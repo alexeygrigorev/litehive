@@ -1,0 +1,37 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "litehive"
+description = "Local-first deterministic autonomous coding workspace"
+readme = "README.md"
+requires-python = ">=3.11"
+dynamic = ["version"]
+dependencies = [
+    "pydantic>=2.11.0",
+    "pyyaml>=6.0.2",
+    "textual>=3.2.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.4.0",
+    "ruff>=0.12.0",
+]
+
+[project.scripts]
+litehive = "litehive.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["litehive"]
+
+[tool.hatch.version]
+path = "litehive/__version__.py"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
