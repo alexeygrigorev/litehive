@@ -34,6 +34,45 @@ class SubagentRef(BaseModel):
     path: str
 
 
+class RuntimeGitState(BaseModel):
+    commit_sha: str | None = None
+
+
+class RuntimeStageState(BaseModel):
+    step: str | None = None
+    status: str = "idle"
+    started_at: str | None = None
+    completed_at: str | None = None
+    updated_at: str | None = None
+    duration_seconds: int = 0
+    verdict: str | None = None
+    summary: str = ""
+
+
+class RuntimeSubagentState(BaseModel):
+    id: str
+    role: str
+    engine: str
+    status: SubagentStatus
+    path: str
+    started_at: str
+    updated_at: str
+    completed_at: str | None = None
+    exit_code: int | None = None
+    transcript_snippet: str = ""
+
+
+class TaskRuntime(BaseModel):
+    git: RuntimeGitState = Field(default_factory=RuntimeGitState)
+    execution_status: str = "idle"
+    run_started_at: str | None = None
+    updated_at: str | None = None
+    current_stage: RuntimeStageState = Field(default_factory=RuntimeStageState)
+    last_stage: RuntimeStageState = Field(default_factory=RuntimeStageState)
+    active_subagent: RuntimeSubagentState | None = None
+    last_subagent: RuntimeSubagentState | None = None
+
+
 class GitSettings(BaseModel):
     auto_commit: bool = True
     commit_message: str | None = None
@@ -60,6 +99,7 @@ class TaskRecord(BaseModel):
     plan: list[str] = Field(default_factory=list)
     subagents: list[SubagentRef] = Field(default_factory=list)
     git: GitSettings = Field(default_factory=GitSettings)
+    runtime: TaskRuntime = Field(default_factory=TaskRuntime, exclude=True)
 
 
 class WorkspaceState(BaseModel):

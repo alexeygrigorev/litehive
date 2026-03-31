@@ -7,13 +7,23 @@ from pathlib import Path
 
 from litehive.config import LitehiveConfig, ensure_workspace, load_config
 from litehive.git_ops import GitError
+from litehive.observability import render_task_summary
 from litehive.runtime import (
     recover_completed_task,
     resolve_next_task,
     rollback_completed_task,
     run_next_task,
 )
-from litehive.tasks import create_task, list_tasks, load_state
+from litehive.tasks import (
+    VALID_TASK_PRIORITIES,
+    create_task,
+    list_tasks,
+    load_state,
+    move_queued_task,
+    requeue_task,
+    require_task,
+    update_task_metadata,
+)
 from litehive.tui.app import LitehiveApp
 
 
@@ -41,6 +51,14 @@ def build_parser() -> argparse.ArgumentParser:
 
     status = subparsers.add_parser("status", help="Show workspace status")
     status.add_argument(
+        "--workspace",
+        type=Path,
+        default=Path.cwd(),
+        help="Repository root containing .litehive/",
+    )
+
+    queue = subparsers.add_parser("queue", help="Show the active task and queued order")
+    queue.add_argument(
         "--workspace",
         type=Path,
         default=Path.cwd(),
@@ -102,6 +120,77 @@ def build_parser() -> argparse.ArgumentParser:
         help="Repository root containing .litehive/",
     )
 
+    move = subparsers.add_parser("move", help="Move a queued task to a 1-based position")
+    move.add_argument("task_id", help="Queued task id to move")
+    move.add_argument("position", type=int, help="Target queue position (1-based)")
+    move.add_argument(
+        "--workspace",
+        type=Path,
+        default=Path.cwd(),
+        help="Repository root containing .litehive/",
+    )
+
+    promote = subparsers.add_parser("promote", help="Move a queued task to the front of the queue")
+    promote.add_argument("task_id", help="Queued task id to promote")
+    promote.add_argument(
+        "--workspace",
+        type=Path,
+        default=Path.cwd(),
+        help="Repository root containing .litehive/",
+    )
+
+    requeue = subparsers.add_parser("requeue", help="Requeue a flagged or cancelled task")
+    requeue.add_argument("task_id", help="Task id to requeue")
+    requeue.add_argument(
+        "--front",
+        action="store_true",
+        help="Insert the task at the front of the queue",
+    )
+    requeue.add_argument(
+        "--workspace",
+        type=Path,
+        default=Path.cwd(),
+        help="Repository root containing .litehive/",
+    )
+
+    update = subparsers.add_parser("update", help="Update task engine and metadata")
+    update.add_argument("task_id", help="Task id to update")
+    update.add_argument(
+        "--engine",
+        choices=["codex", "opencode", "default"],
+        help="Override task engine, or use 'default' to clear the override",
+    )
+    update.add_argument(
+        "--priority",
+        choices=sorted(VALID_TASK_PRIORITIES),
+        help="Set task priority",
+    )
+    update.add_argument("--goal", help="Replace the task goal text")
+    update.add_argument(
+        "--mode",
+        choices=["tasks", "implementation"],
+        help="Set task mode",
+    )
+    update.add_argument(
+        "--auto-commit",
+        dest="auto_commit",
+        action="store_true",
+        default=None,
+        help="Enable auto-commit for this task",
+    )
+    update.add_argument(
+        "--no-auto-commit",
+        dest="auto_commit",
+        action="store_false",
+        help="Disable auto-commit for this task",
+    )
+    update.add_argument(
+        "--workspace",
+        type=Path,
+        default=Path.cwd(),
+        help="Repository root containing .litehive/",
+    )
+
     return parser
 
 
@@ -128,11 +217,34 @@ def _cmd_status(args: argparse.Namespace) -> int:
     if tasks:
         print()
         for task in tasks:
-            marker = "*" if task.id == state.active_task_id else " "
-            print(
-                f"{marker} {task.id} [{task.status}/{task.pipeline_status}] "
-                f"{task.mode} {task.title}"
-            )
+            for line in render_task_summary(task, active=task.id == state.active_task_id):
+                print(line)
+    return 0
+
+
+def _task_engine_label(task_engine: str | None, default_engine: str) -> str:
+    return task_engine or f"{default_engine} (default)"
+
+
+def _cmd_queue(args: argparse.Namespace) -> int:
+    config = load_config(args.workspace)
+    state = load_state(args.workspace)
+    print(f"active_task_id: {state.active_task_id}")
+    if state.active_task_id is not None:
+        active_task = require_task(args.workspace, state.active_task_id)
+        print(
+            f"active: {active_task.id} [{active_task.status}/{active_task.pipeline_status}] "
+            f"priority={active_task.priority} engine={_task_engine_label(active_task.engine, config.default_engine)} "
+            f"title={active_task.title}"
+        )
+    print(f"queue_length: {len(state.queue)}")
+    for index, task_id in enumerate(state.queue, start=1):
+        task = require_task(args.workspace, task_id)
+        print(
+            f"{index}. {task.id} [{task.status}/{task.pipeline_status}] "
+            f"priority={task.priority} engine={_task_engine_label(task.engine, config.default_engine)} "
+            f"title={task.title}"
+        )
     return 0
 
 
@@ -198,6 +310,79 @@ def _cmd_recover(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_move(args: argparse.Namespace) -> int:
+    ensure_workspace(args.workspace)
+    try:
+        state = move_queued_task(args.workspace, args.task_id, args.position)
+    except ValueError as exc:
+        print(f"move failed: {exc}")
+        return 1
+    print(f"task_id: {args.task_id}")
+    print(f"position: {state.queue.index(args.task_id) + 1}")
+    return 0
+
+
+def _cmd_promote(args: argparse.Namespace) -> int:
+    ensure_workspace(args.workspace)
+    try:
+        move_queued_task(args.workspace, args.task_id, 1)
+    except ValueError as exc:
+        print(f"promote failed: {exc}")
+        return 1
+    print(f"task_id: {args.task_id}")
+    print("position: 1")
+    return 0
+
+
+def _cmd_requeue_task(args: argparse.Namespace) -> int:
+    ensure_workspace(args.workspace)
+    try:
+        task = requeue_task(args.workspace, args.task_id, front=args.front)
+    except ValueError as exc:
+        print(f"requeue failed: {exc}")
+        return 1
+    state = load_state(args.workspace)
+    print(f"task: {task.id} {task.title}")
+    print("status: queued")
+    print("pipeline_status: implementing")
+    print(f"position: {state.queue.index(task.id) + 1}")
+    return 0
+
+
+def _cmd_update(args: argparse.Namespace) -> int:
+    ensure_workspace(args.workspace)
+    if (
+        args.engine is None
+        and args.priority is None
+        and args.goal is None
+        and args.mode is None
+        and args.auto_commit is None
+    ):
+        print("update failed: no changes requested")
+        return 1
+    try:
+        task = update_task_metadata(
+            args.workspace,
+            args.task_id,
+            engine=(None if args.engine == "default" else args.engine) if args.engine is not None else ...,
+            priority=args.priority if args.priority is not None else ...,
+            goal=args.goal if args.goal is not None else ...,
+            mode=args.mode if args.mode is not None else ...,
+            auto_commit=args.auto_commit if args.auto_commit is not None else ...,
+        )
+    except ValueError as exc:
+        print(f"update failed: {exc}")
+        return 1
+    config = load_config(args.workspace)
+    print(f"task: {task.id} {task.title}")
+    print(f"engine: {_task_engine_label(task.engine, config.default_engine)}")
+    print(f"priority: {task.priority}")
+    print(f"mode: {task.mode}")
+    print(f"auto_commit: {task.git.auto_commit}")
+    print(f"goal: {task.goal}")
+    return 0
+
+
 def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
@@ -206,6 +391,8 @@ def main() -> int:
         return _cmd_configure(args)
     if args.command == "status":
         return _cmd_status(args)
+    if args.command == "queue":
+        return _cmd_queue(args)
     if args.command == "tasks":
         return _launch_app(args.workspace, default_mode="tasks")
     if args.command == "add":
@@ -225,6 +412,14 @@ def main() -> int:
         return _cmd_rollback(args)
     if args.command == "recover":
         return _cmd_recover(args)
+    if args.command == "move":
+        return _cmd_move(args)
+    if args.command == "promote":
+        return _cmd_promote(args)
+    if args.command == "requeue":
+        return _cmd_requeue_task(args)
+    if args.command == "update":
+        return _cmd_update(args)
 
     summary = run_next_task(Path.cwd())
     if summary.task is not None:

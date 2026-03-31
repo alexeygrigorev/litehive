@@ -28,6 +28,8 @@ from litehive.tasks import (
     dequeue_next_task,
     get_task,
     load_state,
+    mark_task_run_finished,
+    mark_task_run_started,
     save_task_runtime,
     save_task,
 )
@@ -69,6 +71,7 @@ def run_next_task(root: Path) -> ExecutionSummary:
     subagents = SubagentManager(root)
 
     append_journal(root, task, f"Execution started with engine `{engine_name}`.")
+    mark_task_run_started(root, task)
 
     runner = TaskExecutionRunner(
         root,
@@ -82,6 +85,7 @@ def run_next_task(root: Path) -> ExecutionSummary:
         ),
     )
     result = runner.run(task)
+    mark_task_run_finished(root, task, result.final_status)
     if result.final_status != "done":
         append_journal(root, task, f"Execution finished with status `{result.final_status}`.")
     clear_active_task(root)

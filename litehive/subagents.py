@@ -10,7 +10,7 @@ import yaml
 from litehive.external_cli import CLIExecutionResult, parse_stage_report_text
 from litehive.engines import EngineError, get_engine
 from litehive.models import StageReport, SubagentRef, TaskRecord, utcnow
-from litehive.tasks import save_task, task_dir
+from litehive.tasks import mark_subagent_finished, mark_subagent_started, save_task, task_dir
 
 
 @dataclass(slots=True)
@@ -50,6 +50,7 @@ class SubagentManager:
         )
         task.subagents.append(ref)
         save_task(self.root, task)
+        mark_subagent_started(self.root, task, ref)
 
         engine = get_engine(engine_name)
         try:
@@ -64,6 +65,7 @@ class SubagentManager:
             ref.status = "blocked"
 
         save_task(self.root, task)
+        mark_subagent_finished(self.root, task, ref, transcript, 0 if proc is None else proc.exit_code)
         self._write_session(base, ref, prompt, transcript, 0 if proc is None else proc.exit_code)
         return SubagentResult(ref=ref, execution=proc, transcript=transcript, exit_code=0 if proc is None else proc.exit_code)
 

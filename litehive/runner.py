@@ -9,7 +9,7 @@ from typing import Protocol
 import yaml
 
 from litehive.models import StageReport, TaskRecord
-from litehive.tasks import save_task, task_dir
+from litehive.tasks import mark_stage_finished, mark_stage_started, save_task, task_dir
 
 
 class StageExecutor(Protocol):
@@ -77,9 +77,11 @@ class TaskExecutionRunner:
             task.status = "in_progress"
             task.pipeline_status = current  # type: ignore[assignment]
             save_task(self.root, task)
+            mark_stage_started(self.root, task, current)
 
             report = self.executor(task, current)
             self._write_report(task, report, steps + 1)
+            mark_stage_finished(self.root, task, report)
 
             steps += 1
             last_verdict = report.verdict
