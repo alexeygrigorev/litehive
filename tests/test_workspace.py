@@ -20,7 +20,7 @@ from litehive.engines import get_engine
 from litehive.config import ensure_workspace, load_config
 from litehive.external_cli import CLIExecutionResult, parse_stage_report_text
 from litehive.models import RuntimeStageState, RuntimeSubagentState, StageReport, SubagentRef
-from litehive.runtime import resolve_next_task, run_next_task, run_task_pool
+from litehive.runtime import resolve_engine_name, resolve_next_task, run_next_task, run_task_pool
 from litehive.runner import TaskExecutionRunner
 from litehive.subagents import EngineFailure, SubagentResult, stage_report_from_subagent
 from litehive.tasks import (
@@ -639,6 +639,18 @@ def test_configure_persists_gemini_model(tmp_path: Path) -> None:
     assert config.gemini_model == "gemini-2.5-pro"
 
 
+def test_resolve_engine_name_prefers_run_override_then_task_then_workspace_default(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    config = load_config(tmp_path)
+    task = create_task(tmp_path, title="Queued task", engine="opencode")
+
+    assert resolve_engine_name(task, config, engine_override="gemini") == "gemini"
+    assert resolve_engine_name(task, config) == "opencode"
+
+    task.engine = None
+    assert resolve_engine_name(task, config) == config.default_engine
+
+
 def test_cmd_run_dry_run_shows_task_and_engine_without_execution(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -657,6 +669,45 @@ def test_cmd_run_dry_run_shows_task_and_engine_without_execution(
     assert "task: T-0001 Queued task" in output
     assert "engine: opencode" in output
     assert load_state(tmp_path).queue == ["T-0001"]
+
+
+def test_cmd_run_dry_run_prefers_run_engine_override(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ensure_workspace(tmp_path)
+    create_task(tmp_path, title="Queued task", engine="opencode")
+
+    def fail_run_task_pool(root: Path, engine_override: str | None = None) -> None:
+        raise AssertionError(f"run_task_pool should not be called for dry-run: {root} {engine_override}")
+
+    monkeypatch.setattr("litehive.cli.run_task_pool", fail_run_task_pool)
+
+    exit_code = _cmd_run(argparse.Namespace(workspace=tmp_path, dry_run=True, engine="gemini"))
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "task: T-0001 Queued task" in output
+    assert "engine: gemini" in output
+    assert load_state(tmp_path).queue == ["T-0001"]
+
+
+def test_run_task_pool_uses_run_engine_override_for_execution(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ensure_workspace(tmp_path)
+    create_task(tmp_path, title="Queued task", engine="codex", auto_commit=False)
+    seen_engines: list[str] = []
+
+    def fake_run(self, task, role, engine_name, prompt, model=None):  # type: ignore[no-untyped-def]
+        seen_engines.append(engine_name)
+        return _completed_subagent_result(tmp_path, task.pipeline_status)
+
+    monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_run)
+
+    summary = run_task_pool(tmp_path, engine_override="opencode")
+
+    assert summary.stop_reason == "queue_exhausted"
+    assert seen_engines == ["opencode", "opencode", "opencode", "opencode"]
 
 
 def test_cmd_run_drains_task_pool_and_reports_summary(

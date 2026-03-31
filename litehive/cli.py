@@ -10,6 +10,7 @@ from litehive.git_ops import GitError
 from litehive.observability import render_task_summary
 from litehive.runtime import (
     recover_completed_task,
+    resolve_engine_name,
     resolve_next_task,
     rollback_completed_task,
     run_task_pool,
@@ -105,6 +106,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--dry-run",
         action="store_true",
         help="Show which task and engine would run without invoking an agent",
+    )
+    run.add_argument(
+        "--engine",
+        choices=["codex", "opencode", "gemini"],
+        help="Override the engine for this run only",
     )
 
     rollback = subparsers.add_parser("rollback", help="Revert a task checkpoint commit and requeue the task")
@@ -263,17 +269,18 @@ def _launch_app(workspace: Path, default_mode: str) -> int:
 
 def _cmd_run(args: argparse.Namespace) -> int:
     ensure_workspace(args.workspace)
+    engine_override = getattr(args, "engine", None)
     if args.dry_run:
         task = resolve_next_task(args.workspace)
         if task is None:
             print("No queued task.")
             return 0
         config = load_config(args.workspace)
-        engine_name = task.engine or config.default_engine
+        engine_name = resolve_engine_name(task, config, engine_override=engine_override)
         print(f"task: {task.id} {task.title}")
         print(f"engine: {engine_name}")
         return 0
-    summary = run_task_pool(args.workspace)
+    summary = run_task_pool(args.workspace, engine_override=engine_override)
     if not summary.executions:
         print("No queued task.")
         return 0

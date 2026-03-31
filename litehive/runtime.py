@@ -65,12 +65,17 @@ def resolve_next_task(root: Path) -> TaskRecord | None:
 def run_next_task(root: Path) -> ExecutionSummary:
     root = root.resolve()
     task = dequeue_next_task(root)
+    return run_task(root, task)
+
+
+def run_task(root: Path, task: TaskRecord | None, *, engine_override: str | None = None) -> ExecutionSummary:
+    root = root.resolve()
     if task is None:
         return ExecutionSummary(task=None, result=None)
 
     config = load_config(root)
     workspace_context = load_context(root)
-    engine_name = task.engine or config.default_engine
+    engine_name = resolve_engine_name(task, config, engine_override=engine_override)
     subagents = SubagentManager(root)
 
     append_journal(root, task, f"Execution started with engine `{engine_name}`.")
@@ -99,6 +104,7 @@ def run_next_task(root: Path) -> ExecutionSummary:
 def run_task_pool(
     root: Path,
     *,
+    engine_override: str | None = None,
     stop_when: Callable[[list[ExecutionSummary]], bool] | None = None,
 ) -> TaskPoolRunSummary:
     root = root.resolve()
@@ -107,10 +113,16 @@ def run_task_pool(
     while True:
         if stop_when is not None and stop_when(executions):
             return TaskPoolRunSummary(executions=executions, stop_reason="stop_condition_reached")
-        execution = run_next_task(root)
+        execution = run_next_task_with_override(root, engine_override=engine_override)
         if execution.task is None:
             return TaskPoolRunSummary(executions=executions, stop_reason="queue_exhausted")
         executions.append(execution)
+
+
+def run_next_task_with_override(root: Path, *, engine_override: str | None = None) -> ExecutionSummary:
+    root = root.resolve()
+    task = dequeue_next_task(root)
+    return run_task(root, task, engine_override=engine_override)
 
 
 def rollback_completed_task(root: Path, task_id: str) -> RollbackSummary:
@@ -172,6 +184,19 @@ def _role_for_step(step: str) -> str:
         "testing": "qa",
         "accepting": "pm",
     }.get(step, "swe")
+
+
+def resolve_engine_name(
+    task: TaskRecord,
+    config: LitehiveConfig,
+    *,
+    engine_override: str | None = None,
+) -> str:
+    if engine_override is not None:
+        return engine_override
+    if task.engine is not None:
+        return task.engine
+    return config.default_engine
 
 
 def _require_completed_task(task: TaskRecord, action: str) -> None:
