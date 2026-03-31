@@ -22,6 +22,15 @@ PipelineStatus = Literal[
 SubagentStatus = Literal["created", "running", "completed", "failed", "blocked"]
 OutcomeKind = Literal["flagged", "blocked", "cancelled", "failed"]
 RetrySource = Literal["global", "task"]
+OutcomeReasonCode = Literal[
+    "verdict_fail",
+    "verdict_reject",
+    "verdict_blocked",
+    "retry_limit_exhausted",
+    "execution_cancelled",
+    "stage_exception",
+    "unsupported_verdict",
+]
 
 
 def utcnow() -> str:
@@ -79,7 +88,11 @@ class TaskRetryPolicy(BaseModel):
 class TaskOutcomeState(BaseModel):
     kind: OutcomeKind | None = None
     stage: str | None = None
+    reason_code: OutcomeReasonCode | None = None
     reason: str = ""
+    retry_count: int = 0
+    retry_limit: int = 0
+    retry_source: RetrySource = "global"
     recorded_at: str | None = None
 
 
@@ -151,5 +164,6 @@ class StageReport(BaseModel):
     retry_source: RetrySource = "global"
     retry_decision: Literal["continue", "retry", "final"] = "continue"
     outcome: OutcomeKind | None = None
+    outcome_reason_code: OutcomeReasonCode | None = None
     outcome_reason: str = ""
     created_at: str = Field(default_factory=utcnow)

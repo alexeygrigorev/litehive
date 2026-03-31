@@ -5,7 +5,13 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from litehive.config import LitehiveConfig, available_process_profiles, ensure_workspace, load_config
+from litehive.config import (
+    LitehiveConfig,
+    VALID_POOL_SELECTION_POLICIES,
+    available_process_profiles,
+    ensure_workspace,
+    load_config,
+)
 from litehive.git_ops import GitError
 from litehive.observability import render_task_summary
 from litehive.runtime import (
@@ -18,6 +24,7 @@ from litehive.runtime import (
 )
 from litehive.tasks import (
     VALID_TASK_PRIORITIES,
+    WorkspaceConflictError,
     create_task,
     list_tasks,
     load_state,
@@ -25,12 +32,11 @@ from litehive.tasks import (
     peek_next_task_selection,
     requeue_task,
     require_task,
-    save_task,
     update_task_metadata,
 )
 from litehive.tui.app import LitehiveApp
 
-ENGINE_CHOICES = ["codex", "opencode", "gemini", "copilot"]
+ENGINE_CHOICES = ["codex", "opencode", "gemini", "copilot", "claude"]
 
 
 def _parse_dependency_ids(
@@ -65,6 +71,29 @@ def _parse_dependency_ids(
         seen.add(dependency_id)
         normalized.append(dependency_id)
     return normalized
+
+
+def _parse_engine_int_map(raw_values: list[str] | None, *, option_name: str) -> dict[str, int]:
+    if not raw_values:
+        return {}
+
+    mapping: dict[str, int] = {}
+    for raw_value in raw_values:
+        engine_name, separator, raw_int = raw_value.partition("=")
+        if separator != "=":
+            raise ValueError(f"{option_name} entries must use ENGINE=VALUE")
+        engine_name = engine_name.strip()
+        raw_int = raw_int.strip()
+        if engine_name not in ENGINE_CHOICES:
+            raise ValueError(f"{option_name} engine must be one of: {', '.join(ENGINE_CHOICES)}")
+        try:
+            value = int(raw_int)
+        except ValueError as exc:
+            raise ValueError(f"{option_name} value for {engine_name} must be an integer") from exc
+        if value < 0:
+            raise ValueError(f"{option_name} value for {engine_name} must be 0 or greater")
+        mapping[engine_name] = value
+    return mapping
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -111,6 +140,52 @@ def build_parser() -> argparse.ArgumentParser:
         help="Default model identifier when using the copilot adapter",
     )
     configure.add_argument(
+        "--claude-enabled",
+        action="store_true",
+        help="Enable the claude adapter (opt-in; disabled by default to protect quota)",
+    )
+    configure.add_argument(
+        "--claude-model",
+        default="claude-sonnet-4-20250514",
+        help="Default model identifier when using the claude adapter",
+    )
+    configure.add_argument(
+        "--claude-max-turns",
+        type=int,
+        default=30,
+        help="Maximum conversation turns per claude invocation (guardrail against accidental quota burn)",
+    )
+    configure.add_argument(
+        "--pool-usage-cap",
+        type=int,
+        default=None,
+        help="Default pool behavior: stop before starting another engine invocation once this many invocations have run",
+    )
+    configure.add_argument(
+        "--pool-cost-cap",
+        type=int,
+        default=None,
+        help="Default pool behavior: stop before starting another engine invocation once this many cost units have been spent",
+    )
+    configure.add_argument(
+        "--engine-usage-cap",
+        action="append",
+        default=None,
+        help="Per-engine invocation cap as ENGINE=COUNT; repeat to set multiple engines",
+    )
+    configure.add_argument(
+        "--engine-budget-cap",
+        action="append",
+        default=None,
+        help="Per-engine budget cap in cost units as ENGINE=UNITS; repeat to set multiple engines",
+    )
+    configure.add_argument(
+        "--engine-cost",
+        action="append",
+        default=None,
+        help="Per-engine cost per invocation as ENGINE=UNITS; repeat to override defaults",
+    )
+    configure.add_argument(
         "--pool-stop-on-failure",
         action="store_true",
         help="Default pool behavior: stop after the first task that does not finish successfully",
@@ -142,6 +217,12 @@ def build_parser() -> argparse.ArgumentParser:
         "--pool-stop-on-dirty-git",
         action="store_true",
         help="Default pool behavior: stop when the git worktree is dirty before starting another task",
+    )
+    configure.add_argument(
+        "--pool-selection-policy",
+        choices=sorted(VALID_POOL_SELECTION_POLICIES),
+        default="dependency_aware",
+        help="Default pool task ordering policy",
     )
 
     status = subparsers.add_parser("status", help="Show workspace status")
@@ -239,13 +320,43 @@ def build_parser() -> argparse.ArgumentParser:
         help="Stop the pool after this many budget-like limit outcomes in the current run",
     )
     run.add_argument(
+        "--pool-usage-cap",
+        type=int,
+        help="Stop before starting another engine invocation once this many invocations have run in the current pool",
+    )
+    run.add_argument(
+        "--pool-cost-cap",
+        type=int,
+        help="Stop before starting another engine invocation once this many cost units have been spent in the current pool",
+    )
+    run.add_argument(
+        "--engine-usage-cap",
+        action="append",
+        default=None,
+        help="Per-engine invocation cap for this run as ENGINE=COUNT; repeat to set multiple engines",
+    )
+    run.add_argument(
+        "--engine-budget-cap",
+        action="append",
+        default=None,
+        help="Per-engine budget cap for this run in cost units as ENGINE=UNITS; repeat to set multiple engines",
+    )
+    run.add_argument(
+        "--engine-cost",
+        action="append",
+        default=None,
+        help="Per-engine cost for this run as ENGINE=UNITS; repeat to override defaults",
+    )
+    run.add_argument(
         "--stop-on-dirty-git",
         action="store_true",
         default=None,
         help="Stop the pool when the git worktree is dirty before starting another task",
     )
 
-    rollback = subparsers.add_parser("rollback", help="Revert a task checkpoint commit and requeue the task")
+    rollback = subparsers.add_parser(
+        "rollback", help="Revert a task checkpoint commit and requeue the task"
+    )
     rollback.add_argument("task_id", help="Task id to roll back")
     rollback.add_argument(
         "--workspace",
@@ -254,7 +365,9 @@ def build_parser() -> argparse.ArgumentParser:
         help="Repository root containing .litehive/",
     )
 
-    recover = subparsers.add_parser("recover", help="Requeue a completed task without reverting code")
+    recover = subparsers.add_parser(
+        "recover", help="Requeue a completed task without reverting code"
+    )
     recover.add_argument("task_id", help="Task id to recover")
     recover.add_argument(
         "--workspace",
@@ -348,6 +461,23 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def _cmd_configure(args: argparse.Namespace) -> int:
+    try:
+        engine_usage_caps = _parse_engine_int_map(
+            getattr(args, "engine_usage_cap", None),
+            option_name="--engine-usage-cap",
+        )
+        engine_budget_caps = _parse_engine_int_map(
+            getattr(args, "engine_budget_cap", None),
+            option_name="--engine-budget-cap",
+        )
+        engine_costs = _parse_engine_int_map(
+            getattr(args, "engine_cost", None),
+            option_name="--engine-cost",
+        )
+    except ValueError as exc:
+        print(f"configure failed: {exc}")
+        return 1
+
     config = LitehiveConfig(
         default_engine=args.default_engine,
         process_profile=getattr(args, "process_profile", "generic"),
@@ -355,12 +485,21 @@ def _cmd_configure(args: argparse.Namespace) -> int:
         opencode_model=args.opencode_model,
         gemini_model=args.gemini_model,
         copilot_model=getattr(args, "copilot_model", None),
+        claude_enabled=getattr(args, "claude_enabled", False),
+        claude_model=getattr(args, "claude_model", "claude-sonnet-4-20250514"),
+        claude_max_turns=getattr(args, "claude_max_turns", 30),
+        pool_usage_cap=getattr(args, "pool_usage_cap", None),
+        pool_cost_cap=getattr(args, "pool_cost_cap", None),
+        engine_usage_caps=engine_usage_caps,
+        engine_budget_caps=engine_budget_caps,
+        engine_costs=engine_costs or LitehiveConfig().engine_costs,
         pool_stop_on_failure=getattr(args, "pool_stop_on_failure", False),
         pool_max_tasks=getattr(args, "pool_max_tasks", None),
         pool_stop_on_execution_limit=getattr(args, "pool_stop_on_limit", False),
         pool_quota_threshold=getattr(args, "pool_quota_threshold", None),
         pool_budget_threshold=getattr(args, "pool_budget_threshold", None),
         pool_stop_on_dirty_git=getattr(args, "pool_stop_on_dirty_git", False),
+        pool_selection_policy=getattr(args, "pool_selection_policy", "dependency_aware"),
     )
     ensure_workspace(args.workspace, config)
     print(f"Initialized litehive workspace in {args.workspace / '.litehive'}")
@@ -377,6 +516,14 @@ def _cmd_status(args: argparse.Namespace) -> int:
     print(f"opencode_model: {config.opencode_model}")
     print(f"gemini_model: {config.gemini_model}")
     print(f"copilot_model: {config.copilot_model}")
+    print(f"claude_enabled: {config.claude_enabled}")
+    print(f"claude_model: {config.claude_model}")
+    print(f"claude_max_turns: {config.claude_max_turns}")
+    print(f"pool_usage_cap: {config.pool_usage_cap}")
+    print(f"pool_cost_cap: {config.pool_cost_cap}")
+    print(f"engine_usage_caps: {config.engine_usage_caps}")
+    print(f"engine_budget_caps: {config.engine_budget_caps}")
+    print(f"engine_costs: {config.engine_costs}")
     print(f"default_retry_limit: {config.default_retry_limit}")
     print(f"pool_stop_on_failure: {config.pool_stop_on_failure}")
     print(f"pool_max_tasks: {config.pool_max_tasks}")
@@ -384,6 +531,7 @@ def _cmd_status(args: argparse.Namespace) -> int:
     print(f"pool_quota_threshold: {config.pool_quota_threshold}")
     print(f"pool_budget_threshold: {config.pool_budget_threshold}")
     print(f"pool_stop_on_dirty_git: {config.pool_stop_on_dirty_git}")
+    print(f"pool_selection_policy: {config.pool_selection_policy}")
     print(f"mode: {state.mode}")
     print(f"active_task_id: {state.active_task_id}")
     print(f"queued_tasks: {len(state.queue)}")
@@ -403,7 +551,10 @@ def _task_engine_label(task_engine: str | None, default_engine: str) -> str:
 def _task_dependencies_label(task_id: str, dependencies: list[str]) -> str:
     if not dependencies:
         return "-"
-    return ", ".join(dependency_id for dependency_id in dependencies if dependency_id != task_id) or "-"
+    return (
+        ", ".join(dependency_id for dependency_id in dependencies if dependency_id != task_id)
+        or "-"
+    )
 
 
 def _cmd_queue(args: argparse.Namespace) -> int:
@@ -438,6 +589,37 @@ def _cmd_run(args: argparse.Namespace) -> int:
     ensure_workspace(args.workspace)
     engine_override = getattr(args, "engine", None)
     config = load_config(args.workspace)
+    try:
+        engine_usage_caps = _cli_override_or_default(
+            _parse_engine_int_map(
+                getattr(args, "engine_usage_cap", None),
+                option_name="--engine-usage-cap",
+            )
+            if getattr(args, "engine_usage_cap", None) is not None
+            else None,
+            config.engine_usage_caps,
+        )
+        engine_budget_caps = _cli_override_or_default(
+            _parse_engine_int_map(
+                getattr(args, "engine_budget_cap", None),
+                option_name="--engine-budget-cap",
+            )
+            if getattr(args, "engine_budget_cap", None) is not None
+            else None,
+            config.engine_budget_caps,
+        )
+        engine_costs = _cli_override_or_default(
+            _parse_engine_int_map(
+                getattr(args, "engine_cost", None),
+                option_name="--engine-cost",
+            )
+            if getattr(args, "engine_cost", None) is not None
+            else None,
+            config.engine_costs,
+        )
+    except ValueError as exc:
+        print(f"run failed: {exc}")
+        return 1
     stop_conditions = TaskPoolStopConditions(
         stop_on_failure=_cli_override_or_default(
             getattr(args, "stop_on_failure", None),
@@ -459,13 +641,28 @@ def _cmd_run(args: argparse.Namespace) -> int:
             getattr(args, "budget_threshold", None),
             config.pool_budget_threshold,
         ),
+        pool_usage_cap=_cli_override_or_default(
+            getattr(args, "pool_usage_cap", None),
+            config.pool_usage_cap,
+        ),
+        pool_cost_cap=_cli_override_or_default(
+            getattr(args, "pool_cost_cap", None),
+            config.pool_cost_cap,
+        ),
+        engine_usage_caps=engine_usage_caps,
+        engine_budget_caps=engine_budget_caps,
+        engine_costs=engine_costs,
         stop_on_dirty_git=_cli_override_or_default(
             getattr(args, "stop_on_dirty_git", None),
             config.pool_stop_on_dirty_git,
         ),
     )
     if args.dry_run:
-        selection = peek_next_task_selection(args.workspace)
+        try:
+            selection = peek_next_task_selection(args.workspace)
+        except WorkspaceConflictError as exc:
+            print(f"run failed: {exc}")
+            return 1
         task = selection.task
         if task is None:
             if selection.blocked:
@@ -487,11 +684,15 @@ def _cmd_run(args: argparse.Namespace) -> int:
                 f"blocked_by={', '.join(blocked.blocked_by)}"
             )
         return 0
-    summary = run_task_pool(
-        args.workspace,
-        engine_override=engine_override,
-        stop_conditions=stop_conditions,
-    )
+    try:
+        summary = run_task_pool(
+            args.workspace,
+            engine_override=engine_override,
+            stop_conditions=stop_conditions,
+        )
+    except WorkspaceConflictError as exc:
+        print(f"run failed: {exc}")
+        return 1
     if not summary.executions:
         if summary.blocked:
             print("No runnable task.")
@@ -522,8 +723,7 @@ def _cmd_run(args: argparse.Namespace) -> int:
             print(f"commit: {execution.commit_sha}")
     for blocked in summary.blocked:
         print(
-            f"blocked: {blocked.task_id} {blocked.title} "
-            f"blocked_by={', '.join(blocked.blocked_by)}"
+            f"blocked: {blocked.task_id} {blocked.title} blocked_by={', '.join(blocked.blocked_by)}"
         )
     print(f"tasks_run: {len(summary.executions)}")
     print(f"stop_reason: {summary.stop_reason}")
@@ -542,7 +742,7 @@ def _cmd_rollback(args: argparse.Namespace) -> int:
     ensure_workspace(args.workspace)
     try:
         summary = rollback_completed_task(args.workspace, args.task_id)
-    except GitError as exc:
+    except (GitError, WorkspaceConflictError) as exc:
         print(f"rollback failed: {exc}")
         return 1
 
@@ -558,7 +758,7 @@ def _cmd_recover(args: argparse.Namespace) -> int:
     ensure_workspace(args.workspace)
     try:
         task = recover_completed_task(args.workspace, args.task_id)
-    except GitError as exc:
+    except (GitError, WorkspaceConflictError) as exc:
         print(f"recover failed: {exc}")
         return 1
 
@@ -614,20 +814,22 @@ def _cmd_add(args: argparse.Namespace) -> int:
         task = create_task(
             args.workspace,
             title=args.title,
+            depends_on=None if depends_on is ... else depends_on,
             goal=args.goal,
             acceptance_criteria=getattr(args, "acceptance_criteria", None),
             engine=args.engine,
             retry_limit=getattr(args, "retry_limit", None),
             auto_commit=not args.no_auto_commit,
         )
-        if depends_on is not ...:
-            task.depends_on = depends_on
-            save_task(args.workspace, task)
     except ValueError as exc:
         print(f"add failed: {exc}")
         return 1
-    print(f"Created task {task.id} in {args.workspace / '.litehive' / 'tasks' / (task.id + '-' + task.slug)}")
-    print(f"retry_limit: {task.retry_policy.max_retries if task.retry_policy.max_retries is not None else 'default'}")
+    print(
+        f"Created task {task.id} in {args.workspace / '.litehive' / 'tasks' / (task.id + '-' + task.slug)}"
+    )
+    print(
+        f"retry_limit: {task.retry_policy.max_retries if task.retry_policy.max_retries is not None else 'default'}"
+    )
     print(f"depends_on: {_task_dependencies_label(task.id, task.depends_on)}")
     return 0
 
@@ -647,7 +849,9 @@ def _cmd_update(args: argparse.Namespace) -> int:
         print("update failed: no changes requested")
         return 1
     try:
-        depends_on = _parse_dependency_ids(getattr(args, "depends_on", None), task_id=args.task_id, allow_clear=True)
+        depends_on = _parse_dependency_ids(
+            getattr(args, "depends_on", None), task_id=args.task_id, allow_clear=True
+        )
         if retry_limit_arg is None:
             retry_limit: int | None | object = ...
         elif retry_limit_arg == "default":
@@ -658,7 +862,9 @@ def _cmd_update(args: argparse.Namespace) -> int:
             args.workspace,
             args.task_id,
             depends_on=depends_on,
-            engine=(None if args.engine == "default" else args.engine) if args.engine is not None else ...,
+            engine=(None if args.engine == "default" else args.engine)
+            if args.engine is not None
+            else ...,
             retry_limit=retry_limit,
             priority=args.priority if args.priority is not None else ...,
             goal=args.goal if args.goal is not None else ...,
@@ -671,7 +877,9 @@ def _cmd_update(args: argparse.Namespace) -> int:
     config = load_config(args.workspace)
     print(f"task: {task.id} {task.title}")
     print(f"engine: {_task_engine_label(task.engine, config.default_engine)}")
-    print(f"retry_limit: {task.retry_policy.max_retries if task.retry_policy.max_retries is not None else 'default'}")
+    print(
+        f"retry_limit: {task.retry_policy.max_retries if task.retry_policy.max_retries is not None else 'default'}"
+    )
     print(f"priority: {task.priority}")
     print(f"mode: {task.mode}")
     print(f"auto_commit: {task.git.auto_commit}")

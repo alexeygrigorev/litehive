@@ -43,6 +43,7 @@ class SubagentManager:
         engine_name: str,
         prompt: str,
         model: str | None = None,
+        max_turns: int | None = None,
     ) -> SubagentResult:
         subagent_id = f"SA-{len(task.subagents) + 1:04d}"
         folder_name = f"{subagent_id}-{role}"
@@ -65,7 +66,10 @@ class SubagentManager:
         try:
             if not engine.is_available():
                 raise EngineError(f"Engine '{engine.name}' is unavailable: missing binary '{engine.binary}'")
-            proc = engine.run(prompt, cwd=self.root, model=model)
+            if max_turns is None:
+                proc = engine.run(prompt, cwd=self.root, model=model)
+            else:
+                proc = engine.run(prompt, cwd=self.root, model=model, max_turns=max_turns)
             transcript = engine.render_transcript(proc)
             ref.status = "completed" if proc.exit_code == 0 else "failed"
             if proc.exit_code != 0:

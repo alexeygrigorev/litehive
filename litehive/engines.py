@@ -15,6 +15,7 @@ from litehive.external_cli import (
     parse_stage_report_text,
 )
 
+
 class EngineError(RuntimeError):
     """Raised when an engine cannot be resolved or executed."""
 
@@ -35,7 +36,14 @@ _ENGINE_LIMIT_PATTERNS: tuple[tuple[str, str], ...] = (
 
 
 class CodexCLIAdapter(ExternalCLIAdapter):
-    def build_command(self, prompt: str, cwd: Path, model: str | None = None) -> list[str]:
+    def build_command(
+        self,
+        prompt: str,
+        cwd: Path,
+        model: str | None = None,
+        *,
+        max_turns: int | None = None,
+    ) -> list[str]:
         return [
             self.binary,
             "exec",
@@ -48,7 +56,14 @@ class CodexCLIAdapter(ExternalCLIAdapter):
 
 
 class OpenCodeAdapter(ExternalCLIAdapter):
-    def build_command(self, prompt: str, cwd: Path, model: str | None = None) -> list[str]:
+    def build_command(
+        self,
+        prompt: str,
+        cwd: Path,
+        model: str | None = None,
+        *,
+        max_turns: int | None = None,
+    ) -> list[str]:
         command = [self.binary, "run", "--dir", str(cwd)]
         if model:
             command.extend(["--model", model])
@@ -57,7 +72,14 @@ class OpenCodeAdapter(ExternalCLIAdapter):
 
 
 class GeminiCLIAdapter(ExternalCLIAdapter):
-    def build_command(self, prompt: str, cwd: Path, model: str | None = None) -> list[str]:
+    def build_command(
+        self,
+        prompt: str,
+        cwd: Path,
+        model: str | None = None,
+        *,
+        max_turns: int | None = None,
+    ) -> list[str]:
         command = [self.binary, "-p", prompt, "--output-format", "stream-json", "--yolo"]
         if model:
             command.extend(["-m", model])
@@ -92,8 +114,83 @@ class GeminiCLIAdapter(ExternalCLIAdapter):
         )
 
 
+class ClaudeCLIAdapter(ExternalCLIAdapter):
+    DEFAULT_MODEL = "claude-sonnet-4-20250514"
+
+    def __init__(
+        self,
+        *,
+        name: str,
+        binary: str,
+        capabilities: AdapterCapabilities,
+        stripped_env_vars: tuple[str, ...] = (),
+        max_turns: int = 30,
+    ) -> None:
+        super().__init__(
+            name=name, binary=binary, capabilities=capabilities, stripped_env_vars=stripped_env_vars
+        )
+        self.max_turns = max_turns
+
+    def build_command(
+        self,
+        prompt: str,
+        cwd: Path,
+        model: str | None = None,
+        *,
+        max_turns: int | None = None,
+    ) -> list[str]:
+        command = [
+            self.binary,
+            "-p",
+            prompt,
+            "--output-format",
+            "stream-json",
+            "--verbose",
+        ]
+        if model:
+            command.extend(["--model", model])
+        effective_max_turns = self.max_turns if max_turns is None else max_turns
+        command.extend(["--max-turns", str(effective_max_turns)])
+        return command
+
+    def render_transcript(self, execution: CLIExecutionResult) -> str:
+        assistant_text = _extract_claude_transcript(execution.stdout)
+        if assistant_text:
+            if execution.stderr.strip():
+                return f"{assistant_text}\n\n[stderr]\n{execution.stderr.strip()}"
+            return assistant_text
+        return execution.transcript
+
+    def parse_stage_report(
+        self,
+        *,
+        task_id: str,
+        step: str,
+        execution: CLIExecutionResult,
+        subagent_status: str,
+    ):
+        transcript = self.render_transcript(execution)
+        if transcript == execution.transcript:
+            stderr_lines = extract_jsonl_errors(execution.stdout)
+            if stderr_lines:
+                transcript = "\n".join(stderr_lines)
+        return parse_stage_report_text(
+            task_id=task_id,
+            step=step,  # type: ignore[arg-type]
+            transcript=transcript,
+            subagent_status=subagent_status,  # type: ignore[arg-type]
+        )
+
+
 class CopilotCLIAdapter(ExternalCLIAdapter):
-    def build_command(self, prompt: str, cwd: Path, model: str | None = None) -> list[str]:
+    def build_command(
+        self,
+        prompt: str,
+        cwd: Path,
+        model: str | None = None,
+        *,
+        max_turns: int | None = None,
+    ) -> list[str]:
         command = [
             self.binary,
             "-p",
@@ -214,6 +311,29 @@ _OPENCODE_STRIPPED_ENV_VARS = (
 )
 
 
+def _extract_claude_transcript(stdout: str) -> str:
+    messages: list[str] = []
+    for payload in iter_jsonl_payloads(stdout):
+        event_type = payload.get("type")
+        if event_type == "assistant":
+            data = payload.get("message")
+            if isinstance(data, dict):
+                content = data.get("content")
+                if isinstance(content, list):
+                    for block in content:
+                        if isinstance(block, dict) and block.get("type") == "text":
+                            text = block.get("text", "")
+                            if text:
+                                messages.append(text)
+                elif isinstance(content, str) and content:
+                    messages.append(content)
+        elif event_type == "result":
+            data = payload.get("result")
+            if isinstance(data, str) and data:
+                messages.append(data)
+    return "\n".join(messages).strip()
+
+
 ENGINE_REGISTRY: dict[str, ExternalCLIAdapter] = {
     "codex": CodexCLIAdapter(
         name="codex",
@@ -246,6 +366,15 @@ ENGINE_REGISTRY: dict[str, ExternalCLIAdapter] = {
     "copilot": CopilotCLIAdapter(
         name="copilot",
         binary="copilot",
+        capabilities=AdapterCapabilities(
+            supports_model_override=True,
+            strips_environment=False,
+            transcript_format="jsonl",
+        ),
+    ),
+    "claude": ClaudeCLIAdapter(
+        name="claude",
+        binary="claude",
         capabilities=AdapterCapabilities(
             supports_model_override=True,
             strips_environment=False,

@@ -10,6 +10,9 @@ from typing import Any
 import yaml
 
 
+VALID_POOL_SELECTION_POLICIES = {"fifo", "priority_first", "dependency_aware"}
+
+
 def _shared_stage_sequence() -> list[str]:
     return ["grooming", "implementing", "testing", "accepting", "commit_to_git"]
 
@@ -236,6 +239,22 @@ class LitehiveConfig:
     opencode_model: str = "zai-coding-plan/glm-5.1"
     gemini_model: str | None = None
     copilot_model: str | None = None
+    claude_enabled: bool = False
+    claude_model: str = "claude-sonnet-4-20250514"
+    claude_max_turns: int = 30
+    pool_usage_cap: int | None = None
+    pool_cost_cap: int | None = None
+    engine_usage_caps: dict[str, int] = field(default_factory=dict)
+    engine_budget_caps: dict[str, int] = field(default_factory=dict)
+    engine_costs: dict[str, int] = field(
+        default_factory=lambda: {
+            "codex": 1,
+            "opencode": 1,
+            "gemini": 1,
+            "copilot": 1,
+            "claude": 3,
+        }
+    )
     default_retry_limit: int = 3
     pool_stop_on_failure: bool = False
     pool_max_tasks: int | None = None
@@ -243,6 +262,7 @@ class LitehiveConfig:
     pool_quota_threshold: int | None = None
     pool_budget_threshold: int | None = None
     pool_stop_on_dirty_git: bool = False
+    pool_selection_policy: str = "dependency_aware"
     engine_fallbacks: dict[str, list[str]] = field(
         default_factory=lambda: {
             "codex": ["opencode", "gemini", "copilot"],
@@ -283,7 +303,14 @@ def resolve_process_profile(name: str | None) -> dict[str, Any]:
 
     overlay = PROCESS_PROFILES.get(name, PROCESS_PROFILES["generic"])
     for key, value in overlay.items():
-        if key in {"development_rules", "tool_usage", "workspace_overlay", "specifics", "prompt_scaffold", "init_scaffold"}:
+        if key in {
+            "development_rules",
+            "tool_usage",
+            "workspace_overlay",
+            "specifics",
+            "prompt_scaffold",
+            "init_scaffold",
+        }:
             profile[key].extend(deepcopy(value))
             continue
         if key == "stage_overlay":
@@ -353,7 +380,16 @@ def render_context_template(profile_name: str) -> str:
         lines.append(profile["specifics_heading"])
         lines.extend(profile.get("specifics", []))
         lines.append("")
-    lines.extend(["## Development rules", *profile["development_rules"], "", "## Tool usage", *profile["tool_usage"], ""])
+    lines.extend(
+        [
+            "## Development rules",
+            *profile["development_rules"],
+            "",
+            "## Tool usage",
+            *profile["tool_usage"],
+            "",
+        ]
+    )
     return "\n".join(lines)
 
 
@@ -382,7 +418,9 @@ def ensure_workspace(root: Path, config: LitehiveConfig | None = None) -> Path:
         )
 
     if not context_path(root).exists():
-        context_path(root).write_text(render_context_template(cfg.process_profile), encoding="utf-8")
+        context_path(root).write_text(
+            render_context_template(cfg.process_profile), encoding="utf-8"
+        )
 
     return base
 
@@ -392,6 +430,8 @@ def load_config(root: Path) -> LitehiveConfig:
     data = yaml.safe_load(config_path(root).read_text(encoding="utf-8")) or {}
     if data.get("process_profile") not in PROCESS_PROFILES:
         data["process_profile"] = "generic"
+    if data.get("pool_selection_policy") not in VALID_POOL_SELECTION_POLICIES:
+        data["pool_selection_policy"] = "dependency_aware"
     return LitehiveConfig(**data)
 
 

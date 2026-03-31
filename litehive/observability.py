@@ -76,9 +76,18 @@ def render_task_summary(task: TaskRecord, *, active: bool) -> list[str]:
 
     if runtime.last_outcome.kind is not None:
         stage = runtime.last_outcome.stage or "-"
+        reason_code = runtime.last_outcome.reason_code or "-"
         reason = runtime.last_outcome.reason or "-"
         recorded_at = runtime.last_outcome.recorded_at or "-"
-        lines.append(f"  outcome={runtime.last_outcome.kind} stage={stage} recorded_at={recorded_at} reason={reason}")
+        lines.append(
+            "  "
+            + (
+                f"outcome={runtime.last_outcome.kind} stage={stage} "
+                f"reason_code={reason_code} recorded_at={recorded_at} "
+                f"retry_state={runtime.last_outcome.retry_count}/{runtime.last_outcome.retry_limit} "
+                f"retry_source={runtime.last_outcome.retry_source} reason={reason}"
+            )
+        )
 
     if task.git.commit_sha:
         lines.append(f"  commit={task.git.commit_sha}")

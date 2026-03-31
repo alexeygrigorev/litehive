@@ -75,21 +75,42 @@ class ExternalCLIAdapter:
     def detect_capabilities(self) -> AdapterCapabilities:
         return replace(self.capabilities, available=self.is_available())
 
-    def build_command(self, prompt: str, cwd: Path, model: str | None = None) -> list[str]:
+    def build_command(
+        self,
+        prompt: str,
+        cwd: Path,
+        model: str | None = None,
+        *,
+        max_turns: int | None = None,
+    ) -> list[str]:
         raise NotImplementedError
 
-    def build_invocation(self, prompt: str, cwd: Path, model: str | None = None) -> CLIInvocation:
+    def build_invocation(
+        self,
+        prompt: str,
+        cwd: Path,
+        model: str | None = None,
+        *,
+        max_turns: int | None = None,
+    ) -> CLIInvocation:
         env = os.environ.copy()
         for key in self.stripped_env_vars:
             env.pop(key, None)
         return CLIInvocation(
-            argv=tuple(self.build_command(prompt, cwd, model=model)),
+            argv=tuple(self.build_command(prompt, cwd, model=model, max_turns=max_turns)),
             cwd=cwd,
             env=env,
         )
 
-    def run(self, prompt: str, cwd: Path, model: str | None = None) -> CLIExecutionResult:
-        invocation = self.build_invocation(prompt, cwd, model=model)
+    def run(
+        self,
+        prompt: str,
+        cwd: Path,
+        model: str | None = None,
+        *,
+        max_turns: int | None = None,
+    ) -> CLIExecutionResult:
+        invocation = self.build_invocation(prompt, cwd, model=model, max_turns=max_turns)
         proc = subprocess.run(
             invocation.argv,
             cwd=str(invocation.cwd),

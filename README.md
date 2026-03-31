@@ -17,17 +17,17 @@ Local-first autonomous coding workspace with deterministic task execution.
 
 Common commands:
 
-- `uv run litehive configure`
-- `uv run litehive status`
-- `uv run litehive queue`
-- `uv run litehive add "<title>"`
-- `uv run litehive update T-0001 --engine opencode`
-- `uv run litehive move T-0001 1`
-- `uv run litehive promote T-0001`
-- `uv run litehive requeue T-0001 --front`
-- `uv run litehive run`
-- `uv run litehive rollback T-0001`
-- `uv run litehive recover T-0001`
+- `litehive configure`
+- `litehive status`
+- `litehive queue`
+- `litehive add "<title>"`
+- `litehive update T-0001 --engine opencode`
+- `litehive move T-0001 1`
+- `litehive promote T-0001`
+- `litehive requeue T-0001 --front`
+- `litehive run`
+- `litehive rollback T-0001`
+- `litehive recover T-0001`
 
 `--workspace` defaults to the current directory. In normal repo-local use you should not need to pass it.
 
@@ -117,6 +117,22 @@ Use [`scripts/run-all-status.sh`](/home/alexey/git/litehive/scripts/run-all-stat
 ```bash
 scripts/run-all-status.sh .
 ```
+
+## Local launcher
+
+Install a `~/bin/litehive` launcher for this repo with:
+
+```bash
+scripts/install-bin.sh
+```
+
+The script:
+
+- writes a launcher into `~/bin`
+- checks that `~/bin` is on `PATH`
+- prints the resolved `litehive` command path
+
+For this repository, the launcher delegates to the local project via `uv`, but that is an implementation detail. User-facing workflow should treat `litehive` as the command.
 
 ## Current engines
 

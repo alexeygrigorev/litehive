@@ -8,7 +8,7 @@ from typing import Protocol
 
 import yaml
 
-from litehive.models import OutcomeKind, StageReport, TaskRecord
+from litehive.models import OutcomeKind, OutcomeReasonCode, StageReport, TaskRecord
 from litehive.tasks import (
     clear_task_outcome,
     mark_stage_finished,
@@ -113,11 +113,22 @@ class TaskExecutionRunner:
                     verdict="blocked",
                     summary=reason,
                     outcome="cancelled",
+                    outcome_reason_code="execution_cancelled",
                     reason=reason,
                     retry_count=rejections,
                 )
                 task.status = "cancelled"
-                mark_task_outcome(self.root, task, kind="cancelled", stage=current, reason=reason)
+                mark_task_outcome(
+                    self.root,
+                    task,
+                    kind="cancelled",
+                    stage=current,
+                    reason_code="execution_cancelled",
+                    reason=reason,
+                    retry_count=rejections,
+                    retry_limit=self.max_retries,
+                    retry_source=self.retry_source,
+                )
                 self._write_report(task, report, steps + 1)
                 mark_stage_finished(self.root, task, report)
                 save_task(self.root, task)
@@ -130,12 +141,23 @@ class TaskExecutionRunner:
                     verdict="fail",
                     summary=reason,
                     outcome="failed",
+                    outcome_reason_code="stage_exception",
                     reason=reason,
                     retry_count=rejections,
                     warnings=[str(exc)],
                 )
                 task.status = "failed"
-                mark_task_outcome(self.root, task, kind="failed", stage=current, reason=reason)
+                mark_task_outcome(
+                    self.root,
+                    task,
+                    kind="failed",
+                    stage=current,
+                    reason_code="stage_exception",
+                    reason=reason,
+                    retry_count=rejections,
+                    retry_limit=self.max_retries,
+                    retry_source=self.retry_source,
+                )
                 self._write_report(task, report, steps + 1)
                 mark_stage_finished(self.root, task, report)
                 save_task(self.root, task)
@@ -150,12 +172,18 @@ class TaskExecutionRunner:
             if target is None:
                 outcome = "blocked" if report.verdict == "blocked" else "failed"
                 reason = report.summary or f"{current} returned unsupported verdict `{report.verdict}`"
+                outcome_reason_code = (
+                    _reason_code_for_verdict(report.verdict)
+                    if report.verdict == "blocked"
+                    else "unsupported_verdict"
+                )
                 report = self._terminal_report(
                     task,
                     step=report.step,
                     verdict=report.verdict,
                     summary=report.summary,
                     outcome=outcome,
+                    outcome_reason_code=outcome_reason_code,
                     reason=reason,
                     retry_count=report.retry_count,
                     warnings=report.warnings,
@@ -165,7 +193,17 @@ class TaskExecutionRunner:
                 )
                 self._write_report(task, report, steps)
                 task.status = "flagged" if outcome == "blocked" else "failed"
-                mark_task_outcome(self.root, task, kind=outcome, stage=current, reason=reason)
+                mark_task_outcome(
+                    self.root,
+                    task,
+                    kind=outcome,
+                    stage=current,
+                    reason_code=outcome_reason_code,
+                    reason=reason,
+                    retry_count=report.retry_count,
+                    retry_limit=self.max_retries,
+                    retry_source=self.retry_source,
+                )
                 mark_stage_finished(self.root, task, report)
                 save_task(self.root, task)
                 return RunResult(task.status, steps, last_verdict)
@@ -174,7 +212,7 @@ class TaskExecutionRunner:
                 rejections += 1
                 report.retry_count = rejections
                 report.retry_limit = self.max_retries
-                report.retry_decision = "retry" if rejections <= self.max_retries else "final"
+                report.retry_decision = "retry"
                 set_task_retry_state(
                     self.root,
                     task,
@@ -182,27 +220,6 @@ class TaskExecutionRunner:
                     retry_limit=self.max_retries,
                     retry_source=self.retry_source,
                 )
-                if rejections > self.max_retries:
-                    reason = f"Retry limit exhausted after {current} {report.verdict}: {report.summary}"
-                    report = self._terminal_report(
-                        task,
-                        step=report.step,
-                        verdict=report.verdict,
-                        summary=report.summary,
-                        outcome="failed",
-                        reason=reason,
-                        retry_count=report.retry_count,
-                        warnings=report.warnings,
-                        feedback=report.feedback,
-                        files_changed=report.files_changed,
-                        tests=report.tests,
-                    )
-                    task.status = "failed"
-                    mark_task_outcome(self.root, task, kind="failed", stage=current, reason=reason)
-                    self._write_report(task, report, steps)
-                    mark_stage_finished(self.root, task, report)
-                    save_task(self.root, task)
-                    return RunResult("failed", steps, last_verdict)
 
             if target == "done":
                 self._write_report(task, report, steps)
@@ -222,6 +239,7 @@ class TaskExecutionRunner:
                     verdict=report.verdict,
                     summary=report.summary,
                     outcome=outcome,
+                    outcome_reason_code=_reason_code_for_verdict(report.verdict),
                     reason=reason,
                     retry_count=report.retry_count,
                     warnings=report.warnings,
@@ -230,7 +248,17 @@ class TaskExecutionRunner:
                     tests=report.tests,
                 )
                 task.status = "flagged"
-                mark_task_outcome(self.root, task, kind=outcome, stage=current, reason=reason)
+                mark_task_outcome(
+                    self.root,
+                    task,
+                    kind=outcome,
+                    stage=current,
+                    reason_code=_reason_code_for_verdict(report.verdict),
+                    reason=reason,
+                    retry_count=report.retry_count,
+                    retry_limit=self.max_retries,
+                    retry_source=self.retry_source,
+                )
                 self._write_report(task, report, steps)
                 mark_stage_finished(self.root, task, report)
                 save_task(self.root, task)
@@ -259,6 +287,7 @@ class TaskExecutionRunner:
         verdict: str,
         summary: str,
         outcome: OutcomeKind,
+        outcome_reason_code: OutcomeReasonCode,
         reason: str,
         retry_count: int,
         feedback: str = "",
@@ -280,5 +309,14 @@ class TaskExecutionRunner:
             retry_source=self.retry_source,  # type: ignore[arg-type]
             retry_decision="final",
             outcome=outcome,
+            outcome_reason_code=outcome_reason_code,
             outcome_reason=reason,
         )
+
+
+def _reason_code_for_verdict(verdict: str) -> OutcomeReasonCode:
+    if verdict == "fail":
+        return "verdict_fail"
+    if verdict == "reject":
+        return "verdict_reject"
+    return "verdict_blocked"
