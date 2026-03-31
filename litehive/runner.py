@@ -8,8 +8,16 @@ from typing import Protocol
 
 import yaml
 
-from litehive.models import StageReport, TaskRecord
-from litehive.tasks import mark_stage_finished, mark_stage_started, save_task, task_dir
+from litehive.models import OutcomeKind, StageReport, TaskRecord
+from litehive.tasks import (
+    clear_task_outcome,
+    mark_stage_finished,
+    mark_stage_started,
+    mark_task_outcome,
+    save_task,
+    set_task_retry_state,
+    task_dir,
+)
 
 
 class StageExecutor(Protocol):
@@ -56,10 +64,17 @@ _ROUTES: dict[tuple[str, str], str] = {
 class TaskExecutionRunner:
     """Drive one task through the fixed pipeline using a deterministic router."""
 
-    def __init__(self, root: Path, executor: StageExecutor, max_rejections: int = 3) -> None:
+    def __init__(
+        self,
+        root: Path,
+        executor: StageExecutor,
+        max_retries: int = 3,
+        retry_source: str = "global",
+    ) -> None:
         self.root = root
         self.executor = executor
-        self.max_rejections = max_rejections
+        self.max_retries = max_retries
+        self.retry_source = retry_source
 
     def run(self, task: TaskRecord) -> RunResult:
         steps = 0
@@ -68,6 +83,15 @@ class TaskExecutionRunner:
 
         if task.pipeline_status == "done":
             return RunResult(final_status="done")
+
+        set_task_retry_state(
+            self.root,
+            task,
+            retry_count=0,
+            retry_limit=self.max_retries,
+            retry_source=self.retry_source,
+        )
+        clear_task_outcome(self.root, task)
 
         while True:
             current = _STEPS_FROM.get(task.pipeline_status)
@@ -79,26 +103,110 @@ class TaskExecutionRunner:
             save_task(self.root, task)
             mark_stage_started(self.root, task, current)
 
-            report = self.executor(task, current)
-            self._write_report(task, report, steps + 1)
-            mark_stage_finished(self.root, task, report)
+            try:
+                report = self.executor(task, current)
+            except KeyboardInterrupt:
+                reason = f"Execution cancelled during {current}"
+                report = self._terminal_report(
+                    task,
+                    step=current,
+                    verdict="blocked",
+                    summary=reason,
+                    outcome="cancelled",
+                    reason=reason,
+                    retry_count=rejections,
+                )
+                task.status = "cancelled"
+                mark_task_outcome(self.root, task, kind="cancelled", stage=current, reason=reason)
+                self._write_report(task, report, steps + 1)
+                mark_stage_finished(self.root, task, report)
+                save_task(self.root, task)
+                return RunResult("cancelled", steps + 1, "blocked")
+            except Exception as exc:
+                reason = f"{current} failed with unhandled error: {exc}"
+                report = self._terminal_report(
+                    task,
+                    step=current,
+                    verdict="fail",
+                    summary=reason,
+                    outcome="failed",
+                    reason=reason,
+                    retry_count=rejections,
+                    warnings=[str(exc)],
+                )
+                task.status = "failed"
+                mark_task_outcome(self.root, task, kind="failed", stage=current, reason=reason)
+                self._write_report(task, report, steps + 1)
+                mark_stage_finished(self.root, task, report)
+                save_task(self.root, task)
+                return RunResult("failed", steps + 1, "fail")
+            report.retry_count = rejections
+            report.retry_limit = self.max_retries
+            report.retry_source = self.retry_source
 
             steps += 1
             last_verdict = report.verdict
             target = _ROUTES.get((current, report.verdict))
             if target is None:
-                task.status = "flagged"
+                outcome = "blocked" if report.verdict == "blocked" else "failed"
+                reason = report.summary or f"{current} returned unsupported verdict `{report.verdict}`"
+                report = self._terminal_report(
+                    task,
+                    step=report.step,
+                    verdict=report.verdict,
+                    summary=report.summary,
+                    outcome=outcome,
+                    reason=reason,
+                    retry_count=report.retry_count,
+                    warnings=report.warnings,
+                    feedback=report.feedback,
+                    files_changed=report.files_changed,
+                    tests=report.tests,
+                )
+                self._write_report(task, report, steps)
+                task.status = "flagged" if outcome == "blocked" else "failed"
+                mark_task_outcome(self.root, task, kind=outcome, stage=current, reason=reason)
+                mark_stage_finished(self.root, task, report)
                 save_task(self.root, task)
-                return RunResult("flagged", steps, last_verdict)
+                return RunResult(task.status, steps, last_verdict)
 
             if target == "implementing" and current in {"testing", "accepting"}:
                 rejections += 1
-                if rejections >= self.max_rejections:
-                    task.status = "flagged"
+                report.retry_count = rejections
+                report.retry_limit = self.max_retries
+                report.retry_decision = "retry" if rejections <= self.max_retries else "final"
+                set_task_retry_state(
+                    self.root,
+                    task,
+                    retry_count=rejections,
+                    retry_limit=self.max_retries,
+                    retry_source=self.retry_source,
+                )
+                if rejections > self.max_retries:
+                    reason = f"Retry limit exhausted after {current} {report.verdict}: {report.summary}"
+                    report = self._terminal_report(
+                        task,
+                        step=report.step,
+                        verdict=report.verdict,
+                        summary=report.summary,
+                        outcome="failed",
+                        reason=reason,
+                        retry_count=report.retry_count,
+                        warnings=report.warnings,
+                        feedback=report.feedback,
+                        files_changed=report.files_changed,
+                        tests=report.tests,
+                    )
+                    task.status = "failed"
+                    mark_task_outcome(self.root, task, kind="failed", stage=current, reason=reason)
+                    self._write_report(task, report, steps)
+                    mark_stage_finished(self.root, task, report)
                     save_task(self.root, task)
-                    return RunResult("flagged", steps, last_verdict)
+                    return RunResult("failed", steps, last_verdict)
 
             if target == "done":
+                self._write_report(task, report, steps)
+                mark_stage_finished(self.root, task, report)
                 if current != "commit_to_git":
                     task.pipeline_status = "done"
                     task.status = "done"
@@ -106,10 +214,32 @@ class TaskExecutionRunner:
                 return RunResult("done", steps, last_verdict)
 
             if target == "flagged":
+                outcome = "blocked" if report.verdict == "blocked" else "flagged"
+                reason = report.summary or f"{current} ended with `{report.verdict}`"
+                report = self._terminal_report(
+                    task,
+                    step=report.step,
+                    verdict=report.verdict,
+                    summary=report.summary,
+                    outcome=outcome,
+                    reason=reason,
+                    retry_count=report.retry_count,
+                    warnings=report.warnings,
+                    feedback=report.feedback,
+                    files_changed=report.files_changed,
+                    tests=report.tests,
+                )
                 task.status = "flagged"
+                mark_task_outcome(self.root, task, kind=outcome, stage=current, reason=reason)
+                self._write_report(task, report, steps)
+                mark_stage_finished(self.root, task, report)
                 save_task(self.root, task)
                 return RunResult("flagged", steps, last_verdict)
 
+            if report.retry_decision != "retry":
+                clear_task_outcome(self.root, task)
+            self._write_report(task, report, steps)
+            mark_stage_finished(self.root, task, report)
             task.pipeline_status = target  # type: ignore[assignment]
             save_task(self.root, task)
 
@@ -119,4 +249,36 @@ class TaskExecutionRunner:
         (reports_dir / filename).write_text(
             yaml.safe_dump(report.model_dump(mode="python"), sort_keys=False),
             encoding="utf-8",
+        )
+
+    def _terminal_report(
+        self,
+        task: TaskRecord,
+        *,
+        step: str,
+        verdict: str,
+        summary: str,
+        outcome: OutcomeKind,
+        reason: str,
+        retry_count: int,
+        feedback: str = "",
+        files_changed: list[str] | None = None,
+        tests: dict[str, int] | None = None,
+        warnings: list[str] | None = None,
+    ) -> StageReport:
+        return StageReport(
+            task_id=task.id,
+            step=step,  # type: ignore[arg-type]
+            verdict=verdict,  # type: ignore[arg-type]
+            summary=summary,
+            feedback=feedback,
+            files_changed=files_changed or [],
+            tests=tests or {"added": 0, "passing": 0},
+            warnings=warnings or [],
+            retry_count=retry_count,
+            retry_limit=self.max_retries,
+            retry_source=self.retry_source,  # type: ignore[arg-type]
+            retry_decision="final",
+            outcome=outcome,
+            outcome_reason=reason,
         )

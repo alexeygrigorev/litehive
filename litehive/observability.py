@@ -9,11 +9,21 @@ from litehive.models import TaskRecord
 
 def render_task_summary(task: TaskRecord, *, active: bool) -> list[str]:
     marker = "*" if active else " "
-    lines = [f"{marker} {task.id} [{task.status}/{task.pipeline_status}] {task.mode} {task.title}"]
+    retry_policy = task.retry_policy.max_retries
+    retry_label = "default" if retry_policy is None else str(retry_policy)
+    lines = [f"{marker} {task.id} [{task.status}/{task.pipeline_status}] {task.mode} retry_limit={retry_label} {task.title}"]
+    if task.depends_on:
+        lines.append(f"  depends_on={', '.join(task.depends_on)}")
 
     runtime = task.runtime
+    configured_limit = retry_policy if retry_policy is not None else "default"
+    lines.append(
+        f"  retry_policy=configured:{configured_limit} effective:{runtime.retry_limit} source={runtime.retry_source}"
+    )
     if runtime.execution_status != "idle" or runtime.current_stage.step or runtime.last_stage.step:
         parts = [f"run={runtime.execution_status}"]
+        parts.append(f"retries={runtime.retry_count}/{runtime.retry_limit}")
+        parts.append(f"retry_source={runtime.retry_source}")
         if runtime.run_started_at:
             parts.append(f"started={runtime.run_started_at}")
         if runtime.current_stage.step:
@@ -63,6 +73,12 @@ def render_task_summary(task: TaskRecord, *, active: bool) -> list[str]:
                 f"duration={_seconds_label(runtime.last_stage.duration_seconds)} summary={summary}"
             )
         )
+
+    if runtime.last_outcome.kind is not None:
+        stage = runtime.last_outcome.stage or "-"
+        reason = runtime.last_outcome.reason or "-"
+        recorded_at = runtime.last_outcome.recorded_at or "-"
+        lines.append(f"  outcome={runtime.last_outcome.kind} stage={stage} recorded_at={recorded_at} reason={reason}")
 
     if task.git.commit_sha:
         lines.append(f"  commit={task.git.commit_sha}")

@@ -16,6 +16,7 @@ from litehive.models import (
     RuntimeSubagentState,
     StageReport,
     SubagentRef,
+    TaskOutcomeState,
     TaskRecord,
     TaskRuntime,
     WorkspaceState,
@@ -23,7 +24,7 @@ from litehive.models import (
 )
 
 VALID_TASK_PRIORITIES = {"low", "medium", "high"}
-VALID_TASK_ENGINES = {"codex", "opencode", "gemini"}
+VALID_TASK_ENGINES = {"codex", "opencode", "gemini", "copilot"}
 
 
 @dataclass(slots=True)
@@ -154,11 +155,14 @@ def create_task(
     title: str,
     mode: str = "implementation",
     engine: str | None = None,
+    retry_limit: int | None = None,
     goal: str = "",
     acceptance_criteria: list[str] | None = None,
     auto_commit: bool = True,
 ) -> TaskRecord:
     ensure_workspace(root)
+    if retry_limit is not None and retry_limit < 0:
+        raise ValueError("Retry limit must be 0 or greater")
     with _workspace_lock(root):
         task_id = _next_task_id(root)
         slug = slugify(title)
@@ -170,6 +174,7 @@ def create_task(
             mode=mode,  # type: ignore[arg-type]
             goal=goal,
             acceptance_criteria=acceptance_criteria or [],
+            retry_policy={"max_retries": retry_limit},
             git={
                 "auto_commit": auto_commit,
                 "commit_message": f"litehive: checkpoint {task_id} {slug}",
@@ -239,6 +244,9 @@ def mark_task_run_started(root: Path, task: TaskRecord) -> None:
     task.runtime.execution_status = "running"
     task.runtime.run_started_at = now
     task.runtime.updated_at = now
+    task.runtime.retry_count = 0
+    task.runtime.retry_limit = task.runtime.retry_limit
+    task.runtime.last_outcome = TaskOutcomeState()
     task.runtime.current_stage = task.runtime.current_stage.model_copy(
         update={
             "step": None,
@@ -260,6 +268,34 @@ def mark_task_run_finished(root: Path, task: TaskRecord, final_status: str) -> N
     task.runtime.execution_status = final_status
     task.runtime.updated_at = now
     task.runtime.active_subagent = None
+    save_task_runtime(root, task)
+
+
+def set_task_retry_state(
+    root: Path,
+    task: TaskRecord,
+    *,
+    retry_count: int,
+    retry_limit: int,
+    retry_source: str,
+) -> None:
+    task.runtime.updated_at = utcnow()
+    task.runtime.retry_count = retry_count
+    task.runtime.retry_limit = retry_limit
+    task.runtime.retry_source = retry_source
+    save_task_runtime(root, task)
+
+
+def clear_task_outcome(root: Path, task: TaskRecord) -> None:
+    task.runtime.updated_at = utcnow()
+    task.runtime.last_outcome = TaskOutcomeState()
+    save_task_runtime(root, task)
+
+
+def mark_task_outcome(root: Path, task: TaskRecord, *, kind: str, stage: str, reason: str) -> None:
+    now = utcnow()
+    task.runtime.updated_at = now
+    task.runtime.last_outcome = TaskOutcomeState(kind=kind, stage=stage, reason=reason, recorded_at=now)
     save_task_runtime(root, task)
 
 
@@ -581,10 +617,14 @@ def move_queued_task(root: Path, task_id: str, position: int) -> WorkspaceState:
 def requeue_task(root: Path, task_id: str, *, front: bool = False) -> TaskRecord:
     with _workspace_lock(root):
         task = require_task(root, task_id)
-        if task.status not in {"flagged", "cancelled"}:
-            raise ValueError(f"Task {task.id} is not flagged or cancelled")
+        if task.status not in {"flagged", "cancelled", "failed"}:
+            raise ValueError(f"Task {task.id} is not flagged, failed, or cancelled")
         task.status = "queued"
         task.pipeline_status = "implementing"
+        task.runtime.last_outcome = TaskOutcomeState()
+        task.runtime.retry_count = 0
+        task.runtime.retry_limit = 0
+        task.runtime.retry_source = "global"
         append_journal(root, task, "Task requeued for another implementation pass.")
         save_task(root, task)
 
@@ -603,7 +643,9 @@ def update_task_metadata(
     root: Path,
     task_id: str,
     *,
+    depends_on: list[str] | object = ...,
     engine: str | None | object = ...,
+    retry_limit: int | None | object = ...,
     priority: str | object = ...,
     goal: str | object = ...,
     mode: str | object = ...,
@@ -612,10 +654,18 @@ def update_task_metadata(
     with _workspace_lock(root):
         task = require_task(root, task_id)
 
+        if depends_on is not ...:
+            task.depends_on = list(depends_on)
+
         if engine is not ...:
             if engine is not None and engine not in VALID_TASK_ENGINES:
                 raise ValueError(f"Unsupported engine '{engine}'")
             task.engine = engine
+
+        if retry_limit is not ...:
+            if retry_limit is not None and retry_limit < 0:
+                raise ValueError("Retry limit must be 0 or greater")
+            task.retry_policy.max_retries = retry_limit
 
         if priority is not ...:
             if priority not in VALID_TASK_PRIORITIES:

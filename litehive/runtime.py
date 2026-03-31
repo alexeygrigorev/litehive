@@ -14,6 +14,7 @@ from litehive.git_ops import (
     checkpoint_message,
     commit_task,
     current_head,
+    has_changes,
     is_git_repo,
     rollback_message,
     rollback_task,
@@ -55,6 +56,16 @@ class TaskPoolRunSummary:
 
 
 @dataclass(slots=True)
+class TaskPoolStopConditions:
+    stop_on_failure: bool = False
+    max_tasks: int | None = None
+    stop_on_execution_limit: bool = False
+    quota_threshold: int | None = None
+    budget_threshold: int | None = None
+    stop_on_dirty_git: bool = False
+
+
+@dataclass(slots=True)
 class RollbackSummary:
     task: TaskRecord
     rollback_sha: str
@@ -84,6 +95,7 @@ def run_task(root: Path, task: TaskRecord | None, *, engine_override: str | None
 
     append_journal(root, task, f"Execution started with engine `{engine_name}`.")
     mark_task_run_started(root, task)
+    retry_limit, retry_source = resolve_task_retry_policy(task, config)
 
     runner = TaskExecutionRunner(
         root,
@@ -95,6 +107,8 @@ def run_task(root: Path, task: TaskRecord | None, *, engine_override: str | None
             config=config,
             config_auto_commit=config.auto_commit,
         ),
+        max_retries=retry_limit,
+        retry_source=retry_source,
     )
     result = runner.run(task)
     mark_task_run_finished(root, task, result.final_status)
@@ -109,12 +123,17 @@ def run_task_pool(
     root: Path,
     *,
     engine_override: str | None = None,
+    stop_conditions: TaskPoolStopConditions | None = None,
     stop_when: Callable[[list[ExecutionSummary]], bool] | None = None,
 ) -> TaskPoolRunSummary:
     root = root.resolve()
     executions: list[ExecutionSummary] = []
+    conditions = stop_conditions or TaskPoolStopConditions()
 
     while True:
+        stop_reason = _pool_stop_reason(root, executions, conditions)
+        if stop_reason is not None:
+            return TaskPoolRunSummary(executions=executions, stop_reason=stop_reason, blocked=[])
         if stop_when is not None and stop_when(executions):
             return TaskPoolRunSummary(executions=executions, stop_reason="stop_condition_reached", blocked=[])
         execution, blocked = run_next_task_with_override(root, engine_override=engine_override)
@@ -132,6 +151,67 @@ def run_next_task_with_override(
     return run_task(root, selection.task, engine_override=engine_override), selection.blocked
 
 
+def _pool_stop_reason(
+    root: Path,
+    executions: list[ExecutionSummary],
+    conditions: TaskPoolStopConditions,
+) -> str | None:
+    if conditions.stop_on_dirty_git and _git_worktree_is_dirty(root):
+        return "dirty_git_state"
+    if conditions.max_tasks is not None and len(executions) >= conditions.max_tasks:
+        return "max_tasks_reached"
+    if conditions.quota_threshold is not None and _count_execution_limits(executions, kind="quota") >= conditions.quota_threshold:
+        return "quota_threshold_reached"
+    if conditions.budget_threshold is not None and _count_execution_limits(executions, kind="budget") >= conditions.budget_threshold:
+        return "budget_threshold_reached"
+    if not executions:
+        return None
+
+    latest = executions[-1]
+    final_status = latest.result.final_status if latest.result is not None else None
+    if conditions.stop_on_failure and final_status is not None and final_status != "done":
+        return "failure_detected"
+    if conditions.stop_on_execution_limit and _execution_hit_limit(latest):
+        return "execution_limit_reached"
+    return None
+
+
+def _git_worktree_is_dirty(root: Path) -> bool:
+    return is_git_repo(root) and has_changes(root)
+
+
+def _execution_hit_limit(execution: ExecutionSummary) -> bool:
+    return _execution_limit_kind(execution) is not None
+
+
+def _execution_limit_kind(execution: ExecutionSummary) -> str | None:
+    task = execution.task
+    if task is None:
+        return None
+    outcome = task.runtime.last_outcome
+    if outcome.kind != "blocked":
+        return None
+    reason = outcome.reason.lower()
+    if any(marker in reason for marker in ("budget", "credit", "insufficient funds")):
+        return "budget"
+    if any(
+        marker in reason
+        for marker in (
+            "quota",
+            "usage limit",
+            "capacity limit",
+            "rate limit",
+            "too many requests",
+        )
+    ):
+        return "quota"
+    return None
+
+
+def _count_execution_limits(executions: list[ExecutionSummary], *, kind: str) -> int:
+    return sum(1 for execution in executions if _execution_limit_kind(execution) == kind)
+
+
 def rollback_completed_task(root: Path, task_id: str) -> RollbackSummary:
     root = root.resolve()
     task = get_task(root, task_id)
@@ -143,6 +223,13 @@ def rollback_completed_task(root: Path, task_id: str) -> RollbackSummary:
     attempt = task.git.checkpoint_attempts
     task.status = "queued"
     task.pipeline_status = "implementing"
+    task.runtime.last_outcome.kind = None
+    task.runtime.last_outcome.stage = None
+    task.runtime.last_outcome.reason = ""
+    task.runtime.last_outcome.recorded_at = None
+    task.runtime.retry_count = 0
+    task.runtime.retry_limit = 0
+    task.runtime.retry_source = "global"
     task.git.commit_sha = None
     task.git.rolled_back_checkpoint_attempt = attempt
     append_journal(
@@ -177,6 +264,13 @@ def recover_completed_task(root: Path, task_id: str) -> TaskRecord:
 
     task.status = "queued"
     task.pipeline_status = "implementing"
+    task.runtime.last_outcome.kind = None
+    task.runtime.last_outcome.stage = None
+    task.runtime.last_outcome.reason = ""
+    task.runtime.last_outcome.recorded_at = None
+    task.runtime.retry_count = 0
+    task.runtime.retry_limit = 0
+    task.runtime.retry_source = "global"
     task.git.commit_sha = None
     append_journal(root, task, "Task recovered for another implementation pass.")
     save_task(root, task)
@@ -206,6 +300,12 @@ def resolve_engine_name(
     return config.default_engine
 
 
+def resolve_task_retry_policy(task: TaskRecord, config: LitehiveConfig) -> tuple[int, str]:
+    if task.retry_policy.max_retries is not None:
+        return task.retry_policy.max_retries, "task"
+    return config.default_retry_limit, "global"
+
+
 def _require_completed_task(task: TaskRecord, action: str) -> None:
     if task.status != "done" or task.pipeline_status != "done":
         raise GitError(f"Task {task.id} is not completed; cannot {action}")
@@ -228,7 +328,12 @@ def build_executor(
                 auto_commit_enabled=config_auto_commit and current_task.git.auto_commit,
             )
 
-        prompt = stage_prompt(current_task, step, workspace_context=workspace_context)
+        prompt = stage_prompt(
+            current_task,
+            step,
+            workspace_context=workspace_context,
+            process_profile=config.process_profile,
+        )
         fallback_events: list[str] = []
         engines = _engine_attempt_order(initial_engine_name, config.engine_fallbacks)
 
@@ -281,6 +386,8 @@ def _model_for_engine(config: LitehiveConfig, engine_name: str) -> str | None:
         return config.opencode_model
     if engine_name == "gemini":
         return config.gemini_model
+    if engine_name == "copilot":
+        return config.copilot_model
     return None
 
 

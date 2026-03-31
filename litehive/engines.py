@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import re
 from pathlib import Path
 
@@ -10,7 +9,9 @@ from litehive.external_cli import (
     AdapterCapabilities,
     CLIExecutionResult,
     ExternalCLIAdapter,
+    extract_jsonl_errors,
     extract_jsonl_messages,
+    iter_jsonl_payloads,
     parse_stage_report_text,
 )
 
@@ -78,24 +79,56 @@ class GeminiCLIAdapter(ExternalCLIAdapter):
     ):
         transcript = self.render_transcript(execution)
         if transcript == execution.transcript:
-            stderr_lines = []
-            for raw_line in execution.stdout.splitlines():
-                line = raw_line.strip()
-                if not line:
-                    continue
-                try:
-                    payload = json.loads(line)
-                except (json.JSONDecodeError, ValueError):
-                    continue
-                if not isinstance(payload, dict) or payload.get("type") != "tool_result":
-                    continue
-                if payload.get("status") != "error":
-                    continue
-                error = payload.get("error")
-                if isinstance(error, dict) and isinstance(error.get("message"), str):
-                    stderr_lines.append(error["message"])
+            stderr_lines = extract_jsonl_errors(execution.stdout)
             if stderr_lines:
                 transcript = "\n".join(stderr_lines)
+        return parse_stage_report_text(
+            task_id=task_id,
+            step=step,  # type: ignore[arg-type]
+            transcript=transcript,
+            subagent_status=subagent_status,  # type: ignore[arg-type]
+        )
+
+
+class CopilotCLIAdapter(ExternalCLIAdapter):
+    def build_command(self, prompt: str, cwd: Path, model: str | None = None) -> list[str]:
+        command = [
+            self.binary,
+            "-p",
+            prompt,
+            "--output-format",
+            "json",
+            "--allow-all-tools",
+            "--autopilot",
+            "--no-auto-update",
+            "--add-dir",
+            str(cwd),
+        ]
+        if model:
+            command.extend(["--model", model])
+        return command
+
+    def render_transcript(self, execution: CLIExecutionResult) -> str:
+        assistant_text = _extract_copilot_transcript(execution.stdout)
+        if assistant_text:
+            if execution.stderr.strip():
+                return f"{assistant_text}\n\n[stderr]\n{execution.stderr.strip()}"
+            return assistant_text
+        return execution.transcript
+
+    def parse_stage_report(
+        self,
+        *,
+        task_id: str,
+        step: str,
+        execution: CLIExecutionResult,
+        subagent_status: str,
+    ):
+        transcript = self.render_transcript(execution)
+        if transcript == execution.transcript:
+            error_lines = _extract_copilot_errors(execution.stdout)
+            if error_lines:
+                transcript = "\n".join(error_lines)
         return parse_stage_report_text(
             task_id=task_id,
             step=step,  # type: ignore[arg-type]
@@ -208,6 +241,15 @@ ENGINE_REGISTRY: dict[str, ExternalCLIAdapter] = {
             transcript_format="jsonl",
         ),
     ),
+    "copilot": CopilotCLIAdapter(
+        name="copilot",
+        binary="copilot",
+        capabilities=AdapterCapabilities(
+            supports_model_override=True,
+            strips_environment=False,
+            transcript_format="jsonl",
+        ),
+    ),
 }
 
 
@@ -224,3 +266,46 @@ def classify_execution_limit(text: str) -> str | None:
         if needle in normalized:
             return reason
     return None
+
+
+def _extract_copilot_transcript(stdout: str) -> str:
+    final_messages: list[str] = []
+    deltas: list[str] = []
+    for payload in iter_jsonl_payloads(stdout):
+        event_type = payload.get("type")
+        data = payload.get("data")
+        if not isinstance(data, dict):
+            continue
+        if event_type == "assistant.message":
+            content = data.get("content")
+            if isinstance(content, str) and content:
+                final_messages.append(content)
+        elif event_type == "assistant.message_delta":
+            content = data.get("deltaContent")
+            if isinstance(content, str) and content:
+                deltas.append(content)
+    if final_messages:
+        return "".join(final_messages).strip()
+    return "".join(deltas).strip()
+
+
+def _extract_copilot_errors(stdout: str) -> list[str]:
+    errors = extract_jsonl_errors(stdout)
+    if errors:
+        return errors
+
+    tool_errors: list[str] = []
+    for payload in iter_jsonl_payloads(stdout):
+        if payload.get("type") != "tool.execution_complete":
+            continue
+        data = payload.get("data")
+        if not isinstance(data, dict) or data.get("success", True):
+            continue
+        result = data.get("result")
+        if isinstance(result, dict):
+            content = result.get("content") or result.get("detailedContent")
+            if isinstance(content, str) and content:
+                tool_errors.append(content)
+        elif isinstance(result, str) and result:
+            tool_errors.append(result)
+    return tool_errors

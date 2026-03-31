@@ -138,12 +138,52 @@ def extract_jsonl_messages(stdout: str) -> str:
             continue
         if not isinstance(payload, dict):
             continue
-        if payload.get("type") != "message" or payload.get("role") != "assistant":
+        content: str | None = None
+        if payload.get("type") == "message" and payload.get("role") == "assistant":
+            raw_content = payload.get("content")
+            if isinstance(raw_content, str) and raw_content:
+                content = raw_content
+        elif payload.get("type") == "assistant.message":
+            data = payload.get("data")
+            if isinstance(data, dict):
+                raw_content = data.get("content")
+                if isinstance(raw_content, str) and raw_content:
+                    content = raw_content
+        if content is None:
             continue
-        content = payload.get("content")
-        if isinstance(content, str) and content:
-            parts.append(content)
+        parts.append(content)
     return "".join(parts).strip()
+
+
+def iter_jsonl_payloads(stdout: str) -> list[dict[str, object]]:
+    payloads: list[dict[str, object]] = []
+    for raw_line in stdout.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        try:
+            payload = json.loads(line)
+        except (json.JSONDecodeError, ValueError):
+            continue
+        if isinstance(payload, dict):
+            payloads.append(payload)
+    return payloads
+
+
+def extract_jsonl_errors(stdout: str) -> list[str]:
+    errors: list[str] = []
+    for payload in iter_jsonl_payloads(stdout):
+        if payload.get("type") == "tool_result" and payload.get("status") == "error":
+            error = payload.get("error")
+            if isinstance(error, dict) and isinstance(error.get("message"), str):
+                errors.append(error["message"])
+            continue
+
+        if payload.get("type") == "error":
+            data = payload.get("data")
+            if isinstance(data, dict) and isinstance(data.get("message"), str):
+                errors.append(data["message"])
+    return errors
 
 
 def parse_stage_report_text(

@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 
 
 TaskMode = Literal["tasks", "implementation"]
-TaskStatus = Literal["queued", "in_progress", "done", "flagged", "cancelled"]
+TaskStatus = Literal["queued", "in_progress", "done", "flagged", "cancelled", "failed"]
 PipelineStatus = Literal[
     "backlog",
     "grooming",
@@ -20,6 +20,8 @@ PipelineStatus = Literal[
     "done",
 ]
 SubagentStatus = Literal["created", "running", "completed", "failed", "blocked"]
+OutcomeKind = Literal["flagged", "blocked", "cancelled", "failed"]
+RetrySource = Literal["global", "task"]
 
 
 def utcnow() -> str:
@@ -70,16 +72,31 @@ class RuntimeEngineSwitch(BaseModel):
     happened_at: str = Field(default_factory=utcnow)
 
 
+class TaskRetryPolicy(BaseModel):
+    max_retries: int | None = None
+
+
+class TaskOutcomeState(BaseModel):
+    kind: OutcomeKind | None = None
+    stage: str | None = None
+    reason: str = ""
+    recorded_at: str | None = None
+
+
 class TaskRuntime(BaseModel):
     git: RuntimeGitState = Field(default_factory=RuntimeGitState)
     execution_status: str = "idle"
     run_started_at: str | None = None
     updated_at: str | None = None
+    retry_count: int = 0
+    retry_limit: int = 0
+    retry_source: RetrySource = "global"
     current_stage: RuntimeStageState = Field(default_factory=RuntimeStageState)
     last_stage: RuntimeStageState = Field(default_factory=RuntimeStageState)
     active_subagent: RuntimeSubagentState | None = None
     last_subagent: RuntimeSubagentState | None = None
     last_engine_switch: RuntimeEngineSwitch | None = None
+    last_outcome: TaskOutcomeState = Field(default_factory=TaskOutcomeState)
 
 
 class GitSettings(BaseModel):
@@ -109,6 +126,7 @@ class TaskRecord(BaseModel):
     plan: list[str] = Field(default_factory=list)
     subagents: list[SubagentRef] = Field(default_factory=list)
     git: GitSettings = Field(default_factory=GitSettings)
+    retry_policy: TaskRetryPolicy = Field(default_factory=TaskRetryPolicy)
     runtime: TaskRuntime = Field(default_factory=TaskRuntime, exclude=True)
 
 
@@ -127,4 +145,10 @@ class StageReport(BaseModel):
     files_changed: list[str] = Field(default_factory=list)
     tests: dict[str, int] = Field(default_factory=lambda: {"added": 0, "passing": 0})
     warnings: list[str] = Field(default_factory=list)
+    retry_count: int = 0
+    retry_limit: int = 0
+    retry_source: RetrySource = "global"
+    retry_decision: Literal["continue", "retry", "final"] = "continue"
+    outcome: OutcomeKind | None = None
+    outcome_reason: str = ""
     created_at: str = Field(default_factory=utcnow)

@@ -7,6 +7,7 @@ from pathlib import Path
 
 import yaml
 
+from litehive.config import resolve_process_profile
 from litehive.external_cli import CLIExecutionResult, parse_stage_report_text
 from litehive.engines import EngineError, classify_execution_limit, get_engine
 from litehive.models import StageReport, SubagentRef, TaskRecord, utcnow
@@ -127,41 +128,79 @@ class SubagentManager:
         )
 
 
-def stage_prompt(task: TaskRecord, step: str, workspace_context: str = "") -> str:
+def stage_prompt(
+    task: TaskRecord,
+    step: str,
+    workspace_context: str = "",
+    *,
+    process_profile: str = "generic",
+) -> str:
     """Build the prompt for a stage subagent."""
     stage_instructions = {
-        "grooming": (
-            "Clarify the task, inspect the repo if needed, and produce a concrete execution plan. "
-            "Do not make code changes in this stage."
-        ),
-        "implementing": (
-            "Implement the task in this repository. Keep changes tightly scoped and complete the work "
-            "needed for the acceptance criteria."
-        ),
-        "testing": (
-            "Validate the implementation. Run focused checks or tests where possible and report failures "
-            "precisely. Only make minimal fixes if absolutely necessary."
-        ),
-        "accepting": (
-            "Review the current task result against the acceptance criteria and decide whether it should "
-            "be accepted or sent back."
-        ),
+        "grooming": [
+            "Clarify the task, inspect the repo if needed, and produce a concrete execution plan.",
+            "Do not make code changes in this stage.",
+        ],
+        "implementing": [
+            "Implement the task in this repository.",
+            "Keep changes tightly scoped and complete the work needed for the acceptance criteria.",
+        ],
+        "testing": [
+            "Validate the implementation.",
+            "Run focused checks or tests where possible and report failures precisely.",
+            "Only make minimal fixes if absolutely necessary.",
+        ],
+        "accepting": [
+            "Review the current task result against the acceptance criteria and decide whether it should be accepted or sent back.",
+        ],
     }
+    profile = resolve_process_profile(process_profile)
+    workspace_overlay = profile.get("workspace_overlay", [])
+    stage_overlay = profile.get("stage_overlay", {}).get(step, [])
     lines = [
         f"Task: {task.id} {task.title}",
         f"Stage: {step}",
+        f"Process profile: {profile['label']}",
         "",
         "Workspace context:",
         workspace_context.strip() or "No workspace context provided.",
         "",
-        "Stage instructions:",
-        stage_instructions.get(step, "Complete the requested stage."),
+        "Shared process:",
+        f"- Orchestrator model: {profile['orchestrator_model']}",
+        f"- Routing model: {profile['routing_model']}",
+        f"- Shared stages: {' -> '.join(profile['shared_stages'])}.",
+        f"- Role model: {profile['role_model']}",
+        f"- Source of truth: {profile['source_of_truth']}",
+        f"- Task source of truth: {profile['task_source_of_truth']}",
+        f"- TDD expectations: {profile['tdd_expectations']}",
+        f"- Verification discipline: {profile['verification_discipline']}",
+        f"- Acceptance flow: {profile['acceptance_flow']}",
+        f"- Commit and recovery: {profile['commit_recovery']}",
         "",
-        "Goal:",
-        task.goal or task.title,
-        "",
-        "Acceptance criteria:",
+        "Project overlay:",
+        f"- {profile['summary']}",
     ]
+    lines.extend(workspace_overlay or ["- No project-specific overlay provided."])
+    lines.extend(
+        [
+            "",
+            "Prompt scaffold:",
+            *profile.get("prompt_scaffold", []),
+            "",
+            "Stage instructions:",
+            *stage_instructions.get(step, ["Complete the requested stage."]),
+        ]
+    )
+    lines.extend(stage_overlay)
+    lines.extend(
+        [
+            "",
+            "Goal:",
+            task.goal or task.title,
+            "",
+            "Acceptance criteria:",
+        ]
+    )
     if task.acceptance_criteria:
         lines.extend(f"- {item}" for item in task.acceptance_criteria)
     else:
