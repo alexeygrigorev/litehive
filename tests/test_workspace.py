@@ -29,6 +29,7 @@ from litehive.tasks import (
     list_tasks,
     load_state,
     move_queued_task,
+    peek_next_task_selection,
     save_state,
     save_task,
     set_active_task,
@@ -539,6 +540,37 @@ def test_resolve_next_task_skips_ineligible_active_and_queue_entries(tmp_path: P
     assert state.queue == [queued.id]
 
 
+def test_resolve_next_task_prefers_ready_prerequisite_over_earlier_blocked_dependent(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    blocked = create_task(tmp_path, title="Blocked dependent")
+    unrelated = create_task(tmp_path, title="Unrelated ready task")
+    prerequisite = create_task(tmp_path, title="Ready prerequisite")
+
+    blocked.depends_on = [prerequisite.id]
+    save_task(tmp_path, blocked)
+
+    task = resolve_next_task(tmp_path)
+
+    assert task is not None
+    assert task.id == prerequisite.id
+
+
+def test_peek_next_task_selection_reports_blocked_dependencies(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    blocked = create_task(tmp_path, title="Blocked dependent")
+    prerequisite = create_task(tmp_path, title="Prerequisite")
+
+    blocked.depends_on = [prerequisite.id, "T-9999"]
+    save_task(tmp_path, blocked)
+
+    selection = peek_next_task_selection(tmp_path)
+
+    assert selection.task is not None
+    assert selection.task.id == prerequisite.id
+    assert [entry.task_id for entry in selection.blocked] == [blocked.id]
+    assert selection.blocked[0].blocked_by == [f"{prerequisite.id} (queued/backlog)", "T-9999 (missing)"]
+
+
 def test_run_task_pool_skips_stale_queue_entries(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Real task", auto_commit=False)
@@ -595,6 +627,44 @@ def test_run_task_pool_skips_ineligible_active_and_queue_entries(
     state = load_state(tmp_path)
     assert state.active_task_id is None
     assert state.queue == []
+
+
+def test_run_task_pool_reports_blocked_tasks_remaining(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    blocked = create_task(tmp_path, title="Blocked task", auto_commit=False)
+    missing = "T-9999"
+
+    blocked.depends_on = [missing]
+    save_task(tmp_path, blocked)
+
+    summary = run_task_pool(tmp_path)
+
+    assert summary.executions == []
+    assert summary.stop_reason == "blocked_tasks_remaining"
+    assert [entry.task_id for entry in summary.blocked] == [blocked.id]
+    assert summary.blocked[0].blocked_by == [f"{missing} (missing)"]
+    assert load_state(tmp_path).queue == [blocked.id]
+
+
+def test_run_task_pool_reports_and_requeues_blocked_active_task(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    blocked = create_task(tmp_path, title="Blocked active task", auto_commit=False)
+    blocked.depends_on = ["T-9999"]
+    save_task(tmp_path, blocked)
+
+    state = load_state(tmp_path)
+    state.active_task_id = blocked.id
+    state.queue = []
+    save_state(tmp_path, state)
+
+    summary = run_task_pool(tmp_path)
+
+    assert summary.executions == []
+    assert summary.stop_reason == "blocked_tasks_remaining"
+    assert [entry.task_id for entry in summary.blocked] == [blocked.id]
+    state = load_state(tmp_path)
+    assert state.active_task_id is None
+    assert state.queue == [blocked.id]
 
 
 def test_run_task_pool_drains_active_task_without_queued_entries(
@@ -733,6 +803,25 @@ def test_cmd_run_drains_task_pool_and_reports_summary(
     assert "tasks_run: 2" in output
     assert "stop_reason: queue_exhausted" in output
     assert load_state(tmp_path).queue == []
+
+
+def test_cmd_run_reports_blocked_tasks_when_no_runnable_task(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    ensure_workspace(tmp_path)
+    blocked = create_task(tmp_path, title="Blocked task", auto_commit=False)
+    blocked.depends_on = ["T-9999"]
+    save_task(tmp_path, blocked)
+
+    exit_code = _cmd_run(argparse.Namespace(workspace=tmp_path, dry_run=False))
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "No runnable task." in output
+    assert f"blocked: {blocked.id} Blocked task blocked_by=T-9999 (missing)" in output
+    assert "tasks_run: 0" in output
+    assert "stop_reason: blocked_tasks_remaining" in output
 
 
 def test_status_output_includes_runtime_observability(

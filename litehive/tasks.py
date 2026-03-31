@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 import fcntl
 import re
 from contextlib import contextmanager
@@ -23,6 +24,20 @@ from litehive.models import (
 
 VALID_TASK_PRIORITIES = {"low", "medium", "high"}
 VALID_TASK_ENGINES = {"codex", "opencode", "gemini"}
+
+
+@dataclass(slots=True)
+class BlockedTask:
+    task_id: str
+    title: str
+    queue_position: int
+    blocked_by: list[str]
+
+
+@dataclass(slots=True)
+class TaskSelection:
+    task: TaskRecord | None
+    blocked: list[BlockedTask]
 
 
 def load_state(root: Path) -> WorkspaceState:
@@ -400,54 +415,127 @@ def set_active_task(root: Path, task_id: str | None) -> WorkspaceState:
 
 
 def peek_next_task(root: Path) -> TaskRecord | None:
+    return peek_next_task_selection(root).task
+
+
+def peek_next_task_selection(root: Path) -> TaskSelection:
     with _workspace_lock(root):
         state = load_state(root)
-        next_task, mutated = _resolve_next_task_from_state(root, state)
+        next_task, blocked, mutated = _resolve_next_task_from_state(root, state)
         if mutated:
             save_state(root, state)
-        return next_task
+        return TaskSelection(task=next_task, blocked=blocked)
 
 
 def dequeue_next_task(root: Path) -> TaskRecord | None:
+    return dequeue_next_task_selection(root).task
+
+
+def dequeue_next_task_selection(root: Path) -> TaskSelection:
     with _workspace_lock(root):
         state = load_state(root)
-        next_task, mutated = _resolve_next_task_from_state(root, state)
+        next_task, blocked, mutated = _resolve_next_task_from_state(root, state)
         if next_task is None:
             if mutated:
                 save_state(root, state)
-            return None
+            return TaskSelection(task=None, blocked=blocked)
         if state.active_task_id != next_task.id:
             state.active_task_id = next_task.id
             state.queue = [item for item in state.queue if item != next_task.id]
             mutated = True
         if mutated:
             save_state(root, state)
-        return next_task
+        return TaskSelection(task=next_task, blocked=blocked)
 
 
 def _is_task_eligible_for_execution(task: TaskRecord) -> bool:
     return task.status in {"queued", "in_progress"} and task.pipeline_status != "done"
 
 
-def _resolve_next_task_from_state(root: Path, state: WorkspaceState) -> tuple[TaskRecord | None, bool]:
+def _is_task_completed(task: TaskRecord) -> bool:
+    return task.status == "done" and task.pipeline_status == "done"
+
+
+def _task_blockers(task: TaskRecord, tasks_by_id: dict[str, TaskRecord]) -> list[str]:
+    blockers: list[str] = []
+    seen: set[str] = set()
+    for dependency_id in task.depends_on:
+        if dependency_id in seen:
+            continue
+        seen.add(dependency_id)
+        dependency = tasks_by_id.get(dependency_id)
+        if dependency is None:
+            blockers.append(f"{dependency_id} (missing)")
+            continue
+        if not _is_task_completed(dependency):
+            blockers.append(f"{dependency.id} ({dependency.status}/{dependency.pipeline_status})")
+    return blockers
+
+
+def _dependent_task_count(task_id: str, queue: list[str], tasks_by_id: dict[str, TaskRecord]) -> int:
+    count = 0
+    for queued_id in queue:
+        queued_task = tasks_by_id.get(queued_id)
+        if queued_task is None or not _is_task_eligible_for_execution(queued_task):
+            continue
+        if task_id in queued_task.depends_on:
+            count += 1
+    return count
+
+
+def _resolve_next_task_from_state(root: Path, state: WorkspaceState) -> tuple[TaskRecord | None, list[BlockedTask], bool]:
     mutated = False
+    blocked: list[BlockedTask] = []
+    blocked_task_ids: set[str] = set()
+    tasks_by_id = {task.id: task for task in list_tasks(root)}
 
     if state.active_task_id is not None:
-        active_task = get_task(root, state.active_task_id)
+        active_task = tasks_by_id.get(state.active_task_id)
         if active_task is not None and _is_task_eligible_for_execution(active_task):
-            return active_task, mutated
+            blockers = _task_blockers(active_task, tasks_by_id)
+            if not blockers:
+                return active_task, blocked, mutated
+            if active_task.id not in state.queue:
+                state.queue.insert(0, active_task.id)
+            blocked.append(
+                BlockedTask(
+                    task_id=active_task.id,
+                    title=active_task.title,
+                    queue_position=1,
+                    blocked_by=blockers,
+                )
+            )
+            blocked_task_ids.add(active_task.id)
         state.active_task_id = None
         mutated = True
 
-    while state.queue:
-        next_id = state.queue[0]
-        next_task = get_task(root, next_id)
-        if next_task is not None and _is_task_eligible_for_execution(next_task):
-            return next_task, mutated
-        state.queue.pop(0)
-        mutated = True
+    ready_candidates: list[tuple[int, int, TaskRecord]] = []
+    for index, next_id in enumerate(list(state.queue), start=1):
+        next_task = tasks_by_id.get(next_id)
+        if next_task is None or not _is_task_eligible_for_execution(next_task):
+            state.queue.remove(next_id)
+            mutated = True
+            continue
+        blockers = _task_blockers(next_task, tasks_by_id)
+        if blockers:
+            if next_task.id not in blocked_task_ids:
+                blocked.append(
+                    BlockedTask(
+                        task_id=next_task.id,
+                        title=next_task.title,
+                        queue_position=index,
+                        blocked_by=blockers,
+                    )
+                )
+                blocked_task_ids.add(next_task.id)
+            continue
+        ready_candidates.append((_dependent_task_count(next_task.id, state.queue, tasks_by_id), index, next_task))
 
-    return None, mutated
+    if ready_candidates:
+        ready_candidates.sort(key=lambda item: (-item[0], item[1], item[2].id))
+        return ready_candidates[0][2], blocked, mutated
+
+    return None, blocked, mutated
 
 
 def clear_active_task(root: Path) -> WorkspaceState:

@@ -95,6 +95,7 @@ class TaskRecord(BaseModel):
     id: str
     slug: str
     title: str
+    depends_on: list[str] = Field(default_factory=list)
     engine: str | None = None
     mode: TaskMode = "implementation"
     status: TaskStatus = "queued"

@@ -21,6 +21,7 @@ from litehive.tasks import (
     list_tasks,
     load_state,
     move_queued_task,
+    peek_next_task_selection,
     requeue_task,
     require_task,
     update_task_metadata,
@@ -271,17 +272,41 @@ def _cmd_run(args: argparse.Namespace) -> int:
     ensure_workspace(args.workspace)
     engine_override = getattr(args, "engine", None)
     if args.dry_run:
-        task = resolve_next_task(args.workspace)
+        selection = peek_next_task_selection(args.workspace)
+        task = selection.task
         if task is None:
+            if selection.blocked:
+                print("No runnable task.")
+                for blocked in selection.blocked:
+                    print(
+                        f"blocked: {blocked.task_id} {blocked.title} "
+                        f"blocked_by={', '.join(blocked.blocked_by)}"
+                    )
+                return 0
             print("No queued task.")
             return 0
         config = load_config(args.workspace)
         engine_name = resolve_engine_name(task, config, engine_override=engine_override)
         print(f"task: {task.id} {task.title}")
         print(f"engine: {engine_name}")
+        for blocked in selection.blocked:
+            print(
+                f"blocked: {blocked.task_id} {blocked.title} "
+                f"blocked_by={', '.join(blocked.blocked_by)}"
+            )
         return 0
     summary = run_task_pool(args.workspace, engine_override=engine_override)
     if not summary.executions:
+        if summary.blocked:
+            print("No runnable task.")
+            for blocked in summary.blocked:
+                print(
+                    f"blocked: {blocked.task_id} {blocked.title} "
+                    f"blocked_by={', '.join(blocked.blocked_by)}"
+                )
+            print("tasks_run: 0")
+            print(f"stop_reason: {summary.stop_reason}")
+            return 0
         print("No queued task.")
         return 0
     for execution in summary.executions:
@@ -294,6 +319,11 @@ def _cmd_run(args: argparse.Namespace) -> int:
             print(f"last_verdict: {execution.result.last_verdict}")
         if execution.commit_sha:
             print(f"commit: {execution.commit_sha}")
+    for blocked in summary.blocked:
+        print(
+            f"blocked: {blocked.task_id} {blocked.title} "
+            f"blocked_by={', '.join(blocked.blocked_by)}"
+        )
     print(f"tasks_run: {len(summary.executions)}")
     print(f"stop_reason: {summary.stop_reason}")
     return 0

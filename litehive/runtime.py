@@ -23,15 +23,18 @@ from litehive.models import StageReport, TaskRecord
 from litehive.runner import RunResult, StageExecutor, TaskExecutionRunner
 from litehive.subagents import SubagentManager, stage_prompt, stage_report_from_subagent
 from litehive.tasks import (
+    BlockedTask,
     append_journal,
     enqueue_task,
     clear_active_task,
     dequeue_next_task,
+    dequeue_next_task_selection,
     get_task,
     mark_engine_switch,
     mark_task_run_finished,
     mark_task_run_started,
     peek_next_task,
+    peek_next_task_selection,
     save_task_runtime,
     save_task,
 )
@@ -48,6 +51,7 @@ class ExecutionSummary:
 class TaskPoolRunSummary:
     executions: list[ExecutionSummary]
     stop_reason: str
+    blocked: list[BlockedTask]
 
 
 @dataclass(slots=True)
@@ -112,17 +116,20 @@ def run_task_pool(
 
     while True:
         if stop_when is not None and stop_when(executions):
-            return TaskPoolRunSummary(executions=executions, stop_reason="stop_condition_reached")
-        execution = run_next_task_with_override(root, engine_override=engine_override)
+            return TaskPoolRunSummary(executions=executions, stop_reason="stop_condition_reached", blocked=[])
+        execution, blocked = run_next_task_with_override(root, engine_override=engine_override)
         if execution.task is None:
-            return TaskPoolRunSummary(executions=executions, stop_reason="queue_exhausted")
+            stop_reason = "blocked_tasks_remaining" if blocked else "queue_exhausted"
+            return TaskPoolRunSummary(executions=executions, stop_reason=stop_reason, blocked=blocked)
         executions.append(execution)
 
 
-def run_next_task_with_override(root: Path, *, engine_override: str | None = None) -> ExecutionSummary:
+def run_next_task_with_override(
+    root: Path, *, engine_override: str | None = None
+) -> tuple[ExecutionSummary, list[BlockedTask]]:
     root = root.resolve()
-    task = dequeue_next_task(root)
-    return run_task(root, task, engine_override=engine_override)
+    selection = dequeue_next_task_selection(root)
+    return run_task(root, selection.task, engine_override=engine_override), selection.blocked
 
 
 def rollback_completed_task(root: Path, task_id: str) -> RollbackSummary:
