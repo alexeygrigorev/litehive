@@ -68,6 +68,53 @@ def task_file(root: Path, task: TaskRecord) -> Path:
     return task_dir(root, task) / "task.yaml"
 
 
+def task_runtime_file(root: Path, task: TaskRecord) -> Path:
+    return task_dir(root, task) / "runtime.yaml"
+
+
+def _ensure_runtime_ignored(root: Path) -> None:
+    git_info_exclude = root / ".git" / "info" / "exclude"
+    if not git_info_exclude.exists():
+        return
+    existing = git_info_exclude.read_text(encoding="utf-8")
+    entries = [
+        ".litehive/.lock",
+        ".litehive/state.yaml",
+        ".litehive/tasks/*/reports/commit_to_git-*.yaml",
+        ".litehive/tasks/*/runtime.yaml",
+    ]
+    missing_entries = [entry for entry in entries if entry not in existing.splitlines()]
+    if not missing_entries:
+        return
+    with git_info_exclude.open("a", encoding="utf-8") as handle:
+        if existing and not existing.endswith("\n"):
+            handle.write("\n")
+        for entry in missing_entries:
+            handle.write(f"{entry}\n")
+
+
+def _write_task_runtime(root: Path, task: TaskRecord) -> None:
+    task_runtime_file(root, task).write_text(
+        yaml.safe_dump({"git": {"commit_sha": task.git.commit_sha}}, sort_keys=False),
+        encoding="utf-8",
+    )
+    _ensure_runtime_ignored(root)
+
+
+def save_task_runtime(root: Path, task: TaskRecord) -> None:
+    _write_task_runtime(root, task)
+
+
+def _load_task_runtime(root: Path, task: TaskRecord) -> TaskRecord:
+    runtime_file = task_runtime_file(root, task)
+    if not runtime_file.exists():
+        return task
+    data = yaml.safe_load(runtime_file.read_text(encoding="utf-8")) or {}
+    git = data.get("git") or {}
+    task.git.commit_sha = git.get("commit_sha")
+    return task
+
+
 def create_task(
     root: Path,
     *,
@@ -92,7 +139,7 @@ def create_task(
             acceptance_criteria=acceptance_criteria or [],
             git={
                 "auto_commit": auto_commit,
-                "commit_message": f"litehive: complete {task_id} {slug}",
+                "commit_message": f"litehive: checkpoint {task_id} {slug}",
             },
         )
 
@@ -104,6 +151,7 @@ def create_task(
             yaml.safe_dump(task.model_dump(mode="python"), sort_keys=False),
             encoding="utf-8",
         )
+        _write_task_runtime(root, task)
         (base / "journal.md").write_text(
             f"# {task.id} {task.title}\n\n## {utcnow()}\nTask created.\n",
             encoding="utf-8",
@@ -124,7 +172,7 @@ def list_tasks(root: Path) -> list[TaskRecord]:
         if not path.exists():
             continue
         data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-        records.append(TaskRecord(**data))
+        records.append(_load_task_runtime(root, TaskRecord(**data)))
     return records
 
 
@@ -137,10 +185,13 @@ def get_task(root: Path, task_id: str) -> TaskRecord | None:
 
 def save_task(root: Path, task: TaskRecord) -> None:
     task.updated_at = utcnow()
+    task_payload = task.model_dump(mode="python")
+    task_payload["git"]["commit_sha"] = None
     task_file(root, task).write_text(
-        yaml.safe_dump(task.model_dump(mode="python"), sort_keys=False),
+        yaml.safe_dump(task_payload, sort_keys=False),
         encoding="utf-8",
     )
+    _write_task_runtime(root, task)
 
 
 def append_journal(root: Path, task: TaskRecord, message: str) -> None:
@@ -172,3 +223,13 @@ def dequeue_next_task(root: Path) -> TaskRecord | None:
 
 def clear_active_task(root: Path) -> WorkspaceState:
     return set_active_task(root, None)
+
+
+def enqueue_task(root: Path, task_id: str) -> WorkspaceState:
+    with _workspace_lock(root):
+        state = load_state(root)
+        state.active_task_id = None
+        if task_id not in state.queue:
+            state.queue.append(task_id)
+        save_state(root, state)
+        return state

@@ -4,15 +4,15 @@ import subprocess
 
 import pytest
 
+from litehive.cli import _cmd_recover, _cmd_rollback, _cmd_run
 from litehive.engines import get_engine
-from litehive.cli import _cmd_run
 from litehive.config import ensure_workspace
 from litehive.external_cli import CLIExecutionResult, parse_stage_report_text
 from litehive.models import StageReport, SubagentRef
 from litehive.runtime import resolve_next_task, run_next_task
 from litehive.runner import TaskExecutionRunner
 from litehive.subagents import SubagentResult, stage_report_from_subagent
-from litehive.tasks import create_task, list_tasks, load_state, set_active_task
+from litehive.tasks import create_task, get_task, list_tasks, load_state, set_active_task
 
 
 def test_ensure_workspace_creates_layout(tmp_path: Path) -> None:
@@ -52,6 +52,7 @@ def test_runner_advances_task_to_done(tmp_path: Path) -> None:
     assert (reports / "implementing-002.yaml").exists()
     assert (reports / "testing-003.yaml").exists()
     assert (reports / "accepting-004.yaml").exists()
+    assert (reports / "commit_to_git-005.yaml").exists()
 
 
 def test_opencode_strips_provider_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
@@ -239,3 +240,277 @@ def test_cmd_run_dry_run_shows_task_and_engine_without_execution(
     assert "task: T-0001 Queued task" in output
     assert "engine: opencode" in output
     assert load_state(tmp_path).queue == ["T-0001"]
+
+
+def _run(cmd: list[str], cwd: Path) -> str:
+    proc = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, check=True)
+    return proc.stdout.strip()
+
+
+def _init_git_repo(tmp_path: Path) -> str:
+    _run(["git", "init"], tmp_path)
+    _run(["git", "config", "user.name", "Litehive Tests"], tmp_path)
+    _run(["git", "config", "user.email", "tests@example.com"], tmp_path)
+    (tmp_path / "app.txt").write_text("base\n", encoding="utf-8")
+    _run(["git", "add", "app.txt"], tmp_path)
+    _run(["git", "commit", "-m", "initial"], tmp_path)
+    return _run(["git", "rev-parse", "HEAD"], tmp_path)
+
+
+def _completed_subagent_result(tmp_path: Path, step: str) -> SubagentResult:
+    return SubagentResult(
+        ref=SubagentRef(
+            id=f"SA-{step}",
+            role="swe",
+            engine="codex",
+            status="completed",
+            path=f"subagents/{step}",
+        ),
+        execution=CLIExecutionResult(
+            adapter="codex",
+            argv=("codex", "exec"),
+            cwd=tmp_path,
+            exit_code=0,
+            stdout=(
+                "VERDICT: PASS\n"
+                f"SUMMARY: {step} complete\n"
+                "FILES_CHANGED:\n"
+                "- app.txt\n"
+                "TESTS_ADDED: 1\n"
+                "TESTS_PASSING: 1\n"
+                "WARNINGS:\n"
+            ),
+            stderr="",
+        ),
+        transcript="",
+        exit_code=0,
+    )
+
+
+def test_run_next_task_creates_checkpoint_commit_and_persists_policy(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    initial_sha = _init_git_repo(tmp_path)
+    ensure_workspace(tmp_path)
+    create_task(tmp_path, title="Ship checkpoint")
+    (tmp_path / "app.txt").write_text("updated\n", encoding="utf-8")
+
+    monkeypatch.setattr(
+        "litehive.runtime.SubagentManager.run",
+        lambda self, task, role, engine_name, prompt, model=None: _completed_subagent_result(
+            tmp_path, task.pipeline_status
+        ),
+    )
+
+    summary = run_next_task(tmp_path)
+
+    assert summary.task is not None
+    assert summary.result is not None
+    assert summary.result.final_status == "done"
+    assert summary.commit_sha is not None
+    assert _run(["git", "log", "-1", "--pretty=%s"], tmp_path) == "litehive: checkpoint T-0001 ship-checkpoint"
+
+    task = get_task(tmp_path, "T-0001")
+    assert task is not None
+    assert task.git.commit_sha == summary.commit_sha
+    assert task.git.checkpoint_attempts == 1
+    assert task.git.checkpoint_base_sha == initial_sha
+    assert task.git.rolled_back_checkpoint_attempt is None
+
+
+def test_run_next_task_flags_task_when_commit_stage_prerequisite_is_missing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ensure_workspace(tmp_path)
+    create_task(tmp_path, title="Needs git repo")
+    (tmp_path / "app.txt").write_text("updated\n", encoding="utf-8")
+
+    monkeypatch.setattr(
+        "litehive.runtime.SubagentManager.run",
+        lambda self, task, role, engine_name, prompt, model=None: _completed_subagent_result(
+            tmp_path, task.pipeline_status
+        ),
+    )
+
+    summary = run_next_task(tmp_path)
+
+    assert summary.task is not None
+    assert summary.result is not None
+    assert summary.result.final_status == "flagged"
+    task = get_task(tmp_path, "T-0001")
+    assert task is not None
+    assert task.status == "flagged"
+    assert task.pipeline_status == "commit_to_git"
+    assert task.git.commit_sha is None
+
+
+def test_run_next_task_skips_commit_stage_when_auto_commit_disabled(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _init_git_repo(tmp_path)
+    ensure_workspace(tmp_path)
+    create_task(tmp_path, title="Skip commit", auto_commit=False)
+    (tmp_path / "app.txt").write_text("updated\n", encoding="utf-8")
+
+    monkeypatch.setattr(
+        "litehive.runtime.SubagentManager.run",
+        lambda self, task, role, engine_name, prompt, model=None: _completed_subagent_result(
+            tmp_path, task.pipeline_status
+        ),
+    )
+
+    summary = run_next_task(tmp_path)
+
+    assert summary.task is not None
+    assert summary.result is not None
+    assert summary.result.final_status == "done"
+    assert summary.commit_sha is None
+    assert _run(["git", "log", "-1", "--pretty=%s"], tmp_path) == "initial"
+    task = get_task(tmp_path, "T-0001")
+    assert task is not None
+    assert task.git.commit_sha is None
+
+
+def test_run_next_task_flags_task_when_repo_has_unrelated_dirty_changes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _init_git_repo(tmp_path)
+    ensure_workspace(tmp_path)
+    create_task(tmp_path, title="Dirty repo should block commit")
+    (tmp_path / "app.txt").write_text("updated\n", encoding="utf-8")
+    (tmp_path / "notes.txt").write_text("unrelated\n", encoding="utf-8")
+
+    monkeypatch.setattr(
+        "litehive.runtime.SubagentManager.run",
+        lambda self, task, role, engine_name, prompt, model=None: _completed_subagent_result(
+            tmp_path, task.pipeline_status
+        ),
+    )
+
+    summary = run_next_task(tmp_path)
+
+    assert summary.task is not None
+    assert summary.result is not None
+    assert summary.result.final_status == "flagged"
+    assert summary.commit_sha is None
+    assert _run(["git", "log", "-1", "--pretty=%s"], tmp_path) == "initial"
+    task = get_task(tmp_path, "T-0001")
+    assert task is not None
+    assert task.status == "flagged"
+    assert task.pipeline_status == "commit_to_git"
+    assert task.git.commit_sha is None
+
+
+def test_run_next_task_flags_task_when_other_task_state_is_dirty(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _init_git_repo(tmp_path)
+    ensure_workspace(tmp_path)
+    first = create_task(tmp_path, title="Ship first task")
+    create_task(tmp_path, title="Unrelated queued task")
+    (tmp_path / "app.txt").write_text("updated\n", encoding="utf-8")
+
+    monkeypatch.setattr(
+        "litehive.runtime.SubagentManager.run",
+        lambda self, task, role, engine_name, prompt, model=None: _completed_subagent_result(
+            tmp_path, task.pipeline_status
+        ),
+    )
+
+    summary = run_next_task(tmp_path)
+
+    assert summary.task is not None
+    assert summary.task.id == first.id
+    assert summary.result is not None
+    assert summary.result.final_status == "flagged"
+    assert summary.commit_sha is None
+    assert _run(["git", "log", "-1", "--pretty=%s"], tmp_path) == "initial"
+    task = get_task(tmp_path, first.id)
+    assert task is not None
+    assert task.status == "flagged"
+    assert task.pipeline_status == "commit_to_git"
+    assert task.git.commit_sha is None
+
+
+def test_rollback_command_requeues_checkpointed_task(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _init_git_repo(tmp_path)
+    ensure_workspace(tmp_path)
+    create_task(tmp_path, title="Fix after done")
+    (tmp_path / "app.txt").write_text("broken\n", encoding="utf-8")
+
+    monkeypatch.setattr(
+        "litehive.runtime.SubagentManager.run",
+        lambda self, task, role, engine_name, prompt, model=None: _completed_subagent_result(
+            tmp_path, task.pipeline_status
+        ),
+    )
+    run_next_task(tmp_path)
+
+    exit_code = _cmd_rollback(argparse.Namespace(workspace=tmp_path, task_id="T-0001"))
+    rollback_output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "rollback_commit:" in rollback_output
+    assert (tmp_path / "app.txt").read_text(encoding="utf-8") == "base\n"
+    assert _run(["git", "log", "-1", "--pretty=%s"], tmp_path) == "litehive: rollback T-0001 fix-after-done (attempt 1)"
+    task = get_task(tmp_path, "T-0001")
+    assert task is not None
+    assert task.status == "queued"
+    assert task.pipeline_status == "implementing"
+    assert task.git.rolled_back_checkpoint_attempt == 1
+    assert load_state(tmp_path).queue == ["T-0001"]
+
+
+def test_recover_command_requeues_completed_task_without_revert(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _init_git_repo(tmp_path)
+    ensure_workspace(tmp_path)
+    create_task(tmp_path, title="Recover without revert")
+    (tmp_path / "app.txt").write_text("ship-again\n", encoding="utf-8")
+
+    monkeypatch.setattr(
+        "litehive.runtime.SubagentManager.run",
+        lambda self, task, role, engine_name, prompt, model=None: _completed_subagent_result(
+            tmp_path, task.pipeline_status
+        ),
+    )
+    run_next_task(tmp_path)
+
+    exit_code = _cmd_recover(argparse.Namespace(workspace=tmp_path, task_id="T-0001"))
+    recover_output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "task: T-0001 Recover without revert" in recover_output
+    assert "pipeline_status: implementing" in recover_output
+    assert (tmp_path / "app.txt").read_text(encoding="utf-8") == "ship-again\n"
+    assert load_state(tmp_path).queue == ["T-0001"]
+
+
+def test_rollback_requires_completed_task(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _init_git_repo(tmp_path)
+    ensure_workspace(tmp_path)
+    create_task(tmp_path, title="Not done yet")
+
+    exit_code = _cmd_rollback(argparse.Namespace(workspace=tmp_path, task_id="T-0001"))
+    output = capsys.readouterr().out
+
+    assert exit_code == 1
+    assert "is not completed; cannot rollback" in output
+
+
+def test_recover_requires_completed_task(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    ensure_workspace(tmp_path)
+    create_task(tmp_path, title="Still queued")
+
+    exit_code = _cmd_recover(argparse.Namespace(workspace=tmp_path, task_id="T-0001"))
+    output = capsys.readouterr().out
+
+    assert exit_code == 1
+    assert "is not completed; cannot recover" in output

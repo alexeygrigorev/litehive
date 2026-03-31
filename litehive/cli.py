@@ -6,7 +6,13 @@ import argparse
 from pathlib import Path
 
 from litehive.config import LitehiveConfig, ensure_workspace, load_config
-from litehive.runtime import resolve_next_task, run_next_task
+from litehive.git_ops import GitError
+from litehive.runtime import (
+    recover_completed_task,
+    resolve_next_task,
+    rollback_completed_task,
+    run_next_task,
+)
 from litehive.tasks import create_task, list_tasks, load_state
 from litehive.tui.app import LitehiveApp
 
@@ -78,6 +84,24 @@ def build_parser() -> argparse.ArgumentParser:
         help="Show which task and engine would run without invoking an agent",
     )
 
+    rollback = subparsers.add_parser("rollback", help="Revert a task checkpoint commit and requeue the task")
+    rollback.add_argument("task_id", help="Task id to roll back")
+    rollback.add_argument(
+        "--workspace",
+        type=Path,
+        default=Path.cwd(),
+        help="Repository root containing .litehive/",
+    )
+
+    recover = subparsers.add_parser("recover", help="Requeue a completed task without reverting code")
+    recover.add_argument("task_id", help="Task id to recover")
+    recover.add_argument(
+        "--workspace",
+        type=Path,
+        default=Path.cwd(),
+        help="Repository root containing .litehive/",
+    )
+
     return parser
 
 
@@ -144,6 +168,36 @@ def _cmd_run(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_rollback(args: argparse.Namespace) -> int:
+    ensure_workspace(args.workspace)
+    try:
+        summary = rollback_completed_task(args.workspace, args.task_id)
+    except GitError as exc:
+        print(f"rollback failed: {exc}")
+        return 1
+
+    print(f"task: {summary.task.id} {summary.task.title}")
+    print(f"rollback_of: {summary.rolled_back_sha}")
+    print(f"rollback_commit: {summary.rollback_sha}")
+    print("status: queued")
+    print("pipeline_status: implementing")
+    return 0
+
+
+def _cmd_recover(args: argparse.Namespace) -> int:
+    ensure_workspace(args.workspace)
+    try:
+        task = recover_completed_task(args.workspace, args.task_id)
+    except GitError as exc:
+        print(f"recover failed: {exc}")
+        return 1
+
+    print(f"task: {task.id} {task.title}")
+    print("status: queued")
+    print("pipeline_status: implementing")
+    return 0
+
+
 def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
@@ -167,6 +221,10 @@ def main() -> int:
         return 0
     if args.command == "run":
         return _cmd_run(args)
+    if args.command == "rollback":
+        return _cmd_rollback(args)
+    if args.command == "recover":
+        return _cmd_recover(args)
 
     summary = run_next_task(Path.cwd())
     if summary.task is not None:

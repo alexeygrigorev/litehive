@@ -29,6 +29,7 @@ _STEPS_FROM: dict[str, str] = {
     "implementing": "implementing",
     "testing": "testing",
     "accepting": "accepting",
+    "commit_to_git": "commit_to_git",
 }
 
 _ROUTES: dict[tuple[str, str], str] = {
@@ -40,10 +41,15 @@ _ROUTES: dict[tuple[str, str], str] = {
     ("testing", "accept"): "accepting",
     ("testing", "fail"): "implementing",
     ("testing", "reject"): "implementing",
-    ("accepting", "pass"): "done",
-    ("accepting", "accept"): "done",
+    ("accepting", "pass"): "commit_to_git",
+    ("accepting", "accept"): "commit_to_git",
     ("accepting", "fail"): "implementing",
     ("accepting", "reject"): "implementing",
+    ("commit_to_git", "pass"): "done",
+    ("commit_to_git", "accept"): "done",
+    ("commit_to_git", "fail"): "flagged",
+    ("commit_to_git", "reject"): "flagged",
+    ("commit_to_git", "blocked"): "flagged",
 }
 
 
@@ -91,10 +97,16 @@ class TaskExecutionRunner:
                     return RunResult("flagged", steps, last_verdict)
 
             if target == "done":
-                task.pipeline_status = "done"
-                task.status = "done"
-                save_task(self.root, task)
+                if current != "commit_to_git":
+                    task.pipeline_status = "done"
+                    task.status = "done"
+                    save_task(self.root, task)
                 return RunResult("done", steps, last_verdict)
+
+            if target == "flagged":
+                task.status = "flagged"
+                save_task(self.root, task)
+                return RunResult("flagged", steps, last_verdict)
 
             task.pipeline_status = target  # type: ignore[assignment]
             save_task(self.root, task)

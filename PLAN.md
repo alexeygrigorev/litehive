@@ -60,7 +60,11 @@ Later adapters can extend the same contract for `claude`, `gemini`, and `copilot
 - detect the repo root from the current working tree
 - record changed files and command outputs in task artifacts
 - commit automatically when a task reaches acceptance success
-- commit format: `litehive: complete <task-id> <slug>`
+- checkpoint format: `litehive: checkpoint <task-id> <slug>`
+- repeated completion attempts append ` (attempt N)` to the checkpoint subject
+- rollback format: `litehive: rollback <task-id> <slug> (attempt N)`
+- rollback reverts the checkpoint commit, writes a rollback commit, and requeues the task at `implementing`
+- recover requeues a completed task at `implementing` without reverting code
 
 ## UI model
 

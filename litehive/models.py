@@ -10,7 +10,15 @@ from pydantic import BaseModel, Field
 
 TaskMode = Literal["tasks", "implementation"]
 TaskStatus = Literal["queued", "in_progress", "done", "flagged", "cancelled"]
-PipelineStatus = Literal["backlog", "grooming", "implementing", "testing", "accepting", "done"]
+PipelineStatus = Literal[
+    "backlog",
+    "grooming",
+    "implementing",
+    "testing",
+    "accepting",
+    "commit_to_git",
+    "done",
+]
 SubagentStatus = Literal["created", "running", "completed", "failed", "blocked"]
 
 
@@ -29,6 +37,10 @@ class SubagentRef(BaseModel):
 class GitSettings(BaseModel):
     auto_commit: bool = True
     commit_message: str | None = None
+    commit_sha: str | None = None
+    checkpoint_base_sha: str | None = None
+    checkpoint_attempts: int = 0
+    rolled_back_checkpoint_attempt: int | None = None
 
 
 class TaskRecord(BaseModel):
@@ -58,7 +70,7 @@ class WorkspaceState(BaseModel):
 
 class StageReport(BaseModel):
     task_id: str
-    step: Literal["grooming", "implementing", "testing", "accepting"]
+    step: Literal["grooming", "implementing", "testing", "accepting", "commit_to_git"]
     verdict: Literal["pass", "accept", "fail", "reject", "blocked"]
     summary: str
     feedback: str = ""
