@@ -1,0 +1,30 @@
+id: T-0049
+slug: add-cgroup-resource-limits-for-heavy-native-code-tasks
+title: Add cgroup resource limits for heavy native-code tasks
+depends_on: []
+engine: null
+mode: implementation
+status: queued
+pipeline_status: backlog
+priority: medium
+created_at: '2026-03-31T17:01:48+00:00'
+updated_at: '2026-03-31T17:01:48+00:00'
+goal: Introduce explicit resource controls for subagent execution, especially for
+  native-code projects such as Rust and C++. Use cgroups or equivalent container resource
+  limits to cap memory, CPU, and process counts so out-of-memory conditions do not
+  destabilize the host. OOM and limit events should be surfaced as structured task
+  outcomes with clear reporting, and project profiles should be able to define sensible
+  default limits for stacks like Rust/C++.
+acceptance_criteria: []
+constraints: []
+plan: []
+subagents: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: checkpoint T-0049 add-cgroup-resource-limits-for-heavy-native-code-tasks'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+retry_policy:
+  max_retries: null

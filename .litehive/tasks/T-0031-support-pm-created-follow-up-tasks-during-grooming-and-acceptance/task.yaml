@@ -1,0 +1,35 @@
+id: T-0031
+slug: support-pm-created-follow-up-tasks-during-grooming-and-acceptance
+title: Support PM-created follow-up tasks during grooming and acceptance
+depends_on: []
+engine: null
+mode: implementation
+status: queued
+pipeline_status: implementing
+priority: medium
+created_at: '2026-03-31T12:43:11+00:00'
+updated_at: '2026-03-31T14:52:39+00:00'
+goal: Allow PM and acceptance stages to create new queued follow-up tasks when they
+  discover separate work, record why each follow-up was created, and ensure run-all
+  picks up those tasks on later iterations instead of dropping them. Discovering extra
+  work must not abort the current task unless it is explicitly blocking. The current
+  task should continue through implement, verify, accept, and commit as long as its
+  own acceptance criteria are still met.
+acceptance_criteria: []
+constraints: []
+plan: []
+subagents:
+- id: SA-0001
+  role: pm
+  engine: codex
+  status: failed
+  path: subagents/SA-0001-pm
+git:
+  auto_commit: true
+  commit_message: 'litehive: checkpoint T-0031 support-pm-created-follow-up-tasks-during-grooming-and-acceptance'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+retry_policy:
+  max_retries: null

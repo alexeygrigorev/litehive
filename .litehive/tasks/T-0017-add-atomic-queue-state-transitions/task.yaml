@@ -1,0 +1,86 @@
+id: T-0017
+slug: add-atomic-queue-state-transitions
+title: Add atomic queue state transitions
+depends_on: []
+engine: codex
+mode: implementation
+status: failed
+pipeline_status: accepting
+priority: medium
+created_at: '2026-03-31T06:08:02+00:00'
+updated_at: '2026-03-31T18:44:28+00:00'
+goal: Make all queue and state transitions atomic, not just task creation, so task
+  claims, completions, cancellations, and requeues cannot race or lose updates.
+acceptance_criteria: []
+constraints: []
+plan: []
+subagents:
+- id: SA-0001
+  role: pm
+  engine: codex
+  status: failed
+  path: subagents/SA-0001-pm
+- id: SA-0002
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0002-swe
+- id: SA-0003
+  role: qa
+  engine: codex
+  status: completed
+  path: subagents/SA-0003-qa
+- id: SA-0004
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0004-swe
+- id: SA-0005
+  role: qa
+  engine: codex
+  status: completed
+  path: subagents/SA-0005-qa
+- id: SA-0006
+  role: pm
+  engine: codex
+  status: completed
+  path: subagents/SA-0006-pm
+- id: SA-0007
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0007-swe
+- id: SA-0008
+  role: qa
+  engine: codex
+  status: completed
+  path: subagents/SA-0008-qa
+- id: SA-0009
+  role: pm
+  engine: codex
+  status: completed
+  path: subagents/SA-0009-pm
+- id: SA-0010
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0010-swe
+- id: SA-0011
+  role: qa
+  engine: codex
+  status: completed
+  path: subagents/SA-0011-qa
+- id: SA-0012
+  role: pm
+  engine: codex
+  status: completed
+  path: subagents/SA-0012-pm
+git:
+  auto_commit: false
+  commit_message: 'litehive: complete T-0017 add-atomic-queue-state-transitions'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+retry_policy:
+  max_retries: null

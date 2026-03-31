@@ -1,0 +1,81 @@
+id: T-0012
+slug: add-engine-budget-controls
+title: Add engine budget controls
+depends_on: []
+engine: codex
+mode: implementation
+status: queued
+pipeline_status: grooming
+priority: medium
+created_at: '2026-03-31T06:07:52+00:00'
+updated_at: '2026-03-31T18:40:18+00:00'
+goal: Implement per-engine quota and budget controls, with special care for Claude's
+  limited quota, and enforce pool-level cost or usage caps during task execution.
+acceptance_criteria: []
+constraints: []
+plan: []
+subagents:
+- id: SA-0001
+  role: pm
+  engine: codex
+  status: failed
+  path: subagents/SA-0001-pm
+- id: SA-0002
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0002-swe
+- id: SA-0003
+  role: qa
+  engine: codex
+  status: completed
+  path: subagents/SA-0003-qa
+- id: SA-0004
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0004-swe
+- id: SA-0005
+  role: qa
+  engine: codex
+  status: completed
+  path: subagents/SA-0005-qa
+- id: SA-0006
+  role: pm
+  engine: codex
+  status: completed
+  path: subagents/SA-0006-pm
+- id: SA-0007
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0007-swe
+- id: SA-0008
+  role: qa
+  engine: codex
+  status: completed
+  path: subagents/SA-0008-qa
+- id: SA-0009
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0009-swe
+- id: SA-0010
+  role: qa
+  engine: codex
+  status: completed
+  path: subagents/SA-0010-qa
+- id: SA-0011
+  role: pm
+  engine: codex
+  status: completed
+  path: subagents/SA-0011-pm
+git:
+  auto_commit: false
+  commit_message: 'litehive: complete T-0012 add-engine-budget-controls'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+retry_policy:
+  max_retries: null

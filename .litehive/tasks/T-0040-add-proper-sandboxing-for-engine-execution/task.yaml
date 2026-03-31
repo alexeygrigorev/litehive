@@ -1,0 +1,35 @@
+id: T-0040
+slug: add-proper-sandboxing-for-engine-execution
+title: Add proper sandboxing for engine execution
+depends_on: []
+engine: null
+mode: implementation
+status: queued
+pipeline_status: implementing
+priority: medium
+created_at: '2026-03-31T13:17:01+00:00'
+updated_at: '2026-03-31T14:52:43+00:00'
+goal: Introduce a Docker-based sandbox for external engine execution so subagents
+  run with controlled filesystem, network, and permission boundaries instead of broad
+  unrestricted execution. Only the specific executor being used for that run should
+  have its required binary, credentials, and environment propagated into the sandbox;
+  unrelated provider credentials and executors must not leak into the container. The
+  sandbox should be configurable per workspace and visible in task/run observability.
+acceptance_criteria: []
+constraints: []
+plan: []
+subagents:
+- id: SA-0001
+  role: pm
+  engine: codex
+  status: failed
+  path: subagents/SA-0001-pm
+git:
+  auto_commit: true
+  commit_message: 'litehive: checkpoint T-0040 add-proper-sandboxing-for-engine-execution'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+retry_policy:
+  max_retries: null

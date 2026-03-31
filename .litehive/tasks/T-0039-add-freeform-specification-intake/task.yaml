@@ -1,0 +1,35 @@
+id: T-0039
+slug: add-freeform-specification-intake
+title: Add freeform specification intake
+depends_on: []
+engine: null
+mode: implementation
+status: queued
+pipeline_status: implementing
+priority: medium
+created_at: '2026-03-31T13:17:01+00:00'
+updated_at: '2026-03-31T14:52:42+00:00'
+goal: Allow the user to provide a freeform specification or brain dump, analyze the
+  text with z.ai using the configuration/patterns from the codehive repo, and turn
+  it into a rough queued task description. Do not try to fully scope or structure
+  the work at intake time; PM should handle scoping, acceptance criteria, and decomposition
+  later in the normal pipeline. Preserve the original dump and link it to the generated
+  task.
+acceptance_criteria: []
+constraints: []
+plan: []
+subagents:
+- id: SA-0001
+  role: pm
+  engine: codex
+  status: failed
+  path: subagents/SA-0001-pm
+git:
+  auto_commit: true
+  commit_message: 'litehive: checkpoint T-0039 add-freeform-specification-intake'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+retry_policy:
+  max_retries: null

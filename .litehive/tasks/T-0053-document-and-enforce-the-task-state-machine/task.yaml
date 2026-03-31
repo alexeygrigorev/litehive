@@ -1,0 +1,30 @@
+id: T-0053
+slug: document-and-enforce-the-task-state-machine
+title: Document and enforce the task state machine
+depends_on: []
+engine: null
+mode: implementation
+status: queued
+pipeline_status: backlog
+priority: medium
+created_at: '2026-03-31T18:42:32+00:00'
+updated_at: '2026-03-31T18:42:32+00:00'
+goal: Define the canonical litehive task state machine with clear states, allowed
+  transitions, and meanings for review rejection, blocking, parking, cancellation,
+  done, and intentional non-implementation outcomes. The output must include durable
+  documentation in the repo and matching implementation updates. Any future state-machine
+  change should require updating the state-machine documentation as part of the same
+  work.
+acceptance_criteria: []
+constraints: []
+plan: []
+subagents: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: checkpoint T-0053 document-and-enforce-the-task-state-machine'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+retry_policy:
+  max_retries: null

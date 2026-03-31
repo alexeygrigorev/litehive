@@ -1,0 +1,82 @@
+id: T-0029
+slug: generalize-multi-agent-process-profiles-and-init-scaffolding
+title: Generalize multi-agent process profiles and init scaffolding
+depends_on: []
+engine: null
+mode: implementation
+status: queued
+pipeline_status: implementing
+priority: medium
+created_at: '2026-03-31T07:57:34+00:00'
+updated_at: '2026-03-31T14:52:38+00:00'
+goal: Analyze the common process patterns across codehive, litehive, rustkyl, pymermaid,
+  and ai-shipping-labs, then define a generic customizable process for all projects.
+  Capture the shared stages, role model, TDD expectations, acceptance and commit flow,
+  and project-profile overlay design. Add a scaffold/init model where generic base
+  prompts are combined with project-specific overlays, with templates for at least
+  Rust, Python, Django, and Codehive-style projects. Use judgment to generalize strong
+  ideas like TDD, orchestrator-as-manager, deterministic routing, issue/task source
+  of truth, verification discipline, and commit/recovery policy.
+acceptance_criteria: []
+constraints: []
+plan: []
+subagents:
+- id: SA-0001
+  role: pm
+  engine: codex
+  status: completed
+  path: subagents/SA-0001-pm
+- id: SA-0002
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0002-swe
+- id: SA-0003
+  role: qa
+  engine: codex
+  status: completed
+  path: subagents/SA-0003-qa
+- id: SA-0004
+  role: pm
+  engine: codex
+  status: completed
+  path: subagents/SA-0004-pm
+- id: SA-0005
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0005-swe
+- id: SA-0006
+  role: qa
+  engine: codex
+  status: completed
+  path: subagents/SA-0006-qa
+- id: SA-0007
+  role: pm
+  engine: codex
+  status: completed
+  path: subagents/SA-0007-pm
+- id: SA-0008
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0008-swe
+- id: SA-0009
+  role: qa
+  engine: codex
+  status: completed
+  path: subagents/SA-0009-qa
+- id: SA-0010
+  role: pm
+  engine: codex
+  status: completed
+  path: subagents/SA-0010-pm
+git:
+  auto_commit: true
+  commit_message: 'litehive: checkpoint T-0029 generalize-multi-agent-process-profiles-and-init-scaffolding'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+retry_policy:
+  max_retries: null

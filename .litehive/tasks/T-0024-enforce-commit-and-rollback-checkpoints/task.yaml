@@ -1,0 +1,83 @@
+id: T-0024
+slug: enforce-commit-and-rollback-checkpoints
+title: Enforce commit and rollback checkpoints
+depends_on: []
+engine: codex
+mode: implementation
+status: queued
+pipeline_status: implementing
+priority: medium
+created_at: '2026-03-31T06:12:19+00:00'
+updated_at: '2026-03-31T14:52:38+00:00'
+goal: Make task execution commit code by default so every completed change set is
+  captured in git and easy to revert. Add a clear policy for when commits happen,
+  how commit messages are formed, and how to roll back or recover when a task needs
+  fixing after completion.
+acceptance_criteria: []
+constraints: []
+plan: []
+subagents:
+- id: SA-0001
+  role: pm
+  engine: codex
+  status: completed
+  path: subagents/SA-0001-pm
+- id: SA-0002
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0002-swe
+- id: SA-0003
+  role: qa
+  engine: codex
+  status: completed
+  path: subagents/SA-0003-qa
+- id: SA-0004
+  role: pm
+  engine: codex
+  status: completed
+  path: subagents/SA-0004-pm
+- id: SA-0005
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0005-swe
+- id: SA-0006
+  role: qa
+  engine: codex
+  status: completed
+  path: subagents/SA-0006-qa
+- id: SA-0007
+  role: pm
+  engine: codex
+  status: completed
+  path: subagents/SA-0007-pm
+- id: SA-0008
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0008-swe
+- id: SA-0009
+  role: qa
+  engine: codex
+  status: completed
+  path: subagents/SA-0009-qa
+- id: SA-0010
+  role: pm
+  engine: codex
+  status: completed
+  path: subagents/SA-0010-pm
+- id: SA-0011
+  role: swe
+  engine: codex
+  status: failed
+  path: subagents/SA-0011-swe
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0024 enforce-commit-and-rollback-checkpoints'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+retry_policy:
+  max_retries: null

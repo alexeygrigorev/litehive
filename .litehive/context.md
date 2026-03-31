@@ -14,7 +14,10 @@
 - `uv run litehive move T-0002 1 --workspace .`
 - `uv run litehive promote T-0002 --workspace .`
 - `uv run litehive requeue T-0002 --front --workspace .`
+- `uv run litehive resume T-0002 --workspace .`
+- `uv run litehive abandon T-0002 --workspace .`
 - `uv run litehive update T-0002 --engine opencode --priority high --workspace .`
+- `uv run litehive update T-0002 --human-checkpoint before_acceptance --workspace .`
 - `uv run litehive run --workspace .`
   Drains the live task pool until no active or queued task remains, re-reading queue state between tasks.
 - `scripts/run-all.sh .`
@@ -43,4 +46,5 @@
 - `opencode` must not inherit provider credential env vars; the adapter strips the same variables as the `oc()` wrapper from `~/.bashrc`.
 - Execution visibility is a first-class requirement: task runs should expose current stage, subagent status, transcript/output, and recent progress clearly.
 - Long pool runs should leave durable per-iteration logs so failures can be diagnosed after the fact.
+- Tasks may opt into human checkpoints before acceptance or commit; those pauses should stop the pool cleanly and leave the task queued at the next stage.
 - If you add a new workflow or command, document it here so future runs inherit the same context.

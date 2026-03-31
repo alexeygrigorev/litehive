@@ -1,0 +1,28 @@
+id: T-0045
+slug: add-batch-queue-prioritization-command
+title: Add batch queue prioritization command
+depends_on: []
+engine: null
+mode: implementation
+status: queued
+pipeline_status: backlog
+priority: medium
+created_at: '2026-03-31T14:56:27+00:00'
+updated_at: '2026-03-31T14:56:27+00:00'
+goal: Provide a single CLI command to reprioritize multiple tasks at once, for example
+  by supplying an ordered list of task ids to move to the front in the requested order.
+  This should replace repetitive promote/move calls with one atomic queue update and
+  clear status output.
+acceptance_criteria: []
+constraints: []
+plan: []
+subagents: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: checkpoint T-0045 add-batch-queue-prioritization-command'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+retry_policy:
+  max_retries: null

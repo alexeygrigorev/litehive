@@ -1,0 +1,63 @@
+id: T-0043
+slug: fix-execution-limit-fallback-engine-switching
+title: Fix execution-limit fallback engine switching
+depends_on: []
+engine: null
+mode: implementation
+status: done
+pipeline_status: done
+priority: medium
+created_at: '2026-03-31T14:51:27+00:00'
+updated_at: '2026-03-31T17:15:55+00:00'
+goal: Ensure execution-limit failures actually trigger same-stage fallback to the
+  next configured engine when alternate engines are available. Add targeted coverage
+  for Codex usage-limit failures switching to OpenCode or Gemini, and surface the
+  engine-switch reason clearly in observability and task artifacts.
+acceptance_criteria: []
+constraints: []
+plan: []
+subagents:
+- id: SA-0001
+  role: pm
+  engine: codex
+  status: completed
+  path: subagents/SA-0001-pm
+- id: SA-0002
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0002-swe
+- id: SA-0003
+  role: qa
+  engine: codex
+  status: completed
+  path: subagents/SA-0003-qa
+- id: SA-0004
+  role: pm
+  engine: codex
+  status: completed
+  path: subagents/SA-0004-pm
+- id: SA-0005
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0005-swe
+- id: SA-0006
+  role: qa
+  engine: codex
+  status: completed
+  path: subagents/SA-0006-qa
+- id: SA-0007
+  role: pm
+  engine: codex
+  status: completed
+  path: subagents/SA-0007-pm
+git:
+  auto_commit: true
+  commit_message: 'litehive: checkpoint T-0043 fix-execution-limit-fallback-engine-switching'
+  commit_sha: null
+  checkpoint_base_sha: 08cc9c2efd8b9378f2a6ab94374c605cc49c012a
+  checkpoint_attempts: 1
+  rolled_back_checkpoint_attempt: null
+retry_policy:
+  max_retries: null

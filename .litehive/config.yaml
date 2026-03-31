@@ -1,0 +1,5 @@
+default_engine: codex
+opencode_model: zai-coding-plan/glm-5.1
+auto_commit: true
+task_mode_name: tasks
+implementation_mode_name: implementation
