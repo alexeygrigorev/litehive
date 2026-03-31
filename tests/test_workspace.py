@@ -17,7 +17,7 @@ from litehive.cli import (
     _cmd_status,
     _cmd_update,
 )
-from litehive.engines import get_engine
+from litehive.engines import classify_execution_limit, get_engine
 from litehive.config import LitehiveConfig, ensure_workspace, load_config, resolve_process_profile
 from litehive.external_cli import CLIExecutionResult, parse_stage_report_text
 from litehive.models import RuntimeStageState, RuntimeSubagentState, StageReport, SubagentRef
@@ -781,6 +781,53 @@ def test_run_next_task_flags_when_limit_fallbacks_are_exhausted(
     assert report["summary"] == "grooming blocked after exhausting engine fallbacks: quota exceeded"
 
 
+def test_run_task_pool_stops_by_default_when_limit_fallbacks_are_exhausted(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ensure_workspace(tmp_path)
+    create_task(tmp_path, title="Exhausted fallback task", engine="codex", auto_commit=False)
+    create_task(tmp_path, title="Second task", auto_commit=False)
+
+    def fake_run(self, task, role, engine_name, prompt, model=None):  # type: ignore[no-untyped-def]
+        if task.id == "T-0001":
+            return SubagentResult(
+                ref=SubagentRef(
+                    id=f"SA-{task.pipeline_status}-{engine_name}",
+                    role=role,
+                    engine=engine_name,
+                    status="failed",
+                    path=f"subagents/{task.pipeline_status}-{engine_name}",
+                ),
+                execution=CLIExecutionResult(
+                    adapter=engine_name,
+                    argv=(engine_name, "exec"),
+                    cwd=tmp_path,
+                    exit_code=1,
+                    stdout="quota exceeded",
+                    stderr="",
+                ),
+                transcript="quota exceeded",
+                exit_code=1,
+                failure=EngineFailure(kind="execution_limit", reason="quota exceeded"),
+            )
+        return _completed_subagent_result(tmp_path, task.pipeline_status)
+
+    monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_run)
+
+    summary = run_task_pool(tmp_path)
+
+    assert [execution.task.id for execution in summary.executions if execution.task is not None] == ["T-0001"]
+    assert summary.stop_reason == "execution_limit_fallbacks_exhausted"
+    state = load_state(tmp_path)
+    assert state.queue == ["T-0002"]
+    assert state.pool_stop_reason == "execution_limit_fallbacks_exhausted"
+    journal = (
+        tmp_path / ".litehive" / "tasks" / "T-0001-exhausted-fallback-task" / "journal.md"
+    ).read_text(encoding="utf-8")
+    assert "Pool stopped: execution_limit_fallbacks_exhausted." in journal
+    assert "grooming blocked after exhausting engine fallbacks: quota exceeded" in journal
+
+
 def test_run_task_pool_rereads_queue_order_between_tasks(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     ensure_workspace(tmp_path)
     first = create_task(tmp_path, title="First task", auto_commit=False)
@@ -883,7 +930,7 @@ def test_run_task_pool_stops_on_first_failure(tmp_path: Path, monkeypatch: pytes
     summary = run_task_pool(tmp_path, stop_conditions=TaskPoolStopConditions(stop_on_failure=True))
 
     assert [execution.task.id for execution in summary.executions if execution.task is not None] == ["T-0001"]
-    assert summary.stop_reason == "failure_detected"
+    assert summary.stop_reason == "execution_limit_fallbacks_exhausted"
     state = load_state(tmp_path)
     assert state.active_task_id is None
     assert state.queue == ["T-0002"]
@@ -923,7 +970,7 @@ def test_run_task_pool_stops_on_execution_limit(tmp_path: Path, monkeypatch: pyt
     summary = run_task_pool(tmp_path, stop_conditions=TaskPoolStopConditions(stop_on_execution_limit=True))
 
     assert [execution.task.id for execution in summary.executions if execution.task is not None] == ["T-0001"]
-    assert summary.stop_reason == "execution_limit_reached"
+    assert summary.stop_reason == "execution_limit_fallbacks_exhausted"
     state = load_state(tmp_path)
     assert state.active_task_id is None
     assert state.queue == ["T-0002"]
@@ -963,14 +1010,11 @@ def test_run_task_pool_stops_on_quota_threshold(tmp_path: Path, monkeypatch: pyt
 
     summary = run_task_pool(tmp_path, stop_conditions=TaskPoolStopConditions(quota_threshold=2))
 
-    assert [execution.task.id for execution in summary.executions if execution.task is not None] == [
-        "T-0001",
-        "T-0002",
-    ]
-    assert summary.stop_reason == "quota_threshold_reached"
+    assert [execution.task.id for execution in summary.executions if execution.task is not None] == ["T-0001"]
+    assert summary.stop_reason == "execution_limit_fallbacks_exhausted"
     state = load_state(tmp_path)
     assert state.active_task_id is None
-    assert state.queue == ["T-0003"]
+    assert state.queue == ["T-0002", "T-0003"]
 
 
 def test_run_task_pool_stops_on_budget_threshold(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -1007,7 +1051,7 @@ def test_run_task_pool_stops_on_budget_threshold(tmp_path: Path, monkeypatch: py
     summary = run_task_pool(tmp_path, stop_conditions=TaskPoolStopConditions(budget_threshold=1))
 
     assert [execution.task.id for execution in summary.executions if execution.task is not None] == ["T-0001"]
-    assert summary.stop_reason == "budget_threshold_reached"
+    assert summary.stop_reason == "execution_limit_fallbacks_exhausted"
     state = load_state(tmp_path)
     assert state.active_task_id is None
     assert state.queue == ["T-0002"]
@@ -1576,6 +1620,7 @@ def test_status_output_includes_runtime_observability(
     assert "pool_quota_threshold: 2" in output
     assert "pool_budget_threshold: 1" in output
     assert "pool_stop_on_dirty_git: True" in output
+    assert "pool_stop_reason: None" in output
     assert "process_profile: generic" in output
     assert "retry_limit=1" in output
     assert "retry_policy=configured:1 effective:1 source=task" in output
@@ -1912,6 +1957,243 @@ def _completed_subagent_result(tmp_path: Path, step: str) -> SubagentResult:
         ),
         transcript="",
         exit_code=0,
+    )
+
+
+def _successful_stage_execution(tmp_path: Path, adapter: str, step: str) -> CLIExecutionResult:
+    return CLIExecutionResult(
+        adapter=adapter,
+        argv=(adapter, "exec"),
+        cwd=tmp_path,
+        exit_code=0,
+        stdout=(
+            "VERDICT: PASS\n"
+            f"SUMMARY: {step} complete via {adapter}\n"
+            "FILES_CHANGED:\n"
+            "- app.txt\n"
+            "TESTS_ADDED: 1\n"
+            "TESTS_PASSING: 1\n"
+            "WARNINGS:\n"
+        ),
+        stderr="",
+    )
+
+
+def test_classify_execution_limit_matches_codex_usage_limit_transcript() -> None:
+    transcript = (
+        "[stderr]\n"
+        "ERROR: You've hit your usage limit. Upgrade to Pro "
+        "(https://chatgpt.com/explore/pro), visit https://chatgpt.com/codex/settings/usage "
+        "to purchase more credits or try again at 5:26 PM."
+    )
+
+    assert classify_execution_limit(transcript) == "usage limit reached"
+
+
+def test_run_next_task_falls_back_from_codex_to_opencode_on_usage_limit(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    ensure_workspace(tmp_path)
+    create_task(tmp_path, title="Fallback usage-limit task", engine="codex", auto_commit=False)
+    codex = get_engine("codex")
+    opencode = get_engine("opencode")
+
+    monkeypatch.setattr(codex, "is_available", lambda: True)
+    monkeypatch.setattr(opencode, "is_available", lambda: True)
+
+    def fake_codex_run(prompt: str, cwd: Path, model: str | None = None) -> CLIExecutionResult:
+        if "Stage: grooming" in prompt:
+            return CLIExecutionResult(
+                adapter="codex",
+                argv=("codex", "exec"),
+                cwd=cwd,
+                exit_code=1,
+                stdout="",
+                stderr=(
+                    "ERROR: You've hit your usage limit. Upgrade to Pro "
+                    "(https://chatgpt.com/explore/pro), visit https://chatgpt.com/codex/settings/usage "
+                    "to purchase more credits or try again at 5:26 PM."
+                ),
+            )
+        return _successful_stage_execution(tmp_path, "codex", "non-grooming")
+
+    def fake_opencode_run(prompt: str, cwd: Path, model: str | None = None) -> CLIExecutionResult:
+        step = prompt.split("Stage: ", 1)[1].splitlines()[0]
+        return _successful_stage_execution(tmp_path, "opencode", step)
+
+    monkeypatch.setattr(codex, "run", fake_codex_run)
+    monkeypatch.setattr(opencode, "run", fake_opencode_run)
+
+    summary = run_next_task(tmp_path)
+
+    assert summary.task is not None
+    assert summary.result is not None
+    assert summary.result.final_status == "done"
+    task = get_task(tmp_path, "T-0001")
+    assert task is not None
+    assert task.runtime.last_engine_switch is not None
+    assert task.runtime.last_engine_switch.from_engine == "codex"
+    assert task.runtime.last_engine_switch.to_engine == "opencode"
+    assert task.runtime.last_engine_switch.reason == "usage limit reached"
+    report = yaml.safe_load(
+        (
+            tmp_path
+            / ".litehive"
+            / "tasks"
+            / "T-0001-fallback-usage-limit-task"
+            / "reports"
+            / "grooming-001.yaml"
+        ).read_text(encoding="utf-8")
+    )
+    assert "Stage `grooming` switched from `codex` to `opencode` after usage limit reached." in report["warnings"]
+    assert report["feedback"].startswith("Stage `grooming` switched from `codex` to `opencode` after usage limit reached.")
+    assert "SUMMARY: grooming complete via opencode" in report["feedback"]
+    _cmd_status(argparse.Namespace(workspace=tmp_path))
+    output = capsys.readouterr().out
+    assert "engine_switch=grooming codex->opencode reason=usage limit reached" in output
+
+
+def test_run_next_task_falls_back_from_codex_to_gemini_on_usage_limit(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ensure_workspace(
+        tmp_path,
+        LitehiveConfig(
+            engine_fallbacks={
+                "codex": ["gemini"],
+                "opencode": ["codex", "gemini", "copilot"],
+                "gemini": ["codex", "opencode", "copilot"],
+                "copilot": ["codex", "opencode", "gemini"],
+            }
+        ),
+    )
+    create_task(tmp_path, title="Gemini fallback task", engine="codex", auto_commit=False)
+    codex = get_engine("codex")
+    gemini = get_engine("gemini")
+
+    monkeypatch.setattr(codex, "is_available", lambda: True)
+    monkeypatch.setattr(gemini, "is_available", lambda: True)
+
+    def fake_codex_run(prompt: str, cwd: Path, model: str | None = None) -> CLIExecutionResult:
+        if "Stage: grooming" in prompt:
+            return CLIExecutionResult(
+                adapter="codex",
+                argv=("codex", "exec"),
+                cwd=cwd,
+                exit_code=1,
+                stdout="",
+                stderr="ERROR: You've hit your usage limit. Try again later or purchase more credits.",
+            )
+        return _successful_stage_execution(tmp_path, "codex", "non-grooming")
+
+    def fake_gemini_run(prompt: str, cwd: Path, model: str | None = None) -> CLIExecutionResult:
+        step = prompt.split("Stage: ", 1)[1].splitlines()[0]
+        transcript = (
+            '{"type":"message","role":"assistant","content":"VERDICT: PASS\\n","delta":true}\n'
+            f'{{"type":"message","role":"assistant","content":"SUMMARY: {step} complete via gemini\\nFILES_CHANGED:\\n- app.txt\\nTESTS_ADDED: 1\\nTESTS_PASSING: 1\\nWARNINGS:\\n","delta":true}}'
+        )
+        return CLIExecutionResult(
+            adapter="gemini",
+            argv=("gemini", "-p"),
+            cwd=cwd,
+            exit_code=0,
+            stdout=transcript,
+            stderr="",
+        )
+
+    monkeypatch.setattr(codex, "run", fake_codex_run)
+    monkeypatch.setattr(gemini, "run", fake_gemini_run)
+
+    summary = run_next_task(tmp_path)
+
+    assert summary.task is not None
+    assert summary.result is not None
+    assert summary.result.final_status == "done"
+    task = get_task(tmp_path, "T-0001")
+    assert task is not None
+    assert task.runtime.last_engine_switch is not None
+    assert task.runtime.last_engine_switch.from_engine == "codex"
+    assert task.runtime.last_engine_switch.to_engine == "gemini"
+    assert task.runtime.last_engine_switch.reason == "usage limit reached"
+    report = yaml.safe_load(
+        (
+            tmp_path
+            / ".litehive"
+            / "tasks"
+            / "T-0001-gemini-fallback-task"
+            / "reports"
+            / "grooming-001.yaml"
+        ).read_text(encoding="utf-8")
+    )
+    assert "Stage `grooming` switched from `codex` to `gemini` after usage limit reached." in report["warnings"]
+
+
+def test_run_next_task_skips_unavailable_fallback_engine_after_usage_limit(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ensure_workspace(
+        tmp_path,
+        LitehiveConfig(
+            engine_fallbacks={
+                "codex": ["gemini", "opencode"],
+                "opencode": ["codex", "gemini", "copilot"],
+                "gemini": ["codex", "opencode", "copilot"],
+                "copilot": ["codex", "opencode", "gemini"],
+            }
+        ),
+    )
+    create_task(tmp_path, title="Unavailable fallback task", engine="codex", auto_commit=False)
+    codex = get_engine("codex")
+    gemini = get_engine("gemini")
+    opencode = get_engine("opencode")
+
+    monkeypatch.setattr(codex, "is_available", lambda: True)
+    monkeypatch.setattr(gemini, "is_available", lambda: False)
+    monkeypatch.setattr(opencode, "is_available", lambda: True)
+
+    def fake_codex_run(prompt: str, cwd: Path, model: str | None = None) -> CLIExecutionResult:
+        if "Stage: grooming" in prompt:
+            return CLIExecutionResult(
+                adapter="codex",
+                argv=("codex", "exec"),
+                cwd=cwd,
+                exit_code=1,
+                stdout="",
+                stderr="ERROR: You've hit your usage limit. Try again later.",
+            )
+        return _successful_stage_execution(tmp_path, "codex", "non-grooming")
+
+    def fake_opencode_run(prompt: str, cwd: Path, model: str | None = None) -> CLIExecutionResult:
+        step = prompt.split("Stage: ", 1)[1].splitlines()[0]
+        return _successful_stage_execution(tmp_path, "opencode", step)
+
+    monkeypatch.setattr(codex, "run", fake_codex_run)
+    monkeypatch.setattr(opencode, "run", fake_opencode_run)
+
+    summary = run_next_task(tmp_path)
+
+    assert summary.task is not None
+    assert summary.result is not None
+    assert summary.result.final_status == "done"
+    task = get_task(tmp_path, "T-0001")
+    assert task is not None
+    assert task.runtime.last_engine_switch is not None
+    assert task.runtime.last_engine_switch.from_engine == "gemini"
+    assert task.runtime.last_engine_switch.to_engine == "opencode"
+    report = yaml.safe_load(
+        (
+            tmp_path
+            / ".litehive"
+            / "tasks"
+            / "T-0001-unavailable-fallback-task"
+            / "reports"
+            / "grooming-001.yaml"
+        ).read_text(encoding="utf-8")
+    )
+    assert "Stage `grooming` switched from `codex` to `gemini` after usage limit reached." in report["warnings"]
+    assert (
+        "Stage `grooming` switched from `gemini` to `opencode` after Engine 'gemini' is unavailable: missing binary 'gemini'."
+        in report["warnings"]
     )
 
 

@@ -134,6 +134,7 @@ class WorkspaceState(BaseModel):
     active_task_id: str | None = None
     mode: TaskMode = "implementation"
     queue: list[str] = Field(default_factory=list)
+    pool_stop_reason: str | None = None
 
 
 class StageReport(BaseModel):

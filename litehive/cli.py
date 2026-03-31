@@ -387,6 +387,7 @@ def _cmd_status(args: argparse.Namespace) -> int:
     print(f"mode: {state.mode}")
     print(f"active_task_id: {state.active_task_id}")
     print(f"queued_tasks: {len(state.queue)}")
+    print(f"pool_stop_reason: {state.pool_stop_reason}")
     if tasks:
         print()
         for task in tasks:

@@ -41,19 +41,30 @@ transcripts, and artifacts, but do not directly edit `task.yaml`.
 
 ## Engine model
 
-v1 engine adapters:
+Current engine adapters:
 
 - `codex`
 - `opencode`
+- `gemini`
+- `copilot`
 
-Planned adapter shape:
+Planned next:
+
+- `claude`
+
+Shared adapter shape:
 
 - capability detection
 - command construction
 - transcript capture
 - structured report extraction
 
-Later adapters can extend the same contract for `claude`, `gemini`, and `copilot`.
+The runtime also supports:
+
+- workspace-default engine selection
+- task-level engine preferences
+- run-time engine override
+- fallback ordering between engines when configured
 
 ## Git model
 
@@ -76,6 +87,16 @@ Initial UI surfaces:
 - queue and active task status
 - implementation progress
 - subagent activity and reports
+- shell wrappers for long pool runs and status inspection
+
+## Pool model
+
+`litehive run` is the pool runner. It should:
+
+- re-read queue state between tasks
+- support newly added or requeued tasks during a long run
+- respect stop conditions and retry policy
+- leave enough logs and status artifacts to debug failures after the fact
 
 ## Implementation sequence
 

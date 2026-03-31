@@ -2,7 +2,7 @@
 
 Local-first autonomous coding workspace with deterministic task execution.
 
-## v1 goals
+## Current model
 
 - Single active task at a time
 - Local YAML-backed workspace state
@@ -10,14 +10,43 @@ Local-first autonomous coding workspace with deterministic task execution.
 - Deterministic stage pipeline
 - Subagents executed through external CLIs (`codex`, `opencode`, `gemini`, and `copilot`)
 - Checkpoint commit after successful task completion
+- Queue state, runtime state, and task artifacts stored under `.litehive/`
+- `litehive run` drains the active and queued pool, re-reading queue state between tasks
 
-## Planned commands
+## CLI workflow
 
-- `litehive configure`
-- `litehive`
-- `litehive tasks`
-- `litehive add`
-- `litehive status`
+Common commands:
+
+- `uv run litehive configure`
+- `uv run litehive status`
+- `uv run litehive queue`
+- `uv run litehive add "<title>"`
+- `uv run litehive update T-0001 --engine opencode`
+- `uv run litehive move T-0001 1`
+- `uv run litehive promote T-0001`
+- `uv run litehive requeue T-0001 --front`
+- `uv run litehive run`
+- `uv run litehive rollback T-0001`
+- `uv run litehive recover T-0001`
+
+`--workspace` defaults to the current directory. In normal repo-local use you should not need to pass it.
+
+## Execution model
+
+Each runnable task goes through a fixed stage pipeline:
+
+1. `grooming`
+2. `implementing`
+3. `testing`
+4. `accepting`
+5. `commit_to_git`
+
+The orchestrator owns routing and task state. Subagents produce reports and artifacts, but they do not decide the control flow.
+External engine choice resolves as:
+
+1. run-time override
+2. task-level preference
+3. workspace default engine
 
 ## Workspace shape
 
@@ -39,6 +68,20 @@ Use `.litehive/context.md` to describe the repo, commands, and workflow conventi
 `litehive configure` accepts `--process-profile` so new workspaces start from a shared process scaffold plus a project-specific overlay.
 The shared scaffold captures stages, orchestrator routing, issue/task source of truth, role model, TDD expectations, verification discipline, acceptance flow, and commit/recovery policy.
 Built-in overlays currently include `generic`, `python`, `django`, `rust`, and `codehive`, and the generated context now records both the init scaffold and the prompt scaffold used for stage prompts.
+
+## Observability
+
+`litehive status` shows:
+
+- active task
+- queue size
+- current stage
+- live subagent role and engine
+- latest report summary
+- retry policy details
+- recent checkpoint commit for completed tasks
+
+Task-local artifacts live under `.litehive/tasks/<task-id>/` and include reports, transcripts, prompts, journals, and subagent sessions.
 
 ## Git checkpoints
 
@@ -74,3 +117,16 @@ Use [`scripts/run-all-status.sh`](/home/alexey/git/litehive/scripts/run-all-stat
 ```bash
 scripts/run-all-status.sh .
 ```
+
+## Current engines
+
+Currently implemented adapters:
+
+- `codex`
+- `opencode`
+- `gemini`
+- `copilot`
+
+Planned later:
+
+- `claude`

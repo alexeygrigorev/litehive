@@ -374,6 +374,7 @@ def ensure_workspace(root: Path, config: LitehiveConfig | None = None) -> Path:
                     "active_task_id": None,
                     "mode": cfg.implementation_mode_name,
                     "queue": [],
+                    "pool_stop_reason": None,
                 },
                 sort_keys=False,
             ),

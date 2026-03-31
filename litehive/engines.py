@@ -20,6 +20,8 @@ class EngineError(RuntimeError):
 
 
 _ENGINE_LIMIT_PATTERNS: tuple[tuple[str, str], ...] = (
+    ("hit your usage limit", "usage limit reached"),
+    ("usage limit", "usage limit reached"),
     ("quota exceeded", "quota exceeded"),
     ("quota", "quota limit reached"),
     ("rate limit", "rate limit reached"),
@@ -27,7 +29,7 @@ _ENGINE_LIMIT_PATTERNS: tuple[tuple[str, str], ...] = (
     ("budget", "budget limit reached"),
     ("credit", "credit limit reached"),
     ("insufficient funds", "budget limit reached"),
-    ("usage limit", "usage limit reached"),
+    ("purchase more credits", "usage limit reached"),
     ("capacity", "capacity limit reached"),
 )
 

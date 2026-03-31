@@ -54,6 +54,14 @@ def save_state(root: Path, state: WorkspaceState) -> None:
     )
 
 
+def set_pool_stop_reason(root: Path, stop_reason: str | None) -> WorkspaceState:
+    with _workspace_lock(root):
+        state = load_state(root)
+        state.pool_stop_reason = stop_reason
+        save_state(root, state)
+        return state
+
+
 def tasks_root(root: Path) -> Path:
     ensure_workspace(root)
     return workspace_dir(root) / "tasks"

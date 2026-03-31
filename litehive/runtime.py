@@ -36,6 +36,7 @@ from litehive.tasks import (
     mark_task_run_started,
     peek_next_task,
     peek_next_task_selection,
+    set_pool_stop_reason,
     save_task_runtime,
     save_task,
 )
@@ -129,17 +130,23 @@ def run_task_pool(
     root = root.resolve()
     executions: list[ExecutionSummary] = []
     conditions = stop_conditions or TaskPoolStopConditions()
+    set_pool_stop_reason(root, None)
 
     while True:
         stop_reason = _pool_stop_reason(root, executions, conditions)
         if stop_reason is not None:
-            return TaskPoolRunSummary(executions=executions, stop_reason=stop_reason, blocked=[])
+            return _finalize_pool_run(root, executions=executions, stop_reason=stop_reason, blocked=[])
         if stop_when is not None and stop_when(executions):
-            return TaskPoolRunSummary(executions=executions, stop_reason="stop_condition_reached", blocked=[])
+            return _finalize_pool_run(
+                root,
+                executions=executions,
+                stop_reason="stop_condition_reached",
+                blocked=[],
+            )
         execution, blocked = run_next_task_with_override(root, engine_override=engine_override)
         if execution.task is None:
             stop_reason = "blocked_tasks_remaining" if blocked else "queue_exhausted"
-            return TaskPoolRunSummary(executions=executions, stop_reason=stop_reason, blocked=blocked)
+            return _finalize_pool_run(root, executions=executions, stop_reason=stop_reason, blocked=blocked)
         executions.append(execution)
 
 
@@ -160,6 +167,8 @@ def _pool_stop_reason(
         return "dirty_git_state"
     if conditions.max_tasks is not None and len(executions) >= conditions.max_tasks:
         return "max_tasks_reached"
+    if executions and _execution_exhausted_limit_fallbacks(executions[-1]):
+        return "execution_limit_fallbacks_exhausted"
     if conditions.quota_threshold is not None and _count_execution_limits(executions, kind="quota") >= conditions.quota_threshold:
         return "quota_threshold_reached"
     if conditions.budget_threshold is not None and _count_execution_limits(executions, kind="budget") >= conditions.budget_threshold:
@@ -182,6 +191,17 @@ def _git_worktree_is_dirty(root: Path) -> bool:
 
 def _execution_hit_limit(execution: ExecutionSummary) -> bool:
     return _execution_limit_kind(execution) is not None
+
+
+def _execution_exhausted_limit_fallbacks(execution: ExecutionSummary) -> bool:
+    task = execution.task
+    if task is None:
+        return False
+    outcome = task.runtime.last_outcome
+    if outcome.kind != "blocked":
+        return False
+    reason = outcome.reason.lower()
+    return "exhausting engine fallbacks" in reason and _execution_limit_kind(execution) is not None
 
 
 def _execution_limit_kind(execution: ExecutionSummary) -> str | None:
@@ -210,6 +230,22 @@ def _execution_limit_kind(execution: ExecutionSummary) -> str | None:
 
 def _count_execution_limits(executions: list[ExecutionSummary], *, kind: str) -> int:
     return sum(1 for execution in executions if _execution_limit_kind(execution) == kind)
+
+
+def _finalize_pool_run(
+    root: Path,
+    *,
+    executions: list[ExecutionSummary],
+    stop_reason: str,
+    blocked: list[BlockedTask],
+) -> TaskPoolRunSummary:
+    set_pool_stop_reason(root, stop_reason)
+    if stop_reason == "execution_limit_fallbacks_exhausted" and executions:
+        latest = executions[-1]
+        if latest.task is not None:
+            outcome_reason = latest.task.runtime.last_outcome.reason or "engine fallbacks exhausted"
+            append_journal(root, latest.task, f"Pool stopped: {stop_reason}. {outcome_reason}")
+    return TaskPoolRunSummary(executions=executions, stop_reason=stop_reason, blocked=blocked)
 
 
 def rollback_completed_task(root: Path, task_id: str) -> RollbackSummary:
@@ -336,6 +372,7 @@ def build_executor(
         )
         fallback_events: list[str] = []
         engines = _engine_attempt_order(initial_engine_name, config.engine_fallbacks)
+        limit_trigger_reason: str | None = None
 
         for index, engine_name in enumerate(engines):
             result = subagents.run(
@@ -346,7 +383,10 @@ def build_executor(
                 model=_model_for_engine(config, engine_name),
             )
             is_limit_failure = result.failure is not None and result.failure.kind == "execution_limit"
-            if is_limit_failure and index + 1 < len(engines):
+            if is_limit_failure and limit_trigger_reason is None:
+                limit_trigger_reason = result.failure.reason
+            is_unavailable_fallback = limit_trigger_reason is not None and result.failure is not None and result.failure.kind == "engine_error"
+            if (is_limit_failure or is_unavailable_fallback) and index + 1 < len(engines):
                 next_engine = engines[index + 1]
                 event = (
                     f"Stage `{step}` switched from `{engine_name}` to `{next_engine}` "
@@ -367,10 +407,17 @@ def build_executor(
             report = stage_report_from_subagent(current_task, step, result)
             if fallback_events:
                 report.warnings = [*fallback_events, *report.warnings]
-            if is_limit_failure:
-                report.summary = (
-                    f"{step} blocked after exhausting engine fallbacks: {result.failure.reason}"
-                )
+                report.feedback = "\n\n".join([*fallback_events, report.feedback]).strip()
+            if limit_trigger_reason is not None and (is_limit_failure or is_unavailable_fallback):
+                if is_unavailable_fallback and result.failure is not None and result.failure.reason != limit_trigger_reason:
+                    report.summary = (
+                        f"{step} blocked after exhausting engine fallbacks following {limit_trigger_reason}: "
+                        f"{result.failure.reason}"
+                    )
+                else:
+                    report.summary = (
+                        f"{step} blocked after exhausting engine fallbacks: {result.failure.reason}"
+                    )
                 report.feedback = "\n\n".join([*fallback_events, result.transcript]).strip()
                 if not report.warnings or report.warnings[-1] != result.failure.reason:
                     report.warnings.append(result.failure.reason)
