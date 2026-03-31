@@ -2,12 +2,33 @@
 
 from __future__ import annotations
 
+import json
+import re
 from pathlib import Path
 
-from litehive.external_cli import AdapterCapabilities, ExternalCLIAdapter
+from litehive.external_cli import (
+    AdapterCapabilities,
+    CLIExecutionResult,
+    ExternalCLIAdapter,
+    extract_jsonl_messages,
+    parse_stage_report_text,
+)
 
 class EngineError(RuntimeError):
     """Raised when an engine cannot be resolved or executed."""
+
+
+_ENGINE_LIMIT_PATTERNS: tuple[tuple[str, str], ...] = (
+    ("quota exceeded", "quota exceeded"),
+    ("quota", "quota limit reached"),
+    ("rate limit", "rate limit reached"),
+    ("too many requests", "rate limit reached"),
+    ("budget", "budget limit reached"),
+    ("credit", "credit limit reached"),
+    ("insufficient funds", "budget limit reached"),
+    ("usage limit", "usage limit reached"),
+    ("capacity", "capacity limit reached"),
+)
 
 
 class CodexCLIAdapter(ExternalCLIAdapter):
@@ -30,6 +51,57 @@ class OpenCodeAdapter(ExternalCLIAdapter):
             command.extend(["--model", model])
         command.append(prompt)
         return command
+
+
+class GeminiCLIAdapter(ExternalCLIAdapter):
+    def build_command(self, prompt: str, cwd: Path, model: str | None = None) -> list[str]:
+        command = [self.binary, "-p", prompt, "--output-format", "stream-json", "--yolo"]
+        if model:
+            command.extend(["-m", model])
+        return command
+
+    def render_transcript(self, execution: CLIExecutionResult) -> str:
+        assistant_text = extract_jsonl_messages(execution.stdout)
+        if assistant_text:
+            if execution.stderr.strip():
+                return f"{assistant_text}\n\n[stderr]\n{execution.stderr.strip()}"
+            return assistant_text
+        return execution.transcript
+
+    def parse_stage_report(
+        self,
+        *,
+        task_id: str,
+        step: str,
+        execution: CLIExecutionResult,
+        subagent_status: str,
+    ):
+        transcript = self.render_transcript(execution)
+        if transcript == execution.transcript:
+            stderr_lines = []
+            for raw_line in execution.stdout.splitlines():
+                line = raw_line.strip()
+                if not line:
+                    continue
+                try:
+                    payload = json.loads(line)
+                except (json.JSONDecodeError, ValueError):
+                    continue
+                if not isinstance(payload, dict) or payload.get("type") != "tool_result":
+                    continue
+                if payload.get("status") != "error":
+                    continue
+                error = payload.get("error")
+                if isinstance(error, dict) and isinstance(error.get("message"), str):
+                    stderr_lines.append(error["message"])
+            if stderr_lines:
+                transcript = "\n".join(stderr_lines)
+        return parse_stage_report_text(
+            task_id=task_id,
+            step=step,  # type: ignore[arg-type]
+            transcript=transcript,
+            subagent_status=subagent_status,  # type: ignore[arg-type]
+        )
 
 
 _OPENCODE_STRIPPED_ENV_VARS = (
@@ -127,6 +199,15 @@ ENGINE_REGISTRY: dict[str, ExternalCLIAdapter] = {
         ),
         stripped_env_vars=_OPENCODE_STRIPPED_ENV_VARS,
     ),
+    "gemini": GeminiCLIAdapter(
+        name="gemini",
+        binary="gemini",
+        capabilities=AdapterCapabilities(
+            supports_model_override=True,
+            strips_environment=False,
+            transcript_format="jsonl",
+        ),
+    ),
 }
 
 
@@ -135,3 +216,11 @@ def get_engine(name: str) -> ExternalCLIAdapter:
         return ENGINE_REGISTRY[name]
     except KeyError as exc:
         raise EngineError(f"Unknown engine '{name}'") from exc
+
+
+def classify_execution_limit(text: str) -> str | None:
+    normalized = re.sub(r"\s+", " ", text.lower()).strip()
+    for needle, reason in _ENGINE_LIMIT_PATTERNS:
+        if needle in normalized:
+            return reason
+    return None

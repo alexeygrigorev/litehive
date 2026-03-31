@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 import yaml
@@ -12,6 +12,14 @@ import yaml
 class LitehiveConfig:
     default_engine: str = "codex"
     opencode_model: str = "zai-coding-plan/glm-5.1"
+    gemini_model: str | None = None
+    engine_fallbacks: dict[str, list[str]] = field(
+        default_factory=lambda: {
+            "codex": ["opencode", "gemini"],
+            "opencode": ["codex", "gemini"],
+            "gemini": ["codex", "opencode"],
+        }
+    )
     auto_commit: bool = True
     task_mode_name: str = "tasks"
     implementation_mode_name: str = "implementation"

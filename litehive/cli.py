@@ -12,7 +12,7 @@ from litehive.runtime import (
     recover_completed_task,
     resolve_next_task,
     rollback_completed_task,
-    run_next_task,
+    run_task_pool,
 )
 from litehive.tasks import (
     VALID_TASK_PRIORITIES,
@@ -48,6 +48,11 @@ def build_parser() -> argparse.ArgumentParser:
         default="zai-coding-plan/glm-5.1",
         help="Default model identifier when using the opencode adapter",
     )
+    configure.add_argument(
+        "--gemini-model",
+        default=None,
+        help="Default model identifier when using the gemini adapter",
+    )
 
     status = subparsers.add_parser("status", help="Show workspace status")
     status.add_argument(
@@ -76,7 +81,7 @@ def build_parser() -> argparse.ArgumentParser:
     add = subparsers.add_parser("add", help="Create a queued task")
     add.add_argument("title", help="Task title")
     add.add_argument("--goal", default="", help="Task goal text")
-    add.add_argument("--engine", choices=["codex", "opencode"], help="Preferred engine for the task")
+    add.add_argument("--engine", choices=["codex", "opencode", "gemini"], help="Preferred engine for the task")
     add.add_argument(
         "--no-auto-commit",
         action="store_true",
@@ -89,7 +94,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Repository root containing .litehive/",
     )
 
-    run = subparsers.add_parser("run", help="Run the active or next queued task")
+    run = subparsers.add_parser("run", help="Drain the active and queued task pool")
     run.add_argument(
         "--workspace",
         type=Path,
@@ -157,7 +162,7 @@ def build_parser() -> argparse.ArgumentParser:
     update.add_argument("task_id", help="Task id to update")
     update.add_argument(
         "--engine",
-        choices=["codex", "opencode", "default"],
+        choices=["codex", "opencode", "gemini", "default"],
         help="Override task engine, or use 'default' to clear the override",
     )
     update.add_argument(
@@ -198,6 +203,7 @@ def _cmd_configure(args: argparse.Namespace) -> int:
     config = LitehiveConfig(
         default_engine=args.default_engine,
         opencode_model=args.opencode_model,
+        gemini_model=args.gemini_model,
     )
     ensure_workspace(args.workspace, config)
     print(f"Initialized litehive workspace in {args.workspace / '.litehive'}")
@@ -211,6 +217,7 @@ def _cmd_status(args: argparse.Namespace) -> int:
     print(f"workspace: {args.workspace}")
     print(f"default_engine: {config.default_engine}")
     print(f"opencode_model: {config.opencode_model}")
+    print(f"gemini_model: {config.gemini_model}")
     print(f"mode: {state.mode}")
     print(f"active_task_id: {state.active_task_id}")
     print(f"queued_tasks: {len(state.queue)}")
@@ -266,17 +273,22 @@ def _cmd_run(args: argparse.Namespace) -> int:
         print(f"task: {task.id} {task.title}")
         print(f"engine: {engine_name}")
         return 0
-    summary = run_next_task(args.workspace)
-    if summary.task is None:
+    summary = run_task_pool(args.workspace)
+    if not summary.executions:
         print("No queued task.")
         return 0
-    print(f"task: {summary.task.id} {summary.task.title}")
-    if summary.result is not None:
-        print(f"status: {summary.result.final_status}")
-        print(f"steps: {summary.result.steps_executed}")
-        print(f"last_verdict: {summary.result.last_verdict}")
-    if summary.commit_sha:
-        print(f"commit: {summary.commit_sha}")
+    for execution in summary.executions:
+        if execution.task is None:
+            continue
+        print(f"task: {execution.task.id} {execution.task.title}")
+        if execution.result is not None:
+            print(f"status: {execution.result.final_status}")
+            print(f"steps: {execution.result.steps_executed}")
+            print(f"last_verdict: {execution.result.last_verdict}")
+        if execution.commit_sha:
+            print(f"commit: {execution.commit_sha}")
+    print(f"tasks_run: {len(summary.executions)}")
+    print(f"stop_reason: {summary.stop_reason}")
     return 0
 
 

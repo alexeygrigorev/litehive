@@ -11,6 +11,7 @@ import yaml
 
 from litehive.config import ensure_workspace, state_path, workspace_dir
 from litehive.models import (
+    RuntimeEngineSwitch,
     RuntimeSubagentState,
     StageReport,
     SubagentRef,
@@ -21,7 +22,7 @@ from litehive.models import (
 )
 
 VALID_TASK_PRIORITIES = {"low", "medium", "high"}
-VALID_TASK_ENGINES = {"codex", "opencode"}
+VALID_TASK_ENGINES = {"codex", "opencode", "gemini"}
 
 
 def load_state(root: Path) -> WorkspaceState:
@@ -337,6 +338,27 @@ def mark_subagent_finished(
     save_task_runtime(root, task)
 
 
+def mark_engine_switch(
+    root: Path,
+    task: TaskRecord,
+    *,
+    step: str,
+    from_engine: str,
+    to_engine: str,
+    reason: str,
+) -> None:
+    now = utcnow()
+    task.runtime.updated_at = now
+    task.runtime.last_engine_switch = RuntimeEngineSwitch(
+        step=step,
+        from_engine=from_engine,
+        to_engine=to_engine,
+        reason=reason,
+        happened_at=now,
+    )
+    save_task_runtime(root, task)
+
+
 def summarize_transcript(transcript: str, limit: int = 120) -> str:
     for line in transcript.splitlines():
         stripped = line.strip()
@@ -377,15 +399,55 @@ def set_active_task(root: Path, task_id: str | None) -> WorkspaceState:
         return state
 
 
+def peek_next_task(root: Path) -> TaskRecord | None:
+    with _workspace_lock(root):
+        state = load_state(root)
+        next_task, mutated = _resolve_next_task_from_state(root, state)
+        if mutated:
+            save_state(root, state)
+        return next_task
+
+
 def dequeue_next_task(root: Path) -> TaskRecord | None:
-    state = load_state(root)
-    if state.active_task_id:
-        return get_task(root, state.active_task_id)
-    if not state.queue:
-        return None
-    next_id = state.queue[0]
-    set_active_task(root, next_id)
-    return get_task(root, next_id)
+    with _workspace_lock(root):
+        state = load_state(root)
+        next_task, mutated = _resolve_next_task_from_state(root, state)
+        if next_task is None:
+            if mutated:
+                save_state(root, state)
+            return None
+        if state.active_task_id != next_task.id:
+            state.active_task_id = next_task.id
+            state.queue = [item for item in state.queue if item != next_task.id]
+            mutated = True
+        if mutated:
+            save_state(root, state)
+        return next_task
+
+
+def _is_task_eligible_for_execution(task: TaskRecord) -> bool:
+    return task.status in {"queued", "in_progress"} and task.pipeline_status != "done"
+
+
+def _resolve_next_task_from_state(root: Path, state: WorkspaceState) -> tuple[TaskRecord | None, bool]:
+    mutated = False
+
+    if state.active_task_id is not None:
+        active_task = get_task(root, state.active_task_id)
+        if active_task is not None and _is_task_eligible_for_execution(active_task):
+            return active_task, mutated
+        state.active_task_id = None
+        mutated = True
+
+    while state.queue:
+        next_id = state.queue[0]
+        next_task = get_task(root, next_id)
+        if next_task is not None and _is_task_eligible_for_execution(next_task):
+            return next_task, mutated
+        state.queue.pop(0)
+        mutated = True
+
+    return None, mutated
 
 
 def clear_active_task(root: Path) -> WorkspaceState:

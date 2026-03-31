@@ -8,9 +8,15 @@ from pathlib import Path
 import yaml
 
 from litehive.external_cli import CLIExecutionResult, parse_stage_report_text
-from litehive.engines import EngineError, get_engine
+from litehive.engines import EngineError, classify_execution_limit, get_engine
 from litehive.models import StageReport, SubagentRef, TaskRecord, utcnow
 from litehive.tasks import mark_subagent_finished, mark_subagent_started, save_task, task_dir
+
+
+@dataclass(slots=True)
+class EngineFailure:
+    kind: str
+    reason: str
 
 
 @dataclass(slots=True)
@@ -19,6 +25,7 @@ class SubagentResult:
     execution: CLIExecutionResult | None
     transcript: str
     exit_code: int
+    failure: EngineFailure | None = None
 
 
 class SubagentManager:
@@ -53,21 +60,33 @@ class SubagentManager:
         mark_subagent_started(self.root, task, ref)
 
         engine = get_engine(engine_name)
+        failure: EngineFailure | None = None
         try:
             if not engine.is_available():
                 raise EngineError(f"Engine '{engine.name}' is unavailable: missing binary '{engine.binary}'")
             proc = engine.run(prompt, cwd=self.root, model=model)
-            transcript = proc.transcript
+            transcript = engine.render_transcript(proc)
             ref.status = "completed" if proc.exit_code == 0 else "failed"
+            if proc.exit_code != 0:
+                limit_reason = classify_execution_limit(transcript)
+                if limit_reason is not None:
+                    failure = EngineFailure(kind="execution_limit", reason=limit_reason)
         except EngineError as exc:
             transcript = str(exc)
             proc = None
             ref.status = "blocked"
+            failure = EngineFailure(kind="engine_error", reason=str(exc))
 
         save_task(self.root, task)
         mark_subagent_finished(self.root, task, ref, transcript, 0 if proc is None else proc.exit_code)
         self._write_session(base, ref, prompt, transcript, 0 if proc is None else proc.exit_code)
-        return SubagentResult(ref=ref, execution=proc, transcript=transcript, exit_code=0 if proc is None else proc.exit_code)
+        return SubagentResult(
+            ref=ref,
+            execution=proc,
+            transcript=transcript,
+            exit_code=0 if proc is None else proc.exit_code,
+            failure=failure,
+        )
 
     def _write_session(
         self,

@@ -3,6 +3,7 @@ from pathlib import Path
 import subprocess
 
 import pytest
+import yaml
 
 from litehive.cli import (
     _cmd_move,
@@ -16,13 +17,22 @@ from litehive.cli import (
     _cmd_update,
 )
 from litehive.engines import get_engine
-from litehive.config import ensure_workspace
+from litehive.config import ensure_workspace, load_config
 from litehive.external_cli import CLIExecutionResult, parse_stage_report_text
 from litehive.models import RuntimeStageState, RuntimeSubagentState, StageReport, SubagentRef
-from litehive.runtime import resolve_next_task, run_next_task
+from litehive.runtime import resolve_next_task, run_next_task, run_task_pool
 from litehive.runner import TaskExecutionRunner
-from litehive.subagents import SubagentResult, stage_report_from_subagent
-from litehive.tasks import create_task, get_task, list_tasks, load_state, set_active_task
+from litehive.subagents import EngineFailure, SubagentResult, stage_report_from_subagent
+from litehive.tasks import (
+    create_task,
+    get_task,
+    list_tasks,
+    load_state,
+    move_queued_task,
+    save_state,
+    save_task,
+    set_active_task,
+)
 
 
 def test_ensure_workspace_creates_layout(tmp_path: Path) -> None:
@@ -89,6 +99,26 @@ def test_opencode_strips_provider_env(monkeypatch: pytest.MonkeyPatch, tmp_path:
     assert "OPENCODE_API_KEY" not in calls["env"]
 
 
+def test_gemini_build_invocation_includes_model_and_jsonl_flags(tmp_path: Path) -> None:
+    invocation = get_engine("gemini").build_invocation(
+        "ship it",
+        tmp_path,
+        model="gemini-2.5-pro",
+    )
+
+    assert invocation.cwd == tmp_path
+    assert list(invocation.argv) == [
+        "gemini",
+        "-p",
+        "ship it",
+        "--output-format",
+        "stream-json",
+        "--yolo",
+        "-m",
+        "gemini-2.5-pro",
+    ]
+
+
 def test_engine_capabilities_report_availability_and_contract_flags(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -96,6 +126,7 @@ def test_engine_capabilities_report_availability_and_contract_flags(
 
     codex = get_engine("codex").detect_capabilities()
     opencode = get_engine("opencode").detect_capabilities()
+    gemini = get_engine("gemini").detect_capabilities()
 
     assert codex.available is True
     assert codex.supports_model_override is False
@@ -103,6 +134,9 @@ def test_engine_capabilities_report_availability_and_contract_flags(
     assert opencode.available is True
     assert opencode.supports_model_override is True
     assert opencode.strips_environment is True
+    assert gemini.available is True
+    assert gemini.supports_model_override is True
+    assert gemini.transcript_format == "jsonl"
 
 
 def test_codex_build_invocation_includes_workspace_and_prompt(tmp_path: Path) -> None:
@@ -137,6 +171,62 @@ def test_opencode_build_invocation_includes_dir_model_and_prompt(tmp_path: Path)
         "zai-coding-plan/glm-5.1",
         "ship it",
     ]
+
+
+def test_gemini_renders_jsonl_transcript_and_stage_report(tmp_path: Path) -> None:
+    execution = CLIExecutionResult(
+        adapter="gemini",
+        argv=("gemini", "-p"),
+        cwd=tmp_path,
+        exit_code=0,
+        stdout="\n".join(
+            [
+                '{"type":"init","session_id":"abc","model":"gemini-2.5-pro"}',
+                '{"type":"message","role":"assistant","content":"VERDICT: PASS\\n","delta":true}',
+                '{"type":"message","role":"assistant","content":"SUMMARY: implemented Gemini adapter\\n","delta":true}',
+                '{"type":"message","role":"assistant","content":"FILES_CHANGED:\\n- litehive/engines.py\\n","delta":true}',
+                '{"type":"message","role":"assistant","content":"TESTS_ADDED: 4\\nTESTS_PASSING: 4\\nWARNINGS:\\n","delta":true}',
+                '{"type":"result","status":"success"}',
+            ]
+        ),
+        stderr="",
+    )
+
+    engine = get_engine("gemini")
+
+    assert engine.render_transcript(execution).splitlines()[0] == "VERDICT: PASS"
+    report = engine.parse_stage_report(
+        task_id="T-0004",
+        step="implementing",
+        execution=execution,
+        subagent_status="completed",
+    )
+
+    assert report.verdict == "pass"
+    assert report.summary == "implemented Gemini adapter"
+    assert report.files_changed == ["litehive/engines.py"]
+    assert report.tests == {"added": 4, "passing": 4}
+
+
+def test_gemini_stage_report_uses_tool_error_when_no_assistant_message(tmp_path: Path) -> None:
+    execution = CLIExecutionResult(
+        adapter="gemini",
+        argv=("gemini", "-p"),
+        cwd=tmp_path,
+        exit_code=1,
+        stdout='{"type":"tool_result","status":"error","error":{"message":"permission denied"}}',
+        stderr="",
+    )
+
+    report = get_engine("gemini").parse_stage_report(
+        task_id="T-0004",
+        step="testing",
+        execution=execution,
+        subagent_status="failed",
+    )
+
+    assert report.summary == "permission denied"
+    assert report.verdict == "blocked"
 
 
 def test_execution_result_transcript_combines_stdout_and_stderr(tmp_path: Path) -> None:
@@ -215,6 +305,183 @@ def test_run_next_task_no_queue(tmp_path: Path) -> None:
     assert summary.result is None
 
 
+def test_run_task_pool_no_queue(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+
+    summary = run_task_pool(tmp_path)
+
+    assert summary.executions == []
+    assert summary.stop_reason == "queue_exhausted"
+
+
+def test_run_task_pool_drains_dynamic_queue(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    ensure_workspace(tmp_path)
+    first = create_task(tmp_path, title="First task", auto_commit=False)
+
+    def fake_run(self, task, role, engine_name, prompt, model=None):  # type: ignore[no-untyped-def]
+        if task.id == first.id and get_task(tmp_path, "T-0002") is None:
+            create_task(tmp_path, title="Second task", auto_commit=False)
+        return _completed_subagent_result(tmp_path, task.pipeline_status)
+
+    monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_run)
+
+    summary = run_task_pool(tmp_path)
+
+    assert [execution.task.id for execution in summary.executions if execution.task is not None] == [
+        "T-0001",
+        "T-0002",
+    ]
+    assert summary.stop_reason == "queue_exhausted"
+    assert load_state(tmp_path).active_task_id is None
+    assert load_state(tmp_path).queue == []
+    second = get_task(tmp_path, "T-0002")
+    assert second is not None
+    assert second.status == "done"
+
+
+def test_run_next_task_falls_back_to_next_engine_on_execution_limit(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ensure_workspace(tmp_path)
+    create_task(tmp_path, title="Fallback task", engine="codex", auto_commit=False)
+
+    def fake_run(self, task, role, engine_name, prompt, model=None):  # type: ignore[no-untyped-def]
+        if engine_name == "codex":
+            return SubagentResult(
+                ref=SubagentRef(
+                    id=f"SA-{task.pipeline_status}-{engine_name}",
+                    role=role,
+                    engine=engine_name,
+                    status="failed",
+                    path=f"subagents/{task.pipeline_status}-{engine_name}",
+                ),
+                execution=CLIExecutionResult(
+                    adapter=engine_name,
+                    argv=(engine_name, "exec"),
+                    cwd=tmp_path,
+                    exit_code=1,
+                    stdout="rate limit exceeded",
+                    stderr="",
+                ),
+                transcript="rate limit exceeded",
+                exit_code=1,
+                failure=EngineFailure(kind="execution_limit", reason="rate limit reached"),
+            )
+        return _completed_subagent_result(tmp_path, task.pipeline_status)
+
+    monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_run)
+
+    summary = run_next_task(tmp_path)
+
+    assert summary.task is not None
+    assert summary.result is not None
+    assert summary.result.final_status == "done"
+    task = get_task(tmp_path, "T-0001")
+    assert task is not None
+    assert task.runtime.last_engine_switch is not None
+    assert task.runtime.last_engine_switch.from_engine == "codex"
+    assert task.runtime.last_engine_switch.to_engine == "opencode"
+    report = yaml.safe_load(
+        (tmp_path / ".litehive" / "tasks" / "T-0001-fallback-task" / "reports" / "grooming-001.yaml").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert "Stage `grooming` switched from `codex` to `opencode` after rate limit reached." in report["warnings"]
+
+
+def test_run_next_task_flags_when_limit_fallbacks_are_exhausted(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ensure_workspace(tmp_path)
+    create_task(tmp_path, title="Exhausted fallback task", engine="codex", auto_commit=False)
+
+    def fake_run(self, task, role, engine_name, prompt, model=None):  # type: ignore[no-untyped-def]
+        return SubagentResult(
+            ref=SubagentRef(
+                id=f"SA-{task.pipeline_status}-{engine_name}",
+                role=role,
+                engine=engine_name,
+                status="failed",
+                path=f"subagents/{task.pipeline_status}-{engine_name}",
+            ),
+            execution=CLIExecutionResult(
+                adapter=engine_name,
+                argv=(engine_name, "exec"),
+                cwd=tmp_path,
+                exit_code=1,
+                stdout="quota exceeded",
+                stderr="",
+            ),
+            transcript="quota exceeded",
+            exit_code=1,
+            failure=EngineFailure(kind="execution_limit", reason="quota exceeded"),
+        )
+
+    monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_run)
+
+    summary = run_next_task(tmp_path)
+
+    assert summary.task is not None
+    assert summary.result is not None
+    assert summary.result.final_status == "flagged"
+    task = get_task(tmp_path, "T-0001")
+    assert task is not None
+    assert task.status == "flagged"
+    report = yaml.safe_load(
+        (tmp_path / ".litehive" / "tasks" / "T-0001-exhausted-fallback-task" / "reports" / "grooming-001.yaml")
+        .read_text(encoding="utf-8")
+    )
+    assert report["verdict"] == "blocked"
+    assert report["summary"] == "grooming blocked after exhausting engine fallbacks: quota exceeded"
+
+
+def test_run_task_pool_rereads_queue_order_between_tasks(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    ensure_workspace(tmp_path)
+    first = create_task(tmp_path, title="First task", auto_commit=False)
+    second = create_task(tmp_path, title="Second task", auto_commit=False)
+    third = create_task(tmp_path, title="Third task", auto_commit=False)
+
+    def fake_run(self, task, role, engine_name, prompt, model=None):  # type: ignore[no-untyped-def]
+        if task.id == first.id:
+            move_queued_task(tmp_path, third.id, 1)
+        return _completed_subagent_result(tmp_path, task.pipeline_status)
+
+    monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_run)
+
+    summary = run_task_pool(tmp_path)
+
+    assert [execution.task.id for execution in summary.executions if execution.task is not None] == [
+        first.id,
+        third.id,
+        second.id,
+    ]
+    assert summary.stop_reason == "queue_exhausted"
+    state = load_state(tmp_path)
+    assert state.active_task_id is None
+    assert state.queue == []
+
+
+def test_run_task_pool_honors_stop_condition(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    ensure_workspace(tmp_path)
+    create_task(tmp_path, title="First task", auto_commit=False)
+    create_task(tmp_path, title="Second task", auto_commit=False)
+
+    monkeypatch.setattr(
+        "litehive.runtime.SubagentManager.run",
+        lambda self, task, role, engine_name, prompt, model=None: _completed_subagent_result(
+            tmp_path, task.pipeline_status
+        ),
+    )
+
+    summary = run_task_pool(tmp_path, stop_when=lambda executions: len(executions) >= 1)
+
+    assert [execution.task.id for execution in summary.executions if execution.task is not None] == ["T-0001"]
+    assert summary.stop_reason == "stop_condition_reached"
+    state = load_state(tmp_path)
+    assert state.active_task_id is None
+    assert state.queue == ["T-0002"]
+
+
 def test_resolve_next_task_prefers_active_without_mutating_queue(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     first = create_task(tmp_path, title="First task")
@@ -232,16 +499,156 @@ def test_resolve_next_task_prefers_active_without_mutating_queue(tmp_path: Path)
     assert second.id in state_after.queue
 
 
+def test_resolve_next_task_clears_stale_active_and_returns_queued_task(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    queued = create_task(tmp_path, title="Queued task")
+    set_active_task(tmp_path, "T-9999")
+
+    task = resolve_next_task(tmp_path)
+
+    assert task is not None
+    assert task.id == queued.id
+    state = load_state(tmp_path)
+    assert state.active_task_id is None
+    assert state.queue == [queued.id]
+
+
+def test_resolve_next_task_skips_ineligible_active_and_queue_entries(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    active = create_task(tmp_path, title="Flagged active task")
+    queued = create_task(tmp_path, title="Real queued task")
+    completed = create_task(tmp_path, title="Completed queued task")
+
+    active.status = "flagged"
+    save_task(tmp_path, active)
+    completed.status = "done"
+    completed.pipeline_status = "done"
+    save_task(tmp_path, completed)
+
+    state = load_state(tmp_path)
+    state.active_task_id = active.id
+    state.queue = [completed.id, queued.id]
+    save_state(tmp_path, state)
+
+    task = resolve_next_task(tmp_path)
+
+    assert task is not None
+    assert task.id == queued.id
+    state = load_state(tmp_path)
+    assert state.active_task_id is None
+    assert state.queue == [queued.id]
+
+
+def test_run_task_pool_skips_stale_queue_entries(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Real task", auto_commit=False)
+    state = load_state(tmp_path)
+    state.queue = ["T-9999", task.id]
+    save_state(tmp_path, state)
+
+    monkeypatch.setattr(
+        "litehive.runtime.SubagentManager.run",
+        lambda self, current_task, role, engine_name, prompt, model=None: _completed_subagent_result(
+            tmp_path, current_task.pipeline_status
+        ),
+    )
+
+    summary = run_task_pool(tmp_path)
+
+    assert [execution.task.id for execution in summary.executions if execution.task is not None] == [task.id]
+    assert summary.stop_reason == "queue_exhausted"
+    state = load_state(tmp_path)
+    assert state.active_task_id is None
+    assert state.queue == []
+
+
+def test_run_task_pool_skips_ineligible_active_and_queue_entries(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ensure_workspace(tmp_path)
+    active = create_task(tmp_path, title="Flagged active task", auto_commit=False)
+    queued = create_task(tmp_path, title="Real task", auto_commit=False)
+    completed = create_task(tmp_path, title="Completed queued task", auto_commit=False)
+
+    active.status = "flagged"
+    save_task(tmp_path, active)
+    completed.status = "done"
+    completed.pipeline_status = "done"
+    save_task(tmp_path, completed)
+
+    state = load_state(tmp_path)
+    state.active_task_id = active.id
+    state.queue = [completed.id, queued.id]
+    save_state(tmp_path, state)
+
+    monkeypatch.setattr(
+        "litehive.runtime.SubagentManager.run",
+        lambda self, current_task, role, engine_name, prompt, model=None: _completed_subagent_result(
+            tmp_path, current_task.pipeline_status
+        ),
+    )
+
+    summary = run_task_pool(tmp_path)
+
+    assert [execution.task.id for execution in summary.executions if execution.task is not None] == [queued.id]
+    assert summary.stop_reason == "queue_exhausted"
+    state = load_state(tmp_path)
+    assert state.active_task_id is None
+    assert state.queue == []
+
+
+def test_run_task_pool_drains_active_task_without_queued_entries(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Resumed task", auto_commit=False)
+    state = load_state(tmp_path)
+    state.active_task_id = task.id
+    state.queue = []
+    save_state(tmp_path, state)
+
+    monkeypatch.setattr(
+        "litehive.runtime.SubagentManager.run",
+        lambda self, current_task, role, engine_name, prompt, model=None: _completed_subagent_result(
+            tmp_path, current_task.pipeline_status
+        ),
+    )
+
+    summary = run_task_pool(tmp_path)
+
+    assert [execution.task.id for execution in summary.executions if execution.task is not None] == [task.id]
+    assert summary.stop_reason == "queue_exhausted"
+    state = load_state(tmp_path)
+    assert state.active_task_id is None
+    assert state.queue == []
+
+
+def test_configure_persists_gemini_model(tmp_path: Path) -> None:
+    parser = argparse.Namespace(
+        workspace=tmp_path,
+        default_engine="gemini",
+        opencode_model="zai-coding-plan/glm-5.1",
+        gemini_model="gemini-2.5-pro",
+    )
+
+    from litehive.cli import _cmd_configure
+
+    assert _cmd_configure(parser) == 0
+    config = load_config(tmp_path)
+    assert config.default_engine == "gemini"
+    assert config.gemini_model == "gemini-2.5-pro"
+
+
 def test_cmd_run_dry_run_shows_task_and_engine_without_execution(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     ensure_workspace(tmp_path)
     create_task(tmp_path, title="Queued task", engine="opencode")
 
-    def fail_run_next_task(root: Path) -> None:
-        raise AssertionError(f"run_next_task should not be called for dry-run: {root}")
+    def fail_run_task_pool(root: Path) -> None:
+        raise AssertionError(f"run_task_pool should not be called for dry-run: {root}")
 
-    monkeypatch.setattr("litehive.cli.run_next_task", fail_run_next_task)
+    monkeypatch.setattr("litehive.cli.run_task_pool", fail_run_task_pool)
 
     exit_code = _cmd_run(argparse.Namespace(workspace=tmp_path, dry_run=True))
     output = capsys.readouterr().out
@@ -250,6 +657,31 @@ def test_cmd_run_dry_run_shows_task_and_engine_without_execution(
     assert "task: T-0001 Queued task" in output
     assert "engine: opencode" in output
     assert load_state(tmp_path).queue == ["T-0001"]
+
+
+def test_cmd_run_drains_task_pool_and_reports_summary(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ensure_workspace(tmp_path)
+    create_task(tmp_path, title="First task", auto_commit=False)
+    create_task(tmp_path, title="Second task", auto_commit=False)
+
+    monkeypatch.setattr(
+        "litehive.runtime.SubagentManager.run",
+        lambda self, task, role, engine_name, prompt, model=None: _completed_subagent_result(
+            tmp_path, task.pipeline_status
+        ),
+    )
+
+    exit_code = _cmd_run(argparse.Namespace(workspace=tmp_path, dry_run=False))
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "task: T-0001 First task" in output
+    assert "task: T-0002 Second task" in output
+    assert "tasks_run: 2" in output
+    assert "stop_reason: queue_exhausted" in output
+    assert load_state(tmp_path).queue == []
 
 
 def test_status_output_includes_runtime_observability(
@@ -421,6 +853,32 @@ def test_update_command_updates_task_metadata(
     assert updated.git.auto_commit is False
     assert "engine: opencode" in output
     assert "priority: high" in output
+
+
+def test_update_command_accepts_gemini_engine(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Tune Gemini task")
+
+    exit_code = _cmd_update(
+        argparse.Namespace(
+            workspace=tmp_path,
+            task_id=task.id,
+            engine="gemini",
+            priority=None,
+            goal=None,
+            mode=None,
+            auto_commit=None,
+        )
+    )
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    updated = get_task(tmp_path, task.id)
+    assert updated is not None
+    assert updated.engine == "gemini"
+    assert "engine: gemini" in output
 
 
 def _run(cmd: list[str], cwd: Path) -> str:

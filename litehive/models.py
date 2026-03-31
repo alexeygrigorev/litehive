@@ -62,6 +62,14 @@ class RuntimeSubagentState(BaseModel):
     transcript_snippet: str = ""
 
 
+class RuntimeEngineSwitch(BaseModel):
+    step: str
+    from_engine: str
+    to_engine: str
+    reason: str
+    happened_at: str = Field(default_factory=utcnow)
+
+
 class TaskRuntime(BaseModel):
     git: RuntimeGitState = Field(default_factory=RuntimeGitState)
     execution_status: str = "idle"
@@ -71,6 +79,7 @@ class TaskRuntime(BaseModel):
     last_stage: RuntimeStageState = Field(default_factory=RuntimeStageState)
     active_subagent: RuntimeSubagentState | None = None
     last_subagent: RuntimeSubagentState | None = None
+    last_engine_switch: RuntimeEngineSwitch | None = None
 
 
 class GitSettings(BaseModel):

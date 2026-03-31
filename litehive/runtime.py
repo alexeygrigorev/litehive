@@ -4,10 +4,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
+from typing import Callable
 
 import yaml
 
-from litehive.config import load_config, load_context
+from litehive.config import LitehiveConfig, load_config, load_context
 from litehive.git_ops import (
     GitError,
     checkpoint_message,
@@ -27,9 +28,10 @@ from litehive.tasks import (
     clear_active_task,
     dequeue_next_task,
     get_task,
-    load_state,
+    mark_engine_switch,
     mark_task_run_finished,
     mark_task_run_started,
+    peek_next_task,
     save_task_runtime,
     save_task,
 )
@@ -43,6 +45,12 @@ class ExecutionSummary:
 
 
 @dataclass(slots=True)
+class TaskPoolRunSummary:
+    executions: list[ExecutionSummary]
+    stop_reason: str
+
+
+@dataclass(slots=True)
 class RollbackSummary:
     task: TaskRecord
     rollback_sha: str
@@ -51,12 +59,7 @@ class RollbackSummary:
 
 def resolve_next_task(root: Path) -> TaskRecord | None:
     root = root.resolve()
-    state = load_state(root)
-    if state.active_task_id:
-        return get_task(root, state.active_task_id)
-    if not state.queue:
-        return None
-    return get_task(root, state.queue[0])
+    return peek_next_task(root)
 
 
 def run_next_task(root: Path) -> ExecutionSummary:
@@ -77,10 +80,10 @@ def run_next_task(root: Path) -> ExecutionSummary:
         root,
         build_executor(
             root,
-            engine_name=engine_name,
+            initial_engine_name=engine_name,
             workspace_context=workspace_context,
             subagents=subagents,
-            model=config.opencode_model if engine_name == "opencode" else None,
+            config=config,
             config_auto_commit=config.auto_commit,
         ),
     )
@@ -91,6 +94,23 @@ def run_next_task(root: Path) -> ExecutionSummary:
     clear_active_task(root)
 
     return ExecutionSummary(task=task, result=result, commit_sha=task.git.commit_sha)
+
+
+def run_task_pool(
+    root: Path,
+    *,
+    stop_when: Callable[[list[ExecutionSummary]], bool] | None = None,
+) -> TaskPoolRunSummary:
+    root = root.resolve()
+    executions: list[ExecutionSummary] = []
+
+    while True:
+        if stop_when is not None and stop_when(executions):
+            return TaskPoolRunSummary(executions=executions, stop_reason="stop_condition_reached")
+        execution = run_next_task(root)
+        if execution.task is None:
+            return TaskPoolRunSummary(executions=executions, stop_reason="queue_exhausted")
+        executions.append(execution)
 
 
 def rollback_completed_task(root: Path, task_id: str) -> RollbackSummary:
@@ -162,10 +182,10 @@ def _require_completed_task(task: TaskRecord, action: str) -> None:
 def build_executor(
     root: Path,
     *,
-    engine_name: str,
+    initial_engine_name: str,
     workspace_context: str,
     subagents: SubagentManager,
-    model: str | None,
+    config: LitehiveConfig,
     config_auto_commit: bool,
 ) -> StageExecutor:
     def executor(current_task: TaskRecord, step: str) -> StageReport:
@@ -177,16 +197,70 @@ def build_executor(
             )
 
         prompt = stage_prompt(current_task, step, workspace_context=workspace_context)
-        result = subagents.run(
-            current_task,
-            role=_role_for_step(step),
-            engine_name=engine_name,
-            prompt=prompt,
-            model=model,
-        )
-        return stage_report_from_subagent(current_task, step, result)
+        fallback_events: list[str] = []
+        engines = _engine_attempt_order(initial_engine_name, config.engine_fallbacks)
+
+        for index, engine_name in enumerate(engines):
+            result = subagents.run(
+                current_task,
+                role=_role_for_step(step),
+                engine_name=engine_name,
+                prompt=prompt,
+                model=_model_for_engine(config, engine_name),
+            )
+            is_limit_failure = result.failure is not None and result.failure.kind == "execution_limit"
+            if is_limit_failure and index + 1 < len(engines):
+                next_engine = engines[index + 1]
+                event = (
+                    f"Stage `{step}` switched from `{engine_name}` to `{next_engine}` "
+                    f"after {result.failure.reason}."
+                )
+                fallback_events.append(event)
+                append_journal(root, current_task, event)
+                mark_engine_switch(
+                    root,
+                    current_task,
+                    step=step,
+                    from_engine=engine_name,
+                    to_engine=next_engine,
+                    reason=result.failure.reason,
+                )
+                continue
+
+            report = stage_report_from_subagent(current_task, step, result)
+            if fallback_events:
+                report.warnings = [*fallback_events, *report.warnings]
+            if is_limit_failure:
+                report.summary = (
+                    f"{step} blocked after exhausting engine fallbacks: {result.failure.reason}"
+                )
+                report.feedback = "\n\n".join([*fallback_events, result.transcript]).strip()
+                if not report.warnings or report.warnings[-1] != result.failure.reason:
+                    report.warnings.append(result.failure.reason)
+            return report
+
+        raise RuntimeError("Engine attempt order must include at least one engine")
 
     return executor
+
+
+def _model_for_engine(config: LitehiveConfig, engine_name: str) -> str | None:
+    if engine_name == "opencode":
+        return config.opencode_model
+    if engine_name == "gemini":
+        return config.gemini_model
+    return None
+
+
+def _engine_attempt_order(initial_engine_name: str, engine_fallbacks: dict[str, list[str]]) -> list[str]:
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for engine_name in [initial_engine_name, *engine_fallbacks.get(initial_engine_name, [])]:
+        if engine_name in seen:
+            continue
+        seen.add(engine_name)
+        ordered.append(engine_name)
+    return ordered
 
 
 def _commit_to_git_report(root: Path, task: TaskRecord, *, auto_commit_enabled: bool) -> StageReport:

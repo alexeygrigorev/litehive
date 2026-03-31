@@ -8,6 +8,7 @@ from pathlib import Path
 import re
 import shutil
 import subprocess
+import json
 from typing import Literal
 
 from litehive.models import StageReport, SubagentStatus
@@ -117,9 +118,32 @@ class ExternalCLIAdapter:
         return parse_stage_report_text(
             task_id=task_id,
             step=step,
-            transcript=execution.transcript,
+            transcript=self.render_transcript(execution),
             subagent_status=subagent_status,
         )
+
+    def render_transcript(self, execution: CLIExecutionResult) -> str:
+        return execution.transcript
+
+
+def extract_jsonl_messages(stdout: str) -> str:
+    parts: list[str] = []
+    for raw_line in stdout.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        try:
+            payload = json.loads(line)
+        except (json.JSONDecodeError, ValueError):
+            continue
+        if not isinstance(payload, dict):
+            continue
+        if payload.get("type") != "message" or payload.get("role") != "assistant":
+            continue
+        content = payload.get("content")
+        if isinstance(content, str) and content:
+            parts.append(content)
+    return "".join(parts).strip()
 
 
 def parse_stage_report_text(

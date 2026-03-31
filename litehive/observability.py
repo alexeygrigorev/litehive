@@ -44,6 +44,16 @@ def render_task_summary(task: TaskRecord, *, active: bool) -> list[str]:
             )
         )
 
+    if runtime.last_engine_switch is not None:
+        lines.append(
+            "  "
+            + (
+                f"engine_switch={runtime.last_engine_switch.step} "
+                f"{runtime.last_engine_switch.from_engine}->{runtime.last_engine_switch.to_engine} "
+                f"reason={runtime.last_engine_switch.reason}"
+            )
+        )
+
     if runtime.last_stage.step:
         summary = runtime.last_stage.summary or "-"
         lines.append(
