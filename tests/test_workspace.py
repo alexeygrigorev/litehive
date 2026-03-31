@@ -1,4 +1,5 @@
 import argparse
+import os
 from pathlib import Path
 import subprocess
 
@@ -1938,9 +1939,155 @@ def test_update_command_accepts_copilot_engine(
     assert "engine: copilot" in output
 
 
+def test_run_all_stops_before_run_when_pre_status_has_explicit_pool_stop_reason(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    (workspace / ".litehive").mkdir()
+    counts_dir = tmp_path / "counts"
+    counts_dir.mkdir()
+    run_count_file = counts_dir / "run-count"
+
+    fake_uv = _write_fake_uv(
+        tmp_path,
+        f"""#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ "${{1:-}}" == "run" && "${{2:-}}" == "litehive" && "${{3:-}}" == "status" ]]; then
+  echo "workspace: $5"
+  echo "active_task_id: T-0001"
+  echo "queued_tasks: 1"
+  echo "pool_stop_reason: max_tasks_reached"
+  exit 0
+fi
+
+if [[ "${{1:-}}" == "run" && "${{2:-}}" == "litehive" && "${{3:-}}" == "run" ]]; then
+  count="$(cat "{run_count_file}" 2>/dev/null || echo 0)"
+  count="$((count + 1))"
+  echo "$count" > "{run_count_file}"
+  echo "unexpected run"
+  exit 0
+fi
+
+echo "unexpected uv invocation: $*" >&2
+exit 1
+""",
+    )
+
+    result = subprocess.run(
+        ["bash", str(_repo_root() / "scripts" / "run-all.sh"), str(workspace)],
+        cwd=_repo_root(),
+        text=True,
+        capture_output=True,
+        env=_with_fake_uv(fake_uv),
+        check=False,
+    )
+
+    assert result.returncode == 0
+    assert "Pool already stopped: max_tasks_reached" in result.stdout
+    assert not run_count_file.exists()
+
+    log_dirs = list((workspace / ".litehive" / "logs" / "run-all").iterdir())
+    assert len(log_dirs) == 1
+    assert (log_dirs[0] / "0001-pre-status.log").exists()
+    assert not (log_dirs[0] / "0001-run.log").exists()
+
+
+def test_run_all_restarts_litehive_until_queue_is_empty(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    (workspace / ".litehive").mkdir()
+    counts_dir = tmp_path / "counts"
+    counts_dir.mkdir()
+    status_count_file = counts_dir / "status-count"
+    run_count_file = counts_dir / "run-count"
+
+    fake_uv = _write_fake_uv(
+        tmp_path,
+        f"""#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ "${{1:-}}" == "run" && "${{2:-}}" == "litehive" && "${{3:-}}" == "status" ]]; then
+  count="$(cat "{status_count_file}" 2>/dev/null || echo 0)"
+  count="$((count + 1))"
+  echo "$count" > "{status_count_file}"
+
+  queued_tasks=1
+  stop_reason=None
+  if [[ "$count" -eq 4 ]]; then
+    queued_tasks=0
+    stop_reason=queue_exhausted
+  fi
+
+  echo "workspace: $5"
+  echo "active_task_id: None"
+  echo "queued_tasks: $queued_tasks"
+  echo "pool_stop_reason: $stop_reason"
+  exit 0
+fi
+
+if [[ "${{1:-}}" == "run" && "${{2:-}}" == "litehive" && "${{3:-}}" == "run" ]]; then
+  count="$(cat "{run_count_file}" 2>/dev/null || echo 0)"
+  count="$((count + 1))"
+  echo "$count" > "{run_count_file}"
+  echo "tasks_run: 1"
+  echo "stop_reason: queue_exhausted"
+  exit 0
+fi
+
+echo "unexpected uv invocation: $*" >&2
+exit 1
+""",
+    )
+
+    result = subprocess.run(
+        ["bash", str(_repo_root() / "scripts" / "run-all.sh"), str(workspace)],
+        cwd=_repo_root(),
+        text=True,
+        capture_output=True,
+        env=_with_fake_uv(fake_uv),
+        check=False,
+    )
+
+    assert result.returncode == 0
+    assert "== iteration 1 ==" in result.stdout
+    assert "== iteration 2 ==" in result.stdout
+    assert "No active or queued tasks remain. Stopping." in result.stdout
+    assert run_count_file.read_text(encoding="utf-8").strip() == "2"
+    assert status_count_file.read_text(encoding="utf-8").strip() == "4"
+
+    log_dirs = list((workspace / ".litehive" / "logs" / "run-all").iterdir())
+    assert len(log_dirs) == 1
+    log_dir = log_dirs[0]
+    assert (log_dir / "0001-pre-status.log").exists()
+    assert (log_dir / "0001-run.log").exists()
+    assert (log_dir / "0001-post-status.log").exists()
+    assert (log_dir / "0002-pre-status.log").exists()
+    assert (log_dir / "0002-run.log").exists()
+    assert (log_dir / "0002-post-status.log").exists()
+
+
 def _run(cmd: list[str], cwd: Path) -> str:
     proc = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, check=True)
     return proc.stdout.strip()
+
+
+def _repo_root() -> Path:
+    return Path(__file__).resolve().parents[1]
+
+
+def _with_fake_uv(fake_uv: Path) -> dict[str, str]:
+    env = os.environ.copy()
+    env["PATH"] = f"{fake_uv.parent}:{env['PATH']}"
+    return env
+
+
+def _write_fake_uv(tmp_path: Path, script: str) -> Path:
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir(exist_ok=True)
+    fake_uv = fake_bin / "uv"
+    fake_uv.write_text(script, encoding="utf-8")
+    fake_uv.chmod(0o755)
+    return fake_uv
 
 
 def _init_git_repo(tmp_path: Path) -> str:
