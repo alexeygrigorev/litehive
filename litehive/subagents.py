@@ -8,10 +8,17 @@ from pathlib import Path
 import yaml
 
 from litehive.config import resolve_process_profile
-from litehive.external_cli import CLIExecutionResult, parse_stage_report_text
+from litehive.external_cli import CLIExecutionResult, ExternalCLIAdapter, parse_stage_report_text
 from litehive.engines import EngineError, classify_execution_limit, get_engine
 from litehive.models import StageReport, SubagentRef, TaskRecord, utcnow
-from litehive.tasks import mark_subagent_finished, mark_subagent_started, save_task, task_dir
+from litehive.tasks import (
+    mark_subagent_finished,
+    mark_subagent_started,
+    missing_acceptance_criteria_reason,
+    save_task,
+    task_dir,
+    task_template,
+)
 
 
 @dataclass(slots=True)
@@ -27,6 +34,11 @@ class SubagentResult:
     transcript: str
     exit_code: int
     failure: EngineFailure | None = None
+
+
+def _supports_custom_live_execution(engine: object) -> bool:
+    run_live = getattr(type(engine), "run_live", None)
+    return callable(run_live) and run_live is not ExternalCLIAdapter.run_live
 
 
 class SubagentManager:
@@ -60,13 +72,42 @@ class SubagentManager:
         task.subagents.append(ref)
         save_task(self.root, task)
         mark_subagent_started(self.root, task, ref)
+        self._write_session_start(base, ref, prompt)
 
         engine = get_engine(engine_name)
         failure: EngineFailure | None = None
         try:
             if not engine.is_available():
                 raise EngineError(f"Engine '{engine.name}' is unavailable: missing binary '{engine.binary}'")
-            if max_turns is None:
+            if _supports_custom_live_execution(engine):
+                if max_turns is None:
+                    proc = engine.run_live(
+                        prompt,
+                        cwd=self.root,
+                        model=model,
+                        on_update=lambda execution: self._write_session_progress(
+                            task,
+                            base,
+                            ref,
+                            prompt,
+                            execution,
+                        ),
+                    )
+                else:
+                    proc = engine.run_live(
+                        prompt,
+                        cwd=self.root,
+                        model=model,
+                        max_turns=max_turns,
+                        on_update=lambda execution: self._write_session_progress(
+                            task,
+                            base,
+                            ref,
+                            prompt,
+                            execution,
+                        ),
+                    )
+            elif max_turns is None:
                 proc = engine.run(prompt, cwd=self.root, model=model)
             else:
                 proc = engine.run(prompt, cwd=self.root, model=model, max_turns=max_turns)
@@ -84,7 +125,15 @@ class SubagentManager:
 
         save_task(self.root, task)
         mark_subagent_finished(self.root, task, ref, transcript, 0 if proc is None else proc.exit_code)
-        self._write_session(base, ref, prompt, transcript, 0 if proc is None else proc.exit_code)
+        self._write_session_finish(
+            task,
+            base,
+            ref,
+            prompt,
+            transcript,
+            0 if proc is None else proc.exit_code,
+            proc,
+        )
         return SubagentResult(
             ref=ref,
             execution=proc,
@@ -93,14 +142,129 @@ class SubagentManager:
             failure=failure,
         )
 
-    def _write_session(
+    def _write_session_start(
         self,
+        base: Path,
+        ref: SubagentRef,
+        prompt: str,
+    ) -> None:
+        self._write_session_metadata(base, ref, exit_code=None)
+        (base / "prompt.txt").write_text(prompt, encoding="utf-8")
+        (base / "transcript.md").write_text("", encoding="utf-8")
+        (base / "stdout.txt").write_text("", encoding="utf-8")
+        (base / "stderr.txt").write_text("", encoding="utf-8")
+        (base / "report.yaml").write_text(
+            yaml.safe_dump(
+                {
+                    "status": ref.status,
+                    "summary": "",
+                    "files_changed": [],
+                    "tests": {"added": 0, "passing": 0},
+                    "warnings": [],
+                },
+                sort_keys=False,
+            ),
+            encoding="utf-8",
+        )
+
+    def _write_session_finish(
+        self,
+        task: TaskRecord,
         base: Path,
         ref: SubagentRef,
         prompt: str,
         transcript: str,
         exit_code: int,
+        execution: CLIExecutionResult | None,
     ) -> None:
+        report_step = (
+            task.pipeline_status
+            if task.pipeline_status in {"grooming", "implementing", "testing", "accepting", "commit_to_git"}
+            else "implementing"
+        )
+        report = parse_stage_report_text(
+            task_id=task.id,
+            step=report_step,  # type: ignore[arg-type]
+            transcript=transcript,
+            subagent_status=ref.status,
+        )
+        self._write_session_metadata(base, ref, exit_code=exit_code)
+        (base / "prompt.txt").write_text(prompt, encoding="utf-8")
+        (base / "transcript.md").write_text(transcript + "\n", encoding="utf-8")
+        (base / "stdout.txt").write_text("" if execution is None else execution.stdout, encoding="utf-8")
+        (base / "stderr.txt").write_text("" if execution is None else execution.stderr, encoding="utf-8")
+        (base / "report.yaml").write_text(
+            yaml.safe_dump(
+                {
+                    "status": ref.status,
+                    "summary": report.summary,
+                    "files_changed": report.files_changed,
+                    "tests": report.tests,
+                    "warnings": report.warnings,
+                },
+                sort_keys=False,
+            ),
+            encoding="utf-8",
+        )
+
+    def _write_session_progress(
+        self,
+        task: TaskRecord,
+        base: Path,
+        ref: SubagentRef,
+        prompt: str,
+        execution: CLIExecutionResult,
+    ) -> None:
+        transcript = get_engine(ref.engine).render_transcript(execution)
+        self._write_session_metadata(base, ref, exit_code=None)
+        (base / "prompt.txt").write_text(prompt, encoding="utf-8")
+        (base / "transcript.md").write_text(transcript, encoding="utf-8")
+        (base / "stdout.txt").write_text(execution.stdout, encoding="utf-8")
+        (base / "stderr.txt").write_text(execution.stderr, encoding="utf-8")
+        report_step = (
+            task.pipeline_status
+            if task.pipeline_status in {"grooming", "implementing", "testing", "accepting", "commit_to_git"}
+            else "implementing"
+        )
+        report_payload = {
+            "status": ref.status,
+            "summary": "",
+            "files_changed": [],
+            "tests": {"added": 0, "passing": 0},
+            "warnings": [],
+        }
+        if transcript.strip():
+            report = parse_stage_report_text(
+                task_id=task.id,
+                step=report_step,  # type: ignore[arg-type]
+                transcript=transcript,
+                subagent_status=ref.status,
+            )
+            report_payload = {
+                "status": ref.status,
+                "summary": report.summary,
+                "files_changed": report.files_changed,
+                "tests": report.tests,
+                "warnings": report.warnings,
+            }
+        (base / "report.yaml").write_text(
+            yaml.safe_dump(report_payload, sort_keys=False),
+            encoding="utf-8",
+        )
+
+    def _write_session_metadata(
+        self,
+        base: Path,
+        ref: SubagentRef,
+        *,
+        exit_code: int | None,
+    ) -> None:
+        created_at = utcnow()
+        session_path = base / "session.yaml"
+        if session_path.exists():
+            existing = yaml.safe_load(session_path.read_text(encoding="utf-8")) or {}
+            if isinstance(existing, dict) and isinstance(existing.get("created_at"), str):
+                created_at = existing["created_at"]
         (base / "session.yaml").write_text(
             yaml.safe_dump(
                 {
@@ -108,23 +272,9 @@ class SubagentManager:
                     "role": ref.role,
                     "engine": ref.engine,
                     "status": ref.status,
-                    "created_at": utcnow(),
+                    "created_at": created_at,
+                    "updated_at": utcnow(),
                     "exit_code": exit_code,
-                },
-                sort_keys=False,
-            ),
-            encoding="utf-8",
-        )
-        (base / "prompt.txt").write_text(prompt, encoding="utf-8")
-        (base / "transcript.md").write_text(transcript + "\n", encoding="utf-8")
-        (base / "report.yaml").write_text(
-            yaml.safe_dump(
-                {
-                    "status": ref.status,
-                    "summary": transcript.splitlines()[0] if transcript else "",
-                    "files_changed": [],
-                    "tests": {"added": 0, "passing": 0},
-                    "warnings": [],
                 },
                 sort_keys=False,
             ),
@@ -165,6 +315,7 @@ def stage_prompt(
         f"Task: {task.id} {task.title}",
         f"Stage: {step}",
         f"Process profile: {profile['label']}",
+        f"Task type: {task.task_type or '-'}",
         "",
         "Workspace context:",
         workspace_context.strip() or "No workspace context provided.",
@@ -209,6 +360,39 @@ def stage_prompt(
         lines.extend(f"- {item}" for item in task.acceptance_criteria)
     else:
         lines.append("- No acceptance criteria defined.")
+    missing_criteria_reason = missing_acceptance_criteria_reason(task)
+    if missing_criteria_reason is not None:
+        lines.extend(
+            [
+                "",
+                "Acceptance gate:",
+                f"- {missing_criteria_reason}",
+                "- Use grooming or task intake to define the missing criteria before implementation starts.",
+            ]
+        )
+
+    template = task_template(task)
+    if template is not None:
+        lines.extend(
+            [
+                "",
+                "Task template:",
+                f"- Use the `{task.task_type}` template to keep the task structured.",
+            ]
+        )
+        prompt_guidance = template.get("prompt_guidance", [])
+        if isinstance(prompt_guidance, list):
+            lines.extend(f"- {item}" for item in prompt_guidance)
+        brief_sections = template.get("brief_sections", [])
+        if isinstance(brief_sections, list):
+            lines.extend(["", "Template sections to fill or verify:"])
+            lines.extend(f"- {item}" for item in brief_sections)
+
+    lines.extend(["", "Plan:"])
+    if task.plan:
+        lines.extend(f"- {item}" for item in task.plan)
+    else:
+        lines.append("- No plan defined.")
 
     lines.extend(["", "Constraints:"])
     if task.constraints:

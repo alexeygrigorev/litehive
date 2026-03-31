@@ -12,6 +12,8 @@ Local-first autonomous coding workspace with deterministic task execution.
 - Checkpoint commit after successful task completion
 - Queue state, runtime state, and task artifacts stored under `.litehive/`
 - `litehive run` drains the active and queued pool, re-reading queue state between tasks
+- `litehive run --dry-run` previews the planned pool order, engine selection, and predicted stop reason without invoking any agents
+- Optional per-task human checkpoints can pause the pool before `accepting` or `commit_to_git`
 
 ## CLI workflow
 
@@ -21,15 +23,18 @@ Common commands:
 - `litehive status`
 - `litehive queue`
 - `litehive add "<title>"`
+- `litehive add "<title>" --task-type review`
 - `litehive update T-0001 --engine opencode`
 - `litehive move T-0001 1`
 - `litehive promote T-0001`
 - `litehive requeue T-0001 --front`
 - `litehive run`
+- `litehive run --dry-run`
 - `litehive rollback T-0001`
 - `litehive recover T-0001`
 
 `--workspace` defaults to the current directory. In normal repo-local use you should not need to pass it.
+When `litehive add` receives `--task-type`, it now creates the task in `tasks` mode by default so the task folder includes the structured `brief.md` and prompt guidance for that template. Pass `--mode implementation` to keep a typed task on the implementation path without the intake brief.
 
 ## Execution model
 
@@ -42,11 +47,15 @@ Each runnable task goes through a fixed stage pipeline:
 5. `commit_to_git`
 
 The orchestrator owns routing and task state. Subagents produce reports and artifacts, but they do not decide the control flow.
+Tasks can also opt into `--human-checkpoint before_acceptance` or `--human-checkpoint before_commit`, which pauses the pool and requeues the task at the next stage boundary for manual review.
 External engine choice resolves as:
 
 1. run-time override
 2. task-level preference
 3. workspace default engine
+
+The full state machine — states, transitions, verdicts, outcome codes, and the
+change-gate rule — is documented in [`docs/state-machine.md`](docs/state-machine.md).
 
 ## Workspace shape
 
@@ -58,6 +67,7 @@ External engine choice resolves as:
   tasks/
     T-0001-example/
       task.yaml
+      brief.md
       journal.md
       subagents/
       reports/
@@ -85,12 +95,12 @@ Task-local artifacts live under `.litehive/tasks/<task-id>/` and include reports
 
 ## Git checkpoints
 
-By default, Litehive records a git checkpoint whenever a task reaches `done` and the workspace is a git repository.
+By default, Litehive records a git completion commit whenever a task reaches `done` and the workspace is a git repository.
 The task stores the checkpoint policy in `task.yaml`, including the commit subject, the base `HEAD`, and the number
 of completed attempts.
 
-- Default checkpoint subject: `litehive: checkpoint <task-id> <slug>`
-- Repeat completion attempts append an attempt suffix: `litehive: checkpoint <task-id> <slug> (attempt N)`
+- Default checkpoint subject: `litehive: complete <task-id> <slug>`
+- Repeat completion attempts append an attempt suffix: `litehive: complete <task-id> <slug> (attempt N)`
 - `litehive rollback <task-id>` reverts the latest checkpoint commit, creates a rollback commit, and requeues the task at `implementing`
 - `litehive recover <task-id>` requeues a completed task at `implementing` without reverting code
 
@@ -128,11 +138,31 @@ scripts/install-bin.sh
 
 The script:
 
-- writes a launcher into `~/bin`
+- writes launchers into `~/bin`
 - checks that `~/bin` is on `PATH`
-- prints the resolved `litehive` command path
+- prints the resolved command paths
 
 For this repository, the launcher delegates to the local project via `uv`, but that is an implementation detail. User-facing workflow should treat `litehive` as the command.
+
+Installed commands:
+
+- `litehive`
+- `litehive-run-all`
+- `litehive-run-all-status`
+
+From any other project, run:
+
+```bash
+litehive-run-all /path/to/project
+litehive-run-all-status /path/to/project
+```
+
+If you are already in the target project directory, you can omit the path:
+
+```bash
+litehive-run-all .
+litehive-run-all-status .
+```
 
 ## Current engines
 

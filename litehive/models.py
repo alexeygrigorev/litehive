@@ -22,14 +22,20 @@ PipelineStatus = Literal[
 SubagentStatus = Literal["created", "running", "completed", "failed", "blocked"]
 OutcomeKind = Literal["flagged", "blocked", "cancelled", "failed"]
 RetrySource = Literal["global", "task"]
+HumanCheckpoint = Literal["before_acceptance", "before_commit"]
 OutcomeReasonCode = Literal[
     "verdict_fail",
     "verdict_reject",
     "verdict_blocked",
+    "missing_acceptance_criteria",
     "retry_limit_exhausted",
     "execution_cancelled",
     "stage_exception",
     "unsupported_verdict",
+    # intentional non-implementation outcomes set via `litehive close`
+    "wont_do",
+    "deferred",
+    "duplicate",
 ]
 
 
@@ -126,6 +132,7 @@ class TaskRecord(BaseModel):
     slug: str
     title: str
     depends_on: list[str] = Field(default_factory=list)
+    task_type: str | None = None
     engine: str | None = None
     mode: TaskMode = "implementation"
     status: TaskStatus = "queued"
@@ -137,6 +144,7 @@ class TaskRecord(BaseModel):
     acceptance_criteria: list[str] = Field(default_factory=list)
     constraints: list[str] = Field(default_factory=list)
     plan: list[str] = Field(default_factory=list)
+    human_checkpoints: list[HumanCheckpoint] = Field(default_factory=list)
     subagents: list[SubagentRef] = Field(default_factory=list)
     git: GitSettings = Field(default_factory=GitSettings)
     retry_policy: TaskRetryPolicy = Field(default_factory=TaskRetryPolicy)

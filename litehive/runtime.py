@@ -4,14 +4,16 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
+import re
 from typing import Callable
 
 import yaml
 
 from litehive.engines import EngineError
-from litehive.config import LitehiveConfig, load_config, load_context
+from litehive.config import LitehiveConfig, load_config, load_context, state_path
 from litehive.git_ops import (
     GitError,
+    abort_revert,
     checkpoint_message,
     commit_task,
     current_head,
@@ -25,23 +27,29 @@ from litehive.models import StageReport, TaskRecord
 from litehive.runner import RunResult, StageExecutor, TaskExecutionRunner
 from litehive.subagents import SubagentManager, stage_prompt, stage_report_from_subagent
 from litehive.tasks import (
+    _atomic_write_text,
+    _workspace_lock,
     BlockedTask,
     active_task_markers,
     append_journal,
-    enqueue_task,
-    clear_active_task,
     dequeue_next_task,
     dequeue_next_task_selection,
+    finish_task_run_transition,
     get_task,
+    implementation_entry_stage,
+    load_state,
     mark_engine_switch,
-    mark_task_run_finished,
     mark_task_run_started,
     peek_next_task,
     peek_next_task_selection,
+    persist_task_and_state,
     restore_untouched_active_task,
     set_pool_stop_reason,
     save_task_runtime,
     save_task,
+    task_dir,
+    task_file,
+    task_runtime_file,
     workspace_mutation_guard,
     workspace_runner_guard,
     WorkspaceConflictError,
@@ -172,7 +180,8 @@ def run_task(
 
         config = load_config(root)
         workspace_context = load_context(root)
-        engine_name = resolve_engine_name(task, config, engine_override=engine_override)
+        engine_plan = resolve_engine_plan(task, config, engine_override=engine_override)
+        engine_name = engine_plan[0]
         subagents = SubagentManager(root)
 
         append_journal(root, task, f"Execution started with engine `{engine_name}`.")
@@ -183,7 +192,7 @@ def run_task(
             root,
             build_executor(
                 root,
-                initial_engine_name=engine_name,
+                initial_engine_names=engine_plan,
                 workspace_context=workspace_context,
                 subagents=subagents,
                 config=config,
@@ -194,10 +203,9 @@ def run_task(
             retry_source=retry_source,
         )
         result = runner.run(task)
-        mark_task_run_finished(root, task, result.final_status)
+        finish_task_run_transition(root, task, result.final_status)
         if result.final_status != "done":
             append_journal(root, task, f"Execution finished with status `{result.final_status}`.")
-        clear_active_task(root)
 
         return ExecutionSummary(task=task, result=result, commit_sha=task.git.commit_sha)
 
@@ -280,9 +288,11 @@ def _pool_stop_reason(
         return None
 
     latest = executions[-1]
+    if latest.result is not None and latest.result.final_status == "paused":
+        return _human_checkpoint_stop_reason(latest)
     latest_limit_kind = _execution_limit_kind(latest)
     final_status = latest.result.final_status if latest.result is not None else None
-    if conditions.stop_on_failure and final_status is not None and final_status != "done":
+    if conditions.stop_on_failure and final_status is not None and final_status not in {"done", "paused"}:
         return "failure_detected"
     if conditions.stop_on_execution_limit and _execution_hit_limit(latest):
         return "execution_limit_reached"
@@ -378,50 +388,83 @@ def _finalize_pool_run(
         if latest.task is not None:
             outcome_reason = latest.task.runtime.last_outcome.reason or "engine fallbacks exhausted"
             append_journal(root, latest.task, f"Pool stopped: {stop_reason}. {outcome_reason}")
+    if stop_reason.startswith("human_checkpoint_") and executions:
+        latest = executions[-1]
+        if latest.task is not None:
+            checkpoint = stop_reason.removeprefix("human_checkpoint_").replace("_", " ")
+            append_journal(root, latest.task, f"Pool stopped: {stop_reason}. Awaiting human review at {checkpoint}.")
     return TaskPoolRunSummary(executions=executions, stop_reason=stop_reason, blocked=blocked)
+
+
+def _human_checkpoint_stop_reason(execution: ExecutionSummary) -> str:
+    task = execution.task
+    if task is None:
+        return "human_checkpoint_reached"
+    if task.pipeline_status == "accepting":
+        return "human_checkpoint_before_acceptance"
+    if task.pipeline_status == "commit_to_git":
+        return "human_checkpoint_before_commit"
+    return "human_checkpoint_reached"
 
 
 def rollback_completed_task(root: Path, task_id: str) -> RollbackSummary:
     root = root.resolve()
-    with workspace_mutation_guard(root):
+    with workspace_mutation_guard(root), _workspace_lock(root):
         task = get_task(root, task_id)
         if task is None:
             raise GitError(f"Task {task_id} not found")
         _require_completed_task(task, action="rollback")
 
-        rollback = rollback_task(root, task)
         attempt = task.git.checkpoint_attempts
-        task.status = "queued"
-        task.pipeline_status = "implementing"
-        task.runtime.last_outcome.kind = None
-        task.runtime.last_outcome.stage = None
-        task.runtime.last_outcome.reason_code = None
-        task.runtime.last_outcome.reason = ""
-        task.runtime.last_outcome.retry_count = 0
-        task.runtime.last_outcome.retry_limit = 0
-        task.runtime.last_outcome.retry_source = "global"
-        task.runtime.last_outcome.recorded_at = None
-        task.runtime.retry_count = 0
-        task.runtime.retry_limit = 0
-        task.runtime.retry_source = "global"
-        task.git.commit_sha = None
-        task.git.rolled_back_checkpoint_attempt = attempt
-        append_journal(
-            root,
-            task,
-            (
-                "Checkpoint rollback requested.\n"
-                f"- rolled_back: `{rollback.rolled_back_sha}`\n"
-                f"- recovery_stage: `implementing`"
-            ),
+        recovery_stage = implementation_entry_stage(task)
+        state = load_state(root)
+        snapshot = _capture_persisted_files(
+            [
+                task_file(root, task),
+                task_runtime_file(root, task),
+                state_path(root),
+                task_dir(root, task) / "journal.md",
+            ]
         )
-        save_task(root, task)
-
-        rollback_checkpoint = commit_task(root, rollback_message(task, attempt))
-        if rollback_checkpoint is None:
-            raise GitError("git rollback commit failed")
-
-        enqueue_task(root, task.id)
+        rollback = None
+        try:
+            rollback = rollback_task(root, task)
+            task.status = "queued"
+            task.pipeline_status = recovery_stage
+            task.runtime.last_outcome.kind = None
+            task.runtime.last_outcome.stage = None
+            task.runtime.last_outcome.reason_code = None
+            task.runtime.last_outcome.reason = ""
+            task.runtime.last_outcome.retry_count = 0
+            task.runtime.last_outcome.retry_limit = 0
+            task.runtime.last_outcome.retry_source = "global"
+            task.runtime.last_outcome.recorded_at = None
+            task.runtime.retry_count = 0
+            task.runtime.retry_limit = 0
+            task.runtime.retry_source = "global"
+            task.git.commit_sha = None
+            task.git.rolled_back_checkpoint_attempt = attempt
+            state.active_task_id = None
+            state.queue = [item for item in state.queue if item != task.id]
+            state.queue.append(task.id)
+            persist_task_and_state(
+                root,
+                task=task,
+                state=state,
+                journal_message=(
+                    "Checkpoint rollback requested.\n"
+                    f"- rolled_back_attempt: `{attempt}`\n"
+                    f"- recovery_stage: `{recovery_stage}`"
+                ),
+            )
+            rollback_checkpoint = commit_task(root, rollback_message(task, attempt))
+            if rollback_checkpoint is None:
+                raise GitError("git rollback commit failed")
+        except Exception:
+            if rollback is not None and has_changes(root):
+                abort_revert(root)
+            _restore_persisted_files(snapshot)
+            raise
         return RollbackSummary(
             task=task,
             rollback_sha=rollback_checkpoint.commit_sha,
@@ -431,14 +474,15 @@ def rollback_completed_task(root: Path, task_id: str) -> RollbackSummary:
 
 def recover_completed_task(root: Path, task_id: str) -> TaskRecord:
     root = root.resolve()
-    with workspace_mutation_guard(root):
+    with workspace_mutation_guard(root), _workspace_lock(root):
         task = get_task(root, task_id)
         if task is None:
             raise GitError(f"Task {task_id} not found")
         _require_completed_task(task, action="recover")
 
+        recovery_stage = implementation_entry_stage(task)
         task.status = "queued"
-        task.pipeline_status = "implementing"
+        task.pipeline_status = recovery_stage
         task.runtime.last_outcome.kind = None
         task.runtime.last_outcome.stage = None
         task.runtime.last_outcome.reason_code = None
@@ -451,10 +495,33 @@ def recover_completed_task(root: Path, task_id: str) -> TaskRecord:
         task.runtime.retry_limit = 0
         task.runtime.retry_source = "global"
         task.git.commit_sha = None
-        append_journal(root, task, "Task recovered for another implementation pass.")
-        save_task(root, task)
-        enqueue_task(root, task.id)
+        state = load_state(root)
+        state.active_task_id = None
+        state.queue = [item for item in state.queue if item != task.id]
+        state.queue.append(task.id)
+        persist_task_and_state(
+            root,
+            task=task,
+            state=state,
+            journal_message="Task recovered for another implementation pass.",
+        )
         return task
+
+
+def _capture_persisted_files(paths: list[Path]) -> dict[Path, str | None]:
+    return {
+        path: path.read_text(encoding="utf-8") if path.exists() else None
+        for path in paths
+    }
+
+
+def _restore_persisted_files(snapshot: dict[Path, str | None]) -> None:
+    for path, content in snapshot.items():
+        if content is None:
+            if path.exists():
+                path.unlink()
+            continue
+        _atomic_write_text(path, content)
 
 
 def _role_for_step(step: str) -> str:
@@ -472,14 +539,90 @@ def resolve_engine_name(
     *,
     engine_override: str | None = None,
 ) -> str:
+    return resolve_engine_plan(task, config, engine_override=engine_override)[0]
+
+
+def resolve_engine_attempt_order(
+    task: TaskRecord,
+    config: LitehiveConfig,
+    *,
+    engine_override: str | None = None,
+) -> list[str]:
+    return _engine_attempt_order(
+        resolve_engine_plan(task, config, engine_override=engine_override),
+        config.engine_fallbacks,
+    )
+
+
+def resolve_engine_plan(
+    task: TaskRecord,
+    config: LitehiveConfig,
+    *,
+    engine_override: str | None = None,
+) -> list[str]:
     if engine_override is not None:
         _require_claude_enabled(engine_override, config)
-        return engine_override
+        return [engine_override]
     if task.engine is not None:
         _require_claude_enabled(task.engine, config)
-        return task.engine
+        return [task.engine]
+    routed_engines = _route_engines_for_task(task, config)
+    if routed_engines:
+        return routed_engines
     _require_claude_enabled(config.default_engine, config)
-    return config.default_engine
+    return [config.default_engine]
+
+
+def _route_engines_for_task(task: TaskRecord, config: LitehiveConfig) -> list[str]:
+    route_key = _task_routing_key(task)
+    if route_key is None:
+        return []
+
+    engines: list[str] = []
+    seen: set[str] = set()
+    for engine_name in config.task_engine_routing.get(route_key, []):
+        if engine_name == "claude" and not config.claude_enabled:
+            continue
+        if engine_name in seen:
+            continue
+        seen.add(engine_name)
+        engines.append(engine_name)
+    return engines
+
+
+def _task_routing_key(task: TaskRecord) -> str | None:
+    if task.task_type is not None:
+        return task.task_type
+
+    text = " ".join(
+        [
+            task.title,
+            task.goal,
+            *task.acceptance_criteria,
+            *task.constraints,
+            *task.plan,
+        ]
+    ).lower()
+    if not text.strip():
+        return None
+
+    routing_patterns: tuple[tuple[str, tuple[str, ...]], ...] = (
+        ("adapter", ("adapter", "integration", "provider", "cli adapter", "engine adapter")),
+        ("bugfix", ("bugfix", "bug fix", "fix ", "fixes ", "fixing ", "regression", "hotfix", "flaky")),
+        ("review", ("review", "review feedback", "requested changes", "triage", "comments")),
+        ("research", ("research", "investigate", "investigation", "spike", "analyze", "analysis", "explore", "evaluate")),
+        ("refactor", ("refactor", "cleanup", "clean up", "rename", "reorganize", "extract", "simplify")),
+        ("docs", (" docs", "doc ", "documentation", "document ", "readme", "guide")),
+    )
+    padded = f" {text} "
+    for route_key, patterns in routing_patterns:
+        if any(pattern in padded for pattern in patterns):
+            return route_key
+    if re.search(r"\bfix\b", text):
+        return "bugfix"
+    if re.search(r"\bdoc(s)?\b", text):
+        return "docs"
+    return None
 
 
 def _require_claude_enabled(engine_name: str, config: LitehiveConfig) -> None:
@@ -503,14 +646,17 @@ def _require_completed_task(task: TaskRecord, action: str) -> None:
 def build_executor(
     root: Path,
     *,
-    initial_engine_name: str,
+    initial_engine_names: list[str],
     workspace_context: str,
     subagents: SubagentManager,
     config: LitehiveConfig,
     config_auto_commit: bool,
     budget_ledger: EngineBudgetLedger,
 ) -> StageExecutor:
+    next_stage_engine_names = list(initial_engine_names)
+
     def executor(current_task: TaskRecord, step: str) -> StageReport:
+        nonlocal next_stage_engine_names
         if step == "commit_to_git":
             return _commit_to_git_report(
                 root,
@@ -525,7 +671,7 @@ def build_executor(
             process_profile=config.process_profile,
         )
         fallback_events: list[str] = []
-        engines = _engine_attempt_order(initial_engine_name, config.engine_fallbacks)
+        engines = _engine_attempt_order(next_stage_engine_names, config.engine_fallbacks)
         limit_trigger_reason: str | None = None
 
         for index, engine_name in enumerate(engines):
@@ -616,6 +762,8 @@ def build_executor(
                 report.feedback = "\n\n".join([*fallback_events, result.transcript]).strip()
                 if not report.warnings or report.warnings[-1] != result.failure.reason:
                     report.warnings.append(result.failure.reason)
+                return report
+            next_stage_engine_names = [engine_name]
             return report
 
         raise RuntimeError("Engine attempt order must include at least one engine")
@@ -656,11 +804,11 @@ def _budget_ledger_from_conditions(conditions: TaskPoolStopConditions) -> Engine
 
 
 def _engine_attempt_order(
-    initial_engine_name: str, engine_fallbacks: dict[str, list[str]]
+    initial_engine_names: list[str], engine_fallbacks: dict[str, list[str]]
 ) -> list[str]:
     seen: set[str] = set()
     ordered: list[str] = []
-    queue: list[str] = [initial_engine_name]
+    queue: list[str] = list(initial_engine_names)
     while queue:
         engine_name = queue.pop(0)
         if engine_name in seen:
@@ -677,7 +825,6 @@ def _commit_to_git_report(
     if not auto_commit_enabled:
         task.status = "done"
         task.pipeline_status = "done"
-        save_task(root, task)
         append_journal(root, task, "CommitToGit skipped: auto-commit disabled.")
         return StageReport(
             task_id=task.id,
@@ -784,7 +931,7 @@ def _commit_to_git_report(
         task_id=task.id,
         step="commit_to_git",
         verdict="pass",
-        summary="CommitToGit created the final checkpoint commit",
+        summary="CommitToGit created the final completion commit",
     )
 
 

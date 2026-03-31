@@ -14,6 +14,11 @@ def render_task_summary(task: TaskRecord, *, active: bool) -> list[str]:
     lines = [f"{marker} {task.id} [{task.status}/{task.pipeline_status}] {task.mode} retry_limit={retry_label} {task.title}"]
     if task.depends_on:
         lines.append(f"  depends_on={', '.join(task.depends_on)}")
+    if task.human_checkpoints:
+        lines.append(f"  human_checkpoints={', '.join(task.human_checkpoints)}")
+    lines.append(f"  auto_commit={task.git.auto_commit}")
+    if task.git.commit_message:
+        lines.append(f"  commit_message={task.git.commit_message}")
 
     runtime = task.runtime
     configured_limit = retry_policy if retry_policy is not None else "default"
@@ -91,6 +96,10 @@ def render_task_summary(task: TaskRecord, *, active: bool) -> list[str]:
 
     if task.git.commit_sha:
         lines.append(f"  commit={task.git.commit_sha}")
+    if task.git.checkpoint_base_sha:
+        lines.append(f"  checkpoint_base={task.git.checkpoint_base_sha}")
+    if task.git.rolled_back_checkpoint_attempt is not None:
+        lines.append(f"  rolled_back_attempt={task.git.rolled_back_checkpoint_attempt}")
 
     return lines
 

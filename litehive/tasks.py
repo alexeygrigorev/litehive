@@ -7,18 +7,21 @@ import fcntl
 import re
 from contextlib import contextmanager
 import os
+import shutil
 from pathlib import Path
 import sys
 
 import yaml
 
 from litehive.config import (
+    VALID_TASK_ROUTING_KEYS,
     VALID_POOL_SELECTION_POLICIES,
     ensure_workspace,
     load_config,
     state_path,
     workspace_dir,
 )
+from litehive.git_ops import default_commit_message
 from litehive.models import (
     RuntimeEngineSwitch,
     RuntimeSubagentState,
@@ -33,8 +36,148 @@ from litehive.models import (
 
 VALID_TASK_PRIORITIES = {"low", "medium", "high"}
 VALID_TASK_ENGINES = {"codex", "opencode", "gemini", "copilot", "claude"}
+VALID_HUMAN_CHECKPOINTS = {"before_acceptance", "before_commit"}
+VALID_TASK_TYPES = set(VALID_TASK_ROUTING_KEYS)
 TASK_PRIORITY_ORDER = {"high": 0, "medium": 1, "low": 2}
 _RUNNER_LOCKS: dict[Path, tuple[object, int]] = {}
+_MISSING = object()
+TASK_TEMPLATES: dict[str, dict[str, object]] = {
+    "adapter": {
+        "goal": "Define the adapter change clearly and land the required integration behavior.",
+        "acceptance_criteria": [
+            "The adapter entrypoint, inputs, and expected outputs are defined for the target integration.",
+            "Configuration, invocation, and failure handling are updated consistently at the adapter boundary.",
+            "Focused verification covers the adapter path with a representative task run or test.",
+        ],
+        "constraints": [
+            "Keep provider-specific behavior isolated to the adapter boundary.",
+            "Preserve deterministic workspace state and execution flow.",
+        ],
+        "plan": [
+            "Inspect the existing adapter interface, config wiring, and invocation flow.",
+            "Implement the adapter change close to the integration seam.",
+            "Verify the adapter path with a focused test or representative run.",
+        ],
+        "prompt_guidance": [
+            "State the target adapter seam, external dependency, and expected contract up front.",
+            "Call out config, invocation, and failure-path changes explicitly.",
+            "Prefer verification that exercises the adapter boundary rather than unrelated paths.",
+        ],
+        "brief_sections": [
+            "Adapter surface: identify the entrypoint, inputs, outputs, and external system involved.",
+            "Config and execution path: note which settings, command wiring, or failure handling must change.",
+            "Verification evidence: capture the focused run or test that proves the adapter path works.",
+        ],
+    },
+    "bugfix": {
+        "goal": "Identify the failing behavior, implement the fix, and lock it down with focused verification.",
+        "acceptance_criteria": [
+            "The bug or regression is described clearly enough to verify before and after behavior.",
+            "The fix addresses the root cause in the affected path without broad unrelated changes.",
+            "A regression test or focused verification demonstrates the issue is resolved.",
+        ],
+        "constraints": [
+            "Prefer the smallest change that removes the failure mode.",
+            "Call out any remaining edge cases or follow-up risk explicitly.",
+        ],
+        "plan": [
+            "Reproduce or localize the failing behavior.",
+            "Implement the minimal targeted fix.",
+            "Run focused regression coverage for the affected behavior.",
+        ],
+        "prompt_guidance": [
+            "Describe the broken behavior, trigger, and expected correct behavior before changing code.",
+            "Aim at root cause, not just the visible symptom.",
+            "Include regression coverage or equivalent focused proof that the failure is gone.",
+        ],
+        "brief_sections": [
+            "Bug and reproduction: describe the failing behavior, trigger, and expected result.",
+            "Root cause: note the suspected or confirmed cause in the affected path.",
+            "Regression coverage: record the exact test or check that prevents recurrence.",
+        ],
+    },
+    "research": {
+        "goal": "Answer the open question with concrete evidence and a recommendation for next action.",
+        "acceptance_criteria": [
+            "The research question, scope, and decision to inform are stated clearly.",
+            "Findings are grounded in repository evidence, experiments, or direct inspection.",
+            "The output includes a recommendation, tradeoffs, and any follow-up tasks.",
+        ],
+        "constraints": [
+            "Prefer evidence from the repository and local experiments over speculation.",
+            "Keep conclusions explicit about confidence and remaining unknowns.",
+        ],
+        "plan": [
+            "Define the exact question and scope of the investigation.",
+            "Gather evidence from code, configs, tests, or focused experiments.",
+            "Summarize findings, recommendation, and concrete follow-up actions.",
+        ],
+        "prompt_guidance": [
+            "Frame the question, scope, and decision this research should inform.",
+            "Separate observed evidence from inference.",
+            "End with a recommendation, tradeoffs, and concrete follow-up tasks.",
+        ],
+        "brief_sections": [
+            "Question and scope: define what is being investigated and what is out of scope.",
+            "Evidence: capture repository findings, experiments, or comparisons that support the answer.",
+            "Recommendation: state the proposed next action, tradeoffs, and remaining unknowns.",
+        ],
+    },
+    "review": {
+        "goal": "Review the target change critically and produce an actionable decision with supporting evidence.",
+        "acceptance_criteria": [
+            "Findings are prioritized by severity and tied to concrete files or behaviors.",
+            "Open questions, assumptions, and residual risks are captured explicitly.",
+            "The review result makes the next action clear: accept, revise, or investigate further.",
+        ],
+        "constraints": [
+            "Focus on correctness, regressions, and missing verification before style nits.",
+            "Keep findings concrete enough that another engineer can act on them directly.",
+        ],
+        "plan": [
+            "Inspect the relevant change or workflow surface.",
+            "Identify actionable findings and supporting evidence.",
+            "Summarize the decision, open questions, and required follow-up.",
+        ],
+        "prompt_guidance": [
+            "Prioritize correctness, regressions, and missing verification over style observations.",
+            "Tie each finding to a concrete file, behavior, or risk.",
+            "Make the decision explicit: accept, revise, or investigate further.",
+        ],
+        "brief_sections": [
+            "Review scope: identify the change, workflow, or files under review.",
+            "Findings: record actionable issues with severity and supporting evidence.",
+            "Decision: capture accept versus revise plus open questions or residual risks.",
+        ],
+    },
+    "refactor": {
+        "goal": "Improve the structure of the targeted area while preserving existing behavior.",
+        "acceptance_criteria": [
+            "The targeted code path is simpler, clearer, or better factored after the change.",
+            "Behavior remains unchanged for the intended surface area.",
+            "Focused verification demonstrates no regression in the refactored path.",
+        ],
+        "constraints": [
+            "Avoid broad opportunistic cleanup outside the chosen seam.",
+            "Preserve existing behavior unless the task explicitly includes functional changes.",
+        ],
+        "plan": [
+            "Identify the narrow seam to refactor and the behavior that must stay stable.",
+            "Restructure the code in small, reviewable steps.",
+            "Run focused verification to confirm behavior is preserved.",
+        ],
+        "prompt_guidance": [
+            "Name the seam being refactored and the behavior that must not change.",
+            "Keep the scope structural unless the task explicitly includes functional change.",
+            "Use focused verification to prove behavior stayed stable.",
+        ],
+        "brief_sections": [
+            "Refactor seam: identify the module, function, or flow being reshaped.",
+            "Behavior to preserve: list the user-visible or contract-level behavior that must stay the same.",
+            "Verification: capture the checks that confirm the refactor did not regress behavior.",
+        ],
+    },
+}
 
 
 @dataclass(slots=True)
@@ -51,8 +194,159 @@ class TaskSelection:
     blocked: list[BlockedTask]
 
 
+@dataclass(slots=True)
+class TaskPlan:
+    tasks: list[TaskRecord]
+    blocked: list[BlockedTask]
+
+
 class WorkspaceConflictError(ValueError):
     """Raised when workspace mutations would conflict with an active runner."""
+
+
+def normalize_acceptance_criteria(items: list[str] | None) -> list[str]:
+    if not items:
+        return []
+
+    normalized: list[str] = []
+    for item in items:
+        criterion = item.strip()
+        if not criterion:
+            continue
+        normalized.append(criterion)
+    return normalized
+
+
+def normalize_human_checkpoints(items: list[str] | None) -> list[str]:
+    if not items:
+        return []
+
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for item in items:
+        checkpoint = item.strip()
+        if not checkpoint:
+            continue
+        if checkpoint not in VALID_HUMAN_CHECKPOINTS:
+            allowed = ", ".join(sorted(VALID_HUMAN_CHECKPOINTS))
+            raise ValueError(f"Unsupported human checkpoint '{checkpoint}'. Expected one of: {allowed}")
+        if checkpoint in seen:
+            continue
+        seen.add(checkpoint)
+        normalized.append(checkpoint)
+    return normalized
+
+
+def apply_task_template_defaults(task: TaskRecord) -> TaskRecord:
+    if task.mode != "tasks" or task.task_type is None:
+        return task
+
+    template = TASK_TEMPLATES.get(task.task_type)
+    if template is None:
+        return task
+
+    if not task.goal.strip():
+        task.goal = str(template["goal"])
+    if not task.acceptance_criteria:
+        task.acceptance_criteria = list(template["acceptance_criteria"])  # type: ignore[arg-type]
+    if not task.constraints:
+        task.constraints = list(template["constraints"])  # type: ignore[arg-type]
+    if not task.plan:
+        task.plan = list(template["plan"])  # type: ignore[arg-type]
+    return task
+
+
+def task_template(task: TaskRecord) -> dict[str, object] | None:
+    if task.mode != "tasks" or task.task_type is None:
+        return None
+    template = TASK_TEMPLATES.get(task.task_type)
+    if template is None:
+        return None
+    return template
+
+
+def task_brief_file(root: Path, task: TaskRecord) -> Path:
+    return task_dir(root, task) / "brief.md"
+
+
+def _template_list(template: dict[str, object], key: str) -> list[str]:
+    value = template.get(key, [])
+    return list(value) if isinstance(value, list) else []
+
+
+def render_task_brief(task: TaskRecord) -> str:
+    lines = [
+        f"# {task.id} {task.title}",
+        "",
+        f"- Mode: {task.mode}",
+        f"- Task type: {task.task_type or '-'}",
+        "",
+        "## Goal",
+        task.goal or task.title,
+        "",
+        "## Acceptance Criteria",
+    ]
+    if task.acceptance_criteria:
+        lines.extend(f"- {item}" for item in task.acceptance_criteria)
+    else:
+        lines.append("- No acceptance criteria defined.")
+
+    lines.extend(["", "## Constraints"])
+    if task.constraints:
+        lines.extend(f"- {item}" for item in task.constraints)
+    else:
+        lines.append("- Keep changes scoped to the task.")
+
+    lines.extend(["", "## Plan"])
+    if task.plan:
+        lines.extend(f"- {item}" for item in task.plan)
+    else:
+        lines.append("- No plan defined.")
+
+    template = task_template(task)
+    if template is not None:
+        lines.extend(["", "## Template Guidance"])
+        lines.extend(f"- {item}" for item in _template_list(template, "prompt_guidance"))
+        lines.extend(["", "## Intake Notes"])
+        lines.extend(f"- {item}" for item in _template_list(template, "brief_sections"))
+
+    return "\n".join(lines) + "\n"
+
+
+def task_requires_acceptance_criteria(task: TaskRecord) -> bool:
+    return bool(_acceptance_criteria_requirement_signals(task))
+
+
+def missing_acceptance_criteria_reason(task: TaskRecord) -> str | None:
+    if task.acceptance_criteria:
+        return None
+    signals = _acceptance_criteria_requirement_signals(task)
+    if not signals:
+        return None
+    return (
+        "Structured acceptance criteria are required before implementation for larger tasks. "
+        f"Add at least one criterion because this task has: {', '.join(signals)}."
+    )
+
+
+def implementation_entry_stage(task: TaskRecord) -> str:
+    if missing_acceptance_criteria_reason(task) is not None:
+        return "grooming"
+    return "implementing"
+
+
+def _acceptance_criteria_requirement_signals(task: TaskRecord) -> list[str]:
+    signals: list[str] = []
+    goal = task.goal.strip()
+    if goal and goal != task.title.strip():
+        signals.append("an explicit goal")
+    if task.depends_on:
+        signals.append("dependencies")
+    if task.priority == "high":
+        signals.append("high priority")
+    if len(task.plan) >= 2:
+        signals.append("a multi-step plan")
+    return signals
 
 
 def load_state(root: Path) -> WorkspaceState:
@@ -61,12 +355,47 @@ def load_state(root: Path) -> WorkspaceState:
     return WorkspaceState(**data)
 
 
+def _atomic_write_text(path: Path, content: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temp_path = path.with_name(f".{path.name}.tmp-{os.getpid()}")
+    try:
+        with temp_path.open("w", encoding="utf-8") as handle:
+            handle.write(content)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temp_path, path)
+    finally:
+        if temp_path.exists():
+            temp_path.unlink()
+
+
+def _write_atomic_files(writes: dict[Path, str]) -> None:
+    snapshots = {
+        path: path.read_text(encoding="utf-8") if path.exists() else _MISSING for path in writes
+    }
+    applied: list[Path] = []
+    try:
+        for path, content in writes.items():
+            _atomic_write_text(path, content)
+            applied.append(path)
+    except Exception:
+        for path in reversed(applied):
+            previous = snapshots[path]
+            if previous is _MISSING:
+                if path.exists():
+                    path.unlink()
+                continue
+            _atomic_write_text(path, previous)
+        raise
+
+
+def _serialize_state(state: WorkspaceState) -> str:
+    return yaml.safe_dump(state.model_dump(mode="python"), sort_keys=False)
+
+
 def save_state(root: Path, state: WorkspaceState) -> None:
     with workspace_mutation_guard(root):
-        state_path(root).write_text(
-            yaml.safe_dump(state.model_dump(mode="python"), sort_keys=False),
-            encoding="utf-8",
-        )
+        _atomic_write_text(state_path(root), _serialize_state(state))
 
 
 def set_pool_stop_reason(root: Path, stop_reason: str | None) -> WorkspaceState:
@@ -236,17 +565,24 @@ def _ensure_runtime_ignored(root: Path) -> None:
             handle.write(f"{entry}\n")
 
 
-def _write_task_runtime(root: Path, task: TaskRecord) -> None:
-    task_runtime_file(root, task).write_text(
-        yaml.safe_dump(
-            {
-                **task.runtime.model_dump(mode="python"),
-                "git": {"commit_sha": task.git.commit_sha},
-            },
-            sort_keys=False,
-        ),
-        encoding="utf-8",
+def _serialize_task_record(task: TaskRecord) -> str:
+    task_payload = task.model_dump(mode="python")
+    task_payload["git"]["commit_sha"] = None
+    return yaml.safe_dump(task_payload, sort_keys=False)
+
+
+def _serialize_task_runtime(task: TaskRecord) -> str:
+    return yaml.safe_dump(
+        {
+            **task.runtime.model_dump(mode="python"),
+            "git": {"commit_sha": task.git.commit_sha},
+        },
+        sort_keys=False,
     )
+
+
+def _write_task_runtime(root: Path, task: TaskRecord) -> None:
+    _atomic_write_text(task_runtime_file(root, task), _serialize_task_runtime(task))
     _ensure_runtime_ignored(root)
 
 
@@ -271,15 +607,19 @@ def create_task(
     title: str,
     depends_on: list[str] | None = None,
     mode: str = "implementation",
+    task_type: str | None = None,
     engine: str | None = None,
     retry_limit: int | None = None,
     goal: str = "",
     acceptance_criteria: list[str] | None = None,
+    human_checkpoints: list[str] | None = None,
     auto_commit: bool = True,
 ) -> TaskRecord:
     ensure_workspace(root)
     if retry_limit is not None and retry_limit < 0:
         raise ValueError("Retry limit must be 0 or greater")
+    if task_type is not None and task_type not in VALID_TASK_TYPES:
+        raise ValueError(f"Unsupported task type '{task_type}'")
     with workspace_mutation_guard(root), _workspace_lock(root):
         task_id = _next_task_id(root)
         slug = slugify(title)
@@ -289,34 +629,44 @@ def create_task(
             slug=slug,
             title=title,
             depends_on=list(depends_on or []),
+            task_type=task_type,
             engine=engine,
             mode=mode,  # type: ignore[arg-type]
             goal=goal,
-            acceptance_criteria=acceptance_criteria or [],
+            acceptance_criteria=normalize_acceptance_criteria(acceptance_criteria),
+            human_checkpoints=normalize_human_checkpoints(human_checkpoints),
             retry_policy={"max_retries": retry_limit},
             git={
                 "auto_commit": auto_commit,
-                "commit_message": f"litehive: checkpoint {task_id} {slug}",
+                "commit_message": default_commit_message(task_id, slug),
             },
         )
+        task = apply_task_template_defaults(task)
 
         base = task_dir(root, task)
         (base / "reports").mkdir(parents=True, exist_ok=False)
         (base / "subagents").mkdir(parents=True, exist_ok=False)
         (base / "artifacts").mkdir(parents=True, exist_ok=False)
-        task_file(root, task).write_text(
-            yaml.safe_dump(task.model_dump(mode="python"), sort_keys=False),
-            encoding="utf-8",
-        )
-        _write_task_runtime(root, task)
-        (base / "journal.md").write_text(
-            f"# {task.id} {task.title}\n\n## {utcnow()}\nTask created.\n",
-            encoding="utf-8",
-        )
-
         state = load_state(root)
         state.queue.append(task.id)
-        save_state(root, state)
+        try:
+            writes = {
+                task_file(root, task): yaml.safe_dump(
+                    task.model_dump(mode="python"), sort_keys=False
+                ),
+                task_runtime_file(root, task): _serialize_task_runtime(task),
+                base / "journal.md": f"# {task.id} {task.title}\n\n## {utcnow()}\nTask created.\n",
+                state_path(root): _serialize_state(state),
+            }
+            if task.mode == "tasks":
+                writes[task_brief_file(root, task)] = render_task_brief(task)
+            _write_atomic_files(
+                writes
+            )
+        except Exception:
+            shutil.rmtree(base, ignore_errors=True)
+            raise
+        _ensure_runtime_ignored(root)
         return task
 
 
@@ -349,14 +699,31 @@ def require_task(root: Path, task_id: str) -> TaskRecord:
 
 def save_task(root: Path, task: TaskRecord) -> None:
     task.updated_at = utcnow()
-    task_payload = task.model_dump(mode="python")
-    task_payload["git"]["commit_sha"] = None
     with workspace_mutation_guard(root):
-        task_file(root, task).write_text(
-            yaml.safe_dump(task_payload, sort_keys=False),
-            encoding="utf-8",
-        )
+        _atomic_write_text(task_file(root, task), _serialize_task_record(task))
         _write_task_runtime(root, task)
+
+
+def persist_task_and_state(
+    root: Path,
+    *,
+    task: TaskRecord,
+    state: WorkspaceState,
+    journal_message: str | None = None,
+) -> None:
+    task.updated_at = utcnow()
+    writes = {
+        task_file(root, task): _serialize_task_record(task),
+        task_runtime_file(root, task): _serialize_task_runtime(task),
+        state_path(root): _serialize_state(state),
+    }
+    if journal_message is not None:
+        journal_path = task_dir(root, task) / "journal.md"
+        existing = journal_path.read_text(encoding="utf-8") if journal_path.exists() else ""
+        writes[journal_path] = f"{existing}\n## {utcnow()}\n{journal_message}\n"
+    with workspace_mutation_guard(root):
+        _write_atomic_files(writes)
+        _ensure_runtime_ignored(root)
 
 
 def mark_task_run_started(root: Path, task: TaskRecord) -> None:
@@ -389,6 +756,22 @@ def mark_task_run_finished(root: Path, task: TaskRecord, final_status: str) -> N
     task.runtime.updated_at = now
     task.runtime.active_subagent = None
     save_task_runtime(root, task)
+
+
+def finish_task_run_transition(root: Path, task: TaskRecord, final_status: str) -> TaskRecord:
+    with workspace_mutation_guard(root), _workspace_lock(root):
+        now = utcnow()
+        task.runtime.execution_status = final_status
+        task.runtime.updated_at = now
+        task.runtime.active_subagent = None
+        state = load_state(root)
+        if state.active_task_id == task.id:
+            state.active_task_id = None
+        state.queue = [item for item in state.queue if item != task.id]
+        if final_status == "paused" and task.status == "queued" and task.pipeline_status != "done":
+            state.queue.insert(0, task.id)
+        persist_task_and_state(root, task=task, state=state)
+        return task
 
 
 def set_task_retry_state(
@@ -577,8 +960,8 @@ def _duration_seconds(started_at: str | None, ended_at: str | None) -> int:
 def append_journal(root: Path, task: TaskRecord, message: str) -> None:
     journal = task_dir(root, task) / "journal.md"
     with workspace_mutation_guard(root):
-        with journal.open("a", encoding="utf-8") as handle:
-            handle.write(f"\n## {utcnow()}\n{message}\n")
+        existing = journal.read_text(encoding="utf-8") if journal.exists() else ""
+        _atomic_write_text(journal, f"{existing}\n## {utcnow()}\n{message}\n")
 
 
 def set_active_task(root: Path, task_id: str | None) -> WorkspaceState:
@@ -588,7 +971,13 @@ def set_active_task(root: Path, task_id: str | None) -> WorkspaceState:
         if task_id is not None and task_id in state.queue:
             state.queue = [item for item in state.queue if item != task_id]
         _validate_single_active_task(root, state)
-        save_state(root, state)
+        if task_id is None:
+            save_state(root, state)
+            return state
+        task = require_task(root, task_id)
+        if task.status == "queued":
+            task.status = "in_progress"
+        persist_task_and_state(root, task=task, state=state)
         return state
 
 
@@ -604,6 +993,34 @@ def peek_next_task_selection(root: Path) -> TaskSelection:
         if mutated:
             save_state(root, state)
         return TaskSelection(task=next_task, blocked=blocked)
+
+
+def plan_task_selections(root: Path) -> TaskPlan:
+    with workspace_mutation_guard(root), _workspace_lock(root):
+        state = load_state(root)
+        _validate_single_active_task(root, state)
+        tasks_by_id = {task.id: task.model_copy(deep=True) for task in list_tasks(root)}
+        policy = load_config(root).pool_selection_policy
+        if policy not in VALID_POOL_SELECTION_POLICIES:
+            policy = "dependency_aware"
+
+        planned: list[TaskRecord] = []
+        simulated_state = state.model_copy(deep=True)
+        while True:
+            next_task, blocked, _ = _resolve_next_task_from_snapshot(
+                simulated_state,
+                tasks_by_id,
+                policy=policy,
+            )
+            if next_task is None:
+                return TaskPlan(tasks=planned, blocked=blocked)
+
+            planned.append(next_task.model_copy(deep=True))
+            simulated_state.active_task_id = None
+            simulated_state.queue = [item for item in simulated_state.queue if item != next_task.id]
+            simulated_task = tasks_by_id[next_task.id]
+            simulated_task.status = "done"
+            simulated_task.pipeline_status = "done"
 
 
 def dequeue_next_task(root: Path) -> TaskRecord | None:
@@ -624,7 +1041,9 @@ def dequeue_next_task_selection(root: Path) -> TaskSelection:
             state.queue = [item for item in state.queue if item != next_task.id]
             mutated = True
         if mutated:
-            save_state(root, state)
+            if next_task.status == "queued":
+                next_task.status = "in_progress"
+            persist_task_and_state(root, task=next_task, state=state)
         return TaskSelection(task=next_task, blocked=blocked)
 
 
@@ -749,14 +1168,22 @@ def _task_selection_key(
 def _resolve_next_task_from_state(
     root: Path, state: WorkspaceState
 ) -> tuple[TaskRecord | None, list[BlockedTask], bool]:
-    mutated = False
-    blocked: list[BlockedTask] = []
-    blocked_task_ids: set[str] = set()
     tasks_by_id = {task.id: task for task in list_tasks(root)}
     policy = load_config(root).pool_selection_policy
     if policy not in VALID_POOL_SELECTION_POLICIES:
         policy = "dependency_aware"
+    return _resolve_next_task_from_snapshot(state, tasks_by_id, policy=policy)
 
+
+def _resolve_next_task_from_snapshot(
+    state: WorkspaceState,
+    tasks_by_id: dict[str, TaskRecord],
+    *,
+    policy: str,
+) -> tuple[TaskRecord | None, list[BlockedTask], bool]:
+    mutated = False
+    blocked: list[BlockedTask] = []
+    blocked_task_ids: set[str] = set()
     if state.active_task_id is not None:
         active_task = tasks_by_id.get(state.active_task_id)
         if active_task is not None and _is_task_eligible_for_execution(active_task):
@@ -833,9 +1260,11 @@ def restore_untouched_active_task(root: Path) -> WorkspaceState:
             return state
         if task is not None and _is_task_eligible_for_execution(task):
             task.status = "queued"
-            save_task(root, task)
             state.queue = [item for item in state.queue if item != task.id]
             state.queue.insert(0, task.id)
+            state.active_task_id = None
+            persist_task_and_state(root, task=task, state=state)
+            return state
 
         state.active_task_id = None
         save_state(root, state)
@@ -878,20 +1307,54 @@ def move_queued_task(root: Path, task_id: str, position: int) -> WorkspaceState:
         return state
 
 
+def prioritize_queued_tasks(root: Path, task_ids: list[str]) -> WorkspaceState:
+    if not task_ids:
+        raise ValueError("At least one task id is required")
+    duplicates = sorted({task_id for task_id in task_ids if task_ids.count(task_id) > 1})
+    if duplicates:
+        joined = ", ".join(duplicates)
+        raise ValueError(f"Task ids must be unique: {joined}")
+    with workspace_mutation_guard(root), _workspace_lock(root):
+        state = load_state(root)
+        missing = [task_id for task_id in task_ids if task_id not in state.queue]
+        if missing:
+            joined = ", ".join(missing)
+            raise ValueError(f"Tasks are not queued: {joined}")
+        remaining = [queued_id for queued_id in state.queue if queued_id not in task_ids]
+        state.queue = [*task_ids, *remaining]
+        save_state(root, state)
+        return state
+
+
+def _reset_task_for_recovery(
+    task: TaskRecord,
+    *,
+    status: str,
+    pipeline_status: str,
+) -> None:
+    now = utcnow()
+    task.status = status
+    task.pipeline_status = pipeline_status
+    task.runtime.execution_status = "idle"
+    task.runtime.run_started_at = None
+    task.runtime.updated_at = now
+    task.runtime.active_subagent = None
+    task.runtime.retry_count = 0
+    task.runtime.retry_limit = 0
+    task.runtime.retry_source = "global"
+    task.runtime.last_outcome = TaskOutcomeState()
+
+
 def requeue_task(root: Path, task_id: str, *, front: bool = False) -> TaskRecord:
     with workspace_mutation_guard(root), _workspace_lock(root):
         task = require_task(root, task_id)
         if task.status not in {"flagged", "cancelled", "failed"}:
             raise ValueError(f"Task {task.id} is not flagged, failed, or cancelled")
-        task.status = "queued"
-        task.pipeline_status = "implementing"
-        task.runtime.last_outcome = TaskOutcomeState()
-        task.runtime.retry_count = 0
-        task.runtime.retry_limit = 0
-        task.runtime.retry_source = "global"
-        append_journal(root, task, "Task requeued for another implementation pass.")
-        save_task(root, task)
-
+        _reset_task_for_recovery(
+            task,
+            status="queued",
+            pipeline_status=implementation_entry_stage(task),
+        )
         state = load_state(root)
         state.active_task_id = None
         state.queue = [item for item in state.queue if item != task.id]
@@ -899,19 +1362,140 @@ def requeue_task(root: Path, task_id: str, *, front: bool = False) -> TaskRecord
             state.queue.insert(0, task.id)
         else:
             state.queue.append(task.id)
-        save_state(root, state)
+        persist_task_and_state(
+            root,
+            task=task,
+            state=state,
+            journal_message="Task requeued for another implementation pass.",
+        )
         return task
 
 
-def update_task_metadata(
+def resume_task(root: Path, task_id: str, *, front: bool = False) -> TaskRecord:
+    with workspace_mutation_guard(root), _workspace_lock(root):
+        task = require_task(root, task_id)
+        if task.status not in {"flagged", "cancelled", "failed"}:
+            raise ValueError(f"Task {task.id} is not flagged, failed, or cancelled")
+        if task.pipeline_status in {"backlog", "done"}:
+            raise ValueError(f"Task {task.id} has no resumable stage")
+        resumed_stage = task.pipeline_status
+        if resumed_stage == "implementing":
+            resumed_stage = implementation_entry_stage(task)
+        _reset_task_for_recovery(task, status="queued", pipeline_status=resumed_stage)
+        state = load_state(root)
+        state.active_task_id = None
+        state.queue = [item for item in state.queue if item != task.id]
+        if front:
+            state.queue.insert(0, task.id)
+        else:
+            state.queue.append(task.id)
+        persist_task_and_state(
+            root,
+            task=task,
+            state=state,
+            journal_message=f"Task resumed from `{resumed_stage}`.",
+        )
+        return task
+
+
+def abandon_task(root: Path, task_id: str) -> TaskRecord:
+    with workspace_mutation_guard(root), _workspace_lock(root):
+        task = require_task(root, task_id)
+        if task.status not in {"flagged", "failed", "cancelled"}:
+            raise ValueError(f"Task {task.id} is not flagged, failed, or cancelled")
+        task.status = "cancelled"
+        task.runtime.execution_status = "cancelled"
+        task.runtime.run_started_at = None
+        task.runtime.updated_at = utcnow()
+        task.runtime.active_subagent = None
+        task.runtime.last_outcome.kind = "cancelled"
+        task.runtime.last_outcome.stage = task.pipeline_status
+        task.runtime.last_outcome.reason_code = "execution_cancelled"
+        task.runtime.last_outcome.reason = "Task abandoned via CLI."
+        task.runtime.last_outcome.retry_count = 0
+        task.runtime.last_outcome.retry_limit = 0
+        task.runtime.last_outcome.retry_source = "global"
+        task.runtime.last_outcome.recorded_at = task.runtime.updated_at
+        state = load_state(root)
+        if state.active_task_id == task.id:
+            state.active_task_id = None
+        state.queue = [item for item in state.queue if item != task.id]
+        persist_task_and_state(
+            root,
+            task=task,
+            state=state,
+            journal_message=f"Task abandoned via CLI at stage `{task.pipeline_status}`.",
+        )
+        return task
+
+
+_CLOSE_OUTCOME_REASON_CODES = {"wont_do", "deferred", "duplicate", "execution_cancelled"}
+
+_CLOSE_REASON_CODE_LABELS: dict[str, str] = {
+    "wont_do": "Task closed as won't do.",
+    "deferred": "Task deferred.",
+    "duplicate": "Task closed as duplicate.",
+    "execution_cancelled": "Task abandoned via CLI.",
+}
+
+
+def close_task(
+    root: Path,
+    task_id: str,
+    *,
+    outcome: str,
+    reason: str | None = None,
+) -> TaskRecord:
+    """Mark a task as cancelled with an explicit non-implementation outcome.
+
+    Valid outcomes: ``wont_do``, ``deferred``, ``duplicate``, ``execution_cancelled``.
+    The task is removed from the queue.
+    """
+    if outcome not in _CLOSE_OUTCOME_REASON_CODES:
+        allowed = ", ".join(sorted(_CLOSE_OUTCOME_REASON_CODES))
+        raise ValueError(f"Unsupported close outcome '{outcome}'. Expected one of: {allowed}")
+    with workspace_mutation_guard(root), _workspace_lock(root):
+        task = require_task(root, task_id)
+        if task.status == "done":
+            raise ValueError(f"Task {task.id} is already done and cannot be closed")
+        now = utcnow()
+        task.status = "cancelled"
+        task.runtime.execution_status = "cancelled"
+        task.runtime.run_started_at = None
+        task.runtime.updated_at = now
+        task.runtime.active_subagent = None
+        task.runtime.last_outcome.kind = "cancelled"
+        task.runtime.last_outcome.stage = task.pipeline_status
+        task.runtime.last_outcome.reason_code = outcome
+        task.runtime.last_outcome.reason = reason or _CLOSE_REASON_CODE_LABELS[outcome]
+        task.runtime.last_outcome.retry_count = 0
+        task.runtime.last_outcome.retry_limit = 0
+        task.runtime.last_outcome.retry_source = "global"
+        task.runtime.last_outcome.recorded_at = now
+        state = load_state(root)
+        if state.active_task_id == task.id:
+            state.active_task_id = None
+        state.queue = [item for item in state.queue if item != task.id]
+        persist_task_and_state(
+            root,
+            task=task,
+            state=state,
+            journal_message=f"Task closed: {outcome}."
+            + (f" {reason}" if reason else ""),
+        )
+        return task
+def update_task(
     root: Path,
     task_id: str,
     *,
     depends_on: list[str] | object = ...,
+    task_type: str | None | object = ...,
     engine: str | None | object = ...,
     retry_limit: int | None | object = ...,
     priority: str | object = ...,
     goal: str | object = ...,
+    acceptance_criteria: list[str] | object = ...,
+    human_checkpoints: list[str] | object = ...,
     mode: str | object = ...,
     auto_commit: bool | object = ...,
 ) -> TaskRecord:
@@ -921,6 +1505,11 @@ def update_task_metadata(
         if depends_on is not ...:
             _validate_task_dependencies(root, task_id=task.id, depends_on=list(depends_on))
             task.depends_on = list(depends_on)
+
+        if task_type is not ...:
+            if task_type is not None and task_type not in VALID_TASK_TYPES:
+                raise ValueError(f"Unsupported task type '{task_type}'")
+            task.task_type = task_type
 
         if engine is not ...:
             if engine is not None and engine not in VALID_TASK_ENGINES:
@@ -940,6 +1529,12 @@ def update_task_metadata(
         if goal is not ...:
             task.goal = goal
 
+        if acceptance_criteria is not ...:
+            task.acceptance_criteria = normalize_acceptance_criteria(list(acceptance_criteria))
+
+        if human_checkpoints is not ...:
+            task.human_checkpoints = normalize_human_checkpoints(list(human_checkpoints))
+
         if mode is not ...:
             if mode not in {"tasks", "implementation"}:
                 raise ValueError(f"Unsupported mode '{mode}'")
@@ -948,9 +1543,16 @@ def update_task_metadata(
         if auto_commit is not ...:
             task.git.auto_commit = auto_commit
 
+        apply_task_template_defaults(task)
+
         append_journal(root, task, "Task metadata updated via CLI.")
         save_task(root, task)
+        if task.mode == "tasks":
+            _atomic_write_text(task_brief_file(root, task), render_task_brief(task))
         return task
+
+
+update_task_metadata = update_task
 
 
 def active_task_markers(

@@ -9,7 +9,8 @@ import re
 import shutil
 import subprocess
 import json
-from typing import Literal
+import selectors
+from typing import Callable, Literal
 
 from litehive.models import StageReport, SubagentStatus
 
@@ -127,6 +128,69 @@ class ExternalCLIAdapter:
             stdout=proc.stdout,
             stderr=proc.stderr,
         )
+
+    def run_live(
+        self,
+        prompt: str,
+        cwd: Path,
+        model: str | None = None,
+        *,
+        max_turns: int | None = None,
+        on_update: Callable[[CLIExecutionResult], None] | None = None,
+    ) -> CLIExecutionResult:
+        invocation = self.build_invocation(prompt, cwd, model=model, max_turns=max_turns)
+        proc = subprocess.Popen(
+            invocation.argv,
+            cwd=str(invocation.cwd),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            env=invocation.env,
+            text=False,
+        )
+        assert proc.stdout is not None
+        assert proc.stderr is not None
+
+        stdout_chunks = bytearray()
+        stderr_chunks = bytearray()
+        selector = selectors.DefaultSelector()
+        selector.register(proc.stdout, selectors.EVENT_READ, data="stdout")
+        selector.register(proc.stderr, selectors.EVENT_READ, data="stderr")
+
+        while selector.get_map():
+            for key, _ in selector.select():
+                chunk = os.read(key.fileobj.fileno(), 4096)
+                if chunk:
+                    if key.data == "stdout":
+                        stdout_chunks.extend(chunk)
+                    else:
+                        stderr_chunks.extend(chunk)
+                    if on_update is not None:
+                        on_update(
+                            CLIExecutionResult(
+                                adapter=self.name,
+                                argv=invocation.argv,
+                                cwd=invocation.cwd,
+                                exit_code=proc.poll() or 0,
+                                stdout=stdout_chunks.decode("utf-8", errors="replace"),
+                                stderr=stderr_chunks.decode("utf-8", errors="replace"),
+                            )
+                        )
+                    continue
+                selector.unregister(key.fileobj)
+                key.fileobj.close()
+
+        exit_code = proc.wait()
+        result = CLIExecutionResult(
+            adapter=self.name,
+            argv=invocation.argv,
+            cwd=invocation.cwd,
+            exit_code=exit_code,
+            stdout=stdout_chunks.decode("utf-8", errors="replace"),
+            stderr=stderr_chunks.decode("utf-8", errors="replace"),
+        )
+        if on_update is not None:
+            on_update(result)
+        return result
 
     def parse_stage_report(
         self,

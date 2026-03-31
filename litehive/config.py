@@ -5,12 +5,59 @@ from __future__ import annotations
 from copy import deepcopy
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping, Sequence
 
 import yaml
 
 
 VALID_POOL_SELECTION_POLICIES = {"fifo", "priority_first", "dependency_aware"}
+VALID_ENGINE_NAMES = frozenset({"codex", "opencode", "gemini", "copilot", "claude"})
+
+
+def _default_task_engine_routing() -> dict[str, list[str]]:
+    return {
+        "adapter": ["codex", "opencode", "gemini", "copilot"],
+        "bugfix": ["codex", "opencode", "copilot", "gemini"],
+        "research": ["gemini", "codex", "opencode", "copilot"],
+        "review": ["copilot", "codex", "opencode", "gemini"],
+        "refactor": ["opencode", "codex", "copilot", "gemini"],
+        "docs": ["codex", "gemini", "opencode", "copilot"],
+    }
+
+
+VALID_TASK_ROUTING_KEYS = frozenset(_default_task_engine_routing())
+
+
+def _normalize_engine_sequence(engines: Sequence[str], *, field_name: str) -> list[str]:
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for engine_name in engines:
+        if engine_name not in VALID_ENGINE_NAMES:
+            allowed = ", ".join(sorted(VALID_ENGINE_NAMES))
+            raise ValueError(f"{field_name} engine must be one of: {allowed}")
+        if engine_name in seen:
+            continue
+        seen.add(engine_name)
+        normalized.append(engine_name)
+    return normalized
+
+
+def normalize_task_engine_routing(
+    routing: Mapping[str, Sequence[str]] | None,
+) -> dict[str, list[str]]:
+    normalized = _default_task_engine_routing()
+    if routing is None:
+        return normalized
+
+    for route_key, engines in routing.items():
+        if route_key not in VALID_TASK_ROUTING_KEYS:
+            allowed = ", ".join(sorted(VALID_TASK_ROUTING_KEYS))
+            raise ValueError(f"task_engine_routing key must be one of: {allowed}")
+        normalized[route_key] = _normalize_engine_sequence(
+            list(engines),
+            field_name=f"task_engine_routing[{route_key}]",
+        )
+    return normalized
 
 
 def _shared_stage_sequence() -> list[str]:
@@ -196,7 +243,11 @@ PROCESS_PROFILES: dict[str, dict[str, Any]] = {
             "verification should be independent enough to catch behavioral regressions, not just restate implementation intent."
         ),
         "acceptance_flow": "only accept after focused verification and explicit comparison against task acceptance.",
-        "commit_recovery": "completed work checkpoints cleanly, and rollback/recover must preserve determinism.",
+        "commit_recovery": (
+            "accepted tasks commit by default at commit_to_git using "
+            "`litehive: complete <task-id> <task-slug>`; reruns append `(attempt N)`, "
+            "rollback reverts that checkpoint into a new rollback commit, and recover requeues without reverting code."
+        ),
         "specifics_heading": "## Codehive-style specifics",
         "specifics": [
             "- Preserve execution visibility through task reports, subagent transcripts, and recent progress.",
@@ -226,6 +277,7 @@ PROCESS_PROFILES: dict[str, dict[str, Any]] = {
             ],
             "accepting": [
                 "- Acceptance is managerial review against task goals, tests, and recovery policy, not a rubber stamp.",
+                "- Accepted tasks proceed to `commit_to_git`, where Litehive creates the final checkpoint commit unless auto-commit is explicitly disabled.",
             ],
         },
     },
@@ -263,6 +315,7 @@ class LitehiveConfig:
     pool_budget_threshold: int | None = None
     pool_stop_on_dirty_git: bool = False
     pool_selection_policy: str = "dependency_aware"
+    task_engine_routing: dict[str, list[str]] = field(default_factory=_default_task_engine_routing)
     engine_fallbacks: dict[str, list[str]] = field(
         default_factory=lambda: {
             "codex": ["opencode", "gemini", "copilot"],
@@ -274,6 +327,16 @@ class LitehiveConfig:
     auto_commit: bool = True
     task_mode_name: str = "tasks"
     implementation_mode_name: str = "implementation"
+
+    def __post_init__(self) -> None:
+        self.task_engine_routing = normalize_task_engine_routing(self.task_engine_routing)
+        self.engine_fallbacks = {
+            engine_name: _normalize_engine_sequence(
+                list(fallbacks),
+                field_name=f"engine_fallbacks[{engine_name}]",
+            )
+            for engine_name, fallbacks in self.engine_fallbacks.items()
+        }
 
 
 def workspace_dir(root: Path) -> Path:

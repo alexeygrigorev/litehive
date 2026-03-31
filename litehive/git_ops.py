@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+import shutil
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -59,10 +61,28 @@ def current_head(root: Path) -> str | None:
     return proc.stdout.strip() or None
 
 
+def default_commit_message(task_id: str, slug: str) -> str:
+    return f"litehive: complete {task_id} {slug}"
+
+
+def _legacy_default_commit_message(task_id: str, slug: str) -> str:
+    return f"litehive: checkpoint {task_id} {slug}"
+
+
+def _uses_generated_commit_message(task: TaskRecord) -> bool:
+    message = task.git.commit_message
+    if message is None:
+        return True
+    return message in {
+        default_commit_message(task.id, task.slug),
+        _legacy_default_commit_message(task.id, task.slug),
+    }
+
+
 def checkpoint_message(task: TaskRecord, attempt: int | None = None) -> str:
-    base = task.git.commit_message or f"litehive: checkpoint {task.id} {task.slug}"
+    base = task.git.commit_message or default_commit_message(task.id, task.slug)
     attempt = attempt or (task.git.checkpoint_attempts + 1)
-    if attempt > 1 and task.git.commit_message is None:
+    if attempt > 1 and _uses_generated_commit_message(task):
         return f"{base} (attempt {attempt})"
     return base
 
@@ -121,3 +141,28 @@ def rollback_task(root: Path, task: TaskRecord) -> RollbackCheckpoint:
     if revert_proc.returncode != 0:
         raise GitError(revert_proc.stderr.strip() or "git revert failed")
     return RollbackCheckpoint(rolled_back_sha=checkpoint_sha)
+
+
+def abort_revert(root: Path) -> None:
+    proc = _run_git(root, "revert", "--abort")
+    if proc.returncode == 0:
+        return
+
+    for _ in range(16):
+        conflict_paths = re.findall(
+            r"Untracked working tree file '([^']+)' would be overwritten by merge\.",
+            proc.stderr,
+        )
+        if not conflict_paths:
+            break
+        for relative_path in conflict_paths:
+            conflict_path = root / relative_path
+            if conflict_path.is_dir():
+                shutil.rmtree(conflict_path, ignore_errors=True)
+            elif conflict_path.exists():
+                conflict_path.unlink()
+        proc = _run_git(root, "revert", "--abort")
+        if proc.returncode == 0:
+            return
+
+    raise GitError(proc.stderr.strip() or "git revert --abort failed")

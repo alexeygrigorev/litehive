@@ -20,10 +20,16 @@ The pipeline is fixed:
 2. `implementing`
 3. `testing`
 4. `accepting`
+5. `commit_to_git`
 
 The control loop is deterministic. LLMs or external CLIs produce work and reports,
 but they do not decide routing. Routing is handled by local code based on structured
 verdicts and configured retry limits.
+
+The canonical state machine — all states, transitions, verdicts, outcome codes, and
+the change-gate rule — is documented in [`docs/state-machine.md`](docs/state-machine.md).
+**Any change to `_ROUTES`, `TaskStatus`, `PipelineStatus`, or `OutcomeReasonCode`
+must update that document in the same commit.**
 
 ## Persistence model
 
