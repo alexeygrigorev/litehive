@@ -32,6 +32,7 @@ from litehive.runner import TaskExecutionRunner
 from litehive.subagents import EngineFailure, SubagentResult, stage_prompt, stage_report_from_subagent
 from litehive.tasks import (
     create_task,
+    dequeue_next_task_selection,
     get_task,
     list_tasks,
     load_state,
@@ -873,6 +874,28 @@ def test_run_task_pool_honors_stop_condition(tmp_path: Path, monkeypatch: pytest
     state = load_state(tmp_path)
     assert state.active_task_id is None
     assert state.queue == ["T-0002"]
+
+
+def test_run_task_pool_restores_preselected_active_task_when_stop_condition_hits(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    first = create_task(tmp_path, title="First task", auto_commit=False)
+    second = create_task(tmp_path, title="Second task", auto_commit=False)
+
+    selection = dequeue_next_task_selection(tmp_path)
+
+    assert selection.task is not None
+    assert selection.task.id == first.id
+    assert load_state(tmp_path).queue == [second.id]
+
+    summary = run_task_pool(tmp_path, stop_when=lambda executions: True)
+
+    assert summary.executions == []
+    assert summary.stop_reason == "stop_condition_reached"
+    state = load_state(tmp_path)
+    assert state.active_task_id is None
+    assert state.queue == [first.id, second.id]
+    assert get_task(tmp_path, first.id).status == "queued"
+    assert get_task(tmp_path, second.id).status == "queued"
 
 
 def test_run_task_pool_stops_after_max_tasks(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

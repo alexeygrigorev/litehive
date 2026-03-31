@@ -586,6 +586,26 @@ def clear_active_task(root: Path) -> WorkspaceState:
     return set_active_task(root, None)
 
 
+def restore_untouched_active_task(root: Path) -> WorkspaceState:
+    with _workspace_lock(root):
+        state = load_state(root)
+        if state.active_task_id is None:
+            return state
+
+        task = get_task(root, state.active_task_id)
+        if task is not None and task.runtime.execution_status == "running":
+            return state
+        if task is not None and _is_task_eligible_for_execution(task):
+            task.status = "queued"
+            save_task(root, task)
+            state.queue = [item for item in state.queue if item != task.id]
+            state.queue.insert(0, task.id)
+
+        state.active_task_id = None
+        save_state(root, state)
+        return state
+
+
 def enqueue_task(root: Path, task_id: str) -> WorkspaceState:
     return _enqueue_task(root, task_id, front=False)
 

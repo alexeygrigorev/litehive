@@ -36,6 +36,7 @@ from litehive.tasks import (
     mark_task_run_started,
     peek_next_task,
     peek_next_task_selection,
+    restore_untouched_active_task,
     set_pool_stop_reason,
     save_task_runtime,
     save_task,
@@ -239,6 +240,7 @@ def _finalize_pool_run(
     stop_reason: str,
     blocked: list[BlockedTask],
 ) -> TaskPoolRunSummary:
+    restore_untouched_active_task(root)
     set_pool_stop_reason(root, stop_reason)
     if stop_reason == "execution_limit_fallbacks_exhausted" and executions:
         latest = executions[-1]
