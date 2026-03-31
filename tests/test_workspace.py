@@ -3175,6 +3175,101 @@ def test_run_next_task_falls_back_from_codex_to_gemini_on_usage_limit(
     )
 
 
+def test_run_next_task_walks_same_stage_fallback_graph_after_usage_limit(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ensure_workspace(
+        tmp_path,
+        LitehiveConfig(
+            engine_fallbacks={
+                "codex": ["opencode"],
+                "opencode": ["gemini"],
+                "gemini": ["copilot"],
+                "copilot": [],
+            }
+        ),
+    )
+    create_task(tmp_path, title="Chained fallback task", engine="codex", auto_commit=False)
+    codex = get_engine("codex")
+    opencode = get_engine("opencode")
+    gemini = get_engine("gemini")
+
+    monkeypatch.setattr(codex, "is_available", lambda: True)
+    monkeypatch.setattr(opencode, "is_available", lambda: True)
+    monkeypatch.setattr(gemini, "is_available", lambda: True)
+
+    def fake_codex_run(prompt: str, cwd: Path, model: str | None = None) -> CLIExecutionResult:
+        if "Stage: grooming" in prompt:
+            return CLIExecutionResult(
+                adapter="codex",
+                argv=("codex", "exec"),
+                cwd=cwd,
+                exit_code=1,
+                stdout="",
+                stderr="ERROR: You've hit your usage limit. Try again later.",
+            )
+        return _successful_stage_execution(tmp_path, "codex", "non-grooming")
+
+    def fake_opencode_run(prompt: str, cwd: Path, model: str | None = None) -> CLIExecutionResult:
+        if "Stage: grooming" in prompt:
+            return CLIExecutionResult(
+                adapter="opencode",
+                argv=("opencode", "run"),
+                cwd=cwd,
+                exit_code=1,
+                stdout="rate limit exceeded",
+                stderr="",
+            )
+        return _successful_stage_execution(tmp_path, "opencode", "non-grooming")
+
+    def fake_gemini_run(prompt: str, cwd: Path, model: str | None = None) -> CLIExecutionResult:
+        step = prompt.split("Stage: ", 1)[1].splitlines()[0]
+        transcript = (
+            '{"type":"message","role":"assistant","content":"VERDICT: PASS\\n","delta":true}\n'
+            f'{{"type":"message","role":"assistant","content":"SUMMARY: {step} complete via gemini\\nFILES_CHANGED:\\n- app.txt\\nTESTS_ADDED: 1\\nTESTS_PASSING: 1\\nWARNINGS:\\n","delta":true}}'
+        )
+        return CLIExecutionResult(
+            adapter="gemini",
+            argv=("gemini", "-p"),
+            cwd=cwd,
+            exit_code=0,
+            stdout=transcript,
+            stderr="",
+        )
+
+    monkeypatch.setattr(codex, "run", fake_codex_run)
+    monkeypatch.setattr(opencode, "run", fake_opencode_run)
+    monkeypatch.setattr(gemini, "run", fake_gemini_run)
+
+    summary = run_next_task(tmp_path)
+
+    assert summary.task is not None
+    assert summary.result is not None
+    assert summary.result.final_status == "done"
+    task = get_task(tmp_path, "T-0001")
+    assert task is not None
+    assert task.runtime.last_engine_switch is not None
+    assert task.runtime.last_engine_switch.from_engine == "opencode"
+    assert task.runtime.last_engine_switch.to_engine == "gemini"
+    assert task.runtime.last_engine_switch.reason == "rate limit reached"
+    report = yaml.safe_load(
+        (
+            tmp_path
+            / ".litehive"
+            / "tasks"
+            / "T-0001-chained-fallback-task"
+            / "reports"
+            / "grooming-001.yaml"
+        ).read_text(encoding="utf-8")
+    )
+    assert report["warnings"][:2] == [
+        "Stage `grooming` switched from `codex` to `opencode` after usage limit reached.",
+        "Stage `grooming` switched from `opencode` to `gemini` after rate limit reached.",
+    ]
+    assert report["feedback"].startswith(report["warnings"][0])
+    assert "SUMMARY: grooming complete via gemini" in report["feedback"]
+
+
 def test_run_next_task_skips_unavailable_fallback_engine_after_usage_limit(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -660,11 +660,14 @@ def _engine_attempt_order(
 ) -> list[str]:
     seen: set[str] = set()
     ordered: list[str] = []
-    for engine_name in [initial_engine_name, *engine_fallbacks.get(initial_engine_name, [])]:
+    queue: list[str] = [initial_engine_name]
+    while queue:
+        engine_name = queue.pop(0)
         if engine_name in seen:
             continue
         seen.add(engine_name)
         ordered.append(engine_name)
+        queue.extend(engine_fallbacks.get(engine_name, []))
     return ordered
 
 
