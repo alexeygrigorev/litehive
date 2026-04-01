@@ -1213,6 +1213,10 @@ def _unexpected_dirty_paths(
             continue
         if path.startswith(".litehive/"):
             continue
+        if path.startswith("$tmpdir/.litehive/"):
+            continue
+        if path.startswith('"$tmpdir"/.litehive/'):
+            continue
         unexpected.append(path)
     return unexpected
 
@@ -1230,7 +1234,7 @@ def _allowed_commit_paths(root: Path, task: TaskRecord) -> set[PurePosixPath]:
         report_data = yaml.safe_load(report_path.read_text(encoding="utf-8")) or {}
         for changed in report_data.get("files_changed") or []:
             normalized = str(changed).strip()
-            if normalized:
+            if normalized and normalized.lower() not in {"none", "n/a", "-"}:
                 allowed.add(PurePosixPath(normalized))
     return allowed
 
@@ -1248,5 +1252,8 @@ def _status_entry_path(entry: str) -> str | None:
         return None
     path = entry[3:]
     if " -> " in path:
-        return path.split(" -> ", 1)[1].strip()
-    return path.strip() or None
+        path = path.split(" -> ", 1)[1]
+    normalized = path.strip().replace('\\"', '"')
+    if normalized.startswith('"') and normalized.endswith('"') and len(normalized) >= 2:
+        normalized = normalized[1:-1]
+    return normalized.strip() or None

@@ -53,6 +53,7 @@ from litehive.sandbox import SandboxLauncher
 from litehive.runtime import (
     EngineBudgetLedger,
     TaskPoolStopConditions,
+    _allowed_commit_paths,
     _unexpected_dirty_paths,
     drain_task_pool,
     rollback_completed_task,
@@ -1350,6 +1351,53 @@ def test_unexpected_dirty_paths_ignores_unrelated_litehive_workspace_churn(tmp_p
     unexpected = _unexpected_dirty_paths(dirty_entries, allowed_paths)
 
     assert unexpected == ["README.md"]
+
+
+def test_unexpected_dirty_paths_ignores_stray_tmpdir_workspace_cleanup(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Ignore stray tmpdir cleanup")
+
+    allowed_paths = {
+        PurePosixPath(".litehive") / "tasks" / f"{task.id}-{task.slug}",
+        PurePosixPath("litehive") / "runtime.py",
+    }
+
+    dirty_entries = [
+        ' D "\\"$tmpdir\\"/.litehive/config.yaml"',
+        ' D "\\"$tmpdir\\"/.litehive/context.md"',
+        ' D "\\"$tmpdir\\"/.litehive/state.yaml"',
+        " M README.md",
+    ]
+
+    unexpected = _unexpected_dirty_paths(dirty_entries, allowed_paths)
+
+    assert unexpected == ["README.md"]
+
+
+def test_allowed_commit_paths_ignores_placeholder_file_entries(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Ignore placeholder changed files during commit")
+    reports_dir = tmp_path / ".litehive" / "tasks" / f"{task.id}-{task.slug}" / "reports"
+    (reports_dir / "implementing-001.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "task_id": task.id,
+                "step": "implementing",
+                "verdict": "pass",
+                "summary": "placeholder files changed",
+                "files_changed": ["none", "litehive/runtime.py", " N/A ", "-"],
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+
+    allowed_paths = _allowed_commit_paths(tmp_path, task)
+
+    assert PurePosixPath("litehive/runtime.py") in allowed_paths
+    assert PurePosixPath("none") not in allowed_paths
+    assert PurePosixPath("N/A") not in allowed_paths
+    assert PurePosixPath("-") not in allowed_paths
 
 
 def test_commit_task_can_commit_only_selected_paths_with_other_unstaged_changes(tmp_path: Path) -> None:
@@ -6981,6 +7029,35 @@ def test_resume_command_preserves_flagged_task_stage(
     assert resumed is not None
     assert resumed.status == "queued"
     assert resumed.pipeline_status == "accepting"
+    assert resumed.runtime.execution_status == "idle"
+
+
+def test_resume_command_preserves_flagged_commit_to_git_stage(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    ensure_workspace(tmp_path)
+    first = create_task(tmp_path, title="First task")
+    flagged = create_task(tmp_path, title="Resume commit")
+    task = get_task(tmp_path, flagged.id)
+    assert task is not None
+    task.status = "flagged"
+    task.pipeline_status = "commit_to_git"
+    task.runtime.execution_status = "flagged"
+    save_task(tmp_path, task)
+
+    exit_code = _cmd_resume_task(
+        argparse.Namespace(workspace=tmp_path, task_id=flagged.id, front=False)
+    )
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "status: queued" in output
+    assert "pipeline_status: commit_to_git" in output
+    assert load_state(tmp_path).queue == [first.id, flagged.id]
+    resumed = get_task(tmp_path, flagged.id)
+    assert resumed is not None
+    assert resumed.status == "queued"
+    assert resumed.pipeline_status == "commit_to_git"
     assert resumed.runtime.execution_status == "idle"
 
 

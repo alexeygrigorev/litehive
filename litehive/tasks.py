@@ -2159,7 +2159,7 @@ def resume_task(root: Path, task_id: str, *, front: bool = False) -> TaskRecord:
         if task.pipeline_status in {"backlog", "done"}:
             raise ValueError(f"Task {task.id} has no resumable stage")
         resumed_stage = task.pipeline_status
-        if resumed_stage in {"implementing", "testing", "accepting", "commit_to_git"}:
+        if resumed_stage in {"implementing", "testing", "accepting"}:
             resumed_stage = reroute_stage_for_acceptance_criteria(task)
         _reset_task_for_recovery(task, status="queued", pipeline_status=resumed_stage)
         state.queue = [item for item in state.queue if item != task.id]
