@@ -282,41 +282,6 @@ class TaskExecutionRunner:
                     retry_limit=self.max_retries,
                     retry_source=self.retry_source,
                 )
-                if rejections > self.max_retries:
-                    reason = (
-                        f"Retry limit ({self.max_retries}) exceeded after {rejections} rejection(s)"
-                        f" during {current}"
-                    )
-                    report.retry_decision = "flagged"
-                    report = self._terminal_report(
-                        task,
-                        step=report.step,
-                        verdict=report.verdict,
-                        summary=report.summary,
-                        outcome="flagged",
-                        outcome_reason_code="retry_limit_exhausted",
-                        reason=reason,
-                        retry_count=rejections,
-                        warnings=report.warnings,
-                        feedback=report.feedback,
-                        files_changed=report.files_changed,
-                        tests=report.tests,
-                    )
-                    task.status = "flagged"
-                    mark_task_outcome(
-                        self.root,
-                        task,
-                        kind="flagged",
-                        stage=current,
-                        reason_code="retry_limit_exhausted",
-                        reason=reason,
-                        retry_count=rejections,
-                        retry_limit=self.max_retries,
-                        retry_source=self.retry_source,
-                    )
-                    self._write_report(task, report, steps)
-                    mark_stage_finished(self.root, task, report)
-                    return RunResult("flagged", steps, last_verdict)
                 report.retry_decision = "retry"
 
             if target == "done":
