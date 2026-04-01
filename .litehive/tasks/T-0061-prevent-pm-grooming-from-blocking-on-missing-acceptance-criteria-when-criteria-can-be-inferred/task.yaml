@@ -55,7 +55,7 @@ subagents:
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0061 prevent-pm-grooming-from-blocking-on-missing-acceptance-criteria-when-criteria-can-be-inferred'
-  commit_sha: PENDING
+  commit_sha: 41720d961c0b2a9b05ce3a6b3f845da81752d9b2
   checkpoint_base_sha: null
   checkpoint_attempts: 0
   rolled_back_checkpoint_attempt: null

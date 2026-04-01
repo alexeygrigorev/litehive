@@ -10,7 +10,8 @@ pipeline_status: grooming
 priority: medium
 created_at: '2026-03-31T15:40:05+00:00'
 updated_at: '2026-04-01T08:05:00+00:00'
-goal: Persist subagent output to disk in real time so active runs can be inspected
+goal: >-
+  Persist subagent output to disk in real time so active runs can be inspected
   before completion. This should behave like the Telegram writing assistant Claude
   runner: create the task-local artifact directory immediately, stream stdout/stderr
   and transcript updates incrementally, and keep session metadata current while the
