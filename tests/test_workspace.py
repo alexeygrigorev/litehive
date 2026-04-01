@@ -1958,6 +1958,45 @@ def test_restore_untouched_active_task_requeues_interrupted_commit_stage_task(tm
     assert "Recovered interrupted `commit_to_git` attempt" in journal
 
 
+def test_restore_untouched_active_task_requeues_interrupted_non_commit_task(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    queued = create_task(tmp_path, title="Queued follow-up", auto_commit=False)
+    interrupted = create_task(tmp_path, title="Interrupted testing task", auto_commit=False)
+
+    interrupted.status = "in_progress"
+    interrupted.pipeline_status = "testing"
+    interrupted.runtime.execution_status = "running"
+    interrupted.runtime.current_stage = RuntimeStageState(
+        step="testing",
+        status="running",
+        started_at="2026-04-01T00:00:00+00:00",
+        updated_at="2026-04-01T00:00:00+00:00",
+    )
+    save_task(tmp_path, interrupted)
+    save_task_runtime(tmp_path, interrupted)
+
+    state = load_state(tmp_path)
+    state.active_task_id = interrupted.id
+    state.queue = [queued.id]
+    save_state(tmp_path, state)
+
+    restore_untouched_active_task(tmp_path)
+
+    refreshed = get_task(tmp_path, interrupted.id)
+    assert refreshed is not None
+    assert refreshed.status == "queued"
+    assert refreshed.pipeline_status == "testing"
+    assert refreshed.runtime.execution_status == "idle"
+    assert refreshed.runtime.run_started_at is None
+    assert refreshed.runtime.current_stage.step == "testing"
+    assert refreshed.runtime.current_stage.status == "interrupted"
+    state = load_state(tmp_path)
+    assert state.active_task_id is None
+    assert state.queue == [interrupted.id, queued.id]
+    journal = (task_dir(tmp_path, refreshed) / "journal.md").read_text(encoding="utf-8")
+    assert "Recovered interrupted run and requeued the task at `testing`." in journal
+
+
 def test_restore_untouched_active_task_requeues_stranded_done_commit_without_checkpoint(
     tmp_path: Path,
 ) -> None:
@@ -4461,6 +4500,44 @@ def test_move_command_reorders_future_task_while_runner_is_active(
     assert load_state(tmp_path).queue == [third.id, first.id, second.id]
 
 
+def test_add_command_creates_future_task_while_runner_is_active(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ensure_workspace(tmp_path)
+    active = create_task(tmp_path, title="Active task")
+    set_active_task(tmp_path, active.id)
+    _block_runner_lock(monkeypatch)
+
+    exit_code = _cmd_add(
+        argparse.Namespace(
+            workspace=tmp_path,
+            title="Queued task",
+            depends_on=None,
+            acceptance_criteria=None,
+            human_checkpoint=None,
+            task_type=None,
+            mode=None,
+            goal="",
+            engine=None,
+            retry_limit=None,
+            no_auto_commit=False,
+        )
+    )
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "Created task T-0002" in output
+    state = load_state(tmp_path)
+    assert state.active_task_id == active.id
+    assert state.queue == ["T-0002"]
+    queued = get_task(tmp_path, "T-0002")
+    assert queued is not None
+    assert queued.status == "queued"
+    assert queued.pipeline_status == "backlog"
+
+
 def test_promote_command_moves_queued_task_to_front(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -4813,6 +4890,36 @@ def test_abandon_command_cancels_task_and_removes_it_from_queue(
     assert "Task abandoned via CLI at stage `testing`." in journal
 
 
+def test_abandon_command_allows_future_task_while_runner_is_active(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ensure_workspace(tmp_path)
+    active = create_task(tmp_path, title="Active task")
+    flagged = create_task(tmp_path, title="Stop this later")
+    task = get_task(tmp_path, flagged.id)
+    assert task is not None
+    task.status = "flagged"
+    task.pipeline_status = "testing"
+    task.runtime.execution_status = "flagged"
+    save_task(tmp_path, task)
+    set_active_task(tmp_path, active.id)
+    _block_runner_lock(monkeypatch)
+
+    exit_code = _cmd_abandon_task(argparse.Namespace(workspace=tmp_path, task_id=flagged.id))
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "status: cancelled" in output
+    state = load_state(tmp_path)
+    assert state.active_task_id == active.id
+    assert flagged.id not in state.queue
+    refreshed = get_task(tmp_path, flagged.id)
+    assert refreshed is not None
+    assert refreshed.status == "cancelled"
+
+
 def test_abandon_task_rolls_back_when_atomic_state_persist_fails(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -4912,6 +5019,38 @@ def test_cmd_close_task_wont_do(
     assert closed is not None
     assert closed.status == "cancelled"
     assert closed.runtime.last_outcome.reason_code == "wont_do"
+
+
+def test_close_command_allows_future_task_while_runner_is_active(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ensure_workspace(tmp_path)
+    active = create_task(tmp_path, title="Active task")
+    queued = create_task(tmp_path, title="Won't do later")
+    set_active_task(tmp_path, active.id)
+    _block_runner_lock(monkeypatch)
+
+    exit_code = _cmd_close_task(
+        argparse.Namespace(
+            workspace=tmp_path,
+            task_id=queued.id,
+            outcome="deferred",
+            reason=None,
+        )
+    )
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "status: cancelled" in output
+    assert "outcome: deferred" in output
+    state = load_state(tmp_path)
+    assert state.active_task_id == active.id
+    assert queued.id not in state.queue
+    refreshed = get_task(tmp_path, queued.id)
+    assert refreshed is not None
+    assert refreshed.runtime.last_outcome.reason_code == "deferred"
 
 
 def test_update_command_updates_task_metadata(

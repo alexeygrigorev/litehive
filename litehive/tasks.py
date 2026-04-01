@@ -1346,6 +1346,34 @@ def _prepare_recovered_commit_task(task: TaskRecord) -> None:
     )
 
 
+def _prepare_interrupted_task_for_requeue(task: TaskRecord) -> None:
+    now = utcnow()
+    task.status = "queued"
+    task.runtime.execution_status = "idle"
+    task.runtime.run_started_at = None
+    task.runtime.active_subagent = None
+    task.runtime.updated_at = now
+    if task.runtime.current_stage.step is None:
+        task.runtime.current_stage = task.runtime.current_stage.model_copy(
+            update={
+                "status": "idle",
+                "started_at": None,
+                "completed_at": None,
+                "updated_at": now,
+                "duration_seconds": 0,
+                "verdict": None,
+                "summary": "",
+            }
+        )
+    else:
+        task.runtime.current_stage = task.runtime.current_stage.model_copy(
+            update={
+                "status": "interrupted",
+                "updated_at": now,
+            }
+        )
+
+
 def _recover_commit_task(root: Path, task: TaskRecord) -> None:
     _prepare_recovered_commit_task(task)
     append_journal(
@@ -1615,14 +1643,20 @@ def restore_untouched_active_task(root: Path) -> WorkspaceState:
             )
             return state
 
-        if task is not None and task.runtime.execution_status == "running":
-            return state
         if task is not None and _is_task_eligible_for_execution(task):
-            task.status = "queued"
+            _prepare_interrupted_task_for_requeue(task)
             state.queue = [item for item in state.queue if item != task.id]
             state.queue.insert(0, task.id)
             state.active_task_id = None
-            persist_task_and_state(root, task=task, state=state)
+            persist_task_and_state(
+                root,
+                task=task,
+                state=state,
+                journal_message=(
+                    "Recovered interrupted run and requeued the task at "
+                    f"`{task.pipeline_status}`."
+                ),
+            )
             return state
 
         state.active_task_id = None
@@ -1760,8 +1794,10 @@ def resume_task(root: Path, task_id: str, *, front: bool = False) -> TaskRecord:
 
 
 def abandon_task(root: Path, task_id: str) -> TaskRecord:
-    with workspace_mutation_guard(root), _workspace_lock(root):
+    with _workspace_lock(root):
         task = require_task(root, task_id)
+        state = load_state(root)
+        _ensure_future_task_mutation_allowed(root, [task.id], state=state)
         if task.status not in {"flagged", "failed", "cancelled"}:
             raise ValueError(f"Task {task.id} is not flagged, failed, or cancelled")
         task.status = "cancelled"
@@ -1777,11 +1813,10 @@ def abandon_task(root: Path, task_id: str) -> TaskRecord:
         task.runtime.last_outcome.retry_limit = 0
         task.runtime.last_outcome.retry_source = "global"
         task.runtime.last_outcome.recorded_at = task.runtime.updated_at
-        state = load_state(root)
         if state.active_task_id == task.id:
             state.active_task_id = None
         state.queue = [item for item in state.queue if item != task.id]
-        persist_task_and_state(
+        _persist_task_and_state_without_runner_guard(
             root,
             task=task,
             state=state,
@@ -1815,8 +1850,10 @@ def close_task(
     if outcome not in _CLOSE_OUTCOME_REASON_CODES:
         allowed = ", ".join(sorted(_CLOSE_OUTCOME_REASON_CODES))
         raise ValueError(f"Unsupported close outcome '{outcome}'. Expected one of: {allowed}")
-    with workspace_mutation_guard(root), _workspace_lock(root):
+    with _workspace_lock(root):
         task = require_task(root, task_id)
+        state = load_state(root)
+        _ensure_future_task_mutation_allowed(root, [task.id], state=state)
         if task.status == "done":
             raise ValueError(f"Task {task.id} is already done and cannot be closed")
         now = utcnow()
@@ -1833,11 +1870,10 @@ def close_task(
         task.runtime.last_outcome.retry_limit = 0
         task.runtime.last_outcome.retry_source = "global"
         task.runtime.last_outcome.recorded_at = now
-        state = load_state(root)
         if state.active_task_id == task.id:
             state.active_task_id = None
         state.queue = [item for item in state.queue if item != task.id]
-        persist_task_and_state(
+        _persist_task_and_state_without_runner_guard(
             root,
             task=task,
             state=state,

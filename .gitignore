@@ -8,3 +8,4 @@ dist/
 build/
 *.egg-info/
 .DS_Store
+tmp_accept_t*/
