@@ -202,7 +202,7 @@ subagents:
 - id: SA-0011
   role: swe
   engine: codex
-  status: failed
+  status: flagged
   path: subagents/SA-0011-swe
 - id: SA-0012
   role: swe

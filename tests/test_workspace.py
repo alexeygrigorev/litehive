@@ -1955,7 +1955,7 @@ def test_runner_fails_task_when_stage_executor_crashes(tmp_path: Path) -> None:
     assert task is not None
     assert task.status == "queued"
     assert load_state(tmp_path).queue == [task.id]
-    assert task.runtime.last_outcome.kind == "failed"
+    assert task.runtime.last_outcome.kind == "flagged"
     assert task.runtime.last_outcome.stage == "testing"
     assert task.runtime.last_outcome.reason_code == "stage_exception"
     assert task.runtime.last_outcome.reason == "testing failed with unhandled error: boom"
@@ -1971,7 +1971,7 @@ def test_runner_fails_task_when_stage_executor_crashes(tmp_path: Path) -> None:
     )
     assert report["warnings"] == ["boom"]
     assert report["retry_decision"] == "final"
-    assert report["outcome"] == "failed"
+    assert report["outcome"] == "flagged"
     assert report["outcome_reason_code"] == "stage_exception"
     assert report["outcome_reason"] == "testing failed with unhandled error: boom"
 
@@ -4756,12 +4756,119 @@ def test_configure_persists_pre_acceptance_command(tmp_path: Path) -> None:
         pool_stop_on_dirty_git=False,
         pool_selection_policy="dependency_aware",
         pre_acceptance_command="uv run ruff check litehive tests",
+        hook=None,
     )
 
     assert _cmd_configure(parser) == 0
     config = load_config(tmp_path)
 
     assert config.pre_acceptance_command == "uv run ruff check litehive tests"
+    assert config.runner_hooks["before_pm_acceptance"][0].command == "uv run ruff check litehive tests"
+    assert config.runner_hooks["before_pm_acceptance"][0].blocking is True
+
+
+def test_pre_acceptance_command_forces_matching_runner_hook_to_blocking() -> None:
+    config = LitehiveConfig(
+        pre_acceptance_command="uv run ruff check litehive tests",
+        runner_hooks={
+            "before_pm_acceptance": [
+                {"command": "uv run ruff check litehive tests", "blocking": False}
+            ]
+        },
+    )
+
+    before_acceptance_hooks = config.runner_hooks["before_pm_acceptance"]
+    assert len(before_acceptance_hooks) == 1
+    assert before_acceptance_hooks[0].command == "uv run ruff check litehive tests"
+    assert before_acceptance_hooks[0].blocking is True
+
+
+def test_configure_persists_runner_hooks(tmp_path: Path) -> None:
+    from litehive.cli import _cmd_configure
+
+    parser = argparse.Namespace(
+        workspace=tmp_path,
+        default_engine="codex",
+        process_profile="generic",
+        default_retry_limit=3,
+        opencode_model="zai-coding-plan/glm-5.1",
+        gemini_model=None,
+        copilot_model=None,
+        claude_enabled=False,
+        claude_model="claude-sonnet-4-20250514",
+        claude_max_turns=30,
+        pool_usage_cap=None,
+        pool_cost_cap=None,
+        engine_usage_cap=None,
+        engine_budget_cap=None,
+        engine_cost=None,
+        task_engine_route=None,
+        pool_stop_on_failure=False,
+        pool_max_tasks=None,
+        pool_stop_on_limit=False,
+        pool_quota_threshold=None,
+        pool_budget_threshold=None,
+        pool_stop_on_dirty_git=False,
+        pool_selection_policy="dependency_aware",
+        pre_acceptance_command=None,
+        hook=[
+            "before_swe_implementation=nonblocking:echo pre",
+            "after_swe_implementation=blocking:echo post",
+            "before_pm_acceptance=blocking:echo review",
+            "after_pm_acceptance=nonblocking:echo accepted",
+        ],
+    )
+
+    assert _cmd_configure(parser) == 0
+    config = load_config(tmp_path)
+
+    assert config.runner_hooks["before_swe_implementation"][0].blocking is False
+    assert config.runner_hooks["after_swe_implementation"][0].command == "echo post"
+    assert config.runner_hooks["before_pm_acceptance"][0].command == "echo review"
+    assert config.runner_hooks["after_pm_acceptance"][0].blocking is False
+
+
+def test_configure_rejects_invalid_runner_hook_point(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from litehive.cli import _cmd_configure
+
+    parser = argparse.Namespace(
+        workspace=tmp_path,
+        default_engine="codex",
+        process_profile="generic",
+        default_retry_limit=3,
+        opencode_model="zai-coding-plan/glm-5.1",
+        gemini_model=None,
+        copilot_model=None,
+        claude_enabled=False,
+        claude_model="claude-sonnet-4-20250514",
+        claude_max_turns=30,
+        pool_usage_cap=None,
+        pool_cost_cap=None,
+        engine_usage_cap=None,
+        engine_budget_cap=None,
+        engine_cost=None,
+        task_engine_route=None,
+        pool_stop_on_failure=False,
+        pool_max_tasks=None,
+        pool_stop_on_limit=False,
+        pool_quota_threshold=None,
+        pool_budget_threshold=None,
+        pool_stop_on_dirty_git=False,
+        pool_selection_policy="dependency_aware",
+        pre_acceptance_command=None,
+        hook=["before_testing=blocking:echo nope"],
+        subagent_resource_limits_enabled=None,
+        subagent_memory_mb=None,
+        subagent_cpu_count=None,
+        subagent_process_limit=None,
+    )
+
+    assert _cmd_configure(parser) == 1
+    output = capsys.readouterr().out
+
+    assert "configure failed: runner_hooks key must be one of:" in output
 
 
 def test_configure_rejects_invalid_task_engine_route(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
@@ -6291,6 +6398,26 @@ def test_status_output_includes_subagent_resource_limits(
     assert "subagent_resource_limits: enabled memory_mb:8192 cpu_count:4 process_limit:512" in output
 
 
+def test_status_output_includes_runner_hooks(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    ensure_workspace(
+        tmp_path,
+        LitehiveConfig(
+            runner_hooks={
+                "before_swe_implementation": [{"command": "echo pre", "blocking": False}],
+                "before_pm_acceptance": [{"command": "echo review", "blocking": True}],
+            }
+        ),
+    )
+
+    exit_code = _cmd_status(argparse.Namespace(workspace=tmp_path))
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "runner_hooks: before_pm_acceptance=[blocking:echo review]; before_swe_implementation=[non-blocking:echo pre]" in output
+
+
 def test_status_output_includes_budget_control_settings(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -7353,7 +7480,7 @@ def test_requeue_command_requires_flagged_or_cancelled(
     output = capsys.readouterr().out
 
     assert exit_code == 1
-    assert "is not flagged, failed, or cancelled" in output
+    assert "is not flagged or cancelled" in output
 
 
 def test_requeue_task_rolls_back_when_atomic_state_persist_fails(
@@ -8473,17 +8600,18 @@ def test_run_task_runs_pre_acceptance_hook_after_testing_passes(
         / "pre-acceptance-hook.txt"
     )
     assert "command: uv run ruff check litehive tests" in artifact.read_text(encoding="utf-8")
-    testing_report = yaml.safe_load(
+    accepting_report = yaml.safe_load(
         (
             tmp_path
             / ".litehive"
             / "tasks"
             / "T-0001-run-ruff-before-acceptance"
             / "reports"
-            / "testing-003.yaml"
+            / "accepting-004.yaml"
         ).read_text(encoding="utf-8")
     )
-    assert "pre-acceptance command passed" in "\n".join(testing_report["warnings"])
+    assert accepting_report["hook_results"][0]["point"] == "before_pm_acceptance"
+    assert "runner hook passed" in "\n".join(accepting_report["warnings"])
 
 
 def test_run_task_blocks_before_accepting_when_pre_acceptance_hook_fails(
@@ -8514,21 +8642,163 @@ def test_run_task_blocks_before_accepting_when_pre_acceptance_hook_fails(
     task = get_task(tmp_path, "T-0001")
     assert task is not None
     assert task.status == "flagged"
-    assert task.pipeline_status == "testing"
+    assert task.pipeline_status == "accepting"
     assert task.runtime.last_outcome.kind == "blocked"
-    testing_report = yaml.safe_load(
+    accepting_report = yaml.safe_load(
         (
             tmp_path
             / ".litehive"
             / "tasks"
             / "T-0001-block-on-failing-ruff"
             / "reports"
-            / "testing-003.yaml"
+            / "accepting-004.yaml"
         ).read_text(encoding="utf-8")
     )
-    assert testing_report["verdict"] == "blocked"
-    assert "pre-acceptance command `uv run ruff check litehive tests`" in testing_report["summary"]
-    assert "F401 unused import" in "\n".join(testing_report["warnings"])
+    assert accepting_report["verdict"] == "blocked"
+    assert "accepting blocked by runner hook" in accepting_report["summary"]
+    assert accepting_report["hook_results"][0]["point"] == "before_pm_acceptance"
+    assert "runner hook failed" in "\n".join(accepting_report["warnings"])
+
+
+def test_run_task_records_non_blocking_runner_hook_failure_and_continues(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ensure_workspace(
+        tmp_path,
+        LitehiveConfig(
+            runner_hooks={
+                "before_swe_implementation": [
+                    {"command": "echo pre && exit 7", "blocking": False}
+                ]
+            }
+        ),
+    )
+    create_task(tmp_path, title="Warn on hook failure", auto_commit=False)
+    calls: list[str] = []
+
+    def fake_subagent_run(self, task, role, engine_name, prompt, model=None, max_turns=None):  # type: ignore[no-untyped-def]
+        calls.append(task.pipeline_status)
+        return _completed_subagent_result(tmp_path, task.pipeline_status)
+
+    def fake_hook(argv, cwd, capture_output, text, check):  # type: ignore[no-untyped-def]
+        if list(argv) == ["bash", "-lc", "echo pre && exit 7"]:
+            return subprocess.CompletedProcess(argv, 7, stdout="pre\n", stderr="hook warning\n")
+        return subprocess.CompletedProcess(argv, 0, stdout="", stderr="")
+
+    monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_subagent_run)
+    monkeypatch.setattr("litehive.runtime.subprocess.run", fake_hook)
+
+    summary = run_next_task(tmp_path)
+
+    assert summary.result is not None
+    assert summary.result.final_status == "done"
+    assert calls == ["grooming", "implementing", "testing", "accepting"]
+    implementing_report = yaml.safe_load(
+        (
+            tmp_path
+            / ".litehive"
+            / "tasks"
+            / "T-0001-warn-on-hook-failure"
+            / "reports"
+            / "implementing-002.yaml"
+        ).read_text(encoding="utf-8")
+    )
+    assert implementing_report["hook_results"][0]["point"] == "before_swe_implementation"
+    assert implementing_report["hook_results"][0]["status"] == "failed"
+    assert implementing_report["verdict"] == "pass"
+    assert "runner hook failed" in "\n".join(implementing_report["warnings"])
+
+
+def test_run_task_blocks_when_post_implementation_runner_hook_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ensure_workspace(
+        tmp_path,
+        LitehiveConfig(
+            runner_hooks={
+                "after_swe_implementation": [
+                    {"command": "echo post && exit 9", "blocking": True}
+                ]
+            }
+        ),
+    )
+    create_task(tmp_path, title="Block on post-implementation hook", auto_commit=False)
+    calls: list[str] = []
+
+    def fake_subagent_run(self, task, role, engine_name, prompt, model=None, max_turns=None):  # type: ignore[no-untyped-def]
+        calls.append(task.pipeline_status)
+        return _completed_subagent_result(tmp_path, task.pipeline_status)
+
+    def fake_hook(argv, cwd, capture_output, text, check):  # type: ignore[no-untyped-def]
+        if list(argv) == ["bash", "-lc", "echo post && exit 9"]:
+            return subprocess.CompletedProcess(argv, 9, stdout="post\n", stderr="bad diff\n")
+        return subprocess.CompletedProcess(argv, 0, stdout="", stderr="")
+
+    monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_subagent_run)
+    monkeypatch.setattr("litehive.runtime.subprocess.run", fake_hook)
+
+    summary = run_next_task(tmp_path)
+
+    assert summary.result is not None
+    assert summary.result.final_status == "flagged"
+    assert calls == ["grooming", "implementing"]
+    task = get_task(tmp_path, "T-0001")
+    assert task is not None
+    assert task.status == "flagged"
+    assert task.pipeline_status == "implementing"
+    implementing_report = yaml.safe_load(
+        (
+            tmp_path
+            / ".litehive"
+            / "tasks"
+            / "T-0001-block-on-post-implementation-hook"
+            / "reports"
+            / "implementing-002.yaml"
+        ).read_text(encoding="utf-8")
+    )
+    assert implementing_report["verdict"] == "blocked"
+    assert implementing_report["hook_results"][0]["point"] == "after_swe_implementation"
+
+
+def test_run_task_runs_after_acceptance_runner_hook_on_accept(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ensure_workspace(
+        tmp_path,
+        LitehiveConfig(
+            runner_hooks={
+                "after_pm_acceptance": [{"command": "echo accepted", "blocking": True}]
+            }
+        ),
+    )
+    create_task(tmp_path, title="Run after acceptance hook", auto_commit=False)
+
+    def fake_subagent_run(self, task, role, engine_name, prompt, model=None, max_turns=None):  # type: ignore[no-untyped-def]
+        return _completed_subagent_result(tmp_path, task.pipeline_status)
+
+    def fake_hook(argv, cwd, capture_output, text, check):  # type: ignore[no-untyped-def]
+        if list(argv) == ["bash", "-lc", "echo accepted"]:
+            return subprocess.CompletedProcess(argv, 0, stdout="accepted\n", stderr="")
+        return subprocess.CompletedProcess(argv, 0, stdout="", stderr="")
+
+    monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_subagent_run)
+    monkeypatch.setattr("litehive.runtime.subprocess.run", fake_hook)
+
+    summary = run_next_task(tmp_path)
+
+    assert summary.result is not None
+    assert summary.result.final_status == "done"
+    accepting_report = yaml.safe_load(
+        (
+            tmp_path
+            / ".litehive"
+            / "tasks"
+            / "T-0001-run-after-acceptance-hook"
+            / "reports"
+            / "accepting-004.yaml"
+        ).read_text(encoding="utf-8")
+    )
+    assert accepting_report["hook_results"][0]["point"] == "after_pm_acceptance"
 
 
 def _successful_stage_execution(tmp_path: Path, adapter: str, step: str) -> CLIExecutionResult:

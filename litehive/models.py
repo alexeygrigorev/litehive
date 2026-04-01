@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 
 
 TaskMode = Literal["tasks", "implementation"]
-TaskStatus = Literal["queued", "in_progress", "done", "flagged", "cancelled", "failed"]
+TaskStatus = Literal["queued", "in_progress", "done", "flagged", "cancelled"]
 PipelineStatus = Literal[
     "backlog",
     "grooming",
@@ -20,7 +20,7 @@ PipelineStatus = Literal[
     "done",
 ]
 SubagentStatus = Literal["created", "running", "completed", "failed", "blocked"]
-OutcomeKind = Literal["flagged", "blocked", "cancelled", "failed"]
+OutcomeKind = Literal["flagged", "blocked", "cancelled"]
 RetrySource = Literal["global", "task"]
 HumanCheckpoint = Literal["before_acceptance", "before_commit"]
 OutcomeReasonCode = Literal[
@@ -212,4 +212,5 @@ class StageReport(BaseModel):
     outcome_reason_code: OutcomeReasonCode | None = None
     outcome_reason: str = ""
     resource_limit_event: ResourceLimitEvent | None = None
+    hook_results: list[dict[str, str | int | bool | None]] = Field(default_factory=list)
     created_at: str = Field(default_factory=utcnow)

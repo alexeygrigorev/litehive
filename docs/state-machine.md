@@ -35,14 +35,13 @@ fails, Litehive restores the pre-transition files instead of leaving
 | `queued` | Waiting in the pool to be picked up, including resumable interrupted or rejected work |
 | `in_progress` | Currently running under the pool runner |
 | `done` | Completed successfully; git checkpoint recorded |
-| `flagged` | Blocked or unresolvable — needs human attention |
+| `flagged` | Blocked, unresolvable, or interrupted by an unhandled error — needs human attention |
 | `cancelled` | Deliberately stopped and closed by a human decision |
-| `failed` | Reserved for explicit terminal failure states; normal runner interruptions requeue instead |
 
-Terminal states (no automatic forward progress): `done`, `flagged`, `cancelled`, `failed`.
+Terminal states (no automatic forward progress): `done`, `flagged`, `cancelled`.
 
-`flagged` and `failed` tasks can be requeued via `litehive requeue` if they are recoverable.
-`flagged` and `failed` tasks can be permanently closed via `litehive abandon`.
+`flagged` tasks can be requeued via `litehive requeue` if they are recoverable.
+`flagged` tasks can be permanently closed via `litehive abandon`.
 Any non-done task can be explicitly closed via `litehive close --outcome <code>`.
 
 ---
@@ -118,10 +117,9 @@ and an `OutcomeReasonCode`.
 
 | Kind | Meaning |
 |------|---------|
-| `flagged` | Blocked or unresolvable — requires human action |
+| `flagged` | Blocked, unresolvable, or interrupted by an unhandled error — requires human action |
 | `blocked` | A specific dependency or criteria check prevented execution |
 | `cancelled` | Deliberately stopped |
-| `failed` | Unhandled execution error |
 
 ### OutcomeReasonCode
 
@@ -132,8 +130,8 @@ and an `OutcomeReasonCode`.
 | `verdict_blocked` | blocked | Stage produced `blocked` |
 | `missing_acceptance_criteria` | blocked | Grooming passed but criteria were missing when entering implementing |
 | `execution_cancelled` | cancelled | Runner interrupted mid-stage and requeued the task, or `litehive abandon` closed it |
-| `stage_exception` | failed | Unhandled Python exception during stage execution; the task stays queued with failure context recorded |
-| `unsupported_verdict` | flagged / failed | Stage returned a verdict not in the transition table |
+| `stage_exception` | flagged | Unhandled Python exception during stage execution; the task stays queued with failure context recorded |
+| `unsupported_verdict` | flagged | Stage returned a verdict not in the transition table |
 | `wont_do` | cancelled | Task explicitly closed — not worth implementing |
 | `deferred` | cancelled | Task closed — work deferred to a future decision |
 | `duplicate` | cancelled | Task closed — duplicate of another task |
@@ -232,7 +230,7 @@ Checkpoint policy:
 
 | Command | Effect |
 |---------|--------|
-| `litehive requeue <id>` | Re-adds a `flagged`/`failed`/`cancelled` task to the queue at its current stage |
+| `litehive requeue <id>` | Re-adds a `flagged`/`cancelled` task to the queue at its current stage |
 | `litehive resume <id>` | Like requeue but explicitly targets a stage |
 | `litehive rollback <id>` | Reverts the checkpoint commit and requeues the task at `implementing` |
 | `litehive recover <id>` | Requeues a completed task at `implementing` without reverting code |

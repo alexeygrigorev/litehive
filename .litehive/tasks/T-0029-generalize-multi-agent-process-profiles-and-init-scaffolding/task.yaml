@@ -96,7 +96,7 @@ subagents:
 - id: SA-0013
   role: swe
   engine: gemini
-  status: failed
+  status: flagged
   path: subagents/SA-0013-swe
 - id: SA-0014
   role: swe

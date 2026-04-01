@@ -2145,8 +2145,8 @@ def requeue_task(root: Path, task_id: str, *, front: bool = False) -> TaskRecord
         task = require_task(root, task_id)
         state = load_state(root)
         _ensure_future_task_mutation_allowed(root, [task.id], state=state)
-        if task.status not in {"flagged", "cancelled", "failed"}:
-            raise ValueError(f"Task {task.id} is not flagged, failed, or cancelled")
+        if task.status not in {"flagged", "cancelled"}:
+            raise ValueError(f"Task {task.id} is not flagged or cancelled")
         _reset_task_for_recovery(
             task,
             status="queued",
@@ -2171,8 +2171,8 @@ def resume_task(root: Path, task_id: str, *, front: bool = False) -> TaskRecord:
         task = require_task(root, task_id)
         state = load_state(root)
         _ensure_future_task_mutation_allowed(root, [task.id], state=state)
-        if task.status not in {"flagged", "cancelled", "failed"}:
-            raise ValueError(f"Task {task.id} is not flagged, failed, or cancelled")
+        if task.status not in {"flagged", "cancelled"}:
+            raise ValueError(f"Task {task.id} is not flagged or cancelled")
         if task.pipeline_status in {"backlog", "done"}:
             raise ValueError(f"Task {task.id} has no resumable stage")
         resumed_stage = task.pipeline_status
@@ -2198,8 +2198,8 @@ def abandon_task(root: Path, task_id: str) -> TaskRecord:
         task = require_task(root, task_id)
         state = load_state(root)
         _ensure_future_task_mutation_allowed(root, [task.id], state=state)
-        if task.status not in {"flagged", "failed", "cancelled"}:
-            raise ValueError(f"Task {task.id} is not flagged, failed, or cancelled")
+        if task.status not in {"flagged", "cancelled"}:
+            raise ValueError(f"Task {task.id} is not flagged or cancelled")
         task.status = "cancelled"
         task.runtime.execution_status = "cancelled"
         task.runtime.run_started_at = None

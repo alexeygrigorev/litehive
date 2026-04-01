@@ -18,6 +18,7 @@ from litehive.config import (
     context_path,
     ensure_workspace,
     format_external_engine_sandbox,
+    format_runner_hooks,
     format_subagent_resource_limits,
     load_config,
     normalize_task_engine_routing,
@@ -584,6 +585,34 @@ def _parse_task_engine_routing(
     return routing
 
 
+def _parse_runner_hooks(
+    raw_values: list[str] | None,
+    *,
+    option_name: str,
+) -> dict[str, list[dict[str, object]]]:
+    if not raw_values:
+        return {}
+
+    hooks: dict[str, list[dict[str, object]]] = {}
+    for raw_value in raw_values:
+        point, separator, remainder = raw_value.partition("=")
+        if separator != "=":
+            raise ValueError(f"{option_name} entries must use HOOK_POINT=blocking|nonblocking:COMMAND")
+        blocking_label, separator, command = remainder.partition(":")
+        if separator != ":":
+            raise ValueError(f"{option_name} entries must use HOOK_POINT=blocking|nonblocking:COMMAND")
+        blocking_key = blocking_label.strip().lower()
+        if blocking_key not in {"blocking", "nonblocking", "non-blocking"}:
+            raise ValueError(f"{option_name} blocking mode must be `blocking` or `nonblocking`")
+        hooks.setdefault(point.strip(), []).append(
+            {
+                "command": command.strip(),
+                "blocking": blocking_key == "blocking",
+            }
+        )
+    return hooks
+
+
 def _parse_acceptance_criteria(
     raw_values: list[str] | None,
     *,
@@ -759,6 +788,16 @@ def build_parser() -> argparse.ArgumentParser:
         "--pre-acceptance-command",
         default=None,
         help="Run this shell command after testing passes and before the task enters accepting",
+    )
+    configure.add_argument(
+        "--hook",
+        action="append",
+        default=None,
+        help=(
+            "Add a runner hook as HOOK_POINT=blocking|nonblocking:COMMAND. "
+            "Supported points: before_swe_implementation, after_swe_implementation, "
+            "before_pm_acceptance, after_pm_acceptance."
+        ),
     )
     configure.add_argument(
         "--subagent-resource-limits",
@@ -1042,7 +1081,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Repository root containing .litehive/",
     )
 
-    requeue = subparsers.add_parser("requeue", help="Requeue a flagged, failed, or cancelled task")
+    requeue = subparsers.add_parser("requeue", help="Requeue a flagged or cancelled task")
     requeue.add_argument("task_id", help="Task id to requeue")
     requeue.add_argument(
         "--front",
@@ -1057,7 +1096,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     resume = subparsers.add_parser(
-        "resume", help="Resume a flagged, failed, or cancelled task from its current stage"
+        "resume", help="Resume a flagged or cancelled task from its current stage"
     )
     resume.add_argument("task_id", help="Task id to resume")
     resume.add_argument(
@@ -1073,7 +1112,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     abandon = subparsers.add_parser(
-        "abandon", help="Cancel a flagged, failed, or cancelled task and remove it from the queue"
+        "abandon", help="Cancel a flagged or cancelled task and remove it from the queue"
     )
     abandon.add_argument("task_id", help="Task id to abandon")
     abandon.add_argument(
@@ -1199,41 +1238,50 @@ def _cmd_configure(args: argparse.Namespace) -> int:
                 option_name="--task-engine-route",
             )
         )
+        runner_hooks = _parse_runner_hooks(
+            getattr(args, "hook", None),
+            option_name="--hook",
+        )
     except ValueError as exc:
         print(f"configure failed: {exc}")
         return 1
 
-    config = LitehiveConfig(
-        default_engine=args.default_engine,
-        process_profile=getattr(args, "process_profile", "generic"),
-        default_retry_limit=getattr(args, "default_retry_limit", 3),
-        opencode_model=args.opencode_model,
-        gemini_model=args.gemini_model,
-        copilot_model=getattr(args, "copilot_model", None),
-        claude_enabled=getattr(args, "claude_enabled", False),
-        claude_model=getattr(args, "claude_model", "claude-sonnet-4-20250514"),
-        claude_max_turns=getattr(args, "claude_max_turns", 30),
-        pool_usage_cap=getattr(args, "pool_usage_cap", None),
-        pool_cost_cap=getattr(args, "pool_cost_cap", None),
-        engine_usage_caps=engine_usage_caps,
-        engine_budget_caps=engine_budget_caps,
-        engine_costs=engine_costs or LitehiveConfig().engine_costs,
-        pool_stop_on_failure=getattr(args, "pool_stop_on_failure", False),
-        pool_max_tasks=getattr(args, "pool_max_tasks", None),
-        pool_stop_on_execution_limit=getattr(args, "pool_stop_on_limit", False),
-        pool_quota_threshold=getattr(args, "pool_quota_threshold", None),
-        pool_budget_threshold=getattr(args, "pool_budget_threshold", None),
-        pool_stop_on_dirty_git=getattr(args, "pool_stop_on_dirty_git", False),
-        pool_selection_policy=getattr(args, "pool_selection_policy", "dependency_aware"),
-        pre_acceptance_command=getattr(args, "pre_acceptance_command", None),
-        subagent_resource_limits=SubagentResourceLimitsConfig(
-            enabled=getattr(args, "subagent_resource_limits_enabled", None),
-            memory_mb=getattr(args, "subagent_memory_mb", None),
-            cpu_count=getattr(args, "subagent_cpu_count", None),
-            process_limit=getattr(args, "subagent_process_limit", None),
-        ),
-        task_engine_routing=task_engine_routing,
-    )
+    try:
+        config = LitehiveConfig(
+            default_engine=args.default_engine,
+            process_profile=getattr(args, "process_profile", "generic"),
+            default_retry_limit=getattr(args, "default_retry_limit", 3),
+            opencode_model=args.opencode_model,
+            gemini_model=args.gemini_model,
+            copilot_model=getattr(args, "copilot_model", None),
+            claude_enabled=getattr(args, "claude_enabled", False),
+            claude_model=getattr(args, "claude_model", "claude-sonnet-4-20250514"),
+            claude_max_turns=getattr(args, "claude_max_turns", 30),
+            pool_usage_cap=getattr(args, "pool_usage_cap", None),
+            pool_cost_cap=getattr(args, "pool_cost_cap", None),
+            engine_usage_caps=engine_usage_caps,
+            engine_budget_caps=engine_budget_caps,
+            engine_costs=engine_costs or LitehiveConfig().engine_costs,
+            pool_stop_on_failure=getattr(args, "pool_stop_on_failure", False),
+            pool_max_tasks=getattr(args, "pool_max_tasks", None),
+            pool_stop_on_execution_limit=getattr(args, "pool_stop_on_limit", False),
+            pool_quota_threshold=getattr(args, "pool_quota_threshold", None),
+            pool_budget_threshold=getattr(args, "pool_budget_threshold", None),
+            pool_stop_on_dirty_git=getattr(args, "pool_stop_on_dirty_git", False),
+            pool_selection_policy=getattr(args, "pool_selection_policy", "dependency_aware"),
+            pre_acceptance_command=getattr(args, "pre_acceptance_command", None),
+            runner_hooks=runner_hooks,
+            subagent_resource_limits=SubagentResourceLimitsConfig(
+                enabled=getattr(args, "subagent_resource_limits_enabled", None),
+                memory_mb=getattr(args, "subagent_memory_mb", None),
+                cpu_count=getattr(args, "subagent_cpu_count", None),
+                process_limit=getattr(args, "subagent_process_limit", None),
+            ),
+            task_engine_routing=task_engine_routing,
+        )
+    except ValueError as exc:
+        print(f"configure failed: {exc}")
+        return 1
     ensure_workspace(args.workspace, config)
     config_path(args.workspace).write_text(
         yaml.safe_dump(asdict(config), sort_keys=False),
@@ -1275,6 +1323,7 @@ def _cmd_status(args: argparse.Namespace) -> int:
     print(f"pool_stop_on_dirty_git: {config.pool_stop_on_dirty_git}")
     print(f"pool_selection_policy: {config.pool_selection_policy}")
     print(f"pre_acceptance_command: {config.pre_acceptance_command}")
+    print(f"runner_hooks: {format_runner_hooks(config)}")
     print(f"subagent_resource_limits: {format_subagent_resource_limits(config)}")
     print(f"external_engine_sandbox: {format_external_engine_sandbox(config)}")
     print(f"task_engine_routing: {config.task_engine_routing}")
@@ -1697,7 +1746,7 @@ def _cmd_promote(args: argparse.Namespace) -> int:
     ensure_workspace(args.workspace)
     try:
         task = require_task(args.workspace, args.task_id)
-        if task.status in {"flagged", "failed", "cancelled"}:
+        if task.status in {"flagged", "cancelled"}:
             task = resume_task(args.workspace, args.task_id, front=True)
             print(f"task: {task.id} {task.title}")
             print("status: queued")

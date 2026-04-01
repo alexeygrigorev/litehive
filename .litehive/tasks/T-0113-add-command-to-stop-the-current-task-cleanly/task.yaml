@@ -1,0 +1,29 @@
+id: T-0113
+slug: add-command-to-stop-the-current-task-cleanly
+title: Add command to stop the current task cleanly
+depends_on: []
+task_type: null
+engine: null
+model: null
+mode: implementation
+status: queued
+pipeline_status: backlog
+priority: medium
+created_at: '2026-04-01T21:03:12+00:00'
+updated_at: '2026-04-01T21:03:12+00:00'
+goal: ''
+acceptance_criteria: []
+constraints: []
+plan: []
+human_checkpoints: []
+subagents: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0113 add-command-to-stop-the-current-task-cleanly'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+retry_policy:
+  max_retries: null
+created_from: null

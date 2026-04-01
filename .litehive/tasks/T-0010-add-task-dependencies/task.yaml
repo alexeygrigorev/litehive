@@ -38,7 +38,7 @@ subagents:
 - id: SA-0005
   role: swe
   engine: codex
-  status: failed
+  status: flagged
   path: subagents/SA-0005-swe
 - id: SA-0006
   role: swe

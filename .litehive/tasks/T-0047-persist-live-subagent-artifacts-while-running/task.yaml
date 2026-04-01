@@ -42,7 +42,7 @@ subagents:
 - id: SA-0001
   role: pm
   engine: codex
-  status: failed
+  status: flagged
   path: subagents/SA-0001-pm
   sandboxed: false
   sandbox_summary: ''
@@ -98,7 +98,7 @@ subagents:
 - id: SA-0015
   role: swe
   engine: codex
-  status: failed
+  status: flagged
   path: subagents/SA-0015-swe
   sandboxed: false
   sandbox_summary: host
