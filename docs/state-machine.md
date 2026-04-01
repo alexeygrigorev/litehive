@@ -16,7 +16,8 @@ A litehive task has two orthogonal state fields:
 | `pipeline_status` | `PipelineStatus` | Which stage the task is at |
 
 Together they give the full picture: a task is `in_progress` at `implementing`,
-or `flagged` at `testing`, etc.
+or `queued` at `testing` because a previous run was interrupted and it is waiting
+for another pass.
 
 ---
 
@@ -24,12 +25,12 @@ or `flagged` at `testing`, etc.
 
 | Value | Meaning |
 |-------|---------|
-| `queued` | Waiting in the pool to be picked up |
+| `queued` | Waiting in the pool to be picked up, including resumable interrupted or rejected work |
 | `in_progress` | Currently running under the pool runner |
 | `done` | Completed successfully; git checkpoint recorded |
 | `flagged` | Blocked or unresolvable — needs human attention |
-| `cancelled` | Deliberately stopped (abandon, close, keyboard interrupt) |
-| `failed` | Crashed with an unhandled exception during execution |
+| `cancelled` | Deliberately stopped and closed by a human decision |
+| `failed` | Reserved for explicit terminal failure states; normal runner interruptions requeue instead |
 
 Terminal states (no automatic forward progress): `done`, `flagged`, `cancelled`, `failed`.
 
@@ -83,19 +84,19 @@ Source: `_ROUTES` dict in `litehive/runner.py`.
 | grooming | blocked | — (flagged) | Missing acceptance criteria |
 | implementing | pass / accept | testing | |
 | testing | pass / accept | accepting | |
-| testing | fail / reject | implementing | Rejection loop — counts against retry limit |
+| testing | fail / reject | implementing | Task is requeued at `implementing` for another runnable pass; counts against retry limit |
 | accepting | pass / accept | commit_to_git | |
-| accepting | fail / reject | implementing | PM rejection loop — counts against retry limit |
+| accepting | fail / reject | implementing | Task is requeued at `implementing` for another runnable pass; counts against retry limit |
 | commit_to_git | pass / accept | done | |
 | commit_to_git | fail / reject / blocked | — (flagged) | Commit failed |
 
-### Rejection loop and retry limit
+### Rejection requeue and retry limit
 
 When `testing` or `accepting` returns `fail` or `reject`, the task routes back to
-`implementing`. Each such rejection increments the rejection counter.
-
-When `rejections > max_retries`, the task is immediately terminated as `flagged`
-with `reason_code = "retry_limit_exhausted"` instead of retrying again.
+`implementing`, persists `status = queued`, and returns control to the pool with
+`final_status = queued`. The task remains runnable and is picked up on a later pass.
+Each such rejection increments the rejection counter, and that counter persists across
+requeued runs.
 
 The retry limit is resolved in order: task-level override → workspace default.
 
@@ -123,9 +124,8 @@ and an `OutcomeReasonCode`.
 | `verdict_reject` | flagged | Stage produced `reject` and no retry route was available |
 | `verdict_blocked` | blocked | Stage produced `blocked` |
 | `missing_acceptance_criteria` | blocked | Grooming passed but criteria were missing when entering implementing |
-| `retry_limit_exhausted` | flagged | Rejection counter exceeded `max_retries` |
-| `execution_cancelled` | cancelled | Runner interrupted (KeyboardInterrupt) or `litehive abandon` |
-| `stage_exception` | failed | Unhandled Python exception during stage execution |
+| `execution_cancelled` | cancelled | Runner interrupted mid-stage and requeued the task, or `litehive abandon` closed it |
+| `stage_exception` | failed | Unhandled Python exception during stage execution; the task stays queued with failure context recorded |
 | `unsupported_verdict` | flagged / failed | Stage returned a verdict not in the transition table |
 | `wont_do` | cancelled | Task explicitly closed — not worth implementing |
 | `deferred` | cancelled | Task closed — work deferred to a future decision |
@@ -157,13 +157,23 @@ A task is "parked" by the human-checkpoint mechanism. When a task opt into
 queue at the boundary stage and will not advance until the pool is restarted and
 a human confirms the run.
 
+Runner interruptions park the task in the runnable pool. In that case the task
+keeps `status = queued`, preserves its current `pipeline_status`, records the
+terminal report under `runtime.last_outcome`, and the pool stops with
+`task_requeued` so the next run can resume deterministically.
+
+QA or PM rejection also parks the task in the runnable pool. In that case the task
+switches back to `pipeline_status = implementing`, keeps `status = queued`, records
+the rejection report with `retry_decision = retry`, and re-enters the pool for the
+next implementation pass instead of moving to a sink state.
+
 ---
 
 ## Cancellation
 
 | Trigger | Status | Reason code |
 |---------|--------|-------------|
-| KeyboardInterrupt during run | `cancelled` | `execution_cancelled` |
+| KeyboardInterrupt during run | `queued` | `execution_cancelled` |
 | `litehive abandon <id>` | `cancelled` | `execution_cancelled` |
 | `litehive close <id> --outcome wont_do` | `cancelled` | `wont_do` |
 | `litehive close <id> --outcome deferred` | `cancelled` | `deferred` |

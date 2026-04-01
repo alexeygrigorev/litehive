@@ -2,13 +2,14 @@ id: T-0040
 slug: add-proper-sandboxing-for-engine-execution
 title: Add proper sandboxing for engine execution
 depends_on: []
+task_type: null
 engine: null
 mode: implementation
 status: queued
-pipeline_status: implementing
+pipeline_status: grooming
 priority: medium
 created_at: '2026-03-31T13:17:01+00:00'
-updated_at: '2026-03-31T14:52:43+00:00'
+updated_at: '2026-04-01T06:24:55+00:00'
 goal: Introduce a Docker-based sandbox for external engine execution so subagents
   run with controlled filesystem, network, and permission boundaries instead of broad
   unrestricted execution. Only the specific executor being used for that run should
@@ -18,6 +19,7 @@ goal: Introduce a Docker-based sandbox for external engine execution so subagent
 acceptance_criteria: []
 constraints: []
 plan: []
+human_checkpoints: []
 subagents:
 - id: SA-0001
   role: pm

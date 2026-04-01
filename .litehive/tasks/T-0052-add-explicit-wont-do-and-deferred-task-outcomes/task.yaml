@@ -2,13 +2,14 @@ id: T-0052
 slug: add-explicit-wont-do-and-deferred-task-outcomes
 title: Add explicit wont-do and deferred task outcomes
 depends_on: []
+task_type: null
 engine: null
 mode: implementation
 status: queued
-pipeline_status: backlog
+pipeline_status: grooming
 priority: medium
 created_at: '2026-03-31T18:41:22+00:00'
-updated_at: '2026-03-31T18:41:22+00:00'
+updated_at: '2026-04-01T06:25:05+00:00'
 goal: Introduce intentional non-implementation outcomes such as wont_do, deferred,
   or duplicate so PM can explicitly decide not to proceed without overloading failed
   or silently dropping work. These outcomes should preserve the task record, rationale,
@@ -17,7 +18,13 @@ goal: Introduce intentional non-implementation outcomes such as wont_do, deferre
 acceptance_criteria: []
 constraints: []
 plan: []
-subagents: []
+human_checkpoints: []
+subagents:
+- id: SA-0001
+  role: pm
+  engine: codex
+  status: completed
+  path: subagents/SA-0001-pm
 git:
   auto_commit: true
   commit_message: 'litehive: checkpoint T-0052 add-explicit-wont-do-and-deferred-task-outcomes'

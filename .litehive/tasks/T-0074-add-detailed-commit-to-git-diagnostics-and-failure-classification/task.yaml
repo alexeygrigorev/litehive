@@ -1,0 +1,27 @@
+id: T-0074
+slug: add-detailed-commit-to-git-diagnostics-and-failure-classification
+title: Add detailed commit_to_git diagnostics and failure classification
+depends_on: []
+task_type: null
+engine: null
+mode: implementation
+status: queued
+pipeline_status: backlog
+priority: medium
+created_at: '2026-04-01T06:36:01+00:00'
+updated_at: '2026-04-01T06:36:01+00:00'
+goal: ''
+acceptance_criteria: []
+constraints: []
+plan: []
+human_checkpoints: []
+subagents: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0074 add-detailed-commit-to-git-diagnostics-and-failure-classification'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+retry_policy:
+  max_retries: null

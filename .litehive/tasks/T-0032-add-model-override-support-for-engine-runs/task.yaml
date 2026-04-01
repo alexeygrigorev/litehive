@@ -2,13 +2,14 @@ id: T-0032
 slug: add-model-override-support-for-engine-runs
 title: Add model override support for engine runs
 depends_on: []
+task_type: null
 engine: null
 mode: implementation
 status: queued
-pipeline_status: implementing
+pipeline_status: grooming
 priority: medium
 created_at: '2026-03-31T13:11:47+00:00'
-updated_at: '2026-03-31T14:52:39+00:00'
+updated_at: '2026-04-01T06:24:43+00:00'
 goal: 'Support workspace-default, task-level, and run-time model overrides for supported
   engines. Add CLI surfaces to configure models and override them when running a task.
   Precedence should be: run override > task preference > workspace default. Codex,
@@ -17,6 +18,7 @@ goal: 'Support workspace-default, task-level, and run-time model overrides for s
 acceptance_criteria: []
 constraints: []
 plan: []
+human_checkpoints: []
 subagents:
 - id: SA-0001
   role: pm

@@ -4,11 +4,11 @@ title: Add engine routing rules
 depends_on: []
 engine: codex
 mode: implementation
-status: in_progress
-pipeline_status: implementing
+status: done
+pipeline_status: done
 priority: medium
 created_at: '2026-03-31T06:08:02+00:00'
-updated_at: '2026-03-31T19:14:02+00:00'
+updated_at: '2026-03-31T19:26:51+00:00'
 goal: Implement task-to-engine routing rules so different task types can prefer codex,
   opencode, later claude, gemini, or copilot according to configuration and budget
   controls.
@@ -39,8 +39,33 @@ subagents:
 - id: SA-0005
   role: swe
   engine: codex
-  status: running
+  status: completed
   path: subagents/SA-0005-swe
+- id: SA-0006
+  role: qa
+  engine: codex
+  status: completed
+  path: subagents/SA-0006-qa
+- id: SA-0007
+  role: pm
+  engine: codex
+  status: completed
+  path: subagents/SA-0007-pm
+- id: SA-0008
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0008-swe
+- id: SA-0009
+  role: qa
+  engine: codex
+  status: completed
+  path: subagents/SA-0009-qa
+- id: SA-0010
+  role: pm
+  engine: codex
+  status: completed
+  path: subagents/SA-0010-pm
 git:
   auto_commit: false
   commit_message: 'litehive: complete T-0019 add-engine-routing-rules'

@@ -1,0 +1,27 @@
+id: T-0071
+slug: investigate-and-fix-slow-or-hanging-queue-status-commands-on-large-workspaces
+title: Investigate and fix slow or hanging queue/status commands on large workspaces
+depends_on: []
+task_type: null
+engine: null
+mode: implementation
+status: queued
+pipeline_status: backlog
+priority: medium
+created_at: '2026-04-01T06:27:38+00:00'
+updated_at: '2026-04-01T06:27:38+00:00'
+goal: ''
+acceptance_criteria: []
+constraints: []
+plan: []
+human_checkpoints: []
+subagents: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0071 investigate-and-fix-slow-or-hanging-queue-status-commands-on-large-workspaces'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+retry_policy:
+  max_retries: null

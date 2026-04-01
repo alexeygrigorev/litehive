@@ -11,6 +11,8 @@
 - `uv run litehive status --workspace .`
 - `uv run litehive queue --workspace .`
 - `uv run litehive add "<title>" --workspace .`
+- `uv run litehive add "<title>" --task-type review --workspace .`
+  Defaults to `mode: tasks` for typed intake so the task folder gets `brief.md` template guidance; pass `--mode implementation` to opt out.
 - `uv run litehive move T-0002 1 --workspace .`
 - `uv run litehive promote T-0002 --workspace .`
 - `uv run litehive requeue T-0002 --front --workspace .`
@@ -19,7 +21,13 @@
 - `uv run litehive update T-0002 --engine opencode --priority high --workspace .`
 - `uv run litehive update T-0002 --human-checkpoint before_acceptance --workspace .`
 - `uv run litehive run --workspace .`
+  Runs the next active or queued task once and leaves remaining work queued.
+- `uv run litehive run --workspace . --dry-run`
+  Shows the next planned task, selected engine, and predicted stop reason without invoking any agents.
+- `uv run litehive run --workspace . --drain`
   Drains the live task pool until no active or queued task remains, re-reading queue state between tasks.
+- `uv run litehive run --workspace . --drain --dry-run`
+  Shows the planned pool order, selected engines, and predicted stop reason without invoking any agents.
 - `scripts/run-all.sh .`
   Restarts `uv run litehive run` each iteration and writes timestamped logs under `.litehive/logs/run-all/`.
 - `scripts/run-all-status.sh .`
@@ -29,6 +37,18 @@
 - Implemented adapters: `codex`, `opencode`, `gemini`, `copilot`.
 - Planned later: `claude`.
 - Engine selection precedence: run override, then task preference, then workspace default.
+
+## Process decisions
+- The intended execution loop is: `grooming -> implementing -> testing -> accepting -> commit_to_git`.
+- QA rejection should return the same task to SWE; it should not become terminal failure.
+- PM rejection should return the same task to SWE; it should not go back to backlog.
+- Review rejection is normal iteration, not a final task outcome.
+- `failed` is not the desired long-term lifecycle state for review rejection; state-machine cleanup is planned.
+- Tasks that cannot be worked on right now should be parked or requeued, not dropped.
+- Explicit non-implementation outcomes such as `wont_do`, `deferred`, or `duplicate` should stay visible with rationale.
+- Any future state-machine change should update the durable state-machine documentation in the repo.
+- Workspace locking should become granular: short atomic locks for active-task transitions, but queue intake and non-conflicting queue updates should remain possible while a runner is active.
+- Interrupted runners and subagents should become resumable states with recorded context rather than silent stale `running` state.
 
 ## Development rules
 - Keep changes scoped to the current task.
@@ -46,5 +66,6 @@
 - `opencode` must not inherit provider credential env vars; the adapter strips the same variables as the `oc()` wrapper from `~/.bashrc`.
 - Execution visibility is a first-class requirement: task runs should expose current stage, subagent status, transcript/output, and recent progress clearly.
 - Long pool runs should leave durable per-iteration logs so failures can be diagnosed after the fact.
+- Live subagent state should be written to disk while the subagent is still running, not only after completion.
 - Tasks may opt into human checkpoints before acceptance or commit; those pauses should stop the pool cleanly and leave the task queued at the next stage.
 - If you add a new workflow or command, document it here so future runs inherit the same context.

@@ -21,11 +21,12 @@ from litehive.observability import render_task_summary
 from litehive.runtime import (
     EngineBudgetLedger,
     TaskPoolStopConditions,
+    drain_task_pool,
     recover_completed_task,
     resolve_engine_attempt_order,
-    resolve_next_task,
-    rollback_completed_task,
+    run_single_task,
     run_task_pool,
+    rollback_completed_task,
 )
 from litehive.tasks import (
     VALID_HUMAN_CHECKPOINTS,
@@ -42,9 +43,11 @@ from litehive.tasks import (
     normalize_acceptance_criteria,
     normalize_human_checkpoints,
     plan_task_selections,
+    peek_next_task_selection,
     requeue_task,
     resume_task,
     require_task,
+    set_pool_stop_reason,
     update_task_metadata,
 )
 from litehive.tui.app import LitehiveApp
@@ -102,7 +105,9 @@ def _format_pool_task_report_line(
 
 def _pool_stop_condition_label(stop_reason: str) -> str:
     labels = {
+        "single_task_complete": "single task complete",
         "queue_exhausted": "queue exhausted",
+        "task_requeued": "task requeued for another pass",
         "blocked_tasks_remaining": "blocked tasks remaining",
         "stop_condition_reached": "custom stop condition reached",
         "max_tasks_reached": "max tasks reached",
@@ -307,6 +312,48 @@ def _plan_pool_dry_run(
     return runnable_tasks, "queue_exhausted"
 
 
+def _plan_single_task_dry_run(
+    root: Path,
+    *,
+    planned_tasks: list[object],
+    blocked_count: int,
+    config: LitehiveConfig,
+    stop_conditions: TaskPoolStopConditions,
+    engine_override: str | None,
+) -> tuple[list[tuple[object, str, list[str]]], str]:
+    from litehive.runtime import _git_worktree_is_dirty
+
+    if stop_conditions.stop_on_dirty_git and _git_worktree_is_dirty(root):
+        return [], "dirty_git_state"
+    if not planned_tasks:
+        if blocked_count:
+            return [], "blocked_tasks_remaining"
+        return [], "queue_exhausted"
+
+    budget_ledger = _budget_ledger_from_stop_conditions(stop_conditions)
+    task = planned_tasks[0]
+    engine_attempts = resolve_engine_attempt_order(
+        task,
+        config,
+        engine_override=engine_override,
+    )
+    blocked_reasons: list[str] = []
+    selected_engine: str | None = None
+    for engine_name in engine_attempts:
+        blocked_reason = budget_ledger.block_reason(engine_name)
+        if blocked_reason is None:
+            selected_engine = engine_name
+            break
+        blocked_reasons.append(blocked_reason)
+
+    if selected_engine is None:
+        return [], _determine_dry_run_stop_reason(
+            blocked_reasons,
+            stop_conditions=stop_conditions,
+        )
+    return [(task, selected_engine, engine_attempts)], "single_task_complete"
+
+
 def _print_pool_dry_run_plan(
     root: Path,
     *,
@@ -346,6 +393,18 @@ def _print_pool_dry_run_plan(
     print(f"engine_budget_caps: {_format_engine_int_map(stop_conditions.engine_budget_caps)}")
     print(f"engine_costs: {_format_engine_int_map(stop_conditions.engine_costs)}")
     print(f"stop_on_dirty_git: {stop_conditions.stop_on_dirty_git}")
+
+
+def _budget_ledger_from_stop_conditions(
+    stop_conditions: TaskPoolStopConditions,
+) -> EngineBudgetLedger:
+    return EngineBudgetLedger(
+        pool_usage_cap=stop_conditions.pool_usage_cap,
+        pool_cost_cap=stop_conditions.pool_cost_cap,
+        engine_usage_caps=dict(stop_conditions.engine_usage_caps),
+        engine_budget_caps=dict(stop_conditions.engine_budget_caps),
+        engine_costs=dict(stop_conditions.engine_costs),
+    )
 
 
 def _parse_dependency_ids(
@@ -602,6 +661,11 @@ def build_parser() -> argparse.ArgumentParser:
         default="dependency_aware",
         help="Default pool task ordering policy",
     )
+    configure.add_argument(
+        "--pre-acceptance-command",
+        default=None,
+        help="Run this shell command after testing passes and before the task enters accepting",
+    )
 
     status = subparsers.add_parser("status", help="Show workspace status")
     status.add_argument(
@@ -676,7 +740,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Repository root containing .litehive/",
     )
 
-    run = subparsers.add_parser("run", help="Drain the active and queued task pool")
+    run = subparsers.add_parser("run", help="Run the next active or queued task")
     run.add_argument(
         "--workspace",
         type=Path,
@@ -686,7 +750,12 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument(
         "--dry-run",
         action="store_true",
-        help="Show the planned pool order, engines, and stop conditions without invoking any agents",
+        help="Show the planned task selection, engines, and stop conditions without invoking any agents",
+    )
+    run.add_argument(
+        "--drain",
+        action="store_true",
+        help="Keep running tasks until the pool reaches an explicit stop condition",
     )
     run.add_argument(
         "--engine",
@@ -991,6 +1060,7 @@ def _cmd_configure(args: argparse.Namespace) -> int:
         pool_budget_threshold=getattr(args, "pool_budget_threshold", None),
         pool_stop_on_dirty_git=getattr(args, "pool_stop_on_dirty_git", False),
         pool_selection_policy=getattr(args, "pool_selection_policy", "dependency_aware"),
+        pre_acceptance_command=getattr(args, "pre_acceptance_command", None),
         task_engine_routing=task_engine_routing,
     )
     ensure_workspace(args.workspace, config)
@@ -1024,6 +1094,7 @@ def _cmd_status(args: argparse.Namespace) -> int:
     print(f"pool_budget_threshold: {config.pool_budget_threshold}")
     print(f"pool_stop_on_dirty_git: {config.pool_stop_on_dirty_git}")
     print(f"pool_selection_policy: {config.pool_selection_policy}")
+    print(f"pre_acceptance_command: {config.pre_acceptance_command}")
     print(f"task_engine_routing: {config.task_engine_routing}")
     print(f"mode: {state.mode}")
     print(f"active_task_id: {state.active_task_id}")
@@ -1081,6 +1152,7 @@ def _launch_app(workspace: Path, default_mode: str) -> int:
 def _cmd_run(args: argparse.Namespace) -> int:
     ensure_workspace(args.workspace)
     engine_override = getattr(args, "engine", None)
+    drain = bool(getattr(args, "drain", False))
     config = load_config(args.workspace)
     try:
         engine_usage_caps = _cli_override_or_default(
@@ -1152,29 +1224,169 @@ def _cmd_run(args: argparse.Namespace) -> int:
     )
     if args.dry_run:
         try:
-            plan = plan_task_selections(args.workspace)
+            if drain:
+                plan = plan_task_selections(args.workspace)
+                planned_tasks = plan.tasks
+                blocked = plan.blocked
+            else:
+                selection = peek_next_task_selection(args.workspace)
+                planned_tasks = [selection.task] if selection.task is not None else []
+                blocked = selection.blocked
         except WorkspaceConflictError as exc:
             print(f"run failed: {exc}")
             return 1
-        runnable_tasks, predicted_stop_reason = _plan_pool_dry_run(
-            args.workspace,
-            planned_tasks=plan.tasks,
-            blocked_count=len(plan.blocked),
-            config=config,
-            stop_conditions=stop_conditions,
-            engine_override=engine_override,
-        )
+        if drain:
+            runnable_tasks, predicted_stop_reason = _plan_pool_dry_run(
+                args.workspace,
+                planned_tasks=planned_tasks,
+                blocked_count=len(blocked),
+                config=config,
+                stop_conditions=stop_conditions,
+                engine_override=engine_override,
+            )
+        else:
+            runnable_tasks, predicted_stop_reason = _plan_single_task_dry_run(
+                args.workspace,
+                planned_tasks=planned_tasks,
+                blocked_count=len(blocked),
+                config=config,
+                stop_conditions=stop_conditions,
+                engine_override=engine_override,
+            )
         _print_pool_dry_run_plan(
             args.workspace,
             planned_tasks=runnable_tasks,
-            blocked=plan.blocked,
+            blocked=blocked,
             config=config,
             stop_conditions=stop_conditions,
             predicted_stop_reason=predicted_stop_reason,
         )
         return 0
+    if drain:
+        try:
+            summary = drain_task_pool(
+                args.workspace,
+                engine_override=engine_override,
+                stop_conditions=stop_conditions,
+            )
+        except WorkspaceConflictError as exc:
+            print(f"run failed: {exc}")
+            return 1
+        if not summary.executions:
+            if summary.blocked:
+                print("No runnable task.")
+                for blocked in summary.blocked:
+                    print(
+                        f"blocked: {blocked.task_id} {blocked.title} "
+                        f"blocked_by={', '.join(blocked.blocked_by)}"
+                    )
+                _write_pool_summary_report(
+                    args.workspace,
+                    completed=[],
+                    failed=[],
+                    stop_reason=summary.stop_reason,
+                    tasks_run=0,
+                )
+                _print_pool_summary_report(
+                    args.workspace,
+                    completed=[],
+                    failed=[],
+                    stop_reason=summary.stop_reason,
+                    tasks_run=0,
+                )
+                return 0
+            if summary.stop_reason != "queue_exhausted":
+                print("No task executed.")
+                _write_pool_summary_report(
+                    args.workspace,
+                    completed=[],
+                    failed=[],
+                    stop_reason=summary.stop_reason,
+                    tasks_run=0,
+                )
+                _print_pool_summary_report(
+                    args.workspace,
+                    completed=[],
+                    failed=[],
+                    stop_reason=summary.stop_reason,
+                    tasks_run=0,
+                )
+                return 0
+            print("No queued task.")
+            _write_pool_summary_report(
+                args.workspace,
+                completed=[],
+                failed=[],
+                stop_reason=summary.stop_reason,
+                tasks_run=0,
+            )
+            _print_pool_summary_report(
+                args.workspace,
+                completed=[],
+                failed=[],
+                stop_reason=summary.stop_reason,
+                tasks_run=0,
+            )
+            return 0
+        completed: list[tuple[str, str, str, str, str]] = []
+        failed: list[tuple[str, str, str, str, str]] = []
+        for execution in summary.executions:
+            if execution.task is None:
+                continue
+            print(f"task: {execution.task.id} {execution.task.title}")
+            if execution.result is not None:
+                print(f"status: {execution.result.final_status}")
+                print(f"steps: {execution.result.steps_executed}")
+                print(f"last_verdict: {execution.result.last_verdict}")
+                if execution.result.final_status == "done":
+                    completed.append(
+                        (
+                            execution.task.id,
+                            execution.task.slug,
+                            execution.task.title,
+                            execution.task.status,
+                            execution.task.pipeline_status,
+                        )
+                    )
+                elif execution.result.final_status not in {"paused", "queued"}:
+                    failed.append(
+                        (
+                            execution.task.id,
+                            execution.task.slug,
+                            execution.task.title,
+                            execution.task.status,
+                            execution.task.pipeline_status,
+                        )
+                    )
+            stage_outcomes = _task_stage_outcomes(
+                args.workspace, execution.task.id, execution.task.slug
+            )
+            if stage_outcomes:
+                print(f"stage_outcomes: {', '.join(stage_outcomes)}")
+            if execution.commit_sha:
+                print(f"commit: {execution.commit_sha}")
+        for blocked in summary.blocked:
+            print(
+                f"blocked: {blocked.task_id} {blocked.title} blocked_by={', '.join(blocked.blocked_by)}"
+            )
+        _write_pool_summary_report(
+            args.workspace,
+            completed=completed,
+            failed=failed,
+            stop_reason=summary.stop_reason,
+            tasks_run=len(summary.executions),
+        )
+        _print_pool_summary_report(
+            args.workspace,
+            completed=completed,
+            failed=failed,
+            stop_reason=summary.stop_reason,
+            tasks_run=len(summary.executions),
+        )
+        return 0
+
     try:
-        summary = run_task_pool(
+        summary = run_single_task(
             args.workspace,
             engine_override=engine_override,
             stop_conditions=stop_conditions,
@@ -1182,116 +1394,85 @@ def _cmd_run(args: argparse.Namespace) -> int:
     except WorkspaceConflictError as exc:
         print(f"run failed: {exc}")
         return 1
-    if not summary.executions:
-        if summary.blocked:
+    stop_reason = summary.stop_reason
+    execution = summary.execution
+    blocked = summary.blocked
+    if stop_reason is not None:
+        if blocked:
             print("No runnable task.")
-            for blocked in summary.blocked:
+            for blocked_task in blocked:
                 print(
-                    f"blocked: {blocked.task_id} {blocked.title} "
-                    f"blocked_by={', '.join(blocked.blocked_by)}"
+                    f"blocked: {blocked_task.task_id} {blocked_task.title} "
+                    f"blocked_by={', '.join(blocked_task.blocked_by)}"
                 )
             _write_pool_summary_report(
                 args.workspace,
                 completed=[],
                 failed=[],
-                stop_reason=summary.stop_reason,
+                stop_reason=stop_reason,
                 tasks_run=0,
             )
             _print_pool_summary_report(
                 args.workspace,
                 completed=[],
                 failed=[],
-                stop_reason=summary.stop_reason,
+                stop_reason=stop_reason,
                 tasks_run=0,
             )
             return 0
-        if summary.stop_reason != "queue_exhausted":
-            print("No task executed.")
+        if execution is None or execution.task is None:
+            if stop_reason == "queue_exhausted":
+                print("No queued task.")
+            else:
+                print("No task executed.")
             _write_pool_summary_report(
                 args.workspace,
                 completed=[],
                 failed=[],
-                stop_reason=summary.stop_reason,
+                stop_reason=stop_reason,
                 tasks_run=0,
             )
             _print_pool_summary_report(
                 args.workspace,
                 completed=[],
                 failed=[],
-                stop_reason=summary.stop_reason,
+                stop_reason=stop_reason,
                 tasks_run=0,
             )
             return 0
-        print("No queued task.")
-        _write_pool_summary_report(
-            args.workspace,
-            completed=[],
-            failed=[],
-            stop_reason=summary.stop_reason,
-            tasks_run=0,
-        )
-        _print_pool_summary_report(
-            args.workspace,
-            completed=[],
-            failed=[],
-            stop_reason=summary.stop_reason,
-            tasks_run=0,
-        )
-        return 0
+
     completed: list[tuple[str, str, str, str, str]] = []
     failed: list[tuple[str, str, str, str, str]] = []
-    for execution in summary.executions:
-        if execution.task is None:
-            continue
-        print(f"task: {execution.task.id} {execution.task.title}")
-        if execution.result is not None:
-            print(f"status: {execution.result.final_status}")
-            print(f"steps: {execution.result.steps_executed}")
-            print(f"last_verdict: {execution.result.last_verdict}")
-            if execution.result.final_status == "done":
-                completed.append(
-                    (
-                        execution.task.id,
-                        execution.task.slug,
-                        execution.task.title,
-                        execution.task.status,
-                        execution.task.pipeline_status,
-                    )
-                )
-            elif execution.result.final_status != "paused":
-                failed.append(
-                    (
-                        execution.task.id,
-                        execution.task.slug,
-                        execution.task.title,
-                        execution.task.status,
-                        execution.task.pipeline_status,
-                    )
-                )
-        stage_outcomes = _task_stage_outcomes(
-            args.workspace, execution.task.id, execution.task.slug
-        )
-        if stage_outcomes:
-            print(f"stage_outcomes: {', '.join(stage_outcomes)}")
-        if execution.commit_sha:
-            print(f"commit: {execution.commit_sha}")
-    for blocked in summary.blocked:
-        print(
-            f"blocked: {blocked.task_id} {blocked.title} blocked_by={', '.join(blocked.blocked_by)}"
-        )
+    task = execution.task
+    result = execution.result
+    print(f"task: {task.id} {task.title}")
+    if result is not None:
+        print(f"status: {result.final_status}")
+        print(f"steps: {result.steps_executed}")
+        print(f"last_verdict: {result.last_verdict}")
+        if result.final_status == "done":
+            completed.append((task.id, task.slug, task.title, task.status, task.pipeline_status))
+        elif result.final_status not in {"paused", "queued"}:
+            failed.append((task.id, task.slug, task.title, task.status, task.pipeline_status))
+    stage_outcomes = _task_stage_outcomes(args.workspace, task.id, task.slug)
+    if stage_outcomes:
+        print(f"stage_outcomes: {', '.join(stage_outcomes)}")
+    if execution.commit_sha:
+        print(f"commit: {execution.commit_sha}")
+
     _write_pool_summary_report(
         args.workspace,
         completed=completed,
         failed=failed,
-        stop_reason=summary.stop_reason,
-        tasks_run=len(summary.executions),
+        stop_reason=stop_reason,
+        tasks_run=1,
     )
     _print_pool_summary_report(
         args.workspace,
         completed=completed,
         failed=failed,
-        stop_reason=summary.stop_reason,
-        tasks_run=len(summary.executions),
+        stop_reason=stop_reason,
+        tasks_run=1,
     )
     return 0
 
@@ -1348,7 +1529,7 @@ def _cmd_move(args: argparse.Namespace) -> int:
     ensure_workspace(args.workspace)
     try:
         state = move_queued_task(args.workspace, args.task_id, args.position)
-    except ValueError as exc:
+    except (ValueError, WorkspaceConflictError) as exc:
         print(f"move failed: {exc}")
         return 1
     print(f"task_id: {args.task_id}")
@@ -1368,7 +1549,7 @@ def _cmd_promote(args: argparse.Namespace) -> int:
             print("position: 1")
             return 0
         move_queued_task(args.workspace, args.task_id, 1)
-    except ValueError as exc:
+    except (ValueError, WorkspaceConflictError) as exc:
         print(f"promote failed: {exc}")
         return 1
     print(f"task_id: {args.task_id}")
@@ -1380,7 +1561,7 @@ def _cmd_prioritize(args: argparse.Namespace) -> int:
     ensure_workspace(args.workspace)
     try:
         state = prioritize_queued_tasks(args.workspace, args.task_ids)
-    except ValueError as exc:
+    except (ValueError, WorkspaceConflictError) as exc:
         print(f"prioritize failed: {exc}")
         return 1
     print(f"tasks: {' '.join(args.task_ids)}")
@@ -1394,7 +1575,7 @@ def _cmd_requeue_task(args: argparse.Namespace) -> int:
     ensure_workspace(args.workspace)
     try:
         task = requeue_task(args.workspace, args.task_id, front=args.front)
-    except ValueError as exc:
+    except (ValueError, WorkspaceConflictError) as exc:
         print(f"requeue failed: {exc}")
         return 1
     state = load_state(args.workspace)
@@ -1412,7 +1593,7 @@ def _cmd_resume_task(args: argparse.Namespace) -> int:
     ensure_workspace(args.workspace)
     try:
         task = resume_task(args.workspace, args.task_id, front=args.front)
-    except ValueError as exc:
+    except (ValueError, WorkspaceConflictError) as exc:
         print(f"resume failed: {exc}")
         return 1
     state = load_state(args.workspace)
@@ -1477,7 +1658,7 @@ def _cmd_add(args: argparse.Namespace) -> int:
             retry_limit=getattr(args, "retry_limit", None),
             auto_commit=not args.no_auto_commit,
         )
-    except ValueError as exc:
+    except (ValueError, WorkspaceConflictError) as exc:
         print(f"add failed: {exc}")
         return 1
     print(
@@ -1555,7 +1736,7 @@ def _cmd_update(args: argparse.Namespace) -> int:
             mode=args.mode if args.mode is not None else ...,
             auto_commit=args.auto_commit if args.auto_commit is not None else ...,
         )
-    except ValueError as exc:
+    except (ValueError, WorkspaceConflictError) as exc:
         print(f"update failed: {exc}")
         return 1
     config = load_config(args.workspace)

@@ -12,6 +12,7 @@ from litehive.external_cli import CLIExecutionResult, ExternalCLIAdapter, parse_
 from litehive.engines import EngineError, classify_execution_limit, get_engine
 from litehive.models import StageReport, SubagentRef, TaskRecord, utcnow
 from litehive.tasks import (
+    infer_acceptance_criteria,
     mark_subagent_finished,
     mark_subagent_started,
     missing_acceptance_criteria_reason,
@@ -362,14 +363,34 @@ def stage_prompt(
         lines.append("- No acceptance criteria defined.")
     missing_criteria_reason = missing_acceptance_criteria_reason(task)
     if missing_criteria_reason is not None:
-        lines.extend(
-            [
-                "",
-                "Acceptance gate:",
-                f"- {missing_criteria_reason}",
-                "- Use grooming or task intake to define the missing criteria before implementation starts.",
-            ]
-        )
+        inferred_acceptance_criteria = infer_acceptance_criteria(task)
+        lines.extend(["", "Acceptance gate:"])
+        if step == "grooming" and inferred_acceptance_criteria:
+            lines.extend(
+                [
+                    "- Structured acceptance criteria are still missing on the task record, but the current task context is sufficient to infer them.",
+                    "- You may return `VERDICT: PASS` without restating them; the runner will infer and persist the criteria after grooming.",
+                    "- If you want to override the inferred version, add an `ACCEPTANCE_CRITERIA:` section to your response with concrete `- ` bullets that can be persisted directly.",
+                    "- Return `VERDICT: BLOCKED` only if the inferred criteria are incomplete or incorrect and the task still needs more information.",
+                    "",
+                    "Inferred acceptance criteria available from current task context:",
+                ]
+            )
+            lines.extend(f"- {item}" for item in inferred_acceptance_criteria)
+        else:
+            lines.extend(
+                [
+                    f"- {missing_criteria_reason}",
+                    "- Use grooming or task intake to define the missing criteria before implementation starts.",
+                ]
+            )
+            if step == "grooming":
+                lines.extend(
+                    [
+                        "- Add an `ACCEPTANCE_CRITERIA:` section to your response with concrete `- ` bullets that can be persisted directly.",
+                        "- If the context is still insufficient, return `VERDICT: BLOCKED` and explain the missing information in `SUMMARY` or `WARNINGS`.",
+                    ]
+                )
 
     template = task_template(task)
     if template is not None:
@@ -414,6 +435,13 @@ def stage_prompt(
             "- optional warning",
         ]
     )
+    if step == "grooming" and missing_criteria_reason is not None:
+        lines.extend(
+            [
+                "ACCEPTANCE_CRITERIA:",
+                "- optional criterion",
+            ]
+        )
     return "\n".join(lines)
 
 

@@ -315,6 +315,7 @@ class LitehiveConfig:
     pool_budget_threshold: int | None = None
     pool_stop_on_dirty_git: bool = False
     pool_selection_policy: str = "dependency_aware"
+    pre_acceptance_command: str | None = None
     task_engine_routing: dict[str, list[str]] = field(default_factory=_default_task_engine_routing)
     engine_fallbacks: dict[str, list[str]] = field(
         default_factory=lambda: {
@@ -353,6 +354,10 @@ def state_path(root: Path) -> Path:
 
 def context_path(root: Path) -> Path:
     return workspace_dir(root) / "context.md"
+
+
+def workspace_gitignore_path(root: Path) -> Path:
+    return workspace_dir(root) / ".gitignore"
 
 
 def available_process_profiles() -> list[str]:
@@ -456,6 +461,21 @@ def render_context_template(profile_name: str) -> str:
     return "\n".join(lines)
 
 
+def render_workspace_gitignore() -> str:
+    return "\n".join(
+        [
+            "# Transient litehive runtime state",
+            ".lock",
+            ".runner.lock",
+            "logs/",
+            "pool-summary.txt",
+            "tasks/*/runtime.yaml",
+            "tasks/*/reports/commit_to_git-*.yaml",
+            "",
+        ]
+    )
+
+
 def ensure_workspace(root: Path, config: LitehiveConfig | None = None) -> Path:
     root = root.resolve()
     base = workspace_dir(root)
@@ -483,6 +503,12 @@ def ensure_workspace(root: Path, config: LitehiveConfig | None = None) -> Path:
     if not context_path(root).exists():
         context_path(root).write_text(
             render_context_template(cfg.process_profile), encoding="utf-8"
+        )
+
+    if not workspace_gitignore_path(root).exists():
+        workspace_gitignore_path(root).write_text(
+            render_workspace_gitignore(),
+            encoding="utf-8",
         )
 
     return base

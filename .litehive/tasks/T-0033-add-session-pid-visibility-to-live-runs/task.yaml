@@ -2,19 +2,21 @@ id: T-0033
 slug: add-session-pid-visibility-to-live-runs
 title: Add session PID visibility to live runs
 depends_on: []
+task_type: null
 engine: null
 mode: implementation
 status: queued
-pipeline_status: implementing
+pipeline_status: grooming
 priority: medium
 created_at: '2026-03-31T13:13:51+00:00'
-updated_at: '2026-03-31T14:52:40+00:00'
+updated_at: '2026-04-01T06:24:44+00:00'
 goal: Persist and display the OS PID for each running subagent session so status,
   logs, and task artifacts show which process is currently executing. Include the
   PID in structured session metadata and live observability output.
 acceptance_criteria: []
 constraints: []
 plan: []
+human_checkpoints: []
 subagents:
 - id: SA-0001
   role: pm

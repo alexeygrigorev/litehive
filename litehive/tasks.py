@@ -18,10 +18,12 @@ from litehive.config import (
     VALID_POOL_SELECTION_POLICIES,
     ensure_workspace,
     load_config,
+    render_workspace_gitignore,
     state_path,
     workspace_dir,
+    workspace_gitignore_path,
 )
-from litehive.git_ops import default_commit_message
+from litehive.git_ops import GitError, checkpoint_message, default_commit_message, find_commit_by_subject, is_git_repo
 from litehive.models import (
     RuntimeEngineSwitch,
     RuntimeSubagentState,
@@ -217,6 +219,22 @@ def normalize_acceptance_criteria(items: list[str] | None) -> list[str]:
     return normalized
 
 
+def extract_report_list_section(text: str, key: str) -> list[str]:
+    items: list[str] = []
+    capture = False
+    header = f"{key}:"
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped == header:
+            capture = True
+            continue
+        if capture and re.match(r"^[A-Z_]+:", stripped):
+            break
+        if capture and line.lstrip().startswith("- "):
+            items.append(line.split("- ", 1)[1].strip())
+    return items
+
+
 def normalize_human_checkpoints(items: list[str] | None) -> list[str]:
     if not items:
         return []
@@ -349,6 +367,37 @@ def _acceptance_criteria_requirement_signals(task: TaskRecord) -> list[str]:
     return signals
 
 
+def infer_acceptance_criteria(task: TaskRecord) -> list[str]:
+    if task.acceptance_criteria:
+        return list(task.acceptance_criteria)
+
+    inferred: list[str] = []
+    anchored = False
+    goal = task.goal.strip()
+    if goal and goal != task.title.strip():
+        inferred.append(f"The delivered change achieves the stated goal: {goal}.")
+        anchored = True
+
+    if task.plan:
+        if len(task.plan) == 1:
+            inferred.append(f"The implementation completes the planned work: {task.plan[0]}.")
+        else:
+            inferred.append("The implementation covers the defined plan end-to-end without broad unrelated changes.")
+        anchored = True
+
+    if task.depends_on and anchored:
+        dependency_list = ", ".join(task.depends_on)
+        inferred.append(
+            f"The result aligns with the prerequisite task context needed from: {dependency_list}."
+        )
+
+    if not inferred:
+        return []
+
+    inferred.append("Focused verification demonstrates the targeted behavior works as intended.")
+    return normalize_acceptance_criteria(inferred)
+
+
 def load_state(root: Path) -> WorkspaceState:
     ensure_workspace(root)
     data = yaml.safe_load(state_path(root).read_text(encoding="utf-8")) or {}
@@ -396,6 +445,10 @@ def _serialize_state(state: WorkspaceState) -> str:
 def save_state(root: Path, state: WorkspaceState) -> None:
     with workspace_mutation_guard(root):
         _atomic_write_text(state_path(root), _serialize_state(state))
+
+
+def _save_state_without_runner_guard(root: Path, state: WorkspaceState) -> None:
+    _atomic_write_text(state_path(root), _serialize_state(state))
 
 
 def set_pool_stop_reason(root: Path, stop_reason: str | None) -> WorkspaceState:
@@ -514,6 +567,44 @@ def workspace_mutation_guard(root: Path):
         yield
 
 
+def _ensure_future_task_mutation_allowed(
+    root: Path,
+    task_ids: list[str],
+    *,
+    state: WorkspaceState | None = None,
+) -> None:
+    markers = active_task_markers(root, state)
+    conflicts = [
+        f"{task_id} ({', '.join(markers[task_id])})" for task_id in task_ids if task_id in markers
+    ]
+    if conflicts:
+        details = "; ".join(conflicts)
+        raise WorkspaceConflictError(
+            f"runner is actively using task state that cannot be changed concurrently: {details}"
+        )
+
+
+def _persist_future_task_update(
+    root: Path,
+    task: TaskRecord,
+    *,
+    journal_message: str | None = None,
+) -> None:
+    task.updated_at = utcnow()
+    writes = {
+        task_file(root, task): _serialize_task_record(task),
+        task_runtime_file(root, task): _serialize_task_runtime(task),
+    }
+    if journal_message is not None:
+        journal_path = task_dir(root, task) / "journal.md"
+        existing = journal_path.read_text(encoding="utf-8") if journal_path.exists() else ""
+        writes[journal_path] = f"{existing}\n## {utcnow()}\n{journal_message}\n"
+    if task.mode == "tasks":
+        writes[task_brief_file(root, task)] = render_task_brief(task)
+    _write_atomic_files(writes)
+    _ensure_runtime_ignored(root)
+
+
 def slugify(value: str) -> str:
     slug = re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")
     return slug or "task"
@@ -544,25 +635,10 @@ def task_runtime_file(root: Path, task: TaskRecord) -> Path:
 
 
 def _ensure_runtime_ignored(root: Path) -> None:
-    git_info_exclude = root / ".git" / "info" / "exclude"
-    if not git_info_exclude.exists():
-        return
-    existing = git_info_exclude.read_text(encoding="utf-8")
-    entries = [
-        ".litehive/.lock",
-        ".litehive/.runner.lock",
-        ".litehive/state.yaml",
-        ".litehive/tasks/*/reports/commit_to_git-*.yaml",
-        ".litehive/tasks/*/runtime.yaml",
-    ]
-    missing_entries = [entry for entry in entries if entry not in existing.splitlines()]
-    if not missing_entries:
-        return
-    with git_info_exclude.open("a", encoding="utf-8") as handle:
-        if existing and not existing.endswith("\n"):
-            handle.write("\n")
-        for entry in missing_entries:
-            handle.write(f"{entry}\n")
+    ignore_path = workspace_gitignore_path(root)
+    expected = render_workspace_gitignore()
+    if not ignore_path.exists() or ignore_path.read_text(encoding="utf-8") != expected:
+        ignore_path.write_text(expected, encoding="utf-8")
 
 
 def _serialize_task_record(task: TaskRecord) -> str:
@@ -620,7 +696,7 @@ def create_task(
         raise ValueError("Retry limit must be 0 or greater")
     if task_type is not None and task_type not in VALID_TASK_TYPES:
         raise ValueError(f"Unsupported task type '{task_type}'")
-    with workspace_mutation_guard(root), _workspace_lock(root):
+    with _workspace_lock(root):
         task_id = _next_task_id(root)
         slug = slugify(title)
         _validate_task_dependencies(root, task_id=task_id, depends_on=depends_on or [])
@@ -704,6 +780,33 @@ def save_task(root: Path, task: TaskRecord) -> None:
         _write_task_runtime(root, task)
 
 
+def populate_missing_acceptance_criteria_from_report(
+    root: Path, task: TaskRecord, feedback: str
+) -> list[str]:
+    if task.acceptance_criteria:
+        return []
+    acceptance_criteria = normalize_acceptance_criteria(
+        extract_report_list_section(feedback, "ACCEPTANCE_CRITERIA")
+    )
+    journal_message = "Acceptance criteria auto-populated from grooming output."
+    if not acceptance_criteria:
+        acceptance_criteria = infer_acceptance_criteria(task)
+        journal_message = "Acceptance criteria inferred from task context after grooming."
+    if not acceptance_criteria:
+        return []
+
+    task.acceptance_criteria = acceptance_criteria
+    save_task(root, task)
+    if task.mode == "tasks":
+        _atomic_write_text(task_brief_file(root, task), render_task_brief(task))
+    append_journal(
+        root,
+        task,
+        journal_message,
+    )
+    return acceptance_criteria
+
+
 def persist_task_and_state(
     root: Path,
     *,
@@ -724,6 +827,27 @@ def persist_task_and_state(
     with workspace_mutation_guard(root):
         _write_atomic_files(writes)
         _ensure_runtime_ignored(root)
+
+
+def _persist_task_and_state_without_runner_guard(
+    root: Path,
+    *,
+    task: TaskRecord,
+    state: WorkspaceState,
+    journal_message: str | None = None,
+) -> None:
+    task.updated_at = utcnow()
+    writes = {
+        task_file(root, task): _serialize_task_record(task),
+        task_runtime_file(root, task): _serialize_task_runtime(task),
+        state_path(root): _serialize_state(state),
+    }
+    if journal_message is not None:
+        journal_path = task_dir(root, task) / "journal.md"
+        existing = journal_path.read_text(encoding="utf-8") if journal_path.exists() else ""
+        writes[journal_path] = f"{existing}\n## {utcnow()}\n{journal_message}\n"
+    _write_atomic_files(writes)
+    _ensure_runtime_ignored(root)
 
 
 def mark_task_run_started(root: Path, task: TaskRecord) -> None:
@@ -768,7 +892,7 @@ def finish_task_run_transition(root: Path, task: TaskRecord, final_status: str) 
         if state.active_task_id == task.id:
             state.active_task_id = None
         state.queue = [item for item in state.queue if item != task.id]
-        if final_status == "paused" and task.status == "queued" and task.pipeline_status != "done":
+        if final_status in {"paused", "queued"} and task.status == "queued" and task.pipeline_status != "done":
             state.queue.insert(0, task.id)
         persist_task_and_state(root, task=task, state=state)
         return task
@@ -1168,11 +1292,168 @@ def _task_selection_key(
 def _resolve_next_task_from_state(
     root: Path, state: WorkspaceState
 ) -> tuple[TaskRecord | None, list[BlockedTask], bool]:
+    mutated = _recover_stranded_commit_tasks(root, state)
     tasks_by_id = {task.id: task for task in list_tasks(root)}
     policy = load_config(root).pool_selection_policy
     if policy not in VALID_POOL_SELECTION_POLICIES:
         policy = "dependency_aware"
-    return _resolve_next_task_from_snapshot(state, tasks_by_id, policy=policy)
+    next_task, blocked, snapshot_mutated = _resolve_next_task_from_snapshot(
+        state, tasks_by_id, policy=policy
+    )
+    return next_task, blocked, mutated or snapshot_mutated
+
+
+def _is_stranded_commit_task(task: TaskRecord) -> bool:
+    return (
+        task.pipeline_status == "done"
+        and task.git.commit_sha is None
+        and task.git.checkpoint_attempts > 0
+    )
+
+
+def _is_orphaned_commit_stage_task(task: TaskRecord, state: WorkspaceState) -> bool:
+    return (
+        task.pipeline_status == "commit_to_git"
+        and task.status in {"queued", "in_progress"}
+        and state.active_task_id != task.id
+        and task.id not in state.queue
+    )
+
+
+def _should_requeue_commit_stage_task(task: TaskRecord) -> bool:
+    return task.pipeline_status == "commit_to_git" and task.status in {"queued", "in_progress"}
+
+
+def _prepare_recovered_commit_task(task: TaskRecord) -> None:
+    now = utcnow()
+    task.status = "queued"
+    task.pipeline_status = "commit_to_git"
+    task.runtime.execution_status = "idle"
+    task.runtime.run_started_at = None
+    task.runtime.active_subagent = None
+    task.runtime.updated_at = now
+    task.runtime.current_stage = task.runtime.current_stage.model_copy(
+        update={
+            "step": None,
+            "status": "idle",
+            "started_at": None,
+            "completed_at": None,
+            "updated_at": now,
+            "duration_seconds": 0,
+            "verdict": None,
+            "summary": "",
+        }
+    )
+
+
+def _recover_commit_task(root: Path, task: TaskRecord) -> None:
+    _prepare_recovered_commit_task(task)
+    append_journal(
+        root,
+        task,
+        "Recovered interrupted `commit_to_git` attempt and requeued the task at `commit_to_git`.",
+    )
+    save_task(root, task)
+    save_task_runtime(root, task)
+
+
+def _finalize_recovered_commit_task(root: Path, task: TaskRecord, *, commit_sha: str) -> None:
+    now = utcnow()
+    started_at = task.runtime.current_stage.started_at
+    task.status = "done"
+    task.pipeline_status = "done"
+    task.git.commit_sha = commit_sha
+    task.runtime.execution_status = "done"
+    task.runtime.run_started_at = None
+    task.runtime.active_subagent = None
+    task.runtime.updated_at = now
+    task.runtime.last_stage = task.runtime.last_stage.model_copy(
+        update={
+            "step": "commit_to_git",
+            "status": "completed",
+            "started_at": started_at,
+            "completed_at": now,
+            "updated_at": now,
+            "duration_seconds": _duration_seconds(started_at, now),
+            "verdict": "pass",
+            "summary": "Recovered existing checkpoint commit after interrupted `commit_to_git`.",
+        }
+    )
+    task.runtime.current_stage = task.runtime.current_stage.model_copy(
+        update={
+            "step": None,
+            "status": "idle",
+            "started_at": None,
+            "completed_at": None,
+            "updated_at": now,
+            "duration_seconds": 0,
+            "verdict": None,
+            "summary": "",
+        }
+    )
+    append_journal(
+        root,
+        task,
+        (
+            "Recovered existing checkpoint commit after interrupted `commit_to_git` "
+            f"and finalized the task at `{commit_sha}`."
+        ),
+    )
+    save_task(root, task)
+    save_task_runtime(root, task)
+
+
+def _find_existing_checkpoint_commit(root: Path, task: TaskRecord) -> str | None:
+    if not is_git_repo(root):
+        return None
+    try:
+        return find_commit_by_subject(
+            root,
+            checkpoint_message(task, attempt=task.git.checkpoint_attempts),
+        )
+    except GitError:
+        return None
+
+
+def _recover_existing_checkpoint_commit(root: Path, task: TaskRecord) -> bool:
+    commit_sha = _find_existing_checkpoint_commit(root, task)
+    if commit_sha is None:
+        return False
+    _finalize_recovered_commit_task(root, task, commit_sha=commit_sha)
+    return True
+
+
+def _recover_stranded_commit_tasks(root: Path, state: WorkspaceState) -> bool:
+    tasks = list_tasks(root)
+    stranded = [task for task in tasks if _is_stranded_commit_task(task)]
+    orphaned = [task for task in tasks if _is_orphaned_commit_stage_task(task, state)]
+    completed_ids: set[str] = set()
+    recovered: list[TaskRecord] = []
+    for task in stranded:
+        if _recover_existing_checkpoint_commit(root, task):
+            completed_ids.add(task.id)
+            continue
+        recovered.append(task)
+    recovered.extend(orphaned)
+    if not recovered:
+        if not completed_ids:
+            return False
+        if state.active_task_id in completed_ids:
+            state.active_task_id = None
+        state.queue = [task_id for task_id in state.queue if task_id not in completed_ids]
+        return True
+
+    recovered_ids = {task.id for task in recovered}
+    resolved_ids = {*recovered_ids, *completed_ids}
+    queue = [task_id for task_id in state.queue if task_id not in recovered_ids]
+    for task in recovered:
+        _recover_commit_task(root, task)
+        queue.insert(0, task.id)
+    queue = [task_id for task_id in queue if task_id not in completed_ids]
+    if state.active_task_id in resolved_ids:
+        state.active_task_id = None
+    state.queue = queue
+    return True
 
 
 def _resolve_next_task_from_snapshot(
@@ -1256,6 +1537,84 @@ def restore_untouched_active_task(root: Path) -> WorkspaceState:
             return state
 
         task = get_task(root, state.active_task_id)
+        if task is not None and _is_stranded_commit_task(task):
+            commit_sha = _find_existing_checkpoint_commit(root, task)
+            state.active_task_id = None
+            state.queue = [item for item in state.queue if item != task.id]
+            if commit_sha is None:
+                _prepare_recovered_commit_task(task)
+                state.queue.insert(0, task.id)
+                persist_task_and_state(
+                    root,
+                    task=task,
+                    state=state,
+                    journal_message=(
+                        "Recovered interrupted `commit_to_git` attempt and requeued the task "
+                        "at `commit_to_git`."
+                    ),
+                )
+                return state
+
+            now = utcnow()
+            started_at = task.runtime.current_stage.started_at
+            task.status = "done"
+            task.pipeline_status = "done"
+            task.git.commit_sha = commit_sha
+            task.runtime.execution_status = "done"
+            task.runtime.run_started_at = None
+            task.runtime.active_subagent = None
+            task.runtime.updated_at = now
+            task.runtime.last_stage = task.runtime.last_stage.model_copy(
+                update={
+                    "step": "commit_to_git",
+                    "status": "completed",
+                    "started_at": started_at,
+                    "completed_at": now,
+                    "updated_at": now,
+                    "duration_seconds": _duration_seconds(started_at, now),
+                    "verdict": "pass",
+                    "summary": "Recovered existing checkpoint commit after interrupted `commit_to_git`.",
+                }
+            )
+            task.runtime.current_stage = task.runtime.current_stage.model_copy(
+                update={
+                    "step": None,
+                    "status": "idle",
+                    "started_at": None,
+                    "completed_at": None,
+                    "updated_at": now,
+                    "duration_seconds": 0,
+                    "verdict": None,
+                    "summary": "",
+                }
+            )
+            persist_task_and_state(
+                root,
+                task=task,
+                state=state,
+                journal_message=(
+                    "Recovered existing checkpoint commit after interrupted `commit_to_git` "
+                    f"and finalized the task at `{commit_sha}`."
+                ),
+            )
+            return state
+
+        if task is not None and _should_requeue_commit_stage_task(task):
+            _prepare_recovered_commit_task(task)
+            state.queue = [item for item in state.queue if item != task.id]
+            state.queue.insert(0, task.id)
+            state.active_task_id = None
+            persist_task_and_state(
+                root,
+                task=task,
+                state=state,
+                journal_message=(
+                    "Recovered interrupted `commit_to_git` attempt and requeued the task at "
+                    "`commit_to_git`."
+                ),
+            )
+            return state
+
         if task is not None and task.runtime.execution_status == "running":
             return state
         if task is not None and _is_task_eligible_for_execution(task):
@@ -1280,30 +1639,31 @@ def enqueue_task_front(root: Path, task_id: str) -> WorkspaceState:
 
 
 def _enqueue_task(root: Path, task_id: str, *, front: bool) -> WorkspaceState:
-    with workspace_mutation_guard(root), _workspace_lock(root):
+    with _workspace_lock(root):
         state = load_state(root)
-        state.active_task_id = None
+        _ensure_future_task_mutation_allowed(root, [task_id], state=state)
         state.queue = [item for item in state.queue if item != task_id]
         if front:
             state.queue.insert(0, task_id)
         else:
             state.queue.append(task_id)
-        save_state(root, state)
+        _save_state_without_runner_guard(root, state)
         return state
 
 
 def move_queued_task(root: Path, task_id: str, position: int) -> WorkspaceState:
     if position < 1:
         raise ValueError("Queue position must be 1 or greater")
-    with workspace_mutation_guard(root), _workspace_lock(root):
+    with _workspace_lock(root):
         state = load_state(root)
+        _ensure_future_task_mutation_allowed(root, [task_id], state=state)
         if task_id not in state.queue:
             raise ValueError(f"Task {task_id} is not queued")
         queue = [item for item in state.queue if item != task_id]
         target_index = min(position - 1, len(queue))
         queue.insert(target_index, task_id)
         state.queue = queue
-        save_state(root, state)
+        _save_state_without_runner_guard(root, state)
         return state
 
 
@@ -1314,15 +1674,16 @@ def prioritize_queued_tasks(root: Path, task_ids: list[str]) -> WorkspaceState:
     if duplicates:
         joined = ", ".join(duplicates)
         raise ValueError(f"Task ids must be unique: {joined}")
-    with workspace_mutation_guard(root), _workspace_lock(root):
+    with _workspace_lock(root):
         state = load_state(root)
+        _ensure_future_task_mutation_allowed(root, task_ids, state=state)
         missing = [task_id for task_id in task_ids if task_id not in state.queue]
         if missing:
             joined = ", ".join(missing)
             raise ValueError(f"Tasks are not queued: {joined}")
         remaining = [queued_id for queued_id in state.queue if queued_id not in task_ids]
         state.queue = [*task_ids, *remaining]
-        save_state(root, state)
+        _save_state_without_runner_guard(root, state)
         return state
 
 
@@ -1346,8 +1707,10 @@ def _reset_task_for_recovery(
 
 
 def requeue_task(root: Path, task_id: str, *, front: bool = False) -> TaskRecord:
-    with workspace_mutation_guard(root), _workspace_lock(root):
+    with _workspace_lock(root):
         task = require_task(root, task_id)
+        state = load_state(root)
+        _ensure_future_task_mutation_allowed(root, [task.id], state=state)
         if task.status not in {"flagged", "cancelled", "failed"}:
             raise ValueError(f"Task {task.id} is not flagged, failed, or cancelled")
         _reset_task_for_recovery(
@@ -1355,14 +1718,12 @@ def requeue_task(root: Path, task_id: str, *, front: bool = False) -> TaskRecord
             status="queued",
             pipeline_status=implementation_entry_stage(task),
         )
-        state = load_state(root)
-        state.active_task_id = None
         state.queue = [item for item in state.queue if item != task.id]
         if front:
             state.queue.insert(0, task.id)
         else:
             state.queue.append(task.id)
-        persist_task_and_state(
+        _persist_task_and_state_without_runner_guard(
             root,
             task=task,
             state=state,
@@ -1372,8 +1733,10 @@ def requeue_task(root: Path, task_id: str, *, front: bool = False) -> TaskRecord
 
 
 def resume_task(root: Path, task_id: str, *, front: bool = False) -> TaskRecord:
-    with workspace_mutation_guard(root), _workspace_lock(root):
+    with _workspace_lock(root):
         task = require_task(root, task_id)
+        state = load_state(root)
+        _ensure_future_task_mutation_allowed(root, [task.id], state=state)
         if task.status not in {"flagged", "cancelled", "failed"}:
             raise ValueError(f"Task {task.id} is not flagged, failed, or cancelled")
         if task.pipeline_status in {"backlog", "done"}:
@@ -1382,14 +1745,12 @@ def resume_task(root: Path, task_id: str, *, front: bool = False) -> TaskRecord:
         if resumed_stage == "implementing":
             resumed_stage = implementation_entry_stage(task)
         _reset_task_for_recovery(task, status="queued", pipeline_status=resumed_stage)
-        state = load_state(root)
-        state.active_task_id = None
         state.queue = [item for item in state.queue if item != task.id]
         if front:
             state.queue.insert(0, task.id)
         else:
             state.queue.append(task.id)
-        persist_task_and_state(
+        _persist_task_and_state_without_runner_guard(
             root,
             task=task,
             state=state,
@@ -1499,8 +1860,10 @@ def update_task(
     mode: str | object = ...,
     auto_commit: bool | object = ...,
 ) -> TaskRecord:
-    with workspace_mutation_guard(root), _workspace_lock(root):
+    with _workspace_lock(root):
+        state = load_state(root)
         task = require_task(root, task_id)
+        _ensure_future_task_mutation_allowed(root, [task.id], state=state)
 
         if depends_on is not ...:
             _validate_task_dependencies(root, task_id=task.id, depends_on=list(depends_on))
@@ -1545,10 +1908,7 @@ def update_task(
 
         apply_task_template_defaults(task)
 
-        append_journal(root, task, "Task metadata updated via CLI.")
-        save_task(root, task)
-        if task.mode == "tasks":
-            _atomic_write_text(task_brief_file(root, task), render_task_brief(task))
+        _persist_future_task_update(root, task, journal_message="Task metadata updated via CLI.")
         return task
 
 

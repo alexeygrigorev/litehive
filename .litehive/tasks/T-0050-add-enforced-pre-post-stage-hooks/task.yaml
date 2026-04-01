@@ -2,13 +2,14 @@ id: T-0050
 slug: add-enforced-pre-post-stage-hooks
 title: Add enforced pre/post stage hooks
 depends_on: []
+task_type: null
 engine: null
 mode: implementation
 status: queued
-pipeline_status: backlog
+pipeline_status: grooming
 priority: medium
 created_at: '2026-03-31T17:53:20+00:00'
-updated_at: '2026-03-31T17:53:20+00:00'
+updated_at: '2026-04-01T06:25:02+00:00'
 goal: Introduce configurable process hooks that the runner executes automatically
   at defined lifecycle points, for example before SWE implementation starts, before
   saving implementation results, before PM acceptance, and after PM acceptance. Hooks
@@ -19,7 +20,13 @@ goal: Introduce configurable process hooks that the runner executes automaticall
 acceptance_criteria: []
 constraints: []
 plan: []
-subagents: []
+human_checkpoints: []
+subagents:
+- id: SA-0001
+  role: pm
+  engine: codex
+  status: completed
+  path: subagents/SA-0001-pm
 git:
   auto_commit: true
   commit_message: 'litehive: checkpoint T-0050 add-enforced-pre-post-stage-hooks'

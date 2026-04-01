@@ -2,19 +2,21 @@ id: T-0016
 slug: add-pool-summary-reporting
 title: Add pool summary reporting
 depends_on: []
+task_type: null
 engine: codex
 mode: implementation
 status: queued
 pipeline_status: grooming
 priority: medium
 created_at: '2026-03-31T06:08:02+00:00'
-updated_at: '2026-03-31T18:40:29+00:00'
+updated_at: '2026-04-01T06:24:32+00:00'
 goal: After a pool run, write a summary report showing completed, failed, skipped,
   and remaining tasks, along with stage outcomes and any stop condition that ended
   the run.
 acceptance_criteria: []
 constraints: []
 plan: []
+human_checkpoints: []
 subagents:
 - id: SA-0001
   role: pm
@@ -81,6 +83,11 @@ subagents:
   engine: codex
   status: completed
   path: subagents/SA-0013-pm
+- id: SA-0014
+  role: pm
+  engine: codex
+  status: completed
+  path: subagents/SA-0014-pm
 git:
   auto_commit: false
   commit_message: 'litehive: complete T-0016 add-pool-summary-reporting'

@@ -3,7 +3,6 @@ set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 target_dir="${HOME}/bin"
-target_path="${target_dir}/litehive"
 uv_bin="${HOME}/.local/bin/uv"
 
 mkdir -p "$target_dir"
@@ -13,16 +12,30 @@ if [[ ! -x "$uv_bin" ]]; then
   exit 1
 fi
 
-cat >"$target_path" <<EOF
+write_launcher() {
+  local path="$1"
+  local body="$2"
+  cat >"$path" <<EOF
 #!/usr/bin/env bash
 set -euo pipefail
 
-exec "$uv_bin" run --project "$repo_root" litehive "\$@"
+${body}
 EOF
+  chmod +x "$path"
+  echo "Installed launcher: $path"
+}
 
-chmod +x "$target_path"
+write_launcher \
+  "${target_dir}/litehive" \
+  "exec \"$uv_bin\" run --project \"$repo_root\" litehive \"\$@\""
 
-echo "Installed launcher: $target_path"
+write_launcher \
+  "${target_dir}/litehive-run-all" \
+  "exec \"$repo_root/scripts/run-all.sh\" \"\$@\""
+
+write_launcher \
+  "${target_dir}/litehive-run-all-status" \
+  "exec \"$repo_root/scripts/run-all-status.sh\" \"\$@\""
 
 case ":${PATH}:" in
   *":${HOME}/bin:"*)
@@ -37,3 +50,5 @@ case ":${PATH}:" in
 esac
 
 echo "Resolved launcher: $(command -v litehive || true)"
+echo "Resolved run-all launcher: $(command -v litehive-run-all || true)"
+echo "Resolved run-all-status launcher: $(command -v litehive-run-all-status || true)"

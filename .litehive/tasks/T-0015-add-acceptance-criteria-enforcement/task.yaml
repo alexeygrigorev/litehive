@@ -2,18 +2,20 @@ id: T-0015
 slug: add-acceptance-criteria-enforcement
 title: Add acceptance criteria enforcement
 depends_on: []
+task_type: null
 engine: codex
 mode: implementation
-status: flagged
-pipeline_status: accepting
+status: queued
+pipeline_status: grooming
 priority: medium
 created_at: '2026-03-31T06:07:52+00:00'
-updated_at: '2026-03-31T17:39:19+00:00'
+updated_at: '2026-04-01T06:24:30+00:00'
 goal: Require structured acceptance criteria before implementation for larger tasks
   and surface missing criteria clearly during grooming or task intake.
 acceptance_criteria: []
 constraints: []
 plan: []
+human_checkpoints: []
 subagents:
 - id: SA-0001
   role: pm

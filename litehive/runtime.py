@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 import re
+import subprocess
 from typing import Callable
 
 import yaml
@@ -66,6 +67,13 @@ class ExecutionSummary:
 @dataclass(slots=True)
 class TaskPoolRunSummary:
     executions: list[ExecutionSummary]
+    stop_reason: str
+    blocked: list[BlockedTask]
+
+
+@dataclass(slots=True)
+class SingleTaskRunSummary:
+    execution: ExecutionSummary | None
     stop_reason: str
     blocked: list[BlockedTask]
 
@@ -210,7 +218,44 @@ def run_task(
         return ExecutionSummary(task=task, result=result, commit_sha=task.git.commit_sha)
 
 
-def run_task_pool(
+def run_single_task(
+    root: Path,
+    *,
+    engine_override: str | None = None,
+    stop_conditions: TaskPoolStopConditions | None = None,
+) -> SingleTaskRunSummary:
+    root = root.resolve()
+    with workspace_runner_guard(root):
+        conditions = stop_conditions or TaskPoolStopConditions()
+        budget_ledger = _budget_ledger_from_conditions(conditions)
+        set_pool_stop_reason(root, None)
+
+        stop_reason = _single_task_pre_stop_reason(
+            root,
+            stop_conditions=conditions,
+            budget_ledger=budget_ledger,
+        )
+        if stop_reason is not None:
+            set_pool_stop_reason(root, stop_reason)
+            return SingleTaskRunSummary(execution=None, stop_reason=stop_reason, blocked=[])
+
+        execution, blocked = run_next_task_with_override(
+            root,
+            engine_override=engine_override,
+            budget_ledger=budget_ledger,
+        )
+        if execution.task is None:
+            stop_reason = "blocked_tasks_remaining" if blocked else "queue_exhausted"
+            set_pool_stop_reason(root, stop_reason)
+            return SingleTaskRunSummary(execution=None, stop_reason=stop_reason, blocked=blocked)
+
+        stop_reason = _single_task_stop_reason(execution)
+        if stop_reason.startswith("human_checkpoint_"):
+            set_pool_stop_reason(root, stop_reason)
+        return SingleTaskRunSummary(execution=execution, stop_reason=stop_reason, blocked=blocked)
+
+
+def drain_task_pool(
     root: Path,
     *,
     engine_override: str | None = None,
@@ -248,6 +293,21 @@ def run_task_pool(
                     root, executions=executions, stop_reason=stop_reason, blocked=blocked
                 )
             executions.append(execution)
+
+
+def run_task_pool(
+    root: Path,
+    *,
+    engine_override: str | None = None,
+    stop_conditions: TaskPoolStopConditions | None = None,
+    stop_when: Callable[[list[ExecutionSummary]], bool] | None = None,
+) -> TaskPoolRunSummary:
+    return drain_task_pool(
+        root,
+        engine_override=engine_override,
+        stop_conditions=stop_conditions,
+        stop_when=stop_when,
+    )
 
 
 def run_next_task_with_override(
@@ -290,6 +350,8 @@ def _pool_stop_reason(
     latest = executions[-1]
     if latest.result is not None and latest.result.final_status == "paused":
         return _human_checkpoint_stop_reason(latest)
+    if latest.result is not None and latest.result.final_status == "queued":
+        return "task_requeued"
     latest_limit_kind = _execution_limit_kind(latest)
     final_status = latest.result.final_status if latest.result is not None else None
     if conditions.stop_on_failure and final_status is not None and final_status not in {"done", "paused"}:
@@ -314,6 +376,26 @@ def _pool_stop_reason(
     ):
         return "execution_limit_fallbacks_exhausted"
     return None
+
+
+def _single_task_pre_stop_reason(
+    root: Path,
+    *,
+    stop_conditions: TaskPoolStopConditions,
+    budget_ledger: EngineBudgetLedger,
+) -> str | None:
+    if stop_conditions.stop_on_dirty_git and _git_worktree_is_dirty(root):
+        return "dirty_git_state"
+    return budget_ledger.pool_stop_reason()
+
+
+def _single_task_stop_reason(execution: ExecutionSummary) -> str:
+    result = execution.result
+    if result is not None and result.final_status == "paused":
+        return _human_checkpoint_stop_reason(execution)
+    if result is not None and result.final_status == "queued":
+        return "task_requeued"
+    return "single_task_complete"
 
 
 def _git_worktree_is_dirty(root: Path) -> bool:
@@ -763,6 +845,15 @@ def build_executor(
                 if not report.warnings or report.warnings[-1] != result.failure.reason:
                     report.warnings.append(result.failure.reason)
                 return report
+            if step == "testing" and report.verdict in {"pass", "accept"}:
+                hook_report = _run_pre_acceptance_command(
+                    root,
+                    current_task,
+                    report,
+                    command=config.pre_acceptance_command,
+                )
+                if hook_report is not None:
+                    return hook_report
             next_stage_engine_names = [engine_name]
             return report
 
@@ -817,6 +908,94 @@ def _engine_attempt_order(
         ordered.append(engine_name)
         queue.extend(engine_fallbacks.get(engine_name, []))
     return ordered
+
+
+def _run_pre_acceptance_command(
+    root: Path,
+    task: TaskRecord,
+    report: StageReport,
+    *,
+    command: str | None,
+) -> StageReport | None:
+    if command is None or not command.strip():
+        return None
+
+    completed = subprocess.run(
+        ["bash", "-lc", command],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    artifact_path = task_dir(root, task) / "artifacts" / "pre-acceptance-hook.txt"
+    artifact_body = "\n".join(
+        [
+            f"command: {command}",
+            f"exit_code: {completed.returncode}",
+            "",
+            "[stdout]",
+            completed.stdout.rstrip(),
+            "",
+            "[stderr]",
+            completed.stderr.rstrip(),
+        ]
+    ).rstrip() + "\n"
+    _atomic_write_text(artifact_path, artifact_body)
+    artifact_label = artifact_path.relative_to(task_dir(root, task)).as_posix()
+
+    if completed.returncode == 0:
+        append_journal(
+            root,
+            task,
+            f"Pre-acceptance command passed: `{command}`.\n- artifact: `{artifact_label}`",
+        )
+        report.warnings = [
+            *report.warnings,
+            f"pre-acceptance command passed: `{command}`",
+            f"artifact: `{artifact_label}`",
+        ]
+        feedback_parts = [report.feedback]
+        if completed.stdout.strip():
+            feedback_parts.append(f"Pre-acceptance stdout:\n{completed.stdout.strip()}")
+        if completed.stderr.strip():
+            feedback_parts.append(f"Pre-acceptance stderr:\n{completed.stderr.strip()}")
+        report.feedback = "\n\n".join(part for part in feedback_parts if part).strip()
+        return None
+
+    append_journal(
+        root,
+        task,
+        (
+            f"Pre-acceptance command failed: `{command}`.\n"
+            f"- exit_code: `{completed.returncode}`\n"
+            f"- artifact: `{artifact_label}`"
+        ),
+    )
+    warnings = [
+        *report.warnings,
+        f"pre-acceptance command failed: `{command}`",
+        f"artifact: `{artifact_label}`",
+    ]
+    if completed.stderr.strip():
+        warnings.append(completed.stderr.strip().splitlines()[-1])
+    feedback_parts = [report.feedback, f"pre-acceptance artifact: `{artifact_label}`"]
+    if completed.stdout.strip():
+        feedback_parts.append(f"Pre-acceptance stdout:\n{completed.stdout.strip()}")
+    if completed.stderr.strip():
+        feedback_parts.append(f"Pre-acceptance stderr:\n{completed.stderr.strip()}")
+    return StageReport(
+        task_id=task.id,
+        step="testing",
+        verdict="blocked",
+        summary=(
+            f"testing blocked by pre-acceptance command `{command}` "
+            f"(exit {completed.returncode})"
+        ),
+        feedback="\n\n".join(part for part in feedback_parts if part).strip(),
+        files_changed=report.files_changed,
+        tests=report.tests,
+        warnings=warnings,
+    )
 
 
 def _commit_to_git_report(
@@ -889,12 +1068,17 @@ def _commit_to_git_report(
         previous_rollback_attempt = task.git.rolled_back_checkpoint_attempt
         previous_status = task.status
         previous_pipeline_status = task.pipeline_status
+        state = load_state(root)
+        previous_state = state.model_copy(deep=True)
         task.git.commit_sha = None
         task.git.checkpoint_base_sha = base_sha
         task.git.checkpoint_attempts = attempt
         task.git.rolled_back_checkpoint_attempt = None
         task.status = "done"
         task.pipeline_status = "done"
+        if state.active_task_id == task.id:
+            state.active_task_id = None
+        state.queue = [queued_id for queued_id in state.queue if queued_id != task.id]
         append_journal(
             root,
             task,
@@ -904,7 +1088,7 @@ def _commit_to_git_report(
                 f"- message: `{message}`"
             ),
         )
-        save_task(root, task)
+        persist_task_and_state(root, task=task, state=state)
         checkpoint = commit_task(root, message)
         if checkpoint is None:
             raise GitError("git commit prerequisites were not met")
@@ -915,7 +1099,7 @@ def _commit_to_git_report(
         task.git.commit_sha = None
         task.status = previous_status
         task.pipeline_status = previous_pipeline_status
-        save_task(root, task)
+        persist_task_and_state(root, task=task, state=previous_state)
         append_journal(root, task, f"CommitToGit failed: {exc}")
         return StageReport(
             task_id=task.id,
@@ -947,8 +1131,10 @@ def _unexpected_dirty_paths(root: Path, task: TaskRecord, dirty_entries: list[st
 
 def _allowed_commit_paths(root: Path, task: TaskRecord) -> set[PurePosixPath]:
     allowed = {
+        PurePosixPath(".litehive") / ".gitignore",
         PurePosixPath(".litehive") / "config.yaml",
         PurePosixPath(".litehive") / "context.md",
+        PurePosixPath(".litehive") / "state.yaml",
         PurePosixPath(".litehive") / "tasks" / f"{task.id}-{task.slug}",
     }
     reports_dir = root / ".litehive" / "tasks" / f"{task.id}-{task.slug}" / "reports"

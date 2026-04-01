@@ -16,6 +16,7 @@ from litehive.tasks import (
     mark_stage_started,
     mark_task_outcome,
     missing_acceptance_criteria_reason,
+    populate_missing_acceptance_criteria_from_report,
     save_task,
     set_task_retry_state,
     task_dir,
@@ -80,7 +81,7 @@ class TaskExecutionRunner:
 
     def run(self, task: TaskRecord) -> RunResult:
         steps = 0
-        rejections = 0
+        rejections = task.runtime.retry_count
         last_verdict: str | None = None
 
         if task.pipeline_status == "done":
@@ -89,7 +90,7 @@ class TaskExecutionRunner:
         set_task_retry_state(
             self.root,
             task,
-            retry_count=0,
+            retry_count=rejections,
             retry_limit=self.max_retries,
             retry_source=self.retry_source,
         )
@@ -139,6 +140,7 @@ class TaskExecutionRunner:
                 report = self.executor(task, current)
             except KeyboardInterrupt:
                 reason = f"Execution cancelled during {current}"
+                task.pipeline_status = current  # type: ignore[assignment]
                 report = self._terminal_report(
                     task,
                     step=current,
@@ -149,7 +151,7 @@ class TaskExecutionRunner:
                     reason=reason,
                     retry_count=rejections,
                 )
-                task.status = "cancelled"
+                task.status = "queued"
                 mark_task_outcome(
                     self.root,
                     task,
@@ -163,9 +165,10 @@ class TaskExecutionRunner:
                 )
                 self._write_report(task, report, steps + 1)
                 mark_stage_finished(self.root, task, report)
-                return RunResult("cancelled", steps + 1, "blocked")
+                return RunResult("queued", steps + 1, "blocked")
             except Exception as exc:
                 reason = f"{current} failed with unhandled error: {exc}"
+                task.pipeline_status = current  # type: ignore[assignment]
                 report = self._terminal_report(
                     task,
                     step=current,
@@ -177,7 +180,7 @@ class TaskExecutionRunner:
                     retry_count=rejections,
                     warnings=[str(exc)],
                 )
-                task.status = "failed"
+                task.status = "queued"
                 mark_task_outcome(
                     self.root,
                     task,
@@ -191,7 +194,7 @@ class TaskExecutionRunner:
                 )
                 self._write_report(task, report, steps + 1)
                 mark_stage_finished(self.root, task, report)
-                return RunResult("failed", steps + 1, "fail")
+                return RunResult("queued", steps + 1, "fail")
             report.retry_count = rejections
             report.retry_limit = self.max_retries
             report.retry_source = self.retry_source
@@ -199,6 +202,14 @@ class TaskExecutionRunner:
             steps += 1
             last_verdict = report.verdict
             target = _ROUTES.get((current, report.verdict))
+            if target is None and report.verdict == "reject" and current != "commit_to_git":
+                report.retry_decision = "retry"
+                self._write_report(task, report, steps)
+                mark_stage_finished(self.root, task, report)
+                task.pipeline_status = current  # type: ignore[assignment]
+                task.status = "queued"
+                save_task(self.root, task)
+                return RunResult("queued", steps, last_verdict)
             if target is None:
                 outcome = "blocked" if report.verdict == "blocked" else "failed"
                 reason = report.summary or f"{current} returned unsupported verdict `{report.verdict}`"
@@ -238,6 +249,7 @@ class TaskExecutionRunner:
                 return RunResult(task.status, steps, last_verdict)
 
             if current == "grooming" and target == "implementing":
+                populate_missing_acceptance_criteria_from_report(self.root, task, report.feedback)
                 missing_criteria_reason = missing_acceptance_criteria_reason(task)
                 if missing_criteria_reason is not None:
                     report = self._terminal_report(
@@ -283,6 +295,12 @@ class TaskExecutionRunner:
                     retry_source=self.retry_source,
                 )
                 report.retry_decision = "retry"
+                self._write_report(task, report, steps)
+                mark_stage_finished(self.root, task, report)
+                task.pipeline_status = target  # type: ignore[assignment]
+                task.status = "queued"
+                save_task(self.root, task)
+                return RunResult("queued", steps, last_verdict)
 
             if target == "done":
                 self._write_report(task, report, steps)

@@ -1,13 +1,15 @@
 id: T-0026
 slug: add-committogit-terminal-stage
 title: Add CommitToGit terminal stage
+depends_on: []
+task_type: null
 engine: codex
 mode: implementation
 status: done
 pipeline_status: done
 priority: medium
 created_at: '2026-03-31T06:13:56+00:00'
-updated_at: '2026-03-31T09:32:02+00:00'
+updated_at: '2026-04-01T06:28:38+00:00'
 goal: Extend the deterministic task pipeline so the final stage is an explicit CommitToGit
   step. This stage should run only after acceptance succeeds, create a git commit
   with a predictable message, persist the commit SHA in task state, and fail safely
@@ -15,6 +17,7 @@ goal: Extend the deterministic task pipeline so the final stage is an explicit C
 acceptance_criteria: []
 constraints: []
 plan: []
+human_checkpoints: []
 subagents:
 - id: SA-0001
   role: pm
@@ -54,6 +57,9 @@ subagents:
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0026 add-committogit-terminal-stage'
+  commit_sha: null
   checkpoint_base_sha: 4c9166bd23d08392a4e49225b20e716cf3265183
   checkpoint_attempts: 1
   rolled_back_checkpoint_attempt: null
+retry_policy:
+  max_retries: null

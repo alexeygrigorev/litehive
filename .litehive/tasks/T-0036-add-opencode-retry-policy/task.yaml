@@ -2,18 +2,20 @@ id: T-0036
 slug: add-opencode-retry-policy
 title: Add OpenCode retry policy
 depends_on: []
+task_type: null
 engine: null
 mode: implementation
 status: queued
-pipeline_status: implementing
+pipeline_status: grooming
 priority: medium
 created_at: '2026-03-31T13:14:18+00:00'
-updated_at: '2026-03-31T14:52:41+00:00'
+updated_at: '2026-04-01T06:24:49+00:00'
 goal: Implement OpenCode-specific retry policy settings and retryable failure detection,
   consistent with the shared engine retry contract and observability.
 acceptance_criteria: []
 constraints: []
 plan: []
+human_checkpoints: []
 subagents:
 - id: SA-0001
   role: pm
