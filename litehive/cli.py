@@ -205,7 +205,7 @@ def _pool_summary_report_data(
     root: Path,
     *,
     completed: list[dict[str, object]],
-    failed: list[dict[str, object]],
+    flagged: list[dict[str, object]],
     stop_reason: str,
     tasks_run: int | None = None,
 ) -> dict[str, object]:
@@ -214,11 +214,11 @@ def _pool_summary_report_data(
         "created_at": utcnow(),
         "stop_condition": _pool_stop_condition_label(stop_reason),
         "stop_reason": stop_reason,
-        "tasks_run": tasks_run if tasks_run is not None else len(completed) + len(failed),
+        "tasks_run": tasks_run if tasks_run is not None else len(completed) + len(flagged),
         "completed_count": len(completed),
         "completed": completed,
-        "failed_count": len(failed),
-        "failed": failed,
+        "flagged_count": len(flagged),
+        "flagged": flagged,
         "skipped_count": len(remaining),
         "skipped": remaining,
         "remaining_count": len(remaining),
@@ -231,7 +231,7 @@ def _pool_summary_report_lines(
     report: dict[str, object],
 ) -> list[str]:
     completed = [entry for entry in report["completed"] if isinstance(entry, dict)]
-    failed = [entry for entry in report["failed"] if isinstance(entry, dict)]
+    flagged = [entry for entry in report["flagged"] if isinstance(entry, dict)]
     skipped = [entry for entry in report["skipped"] if isinstance(entry, dict)]
     remaining = [entry for entry in report["remaining"] if isinstance(entry, dict)]
     lines = [f"completed_tasks: {report['completed_count']}"]
@@ -242,11 +242,11 @@ def _pool_summary_report_lines(
                 entry=entry,
             )
         )
-    lines.append(f"failed_tasks: {report['failed_count']}")
-    for entry in failed:
+    lines.append(f"flagged_tasks: {report['flagged_count']}")
+    for entry in flagged:
         lines.append(
             _format_pool_task_report_line(
-                label="failed",
+                label="flagged",
                 entry=entry,
             )
         )
@@ -1517,7 +1517,7 @@ def _cmd_run(args: argparse.Namespace) -> int:
             report = _pool_summary_report_data(
                 args.workspace,
                 completed=[],
-                failed=[],
+                flagged=[],
                 stop_reason=summary.stop_reason,
                 tasks_run=0,
             )
@@ -1541,7 +1541,7 @@ def _cmd_run(args: argparse.Namespace) -> int:
             _print_pool_summary_report(report=report)
             return 0
         completed: list[dict[str, object]] = []
-        failed: list[dict[str, object]] = []
+        flagged: list[dict[str, object]] = []
         for execution in summary.executions:
             if execution.task is None:
                 continue
@@ -1562,7 +1562,7 @@ def _cmd_run(args: argparse.Namespace) -> int:
                         )
                     )
                 elif execution.result.final_status not in {"paused", "queued"}:
-                    failed.append(
+                    flagged.append(
                         _pool_task_report_entry(
                             args.workspace,
                             task_id=execution.task.id,
@@ -1586,7 +1586,7 @@ def _cmd_run(args: argparse.Namespace) -> int:
         report = _pool_summary_report_data(
             args.workspace,
             completed=completed,
-            failed=failed,
+            flagged=flagged,
             stop_reason=summary.stop_reason,
             tasks_run=len(summary.executions),
         )
@@ -1611,7 +1611,7 @@ def _cmd_run(args: argparse.Namespace) -> int:
         report = _pool_summary_report_data(
             args.workspace,
             completed=[],
-            failed=[],
+            flagged=[],
             stop_reason=stop_reason,
             tasks_run=0,
         )
@@ -1634,7 +1634,7 @@ def _cmd_run(args: argparse.Namespace) -> int:
         return 0
 
     completed: list[dict[str, object]] = []
-    failed: list[dict[str, object]] = []
+    flagged: list[dict[str, object]] = []
     task = execution.task
     result = execution.result
     print(f"task: {task.id} {task.title}")
@@ -1654,7 +1654,7 @@ def _cmd_run(args: argparse.Namespace) -> int:
                 )
             )
         elif result.final_status not in {"paused", "queued"}:
-            failed.append(
+            flagged.append(
                 _pool_task_report_entry(
                     args.workspace,
                     task_id=task.id,
@@ -1673,7 +1673,7 @@ def _cmd_run(args: argparse.Namespace) -> int:
     report = _pool_summary_report_data(
         args.workspace,
         completed=completed,
-        failed=failed,
+        flagged=flagged,
         stop_reason=stop_reason,
         tasks_run=1,
     )

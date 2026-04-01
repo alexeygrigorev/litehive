@@ -5551,7 +5551,7 @@ def test_cmd_run_default_executes_single_task_and_reports_summary(
         "stage_outcomes=grooming=pass, implementing=pass, testing=pass, accepting=pass, commit_to_git=pass"
         in output
     )
-    assert "failed_tasks: 0" in output
+    assert "flagged_tasks: 0" in output
     assert "skipped_tasks: 1" in output
     assert "remaining_tasks: 1" in output
     assert "tasks_run: 1" in output
@@ -5569,7 +5569,7 @@ def test_cmd_run_default_executes_single_task_and_reports_summary(
     assert durable_report["stop_condition"] == "single task complete"
     assert durable_report["tasks_run"] == 1
     assert durable_report["completed_count"] == 1
-    assert durable_report["failed_count"] == 0
+    assert durable_report["flagged_count"] == 0
     assert durable_report["skipped_count"] == 1
     assert durable_report["remaining_count"] == 1
     assert durable_report["completed"] == [
@@ -5627,7 +5627,7 @@ def test_cmd_run_drains_task_pool_and_reports_summary(
     assert durable_report["stop_condition"] == "queue exhausted"
     assert durable_report["tasks_run"] == 2
     assert durable_report["completed_count"] == 2
-    assert durable_report["failed_count"] == 0
+    assert durable_report["flagged_count"] == 0
     assert durable_report["skipped_count"] == 0
     assert durable_report["remaining_count"] == 0
     assert durable_report["completed"] == [
@@ -5766,7 +5766,7 @@ def test_cmd_run_reports_blocked_tasks_when_no_runnable_task(
     assert "No runnable task." in output
     assert f"blocked: {blocked.id} Blocked task blocked_by=T-9999 (missing)" in output
     assert "completed_tasks: 0" in output
-    assert "failed_tasks: 0" in output
+    assert "flagged_tasks: 0" in output
     assert "skipped_tasks: 1" in output
     assert "remaining_tasks: 1" in output
     assert (
@@ -5804,7 +5804,7 @@ def test_cmd_run_reports_pre_execution_stop_reason(
     assert exit_code == 0
     assert "No task executed." in output
     assert "completed_tasks: 0" in output
-    assert "failed_tasks: 0" in output
+    assert "flagged_tasks: 0" in output
     assert "skipped_tasks: 1" in output
     assert "remaining_tasks: 1" in output
     assert "remaining: T-0001 Queued task status=queued pipeline_status=backlog" in output
@@ -5850,7 +5850,7 @@ def test_cmd_run_reports_remaining_tasks_when_pool_stops_early(
 
     assert exit_code == 0
     assert "completed_tasks: 1" in output
-    assert "failed_tasks: 0" in output
+    assert "flagged_tasks: 0" in output
     assert "skipped_tasks: 1" in output
     assert (
         "completed: T-0001 First task status=done pipeline_status=done "
@@ -5874,7 +5874,7 @@ def test_cmd_run_reports_remaining_tasks_when_pool_stops_early(
     assert durable_report["stop_condition"] == "max tasks reached"
     assert durable_report["tasks_run"] == 1
     assert durable_report["completed_count"] == 1
-    assert durable_report["failed_count"] == 0
+    assert durable_report["flagged_count"] == 0
     assert durable_report["skipped_count"] == 1
     assert durable_report["remaining_count"] == 1
     assert durable_report["completed"] == [
@@ -5931,7 +5931,7 @@ def test_cmd_run_reports_human_checkpoint_stop_without_marking_failure(
     assert exit_code == 0
     assert "status: paused" in output
     assert "completed_tasks: 0" in output
-    assert "failed_tasks: 0" in output
+    assert "flagged_tasks: 0" in output
     assert "skipped_tasks: 2" in output
     assert "tasks_run: 1" in output
     assert "stop_condition: human checkpoint before acceptance" in output
@@ -6094,9 +6094,9 @@ def test_cmd_run_reports_failed_task_summary_with_stage_outcomes(
     output = capsys.readouterr().out
 
     assert exit_code == 0
-    assert "failed_tasks: 1" in output
+    assert "flagged_tasks: 1" in output
     assert (
-        "failed: T-0001 Needs acceptance criteria status=flagged pipeline_status=implementing "
+        "flagged: T-0001 Needs acceptance criteria status=flagged pipeline_status=implementing "
         "stage_outcomes=implementing=blocked"
         in output
     )
@@ -6166,7 +6166,7 @@ def test_cmd_run_reports_summary_when_queue_is_empty(
     assert exit_code == 0
     assert "No queued task." in output
     assert "completed_tasks: 0" in output
-    assert "failed_tasks: 0" in output
+    assert "flagged_tasks: 0" in output
     assert "skipped_tasks: 0" in output
     assert "remaining_tasks: 0" in output
     assert "tasks_run: 0" in output
@@ -6174,7 +6174,7 @@ def test_cmd_run_reports_summary_when_queue_is_empty(
     assert "stop_reason: queue_exhausted" in output
     summary_report = (tmp_path / ".litehive" / "pool-summary.txt").read_text(encoding="utf-8")
     assert "completed_tasks: 0" in summary_report
-    assert "failed_tasks: 0" in summary_report
+    assert "flagged_tasks: 0" in summary_report
     assert "stop_condition: queue exhausted" in summary_report
 
 
