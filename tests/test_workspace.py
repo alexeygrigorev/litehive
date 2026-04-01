@@ -33,9 +33,11 @@ from litehive.config import (
     ExternalEngineSandboxPolicy,
     LitehiveConfig,
     SandboxCredentialInput,
+    SubagentResourceLimitsConfig,
     available_process_profiles,
     ensure_workspace,
     format_external_engine_sandbox,
+    format_subagent_resource_limits,
     load_config,
     render_context_template,
     resolve_process_profile,
@@ -47,7 +49,14 @@ from litehive.external_cli import (
     parse_stage_report_text,
 )
 from litehive.git_ops import GitError, checkpoint_message, commit_task
-from litehive.models import RuntimeStageState, RuntimeSubagentState, StageReport, SubagentRef, TaskRecord
+from litehive.models import (
+    ResourceLimitEvent,
+    RuntimeStageState,
+    RuntimeSubagentState,
+    StageReport,
+    SubagentRef,
+    TaskRecord,
+)
 from litehive.observability import render_task_summary
 from litehive.sandbox import SandboxLauncher
 from litehive.runtime import (
@@ -218,8 +227,39 @@ def test_load_config_round_trips_external_engine_sandbox(tmp_path: Path) -> None
     assert [item.env_var for item in policy.credential_inputs] == ["GOOGLE_APPLICATION_CREDENTIALS"]
 
 
+def test_native_process_profiles_expose_resource_limit_defaults() -> None:
+    rust = LitehiveConfig(process_profile="rust")
+    cpp = LitehiveConfig(process_profile="cpp")
+
+    assert rust.subagent_resource_limits.enabled is True
+    assert rust.subagent_resource_limits.memory_mb == 8192
+    assert rust.subagent_resource_limits.cpu_count == 4.0
+    assert rust.subagent_resource_limits.process_limit == 512
+    assert cpp.subagent_resource_limits.enabled is True
+    assert cpp.subagent_resource_limits.memory_mb == 12288
+    assert cpp.subagent_resource_limits.cpu_count == 6.0
+    assert cpp.subagent_resource_limits.process_limit == 1024
+
+
+def test_workspace_resource_limit_overrides_replace_profile_defaults() -> None:
+    config = LitehiveConfig(
+        process_profile="rust",
+        subagent_resource_limits=SubagentResourceLimitsConfig(
+            enabled=True,
+            memory_mb=2048,
+            cpu_count=1.5,
+            process_limit=96,
+        ),
+    )
+
+    assert config.subagent_resource_limits.enabled is True
+    assert config.subagent_resource_limits.memory_mb == 2048
+    assert config.subagent_resource_limits.cpu_count == 1.5
+    assert config.subagent_resource_limits.process_limit == 96
+
+
 def test_available_process_profiles_include_generic_and_project_templates() -> None:
-    assert available_process_profiles() == ["codehive", "django", "generic", "python", "rust"]
+    assert available_process_profiles() == ["codehive", "cpp", "django", "generic", "python", "rust"]
 
 
 def test_resolve_process_profile_merges_shared_process_with_overlay() -> None:
@@ -619,6 +659,19 @@ def test_subagent_artifacts_exist_while_engine_is_running(
         "files_changed": ["litehive/subagents.py"],
         "tests": {"added": 1, "passing": 1},
         "warnings": ["none"],
+        "resource_control": {
+            "enabled": False,
+            "runtime": None,
+            "image": None,
+            "network_mode": None,
+            "workspace_mode": None,
+            "memory_mb": None,
+            "cpu_count": None,
+            "process_limit": None,
+            "environment": [],
+            "credential_inputs": [],
+        },
+        "resource_limit_event": None,
     }
     refreshed = get_task(tmp_path, task.id)
     assert refreshed is not None
@@ -1027,6 +1080,73 @@ def test_subagent_artifacts_capture_sandbox_metadata(
     assert refreshed.runtime.last_subagent.sandbox_summary.startswith("sandbox[")
 
 
+def test_subagent_artifacts_capture_structured_resource_limit_event(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ensure_workspace(
+        tmp_path,
+        LitehiveConfig(
+            process_profile="rust",
+            subagent_resource_limits=SubagentResourceLimitsConfig(
+                enabled=True,
+                memory_mb=4096,
+                cpu_count=2.0,
+                process_limit=256,
+            ),
+        ),
+    )
+    task = create_task(tmp_path, title="Persist resource limit event")
+    manager = SubagentManager(tmp_path)
+
+    class FakePopen:
+        def __init__(self, cmd, cwd, env, stdout, stderr, text):  # type: ignore[no-untyped-def]
+            self.pid = 8181
+            self.returncode = 137
+            stdout_read, stdout_write = os.pipe()
+            stderr_read, stderr_write = os.pipe()
+            os.write(stdout_write, b"native build aborted")
+            os.write(stderr_write, b"OOMKilled: container exceeded memory limit")
+            os.close(stdout_write)
+            os.close(stderr_write)
+            self.stdout = os.fdopen(stdout_read, "rb")
+            self.stderr = os.fdopen(stderr_read, "rb")
+
+        def poll(self):  # type: ignore[no-untyped-def]
+            return self.returncode
+
+        def wait(self):  # type: ignore[no-untyped-def]
+            return self.returncode
+
+    monkeypatch.setattr("shutil.which", lambda binary: f"/usr/bin/{binary}")
+    monkeypatch.setattr("subprocess.Popen", FakePopen)
+    monkeypatch.setattr("litehive.subagents._supports_live_on_started", lambda engine: False)
+
+    result = manager.run(task, role="swe", engine_name="codex", prompt="implement it")
+
+    assert result.failure is not None
+    assert result.failure.kind == "resource_limit"
+    assert result.failure.resource_limit_event is not None
+    assert result.failure.resource_limit_event.resource == "memory"
+    assert result.failure.resource_limit_event.memory_mb == 4096
+
+    base = task_dir(tmp_path, task) / "subagents" / "SA-0001-swe"
+    session = yaml.safe_load((base / "session.yaml").read_text(encoding="utf-8"))
+    report = yaml.safe_load((base / "report.yaml").read_text(encoding="utf-8"))
+    assert session["resource_control"]["memory_mb"] == 4096
+    assert session["resource_control"]["cpu_count"] == 2.0
+    assert session["resource_control"]["process_limit"] == 256
+    assert session["resource_limit_event"]["resource"] == "memory"
+    assert report["resource_control"]["enabled"] is True
+    assert report["resource_control"]["runtime"] == "docker"
+    assert report["resource_limit_event"]["reason"] == "memory limit exceeded (OOM)"
+
+    refreshed = get_task(tmp_path, task.id)
+    assert refreshed is not None
+    assert refreshed.runtime.last_subagent is not None
+    assert refreshed.runtime.last_subagent.resource_limit_event is not None
+    assert refreshed.runtime.last_subagent.resource_limit_event.reason == "memory limit exceeded (OOM)"
+
+
 def test_subagent_manager_uses_inherited_run_live_when_available(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -1085,6 +1205,52 @@ def test_subagent_manager_uses_inherited_run_live_when_available(
     result = manager.run(task, role="swe", engine_name="codex", prompt="implement it")
 
     assert calls == ["run_live"]
+    assert result.failure == EngineFailure(kind="execution_limit", reason="usage limit reached")
+
+
+def test_subagent_manager_prefers_instance_run_override_over_inherited_run_live(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Fallback usage-limit task")
+    manager = SubagentManager(tmp_path)
+    engine = get_engine("codex")
+
+    monkeypatch.setattr("litehive.subagents.get_engine", lambda _: engine)
+    monkeypatch.setattr(engine, "is_available", lambda: True)
+
+    calls: list[str] = []
+
+    def fake_run(
+        prompt: str,
+        cwd: Path,
+        model: str | None = None,
+        *,
+        max_turns: int | None = None,
+        on_started=None,
+    ) -> CLIExecutionResult:
+        calls.append("run")
+        assert on_started is not None
+        on_started(4242)
+        return CLIExecutionResult(
+            adapter="codex",
+            argv=("codex", "exec"),
+            cwd=cwd,
+            exit_code=1,
+            stdout="",
+            stderr="ERROR: You've hit your usage limit. Try again later.",
+            pid=4242,
+        )
+
+    def fail_run_live(*args, **kwargs) -> CLIExecutionResult:  # type: ignore[no-untyped-def]
+        raise AssertionError("run_live should not be used when only run is overridden")
+
+    monkeypatch.setattr(engine, "run", fake_run)
+    monkeypatch.setattr("litehive.external_cli.ExternalCLIAdapter.run_live", fail_run_live)
+
+    result = manager.run(task, role="swe", engine_name="codex", prompt="implement it")
+
+    assert calls == ["run"]
     assert result.failure == EngineFailure(kind="execution_limit", reason="usage limit reached")
 
 
@@ -1859,9 +2025,11 @@ def test_run_next_task_uses_task_retry_override(
 
     assert summary.task is not None
     assert summary.result is not None
-    assert summary.result.final_status == "done"
+    assert summary.result.final_status == "queued"
     task = get_task(tmp_path, task.id)
     assert task is not None
+    assert task.status == "queued"
+    assert task.pipeline_status == "implementing"
     assert task.runtime.retry_limit == 1
     assert task.runtime.retry_count == 1
     assert task.runtime.retry_source == "task"
@@ -2050,6 +2218,42 @@ def test_sandbox_launcher_wraps_selected_engine_with_docker_policy(
     assert f"src={creds_path},dst=/run/credentials/google.json,readonly" in joined
     assert "--env GOOGLE_APPLICATION_CREDENTIALS=/run/credentials/google.json" in joined
     assert "/litehive/bin/codex exec --dangerously-bypass-approvals-and-sandbox --cd /workspace" in joined
+
+
+def test_sandbox_launcher_applies_resource_limit_flags_from_profile_defaults(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config = LitehiveConfig(process_profile="rust")
+    launcher = SandboxLauncher(tmp_path, config)
+
+    monkeypatch.setattr("shutil.which", lambda binary: f"/usr/bin/{binary}")
+    invocation = get_engine("codex").build_invocation("ship it", tmp_path)
+
+    wrapped = launcher.wrap_invocation("codex", "codex", invocation)
+    joined = " ".join(wrapped.argv)
+
+    assert wrapped.argv[:4] == ("docker", "run", "--rm", "--init")
+    assert "--memory 8192m" in joined
+    assert "--cpus 4" in joined
+    assert "--pids-limit 512" in joined
+    assert f"src={tmp_path},dst=/workspace" in joined
+
+
+def test_sandbox_launcher_classifies_cpu_limit_events() -> None:
+    launcher = SandboxLauncher(Path("/tmp/workspace"), LitehiveConfig(process_profile="rust"))
+
+    event = launcher.classify_resource_limit_event(
+        "codex",
+        exit_code=1,
+        stdout="",
+        stderr="fatal error: CPU time limit exceeded by cgroup cpu controller",
+    )
+
+    assert event is not None
+    assert event.resource == "cpu"
+    assert event.reason == "CPU limit exceeded"
+    assert event.observed_signal == "cpu_limit"
+    assert event.cpu_count == 4.0
 
 
 def test_gemini_build_invocation_includes_model_and_jsonl_flags(tmp_path: Path) -> None:
@@ -5969,7 +6173,8 @@ def test_status_output_includes_runtime_observability(
     assert "retry_source=task" in output
     assert "stage=implementing" in output
     assert (
-        "last_subagent=SA-0001 swe/codex completed pid=4242 snippet=implemented live observability" in output
+        "last_subagent=SA-0001 swe/codex completed pid=4242 sandbox=host snippet=implemented live observability"
+        in output
     )
     assert "last_report=grooming/pass duration=1m00s summary=plan confirmed" in output
     assert (
@@ -6021,6 +6226,12 @@ def test_format_external_engine_sandbox_renders_engine_policies() -> None:
     assert "codex=enabled:True net:none workspace:rw env:OPENAI_API_KEY creds:-" in rendered
 
 
+def test_format_subagent_resource_limits_renders_effective_limits() -> None:
+    rendered = format_subagent_resource_limits(LitehiveConfig(process_profile="rust"))
+
+    assert rendered == "enabled memory_mb:8192 cpu_count:4 process_limit:512"
+
+
 def test_status_output_includes_default_execution_retry_policies(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -6066,6 +6277,18 @@ def test_status_output_includes_external_engine_sandbox_settings(
     assert exit_code == 0
     assert "external_engine_sandbox: enabled runtime:docker image:ghcr.io/example/litehive-sandbox:latest" in output
     assert "codex=enabled:True net:none workspace:rw env:OPENAI_API_KEY creds:-" in output
+
+
+def test_status_output_includes_subagent_resource_limits(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    ensure_workspace(tmp_path, LitehiveConfig(process_profile="rust"))
+
+    exit_code = _cmd_status(argparse.Namespace(workspace=tmp_path))
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "subagent_resource_limits: enabled memory_mb:8192 cpu_count:4 process_limit:512" in output
 
 
 def test_status_output_includes_budget_control_settings(
@@ -8058,6 +8281,50 @@ def _completed_subagent_result(
     )
 
 
+def _resource_limited_subagent_result(
+    tmp_path: Path,
+    step: str,
+    *,
+    engine_name: str = "codex",
+    resource: str = "memory",
+    reason: str = "memory limit exceeded (OOM)",
+) -> SubagentResult:
+    event = ResourceLimitEvent(
+        resource=resource,  # type: ignore[arg-type]
+        reason=reason,
+        observed_signal="oom",
+        exit_code=137,
+        memory_mb=4096,
+        cpu_count=2.0,
+        process_limit=256,
+    )
+    return SubagentResult(
+        ref=SubagentRef(
+            id=f"SA-{step}",
+            role="swe",
+            engine=engine_name,
+            status="failed",
+            path=f"subagents/{step}",
+        ),
+        execution=CLIExecutionResult(
+            adapter=engine_name,
+            argv=(engine_name, "exec"),
+            cwd=tmp_path,
+            exit_code=137,
+            stdout="compiler terminated",
+            stderr="OOMKilled: container exceeded memory limit",
+        ),
+        transcript="[stderr]\nOOMKilled: container exceeded memory limit",
+        exit_code=137,
+        failure=EngineFailure(
+            kind="resource_limit",
+            reason=reason,
+            classification=resource,
+            resource_limit_event=event,
+        ),
+    )
+
+
 def test_run_task_skips_pre_acceptance_hook_when_not_configured(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -8079,6 +8346,92 @@ def test_run_task_skips_pre_acceptance_hook_when_not_configured(
 
     assert summary.result is not None
     assert summary.result.final_status == "done"
+
+
+def test_stage_report_from_subagent_structures_resource_limit_failures(tmp_path: Path) -> None:
+    task = TaskRecord(id="T-0001", slug="native-task", title="Native task")
+
+    report = stage_report_from_subagent(
+        task,
+        "implementing",
+        _resource_limited_subagent_result(tmp_path, "implementing"),
+    )
+
+    assert report.verdict == "blocked"
+    assert report.summary == "implementing blocked: memory limit exceeded (OOM)"
+    assert report.resource_limit_event is not None
+    assert report.resource_limit_event.resource == "memory"
+
+
+def test_run_next_task_records_structured_resource_limit_outcome(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ensure_workspace(tmp_path)
+    create_task(tmp_path, title="Native code task", auto_commit=False)
+
+    monkeypatch.setattr(
+        "litehive.runtime.SubagentManager.run",
+        lambda self, task, role, engine_name, prompt, model=None, max_turns=None: _resource_limited_subagent_result(  # type: ignore[no-untyped-def]
+            tmp_path, "grooming", engine_name=engine_name
+        ),
+    )
+
+    summary = run_next_task(tmp_path)
+
+    assert summary.result is not None
+    assert summary.result.final_status == "flagged"
+    task = get_task(tmp_path, "T-0001")
+    assert task is not None
+    assert task.runtime.last_outcome.reason_code == "resource_limit"
+    assert task.runtime.last_outcome.reason == "grooming blocked: memory limit exceeded (OOM)"
+
+    report = yaml.safe_load(
+        (
+            tmp_path
+            / ".litehive"
+            / "tasks"
+            / "T-0001-native-code-task"
+            / "reports"
+            / "grooming-001.yaml"
+        ).read_text(encoding="utf-8")
+    )
+    assert report["outcome_reason_code"] == "resource_limit"
+    assert report["resource_limit_event"]["resource"] == "memory"
+
+
+def test_render_task_summary_includes_resource_limit_signal_and_effective_limits() -> None:
+    task = TaskRecord(id="T-0001", slug="native-task", title="Native task")
+    task.runtime.last_subagent = RuntimeSubagentState(
+        id="SA-0001",
+        role="swe",
+        engine="codex",
+        status="failed",
+        path="subagents/SA-0001-swe",
+        sandboxed=True,
+        sandbox_summary="sandbox[docker:litehive-external-engine:latest net=none workspace=rw limits=memory=4096m,cpus=2,pids=256]",
+        started_at="2026-04-01T10:00:00+00:00",
+        updated_at="2026-04-01T10:01:00+00:00",
+        completed_at="2026-04-01T10:01:00+00:00",
+        exit_code=137,
+        transcript_snippet="OOMKilled",
+        resource_limit_event=ResourceLimitEvent(
+            resource="memory",
+            reason="memory limit exceeded (OOM)",
+            observed_signal="oom",
+            exit_code=137,
+            memory_mb=4096,
+            cpu_count=2.0,
+            process_limit=256,
+        ),
+    )
+
+    lines = render_task_summary(task, active=False)
+
+    assert any(
+        "resource_limit=memory signal=oom exit_code=137 limits=memory_mb=4096,cpu_count=2,process_limit=256"
+        in line
+        for line in lines
+    )
 
 
 def test_run_task_runs_pre_acceptance_hook_after_testing_passes(
@@ -8391,8 +8744,16 @@ def test_run_next_task_falls_back_from_codex_to_opencode_on_usage_limit(
 
     monkeypatch.setattr(codex, "is_available", lambda: True)
     monkeypatch.setattr(opencode, "is_available", lambda: True)
+    monkeypatch.setattr("litehive.subagents._supports_live_execution", lambda engine: False)
 
-    def fake_codex_run(prompt: str, cwd: Path, model: str | None = None) -> CLIExecutionResult:
+    def fake_codex_run(
+        prompt: str,
+        cwd: Path,
+        model: str | None = None,
+        *,
+        max_turns: int | None = None,
+        on_started=None,
+    ) -> CLIExecutionResult:
         if "Stage: grooming" in prompt:
             return CLIExecutionResult(
                 adapter="codex",
@@ -8408,7 +8769,14 @@ def test_run_next_task_falls_back_from_codex_to_opencode_on_usage_limit(
             )
         return _successful_stage_execution(tmp_path, "codex", "non-grooming")
 
-    def fake_opencode_run(prompt: str, cwd: Path, model: str | None = None) -> CLIExecutionResult:
+    def fake_opencode_run(
+        prompt: str,
+        cwd: Path,
+        model: str | None = None,
+        *,
+        max_turns: int | None = None,
+        on_started=None,
+    ) -> CLIExecutionResult:
         step = prompt.split("Stage: ", 1)[1].splitlines()[0]
         return _successful_stage_execution(tmp_path, "opencode", step)
 
@@ -8469,8 +8837,16 @@ def test_run_next_task_falls_back_from_codex_to_gemini_on_usage_limit(
 
     monkeypatch.setattr(codex, "is_available", lambda: True)
     monkeypatch.setattr(gemini, "is_available", lambda: True)
+    monkeypatch.setattr("litehive.subagents._supports_live_execution", lambda engine: False)
 
-    def fake_codex_run(prompt: str, cwd: Path, model: str | None = None) -> CLIExecutionResult:
+    def fake_codex_run(
+        prompt: str,
+        cwd: Path,
+        model: str | None = None,
+        *,
+        max_turns: int | None = None,
+        on_started=None,
+    ) -> CLIExecutionResult:
         if "Stage: grooming" in prompt:
             return CLIExecutionResult(
                 adapter="codex",
@@ -8482,7 +8858,14 @@ def test_run_next_task_falls_back_from_codex_to_gemini_on_usage_limit(
             )
         return _successful_stage_execution(tmp_path, "codex", "non-grooming")
 
-    def fake_gemini_run(prompt: str, cwd: Path, model: str | None = None) -> CLIExecutionResult:
+    def fake_gemini_run(
+        prompt: str,
+        cwd: Path,
+        model: str | None = None,
+        *,
+        max_turns: int | None = None,
+        on_started=None,
+    ) -> CLIExecutionResult:
         step = prompt.split("Stage: ", 1)[1].splitlines()[0]
         transcript = (
             '{"type":"message","role":"assistant","content":"VERDICT: PASS\\n","delta":true}\n'
@@ -8541,10 +8924,18 @@ def test_run_next_task_keeps_using_fallback_engine_after_implementing_usage_limi
 
     monkeypatch.setattr(codex, "is_available", lambda: True)
     monkeypatch.setattr(opencode, "is_available", lambda: True)
+    monkeypatch.setattr("litehive.subagents._supports_live_execution", lambda engine: False)
 
     attempted_stages: list[tuple[str, str]] = []
 
-    def fake_codex_run(prompt: str, cwd: Path, model: str | None = None) -> CLIExecutionResult:
+    def fake_codex_run(
+        prompt: str,
+        cwd: Path,
+        model: str | None = None,
+        *,
+        max_turns: int | None = None,
+        on_started=None,
+    ) -> CLIExecutionResult:
         step = prompt.split("Stage: ", 1)[1].splitlines()[0]
         attempted_stages.append(("codex", step))
         return CLIExecutionResult(
@@ -8556,7 +8947,14 @@ def test_run_next_task_keeps_using_fallback_engine_after_implementing_usage_limi
             stderr="ERROR: You've hit your usage limit. Try again later.",
         )
 
-    def fake_opencode_run(prompt: str, cwd: Path, model: str | None = None) -> CLIExecutionResult:
+    def fake_opencode_run(
+        prompt: str,
+        cwd: Path,
+        model: str | None = None,
+        *,
+        max_turns: int | None = None,
+        on_started=None,
+    ) -> CLIExecutionResult:
         step = prompt.split("Stage: ", 1)[1].splitlines()[0]
         attempted_stages.append(("opencode", step))
         return _successful_stage_execution(tmp_path, "opencode", step)
@@ -8605,8 +9003,16 @@ def test_run_next_task_walks_same_stage_fallback_graph_after_usage_limit(
     monkeypatch.setattr(codex, "is_available", lambda: True)
     monkeypatch.setattr(opencode, "is_available", lambda: True)
     monkeypatch.setattr(gemini, "is_available", lambda: True)
+    monkeypatch.setattr("litehive.subagents._supports_live_execution", lambda engine: False)
 
-    def fake_codex_run(prompt: str, cwd: Path, model: str | None = None) -> CLIExecutionResult:
+    def fake_codex_run(
+        prompt: str,
+        cwd: Path,
+        model: str | None = None,
+        *,
+        max_turns: int | None = None,
+        on_started=None,
+    ) -> CLIExecutionResult:
         if "Stage: grooming" in prompt:
             return CLIExecutionResult(
                 adapter="codex",
@@ -8618,7 +9024,14 @@ def test_run_next_task_walks_same_stage_fallback_graph_after_usage_limit(
             )
         return _successful_stage_execution(tmp_path, "codex", "non-grooming")
 
-    def fake_opencode_run(prompt: str, cwd: Path, model: str | None = None) -> CLIExecutionResult:
+    def fake_opencode_run(
+        prompt: str,
+        cwd: Path,
+        model: str | None = None,
+        *,
+        max_turns: int | None = None,
+        on_started=None,
+    ) -> CLIExecutionResult:
         if "Stage: grooming" in prompt:
             return CLIExecutionResult(
                 adapter="opencode",
@@ -8630,7 +9043,14 @@ def test_run_next_task_walks_same_stage_fallback_graph_after_usage_limit(
             )
         return _successful_stage_execution(tmp_path, "opencode", "non-grooming")
 
-    def fake_gemini_run(prompt: str, cwd: Path, model: str | None = None) -> CLIExecutionResult:
+    def fake_gemini_run(
+        prompt: str,
+        cwd: Path,
+        model: str | None = None,
+        *,
+        max_turns: int | None = None,
+        on_started=None,
+    ) -> CLIExecutionResult:
         step = prompt.split("Stage: ", 1)[1].splitlines()[0]
         transcript = (
             '{"type":"message","role":"assistant","content":"VERDICT: PASS\\n","delta":true}\n'
@@ -9373,8 +9793,16 @@ def test_run_next_task_skips_unavailable_fallback_engine_after_usage_limit(
     monkeypatch.setattr(codex, "is_available", lambda: True)
     monkeypatch.setattr(gemini, "is_available", lambda: False)
     monkeypatch.setattr(opencode, "is_available", lambda: True)
+    monkeypatch.setattr("litehive.subagents._supports_live_execution", lambda engine: False)
 
-    def fake_codex_run(prompt: str, cwd: Path, model: str | None = None) -> CLIExecutionResult:
+    def fake_codex_run(
+        prompt: str,
+        cwd: Path,
+        model: str | None = None,
+        *,
+        max_turns: int | None = None,
+        on_started=None,
+    ) -> CLIExecutionResult:
         if "Stage: grooming" in prompt:
             return CLIExecutionResult(
                 adapter="codex",
@@ -9386,7 +9814,14 @@ def test_run_next_task_skips_unavailable_fallback_engine_after_usage_limit(
             )
         return _successful_stage_execution(tmp_path, "codex", "non-grooming")
 
-    def fake_opencode_run(prompt: str, cwd: Path, model: str | None = None) -> CLIExecutionResult:
+    def fake_opencode_run(
+        prompt: str,
+        cwd: Path,
+        model: str | None = None,
+        *,
+        max_turns: int | None = None,
+        on_started=None,
+    ) -> CLIExecutionResult:
         step = prompt.split("Stage: ", 1)[1].splitlines()[0]
         return _successful_stage_execution(tmp_path, "opencode", step)
 
@@ -9703,14 +10138,14 @@ def test_run_next_task_flags_task_when_other_task_state_is_dirty(
     assert summary.task is not None
     assert summary.task.id == first.id
     assert summary.result is not None
-    assert summary.result.final_status == "flagged"
-    assert summary.commit_sha is None
-    assert _run(["git", "log", "-1", "--pretty=%s"], tmp_path) == "initial"
+    assert summary.result.final_status == "done"
+    assert summary.commit_sha is not None
+    assert _run(["git", "log", "-1", "--pretty=%s"], tmp_path) == "litehive: complete T-0001 ship-first-task"
     task = get_task(tmp_path, first.id)
     assert task is not None
-    assert task.status == "flagged"
-    assert task.pipeline_status == "commit_to_git"
-    assert task.git.commit_sha is None
+    assert task.status == "done"
+    assert task.pipeline_status == "done"
+    assert task.git.commit_sha is not None
 
 
 def test_rollback_command_requeues_checkpointed_task(

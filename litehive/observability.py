@@ -70,6 +70,23 @@ def render_task_summary(task: TaskRecord, *, active: bool) -> list[str]:
                 f"{runtime.last_subagent.status} {pid_label} {sandbox_label} snippet={snippet}"
             )
         )
+        if runtime.last_subagent.resource_limit_event is not None:
+            event = runtime.last_subagent.resource_limit_event
+            limit_parts: list[str] = []
+            if event.memory_mb is not None:
+                limit_parts.append(f"memory_mb={event.memory_mb}")
+            if event.cpu_count is not None:
+                limit_parts.append(f"cpu_count={event.cpu_count:g}")
+            if event.process_limit is not None:
+                limit_parts.append(f"process_limit={event.process_limit}")
+            signal = event.observed_signal or "-"
+            lines.append(
+                "  "
+                + (
+                    f"resource_limit={event.resource} signal={signal} exit_code={event.exit_code or '-'} "
+                    f"limits={','.join(limit_parts) or '-'} reason={event.reason}"
+                )
+            )
 
     if runtime.last_engine_switch is not None:
         lines.append(

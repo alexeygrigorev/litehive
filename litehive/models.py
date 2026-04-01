@@ -27,6 +27,7 @@ OutcomeReasonCode = Literal[
     "verdict_fail",
     "verdict_reject",
     "verdict_blocked",
+    "resource_limit",
     "missing_acceptance_criteria",
     "retry_limit_exhausted",
     "execution_cancelled",
@@ -51,6 +52,16 @@ class SubagentRef(BaseModel):
     path: str
     sandboxed: bool = False
     sandbox_summary: str = ""
+
+
+class ResourceLimitEvent(BaseModel):
+    resource: Literal["memory", "cpu", "processes", "resource"] = "resource"
+    reason: str
+    observed_signal: str | None = None
+    exit_code: int | None = None
+    memory_mb: int | None = None
+    cpu_count: float | None = None
+    process_limit: int | None = None
 
 
 class RuntimeGitState(BaseModel):
@@ -82,6 +93,7 @@ class RuntimeSubagentState(BaseModel):
     completed_at: str | None = None
     exit_code: int | None = None
     transcript_snippet: str = ""
+    resource_limit_event: ResourceLimitEvent | None = None
 
 
 class RuntimeEngineSwitch(BaseModel):
@@ -199,4 +211,5 @@ class StageReport(BaseModel):
     outcome: OutcomeKind | None = None
     outcome_reason_code: OutcomeReasonCode | None = None
     outcome_reason: str = ""
+    resource_limit_event: ResourceLimitEvent | None = None
     created_at: str = Field(default_factory=utcnow)

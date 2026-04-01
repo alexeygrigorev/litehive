@@ -259,7 +259,7 @@ class TaskExecutionRunner:
                 outcome = "blocked" if report.verdict == "blocked" else "failed"
                 reason = report.summary or f"{current} returned unsupported verdict `{report.verdict}`"
                 outcome_reason_code = (
-                    _reason_code_for_verdict(report.verdict)
+                    _reason_code_for_report(report)
                     if report.verdict == "blocked"
                     else "unsupported_verdict"
                 )
@@ -276,6 +276,7 @@ class TaskExecutionRunner:
                     feedback=report.feedback,
                     files_changed=report.files_changed,
                     tests=report.tests,
+                    resource_limit_event=report.resource_limit_event,
                 )
                 self._write_report(task, report, steps)
                 task.status = "flagged" if outcome == "blocked" else "failed"
@@ -314,6 +315,7 @@ class TaskExecutionRunner:
                         files_changed=report.files_changed,
                         tests=report.tests,
                         warnings=report.warnings,
+                        resource_limit_event=report.resource_limit_event,
                     )
                     last_verdict = report.verdict
                     task.status = "flagged"
@@ -400,20 +402,21 @@ class TaskExecutionRunner:
                     verdict=report.verdict,
                     summary=report.summary,
                     outcome=outcome,
-                    outcome_reason_code=_reason_code_for_verdict(report.verdict),
+                    outcome_reason_code=_reason_code_for_report(report),
                     reason=reason,
                     retry_count=report.retry_count,
                     warnings=report.warnings,
                     feedback=report.feedback,
                     files_changed=report.files_changed,
                     tests=report.tests,
+                    resource_limit_event=report.resource_limit_event,
                 )
                 task.status = "flagged"
                 _apply_task_outcome(
                     task,
                     kind=outcome,
                     stage=current,
-                    reason_code=_reason_code_for_verdict(report.verdict),
+                    reason_code=_reason_code_for_report(report),
                     reason=reason,
                     retry_count=report.retry_count,
                     retry_limit=self.max_retries,
@@ -469,6 +472,7 @@ class TaskExecutionRunner:
         files_changed: list[str] | None = None,
         tests: dict[str, int] | None = None,
         warnings: list[str] | None = None,
+        resource_limit_event=None,
     ) -> StageReport:
         return StageReport(
             task_id=task.id,
@@ -486,14 +490,18 @@ class TaskExecutionRunner:
             outcome=outcome,
             outcome_reason_code=outcome_reason_code,
             outcome_reason=reason,
+            resource_limit_event=resource_limit_event,
         )
 
 
-def _reason_code_for_verdict(verdict: str) -> OutcomeReasonCode:
+def _reason_code_for_report(report: StageReport) -> OutcomeReasonCode:
+    verdict = report.verdict
     if verdict == "fail":
         return "verdict_fail"
     if verdict == "reject":
         return "verdict_reject"
+    if report.resource_limit_event is not None:
+        return "resource_limit"
     return "verdict_blocked"
 
 

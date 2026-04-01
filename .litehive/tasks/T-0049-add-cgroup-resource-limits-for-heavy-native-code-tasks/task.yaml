@@ -4,19 +4,155 @@ title: Add cgroup resource limits for heavy native-code tasks
 depends_on: []
 task_type: null
 engine: null
+model: null
 mode: implementation
-status: queued
-pipeline_status: grooming
+status: done
+pipeline_status: done
 priority: medium
 created_at: '2026-03-31T17:01:48+00:00'
-updated_at: '2026-04-01T06:25:00+00:00'
+updated_at: '2026-04-01T21:54:13+00:00'
 goal: Introduce explicit resource controls for subagent execution, especially for
   native-code projects such as Rust and C++. Use cgroups or equivalent container resource
   limits to cap memory, CPU, and process counts so out-of-memory conditions do not
   destabilize the host. OOM and limit events should be surfaced as structured task
   outcomes with clear reporting, and project profiles should be able to define sensible
   default limits for stacks like Rust/C++.
-acceptance_criteria: []
+acceptance_criteria:
+- Workspace configuration can define subagent resource limits for heavy native-code
+  execution, including memory, CPU, and process-count caps, with validation and sensible
+  defaults.
+- Litehive applies those limits when launching subagents by using cgroups or an equivalent
+  container/runtime resource-control mechanism, so heavy child processes cannot destabilize
+  the host when limits are enabled.
+- Native-code-oriented project profiles expose sensible default limits for at least
+  Rust and C/C++ style workloads, while still allowing workspace overrides.
+- When a subagent hits an OOM condition or another configured resource limit, Litehive
+  records and surfaces a structured outcome with a clear reason in persisted task/runtime/session
+  reporting rather than only a generic failed or blocked status.
+- Observability surfaces the effective resource-control context and the resulting
+  limit event clearly enough to diagnose why a task stopped.
+- Focused automated tests cover config normalization, launch-time limit application,
+  and structured reporting/classification for OOM or resource-limit failures.
+- 'Purpose: build a local-first deterministic coding workspace with YAML-backed task
+  state and subagent execution.'
+- 'Main package/module locations: `litehive/cli.py`, `litehive/config.py`, `litehive/tasks.py`,
+  `litehive/runner.py`, `litehive/runtime.py`, `litehive/subagents.py`, `litehive/engines.py`,
+  `litehive/tui/app.py`.'
+- 'Tests: `tests/test_workspace.py`.'
+- '`uv run pytest -q`'
+- '`uv run litehive configure --workspace .`'
+- '`uv run litehive status --workspace .`'
+- '`uv run litehive queue --workspace .`'
+- '`uv run litehive add "<title>" --workspace .`'
+- '`uv run litehive add "<title>" --task-type review --workspace .`'
+- '`uv run litehive intake <file> --workspace .`'
+- '`uv run litehive move T-0002 1 --workspace .`'
+- '`uv run litehive prioritize T-0004 T-0002 T-0003 --workspace .`'
+- '`uv run litehive promote T-0002 --workspace .`'
+- '`uv run litehive requeue T-0002 --front --workspace .`'
+- '`uv run litehive resume T-0002 --workspace .`'
+- '`uv run litehive abandon T-0002 --workspace .`'
+- '`uv run litehive update T-0002 --engine opencode --priority high --workspace .`'
+- '`uv run litehive update T-0002 --human-checkpoint before_acceptance --workspace
+  .`'
+- '`uv run litehive run --workspace .`'
+- '`uv run litehive run --workspace . --dry-run`'
+- '`uv run litehive run --workspace . --drain`'
+- '`uv run litehive run --workspace . --drain --dry-run`'
+- '`scripts/run-all.sh .`'
+- '`scripts/run-all-status.sh .`'
+- 'Implemented adapters: `codex`, `opencode`, `gemini`, `copilot`.'
+- 'Planned later: `claude`.'
+- 'Engine selection precedence: run override, then task preference, then workspace
+  default.'
+- 'The intended execution loop is: `grooming -> implementing -> testing -> accepting
+  -> commit_to_git`.'
+- QA rejection should return the same task to SWE; it should not become terminal failure.
+- PM rejection should return the same task to SWE; it should not go back to backlog.
+- Review rejection is normal iteration, not a final task outcome.
+- '`failed` is not the desired long-term lifecycle state for review rejection; state-machine
+  cleanup is planned.'
+- Tasks that cannot be worked on right now should be parked or requeued, not dropped.
+- Explicit non-implementation outcomes such as `wont_do`, `deferred`, or `duplicate`
+  should stay visible with rationale.
+- Any future state-machine change should update the durable state-machine documentation
+  in the repo.
+- 'Workspace locking should become granular: short atomic locks for active-task transitions,
+  but queue intake and non-conflicting queue updates should remain possible while
+  a runner is active.'
+- Interrupted runners and subagents should become resumable states with recorded context
+  rather than silent stale `running` state.
+- Keep changes scoped to the current task.
+- Prefer targeted tests over broad test suites.
+- Use local YAML state under `.litehive/` as the source of truth.
+- Do not invent extra persistence layers unless the task requires it.
+- Prefer committed task outputs so completed changes are easy to revert and recover.
+- '`codex` is currently used for self-hosted testing.'
+- '`opencode` should run with model `zai-coding-plan/glm-5.1`.'
+- '`gemini` and `copilot` adapters exist, but their usage should still be validated
+  through real task runs.'
+- '`claude` support is deferred and should remain opt-in because quota is limited.'
+- When claude support is added, prefer Claude Sonnet for testing rather than Opus
+  to reduce quota usage.
+- '`opencode` must not inherit provider credential env vars; the adapter strips the
+  same variables as the `oc()` wrapper from `~/.bashrc`.'
+- 'Execution visibility is a first-class requirement: task runs should expose current
+  stage, subagent status, transcript/output, and recent progress clearly.'
+- Long pool runs should leave durable per-iteration logs so failures can be diagnosed
+  after the fact.
+- Live subagent state should be written to disk while the subagent is still running,
+  not only after completion.
+- Tasks may opt into human checkpoints before acceptance or commit; those pauses should
+  stop the pool cleanly and leave the task queued at the next stage.
+- If you add a new workflow or command, document it here so future runs inherit the
+  same context.
+- 'Orchestrator model: the local runner is the manager and owns stage routing.'
+- 'Routing model: routing stays deterministic and local; subagents execute assigned
+  stages but do not self-route.'
+- 'Shared stages: grooming -> implementing -> testing -> accepting -> commit_to_git.'
+- 'Role model: orchestrator-as-manager: `pm` grooms and accepts, `swe` implements,
+  `qa` verifies.'
+- 'Source of truth: tasks and implementation state live under `.litehive/`.'
+- 'Task source of truth: issues or task records define scope; prompts and transcripts
+  are supporting evidence.'
+- 'TDD expectations: prefer test-first or test-tight changes and explain deviations.'
+- 'Verification discipline: verification should be explicit, focused, and independent
+  enough to catch regressions.'
+- 'Acceptance flow: implementation must pass verification before acceptance.'
+- 'Commit and recovery: successful tasks checkpoint to git; rollback and recover should
+  remain deterministic.'
+- General software project workflow with deterministic local orchestration.
+- Favor incremental, reviewable changes over broad refactors.
+- Keep implementation, verification, and acceptance evidence explicit.
+- Start from the shared process contract, then add repository context and task data.
+- Combine the generic base prompt with the selected project overlay instead of replacing
+  the base.
+- Apply stage defaults first, then append any project-specific stage overlay for that
+  step.
+- Keep stage prompts explicit about role, verification expectations, and final report
+  format.
+- No acceptance criteria defined.
+- Structured acceptance criteria are still missing on the task record, but the current
+  task context is sufficient to infer them.
+- 'As the PM for grooming, either provide explicit `ACCEPTANCE_CRITERIA:` bullets
+  or let the runner persist the inferred version by returning `VERDICT: PASS`.'
+- 'You may return `VERDICT: PASS` without restating them; the runner will infer and
+  persist the criteria after grooming.'
+- 'If the current task context is not sufficient after all, return `VERDICT: BLOCKED`
+  instead of passing grooming without criteria.'
+- To override the inferred version, you may add an `ACCEPTANCE_CRITERIA:` section
+  with concrete `- ` bullets that can be persisted directly.
+- 'Return `VERDICT: BLOCKED` only if the inferred criteria are incomplete or incorrect
+  and the task still needs more information.'
+- 'The delivered change achieves the stated goal: Introduce explicit resource controls
+  for subagent execution, especially for native-code projects such as Rust and C++.
+  Use cgroups or equivalent container resource limits to cap memory, CPU, and process
+  counts so out-of-memory conditions do not destabilize the host. OOM and limit events
+  should be surfaced as structured task outcomes with clear reporting, and project
+  profiles should be able to define sensible default limits for stacks like Rust/C++..'
+- Focused verification demonstrates the targeted behavior works as intended.
+- No plan defined.
+- Keep changes scoped to the task.
 constraints: []
 plan: []
 human_checkpoints: []
@@ -26,12 +162,120 @@ subagents:
   engine: codex
   status: completed
   path: subagents/SA-0001-pm
+  sandboxed: false
+  sandbox_summary: ''
+- id: SA-0002
+  role: pm
+  engine: codex
+  status: running
+  path: subagents/SA-0002-pm
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0003
+  role: pm
+  engine: codex
+  status: running
+  path: subagents/SA-0003-pm
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0004
+  role: pm
+  engine: codex
+  status: completed
+  path: subagents/SA-0004-pm
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0005
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0005-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0006
+  role: qa
+  engine: codex
+  status: completed
+  path: subagents/SA-0006-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0007
+  role: pm
+  engine: codex
+  status: completed
+  path: subagents/SA-0007-pm
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0008
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0008-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0009
+  role: qa
+  engine: codex
+  status: completed
+  path: subagents/SA-0009-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0010
+  role: pm
+  engine: codex
+  status: completed
+  path: subagents/SA-0010-pm
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0011
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0011-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0012
+  role: qa
+  engine: codex
+  status: completed
+  path: subagents/SA-0012-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0013
+  role: pm
+  engine: codex
+  status: completed
+  path: subagents/SA-0013-pm
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0014
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0014-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0015
+  role: qa
+  engine: codex
+  status: completed
+  path: subagents/SA-0015-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0016
+  role: pm
+  engine: codex
+  status: completed
+  path: subagents/SA-0016-pm
+  sandboxed: false
+  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: checkpoint T-0049 add-cgroup-resource-limits-for-heavy-native-code-tasks'
   commit_sha: null
-  checkpoint_base_sha: null
-  checkpoint_attempts: 0
+  checkpoint_base_sha: cfb0d5d0563e4168655e3812dda8d224ddcbb3cb
+  checkpoint_attempts: 1
   rolled_back_checkpoint_attempt: null
 retry_policy:
   max_retries: null
+created_from: null

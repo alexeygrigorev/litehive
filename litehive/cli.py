@@ -10,6 +10,7 @@ import yaml
 
 from litehive.config import (
     LitehiveConfig,
+    SubagentResourceLimitsConfig,
     VALID_TASK_ROUTING_KEYS,
     VALID_POOL_SELECTION_POLICIES,
     available_process_profiles,
@@ -17,6 +18,7 @@ from litehive.config import (
     context_path,
     ensure_workspace,
     format_external_engine_sandbox,
+    format_subagent_resource_limits,
     load_config,
     normalize_task_engine_routing,
     render_context_template,
@@ -758,6 +760,37 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Run this shell command after testing passes and before the task enters accepting",
     )
+    configure.add_argument(
+        "--subagent-resource-limits",
+        dest="subagent_resource_limits_enabled",
+        action="store_true",
+        default=None,
+        help="Enable container-level memory/CPU/process caps for subagent execution",
+    )
+    configure.add_argument(
+        "--no-subagent-resource-limits",
+        dest="subagent_resource_limits_enabled",
+        action="store_false",
+        help="Disable container-level memory/CPU/process caps for subagent execution",
+    )
+    configure.add_argument(
+        "--subagent-memory-mb",
+        type=int,
+        default=None,
+        help="Container memory cap in MiB for subagent execution",
+    )
+    configure.add_argument(
+        "--subagent-cpu-count",
+        type=float,
+        default=None,
+        help="Container CPU cap for subagent execution",
+    )
+    configure.add_argument(
+        "--subagent-process-limit",
+        type=int,
+        default=None,
+        help="Container process-count cap for subagent execution",
+    )
 
     status = subparsers.add_parser("status", help="Show workspace status")
     status.add_argument(
@@ -1193,6 +1226,12 @@ def _cmd_configure(args: argparse.Namespace) -> int:
         pool_stop_on_dirty_git=getattr(args, "pool_stop_on_dirty_git", False),
         pool_selection_policy=getattr(args, "pool_selection_policy", "dependency_aware"),
         pre_acceptance_command=getattr(args, "pre_acceptance_command", None),
+        subagent_resource_limits=SubagentResourceLimitsConfig(
+            enabled=getattr(args, "subagent_resource_limits_enabled", None),
+            memory_mb=getattr(args, "subagent_memory_mb", None),
+            cpu_count=getattr(args, "subagent_cpu_count", None),
+            process_limit=getattr(args, "subagent_process_limit", None),
+        ),
         task_engine_routing=task_engine_routing,
     )
     ensure_workspace(args.workspace, config)
@@ -1236,6 +1275,7 @@ def _cmd_status(args: argparse.Namespace) -> int:
     print(f"pool_stop_on_dirty_git: {config.pool_stop_on_dirty_git}")
     print(f"pool_selection_policy: {config.pool_selection_policy}")
     print(f"pre_acceptance_command: {config.pre_acceptance_command}")
+    print(f"subagent_resource_limits: {format_subagent_resource_limits(config)}")
     print(f"external_engine_sandbox: {format_external_engine_sandbox(config)}")
     print(f"task_engine_routing: {config.task_engine_routing}")
     print(f"mode: {state.mode}")

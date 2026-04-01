@@ -147,6 +147,73 @@ class ExternalEngineSandboxConfig:
     engine_policies: dict[str, ExternalEngineSandboxPolicy] = field(default_factory=dict)
 
 
+@dataclass(slots=True)
+class SubagentResourceLimitsConfig:
+    enabled: bool | None = None
+    memory_mb: int | None = None
+    cpu_count: float | None = None
+    process_limit: int | None = None
+
+
+_PROFILE_RESOURCE_LIMIT_DEFAULTS: dict[str, SubagentResourceLimitsConfig] = {
+    "rust": SubagentResourceLimitsConfig(
+        enabled=True,
+        memory_mb=8192,
+        cpu_count=4.0,
+        process_limit=512,
+    ),
+    "cpp": SubagentResourceLimitsConfig(
+        enabled=True,
+        memory_mb=12288,
+        cpu_count=6.0,
+        process_limit=1024,
+    ),
+}
+
+
+def _normalize_subagent_resource_limits(
+    raw_limits: SubagentResourceLimitsConfig | Mapping[str, object] | None,
+    *,
+    process_profile: str,
+) -> SubagentResourceLimitsConfig:
+    if raw_limits is None:
+        limits = SubagentResourceLimitsConfig()
+    elif isinstance(raw_limits, SubagentResourceLimitsConfig):
+        limits = raw_limits
+    else:
+        raw_enabled = raw_limits.get("enabled")
+        limits = SubagentResourceLimitsConfig(
+            enabled=None if raw_enabled is None else bool(raw_enabled),
+            memory_mb=(
+                None if raw_limits.get("memory_mb") is None else int(raw_limits.get("memory_mb"))
+            ),
+            cpu_count=(
+                None if raw_limits.get("cpu_count") is None else float(raw_limits.get("cpu_count"))
+            ),
+            process_limit=(
+                None if raw_limits.get("process_limit") is None else int(raw_limits.get("process_limit"))
+            ),
+        )
+
+    defaults = _PROFILE_RESOURCE_LIMIT_DEFAULTS.get(process_profile)
+    if limits.enabled is None:
+        limits.enabled = False if defaults is None else defaults.enabled
+    if limits.memory_mb is None and defaults is not None:
+        limits.memory_mb = defaults.memory_mb
+    if limits.cpu_count is None and defaults is not None:
+        limits.cpu_count = defaults.cpu_count
+    if limits.process_limit is None and defaults is not None:
+        limits.process_limit = defaults.process_limit
+
+    if limits.memory_mb is not None and limits.memory_mb <= 0:
+        raise ValueError("subagent_resource_limits.memory_mb must be greater than 0")
+    if limits.cpu_count is not None and limits.cpu_count <= 0:
+        raise ValueError("subagent_resource_limits.cpu_count must be greater than 0")
+    if limits.process_limit is not None and limits.process_limit <= 0:
+        raise ValueError("subagent_resource_limits.process_limit must be greater than 0")
+    return limits
+
+
 def _normalize_sandbox_credential_input(
     raw_input: SandboxCredentialInput | Mapping[str, object],
     *,
@@ -523,6 +590,45 @@ PROCESS_PROFILES: dict[str, dict[str, Any]] = {
             ],
         },
     },
+    "cpp": {
+        "label": "C/C++",
+        "summary": "C or C++ workflow with compile-heavy verification, native toolchains, and linker-aware debugging.",
+        "role_model": "`pm` scopes the change, `swe` edits native code, `qa` verifies compile and runtime behavior.",
+        "tdd_expectations": (
+            "prefer focused native regression coverage near the affected target before broader rebuilds."
+        ),
+        "verification_discipline": (
+            "treat compile success, targeted tests, and linker/toolchain diagnostics as acceptance evidence."
+        ),
+        "acceptance_flow": "verify the target builds cleanly, run focused checks, and surface warnings explicitly.",
+        "commit_recovery": "keep generated build churn out of scope so checkpoints stay reviewable and deterministic.",
+        "tool_usage": [
+            "- Use the repository's documented build and test commands for the affected native target.",
+            "- Update litehive task artifacts instead of inventing external state stores.",
+            "- If you add a new command or workflow, document it here for future runs.",
+        ],
+        "specifics_heading": "## C/C++ specifics",
+        "specifics": [
+            "- Prefer target-scoped builds and tests over full rebuilds when possible.",
+            "- Keep ABI, toolchain, warning, and linker impacts explicit.",
+            "- Record sanitizer, compiler, or build-system expectations when they affect verification.",
+        ],
+        "workspace_overlay": [
+            "- Favor narrow changes that keep compile and linker failures easy to localize.",
+            "- Treat toolchain warnings, generated artifacts, and native resource usage as first-class signals.",
+        ],
+        "init_scaffold": [
+            "- Seed C/C++ workspaces with target boundaries, build commands, and toolchain expectations.",
+        ],
+        "stage_overlay": {
+            "implementing": [
+                "- Keep native build-system, header, and source changes coordinated and reviewable.",
+            ],
+            "testing": [
+                "- Prefer target-scoped compile and test commands before broader native builds.",
+            ],
+        },
+    },
     "codehive": {
         "label": "Codehive-style",
         "summary": "Multi-agent coding workflow emphasizing manager routing, TDD, and deterministic recovery.",
@@ -616,6 +722,9 @@ class LitehiveConfig:
     pool_stop_on_dirty_git: bool = False
     pool_selection_policy: str = "dependency_aware"
     pre_acceptance_command: str | None = None
+    subagent_resource_limits: SubagentResourceLimitsConfig = field(
+        default_factory=SubagentResourceLimitsConfig
+    )
     external_engine_sandbox: ExternalEngineSandboxConfig = field(
         default_factory=ExternalEngineSandboxConfig
     )
@@ -655,6 +764,10 @@ class LitehiveConfig:
         }
         self.execution_retry_policies = _normalize_execution_retry_policies(
             self.execution_retry_policies
+        )
+        self.subagent_resource_limits = _normalize_subagent_resource_limits(
+            self.subagent_resource_limits,
+            process_profile=self.process_profile,
         )
         self.external_engine_sandbox = _normalize_external_engine_sandbox_config(
             self.external_engine_sandbox
@@ -888,3 +1001,17 @@ def format_external_engine_sandbox(config: LitehiveConfig) -> str:
         f"default_net:{sandbox.default_network_mode} default_workspace:{sandbox.default_workspace_mode} "
         f"policies: {policies}"
     )
+
+
+def format_subagent_resource_limits(config: LitehiveConfig) -> str:
+    limits = config.subagent_resource_limits
+    if not limits.enabled:
+        return "disabled"
+    details: list[str] = []
+    if limits.memory_mb is not None:
+        details.append(f"memory_mb:{limits.memory_mb}")
+    if limits.cpu_count is not None:
+        details.append(f"cpu_count:{limits.cpu_count:g}")
+    if limits.process_limit is not None:
+        details.append(f"process_limit:{limits.process_limit}")
+    return "enabled " + " ".join(details) if details else "enabled"

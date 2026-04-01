@@ -27,6 +27,7 @@ from litehive.git_ops import GitError, checkpoint_message, default_commit_messag
 from litehive.models import (
     FollowUpTaskSpec,
     RuntimeEngineSwitch,
+    ResourceLimitEvent,
     RuntimeSubagentState,
     StageReport,
     TaskCreationSource,
@@ -1197,11 +1198,25 @@ def finish_task_run_transition(root: Path, task: TaskRecord, final_status: str) 
         task.runtime.updated_at = now
         task.runtime.active_subagent = None
         state = load_state(root)
+        state_changed = False
         if state.active_task_id == task.id:
             state.active_task_id = None
-        state.queue = [item for item in state.queue if item != task.id]
+            state_changed = True
+        queued_without_task = [item for item in state.queue if item != task.id]
+        if queued_without_task != state.queue:
+            state.queue = queued_without_task
+            state_changed = True
         if final_status in {"paused", "queued"} and task.status == "queued" and task.pipeline_status != "done":
             state.queue.insert(0, task.id)
+            state_changed = True
+        if (
+            final_status == "done"
+            and task.status == "done"
+            and task.pipeline_status == "done"
+            and not state_changed
+        ):
+            _write_task_runtime(root, task)
+            return task
         persist_task_and_state(root, task=task, state=state)
         return task
 
@@ -1382,6 +1397,7 @@ def mark_subagent_finished(
     transcript: str,
     exit_code: int,
     pid: int | None = None,
+    resource_limit_event: ResourceLimitEvent | None = None,
 ) -> None:
     now = utcnow()
     started_at = task.runtime.active_subagent.started_at if task.runtime.active_subagent else now
@@ -1403,6 +1419,7 @@ def mark_subagent_finished(
         completed_at=now,
         exit_code=exit_code,
         transcript_snippet=summarize_transcript(transcript),
+        resource_limit_event=resource_limit_event,
     )
     task.runtime.active_subagent = None
     save_task_runtime(root, task)

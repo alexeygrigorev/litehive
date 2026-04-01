@@ -17,7 +17,7 @@ from litehive.engines import (
     classify_retryable_execution_failure,
     get_engine,
 )
-from litehive.models import StageReport, SubagentRef, TaskRecord, utcnow
+from litehive.models import ResourceLimitEvent, StageReport, SubagentRef, TaskRecord, utcnow
 from litehive.sandbox import SandboxError, SandboxLauncher
 from litehive.tasks import (
     _write_atomic_files,
@@ -37,6 +37,7 @@ class EngineFailure:
     kind: str
     reason: str
     classification: str | None = None
+    resource_limit_event: ResourceLimitEvent | None = None
 
 
 @dataclass(slots=True)
@@ -50,7 +51,23 @@ class SubagentResult:
 
 def _supports_live_execution(engine: object) -> bool:
     run_live = getattr(engine, "run_live", None)
-    return callable(run_live)
+    if not callable(run_live):
+        return False
+    return not _prefers_non_live_run(engine)
+
+
+def _prefers_non_live_run(engine: object) -> bool:
+    engine_dict = getattr(engine, "__dict__", {})
+    if "run" in engine_dict and "run_live" not in engine_dict:
+        return True
+
+    engine_type = type(engine)
+    run_impl = getattr(engine_type, "run", None)
+    run_live_impl = getattr(engine_type, "run_live", None)
+    return (
+        run_impl is not ExternalCLIAdapter.run
+        and run_live_impl is ExternalCLIAdapter.run_live
+    )
 
 
 def _supports_on_started(engine: object) -> bool:
@@ -115,7 +132,7 @@ class SubagentManager:
         try:
             if not engine.is_available():
                 raise EngineError(f"Engine '{engine.name}' is unavailable: missing binary '{engine.binary}'")
-            if isinstance(engine, ExternalCLIAdapter):
+            if isinstance(engine, ExternalCLIAdapter) and sandbox_summary.enabled:
                 engine = _SandboxedAdapter(engine, self.sandbox, engine_name)
             if _supports_live_execution(engine):
                 live_kwargs: dict[str, object] = {
@@ -159,17 +176,31 @@ class SubagentManager:
             transcript = engine.render_transcript(proc)
             ref.status = "completed" if proc.exit_code == 0 else "failed"
             if proc.exit_code != 0:
-                limit_reason = classify_execution_limit(transcript)
-                if limit_reason is not None:
-                    failure = EngineFailure(kind="execution_limit", reason=limit_reason)
+                resource_limit_event = self.sandbox.classify_resource_limit_event(
+                    engine_name,
+                    exit_code=proc.exit_code,
+                    stdout=proc.stdout,
+                    stderr=proc.stderr,
+                )
+                if resource_limit_event is not None:
+                    failure = EngineFailure(
+                        kind="resource_limit",
+                        reason=resource_limit_event.reason,
+                        classification=resource_limit_event.resource,
+                        resource_limit_event=resource_limit_event,
+                    )
                 else:
-                    retryable_failure = classify_retryable_execution_failure(transcript)
-                    if retryable_failure is not None:
-                        failure = EngineFailure(
-                            kind="retryable_execution_error",
-                            reason=retryable_failure.reason,
-                            classification=retryable_failure.classification,
-                        )
+                    limit_reason = classify_execution_limit(transcript)
+                    if limit_reason is not None:
+                        failure = EngineFailure(kind="execution_limit", reason=limit_reason)
+                    else:
+                        retryable_failure = classify_retryable_execution_failure(transcript)
+                        if retryable_failure is not None:
+                            failure = EngineFailure(
+                                kind="retryable_execution_error",
+                                reason=retryable_failure.reason,
+                                classification=retryable_failure.classification,
+                            )
         except (EngineError, SandboxError) as exc:
             transcript = str(exc)
             proc = None
@@ -184,6 +215,7 @@ class SubagentManager:
             transcript,
             0 if proc is None else proc.exit_code,
             pid=None if proc is None else proc.pid,
+            resource_limit_event=None if failure is None else failure.resource_limit_event,
         )
         self._write_session_finish(
             task,
@@ -193,6 +225,7 @@ class SubagentManager:
             transcript,
             0 if proc is None else proc.exit_code,
             proc,
+            resource_limit_event=None if failure is None else failure.resource_limit_event,
         )
         return SubagentResult(
             ref=ref,
@@ -239,9 +272,12 @@ class SubagentManager:
                 "files_changed": [],
                 "tests": {"added": 0, "passing": 0},
                 "warnings": [],
+                "resource_control": self.sandbox.policy_summary(ref.engine).as_dict(),
+                "resource_limit_event": None,
             },
             exit_code=None,
             pid=None,
+            resource_limit_event=None,
         )
 
     def _write_session_finish(
@@ -253,18 +289,30 @@ class SubagentManager:
         transcript: str,
         exit_code: int,
         execution: CLIExecutionResult | None,
+        resource_limit_event: ResourceLimitEvent | None,
     ) -> None:
         report_step = (
             task.pipeline_status
             if task.pipeline_status in {"grooming", "implementing", "testing", "accepting", "commit_to_git"}
             else "implementing"
         )
-        report = parse_stage_report_text(
-            task_id=task.id,
-            step=report_step,  # type: ignore[arg-type]
-            transcript=transcript,
-            subagent_status=ref.status,
-        )
+        if resource_limit_event is not None:
+            report = StageReport(
+                task_id=task.id,
+                step=report_step,  # type: ignore[arg-type]
+                verdict="blocked",
+                summary=f"{report_step} blocked: {resource_limit_event.reason}",
+                feedback=transcript,
+                warnings=[resource_limit_event.reason],
+                resource_limit_event=resource_limit_event,
+            )
+        else:
+            report = parse_stage_report_text(
+                task_id=task.id,
+                step=report_step,  # type: ignore[arg-type]
+                transcript=transcript,
+                subagent_status=ref.status,
+            )
         self._write_session_snapshot(
             base,
             ref,
@@ -278,9 +326,16 @@ class SubagentManager:
                 "files_changed": report.files_changed,
                 "tests": report.tests,
                 "warnings": report.warnings,
+                "resource_control": self.sandbox.policy_summary(ref.engine).as_dict(),
+                "resource_limit_event": (
+                    None
+                    if report.resource_limit_event is None
+                    else report.resource_limit_event.model_dump(mode="python")
+                ),
             },
             exit_code=exit_code,
             pid=None if execution is None else execution.pid,
+            resource_limit_event=resource_limit_event,
         )
 
     def _write_session_progress(
@@ -309,6 +364,8 @@ class SubagentManager:
             "files_changed": [],
             "tests": {"added": 0, "passing": 0},
             "warnings": [],
+            "resource_control": self.sandbox.policy_summary(ref.engine).as_dict(),
+            "resource_limit_event": None,
         }
         if transcript.strip():
             report = parse_stage_report_text(
@@ -323,6 +380,12 @@ class SubagentManager:
                 "files_changed": report.files_changed,
                 "tests": report.tests,
                 "warnings": report.warnings,
+                "resource_control": self.sandbox.policy_summary(ref.engine).as_dict(),
+                "resource_limit_event": (
+                    None
+                    if report.resource_limit_event is None
+                    else report.resource_limit_event.model_dump(mode="python")
+                ),
             }
         self._write_session_snapshot(
             base,
@@ -334,6 +397,7 @@ class SubagentManager:
             report_payload=report_payload,
             exit_code=None,
             pid=execution.pid,
+            resource_limit_event=None,
         )
 
     def _write_session_metadata(
@@ -343,9 +407,11 @@ class SubagentManager:
         *,
         exit_code: int | None,
         pid: int | None,
+        resource_limit_event: ResourceLimitEvent | None = None,
     ) -> None:
         created_at = utcnow()
         session_path = base / "session.yaml"
+        resource_control = self.sandbox.policy_summary(ref.engine).as_dict()
         if session_path.exists():
             existing = yaml.safe_load(session_path.read_text(encoding="utf-8")) or {}
             if isinstance(existing, dict) and isinstance(existing.get("created_at"), str):
@@ -364,6 +430,12 @@ class SubagentManager:
                         "updated_at": utcnow(),
                         "pid": pid,
                         "exit_code": exit_code,
+                        "resource_control": resource_control,
+                        "resource_limit_event": (
+                            None
+                            if resource_limit_event is None
+                            else resource_limit_event.model_dump(mode="python")
+                        ),
                     },
                     sort_keys=False,
                 )
@@ -374,7 +446,7 @@ class SubagentManager:
         if pid is None:
             return
         mark_subagent_pid(self.root, task, pid)
-        self._write_session_metadata(base, ref, exit_code=None, pid=pid)
+        self._write_session_metadata(base, ref, exit_code=None, pid=pid, resource_limit_event=None)
 
     def _write_session_snapshot(
         self,
@@ -388,9 +460,11 @@ class SubagentManager:
         report_payload: dict[str, object],
         exit_code: int | None,
         pid: int | None,
+        resource_limit_event: ResourceLimitEvent | None,
     ) -> None:
         created_at = utcnow()
         session_path = base / "session.yaml"
+        resource_control = self.sandbox.policy_summary(ref.engine).as_dict()
         if session_path.exists():
             existing = yaml.safe_load(session_path.read_text(encoding="utf-8")) or {}
             if isinstance(existing, dict) and isinstance(existing.get("created_at"), str):
@@ -409,6 +483,12 @@ class SubagentManager:
                         "updated_at": utcnow(),
                         "pid": pid,
                         "exit_code": exit_code,
+                        "resource_control": resource_control,
+                        "resource_limit_event": (
+                            None
+                            if resource_limit_event is None
+                            else resource_limit_event.model_dump(mode="python")
+                        ),
                     },
                     sort_keys=False,
                 ),
@@ -631,6 +711,21 @@ def stage_prompt(
 
 
 def stage_report_from_subagent(task: TaskRecord, step: str, result: SubagentResult) -> StageReport:
+    if (
+        result.failure is not None
+        and result.failure.kind == "resource_limit"
+        and result.failure.resource_limit_event is not None
+    ):
+        event = result.failure.resource_limit_event
+        return StageReport(
+            task_id=task.id,
+            step=step,  # type: ignore[arg-type]
+            verdict="blocked",
+            summary=f"{step} blocked: {event.reason}",
+            feedback=result.transcript,
+            warnings=[event.reason],
+            resource_limit_event=event,
+        )
     if result.execution is not None:
         engine = get_engine(result.ref.engine)
         return engine.parse_stage_report(
