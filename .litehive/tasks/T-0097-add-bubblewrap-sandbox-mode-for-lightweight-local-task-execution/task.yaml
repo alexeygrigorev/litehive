@@ -1,0 +1,46 @@
+id: T-0097
+slug: add-bubblewrap-sandbox-mode-for-lightweight-local-task-execution
+title: Add bubblewrap sandbox mode for lightweight local task execution
+depends_on: []
+task_type: null
+engine: null
+mode: implementation
+status: queued
+pipeline_status: backlog
+priority: medium
+created_at: '2026-04-01T08:54:36+00:00'
+updated_at: '2026-04-01T08:56:00+00:00'
+goal: Add a lightweight `bubblewrap` sandbox mode that constrains task execution
+  to the workspace and a minimal runtime surface, so an agent or compromised package
+  cannot freely read, modify, or delete files outside the allowed mounts.
+acceptance_criteria:
+- Litehive can execute supported task stages inside `bubblewrap` as a selectable sandbox mode.
+- The sandbox mounts only the intended workspace paths plus the minimal runtime paths
+  needed to execute the toolchain.
+- The sandbox configuration prevents writes outside the allowed workspace mounts.
+- Sensitive host paths like the broader home directory are not exposed unless explicitly
+  required for the selected executor.
+- Sandbox policy and propagated mounts/env are visible in task/run diagnostics.
+constraints:
+- Treat `bubblewrap` as complementary to Docker, not a replacement for Docker-based
+  resource and environment isolation.
+- Default to the narrowest practical filesystem and environment exposure.
+- Make executor-specific credential propagation explicit rather than inheriting the
+  full host environment.
+plan:
+- Add a `bubblewrap` sandbox backend with a minimal mount and environment policy.
+- Restrict default access to the workspace plus only the runtime/tool paths required
+  for execution.
+- Surface the resulting sandbox config in diagnostics and verify that paths outside
+  the workspace are not writable or broadly readable.
+human_checkpoints: []
+subagents: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0097 add-bubblewrap-sandbox-mode-for-lightweight-local-task-execution'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+retry_policy:
+  max_retries: null

@@ -16,6 +16,8 @@ def render_task_summary(task: TaskRecord, *, active: bool) -> list[str]:
         lines.append(f"  depends_on={', '.join(task.depends_on)}")
     if task.human_checkpoints:
         lines.append(f"  human_checkpoints={', '.join(task.human_checkpoints)}")
+    if task.engine or task.model:
+        lines.append(f"  engine={task.engine or '-'} model={task.model or 'default'}")
     lines.append(f"  auto_commit={task.git.auto_commit}")
     if task.git.commit_message:
         lines.append(f"  commit_message={task.git.commit_message}")
@@ -42,20 +44,30 @@ def render_task_summary(task: TaskRecord, *, active: bool) -> list[str]:
 
     if runtime.active_subagent is not None:
         subagent_duration = _duration_label(runtime.active_subagent.started_at, 0)
+        pid_label = _pid_label(runtime.active_subagent.pid)
+        sandbox_label = _sandbox_label(
+            runtime.active_subagent.sandboxed,
+            runtime.active_subagent.sandbox_summary,
+        )
         lines.append(
             "  "
             + (
                 f"subagent={runtime.active_subagent.id} {runtime.active_subagent.role}/{runtime.active_subagent.engine} "
-                f"{runtime.active_subagent.status} duration={subagent_duration}"
+                f"{runtime.active_subagent.status} {pid_label} duration={subagent_duration} {sandbox_label}"
             )
         )
     elif runtime.last_subagent is not None:
         snippet = runtime.last_subagent.transcript_snippet or "-"
+        pid_label = _pid_label(runtime.last_subagent.pid)
+        sandbox_label = _sandbox_label(
+            runtime.last_subagent.sandboxed,
+            runtime.last_subagent.sandbox_summary,
+        )
         lines.append(
             "  "
             + (
                 f"last_subagent={runtime.last_subagent.id} {runtime.last_subagent.role}/{runtime.last_subagent.engine} "
-                f"{runtime.last_subagent.status} snippet={snippet}"
+                f"{runtime.last_subagent.status} {pid_label} {sandbox_label} snippet={snippet}"
             )
         )
 
@@ -123,3 +135,11 @@ def _seconds_label(seconds: int) -> str:
         return f"{minutes}m{remaining_seconds:02d}s"
     hours, remaining_minutes = divmod(minutes, 60)
     return f"{hours}h{remaining_minutes:02d}m"
+
+
+def _pid_label(pid: int | None) -> str:
+    return f"pid={pid}" if pid is not None else "pid=-"
+
+
+def _sandbox_label(sandboxed: bool, sandbox_summary: str) -> str:
+    return f"sandbox={sandbox_summary or 'enabled'}" if sandboxed else "sandbox=host"

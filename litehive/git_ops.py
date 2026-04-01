@@ -10,6 +10,11 @@ from pathlib import Path
 
 from litehive.models import TaskRecord
 
+DEFAULT_CHECKPOINT_SUBJECT_TEMPLATE = "litehive: complete {task_id} {slug}"
+LEGACY_CHECKPOINT_SUBJECT_TEMPLATE = "litehive: checkpoint {task_id} {slug}"
+CHECKPOINT_ATTEMPT_SUFFIX_TEMPLATE = "{base} (attempt {attempt})"
+ROLLBACK_SUBJECT_TEMPLATE = "litehive: rollback {task_id} {slug} (attempt {attempt})"
+
 
 class GitError(RuntimeError):
     """Raised when git operations fail."""
@@ -62,11 +67,11 @@ def current_head(root: Path) -> str | None:
 
 
 def default_commit_message(task_id: str, slug: str) -> str:
-    return f"litehive: complete {task_id} {slug}"
+    return DEFAULT_CHECKPOINT_SUBJECT_TEMPLATE.format(task_id=task_id, slug=slug)
 
 
 def _legacy_default_commit_message(task_id: str, slug: str) -> str:
-    return f"litehive: checkpoint {task_id} {slug}"
+    return LEGACY_CHECKPOINT_SUBJECT_TEMPLATE.format(task_id=task_id, slug=slug)
 
 
 def _uses_generated_commit_message(task: TaskRecord) -> bool:
@@ -80,15 +85,16 @@ def _uses_generated_commit_message(task: TaskRecord) -> bool:
 
 
 def checkpoint_message(task: TaskRecord, attempt: int | None = None) -> str:
+    """Return the deterministic checkpoint subject for the next or requested attempt."""
     base = task.git.commit_message or default_commit_message(task.id, task.slug)
     attempt = attempt or (task.git.checkpoint_attempts + 1)
     if attempt > 1 and _uses_generated_commit_message(task):
-        return f"{base} (attempt {attempt})"
+        return CHECKPOINT_ATTEMPT_SUFFIX_TEMPLATE.format(base=base, attempt=attempt)
     return base
 
 
 def rollback_message(task: TaskRecord, attempt: int) -> str:
-    return f"litehive: rollback {task.id} {task.slug} (attempt {attempt})"
+    return ROLLBACK_SUBJECT_TEMPLATE.format(task_id=task.id, slug=task.slug, attempt=attempt)
 
 
 def find_commit_by_subject(root: Path, subject: str) -> str | None:
@@ -103,14 +109,25 @@ def find_commit_by_subject(root: Path, subject: str) -> str | None:
     return None
 
 
-def commit_task(root: Path, message: str) -> CommitCheckpoint | None:
-    if not is_git_repo(root) or not has_changes(root):
+def commit_task(root: Path, message: str, *, paths: list[str] | None = None) -> CommitCheckpoint | None:
+    if not is_git_repo(root):
         return None
 
     base_sha = current_head(root)
-    add_proc = _run_git(root, "add", "-A")
+    if paths:
+        add_proc = _run_git(root, "add", "--", *paths)
+    else:
+        if not has_changes(root):
+            return None
+        add_proc = _run_git(root, "add", "-A")
     if add_proc.returncode != 0:
         raise GitError(add_proc.stderr.strip() or "git add failed")
+
+    staged_proc = _run_git(root, "diff", "--cached", "--quiet", "--exit-code")
+    if staged_proc.returncode == 0:
+        return None
+    if staged_proc.returncode not in {0, 1}:
+        raise GitError(staged_proc.stderr.strip() or "git diff --cached failed")
 
     commit_proc = _run_git(root, "commit", "-m", message)
     if commit_proc.returncode != 0:

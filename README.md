@@ -2,6 +2,20 @@
 
 Local-first autonomous coding workspace with deterministic task execution.
 
+litehive is about making agent-driven development deterministic and system-controlled.
+The goal is to let agents perform at their best while constraining them to a clear process:
+the runner owns state transitions, routing, and git integration so agents cannot freely invent
+workflow state or skip required steps. In practice, the restriction is a feature. Agents tend
+to perform better when the process is explicit, validated, and enforced.
+
+The intended operating mode is simple:
+
+- keep a working queue of tasks
+- run the queue in order
+- let the system continue until there is no runnable work left
+- allow agents to add follow-up work to the queue while the project is in progress
+- keep execution, verification, acceptance, and integration under runner control
+
 ## Current model
 
 - Single active task at a time
@@ -26,6 +40,7 @@ Common commands:
 - `litehive add "<title>" --task-type review`
 - `litehive update T-0001 --engine opencode`
 - `litehive move T-0001 1`
+- `litehive prioritize T-0003 T-0002 T-0001`
 - `litehive promote T-0001`
 - `litehive requeue T-0001 --front`
 - `litehive run`
@@ -47,6 +62,7 @@ Each runnable task goes through a fixed stage pipeline:
 5. `commit_to_git`
 
 The orchestrator owns routing and task state. Subagents produce reports and artifacts, but they do not decide the control flow.
+Agents are meant to operate inside this system rather than around it: they implement, verify, and report, while litehive enforces the stage order, validates results, and owns final integration.
 Tasks can also opt into `--human-checkpoint before_acceptance` or `--human-checkpoint before_commit`, which pauses the pool and requeues the task at the next stage boundary for manual review.
 External engine choice resolves as:
 
@@ -56,6 +72,8 @@ External engine choice resolves as:
 
 The full state machine — states, transitions, verdicts, outcome codes, and the
 change-gate rule — is documented in [`docs/state-machine.md`](docs/state-machine.md).
+
+In continuous operation, litehive should be able to keep draining the pool, pick up newly queued work between iterations, and stop only when there is no active or queued runnable task left or when an explicit stop condition is hit.
 
 ## Workspace shape
 
@@ -95,14 +113,16 @@ Task-local artifacts live under `.litehive/tasks/<task-id>/` and include reports
 
 ## Git checkpoints
 
-By default, Litehive records a git completion commit whenever a task reaches `done` and the workspace is a git repository.
+By default, litehive records a git completion commit whenever a task reaches `done` and the workspace is a git repository.
 The task stores the checkpoint policy in `task.yaml`, including the commit subject, the base `HEAD`, and the number
 of completed attempts.
 
 - Default checkpoint subject: `litehive: complete <task-id> <slug>`
-- Repeat completion attempts append an attempt suffix: `litehive: complete <task-id> <slug> (attempt N)`
-- `litehive rollback <task-id>` reverts the latest checkpoint commit, creates a rollback commit, and requeues the task at `implementing`
-- `litehive recover <task-id>` requeues a completed task at `implementing` without reverting code
+- Repeat completion attempts keep the same generated subject and append an attempt suffix: `litehive: complete <task-id> <slug> (attempt N)`
+- The checkpoint happens at `commit_to_git`; a task only reaches and stays `done` after that checkpoint is recorded unless task-level or workspace-level auto-commit is disabled
+- `litehive rollback <task-id>` preserves the attempt counter, reverts the recorded checkpoint into a new rollback commit, and requeues the task at the implementation entry stage
+- `litehive recover <task-id>` clears the recorded checkpoint pointer without reverting code, keeps the attempt counter, and requeues the task at the implementation entry stage
+- The implementation entry stage is normally `implementing`; Litehive reroutes recovery to `grooming` instead when structured acceptance criteria are still required.
 
 Rollback and recover are only valid for completed tasks. Rollback also requires a clean git worktree so the revert is deterministic.
 

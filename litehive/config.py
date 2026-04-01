@@ -5,6 +5,7 @@ from __future__ import annotations
 from copy import deepcopy
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
+import re
 from typing import Any, Mapping, Sequence
 
 import yaml
@@ -12,6 +13,28 @@ import yaml
 
 VALID_POOL_SELECTION_POLICIES = {"fifo", "priority_first", "dependency_aware"}
 VALID_ENGINE_NAMES = frozenset({"codex", "opencode", "gemini", "copilot", "claude"})
+VALID_EXECUTION_RETRY_SELECTORS = frozenset({*VALID_ENGINE_NAMES, "external_cli"})
+VALID_EXECUTION_RETRY_CLASSIFICATIONS = frozenset({"timeout", "network", "service"})
+VALID_SANDBOX_NETWORK_MODES = frozenset({"none", "bridge", "host"})
+VALID_SANDBOX_WORKSPACE_MODES = frozenset({"ro", "rw"})
+MODEL_FAMILY_RETRY_SELECTOR_PREFIX = "model_family:"
+ENGINE_CATEGORY_RETRY_SELECTOR_PREFIX = "engine_category:"
+
+
+def _normalize_execution_retry_selector(selector: str) -> str:
+    normalized = selector.strip().lower()
+    if normalized in VALID_EXECUTION_RETRY_SELECTORS:
+        return normalized
+    if normalized == f"{ENGINE_CATEGORY_RETRY_SELECTOR_PREFIX}external_cli":
+        return "external_cli"
+    if normalized.startswith(MODEL_FAMILY_RETRY_SELECTOR_PREFIX):
+        family = normalized.removeprefix(MODEL_FAMILY_RETRY_SELECTOR_PREFIX).strip()
+        if re.fullmatch(r"[a-z0-9][a-z0-9_-]*", family):
+            return f"{MODEL_FAMILY_RETRY_SELECTOR_PREFIX}{family}"
+    raise ValueError(
+        "execution_retry_policies key must be an engine name, `external_cli`, "
+        "or `model_family:<family>`"
+    )
 
 
 def _default_task_engine_routing() -> dict[str, list[str]]:
@@ -22,6 +45,7 @@ def _default_task_engine_routing() -> dict[str, list[str]]:
         "review": ["copilot", "codex", "opencode", "gemini"],
         "refactor": ["opencode", "codex", "copilot", "gemini"],
         "docs": ["codex", "gemini", "opencode", "copilot"],
+        "intake": ["opencode", "codex", "gemini", "copilot"],
     }
 
 
@@ -42,6 +66,27 @@ def _normalize_engine_sequence(engines: Sequence[str], *, field_name: str) -> li
     return normalized
 
 
+def _normalize_engine_int_map(
+    values: Mapping[str, int] | None,
+    *,
+    field_name: str,
+) -> dict[str, int]:
+    if values is None:
+        return {}
+
+    normalized: dict[str, int] = {}
+    for engine_name, raw_value in values.items():
+        if engine_name not in VALID_ENGINE_NAMES:
+            allowed = ", ".join(sorted(VALID_ENGINE_NAMES))
+            raise ValueError(f"{field_name} engine must be one of: {allowed}")
+        if not isinstance(raw_value, int):
+            raise ValueError(f"{field_name}[{engine_name}] must be an integer")
+        if raw_value < 0:
+            raise ValueError(f"{field_name}[{engine_name}] must be 0 or greater")
+        normalized[engine_name] = raw_value
+    return normalized
+
+
 def normalize_task_engine_routing(
     routing: Mapping[str, Sequence[str]] | None,
 ) -> dict[str, list[str]]:
@@ -58,6 +103,238 @@ def normalize_task_engine_routing(
             field_name=f"task_engine_routing[{route_key}]",
         )
     return normalized
+
+
+@dataclass(slots=True)
+class ExecutionRetryPolicy:
+    max_retries: int = 0
+    backoff_seconds: float = 0.0
+    backoff_multiplier: float = 1.0
+    retry_on: list[str] = field(
+        default_factory=lambda: ["timeout", "network", "service"]
+    )
+
+
+@dataclass(slots=True)
+class SandboxCredentialInput:
+    env_var: str
+    mount_path: str
+
+
+@dataclass(slots=True)
+class ExternalEngineSandboxPolicy:
+    enabled: bool = False
+    network_mode: str | None = None
+    workspace_mode: str | None = None
+    environment: list[str] = field(default_factory=list)
+    credential_inputs: list[SandboxCredentialInput] = field(default_factory=list)
+
+
+@dataclass(slots=True)
+class ExternalEngineSandboxConfig:
+    enabled: bool = False
+    runtime_binary: str = "docker"
+    image: str = "litehive-external-engine:latest"
+    workspace_mount_path: str = "/workspace"
+    binary_mount_root: str = "/litehive/bin"
+    runtime_args: list[str] = field(default_factory=list)
+    default_network_mode: str = "none"
+    default_workspace_mode: str = "rw"
+    read_only_rootfs: bool = True
+    drop_capabilities: bool = True
+    no_new_privileges: bool = True
+    tmpfs: list[str] = field(default_factory=lambda: ["/tmp"])
+    engine_policies: dict[str, ExternalEngineSandboxPolicy] = field(default_factory=dict)
+
+
+def _normalize_sandbox_credential_input(
+    raw_input: SandboxCredentialInput | Mapping[str, object],
+    *,
+    field_name: str,
+) -> SandboxCredentialInput:
+    if isinstance(raw_input, SandboxCredentialInput):
+        credential = raw_input
+    else:
+        env_var = str(raw_input.get("env_var", "")).strip()
+        mount_path = str(raw_input.get("mount_path", "")).strip()
+        credential = SandboxCredentialInput(env_var=env_var, mount_path=mount_path)
+    if not re.fullmatch(r"[A-Z][A-Z0-9_]*", credential.env_var):
+        raise ValueError(f"{field_name}.env_var must be an uppercase environment variable name")
+    if not credential.mount_path.startswith("/"):
+        raise ValueError(f"{field_name}.mount_path must be an absolute container path")
+    return credential
+
+
+def _normalize_external_engine_sandbox_policy(
+    raw_policy: ExternalEngineSandboxPolicy | Mapping[str, object],
+    *,
+    field_name: str,
+) -> ExternalEngineSandboxPolicy:
+    if isinstance(raw_policy, ExternalEngineSandboxPolicy):
+        policy = raw_policy
+    else:
+        policy = ExternalEngineSandboxPolicy(
+            enabled=bool(raw_policy.get("enabled", False)),
+            network_mode=(
+                None if raw_policy.get("network_mode") is None else str(raw_policy.get("network_mode"))
+            ),
+            workspace_mode=(
+                None if raw_policy.get("workspace_mode") is None else str(raw_policy.get("workspace_mode"))
+            ),
+            environment=[str(item) for item in raw_policy.get("environment", [])],
+            credential_inputs=[
+                _normalize_sandbox_credential_input(
+                    item,
+                    field_name=f"{field_name}.credential_inputs[{index}]",
+                )
+                for index, item in enumerate(raw_policy.get("credential_inputs", []))
+            ],
+        )
+    for index, env_name in enumerate(policy.environment):
+        if not re.fullmatch(r"[A-Z][A-Z0-9_]*", env_name):
+            raise ValueError(
+                f"{field_name}.environment[{index}] must be an uppercase environment variable name"
+            )
+    if policy.network_mode is not None and policy.network_mode not in VALID_SANDBOX_NETWORK_MODES:
+        allowed = ", ".join(sorted(VALID_SANDBOX_NETWORK_MODES))
+        raise ValueError(f"{field_name}.network_mode must be one of: {allowed}")
+    if policy.workspace_mode is not None and policy.workspace_mode not in VALID_SANDBOX_WORKSPACE_MODES:
+        allowed = ", ".join(sorted(VALID_SANDBOX_WORKSPACE_MODES))
+        raise ValueError(f"{field_name}.workspace_mode must be one of: {allowed}")
+    return policy
+
+
+def _normalize_external_engine_sandbox_config(
+    raw_config: ExternalEngineSandboxConfig | Mapping[str, object] | None,
+) -> ExternalEngineSandboxConfig:
+    if raw_config is None:
+        return ExternalEngineSandboxConfig()
+    if isinstance(raw_config, ExternalEngineSandboxConfig):
+        config = raw_config
+    else:
+        config = ExternalEngineSandboxConfig(
+            enabled=bool(raw_config.get("enabled", False)),
+            runtime_binary=str(raw_config.get("runtime_binary", "docker")),
+            image=str(raw_config.get("image", "litehive-external-engine:latest")),
+            workspace_mount_path=str(raw_config.get("workspace_mount_path", "/workspace")),
+            binary_mount_root=str(raw_config.get("binary_mount_root", "/litehive/bin")),
+            runtime_args=[str(item) for item in raw_config.get("runtime_args", [])],
+            default_network_mode=str(raw_config.get("default_network_mode", "none")),
+            default_workspace_mode=str(raw_config.get("default_workspace_mode", "rw")),
+            read_only_rootfs=bool(raw_config.get("read_only_rootfs", True)),
+            drop_capabilities=bool(raw_config.get("drop_capabilities", True)),
+            no_new_privileges=bool(raw_config.get("no_new_privileges", True)),
+            tmpfs=[str(item) for item in raw_config.get("tmpfs", ["/tmp"])],
+            engine_policies={
+                engine_name: _normalize_external_engine_sandbox_policy(
+                    policy,
+                    field_name=f"external_engine_sandbox.engine_policies[{engine_name}]",
+                )
+                for engine_name, policy in dict(raw_config.get("engine_policies", {})).items()
+            },
+        )
+    if config.default_network_mode not in VALID_SANDBOX_NETWORK_MODES:
+        allowed = ", ".join(sorted(VALID_SANDBOX_NETWORK_MODES))
+        raise ValueError(f"external_engine_sandbox.default_network_mode must be one of: {allowed}")
+    if config.default_workspace_mode not in VALID_SANDBOX_WORKSPACE_MODES:
+        allowed = ", ".join(sorted(VALID_SANDBOX_WORKSPACE_MODES))
+        raise ValueError(f"external_engine_sandbox.default_workspace_mode must be one of: {allowed}")
+    if not config.workspace_mount_path.startswith("/"):
+        raise ValueError("external_engine_sandbox.workspace_mount_path must be an absolute path")
+    if not config.binary_mount_root.startswith("/"):
+        raise ValueError("external_engine_sandbox.binary_mount_root must be an absolute path")
+    for index, mount_path in enumerate(config.tmpfs):
+        if not mount_path.startswith("/"):
+            raise ValueError(f"external_engine_sandbox.tmpfs[{index}] must be an absolute path")
+    normalized_policies: dict[str, ExternalEngineSandboxPolicy] = {}
+    for engine_name, policy in config.engine_policies.items():
+        if engine_name not in VALID_ENGINE_NAMES:
+            allowed = ", ".join(sorted(VALID_ENGINE_NAMES))
+            raise ValueError(
+                f"external_engine_sandbox.engine_policies engine must be one of: {allowed}"
+            )
+        normalized_policies[engine_name] = _normalize_external_engine_sandbox_policy(
+            policy,
+            field_name=f"external_engine_sandbox.engine_policies[{engine_name}]",
+        )
+    config.engine_policies = normalized_policies
+    return config
+
+
+def _normalize_execution_retry_policy(
+    raw_policy: ExecutionRetryPolicy | Mapping[str, object],
+    *,
+    field_name: str,
+) -> ExecutionRetryPolicy:
+    policy = (
+        raw_policy
+        if isinstance(raw_policy, ExecutionRetryPolicy)
+        else ExecutionRetryPolicy(**dict(raw_policy))
+    )
+    if policy.max_retries < 0:
+        raise ValueError(f"{field_name}.max_retries must be 0 or greater")
+    if policy.backoff_seconds < 0:
+        raise ValueError(f"{field_name}.backoff_seconds must be 0 or greater")
+    if policy.backoff_multiplier < 1:
+        raise ValueError(f"{field_name}.backoff_multiplier must be 1 or greater")
+
+    normalized_retry_on: list[str] = []
+    seen: set[str] = set()
+    for classification in policy.retry_on:
+        if classification not in VALID_EXECUTION_RETRY_CLASSIFICATIONS:
+            allowed = ", ".join(sorted(VALID_EXECUTION_RETRY_CLASSIFICATIONS))
+            raise ValueError(f"{field_name}.retry_on must be one of: {allowed}")
+        if classification in seen:
+            continue
+        seen.add(classification)
+        normalized_retry_on.append(classification)
+    policy.retry_on = normalized_retry_on
+    return policy
+
+
+def _normalize_execution_retry_policies(
+    raw_policies: Mapping[str, ExecutionRetryPolicy | Mapping[str, object]] | None,
+) -> dict[str, ExecutionRetryPolicy]:
+    if raw_policies is None:
+        return {}
+
+    normalized: dict[str, ExecutionRetryPolicy] = {}
+    for raw_selector, raw_policy in raw_policies.items():
+        selector = _normalize_execution_retry_selector(raw_selector)
+        normalized[selector] = _normalize_execution_retry_policy(
+            raw_policy,
+            field_name=f"execution_retry_policies[{selector}]",
+        )
+    return normalized
+
+
+def _default_execution_retry_policies() -> dict[str, ExecutionRetryPolicy]:
+    return {
+        "claude": ExecutionRetryPolicy(
+            max_retries=2,
+            backoff_seconds=0.25,
+            backoff_multiplier=2.0,
+            retry_on=["timeout", "network", "service"],
+        ),
+        "codex": ExecutionRetryPolicy(
+            max_retries=2,
+            backoff_seconds=0.25,
+            backoff_multiplier=2.0,
+            retry_on=["timeout", "network", "service"],
+        ),
+        "opencode": ExecutionRetryPolicy(
+            max_retries=2,
+            backoff_seconds=0.25,
+            backoff_multiplier=2.0,
+            retry_on=["timeout", "network", "service"],
+        ),
+        "gemini": ExecutionRetryPolicy(
+            max_retries=2,
+            backoff_seconds=0.25,
+            backoff_multiplier=2.0,
+            retry_on=["timeout", "network", "service"],
+        ),
+    }
 
 
 def _shared_stage_sequence() -> list[str]:
@@ -86,11 +363,13 @@ SHARED_PROCESS_PROFILE: dict[str, Any] = {
     "prompt_scaffold": [
         "- Start from the shared process contract, then add repository context and task data.",
         "- Combine the generic base prompt with the selected project overlay instead of replacing the base.",
+        "- Apply stage defaults first, then append any project-specific stage overlay for that step.",
         "- Keep stage prompts explicit about role, verification expectations, and final report format.",
     ],
     "init_scaffold": [
         "- Scaffold `.litehive/context.md` from the generic base process template.",
         "- Layer the project profile summary, workspace overlay, and stage overlay onto that base.",
+        "- Treat process profiles as overlays on the shared contract rather than separate workflows.",
         "- Keep the task/issue source of truth, verification commands, and recovery policy visible in the scaffold.",
     ],
     "development_rules": [
@@ -107,6 +386,24 @@ SHARED_PROCESS_PROFILE: dict[str, Any] = {
         "- Favor incremental, reviewable changes over broad refactors.",
         "- Keep implementation, verification, and acceptance evidence explicit.",
     ],
+    "stage_instructions": {
+        "grooming": [
+            "Clarify the task, inspect the repo if needed, and produce a concrete execution plan.",
+            "Do not make code changes in this stage.",
+        ],
+        "implementing": [
+            "Implement the task in this repository.",
+            "Keep changes tightly scoped and complete the work needed for the acceptance criteria.",
+        ],
+        "testing": [
+            "Validate the implementation.",
+            "Run focused checks or tests where possible and report failures precisely.",
+            "Only make minimal fixes if absolutely necessary.",
+        ],
+        "accepting": [
+            "Review the current task result against the acceptance criteria and decide whether it should be accepted or sent back.",
+        ],
+    },
     "stage_overlay": {},
     "specifics_heading": None,
     "specifics": [],
@@ -308,6 +605,9 @@ class LitehiveConfig:
         }
     )
     default_retry_limit: int = 3
+    execution_retry_policies: dict[str, ExecutionRetryPolicy] = field(
+        default_factory=_default_execution_retry_policies
+    )
     pool_stop_on_failure: bool = False
     pool_max_tasks: int | None = None
     pool_stop_on_execution_limit: bool = False
@@ -316,6 +616,9 @@ class LitehiveConfig:
     pool_stop_on_dirty_git: bool = False
     pool_selection_policy: str = "dependency_aware"
     pre_acceptance_command: str | None = None
+    external_engine_sandbox: ExternalEngineSandboxConfig = field(
+        default_factory=ExternalEngineSandboxConfig
+    )
     task_engine_routing: dict[str, list[str]] = field(default_factory=_default_task_engine_routing)
     engine_fallbacks: dict[str, list[str]] = field(
         default_factory=lambda: {
@@ -331,6 +634,18 @@ class LitehiveConfig:
 
     def __post_init__(self) -> None:
         self.task_engine_routing = normalize_task_engine_routing(self.task_engine_routing)
+        self.engine_usage_caps = _normalize_engine_int_map(
+            self.engine_usage_caps,
+            field_name="engine_usage_caps",
+        )
+        self.engine_budget_caps = _normalize_engine_int_map(
+            self.engine_budget_caps,
+            field_name="engine_budget_caps",
+        )
+        self.engine_costs = _normalize_engine_int_map(
+            self.engine_costs,
+            field_name="engine_costs",
+        )
         self.engine_fallbacks = {
             engine_name: _normalize_engine_sequence(
                 list(fallbacks),
@@ -338,6 +653,12 @@ class LitehiveConfig:
             )
             for engine_name, fallbacks in self.engine_fallbacks.items()
         }
+        self.execution_retry_policies = _normalize_execution_retry_policies(
+            self.execution_retry_policies
+        )
+        self.external_engine_sandbox = _normalize_external_engine_sandbox_config(
+            self.external_engine_sandbox
+        )
 
 
 def workspace_dir(root: Path) -> Path:
@@ -385,6 +706,10 @@ def resolve_process_profile(name: str | None) -> dict[str, Any]:
             for stage, instructions in value.items():
                 profile["stage_overlay"].setdefault(stage, []).extend(deepcopy(instructions))
             continue
+        if key == "stage_instructions":
+            for stage, instructions in value.items():
+                profile["stage_instructions"].setdefault(stage, []).extend(deepcopy(instructions))
+            continue
         profile[key] = deepcopy(value)
     return profile
 
@@ -424,6 +749,20 @@ def _render_scaffold_sections(profile: dict[str, Any]) -> list[str]:
     ]
 
 
+def _render_stage_prompt_scaffolding(profile: dict[str, Any]) -> list[str]:
+    lines = ["## Stage prompt scaffolding"]
+    for stage in profile["shared_stages"]:
+        stage_instructions = profile.get("stage_instructions", {}).get(stage, [])
+        stage_overlay = profile.get("stage_overlay", {}).get(stage, [])
+        if not stage_instructions and not stage_overlay:
+            continue
+        lines.extend(["", f"### {stage}"])
+        lines.extend(stage_instructions)
+        lines.extend(stage_overlay)
+    lines.append("")
+    return lines
+
+
 def render_context_template(profile_name: str) -> str:
     profile = resolve_process_profile(profile_name)
     lines = [
@@ -444,6 +783,7 @@ def render_context_template(profile_name: str) -> str:
     lines.extend(_render_project_overlay(profile))
     lines.append("")
     lines.extend(_render_scaffold_sections(profile))
+    lines.extend(_render_stage_prompt_scaffolding(profile))
     if profile.get("specifics_heading"):
         lines.append(profile["specifics_heading"])
         lines.extend(profile.get("specifics", []))
@@ -527,3 +867,24 @@ def load_config(root: Path) -> LitehiveConfig:
 def load_context(root: Path) -> str:
     ensure_workspace(root)
     return context_path(root).read_text(encoding="utf-8")
+
+
+def format_external_engine_sandbox(config: LitehiveConfig) -> str:
+    sandbox = config.external_engine_sandbox
+    if not sandbox.enabled:
+        return "disabled"
+    policy_parts: list[str] = []
+    for engine_name in sorted(sandbox.engine_policies):
+        policy = sandbox.engine_policies[engine_name]
+        envs = ",".join(policy.environment) or "-"
+        creds = ",".join(item.env_var for item in policy.credential_inputs) or "-"
+        policy_parts.append(
+            f"{engine_name}=enabled:{policy.enabled} net:{policy.network_mode or sandbox.default_network_mode} "
+            f"workspace:{policy.workspace_mode or sandbox.default_workspace_mode} env:{envs} creds:{creds}"
+        )
+    policies = "; ".join(policy_parts) if policy_parts else "no engine policies"
+    return (
+        f"enabled runtime:{sandbox.runtime_binary} image:{sandbox.image} "
+        f"default_net:{sandbox.default_network_mode} default_workspace:{sandbox.default_workspace_mode} "
+        f"policies: {policies}"
+    )

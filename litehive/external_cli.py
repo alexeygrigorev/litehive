@@ -10,9 +10,10 @@ import shutil
 import subprocess
 import json
 import selectors
+import time
 from typing import Callable, Literal
 
-from litehive.models import StageReport, SubagentStatus
+from litehive.models import FollowUpTaskSpec, StageReport, SubagentStatus
 
 
 TranscriptFormat = Literal["text", "jsonl"]
@@ -41,6 +42,9 @@ class CLIExecutionResult:
     exit_code: int
     stdout: str
     stderr: str
+    pid: int | None = None
+    sandboxed: bool = False
+    sandbox_summary: str = ""
 
     @property
     def returncode(self) -> int:
@@ -56,6 +60,8 @@ class CLIExecutionResult:
 
 class ExternalCLIAdapter:
     """Shared contract for one-shot external CLI adapters."""
+
+    LIVE_UPDATE_INTERVAL_SECONDS = 0.5
 
     def __init__(
         self,
@@ -103,6 +109,12 @@ class ExternalCLIAdapter:
             env=env,
         )
 
+    def finalize_invocation(self, invocation: CLIInvocation) -> CLIInvocation:
+        return invocation
+
+    def sandbox_details(self) -> tuple[bool, str]:
+        return (False, "")
+
     def run(
         self,
         prompt: str,
@@ -110,23 +122,33 @@ class ExternalCLIAdapter:
         model: str | None = None,
         *,
         max_turns: int | None = None,
+        on_started: Callable[[int], None] | None = None,
     ) -> CLIExecutionResult:
-        invocation = self.build_invocation(prompt, cwd, model=model, max_turns=max_turns)
-        proc = subprocess.run(
+        invocation = self.finalize_invocation(
+            self.build_invocation(prompt, cwd, model=model, max_turns=max_turns)
+        )
+        sandboxed, sandbox_summary = self.sandbox_details()
+        proc = subprocess.Popen(
             invocation.argv,
             cwd=str(invocation.cwd),
-            capture_output=True,
-            text=True,
             env=invocation.env,
-            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
         )
+        if on_started is not None:
+            on_started(proc.pid)
+        stdout, stderr = proc.communicate()
         return CLIExecutionResult(
             adapter=self.name,
             argv=invocation.argv,
             cwd=invocation.cwd,
             exit_code=proc.returncode,
-            stdout=proc.stdout,
-            stderr=proc.stderr,
+            stdout=stdout,
+            stderr=stderr,
+            pid=proc.pid,
+            sandboxed=sandboxed,
+            sandbox_summary=sandbox_summary,
         )
 
     def run_live(
@@ -136,9 +158,13 @@ class ExternalCLIAdapter:
         model: str | None = None,
         *,
         max_turns: int | None = None,
+        on_started: Callable[[int], None] | None = None,
         on_update: Callable[[CLIExecutionResult], None] | None = None,
     ) -> CLIExecutionResult:
-        invocation = self.build_invocation(prompt, cwd, model=model, max_turns=max_turns)
+        invocation = self.finalize_invocation(
+            self.build_invocation(prompt, cwd, model=model, max_turns=max_turns)
+        )
+        sandboxed, sandbox_summary = self.sandbox_details()
         proc = subprocess.Popen(
             invocation.argv,
             cwd=str(invocation.cwd),
@@ -147,6 +173,8 @@ class ExternalCLIAdapter:
             env=invocation.env,
             text=False,
         )
+        if on_started is not None:
+            on_started(proc.pid)
         assert proc.stdout is not None
         assert proc.stderr is not None
 
@@ -155,26 +183,41 @@ class ExternalCLIAdapter:
         selector = selectors.DefaultSelector()
         selector.register(proc.stdout, selectors.EVENT_READ, data="stdout")
         selector.register(proc.stderr, selectors.EVENT_READ, data="stderr")
+        last_update_at = time.monotonic()
+
+        def emit_update() -> None:
+            if on_update is None:
+                return
+            on_update(
+                CLIExecutionResult(
+                    adapter=self.name,
+                    argv=invocation.argv,
+                    cwd=invocation.cwd,
+                    exit_code=proc.poll() or 0,
+                    stdout=stdout_chunks.decode("utf-8", errors="replace"),
+                    stderr=stderr_chunks.decode("utf-8", errors="replace"),
+                    pid=proc.pid,
+                    sandboxed=sandboxed,
+                    sandbox_summary=sandbox_summary,
+                )
+            )
 
         while selector.get_map():
-            for key, _ in selector.select():
+            events = selector.select(timeout=self.LIVE_UPDATE_INTERVAL_SECONDS)
+            if not events:
+                if proc.poll() is None and time.monotonic() - last_update_at >= self.LIVE_UPDATE_INTERVAL_SECONDS:
+                    emit_update()
+                    last_update_at = time.monotonic()
+                continue
+            for key, _ in events:
                 chunk = os.read(key.fileobj.fileno(), 4096)
                 if chunk:
                     if key.data == "stdout":
                         stdout_chunks.extend(chunk)
                     else:
                         stderr_chunks.extend(chunk)
-                    if on_update is not None:
-                        on_update(
-                            CLIExecutionResult(
-                                adapter=self.name,
-                                argv=invocation.argv,
-                                cwd=invocation.cwd,
-                                exit_code=proc.poll() or 0,
-                                stdout=stdout_chunks.decode("utf-8", errors="replace"),
-                                stderr=stderr_chunks.decode("utf-8", errors="replace"),
-                            )
-                        )
+                    emit_update()
+                    last_update_at = time.monotonic()
                     continue
                 selector.unregister(key.fileobj)
                 key.fileobj.close()
@@ -187,6 +230,9 @@ class ExternalCLIAdapter:
             exit_code=exit_code,
             stdout=stdout_chunks.decode("utf-8", errors="replace"),
             stderr=stderr_chunks.decode("utf-8", errors="replace"),
+            pid=proc.pid,
+            sandboxed=sandboxed,
+            sandbox_summary=sandbox_summary,
         )
         if on_update is not None:
             on_update(result)
@@ -278,6 +324,7 @@ def parse_stage_report_text(
     transcript: str,
     subagent_status: SubagentStatus,
 ) -> StageReport:
+    follow_up_tasks, follow_up_warnings = _extract_follow_up_tasks(transcript)
     summary = _extract_line(transcript, "SUMMARY") or (
         transcript.splitlines()[0] if transcript else f"{step} completed"
     )
@@ -288,11 +335,12 @@ def parse_stage_report_text(
         summary=summary,
         feedback=transcript,
         files_changed=_extract_list(transcript, "FILES_CHANGED"),
+        follow_up_tasks=follow_up_tasks,
         tests={
             "added": _extract_int(transcript, "TESTS_ADDED"),
             "passing": _extract_int(transcript, "TESTS_PASSING"),
         },
-        warnings=_extract_list(transcript, "WARNINGS"),
+        warnings=[*_extract_list(transcript, "WARNINGS"), *follow_up_warnings],
     )
 
 
@@ -323,6 +371,80 @@ def _extract_list(text: str, key: str) -> list[str]:
         if capture and line.lstrip().startswith("- "):
             items.append(line.split("- ", 1)[1].strip())
     return items
+
+
+def _extract_follow_up_tasks(text: str) -> tuple[list[FollowUpTaskSpec], list[str]]:
+    section = _extract_section_block(text, "FOLLOW_UP_TASKS")
+    if section is None:
+        return [], []
+    try:
+        payload = json.loads(section)
+    except json.JSONDecodeError:
+        return [], ["Ignoring invalid FOLLOW_UP_TASKS section: expected JSON array."]
+    if not isinstance(payload, list):
+        return [], ["Ignoring invalid FOLLOW_UP_TASKS section: expected JSON array."]
+
+    follow_up_tasks: list[FollowUpTaskSpec] = []
+    warnings: list[str] = []
+    for index, item in enumerate(payload, start=1):
+        if not isinstance(item, dict):
+            warnings.append(f"Ignoring invalid follow-up task #{index}: expected object.")
+            continue
+        title = item.get("title")
+        rationale = item.get("rationale")
+        if not isinstance(title, str) or not title.strip():
+            warnings.append(f"Ignoring invalid follow-up task #{index}: missing title.")
+            continue
+        if not isinstance(rationale, str) or not rationale.strip():
+            warnings.append(f"Ignoring invalid follow-up task #{index}: missing rationale.")
+            continue
+        acceptance_criteria = item.get("acceptance_criteria", [])
+        if not isinstance(acceptance_criteria, list):
+            warnings.append(
+                f"Ignoring invalid follow-up task #{index}: acceptance_criteria must be a list."
+            )
+            continue
+        task_type = item.get("task_type")
+        if task_type is not None and not isinstance(task_type, str):
+            warnings.append(f"Ignoring invalid follow-up task #{index}: task_type must be a string.")
+            continue
+        goal = item.get("goal", "")
+        if not isinstance(goal, str):
+            warnings.append(f"Ignoring invalid follow-up task #{index}: goal must be a string.")
+            continue
+        blocking = item.get("blocking", False)
+        if not isinstance(blocking, bool):
+            warnings.append(f"Ignoring invalid follow-up task #{index}: blocking must be true/false.")
+            continue
+        criteria = [entry.strip() for entry in acceptance_criteria if isinstance(entry, str) and entry.strip()]
+        follow_up_tasks.append(
+            FollowUpTaskSpec(
+                title=title.strip(),
+                rationale=rationale.strip(),
+                blocking=blocking,
+                goal=goal.strip(),
+                acceptance_criteria=criteria,
+                task_type=task_type.strip() if isinstance(task_type, str) else None,
+            )
+        )
+    return follow_up_tasks, warnings
+
+
+def _extract_section_block(text: str, key: str) -> str | None:
+    capture = False
+    lines: list[str] = []
+    header = f"{key}:"
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped == header:
+            capture = True
+            continue
+        if capture and re.match(r"^[A-Z_]+:", stripped):
+            break
+        if capture:
+            lines.append(line)
+    block = "\n".join(lines).strip()
+    return block or None
 
 
 def _parse_verdict(text: str, subagent_status: SubagentStatus) -> str:

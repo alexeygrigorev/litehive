@@ -19,6 +19,13 @@ Together they give the full picture: a task is `in_progress` at `implementing`,
 or `queued` at `testing` because a previous run was interrupted and it is waiting
 for another pass.
 
+Queue-affecting transitions are persisted atomically. When Litehive claims a task,
+finishes a run, requeues or resumes work, abandons or closes a task, or recovers a
+completed/interrupted task, it writes the task record, task runtime, and workspace
+queue state as one transition under the workspace lock. If one of those writes
+fails, Litehive restores the pre-transition files instead of leaving
+`active_task_id`, queue membership, and task status out of sync.
+
 ---
 
 ## TaskStatus — queue and execution lifecycle
@@ -149,6 +156,26 @@ keeping the rationale visible for later review.
 
 ---
 
+## Acceptance-Criteria Gate
+
+Litehive treats some tasks as "larger tasks" that must carry structured acceptance
+criteria before implementation starts. The current requirement signals are:
+
+- dependencies
+- an explicit goal
+- high priority
+- a multi-step plan
+
+When one of those signals is present and `acceptance_criteria` is empty, the task
+cannot proceed into `implementing`. The runner blocks the transition, and task
+metadata changes or recovery paths that would otherwise place the task back at an
+implementation-entry stage reroute it to `grooming` until at least one structured
+criterion is persisted. During `grooming`, the PM can provide explicit
+`ACCEPTANCE_CRITERIA` bullets, or the runner can infer and persist them from the
+current task context when that context is already specific enough.
+
+---
+
 ## Parking / pausing
 
 A task is "parked" by the human-checkpoint mechanism. When a task opt into
@@ -188,6 +215,16 @@ A task is `done` when:
 1. `commit_to_git` returns `pass` or `accept`, **and**
 2. `task.status = "done"` and `task.pipeline_status = "done"` are persisted, **and**
 3. A git checkpoint commit is recorded (unless `auto_commit = false`).
+
+Checkpoint policy:
+
+- Default checkpoint subject: `litehive: complete <task-id> <task-slug>`
+- Checkpoints are created at `commit_to_git`
+- Generated checkpoint subjects keep the default base subject and append ` (attempt N)` on reruns after `rollback` or `recover`
+- Task-level or workspace-level auto-commit can disable checkpoint creation explicitly; otherwise `done` requires a recorded checkpoint commit
+- `rollback` records which attempt was reverted, then requeues the task at the implementation entry stage
+- `recover` clears the recorded checkpoint pointer without reverting code, then requeues the task at the implementation entry stage
+- If structured acceptance criteria are still required, recovery reroutes to `grooming` as the implementation entry stage instead of `implementing`
 
 ---
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 import re
 from pathlib import Path
 
@@ -23,8 +24,10 @@ class EngineError(RuntimeError):
 _ENGINE_LIMIT_PATTERNS: tuple[tuple[str, str], ...] = (
     ("hit your usage limit", "usage limit reached"),
     ("usage limit", "usage limit reached"),
+    ("spend limit", "budget limit reached"),
     ("quota exceeded", "quota exceeded"),
     ("quota", "quota limit reached"),
+    ("rate_limit_error", "rate limit reached"),
     ("rate limit", "rate limit reached"),
     ("too many requests", "rate limit reached"),
     ("budget", "budget limit reached"),
@@ -33,6 +36,99 @@ _ENGINE_LIMIT_PATTERNS: tuple[tuple[str, str], ...] = (
     ("purchase more credits", "usage limit reached"),
     ("capacity", "capacity limit reached"),
 )
+
+_RETRYABLE_EXECUTION_PATTERNS: tuple[tuple[str, tuple[str, ...], str], ...] = (
+    (
+        "timeout",
+        (
+            "timed out",
+            "timeout",
+            "deadline exceeded",
+            "etimedout",
+            "operation timed out",
+            "request timed out",
+            "upstream request timeout",
+            "read timeout",
+            "connect timeout",
+            "request_timeout",
+            "request timeout",
+        ),
+        "transient timeout",
+    ),
+    (
+        "network",
+        (
+            "connection reset",
+            "connection refused",
+            "network error",
+            "temporary failure in name resolution",
+            "network is unreachable",
+            "socket hang up",
+            "econnreset",
+            "econnrefused",
+            "eai_again",
+            "enotfound",
+            "broken pipe",
+            "connection closed",
+            "connection aborted",
+            "connection interrupted",
+            "error sending request",
+            "error trying to connect",
+            "peer closed connection",
+            "tls handshake eof",
+            "socket disconnected before secure tls connection was established",
+            "unexpected eof",
+            "client network socket disconnected",
+            "connect econnrefused",
+            "connect enetunreach",
+            "connect ehostunreach",
+            "write epipe",
+            "getaddrinfo eai_again",
+            "getaddrinfo enotfound",
+            "network connection was lost",
+            "connection has been closed",
+        ),
+        "transient network failure",
+    ),
+    (
+        "service",
+        (
+            "internal server error",
+            "bad gateway",
+            "service unavailable",
+            "service temporarily unavailable",
+            "temporarily unavailable",
+            "gateway timeout",
+            "server overloaded",
+            "overloaded",
+            "try again later",
+            "server error",
+            "502 bad gateway",
+            "503 service unavailable",
+            "504 gateway timeout",
+            "status code 502",
+            "status code 503",
+            "status code 504",
+            "status: 500",
+            "status: 502",
+            "status: 503",
+            "status: 504",
+            "backend error",
+            "backend unavailable",
+            "api_error",
+            "overloaded_error",
+            "529",
+            "anthropic's systems are overloaded",
+        ),
+        "transient service failure",
+    ),
+)
+
+
+@dataclass(frozen=True, slots=True)
+class RetryableExecutionFailure:
+    classification: str
+    reason: str
 
 
 class CodexCLIAdapter(ExternalCLIAdapter):
@@ -383,6 +479,8 @@ ENGINE_REGISTRY: dict[str, ExternalCLIAdapter] = {
     ),
 }
 
+ENGINE_CHOICES = sorted(ENGINE_REGISTRY.keys())
+
 
 def get_engine(name: str) -> ExternalCLIAdapter:
     try:
@@ -396,6 +494,16 @@ def classify_execution_limit(text: str) -> str | None:
     for needle, reason in _ENGINE_LIMIT_PATTERNS:
         if needle in normalized:
             return reason
+    return None
+
+
+def classify_retryable_execution_failure(text: str) -> RetryableExecutionFailure | None:
+    normalized = re.sub(r"\s+", " ", text.lower()).strip()
+    if not normalized or classify_execution_limit(normalized) is not None:
+        return None
+    for classification, needles, reason in _RETRYABLE_EXECUTION_PATTERNS:
+        if any(needle in normalized for needle in needles):
+            return RetryableExecutionFailure(classification=classification, reason=reason)
     return None
 
 

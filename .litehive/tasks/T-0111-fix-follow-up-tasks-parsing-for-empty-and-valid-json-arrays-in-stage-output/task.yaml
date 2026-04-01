@@ -1,0 +1,29 @@
+id: T-0111
+slug: fix-follow-up-tasks-parsing-for-empty-and-valid-json-arrays-in-stage-output
+title: Fix FOLLOW_UP_TASKS parsing for empty and valid JSON arrays in stage output
+depends_on: []
+task_type: null
+engine: null
+model: null
+mode: implementation
+status: queued
+pipeline_status: backlog
+priority: medium
+created_at: '2026-04-01T17:31:25+00:00'
+updated_at: '2026-04-01T17:31:25+00:00'
+goal: ''
+acceptance_criteria: []
+constraints: []
+plan: []
+human_checkpoints: []
+subagents: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0111 fix-follow-up-tasks-parsing-for-empty-and-valid-json-arrays-in-stage-output'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+retry_policy:
+  max_retries: null
+created_from: null

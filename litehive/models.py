@@ -49,6 +49,8 @@ class SubagentRef(BaseModel):
     engine: str
     status: SubagentStatus = "created"
     path: str
+    sandboxed: bool = False
+    sandbox_summary: str = ""
 
 
 class RuntimeGitState(BaseModel):
@@ -72,6 +74,9 @@ class RuntimeSubagentState(BaseModel):
     engine: str
     status: SubagentStatus
     path: str
+    pid: int | None = None
+    sandboxed: bool = False
+    sandbox_summary: str = ""
     started_at: str
     updated_at: str
     completed_at: str | None = None
@@ -89,6 +94,22 @@ class RuntimeEngineSwitch(BaseModel):
 
 class TaskRetryPolicy(BaseModel):
     max_retries: int | None = None
+
+
+class TaskCreationSource(BaseModel):
+    task_id: str
+    stage: Literal["grooming", "accepting"]
+    rationale: str
+    blocking: bool = False
+
+
+class FollowUpTaskSpec(BaseModel):
+    title: str
+    rationale: str
+    blocking: bool = False
+    goal: str = ""
+    acceptance_criteria: list[str] = Field(default_factory=list)
+    task_type: str | None = None
 
 
 class TaskOutcomeState(BaseModel):
@@ -134,6 +155,7 @@ class TaskRecord(BaseModel):
     depends_on: list[str] = Field(default_factory=list)
     task_type: str | None = None
     engine: str | None = None
+    model: str | None = None
     mode: TaskMode = "implementation"
     status: TaskStatus = "queued"
     pipeline_status: PipelineStatus = "backlog"
@@ -148,6 +170,7 @@ class TaskRecord(BaseModel):
     subagents: list[SubagentRef] = Field(default_factory=list)
     git: GitSettings = Field(default_factory=GitSettings)
     retry_policy: TaskRetryPolicy = Field(default_factory=TaskRetryPolicy)
+    created_from: TaskCreationSource | None = None
     runtime: TaskRuntime = Field(default_factory=TaskRuntime, exclude=True)
 
 
@@ -165,6 +188,8 @@ class StageReport(BaseModel):
     summary: str
     feedback: str = ""
     files_changed: list[str] = Field(default_factory=list)
+    follow_up_tasks: list[FollowUpTaskSpec] = Field(default_factory=list)
+    created_follow_up_task_ids: list[str] = Field(default_factory=list)
     tests: dict[str, int] = Field(default_factory=lambda: {"added": 0, "passing": 0})
     warnings: list[str] = Field(default_factory=list)
     retry_count: int = 0

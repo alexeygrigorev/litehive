@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+from dataclasses import asdict
 from pathlib import Path
 
 import yaml
@@ -12,22 +13,33 @@ from litehive.config import (
     VALID_TASK_ROUTING_KEYS,
     VALID_POOL_SELECTION_POLICIES,
     available_process_profiles,
+    config_path,
+    context_path,
     ensure_workspace,
+    format_external_engine_sandbox,
     load_config,
     normalize_task_engine_routing,
+    render_context_template,
 )
-from litehive.git_ops import GitError
+from litehive.git_ops import GitError, checkpoint_message
 from litehive.observability import render_task_summary
+from litehive.models import utcnow
 from litehive.runtime import (
     EngineBudgetLedger,
     TaskPoolStopConditions,
     drain_task_pool,
     recover_completed_task,
+    resolve_model,
     resolve_engine_attempt_order,
     run_single_task,
     run_task_pool,
     rollback_completed_task,
 )
+from litehive.engines import (
+    ENGINE_CHOICES,
+    get_engine,
+)
+from litehive.subagents import intake_prompt
 from litehive.tasks import (
     VALID_HUMAN_CHECKPOINTS,
     VALID_TASK_PRIORITIES,
@@ -38,6 +50,7 @@ from litehive.tasks import (
     list_tasks,
     load_state,
     missing_acceptance_criteria_reason,
+    missing_acceptance_criteria_cli_warning,
     move_queued_task,
     prioritize_queued_tasks,
     normalize_acceptance_criteria,
@@ -52,8 +65,38 @@ from litehive.tasks import (
 )
 from litehive.tui.app import LitehiveApp
 
-ENGINE_CHOICES = ["codex", "opencode", "gemini", "copilot", "claude"]
 TASK_TYPE_CHOICES = sorted(VALID_TASK_ROUTING_KEYS)
+
+
+def _fallback_intake_title(brain_dump: str) -> str:
+    first_nonempty = next((line.strip() for line in brain_dump.splitlines() if line.strip()), "")
+    if not first_nonempty:
+        return "Unstructured Intake"
+    compact = " ".join(first_nonempty.split())
+    return compact[:77] + "..." if len(compact) > 80 else compact
+
+
+def _fallback_intake_goal(brain_dump: str) -> str:
+    lines = [" ".join(line.split()) for line in brain_dump.splitlines() if line.strip()]
+    if not lines:
+        return "Capture the original intake and prepare it for PM grooming."
+    summary = " ".join(lines)
+    summary = summary[:237] + "..." if len(summary) > 240 else summary
+    return summary
+
+
+def _link_intake_brief_to_source(brief_file: Path) -> None:
+    if not brief_file.exists():
+        return
+    content = brief_file.read_text(encoding="utf-8")
+    stub_pattern = "### Intake Notes\n- Capture the core brain dump or link to the source.\n\n_TBD_"
+    replacement = (
+        "### Intake Notes\n"
+        "- Original dump: [intake.md](intake.md)\n"
+        "- Treat `intake.md` as the authoritative source for the raw specification.\n"
+    )
+    if stub_pattern in content:
+        brief_file.write_text(content.replace(stub_pattern, replacement), encoding="utf-8")
 
 
 def _task_stage_outcomes(root: Path, task_id: str, slug: str) -> list[str]:
@@ -75,31 +118,52 @@ def _task_stage_outcomes(root: Path, task_id: str, slug: str) -> list[str]:
     return outcomes
 
 
-def _pending_pool_tasks(root: Path) -> list[tuple[str, str, str, str, str]]:
-    pending: list[tuple[str, str, str, str, str]] = []
-    for task in list_tasks(root):
-        if task.status in {"queued", "in_progress"} and task.pipeline_status != "done":
-            pending.append((task.id, task.slug, task.title, task.status, task.pipeline_status))
-    return pending
-
-
-def _format_pool_task_report_line(
+def _pool_task_report_entry(
     root: Path,
     *,
-    label: str,
     task_id: str,
     title: str,
     status: str,
     pipeline_status: str,
     slug: str | None = None,
+) -> dict[str, object]:
+    stage_outcomes = _task_stage_outcomes(root, task_id, slug) if slug is not None else []
+    return {
+        "task_id": task_id,
+        "title": title,
+        "final_task_status": status,
+        "pipeline_status": pipeline_status,
+        "stage_outcomes": stage_outcomes,
+    }
+
+
+def _pending_pool_tasks(root: Path) -> list[dict[str, object]]:
+    pending: list[dict[str, object]] = []
+    for task in list_tasks(root):
+        if task.status in {"queued", "in_progress"} and task.pipeline_status != "done":
+            pending.append(
+                _pool_task_report_entry(
+                    root,
+                    task_id=task.id,
+                    title=task.title,
+                    status=task.status,
+                    pipeline_status=task.pipeline_status,
+                    slug=task.slug,
+                )
+            )
+    return pending
+
+
+def _format_pool_task_report_line(
+    *,
+    label: str,
+    entry: dict[str, object],
 ) -> str:
-    stage_outcomes = (
-        _task_stage_outcomes(root, task_id, slug) if slug is not None else []
-    )
+    stage_outcomes = [str(item) for item in entry.get("stage_outcomes", [])]
     stage_outcomes_label = ", ".join(stage_outcomes) if stage_outcomes else "-"
     return (
-        f"{label}: {task_id} {title} status={status} "
-        f"pipeline_status={pipeline_status} stage_outcomes={stage_outcomes_label}"
+        f"{label}: {entry['task_id']} {entry['title']} status={entry['final_task_status']} "
+        f"pipeline_status={entry['pipeline_status']} stage_outcomes={stage_outcomes_label}"
     )
 
 
@@ -127,113 +191,126 @@ def _pool_stop_condition_label(stop_reason: str) -> str:
 
 
 def _print_pool_summary_report(
-    root: Path,
     *,
-    completed: list[tuple[str, str, str, str, str]],
-    failed: list[tuple[str, str, str, str, str]],
-    stop_reason: str,
-    tasks_run: int | None = None,
+    report: dict[str, object],
 ) -> None:
-    for line in _pool_summary_report_lines(
-        root,
-        completed=completed,
-        failed=failed,
-        stop_reason=stop_reason,
-        tasks_run=tasks_run,
-    ):
+    for line in _pool_summary_report_lines(report=report):
         print(line)
 
 
-def _pool_summary_report_lines(
+def _pool_summary_report_data(
     root: Path,
     *,
-    completed: list[tuple[str, str, str, str, str]],
-    failed: list[tuple[str, str, str, str, str]],
+    completed: list[dict[str, object]],
+    failed: list[dict[str, object]],
     stop_reason: str,
     tasks_run: int | None = None,
-) -> list[str]:
+) -> dict[str, object]:
     remaining = _pending_pool_tasks(root)
-    lines = [f"completed_tasks: {len(completed)}"]
-    for task_id, slug, title, status, pipeline_status in completed:
+    return {
+        "created_at": utcnow(),
+        "stop_condition": _pool_stop_condition_label(stop_reason),
+        "stop_reason": stop_reason,
+        "tasks_run": tasks_run if tasks_run is not None else len(completed) + len(failed),
+        "completed_count": len(completed),
+        "completed": completed,
+        "failed_count": len(failed),
+        "failed": failed,
+        "skipped_count": len(remaining),
+        "skipped": remaining,
+        "remaining_count": len(remaining),
+        "remaining": remaining,
+    }
+
+
+def _pool_summary_report_lines(
+    *,
+    report: dict[str, object],
+) -> list[str]:
+    completed = [entry for entry in report["completed"] if isinstance(entry, dict)]
+    failed = [entry for entry in report["failed"] if isinstance(entry, dict)]
+    skipped = [entry for entry in report["skipped"] if isinstance(entry, dict)]
+    remaining = [entry for entry in report["remaining"] if isinstance(entry, dict)]
+    lines = [f"completed_tasks: {report['completed_count']}"]
+    for entry in completed:
         lines.append(
             _format_pool_task_report_line(
-                root,
                 label="completed",
-                task_id=task_id,
-                title=title,
-                status=status,
-                pipeline_status=pipeline_status,
-                slug=slug,
+                entry=entry,
             )
         )
-    lines.append(f"failed_tasks: {len(failed)}")
-    for task_id, slug, title, status, pipeline_status in failed:
+    lines.append(f"failed_tasks: {report['failed_count']}")
+    for entry in failed:
         lines.append(
             _format_pool_task_report_line(
-                root,
                 label="failed",
-                task_id=task_id,
-                title=title,
-                status=status,
-                pipeline_status=pipeline_status,
-                slug=slug,
+                entry=entry,
             )
         )
-    lines.append(f"skipped_tasks: {len(remaining)}")
-    for task_id, slug, title, status, pipeline_status in remaining:
+    lines.append(f"skipped_tasks: {report['skipped_count']}")
+    for entry in skipped:
         lines.append(
             _format_pool_task_report_line(
-                root,
                 label="skipped",
-                task_id=task_id,
-                title=title,
-                status=status,
-                pipeline_status=pipeline_status,
-                slug=slug,
+                entry=entry,
             )
         )
-    lines.append(f"remaining_tasks: {len(remaining)}")
-    for task_id, slug, title, status, pipeline_status in remaining:
+    lines.append(f"remaining_tasks: {report['remaining_count']}")
+    for entry in remaining:
         lines.append(
             _format_pool_task_report_line(
-                root,
                 label="remaining",
-                task_id=task_id,
-                title=title,
-                status=status,
-                pipeline_status=pipeline_status,
-                slug=slug,
+                entry=entry,
             )
         )
-    lines.append(f"tasks_run: {tasks_run if tasks_run is not None else len(completed) + len(failed)}")
-    lines.append(f"stop_condition: {_pool_stop_condition_label(stop_reason)}")
-    lines.append(f"stop_reason: {stop_reason}")
+    lines.append(f"tasks_run: {report['tasks_run']}")
+    lines.append(f"stop_condition: {report['stop_condition']}")
+    lines.append(f"stop_reason: {report['stop_reason']}")
     return lines
 
 
 def _write_pool_summary_report(
-    root: Path,
     *,
-    completed: list[tuple[str, str, str, str, str]],
-    failed: list[tuple[str, str, str, str, str]],
-    stop_reason: str,
-    tasks_run: int | None = None,
+    root: Path,
+    report: dict[str, object],
 ) -> None:
     report_path = root / ".litehive" / "pool-summary.txt"
-    report_lines = _pool_summary_report_lines(
-        root,
-        completed=completed,
-        failed=failed,
-        stop_reason=stop_reason,
-        tasks_run=tasks_run,
-    )
+    report_lines = _pool_summary_report_lines(report=report)
     report_path.write_text("\n".join(report_lines) + "\n", encoding="utf-8")
+    _write_durable_pool_run_report(root, report=report)
+
+
+def _write_durable_pool_run_report(root: Path, *, report: dict[str, object]) -> None:
+    reports_dir = root / ".litehive" / "logs" / "pool-runs"
+    reports_dir.mkdir(parents=True, exist_ok=True)
+    timestamp = str(report["created_at"]).replace(":", "-").replace("+00:00", "Z")
+    report_path = reports_dir / f"{timestamp}.yaml"
+    suffix = 1
+    while report_path.exists():
+        suffix += 1
+        report_path = reports_dir / f"{timestamp}-{suffix:02d}.yaml"
+    report_path.write_text(yaml.safe_dump(report, sort_keys=False), encoding="utf-8")
 
 
 def _format_engine_int_map(values: dict[str, int]) -> str:
     if not values:
         return "-"
     return ", ".join(f"{engine}={limit}" for engine, limit in sorted(values.items()))
+
+
+def _format_execution_retry_policies(config: LitehiveConfig) -> str:
+    if not config.execution_retry_policies:
+        return "-"
+    parts: list[str] = []
+    for selector, policy in sorted(config.execution_retry_policies.items()):
+        retry_on = ",".join(policy.retry_on) if policy.retry_on else "-"
+        parts.append(
+            f"{selector}=retries:{policy.max_retries} "
+            f"backoff:{policy.backoff_seconds:.2f}s "
+            f"multiplier:{policy.backoff_multiplier:.2f} "
+            f"retry_on:{retry_on}"
+        )
+    return "; ".join(parts)
 
 
 def _determine_dry_run_stop_reason(
@@ -259,7 +336,8 @@ def _plan_pool_dry_run(
     config: LitehiveConfig,
     stop_conditions: TaskPoolStopConditions,
     engine_override: str | None,
-) -> tuple[list[tuple[object, str, list[str]]], str]:
+    model_override: str | None,
+) -> tuple[list[tuple[object, str, list[str], str | None]], str]:
     from litehive.runtime import _git_worktree_is_dirty
 
     if stop_conditions.stop_on_dirty_git and _git_worktree_is_dirty(root):
@@ -272,7 +350,7 @@ def _plan_pool_dry_run(
         engine_budget_caps=dict(stop_conditions.engine_budget_caps),
         engine_costs=dict(stop_conditions.engine_costs),
     )
-    runnable_tasks: list[tuple[object, str, list[str]]] = []
+    runnable_tasks: list[tuple[object, str, list[str], str | None]] = []
 
     for task in planned_tasks:
         if stop_conditions.max_tasks is not None and len(runnable_tasks) >= stop_conditions.max_tasks:
@@ -301,7 +379,13 @@ def _plan_pool_dry_run(
                 stop_conditions=stop_conditions,
             )
 
-        runnable_tasks.append((task, selected_engine, engine_attempts))
+        selected_model = resolve_model(
+            task,
+            config,
+            engine_name=selected_engine,
+            model_override=model_override,
+        )
+        runnable_tasks.append((task, selected_engine, engine_attempts, selected_model))
         budget_ledger.record(selected_engine)
 
     pool_stop_reason = budget_ledger.pool_stop_reason()
@@ -320,7 +404,8 @@ def _plan_single_task_dry_run(
     config: LitehiveConfig,
     stop_conditions: TaskPoolStopConditions,
     engine_override: str | None,
-) -> tuple[list[tuple[object, str, list[str]]], str]:
+    model_override: str | None,
+) -> tuple[list[tuple[object, str, list[str], str | None]], str]:
     from litehive.runtime import _git_worktree_is_dirty
 
     if stop_conditions.stop_on_dirty_git and _git_worktree_is_dirty(root):
@@ -351,13 +436,19 @@ def _plan_single_task_dry_run(
             blocked_reasons,
             stop_conditions=stop_conditions,
         )
-    return [(task, selected_engine, engine_attempts)], "single_task_complete"
+    selected_model = resolve_model(
+        task,
+        config,
+        engine_name=selected_engine,
+        model_override=model_override,
+    )
+    return [(task, selected_engine, engine_attempts, selected_model)], "single_task_complete"
 
 
 def _print_pool_dry_run_plan(
     root: Path,
     *,
-    planned_tasks: list[tuple[object, str, list[str]]],
+    planned_tasks: list[tuple[object, str, list[str], str | None]],
     blocked: list[object],
     config: LitehiveConfig,
     stop_conditions: TaskPoolStopConditions,
@@ -366,13 +457,14 @@ def _print_pool_dry_run_plan(
     print("dry_run: true")
     print(f"selection_policy: {config.pool_selection_policy}")
     print(f"planned_tasks: {len(planned_tasks)}")
-    for index, (task, selected_engine, engine_attempts) in enumerate(planned_tasks, start=1):
+    for index, (task, selected_engine, engine_attempts, selected_model) in enumerate(planned_tasks, start=1):
         checkpoints = ", ".join(task.human_checkpoints) if task.human_checkpoints else "-"
+        model_label = selected_model or "-"
         print(
             f"would_run: {index}. {task.id} {task.title} "
             f"status={task.status} pipeline_status={task.pipeline_status} "
             f"engine={selected_engine} engine_attempts={', '.join(engine_attempts)} "
-            f"human_checkpoints={checkpoints}"
+            f"model={model_label} human_checkpoints={checkpoints}"
         )
     print(f"blocked_tasks: {len(blocked)}")
     for blocked_task in blocked:
@@ -724,6 +816,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     add.add_argument("--engine", choices=ENGINE_CHOICES, help="Preferred engine for the task")
     add.add_argument(
+        "--model",
+        help="Preferred model override for supported engines on this task",
+    )
+    add.add_argument(
         "--retry-limit",
         type=int,
         help="Per-task retry limit override; omit to use the workspace default",
@@ -740,7 +836,35 @@ def build_parser() -> argparse.ArgumentParser:
         help="Repository root containing .litehive/",
     )
 
-    run = subparsers.add_parser("run", help="Run the next active or queued task")
+    intake = subparsers.add_parser(
+        "intake",
+        help="Create a rough task from a freeform brain dump using an LLM",
+    )
+    intake.add_argument(
+        "file",
+        type=Path,
+        nargs="?",
+        help="File containing the brain dump; omit to read from stdin",
+    )
+    intake.add_argument(
+        "--engine",
+        choices=ENGINE_CHOICES,
+        default="opencode",
+        help="Engine to use for analysis",
+    )
+    intake.add_argument(
+        "--model",
+        help="Model override for the selected engine",
+    )
+    intake.add_argument(
+        "--workspace",
+        type=Path,
+        default=Path.cwd(),
+        help="Repository root containing .litehive/",
+    )
+
+    run = subparsers.add_parser("run", help="Run the next planned task")
+
     run.add_argument(
         "--workspace",
         type=Path,
@@ -761,6 +885,10 @@ def build_parser() -> argparse.ArgumentParser:
         "--engine",
         choices=ENGINE_CHOICES,
         help="Override the engine for this run only",
+    )
+    run.add_argument(
+        "--model",
+        help="Override the model for supported engines for this run only",
     )
     run.add_argument(
         "--stop-on-failure",
@@ -953,6 +1081,10 @@ def build_parser() -> argparse.ArgumentParser:
         help="Override task engine, or use 'default' to clear the override",
     )
     update.add_argument(
+        "--model",
+        help="Override task model, or use 'default' to clear the override",
+    )
+    update.add_argument(
         "--retry-limit",
         type=str,
         help="Set task retry limit, or use 'default' to clear the override",
@@ -1064,6 +1196,14 @@ def _cmd_configure(args: argparse.Namespace) -> int:
         task_engine_routing=task_engine_routing,
     )
     ensure_workspace(args.workspace, config)
+    config_path(args.workspace).write_text(
+        yaml.safe_dump(asdict(config), sort_keys=False),
+        encoding="utf-8",
+    )
+    context_path(args.workspace).write_text(
+        render_context_template(config.process_profile),
+        encoding="utf-8",
+    )
     print(f"Initialized litehive workspace in {args.workspace / '.litehive'}")
     return 0
 
@@ -1087,6 +1227,7 @@ def _cmd_status(args: argparse.Namespace) -> int:
     print(f"engine_budget_caps: {config.engine_budget_caps}")
     print(f"engine_costs: {config.engine_costs}")
     print(f"default_retry_limit: {config.default_retry_limit}")
+    print(f"execution_retry_policies: {_format_execution_retry_policies(config)}")
     print(f"pool_stop_on_failure: {config.pool_stop_on_failure}")
     print(f"pool_max_tasks: {config.pool_max_tasks}")
     print(f"pool_stop_on_execution_limit: {config.pool_stop_on_execution_limit}")
@@ -1095,6 +1236,7 @@ def _cmd_status(args: argparse.Namespace) -> int:
     print(f"pool_stop_on_dirty_git: {config.pool_stop_on_dirty_git}")
     print(f"pool_selection_policy: {config.pool_selection_policy}")
     print(f"pre_acceptance_command: {config.pre_acceptance_command}")
+    print(f"external_engine_sandbox: {format_external_engine_sandbox(config)}")
     print(f"task_engine_routing: {config.task_engine_routing}")
     print(f"mode: {state.mode}")
     print(f"active_task_id: {state.active_task_id}")
@@ -1110,6 +1252,10 @@ def _cmd_status(args: argparse.Namespace) -> int:
 
 def _task_engine_label(task_engine: str | None, default_engine: str) -> str:
     return task_engine or f"{default_engine} (default)"
+
+
+def _task_model_label(task_model: str | None) -> str:
+    return task_model or "default"
 
 
 def _task_dependencies_label(task_id: str, dependencies: list[str]) -> str:
@@ -1130,6 +1276,7 @@ def _cmd_queue(args: argparse.Namespace) -> int:
         print(
             f"active: {active_task.id} [{active_task.status}/{active_task.pipeline_status}] "
             f"priority={active_task.priority} engine={_task_engine_label(active_task.engine, config.default_engine)} "
+            f"model={_task_model_label(active_task.model)} "
             f"title={active_task.title} depends_on={_task_dependencies_label(active_task.id, active_task.depends_on)}"
         )
     print(f"queue_length: {len(state.queue)}")
@@ -1138,6 +1285,7 @@ def _cmd_queue(args: argparse.Namespace) -> int:
         print(
             f"{index}. {task.id} [{task.status}/{task.pipeline_status}] "
             f"priority={task.priority} engine={_task_engine_label(task.engine, config.default_engine)} "
+            f"model={_task_model_label(task.model)} "
             f"title={task.title} depends_on={_task_dependencies_label(task.id, task.depends_on)}"
         )
     return 0
@@ -1152,6 +1300,7 @@ def _launch_app(workspace: Path, default_mode: str) -> int:
 def _cmd_run(args: argparse.Namespace) -> int:
     ensure_workspace(args.workspace)
     engine_override = getattr(args, "engine", None)
+    model_override = getattr(args, "model", None)
     drain = bool(getattr(args, "drain", False))
     config = load_config(args.workspace)
     try:
@@ -1243,6 +1392,7 @@ def _cmd_run(args: argparse.Namespace) -> int:
                 config=config,
                 stop_conditions=stop_conditions,
                 engine_override=engine_override,
+                model_override=model_override,
             )
         else:
             runnable_tasks, predicted_stop_reason = _plan_single_task_dry_run(
@@ -1252,6 +1402,7 @@ def _cmd_run(args: argparse.Namespace) -> int:
                 config=config,
                 stop_conditions=stop_conditions,
                 engine_override=engine_override,
+                model_override=model_override,
             )
         _print_pool_dry_run_plan(
             args.workspace,
@@ -1267,12 +1418,20 @@ def _cmd_run(args: argparse.Namespace) -> int:
             summary = drain_task_pool(
                 args.workspace,
                 engine_override=engine_override,
+                model_override=model_override,
                 stop_conditions=stop_conditions,
             )
         except WorkspaceConflictError as exc:
             print(f"run failed: {exc}")
             return 1
         if not summary.executions:
+            report = _pool_summary_report_data(
+                args.workspace,
+                completed=[],
+                failed=[],
+                stop_reason=summary.stop_reason,
+                tasks_run=0,
+            )
             if summary.blocked:
                 print("No runnable task.")
                 for blocked in summary.blocked:
@@ -1280,56 +1439,20 @@ def _cmd_run(args: argparse.Namespace) -> int:
                         f"blocked: {blocked.task_id} {blocked.title} "
                         f"blocked_by={', '.join(blocked.blocked_by)}"
                     )
-                _write_pool_summary_report(
-                    args.workspace,
-                    completed=[],
-                    failed=[],
-                    stop_reason=summary.stop_reason,
-                    tasks_run=0,
-                )
-                _print_pool_summary_report(
-                    args.workspace,
-                    completed=[],
-                    failed=[],
-                    stop_reason=summary.stop_reason,
-                    tasks_run=0,
-                )
+                _write_pool_summary_report(root=args.workspace, report=report)
+                _print_pool_summary_report(report=report)
                 return 0
             if summary.stop_reason != "queue_exhausted":
                 print("No task executed.")
-                _write_pool_summary_report(
-                    args.workspace,
-                    completed=[],
-                    failed=[],
-                    stop_reason=summary.stop_reason,
-                    tasks_run=0,
-                )
-                _print_pool_summary_report(
-                    args.workspace,
-                    completed=[],
-                    failed=[],
-                    stop_reason=summary.stop_reason,
-                    tasks_run=0,
-                )
+                _write_pool_summary_report(root=args.workspace, report=report)
+                _print_pool_summary_report(report=report)
                 return 0
             print("No queued task.")
-            _write_pool_summary_report(
-                args.workspace,
-                completed=[],
-                failed=[],
-                stop_reason=summary.stop_reason,
-                tasks_run=0,
-            )
-            _print_pool_summary_report(
-                args.workspace,
-                completed=[],
-                failed=[],
-                stop_reason=summary.stop_reason,
-                tasks_run=0,
-            )
+            _write_pool_summary_report(root=args.workspace, report=report)
+            _print_pool_summary_report(report=report)
             return 0
-        completed: list[tuple[str, str, str, str, str]] = []
-        failed: list[tuple[str, str, str, str, str]] = []
+        completed: list[dict[str, object]] = []
+        failed: list[dict[str, object]] = []
         for execution in summary.executions:
             if execution.task is None:
                 continue
@@ -1340,22 +1463,24 @@ def _cmd_run(args: argparse.Namespace) -> int:
                 print(f"last_verdict: {execution.result.last_verdict}")
                 if execution.result.final_status == "done":
                     completed.append(
-                        (
-                            execution.task.id,
-                            execution.task.slug,
-                            execution.task.title,
-                            execution.task.status,
-                            execution.task.pipeline_status,
+                        _pool_task_report_entry(
+                            args.workspace,
+                            task_id=execution.task.id,
+                            title=execution.task.title,
+                            status=execution.task.status,
+                            pipeline_status=execution.task.pipeline_status,
+                            slug=execution.task.slug,
                         )
                     )
                 elif execution.result.final_status not in {"paused", "queued"}:
                     failed.append(
-                        (
-                            execution.task.id,
-                            execution.task.slug,
-                            execution.task.title,
-                            execution.task.status,
-                            execution.task.pipeline_status,
+                        _pool_task_report_entry(
+                            args.workspace,
+                            task_id=execution.task.id,
+                            title=execution.task.title,
+                            status=execution.task.status,
+                            pipeline_status=execution.task.pipeline_status,
+                            slug=execution.task.slug,
                         )
                     )
             stage_outcomes = _task_stage_outcomes(
@@ -1369,26 +1494,22 @@ def _cmd_run(args: argparse.Namespace) -> int:
             print(
                 f"blocked: {blocked.task_id} {blocked.title} blocked_by={', '.join(blocked.blocked_by)}"
             )
-        _write_pool_summary_report(
+        report = _pool_summary_report_data(
             args.workspace,
             completed=completed,
             failed=failed,
             stop_reason=summary.stop_reason,
             tasks_run=len(summary.executions),
         )
-        _print_pool_summary_report(
-            args.workspace,
-            completed=completed,
-            failed=failed,
-            stop_reason=summary.stop_reason,
-            tasks_run=len(summary.executions),
-        )
+        _write_pool_summary_report(root=args.workspace, report=report)
+        _print_pool_summary_report(report=report)
         return 0
 
     try:
         summary = run_single_task(
             args.workspace,
             engine_override=engine_override,
+            model_override=model_override,
             stop_conditions=stop_conditions,
         )
     except WorkspaceConflictError as exc:
@@ -1397,7 +1518,14 @@ def _cmd_run(args: argparse.Namespace) -> int:
     stop_reason = summary.stop_reason
     execution = summary.execution
     blocked = summary.blocked
-    if stop_reason is not None:
+    if stop_reason is not None and (execution is None or execution.task is None):
+        report = _pool_summary_report_data(
+            args.workspace,
+            completed=[],
+            failed=[],
+            stop_reason=stop_reason,
+            tasks_run=0,
+        )
         if blocked:
             print("No runnable task.")
             for blocked_task in blocked:
@@ -1405,44 +1533,19 @@ def _cmd_run(args: argparse.Namespace) -> int:
                     f"blocked: {blocked_task.task_id} {blocked_task.title} "
                     f"blocked_by={', '.join(blocked_task.blocked_by)}"
                 )
-            _write_pool_summary_report(
-                args.workspace,
-                completed=[],
-                failed=[],
-                stop_reason=stop_reason,
-                tasks_run=0,
-            )
-            _print_pool_summary_report(
-                args.workspace,
-                completed=[],
-                failed=[],
-                stop_reason=stop_reason,
-                tasks_run=0,
-            )
+            _write_pool_summary_report(root=args.workspace, report=report)
+            _print_pool_summary_report(report=report)
             return 0
-        if execution is None or execution.task is None:
-            if stop_reason == "queue_exhausted":
-                print("No queued task.")
-            else:
-                print("No task executed.")
-            _write_pool_summary_report(
-                args.workspace,
-                completed=[],
-                failed=[],
-                stop_reason=stop_reason,
-                tasks_run=0,
-            )
-            _print_pool_summary_report(
-                args.workspace,
-                completed=[],
-                failed=[],
-                stop_reason=stop_reason,
-                tasks_run=0,
-            )
-            return 0
+        if stop_reason == "queue_exhausted":
+            print("No queued task.")
+        else:
+            print("No task executed.")
+        _write_pool_summary_report(root=args.workspace, report=report)
+        _print_pool_summary_report(report=report)
+        return 0
 
-    completed: list[tuple[str, str, str, str, str]] = []
-    failed: list[tuple[str, str, str, str, str]] = []
+    completed: list[dict[str, object]] = []
+    failed: list[dict[str, object]] = []
     task = execution.task
     result = execution.result
     print(f"task: {task.id} {task.title}")
@@ -1451,29 +1554,42 @@ def _cmd_run(args: argparse.Namespace) -> int:
         print(f"steps: {result.steps_executed}")
         print(f"last_verdict: {result.last_verdict}")
         if result.final_status == "done":
-            completed.append((task.id, task.slug, task.title, task.status, task.pipeline_status))
+            completed.append(
+                _pool_task_report_entry(
+                    args.workspace,
+                    task_id=task.id,
+                    title=task.title,
+                    status=task.status,
+                    pipeline_status=task.pipeline_status,
+                    slug=task.slug,
+                )
+            )
         elif result.final_status not in {"paused", "queued"}:
-            failed.append((task.id, task.slug, task.title, task.status, task.pipeline_status))
+            failed.append(
+                _pool_task_report_entry(
+                    args.workspace,
+                    task_id=task.id,
+                    title=task.title,
+                    status=task.status,
+                    pipeline_status=task.pipeline_status,
+                    slug=task.slug,
+                )
+            )
     stage_outcomes = _task_stage_outcomes(args.workspace, task.id, task.slug)
     if stage_outcomes:
         print(f"stage_outcomes: {', '.join(stage_outcomes)}")
     if execution.commit_sha:
         print(f"commit: {execution.commit_sha}")
 
-    _write_pool_summary_report(
+    report = _pool_summary_report_data(
         args.workspace,
         completed=completed,
         failed=failed,
         stop_reason=stop_reason,
         tasks_run=1,
     )
-    _print_pool_summary_report(
-        args.workspace,
-        completed=completed,
-        failed=failed,
-        stop_reason=stop_reason,
-        tasks_run=1,
-    )
+    _write_pool_summary_report(root=args.workspace, report=report)
+    _print_pool_summary_report(report=report)
     return 0
 
 
@@ -1499,7 +1615,7 @@ def _cmd_rollback(args: argparse.Namespace) -> int:
     print("status: queued")
     print(f"pipeline_status: {summary.task.pipeline_status}")
     print("recovery_policy: rollback reverted the checkpoint and requeued the task")
-    print(f"next_commit_message: {summary.task.git.commit_message}")
+    print(f"next_commit_message: {checkpoint_message(summary.task)}")
     missing_criteria_reason = missing_acceptance_criteria_reason(summary.task)
     if missing_criteria_reason is not None:
         print(f"warning: {missing_criteria_reason}")
@@ -1518,7 +1634,7 @@ def _cmd_recover(args: argparse.Namespace) -> int:
     print("status: queued")
     print(f"pipeline_status: {task.pipeline_status}")
     print("recovery_policy: recover requeued the task without reverting workspace code")
-    print(f"next_commit_message: {task.git.commit_message}")
+    print(f"next_commit_message: {checkpoint_message(task)}")
     missing_criteria_reason = missing_acceptance_criteria_reason(task)
     if missing_criteria_reason is not None:
         print(f"warning: {missing_criteria_reason}")
@@ -1546,6 +1662,9 @@ def _cmd_promote(args: argparse.Namespace) -> int:
             print(f"task: {task.id} {task.title}")
             print("status: queued")
             print(f"pipeline_status: {task.pipeline_status}")
+            missing_criteria_reason = missing_acceptance_criteria_reason(task)
+            if missing_criteria_reason is not None:
+                print(f"warning: {missing_criteria_reason}")
             print("position: 1")
             return 0
         move_queued_task(args.workspace, args.task_id, 1)
@@ -1564,9 +1683,9 @@ def _cmd_prioritize(args: argparse.Namespace) -> int:
     except (ValueError, WorkspaceConflictError) as exc:
         print(f"prioritize failed: {exc}")
         return 1
-    print(f"tasks: {' '.join(args.task_ids)}")
-    print(f"moved: {len(args.task_ids)}")
-    print(f"front: {' '.join(state.queue[: len(args.task_ids)])}")
+    print(f"moved_tasks: {' '.join(args.task_ids)}")
+    print(f"moved_count: {len(args.task_ids)}")
+    print(f"front_of_queue: {' '.join(state.queue[: len(args.task_ids)])}")
     print(f"queue_length: {len(state.queue)}")
     return 0
 
@@ -1655,6 +1774,7 @@ def _cmd_add(args: argparse.Namespace) -> int:
             human_checkpoints=None if human_checkpoints is ... else human_checkpoints,
             task_type=requested_task_type,
             engine=args.engine,
+            model=getattr(args, "model", None),
             retry_limit=getattr(args, "retry_limit", None),
             auto_commit=not args.no_auto_commit,
         )
@@ -1668,6 +1788,8 @@ def _cmd_add(args: argparse.Namespace) -> int:
         f"retry_limit: {task.retry_policy.max_retries if task.retry_policy.max_retries is not None else 'default'}"
     )
     print(f"mode: {task.mode}")
+    print(f"engine: {_task_engine_label(task.engine, load_config(args.workspace).default_engine)}")
+    print(f"model: {_task_model_label(task.model)}")
     print(
         "human_checkpoints: "
         + (", ".join(task.human_checkpoints) if task.human_checkpoints else "-")
@@ -1675,9 +1797,98 @@ def _cmd_add(args: argparse.Namespace) -> int:
     print(f"task_type: {task.task_type or '-'}")
     print(f"depends_on: {_task_dependencies_label(task.id, task.depends_on)}")
     print(f"acceptance_criteria: {len(task.acceptance_criteria)}")
-    missing_criteria_reason = missing_acceptance_criteria_reason(task)
+    missing_criteria_reason = missing_acceptance_criteria_cli_warning(task)
     if missing_criteria_reason is not None:
         print(f"warning: {missing_criteria_reason}")
+    return 0
+
+
+def _cmd_intake(args: argparse.Namespace) -> int:
+    ensure_workspace(args.workspace)
+    brain_dump = ""
+    if args.file:
+        try:
+            brain_dump = args.file.read_text(encoding="utf-8")
+        except OSError as exc:
+            print(f"Failed to read file: {exc}")
+            return 1
+    else:
+        import sys
+
+        try:
+            if sys.stdin.isatty():
+                print("Reading brain dump from stdin (Ctrl-D to end):")
+            brain_dump = sys.stdin.read()
+        except EOFError:
+            pass
+
+    if not brain_dump.strip():
+        print("Empty brain dump; aborting.")
+        return 1
+
+    config = load_config(args.workspace)
+    engine_name = args.engine or config.default_engine
+    engine = get_engine(engine_name)
+    model = args.model or (
+        config.opencode_model if engine_name == "opencode" else None
+    )
+
+    prompt = intake_prompt(brain_dump)
+    print(f"Analyzing brain dump with {engine_name}...")
+
+    raw_title = _fallback_intake_title(brain_dump)
+    raw_goal = ""
+
+    try:
+        execution = engine.run(prompt, cwd=args.workspace, model=model)
+        if execution.exit_code == 0:
+            transcript = engine.render_transcript(execution)
+            from litehive.external_cli import _extract_line
+
+            extracted_title = _extract_line(transcript, "TITLE")
+            extracted_goal = _extract_line(transcript, "GOAL")
+
+            if extracted_title:
+                raw_title = extracted_title
+            if extracted_goal:
+                raw_goal = extracted_goal
+        else:
+            print(
+                f"Warning: Analysis failed with exit code {execution.exit_code}. "
+                "Creating task from raw intake."
+            )
+    except Exception as exc:
+        print(f"Warning: Analysis failed ({exc}). Creating task from raw intake.")
+
+    try:
+        from litehive.tasks import task_dir, task_brief_file
+
+        task_goal = raw_goal.strip() if raw_goal.strip() else _fallback_intake_goal(brain_dump)
+        task_goal += f"\n\n(See intake.md for the original brain dump)"
+
+        task = create_task(
+            args.workspace,
+            title=raw_title,
+            goal=task_goal,
+            mode="tasks",
+            task_type="intake",
+            engine=args.engine,
+            model=args.model,
+        )
+        base = task_dir(args.workspace, task)
+        (base / "intake.md").write_text(brain_dump, encoding="utf-8")
+
+        brief_file = task_brief_file(args.workspace, task)
+        _link_intake_brief_to_source(brief_file)
+
+    except (ValueError, WorkspaceConflictError) as exc:
+        print(f"Task creation failed: {exc}")
+        return 1
+
+    print(f"Created task {task.id}: {task.title}")
+    if task.goal:
+        print(f"Goal: {task.goal}")
+    print(f"Original dump preserved at: {base / 'intake.md'}")
     return 0
 
 
@@ -1690,6 +1901,7 @@ def _cmd_update(args: argparse.Namespace) -> int:
         and getattr(args, "human_checkpoint", None) is None
         and getattr(args, "task_type", None) is None
         and args.engine is None
+        and getattr(args, "model", None) is None
         and retry_limit_arg is None
         and args.priority is None
         and args.goal is None
@@ -1728,6 +1940,9 @@ def _cmd_update(args: argparse.Namespace) -> int:
             engine=(None if args.engine == "default" else args.engine)
             if args.engine is not None
             else ...,
+            model=(None if getattr(args, "model", None) == "default" else getattr(args, "model", None))
+            if getattr(args, "model", None) is not None
+            else ...,
             retry_limit=retry_limit,
             priority=args.priority if args.priority is not None else ...,
             goal=args.goal if args.goal is not None else ...,
@@ -1742,6 +1957,7 @@ def _cmd_update(args: argparse.Namespace) -> int:
     config = load_config(args.workspace)
     print(f"task: {task.id} {task.title}")
     print(f"engine: {_task_engine_label(task.engine, config.default_engine)}")
+    print(f"model: {_task_model_label(task.model)}")
     print(
         f"retry_limit: {task.retry_policy.max_retries if task.retry_policy.max_retries is not None else 'default'}"
     )
@@ -1756,7 +1972,7 @@ def _cmd_update(args: argparse.Namespace) -> int:
     print(f"depends_on: {_task_dependencies_label(task.id, task.depends_on)}")
     print(f"goal: {task.goal}")
     print(f"acceptance_criteria: {len(task.acceptance_criteria)}")
-    missing_criteria_reason = missing_acceptance_criteria_reason(task)
+    missing_criteria_reason = missing_acceptance_criteria_cli_warning(task)
     if missing_criteria_reason is not None:
         print(f"warning: {missing_criteria_reason}")
     return 0
@@ -1776,6 +1992,8 @@ def main() -> int:
         return _launch_app(args.workspace, default_mode="tasks")
     if args.command == "add":
         return _cmd_add(args)
+    if args.command == "intake":
+        return _cmd_intake(args)
     if args.command == "run":
         return _cmd_run(args)
     if args.command == "rollback":

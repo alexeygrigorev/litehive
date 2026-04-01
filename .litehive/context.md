@@ -13,7 +13,10 @@
 - `uv run litehive add "<title>" --workspace .`
 - `uv run litehive add "<title>" --task-type review --workspace .`
   Defaults to `mode: tasks` for typed intake so the task folder gets `brief.md` template guidance; pass `--mode implementation` to opt out.
+- `uv run litehive intake <file> --workspace .`
+  Creates a rough task from a freeform brain dump or specification using an LLM.
 - `uv run litehive move T-0002 1 --workspace .`
+- `uv run litehive prioritize T-0004 T-0002 T-0003 --workspace .`
 - `uv run litehive promote T-0002 --workspace .`
 - `uv run litehive requeue T-0002 --front --workspace .`
 - `uv run litehive resume T-0002 --workspace .`

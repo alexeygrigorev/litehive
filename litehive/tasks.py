@@ -25,9 +25,11 @@ from litehive.config import (
 )
 from litehive.git_ops import GitError, checkpoint_message, default_commit_message, find_commit_by_subject, is_git_repo
 from litehive.models import (
+    FollowUpTaskSpec,
     RuntimeEngineSwitch,
     RuntimeSubagentState,
     StageReport,
+    TaskCreationSource,
     SubagentRef,
     TaskOutcomeState,
     TaskRecord,
@@ -70,6 +72,20 @@ TASK_TEMPLATES: dict[str, dict[str, object]] = {
             "Config and execution path: note which settings, command wiring, or failure handling must change.",
             "Verification evidence: capture the focused run or test that proves the adapter path works.",
         ],
+        "brief_section_stubs": [
+            {
+                "title": "Adapter Surface",
+                "prompt": "Identify the entrypoint, inputs, outputs, and external system involved.",
+            },
+            {
+                "title": "Config and Execution Path",
+                "prompt": "Note which settings, command wiring, or failure handling must change.",
+            },
+            {
+                "title": "Verification Evidence",
+                "prompt": "Capture the focused run or test that proves the adapter path works.",
+            },
+        ],
     },
     "bugfix": {
         "goal": "Identify the failing behavior, implement the fix, and lock it down with focused verification.",
@@ -96,6 +112,20 @@ TASK_TEMPLATES: dict[str, dict[str, object]] = {
             "Bug and reproduction: describe the failing behavior, trigger, and expected result.",
             "Root cause: note the suspected or confirmed cause in the affected path.",
             "Regression coverage: record the exact test or check that prevents recurrence.",
+        ],
+        "brief_section_stubs": [
+            {
+                "title": "Bug and Reproduction",
+                "prompt": "Describe the failing behavior, trigger, and expected result.",
+            },
+            {
+                "title": "Root Cause",
+                "prompt": "Note the suspected or confirmed cause in the affected path.",
+            },
+            {
+                "title": "Regression Coverage",
+                "prompt": "Record the exact test or check that prevents recurrence.",
+            },
         ],
     },
     "research": {
@@ -124,6 +154,20 @@ TASK_TEMPLATES: dict[str, dict[str, object]] = {
             "Evidence: capture repository findings, experiments, or comparisons that support the answer.",
             "Recommendation: state the proposed next action, tradeoffs, and remaining unknowns.",
         ],
+        "brief_section_stubs": [
+            {
+                "title": "Question and Scope",
+                "prompt": "Define what is being investigated and what is out of scope.",
+            },
+            {
+                "title": "Evidence",
+                "prompt": "Capture repository findings, experiments, or comparisons that support the answer.",
+            },
+            {
+                "title": "Recommendation",
+                "prompt": "State the proposed next action, tradeoffs, and remaining unknowns.",
+            },
+        ],
     },
     "review": {
         "goal": "Review the target change critically and produce an actionable decision with supporting evidence.",
@@ -151,6 +195,55 @@ TASK_TEMPLATES: dict[str, dict[str, object]] = {
             "Findings: record actionable issues with severity and supporting evidence.",
             "Decision: capture accept versus revise plus open questions or residual risks.",
         ],
+        "brief_section_stubs": [
+            {
+                "title": "Review Scope",
+                "prompt": "Identify the change, workflow, or files under review.",
+            },
+            {
+                "title": "Findings",
+                "prompt": "Record actionable issues with severity and supporting evidence.",
+            },
+            {
+                "title": "Decision",
+                "prompt": "Capture accept versus revise plus open questions or residual risks.",
+            },
+        ],
+    },
+    "intake": {
+        "goal": "Capture a brain dump or freeform specification and prepare it for further decomposition.",
+        "acceptance_criteria": [
+            "The original brain dump is preserved and accessible.",
+            "The rough task title and goal accurately reflect the high-level intent.",
+            "The task is queued in 'tasks' mode for further grooming.",
+        ],
+        "constraints": [
+            "Do not try to fully scope or structure the work at intake time.",
+            "Preserve the original dump as the authoritative source of intent.",
+        ],
+        "plan": [
+            "Review the brain dump for high-level intent.",
+            "Extract a concise title and clear goal statement.",
+            "Prepare the task for PM grooming.",
+        ],
+        "prompt_guidance": [
+            "Keep the scope high-level; the PM will handle decomposition later.",
+            "Ensure the original intent is preserved and linked to the task.",
+        ],
+        "brief_sections": [
+            "Intake Notes: capture the core brain dump or link to the source.",
+            "Intent summary: describe the high-level goal in a few sentences.",
+        ],
+        "brief_section_stubs": [
+            {
+                "title": "Intake Notes",
+                "prompt": "Capture the core brain dump or link to the source.",
+            },
+            {
+                "title": "Intent Summary",
+                "prompt": "Describe the high-level goal in a few sentences.",
+            },
+        ],
     },
     "refactor": {
         "goal": "Improve the structure of the targeted area while preserving existing behavior.",
@@ -177,6 +270,20 @@ TASK_TEMPLATES: dict[str, dict[str, object]] = {
             "Refactor seam: identify the module, function, or flow being reshaped.",
             "Behavior to preserve: list the user-visible or contract-level behavior that must stay the same.",
             "Verification: capture the checks that confirm the refactor did not regress behavior.",
+        ],
+        "brief_section_stubs": [
+            {
+                "title": "Refactor Seam",
+                "prompt": "Identify the module, function, or flow being reshaped.",
+            },
+            {
+                "title": "Behavior to Preserve",
+                "prompt": "List the user-visible or contract-level behavior that must stay the same.",
+            },
+            {
+                "title": "Verification",
+                "prompt": "Capture the checks that confirm the refactor did not regress behavior.",
+            },
         ],
     },
 }
@@ -292,6 +399,23 @@ def _template_list(template: dict[str, object], key: str) -> list[str]:
     return list(value) if isinstance(value, list) else []
 
 
+def _template_section_stubs(template: dict[str, object]) -> list[dict[str, str]]:
+    value = template.get("brief_section_stubs", [])
+    if not isinstance(value, list):
+        return []
+
+    stubs: list[dict[str, str]] = []
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        title = str(item.get("title", "")).strip()
+        prompt = str(item.get("prompt", "")).strip()
+        if not title or not prompt:
+            continue
+        stubs.append({"title": title, "prompt": prompt})
+    return stubs
+
+
 def render_task_brief(task: TaskRecord) -> str:
     lines = [
         f"# {task.id} {task.title}",
@@ -326,7 +450,20 @@ def render_task_brief(task: TaskRecord) -> str:
         lines.extend(["", "## Template Guidance"])
         lines.extend(f"- {item}" for item in _template_list(template, "prompt_guidance"))
         lines.extend(["", "## Intake Notes"])
-        lines.extend(f"- {item}" for item in _template_list(template, "brief_sections"))
+        section_stubs = _template_section_stubs(template)
+        if section_stubs:
+            for stub in section_stubs:
+                lines.extend(
+                    [
+                        "",
+                        f"### {stub['title']}",
+                        f"- {stub['prompt']}",
+                        "",
+                        "_TBD_",
+                    ]
+                )
+        else:
+            lines.extend(f"- {item}" for item in _template_list(template, "brief_sections"))
 
     return "\n".join(lines) + "\n"
 
@@ -347,19 +484,36 @@ def missing_acceptance_criteria_reason(task: TaskRecord) -> str | None:
     )
 
 
+def missing_acceptance_criteria_cli_warning(task: TaskRecord) -> str | None:
+    reason = missing_acceptance_criteria_reason(task)
+    if reason is None:
+        return None
+    return (
+        f"{reason} This task will stay in `grooming` until criteria are added. "
+        "Use `--acceptance-criteria` to persist at least one structured bullet."
+    )
+
+
 def implementation_entry_stage(task: TaskRecord) -> str:
     if missing_acceptance_criteria_reason(task) is not None:
         return "grooming"
     return "implementing"
 
 
+def reroute_stage_for_acceptance_criteria(task: TaskRecord) -> str:
+    if task.pipeline_status in {"implementing", "testing", "accepting", "commit_to_git"}:
+        if missing_acceptance_criteria_reason(task) is not None:
+            return "grooming"
+        return task.pipeline_status
+    return task.pipeline_status
+
+
 def _acceptance_criteria_requirement_signals(task: TaskRecord) -> list[str]:
     signals: list[str] = []
-    goal = task.goal.strip()
-    if goal and goal != task.title.strip():
-        signals.append("an explicit goal")
     if task.depends_on:
         signals.append("dependencies")
+    if task.goal.strip() and task.goal.strip() != task.title.strip():
+        signals.append("an explicit goal")
     if task.priority == "high":
         signals.append("high priority")
     if len(task.plan) >= 2:
@@ -574,9 +728,20 @@ def _ensure_future_task_mutation_allowed(
     state: WorkspaceState | None = None,
 ) -> None:
     markers = active_task_markers(root, state)
-    conflicts = [
-        f"{task_id} ({', '.join(markers[task_id])})" for task_id in task_ids if task_id in markers
-    ]
+    conflicts: list[str] = []
+    for task_id in task_ids:
+        if task_id not in markers:
+            continue
+        task = get_task(root, task_id)
+        marker_set = set(markers[task_id])
+        if (
+            marker_set == {"workspace.active_task_id"}
+            and task is not None
+            and not _is_task_eligible_for_execution(task)
+            and task.runtime.execution_status != "running"
+        ):
+            continue
+        conflicts.append(f"{task_id} ({', '.join(markers[task_id])})")
     if conflicts:
         details = "; ".join(conflicts)
         raise WorkspaceConflictError(
@@ -662,6 +827,11 @@ def _write_task_runtime(root: Path, task: TaskRecord) -> None:
     _ensure_runtime_ignored(root)
 
 
+def set_task_commit_sha(task: TaskRecord, commit_sha: str | None) -> None:
+    task.git.commit_sha = commit_sha
+    task.runtime.git.commit_sha = commit_sha
+
+
 def save_task_runtime(root: Path, task: TaskRecord) -> None:
     with workspace_mutation_guard(root):
         _write_task_runtime(root, task)
@@ -673,7 +843,7 @@ def _load_task_runtime(root: Path, task: TaskRecord) -> TaskRecord:
         return task
     data = yaml.safe_load(runtime_file.read_text(encoding="utf-8")) or {}
     task.runtime = TaskRuntime(**data)
-    task.git.commit_sha = task.runtime.git.commit_sha
+    set_task_commit_sha(task, task.runtime.git.commit_sha)
     return task
 
 
@@ -685,6 +855,7 @@ def create_task(
     mode: str = "implementation",
     task_type: str | None = None,
     engine: str | None = None,
+    model: str | None = None,
     retry_limit: int | None = None,
     goal: str = "",
     acceptance_criteria: list[str] | None = None,
@@ -707,6 +878,7 @@ def create_task(
             depends_on=list(depends_on or []),
             task_type=task_type,
             engine=engine,
+            model=model,
             mode=mode,  # type: ignore[arg-type]
             goal=goal,
             acceptance_criteria=normalize_acceptance_criteria(acceptance_criteria),
@@ -746,6 +918,94 @@ def create_task(
         return task
 
 
+def create_follow_up_tasks(
+    root: Path,
+    *,
+    parent_task: TaskRecord,
+    stage: str,
+    follow_ups: list[FollowUpTaskSpec],
+) -> list[TaskRecord]:
+    if not follow_ups:
+        return []
+    if stage not in {"grooming", "accepting"}:
+        return []
+
+    ensure_workspace(root)
+    created_tasks: list[TaskRecord] = []
+    created_dirs: list[Path] = []
+    with workspace_mutation_guard(root), _workspace_lock(root):
+        state = load_state(root)
+        next_number = max(
+            (
+                int(match.group(1))
+                for child in tasks_root(root).iterdir()
+                if child.is_dir()
+                and (match := re.match(r"^T-(\d{4})-", child.name)) is not None
+            ),
+            default=0,
+        )
+        writes: dict[Path, str] = {}
+
+        for follow_up in follow_ups:
+            next_number += 1
+            task_id = f"T-{next_number:04d}"
+            slug = slugify(follow_up.title)
+            mode = "tasks" if follow_up.task_type else "implementation"
+            task = TaskRecord(
+                id=task_id,
+                slug=slug,
+                title=follow_up.title,
+                mode=mode,  # type: ignore[arg-type]
+                task_type=follow_up.task_type,
+                goal=follow_up.goal,
+                acceptance_criteria=normalize_acceptance_criteria(follow_up.acceptance_criteria),
+                created_from=TaskCreationSource(
+                    task_id=parent_task.id,
+                    stage=stage,  # type: ignore[arg-type]
+                    rationale=follow_up.rationale,
+                    blocking=follow_up.blocking,
+                ),
+                git={
+                    "auto_commit": True,
+                    "commit_message": default_commit_message(task_id, slug),
+                },
+            )
+            task = apply_task_template_defaults(task)
+
+            base = task_dir(root, task)
+            (base / "reports").mkdir(parents=True, exist_ok=False)
+            (base / "subagents").mkdir(parents=True, exist_ok=False)
+            (base / "artifacts").mkdir(parents=True, exist_ok=False)
+            created_dirs.append(base)
+            state.queue.append(task.id)
+            writes[task_file(root, task)] = yaml.safe_dump(
+                task.model_dump(mode="python"), sort_keys=False
+            )
+            writes[task_runtime_file(root, task)] = _serialize_task_runtime(task)
+            writes[
+                base / "journal.md"
+            ] = (
+                f"# {task.id} {task.title}\n\n"
+                f"## {utcnow()}\n"
+                "Task created.\n\n"
+                f"Created as a follow-up from `{parent_task.id}` during `{stage}`.\n"
+                f"Rationale: {follow_up.rationale}\n"
+            )
+            if task.mode == "tasks":
+                writes[task_brief_file(root, task)] = render_task_brief(task)
+            created_tasks.append(task)
+
+        writes[state_path(root)] = _serialize_state(state)
+        try:
+            _write_atomic_files(writes)
+        except Exception:
+            for base in reversed(created_dirs):
+                shutil.rmtree(base, ignore_errors=True)
+            raise
+        _ensure_runtime_ignored(root)
+    return created_tasks
+
+
 def list_tasks(root: Path) -> list[TaskRecord]:
     records: list[TaskRecord] = []
     for child in sorted(tasks_root(root).iterdir()):
@@ -776,8 +1036,30 @@ def require_task(root: Path, task_id: str) -> TaskRecord:
 def save_task(root: Path, task: TaskRecord) -> None:
     task.updated_at = utcnow()
     with workspace_mutation_guard(root):
-        _atomic_write_text(task_file(root, task), _serialize_task_record(task))
-        _write_task_runtime(root, task)
+        writes = _workspace_transition_writes(root, tasks=[task])
+        _write_atomic_files(writes)
+        _ensure_runtime_ignored(root)
+
+
+def _workspace_transition_writes(
+    root: Path,
+    *,
+    tasks: list[TaskRecord] | tuple[TaskRecord, ...] = (),
+    state: WorkspaceState | None = None,
+    journal_messages: dict[str, str] | None = None,
+) -> dict[Path, str]:
+    writes: dict[Path, str] = {}
+    for task in tasks:
+        writes[task_file(root, task)] = _serialize_task_record(task)
+        writes[task_runtime_file(root, task)] = _serialize_task_runtime(task)
+        if journal_messages is None or task.id not in journal_messages:
+            continue
+        journal_path = task_dir(root, task) / "journal.md"
+        existing = journal_path.read_text(encoding="utf-8") if journal_path.exists() else ""
+        writes[journal_path] = f"{existing}\n## {utcnow()}\n{journal_messages[task.id]}\n"
+    if state is not None:
+        writes[state_path(root)] = _serialize_state(state)
+    return writes
 
 
 def populate_missing_acceptance_criteria_from_report(
@@ -814,19 +1096,51 @@ def persist_task_and_state(
     state: WorkspaceState,
     journal_message: str | None = None,
 ) -> None:
-    task.updated_at = utcnow()
-    writes = {
-        task_file(root, task): _serialize_task_record(task),
-        task_runtime_file(root, task): _serialize_task_runtime(task),
-        state_path(root): _serialize_state(state),
-    }
-    if journal_message is not None:
-        journal_path = task_dir(root, task) / "journal.md"
-        existing = journal_path.read_text(encoding="utf-8") if journal_path.exists() else ""
-        writes[journal_path] = f"{existing}\n## {utcnow()}\n{journal_message}\n"
+    persist_tasks_and_state(
+        root,
+        tasks=[task],
+        state=state,
+        journal_messages={task.id: journal_message} if journal_message is not None else None,
+    )
+
+
+def persist_tasks_and_state(
+    root: Path,
+    *,
+    tasks: list[TaskRecord] | tuple[TaskRecord, ...],
+    state: WorkspaceState,
+    journal_messages: dict[str, str] | None = None,
+) -> None:
+    for task in tasks:
+        task.updated_at = utcnow()
+    writes = _workspace_transition_writes(
+        root,
+        tasks=tasks,
+        state=state,
+        journal_messages=journal_messages,
+    )
     with workspace_mutation_guard(root):
         _write_atomic_files(writes)
         _ensure_runtime_ignored(root)
+
+
+def _persist_tasks_and_state_without_runner_guard(
+    root: Path,
+    *,
+    tasks: list[TaskRecord] | tuple[TaskRecord, ...],
+    state: WorkspaceState,
+    journal_messages: dict[str, str] | None = None,
+) -> None:
+    for task in tasks:
+        task.updated_at = utcnow()
+    writes = _workspace_transition_writes(
+        root,
+        tasks=tasks,
+        state=state,
+        journal_messages=journal_messages,
+    )
+    _write_atomic_files(writes)
+    _ensure_runtime_ignored(root)
 
 
 def _persist_task_and_state_without_runner_guard(
@@ -836,18 +1150,12 @@ def _persist_task_and_state_without_runner_guard(
     state: WorkspaceState,
     journal_message: str | None = None,
 ) -> None:
-    task.updated_at = utcnow()
-    writes = {
-        task_file(root, task): _serialize_task_record(task),
-        task_runtime_file(root, task): _serialize_task_runtime(task),
-        state_path(root): _serialize_state(state),
-    }
-    if journal_message is not None:
-        journal_path = task_dir(root, task) / "journal.md"
-        existing = journal_path.read_text(encoding="utf-8") if journal_path.exists() else ""
-        writes[journal_path] = f"{existing}\n## {utcnow()}\n{journal_message}\n"
-    _write_atomic_files(writes)
-    _ensure_runtime_ignored(root)
+    _persist_tasks_and_state_without_runner_guard(
+        root,
+        tasks=[task],
+        state=state,
+        journal_messages={task.id: journal_message} if journal_message is not None else None,
+    )
 
 
 def mark_task_run_started(root: Path, task: TaskRecord) -> None:
@@ -906,21 +1214,64 @@ def set_task_retry_state(
     retry_limit: int,
     retry_source: str,
 ) -> None:
-    task.runtime.updated_at = utcnow()
-    task.runtime.retry_count = retry_count
-    task.runtime.retry_limit = retry_limit
-    task.runtime.retry_source = retry_source
+    _apply_task_retry_state(
+        task,
+        retry_count=retry_count,
+        retry_limit=retry_limit,
+        retry_source=retry_source,
+    )
     save_task_runtime(root, task)
 
 
 def clear_task_outcome(root: Path, task: TaskRecord) -> None:
+    _clear_task_outcome(task)
+    save_task_runtime(root, task)
+
+
+def _apply_task_retry_state(
+    task: TaskRecord,
+    *,
+    retry_count: int,
+    retry_limit: int,
+    retry_source: str,
+) -> None:
+    task.runtime.updated_at = utcnow()
+    task.runtime.retry_count = retry_count
+    task.runtime.retry_limit = retry_limit
+    task.runtime.retry_source = retry_source
+
+
+def _clear_task_outcome(task: TaskRecord) -> None:
     task.runtime.updated_at = utcnow()
     task.runtime.last_outcome = TaskOutcomeState()
-    save_task_runtime(root, task)
 
 
 def mark_task_outcome(
     root: Path,
+    task: TaskRecord,
+    *,
+    kind: str,
+    stage: str,
+    reason_code: str,
+    reason: str,
+    retry_count: int,
+    retry_limit: int,
+    retry_source: str,
+) -> None:
+    _apply_task_outcome(
+        task,
+        kind=kind,
+        stage=stage,
+        reason_code=reason_code,
+        reason=reason,
+        retry_count=retry_count,
+        retry_limit=retry_limit,
+        retry_source=retry_source,
+    )
+    save_task_runtime(root, task)
+
+
+def _apply_task_outcome(
     task: TaskRecord,
     *,
     kind: str,
@@ -943,7 +1294,6 @@ def mark_task_outcome(
         retry_source=retry_source,
         recorded_at=now,
     )
-    save_task_runtime(root, task)
 
 
 def mark_stage_started(root: Path, task: TaskRecord, step: str) -> None:
@@ -965,6 +1315,11 @@ def mark_stage_started(root: Path, task: TaskRecord, step: str) -> None:
 
 
 def mark_stage_finished(root: Path, task: TaskRecord, report: StageReport) -> None:
+    _apply_stage_finished(task, report)
+    save_task_runtime(root, task)
+
+
+def _apply_stage_finished(task: TaskRecord, report: StageReport) -> None:
     now = utcnow()
     started_at = task.runtime.current_stage.started_at
     task.runtime.updated_at = now
@@ -992,7 +1347,6 @@ def mark_stage_finished(root: Path, task: TaskRecord, report: StageReport) -> No
             "summary": "",
         }
     )
-    save_task_runtime(root, task)
 
 
 def mark_subagent_started(root: Path, task: TaskRecord, ref: SubagentRef) -> None:
@@ -1004,9 +1358,20 @@ def mark_subagent_started(root: Path, task: TaskRecord, ref: SubagentRef) -> Non
         engine=ref.engine,
         status=ref.status,
         path=ref.path,
+        sandboxed=ref.sandboxed,
+        sandbox_summary=ref.sandbox_summary,
         started_at=now,
         updated_at=now,
     )
+    save_task_runtime(root, task)
+
+
+def mark_subagent_pid(root: Path, task: TaskRecord, pid: int | None) -> None:
+    if pid is None or task.runtime.active_subagent is None or task.runtime.active_subagent.pid == pid:
+        return
+    now = utcnow()
+    task.runtime.updated_at = now
+    task.runtime.active_subagent = task.runtime.active_subagent.model_copy(update={"pid": pid, "updated_at": now})
     save_task_runtime(root, task)
 
 
@@ -1016,9 +1381,13 @@ def mark_subagent_finished(
     ref: SubagentRef,
     transcript: str,
     exit_code: int,
+    pid: int | None = None,
 ) -> None:
     now = utcnow()
     started_at = task.runtime.active_subagent.started_at if task.runtime.active_subagent else now
+    runtime_pid = pid
+    if runtime_pid is None and task.runtime.active_subagent is not None:
+        runtime_pid = task.runtime.active_subagent.pid
     task.runtime.updated_at = now
     task.runtime.last_subagent = RuntimeSubagentState(
         id=ref.id,
@@ -1026,6 +1395,9 @@ def mark_subagent_finished(
         engine=ref.engine,
         status=ref.status,
         path=ref.path,
+        pid=runtime_pid,
+        sandboxed=ref.sandboxed,
+        sandbox_summary=ref.sandbox_summary,
         started_at=started_at,
         updated_at=now,
         completed_at=now,
@@ -1374,23 +1746,17 @@ def _prepare_interrupted_task_for_requeue(task: TaskRecord) -> None:
         )
 
 
-def _recover_commit_task(root: Path, task: TaskRecord) -> None:
+def _recover_commit_task(task: TaskRecord) -> str:
     _prepare_recovered_commit_task(task)
-    append_journal(
-        root,
-        task,
-        "Recovered interrupted `commit_to_git` attempt and requeued the task at `commit_to_git`.",
-    )
-    save_task(root, task)
-    save_task_runtime(root, task)
+    return "Recovered interrupted `commit_to_git` attempt and requeued the task at `commit_to_git`."
 
 
-def _finalize_recovered_commit_task(root: Path, task: TaskRecord, *, commit_sha: str) -> None:
+def _finalize_recovered_commit_task(task: TaskRecord, *, commit_sha: str) -> str:
     now = utcnow()
     started_at = task.runtime.current_stage.started_at
     task.status = "done"
     task.pipeline_status = "done"
-    task.git.commit_sha = commit_sha
+    set_task_commit_sha(task, commit_sha)
     task.runtime.execution_status = "done"
     task.runtime.run_started_at = None
     task.runtime.active_subagent = None
@@ -1419,16 +1785,12 @@ def _finalize_recovered_commit_task(root: Path, task: TaskRecord, *, commit_sha:
             "summary": "",
         }
     )
-    append_journal(
-        root,
-        task,
+    return (
         (
             "Recovered existing checkpoint commit after interrupted `commit_to_git` "
             f"and finalized the task at `{commit_sha}`."
-        ),
+        )
     )
-    save_task(root, task)
-    save_task_runtime(root, task)
 
 
 def _find_existing_checkpoint_commit(root: Path, task: TaskRecord) -> str | None:
@@ -1443,12 +1805,11 @@ def _find_existing_checkpoint_commit(root: Path, task: TaskRecord) -> str | None
         return None
 
 
-def _recover_existing_checkpoint_commit(root: Path, task: TaskRecord) -> bool:
+def _recover_existing_checkpoint_commit(root: Path, task: TaskRecord) -> str | None:
     commit_sha = _find_existing_checkpoint_commit(root, task)
     if commit_sha is None:
-        return False
-    _finalize_recovered_commit_task(root, task, commit_sha=commit_sha)
-    return True
+        return None
+    return _finalize_recovered_commit_task(task, commit_sha=commit_sha)
 
 
 def _recover_stranded_commit_tasks(root: Path, state: WorkspaceState) -> bool:
@@ -1457,30 +1818,36 @@ def _recover_stranded_commit_tasks(root: Path, state: WorkspaceState) -> bool:
     orphaned = [task for task in tasks if _is_orphaned_commit_stage_task(task, state)]
     completed_ids: set[str] = set()
     recovered: list[TaskRecord] = []
+    transitioned: list[TaskRecord] = []
+    journal_messages: dict[str, str] = {}
     for task in stranded:
-        if _recover_existing_checkpoint_commit(root, task):
+        journal_message = _recover_existing_checkpoint_commit(root, task)
+        if journal_message is not None:
             completed_ids.add(task.id)
+            transitioned.append(task)
+            journal_messages[task.id] = journal_message
             continue
         recovered.append(task)
     recovered.extend(orphaned)
-    if not recovered:
-        if not completed_ids:
-            return False
-        if state.active_task_id in completed_ids:
-            state.active_task_id = None
-        state.queue = [task_id for task_id in state.queue if task_id not in completed_ids]
-        return True
-
     recovered_ids = {task.id for task in recovered}
     resolved_ids = {*recovered_ids, *completed_ids}
     queue = [task_id for task_id in state.queue if task_id not in recovered_ids]
     for task in recovered:
-        _recover_commit_task(root, task)
+        journal_messages[task.id] = _recover_commit_task(task)
+        transitioned.append(task)
         queue.insert(0, task.id)
     queue = [task_id for task_id in queue if task_id not in completed_ids]
     if state.active_task_id in resolved_ids:
         state.active_task_id = None
     state.queue = queue
+    if not transitioned:
+        return False
+    _persist_tasks_and_state_without_runner_guard(
+        root,
+        tasks=transitioned,
+        state=state,
+        journal_messages=journal_messages,
+    )
     return True
 
 
@@ -1587,7 +1954,7 @@ def restore_untouched_active_task(root: Path) -> WorkspaceState:
             started_at = task.runtime.current_stage.started_at
             task.status = "done"
             task.pipeline_status = "done"
-            task.git.commit_sha = commit_sha
+            set_task_commit_sha(task, commit_sha)
             task.runtime.execution_status = "done"
             task.runtime.run_started_at = None
             task.runtime.active_subagent = None
@@ -1704,9 +2071,15 @@ def move_queued_task(root: Path, task_id: str, position: int) -> WorkspaceState:
 def prioritize_queued_tasks(root: Path, task_ids: list[str]) -> WorkspaceState:
     if not task_ids:
         raise ValueError("At least one task id is required")
-    duplicates = sorted({task_id for task_id in task_ids if task_ids.count(task_id) > 1})
+    seen: set[str] = set()
+    duplicates: set[str] = set()
+    for task_id in task_ids:
+        if task_id in seen:
+            duplicates.add(task_id)
+            continue
+        seen.add(task_id)
     if duplicates:
-        joined = ", ".join(duplicates)
+        joined = ", ".join(sorted(duplicates))
         raise ValueError(f"Task ids must be unique: {joined}")
     with _workspace_lock(root):
         state = load_state(root)
@@ -1738,6 +2111,16 @@ def _reset_task_for_recovery(
     task.runtime.retry_limit = 0
     task.runtime.retry_source = "global"
     task.runtime.last_outcome = TaskOutcomeState()
+
+
+def prepare_completed_task_for_recovery(task: TaskRecord, *, recovery_stage: str) -> None:
+    _reset_task_for_recovery(
+        task,
+        status="queued",
+        pipeline_status=recovery_stage,
+    )
+    set_task_commit_sha(task, None)
+    task.git.rolled_back_checkpoint_attempt = None
 
 
 def requeue_task(root: Path, task_id: str, *, front: bool = False) -> TaskRecord:
@@ -1776,8 +2159,8 @@ def resume_task(root: Path, task_id: str, *, front: bool = False) -> TaskRecord:
         if task.pipeline_status in {"backlog", "done"}:
             raise ValueError(f"Task {task.id} has no resumable stage")
         resumed_stage = task.pipeline_status
-        if resumed_stage == "implementing":
-            resumed_stage = implementation_entry_stage(task)
+        if resumed_stage in {"implementing", "testing", "accepting", "commit_to_git"}:
+            resumed_stage = reroute_stage_for_acceptance_criteria(task)
         _reset_task_for_recovery(task, status="queued", pipeline_status=resumed_stage)
         state.queue = [item for item in state.queue if item != task.id]
         if front:
@@ -1888,6 +2271,7 @@ def update_task(
     depends_on: list[str] | object = ...,
     task_type: str | None | object = ...,
     engine: str | None | object = ...,
+    model: str | None | object = ...,
     retry_limit: int | None | object = ...,
     priority: str | object = ...,
     goal: str | object = ...,
@@ -1914,6 +2298,9 @@ def update_task(
             if engine is not None and engine not in VALID_TASK_ENGINES:
                 raise ValueError(f"Unsupported engine '{engine}'")
             task.engine = engine
+
+        if model is not ...:
+            task.model = model
 
         if retry_limit is not ...:
             if retry_limit is not None and retry_limit < 0:
@@ -1943,8 +2330,12 @@ def update_task(
             task.git.auto_commit = auto_commit
 
         apply_task_template_defaults(task)
+        task.pipeline_status = reroute_stage_for_acceptance_criteria(task)
 
-        _persist_future_task_update(root, task, journal_message="Task metadata updated via CLI.")
+        journal_message = "Task metadata updated via CLI."
+        if task.pipeline_status == "grooming" and missing_acceptance_criteria_reason(task) is not None:
+            journal_message += " Rerouted to `grooming` until structured acceptance criteria are added."
+        _persist_future_task_update(root, task, journal_message=journal_message)
         return task
 
 

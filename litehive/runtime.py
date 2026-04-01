@@ -6,12 +6,13 @@ from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 import re
 import subprocess
+import time
 from typing import Callable
 
 import yaml
 
-from litehive.engines import EngineError
-from litehive.config import LitehiveConfig, load_config, load_context, state_path
+from litehive.engines import EngineError, get_engine
+from litehive.config import ExecutionRetryPolicy, LitehiveConfig, load_config, load_context, state_path
 from litehive.git_ops import (
     GitError,
     abort_revert,
@@ -35,7 +36,6 @@ from litehive.tasks import (
     append_journal,
     dequeue_next_task,
     dequeue_next_task_selection,
-    finish_task_run_transition,
     get_task,
     implementation_entry_stage,
     load_state,
@@ -44,8 +44,10 @@ from litehive.tasks import (
     peek_next_task,
     peek_next_task_selection,
     persist_task_and_state,
+    prepare_completed_task_for_recovery,
     restore_untouched_active_task,
     set_pool_stop_reason,
+    set_task_commit_sha,
     save_task_runtime,
     save_task,
     task_dir,
@@ -98,6 +100,12 @@ class RollbackSummary:
     task: TaskRecord
     rollback_sha: str
     rolled_back_sha: str
+
+
+@dataclass(frozen=True, slots=True)
+class ResolvedExecutionRetryPolicy:
+    selector: str
+    policy: ExecutionRetryPolicy
 
 
 @dataclass(slots=True)
@@ -164,6 +172,7 @@ def run_task(
     task: TaskRecord | None,
     *,
     engine_override: str | None = None,
+    model_override: str | None = None,
     budget_ledger: EngineBudgetLedger | None = None,
 ) -> ExecutionSummary:
     root = root.resolve()
@@ -204,6 +213,8 @@ def run_task(
                 workspace_context=workspace_context,
                 subagents=subagents,
                 config=config,
+                task=task,
+                model_override=model_override,
                 config_auto_commit=config.auto_commit,
                 budget_ledger=budget_ledger or _budget_ledger_from_config(config),
             ),
@@ -211,7 +222,6 @@ def run_task(
             retry_source=retry_source,
         )
         result = runner.run(task)
-        finish_task_run_transition(root, task, result.final_status)
         if result.final_status != "done":
             append_journal(root, task, f"Execution finished with status `{result.final_status}`.")
 
@@ -222,6 +232,7 @@ def run_single_task(
     root: Path,
     *,
     engine_override: str | None = None,
+    model_override: str | None = None,
     stop_conditions: TaskPoolStopConditions | None = None,
 ) -> SingleTaskRunSummary:
     root = root.resolve()
@@ -242,6 +253,7 @@ def run_single_task(
         execution, blocked = run_next_task_with_override(
             root,
             engine_override=engine_override,
+            model_override=model_override,
             budget_ledger=budget_ledger,
         )
         if execution.task is None:
@@ -259,6 +271,7 @@ def drain_task_pool(
     root: Path,
     *,
     engine_override: str | None = None,
+    model_override: str | None = None,
     stop_conditions: TaskPoolStopConditions | None = None,
     stop_when: Callable[[list[ExecutionSummary]], bool] | None = None,
 ) -> TaskPoolRunSummary:
@@ -285,6 +298,7 @@ def drain_task_pool(
             execution, blocked = run_next_task_with_override(
                 root,
                 engine_override=engine_override,
+                model_override=model_override,
                 budget_ledger=budget_ledger,
             )
             if execution.task is None:
@@ -299,12 +313,14 @@ def run_task_pool(
     root: Path,
     *,
     engine_override: str | None = None,
+    model_override: str | None = None,
     stop_conditions: TaskPoolStopConditions | None = None,
     stop_when: Callable[[list[ExecutionSummary]], bool] | None = None,
 ) -> TaskPoolRunSummary:
     return drain_task_pool(
         root,
         engine_override=engine_override,
+        model_override=model_override,
         stop_conditions=stop_conditions,
         stop_when=stop_when,
     )
@@ -314,6 +330,7 @@ def run_next_task_with_override(
     root: Path,
     *,
     engine_override: str | None = None,
+    model_override: str | None = None,
     budget_ledger: EngineBudgetLedger | None = None,
 ) -> tuple[ExecutionSummary, list[BlockedTask]]:
     root = root.resolve()
@@ -323,6 +340,7 @@ def run_next_task_with_override(
             root,
             selection.task,
             engine_override=engine_override,
+            model_override=model_override,
             budget_ledger=budget_ledger,
         ),
         selection.blocked,
@@ -511,20 +529,7 @@ def rollback_completed_task(root: Path, task_id: str) -> RollbackSummary:
         rollback = None
         try:
             rollback = rollback_task(root, task)
-            task.status = "queued"
-            task.pipeline_status = recovery_stage
-            task.runtime.last_outcome.kind = None
-            task.runtime.last_outcome.stage = None
-            task.runtime.last_outcome.reason_code = None
-            task.runtime.last_outcome.reason = ""
-            task.runtime.last_outcome.retry_count = 0
-            task.runtime.last_outcome.retry_limit = 0
-            task.runtime.last_outcome.retry_source = "global"
-            task.runtime.last_outcome.recorded_at = None
-            task.runtime.retry_count = 0
-            task.runtime.retry_limit = 0
-            task.runtime.retry_source = "global"
-            task.git.commit_sha = None
+            prepare_completed_task_for_recovery(task, recovery_stage=recovery_stage)
             task.git.rolled_back_checkpoint_attempt = attempt
             state.active_task_id = None
             state.queue = [item for item in state.queue if item != task.id]
@@ -563,20 +568,7 @@ def recover_completed_task(root: Path, task_id: str) -> TaskRecord:
         _require_completed_task(task, action="recover")
 
         recovery_stage = implementation_entry_stage(task)
-        task.status = "queued"
-        task.pipeline_status = recovery_stage
-        task.runtime.last_outcome.kind = None
-        task.runtime.last_outcome.stage = None
-        task.runtime.last_outcome.reason_code = None
-        task.runtime.last_outcome.reason = ""
-        task.runtime.last_outcome.retry_count = 0
-        task.runtime.last_outcome.retry_limit = 0
-        task.runtime.last_outcome.retry_source = "global"
-        task.runtime.last_outcome.recorded_at = None
-        task.runtime.retry_count = 0
-        task.runtime.retry_limit = 0
-        task.runtime.retry_source = "global"
-        task.git.commit_sha = None
+        prepare_completed_task_for_recovery(task, recovery_stage=recovery_stage)
         state = load_state(root)
         state.active_task_id = None
         state.queue = [item for item in state.queue if item != task.id]
@@ -720,6 +712,35 @@ def resolve_task_retry_policy(task: TaskRecord, config: LitehiveConfig) -> tuple
     return config.default_retry_limit, "global"
 
 
+def _execution_retry_model_family(*, engine_name: str, model_name: str | None) -> str:
+    if model_name:
+        model_tail = model_name.rsplit("/", 1)[-1].strip().lower()
+        match = re.match(r"[a-z0-9]+", model_tail)
+        if match is not None:
+            return match.group(0)
+    return engine_name
+
+
+def resolve_execution_retry_policy(
+    config: LitehiveConfig, *, engine_name: str, model_name: str | None = None
+) -> ResolvedExecutionRetryPolicy:
+    model_family = _execution_retry_model_family(engine_name=engine_name, model_name=model_name)
+    selector_order = [engine_name, f"model_family:{model_family}", "external_cli"]
+    for selector in selector_order:
+        if selector in config.execution_retry_policies:
+            return ResolvedExecutionRetryPolicy(
+                selector=selector,
+                policy=config.execution_retry_policies[selector],
+            )
+    return ResolvedExecutionRetryPolicy(selector="none", policy=ExecutionRetryPolicy())
+
+
+def _retry_backoff_seconds(policy: ExecutionRetryPolicy, retry_number: int) -> float:
+    if retry_number <= 0:
+        return 0.0
+    return policy.backoff_seconds * (policy.backoff_multiplier ** (retry_number - 1))
+
+
 def _require_completed_task(task: TaskRecord, action: str) -> None:
     if task.status != "done" or task.pipeline_status != "done":
         raise GitError(f"Task {task.id} is not completed; cannot {action}")
@@ -732,6 +753,8 @@ def build_executor(
     workspace_context: str,
     subagents: SubagentManager,
     config: LitehiveConfig,
+    task: TaskRecord,
+    model_override: str | None,
     config_auto_commit: bool,
     budget_ledger: EngineBudgetLedger,
 ) -> StageExecutor:
@@ -752,7 +775,7 @@ def build_executor(
             workspace_context=workspace_context,
             process_profile=config.process_profile,
         )
-        fallback_events: list[str] = []
+        execution_events: list[str] = []
         engines = _engine_attempt_order(next_stage_engine_names, config.engine_fallbacks)
         limit_trigger_reason: str | None = None
 
@@ -765,7 +788,7 @@ def build_executor(
                         f"Stage `{step}` switched from `{engine_name}` to `{next_engine}` "
                         f"after {budget_reason}."
                     )
-                    fallback_events.append(event)
+                    execution_events.append(event)
                     append_journal(root, current_task, event)
                     mark_engine_switch(
                         root,
@@ -781,23 +804,63 @@ def build_executor(
                     step=step,  # type: ignore[arg-type]
                     verdict="blocked",
                     summary=f"{step} blocked: {budget_reason}",
-                    feedback="\n\n".join(fallback_events).strip(),
-                    warnings=[*fallback_events, budget_reason],
+                    feedback="\n\n".join(execution_events).strip(),
+                    warnings=[*execution_events, budget_reason],
                 )
                 return report
 
             budget_ledger.record(engine_name)
-            result = subagents.run(
-                current_task,
-                role=_role_for_step(step),
+            model_name = resolve_model(task, config, engine_name=engine_name, model_override=model_override)
+            retry_policy = resolve_execution_retry_policy(
+                config,
                 engine_name=engine_name,
-                prompt=prompt,
-                model=_model_for_engine(config, engine_name),
-                max_turns=(config.claude_max_turns if engine_name == "claude" else None),
+                model_name=model_name,
             )
+            max_turns = config.claude_max_turns if engine_name == "claude" else None
+            attempt_count = 0
+            retry_exhausted_reason: str | None = None
+            while True:
+                attempt_count += 1
+                result = subagents.run(
+                    current_task,
+                    role=_role_for_step(step),
+                    engine_name=engine_name,
+                    prompt=prompt,
+                    model=model_name,
+                    max_turns=max_turns,
+                )
+                failure = result.failure
+                if (
+                    failure is None
+                    or failure.kind != "retryable_execution_error"
+                    or failure.classification not in retry_policy.policy.retry_on
+                ):
+                    break
+                retry_number = attempt_count - 1
+                if retry_number >= retry_policy.policy.max_retries:
+                    stop_event = (
+                        f"Stage `{step}` stopped retrying `{engine_name}` after attempt "
+                        f"{attempt_count}/{retry_policy.policy.max_retries + 1}: {failure.reason}."
+                    )
+                    execution_events.append(stop_event)
+                    append_journal(root, current_task, stop_event)
+                    retry_exhausted_reason = failure.reason
+                    break
+                backoff_seconds = _retry_backoff_seconds(retry_policy.policy, retry_number + 1)
+                retry_event = (
+                    f"Stage `{step}` retrying `{engine_name}` after attempt "
+                    f"{attempt_count}/{retry_policy.policy.max_retries + 1} due to {failure.reason} "
+                    f"(classification: {failure.classification}, policy: {retry_policy.selector}, "
+                    f"backoff: {backoff_seconds:.2f}s)."
+                )
+                execution_events.append(retry_event)
+                append_journal(root, current_task, retry_event)
+                if backoff_seconds > 0:
+                    time.sleep(backoff_seconds)
             is_limit_failure = (
                 result.failure is not None and result.failure.kind == "execution_limit"
             )
+            is_retry_exhausted_failure = retry_exhausted_reason is not None
             if is_limit_failure and limit_trigger_reason is None:
                 limit_trigger_reason = result.failure.reason
             is_unavailable_fallback = (
@@ -805,13 +868,14 @@ def build_executor(
                 and result.failure is not None
                 and result.failure.kind == "engine_error"
             )
-            if (is_limit_failure or is_unavailable_fallback) and index + 1 < len(engines):
+            if (is_limit_failure or is_unavailable_fallback or is_retry_exhausted_failure) and index + 1 < len(engines):
                 next_engine = engines[index + 1]
+                failure_reason = result.failure.reason if result.failure is not None else retry_exhausted_reason
                 event = (
                     f"Stage `{step}` switched from `{engine_name}` to `{next_engine}` "
-                    f"after {result.failure.reason}."
+                    f"after {failure_reason}."
                 )
-                fallback_events.append(event)
+                execution_events.append(event)
                 append_journal(root, current_task, event)
                 mark_engine_switch(
                     root,
@@ -819,14 +883,14 @@ def build_executor(
                     step=step,
                     from_engine=engine_name,
                     to_engine=next_engine,
-                    reason=result.failure.reason,
+                    reason=failure_reason,
                 )
                 continue
 
             report = stage_report_from_subagent(current_task, step, result)
-            if fallback_events:
-                report.warnings = [*fallback_events, *report.warnings]
-                report.feedback = "\n\n".join([*fallback_events, report.feedback]).strip()
+            if execution_events:
+                report.warnings = [*execution_events, *report.warnings]
+                report.feedback = "\n\n".join([*execution_events, report.feedback]).strip()
             if limit_trigger_reason is not None and (is_limit_failure or is_unavailable_fallback):
                 if (
                     is_unavailable_fallback
@@ -841,7 +905,7 @@ def build_executor(
                     report.summary = (
                         f"{step} blocked after exhausting engine fallbacks: {result.failure.reason}"
                     )
-                report.feedback = "\n\n".join([*fallback_events, result.transcript]).strip()
+                report.feedback = "\n\n".join([*execution_events, result.transcript]).strip()
                 if not report.warnings or report.warnings[-1] != result.failure.reason:
                     report.warnings.append(result.failure.reason)
                 return report
@@ -862,7 +926,7 @@ def build_executor(
     return executor
 
 
-def _model_for_engine(config: LitehiveConfig, engine_name: str) -> str | None:
+def workspace_model_for_engine(config: LitehiveConfig, engine_name: str) -> str | None:
     if engine_name == "opencode":
         return config.opencode_model
     if engine_name == "gemini":
@@ -872,6 +936,22 @@ def _model_for_engine(config: LitehiveConfig, engine_name: str) -> str | None:
     if engine_name == "claude":
         return config.claude_model
     return None
+
+
+def resolve_model(
+    task: TaskRecord,
+    config: LitehiveConfig,
+    *,
+    engine_name: str,
+    model_override: str | None = None,
+) -> str | None:
+    if not get_engine(engine_name).capabilities.supports_model_override:
+        return None
+    if model_override is not None:
+        return model_override
+    if task.model is not None:
+        return task.model
+    return workspace_model_for_engine(config, engine_name)
 
 
 def _budget_ledger_from_config(config: LitehiveConfig) -> EngineBudgetLedger:
@@ -1045,7 +1125,8 @@ def _commit_to_git_report(
             warnings=["no changes to commit"],
         )
 
-    unexpected_dirty_paths = _unexpected_dirty_paths(root, task, dirty_entries)
+    allowed_paths = _allowed_commit_paths(root, task)
+    unexpected_dirty_paths = _unexpected_dirty_paths(dirty_entries, allowed_paths)
     if unexpected_dirty_paths:
         message = "repository has unrelated changes: " + ", ".join(
             f"`{path}`" for path in unexpected_dirty_paths
@@ -1070,7 +1151,7 @@ def _commit_to_git_report(
         previous_pipeline_status = task.pipeline_status
         state = load_state(root)
         previous_state = state.model_copy(deep=True)
-        task.git.commit_sha = None
+        set_task_commit_sha(task, None)
         task.git.checkpoint_base_sha = base_sha
         task.git.checkpoint_attempts = attempt
         task.git.rolled_back_checkpoint_attempt = None
@@ -1089,14 +1170,15 @@ def _commit_to_git_report(
             ),
         )
         persist_task_and_state(root, task=task, state=state)
-        checkpoint = commit_task(root, message)
+        checkpoint_paths = sorted(str(path) for path in allowed_paths)
+        checkpoint = commit_task(root, message, paths=checkpoint_paths)
         if checkpoint is None:
             raise GitError("git commit prerequisites were not met")
     except GitError as exc:
         task.git.checkpoint_base_sha = previous_base_sha
         task.git.checkpoint_attempts = previous_attempts
         task.git.rolled_back_checkpoint_attempt = previous_rollback_attempt
-        task.git.commit_sha = None
+        set_task_commit_sha(task, None)
         task.status = previous_status
         task.pipeline_status = previous_pipeline_status
         persist_task_and_state(root, task=task, state=previous_state)
@@ -1109,7 +1191,7 @@ def _commit_to_git_report(
             warnings=[str(exc)],
         )
 
-    task.git.commit_sha = checkpoint.commit_sha
+    set_task_commit_sha(task, checkpoint.commit_sha)
     save_task_runtime(root, task)
     return StageReport(
         task_id=task.id,
@@ -1119,11 +1201,17 @@ def _commit_to_git_report(
     )
 
 
-def _unexpected_dirty_paths(root: Path, task: TaskRecord, dirty_entries: list[str]) -> list[str]:
+def _unexpected_dirty_paths(
+    dirty_entries: list[str], allowed_paths: set[PurePosixPath]
+) -> list[str]:
     unexpected: list[str] = []
     for entry in dirty_entries:
         path = _status_entry_path(entry)
-        if path is None or _is_allowed_commit_path(root, task, path):
+        if path is None:
+            continue
+        if _is_allowed_commit_path(path, allowed_paths):
+            continue
+        if path.startswith(".litehive/"):
             continue
         unexpected.append(path)
     return unexpected
@@ -1147,9 +1235,9 @@ def _allowed_commit_paths(root: Path, task: TaskRecord) -> set[PurePosixPath]:
     return allowed
 
 
-def _is_allowed_commit_path(root: Path, task: TaskRecord, path: str) -> bool:
+def _is_allowed_commit_path(path: str, allowed_paths: set[PurePosixPath]) -> bool:
     candidate = PurePosixPath(path)
-    for allowed in _allowed_commit_paths(root, task):
+    for allowed in allowed_paths:
         if candidate == allowed or allowed in candidate.parents:
             return True
     return False

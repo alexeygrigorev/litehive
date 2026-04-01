@@ -3,17 +3,27 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import inspect
 from pathlib import Path
+import re
 
 import yaml
 
-from litehive.config import resolve_process_profile
+from litehive.config import load_config, resolve_process_profile
 from litehive.external_cli import CLIExecutionResult, ExternalCLIAdapter, parse_stage_report_text
-from litehive.engines import EngineError, classify_execution_limit, get_engine
+from litehive.engines import (
+    EngineError,
+    classify_execution_limit,
+    classify_retryable_execution_failure,
+    get_engine,
+)
 from litehive.models import StageReport, SubagentRef, TaskRecord, utcnow
+from litehive.sandbox import SandboxError, SandboxLauncher
 from litehive.tasks import (
+    _write_atomic_files,
     infer_acceptance_criteria,
     mark_subagent_finished,
+    mark_subagent_pid,
     mark_subagent_started,
     missing_acceptance_criteria_reason,
     save_task,
@@ -26,6 +36,7 @@ from litehive.tasks import (
 class EngineFailure:
     kind: str
     reason: str
+    classification: str | None = None
 
 
 @dataclass(slots=True)
@@ -37,9 +48,29 @@ class SubagentResult:
     failure: EngineFailure | None = None
 
 
-def _supports_custom_live_execution(engine: object) -> bool:
-    run_live = getattr(type(engine), "run_live", None)
-    return callable(run_live) and run_live is not ExternalCLIAdapter.run_live
+def _supports_live_execution(engine: object) -> bool:
+    run_live = getattr(engine, "run_live", None)
+    return callable(run_live)
+
+
+def _supports_on_started(engine: object) -> bool:
+    run = getattr(engine, "run", None)
+    if not callable(run):
+        return False
+    try:
+        return "on_started" in inspect.signature(run).parameters
+    except (TypeError, ValueError):
+        return False
+
+
+def _supports_live_on_started(engine: object) -> bool:
+    run_live = getattr(engine, "run_live", None)
+    if not callable(run_live):
+        return False
+    try:
+        return "on_started" in inspect.signature(run_live).parameters
+    except (TypeError, ValueError):
+        return False
 
 
 class SubagentManager:
@@ -47,6 +78,8 @@ class SubagentManager:
 
     def __init__(self, root: Path) -> None:
         self.root = root.resolve()
+        self.config = load_config(self.root)
+        self.sandbox = SandboxLauncher(self.root, self.config)
 
     def run(
         self,
@@ -58,74 +91,100 @@ class SubagentManager:
         model: str | None = None,
         max_turns: int | None = None,
     ) -> SubagentResult:
-        subagent_id = f"SA-{len(task.subagents) + 1:04d}"
+        subagent_id = self._next_subagent_id(task)
         folder_name = f"{subagent_id}-{role}"
         base = task_dir(self.root, task) / "subagents" / folder_name
         base.mkdir(parents=True, exist_ok=False)
 
+        engine = get_engine(engine_name)
+        sandbox_summary = self.sandbox.policy_summary(engine_name)
         ref = SubagentRef(
             id=subagent_id,
             role=role,
             engine=engine_name,
             status="running",
             path=f"subagents/{folder_name}",
+            sandboxed=sandbox_summary.enabled,
+            sandbox_summary=sandbox_summary.summary,
         )
         task.subagents.append(ref)
         save_task(self.root, task)
         mark_subagent_started(self.root, task, ref)
         self._write_session_start(base, ref, prompt)
-
-        engine = get_engine(engine_name)
         failure: EngineFailure | None = None
         try:
             if not engine.is_available():
                 raise EngineError(f"Engine '{engine.name}' is unavailable: missing binary '{engine.binary}'")
-            if _supports_custom_live_execution(engine):
+            if isinstance(engine, ExternalCLIAdapter):
+                engine = _SandboxedAdapter(engine, self.sandbox, engine_name)
+            if _supports_live_execution(engine):
+                live_kwargs: dict[str, object] = {
+                    "cwd": self.root,
+                    "model": model,
+                    "on_update": lambda execution: self._write_session_progress(
+                        task,
+                        base,
+                        ref,
+                        prompt,
+                        execution,
+                    ),
+                }
+                if _supports_live_on_started(engine):
+                    live_kwargs["on_started"] = lambda pid: self._record_subagent_pid(task, base, ref, pid)
                 if max_turns is None:
-                    proc = engine.run_live(
+                    proc = engine.run_live(prompt, **live_kwargs)
+                else:
+                    proc = engine.run_live(prompt, max_turns=max_turns, **live_kwargs)
+            elif max_turns is None:
+                if _supports_on_started(engine):
+                    proc = engine.run(
                         prompt,
                         cwd=self.root,
                         model=model,
-                        on_update=lambda execution: self._write_session_progress(
-                            task,
-                            base,
-                            ref,
-                            prompt,
-                            execution,
-                        ),
+                        on_started=lambda pid: self._record_subagent_pid(task, base, ref, pid),
                     )
                 else:
-                    proc = engine.run_live(
+                    proc = engine.run(prompt, cwd=self.root, model=model)
+            else:
+                if _supports_on_started(engine):
+                    proc = engine.run(
                         prompt,
                         cwd=self.root,
                         model=model,
                         max_turns=max_turns,
-                        on_update=lambda execution: self._write_session_progress(
-                            task,
-                            base,
-                            ref,
-                            prompt,
-                            execution,
-                        ),
+                        on_started=lambda pid: self._record_subagent_pid(task, base, ref, pid),
                     )
-            elif max_turns is None:
-                proc = engine.run(prompt, cwd=self.root, model=model)
-            else:
-                proc = engine.run(prompt, cwd=self.root, model=model, max_turns=max_turns)
+                else:
+                    proc = engine.run(prompt, cwd=self.root, model=model, max_turns=max_turns)
             transcript = engine.render_transcript(proc)
             ref.status = "completed" if proc.exit_code == 0 else "failed"
             if proc.exit_code != 0:
                 limit_reason = classify_execution_limit(transcript)
                 if limit_reason is not None:
                     failure = EngineFailure(kind="execution_limit", reason=limit_reason)
-        except EngineError as exc:
+                else:
+                    retryable_failure = classify_retryable_execution_failure(transcript)
+                    if retryable_failure is not None:
+                        failure = EngineFailure(
+                            kind="retryable_execution_error",
+                            reason=retryable_failure.reason,
+                            classification=retryable_failure.classification,
+                        )
+        except (EngineError, SandboxError) as exc:
             transcript = str(exc)
             proc = None
             ref.status = "blocked"
             failure = EngineFailure(kind="engine_error", reason=str(exc))
 
         save_task(self.root, task)
-        mark_subagent_finished(self.root, task, ref, transcript, 0 if proc is None else proc.exit_code)
+        mark_subagent_finished(
+            self.root,
+            task,
+            ref,
+            transcript,
+            0 if proc is None else proc.exit_code,
+            pid=None if proc is None else proc.pid,
+        )
         self._write_session_finish(
             task,
             base,
@@ -143,29 +202,46 @@ class SubagentManager:
             failure=failure,
         )
 
+    def _next_subagent_id(self, task: TaskRecord) -> str:
+        next_number = 1
+        for ref in task.subagents:
+            match = re.match(r"^SA-(\d{4})$", ref.id)
+            if match:
+                next_number = max(next_number, int(match.group(1)) + 1)
+
+        subagents_root = task_dir(self.root, task) / "subagents"
+        if subagents_root.exists():
+            for child in subagents_root.iterdir():
+                if not child.is_dir():
+                    continue
+                match = re.match(r"^SA-(\d{4})-", child.name)
+                if match:
+                    next_number = max(next_number, int(match.group(1)) + 1)
+
+        return f"SA-{next_number:04d}"
+
     def _write_session_start(
         self,
         base: Path,
         ref: SubagentRef,
         prompt: str,
     ) -> None:
-        self._write_session_metadata(base, ref, exit_code=None)
-        (base / "prompt.txt").write_text(prompt, encoding="utf-8")
-        (base / "transcript.md").write_text("", encoding="utf-8")
-        (base / "stdout.txt").write_text("", encoding="utf-8")
-        (base / "stderr.txt").write_text("", encoding="utf-8")
-        (base / "report.yaml").write_text(
-            yaml.safe_dump(
-                {
-                    "status": ref.status,
-                    "summary": "",
-                    "files_changed": [],
-                    "tests": {"added": 0, "passing": 0},
-                    "warnings": [],
-                },
-                sort_keys=False,
-            ),
-            encoding="utf-8",
+        self._write_session_snapshot(
+            base,
+            ref,
+            prompt=prompt,
+            transcript="",
+            stdout="",
+            stderr="",
+            report_payload={
+                "status": ref.status,
+                "summary": "",
+                "files_changed": [],
+                "tests": {"added": 0, "passing": 0},
+                "warnings": [],
+            },
+            exit_code=None,
+            pid=None,
         )
 
     def _write_session_finish(
@@ -189,23 +265,22 @@ class SubagentManager:
             transcript=transcript,
             subagent_status=ref.status,
         )
-        self._write_session_metadata(base, ref, exit_code=exit_code)
-        (base / "prompt.txt").write_text(prompt, encoding="utf-8")
-        (base / "transcript.md").write_text(transcript + "\n", encoding="utf-8")
-        (base / "stdout.txt").write_text("" if execution is None else execution.stdout, encoding="utf-8")
-        (base / "stderr.txt").write_text("" if execution is None else execution.stderr, encoding="utf-8")
-        (base / "report.yaml").write_text(
-            yaml.safe_dump(
-                {
-                    "status": ref.status,
-                    "summary": report.summary,
-                    "files_changed": report.files_changed,
-                    "tests": report.tests,
-                    "warnings": report.warnings,
-                },
-                sort_keys=False,
-            ),
-            encoding="utf-8",
+        self._write_session_snapshot(
+            base,
+            ref,
+            prompt=prompt,
+            transcript=transcript + "\n",
+            stdout="" if execution is None else execution.stdout,
+            stderr="" if execution is None else execution.stderr,
+            report_payload={
+                "status": ref.status,
+                "summary": report.summary,
+                "files_changed": report.files_changed,
+                "tests": report.tests,
+                "warnings": report.warnings,
+            },
+            exit_code=exit_code,
+            pid=None if execution is None else execution.pid,
         )
 
     def _write_session_progress(
@@ -217,7 +292,8 @@ class SubagentManager:
         execution: CLIExecutionResult,
     ) -> None:
         transcript = get_engine(ref.engine).render_transcript(execution)
-        self._write_session_metadata(base, ref, exit_code=None)
+        self._record_subagent_pid(task, base, ref, execution.pid)
+        self._write_session_metadata(base, ref, exit_code=None, pid=execution.pid)
         (base / "prompt.txt").write_text(prompt, encoding="utf-8")
         (base / "transcript.md").write_text(transcript, encoding="utf-8")
         (base / "stdout.txt").write_text(execution.stdout, encoding="utf-8")
@@ -248,9 +324,16 @@ class SubagentManager:
                 "tests": report.tests,
                 "warnings": report.warnings,
             }
-        (base / "report.yaml").write_text(
-            yaml.safe_dump(report_payload, sort_keys=False),
-            encoding="utf-8",
+        self._write_session_snapshot(
+            base,
+            ref,
+            prompt=prompt,
+            transcript=transcript,
+            stdout=execution.stdout,
+            stderr=execution.stderr,
+            report_payload=report_payload,
+            exit_code=None,
+            pid=execution.pid,
         )
 
     def _write_session_metadata(
@@ -259,6 +342,7 @@ class SubagentManager:
         ref: SubagentRef,
         *,
         exit_code: int | None,
+        pid: int | None,
     ) -> None:
         created_at = utcnow()
         session_path = base / "session.yaml"
@@ -266,20 +350,125 @@ class SubagentManager:
             existing = yaml.safe_load(session_path.read_text(encoding="utf-8")) or {}
             if isinstance(existing, dict) and isinstance(existing.get("created_at"), str):
                 created_at = existing["created_at"]
-        (base / "session.yaml").write_text(
-            yaml.safe_dump(
-                {
-                    "id": ref.id,
-                    "role": ref.role,
-                    "engine": ref.engine,
-                    "status": ref.status,
-                    "created_at": created_at,
-                    "updated_at": utcnow(),
-                    "exit_code": exit_code,
-                },
-                sort_keys=False,
-            ),
-            encoding="utf-8",
+        _write_atomic_files(
+            {
+                session_path: yaml.safe_dump(
+                    {
+                        "id": ref.id,
+                        "role": ref.role,
+                        "engine": ref.engine,
+                        "status": ref.status,
+                        "sandboxed": ref.sandboxed,
+                        "sandbox": ref.sandbox_summary or "host",
+                        "created_at": created_at,
+                        "updated_at": utcnow(),
+                        "pid": pid,
+                        "exit_code": exit_code,
+                    },
+                    sort_keys=False,
+                )
+            }
+        )
+
+    def _record_subagent_pid(self, task: TaskRecord, base: Path, ref: SubagentRef, pid: int | None) -> None:
+        if pid is None:
+            return
+        mark_subagent_pid(self.root, task, pid)
+        self._write_session_metadata(base, ref, exit_code=None, pid=pid)
+
+    def _write_session_snapshot(
+        self,
+        base: Path,
+        ref: SubagentRef,
+        *,
+        prompt: str,
+        transcript: str,
+        stdout: str,
+        stderr: str,
+        report_payload: dict[str, object],
+        exit_code: int | None,
+        pid: int | None,
+    ) -> None:
+        created_at = utcnow()
+        session_path = base / "session.yaml"
+        if session_path.exists():
+            existing = yaml.safe_load(session_path.read_text(encoding="utf-8")) or {}
+            if isinstance(existing, dict) and isinstance(existing.get("created_at"), str):
+                created_at = existing["created_at"]
+        _write_atomic_files(
+            {
+                session_path: yaml.safe_dump(
+                    {
+                        "id": ref.id,
+                        "role": ref.role,
+                        "engine": ref.engine,
+                        "status": ref.status,
+                        "sandboxed": ref.sandboxed,
+                        "sandbox": ref.sandbox_summary or "host",
+                        "created_at": created_at,
+                        "updated_at": utcnow(),
+                        "pid": pid,
+                        "exit_code": exit_code,
+                    },
+                    sort_keys=False,
+                ),
+                base / "prompt.txt": prompt,
+                base / "transcript.md": transcript,
+                base / "stdout.txt": stdout,
+                base / "stderr.txt": stderr,
+                base / "report.yaml": yaml.safe_dump(report_payload, sort_keys=False),
+            }
+        )
+
+
+class _SandboxedAdapter(ExternalCLIAdapter):
+    def __init__(self, adapter: ExternalCLIAdapter, launcher: SandboxLauncher, engine_name: str) -> None:
+        super().__init__(
+            name=adapter.name,
+            binary=adapter.binary,
+            capabilities=adapter.capabilities,
+            stripped_env_vars=adapter.stripped_env_vars,
+        )
+        self._adapter = adapter
+        self._launcher = launcher
+        self._engine_name = engine_name
+        self._summary = launcher.policy_summary(engine_name)
+
+    def build_command(
+        self,
+        prompt: str,
+        cwd: Path,
+        model: str | None = None,
+        *,
+        max_turns: int | None = None,
+    ) -> list[str]:
+        return self._adapter.build_command(prompt, cwd, model=model, max_turns=max_turns)
+
+    def detect_capabilities(self):
+        return self._adapter.detect_capabilities()
+
+    def finalize_invocation(self, invocation):
+        return self._launcher.wrap_invocation(self._engine_name, self.binary, invocation)
+
+    def sandbox_details(self) -> tuple[bool, str]:
+        return (self._summary.enabled, self._summary.summary)
+
+    def render_transcript(self, execution: CLIExecutionResult) -> str:
+        return self._adapter.render_transcript(execution)
+
+    def parse_stage_report(
+        self,
+        *,
+        task_id: str,
+        step: str,
+        execution: CLIExecutionResult,
+        subagent_status: str,
+    ):
+        return self._adapter.parse_stage_report(
+            task_id=task_id,
+            step=step,
+            execution=execution,
+            subagent_status=subagent_status,
         )
 
 
@@ -291,27 +480,11 @@ def stage_prompt(
     process_profile: str = "generic",
 ) -> str:
     """Build the prompt for a stage subagent."""
-    stage_instructions = {
-        "grooming": [
-            "Clarify the task, inspect the repo if needed, and produce a concrete execution plan.",
-            "Do not make code changes in this stage.",
-        ],
-        "implementing": [
-            "Implement the task in this repository.",
-            "Keep changes tightly scoped and complete the work needed for the acceptance criteria.",
-        ],
-        "testing": [
-            "Validate the implementation.",
-            "Run focused checks or tests where possible and report failures precisely.",
-            "Only make minimal fixes if absolutely necessary.",
-        ],
-        "accepting": [
-            "Review the current task result against the acceptance criteria and decide whether it should be accepted or sent back.",
-        ],
-    }
     profile = resolve_process_profile(process_profile)
     workspace_overlay = profile.get("workspace_overlay", [])
     stage_overlay = profile.get("stage_overlay", {}).get(step, [])
+    stage_instructions = profile.get("stage_instructions", {}).get(step, ["Complete the requested stage."])
+
     lines = [
         f"Task: {task.id} {task.title}",
         f"Stage: {step}",
@@ -344,7 +517,7 @@ def stage_prompt(
             *profile.get("prompt_scaffold", []),
             "",
             "Stage instructions:",
-            *stage_instructions.get(step, ["Complete the requested stage."]),
+            *stage_instructions,
         ]
     )
     lines.extend(stage_overlay)
@@ -369,8 +542,10 @@ def stage_prompt(
             lines.extend(
                 [
                     "- Structured acceptance criteria are still missing on the task record, but the current task context is sufficient to infer them.",
+                    "- As the PM for grooming, either provide explicit `ACCEPTANCE_CRITERIA:` bullets or let the runner persist the inferred version by returning `VERDICT: PASS`.",
                     "- You may return `VERDICT: PASS` without restating them; the runner will infer and persist the criteria after grooming.",
-                    "- If you want to override the inferred version, add an `ACCEPTANCE_CRITERIA:` section to your response with concrete `- ` bullets that can be persisted directly.",
+                    "- If the current task context is not sufficient after all, return `VERDICT: BLOCKED` instead of passing grooming without criteria.",
+                    "- To override the inferred version, you may add an `ACCEPTANCE_CRITERIA:` section with concrete `- ` bullets that can be persisted directly.",
                     "- Return `VERDICT: BLOCKED` only if the inferred criteria are incomplete or incorrect and the task still needs more information.",
                     "",
                     "Inferred acceptance criteria available from current task context:",
@@ -387,7 +562,7 @@ def stage_prompt(
             if step == "grooming":
                 lines.extend(
                     [
-                        "- Add an `ACCEPTANCE_CRITERIA:` section to your response with concrete `- ` bullets that can be persisted directly.",
+                        "- As the PM for grooming, provide an `ACCEPTANCE_CRITERIA:` section with concrete `- ` bullets before passing grooming.",
                         "- If the context is still insufficient, return `VERDICT: BLOCKED` and explain the missing information in `SUMMARY` or `WARNINGS`.",
                     ]
                 )
@@ -435,6 +610,16 @@ def stage_prompt(
             "- optional warning",
         ]
     )
+    if step in {"grooming", "accepting"}:
+        lines.extend(
+            [
+                "FOLLOW_UP_TASKS:",
+                '[{"title":"optional follow-up title","rationale":"why this separate task is needed","blocking":false}]',
+                "- Use a JSON array on the line(s) after `FOLLOW_UP_TASKS:` when you discover separate follow-up work.",
+                "- Set `blocking` to `true` only when the extra work blocks the current task from continuing.",
+                "- Optional keys per follow-up: `goal`, `acceptance_criteria` (array of strings), `task_type`.",
+            ]
+        )
     if step == "grooming" and missing_criteria_reason is not None:
         lines.extend(
             [
@@ -460,3 +645,29 @@ def stage_report_from_subagent(task: TaskRecord, step: str, result: SubagentResu
         transcript=result.transcript,
         subagent_status=result.ref.status,
     )
+
+
+def intake_prompt(brain_dump: str) -> str:
+    """Build a prompt to analyze a freeform brain dump and suggest a task title and goal."""
+    profile = resolve_process_profile("codehive")
+    specifics = "\n".join(str(item) for item in profile.get("specifics", []))
+    return f"""You are the PM for a local multi-agent coding workspace.
+You are handling freeform task intake for a Codehive-style workflow.
+
+Codehive-style specifics:
+{specifics}
+
+Analyze the following freeform specification or brain dump and turn it into a rough queued task description.
+Produce only a concise title and a short goal statement that preserve the user's intent.
+Do not add acceptance criteria, implementation plans, decomposition, or detailed structure.
+Keep the scope high-level and reviewable so PM grooming can refine it later.
+Treat the original dump as the authoritative source of detail.
+
+Return your suggestion in exactly this format:
+
+TITLE: <concise rough task title>
+GOAL: <1-3 sentence high-level goal statement>
+
+--- BRAIN DUMP ---
+{brain_dump.strip()}
+"""
