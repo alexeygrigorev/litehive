@@ -9,6 +9,8 @@ from pydantic import BaseModel, Field
 
 
 TaskMode = Literal["tasks", "implementation"]
+TaskComplexity = Literal["simple", "moderate", "complex"]
+PlannedEffort = Literal["xs", "s", "m", "l", "xl"]
 TaskStatus = Literal[
     "queued",
     "in_progress",
@@ -209,6 +211,8 @@ class TaskRecord(BaseModel):
     status: TaskStatus = "queued"
     pipeline_status: PipelineStatus = "backlog"
     priority: str = "medium"
+    pm_complexity: TaskComplexity | None = None
+    planned_effort: PlannedEffort | None = None
     created_at: str = Field(default_factory=utcnow)
     updated_at: str = Field(default_factory=utcnow)
     goal: str = ""

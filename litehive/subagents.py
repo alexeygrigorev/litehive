@@ -728,6 +728,18 @@ def stage_prompt(
     else:
         lines.append("- No plan defined.")
 
+    lines.extend(["", "PM sizing:"])
+    lines.append(f"- Current PM complexity: {task.pm_complexity or '-'}")
+    lines.append(f"- Current planned effort: {task.planned_effort or '-'}")
+    if step == "grooming":
+        lines.extend(
+            [
+                "- During grooming, set PM sizing when you have enough context.",
+                "- Use `PM_COMPLEXITY: simple|moderate|complex`.",
+                "- Use `PLANNED_EFFORT: xs|s|m|l|xl`.",
+            ]
+        )
+
     lines.extend(["", "Constraints:"])
     if task.constraints:
         lines.extend(f"- {item}" for item in task.constraints)

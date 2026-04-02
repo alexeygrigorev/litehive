@@ -37,8 +37,10 @@ Common commands:
 - `litehive status`
 - `litehive queue`
 - `litehive add "<title>"`
+- `litehive add "<title>" --pm-complexity moderate --planned-effort m`
 - `litehive add "<title>" --task-type review`
 - `litehive update T-0001 --engine opencode`
+- `litehive update T-0001 --pm-complexity complex --planned-effort l`
 - `litehive move T-0001 1`
 - `litehive prioritize T-0003 T-0002 T-0001`
 - `litehive promote T-0001`
@@ -50,6 +52,8 @@ Common commands:
 
 `--workspace` defaults to the current directory. In normal repo-local use you should not need to pass it.
 When `litehive add` receives `--task-type`, it now creates the task in `tasks` mode by default so the task folder includes the structured `brief.md` and prompt guidance for that template. Pass `--mode implementation` to keep a typed task on the implementation path without the intake brief.
+Tasks can also carry PM sizing metadata: `--pm-complexity simple|moderate|complex` and `--planned-effort xs|s|m|l|xl`.
+During grooming, PM can emit `PM_COMPLEXITY:` and `PLANNED_EFFORT:` lines and litehive will persist them back into the task record and brief.
 
 ## Execution model
 
@@ -104,6 +108,7 @@ Built-in overlays currently include `generic`, `python`, `django`, `rust`, and `
 - active task
 - queue size
 - current stage
+- PM complexity and planned effort when present
 - explicit close outcomes such as `wont_do`, `deferred`, and `duplicate`
 - live subagent role and engine
 - latest report summary

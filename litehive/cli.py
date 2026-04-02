@@ -44,6 +44,8 @@ from litehive.engines import (
 from litehive.subagents import intake_prompt
 from litehive.tasks import (
     VALID_HUMAN_CHECKPOINTS,
+    VALID_PLANNED_EFFORTS,
+    VALID_PM_COMPLEXITIES,
     VALID_TASK_PRIORITIES,
     WorkspaceConflictError,
     abandon_task,
@@ -1006,6 +1008,16 @@ def build_parser() -> argparse.ArgumentParser:
     add.add_argument("title", help="Task title")
     add.add_argument("--goal", default="", help="Task goal text")
     add.add_argument(
+        "--pm-complexity",
+        choices=sorted(VALID_PM_COMPLEXITIES),
+        help="Initial PM complexity estimate",
+    )
+    add.add_argument(
+        "--planned-effort",
+        choices=sorted(VALID_PLANNED_EFFORTS),
+        help="Initial PM planned effort size",
+    )
+    add.add_argument(
         "--acceptance-criteria",
         action="append",
         default=None,
@@ -1317,6 +1329,16 @@ def build_parser() -> argparse.ArgumentParser:
         "--priority",
         choices=sorted(VALID_TASK_PRIORITIES),
         help="Set task priority",
+    )
+    update.add_argument(
+        "--pm-complexity",
+        choices=[*sorted(VALID_PM_COMPLEXITIES), "none"],
+        help="Set PM complexity, or use 'none' to clear it",
+    )
+    update.add_argument(
+        "--planned-effort",
+        choices=[*sorted(VALID_PLANNED_EFFORTS), "none"],
+        help="Set planned effort, or use 'none' to clear it",
     )
     update.add_argument("--goal", help="Replace the task goal text")
     update.add_argument(
@@ -2127,6 +2149,8 @@ def _cmd_add(args: argparse.Namespace) -> int:
             mode=mode,
             goal=args.goal,
             acceptance_criteria=None if acceptance_criteria is ... else acceptance_criteria,
+            pm_complexity=getattr(args, "pm_complexity", None),
+            planned_effort=getattr(args, "planned_effort", None),
             human_checkpoints=None if human_checkpoints is ... else human_checkpoints,
             task_type=requested_task_type,
             engine=args.engine,
@@ -2152,6 +2176,8 @@ def _cmd_add(args: argparse.Namespace) -> int:
     )
     print(f"task_type: {task.task_type or '-'}")
     print(f"depends_on: {_task_dependencies_label(task.id, task.depends_on)}")
+    print(f"pm_complexity: {task.pm_complexity or '-'}")
+    print(f"planned_effort: {task.planned_effort or '-'}")
     print(f"acceptance_criteria: {len(task.acceptance_criteria)}")
     missing_criteria_reason = missing_acceptance_criteria_cli_warning(task)
     if missing_criteria_reason is not None:
@@ -2260,6 +2286,8 @@ def _cmd_update(args: argparse.Namespace) -> int:
         and getattr(args, "model", None) is None
         and retry_limit_arg is None
         and args.priority is None
+        and getattr(args, "pm_complexity", None) is None
+        and getattr(args, "planned_effort", None) is None
         and args.goal is None
         and args.mode is None
         and args.auto_commit is None
@@ -2301,6 +2329,18 @@ def _cmd_update(args: argparse.Namespace) -> int:
             else ...,
             retry_limit=retry_limit,
             priority=args.priority if args.priority is not None else ...,
+            pm_complexity=(
+                None if getattr(args, "pm_complexity", None) == "none" else getattr(args, "pm_complexity", None)
+            )
+            if getattr(args, "pm_complexity", None) is not None
+            else ...,
+            planned_effort=(
+                None
+                if getattr(args, "planned_effort", None) == "none"
+                else getattr(args, "planned_effort", None)
+            )
+            if getattr(args, "planned_effort", None) is not None
+            else ...,
             goal=args.goal if args.goal is not None else ...,
             acceptance_criteria=acceptance_criteria,
             human_checkpoints=human_checkpoints,
@@ -2318,6 +2358,8 @@ def _cmd_update(args: argparse.Namespace) -> int:
         f"retry_limit: {task.retry_policy.max_retries if task.retry_policy.max_retries is not None else 'default'}"
     )
     print(f"priority: {task.priority}")
+    print(f"pm_complexity: {task.pm_complexity or '-'}")
+    print(f"planned_effort: {task.planned_effort or '-'}")
     print(f"mode: {task.mode}")
     print(f"auto_commit: {task.git.auto_commit}")
     print(

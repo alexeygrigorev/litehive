@@ -11,6 +11,7 @@ import shutil
 from pathlib import Path
 import sys
 import threading
+from typing import get_args
 
 import yaml
 
@@ -27,6 +28,7 @@ from litehive.config import (
 from litehive.git_ops import GitError, checkpoint_message, default_commit_message, find_commit_by_subject, is_git_repo
 from litehive.models import (
     FollowUpTaskSpec,
+    PlannedEffort,
     RuntimeEngineSwitch,
     RuntimeInterruptionState,
     ResourceLimitEvent,
@@ -35,6 +37,7 @@ from litehive.models import (
     TaskCreationSource,
     SubagentRef,
     TaskOutcomeState,
+    TaskComplexity,
     TaskRecord,
     TaskRuntime,
     WorkspaceState,
@@ -44,6 +47,8 @@ from litehive.models import (
 VALID_TASK_PRIORITIES = {"low", "medium", "high"}
 VALID_TASK_ENGINES = {"codex", "opencode", "gemini", "copilot", "claude"}
 VALID_HUMAN_CHECKPOINTS = {"before_acceptance", "before_commit"}
+VALID_PM_COMPLEXITIES = set(get_args(TaskComplexity))
+VALID_PLANNED_EFFORTS = set(get_args(PlannedEffort))
 VALID_TASK_TYPES = set(VALID_TASK_ROUTING_KEYS)
 TASK_PRIORITY_ORDER = {"high": 0, "medium": 1, "low": 2}
 _RUNNER_LOCKS: dict[Path, tuple[object, int, int]] = {}
@@ -344,6 +349,11 @@ def normalize_acceptance_criteria(items: list[str] | None) -> list[str]:
     return normalized
 
 
+def extract_report_line(text: str, key: str) -> str | None:
+    match = re.search(rf"^{key}:\s*(.+)$", text, re.MULTILINE)
+    return match.group(1).strip() if match else None
+
+
 def extract_report_list_section(text: str, key: str) -> list[str]:
     items: list[str] = []
     capture = False
@@ -440,6 +450,8 @@ def render_task_brief(task: TaskRecord) -> str:
         "",
         f"- Mode: {task.mode}",
         f"- Task type: {task.task_type or '-'}",
+        f"- PM complexity: {task.pm_complexity or '-'}",
+        f"- Planned effort: {task.planned_effort or '-'}",
         "",
         "## Goal",
         task.goal or task.title,
@@ -462,6 +474,10 @@ def render_task_brief(task: TaskRecord) -> str:
         lines.extend(f"- {item}" for item in task.plan)
     else:
         lines.append("- No plan defined.")
+
+    lines.extend(["", "## PM Sizing"])
+    lines.append(f"- Complexity: {task.pm_complexity or 'Not estimated.'}")
+    lines.append(f"- Planned effort: {task.planned_effort or 'Not sized.'}")
 
     template = task_template(task)
     if template is not None:
@@ -927,6 +943,8 @@ def create_task(
     retry_limit: int | None = None,
     goal: str = "",
     acceptance_criteria: list[str] | None = None,
+    pm_complexity: str | None = None,
+    planned_effort: str | None = None,
     human_checkpoints: list[str] | None = None,
     auto_commit: bool = True,
 ) -> TaskRecord:
@@ -935,6 +953,10 @@ def create_task(
         raise ValueError("Retry limit must be 0 or greater")
     if task_type is not None and task_type not in VALID_TASK_TYPES:
         raise ValueError(f"Unsupported task type '{task_type}'")
+    if pm_complexity is not None and pm_complexity not in VALID_PM_COMPLEXITIES:
+        raise ValueError(f"Unsupported PM complexity '{pm_complexity}'")
+    if planned_effort is not None and planned_effort not in VALID_PLANNED_EFFORTS:
+        raise ValueError(f"Unsupported planned effort '{planned_effort}'")
     with _workspace_lock(root):
         task_id = _next_task_id(root)
         slug = slugify(title)
@@ -950,6 +972,8 @@ def create_task(
             mode=mode,  # type: ignore[arg-type]
             goal=goal,
             acceptance_criteria=normalize_acceptance_criteria(acceptance_criteria),
+            pm_complexity=pm_complexity,  # type: ignore[arg-type]
+            planned_effort=planned_effort,  # type: ignore[arg-type]
             human_checkpoints=normalize_human_checkpoints(human_checkpoints),
             retry_policy={"max_retries": retry_limit},
             git={
@@ -1155,6 +1179,35 @@ def populate_missing_acceptance_criteria_from_report(
         journal_message,
     )
     return acceptance_criteria
+
+
+def populate_pm_sizing_from_report(root: Path, task: TaskRecord, feedback: str) -> bool:
+    pm_complexity = extract_report_line(feedback, "PM_COMPLEXITY")
+    planned_effort = extract_report_line(feedback, "PLANNED_EFFORT")
+
+    updates: list[str] = []
+    changed = False
+    if pm_complexity in VALID_PM_COMPLEXITIES and task.pm_complexity != pm_complexity:
+        task.pm_complexity = pm_complexity  # type: ignore[assignment]
+        updates.append(f"- pm_complexity: `{pm_complexity}`")
+        changed = True
+    if planned_effort in VALID_PLANNED_EFFORTS and task.planned_effort != planned_effort:
+        task.planned_effort = planned_effort  # type: ignore[assignment]
+        updates.append(f"- planned_effort: `{planned_effort}`")
+        changed = True
+
+    if not changed:
+        return False
+
+    save_task(root, task)
+    if task.mode == "tasks":
+        _atomic_write_text(task_brief_file(root, task), render_task_brief(task))
+    append_journal(
+        root,
+        task,
+        "PM sizing updated from grooming output.\n" + "\n".join(updates),
+    )
+    return True
 
 
 def persist_task_and_state(
@@ -2942,6 +2995,8 @@ def update_task(
     priority: str | object = ...,
     goal: str | object = ...,
     acceptance_criteria: list[str] | object = ...,
+    pm_complexity: str | None | object = ...,
+    planned_effort: str | None | object = ...,
     human_checkpoints: list[str] | object = ...,
     mode: str | object = ...,
     auto_commit: bool | object = ...,
@@ -2977,6 +3032,16 @@ def update_task(
             if priority not in VALID_TASK_PRIORITIES:
                 raise ValueError(f"Unsupported priority '{priority}'")
             task.priority = priority
+
+        if pm_complexity is not ...:
+            if pm_complexity is not None and pm_complexity not in VALID_PM_COMPLEXITIES:
+                raise ValueError(f"Unsupported PM complexity '{pm_complexity}'")
+            task.pm_complexity = pm_complexity  # type: ignore[assignment]
+
+        if planned_effort is not ...:
+            if planned_effort is not None and planned_effort not in VALID_PLANNED_EFFORTS:
+                raise ValueError(f"Unsupported planned effort '{planned_effort}'")
+            task.planned_effort = planned_effort  # type: ignore[assignment]
 
         if goal is not ...:
             task.goal = goal

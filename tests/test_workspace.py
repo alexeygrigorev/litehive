@@ -1891,6 +1891,41 @@ def test_runner_persists_grooming_generated_acceptance_criteria(tmp_path: Path) 
     ]
 
 
+def test_runner_persists_grooming_generated_pm_sizing(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Implement feature", goal="Ship deterministic routing")
+
+    def executor(task, step):  # type: ignore[no-untyped-def]
+        if step == "grooming":
+            transcript = (
+                "VERDICT: PASS\n"
+                "SUMMARY: grooming complete\n"
+                "PM_COMPLEXITY: complex\n"
+                "PLANNED_EFFORT: l\n"
+                "FILES_CHANGED:\n"
+                "TESTS_ADDED: 0\n"
+                "TESTS_PASSING: 0\n"
+                "WARNINGS:\n"
+            )
+            return parse_stage_report_text(
+                task_id=task.id,
+                step="grooming",
+                transcript=transcript,
+                subagent_status="completed",
+            )
+        return StageReport(task_id=task.id, step=step, verdict="pass", summary=f"{step} ok")
+
+    runner = TaskExecutionRunner(tmp_path, executor)
+    result = runner.run(task)
+
+    assert result.final_status == "done"
+    finish_task_run_transition(tmp_path, task, result.final_status)
+    updated = get_task(tmp_path, task.id)
+    assert updated is not None
+    assert updated.pm_complexity == "complex"
+    assert updated.planned_effort == "l"
+
+
 def test_large_task_acceptance_criteria_requirement_heuristic() -> None:
     minimal = TaskRecord(id="T-0001", slug="small-task", title="Small task")
     assert task_requires_acceptance_criteria(minimal) is False
@@ -2887,6 +2922,19 @@ def test_stage_prompt_includes_task_type_and_plan(tmp_path: Path) -> None:
     assert "Prioritize correctness, regressions, and missing verification over style observations." in prompt
     assert "Template sections to fill or verify:" in prompt
     assert "Findings: record actionable issues with severity and supporting evidence." in prompt
+
+
+def test_stage_prompt_includes_pm_sizing_guidance_for_grooming(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Estimate task", pm_complexity="moderate", planned_effort="m")
+
+    prompt = stage_prompt(task, "grooming", workspace_context="")
+
+    assert "PM sizing:" in prompt
+    assert "Current PM complexity: moderate" in prompt
+    assert "Current planned effort: m" in prompt
+    assert "Use `PM_COMPLEXITY: simple|moderate|complex`." in prompt
+    assert "Use `PLANNED_EFFORT: xs|s|m|l|xl`." in prompt
 
 
 def test_update_command_seeds_task_brief_when_switching_to_tasks_mode(
@@ -5334,6 +5382,40 @@ def test_build_parser_accepts_acceptance_criteria_flags(tmp_path: Path) -> None:
     assert update_args.acceptance_criteria == ["none"]
 
 
+def test_build_parser_accepts_pm_sizing_flags(tmp_path: Path) -> None:
+    parser = build_parser()
+
+    add_args = parser.parse_args(
+        [
+            "add",
+            "Ship task",
+            "--workspace",
+            str(tmp_path),
+            "--pm-complexity",
+            "complex",
+            "--planned-effort",
+            "l",
+        ]
+    )
+    update_args = parser.parse_args(
+        [
+            "update",
+            "T-0001",
+            "--workspace",
+            str(tmp_path),
+            "--pm-complexity",
+            "none",
+            "--planned-effort",
+            "none",
+        ]
+    )
+
+    assert add_args.pm_complexity == "complex"
+    assert add_args.planned_effort == "l"
+    assert update_args.pm_complexity == "none"
+    assert update_args.planned_effort == "none"
+
+
 def test_build_parser_accepts_human_checkpoint_flags(tmp_path: Path) -> None:
     parser = build_parser()
 
@@ -7575,6 +7657,38 @@ def test_add_command_persists_acceptance_criteria(
     assert "warning:" not in output
 
 
+def test_add_command_persists_pm_sizing(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    ensure_workspace(tmp_path)
+
+    exit_code = _cmd_add(
+        argparse.Namespace(
+            workspace=tmp_path,
+            title="Estimated task",
+            goal="",
+            pm_complexity="moderate",
+            planned_effort="m",
+            acceptance_criteria=None,
+            depends_on=None,
+            human_checkpoint=None,
+            task_type=None,
+            mode=None,
+            engine=None,
+            model=None,
+            retry_limit=None,
+            no_auto_commit=False,
+        )
+    )
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    task = get_task(tmp_path, "T-0001")
+    assert task is not None
+    assert task.pm_complexity == "moderate"
+    assert task.planned_effort == "m"
+    assert "pm_complexity: moderate" in output
+    assert "planned_effort: m" in output
+
+
 def test_add_command_persists_task_type(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -7810,6 +7924,71 @@ def test_update_command_replaces_and_clears_acceptance_criteria(
     assert "acceptance_criteria: 0" in output
     assert "warning: Structured acceptance criteria are required before implementation for larger tasks." in output
     assert "Use `--acceptance-criteria` to persist at least one structured bullet." in output
+
+
+def test_update_command_replaces_and_clears_pm_sizing(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Tune task", pm_complexity="simple", planned_effort="s")
+
+    exit_code = _cmd_update(
+        argparse.Namespace(
+            workspace=tmp_path,
+            task_id=task.id,
+            depends_on=None,
+            acceptance_criteria=None,
+            engine=None,
+            model=None,
+            retry_limit=None,
+            priority=None,
+            pm_complexity="complex",
+            planned_effort="l",
+            goal=None,
+            human_checkpoint=None,
+            task_type=None,
+            mode=None,
+            auto_commit=None,
+        )
+    )
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    updated = get_task(tmp_path, task.id)
+    assert updated is not None
+    assert updated.pm_complexity == "complex"
+    assert updated.planned_effort == "l"
+    assert "pm_complexity: complex" in output
+    assert "planned_effort: l" in output
+
+    exit_code = _cmd_update(
+        argparse.Namespace(
+            workspace=tmp_path,
+            task_id=task.id,
+            depends_on=None,
+            acceptance_criteria=None,
+            engine=None,
+            model=None,
+            retry_limit=None,
+            priority=None,
+            pm_complexity="none",
+            planned_effort="none",
+            goal=None,
+            human_checkpoint=None,
+            task_type=None,
+            mode=None,
+            auto_commit=None,
+        )
+    )
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    cleared = get_task(tmp_path, task.id)
+    assert cleared is not None
+    assert cleared.pm_complexity is None
+    assert cleared.planned_effort is None
+    assert "pm_complexity: -" in output
+    assert "planned_effort: -" in output
 
 
 def test_update_command_warns_when_metadata_change_makes_task_require_acceptance_criteria(

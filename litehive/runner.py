@@ -24,6 +24,7 @@ from litehive.tasks import (
     mark_stage_started,
     missing_acceptance_criteria_reason,
     populate_missing_acceptance_criteria_from_report,
+    populate_pm_sizing_from_report,
     save_task,
     set_task_retry_state,
     task_dir,
@@ -295,6 +296,7 @@ class TaskExecutionRunner:
 
             if current == "grooming" and target == "implementing":
                 populate_missing_acceptance_criteria_from_report(self.root, task, report.feedback)
+                populate_pm_sizing_from_report(self.root, task, report.feedback)
                 missing_criteria_reason = missing_acceptance_criteria_reason(task)
                 if missing_criteria_reason is not None:
                     report = self._terminal_report(

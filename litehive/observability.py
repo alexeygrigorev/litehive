@@ -18,6 +18,10 @@ def render_task_summary(task: TaskRecord, *, active: bool) -> list[str]:
         lines.append(f"  human_checkpoints={', '.join(task.human_checkpoints)}")
     if task.engine or task.model:
         lines.append(f"  engine={task.engine or '-'} model={task.model or 'default'}")
+    if task.pm_complexity or task.planned_effort:
+        lines.append(
+            f"  pm_complexity={task.pm_complexity or '-'} planned_effort={task.planned_effort or '-'}"
+        )
     lines.append(f"  auto_commit={task.git.auto_commit}")
     if task.git.commit_message:
         lines.append(f"  commit_message={task.git.commit_message}")
