@@ -27,12 +27,19 @@ def render_task_summary(task: TaskRecord, *, active: bool) -> list[str]:
     lines.append(
         f"  retry_policy=configured:{configured_limit} effective:{runtime.retry_limit} source={runtime.retry_source}"
     )
-    if runtime.execution_status != "idle" or runtime.current_stage.step or runtime.last_stage.step:
+    if (
+        runtime.execution_status != "idle"
+        or runtime.current_stage.step
+        or runtime.current_stage.status != "idle"
+        or runtime.last_stage.step
+    ):
         parts = [f"run={runtime.execution_status}"]
         parts.append(f"retries={runtime.retry_count}/{runtime.retry_limit}")
         parts.append(f"retry_source={runtime.retry_source}")
         if runtime.run_started_at:
             parts.append(f"started={runtime.run_started_at}")
+        if runtime.current_stage.status != "idle":
+            parts.append(f"stage_status={runtime.current_stage.status}")
         if runtime.current_stage.step:
             stage_duration = _duration_label(runtime.current_stage.started_at, runtime.current_stage.duration_seconds)
             parts.append(f"stage={runtime.current_stage.step}")
@@ -70,6 +77,8 @@ def render_task_summary(task: TaskRecord, *, active: bool) -> list[str]:
                 f"{runtime.last_subagent.status} {pid_label} {sandbox_label} snippet={snippet}"
             )
         )
+        if runtime.last_subagent.interruption_reason:
+            lines.append(f"  last_subagent_interruption_reason={runtime.last_subagent.interruption_reason}")
         if runtime.last_subagent.resource_limit_event is not None:
             event = runtime.last_subagent.resource_limit_event
             limit_parts: list[str] = []
@@ -98,6 +107,19 @@ def render_task_summary(task: TaskRecord, *, active: bool) -> list[str]:
             )
         )
 
+    if runtime.interruption is not None:
+        interruption = runtime.interruption
+        lines.append(
+            "  "
+            + (
+                f"interruption={interruption.source} stage={interruption.stage or '-'} "
+                f"resume_from={interruption.resume_stage or interruption.pipeline_status or '-'} "
+                f"interrupted_at={interruption.interrupted_at or '-'} "
+                f"detected_at={interruption.detected_at or '-'} "
+                f"reason={interruption.reason or interruption.summary or '-'}"
+            )
+        )
+
     if runtime.last_stage.step:
         summary = runtime.last_stage.summary or "-"
         lines.append(
@@ -113,11 +135,13 @@ def render_task_summary(task: TaskRecord, *, active: bool) -> list[str]:
         reason_code = runtime.last_outcome.reason_code or "-"
         reason = runtime.last_outcome.reason or "-"
         recorded_at = runtime.last_outcome.recorded_at or "-"
+        follow_up_task_id = runtime.last_outcome.follow_up_task_id or "-"
         lines.append(
             "  "
             + (
                 f"outcome={runtime.last_outcome.kind} stage={stage} "
                 f"reason_code={reason_code} recorded_at={recorded_at} "
+                f"follow_up_task={follow_up_task_id} "
                 f"retry_state={runtime.last_outcome.retry_count}/{runtime.last_outcome.retry_limit} "
                 f"retry_source={runtime.last_outcome.retry_source} reason={reason}"
             )

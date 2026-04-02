@@ -4,12 +4,13 @@ title: Document and enforce the task state machine
 depends_on: []
 task_type: null
 engine: null
+model: null
 mode: implementation
-status: queued
-pipeline_status: implementing
+status: flagged
+pipeline_status: commit_to_git
 priority: medium
 created_at: '2026-03-31T18:42:32+00:00'
-updated_at: '2026-04-01T06:25:06+00:00'
+updated_at: '2026-04-01T23:22:25+00:00'
 goal: Define the canonical litehive task state machine with clear states, allowed
   transitions, and meanings for review rejection, blocking, parking, cancellation,
   done, and intentional non-implementation outcomes. The output must include durable
@@ -60,26 +61,57 @@ subagents:
   engine: copilot
   status: running
   path: subagents/SA-0001-pm
+  sandboxed: false
+  sandbox_summary: ''
 - id: SA-0002
   role: pm
   engine: copilot
   status: completed
   path: subagents/SA-0002-pm
+  sandboxed: false
+  sandbox_summary: ''
 - id: SA-0003
   role: swe
   engine: copilot
   status: completed
   path: subagents/SA-0003-swe
+  sandboxed: false
+  sandbox_summary: ''
 - id: SA-0004
   role: qa
   engine: copilot
   status: completed
   path: subagents/SA-0004-qa
+  sandboxed: false
+  sandbox_summary: ''
 - id: SA-0005
   role: pm
   engine: copilot
   status: completed
   path: subagents/SA-0005-pm
+  sandboxed: false
+  sandbox_summary: ''
+- id: SA-0006
+  role: swe
+  engine: copilot
+  status: completed
+  path: subagents/SA-0006-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0007
+  role: qa
+  engine: copilot
+  status: completed
+  path: subagents/SA-0007-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0008
+  role: pm
+  engine: copilot
+  status: completed
+  path: subagents/SA-0008-pm
+  sandboxed: false
+  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: checkpoint T-0053 document-and-enforce-the-task-state-machine'
@@ -89,3 +121,4 @@ git:
   rolled_back_checkpoint_attempt: null
 retry_policy:
   max_retries: null
+created_from: null

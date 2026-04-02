@@ -13,9 +13,9 @@ updated_at: '2026-04-01T11:15:05+00:00'
 goal: Require structured acceptance criteria before implementation for larger tasks
   and surface missing criteria clearly during grooming or task intake.
 acceptance_criteria:
-- "Larger tasks that meet the repository\u2019s acceptance-criteria requirement signals\
-  \ cannot proceed into `implementing` without at least one structured acceptance\
-  \ criterion persisted on the task record."
+- Larger tasks that meet the repository’s acceptance-criteria requirement signals
+  cannot proceed into `implementing` without at least one structured acceptance criterion
+  persisted on the task record.
 - Task intake and task metadata updates surface a clear warning when a qualifying
   larger task is missing structured acceptance criteria.
 - 'Grooming guidance clearly tells the PM to provide `ACCEPTANCE_CRITERIA` bullets
@@ -139,7 +139,7 @@ subagents:
 - id: SA-0001
   role: pm
   engine: codex
-  status: flagged
+  status: failed
   path: subagents/SA-0001-pm
 - id: SA-0002
   role: swe

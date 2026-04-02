@@ -59,11 +59,51 @@ def status_porcelain(root: Path) -> list[str]:
     return [line for line in proc.stdout.splitlines() if line.strip()]
 
 
+def has_non_litehive_changes(root: Path) -> bool:
+    for line in status_porcelain(root):
+        path = line[3:] if len(line) > 3 else ""
+        if path and not path.startswith(".litehive/"):
+            return True
+    return False
+
+
 def current_head(root: Path) -> str | None:
     proc = _run_git(root, "rev-parse", "--verify", "HEAD")
     if proc.returncode != 0:
         return None
     return proc.stdout.strip() or None
+
+
+def add_worktree(root: Path, path: Path, *, ref: str = "HEAD") -> None:
+    proc = _run_git(root, "worktree", "add", "--detach", str(path), ref)
+    if proc.returncode != 0:
+        raise GitError(proc.stderr.strip() or "git worktree add failed")
+
+
+def remove_worktree(root: Path, path: Path, *, force: bool = False) -> None:
+    args = ["worktree", "remove"]
+    if force:
+        args.append("--force")
+    args.append(str(path))
+    proc = _run_git(root, *args)
+    if proc.returncode != 0:
+        raise GitError(proc.stderr.strip() or "git worktree remove failed")
+
+
+def cherry_pick_commit(root: Path, commit_sha: str) -> str:
+    proc = _run_git(root, "cherry-pick", commit_sha)
+    if proc.returncode != 0:
+        abort = _run_git(root, "cherry-pick", "--abort")
+        if abort.returncode != 0:
+            raise GitError(
+                (proc.stderr.strip() or "git cherry-pick failed")
+                + f"; additionally failed to abort cherry-pick: {abort.stderr.strip() or 'unknown error'}"
+            )
+        raise GitError(proc.stderr.strip() or "git cherry-pick failed")
+    head = current_head(root)
+    if head is None:
+        raise GitError("git cherry-pick completed but HEAD could not be resolved")
+    return head
 
 
 def default_commit_message(task_id: str, slug: str) -> str:
@@ -140,7 +180,7 @@ def commit_task(root: Path, message: str, *, paths: list[str] | None = None) -> 
 
 
 def rollback_task(root: Path, task: TaskRecord) -> RollbackCheckpoint:
-    if has_changes(root):
+    if has_non_litehive_changes(root):
         raise GitError("Workspace has uncommitted changes; rollback requires a clean worktree")
     if task.git.checkpoint_attempts < 1:
         raise GitError(f"Task {task.id} has no checkpoint commit to roll back")

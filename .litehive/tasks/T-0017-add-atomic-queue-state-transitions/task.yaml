@@ -15,9 +15,9 @@ goal: Make all queue and state transitions atomic, not just task creation, so ta
 acceptance_criteria:
 - Claiming the next task persists `task.yaml`, `runtime.yaml`, and `state.yaml` as
   one atomic transition, or restores the pre-claim state if any write fails.
-- "Finishing a run persists queue cleanup or requeueing together with the task\u2019\
-  s final status and runtime state, so `active_task_id`, queue membership, and task\
-  \ status cannot diverge after partial failure."
+- Finishing a run persists queue cleanup or requeueing together with the task’s final
+  status and runtime state, so `active_task_id`, queue membership, and task status
+  cannot diverge after partial failure.
 - Human-triggered queue/state transitions that change both task state and queue placement,
   including `requeue`, `resume`, `abandon`, and completed-task recovery paths, persist
   atomically or roll back cleanly on injected write failure.
@@ -147,7 +147,7 @@ subagents:
 - id: SA-0001
   role: pm
   engine: codex
-  status: flagged
+  status: failed
   path: subagents/SA-0001-pm
 - id: SA-0002
   role: swe

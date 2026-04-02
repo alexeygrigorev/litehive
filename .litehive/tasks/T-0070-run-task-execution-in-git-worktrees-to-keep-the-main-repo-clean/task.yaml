@@ -4,12 +4,13 @@ title: Run task execution in git worktrees to keep the main repo clean
 depends_on: []
 task_type: null
 engine: null
+model: null
 mode: implementation
-status: queued
-pipeline_status: backlog
+status: flagged
+pipeline_status: testing
 priority: medium
 created_at: '2026-04-01T06:25:49+00:00'
-updated_at: '2026-04-01T12:21:28+00:00'
+updated_at: '2026-04-02T02:09:22+00:00'
 goal: 'Run task execution in dedicated git worktrees so task changes stay isolated
   from the main checkout. After acceptance, Litehive should own the final git integration
   flow: create the task commit in the worktree, merge or cherry-pick it back to main
@@ -25,7 +26,49 @@ acceptance_criteria:
 constraints: []
 plan: []
 human_checkpoints: []
-subagents: []
+subagents:
+- id: SA-0001
+  role: pm
+  engine: codex
+  status: completed
+  path: subagents/SA-0001-pm
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0002
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0002-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0003
+  role: qa
+  engine: codex
+  status: completed
+  path: subagents/SA-0003-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0004
+  role: pm
+  engine: codex
+  status: completed
+  path: subagents/SA-0004-pm
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0005
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0005-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0006
+  role: qa
+  engine: codex
+  status: completed
+  path: subagents/SA-0006-qa
+  sandboxed: false
+  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0070 run-task-execution-in-git-worktrees-to-keep-the-main-repo-clean'
@@ -33,5 +76,7 @@ git:
   checkpoint_base_sha: null
   checkpoint_attempts: 0
   rolled_back_checkpoint_attempt: null
+  worktree_path: .litehive/worktrees/T-0070-run-task-execution-in-git-worktrees-to-keep-the-main-repo-clean
 retry_policy:
   max_retries: null
+created_from: null

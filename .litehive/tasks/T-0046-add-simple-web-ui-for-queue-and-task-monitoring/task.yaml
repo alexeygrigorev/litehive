@@ -13,8 +13,8 @@ updated_at: '2026-03-31T20:44:08+00:00'
 goal: Create a small local web service that shows the current queue, active task,
   task details, stage status, subagent status, recent transcripts/logs, and latest
   run-all logs. It should provide a lightweight operational view of litehive without
-  requiring the terminal UI, including a live view of active session messages by
-  tailing the on-disk artifacts written during execution.
+  requiring the terminal UI, including a live view of active session messages by tailing
+  the on-disk artifacts written during execution.
 acceptance_criteria:
 - The web UI shows the current queue, active task, task details, stage status, and
   subagent status.
@@ -39,12 +39,12 @@ subagents:
 - id: SA-0001
   role: pm
   engine: codex
-  status: flagged
+  status: failed
   path: subagents/SA-0001-pm
 - id: SA-0002
   role: pm
   engine: codex
-  status: flagged
+  status: failed
   path: subagents/SA-0002-pm
 git:
   auto_commit: true

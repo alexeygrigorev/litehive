@@ -4,12 +4,13 @@ title: Make workspace locking granular during execution
 depends_on: []
 task_type: null
 engine: null
+model: null
 mode: implementation
-status: queued
-pipeline_status: implementing
+status: flagged
+pipeline_status: commit_to_git
 priority: medium
 created_at: '2026-03-31T20:34:16+00:00'
-updated_at: '2026-04-01T06:25:08+00:00'
+updated_at: '2026-04-01T23:31:46+00:00'
 goal: Replace the long-held workspace mutation lock with short atomic state-transition
   locks so queue/task intake and non-conflicting queue updates can happen while a
   runner is active. Keep conflict protection for active-task transitions and runner
@@ -33,31 +34,64 @@ subagents:
   engine: codex
   status: running
   path: subagents/SA-0001-pm
+  sandboxed: false
+  sandbox_summary: ''
 - id: SA-0002
   role: pm
   engine: codex
   status: completed
   path: subagents/SA-0002-pm
+  sandboxed: false
+  sandbox_summary: ''
 - id: SA-0003
   role: pm
   engine: codex
   status: completed
   path: subagents/SA-0003-pm
+  sandboxed: false
+  sandbox_summary: ''
 - id: SA-0004
   role: swe
   engine: codex
   status: completed
   path: subagents/SA-0004-swe
+  sandboxed: false
+  sandbox_summary: ''
 - id: SA-0005
   role: qa
   engine: codex
   status: completed
   path: subagents/SA-0005-qa
+  sandboxed: false
+  sandbox_summary: ''
 - id: SA-0006
   role: pm
   engine: codex
   status: completed
   path: subagents/SA-0006-pm
+  sandboxed: false
+  sandbox_summary: ''
+- id: SA-0007
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0007-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0008
+  role: qa
+  engine: codex
+  status: completed
+  path: subagents/SA-0008-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0009
+  role: pm
+  engine: codex
+  status: completed
+  path: subagents/SA-0009-pm
+  sandboxed: false
+  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0054 make-workspace-locking-granular-during-execution'
@@ -67,3 +101,4 @@ git:
   rolled_back_checkpoint_attempt: null
 retry_policy:
   max_retries: null
+created_from: null

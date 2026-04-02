@@ -104,8 +104,10 @@ Built-in overlays currently include `generic`, `python`, `django`, `rust`, and `
 - active task
 - queue size
 - current stage
+- explicit close outcomes such as `wont_do`, `deferred`, and `duplicate`
 - live subagent role and engine
 - latest report summary
+- persisted rationale and follow-up task linkage for closed work
 - retry policy details
 - recent checkpoint commit for completed tasks
 

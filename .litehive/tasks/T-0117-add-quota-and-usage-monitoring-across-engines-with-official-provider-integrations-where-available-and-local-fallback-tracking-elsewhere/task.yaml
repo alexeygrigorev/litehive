@@ -1,0 +1,31 @@
+id: T-0117
+slug: add-quota-and-usage-monitoring-across-engines-with-official-provider-integrations-where-available-and-local-fallback-tracking-elsewhere
+title: Add quota and usage monitoring across engines with official provider integrations
+  where available and local fallback tracking elsewhere
+depends_on: []
+task_type: null
+engine: null
+model: null
+mode: implementation
+status: queued
+pipeline_status: backlog
+priority: medium
+created_at: '2026-04-02T10:30:31+00:00'
+updated_at: '2026-04-02T10:30:31+00:00'
+goal: ''
+acceptance_criteria: []
+constraints: []
+plan: []
+human_checkpoints: []
+subagents: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0117 add-quota-and-usage-monitoring-across-engines-with-official-provider-integrations-where-available-and-local-fallback-tracking-elsewhere'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+  worktree_path: null
+retry_policy:
+  max_retries: null
+created_from: null

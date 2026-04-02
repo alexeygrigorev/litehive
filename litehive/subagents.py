@@ -13,6 +13,7 @@ from litehive.config import load_config, resolve_process_profile
 from litehive.external_cli import CLIExecutionResult, ExternalCLIAdapter, parse_stage_report_text
 from litehive.engines import (
     EngineError,
+    classify_execution_interruption,
     classify_execution_limit,
     classify_retryable_execution_failure,
     get_engine,
@@ -23,6 +24,7 @@ from litehive.tasks import (
     _write_atomic_files,
     infer_acceptance_criteria,
     mark_subagent_finished,
+    mark_subagent_progress,
     mark_subagent_pid,
     mark_subagent_started,
     missing_acceptance_criteria_reason,
@@ -93,8 +95,9 @@ def _supports_live_on_started(engine: object) -> bool:
 class SubagentManager:
     """Run external CLI subagents inside a task-scoped folder."""
 
-    def __init__(self, root: Path) -> None:
+    def __init__(self, root: Path, *, execution_root: Path | None = None) -> None:
         self.root = root.resolve()
+        self.execution_root = (execution_root or root).resolve()
         self.config = load_config(self.root)
         self.sandbox = SandboxLauncher(self.root, self.config)
 
@@ -136,7 +139,7 @@ class SubagentManager:
                 engine = _SandboxedAdapter(engine, self.sandbox, engine_name)
             if _supports_live_execution(engine):
                 live_kwargs: dict[str, object] = {
-                    "cwd": self.root,
+                    "cwd": self.execution_root,
                     "model": model,
                     "on_update": lambda execution: self._write_session_progress(
                         task,
@@ -156,23 +159,28 @@ class SubagentManager:
                 if _supports_on_started(engine):
                     proc = engine.run(
                         prompt,
-                        cwd=self.root,
+                        cwd=self.execution_root,
                         model=model,
                         on_started=lambda pid: self._record_subagent_pid(task, base, ref, pid),
                     )
                 else:
-                    proc = engine.run(prompt, cwd=self.root, model=model)
+                    proc = engine.run(prompt, cwd=self.execution_root, model=model)
             else:
                 if _supports_on_started(engine):
                     proc = engine.run(
                         prompt,
-                        cwd=self.root,
+                        cwd=self.execution_root,
                         model=model,
                         max_turns=max_turns,
                         on_started=lambda pid: self._record_subagent_pid(task, base, ref, pid),
                     )
                 else:
-                    proc = engine.run(prompt, cwd=self.root, model=model, max_turns=max_turns)
+                    proc = engine.run(
+                        prompt,
+                        cwd=self.execution_root,
+                        model=model,
+                        max_turns=max_turns,
+                    )
             transcript = engine.render_transcript(proc)
             ref.status = "completed" if proc.exit_code == 0 else "failed"
             if proc.exit_code != 0:
@@ -190,17 +198,28 @@ class SubagentManager:
                         resource_limit_event=resource_limit_event,
                     )
                 else:
-                    limit_reason = classify_execution_limit(transcript)
-                    if limit_reason is not None:
-                        failure = EngineFailure(kind="execution_limit", reason=limit_reason)
+                    interruption_reason = classify_execution_interruption(
+                        transcript,
+                        exit_code=proc.exit_code,
+                    )
+                    if interruption_reason is not None:
+                        ref.status = "interrupted"
+                        failure = EngineFailure(
+                            kind="execution_interrupted",
+                            reason=interruption_reason,
+                        )
                     else:
-                        retryable_failure = classify_retryable_execution_failure(transcript)
-                        if retryable_failure is not None:
-                            failure = EngineFailure(
-                                kind="retryable_execution_error",
-                                reason=retryable_failure.reason,
-                                classification=retryable_failure.classification,
-                            )
+                        limit_reason = classify_execution_limit(transcript)
+                        if limit_reason is not None:
+                            failure = EngineFailure(kind="execution_limit", reason=limit_reason)
+                        else:
+                            retryable_failure = classify_retryable_execution_failure(transcript)
+                            if retryable_failure is not None:
+                                failure = EngineFailure(
+                                    kind="retryable_execution_error",
+                                    reason=retryable_failure.reason,
+                                    classification=retryable_failure.classification,
+                                )
         except (EngineError, SandboxError) as exc:
             transcript = str(exc)
             proc = None
@@ -215,6 +234,11 @@ class SubagentManager:
             transcript,
             0 if proc is None else proc.exit_code,
             pid=None if proc is None else proc.pid,
+            interruption_reason=(
+                None
+                if failure is None or failure.kind != "execution_interrupted"
+                else failure.reason
+            ),
             resource_limit_event=None if failure is None else failure.resource_limit_event,
         )
         self._write_session_finish(
@@ -225,6 +249,11 @@ class SubagentManager:
             transcript,
             0 if proc is None else proc.exit_code,
             proc,
+            interruption_reason=(
+                None
+                if failure is None or failure.kind != "execution_interrupted"
+                else failure.reason
+            ),
             resource_limit_event=None if failure is None else failure.resource_limit_event,
         )
         return SubagentResult(
@@ -277,6 +306,7 @@ class SubagentManager:
             },
             exit_code=None,
             pid=None,
+            interruption_reason=None,
             resource_limit_event=None,
         )
 
@@ -289,6 +319,7 @@ class SubagentManager:
         transcript: str,
         exit_code: int,
         execution: CLIExecutionResult | None,
+        interruption_reason: str | None,
         resource_limit_event: ResourceLimitEvent | None,
     ) -> None:
         report_step = (
@@ -327,6 +358,7 @@ class SubagentManager:
                 "tests": report.tests,
                 "warnings": report.warnings,
                 "resource_control": self.sandbox.policy_summary(ref.engine).as_dict(),
+                "interruption_reason": interruption_reason,
                 "resource_limit_event": (
                     None
                     if report.resource_limit_event is None
@@ -335,6 +367,7 @@ class SubagentManager:
             },
             exit_code=exit_code,
             pid=None if execution is None else execution.pid,
+            interruption_reason=interruption_reason,
             resource_limit_event=resource_limit_event,
         )
 
@@ -348,7 +381,19 @@ class SubagentManager:
     ) -> None:
         transcript = get_engine(ref.engine).render_transcript(execution)
         self._record_subagent_pid(task, base, ref, execution.pid)
-        self._write_session_metadata(base, ref, exit_code=None, pid=execution.pid)
+        mark_subagent_progress(
+            self.root,
+            task,
+            pid=execution.pid,
+            transcript=transcript,
+        )
+        self._write_session_metadata(
+            base,
+            ref,
+            exit_code=None,
+            pid=execution.pid,
+            interruption_reason=None,
+        )
         (base / "prompt.txt").write_text(prompt, encoding="utf-8")
         (base / "transcript.md").write_text(transcript, encoding="utf-8")
         (base / "stdout.txt").write_text(execution.stdout, encoding="utf-8")
@@ -365,6 +410,7 @@ class SubagentManager:
             "tests": {"added": 0, "passing": 0},
             "warnings": [],
             "resource_control": self.sandbox.policy_summary(ref.engine).as_dict(),
+            "interruption_reason": None,
             "resource_limit_event": None,
         }
         if transcript.strip():
@@ -397,6 +443,7 @@ class SubagentManager:
             report_payload=report_payload,
             exit_code=None,
             pid=execution.pid,
+            interruption_reason=None,
             resource_limit_event=None,
         )
 
@@ -407,6 +454,7 @@ class SubagentManager:
         *,
         exit_code: int | None,
         pid: int | None,
+        interruption_reason: str | None = None,
         resource_limit_event: ResourceLimitEvent | None = None,
     ) -> None:
         created_at = utcnow()
@@ -430,6 +478,7 @@ class SubagentManager:
                         "updated_at": utcnow(),
                         "pid": pid,
                         "exit_code": exit_code,
+                        "interruption_reason": interruption_reason,
                         "resource_control": resource_control,
                         "resource_limit_event": (
                             None
@@ -446,7 +495,14 @@ class SubagentManager:
         if pid is None:
             return
         mark_subagent_pid(self.root, task, pid)
-        self._write_session_metadata(base, ref, exit_code=None, pid=pid, resource_limit_event=None)
+        self._write_session_metadata(
+            base,
+            ref,
+            exit_code=None,
+            pid=pid,
+            interruption_reason=None,
+            resource_limit_event=None,
+        )
 
     def _write_session_snapshot(
         self,
@@ -460,6 +516,7 @@ class SubagentManager:
         report_payload: dict[str, object],
         exit_code: int | None,
         pid: int | None,
+        interruption_reason: str | None,
         resource_limit_event: ResourceLimitEvent | None,
     ) -> None:
         created_at = utcnow()
@@ -483,6 +540,7 @@ class SubagentManager:
                         "updated_at": utcnow(),
                         "pid": pid,
                         "exit_code": exit_code,
+                        "interruption_reason": interruption_reason,
                         "resource_control": resource_control,
                         "resource_limit_event": (
                             None

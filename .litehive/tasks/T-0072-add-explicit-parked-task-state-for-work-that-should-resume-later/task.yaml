@@ -4,18 +4,54 @@ title: Add explicit parked task state for work that should resume later
 depends_on: []
 task_type: null
 engine: null
+model: null
 mode: implementation
-status: queued
-pipeline_status: backlog
+status: interrupted
+pipeline_status: implementing
 priority: medium
 created_at: '2026-04-01T06:36:00+00:00'
-updated_at: '2026-04-01T06:36:00+00:00'
+updated_at: '2026-04-02T05:36:00+00:00'
 goal: ''
 acceptance_criteria: []
 constraints: []
 plan: []
 human_checkpoints: []
-subagents: []
+subagents:
+- id: SA-0001
+  role: pm
+  engine: codex
+  status: completed
+  path: subagents/SA-0001-pm
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0002
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0002-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0003
+  role: qa
+  engine: codex
+  status: completed
+  path: subagents/SA-0003-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0004
+  role: pm
+  engine: codex
+  status: completed
+  path: subagents/SA-0004-pm
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0005
+  role: swe
+  engine: codex
+  status: interrupted
+  path: subagents/SA-0005-swe
+  sandboxed: false
+  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0072 add-explicit-parked-task-state-for-work-that-should-resume-later'
@@ -23,5 +59,7 @@ git:
   checkpoint_base_sha: null
   checkpoint_attempts: 0
   rolled_back_checkpoint_attempt: null
+  worktree_path: .litehive/worktrees/T-0072-add-explicit-parked-task-state-for-work-that-should-resume-later
 retry_policy:
   max_retries: null
+created_from: null

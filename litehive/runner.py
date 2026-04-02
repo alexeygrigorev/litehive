@@ -14,10 +14,12 @@ from litehive.tasks import (
     _apply_stage_finished,
     _apply_task_outcome,
     _clear_task_outcome,
+    _prepare_interrupted_task,
     append_journal,
     clear_task_outcome,
     create_follow_up_tasks,
     finish_task_run_transition,
+    interruption_journal_message,
     mark_stage_finished,
     mark_stage_started,
     missing_acceptance_criteria_reason,
@@ -155,34 +157,26 @@ class TaskExecutionRunner:
             try:
                 report = self.executor(task, current)
             except KeyboardInterrupt:
-                reason = f"Execution cancelled during {current}"
+                reason = f"Execution interrupted during {current}"
                 task.pipeline_status = current  # type: ignore[assignment]
+                _prepare_interrupted_task(self.root, task, stage=current, summary=reason)
+                if current == "commit_to_git":
+                    task.status = "queued"
+                append_journal(self.root, task, interruption_journal_message(task))
                 report = self._terminal_report(
                     task,
                     step=current,
                     verdict="blocked",
                     summary=reason,
-                    outcome="cancelled",
-                    outcome_reason_code="execution_cancelled",
+                    outcome="interrupted",
+                    outcome_reason_code="execution_interrupted",
                     reason=reason,
                     retry_count=rejections,
-                )
-                task.status = "queued"
-                _apply_task_outcome(
-                    task,
-                    kind="cancelled",
-                    stage=current,
-                    reason_code="execution_cancelled",
-                    reason=reason,
-                    retry_count=rejections,
-                    retry_limit=self.max_retries,
-                    retry_source=self.retry_source,
                 )
                 self._write_report(task, report, steps + 1)
-                _apply_stage_finished(task, report)
                 return self._finish_run(
                     task,
-                    final_status="queued",
+                    final_status="interrupted",
                     steps=steps + 1,
                     last_verdict="blocked",
                 )
@@ -350,6 +344,46 @@ class TaskExecutionRunner:
                     retry_limit=self.max_retries,
                     retry_source=self.retry_source,
                 )
+                if rejections > self.max_retries:
+                    exhausted_reason = (
+                        f"Retry limit exhausted after {rejections} rejection(s) "
+                        f"(limit: {self.max_retries})"
+                    )
+                    report = self._terminal_report(
+                        task,
+                        step=current,
+                        verdict=report.verdict,
+                        summary=exhausted_reason,
+                        outcome="flagged",
+                        outcome_reason_code="retry_limit_exhausted",
+                        reason=exhausted_reason,
+                        retry_count=rejections,
+                        feedback=report.feedback,
+                        files_changed=report.files_changed,
+                        tests=report.tests,
+                        warnings=report.warnings,
+                        resource_limit_event=report.resource_limit_event,
+                        hook_results=report.hook_results,
+                    )
+                    task.status = "flagged"
+                    _apply_task_outcome(
+                        task,
+                        kind="flagged",
+                        stage=current,
+                        reason_code="retry_limit_exhausted",
+                        reason=exhausted_reason,
+                        retry_count=rejections,
+                        retry_limit=self.max_retries,
+                        retry_source=self.retry_source,
+                    )
+                    self._write_report(task, report, steps)
+                    _apply_stage_finished(task, report)
+                    return self._finish_run(
+                        task,
+                        final_status="flagged",
+                        steps=steps,
+                        last_verdict=last_verdict,
+                    )
                 report.retry_decision = "retry"
                 self._write_report(task, report, steps)
                 _apply_stage_finished(task, report)

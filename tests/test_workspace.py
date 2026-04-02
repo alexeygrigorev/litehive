@@ -18,6 +18,7 @@ from litehive.cli import (
     _cmd_prioritize,
     _cmd_promote,
     _cmd_queue,
+    _cmd_repair,
     _cmd_recover,
     _cmd_requeue_task,
     _cmd_resume_task,
@@ -104,7 +105,9 @@ from litehive.tasks import (
     list_tasks,
     load_state,
     move_queued_task,
+    mark_subagent_started,
     peek_next_task_selection,
+    repair_workspace_state,
     requeue_task,
     recover_stale_runner_state,
     resume_task,
@@ -1634,6 +1637,51 @@ def test_allowed_commit_paths_ignores_placeholder_file_entries(tmp_path: Path) -
     assert PurePosixPath("none") not in allowed_paths
     assert PurePosixPath("N/A") not in allowed_paths
     assert PurePosixPath("-") not in allowed_paths
+
+
+def test_live_session_progress_updates_runtime_heartbeat(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Live heartbeat update")
+    task.pipeline_status = "testing"
+    task.runtime.current_stage = RuntimeStageState(
+        step="testing",
+        status="running",
+        started_at="2026-04-02T00:00:00+00:00",
+        updated_at="2026-04-02T00:00:00+00:00",
+    )
+    ref = SubagentRef(
+        id="SA-0001",
+        role="qa",
+        engine="codex",
+        status="running",
+        path="subagents/SA-0001-qa",
+    )
+    task.subagents.append(ref)
+    save_task(tmp_path, task)
+    mark_subagent_started(tmp_path, task, ref)
+    task_dir_path = task_dir(tmp_path, task) / "subagents" / "SA-0001-qa"
+    task_dir_path.mkdir(parents=True, exist_ok=True)
+
+    manager = SubagentManager(tmp_path)
+    execution = CLIExecutionResult(
+        adapter="codex",
+        argv=("codex", "exec"),
+        cwd=tmp_path,
+        exit_code=0,
+        stdout="VERDICT: PASS\nSUMMARY: still running\n",
+        stderr="",
+        pid=12345,
+    )
+    manager._write_session_progress(task, task_dir_path, ref, "prompt", execution)
+
+    refreshed = get_task(tmp_path, task.id)
+    assert refreshed is not None
+    assert refreshed.runtime.updated_at != "2026-04-02T00:00:00+00:00"
+    assert refreshed.runtime.current_stage.updated_at != "2026-04-02T00:00:00+00:00"
+    assert refreshed.runtime.active_subagent is not None
+    assert refreshed.runtime.active_subagent.updated_at != "2026-04-02T00:00:00+00:00"
+    assert refreshed.runtime.active_subagent.pid == 12345
+    assert refreshed.runtime.active_subagent.transcript_snippet
 
 
 def test_commit_task_can_commit_only_selected_paths_with_other_unstaged_changes(tmp_path: Path) -> None:
@@ -6360,6 +6408,26 @@ def test_cmd_run_reports_requeued_task_even_when_other_tasks_are_blocked(
     )
 
 
+def test_dequeue_next_task_selection_restores_missing_queued_tasks_to_state_queue(
+    tmp_path: Path,
+) -> None:
+    ensure_workspace(tmp_path)
+    first = create_task(tmp_path, title="First queued task")
+    second = create_task(tmp_path, title="Second queued task")
+
+    state = load_state(tmp_path)
+    state.queue = []
+    save_state(tmp_path, state)
+
+    selection = dequeue_next_task_selection(tmp_path)
+
+    assert selection.task is not None
+    assert selection.task.id == first.id
+    repaired_state = load_state(tmp_path)
+    assert repaired_state.active_task_id == first.id
+    assert second.id in repaired_state.queue
+
+
 def test_cmd_run_reports_stage_outcomes_for_remaining_task_with_prior_reports(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -6866,6 +6934,72 @@ def test_queue_command_shows_active_and_queued_order(
         f"1. {second.id} [queued/backlog] priority=medium engine=opencode model=default "
         f"title=Second task depends_on={first.id}"
     ) in output
+
+
+def test_repair_command_repairs_stale_runner_state_and_queue(tmp_path: Path, capsys) -> None:  # type: ignore[no-untyped-def]
+    ensure_workspace(tmp_path)
+    queued = create_task(tmp_path, title="Queued follow-up", auto_commit=False)
+    interrupted = create_task(tmp_path, title="Interrupted testing task", auto_commit=False)
+    done = create_task(tmp_path, title="Completed task", auto_commit=False)
+
+    interrupted.status = "in_progress"
+    interrupted.pipeline_status = "testing"
+    interrupted.runtime.execution_status = "running"
+    interrupted.runtime.current_stage = RuntimeStageState(
+        step="testing",
+        status="running",
+        started_at="2026-04-01T00:00:00+00:00",
+        updated_at="2026-04-01T00:00:00+00:00",
+    )
+    save_task(tmp_path, interrupted)
+    save_task_runtime(tmp_path, interrupted)
+
+    done.status = "done"
+    done.pipeline_status = "done"
+    save_task(tmp_path, done)
+
+    state = load_state(tmp_path)
+    state.active_task_id = interrupted.id
+    state.queue = [queued.id, queued.id, "T-9999", done.id]
+    save_state(tmp_path, state)
+    (tmp_path / ".litehive" / ".runner.lock").write_text(
+        yaml.safe_dump({"pid": 999999}, sort_keys=False),
+        encoding="utf-8",
+    )
+
+    exit_code = _cmd_repair(argparse.Namespace(workspace=tmp_path))
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "repaired: yes" in output
+    assert "stale_runner_recovered: yes" in output
+    assert "cleared_active_task_id: -" in output
+    assert f"removed_queue_entries: T-9999 {done.id}" in output
+    assert f"deduped_queue_entries: {queued.id}" in output
+    assert "active_task_id: None" in output
+    assert "queue_length: 1" in output
+
+    repaired_state = load_state(tmp_path)
+    assert repaired_state.active_task_id is None
+    assert repaired_state.queue == [queued.id]
+    refreshed = get_task(tmp_path, interrupted.id)
+    assert refreshed is not None
+    assert refreshed.status == "interrupted"
+    assert refreshed.runtime.execution_status == "interrupted"
+
+
+def test_repair_workspace_state_reports_noop_for_consistent_workspace(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Queued task", auto_commit=False)
+
+    summary = repair_workspace_state(tmp_path)
+
+    assert summary.mutated is False
+    assert summary.stale_runner_recovered is False
+    assert summary.cleared_active_task_id is None
+    assert summary.removed_queue_entries == []
+    assert summary.deduped_queue_entries == []
+    assert load_state(tmp_path).queue == [task.id]
 
 
 def test_queue_command_marks_recovered_interruption(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:

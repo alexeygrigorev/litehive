@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import fcntl
 import re
 from contextlib import contextmanager
@@ -10,6 +10,7 @@ import os
 import shutil
 from pathlib import Path
 import sys
+import threading
 
 import yaml
 
@@ -27,6 +28,7 @@ from litehive.git_ops import GitError, checkpoint_message, default_commit_messag
 from litehive.models import (
     FollowUpTaskSpec,
     RuntimeEngineSwitch,
+    RuntimeInterruptionState,
     ResourceLimitEvent,
     RuntimeSubagentState,
     StageReport,
@@ -44,8 +46,11 @@ VALID_TASK_ENGINES = {"codex", "opencode", "gemini", "copilot", "claude"}
 VALID_HUMAN_CHECKPOINTS = {"before_acceptance", "before_commit"}
 VALID_TASK_TYPES = set(VALID_TASK_ROUTING_KEYS)
 TASK_PRIORITY_ORDER = {"high": 0, "medium": 1, "low": 2}
-_RUNNER_LOCKS: dict[Path, tuple[object, int]] = {}
+_RUNNER_LOCKS: dict[Path, tuple[object, int, int]] = {}
+_RUNNER_LOCKS_MUTEX = threading.Lock()
 _MISSING = object()
+CLOSED_TASK_STATUSES = {"cancelled", "wont_do", "deferred", "duplicate"}
+RESUMABLE_TASK_STATUSES = {"interrupted"}
 TASK_TEMPLATES: dict[str, dict[str, object]] = {
     "adapter": {
         "goal": "Define the adapter change clearly and land the required integration behavior.",
@@ -308,6 +313,16 @@ class TaskSelection:
 class TaskPlan:
     tasks: list[TaskRecord]
     blocked: list[BlockedTask]
+
+
+@dataclass(slots=True)
+class WorkspaceRepairSummary:
+    mutated: bool = False
+    stale_runner_recovered: bool = False
+    cleared_active_task_id: str | None = None
+    removed_queue_entries: list[str] = field(default_factory=list)
+    deduped_queue_entries: list[str] = field(default_factory=list)
+    restored_queue_entries: list[str] = field(default_factory=list)
 
 
 class WorkspaceConflictError(ValueError):
@@ -657,6 +672,44 @@ def _read_runner_lock_metadata(root: Path) -> dict[str, object]:
     return data if isinstance(data, dict) else {}
 
 
+def _current_thread_owns_runner_guard(root: Path) -> bool:
+    root = root.resolve()
+    owner_thread_id = threading.get_ident()
+    with _RUNNER_LOCKS_MUTEX:
+        existing = _RUNNER_LOCKS.get(root)
+    return existing is not None and existing[2] == owner_thread_id
+
+
+def _runner_pid_is_alive(pid: object) -> bool:
+    try:
+        candidate = int(pid)
+    except (TypeError, ValueError):
+        return False
+    if candidate <= 0:
+        return False
+    try:
+        os.kill(candidate, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def _runner_lock_is_held(root: Path) -> bool:
+    if _current_thread_owns_runner_guard(root):
+        return True
+    lock_path = runner_lock_path(root)
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    with lock_path.open("a+", encoding="utf-8") as handle:
+        try:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            return True
+        fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+        return False
+
+
 def _runner_conflict_message(root: Path) -> str:
     metadata = _read_runner_lock_metadata(root)
     pid = metadata.get("pid")
@@ -679,43 +732,57 @@ def _runner_conflict_message(root: Path) -> str:
 @contextmanager
 def workspace_runner_guard(root: Path):
     root = root.resolve()
-    existing = _RUNNER_LOCKS.get(root)
-    if existing is not None:
-        handle, depth = existing
-        _RUNNER_LOCKS[root] = (handle, depth + 1)
-        try:
-            yield
-        finally:
-            handle, depth = _RUNNER_LOCKS[root]
+    owner_thread_id = threading.get_ident()
+    with _RUNNER_LOCKS_MUTEX:
+        existing = _RUNNER_LOCKS.get(root)
+        if existing is not None:
+            handle, depth, existing_owner_thread_id = existing
+            if existing_owner_thread_id != owner_thread_id:
+                raise WorkspaceConflictError(_runner_conflict_message(root))
+            _RUNNER_LOCKS[root] = (handle, depth + 1, owner_thread_id)
+        else:
+            lock_path = runner_lock_path(root)
+            lock_path.parent.mkdir(parents=True, exist_ok=True)
+            handle = lock_path.open("a+", encoding="utf-8")
+            try:
+                try:
+                    fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                except BlockingIOError as exc:
+                    raise WorkspaceConflictError(_runner_conflict_message(root)) from exc
+                _write_runner_lock_metadata(handle, root)
+                _RUNNER_LOCKS[root] = (handle, 1, owner_thread_id)
+            except Exception:
+                handle.close()
+                raise
+
+    try:
+        yield
+    finally:
+        with _RUNNER_LOCKS_MUTEX:
+            handle, depth, existing_owner_thread_id = _RUNNER_LOCKS[root]
+            if existing_owner_thread_id != owner_thread_id:
+                raise RuntimeError("workspace runner guard released by non-owner thread")
             if depth <= 1:
                 _RUNNER_LOCKS.pop(root, None)
+                should_close = True
             else:
-                _RUNNER_LOCKS[root] = (handle, depth - 1)
-        return
-
-    lock_path = runner_lock_path(root)
-    lock_path.parent.mkdir(parents=True, exist_ok=True)
-    with lock_path.open("a+", encoding="utf-8") as handle:
-        try:
-            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError as exc:
-            raise WorkspaceConflictError(_runner_conflict_message(root)) from exc
-        _write_runner_lock_metadata(handle, root)
-        _RUNNER_LOCKS[root] = (handle, 1)
-        try:
-            yield
-        finally:
-            _RUNNER_LOCKS.pop(root, None)
+                _RUNNER_LOCKS[root] = (handle, depth - 1, owner_thread_id)
+                should_close = False
+        if should_close:
             handle.seek(0)
             handle.truncate()
             handle.flush()
             fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+            handle.close()
 
 
 @contextmanager
 def workspace_mutation_guard(root: Path):
     root = root.resolve()
-    if root in _RUNNER_LOCKS:
+    owner_thread_id = threading.get_ident()
+    with _RUNNER_LOCKS_MUTEX:
+        existing = _RUNNER_LOCKS.get(root)
+    if existing is not None and existing[2] == owner_thread_id:
         yield
         return
     with workspace_runner_guard(root):
@@ -1180,6 +1247,7 @@ def mark_task_run_started(root: Path, task: TaskRecord) -> None:
         }
     )
     task.runtime.active_subagent = None
+    task.runtime.interruption = None
     save_task_runtime(root, task)
 
 
@@ -1206,7 +1274,11 @@ def finish_task_run_transition(root: Path, task: TaskRecord, final_status: str) 
         if queued_without_task != state.queue:
             state.queue = queued_without_task
             state_changed = True
-        if final_status in {"paused", "queued"} and task.status == "queued" and task.pipeline_status != "done":
+        if (
+            final_status in {"paused", "queued", "interrupted"}
+            and task.status == "queued"
+            and task.pipeline_status != "done"
+        ):
             state.queue.insert(0, task.id)
             state_changed = True
         if (
@@ -1390,6 +1462,28 @@ def mark_subagent_pid(root: Path, task: TaskRecord, pid: int | None) -> None:
     save_task_runtime(root, task)
 
 
+def mark_subagent_progress(
+    root: Path,
+    task: TaskRecord,
+    *,
+    pid: int | None = None,
+    transcript: str | None = None,
+) -> None:
+    if task.runtime.active_subagent is None:
+        return
+    now = utcnow()
+    task.runtime.updated_at = now
+    if task.runtime.current_stage.step is not None:
+        task.runtime.current_stage = task.runtime.current_stage.model_copy(update={"updated_at": now})
+    updates: dict[str, object] = {"updated_at": now}
+    if pid is not None:
+        updates["pid"] = pid
+    if transcript is not None:
+        updates["transcript_snippet"] = summarize_transcript(transcript)
+    task.runtime.active_subagent = task.runtime.active_subagent.model_copy(update=updates)
+    save_task_runtime(root, task)
+
+
 def mark_subagent_finished(
     root: Path,
     task: TaskRecord,
@@ -1397,6 +1491,7 @@ def mark_subagent_finished(
     transcript: str,
     exit_code: int,
     pid: int | None = None,
+    interruption_reason: str | None = None,
     resource_limit_event: ResourceLimitEvent | None = None,
 ) -> None:
     now = utcnow()
@@ -1419,6 +1514,7 @@ def mark_subagent_finished(
         completed_at=now,
         exit_code=exit_code,
         transcript_snippet=summarize_transcript(transcript),
+        interruption_reason=interruption_reason or "",
         resource_limit_event=resource_limit_event,
     )
     task.runtime.active_subagent = None
@@ -1499,6 +1595,7 @@ def peek_next_task(root: Path) -> TaskRecord | None:
 
 
 def peek_next_task_selection(root: Path) -> TaskSelection:
+    recover_stale_runner_state(root)
     with workspace_mutation_guard(root), _workspace_lock(root):
         state = load_state(root)
         _validate_single_active_task(root, state)
@@ -1509,6 +1606,7 @@ def peek_next_task_selection(root: Path) -> TaskSelection:
 
 
 def plan_task_selections(root: Path) -> TaskPlan:
+    recover_stale_runner_state(root)
     with workspace_mutation_guard(root), _workspace_lock(root):
         state = load_state(root)
         _validate_single_active_task(root, state)
@@ -1541,6 +1639,7 @@ def dequeue_next_task(root: Path) -> TaskRecord | None:
 
 
 def dequeue_next_task_selection(root: Path) -> TaskSelection:
+    recover_stale_runner_state(root)
     with workspace_mutation_guard(root), _workspace_lock(root):
         state = load_state(root)
         _validate_single_active_task(root, state)
@@ -1703,69 +1802,246 @@ def _is_stranded_commit_task(task: TaskRecord) -> bool:
 def _is_orphaned_commit_stage_task(task: TaskRecord, state: WorkspaceState) -> bool:
     return (
         task.pipeline_status == "commit_to_git"
-        and task.status in {"queued", "in_progress"}
+        and task.status in {"queued", "in_progress", "interrupted"}
         and state.active_task_id != task.id
         and task.id not in state.queue
     )
 
 
 def _should_requeue_commit_stage_task(task: TaskRecord) -> bool:
-    return task.pipeline_status == "commit_to_git" and task.status in {"queued", "in_progress"}
+    return task.pipeline_status == "commit_to_git" and task.status in {
+        "queued",
+        "in_progress",
+        "interrupted",
+    }
 
 
-def _prepare_recovered_commit_task(task: TaskRecord) -> None:
+def _interrupted_subagent_snippet(root: Path, task: TaskRecord, active: RuntimeSubagentState) -> str:
+    subagent_base = task_dir(root, task) / active.path
+    report_path = subagent_base / "report.yaml"
+    if report_path.exists():
+        try:
+            report = yaml.safe_load(report_path.read_text(encoding="utf-8")) or {}
+        except yaml.YAMLError:
+            report = {}
+        if isinstance(report, dict):
+            summary = str(report.get("summary") or "").strip()
+            if summary:
+                return summary
+    transcript_path = subagent_base / "transcript.md"
+    if transcript_path.exists():
+        transcript = transcript_path.read_text(encoding="utf-8")
+        snippet = summarize_transcript(transcript)
+        if snippet:
+            return snippet
+    return active.transcript_snippet or "runner interrupted before subagent completion"
+
+
+def _interrupted_subagent_reason(task: TaskRecord, reason: str) -> str:
+    active = task.runtime.active_subagent
+    last_subagent = task.runtime.last_subagent
+    if (
+        last_subagent is not None
+        and last_subagent.interruption_reason
+        and (active is None or last_subagent.id == active.id)
+    ):
+        return last_subagent.interruption_reason
+    return reason
+
+
+def _write_interrupted_subagent_artifacts(
+    root: Path,
+    task: TaskRecord,
+    subagent: RuntimeSubagentState,
+    *,
+    resume_stage: str,
+) -> None:
     now = utcnow()
-    task.status = "queued"
-    task.pipeline_status = "commit_to_git"
-    task.runtime.execution_status = "idle"
-    task.runtime.run_started_at = None
+    base = task_dir(root, task) / subagent.path
+    session_path = base / "session.yaml"
+    report_path = base / "report.yaml"
+    writes: dict[Path, str] = {}
+
+    session_payload: dict[str, object]
+    if session_path.exists():
+        existing_session = yaml.safe_load(session_path.read_text(encoding="utf-8")) or {}
+        session_payload = existing_session if isinstance(existing_session, dict) else {}
+    else:
+        session_payload = {}
+    session_payload.update(
+        {
+            "id": subagent.id,
+            "role": subagent.role,
+            "engine": subagent.engine,
+            "status": subagent.status,
+            "sandboxed": subagent.sandboxed,
+            "sandbox": subagent.sandbox_summary or "host",
+            "updated_at": now,
+            "pid": subagent.pid,
+            "exit_code": subagent.exit_code,
+            "interruption_reason": subagent.interruption_reason or None,
+            "resume_stage": resume_stage,
+        }
+    )
+    writes[session_path] = yaml.safe_dump(session_payload, sort_keys=False)
+
+    report_payload: dict[str, object]
+    if report_path.exists():
+        existing_report = yaml.safe_load(report_path.read_text(encoding="utf-8")) or {}
+        report_payload = existing_report if isinstance(existing_report, dict) else {}
+    else:
+        report_payload = {}
+    report_payload["status"] = subagent.status
+    report_payload["summary"] = report_payload.get("summary") or subagent.transcript_snippet
+    report_payload["interruption_reason"] = subagent.interruption_reason or None
+    report_payload["resume_stage"] = resume_stage
+    writes[report_path] = yaml.safe_dump(report_payload, sort_keys=False)
+    _write_atomic_files(writes)
+
+
+def _mark_interrupted_subagent(root: Path, task: TaskRecord, *, reason: str, stage: str) -> RuntimeSubagentState | None:
+    active = task.runtime.active_subagent
+    existing = task.runtime.last_subagent if task.runtime.last_subagent is not None else None
+    if active is None and (existing is None or existing.status != "interrupted"):
+        return None
+    now = utcnow()
+    source = active or existing
+    assert source is not None
+    if active is not None:
+        for ref in reversed(task.subagents):
+            if ref.id == active.id and ref.status == "running":
+                ref.status = "interrupted"
+                break
+    snippet = (
+        _interrupted_subagent_snippet(root, task, source)
+        if active is not None or not source.transcript_snippet
+        else source.transcript_snippet
+    )
+    interrupted = source.model_copy(
+        update={
+            "status": "interrupted",
+            "updated_at": now,
+            "completed_at": source.completed_at or now,
+            "transcript_snippet": snippet,
+            "interruption_reason": _interrupted_subagent_reason(task, reason),
+        }
+    )
+    task.runtime.last_subagent = interrupted
     task.runtime.active_subagent = None
+    _write_interrupted_subagent_artifacts(root, task, interrupted, resume_stage=stage)
+    return interrupted
+
+
+def _prepare_interrupted_task(
+    root: Path,
+    task: TaskRecord,
+    *,
+    stage: str,
+    summary: str,
+    reason: str | None = None,
+) -> None:
+    now = utcnow()
+    run_started_at = task.runtime.run_started_at
+    stage_started_at = task.runtime.current_stage.started_at
+    started_at = task.runtime.current_stage.started_at or task.runtime.run_started_at
+    interrupted_at = (
+        task.runtime.active_subagent.updated_at
+        if task.runtime.active_subagent is not None
+        else task.runtime.current_stage.updated_at
+        or started_at
+        or now
+    )
+    task.status = "interrupted"
+    task.pipeline_status = stage  # type: ignore[assignment]
+    task.runtime.execution_status = "interrupted"
+    task.runtime.run_started_at = None
+    interruption_reason = reason or summary
+    interrupted_subagent = _mark_interrupted_subagent(root, task, reason=interruption_reason, stage=stage)
+    _apply_task_outcome(
+        task,
+        kind="interrupted",
+        stage=stage,
+        reason_code="execution_interrupted",
+        reason=summary,
+        retry_count=task.runtime.retry_count,
+        retry_limit=task.runtime.retry_limit,
+        retry_source=task.runtime.retry_source,
+    )
     task.runtime.updated_at = now
+    task.runtime.interruption = RuntimeInterruptionState(
+        source="subagent" if interrupted_subagent is not None else "runner",
+        stage=stage,
+        pipeline_status=stage,
+        resume_stage=stage,
+        reason=interruption_reason,
+        summary=summary,
+        interrupted_at=interrupted_at,
+        detected_at=now,
+        run_started_at=run_started_at,
+        stage_started_at=stage_started_at,
+        subagent=interrupted_subagent,
+    )
     task.runtime.current_stage = task.runtime.current_stage.model_copy(
         update={
-            "step": None,
-            "status": "idle",
-            "started_at": None,
-            "completed_at": None,
+            "step": stage,
+            "status": "interrupted",
+            "started_at": started_at,
+            "completed_at": now,
             "updated_at": now,
-            "duration_seconds": 0,
-            "verdict": None,
-            "summary": "",
+            "duration_seconds": _duration_seconds(started_at, now),
+            "verdict": "blocked",
+            "summary": summary,
         }
     )
 
 
-def _prepare_interrupted_task_for_requeue(task: TaskRecord) -> None:
-    now = utcnow()
+def interruption_journal_message(task: TaskRecord) -> str:
+    interruption = task.runtime.interruption
+    if interruption is None:
+        return f"Interrupted run recorded. Resume from `{task.pipeline_status}`."
+    parts = [
+        (
+            f"Interrupted {interruption.source} execution while `{interruption.stage or task.pipeline_status}` "
+            f"was running."
+        ),
+        f"Reason: {interruption.reason or interruption.summary or 'unknown'}.",
+    ]
+    if interruption.subagent is not None:
+        subagent = interruption.subagent
+        pid = subagent.pid if subagent.pid is not None else "-"
+        parts.append(
+            (
+                f"Subagent `{subagent.id}` ({subagent.role}/{subagent.engine}, pid={pid}, "
+                f"path `{subagent.path}`) stopped with status `{subagent.status}`."
+            )
+        )
+        if subagent.transcript_snippet:
+            parts.append(f"Last snippet: {subagent.transcript_snippet}.")
+    parts.append(f"Resume from `{interruption.resume_stage or task.pipeline_status}`.")
+    return " ".join(parts)
+
+
+def _stale_interruption_reason(task: TaskRecord, stage: str) -> str:
+    active = task.runtime.active_subagent
+    if active is not None:
+        return (
+            f"Stale runner detected while subagent `{active.id}` "
+            f"({active.role}/{active.engine}) was still marked running in `{stage}`."
+        )
+    return f"Stale runner detected while `{stage}` was still marked running."
+
+
+def _recover_commit_task(root: Path, task: TaskRecord) -> str:
+    summary = "Interrupted `commit_to_git` run recovered. Resume from `commit_to_git`."
+    _prepare_interrupted_task(
+        root,
+        task,
+        stage="commit_to_git",
+        summary=summary,
+        reason=_stale_interruption_reason(task, "commit_to_git"),
+    )
     task.status = "queued"
-    task.runtime.execution_status = "idle"
-    task.runtime.run_started_at = None
-    task.runtime.active_subagent = None
-    task.runtime.updated_at = now
-    if task.runtime.current_stage.step is None:
-        task.runtime.current_stage = task.runtime.current_stage.model_copy(
-            update={
-                "status": "idle",
-                "started_at": None,
-                "completed_at": None,
-                "updated_at": now,
-                "duration_seconds": 0,
-                "verdict": None,
-                "summary": "",
-            }
-        )
-    else:
-        task.runtime.current_stage = task.runtime.current_stage.model_copy(
-            update={
-                "status": "interrupted",
-                "updated_at": now,
-            }
-        )
-
-
-def _recover_commit_task(task: TaskRecord) -> str:
-    _prepare_recovered_commit_task(task)
-    return "Recovered interrupted `commit_to_git` attempt and requeued the task at `commit_to_git`."
+    return interruption_journal_message(task)
 
 
 def _finalize_recovered_commit_task(task: TaskRecord, *, commit_sha: str) -> str:
@@ -1850,10 +2126,11 @@ def _recover_stranded_commit_tasks(root: Path, state: WorkspaceState) -> bool:
     resolved_ids = {*recovered_ids, *completed_ids}
     queue = [task_id for task_id in state.queue if task_id not in recovered_ids]
     for task in recovered:
-        journal_messages[task.id] = _recover_commit_task(task)
+        journal_messages[task.id] = _recover_commit_task(root, task)
         transitioned.append(task)
-        queue.insert(0, task.id)
     queue = [task_id for task_id in queue if task_id not in completed_ids]
+    if recovered:
+        queue = [*(task.id for task in recovered), *queue]
     if state.active_task_id in resolved_ids:
         state.active_task_id = None
     state.queue = queue
@@ -1868,6 +2145,157 @@ def _recover_stranded_commit_tasks(root: Path, state: WorkspaceState) -> bool:
     return True
 
 
+def recover_stale_runner_state(root: Path) -> bool:
+    root = root.resolve()
+    with _workspace_lock(root):
+        state = load_state(root)
+        tasks = list_tasks(root)
+        tasks_by_id = {task.id: task for task in tasks}
+        running_task_ids = sorted(
+            task.id for task in tasks if task.runtime.execution_status == "running"
+        )
+        owned_by_current_thread = _current_thread_owns_runner_guard(root)
+        runner_lock_held = _runner_lock_is_held(root)
+        if not owned_by_current_thread and runner_lock_held:
+            return False
+
+        mutated = False
+        transitioned: list[TaskRecord] = []
+        journal_messages: dict[str, str] = {}
+
+        if len(running_task_ids) > 1:
+            return False
+
+        if running_task_ids:
+            for task_id in running_task_ids:
+                task = tasks_by_id.get(task_id)
+                if task is None:
+                    continue
+                if _is_stranded_commit_task(task):
+                    continue
+                if _should_requeue_commit_stage_task(task):
+                    _prepare_interrupted_task(
+                        root,
+                        task,
+                        stage="commit_to_git",
+                        summary=(
+                            "Interrupted `commit_to_git` run recovered after stale runner detection. "
+                            "Resume from `commit_to_git`."
+                        ),
+                        reason=_stale_interruption_reason(task, "commit_to_git"),
+                    )
+                    task.status = "queued"
+                    journal_messages[task.id] = interruption_journal_message(task)
+                elif _is_task_eligible_for_execution(task):
+                    _prepare_interrupted_task(
+                        root,
+                        task,
+                        stage=task.pipeline_status,
+                        summary=(
+                            "Interrupted run recovered after stale runner detection. "
+                            f"Resume from `{task.pipeline_status}`."
+                        ),
+                        reason=_stale_interruption_reason(task, task.pipeline_status),
+                    )
+                    journal_messages[task.id] = interruption_journal_message(task)
+                else:
+                    continue
+                transitioned.append(task)
+            if state.active_task_id is not None:
+                state.active_task_id = None
+                mutated = True
+            state.queue = [task_id for task_id in state.queue if task_id not in running_task_ids]
+            commit_requeued_ids = [
+                task.id
+                for task in transitioned
+                if task.pipeline_status == "commit_to_git" and task.status == "queued"
+            ]
+            if commit_requeued_ids:
+                state.queue = [*commit_requeued_ids, *state.queue]
+            mutated = mutated or bool(transitioned)
+
+        if state.active_task_id is not None:
+            active_task = tasks_by_id.get(state.active_task_id)
+            if active_task is None:
+                state.active_task_id = None
+                mutated = True
+
+        commit_mutated = _recover_stranded_commit_tasks(root, state)
+        if transitioned:
+            _persist_tasks_and_state_without_runner_guard(
+                root,
+                tasks=transitioned,
+                state=state,
+                journal_messages=journal_messages,
+            )
+        elif mutated:
+            _save_state_without_runner_guard(root, state)
+        return mutated or commit_mutated
+
+
+def repair_workspace_state(root: Path) -> WorkspaceRepairSummary:
+    summary = WorkspaceRepairSummary()
+    summary.stale_runner_recovered = recover_stale_runner_state(root)
+    summary.mutated = summary.stale_runner_recovered
+
+    with workspace_mutation_guard(root), _workspace_lock(root):
+        state = load_state(root)
+        tasks_by_id = {task.id: task for task in list_tasks(root)}
+
+        if state.active_task_id is not None:
+            active_task = tasks_by_id.get(state.active_task_id)
+            if active_task is None or not _is_task_eligible_for_execution(active_task):
+                summary.cleared_active_task_id = state.active_task_id
+                state.active_task_id = None
+                summary.mutated = True
+
+        seen: set[str] = set()
+        normalized_queue: list[str] = []
+        for task_id in state.queue:
+            task = tasks_by_id.get(task_id)
+            if task is None or not _is_task_eligible_for_execution(task):
+                summary.removed_queue_entries.append(task_id)
+                summary.mutated = True
+                continue
+            if task_id in seen:
+                summary.deduped_queue_entries.append(task_id)
+                summary.mutated = True
+                continue
+            seen.add(task_id)
+            normalized_queue.append(task_id)
+        if normalized_queue != state.queue:
+            state.queue = normalized_queue
+            summary.mutated = True
+
+        restored = _restore_missing_queued_tasks(state, tasks_by_id)
+        if restored:
+            summary.restored_queue_entries.extend(restored)
+            summary.mutated = True
+
+        if summary.mutated:
+            _save_state_without_runner_guard(root, state)
+    return summary
+
+
+def _restore_missing_queued_tasks(
+    state: WorkspaceState,
+    tasks_by_id: dict[str, TaskRecord],
+) -> list[str]:
+    restored: list[str] = []
+    queued_ids = set(state.queue)
+    for task_id, task in tasks_by_id.items():
+        if task.status != "queued":
+            continue
+        if task.pipeline_status == "done":
+            continue
+        if task_id in queued_ids:
+            continue
+        state.queue.append(task_id)
+        queued_ids.add(task_id)
+        restored.append(task_id)
+    return restored
+
+
 def _resolve_next_task_from_snapshot(
     state: WorkspaceState,
     tasks_by_id: dict[str, TaskRecord],
@@ -1877,6 +2305,8 @@ def _resolve_next_task_from_snapshot(
     mutated = False
     blocked: list[BlockedTask] = []
     blocked_task_ids: set[str] = set()
+    if _restore_missing_queued_tasks(state, tasks_by_id):
+        mutated = True
     if state.active_task_id is not None:
         active_task = tasks_by_id.get(state.active_task_id)
         if active_task is not None and _is_task_eligible_for_execution(active_task):
@@ -1954,16 +2384,20 @@ def restore_untouched_active_task(root: Path) -> WorkspaceState:
             state.active_task_id = None
             state.queue = [item for item in state.queue if item != task.id]
             if commit_sha is None:
-                _prepare_recovered_commit_task(task)
+                _prepare_interrupted_task(
+                    root,
+                    task,
+                    stage="commit_to_git",
+                    summary="Interrupted `commit_to_git` run recovered. Resume from `commit_to_git`.",
+                    reason=_stale_interruption_reason(task, "commit_to_git"),
+                )
+                task.status = "queued"
                 state.queue.insert(0, task.id)
                 persist_task_and_state(
                     root,
                     task=task,
                     state=state,
-                    journal_message=(
-                        "Recovered interrupted `commit_to_git` attempt and requeued the task "
-                        "at `commit_to_git`."
-                    ),
+                    journal_message=interruption_journal_message(task),
                 )
                 return state
 
@@ -2012,7 +2446,31 @@ def restore_untouched_active_task(root: Path) -> WorkspaceState:
             return state
 
         if task is not None and _should_requeue_commit_stage_task(task):
-            _prepare_recovered_commit_task(task)
+            _prepare_interrupted_task(
+                root,
+                task,
+                stage="commit_to_git",
+                summary="Interrupted `commit_to_git` run recovered. Resume from `commit_to_git`.",
+                reason=_stale_interruption_reason(task, "commit_to_git"),
+            )
+            state.queue = [item for item in state.queue if item != task.id]
+            task.status = "queued"
+            state.queue.insert(0, task.id)
+            state.active_task_id = None
+            persist_task_and_state(
+                root,
+                task=task,
+                state=state,
+                journal_message=interruption_journal_message(task),
+            )
+            return state
+
+        if (
+            task is not None
+            and _is_task_eligible_for_execution(task)
+            and task.runtime.execution_status != "running"
+        ):
+            task.status = "queued"
             state.queue = [item for item in state.queue if item != task.id]
             state.queue.insert(0, task.id)
             state.active_task_id = None
@@ -2020,26 +2478,25 @@ def restore_untouched_active_task(root: Path) -> WorkspaceState:
                 root,
                 task=task,
                 state=state,
-                journal_message=(
-                    "Recovered interrupted `commit_to_git` attempt and requeued the task at "
-                    "`commit_to_git`."
-                ),
+                journal_message=f"Restored untouched active task to queue at `{task.pipeline_status}`.",
             )
             return state
 
         if task is not None and _is_task_eligible_for_execution(task):
-            _prepare_interrupted_task_for_requeue(task)
+            _prepare_interrupted_task(
+                root,
+                task,
+                stage=task.pipeline_status,
+                summary=f"Interrupted run recovered. Resume from `{task.pipeline_status}`.",
+                reason=_stale_interruption_reason(task, task.pipeline_status),
+            )
             state.queue = [item for item in state.queue if item != task.id]
-            state.queue.insert(0, task.id)
             state.active_task_id = None
             persist_task_and_state(
                 root,
                 task=task,
                 state=state,
-                journal_message=(
-                    "Recovered interrupted run and requeued the task at "
-                    f"`{task.pipeline_status}`."
-                ),
+                journal_message=interruption_journal_message(task),
             )
             return state
 
@@ -2116,6 +2573,7 @@ def _reset_task_for_recovery(
     *,
     status: str,
     pipeline_status: str,
+    clear_last_outcome: bool = True,
 ) -> None:
     now = utcnow()
     task.status = status
@@ -2124,10 +2582,26 @@ def _reset_task_for_recovery(
     task.runtime.run_started_at = None
     task.runtime.updated_at = now
     task.runtime.active_subagent = None
+    task.runtime.interruption = None
     task.runtime.retry_count = 0
     task.runtime.retry_limit = 0
     task.runtime.retry_source = "global"
-    task.runtime.last_outcome = TaskOutcomeState()
+    task.runtime.current_stage = task.runtime.current_stage.model_copy(
+        update={
+            "step": None,
+            "status": "idle",
+            "started_at": None,
+            "completed_at": None,
+            "updated_at": now,
+            "duration_seconds": 0,
+            "verdict": None,
+            "summary": "",
+        }
+    )
+    if clear_last_outcome:
+        task.runtime.last_outcome = TaskOutcomeState()
+    elif task.runtime.last_outcome.kind == "interrupted":
+        task.runtime.last_outcome.stage = pipeline_status
 
 
 def prepare_completed_task_for_recovery(task: TaskRecord, *, recovery_stage: str) -> None:
@@ -2145,8 +2619,8 @@ def requeue_task(root: Path, task_id: str, *, front: bool = False) -> TaskRecord
         task = require_task(root, task_id)
         state = load_state(root)
         _ensure_future_task_mutation_allowed(root, [task.id], state=state)
-        if task.status not in {"flagged", "cancelled"}:
-            raise ValueError(f"Task {task.id} is not flagged or cancelled")
+        if task.status not in {"flagged", *CLOSED_TASK_STATUSES}:
+            raise ValueError(f"Task {task.id} is not flagged or closed")
         _reset_task_for_recovery(
             task,
             status="queued",
@@ -2171,14 +2645,19 @@ def resume_task(root: Path, task_id: str, *, front: bool = False) -> TaskRecord:
         task = require_task(root, task_id)
         state = load_state(root)
         _ensure_future_task_mutation_allowed(root, [task.id], state=state)
-        if task.status not in {"flagged", "cancelled"}:
-            raise ValueError(f"Task {task.id} is not flagged or cancelled")
+        if task.status not in {"flagged", *CLOSED_TASK_STATUSES, *RESUMABLE_TASK_STATUSES}:
+            raise ValueError(f"Task {task.id} is not interrupted, flagged, or closed")
         if task.pipeline_status in {"backlog", "done"}:
             raise ValueError(f"Task {task.id} has no resumable stage")
         resumed_stage = task.pipeline_status
         if resumed_stage in {"implementing", "testing", "accepting"}:
             resumed_stage = reroute_stage_for_acceptance_criteria(task)
-        _reset_task_for_recovery(task, status="queued", pipeline_status=resumed_stage)
+        _reset_task_for_recovery(
+            task,
+            status="queued",
+            pipeline_status=resumed_stage,
+            clear_last_outcome=task.status != "interrupted",
+        )
         state.queue = [item for item in state.queue if item != task.id]
         if front:
             state.queue.insert(0, task.id)
@@ -2198,8 +2677,8 @@ def abandon_task(root: Path, task_id: str) -> TaskRecord:
         task = require_task(root, task_id)
         state = load_state(root)
         _ensure_future_task_mutation_allowed(root, [task.id], state=state)
-        if task.status not in {"flagged", "cancelled"}:
-            raise ValueError(f"Task {task.id} is not flagged or cancelled")
+        if task.status not in {"flagged", *CLOSED_TASK_STATUSES, *RESUMABLE_TASK_STATUSES}:
+            raise ValueError(f"Task {task.id} is not interrupted, flagged, or closed")
         task.status = "cancelled"
         task.runtime.execution_status = "cancelled"
         task.runtime.run_started_at = None
@@ -2241,8 +2720,9 @@ def close_task(
     *,
     outcome: str,
     reason: str | None = None,
+    follow_up_task_id: str | None = None,
 ) -> TaskRecord:
-    """Mark a task as cancelled with an explicit non-implementation outcome.
+    """Mark a task as explicitly closed with a non-implementation outcome.
 
     Valid outcomes: ``wont_do``, ``deferred``, ``duplicate``, ``execution_cancelled``.
     The task is removed from the queue.
@@ -2252,20 +2732,28 @@ def close_task(
         raise ValueError(f"Unsupported close outcome '{outcome}'. Expected one of: {allowed}")
     with _workspace_lock(root):
         task = require_task(root, task_id)
+        if follow_up_task_id is not None:
+            follow_up_task_id = follow_up_task_id.strip()
+            if not follow_up_task_id:
+                raise ValueError("Follow-up task id must not be empty")
+            if follow_up_task_id == task.id:
+                raise ValueError(f"Task {task.id} cannot reference itself as a follow-up task")
+            require_task(root, follow_up_task_id)
         state = load_state(root)
         _ensure_future_task_mutation_allowed(root, [task.id], state=state)
         if task.status == "done":
             raise ValueError(f"Task {task.id} is already done and cannot be closed")
         now = utcnow()
-        task.status = "cancelled"
+        task.status = outcome  # type: ignore[assignment]
         task.runtime.execution_status = "cancelled"
         task.runtime.run_started_at = None
         task.runtime.updated_at = now
         task.runtime.active_subagent = None
-        task.runtime.last_outcome.kind = "cancelled"
+        task.runtime.last_outcome.kind = outcome  # type: ignore[assignment]
         task.runtime.last_outcome.stage = task.pipeline_status
         task.runtime.last_outcome.reason_code = outcome
         task.runtime.last_outcome.reason = reason or _CLOSE_REASON_CODE_LABELS[outcome]
+        task.runtime.last_outcome.follow_up_task_id = follow_up_task_id
         task.runtime.last_outcome.retry_count = 0
         task.runtime.last_outcome.retry_limit = 0
         task.runtime.last_outcome.retry_source = "global"
@@ -2273,14 +2761,20 @@ def close_task(
         if state.active_task_id == task.id:
             state.active_task_id = None
         state.queue = [item for item in state.queue if item != task.id]
+        journal_message = f"Task closed: {outcome}."
+        if reason:
+            journal_message += f" {reason}"
+        if follow_up_task_id is not None:
+            journal_message += f" Follow-up task: {follow_up_task_id}."
         _persist_task_and_state_without_runner_guard(
             root,
             task=task,
             state=state,
-            journal_message=f"Task closed: {outcome}."
-            + (f" {reason}" if reason else ""),
+            journal_message=journal_message,
         )
         return task
+
+
 def update_task(
     root: Path,
     task_id: str,

@@ -124,6 +124,20 @@ _RETRYABLE_EXECUTION_PATTERNS: tuple[tuple[str, tuple[str, ...], str], ...] = (
     ),
 )
 
+_EXECUTION_INTERRUPTION_PATTERNS: tuple[tuple[str, str], ...] = (
+    ("keyboardinterrupt", "execution interrupted"),
+    ("interrupt signal", "execution interrupted"),
+    ("received sigint", "execution interrupted"),
+    ("received signal sigint", "execution interrupted"),
+    ("received signal 2", "execution interrupted"),
+    ("terminated by sigint", "execution interrupted"),
+    ("terminated by signal 2", "execution interrupted"),
+    ("cancelled by user", "execution interrupted"),
+    ("canceled by user", "execution interrupted"),
+    ("interrupted by user", "execution interrupted"),
+    ("execution interrupted", "execution interrupted"),
+)
+
 
 @dataclass(frozen=True, slots=True)
 class RetryableExecutionFailure:
@@ -497,9 +511,27 @@ def classify_execution_limit(text: str) -> str | None:
     return None
 
 
+def classify_execution_interruption(text: str, *, exit_code: int | None = None) -> str | None:
+    if exit_code in {130, 131, 143}:
+        return "execution interrupted"
+    if exit_code is not None and exit_code < 0 and abs(exit_code) in {2, 15}:
+        return "execution interrupted"
+    normalized = re.sub(r"\s+", " ", text.lower()).strip()
+    if not normalized:
+        return None
+    for needle, reason in _EXECUTION_INTERRUPTION_PATTERNS:
+        if needle in normalized:
+            return reason
+    return None
+
+
 def classify_retryable_execution_failure(text: str) -> RetryableExecutionFailure | None:
     normalized = re.sub(r"\s+", " ", text.lower()).strip()
-    if not normalized or classify_execution_limit(normalized) is not None:
+    if (
+        not normalized
+        or classify_execution_limit(normalized) is not None
+        or classify_execution_interruption(normalized) is not None
+    ):
         return None
     for classification, needles, reason in _RETRYABLE_EXECUTION_PATTERNS:
         if any(needle in normalized for needle in needles):

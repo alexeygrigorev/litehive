@@ -27,9 +27,9 @@ acceptance_criteria:
   fallback behavior.
 - Retry behavior is recorded clearly enough in subagent artifacts or warnings/transcript
   output to explain how many attempts ran and why retries occurred or stopped.
-- "The implementation follows the Claude retry wrapper pattern from `/home/alexey/git/telegram-writing-assistant/session_retrier.py`\
-  \ where the retry loop is explicit, bounded, and tested, but is adapted to Litehive\u2019\
-  s engine/fallback model rather than session resume."
+- The implementation follows the Claude retry wrapper pattern from `/home/alexey/git/telegram-writing-assistant/session_retrier.py`
+  where the retry loop is explicit, bounded, and tested, but is adapted to Litehive’s
+  engine/fallback model rather than session resume.
 - 'Focused tests cover at least: retryable failure then success on same engine, retry
   exhaustion leading to normal failure/fallback handling, and non-retryable failure
   skipping retries.'
@@ -157,7 +157,7 @@ subagents:
 - id: SA-0001
   role: pm
   engine: codex
-  status: flagged
+  status: failed
   path: subagents/SA-0001-pm
 - id: SA-0002
   role: pm

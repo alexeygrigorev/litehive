@@ -17,6 +17,14 @@ VALID_EXECUTION_RETRY_SELECTORS = frozenset({*VALID_ENGINE_NAMES, "external_cli"
 VALID_EXECUTION_RETRY_CLASSIFICATIONS = frozenset({"timeout", "network", "service"})
 VALID_SANDBOX_NETWORK_MODES = frozenset({"none", "bridge", "host"})
 VALID_SANDBOX_WORKSPACE_MODES = frozenset({"ro", "rw"})
+VALID_RUNNER_HOOK_POINTS = frozenset(
+    {
+        "before_swe_implementation",
+        "after_swe_implementation",
+        "before_pm_acceptance",
+        "after_pm_acceptance",
+    }
+)
 MODEL_FAMILY_RETRY_SELECTOR_PREFIX = "model_family:"
 ENGINE_CATEGORY_RETRY_SELECTOR_PREFIX = "engine_category:"
 
@@ -153,6 +161,45 @@ class SubagentResourceLimitsConfig:
     memory_mb: int | None = None
     cpu_count: float | None = None
     process_limit: int | None = None
+
+
+@dataclass(slots=True)
+class RunnerHookConfig:
+    command: str
+    blocking: bool = True
+
+
+def _normalize_runner_hook_config(
+    raw_hook: RunnerHookConfig | Mapping[str, object],
+    *,
+    field_name: str,
+) -> RunnerHookConfig:
+    hook = raw_hook if isinstance(raw_hook, RunnerHookConfig) else RunnerHookConfig(**dict(raw_hook))
+    hook.command = hook.command.strip()
+    if not hook.command:
+        raise ValueError(f"{field_name}.command must not be empty")
+    return hook
+
+
+def _normalize_runner_hooks(
+    raw_hooks: Mapping[str, Sequence[RunnerHookConfig | Mapping[str, object]]] | None,
+) -> dict[str, list[RunnerHookConfig]]:
+    if raw_hooks is None:
+        return {}
+
+    normalized: dict[str, list[RunnerHookConfig]] = {}
+    for point, hooks in raw_hooks.items():
+        if point not in VALID_RUNNER_HOOK_POINTS:
+            allowed = ", ".join(sorted(VALID_RUNNER_HOOK_POINTS))
+            raise ValueError(f"runner_hooks key must be one of: {allowed}")
+        normalized[point] = [
+            _normalize_runner_hook_config(
+                hook,
+                field_name=f"runner_hooks[{point}][{index}]",
+            )
+            for index, hook in enumerate(hooks)
+        ]
+    return normalized
 
 
 _PROFILE_RESOURCE_LIMIT_DEFAULTS: dict[str, SubagentResourceLimitsConfig] = {
@@ -722,6 +769,7 @@ class LitehiveConfig:
     pool_stop_on_dirty_git: bool = False
     pool_selection_policy: str = "dependency_aware"
     pre_acceptance_command: str | None = None
+    runner_hooks: dict[str, list[RunnerHookConfig]] = field(default_factory=dict)
     subagent_resource_limits: SubagentResourceLimitsConfig = field(
         default_factory=SubagentResourceLimitsConfig
     )
@@ -765,6 +813,20 @@ class LitehiveConfig:
         self.execution_retry_policies = _normalize_execution_retry_policies(
             self.execution_retry_policies
         )
+        self.runner_hooks = _normalize_runner_hooks(self.runner_hooks)
+        if self.pre_acceptance_command is not None:
+            self.pre_acceptance_command = self.pre_acceptance_command.strip() or None
+        if self.pre_acceptance_command:
+            before_acceptance_hooks = self.runner_hooks.setdefault("before_pm_acceptance", [])
+            matched_legacy_hook = False
+            for hook in before_acceptance_hooks:
+                if hook.command == self.pre_acceptance_command:
+                    hook.blocking = True
+                    matched_legacy_hook = True
+            if not matched_legacy_hook:
+                before_acceptance_hooks.append(
+                    RunnerHookConfig(command=self.pre_acceptance_command, blocking=True)
+                )
         self.subagent_resource_limits = _normalize_subagent_resource_limits(
             self.subagent_resource_limits,
             process_profile=self.process_profile,
@@ -922,6 +984,7 @@ def render_workspace_gitignore() -> str:
             ".runner.lock",
             "logs/",
             "pool-summary.txt",
+            "worktrees/",
             "tasks/*/runtime.yaml",
             "tasks/*/reports/commit_to_git-*.yaml",
             "",
@@ -1015,3 +1078,16 @@ def format_subagent_resource_limits(config: LitehiveConfig) -> str:
     if limits.process_limit is not None:
         details.append(f"process_limit:{limits.process_limit}")
     return "enabled " + " ".join(details) if details else "enabled"
+
+
+def format_runner_hooks(config: LitehiveConfig) -> str:
+    if not config.runner_hooks:
+        return "none"
+    parts: list[str] = []
+    for point in sorted(config.runner_hooks):
+        hooks = ", ".join(
+            f"{'blocking' if hook.blocking else 'non-blocking'}:{hook.command}"
+            for hook in config.runner_hooks[point]
+        )
+        parts.append(f"{point}=[{hooks}]")
+    return "; ".join(parts)

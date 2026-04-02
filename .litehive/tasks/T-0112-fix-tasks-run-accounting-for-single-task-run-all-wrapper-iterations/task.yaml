@@ -6,17 +6,31 @@ task_type: null
 engine: null
 model: null
 mode: implementation
-status: queued
-pipeline_status: backlog
+status: flagged
+pipeline_status: implementing
 priority: medium
 created_at: '2026-04-01T17:31:26+00:00'
-updated_at: '2026-04-01T17:31:26+00:00'
+updated_at: '2026-04-02T03:08:22+00:00'
 goal: ''
 acceptance_criteria: []
 constraints: []
 plan: []
 human_checkpoints: []
-subagents: []
+subagents:
+- id: SA-0001
+  role: pm
+  engine: codex
+  status: completed
+  path: subagents/SA-0001-pm
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0002
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0002-swe
+  sandboxed: false
+  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0112 fix-tasks-run-accounting-for-single-task-run-all-wrapper-iterations'
@@ -24,6 +38,7 @@ git:
   checkpoint_base_sha: null
   checkpoint_attempts: 0
   rolled_back_checkpoint_attempt: null
+  worktree_path: .litehive/worktrees/T-0112-fix-tasks-run-accounting-for-single-task-run-all-wrapper-iterations
 retry_policy:
   max_retries: null
 created_from: null

@@ -24,9 +24,9 @@ acceptance_criteria:
 - External engine execution is routed through a sandbox launcher when configured,
   and the launcher restricts mounts, network mode, and permissions so subagents no
   longer execute with unrestricted host access by default.
-- "Only the selected engine\u2019s required binary, credentials, and environment are\
-  \ exposed inside the sandbox for a run; unrelated provider credentials, executor\
-  \ binaries, and unused env vars are not propagated."
+- Only the selected engine’s required binary, credentials, and environment are exposed
+  inside the sandbox for a run; unrelated provider credentials, executor binaries,
+  and unused env vars are not propagated.
 - Existing engine adapters continue to build their engine-specific commands, but environment
   selection and sandbox wrapping are enforced at a shared invocation boundary so the
   behavior is consistent across `codex`, `opencode`, `gemini`, `copilot`, and opt-in
@@ -163,7 +163,7 @@ subagents:
 - id: SA-0001
   role: pm
   engine: codex
-  status: flagged
+  status: failed
   path: subagents/SA-0001-pm
 - id: SA-0002
   role: pm

@@ -10,6 +10,7 @@
 - `uv run litehive configure --workspace .`
 - `uv run litehive status --workspace .`
 - `uv run litehive queue --workspace .`
+- `uv run litehive repair --workspace .`
 - `uv run litehive add "<title>" --workspace .`
 - `uv run litehive add "<title>" --task-type review --workspace .`
   Defaults to `mode: tasks` for typed intake so the task folder gets `brief.md` template guidance; pass `--mode implementation` to opt out.
@@ -52,6 +53,7 @@
 - Any future state-machine change should update the durable state-machine documentation in the repo.
 - Workspace locking should become granular: short atomic locks for active-task transitions, but queue intake and non-conflicting queue updates should remain possible while a runner is active.
 - Interrupted runners and subagents should become resumable states with recorded context rather than silent stale `running` state.
+- `litehive repair` is the manual recovery entrypoint for stale active tasks, interrupted runs, and queue cleanup.
 
 ## Development rules
 - Keep changes scoped to the current task.

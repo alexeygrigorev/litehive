@@ -34,14 +34,19 @@ fails, Litehive restores the pre-transition files instead of leaving
 |-------|---------|
 | `queued` | Waiting in the pool to be picked up, including resumable interrupted or rejected work |
 | `in_progress` | Currently running under the pool runner |
+| `interrupted` | Execution stopped by runner or subagent termination; resumable from the preserved stage |
 | `done` | Completed successfully; git checkpoint recorded |
 | `flagged` | Blocked, unresolvable, or interrupted by an unhandled error — needs human attention |
-| `cancelled` | Deliberately stopped and closed by a human decision |
+| `cancelled` | Explicitly abandoned or execution-cancelled without a PM close outcome |
+| `wont_do` | Explicit PM close: the task will not be implemented |
+| `deferred` | Explicit PM close: the task is intentionally parked for later reconsideration |
+| `duplicate` | Explicit PM close: the task is covered elsewhere |
 
-Terminal states (no automatic forward progress): `done`, `flagged`, `cancelled`.
+Terminal states (no automatic forward progress): `done`, `interrupted`, `flagged`, `cancelled`, `wont_do`, `deferred`, `duplicate`.
 
-`flagged` tasks can be requeued via `litehive requeue` if they are recoverable.
-`flagged` tasks can be permanently closed via `litehive abandon`.
+`interrupted`, `flagged`, and explicitly closed tasks can be resumed via `litehive resume`.
+`flagged` and explicitly closed tasks can be requeued via `litehive requeue` if they should re-enter execution from the implementation entry stage.
+`interrupted`, `flagged`, and explicitly closed tasks can be permanently abandoned via `litehive abandon`.
 Any non-done task can be explicitly closed via `litehive close --outcome <code>`.
 
 ---
@@ -105,6 +110,11 @@ Each such rejection increments the rejection counter, and that counter persists 
 requeued runs.
 
 The retry limit is resolved in order: task-level override → workspace default.
+`max_retries=N` allows exactly N rejections before the limit is enforced.
+
+When the rejection counter exceeds `max_retries` (i.e. `rejections > max_retries`),
+the runner terminates the task as `flagged` with
+`reason_code = "retry_limit_exhausted"` instead of requeuing it again.
 
 ---
 
@@ -119,7 +129,11 @@ and an `OutcomeReasonCode`.
 |------|---------|
 | `flagged` | Blocked, unresolvable, or interrupted by an unhandled error — requires human action |
 | `blocked` | A specific dependency or criteria check prevented execution |
+| `interrupted` | Execution stopped externally but kept enough runtime context to resume deterministically |
 | `cancelled` | Deliberately stopped |
+| `wont_do` | Explicit PM close: the task will not be implemented |
+| `deferred` | Explicit PM close: the task is intentionally parked for later reconsideration |
+| `duplicate` | Explicit PM close: the task is covered elsewhere |
 
 ### OutcomeReasonCode
 
@@ -129,12 +143,13 @@ and an `OutcomeReasonCode`.
 | `verdict_reject` | flagged | Stage produced `reject` and no retry route was available |
 | `verdict_blocked` | blocked | Stage produced `blocked` |
 | `missing_acceptance_criteria` | blocked | Grooming passed but criteria were missing when entering implementing |
+| `execution_interrupted` | interrupted | Runner `KeyboardInterrupt`, stale-runner recovery, or subagent termination interrupted the current stage and preserved resumable context |
 | `execution_cancelled` | cancelled | Runner interrupted mid-stage and requeued the task, or `litehive abandon` closed it |
 | `stage_exception` | flagged | Unhandled Python exception during stage execution; the task stays queued with failure context recorded |
 | `unsupported_verdict` | flagged | Stage returned a verdict not in the transition table |
-| `wont_do` | cancelled | Task explicitly closed — not worth implementing |
-| `deferred` | cancelled | Task closed — work deferred to a future decision |
-| `duplicate` | cancelled | Task closed — duplicate of another task |
+| `wont_do` | wont_do | Task explicitly closed with `status = wont_do` |
+| `deferred` | deferred | Task explicitly closed with `status = deferred` |
+| `duplicate` | duplicate | Task explicitly closed with `status = duplicate` |
 
 ---
 
@@ -144,13 +159,15 @@ Tasks that will not be implemented through the normal pipeline should be closed
 explicitly rather than left in `flagged` or silently abandoned:
 
 ```
-litehive close T-0042 --outcome wont_do  --reason "Superseded by T-0039"
+litehive close T-0042 --outcome wont_do  --reason "Superseded by T-0039" --follow-up-task T-0039
 litehive close T-0043 --outcome deferred --reason "Revisit after v2 release"
 litehive close T-0044 --outcome duplicate
 ```
 
-This records the decision in the task journal and removes the task from the queue,
-keeping the rationale visible for later review.
+This records the decision in the task journal, persists the rationale and outcome code
+and optional follow-up task link on the task record, sets `task.status` to the chosen
+close outcome, and removes the task from the queue while keeping it visible in
+status/reporting and pool summaries.
 
 ---
 
@@ -182,10 +199,13 @@ A task is "parked" by the human-checkpoint mechanism. When a task opt into
 queue at the boundary stage and will not advance until the pool is restarted and
 a human confirms the run.
 
-Runner interruptions park the task in the runnable pool. In that case the task
-keeps `status = queued`, preserves its current `pipeline_status`, records the
-terminal report under `runtime.last_outcome`, and the pool stops with
-`task_requeued` so the next run can resume deterministically.
+Runner interruptions and stale-runner/subagent termination recovery move the task
+to `status = interrupted`. Litehive preserves the current `pipeline_status`,
+records `runtime.last_outcome.kind = interrupted`, keeps the interrupted stage in
+`runtime.current_stage`, snapshots the last known subagent context when available,
+and stops the pool with `task_interrupted`. The task is visible as resumable until
+`litehive resume <id>` returns it to `status = queued` at the preserved stage
+subject only to normal reroutes such as missing acceptance criteria.
 
 QA or PM rejection also parks the task in the runnable pool. In that case the task
 switches back to `pipeline_status = implementing`, keeps `status = queued`, records
@@ -198,11 +218,11 @@ next implementation pass instead of moving to a sink state.
 
 | Trigger | Status | Reason code |
 |---------|--------|-------------|
-| KeyboardInterrupt during run | `queued` | `execution_cancelled` |
+| KeyboardInterrupt during run | `interrupted` | `execution_interrupted` |
 | `litehive abandon <id>` | `cancelled` | `execution_cancelled` |
-| `litehive close <id> --outcome wont_do` | `cancelled` | `wont_do` |
-| `litehive close <id> --outcome deferred` | `cancelled` | `deferred` |
-| `litehive close <id> --outcome duplicate` | `cancelled` | `duplicate` |
+| `litehive close <id> --outcome wont_do` | `wont_do` | `wont_do` |
+| `litehive close <id> --outcome deferred` | `deferred` | `deferred` |
+| `litehive close <id> --outcome duplicate` | `duplicate` | `duplicate` |
 
 ---
 
@@ -230,7 +250,7 @@ Checkpoint policy:
 
 | Command | Effect |
 |---------|--------|
-| `litehive requeue <id>` | Re-adds a `flagged`/`cancelled` task to the queue at its current stage |
-| `litehive resume <id>` | Like requeue but explicitly targets a stage |
+| `litehive requeue <id>` | Re-adds a `flagged` or explicitly closed task to the queue at the implementation entry stage |
+| `litehive resume <id>` | Re-adds an `interrupted`, `flagged`, or explicitly closed task to the queue at its preserved stage, subject to normal reroutes |
 | `litehive rollback <id>` | Reverts the checkpoint commit and requeues the task at `implementing` |
 | `litehive recover <id>` | Requeues a completed task at `implementing` without reverting code |

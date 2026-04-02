@@ -9,7 +9,17 @@ from pydantic import BaseModel, Field
 
 
 TaskMode = Literal["tasks", "implementation"]
-TaskStatus = Literal["queued", "in_progress", "done", "flagged", "cancelled"]
+TaskStatus = Literal[
+    "queued",
+    "in_progress",
+    "interrupted",
+    "done",
+    "flagged",
+    "cancelled",
+    "wont_do",
+    "deferred",
+    "duplicate",
+]
 PipelineStatus = Literal[
     "backlog",
     "grooming",
@@ -19,8 +29,16 @@ PipelineStatus = Literal[
     "commit_to_git",
     "done",
 ]
-SubagentStatus = Literal["created", "running", "completed", "failed", "blocked"]
-OutcomeKind = Literal["flagged", "blocked", "cancelled"]
+SubagentStatus = Literal["created", "running", "completed", "failed", "blocked", "interrupted"]
+OutcomeKind = Literal[
+    "flagged",
+    "blocked",
+    "interrupted",
+    "cancelled",
+    "wont_do",
+    "deferred",
+    "duplicate",
+]
 RetrySource = Literal["global", "task"]
 HumanCheckpoint = Literal["before_acceptance", "before_commit"]
 OutcomeReasonCode = Literal[
@@ -30,6 +48,7 @@ OutcomeReasonCode = Literal[
     "resource_limit",
     "missing_acceptance_criteria",
     "retry_limit_exhausted",
+    "execution_interrupted",
     "execution_cancelled",
     "stage_exception",
     "unsupported_verdict",
@@ -93,6 +112,7 @@ class RuntimeSubagentState(BaseModel):
     completed_at: str | None = None
     exit_code: int | None = None
     transcript_snippet: str = ""
+    interruption_reason: str = ""
     resource_limit_event: ResourceLimitEvent | None = None
 
 
@@ -129,10 +149,25 @@ class TaskOutcomeState(BaseModel):
     stage: str | None = None
     reason_code: OutcomeReasonCode | None = None
     reason: str = ""
+    follow_up_task_id: str | None = None
     retry_count: int = 0
     retry_limit: int = 0
     retry_source: RetrySource = "global"
     recorded_at: str | None = None
+
+
+class RuntimeInterruptionState(BaseModel):
+    source: Literal["runner", "subagent"] = "runner"
+    stage: str | None = None
+    pipeline_status: str | None = None
+    resume_stage: str | None = None
+    reason: str = ""
+    summary: str = ""
+    interrupted_at: str | None = None
+    detected_at: str | None = None
+    run_started_at: str | None = None
+    stage_started_at: str | None = None
+    subagent: RuntimeSubagentState | None = None
 
 
 class TaskRuntime(BaseModel):
@@ -147,6 +182,7 @@ class TaskRuntime(BaseModel):
     last_stage: RuntimeStageState = Field(default_factory=RuntimeStageState)
     active_subagent: RuntimeSubagentState | None = None
     last_subagent: RuntimeSubagentState | None = None
+    interruption: RuntimeInterruptionState | None = None
     last_engine_switch: RuntimeEngineSwitch | None = None
     last_outcome: TaskOutcomeState = Field(default_factory=TaskOutcomeState)
 
@@ -158,6 +194,7 @@ class GitSettings(BaseModel):
     checkpoint_base_sha: str | None = None
     checkpoint_attempts: int = 0
     rolled_back_checkpoint_attempt: int | None = None
+    worktree_path: str | None = None
 
 
 class TaskRecord(BaseModel):
