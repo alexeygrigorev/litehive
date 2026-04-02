@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 import re
+import shutil
 import subprocess
 import time
 from typing import Callable
@@ -15,17 +16,21 @@ from litehive.engines import EngineError, get_engine
 from litehive.config import ExecutionRetryPolicy, LitehiveConfig, load_config, load_context, state_path
 from litehive.git_ops import (
     GitError,
+    add_worktree,
     abort_revert,
+    cherry_pick_commit,
     checkpoint_message,
     commit_task,
     current_head,
+    find_commit_by_subject,
     has_changes,
     is_git_repo,
+    remove_worktree,
     rollback_message,
     rollback_task,
     status_porcelain,
 )
-from litehive.models import StageReport, TaskRecord
+from litehive.models import RuntimeStageState, StageReport, TaskRecord, utcnow
 from litehive.runner import RunResult, StageExecutor, TaskExecutionRunner
 from litehive.subagents import SubagentManager, stage_prompt, stage_report_from_subagent
 from litehive.tasks import (
@@ -42,14 +47,14 @@ from litehive.tasks import (
     mark_engine_switch,
     mark_task_run_started,
     peek_next_task,
-    peek_next_task_selection,
     persist_task_and_state,
     prepare_completed_task_for_recovery,
+    recover_stale_runner_state,
     restore_untouched_active_task,
     set_pool_stop_reason,
     set_task_commit_sha,
-    save_task_runtime,
     save_task,
+    save_task_runtime,
     task_dir,
     task_file,
     task_runtime_file,
@@ -156,6 +161,16 @@ class EngineBudgetLedger:
         return None
 
 
+_PRE_STAGE_HOOK_POINTS = {
+    "implementing": "before_swe_implementation",
+    "accepting": "before_pm_acceptance",
+}
+_POST_STAGE_HOOK_POINTS = {
+    "implementing": "after_swe_implementation",
+}
+_POST_ACCEPT_VERDICTS = {"pass", "accept"}
+
+
 def resolve_next_task(root: Path) -> TaskRecord | None:
     root = root.resolve()
     return peek_next_task(root)
@@ -178,6 +193,22 @@ def run_task(
     root = root.resolve()
     if task is None:
         return ExecutionSummary(task=None, result=None)
+    markers = active_task_markers(root)
+    if markers:
+        active_ids = sorted(markers)
+        if len(active_ids) > 1:
+            details = "; ".join(
+                f"{task_id} ({', '.join(markers[task_id])})" for task_id in active_ids
+            )
+            raise WorkspaceConflictError(
+                f"workspace has multiple active tasks: {details}. Clear the stale active task state before running again."
+            )
+        active_id = active_ids[0]
+        if active_id != task.id:
+            raise WorkspaceConflictError(
+                f"task {task.id} cannot start because task {active_id} is already active in this workspace."
+            )
+    recover_stale_runner_state(root)
     with workspace_runner_guard(root):
         markers = active_task_markers(root)
         if markers:
@@ -197,9 +228,13 @@ def run_task(
 
         config = load_config(root)
         workspace_context = load_context(root)
+        recovered_summary = _recover_existing_integrated_checkpoint(root, task)
+        if recovered_summary is not None:
+            return recovered_summary
         engine_plan = resolve_engine_plan(task, config, engine_override=engine_override)
         engine_name = engine_plan[0]
-        subagents = SubagentManager(root)
+        execution_root = _resolve_task_execution_root(root, task)
+        subagents = SubagentManager(root, execution_root=execution_root)
 
         append_journal(root, task, f"Execution started with engine `{engine_name}`.")
         mark_task_run_started(root, task)
@@ -209,6 +244,7 @@ def run_task(
             root,
             build_executor(
                 root,
+                execution_root=execution_root,
                 initial_engine_names=engine_plan,
                 workspace_context=workspace_context,
                 subagents=subagents,
@@ -309,23 +345,6 @@ def drain_task_pool(
             executions.append(execution)
 
 
-def run_task_pool(
-    root: Path,
-    *,
-    engine_override: str | None = None,
-    model_override: str | None = None,
-    stop_conditions: TaskPoolStopConditions | None = None,
-    stop_when: Callable[[list[ExecutionSummary]], bool] | None = None,
-) -> TaskPoolRunSummary:
-    return drain_task_pool(
-        root,
-        engine_override=engine_override,
-        model_override=model_override,
-        stop_conditions=stop_conditions,
-        stop_when=stop_when,
-    )
-
-
 def run_next_task_with_override(
     root: Path,
     *,
@@ -370,6 +389,8 @@ def _pool_stop_reason(
         return _human_checkpoint_stop_reason(latest)
     if latest.result is not None and latest.result.final_status == "queued":
         return "task_requeued"
+    if latest.result is not None and latest.result.final_status == "interrupted":
+        return "task_interrupted"
     latest_limit_kind = _execution_limit_kind(latest)
     final_status = latest.result.final_status if latest.result is not None else None
     if conditions.stop_on_failure and final_status is not None and final_status not in {"done", "paused"}:
@@ -413,11 +434,94 @@ def _single_task_stop_reason(execution: ExecutionSummary) -> str:
         return _human_checkpoint_stop_reason(execution)
     if result is not None and result.final_status == "queued":
         return "task_requeued"
+    if result is not None and result.final_status == "interrupted":
+        return "task_interrupted"
     return "single_task_complete"
 
 
 def _git_worktree_is_dirty(root: Path) -> bool:
     return is_git_repo(root) and has_changes(root)
+
+
+def _task_worktree_path(root: Path, task: TaskRecord) -> Path:
+    return root / ".litehive" / "worktrees" / f"{task.id}-{task.slug}"
+
+
+def _resolve_task_execution_root(root: Path, task: TaskRecord) -> Path:
+    if not is_git_repo(root):
+        return root
+
+    if task.git.worktree_path:
+        worktree_path = (root / task.git.worktree_path).resolve()
+        if not worktree_path.exists():
+            raise GitError(f"task worktree is missing: {task.git.worktree_path}")
+        return worktree_path
+
+    worktree_path = _task_worktree_path(root, task)
+    worktree_path.parent.mkdir(parents=True, exist_ok=True)
+    if worktree_path.exists():
+        shutil.rmtree(worktree_path)
+    add_worktree(root, worktree_path, ref=current_head(root) or "HEAD")
+    task.git.worktree_path = str(worktree_path.relative_to(root))
+    save_task(root, task)
+    append_journal(root, task, f"Created task worktree at `{task.git.worktree_path}`.")
+    return worktree_path
+
+
+def _cleanup_task_worktree(root: Path, task: TaskRecord) -> None:
+    if not task.git.worktree_path:
+        return
+    worktree_path = (root / task.git.worktree_path).resolve()
+    if worktree_path.exists():
+        remove_worktree(root, worktree_path, force=True)
+    task.git.worktree_path = None
+    save_task(root, task)
+
+
+def _recover_existing_integrated_checkpoint(root: Path, task: TaskRecord) -> ExecutionSummary | None:
+    if (
+        task.status != "done"
+        or task.pipeline_status != "done"
+        or task.git.commit_sha is not None
+        or task.git.checkpoint_attempts < 1
+    ):
+        return None
+    existing_integrated_sha = find_commit_by_subject(
+        root,
+        checkpoint_message(task, attempt=task.git.checkpoint_attempts),
+    )
+    if existing_integrated_sha is None:
+        return None
+
+    state = load_state(root)
+    if state.active_task_id == task.id:
+        state.active_task_id = None
+    state.queue = [queued_id for queued_id in state.queue if queued_id != task.id]
+    set_task_commit_sha(task, existing_integrated_sha)
+    task.runtime.execution_status = "done"
+    task.runtime.current_stage = RuntimeStageState(updated_at=utcnow())
+    task.runtime.last_stage = RuntimeStageState(
+        step="commit_to_git",
+        status="pass",
+        verdict="pass",
+        summary="Recovered existing checkpoint commit after interrupted `commit_to_git`.",
+        started_at=utcnow(),
+        completed_at=utcnow(),
+        updated_at=utcnow(),
+    )
+    persist_task_and_state(
+        root,
+        task=task,
+        state=state,
+        journal_message="Recovered existing checkpoint commit after interrupted `commit_to_git`.",
+    )
+    _cleanup_task_worktree(root, task)
+    save_task_runtime(root, task)
+    return ExecutionSummary(
+        task=task,
+        result=RunResult(final_status="done", steps_executed=0, last_verdict="pass"),
+        commit_sha=task.git.commit_sha,
+    )
 
 
 def _execution_hit_limit(execution: ExecutionSummary) -> bool:
@@ -749,6 +853,7 @@ def _require_completed_task(task: TaskRecord, action: str) -> None:
 def build_executor(
     root: Path,
     *,
+    execution_root: Path,
     initial_engine_names: list[str],
     workspace_context: str,
     subagents: SubagentManager,
@@ -765,9 +870,23 @@ def build_executor(
         if step == "commit_to_git":
             return _commit_to_git_report(
                 root,
+                execution_root,
                 current_task,
                 auto_commit_enabled=config_auto_commit and current_task.git.auto_commit,
             )
+
+        pre_stage_hook_results: list[dict[str, str | int | bool | None]] = []
+        pre_stage_hook_report = _run_runner_hooks_for_stage(
+            root,
+            execution_root,
+            current_task,
+            step=step,
+            config=config,
+            phase="before",
+            collected_results=pre_stage_hook_results,
+        )
+        if pre_stage_hook_report is not None:
+            return pre_stage_hook_report
 
         prompt = stage_prompt(
             current_task,
@@ -830,6 +949,8 @@ def build_executor(
                     max_turns=max_turns,
                 )
                 failure = result.failure
+                if failure is not None and failure.kind == "execution_interrupted":
+                    raise KeyboardInterrupt(failure.reason)
                 if (
                     failure is None
                     or failure.kind != "retryable_execution_error"
@@ -891,6 +1012,7 @@ def build_executor(
             if execution_events:
                 report.warnings = [*execution_events, *report.warnings]
                 report.feedback = "\n\n".join([*execution_events, report.feedback]).strip()
+            _attach_runner_hook_results(report, pre_stage_hook_results)
             if limit_trigger_reason is not None and (is_limit_failure or is_unavailable_fallback):
                 if (
                     is_unavailable_fallback
@@ -909,15 +1031,28 @@ def build_executor(
                 if not report.warnings or report.warnings[-1] != result.failure.reason:
                     report.warnings.append(result.failure.reason)
                 return report
-            if step == "testing" and report.verdict in {"pass", "accept"}:
-                hook_report = _run_pre_acceptance_command(
-                    root,
-                    current_task,
-                    report,
-                    command=config.pre_acceptance_command,
-                )
-                if hook_report is not None:
-                    return hook_report
+            post_stage_hook_report = _run_runner_hooks_for_stage(
+                root,
+                execution_root,
+                current_task,
+                step=step,
+                config=config,
+                phase="after",
+                report=report,
+            )
+            if post_stage_hook_report is not None:
+                return post_stage_hook_report
+            post_accept_hook_report = _run_runner_hooks_for_stage(
+                root,
+                execution_root,
+                current_task,
+                step=step,
+                config=config,
+                phase="after_accept",
+                report=report,
+            )
+            if post_accept_hook_report is not None:
+                return post_accept_hook_report
             next_stage_engine_names = [engine_name]
             return report
 
@@ -990,100 +1125,210 @@ def _engine_attempt_order(
     return ordered
 
 
-def _run_pre_acceptance_command(
+def _run_runner_hooks_for_stage(
     root: Path,
+    execution_root: Path,
     task: TaskRecord,
-    report: StageReport,
     *,
-    command: str | None,
+    step: str,
+    config: LitehiveConfig,
+    phase: str,
+    report: StageReport | None = None,
+    collected_results: list[dict[str, str | int | bool | None]] | None = None,
 ) -> StageReport | None:
-    if command is None or not command.strip():
+    hook_point = _runner_hook_point(step=step, phase=phase, report=report)
+    if hook_point is None:
+        return None
+    configured_hooks = config.runner_hooks.get(hook_point, [])
+    if not configured_hooks:
         return None
 
+    for index, hook in enumerate(configured_hooks, start=1):
+        hook_result = _execute_runner_hook(
+            root,
+            execution_root,
+            task,
+            step=step,
+            hook_point=hook_point,
+            command=hook.command,
+            blocking=hook.blocking,
+            ordinal=index,
+            legacy_artifact_name=(
+                "pre-acceptance-hook.txt"
+                if hook_point == "before_pm_acceptance"
+                and config.pre_acceptance_command == hook.command
+                else None
+            ),
+        )
+        if report is None:
+            if collected_results is not None:
+                collected_results.append(hook_result)
+            if hook_result["status"] == "failed" and hook.blocking:
+                blocking_results = list(collected_results or [hook_result])
+                return StageReport(
+                    task_id=task.id,
+                    step=step,  # type: ignore[arg-type]
+                    verdict="blocked",
+                    summary=(
+                        f"{step} blocked by runner hook `{hook_point}` "
+                        f"(exit {hook_result['exit_code']}): {hook.command}"
+                    ),
+                    feedback="\n\n".join(_flatten_runner_hook_feedback(blocking_results)),
+                    warnings=_flatten_runner_hook_warnings(blocking_results),
+                    hook_results=blocking_results,
+                )
+            continue
+
+        report.hook_results.append(hook_result)
+        report.warnings = [*report.warnings, *_runner_hook_warnings(hook_result)]
+        report.feedback = "\n\n".join(
+            part for part in [report.feedback, _runner_hook_feedback(hook_result)] if part
+        ).strip()
+        if hook_result["status"] == "failed" and hook.blocking:
+            report.verdict = "blocked"
+            report.summary = (
+                f"{step} blocked by runner hook `{hook_point}` "
+                f"(exit {hook_result['exit_code']}): {hook.command}"
+            )
+            return report
+
+    return None
+
+
+def _attach_runner_hook_results(
+    report: StageReport,
+    hook_results: list[dict[str, str | int | bool | None]],
+) -> None:
+    if not hook_results:
+        return
+    report.hook_results.extend(hook_results)
+    report.warnings = [
+        *_flatten_runner_hook_warnings(hook_results),
+        *report.warnings,
+    ]
+    report.feedback = "\n\n".join(
+        [
+            *_flatten_runner_hook_feedback(hook_results),
+            report.feedback,
+        ]
+    ).strip()
+
+
+def _runner_hook_point(
+    *,
+    step: str,
+    phase: str,
+    report: StageReport | None,
+) -> str | None:
+    if phase == "before":
+        return _PRE_STAGE_HOOK_POINTS.get(step)
+    if phase == "after":
+        return _POST_STAGE_HOOK_POINTS.get(step)
+    if phase == "after_accept" and step == "accepting" and report is not None:
+        if report.verdict in _POST_ACCEPT_VERDICTS:
+            return "after_pm_acceptance"
+    return None
+
+
+def _execute_runner_hook(
+    root: Path,
+    execution_root: Path,
+    task: TaskRecord,
+    *,
+    step: str,
+    hook_point: str,
+    command: str,
+    blocking: bool,
+    ordinal: int,
+    legacy_artifact_name: str | None,
+) -> dict[str, str | int | bool | None]:
     completed = subprocess.run(
         ["bash", "-lc", command],
-        cwd=root,
+        cwd=execution_root,
         capture_output=True,
         text=True,
         check=False,
     )
-    artifact_path = task_dir(root, task) / "artifacts" / "pre-acceptance-hook.txt"
-    artifact_body = "\n".join(
-        [
-            f"command: {command}",
-            f"exit_code: {completed.returncode}",
-            "",
-            "[stdout]",
-            completed.stdout.rstrip(),
-            "",
-            "[stderr]",
-            completed.stderr.rstrip(),
-        ]
-    ).rstrip() + "\n"
-    _atomic_write_text(artifact_path, artifact_body)
+    artifact_name = legacy_artifact_name or f"{hook_point}-{ordinal:03d}.yaml"
+    artifact_path = task_dir(root, task) / "artifacts" / artifact_name
+    artifact_payload = {
+        "step": step,
+        "hook_point": hook_point,
+        "command": command,
+        "blocking": blocking,
+        "exit_code": completed.returncode,
+        "stdout": completed.stdout,
+        "stderr": completed.stderr,
+    }
+    _atomic_write_text(
+        artifact_path,
+        yaml.safe_dump(artifact_payload, sort_keys=False),
+    )
     artifact_label = artifact_path.relative_to(task_dir(root, task)).as_posix()
-
-    if completed.returncode == 0:
-        append_journal(
-            root,
-            task,
-            f"Pre-acceptance command passed: `{command}`.\n- artifact: `{artifact_label}`",
-        )
-        report.warnings = [
-            *report.warnings,
-            f"pre-acceptance command passed: `{command}`",
-            f"artifact: `{artifact_label}`",
-        ]
-        feedback_parts = [report.feedback]
-        if completed.stdout.strip():
-            feedback_parts.append(f"Pre-acceptance stdout:\n{completed.stdout.strip()}")
-        if completed.stderr.strip():
-            feedback_parts.append(f"Pre-acceptance stderr:\n{completed.stderr.strip()}")
-        report.feedback = "\n\n".join(part for part in feedback_parts if part).strip()
-        return None
-
+    status = "passed" if completed.returncode == 0 else "failed"
     append_journal(
         root,
         task,
+        "\n".join(
+            [
+                f"Runner hook `{hook_point}` {status}: `{command}`.",
+                f"- step: `{step}`",
+                f"- blocking: `{blocking}`",
+                f"- exit_code: `{completed.returncode}`",
+                f"- artifact: `{artifact_label}`",
+            ]
+        ),
+    )
+    return {
+        "point": hook_point,
+        "command": command,
+        "blocking": blocking,
+        "exit_code": completed.returncode,
+        "status": status,
+        "artifact": artifact_label,
+    }
+
+
+def _runner_hook_warnings(hook_result: dict[str, str | int | bool | None]) -> list[str]:
+    qualifier = "passed" if hook_result["status"] == "passed" else "failed"
+    return [
         (
-            f"Pre-acceptance command failed: `{command}`.\n"
-            f"- exit_code: `{completed.returncode}`\n"
-            f"- artifact: `{artifact_label}`"
-        ),
-    )
-    warnings = [
-        *report.warnings,
-        f"pre-acceptance command failed: `{command}`",
-        f"artifact: `{artifact_label}`",
+            f"runner hook {qualifier}: `{hook_result['point']}` "
+            f"`{hook_result['command']}` (artifact: `{hook_result['artifact']}`)"
+        )
     ]
-    if completed.stderr.strip():
-        warnings.append(completed.stderr.strip().splitlines()[-1])
-    feedback_parts = [report.feedback, f"pre-acceptance artifact: `{artifact_label}`"]
-    if completed.stdout.strip():
-        feedback_parts.append(f"Pre-acceptance stdout:\n{completed.stdout.strip()}")
-    if completed.stderr.strip():
-        feedback_parts.append(f"Pre-acceptance stderr:\n{completed.stderr.strip()}")
-    return StageReport(
-        task_id=task.id,
-        step="testing",
-        verdict="blocked",
-        summary=(
-            f"testing blocked by pre-acceptance command `{command}` "
-            f"(exit {completed.returncode})"
-        ),
-        feedback="\n\n".join(part for part in feedback_parts if part).strip(),
-        files_changed=report.files_changed,
-        tests=report.tests,
-        warnings=warnings,
+
+
+def _runner_hook_feedback(hook_result: dict[str, str | int | bool | None]) -> str:
+    return (
+        f"Runner hook `{hook_result['point']}` `{hook_result['command']}` "
+        f"{hook_result['status']} with exit code {hook_result['exit_code']} "
+        f"(artifact: `{hook_result['artifact']}`)."
     )
+
+
+def _flatten_runner_hook_warnings(
+    hook_results: list[dict[str, str | int | bool | None]]
+) -> list[str]:
+    warnings: list[str] = []
+    for hook_result in hook_results:
+        warnings.extend(_runner_hook_warnings(hook_result))
+    return warnings
+
+
+def _flatten_runner_hook_feedback(
+    hook_results: list[dict[str, str | int | bool | None]]
+) -> list[str]:
+    return [_runner_hook_feedback(hook_result) for hook_result in hook_results]
 
 
 def _commit_to_git_report(
-    root: Path, task: TaskRecord, *, auto_commit_enabled: bool
+    root: Path, execution_root: Path, task: TaskRecord, *, auto_commit_enabled: bool
 ) -> StageReport:
     if not auto_commit_enabled:
         task.status = "done"
         task.pipeline_status = "done"
+        _cleanup_task_worktree(root, task)
         append_journal(root, task, "CommitToGit skipped: auto-commit disabled.")
         return StageReport(
             task_id=task.id,
@@ -1104,7 +1349,7 @@ def _commit_to_git_report(
         )
 
     try:
-        dirty_entries = status_porcelain(root)
+        dirty_entries = status_porcelain(execution_root)
     except GitError as exc:
         append_journal(root, task, f"CommitToGit failed: {exc}")
         return StageReport(
@@ -1116,19 +1361,19 @@ def _commit_to_git_report(
         )
 
     if not dirty_entries:
-        append_journal(root, task, "CommitToGit failed: repository has no changes to commit.")
+        append_journal(root, task, "CommitToGit failed: task worktree has no changes to commit.")
         return StageReport(
             task_id=task.id,
             step="commit_to_git",
             verdict="fail",
-            summary="CommitToGit failed: repository has no changes to commit",
+            summary="CommitToGit failed: task worktree has no changes to commit",
             warnings=["no changes to commit"],
         )
 
     allowed_paths = _allowed_commit_paths(root, task)
     unexpected_dirty_paths = _unexpected_dirty_paths(dirty_entries, allowed_paths)
     if unexpected_dirty_paths:
-        message = "repository has unrelated changes: " + ", ".join(
+        message = "task worktree has unrelated changes: " + ", ".join(
             f"`{path}`" for path in unexpected_dirty_paths
         )
         append_journal(root, task, f"CommitToGit failed: {message}.")
@@ -1150,7 +1395,6 @@ def _commit_to_git_report(
         previous_status = task.status
         previous_pipeline_status = task.pipeline_status
         state = load_state(root)
-        previous_state = state.model_copy(deep=True)
         set_task_commit_sha(task, None)
         task.git.checkpoint_base_sha = base_sha
         task.git.checkpoint_attempts = attempt
@@ -1166,14 +1410,18 @@ def _commit_to_git_report(
             (
                 "CommitToGit requested.\n"
                 f"- base: `{base_sha or 'initial commit'}`\n"
-                f"- message: `{message}`"
+                f"- message: `{message}`\n"
+                f"- worktree: `{task.git.worktree_path or execution_root}`"
             ),
         )
         persist_task_and_state(root, task=task, state=state)
-        checkpoint_paths = sorted(str(path) for path in allowed_paths)
-        checkpoint = commit_task(root, message, paths=checkpoint_paths)
+        checkpoint_paths = sorted(
+            str(path) for path in allowed_paths if str(path) and not str(path).startswith(".litehive/")
+        )
+        checkpoint = commit_task(execution_root, message, paths=checkpoint_paths)
         if checkpoint is None:
             raise GitError("git commit prerequisites were not met")
+        integrated_sha = cherry_pick_commit(root, checkpoint.commit_sha)
     except GitError as exc:
         task.git.checkpoint_base_sha = previous_base_sha
         task.git.checkpoint_attempts = previous_attempts
@@ -1181,7 +1429,9 @@ def _commit_to_git_report(
         set_task_commit_sha(task, None)
         task.status = previous_status
         task.pipeline_status = previous_pipeline_status
-        persist_task_and_state(root, task=task, state=previous_state)
+        state = load_state(root)
+        state.queue = [queued_id for queued_id in state.queue if queued_id != task.id]
+        persist_task_and_state(root, task=task, state=state)
         append_journal(root, task, f"CommitToGit failed: {exc}")
         return StageReport(
             task_id=task.id,
@@ -1191,13 +1441,14 @@ def _commit_to_git_report(
             warnings=[str(exc)],
         )
 
-    set_task_commit_sha(task, checkpoint.commit_sha)
+    set_task_commit_sha(task, integrated_sha)
+    _cleanup_task_worktree(root, task)
     save_task_runtime(root, task)
     return StageReport(
         task_id=task.id,
         step="commit_to_git",
         verdict="pass",
-        summary="CommitToGit created the final completion commit",
+        summary="CommitToGit created and integrated the final completion commit",
     )
 
 

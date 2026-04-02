@@ -27,7 +27,12 @@ from litehive.cli import (
     _cmd_update,
     build_parser,
 )
-from litehive.engines import classify_execution_limit, classify_retryable_execution_failure, get_engine
+from litehive.engines import (
+    classify_execution_interruption,
+    classify_execution_limit,
+    classify_retryable_execution_failure,
+    get_engine,
+)
 from litehive.config import (
     ExternalEngineSandboxConfig,
     ExternalEngineSandboxPolicy,
@@ -51,6 +56,7 @@ from litehive.external_cli import (
 from litehive.git_ops import GitError, checkpoint_message, commit_task
 from litehive.models import (
     ResourceLimitEvent,
+    RuntimeInterruptionState,
     RuntimeStageState,
     RuntimeSubagentState,
     StageReport,
@@ -62,6 +68,7 @@ from litehive.sandbox import SandboxLauncher
 from litehive.runtime import (
     EngineBudgetLedger,
     TaskPoolStopConditions,
+    _commit_to_git_report,
     _allowed_commit_paths,
     _unexpected_dirty_paths,
     drain_task_pool,
@@ -75,7 +82,6 @@ from litehive.runtime import (
     run_next_task,
     run_single_task,
     run_task,
-    run_task_pool,
 )
 from litehive.runner import TaskExecutionRunner
 from litehive.subagents import (
@@ -100,6 +106,7 @@ from litehive.tasks import (
     move_queued_task,
     peek_next_task_selection,
     requeue_task,
+    recover_stale_runner_state,
     resume_task,
     reroute_stage_for_acceptance_criteria,
     require_task,
@@ -659,6 +666,7 @@ def test_subagent_artifacts_exist_while_engine_is_running(
         "files_changed": ["litehive/subagents.py"],
         "tests": {"added": 1, "passing": 1},
         "warnings": ["none"],
+        "interruption_reason": None,
         "resource_control": {
             "enabled": False,
             "runtime": None,
@@ -1145,6 +1153,68 @@ def test_subagent_artifacts_capture_structured_resource_limit_event(
     assert refreshed.runtime.last_subagent is not None
     assert refreshed.runtime.last_subagent.resource_limit_event is not None
     assert refreshed.runtime.last_subagent.resource_limit_event.reason == "memory limit exceeded (OOM)"
+
+
+def test_subagent_manager_marks_signal_terminated_execution_as_interrupted(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Interrupted subagent execution")
+    manager = SubagentManager(tmp_path)
+
+    class InterruptedEngine:
+        name = "codex"
+        binary = "codex"
+
+        def is_available(self) -> bool:
+            return True
+
+        def run(
+            self,
+            prompt: str,
+            cwd: Path,
+            model: str | None = None,
+            *,
+            max_turns: int | None = None,
+            on_started=None,
+        ) -> CLIExecutionResult:
+            assert max_turns is None
+            if on_started is not None:
+                on_started(7171)
+            return CLIExecutionResult(
+                adapter="codex",
+                argv=("codex", "exec"),
+                cwd=cwd,
+                exit_code=130,
+                stdout="Execution interrupted by user",
+                stderr="received SIGINT",
+                pid=7171,
+            )
+
+        def render_transcript(self, execution: CLIExecutionResult) -> str:
+            return execution.transcript
+
+    monkeypatch.setattr("litehive.subagents.get_engine", lambda _: InterruptedEngine())
+
+    result = manager.run(task, role="swe", engine_name="codex", prompt="resume safely")
+
+    assert result.ref.status == "interrupted"
+    assert result.failure is not None
+    assert result.failure.kind == "execution_interrupted"
+    base = task_dir(tmp_path, task) / "subagents" / "SA-0001-swe"
+    session = yaml.safe_load((base / "session.yaml").read_text(encoding="utf-8"))
+    report = yaml.safe_load((base / "report.yaml").read_text(encoding="utf-8"))
+    assert session["status"] == "interrupted"
+    assert session["pid"] == 7171
+    assert session["interruption_reason"] == "execution interrupted"
+    assert report["status"] == "interrupted"
+    assert report["interruption_reason"] == "execution interrupted"
+    refreshed = get_task(tmp_path, task.id)
+    assert refreshed is not None
+    assert refreshed.runtime.last_subagent is not None
+    assert refreshed.runtime.last_subagent.status == "interrupted"
+    assert refreshed.runtime.last_subagent.pid == 7171
+    assert refreshed.runtime.last_subagent.interruption_reason == "execution interrupted"
 
 
 def test_subagent_manager_uses_inherited_run_live_when_available(
@@ -1911,16 +1981,29 @@ def test_runner_cancels_task_with_explicit_reason(tmp_path: Path) -> None:
     runner = TaskExecutionRunner(tmp_path, executor)
     result = runner.run(task)
 
-    assert result.final_status == "queued"
+    assert result.final_status == "interrupted"
     finish_task_run_transition(tmp_path, task, result.final_status)
     task = get_task(tmp_path, task.id)
     assert task is not None
-    assert task.status == "queued"
-    assert load_state(tmp_path).queue == [task.id]
-    assert task.runtime.last_outcome.kind == "cancelled"
+    assert task.status == "interrupted"
+    assert load_state(tmp_path).queue == []
+    assert task.runtime.execution_status == "interrupted"
+    assert task.runtime.last_outcome.kind == "interrupted"
     assert task.runtime.last_outcome.stage == "testing"
-    assert task.runtime.last_outcome.reason_code == "execution_cancelled"
-    assert task.runtime.last_outcome.reason == "Execution cancelled during testing"
+    assert task.runtime.last_outcome.reason_code == "execution_interrupted"
+    assert task.runtime.last_outcome.reason == "Execution interrupted during testing"
+    assert task.runtime.interruption is not None
+    assert task.runtime.interruption.source == "runner"
+    assert task.runtime.interruption.stage == "testing"
+    assert task.runtime.interruption.resume_stage == "testing"
+    assert task.runtime.interruption.reason == "Execution interrupted during testing"
+    assert task.runtime.current_stage.step == "testing"
+    assert task.runtime.current_stage.status == "interrupted"
+    journal = (
+        tmp_path / ".litehive" / "tasks" / "T-0001-cancelled-run" / "journal.md"
+    ).read_text(encoding="utf-8")
+    assert "Interrupted runner execution while `testing` was running." in journal
+    assert "Resume from `testing`." in journal
     report = yaml.safe_load(
         (
             tmp_path
@@ -1932,9 +2015,9 @@ def test_runner_cancels_task_with_explicit_reason(tmp_path: Path) -> None:
         ).read_text(encoding="utf-8")
     )
     assert report["retry_decision"] == "final"
-    assert report["outcome"] == "cancelled"
-    assert report["outcome_reason_code"] == "execution_cancelled"
-    assert report["outcome_reason"] == "Execution cancelled during testing"
+    assert report["outcome"] == "interrupted"
+    assert report["outcome_reason_code"] == "execution_interrupted"
+    assert report["outcome_reason"] == "Execution interrupted during testing"
 
 
 def test_runner_fails_task_when_stage_executor_crashes(tmp_path: Path) -> None:
@@ -2746,16 +2829,16 @@ def test_run_next_task_no_queue(tmp_path: Path) -> None:
     assert summary.result is None
 
 
-def test_run_task_pool_no_queue(tmp_path: Path) -> None:
+def test_drain_task_pool_no_queue(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
 
-    summary = run_task_pool(tmp_path)
+    summary = drain_task_pool(tmp_path)
 
     assert summary.executions == []
     assert summary.stop_reason == "queue_exhausted"
 
 
-def test_run_task_pool_drains_dynamic_queue(
+def test_drain_task_pool_drains_dynamic_queue(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     ensure_workspace(tmp_path)
@@ -2768,7 +2851,7 @@ def test_run_task_pool_drains_dynamic_queue(
 
     monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_run)
 
-    summary = run_task_pool(tmp_path)
+    summary = drain_task_pool(tmp_path)
 
     assert [
         execution.task.id for execution in summary.executions if execution.task is not None
@@ -2894,7 +2977,7 @@ def test_run_next_task_flags_when_limit_fallbacks_are_exhausted(
     assert report["summary"] == "grooming blocked after exhausting engine fallbacks: quota exceeded"
 
 
-def test_run_task_pool_stops_by_default_when_limit_fallbacks_are_exhausted(
+def test_drain_task_pool_stops_by_default_when_limit_fallbacks_are_exhausted(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     ensure_workspace(tmp_path)
@@ -2927,7 +3010,7 @@ def test_run_task_pool_stops_by_default_when_limit_fallbacks_are_exhausted(
 
     monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_run)
 
-    summary = run_task_pool(tmp_path)
+    summary = drain_task_pool(tmp_path)
 
     assert [
         execution.task.id for execution in summary.executions if execution.task is not None
@@ -2943,7 +3026,7 @@ def test_run_task_pool_stops_by_default_when_limit_fallbacks_are_exhausted(
     assert "grooming blocked after exhausting engine fallbacks: quota exceeded" in journal
 
 
-def test_run_task_pool_rereads_queue_order_between_tasks(
+def test_drain_task_pool_rereads_queue_order_between_tasks(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     ensure_workspace(tmp_path)
@@ -2958,7 +3041,7 @@ def test_run_task_pool_rereads_queue_order_between_tasks(
 
     monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_run)
 
-    summary = run_task_pool(tmp_path)
+    summary = drain_task_pool(tmp_path)
 
     assert [
         execution.task.id for execution in summary.executions if execution.task is not None
@@ -2973,7 +3056,83 @@ def test_run_task_pool_rereads_queue_order_between_tasks(
     assert state.queue == []
 
 
-def test_run_task_pool_picks_up_requeued_task_between_iterations(
+def test_drain_task_pool_allows_future_queue_mutation_during_active_run(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ensure_workspace(tmp_path)
+    first = create_task(tmp_path, title="First task", auto_commit=False)
+    second = create_task(tmp_path, title="Second task", auto_commit=False)
+    started = threading.Event()
+    resume = threading.Event()
+    completed: dict[str, object] = {}
+    failures: list[BaseException] = []
+
+    def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None):  # type: ignore[no-untyped-def]
+        if task.id == first.id:
+            started.set()
+            assert resume.wait(timeout=5)
+        return _completed_subagent_result(tmp_path, task.pipeline_status)
+
+    monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_run)
+
+    def run_pool() -> None:
+        try:
+            completed["summary"] = drain_task_pool(tmp_path)
+        except BaseException as exc:  # pragma: no cover - surfaced by assertion below
+            failures.append(exc)
+            resume.set()
+
+    thread = threading.Thread(target=run_pool)
+    thread.start()
+    assert started.wait(timeout=5)
+
+    third = create_task(tmp_path, title="Third task", auto_commit=False)
+    move_queued_task(tmp_path, third.id, 1)
+    updated = update_task_metadata(
+        tmp_path,
+        third.id,
+        priority="high",
+        goal="Run before the older queued work once the active task finishes.",
+    )
+
+    with pytest.raises(
+        WorkspaceConflictError,
+        match="runner is actively using task state that cannot be changed concurrently",
+    ):
+        update_task_metadata(tmp_path, first.id, priority="high")
+
+    with pytest.raises(
+        WorkspaceConflictError,
+        match="workspace is already being mutated by another runner",
+    ):
+        dequeue_next_task_selection(tmp_path)
+
+    resume.set()
+    thread.join(timeout=5)
+    assert not thread.is_alive()
+    assert failures == []
+
+    assert "summary" in completed
+    summary = completed["summary"]
+    assert [
+        execution.task.id for execution in summary.executions if execution.task is not None
+    ] == [
+        first.id,
+        third.id,
+        second.id,
+    ]
+    assert summary.stop_reason == "queue_exhausted"
+    refreshed = get_task(tmp_path, third.id)
+    assert refreshed is not None
+    assert refreshed.priority == "high"
+    assert refreshed.goal == "Run before the older queued work once the active task finishes."
+    state = load_state(tmp_path)
+    assert state.active_task_id is None
+    assert state.queue == []
+    assert updated.id == third.id
+
+
+def test_drain_task_pool_picks_up_requeued_task_between_iterations(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     ensure_workspace(tmp_path)
@@ -2997,7 +3156,7 @@ def test_run_task_pool_picks_up_requeued_task_between_iterations(
 
     monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_run)
 
-    summary = run_task_pool(tmp_path)
+    summary = drain_task_pool(tmp_path)
 
     assert [
         execution.task.id for execution in summary.executions if execution.task is not None
@@ -3015,7 +3174,7 @@ def test_run_task_pool_picks_up_requeued_task_between_iterations(
     assert refreshed.pipeline_status == "done"
 
 
-def test_run_task_pool_honors_stop_condition(
+def test_drain_task_pool_honors_stop_condition(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     ensure_workspace(tmp_path)
@@ -3029,7 +3188,7 @@ def test_run_task_pool_honors_stop_condition(
         ),
     )
 
-    summary = run_task_pool(tmp_path, stop_when=lambda executions: len(executions) >= 1)
+    summary = drain_task_pool(tmp_path, stop_when=lambda executions: len(executions) >= 1)
 
     assert [
         execution.task.id for execution in summary.executions if execution.task is not None
@@ -3040,7 +3199,7 @@ def test_run_task_pool_honors_stop_condition(
     assert state.queue == ["T-0002"]
 
 
-def test_run_task_pool_restores_preselected_active_task_when_stop_condition_hits(
+def test_drain_task_pool_restores_preselected_active_task_when_stop_condition_hits(
     tmp_path: Path,
 ) -> None:
     ensure_workspace(tmp_path)
@@ -3053,7 +3212,7 @@ def test_run_task_pool_restores_preselected_active_task_when_stop_condition_hits
     assert selection.task.id == first.id
     assert load_state(tmp_path).queue == [second.id]
 
-    summary = run_task_pool(tmp_path, stop_when=lambda executions: True)
+    summary = drain_task_pool(tmp_path, stop_when=lambda executions: True)
 
     assert summary.executions == []
     assert summary.stop_reason == "stop_condition_reached"
@@ -3062,7 +3221,7 @@ def test_run_task_pool_restores_preselected_active_task_when_stop_condition_hits
     assert state.queue == [first.id, second.id]
 
 
-def test_run_task_pool_pauses_for_human_checkpoint_before_acceptance(
+def test_drain_task_pool_pauses_for_human_checkpoint_before_acceptance(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     ensure_workspace(tmp_path)
@@ -3081,7 +3240,7 @@ def test_run_task_pool_pauses_for_human_checkpoint_before_acceptance(
         ),
     )
 
-    summary = run_task_pool(tmp_path)
+    summary = drain_task_pool(tmp_path)
 
     assert [
         execution.task.id for execution in summary.executions if execution.task is not None
@@ -3094,7 +3253,7 @@ def test_run_task_pool_pauses_for_human_checkpoint_before_acceptance(
     assert refreshed.runtime.execution_status == "paused"
     assert load_state(tmp_path).queue == [checkpointed.id, queued.id]
 
-    resume_summary = run_task_pool(tmp_path)
+    resume_summary = drain_task_pool(tmp_path)
 
     assert [
         execution.task.id for execution in resume_summary.executions if execution.task is not None
@@ -3106,7 +3265,7 @@ def test_run_task_pool_pauses_for_human_checkpoint_before_acceptance(
     assert refreshed.pipeline_status == "done"
 
 
-def test_run_task_pool_pauses_for_human_checkpoint_before_commit(
+def test_drain_task_pool_pauses_for_human_checkpoint_before_commit(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     ensure_workspace(tmp_path)
@@ -3125,7 +3284,7 @@ def test_run_task_pool_pauses_for_human_checkpoint_before_commit(
         ),
     )
 
-    summary = run_task_pool(tmp_path)
+    summary = drain_task_pool(tmp_path)
 
     assert [
         execution.task.id for execution in summary.executions if execution.task is not None
@@ -3138,7 +3297,7 @@ def test_run_task_pool_pauses_for_human_checkpoint_before_commit(
     assert refreshed.runtime.execution_status == "paused"
     assert load_state(tmp_path).queue == [checkpointed.id, queued.id]
 
-    resume_summary = run_task_pool(tmp_path)
+    resume_summary = drain_task_pool(tmp_path)
 
     assert [
         execution.task.id for execution in resume_summary.executions if execution.task is not None
@@ -3220,7 +3379,7 @@ def test_restore_untouched_active_task_rolls_back_when_runtime_persist_fails(
     assert refreshed.runtime.execution_status == "running"
     assert refreshed.runtime.current_stage.status == "running"
     journal = (task_dir(tmp_path, refreshed) / "journal.md").read_text(encoding="utf-8")
-    assert "Recovered interrupted run and requeued the task at `testing`." not in journal
+    assert "Interrupted run recovered. Resume from `testing`." not in journal
 
 
 def test_restore_untouched_active_task_requeues_interrupted_commit_stage_task(tmp_path: Path) -> None:
@@ -3251,15 +3410,19 @@ def test_restore_untouched_active_task_requeues_interrupted_commit_stage_task(tm
     assert refreshed is not None
     assert refreshed.status == "queued"
     assert refreshed.pipeline_status == "commit_to_git"
-    assert refreshed.runtime.execution_status == "idle"
+    assert refreshed.runtime.execution_status == "interrupted"
     assert refreshed.runtime.run_started_at is None
-    assert refreshed.runtime.current_stage.step is None
-    assert refreshed.runtime.current_stage.status == "idle"
+    assert refreshed.runtime.current_stage.step == "commit_to_git"
+    assert refreshed.runtime.current_stage.status == "interrupted"
+    assert refreshed.runtime.last_outcome.kind == "interrupted"
+    assert refreshed.runtime.interruption is not None
+    assert refreshed.runtime.interruption.source == "runner"
     state = load_state(tmp_path)
     assert state.active_task_id is None
     assert state.queue == [stranded.id, queued.id]
     journal = (task_dir(tmp_path, refreshed) / "journal.md").read_text(encoding="utf-8")
-    assert "Recovered interrupted `commit_to_git` attempt" in journal
+    assert "Interrupted runner execution while `commit_to_git` was running." in journal
+    assert "Resume from `commit_to_git`." in journal
 
 
 def test_restore_untouched_active_task_requeues_interrupted_non_commit_task(tmp_path: Path) -> None:
@@ -3288,17 +3451,21 @@ def test_restore_untouched_active_task_requeues_interrupted_non_commit_task(tmp_
 
     refreshed = get_task(tmp_path, interrupted.id)
     assert refreshed is not None
-    assert refreshed.status == "queued"
+    assert refreshed.status == "interrupted"
     assert refreshed.pipeline_status == "testing"
-    assert refreshed.runtime.execution_status == "idle"
+    assert refreshed.runtime.execution_status == "interrupted"
     assert refreshed.runtime.run_started_at is None
     assert refreshed.runtime.current_stage.step == "testing"
     assert refreshed.runtime.current_stage.status == "interrupted"
+    assert refreshed.runtime.last_outcome.kind == "interrupted"
+    assert refreshed.runtime.interruption is not None
+    assert refreshed.runtime.interruption.source == "runner"
     state = load_state(tmp_path)
     assert state.active_task_id is None
-    assert state.queue == [interrupted.id, queued.id]
+    assert state.queue == [queued.id]
     journal = (task_dir(tmp_path, refreshed) / "journal.md").read_text(encoding="utf-8")
-    assert "Recovered interrupted run and requeued the task at `testing`." in journal
+    assert "Interrupted runner execution while `testing` was running." in journal
+    assert "Resume from `testing`." in journal
 
 
 def test_restore_untouched_active_task_requeues_stranded_done_commit_without_checkpoint(
@@ -3333,12 +3500,98 @@ def test_restore_untouched_active_task_requeues_stranded_done_commit_without_che
     assert refreshed.status == "queued"
     assert refreshed.pipeline_status == "commit_to_git"
     assert refreshed.git.commit_sha is None
-    assert refreshed.runtime.execution_status == "idle"
+    assert refreshed.runtime.execution_status == "interrupted"
     state = load_state(tmp_path)
     assert state.active_task_id is None
     assert state.queue == [stranded.id, queued.id]
     journal = (task_dir(tmp_path, refreshed) / "journal.md").read_text(encoding="utf-8")
-    assert "Recovered interrupted `commit_to_git` attempt" in journal
+    assert "Interrupted runner execution while `commit_to_git` was running." in journal
+    assert "Resume from `commit_to_git`." in journal
+
+
+def test_peek_next_task_selection_auto_recovers_stale_runner_state(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    queued = create_task(tmp_path, title="Queued follow-up", auto_commit=False)
+    interrupted = create_task(tmp_path, title="Interrupted testing task", auto_commit=False)
+
+    interrupted.status = "in_progress"
+    interrupted.pipeline_status = "testing"
+    interrupted.runtime.execution_status = "running"
+    interrupted.runtime.run_started_at = "2026-04-01T00:00:00+00:00"
+    interrupted.runtime.current_stage = RuntimeStageState(
+        step="testing",
+        status="running",
+        started_at="2026-04-01T00:00:00+00:00",
+        updated_at="2026-04-01T00:00:00+00:00",
+    )
+    interrupted.subagents.append(
+        SubagentRef(
+            id="SA-0001",
+            role="qa",
+            engine="codex",
+            status="running",
+            path="subagents/SA-0001-qa",
+        )
+    )
+    interrupted.runtime.active_subagent = RuntimeSubagentState(
+        id="SA-0001",
+        role="qa",
+        engine="codex",
+        status="running",
+        path="subagents/SA-0001-qa",
+        pid=4242,
+        started_at="2026-04-01T00:00:10+00:00",
+        updated_at="2026-04-01T00:00:10+00:00",
+    )
+    save_task(tmp_path, interrupted)
+    save_task_runtime(tmp_path, interrupted)
+    subagent_base = task_dir(tmp_path, interrupted) / "subagents" / "SA-0001-qa"
+    subagent_base.mkdir(parents=True, exist_ok=False)
+    (subagent_base / "report.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "status": "running",
+                "summary": "halfway through targeted testing",
+                "files_changed": [],
+                "tests": {"added": 0, "passing": 0},
+                "warnings": [],
+                "resource_limit_event": None,
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+
+    state = load_state(tmp_path)
+    state.active_task_id = interrupted.id
+    state.queue = [queued.id]
+    save_state(tmp_path, state)
+    (tmp_path / ".litehive" / ".runner.lock").write_text(
+        yaml.safe_dump({"pid": 999999, "started_at": "2026-04-01T00:00:00+00:00"}, sort_keys=False),
+        encoding="utf-8",
+    )
+
+    selection = peek_next_task_selection(tmp_path)
+
+    assert selection.task is not None
+    assert selection.task.id == queued.id
+    refreshed = get_task(tmp_path, interrupted.id)
+    assert refreshed is not None
+    assert refreshed.status == "interrupted"
+    assert refreshed.pipeline_status == "testing"
+    assert refreshed.runtime.execution_status == "interrupted"
+    assert refreshed.runtime.active_subagent is None
+    assert refreshed.runtime.last_subagent is not None
+    assert refreshed.runtime.last_subagent.status == "interrupted"
+    assert refreshed.runtime.current_stage.status == "interrupted"
+    assert refreshed.runtime.last_outcome.kind == "interrupted"
+    assert refreshed.subagents[-1].status == "interrupted"
+    restored_state = load_state(tmp_path)
+    assert restored_state.active_task_id is None
+    assert restored_state.queue == [queued.id]
+    journal = (task_dir(tmp_path, refreshed) / "journal.md").read_text(encoding="utf-8")
+    assert "Interrupted subagent execution while `testing` was running." in journal
+    assert "Resume from `testing`." in journal
 
 
 def test_dequeue_next_task_selection_rolls_back_claim_when_atomic_state_persist_fails(
@@ -3541,7 +3794,7 @@ def test_finish_task_run_transition_rolls_back_when_runtime_persist_fails(
     assert refreshed.runtime.active_subagent is not None
 
 
-def test_run_task_pool_stops_after_max_tasks(
+def test_drain_task_pool_stops_after_max_tasks(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     ensure_workspace(tmp_path)
@@ -3555,7 +3808,7 @@ def test_run_task_pool_stops_after_max_tasks(
         ),
     )
 
-    summary = run_task_pool(tmp_path, stop_conditions=TaskPoolStopConditions(max_tasks=1))
+    summary = drain_task_pool(tmp_path, stop_conditions=TaskPoolStopConditions(max_tasks=1))
 
     assert [
         execution.task.id for execution in summary.executions if execution.task is not None
@@ -3566,7 +3819,7 @@ def test_run_task_pool_stops_after_max_tasks(
     assert state.queue == ["T-0002"]
 
 
-def test_run_task_pool_stops_on_first_failure(
+def test_drain_task_pool_stops_on_first_failure(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     ensure_workspace(tmp_path)
@@ -3599,7 +3852,9 @@ def test_run_task_pool_stops_on_first_failure(
 
     monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_run)
 
-    summary = run_task_pool(tmp_path, stop_conditions=TaskPoolStopConditions(stop_on_failure=True))
+    summary = drain_task_pool(
+        tmp_path, stop_conditions=TaskPoolStopConditions(stop_on_failure=True)
+    )
 
     assert [
         execution.task.id for execution in summary.executions if execution.task is not None
@@ -3610,7 +3865,7 @@ def test_run_task_pool_stops_on_first_failure(
     assert state.queue == ["T-0002"]
 
 
-def test_run_task_pool_stops_on_execution_limit(
+def test_drain_task_pool_stops_on_execution_limit(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     ensure_workspace(tmp_path)
@@ -3643,7 +3898,7 @@ def test_run_task_pool_stops_on_execution_limit(
 
     monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_run)
 
-    summary = run_task_pool(
+    summary = drain_task_pool(
         tmp_path, stop_conditions=TaskPoolStopConditions(stop_on_execution_limit=True)
     )
 
@@ -3656,7 +3911,7 @@ def test_run_task_pool_stops_on_execution_limit(
     assert state.queue == ["T-0002"]
 
 
-def test_run_task_pool_stops_on_quota_threshold(
+def test_drain_task_pool_stops_on_quota_threshold(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     ensure_workspace(tmp_path)
@@ -3690,7 +3945,7 @@ def test_run_task_pool_stops_on_quota_threshold(
 
     monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_run)
 
-    summary = run_task_pool(tmp_path, stop_conditions=TaskPoolStopConditions(quota_threshold=2))
+    summary = drain_task_pool(tmp_path, stop_conditions=TaskPoolStopConditions(quota_threshold=2))
 
     assert [
         execution.task.id for execution in summary.executions if execution.task is not None
@@ -3701,7 +3956,7 @@ def test_run_task_pool_stops_on_quota_threshold(
     assert state.queue == ["T-0003"]
 
 
-def test_run_task_pool_stops_on_budget_threshold(
+def test_drain_task_pool_stops_on_budget_threshold(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     ensure_workspace(tmp_path)
@@ -3734,7 +3989,7 @@ def test_run_task_pool_stops_on_budget_threshold(
 
     monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_run)
 
-    summary = run_task_pool(tmp_path, stop_conditions=TaskPoolStopConditions(budget_threshold=1))
+    summary = drain_task_pool(tmp_path, stop_conditions=TaskPoolStopConditions(budget_threshold=1))
 
     assert [
         execution.task.id for execution in summary.executions if execution.task is not None
@@ -3745,13 +4000,13 @@ def test_run_task_pool_stops_on_budget_threshold(
     assert state.queue == ["T-0002"]
 
 
-def test_run_task_pool_stops_on_dirty_git_state(tmp_path: Path) -> None:
+def test_drain_task_pool_stops_on_dirty_git_state(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     _init_git_repo(tmp_path)
     create_task(tmp_path, title="Queued task", auto_commit=False)
     (tmp_path / "app.txt").write_text("changed\n", encoding="utf-8")
 
-    summary = run_task_pool(
+    summary = drain_task_pool(
         tmp_path, stop_conditions=TaskPoolStopConditions(stop_on_dirty_git=True)
     )
 
@@ -3759,7 +4014,7 @@ def test_run_task_pool_stops_on_dirty_git_state(tmp_path: Path) -> None:
     assert summary.stop_reason == "dirty_git_state"
 
 
-def test_run_task_pool_stops_on_pool_usage_cap(
+def test_drain_task_pool_stops_on_pool_usage_cap(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     ensure_workspace(tmp_path)
@@ -3773,7 +4028,7 @@ def test_run_task_pool_stops_on_pool_usage_cap(
         ),
     )
 
-    summary = run_task_pool(tmp_path, stop_conditions=TaskPoolStopConditions(pool_usage_cap=4))
+    summary = drain_task_pool(tmp_path, stop_conditions=TaskPoolStopConditions(pool_usage_cap=4))
 
     assert [
         execution.task.id for execution in summary.executions if execution.task is not None
@@ -3783,7 +4038,7 @@ def test_run_task_pool_stops_on_pool_usage_cap(
     assert state.queue == ["T-0002"]
 
 
-def test_run_task_pool_stops_on_pool_cost_cap(
+def test_drain_task_pool_stops_on_pool_cost_cap(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     ensure_workspace(tmp_path, LitehiveConfig(claude_enabled=True))
@@ -3797,7 +4052,7 @@ def test_run_task_pool_stops_on_pool_cost_cap(
         ),
     )
 
-    summary = run_task_pool(
+    summary = drain_task_pool(
         tmp_path,
         stop_conditions=TaskPoolStopConditions(
             pool_cost_cap=12,
@@ -3951,7 +4206,7 @@ def test_resolve_next_task_prefers_ready_prerequisite_over_earlier_blocked_depen
 ) -> None:
     ensure_workspace(tmp_path)
     blocked = create_task(tmp_path, title="Blocked dependent")
-    unrelated = create_task(tmp_path, title="Unrelated ready task")
+    create_task(tmp_path, title="Unrelated ready task")
     prerequisite = create_task(tmp_path, title="Ready prerequisite")
 
     blocked.depends_on = [prerequisite.id]
@@ -4033,7 +4288,7 @@ def test_resolve_next_task_dependency_aware_prefers_task_with_more_downstream_de
     tmp_path: Path,
 ) -> None:
     ensure_workspace(tmp_path, LitehiveConfig(pool_selection_policy="dependency_aware"))
-    unrelated = create_task(tmp_path, title="Unrelated ready task")
+    create_task(tmp_path, title="Unrelated ready task")
     root = create_task(tmp_path, title="Dependency root")
     mid = create_task(tmp_path, title="Mid dependency")
     leaf = create_task(tmp_path, title="Leaf dependency")
@@ -4068,7 +4323,7 @@ def test_peek_next_task_selection_reports_blocked_dependencies(tmp_path: Path) -
     ]
 
 
-def test_run_task_pool_skips_stale_queue_entries(
+def test_drain_task_pool_skips_stale_queue_entries(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     ensure_workspace(tmp_path)
@@ -4084,7 +4339,7 @@ def test_run_task_pool_skips_stale_queue_entries(
         ),
     )
 
-    summary = run_task_pool(tmp_path)
+    summary = drain_task_pool(tmp_path)
 
     assert [
         execution.task.id for execution in summary.executions if execution.task is not None
@@ -4095,7 +4350,7 @@ def test_run_task_pool_skips_stale_queue_entries(
     assert state.queue == []
 
 
-def test_run_task_pool_skips_ineligible_active_and_queue_entries(
+def test_drain_task_pool_skips_ineligible_active_and_queue_entries(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     ensure_workspace(tmp_path)
@@ -4121,7 +4376,7 @@ def test_run_task_pool_skips_ineligible_active_and_queue_entries(
         ),
     )
 
-    summary = run_task_pool(tmp_path)
+    summary = drain_task_pool(tmp_path)
 
     assert [
         execution.task.id for execution in summary.executions if execution.task is not None
@@ -4132,7 +4387,7 @@ def test_run_task_pool_skips_ineligible_active_and_queue_entries(
     assert state.queue == []
 
 
-def test_run_task_pool_reports_blocked_tasks_remaining(tmp_path: Path) -> None:
+def test_drain_task_pool_reports_blocked_tasks_remaining(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     blocked = create_task(tmp_path, title="Blocked task", auto_commit=False)
     missing = "T-9999"
@@ -4140,7 +4395,7 @@ def test_run_task_pool_reports_blocked_tasks_remaining(tmp_path: Path) -> None:
     blocked.depends_on = [missing]
     save_task(tmp_path, blocked)
 
-    summary = run_task_pool(tmp_path)
+    summary = drain_task_pool(tmp_path)
 
     assert summary.executions == []
     assert summary.stop_reason == "blocked_tasks_remaining"
@@ -4149,7 +4404,7 @@ def test_run_task_pool_reports_blocked_tasks_remaining(tmp_path: Path) -> None:
     assert load_state(tmp_path).queue == [blocked.id]
 
 
-def test_run_task_pool_reports_and_requeues_blocked_active_task(tmp_path: Path) -> None:
+def test_drain_task_pool_reports_and_requeues_blocked_active_task(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     blocked = create_task(tmp_path, title="Blocked active task", auto_commit=False)
     blocked.depends_on = ["T-9999"]
@@ -4160,7 +4415,7 @@ def test_run_task_pool_reports_and_requeues_blocked_active_task(tmp_path: Path) 
     state.queue = []
     save_state(tmp_path, state)
 
-    summary = run_task_pool(tmp_path)
+    summary = drain_task_pool(tmp_path)
 
     assert summary.executions == []
     assert summary.stop_reason == "blocked_tasks_remaining"
@@ -4170,7 +4425,7 @@ def test_run_task_pool_reports_and_requeues_blocked_active_task(tmp_path: Path) 
     assert state.queue == [blocked.id]
 
 
-def test_run_task_pool_stops_after_requeueing_interrupted_task(
+def test_drain_task_pool_stops_after_requeueing_interrupted_task(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     ensure_workspace(tmp_path)
@@ -4182,17 +4437,17 @@ def test_run_task_pool_stops_after_requeueing_interrupted_task(
         return _completed_subagent_result(tmp_path, current_task.pipeline_status)
 
     monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_run)
-    summary = run_task_pool(tmp_path)
+    summary = drain_task_pool(tmp_path)
 
     assert summary.executions
     assert summary.executions[0].result is not None
-    assert summary.executions[0].result.final_status == "queued"
-    assert summary.stop_reason == "task_requeued"
+    assert summary.executions[0].result.final_status == "interrupted"
+    assert summary.stop_reason == "task_interrupted"
     refreshed = get_task(tmp_path, task.id)
     assert refreshed is not None
-    assert refreshed.status == "queued"
+    assert refreshed.status == "interrupted"
     assert refreshed.pipeline_status == "testing"
-    assert load_state(tmp_path).queue == [task.id]
+    assert load_state(tmp_path).queue == []
 
 
 def test_runner_requeues_commit_stage_after_keyboard_interrupt(tmp_path: Path) -> None:
@@ -4212,16 +4467,17 @@ def test_runner_requeues_commit_stage_after_keyboard_interrupt(tmp_path: Path) -
     runner = TaskExecutionRunner(tmp_path, executor)
     result = runner.run(task)
 
-    assert result.final_status == "queued"
+    assert result.final_status == "interrupted"
     finish_task_run_transition(tmp_path, task, result.final_status)
     refreshed = get_task(tmp_path, task.id)
     assert refreshed is not None
     assert refreshed.status == "queued"
     assert refreshed.pipeline_status == "commit_to_git"
+    assert refreshed.runtime.execution_status == "interrupted"
     assert load_state(tmp_path).queue == [task.id]
 
 
-def test_run_task_pool_drains_active_task_without_queued_entries(
+def test_drain_task_pool_drains_active_task_without_queued_entries(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     ensure_workspace(tmp_path)
@@ -4238,7 +4494,7 @@ def test_run_task_pool_drains_active_task_without_queued_entries(
         ),
     )
 
-    summary = run_task_pool(tmp_path)
+    summary = drain_task_pool(tmp_path)
 
     assert [
         execution.task.id for execution in summary.executions if execution.task is not None
@@ -4249,7 +4505,7 @@ def test_run_task_pool_drains_active_task_without_queued_entries(
     assert state.queue == []
 
 
-def test_run_task_pool_stops_after_requeueing_review_rejection(
+def test_drain_task_pool_stops_after_requeueing_review_rejection(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     ensure_workspace(tmp_path, LitehiveConfig(default_retry_limit=0))
@@ -4309,7 +4565,7 @@ def test_run_task_pool_stops_after_requeueing_review_rejection(
 
     monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_run)
 
-    summary = run_task_pool(tmp_path)
+    summary = drain_task_pool(tmp_path)
 
     assert [
         execution.task.id for execution in summary.executions if execution.task is not None
@@ -5011,11 +5267,14 @@ def test_cmd_run_dry_run_shows_planned_tasks_and_stop_conditions_without_executi
     ensure_workspace(tmp_path)
     create_task(tmp_path, title="Queued task", engine="opencode")
 
-    def fail_run_task_pool(root: Path) -> None:
-        raise AssertionError(f"run_task_pool should not be called for dry-run: {root}")
+    def fail_run_single(*args, **kwargs):  # type: ignore[no-untyped-def]
+        raise AssertionError("run_single_task should not be called for dry-run")
 
-    monkeypatch.setattr("litehive.cli.run_task_pool", fail_run_task_pool)
-    monkeypatch.setattr("litehive.cli.run_single_task", fail_run_task_pool)
+    def fail_drain(*args, **kwargs):  # type: ignore[no-untyped-def]
+        raise AssertionError("drain_task_pool should not be called for dry-run")
+
+    monkeypatch.setattr("litehive.cli.run_single_task", fail_run_single)
+    monkeypatch.setattr("litehive.cli.drain_task_pool", fail_drain)
 
     exit_code = _cmd_run(argparse.Namespace(workspace=tmp_path, dry_run=True, drain=False))
     output = capsys.readouterr().out
@@ -5040,13 +5299,14 @@ def test_cmd_run_dry_run_prefers_run_engine_override(
     ensure_workspace(tmp_path)
     create_task(tmp_path, title="Queued task", engine="opencode")
 
-    def fail_run_task_pool(root: Path, engine_override: str | None = None) -> None:
-        raise AssertionError(
-            f"run_task_pool should not be called for dry-run: {root} {engine_override}"
-        )
+    def fail_run_single(*args, **kwargs):  # type: ignore[no-untyped-def]
+        raise AssertionError("run_single_task should not be called for dry-run")
 
-    monkeypatch.setattr("litehive.cli.run_task_pool", fail_run_task_pool)
-    monkeypatch.setattr("litehive.cli.run_single_task", fail_run_task_pool)
+    def fail_drain(*args, **kwargs):  # type: ignore[no-untyped-def]
+        raise AssertionError("drain_task_pool should not be called for dry-run")
+
+    monkeypatch.setattr("litehive.cli.run_single_task", fail_run_single)
+    monkeypatch.setattr("litehive.cli.drain_task_pool", fail_drain)
 
     exit_code = _cmd_run(
         argparse.Namespace(workspace=tmp_path, dry_run=True, engine="gemini", drain=False))
@@ -5314,7 +5574,7 @@ def test_cmd_run_dry_run_uses_budget_allowed_fallback_engine(
     assert "predicted_stop_reason: single_task_complete" in output
 
 
-def test_run_task_pool_uses_run_engine_override_for_execution(
+def test_drain_task_pool_uses_run_engine_override_for_execution(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     ensure_workspace(tmp_path)
@@ -5327,7 +5587,7 @@ def test_run_task_pool_uses_run_engine_override_for_execution(
 
     monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_run)
 
-    summary = run_task_pool(tmp_path, engine_override="opencode")
+    summary = drain_task_pool(tmp_path, engine_override="opencode")
 
     assert summary.stop_reason == "queue_exhausted"
     assert seen_engines == ["opencode", "opencode", "opencode", "opencode"]
@@ -5585,6 +5845,9 @@ def test_cmd_run_default_executes_single_task_and_reports_summary(
                 "accepting=pass",
                 "commit_to_git=pass",
             ],
+            "reason_code": None,
+            "reason": None,
+            "follow_up_task_id": None,
         }
     ]
     assert durable_report["skipped"] == [
@@ -5594,6 +5857,9 @@ def test_cmd_run_default_executes_single_task_and_reports_summary(
             "final_task_status": "queued",
             "pipeline_status": "backlog",
             "stage_outcomes": [],
+            "reason_code": None,
+            "reason": None,
+            "follow_up_task_id": None,
         }
     ]
     assert load_state(tmp_path).queue == ["T-0002"]
@@ -5643,6 +5909,9 @@ def test_cmd_run_drains_task_pool_and_reports_summary(
                 "accepting=pass",
                 "commit_to_git=pass",
             ],
+            "reason_code": None,
+            "reason": None,
+            "follow_up_task_id": None,
         },
         {
             "task_id": "T-0002",
@@ -5656,6 +5925,9 @@ def test_cmd_run_drains_task_pool_and_reports_summary(
                 "accepting=pass",
                 "commit_to_git=pass",
             ],
+            "reason_code": None,
+            "reason": None,
+            "follow_up_task_id": None,
         },
     ]
     assert load_state(tmp_path).queue == []
@@ -5813,6 +6085,70 @@ def test_cmd_run_reports_pre_execution_stop_reason(
     assert "stop_reason: dirty_git_state" in output
 
 
+def test_cmd_run_reports_resumable_interrupted_tasks(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ensure_workspace(tmp_path)
+    create_task(tmp_path, title="Interrupted task", auto_commit=False)
+    create_task(tmp_path, title="Queued follow-up", auto_commit=False)
+
+    def fake_run(self, current_task, role, engine_name, prompt, model=None, max_turns=None):  # type: ignore[no-untyped-def]
+        if current_task.pipeline_status == "testing":
+            raise KeyboardInterrupt()
+        return _completed_subagent_result(tmp_path, current_task.pipeline_status)
+
+    monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_run)
+
+    exit_code = _cmd_run(argparse.Namespace(workspace=tmp_path, dry_run=False, drain=False))
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "status: interrupted" in output
+    assert "resumable_tasks: 1" in output
+    assert "resumable: T-0001 Interrupted task status=interrupted pipeline_status=testing" in output
+    assert "reason_code=execution_interrupted" in output
+    assert "remaining_tasks: 1" in output
+    assert "remaining: T-0002 Queued follow-up status=queued pipeline_status=backlog" in output
+    assert "stop_condition: task interrupted and awaiting resume" in output
+    assert "stop_reason: task_interrupted" in output
+
+
+def test_run_next_task_marks_subagent_termination_as_interrupted(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Interrupted subagent task", auto_commit=False)
+
+    def fake_run(self, current_task, role, engine_name, prompt, model=None, max_turns=None):  # type: ignore[no-untyped-def]
+        if current_task.pipeline_status == "testing":
+            return _interrupted_subagent_result(tmp_path, current_task.pipeline_status, engine_name=engine_name)
+        return _completed_subagent_result(tmp_path, current_task.pipeline_status, engine_name=engine_name)
+
+    monkeypatch = pytest.MonkeyPatch()
+    monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_run)
+    try:
+        summary = run_next_task(tmp_path)
+    finally:
+        monkeypatch.undo()
+
+    assert summary.result is not None
+    assert summary.result.final_status == "interrupted"
+    refreshed = require_task(tmp_path, task.id)
+    assert refreshed.status == "interrupted"
+    assert refreshed.pipeline_status == "testing"
+    assert refreshed.runtime.execution_status == "interrupted"
+    assert refreshed.runtime.last_outcome.kind == "interrupted"
+    assert refreshed.runtime.last_outcome.reason_code == "execution_interrupted"
+    assert refreshed.runtime.current_stage.step == "testing"
+    assert refreshed.runtime.current_stage.status == "interrupted"
+
+
+def test_classify_execution_interruption_matches_signal_exit_codes_and_text() -> None:
+    assert classify_execution_interruption("", exit_code=130) == "execution interrupted"
+    assert classify_execution_interruption("Received SIGINT from controlling terminal") == "execution interrupted"
+    assert classify_execution_interruption("ordinary failure", exit_code=1) is None
+
+
 def test_cmd_run_reports_remaining_tasks_when_pool_stops_early(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -5890,6 +6226,9 @@ def test_cmd_run_reports_remaining_tasks_when_pool_stops_early(
                 "accepting=pass",
                 "commit_to_git=pass",
             ],
+            "reason_code": None,
+            "reason": None,
+            "follow_up_task_id": None,
         }
     ]
     assert durable_report["skipped"] == [
@@ -5899,6 +6238,9 @@ def test_cmd_run_reports_remaining_tasks_when_pool_stops_early(
             "final_task_status": "queued",
             "pipeline_status": "backlog",
             "stage_outcomes": [],
+            "reason_code": None,
+            "reason": None,
+            "follow_up_task_id": None,
         }
     ]
     assert durable_report["remaining"] == durable_report["skipped"]
@@ -6179,7 +6521,7 @@ def test_cmd_run_reports_summary_when_queue_is_empty(
 
 
 def test_status_output_includes_runtime_observability(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     ensure_workspace(
         tmp_path,
@@ -6252,6 +6594,11 @@ def test_status_output_includes_runtime_observability(
     task.runtime.last_outcome.recorded_at = "2026-03-31T10:02:30+00:00"
 
     save_task(tmp_path, task)
+    (tmp_path / ".litehive" / ".runner.lock").write_text(
+        yaml.safe_dump({"pid": os.getpid()}, sort_keys=False),
+        encoding="utf-8",
+    )
+    _block_runner_lock(monkeypatch)
 
     exit_code = _cmd_status(argparse.Namespace(workspace=tmp_path))
     output = capsys.readouterr().out
@@ -6285,7 +6632,7 @@ def test_status_output_includes_runtime_observability(
     )
     assert "last_report=grooming/pass duration=1m00s summary=plan confirmed" in output
     assert (
-        "outcome=blocked stage=testing reason_code=verdict_blocked recorded_at=2026-03-31T10:02:30+00:00 retry_state=1/1 retry_source=task reason=waiting on fixture update"
+        "outcome=blocked stage=testing reason_code=verdict_blocked recorded_at=2026-03-31T10:02:30+00:00 follow_up_task=- retry_state=1/1 retry_source=task reason=waiting on fixture update"
         in output
     )
 
@@ -6309,6 +6656,53 @@ def test_render_task_summary_includes_active_subagent_pid() -> None:
 
     assert any("subagent=SA-0001 swe/codex running pid=31337" in line for line in lines)
     assert any("sandbox=sandbox[docker:test net=none workspace=rw]" in line for line in lines)
+
+
+def test_render_task_summary_includes_interruption_context() -> None:
+    task = TaskRecord(id="T-0001", slug="resume-task", title="Resume task")
+    task.status = "interrupted"
+    task.pipeline_status = "testing"
+    task.runtime.execution_status = "interrupted"
+    task.runtime.current_stage = RuntimeStageState(
+        step="testing",
+        status="interrupted",
+        started_at="2026-04-01T10:00:00+00:00",
+        completed_at="2026-04-01T10:02:00+00:00",
+        updated_at="2026-04-01T10:02:00+00:00",
+    )
+    task.runtime.last_subagent = RuntimeSubagentState(
+        id="SA-0001",
+        role="qa",
+        engine="codex",
+        status="interrupted",
+        path="subagents/SA-0001-qa",
+        pid=5151,
+        started_at="2026-04-01T10:00:10+00:00",
+        updated_at="2026-04-01T10:02:00+00:00",
+        completed_at="2026-04-01T10:02:00+00:00",
+        transcript_snippet="halfway through targeted testing",
+        interruption_reason="execution interrupted",
+    )
+    task.runtime.interruption = RuntimeInterruptionState(
+        source="subagent",
+        stage="testing",
+        pipeline_status="testing",
+        resume_stage="testing",
+        reason="execution interrupted",
+        summary="Execution interrupted during testing",
+        interrupted_at="2026-04-01T10:02:00+00:00",
+        detected_at="2026-04-01T10:02:00+00:00",
+        subagent=task.runtime.last_subagent,
+    )
+
+    lines = render_task_summary(task, active=False)
+
+    assert any("last_subagent_interruption_reason=execution interrupted" in line for line in lines)
+    assert any(
+        "interruption=subagent stage=testing resume_from=testing interrupted_at=2026-04-01T10:02:00+00:00"
+        in line
+        for line in lines
+    )
 
 
 def test_format_external_engine_sandbox_renders_engine_policies() -> None:
@@ -6444,7 +6838,7 @@ def test_status_output_includes_budget_control_settings(
 
 
 def test_queue_command_shows_active_and_queued_order(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     ensure_workspace(tmp_path)
     first = create_task(tmp_path, title="First task")
@@ -6453,6 +6847,11 @@ def test_queue_command_shows_active_and_queued_order(
     save_task(tmp_path, second)
 
     set_active_task(tmp_path, first.id)
+    (tmp_path / ".litehive" / ".runner.lock").write_text(
+        yaml.safe_dump({"pid": os.getpid()}, sort_keys=False),
+        encoding="utf-8",
+    )
+    _block_runner_lock(monkeypatch)
 
     exit_code = _cmd_queue(argparse.Namespace(workspace=tmp_path))
     output = capsys.readouterr().out
@@ -6467,6 +6866,266 @@ def test_queue_command_shows_active_and_queued_order(
         f"1. {second.id} [queued/backlog] priority=medium engine=opencode model=default "
         f"title=Second task depends_on={first.id}"
     ) in output
+
+
+def test_queue_command_marks_recovered_interruption(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    ensure_workspace(tmp_path)
+    queued = create_task(tmp_path, title="Queued follow-up", auto_commit=False)
+    interrupted = create_task(tmp_path, title="Interrupted testing task", auto_commit=False)
+
+    interrupted.status = "in_progress"
+    interrupted.pipeline_status = "testing"
+    interrupted.runtime.execution_status = "running"
+    interrupted.runtime.current_stage = RuntimeStageState(
+        step="testing",
+        status="running",
+        started_at="2026-04-01T00:00:00+00:00",
+        updated_at="2026-04-01T00:00:00+00:00",
+    )
+    save_task(tmp_path, interrupted)
+    save_task_runtime(tmp_path, interrupted)
+
+    state = load_state(tmp_path)
+    state.active_task_id = interrupted.id
+    state.queue = [queued.id]
+    save_state(tmp_path, state)
+    (tmp_path / ".litehive" / ".runner.lock").write_text(
+        yaml.safe_dump({"pid": 999999}, sort_keys=False),
+        encoding="utf-8",
+    )
+
+    exit_code = _cmd_queue(argparse.Namespace(workspace=tmp_path))
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "active_task_id: None" in output
+    assert "queue_length: 1" in output
+    assert "resumable_tasks: 1" in output
+    assert (
+        f"resume 1. {interrupted.id} [interrupted/testing] priority=medium engine=codex (default) model=default "
+        "title=Interrupted testing task depends_on=- resumable_from=testing interruption=runner "
+        "reason_code=execution_interrupted reason=Stale runner detected while `testing` was still marked running."
+    ) in output
+    assert (
+        f"1. {queued.id} [queued/backlog] priority=medium engine=codex (default) model=default "
+        "title=Queued follow-up depends_on=-"
+    ) in output
+
+
+def test_recover_stale_runner_state_recovers_running_task_without_runner_lock_record(
+    tmp_path: Path,
+) -> None:
+    ensure_workspace(tmp_path)
+    queued = create_task(tmp_path, title="Queued follow-up", auto_commit=False)
+    interrupted = create_task(tmp_path, title="Interrupted testing task", auto_commit=False)
+
+    interrupted.status = "in_progress"
+    interrupted.pipeline_status = "testing"
+    interrupted.runtime.execution_status = "running"
+    interrupted.runtime.run_started_at = "2026-04-01T00:00:00+00:00"
+    interrupted.runtime.current_stage = RuntimeStageState(
+        step="testing",
+        status="running",
+        started_at="2026-04-01T00:00:00+00:00",
+        updated_at="2026-04-01T00:00:00+00:00",
+    )
+    interrupted.subagents.append(
+        SubagentRef(
+            id="SA-0001",
+            role="qa",
+            engine="codex",
+            status="running",
+            path="subagents/SA-0001-qa",
+        )
+    )
+    interrupted.runtime.active_subagent = RuntimeSubagentState(
+        id="SA-0001",
+        role="qa",
+        engine="codex",
+        status="running",
+        path="subagents/SA-0001-qa",
+        pid=4242,
+        started_at="2026-04-01T00:00:10+00:00",
+        updated_at="2026-04-01T00:00:10+00:00",
+    )
+    save_task(tmp_path, interrupted)
+    save_task_runtime(tmp_path, interrupted)
+    subagent_base = task_dir(tmp_path, interrupted) / "subagents" / "SA-0001-qa"
+    subagent_base.mkdir(parents=True, exist_ok=False)
+    (subagent_base / "report.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "status": "running",
+                "summary": "halfway through targeted testing",
+                "files_changed": [],
+                "tests": {"added": 0, "passing": 0},
+                "warnings": [],
+                "resource_limit_event": None,
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+    (subagent_base / "transcript.md").write_text(
+        "VERDICT: PASS\nSUMMARY: halfway through targeted testing\n",
+        encoding="utf-8",
+    )
+
+    state = load_state(tmp_path)
+    state.active_task_id = interrupted.id
+    state.queue = [queued.id]
+    save_state(tmp_path, state)
+
+    mutated = recover_stale_runner_state(tmp_path)
+
+    assert mutated is True
+    refreshed = get_task(tmp_path, interrupted.id)
+    assert refreshed is not None
+    assert refreshed.status == "interrupted"
+    assert refreshed.pipeline_status == "testing"
+    assert refreshed.runtime.execution_status == "interrupted"
+    assert refreshed.runtime.active_subagent is None
+    assert refreshed.runtime.last_subagent is not None
+    assert refreshed.runtime.last_subagent.status == "interrupted"
+    assert refreshed.runtime.last_subagent.transcript_snippet == "halfway through targeted testing"
+    assert refreshed.runtime.last_subagent.interruption_reason.startswith("Stale runner detected while subagent")
+    assert refreshed.runtime.interruption is not None
+    assert refreshed.runtime.interruption.source == "subagent"
+    assert refreshed.runtime.interruption.resume_stage == "testing"
+    assert refreshed.runtime.interruption.subagent is not None
+    assert refreshed.runtime.interruption.subagent.id == "SA-0001"
+    assert refreshed.runtime.current_stage.status == "interrupted"
+    assert refreshed.runtime.last_outcome.kind == "interrupted"
+    assert refreshed.subagents[-1].status == "interrupted"
+    session = yaml.safe_load((subagent_base / "session.yaml").read_text(encoding="utf-8"))
+    report = yaml.safe_load((subagent_base / "report.yaml").read_text(encoding="utf-8"))
+    assert session["status"] == "interrupted"
+    assert session["resume_stage"] == "testing"
+    assert session["interruption_reason"].startswith("Stale runner detected while subagent")
+    assert report["status"] == "interrupted"
+    assert report["resume_stage"] == "testing"
+    assert report["interruption_reason"].startswith("Stale runner detected while subagent")
+    restored_state = load_state(tmp_path)
+    assert restored_state.active_task_id is None
+    assert restored_state.queue == [queued.id]
+    journal = (task_dir(tmp_path, refreshed) / "journal.md").read_text(encoding="utf-8")
+    assert "Interrupted subagent execution while `testing` was running." in journal
+    assert "Subagent `SA-0001` (qa/codex, pid=4242, path `subagents/SA-0001-qa`) stopped" in journal
+    assert "Resume from `testing`." in journal
+
+
+def test_recover_stale_runner_state_recovers_when_lock_is_not_held_even_if_pid_is_alive(
+    tmp_path: Path,
+) -> None:
+    ensure_workspace(tmp_path)
+    queued = create_task(tmp_path, title="Queued follow-up", auto_commit=False)
+    interrupted = create_task(tmp_path, title="Interrupted testing task", auto_commit=False)
+
+    interrupted.status = "in_progress"
+    interrupted.pipeline_status = "testing"
+    interrupted.runtime.execution_status = "running"
+    interrupted.runtime.current_stage = RuntimeStageState(
+        step="testing",
+        status="running",
+        started_at="2026-04-01T00:00:00+00:00",
+        updated_at="2026-04-01T00:00:00+00:00",
+    )
+    save_task(tmp_path, interrupted)
+    save_task_runtime(tmp_path, interrupted)
+
+    state = load_state(tmp_path)
+    state.active_task_id = interrupted.id
+    state.queue = [queued.id]
+    save_state(tmp_path, state)
+    (tmp_path / ".litehive" / ".runner.lock").write_text(
+        yaml.safe_dump({"pid": os.getpid(), "started_at": "2026-04-01T00:00:00+00:00"}, sort_keys=False),
+        encoding="utf-8",
+    )
+
+    mutated = recover_stale_runner_state(tmp_path)
+
+    assert mutated is True
+    refreshed = get_task(tmp_path, interrupted.id)
+    assert refreshed is not None
+    assert refreshed.status == "interrupted"
+    assert refreshed.runtime.execution_status == "interrupted"
+    assert refreshed.runtime.current_stage.status == "interrupted"
+    assert refreshed.runtime.interruption is not None
+    assert refreshed.runtime.interruption.source == "runner"
+    assert refreshed.runtime.interruption.reason == "Stale runner detected while `testing` was still marked running."
+    restored_state = load_state(tmp_path)
+    assert restored_state.active_task_id is None
+    assert restored_state.queue == [queued.id]
+
+
+def test_recover_stale_runner_state_skips_live_runner_lock(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ensure_workspace(tmp_path)
+    queued = create_task(tmp_path, title="Queued follow-up", auto_commit=False)
+    running = create_task(tmp_path, title="Active task", auto_commit=False)
+
+    running.status = "in_progress"
+    running.pipeline_status = "testing"
+    running.runtime.execution_status = "running"
+    running.runtime.current_stage = RuntimeStageState(
+        step="testing",
+        status="running",
+        started_at="2026-04-01T00:00:00+00:00",
+        updated_at="2026-04-01T00:00:00+00:00",
+    )
+    running.runtime.active_subagent = RuntimeSubagentState(
+        id="SA-0001",
+        role="qa",
+        engine="codex",
+        status="running",
+        path="subagents/SA-0001-qa",
+        pid=5151,
+        started_at="2026-04-01T00:00:10+00:00",
+        updated_at="2026-04-01T00:00:10+00:00",
+    )
+    save_task(tmp_path, running)
+    save_task_runtime(tmp_path, running)
+
+    state = load_state(tmp_path)
+    state.active_task_id = running.id
+    state.queue = [queued.id]
+    save_state(tmp_path, state)
+    (tmp_path / ".litehive" / ".runner.lock").write_text(
+        yaml.safe_dump({"pid": os.getpid()}, sort_keys=False),
+        encoding="utf-8",
+    )
+    _block_runner_lock(monkeypatch)
+
+    mutated = recover_stale_runner_state(tmp_path)
+
+    assert mutated is False
+    refreshed = get_task(tmp_path, running.id)
+    assert refreshed is not None
+    assert refreshed.status == "in_progress"
+    assert refreshed.runtime.execution_status == "running"
+    assert refreshed.runtime.active_subagent is not None
+    assert load_state(tmp_path).active_task_id == running.id
+    assert load_state(tmp_path).queue == [queued.id]
+
+
+def test_recover_stale_runner_state_persists_cleared_stale_active_marker_without_transition(
+    tmp_path: Path,
+) -> None:
+    ensure_workspace(tmp_path)
+    queued = create_task(tmp_path, title="Queued follow-up", auto_commit=False)
+
+    state = load_state(tmp_path)
+    state.active_task_id = "T-9999"
+    state.queue = [queued.id]
+    save_state(tmp_path, state)
+
+    mutated = recover_stale_runner_state(tmp_path)
+
+    assert mutated is True
+    restored = load_state(tmp_path)
+    assert restored.active_task_id is None
+    assert restored.queue == [queued.id]
 
 
 def test_add_command_persists_dependencies(
@@ -7382,6 +8041,68 @@ def test_resume_command_preserves_flagged_task_stage(
     assert resumed.runtime.execution_status == "idle"
 
 
+def test_resume_command_preserves_interrupted_task_stage(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    ensure_workspace(tmp_path)
+    first = create_task(tmp_path, title="First task")
+    interrupted = create_task(tmp_path, title="Resume interrupted task")
+    task = get_task(tmp_path, interrupted.id)
+    assert task is not None
+    task.status = "interrupted"
+    task.pipeline_status = "testing"
+    task.runtime.execution_status = "interrupted"
+    task.runtime.last_outcome.kind = "interrupted"
+    task.runtime.last_outcome.stage = "testing"
+    task.runtime.last_outcome.reason_code = "execution_interrupted"
+    task.runtime.last_outcome.reason = "Interrupted run recovered. Resume from `testing`."
+    task.runtime.current_stage = RuntimeStageState(
+        step="testing",
+        status="interrupted",
+        started_at="2026-04-01T00:00:00+00:00",
+        completed_at="2026-04-01T00:01:00+00:00",
+        updated_at="2026-04-01T00:01:00+00:00",
+        duration_seconds=60,
+        verdict="blocked",
+        summary="Interrupted run recovered. Resume from `testing`.",
+    )
+    task.runtime.last_subagent = RuntimeSubagentState(
+        id="SA-0001",
+        role="qa",
+        engine="codex",
+        status="interrupted",
+        path="subagents/SA-0001-qa",
+        pid=4242,
+        started_at="2026-04-01T00:00:10+00:00",
+        updated_at="2026-04-01T00:01:00+00:00",
+        completed_at="2026-04-01T00:01:00+00:00",
+        transcript_snippet="tests were halfway done",
+    )
+    save_task(tmp_path, task)
+
+    exit_code = _cmd_resume_task(
+        argparse.Namespace(workspace=tmp_path, task_id=interrupted.id, front=False)
+    )
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "status: queued" in output
+    assert "pipeline_status: testing" in output
+    assert load_state(tmp_path).queue == [first.id, interrupted.id]
+    resumed = get_task(tmp_path, interrupted.id)
+    assert resumed is not None
+    assert resumed.status == "queued"
+    assert resumed.pipeline_status == "testing"
+    assert resumed.runtime.execution_status == "idle"
+    assert resumed.runtime.current_stage.step is None
+    assert resumed.runtime.current_stage.status == "idle"
+    assert resumed.runtime.last_outcome.kind == "interrupted"
+    assert resumed.runtime.last_outcome.stage == "testing"
+    assert resumed.runtime.last_outcome.reason_code == "execution_interrupted"
+    assert resumed.runtime.last_subagent is not None
+    assert resumed.runtime.last_subagent.transcript_snippet == "tests were halfway done"
+
+
 def test_resume_command_preserves_flagged_commit_to_git_stage(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -7480,7 +8201,7 @@ def test_requeue_command_requires_flagged_or_cancelled(
     output = capsys.readouterr().out
 
     assert exit_code == 1
-    assert "is not flagged or cancelled" in output
+    assert "is not flagged or closed" in output
 
 
 def test_requeue_task_rolls_back_when_atomic_state_persist_fails(
@@ -7845,47 +8566,71 @@ def test_abandon_task_rolls_back_when_runtime_persist_fails(
     assert "Task abandoned via CLI at stage `testing`." not in journal
 
 
-def test_runner_requeues_review_rejection_even_after_retry_limit(tmp_path: Path) -> None:
+def test_runner_flags_task_when_retry_limit_exhausted(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Exhausted task")
+    # max_retries=1 allows 1 retry; on the 2nd rejection (rejections > 1) the task is flagged
+    task.retry_policy.max_retries = 1
+    save_task(tmp_path, task)
+    rejection_count = {"n": 0}
 
     def executor(task, step):  # type: ignore[no-untyped-def]
-        verdict = "fail" if step == "testing" else "pass"
+        if step == "testing":
+            rejection_count["n"] += 1
+            verdict = "fail"
+        else:
+            verdict = "pass"
         return StageReport(task_id=task.id, step=step, verdict=verdict, summary=f"{step} {verdict}")
 
     runner = TaskExecutionRunner(tmp_path, executor, max_retries=1)
-    result = runner.run(task)
-
-    assert result.final_status == "queued"
-    finish_task_run_transition(tmp_path, task, result.final_status)
+    # First run: testing fails → requeued (1 rejection allowed)
+    result1 = runner.run(task)
+    assert result1.final_status == "queued"
+    finish_task_run_transition(tmp_path, task, result1.final_status)
     refreshed = get_task(tmp_path, task.id)
     assert refreshed is not None
-    assert refreshed.runtime.execution_status == "queued"
-    assert refreshed.status == "queued"
-    assert refreshed.pipeline_status == "implementing"
     assert refreshed.runtime.retry_count == 1
-    assert refreshed.runtime.retry_limit == 1
-    assert refreshed.runtime.last_outcome.kind is None
-    assert refreshed.runtime.last_outcome.reason_code is None
+
+    # Second run: testing fails again → retry limit exceeded → flagged
+    result2 = runner.run(refreshed)
+    assert result2.final_status == "flagged"
+    finish_task_run_transition(tmp_path, refreshed, result2.final_status)
+    refreshed2 = get_task(tmp_path, task.id)
+    assert refreshed2 is not None
+    assert refreshed2.runtime.execution_status == "flagged"
+    assert refreshed2.status == "flagged"
+    assert refreshed2.runtime.retry_count == 2
+    assert refreshed2.runtime.retry_limit == 1
+    assert refreshed2.runtime.last_outcome.kind == "flagged"
+    assert refreshed2.runtime.last_outcome.reason_code == "retry_limit_exhausted"
 
 
 @pytest.mark.parametrize("outcome", ["wont_do", "deferred", "duplicate"])
 def test_close_task_non_implementation_outcomes(tmp_path: Path, outcome: str) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Close me")
+    follow_up = create_task(tmp_path, title="Follow up later")
     state = load_state(tmp_path)
     assert task.id in state.queue
 
-    closed = close_task(tmp_path, task.id, outcome=outcome, reason="Test reason")
+    closed = close_task(
+        tmp_path,
+        task.id,
+        outcome=outcome,
+        reason="Test reason",
+        follow_up_task_id=follow_up.id,
+    )
 
-    assert closed.status == "cancelled"
-    assert closed.runtime.last_outcome.kind == "cancelled"
+    assert closed.status == outcome
+    assert closed.runtime.last_outcome.kind == outcome
     assert closed.runtime.last_outcome.reason_code == outcome
     assert closed.runtime.last_outcome.reason == "Test reason"
+    assert closed.runtime.last_outcome.follow_up_task_id == follow_up.id
     state = load_state(tmp_path)
     assert task.id not in state.queue
     journal = (task_dir(tmp_path, closed) / "journal.md").read_text(encoding="utf-8")
     assert f"Task closed: {outcome}." in journal
+    assert f"Follow-up task: {follow_up.id}." in journal
 
 
 def test_close_task_rolls_back_when_atomic_task_persist_fails(
@@ -7941,19 +8686,29 @@ def test_cmd_close_task_wont_do(
 ) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Will not implement")
+    follow_up = create_task(tmp_path, title="Track replacement")
 
     exit_code = _cmd_close_task(
-        argparse.Namespace(workspace=tmp_path, task_id=task.id, outcome="wont_do", reason=None)
+        argparse.Namespace(
+            workspace=tmp_path,
+            task_id=task.id,
+            outcome="wont_do",
+            reason=None,
+            follow_up_task=follow_up.id,
+        )
     )
     output = capsys.readouterr().out
 
     assert exit_code == 0
-    assert "status: cancelled" in output
+    assert "status: wont_do" in output
     assert "outcome: wont_do" in output
+    assert f"follow_up_task: {follow_up.id}" in output
     closed = get_task(tmp_path, task.id)
     assert closed is not None
-    assert closed.status == "cancelled"
+    assert closed.status == "wont_do"
+    assert closed.runtime.last_outcome.kind == "wont_do"
     assert closed.runtime.last_outcome.reason_code == "wont_do"
+    assert closed.runtime.last_outcome.follow_up_task_id == follow_up.id
 
 
 def test_close_command_allows_future_task_while_runner_is_active(
@@ -7973,12 +8728,13 @@ def test_close_command_allows_future_task_while_runner_is_active(
             task_id=queued.id,
             outcome="deferred",
             reason=None,
+            follow_up_task=None,
         )
     )
     output = capsys.readouterr().out
 
     assert exit_code == 0
-    assert "status: cancelled" in output
+    assert "status: deferred" in output
     assert "outcome: deferred" in output
     state = load_state(tmp_path)
     assert state.active_task_id == active.id
@@ -7986,6 +8742,80 @@ def test_close_command_allows_future_task_while_runner_is_active(
     refreshed = get_task(tmp_path, queued.id)
     assert refreshed is not None
     assert refreshed.runtime.last_outcome.reason_code == "deferred"
+
+
+def test_status_command_shows_explicit_close_outcome(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Defer me")
+    follow_up = create_task(tmp_path, title="Future reconsideration")
+
+    close_task(
+        tmp_path,
+        task.id,
+        outcome="deferred",
+        reason="Revisit after launch",
+        follow_up_task_id=follow_up.id,
+    )
+
+    _cmd_status(argparse.Namespace(workspace=tmp_path))
+    output = capsys.readouterr().out
+
+    assert f"{task.id} [deferred/backlog]" in output
+    assert "outcome=deferred" in output
+    assert "reason_code=deferred" in output
+    assert f"follow_up_task={follow_up.id}" in output
+    assert "reason=Revisit after launch" in output
+
+
+def test_pool_summary_reports_closed_tasks_with_reason_and_follow_up(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    ensure_workspace(tmp_path)
+    closed = create_task(tmp_path, title="Not now")
+    follow_up = create_task(tmp_path, title="Revisit later")
+    state = load_state(tmp_path)
+    state.queue = [task_id for task_id in state.queue if task_id == closed.id]
+    save_state(tmp_path, state)
+
+    close_task(
+        tmp_path,
+        closed.id,
+        outcome="deferred",
+        reason="Revisit after launch",
+        follow_up_task_id=follow_up.id,
+    )
+
+    exit_code = _cmd_run(
+        argparse.Namespace(
+            workspace=tmp_path,
+            engine=None,
+            model=None,
+            drain=False,
+            dry_run=False,
+            stop_on_failure=None,
+            max_tasks=None,
+            stop_on_limit=None,
+            quota_threshold=None,
+            budget_threshold=None,
+            pool_usage_cap=None,
+            pool_cost_cap=None,
+            engine_usage_cap=None,
+            engine_budget_cap=None,
+            engine_cost=None,
+            stop_on_dirty_git=None,
+        )
+    )
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "closed_tasks: 1" in output
+    assert (
+        f"closed: {closed.id} Not now status=deferred pipeline_status=backlog "
+        f"stage_outcomes=- reason_code=deferred reason=Revisit after launch "
+        f"follow_up_task={follow_up.id}"
+    ) in output
 
 
 def test_update_command_updates_task_metadata(
@@ -8347,6 +9177,11 @@ def _run(cmd: list[str], cwd: Path) -> str:
     return proc.stdout.strip()
 
 
+def _git_status_without_litehive(cwd: Path) -> list[str]:
+    status = _run(["git", "status", "--short"], cwd)
+    return [line for line in status.splitlines() if line and not line.endswith(".litehive/")]
+
+
 def _repo_root() -> Path:
     return Path(__file__).resolve().parents[1]
 
@@ -8379,6 +9214,18 @@ def _init_git_repo(tmp_path: Path) -> str:
 def _completed_subagent_result(
     tmp_path: Path, step: str, *, engine_name: str = "codex"
 ) -> SubagentResult:
+    worktrees_root = tmp_path / ".litehive" / "worktrees"
+    if step == "implementing" and worktrees_root.exists():
+        main_app = tmp_path / "app.txt"
+        for worktree in sorted(worktrees_root.iterdir()):
+            if not worktree.is_dir():
+                continue
+            worktree_app = worktree / "app.txt"
+            if main_app.exists() and worktree_app.exists():
+                worktree_app.write_text(main_app.read_text(encoding="utf-8"), encoding="utf-8")
+                subprocess.run(["git", "checkout", "--", "app.txt"], cwd=tmp_path, check=True)
+                break
+
     return SubagentResult(
         ref=SubagentRef(
             id=f"SA-{step}",
@@ -8452,14 +9299,46 @@ def _resource_limited_subagent_result(
     )
 
 
+def _interrupted_subagent_result(
+    tmp_path: Path, step: str, *, engine_name: str = "codex"
+) -> SubagentResult:
+    return SubagentResult(
+        ref=SubagentRef(
+            id=f"SA-{step}",
+            role="swe",
+            engine=engine_name,
+            status="interrupted",
+            path=f"subagents/{step}",
+        ),
+        execution=CLIExecutionResult(
+            adapter=engine_name,
+            argv=(engine_name, "exec"),
+            cwd=tmp_path,
+            exit_code=130,
+            stdout="Execution interrupted by user",
+            stderr="received SIGINT",
+        ),
+        transcript="Execution interrupted by user\n\n[stderr]\nreceived SIGINT",
+        exit_code=130,
+        failure=EngineFailure(
+            kind="execution_interrupted",
+            reason="execution interrupted",
+        ),
+    )
+
+
 def test_run_task_skips_pre_acceptance_hook_when_not_configured(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     ensure_workspace(tmp_path)
     create_task(tmp_path, title="No hook configured", auto_commit=False)
+    real_run = subprocess.run
 
     def fail_run(*args, **kwargs):  # type: ignore[no-untyped-def]
-        raise AssertionError("pre-acceptance command should not run")
+        argv = args[0] if args else kwargs.get("args")
+        if list(argv) == ["bash", "-lc", "uv run ruff check litehive tests"]:
+            raise AssertionError("pre-acceptance command should not run")
+        return real_run(*args, **kwargs)
 
     monkeypatch.setattr(
         "litehive.runtime.SubagentManager.run",
@@ -8570,12 +9449,15 @@ def test_run_task_runs_pre_acceptance_hook_after_testing_passes(
     )
     create_task(tmp_path, title="Run ruff before acceptance", auto_commit=False)
     calls: list[str] = []
+    real_run = subprocess.run
 
     def fake_subagent_run(self, task, role, engine_name, prompt, model=None, max_turns=None):  # type: ignore[no-untyped-def]
         calls.append(task.pipeline_status)
         return _completed_subagent_result(tmp_path, task.pipeline_status)
 
     def fake_hook(argv, cwd, capture_output, text, check):  # type: ignore[no-untyped-def]
+        if list(argv) != ["bash", "-lc", "uv run ruff check litehive tests"]:
+            return real_run(argv, cwd=cwd, capture_output=capture_output, text=text, check=check)
         assert list(argv) == ["bash", "-lc", "uv run ruff check litehive tests"]
         assert cwd == tmp_path
         assert capture_output is True
@@ -10165,6 +11047,58 @@ def test_run_next_task_creates_checkpoint_commit_and_persists_policy(
     assert task.runtime.last_stage.step == "commit_to_git"
     assert task.runtime.last_stage.verdict == "pass"
     assert task.runtime.git.commit_sha == summary.commit_sha
+    assert task.git.worktree_path is None
+    assert not (tmp_path / ".litehive" / "worktrees" / f"{task.id}-{task.slug}").exists()
+
+
+def test_run_next_task_executes_stage_in_task_worktree(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    _init_git_repo(tmp_path)
+    ensure_workspace(tmp_path)
+    create_task(tmp_path, title="Run in worktree", auto_commit=False)
+    seen_execution_roots: list[Path] = []
+
+    def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None):  # type: ignore[no-untyped-def]
+        seen_execution_roots.append(self.execution_root)
+        result = _completed_subagent_result(tmp_path, task.pipeline_status, engine_name=engine_name)
+        if task.pipeline_status == "implementing":
+            assert self.execution_root != tmp_path
+            assert (tmp_path / "app.txt").read_text(encoding="utf-8") == "base\n"
+            (self.execution_root / "app.txt").write_text("worktree-only\n", encoding="utf-8")
+        return result
+
+    monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_run)
+
+    summary = run_next_task(tmp_path)
+
+    assert summary.result is not None
+    assert summary.result.final_status == "done"
+    assert seen_execution_roots
+    assert all(path != tmp_path for path in seen_execution_roots)
+    assert (tmp_path / "app.txt").read_text(encoding="utf-8") == "base\n"
+
+
+def test_run_next_task_cherry_picks_task_commit_back_to_main(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _init_git_repo(tmp_path)
+    ensure_workspace(tmp_path)
+    create_task(tmp_path, title="Cherry-pick worktree commit")
+
+    def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None):  # type: ignore[no-untyped-def]
+        result = _completed_subagent_result(tmp_path, task.pipeline_status, engine_name=engine_name)
+        if task.pipeline_status == "implementing":
+            assert (tmp_path / "app.txt").read_text(encoding="utf-8") == "base\n"
+            (self.execution_root / "app.txt").write_text("integrated\n", encoding="utf-8")
+        return result
+
+    monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_run)
+
+    summary = run_next_task(tmp_path)
+
+    assert summary.result is not None
+    assert summary.result.final_status == "done"
+    assert summary.commit_sha == _run(["git", "rev-parse", "HEAD"], tmp_path)
+    assert (tmp_path / "app.txt").read_text(encoding="utf-8") == "integrated\n"
 
 
 def test_checkpoint_message_attempt_policy_matches_generated_subjects_only(tmp_path: Path) -> None:
@@ -10201,7 +11135,7 @@ def test_run_next_task_appends_attempt_suffix_after_rollback(
     assert first.result.final_status == "done"
 
     rollback_completed_task(tmp_path, "T-0001")
-    assert _run(["git", "status", "--short"], tmp_path) == ""
+    assert _git_status_without_litehive(tmp_path) == []
 
     (tmp_path / "app.txt").write_text("updated-twice\n", encoding="utf-8")
     second = run_next_task(tmp_path)
@@ -10216,6 +11150,48 @@ def test_run_next_task_appends_attempt_suffix_after_rollback(
     assert task is not None
     assert task.git.checkpoint_attempts == 2
     assert task.git.rolled_back_checkpoint_attempt is None
+
+
+def test_run_next_task_preserves_future_task_added_during_commit_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _init_git_repo(tmp_path)
+    ensure_workspace(tmp_path)
+    create_task(tmp_path, title="Ship checkpoint")
+    (tmp_path / "app.txt").write_text("updated\n", encoding="utf-8")
+
+    monkeypatch.setattr(
+        "litehive.runtime.SubagentManager.run",
+        lambda self, task, role, engine_name, prompt, model=None, max_turns=None: _completed_subagent_result(
+            tmp_path, task.pipeline_status
+        ),
+    )
+
+    def fail_commit_with_concurrent_add(
+        root: Path, message: str, *, paths: list[str] | None = None
+    ) -> None:
+        create_task(tmp_path, title="Added during commit failure", auto_commit=False)
+        raise GitError("simulated commit failure")
+
+    monkeypatch.setattr("litehive.runtime.commit_task", fail_commit_with_concurrent_add)
+
+    summary = run_next_task(tmp_path)
+
+    assert summary.task is not None
+    assert summary.result is not None
+    assert summary.result.final_status == "flagged"
+    state = load_state(tmp_path)
+    assert state.active_task_id is None
+    assert state.queue == ["T-0002"]
+    added = get_task(tmp_path, "T-0002")
+    assert added is not None
+    assert added.title == "Added during commit failure"
+    assert added.status == "queued"
+    task = get_task(tmp_path, "T-0001")
+    assert task is not None
+    assert task.status == "flagged"
+    assert task.pipeline_status == "commit_to_git"
+    assert task.git.checkpoint_attempts == 0
 
 
 def test_run_next_task_flags_task_when_commit_stage_prerequisite_is_missing(
@@ -10621,19 +11597,23 @@ def test_recover_completed_task_rolls_back_when_runtime_persist_fails(
     assert "Task recovered for another implementation pass." not in journal
 
 
-def test_run_task_pool_recovers_stranded_commit_stage_before_new_work(
+def test_drain_task_pool_recovers_stranded_commit_stage_before_new_work(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _init_git_repo(tmp_path)
     ensure_workspace(tmp_path)
     stranded = create_task(tmp_path, title="Stranded commit task")
-    (tmp_path / "app.txt").write_text("updated\n", encoding="utf-8")
+    worktree_path = tmp_path / ".litehive" / "worktrees" / f"{stranded.id}-{stranded.slug}"
+    worktree_path.parent.mkdir(parents=True, exist_ok=True)
+    _run(["git", "worktree", "add", "--detach", str(worktree_path), "HEAD"], tmp_path)
+    (worktree_path / "app.txt").write_text("updated\n", encoding="utf-8")
 
     stranded.status = "done"
     stranded.pipeline_status = "done"
     stranded.git.checkpoint_attempts = 1
     stranded.git.checkpoint_base_sha = _run(["git", "rev-parse", "HEAD"], tmp_path)
     stranded.git.commit_sha = None
+    stranded.git.worktree_path = str(worktree_path.relative_to(tmp_path))
     save_task(tmp_path, stranded)
     report_path = task_dir(tmp_path, stranded) / "reports" / "accepting-001.yaml"
     report_path.write_text(
@@ -10661,7 +11641,7 @@ def test_run_task_pool_recovers_stranded_commit_stage_before_new_work(
         ),
     )
 
-    summary = run_task_pool(tmp_path)
+    summary = drain_task_pool(tmp_path)
 
     assert [
         execution.task.id for execution in summary.executions if execution.task is not None
@@ -10670,10 +11650,51 @@ def test_run_task_pool_recovers_stranded_commit_stage_before_new_work(
     refreshed = get_task(tmp_path, stranded.id)
     assert refreshed is not None
     assert refreshed.status == "done"
+    assert refreshed.pipeline_status == "done"
     assert refreshed.git.commit_sha is not None
+    assert refreshed.runtime.execution_status == "done"
+    assert refreshed.runtime.last_stage.step == "commit_to_git"
+    assert refreshed.runtime.last_stage.verdict == "pass"
     assert load_state(tmp_path).queue == []
-    journal = (task_dir(tmp_path, refreshed) / "journal.md").read_text(encoding="utf-8")
-    assert "Recovered interrupted `commit_to_git` attempt" in journal
+
+
+def test_commit_to_git_ignores_unrelated_main_checkout_changes_when_task_worktree_is_clean(
+    tmp_path: Path,
+) -> None:
+    _init_git_repo(tmp_path)
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Finalize isolated worktree commit")
+
+    worktree_path = tmp_path / ".litehive" / "worktrees" / f"{task.id}-{task.slug}"
+    worktree_path.parent.mkdir(parents=True, exist_ok=True)
+    _run(["git", "worktree", "add", "--detach", str(worktree_path), "HEAD"], tmp_path)
+    (worktree_path / "app.txt").write_text("updated from task worktree\n", encoding="utf-8")
+    (tmp_path / "README.md").write_text("unrelated main checkout dirt\n", encoding="utf-8")
+
+    task.git.worktree_path = str(worktree_path.relative_to(tmp_path))
+    save_task(tmp_path, task)
+    reports_dir = task_dir(tmp_path, task) / "reports"
+    (reports_dir / "accepting-001.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "task_id": task.id,
+                "step": "accepting",
+                "verdict": "pass",
+                "summary": "ready to commit",
+                "files_changed": ["app.txt"],
+                "tests": {"added": 0, "passing": 1},
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+
+    report = _commit_to_git_report(tmp_path, worktree_path, task, auto_commit_enabled=True)
+
+    assert report.verdict == "pass"
+    assert task.status == "done"
+    assert task.pipeline_status == "done"
+    assert task.git.commit_sha is not None
 
 
 def test_resolve_next_task_finalizes_existing_checkpoint_commit_without_retry(tmp_path: Path) -> None:
@@ -10758,13 +11779,58 @@ def test_resolve_next_task_recovers_orphaned_commit_stage_before_new_work(tmp_pa
     assert refreshed is not None
     assert refreshed.status == "queued"
     assert refreshed.pipeline_status == "commit_to_git"
-    assert refreshed.runtime.execution_status == "idle"
+    assert refreshed.runtime.execution_status == "interrupted"
     assert refreshed.runtime.run_started_at is None
-    assert refreshed.runtime.current_stage.step is None
-    assert refreshed.runtime.current_stage.status == "idle"
+    assert refreshed.runtime.current_stage.step == "commit_to_git"
+    assert refreshed.runtime.current_stage.status == "interrupted"
+    assert refreshed.runtime.last_outcome.kind == "interrupted"
     assert load_state(tmp_path).queue == [orphaned.id, new_task.id]
     journal = (task_dir(tmp_path, refreshed) / "journal.md").read_text(encoding="utf-8")
-    assert "Recovered interrupted `commit_to_git` attempt" in journal
+    assert "Interrupted runner execution while `commit_to_git` was running." in journal
+    assert "Resume from `commit_to_git`." in journal
+
+
+def test_resolve_next_task_recovers_orphaned_interrupted_commit_stage_before_new_work(
+    tmp_path: Path,
+) -> None:
+    ensure_workspace(tmp_path)
+    new_task = create_task(tmp_path, title="New task", auto_commit=False)
+    orphaned = create_task(tmp_path, title="Interrupted commit stage", auto_commit=False)
+
+    orphaned.status = "interrupted"
+    orphaned.pipeline_status = "commit_to_git"
+    orphaned.runtime.execution_status = "interrupted"
+    orphaned.runtime.current_stage = RuntimeStageState(
+        step="commit_to_git",
+        status="interrupted",
+        started_at="2026-04-01T00:00:00+00:00",
+        completed_at="2026-04-01T00:01:00+00:00",
+        updated_at="2026-04-01T00:01:00+00:00",
+        duration_seconds=60,
+        verdict="blocked",
+        summary="Interrupted `commit_to_git` run recovered. Resume from `commit_to_git`.",
+    )
+    save_task(tmp_path, orphaned)
+    save_task_runtime(tmp_path, orphaned)
+
+    state = load_state(tmp_path)
+    state.active_task_id = None
+    state.queue = [new_task.id]
+    save_state(tmp_path, state)
+
+    task = resolve_next_task(tmp_path)
+
+    assert task is not None
+    assert task.id == orphaned.id
+    refreshed = get_task(tmp_path, orphaned.id)
+    assert refreshed is not None
+    assert refreshed.status == "queued"
+    assert refreshed.pipeline_status == "commit_to_git"
+    assert refreshed.runtime.execution_status == "interrupted"
+    assert load_state(tmp_path).queue == [orphaned.id, new_task.id]
+    journal = (task_dir(tmp_path, refreshed) / "journal.md").read_text(encoding="utf-8")
+    assert "Interrupted runner execution while `commit_to_git` was running." in journal
+    assert "Resume from `commit_to_git`." in journal
 
 
 def test_rollback_completed_task_restores_state_when_rollback_commit_fails(
@@ -10802,7 +11868,7 @@ def test_rollback_completed_task_restores_state_when_rollback_commit_fails(
     assert load_state(tmp_path).queue == []
     assert (tmp_path / "app.txt").read_text(encoding="utf-8") == "broken\n"
     assert _run(["git", "rev-parse", "HEAD"], tmp_path) == checkpoint_head
-    assert _run(["git", "status", "--short"], tmp_path) == ""
+    assert _git_status_without_litehive(tmp_path) == []
     journal = (task_dir(tmp_path, refreshed) / "journal.md").read_text(encoding="utf-8")
     assert "Checkpoint rollback requested." not in journal
 
@@ -10843,7 +11909,7 @@ def test_rollback_completed_task_restores_state_when_atomic_state_persist_fails(
     assert load_state(tmp_path).queue == []
     assert (tmp_path / "app.txt").read_text(encoding="utf-8") == "broken\n"
     assert _run(["git", "rev-parse", "HEAD"], tmp_path) == checkpoint_head
-    assert _run(["git", "status", "--short"], tmp_path) == ""
+    assert _git_status_without_litehive(tmp_path) == []
     journal = (task_dir(tmp_path, refreshed) / "journal.md").read_text(encoding="utf-8")
     assert "Checkpoint rollback requested." not in journal
 
@@ -10882,7 +11948,7 @@ def test_rollback_completed_task_restores_state_when_task_persist_fails(
     assert load_state(tmp_path).queue == []
     assert (tmp_path / "app.txt").read_text(encoding="utf-8") == "broken\n"
     assert _run(["git", "rev-parse", "HEAD"], tmp_path) == checkpoint_head
-    assert _run(["git", "status", "--short"], tmp_path) == ""
+    assert _git_status_without_litehive(tmp_path) == []
     journal = (task_dir(tmp_path, refreshed) / "journal.md").read_text(encoding="utf-8")
     assert "Checkpoint rollback requested." not in journal
 
@@ -10921,7 +11987,7 @@ def test_rollback_completed_task_restores_state_when_runtime_persist_fails(
     assert load_state(tmp_path).queue == []
     assert (tmp_path / "app.txt").read_text(encoding="utf-8") == "broken\n"
     assert _run(["git", "rev-parse", "HEAD"], tmp_path) == checkpoint_head
-    assert _run(["git", "status", "--short"], tmp_path) == ""
+    assert _git_status_without_litehive(tmp_path) == []
     journal = (task_dir(tmp_path, refreshed) / "journal.md").read_text(encoding="utf-8")
     assert "Checkpoint rollback requested." not in journal
 
@@ -10991,7 +12057,7 @@ def test_recover_requires_completed_task(
 
 
 def test_claude_build_invocation_includes_model_and_max_turns(tmp_path: Path) -> None:
-    from litehive.engines import ClaudeCLIAdapter, get_engine
+    from litehive.engines import ClaudeCLIAdapter
 
     adapter = ClaudeCLIAdapter(
         name="claude",
@@ -11379,11 +12445,58 @@ def test_cmd_run_dry_run_rejects_default_claude_when_not_enabled(
     ensure_workspace(tmp_path, LitehiveConfig(default_engine="claude"))
     create_task(tmp_path, title="Claude default task")
 
-    def fail_run_task_pool(*args, **kwargs):  # type: ignore[no-untyped-def]
-        raise AssertionError("run_task_pool should not be called for dry-run")
+    def fail_run_single(*args, **kwargs):  # type: ignore[no-untyped-def]
+        raise AssertionError("run_single_task should not be called for dry-run")
 
-    monkeypatch.setattr("litehive.cli.run_task_pool", fail_run_task_pool)
-    monkeypatch.setattr("litehive.cli.run_single_task", fail_run_task_pool)
+    def fail_drain(*args, **kwargs):  # type: ignore[no-untyped-def]
+        raise AssertionError("drain_task_pool should not be called for dry-run")
+
+    monkeypatch.setattr("litehive.cli.run_single_task", fail_run_single)
+    monkeypatch.setattr("litehive.cli.drain_task_pool", fail_drain)
 
     with pytest.raises(EngineError, match="opt-in"):
         _cmd_run(argparse.Namespace(workspace=tmp_path, dry_run=True, engine=None))
+
+
+def test_cmd_run_dispatches_single_task_mode(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ensure_workspace(tmp_path)
+    called: list[str] = []
+
+    def fake_run_single(*args, **kwargs):  # type: ignore[no-untyped-def]
+        called.append("single")
+        return 0
+
+    def fail_run_drain(*args, **kwargs):  # type: ignore[no-untyped-def]
+        raise AssertionError("drain handler should not run for single-task mode")
+
+    monkeypatch.setattr("litehive.cli._cmd_run_single", fake_run_single)
+    monkeypatch.setattr("litehive.cli._cmd_run_drain", fail_run_drain)
+
+    exit_code = _cmd_run(argparse.Namespace(workspace=tmp_path, dry_run=False, drain=False))
+
+    assert exit_code == 0
+    assert called == ["single"]
+
+
+def test_cmd_run_dispatches_pool_drain_mode(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ensure_workspace(tmp_path)
+    called: list[str] = []
+
+    def fail_run_single(*args, **kwargs):  # type: ignore[no-untyped-def]
+        raise AssertionError("single-task handler should not run for drain mode")
+
+    def fake_run_drain(*args, **kwargs):  # type: ignore[no-untyped-def]
+        called.append("drain")
+        return 0
+
+    monkeypatch.setattr("litehive.cli._cmd_run_single", fail_run_single)
+    monkeypatch.setattr("litehive.cli._cmd_run_drain", fake_run_drain)
+
+    exit_code = _cmd_run(argparse.Namespace(workspace=tmp_path, dry_run=False, drain=True))
+
+    assert exit_code == 0
+    assert called == ["drain"]
