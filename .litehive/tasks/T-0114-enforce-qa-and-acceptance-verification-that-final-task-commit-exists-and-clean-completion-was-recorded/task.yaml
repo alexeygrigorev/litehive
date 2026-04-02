@@ -1,0 +1,42 @@
+id: T-0114
+slug: enforce-qa-and-acceptance-verification-that-final-task-commit-exists-and-clean-completion-was-recorded
+title: Enforce QA and acceptance verification that final task commit exists and clean
+  completion was recorded
+depends_on: []
+task_type: null
+engine: null
+model: null
+mode: implementation
+status: queued
+pipeline_status: backlog
+priority: medium
+created_at: '2026-04-02T05:20:35+00:00'
+updated_at: '2026-04-02T05:22:50+00:00'
+goal: Enforce QA and acceptance verification that workflow/control-plane features
+  are only considered done when the real end-to-end lifecycle works, including final
+  checkpoint commit, resumability, and actual CLI behavior.
+acceptance_criteria:
+- QA rejects workflow features unless they are validated through the real litehive
+  CLI/task lifecycle, not only isolated unit tests.
+- A task that claims completion or commit reliability must prove that commit_to_git
+  succeeds and records a final checkpoint commit.
+- A task that claims resume or recovery behavior must prove that an interrupted task
+  resumes from the correct stage in a real workspace run.
+- A task that claims run-all or pool behavior must prove the behavior through the
+  wrapper or real CLI execution, not only direct helper-function tests.
+- Acceptance rejects features whose promise is broader than what QA actually demonstrated.
+constraints: []
+plan: []
+human_checkpoints: []
+subagents: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0114 enforce-qa-and-acceptance-verification-that-final-task-commit-exists-and-clean-completion-was-recorded'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+  worktree_path: null
+retry_policy:
+  max_retries: null
+created_from: null
