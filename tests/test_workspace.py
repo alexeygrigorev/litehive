@@ -12216,6 +12216,7 @@ def test_claude_build_invocation_includes_model_and_max_turns(tmp_path: Path) ->
         "ship it",
         "--output-format",
         "stream-json",
+        "--include-partial-messages",
         "--verbose",
         "--model",
         "claude-sonnet-4-20250514",
@@ -12344,6 +12345,112 @@ def test_claude_renders_jsonl_transcript_and_stage_report(tmp_path: Path) -> Non
     assert report.summary == "implemented Claude adapter"
     assert report.files_changed == ["litehive/engines.py"]
     assert report.tests == {"added": 3, "passing": 3}
+
+
+def test_claude_renders_partial_stream_events_for_live_capture(tmp_path: Path) -> None:
+    from litehive.engines import ClaudeCLIAdapter
+
+    execution = CLIExecutionResult(
+        adapter="claude",
+        argv=("claude", "-p"),
+        cwd=tmp_path,
+        exit_code=0,
+        stdout="\n".join(
+            [
+                '{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"VERDICT: PASS\\n"}}',
+                '{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"SUMMARY: partial Claude output\\n"}}',
+                '{"type":"content_block_delta","index":1,"delta":{"type":"text_delta","text":"FILES_CHANGED:\\n- litehive/engines.py\\n"}}',
+                '{"type":"content_block_delta","index":1,"delta":{"type":"text_delta","text":"TESTS_ADDED: 1\\nTESTS_PASSING: 1\\nWARNINGS:\\n"}}',
+            ]
+        ),
+        stderr="",
+    )
+
+    adapter = ClaudeCLIAdapter(
+        name="claude",
+        binary="claude",
+        capabilities=AdapterCapabilities(
+            supports_model_override=True,
+            strips_environment=False,
+            transcript_format="jsonl",
+        ),
+    )
+
+    transcript = adapter.render_transcript(execution)
+    assert transcript.splitlines()[0] == "VERDICT: PASS"
+    report = adapter.parse_stage_report(
+        task_id="T-0006",
+        step="implementing",
+        execution=execution,
+        subagent_status="running",
+    )
+
+    assert report.summary == "partial Claude output"
+    assert report.files_changed == ["litehive/engines.py"]
+    assert report.tests == {"added": 1, "passing": 1}
+
+
+def test_claude_live_progress_report_uses_adapter_summary_for_restart_snippet(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path, LitehiveConfig(claude_enabled=True))
+    task = create_task(tmp_path, title="Claude live restart summary", engine="claude", auto_commit=False)
+    manager = SubagentManager(tmp_path)
+
+    ref = SubagentRef(
+        id="SA-0001",
+        role="swe",
+        engine="claude",
+        status="running",
+        path="subagents/SA-0001-swe",
+    )
+    task.subagents.append(ref)
+    mark_subagent_started(tmp_path, task, ref)
+    save_task(tmp_path, task)
+
+    base = task_dir(tmp_path, task) / "subagents" / "SA-0001-swe"
+    base.mkdir(parents=True, exist_ok=False)
+    manager._write_session_start(base, ref, "stream partial Claude output")
+
+    execution = CLIExecutionResult(
+        adapter="claude",
+        argv=("claude", "-p"),
+        cwd=tmp_path,
+        exit_code=0,
+        stdout="\n".join(
+            [
+                '{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"VERDICT: PASS\\n"}}',
+                '{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"SUMMARY: partial Claude output\\n"}}',
+                '{"type":"content_block_delta","index":1,"delta":{"type":"text_delta","text":"FILES_CHANGED:\\n- litehive/engines.py\\n"}}',
+                '{"type":"content_block_delta","index":1,"delta":{"type":"text_delta","text":"TESTS_ADDED: 1\\nTESTS_PASSING: 1\\nWARNINGS:\\n"}}',
+            ]
+        ),
+        stderr="",
+        pid=4242,
+    )
+
+    manager._write_session_progress(task, base, ref, "stream partial Claude output", execution)
+
+    report = yaml.safe_load((base / "report.yaml").read_text(encoding="utf-8"))
+    assert report["status"] == "running"
+    assert report["summary"] == "partial Claude output"
+    assert report["files_changed"] == ["litehive/engines.py"]
+    assert report["tests"] == {"added": 1, "passing": 1}
+
+    refreshed = get_task(tmp_path, task.id)
+    assert refreshed is not None
+    interrupted = tasks_module._mark_interrupted_subagent(
+        tmp_path,
+        refreshed,
+        reason="runner interrupted before subagent completion",
+        stage="implementing",
+    )
+
+    assert interrupted is not None
+    assert interrupted.transcript_snippet == "partial Claude output"
+
+    resumed_report = yaml.safe_load((base / "report.yaml").read_text(encoding="utf-8"))
+    assert resumed_report["status"] == "interrupted"
+    assert resumed_report["summary"] == "partial Claude output"
+    assert resumed_report["resume_stage"] == "implementing"
 
 
 def test_claude_stage_report_uses_error_when_no_assistant_message(tmp_path: Path) -> None:
