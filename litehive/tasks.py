@@ -320,9 +320,11 @@ class WorkspaceRepairSummary:
     mutated: bool = False
     stale_runner_recovered: bool = False
     cleared_active_task_id: str | None = None
+    requeued_task_ids: list[str] = field(default_factory=list)
     removed_queue_entries: list[str] = field(default_factory=list)
     deduped_queue_entries: list[str] = field(default_factory=list)
     restored_queue_entries: list[str] = field(default_factory=list)
+    finalized_commit_task_ids: list[str] = field(default_factory=list)
 
 
 class WorkspaceConflictError(ValueError):
@@ -875,9 +877,7 @@ def _ensure_runtime_ignored(root: Path) -> None:
 
 
 def _serialize_task_record(task: TaskRecord) -> str:
-    task_payload = task.model_dump(mode="python")
-    task_payload["git"]["commit_sha"] = None
-    return yaml.safe_dump(task_payload, sort_keys=False)
+    return yaml.safe_dump(task.model_dump(mode="python"), sort_keys=False)
 
 
 def _serialize_task_runtime(task: TaskRecord) -> str:
@@ -1816,6 +1816,56 @@ def _should_requeue_commit_stage_task(task: TaskRecord) -> bool:
     }
 
 
+def _prepare_recovered_commit_task(task: TaskRecord) -> None:
+    now = utcnow()
+    task.status = "queued"
+    task.pipeline_status = "commit_to_git"
+    task.runtime.execution_status = "idle"
+    task.runtime.run_started_at = None
+    task.runtime.active_subagent = None
+    task.runtime.updated_at = now
+    task.runtime.current_stage = task.runtime.current_stage.model_copy(
+        update={
+            "step": None,
+            "status": "idle",
+            "started_at": None,
+            "completed_at": None,
+            "updated_at": now,
+            "duration_seconds": 0,
+            "verdict": None,
+            "summary": "",
+        }
+    )
+
+
+def _prepare_interrupted_task_for_requeue(task: TaskRecord) -> None:
+    now = utcnow()
+    task.status = "queued"
+    task.runtime.execution_status = "idle"
+    task.runtime.run_started_at = None
+    task.runtime.active_subagent = None
+    task.runtime.updated_at = now
+    if task.runtime.current_stage.step is None:
+        task.runtime.current_stage = task.runtime.current_stage.model_copy(
+            update={
+                "status": "idle",
+                "started_at": None,
+                "completed_at": None,
+                "updated_at": now,
+                "duration_seconds": 0,
+                "verdict": None,
+                "summary": "",
+            }
+        )
+    else:
+        task.runtime.current_stage = task.runtime.current_stage.model_copy(
+            update={
+                "status": "interrupted",
+                "updated_at": now,
+            }
+        )
+
+
 def _interrupted_subagent_snippet(root: Path, task: TaskRecord, active: RuntimeSubagentState) -> str:
     subagent_base = task_dir(root, task) / active.path
     report_path = subagent_base / "report.yaml"
@@ -2044,6 +2094,34 @@ def _recover_commit_task(root: Path, task: TaskRecord) -> str:
     return interruption_journal_message(task)
 
 
+def _latest_stage_report_verdict(root: Path, task: TaskRecord) -> str | None:
+    reports_dir = task_dir(root, task) / "reports"
+    if not reports_dir.exists():
+        return None
+    reports = sorted(reports_dir.glob("*.yaml"))
+    if not reports:
+        return None
+    try:
+        report = yaml.safe_load(reports[-1].read_text(encoding="utf-8")) or {}
+    except yaml.YAMLError:
+        return None
+    verdict = str(report.get("verdict") or "").strip().lower()
+    return verdict or None
+
+
+def _should_recover_flagged_commit_stage_task(root: Path, task: TaskRecord) -> bool:
+    if task.pipeline_status != "commit_to_git" or task.status != "flagged":
+        return False
+    if task.git.commit_sha is not None:
+        return False
+    return _latest_stage_report_verdict(root, task) in {"pass", "accept"}
+
+
+def _recover_flagged_commit_task(task: TaskRecord) -> str:
+    _prepare_recovered_commit_task(task)
+    return "Recovered flagged accepted task back to `queued/commit_to_git` for final checkpoint commit."
+
+
 def _finalize_recovered_commit_task(task: TaskRecord, *, commit_sha: str) -> str:
     now = utcnow()
     started_at = task.runtime.current_stage.started_at
@@ -2109,6 +2187,9 @@ def _recover_stranded_commit_tasks(root: Path, state: WorkspaceState) -> bool:
     tasks = list_tasks(root)
     stranded = [task for task in tasks if _is_stranded_commit_task(task)]
     orphaned = [task for task in tasks if _is_orphaned_commit_stage_task(task, state)]
+    flagged_commit_ready = {
+        task.id: task for task in tasks if _should_recover_flagged_commit_stage_task(root, task)
+    }
     completed_ids: set[str] = set()
     recovered: list[TaskRecord] = []
     transitioned: list[TaskRecord] = []
@@ -2122,11 +2203,15 @@ def _recover_stranded_commit_tasks(root: Path, state: WorkspaceState) -> bool:
             continue
         recovered.append(task)
     recovered.extend(orphaned)
+    recovered.extend(flagged_commit_ready.values())
     recovered_ids = {task.id for task in recovered}
     resolved_ids = {*recovered_ids, *completed_ids}
     queue = [task_id for task_id in state.queue if task_id not in recovered_ids]
     for task in recovered:
-        journal_messages[task.id] = _recover_commit_task(root, task)
+        if task.id in flagged_commit_ready:
+            journal_messages[task.id] = _recover_flagged_commit_task(task)
+        else:
+            journal_messages[task.id] = _recover_commit_task(root, task)
         transitioned.append(task)
     queue = [task_id for task_id in queue if task_id not in completed_ids]
     if recovered:
@@ -2145,65 +2230,61 @@ def _recover_stranded_commit_tasks(root: Path, state: WorkspaceState) -> bool:
     return True
 
 
-def recover_stale_runner_state(root: Path) -> bool:
+def _recover_stale_runner_state(
+    root: Path,
+    *,
+    summary: WorkspaceRepairSummary | None = None,
+) -> bool:
     root = root.resolve()
     with _workspace_lock(root):
         state = load_state(root)
         tasks = list_tasks(root)
         tasks_by_id = {task.id: task for task in tasks}
-        running_task_ids = sorted(
-            task.id for task in tasks if task.runtime.execution_status == "running"
-        )
-        owned_by_current_thread = _current_thread_owns_runner_guard(root)
-        runner_lock_held = _runner_lock_is_held(root)
-        if not owned_by_current_thread and runner_lock_held:
+        running_task_ids = sorted(task.id for task in tasks if task.runtime.execution_status == "running")
+        if not _current_thread_owns_runner_guard(root) and _runner_lock_is_held(root):
             return False
 
         mutated = False
         transitioned: list[TaskRecord] = []
         journal_messages: dict[str, str] = {}
+        prioritized_ids: list[str] = []
 
         if len(running_task_ids) > 1:
             return False
 
-        if running_task_ids:
-            for task_id in running_task_ids:
-                task = tasks_by_id.get(task_id)
-                if task is None:
-                    continue
-                if _is_stranded_commit_task(task):
-                    continue
-                if _should_requeue_commit_stage_task(task):
-                    _prepare_interrupted_task(
-                        root,
-                        task,
-                        stage="commit_to_git",
-                        summary=(
-                            "Interrupted `commit_to_git` run recovered after stale runner detection. "
-                            "Resume from `commit_to_git`."
-                        ),
-                        reason=_stale_interruption_reason(task, "commit_to_git"),
-                    )
-                    task.status = "queued"
-                    journal_messages[task.id] = interruption_journal_message(task)
-                elif _is_task_eligible_for_execution(task):
-                    _prepare_interrupted_task(
-                        root,
-                        task,
-                        stage=task.pipeline_status,
-                        summary=(
-                            "Interrupted run recovered after stale runner detection. "
-                            f"Resume from `{task.pipeline_status}`."
-                        ),
-                        reason=_stale_interruption_reason(task, task.pipeline_status),
-                    )
-                    journal_messages[task.id] = interruption_journal_message(task)
-                else:
-                    continue
-                transitioned.append(task)
+        for task_id in running_task_ids:
+            task = tasks_by_id.get(task_id)
+            if task is None:
+                continue
+            if _is_stranded_commit_task(task):
+                continue
+            if _should_requeue_commit_stage_task(task):
+                journal_messages[task.id] = _recover_commit_task(root, task)
+                if summary is not None and task.id not in summary.requeued_task_ids:
+                    summary.requeued_task_ids.append(task.id)
+            elif _is_task_eligible_for_execution(task):
+                _prepare_interrupted_task(
+                    root,
+                    task,
+                    stage=task.pipeline_status,
+                    summary=(
+                        "Interrupted run recovered after stale runner detection. "
+                        f"Resume from `{task.pipeline_status}`."
+                    ),
+                    reason=_stale_interruption_reason(task, task.pipeline_status),
+                )
+                journal_messages[task.id] = interruption_journal_message(task)
+            else:
+                continue
+            transitioned.append(task)
+            prioritized_ids.append(task.id)
+            mutated = True
+
+        if transitioned:
             if state.active_task_id is not None:
+                if summary is not None and summary.cleared_active_task_id is None:
+                    summary.cleared_active_task_id = state.active_task_id
                 state.active_task_id = None
-                mutated = True
             state.queue = [task_id for task_id in state.queue if task_id not in running_task_ids]
             commit_requeued_ids = [
                 task.id
@@ -2212,15 +2293,38 @@ def recover_stale_runner_state(root: Path) -> bool:
             ]
             if commit_requeued_ids:
                 state.queue = [*commit_requeued_ids, *state.queue]
-            mutated = mutated or bool(transitioned)
 
-        if state.active_task_id is not None:
-            active_task = tasks_by_id.get(state.active_task_id)
-            if active_task is None:
-                state.active_task_id = None
-                mutated = True
+        if state.active_task_id is not None and (
+            state.active_task_id not in tasks_by_id or state.active_task_id in prioritized_ids
+        ):
+            if summary is not None and summary.cleared_active_task_id is None:
+                summary.cleared_active_task_id = state.active_task_id
+            state.active_task_id = None
+            mutated = True
 
         commit_mutated = _recover_stranded_commit_tasks(root, state)
+        if summary is not None and commit_mutated:
+            refreshed_tasks = {task.id: task for task in list_tasks(root)}
+            finalized_ids = [
+                task_id
+                for task_id, task in refreshed_tasks.items()
+                if _is_stranded_commit_task(tasks_by_id.get(task_id, task))
+                and task.runtime.execution_status == "done"
+            ]
+            for task_id in sorted(finalized_ids):
+                if task_id not in summary.finalized_commit_task_ids:
+                    summary.finalized_commit_task_ids.append(task_id)
+            for task_id, task in refreshed_tasks.items():
+                previous = tasks_by_id.get(task_id)
+                if previous is None:
+                    continue
+                if (
+                    _is_stranded_commit_task(previous)
+                    and not _is_stranded_commit_task(task)
+                    and task.pipeline_status == "commit_to_git"
+                    and task.id not in summary.requeued_task_ids
+                ):
+                    summary.requeued_task_ids.append(task.id)
         if transitioned:
             _persist_tasks_and_state_without_runner_guard(
                 root,
@@ -2233,21 +2337,67 @@ def recover_stale_runner_state(root: Path) -> bool:
         return mutated or commit_mutated
 
 
+def recover_stale_runner_state(root: Path) -> bool:
+    return _recover_stale_runner_state(root)
+
+
 def repair_workspace_state(root: Path) -> WorkspaceRepairSummary:
     summary = WorkspaceRepairSummary()
-    summary.stale_runner_recovered = recover_stale_runner_state(root)
+    summary.stale_runner_recovered = _recover_stale_runner_state(root, summary=summary)
     summary.mutated = summary.stale_runner_recovered
 
     with workspace_mutation_guard(root), _workspace_lock(root):
         state = load_state(root)
         tasks_by_id = {task.id: task for task in list_tasks(root)}
+        touched_tasks: list[TaskRecord] = []
+        journal_messages: dict[str, str] = {}
 
-        if state.active_task_id is not None:
-            active_task = tasks_by_id.get(state.active_task_id)
-            if active_task is None or not _is_task_eligible_for_execution(active_task):
-                summary.cleared_active_task_id = state.active_task_id
-                state.active_task_id = None
-                summary.mutated = True
+        if state.active_task_id is not None and state.active_task_id not in tasks_by_id:
+            summary.cleared_active_task_id = state.active_task_id
+            state.active_task_id = None
+            summary.mutated = True
+
+        active_task = tasks_by_id.get(state.active_task_id) if state.active_task_id is not None else None
+        if active_task is not None and active_task.runtime.execution_status != "running":
+            state.active_task_id = None
+            summary.cleared_active_task_id = active_task.id
+            summary.mutated = True
+            if _is_stranded_commit_task(active_task):
+                journal_message = _recover_existing_checkpoint_commit(root, active_task)
+                if journal_message is None:
+                    journal_message = _recover_commit_task(active_task)
+                    state.queue = [item for item in state.queue if item != active_task.id]
+                    state.queue.insert(0, active_task.id)
+                    if active_task.id not in summary.requeued_task_ids:
+                        summary.requeued_task_ids.append(active_task.id)
+                else:
+                    state.queue = [item for item in state.queue if item != active_task.id]
+                    if active_task.id not in summary.finalized_commit_task_ids:
+                        summary.finalized_commit_task_ids.append(active_task.id)
+                journal_messages[active_task.id] = journal_message
+                touched_tasks.append(active_task)
+            elif _should_requeue_commit_stage_task(active_task):
+                _prepare_recovered_commit_task(active_task)
+                state.queue = [item for item in state.queue if item != active_task.id]
+                state.queue.insert(0, active_task.id)
+                journal_messages[active_task.id] = (
+                    "Recovered interrupted `commit_to_git` attempt and requeued the task at "
+                    "`commit_to_git`."
+                )
+                touched_tasks.append(active_task)
+                if active_task.id not in summary.requeued_task_ids:
+                    summary.requeued_task_ids.append(active_task.id)
+            elif _is_task_eligible_for_execution(active_task):
+                _prepare_interrupted_task_for_requeue(active_task)
+                state.queue = [item for item in state.queue if item != active_task.id]
+                state.queue.insert(0, active_task.id)
+                journal_messages[active_task.id] = (
+                    "Recovered interrupted run and requeued the task at "
+                    f"`{active_task.pipeline_status}`."
+                )
+                touched_tasks.append(active_task)
+                if active_task.id not in summary.requeued_task_ids:
+                    summary.requeued_task_ids.append(active_task.id)
 
         seen: set[str] = set()
         normalized_queue: list[str] = []
@@ -2263,16 +2413,21 @@ def repair_workspace_state(root: Path) -> WorkspaceRepairSummary:
                 continue
             seen.add(task_id)
             normalized_queue.append(task_id)
-        if normalized_queue != state.queue:
-            state.queue = normalized_queue
-            summary.mutated = True
+        state.queue = normalized_queue
 
         restored = _restore_missing_queued_tasks(state, tasks_by_id)
         if restored:
             summary.restored_queue_entries.extend(restored)
             summary.mutated = True
 
-        if summary.mutated:
+        if touched_tasks:
+            _persist_tasks_and_state_without_runner_guard(
+                root,
+                tasks=touched_tasks,
+                state=state,
+                journal_messages=journal_messages,
+            )
+        elif summary.mutated:
             _save_state_without_runner_guard(root, state)
     return summary
 
@@ -2288,7 +2443,7 @@ def _restore_missing_queued_tasks(
             continue
         if task.pipeline_status == "done":
             continue
-        if task_id in queued_ids:
+        if task_id == state.active_task_id or task_id in queued_ids:
             continue
         state.queue.append(task_id)
         queued_ids.add(task_id)

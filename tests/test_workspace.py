@@ -6936,10 +6936,12 @@ def test_queue_command_shows_active_and_queued_order(
     ) in output
 
 
-def test_repair_command_repairs_stale_runner_state_and_queue(tmp_path: Path, capsys) -> None:  # type: ignore[no-untyped-def]
+def test_repair_command_repairs_stale_runner_state_and_cleans_queue(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     ensure_workspace(tmp_path)
-    queued = create_task(tmp_path, title="Queued follow-up", auto_commit=False)
     interrupted = create_task(tmp_path, title="Interrupted testing task", auto_commit=False)
+    queued = create_task(tmp_path, title="Queued task", auto_commit=False)
     done = create_task(tmp_path, title="Completed task", auto_commit=False)
 
     interrupted.status = "in_progress"
@@ -6960,7 +6962,7 @@ def test_repair_command_repairs_stale_runner_state_and_queue(tmp_path: Path, cap
 
     state = load_state(tmp_path)
     state.active_task_id = interrupted.id
-    state.queue = [queued.id, queued.id, "T-9999", done.id]
+    state.queue = [queued.id, "T-9999", queued.id, done.id]
     save_state(tmp_path, state)
     (tmp_path / ".litehive" / ".runner.lock").write_text(
         yaml.safe_dump({"pid": 999999}, sort_keys=False),
@@ -6973,9 +6975,12 @@ def test_repair_command_repairs_stale_runner_state_and_queue(tmp_path: Path, cap
     assert exit_code == 0
     assert "repaired: yes" in output
     assert "stale_runner_recovered: yes" in output
-    assert "cleared_active_task_id: -" in output
+    assert f"cleared_active_task_id: {interrupted.id}" in output
+    assert "requeued_tasks: -" in output
     assert f"removed_queue_entries: T-9999 {done.id}" in output
     assert f"deduped_queue_entries: {queued.id}" in output
+    assert "restored_queue_entries: -" in output
+    assert "finalized_commit_tasks: -" in output
     assert "active_task_id: None" in output
     assert "queue_length: 1" in output
 
@@ -6985,6 +6990,7 @@ def test_repair_command_repairs_stale_runner_state_and_queue(tmp_path: Path, cap
     refreshed = get_task(tmp_path, interrupted.id)
     assert refreshed is not None
     assert refreshed.status == "interrupted"
+    assert refreshed.pipeline_status == "testing"
     assert refreshed.runtime.execution_status == "interrupted"
 
 
@@ -6997,9 +7003,143 @@ def test_repair_workspace_state_reports_noop_for_consistent_workspace(tmp_path: 
     assert summary.mutated is False
     assert summary.stale_runner_recovered is False
     assert summary.cleared_active_task_id is None
+    assert summary.requeued_task_ids == []
     assert summary.removed_queue_entries == []
     assert summary.deduped_queue_entries == []
+    assert summary.restored_queue_entries == []
+    assert summary.finalized_commit_task_ids == []
     assert load_state(tmp_path).queue == [task.id]
+
+
+def test_repair_workspace_state_requeues_untouched_active_task(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    active = create_task(tmp_path, title="Interrupted active task", auto_commit=False)
+    queued = create_task(tmp_path, title="Queued follow-up", auto_commit=False)
+
+    active.status = "in_progress"
+    active.pipeline_status = "testing"
+    save_task(tmp_path, active)
+
+    state = load_state(tmp_path)
+    state.active_task_id = active.id
+    state.queue = [queued.id]
+    save_state(tmp_path, state)
+
+    summary = repair_workspace_state(tmp_path)
+
+    assert summary.mutated is True
+    assert summary.stale_runner_recovered is False
+    assert summary.cleared_active_task_id == active.id
+    assert summary.requeued_task_ids == [active.id]
+    assert summary.removed_queue_entries == []
+    assert summary.deduped_queue_entries == []
+    assert summary.restored_queue_entries == []
+    assert summary.finalized_commit_task_ids == []
+
+    refreshed_state = load_state(tmp_path)
+    assert refreshed_state.active_task_id is None
+    assert refreshed_state.queue == [active.id, queued.id]
+
+    refreshed = get_task(tmp_path, active.id)
+    assert refreshed is not None
+    assert refreshed.status == "queued"
+    assert refreshed.pipeline_status == "testing"
+    assert refreshed.runtime.execution_status == "idle"
+
+
+def test_repair_workspace_state_requeues_orphaned_commit_stage_task(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    orphaned = create_task(tmp_path, title="Interrupted commit task", auto_commit=False)
+    queued = create_task(tmp_path, title="Queued follow-up", auto_commit=False)
+
+    orphaned.status = "in_progress"
+    orphaned.pipeline_status = "commit_to_git"
+    orphaned.runtime.execution_status = "running"
+    orphaned.runtime.current_stage = RuntimeStageState(
+        step="commit_to_git",
+        status="running",
+        started_at="2026-04-01T00:00:00+00:00",
+        updated_at="2026-04-01T00:00:00+00:00",
+    )
+    save_task(tmp_path, orphaned)
+    save_task_runtime(tmp_path, orphaned)
+
+    state = load_state(tmp_path)
+    state.active_task_id = None
+    state.queue = [queued.id]
+    save_state(tmp_path, state)
+
+    summary = repair_workspace_state(tmp_path)
+
+    assert summary.mutated is True
+    assert summary.stale_runner_recovered is True
+    assert summary.cleared_active_task_id is None
+    assert summary.requeued_task_ids == [orphaned.id]
+    assert summary.removed_queue_entries == []
+    assert summary.deduped_queue_entries == []
+    assert summary.restored_queue_entries == []
+    assert summary.finalized_commit_task_ids == []
+
+    refreshed = get_task(tmp_path, orphaned.id)
+    assert refreshed is not None
+    assert refreshed.status == "queued"
+    assert refreshed.pipeline_status == "commit_to_git"
+    assert refreshed.runtime.execution_status == "interrupted"
+    assert load_state(tmp_path).queue == [orphaned.id, queued.id]
+
+
+def test_repair_workspace_state_finalizes_existing_checkpoint_commit(tmp_path: Path) -> None:
+    initial_sha = _init_git_repo(tmp_path)
+    ensure_workspace(tmp_path)
+    stranded = create_task(tmp_path, title="Stranded commit task")
+    queued = create_task(tmp_path, title="Queued follow-up", auto_commit=False)
+    (tmp_path / "app.txt").write_text("updated\n", encoding="utf-8")
+
+    commit_message = "litehive: complete T-0001 stranded-commit-task"
+    _run(["git", "add", "-A"], tmp_path)
+    _run(["git", "commit", "-m", commit_message], tmp_path)
+    existing_checkpoint_sha = _run(["git", "rev-parse", "HEAD"], tmp_path)
+
+    stranded.status = "done"
+    stranded.pipeline_status = "done"
+    stranded.git.checkpoint_attempts = 1
+    stranded.git.checkpoint_base_sha = initial_sha
+    stranded.git.commit_sha = None
+    stranded.runtime.execution_status = "running"
+    stranded.runtime.current_stage = RuntimeStageState(
+        step="commit_to_git",
+        status="running",
+        started_at="2026-04-01T00:00:00+00:00",
+        updated_at="2026-04-01T00:00:00+00:00",
+    )
+    save_task(tmp_path, stranded)
+    save_task_runtime(tmp_path, stranded)
+
+    state = load_state(tmp_path)
+    state.active_task_id = stranded.id
+    state.queue = [queued.id]
+    save_state(tmp_path, state)
+
+    summary = repair_workspace_state(tmp_path)
+
+    assert summary.mutated is True
+    assert summary.stale_runner_recovered is True
+    assert summary.cleared_active_task_id is None
+    assert summary.requeued_task_ids == []
+    assert summary.removed_queue_entries == []
+    assert summary.deduped_queue_entries == []
+    assert summary.restored_queue_entries == []
+    assert summary.finalized_commit_task_ids == [stranded.id]
+
+    refreshed = get_task(tmp_path, stranded.id)
+    assert refreshed is not None
+    assert refreshed.status == "done"
+    assert refreshed.pipeline_status == "done"
+    assert refreshed.git.commit_sha == existing_checkpoint_sha
+    assert refreshed.git.checkpoint_attempts == 1
+    assert refreshed.runtime.execution_status == "done"
+    assert load_state(tmp_path).active_task_id is None
+    assert load_state(tmp_path).queue == [queued.id]
 
 
 def test_queue_command_marks_recovered_interruption(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
@@ -11526,6 +11666,16 @@ def test_run_next_task_flags_task_when_other_task_state_is_dirty(
     assert task.status == "done"
     assert task.pipeline_status == "done"
     assert task.git.commit_sha is not None
+    task_yaml = yaml.safe_load(
+        (
+            tmp_path
+            / ".litehive"
+            / "tasks"
+            / "T-0001-ship-first-task"
+            / "task.yaml"
+        ).read_text(encoding="utf-8")
+    )
+    assert task_yaml["git"]["commit_sha"] == task.git.commit_sha
 
 
 def test_rollback_command_requeues_checkpointed_task(
@@ -11965,6 +12115,61 @@ def test_resolve_next_task_recovers_orphaned_interrupted_commit_stage_before_new
     journal = (task_dir(tmp_path, refreshed) / "journal.md").read_text(encoding="utf-8")
     assert "Interrupted runner execution while `commit_to_git` was running." in journal
     assert "Resume from `commit_to_git`." in journal
+
+
+def test_resolve_next_task_recovers_flagged_commit_stage_after_passing_review(
+    tmp_path: Path,
+) -> None:
+    ensure_workspace(tmp_path)
+    follow_up = create_task(tmp_path, title="Later task", auto_commit=False)
+    flagged = create_task(tmp_path, title="Accepted but not committed", auto_commit=False)
+
+    flagged.status = "flagged"
+    flagged.pipeline_status = "commit_to_git"
+    flagged.runtime.execution_status = "flagged"
+    flagged.runtime.current_stage = RuntimeStageState(
+        step="commit_to_git",
+        status="blocked",
+        started_at="2026-04-01T00:00:00+00:00",
+        completed_at="2026-04-01T00:01:00+00:00",
+        updated_at="2026-04-01T00:01:00+00:00",
+        duration_seconds=60,
+        verdict="fail",
+        summary="commit never ran",
+    )
+    save_task(tmp_path, flagged)
+    save_task_runtime(tmp_path, flagged)
+    (task_dir(tmp_path, flagged) / "reports" / "testing-001.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "task_id": flagged.id,
+                "step": "testing",
+                "verdict": "pass",
+                "summary": "ready for final commit",
+                "files_changed": ["litehive/tasks.py"],
+                "tests": {"added": 1, "passing": 1},
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+
+    state = load_state(tmp_path)
+    state.active_task_id = None
+    state.queue = [follow_up.id]
+    save_state(tmp_path, state)
+
+    task = resolve_next_task(tmp_path)
+
+    assert task is not None
+    assert task.id == flagged.id
+    refreshed = get_task(tmp_path, flagged.id)
+    assert refreshed is not None
+    assert refreshed.status == "queued"
+    assert refreshed.pipeline_status == "commit_to_git"
+    assert load_state(tmp_path).queue == [flagged.id, follow_up.id]
+    journal = (task_dir(tmp_path, refreshed) / "journal.md").read_text(encoding="utf-8")
+    assert "Recovered flagged accepted task back to `queued/commit_to_git`" in journal
 
 
 def test_rollback_completed_task_restores_state_when_rollback_commit_fails(

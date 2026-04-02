@@ -1577,12 +1577,24 @@ def _cmd_repair(args: argparse.Namespace) -> int:
     print(f"stale_runner_recovered: {'yes' if summary.stale_runner_recovered else 'no'}")
     print(f"cleared_active_task_id: {summary.cleared_active_task_id or '-'}")
     print(
+        "requeued_tasks: "
+        + (" ".join(summary.requeued_task_ids) if summary.requeued_task_ids else "-")
+    )
+    print(
         "removed_queue_entries: "
         + (" ".join(summary.removed_queue_entries) if summary.removed_queue_entries else "-")
     )
     print(
         "deduped_queue_entries: "
         + (" ".join(summary.deduped_queue_entries) if summary.deduped_queue_entries else "-")
+    )
+    print(
+        "restored_queue_entries: "
+        + (" ".join(summary.restored_queue_entries) if summary.restored_queue_entries else "-")
+    )
+    print(
+        "finalized_commit_tasks: "
+        + (" ".join(summary.finalized_commit_task_ids) if summary.finalized_commit_task_ids else "-")
     )
     print(f"active_task_id: {state.active_task_id}")
     print(f"queue_length: {len(state.queue)}")
