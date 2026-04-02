@@ -2616,6 +2616,111 @@ def test_run_next_task_requeues_after_qa_rejection(
     assert testing_report["retry_decision"] == "retry"
 
 
+def test_cli_run_end_to_end_requeues_after_qa_failure_then_commits_in_temp_git_repo(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    initial_sha = _init_git_repo(tmp_path)
+    ensure_workspace(tmp_path, LitehiveConfig(default_retry_limit=0))
+    task = create_task(tmp_path, title="QA harness task")
+    task.retry_policy.max_retries = 2
+    save_task(tmp_path, task)
+
+    attempts = {"testing": 0}
+
+    def fake_run(self, current_task, role, engine_name, prompt, model=None, max_turns=None):  # type: ignore[no-untyped-def]
+        if current_task.pipeline_status == "implementing":
+            (self.execution_root / "app.txt").write_text(
+                f"iteration {attempts['testing'] + 1}\n",
+                encoding="utf-8",
+            )
+        if current_task.pipeline_status == "testing":
+            attempts["testing"] += 1
+            if attempts["testing"] == 1:
+                return _stage_subagent_result(
+                    self.execution_root,
+                    "testing",
+                    role=role,
+                    engine_name=engine_name,
+                    verdict="FAIL",
+                    summary="testing needs another implementation pass",
+                    files_changed=[],
+                    tests_added=0,
+                    tests_passing=0,
+                )
+        return _stage_subagent_result(
+            self.execution_root,
+            current_task.pipeline_status,
+            role=role,
+            engine_name=engine_name,
+            files_changed=["app.txt"],
+        )
+
+    monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_run)
+
+    assert _cmd_run(argparse.Namespace(workspace=tmp_path, dry_run=False, drain=False)) == 0
+    first_output = capsys.readouterr().out
+    assert "status: queued" in first_output
+    assert "last_verdict: fail" in first_output
+    assert "stage_outcomes: grooming=pass, implementing=pass, testing=fail" in first_output
+    assert _run(["git", "rev-parse", "HEAD"], tmp_path) == initial_sha
+    assert (tmp_path / "app.txt").read_text(encoding="utf-8") == "base\n"
+
+    requeued = get_task(tmp_path, task.id)
+    assert requeued is not None
+    assert requeued.status == "queued"
+    assert requeued.pipeline_status == "implementing"
+    assert requeued.runtime.retry_count == 1
+    assert requeued.runtime.retry_limit == 2
+
+    assert _cmd_run(argparse.Namespace(workspace=tmp_path, dry_run=False, drain=False)) == 0
+    second_output = capsys.readouterr().out
+    assert "status: done" in second_output
+    assert "last_verdict: pass" in second_output
+    assert "stage_outcomes:" in second_output
+    assert "grooming=pass" in second_output
+    assert "implementing=pass" in second_output
+    assert "testing=pass" in second_output
+    assert "accepting=pass" in second_output
+    assert "commit_to_git=pass" in second_output
+    assert "commit:" in second_output
+
+    finished = get_task(tmp_path, task.id)
+    assert finished is not None
+    assert finished.status == "done"
+    assert finished.pipeline_status == "done"
+    assert finished.git.commit_sha == _run(["git", "rev-parse", "HEAD"], tmp_path)
+    assert finished.git.commit_sha != initial_sha
+    assert (tmp_path / "app.txt").read_text(encoding="utf-8") == "iteration 2\n"
+    assert (
+        _run(["git", "log", "-1", "--pretty=%s"], tmp_path)
+        == "litehive: complete T-0001 qa-harness-task"
+    )
+
+    reports = task_dir(tmp_path, finished) / "reports"
+    assert (reports / "grooming-001.yaml").exists()
+    implementing_reports = sorted(reports.glob("implementing-*.yaml"))
+    testing_reports = sorted(reports.glob("testing-*.yaml"))
+    accepting_reports = sorted(reports.glob("accepting-*.yaml"))
+    commit_reports = sorted(reports.glob("commit_to_git-*.yaml"))
+    assert len(implementing_reports) == 2
+    assert len(testing_reports) == 2
+    assert len(accepting_reports) == 1
+    assert len(commit_reports) == 1
+
+    parsed_testing_reports = [
+        yaml.safe_load(path.read_text(encoding="utf-8")) for path in testing_reports
+    ]
+    commit_report = yaml.safe_load(commit_reports[0].read_text(encoding="utf-8"))
+    assert {report["verdict"] for report in parsed_testing_reports} == {"fail", "pass"}
+    failed_testing = next(
+        report for report in parsed_testing_reports if report["verdict"] == "fail"
+    )
+    assert failed_testing["retry_decision"] == "retry"
+    assert commit_report["verdict"] == "pass"
+
+
 def test_opencode_strips_provider_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     calls = {}
 
@@ -10363,6 +10468,57 @@ def _completed_subagent_result(
             stderr="",
         ),
         transcript="",
+        exit_code=0,
+    )
+
+
+def _stage_subagent_result(
+    cwd: Path,
+    step: str,
+    *,
+    role: str = "swe",
+    engine_name: str = "codex",
+    verdict: str = "PASS",
+    summary: str | None = None,
+    files_changed: list[str] | None = None,
+    tests_added: int = 1,
+    tests_passing: int = 1,
+    warnings: list[str] | None = None,
+) -> SubagentResult:
+    transcript_lines = [
+        f"VERDICT: {verdict}",
+        f"SUMMARY: {summary or f'{step} complete via {engine_name}'}",
+        "FILES_CHANGED:",
+    ]
+    for path in files_changed or []:
+        transcript_lines.append(f"- {path}")
+    transcript_lines.extend(
+        [
+            f"TESTS_ADDED: {tests_added}",
+            f"TESTS_PASSING: {tests_passing}",
+            "WARNINGS:",
+        ]
+    )
+    for warning in warnings or []:
+        transcript_lines.append(f"- {warning}")
+    transcript = "\n".join(transcript_lines)
+    return SubagentResult(
+        ref=SubagentRef(
+            id=f"SA-{step}-{engine_name}",
+            role=role,
+            engine=engine_name,
+            status="completed",
+            path=f"subagents/{step}-{engine_name}",
+        ),
+        execution=CLIExecutionResult(
+            adapter=engine_name,
+            argv=(engine_name, "exec"),
+            cwd=cwd,
+            exit_code=0,
+            stdout=transcript,
+            stderr="",
+        ),
+        transcript=transcript,
         exit_code=0,
     )
 
