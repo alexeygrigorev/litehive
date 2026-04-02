@@ -4,18 +4,26 @@ title: Add stage duration and velocity estimation for task execution
 depends_on: []
 task_type: null
 engine: null
+model: null
 mode: implementation
-status: queued
-pipeline_status: backlog
+status: in_progress
+pipeline_status: grooming
 priority: medium
 created_at: '2026-04-01T09:05:45+00:00'
-updated_at: '2026-04-01T09:05:45+00:00'
+updated_at: '2026-04-02T21:04:55+00:00'
 goal: ''
 acceptance_criteria: []
 constraints: []
 plan: []
 human_checkpoints: []
-subagents: []
+subagents:
+- id: SA-0001
+  role: pm
+  engine: codex
+  status: running
+  path: subagents/SA-0001-pm
+  sandboxed: false
+  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0098 add-stage-duration-and-velocity-estimation-for-task-execution'
@@ -23,5 +31,7 @@ git:
   checkpoint_base_sha: null
   checkpoint_attempts: 0
   rolled_back_checkpoint_attempt: null
+  worktree_path: .litehive/worktrees/T-0098-add-stage-duration-and-velocity-estimation-for-task-execution
 retry_policy:
   max_retries: null
+created_from: null

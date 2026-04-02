@@ -969,6 +969,11 @@ def build_parser() -> argparse.ArgumentParser:
         default=Path.cwd(),
         help="Repository root containing .litehive/",
     )
+    status.add_argument(
+        "--full",
+        action="store_true",
+        help="Include the full per-task status dump.",
+    )
 
     queue = subparsers.add_parser("queue", help="Show the active task and queued order")
     queue.add_argument(
@@ -1444,46 +1449,41 @@ def _cmd_configure(args: argparse.Namespace) -> int:
 
 def _cmd_status(args: argparse.Namespace) -> int:
     config = load_config(args.workspace)
-    recover_stale_runner_state(args.workspace)
     state = load_state(args.workspace)
-    tasks = list_tasks(args.workspace)
     print(f"workspace: {args.workspace}")
     print(f"default_engine: {config.default_engine}")
-    print(f"process_profile: {config.process_profile}")
-    print(f"opencode_model: {config.opencode_model}")
-    print(f"gemini_model: {config.gemini_model}")
-    print(f"copilot_model: {config.copilot_model}")
-    print(f"claude_enabled: {config.claude_enabled}")
-    print(f"claude_model: {config.claude_model}")
-    print(f"claude_max_turns: {config.claude_max_turns}")
-    print(f"pool_usage_cap: {config.pool_usage_cap}")
-    print(f"pool_cost_cap: {config.pool_cost_cap}")
-    print(f"engine_usage_caps: {config.engine_usage_caps}")
-    print(f"engine_budget_caps: {config.engine_budget_caps}")
-    print(f"engine_costs: {config.engine_costs}")
-    print(f"default_retry_limit: {config.default_retry_limit}")
-    print(f"execution_retry_policies: {_format_execution_retry_policies(config)}")
-    print(f"pool_stop_on_failure: {config.pool_stop_on_failure}")
-    print(f"pool_max_tasks: {config.pool_max_tasks}")
-    print(f"pool_stop_on_execution_limit: {config.pool_stop_on_execution_limit}")
-    print(f"pool_quota_threshold: {config.pool_quota_threshold}")
-    print(f"pool_budget_threshold: {config.pool_budget_threshold}")
-    print(f"pool_stop_on_dirty_git: {config.pool_stop_on_dirty_git}")
-    print(f"pool_selection_policy: {config.pool_selection_policy}")
-    print(f"pre_acceptance_command: {config.pre_acceptance_command}")
-    print(f"runner_hooks: {format_runner_hooks(config)}")
-    print(f"subagent_resource_limits: {format_subagent_resource_limits(config)}")
-    print(f"external_engine_sandbox: {format_external_engine_sandbox(config)}")
-    print(f"task_engine_routing: {config.task_engine_routing}")
     print(f"mode: {state.mode}")
     print(f"active_task_id: {state.active_task_id}")
     print(f"queued_tasks: {len(state.queue)}")
     print(f"pool_stop_reason: {state.pool_stop_reason}")
-    if tasks:
-        print()
-        for task in tasks:
-            for line in render_task_summary(task, active=task.id == state.active_task_id):
-                print(line)
+    if state.queue:
+        print(f"queue_head: {state.queue[0]}")
+    active_task = require_task(args.workspace, state.active_task_id) if state.active_task_id else None
+    if active_task is not None:
+        active_engine = (
+            active_task.runtime.active_subagent.engine
+            if active_task.runtime.active_subagent is not None
+            else active_task.runtime.last_subagent.engine
+            if active_task.runtime.last_subagent is not None
+            else active_task.engine
+            or config.default_engine
+        )
+        active_stage = (
+            active_task.runtime.current_stage.step
+            or active_task.pipeline_status
+            or "-"
+        )
+        print(f"active_task_title: {active_task.title}")
+        print(f"active_task_status: {active_task.status}/{active_task.pipeline_status}")
+        print(f"active_stage: {active_stage}")
+        print(f"active_engine: {active_engine}")
+    if args.full:
+        tasks = list_tasks(args.workspace)
+        if tasks:
+            print()
+            for task in tasks:
+                for line in render_task_summary(task, active=task.id == state.active_task_id):
+                    print(line)
     return 0
 
 

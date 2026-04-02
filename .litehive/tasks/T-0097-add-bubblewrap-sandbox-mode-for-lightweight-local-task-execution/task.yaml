@@ -4,17 +4,19 @@ title: Add bubblewrap sandbox mode for lightweight local task execution
 depends_on: []
 task_type: null
 engine: null
+model: null
 mode: implementation
-status: queued
-pipeline_status: backlog
+status: interrupted
+pipeline_status: implementing
 priority: medium
 created_at: '2026-04-01T08:54:36+00:00'
-updated_at: '2026-04-01T08:56:00+00:00'
-goal: Add a lightweight `bubblewrap` sandbox mode that constrains task execution
-  to the workspace and a minimal runtime surface, so an agent or compromised package
+updated_at: '2026-04-02T21:04:44+00:00'
+goal: Add a lightweight `bubblewrap` sandbox mode that constrains task execution to
+  the workspace and a minimal runtime surface, so an agent or compromised package
   cannot freely read, modify, or delete files outside the allowed mounts.
 acceptance_criteria:
-- Litehive can execute supported task stages inside `bubblewrap` as a selectable sandbox mode.
+- Litehive can execute supported task stages inside `bubblewrap` as a selectable sandbox
+  mode.
 - The sandbox mounts only the intended workspace paths plus the minimal runtime paths
   needed to execute the toolchain.
 - The sandbox configuration prevents writes outside the allowed workspace mounts.
@@ -34,7 +36,21 @@ plan:
 - Surface the resulting sandbox config in diagnostics and verify that paths outside
   the workspace are not writable or broadly readable.
 human_checkpoints: []
-subagents: []
+subagents:
+- id: SA-0001
+  role: pm
+  engine: codex
+  status: completed
+  path: subagents/SA-0001-pm
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0002
+  role: swe
+  engine: codex
+  status: interrupted
+  path: subagents/SA-0002-swe
+  sandboxed: false
+  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0097 add-bubblewrap-sandbox-mode-for-lightweight-local-task-execution'
@@ -42,5 +58,7 @@ git:
   checkpoint_base_sha: null
   checkpoint_attempts: 0
   rolled_back_checkpoint_attempt: null
+  worktree_path: .litehive/worktrees/T-0097-add-bubblewrap-sandbox-mode-for-lightweight-local-task-execution
 retry_policy:
   max_retries: null
+created_from: null

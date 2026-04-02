@@ -21,7 +21,7 @@ dev = [
 ]
 
 [project.scripts]
-litehive = "litehive.cli:main"
+litehive = "litehive.main:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["litehive"]

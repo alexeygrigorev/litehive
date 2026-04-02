@@ -10,7 +10,30 @@ mkdir -p "$log_root"
 
 iteration=0
 
-status_field() {
+read_state_snapshot() {
+  local file="$1"
+  WORKSPACE="$workspace" uv run python - <<'PY' >"$file"
+from pathlib import Path
+import os
+import yaml
+
+workspace = Path(os.environ["WORKSPACE"])
+state_path = workspace / ".litehive" / "state.yaml"
+state = yaml.safe_load(state_path.read_text()) if state_path.exists() else {}
+
+active_task_id = state.get("active_task_id")
+queue = state.get("queue", []) or []
+stop_reason = state.get("pool_stop_reason")
+
+print(f"active_task_id: {active_task_id if active_task_id is not None else 'None'}")
+print(f"queued_tasks: {len(queue)}")
+print(f"pool_stop_reason: {stop_reason if stop_reason is not None else 'None'}")
+if queue:
+    print(f"queue_head: {queue[0]}")
+PY
+}
+
+snapshot_field() {
   local field="$1"
   local file="$2"
   sed -n "s/^${field}: //p" "$file" | head -n 1
@@ -40,11 +63,12 @@ while true; do
 
   echo
   echo "== iteration $iteration =="
-  uv run litehive status --workspace "$workspace" | tee "$pre_status_file"
+  read_state_snapshot "$pre_status_file"
+  cat "$pre_status_file"
 
-  active_task_id="$(status_field active_task_id "$pre_status_file")"
-  queued_tasks="$(status_field queued_tasks "$pre_status_file")"
-  stop_reason_before="$(status_field pool_stop_reason "$pre_status_file")"
+  active_task_id="$(snapshot_field active_task_id "$pre_status_file")"
+  queued_tasks="$(snapshot_field queued_tasks "$pre_status_file")"
+  stop_reason_before="$(snapshot_field pool_stop_reason "$pre_status_file")"
 
   if [[ "${active_task_id:-None}" == "None" && "${queued_tasks:-0}" == "0" ]]; then
     echo "No active or queued tasks remain. Stopping."
@@ -66,11 +90,12 @@ while true; do
     exit 1
   fi
 
-  uv run litehive status --workspace "$workspace" | tee "$post_status_file"
+  read_state_snapshot "$post_status_file"
+  cat "$post_status_file"
 
-  stop_reason="$(status_field pool_stop_reason "$post_status_file")"
-  active_after="$(status_field active_task_id "$post_status_file")"
-  queued_after="$(status_field queued_tasks "$post_status_file")"
+  stop_reason="$(snapshot_field pool_stop_reason "$post_status_file")"
+  active_after="$(snapshot_field active_task_id "$post_status_file")"
+  queued_after="$(snapshot_field queued_tasks "$post_status_file")"
 
   if [[ "${active_after:-None}" == "None" && "${queued_after:-0}" == "0" ]]; then
     echo "No active or queued tasks remain. Stopping."

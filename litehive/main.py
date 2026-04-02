@@ -1,0 +1,83 @@
+"""Lightweight CLI entrypoint with a fast status path."""
+
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+
+import yaml
+
+
+def _resolve_workspace(argv: list[str]) -> Path:
+    workspace = Path.cwd()
+    for index, arg in enumerate(argv):
+        if arg == "--workspace" and index + 1 < len(argv):
+            workspace = Path(argv[index + 1])
+        elif arg.startswith("--workspace="):
+            workspace = Path(arg.split("=", 1)[1])
+    return workspace.resolve()
+
+
+def _fast_status(argv: list[str]) -> int:
+    workspace = _resolve_workspace(argv)
+    state_path = workspace / ".litehive" / "state.yaml"
+    config_path = workspace / ".litehive" / "config.yaml"
+
+    state = yaml.safe_load(state_path.read_text()) if state_path.exists() else {}
+    config = yaml.safe_load(config_path.read_text()) if config_path.exists() else {}
+
+    active_task_id = state.get("active_task_id")
+    queue = state.get("queue", []) or []
+    stop_reason = state.get("pool_stop_reason")
+    mode = state.get("mode", "implementation")
+    default_engine = config.get("default_engine", "codex")
+
+    print(f"workspace: {workspace}")
+    print(f"default_engine: {default_engine}")
+    print(f"mode: {mode}")
+    print(f"active_task_id: {active_task_id if active_task_id is not None else 'None'}")
+    print(f"queued_tasks: {len(queue)}")
+    print(f"pool_stop_reason: {stop_reason if stop_reason is not None else 'None'}")
+    if queue:
+        print(f"queue_head: {queue[0]}")
+
+    if active_task_id is not None:
+        tasks_root = workspace / ".litehive" / "tasks"
+        matches = sorted(tasks_root.glob(f"{active_task_id}-*/task.yaml"))
+        if matches:
+            task_path = matches[0]
+            task_data = yaml.safe_load(task_path.read_text()) or {}
+            runtime_path = task_path.with_name("runtime.yaml")
+            runtime = yaml.safe_load(runtime_path.read_text()) if runtime_path.exists() else {}
+            current_stage = (runtime.get("current_stage") or {}).get("step")
+            last_subagent = runtime.get("last_subagent") or {}
+            active_subagent = runtime.get("active_subagent") or {}
+            stage = current_stage or task_data.get("pipeline_status") or "-"
+            engine = (
+                active_subagent.get("engine")
+                or last_subagent.get("engine")
+                or task_data.get("engine")
+                or default_engine
+            )
+            print(f"active_task_title: {task_data.get('title', '-')}")
+            print(
+                "active_task_status: "
+                f"{task_data.get('status', '-')}/{task_data.get('pipeline_status', '-')}"
+            )
+            print(f"active_stage: {stage}")
+            print(f"active_engine: {engine}")
+    return 0
+
+
+def main() -> int:
+    argv = sys.argv[1:]
+    if argv and argv[0] == "status" and "--full" not in argv:
+        return _fast_status(argv[1:])
+
+    from litehive.cli import main as cli_main
+
+    return cli_main()
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
