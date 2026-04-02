@@ -29,6 +29,7 @@ from litehive.tasks import (
     set_task_retry_state,
     task_dir,
 )
+from litehive.workflow_verification import latest_stage_report, workflow_verification_gaps
 
 
 class StageExecutor(Protocol):
@@ -217,6 +218,7 @@ class TaskExecutionRunner:
             report.retry_count = rejections
             report.retry_limit = self.max_retries
             report.retry_source = self.retry_source
+            report = self._enforce_workflow_verification(task, current, report)
             if current in {"grooming", "accepting"} and report.follow_up_tasks:
                 created_follow_ups = create_follow_up_tasks(
                     self.root,
@@ -534,6 +536,42 @@ class TaskExecutionRunner:
             hook_results=hook_results or [],
         )
 
+    def _enforce_workflow_verification(
+        self, task: TaskRecord, current: str, report: StageReport
+    ) -> StageReport:
+        if report.verdict not in {"pass", "accept"}:
+            return report
+
+        gaps = _workflow_verification_gaps_for_stage(self.root, task, current, report)
+        if not gaps:
+            return report
+
+        if current == "testing":
+            summary = "testing rejected: missing required real lifecycle verification evidence"
+            verdict = "reject"
+        elif current == "accepting":
+            summary = "accepting rejected: QA evidence does not prove the claimed lifecycle behavior"
+            verdict = "reject"
+        else:
+            return report
+
+        warnings = [*report.warnings, *gaps]
+        feedback = report.feedback.strip()
+        if feedback:
+            feedback = f"{feedback}\n\nLifecycle verification gaps:\n" + "\n".join(
+                f"- {gap}" for gap in gaps
+            )
+        else:
+            feedback = "Lifecycle verification gaps:\n" + "\n".join(f"- {gap}" for gap in gaps)
+        return report.model_copy(
+            update={
+                "verdict": verdict,
+                "summary": summary,
+                "warnings": warnings,
+                "feedback": feedback,
+            }
+        )
+
 
 def _reason_code_for_report(report: StageReport) -> OutcomeReasonCode:
     verdict = report.verdict
@@ -552,3 +590,19 @@ def _human_checkpoint_reason(task: TaskRecord, target: str) -> str | None:
     if target == "commit_to_git" and "before_commit" in task.human_checkpoints:
         return "before_commit"
     return None
+
+
+def _workflow_verification_gaps_for_stage(
+    root: Path, task: TaskRecord, current: str, report: StageReport
+) -> list[str]:
+    if current == "testing":
+        return workflow_verification_gaps(task, report.feedback)
+    if current != "accepting":
+        return []
+
+    testing_report = latest_stage_report(root, task, "testing")
+    if testing_report is None:
+        return [
+            "acceptance requires QA evidence from the testing stage for workflow/control-plane lifecycle claims"
+        ]
+    return workflow_verification_gaps(task, testing_report.feedback)

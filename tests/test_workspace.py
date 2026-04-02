@@ -1,13 +1,17 @@
 import argparse
-import litehive.tasks as tasks_module
 import os
 from pathlib import Path, PurePosixPath
 import subprocess
+import sys
 import threading
 import time
 
 import pytest
 import yaml
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+import litehive.tasks as tasks_module
 
 from litehive.cli import (
     _cmd_add,
@@ -1388,6 +1392,315 @@ def test_runner_requeues_task_after_testing_rejection(tmp_path: Path) -> None:
     assert task.runtime.retry_count == 1
     assert task.runtime.retry_limit == 3
     assert task.runtime.retry_source == "global"
+
+
+def test_runner_rejects_workflow_testing_without_real_lifecycle_evidence(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path, LitehiveConfig(default_retry_limit=3))
+    task = create_task(
+        tmp_path,
+        title="Enforce workflow verification",
+        goal="Prove control-plane lifecycle behavior through the real CLI",
+        acceptance_criteria=[
+            "commit_to_git succeeds and records the final checkpoint commit",
+            "An interrupted task resumes from the correct stage in a real workspace run",
+            "run-all behavior is proven through the wrapper or real CLI execution",
+        ],
+        auto_commit=False,
+    )
+
+    report = StageReport(
+        task_id=task.id,
+        step="testing",
+        verdict="pass",
+        summary="testing ok",
+        feedback=(
+            "Verified with pytest tests/test_workspace.py::test_commit_to_git_treats_clean_task_worktree_as_done "
+            "and direct helper coverage around drain_task_pool."
+        ),
+    )
+
+    runner = TaskExecutionRunner(tmp_path, lambda task, step: report, max_retries=3)
+    enforced = runner._enforce_workflow_verification(task, "testing", report)
+
+    assert enforced.verdict == "reject"
+    assert enforced.summary == "testing rejected: missing required real lifecycle verification evidence"
+    assert any("real Litehive CLI or wrapper lifecycle evidence" in warning for warning in enforced.warnings)
+    assert any("final checkpoint commit" in warning for warning in enforced.warnings)
+    assert any("correct stage" in warning for warning in enforced.warnings)
+
+
+def test_runner_rejects_workflow_testing_without_clean_completion_record(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(
+        tmp_path,
+        title="Verify workflow lifecycle",
+        goal="Prove control-plane lifecycle behavior through the real CLI",
+        acceptance_criteria=[
+            "commit_to_git succeeds and records the final checkpoint commit",
+            "An interrupted task resumes from the correct stage in a real workspace run",
+        ],
+        auto_commit=False,
+    )
+
+    evidence = """
+Ran `uv run litehive run --workspace .` in a proof workspace.
+Confirmed commit_to_git succeeded, recorded the final checkpoint commit, and checked the commit_sha with `git rev-parse HEAD`.
+Also resumed with `uv run litehive resume T-0001 --workspace .` after an interruption at testing.
+""".strip()
+
+    report = StageReport(
+        task_id=task.id,
+        step="testing",
+        verdict="pass",
+        summary="testing ok",
+        feedback=evidence,
+    )
+
+    runner = TaskExecutionRunner(tmp_path, lambda task, step: report)
+    enforced = runner._enforce_workflow_verification(task, "testing", report)
+
+    assert enforced.verdict == "reject"
+    assert any("clean completion" in warning for warning in enforced.warnings)
+
+
+def test_runner_accepts_workflow_testing_with_real_lifecycle_evidence(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(
+        tmp_path,
+        title="Verify workflow lifecycle",
+        goal="Prove control-plane lifecycle behavior through the real CLI",
+        acceptance_criteria=[
+            "commit_to_git succeeds and records the final checkpoint commit",
+            "An interrupted task resumes from the correct stage in a real workspace run",
+            "run-all behavior is proven through the wrapper or real CLI execution",
+        ],
+        auto_commit=False,
+    )
+
+    commit_workspace = tmp_path / "proof-commit"
+    commit_workspace.mkdir()
+    _init_git_repo(commit_workspace)
+    ensure_workspace(commit_workspace)
+    create_task(commit_workspace, title="Ship example change")
+
+    resume_workspace = tmp_path / "proof-resume"
+    resume_workspace.mkdir()
+    ensure_workspace(resume_workspace, LitehiveConfig(auto_commit=False))
+    create_task(resume_workspace, title="Finish example change", auto_commit=False)
+
+    resume_once = {"seen": False}
+
+    def fake_run(self, current_task, role, engine_name, prompt, model=None, max_turns=None):  # type: ignore[no-untyped-def]
+        if current_task.pipeline_status == "implementing" and (
+            self.execution_root == commit_workspace or commit_workspace in self.execution_root.parents
+        ):
+            app_path = self.execution_root / "app.txt"
+            if app_path.exists():
+                app_path.write_text("proof commit lifecycle\n", encoding="utf-8")
+        if current_task.pipeline_status == "testing" and (
+            self.execution_root == resume_workspace or resume_workspace in self.execution_root.parents
+        ):
+            if not resume_once["seen"]:
+                resume_once["seen"] = True
+                raise KeyboardInterrupt()
+        return _completed_subagent_result(self.execution_root, current_task.pipeline_status, engine_name=engine_name)
+
+    monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_run)
+
+    assert _cmd_run(argparse.Namespace(workspace=commit_workspace, dry_run=False, drain=False)) == 0
+    commit_output = capsys.readouterr().out
+    assert "status: done" in commit_output
+    assert "commit:" in commit_output
+    assert "commit_to_git=pass" in commit_output
+
+    assert _cmd_run(argparse.Namespace(workspace=resume_workspace, dry_run=False, drain=False)) == 0
+    interrupted_output = capsys.readouterr().out
+    assert "status: interrupted" in interrupted_output
+
+    assert (
+        _cmd_resume_task(
+            argparse.Namespace(workspace=resume_workspace, task_id="T-0001", front=True)
+        )
+        == 0
+    )
+    resume_output = capsys.readouterr().out
+    assert "pipeline_status: testing" in resume_output
+
+    assert _cmd_run(argparse.Namespace(workspace=resume_workspace, dry_run=False, drain=False)) == 0
+    resumed_output = capsys.readouterr().out
+    assert "status: done" in resumed_output
+
+    wrapper_workspace = tmp_path / "proof-wrapper"
+    wrapper_workspace.mkdir()
+    (wrapper_workspace / ".litehive").mkdir()
+    counts_dir = tmp_path / "proof-wrapper-counts"
+    counts_dir.mkdir()
+    status_count_file = counts_dir / "status-count"
+    run_count_file = counts_dir / "run-count"
+
+    fake_uv = _write_fake_uv(
+        tmp_path,
+        f"""#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ "${{1:-}}" == "run" && "${{2:-}}" == "python" && "${{3:-}}" == "-" ]]; then
+  shift 2
+  exec python3 "$@"
+fi
+
+if [[ "${{1:-}}" == "run" && "${{2:-}}" == "litehive" && "${{3:-}}" == "run" ]]; then
+  count="$(cat "{run_count_file}" 2>/dev/null || echo 0)"
+  count="$((count + 1))"
+  echo "$count" > "{run_count_file}"
+  if [[ "$count" -eq 1 ]]; then
+    cat > "{wrapper_workspace / '.litehive' / 'state.yaml'}" <<'STATE'
+active_task_id: null
+queue:
+  - T-0001
+pool_stop_reason: null
+STATE
+  else
+    cat > "{wrapper_workspace / '.litehive' / 'state.yaml'}" <<'STATE'
+active_task_id: null
+queue: []
+pool_stop_reason: queue_exhausted
+STATE
+  fi
+  echo "tasks_run: 1"
+  echo "stop_reason: queue_exhausted"
+  exit 0
+fi
+
+echo "unexpected uv invocation: $*" >&2
+exit 1
+""",
+    )
+    (wrapper_workspace / ".litehive" / "state.yaml").write_text(
+        "active_task_id: null\nqueue:\n  - T-0001\npool_stop_reason: null\n",
+        encoding="utf-8",
+    )
+    wrapper_result = subprocess.run(
+        ["bash", str(_repo_root() / "scripts" / "run-all.sh"), str(wrapper_workspace)],
+        cwd=_repo_root(),
+        text=True,
+        capture_output=True,
+        env=_with_fake_uv(fake_uv),
+        check=False,
+    )
+    assert wrapper_result.returncode == 0
+    assert "== iteration 1 ==" in wrapper_result.stdout
+    assert "No active or queued tasks remain. Stopping." in wrapper_result.stdout
+
+    evidence = "\n\n".join(
+        [
+            "$ uv run litehive run --workspace .\n" + commit_output.strip(),
+            "$ uv run litehive run --workspace .\n" + interrupted_output.strip(),
+            "$ uv run litehive resume T-0001 --workspace .\n" + resume_output.strip(),
+            "$ uv run litehive run --workspace .\n" + resumed_output.strip(),
+            "$ bash scripts/run-all.sh .\n" + wrapper_result.stdout.strip(),
+        ]
+    )
+
+    runner = TaskExecutionRunner(
+        tmp_path,
+        lambda task, step: StageReport(task_id=task.id, step=step, verdict="pass", summary=f"{step} ok"),
+    )
+    testing_report = runner._enforce_workflow_verification(
+        task,
+        "testing",
+        StageReport(
+            task_id=task.id,
+            step="testing",
+            verdict="pass",
+            summary="testing ok",
+            feedback=evidence,
+        ),
+    )
+    assert testing_report.verdict == "pass"
+    reports_dir = task_dir(tmp_path, task) / "reports"
+    reports_dir.mkdir(exist_ok=True)
+    (reports_dir / "testing-001.yaml").write_text(
+        yaml.safe_dump(testing_report.model_dump(mode="json"), sort_keys=False),
+        encoding="utf-8",
+    )
+    accepting_report = runner._enforce_workflow_verification(
+        task,
+        "accepting",
+        StageReport(
+            task_id=task.id,
+            step="accepting",
+            verdict="pass",
+            summary="accepting ok",
+            feedback="PM reviewed the real CLI evidence.",
+        ),
+    )
+    assert accepting_report.verdict == "pass"
+
+
+def test_runner_rejects_acceptance_when_testing_report_lacks_required_workflow_evidence(
+    tmp_path: Path,
+) -> None:
+    ensure_workspace(tmp_path, LitehiveConfig(default_retry_limit=3))
+    task = create_task(
+        tmp_path,
+        title="Accept workflow lifecycle evidence",
+        goal="Only accept lifecycle claims that QA proved through the real CLI",
+        acceptance_criteria=[
+            "commit_to_git succeeds and records the final checkpoint commit",
+            "An interrupted task resumes from the correct stage in a real workspace run",
+        ],
+        auto_commit=False,
+    )
+    task.pipeline_status = "accepting"
+    save_task(tmp_path, task)
+
+    (task_dir(tmp_path, task) / "reports" / "testing-001.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "task_id": task.id,
+                "step": "testing",
+                "verdict": "pass",
+                "summary": "helper tests passed",
+                "feedback": "Verified with pytest and direct helper-function tests only.",
+                "files_changed": ["litehive/runner.py"],
+                "tests": {"added": 1, "passing": 1},
+                "warnings": [],
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+
+    runner = TaskExecutionRunner(
+        tmp_path,
+        lambda task, step: StageReport(
+            task_id=task.id,
+            step=step,
+            verdict="pass",
+            summary="accepting ok",
+            feedback="PM reviewed the task summary and found it aligned.",
+        ),
+        max_retries=3,
+    )
+    enforced = runner._enforce_workflow_verification(
+        task,
+        "accepting",
+        StageReport(
+            task_id=task.id,
+            step="accepting",
+            verdict="pass",
+            summary="accepting ok",
+            feedback="PM reviewed the task summary and found it aligned.",
+        ),
+    )
+
+    assert enforced.verdict == "reject"
+    assert enforced.summary == "accepting rejected: QA evidence does not prove the claimed lifecycle behavior"
+    assert any("real Litehive CLI or wrapper lifecycle evidence" in warning for warning in enforced.warnings)
 
 
 def test_runner_persists_non_blocking_follow_up_and_completes_current_task(tmp_path: Path) -> None:
@@ -2937,6 +3250,95 @@ def test_stage_prompt_includes_pm_sizing_guidance_for_grooming(tmp_path: Path) -
     assert "Current planned effort: m" in prompt
     assert "Use `PM_COMPLEXITY: simple|moderate|complex`." in prompt
     assert "Use `PLANNED_EFFORT: xs|s|m|l|xl`." in prompt
+
+
+def test_stage_prompt_requires_real_lifecycle_verification_for_workflow_testing_tasks(
+    tmp_path: Path,
+) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(
+        tmp_path,
+        title="Enforce workflow verification",
+        goal="Prove workflow/control-plane behavior through the real CLI lifecycle",
+        acceptance_criteria=[
+            "commit_to_git succeeds and records the final checkpoint commit",
+            "An interrupted task resumes from the correct stage in a real workspace run",
+            "run-all behavior is proven through the wrapper or real CLI execution",
+        ],
+    )
+
+    prompt = stage_prompt(task, "testing", workspace_context="")
+
+    assert "This task touches workflow or control-plane behavior" in prompt
+    assert "Reject workflow changes that are only covered by isolated unit tests" in prompt
+    assert "require proof that `commit_to_git` succeeded and recorded the final checkpoint commit" in prompt
+    assert "CLI evidence also shows Litehive recorded clean completion" in prompt
+    assert "require proof that an interrupted task resumes from the correct stage in a real workspace run" in prompt
+    assert "require proof through the wrapper or real CLI execution rather than direct helper-function tests" in prompt
+
+
+def test_stage_prompt_requires_acceptance_to_match_workflow_qa_evidence(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(
+        tmp_path,
+        title="Accept workflow verification evidence",
+        goal="Only accept workflow claims that real Litehive runs demonstrated",
+        acceptance_criteria=[
+            "QA rejects helper-only lifecycle evidence",
+            "Final task commit exists after commit_to_git",
+        ],
+    )
+
+    prompt = stage_prompt(task, "accepting", workspace_context="")
+
+    assert "Reject the task if QA did not demonstrate the real lifecycle behavior the task claims" in prompt
+    assert "Reject the task if the implementation promise is broader than the QA evidence" in prompt
+    assert "require proof that `commit_to_git` succeeded and recorded the final checkpoint commit" in prompt
+    assert "CLI evidence also shows Litehive recorded clean completion" in prompt
+
+
+def test_stage_prompt_requires_real_lifecycle_verification_for_normalized_workflow_terms(
+    tmp_path: Path,
+) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(
+        tmp_path,
+        title="Enforce control plane completion reliability",
+        goal="Prove workflow/control plane behavior through the real CLI lifecycle",
+        acceptance_criteria=[
+            "Completion reliability is only proven after commit to git records the final checkpoint commit",
+            "Interrupted tasks remain resumable from the correct stage in a real workspace run",
+            "Run all behavior is proven through the wrapper or real CLI execution",
+        ],
+    )
+
+    prompt = stage_prompt(task, "testing", workspace_context="")
+
+    assert "This task touches workflow or control-plane behavior" in prompt
+    assert "require proof that `commit_to_git` succeeded and recorded the final checkpoint commit" in prompt
+    assert "CLI evidence also shows Litehive recorded clean completion" in prompt
+    assert "require proof that an interrupted task resumes from the correct stage in a real workspace run" in prompt
+    assert "require proof through the wrapper or real CLI execution rather than direct helper-function tests" in prompt
+
+
+def test_stage_prompt_detects_normalized_control_plane_commit_and_resume_terms(
+    tmp_path: Path,
+) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(
+        tmp_path,
+        title="Control plane clean completion",
+        goal="Keep interrupted tasks resumable and verify commit to git behavior through the CLI",
+        acceptance_criteria=["Run all wrapper proves the pool behavior"],
+    )
+
+    prompt = stage_prompt(task, "testing", workspace_context="")
+
+    assert "This task touches workflow or control-plane behavior" in prompt
+    assert "require proof that `commit_to_git` succeeded and recorded the final checkpoint commit" in prompt
+    assert "CLI evidence also shows Litehive recorded clean completion" in prompt
+    assert "require proof that an interrupted task resumes from the correct stage in a real workspace run" in prompt
+    assert "require proof through the wrapper or real CLI execution rather than direct helper-function tests" in prompt
 
 
 def test_update_command_seeds_task_brief_when_switching_to_tasks_mode(
@@ -9756,6 +10158,10 @@ def test_run_all_stops_before_run_when_pre_status_has_explicit_pool_stop_reason(
     workspace = tmp_path / "workspace"
     workspace.mkdir()
     (workspace / ".litehive").mkdir()
+    (workspace / ".litehive" / "state.yaml").write_text(
+        "active_task_id: T-0001\nqueue:\n  - T-0001\npool_stop_reason: max_tasks_reached\n",
+        encoding="utf-8",
+    )
     counts_dir = tmp_path / "counts"
     counts_dir.mkdir()
     run_count_file = counts_dir / "run-count"
@@ -9765,12 +10171,9 @@ def test_run_all_stops_before_run_when_pre_status_has_explicit_pool_stop_reason(
         f"""#!/usr/bin/env bash
 set -euo pipefail
 
-if [[ "${{1:-}}" == "run" && "${{2:-}}" == "litehive" && "${{3:-}}" == "status" ]]; then
-  echo "workspace: $5"
-  echo "active_task_id: T-0001"
-  echo "queued_tasks: 1"
-  echo "pool_stop_reason: max_tasks_reached"
-  exit 0
+if [[ "${{1:-}}" == "run" && "${{2:-}}" == "python" && "${{3:-}}" == "-" ]]; then
+  shift 2
+  exec python3 "$@"
 fi
 
 if [[ "${{1:-}}" == "run" && "${{2:-}}" == "litehive" && "${{3:-}}" == "run" ]]; then
@@ -9809,9 +10212,12 @@ def test_run_all_restarts_litehive_until_queue_is_empty(tmp_path: Path) -> None:
     workspace = tmp_path / "workspace"
     workspace.mkdir()
     (workspace / ".litehive").mkdir()
+    (workspace / ".litehive" / "state.yaml").write_text(
+        "active_task_id: null\nqueue:\n  - T-0001\npool_stop_reason: null\n",
+        encoding="utf-8",
+    )
     counts_dir = tmp_path / "counts"
     counts_dir.mkdir()
-    status_count_file = counts_dir / "status-count"
     run_count_file = counts_dir / "run-count"
 
     fake_uv = _write_fake_uv(
@@ -9819,29 +10225,29 @@ def test_run_all_restarts_litehive_until_queue_is_empty(tmp_path: Path) -> None:
         f"""#!/usr/bin/env bash
 set -euo pipefail
 
-if [[ "${{1:-}}" == "run" && "${{2:-}}" == "litehive" && "${{3:-}}" == "status" ]]; then
-  count="$(cat "{status_count_file}" 2>/dev/null || echo 0)"
-  count="$((count + 1))"
-  echo "$count" > "{status_count_file}"
-
-  queued_tasks=1
-  stop_reason=None
-  if [[ "$count" -eq 4 ]]; then
-    queued_tasks=0
-    stop_reason=queue_exhausted
-  fi
-
-  echo "workspace: $5"
-  echo "active_task_id: None"
-  echo "queued_tasks: $queued_tasks"
-  echo "pool_stop_reason: $stop_reason"
-  exit 0
+if [[ "${{1:-}}" == "run" && "${{2:-}}" == "python" && "${{3:-}}" == "-" ]]; then
+  shift 2
+  exec python3 "$@"
 fi
 
 if [[ "${{1:-}}" == "run" && "${{2:-}}" == "litehive" && "${{3:-}}" == "run" ]]; then
   count="$(cat "{run_count_file}" 2>/dev/null || echo 0)"
   count="$((count + 1))"
   echo "$count" > "{run_count_file}"
+  if [[ "$count" -eq 1 ]]; then
+    cat > "{workspace / '.litehive' / 'state.yaml'}" <<'STATE'
+active_task_id: null
+queue:
+  - T-0001
+pool_stop_reason: null
+STATE
+  else
+    cat > "{workspace / '.litehive' / 'state.yaml'}" <<'STATE'
+active_task_id: null
+queue: []
+pool_stop_reason: queue_exhausted
+STATE
+  fi
   echo "tasks_run: 1"
   echo "stop_reason: queue_exhausted"
   exit 0
@@ -9866,7 +10272,6 @@ exit 1
     assert "== iteration 2 ==" in result.stdout
     assert "No active or queued tasks remain. Stopping." in result.stdout
     assert run_count_file.read_text(encoding="utf-8").strip() == "2"
-    assert status_count_file.read_text(encoding="utf-8").strip() == "4"
 
     log_dirs = list((workspace / ".litehive" / "logs" / "run-all").iterdir())
     assert len(log_dirs) == 1
