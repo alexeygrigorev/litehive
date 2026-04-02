@@ -1010,6 +1010,7 @@ def ensure_workspace(root: Path, config: LitehiveConfig | None = None) -> Path:
                     "mode": cfg.implementation_mode_name,
                     "queue": [],
                     "pool_stop_reason": None,
+                    "next_task_number": 0,
                 },
                 sort_keys=False,
             ),

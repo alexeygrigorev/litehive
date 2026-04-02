@@ -49,6 +49,7 @@ from litehive.tasks import (
     abandon_task,
     close_task,
     create_task,
+    discard_created_task,
     list_tasks,
     load_state,
     missing_acceptance_criteria_reason,
@@ -2203,6 +2204,7 @@ def _cmd_intake(args: argparse.Namespace) -> int:
     except Exception as exc:
         print(f"Warning: Analysis failed ({exc}). Creating task from raw intake.")
 
+    task = None
     try:
         from litehive.tasks import task_dir, task_brief_file
 
@@ -2224,7 +2226,9 @@ def _cmd_intake(args: argparse.Namespace) -> int:
         brief_file = task_brief_file(args.workspace, task)
         _link_intake_brief_to_source(brief_file)
 
-    except (ValueError, WorkspaceConflictError) as exc:
+    except Exception as exc:
+        if task is not None:
+            discard_created_task(args.workspace, task.id)
         print(f"Task creation failed: {exc}")
         return 1
 
