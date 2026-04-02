@@ -86,7 +86,7 @@ def _fallback_intake_title(brain_dump: str) -> str:
 def _fallback_intake_goal(brain_dump: str) -> str:
     lines = [" ".join(line.split()) for line in brain_dump.splitlines() if line.strip()]
     if not lines:
-        return "Capture the original intake and prepare it for PM grooming."
+        return "Capture the original intake and prepare it for planner grooming."
     summary = " ".join(lines)
     summary = summary[:237] + "..." if len(summary) > 240 else summary
     return summary

@@ -62,10 +62,10 @@ backlog → grooming → implementing → testing → accepting → commit_to_gi
 | Stage | Role | Description |
 |-------|------|-------------|
 | `backlog` | — | Task created but not yet started |
-| `grooming` | PM | Clarify goal, define acceptance criteria, produce plan |
+| `grooming` | Planner | PM-style planning: clarify the user problem, define acceptance criteria, decompose scope, and produce a plan |
 | `implementing` | SWE | Write the code change |
 | `testing` | QA | Verify the change passes tests and review |
-| `accepting` | PM | Accept the implementation for delivery |
+| `accepting` | Reviewer | PM-style final review: validate the end-user outcome and decide done versus not-done |
 | `commit_to_git` | Runner | Record git checkpoint commit |
 | `done` | — | Task complete |
 
@@ -185,7 +185,7 @@ When one of those signals is present and `acceptance_criteria` is empty, the tas
 cannot proceed into `implementing`. The runner blocks the transition, and task
 metadata changes or recovery paths that would otherwise place the task back at an
 implementation-entry stage reroute it to `grooming` until at least one structured
-criterion is persisted. During `grooming`, the PM can provide explicit
+criterion is persisted. During `grooming`, the planner can provide explicit
 `ACCEPTANCE_CRITERIA` bullets, or the runner can infer and persist them from the
 current task context when that context is already specific enough.
 
@@ -207,7 +207,7 @@ and stops the pool with `task_interrupted`. The task is visible as resumable unt
 `litehive resume <id>` returns it to `status = queued` at the preserved stage
 subject only to normal reroutes such as missing acceptance criteria.
 
-QA or PM rejection also parks the task in the runnable pool. In that case the task
+QA or reviewer rejection also parks the task in the runnable pool. In that case the task
 switches back to `pipeline_status = implementing`, keeps `status = queued`, records
 the rejection report with `retry_decision = retry`, and re-enters the pool for the
 next implementation pass instead of moving to a sink state.

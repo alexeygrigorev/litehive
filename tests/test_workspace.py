@@ -75,6 +75,7 @@ from litehive.runtime import (
     EngineBudgetLedger,
     TaskPoolStopConditions,
     _commit_to_git_report,
+    _role_for_step,
     _allowed_commit_paths,
     _unexpected_dirty_paths,
     drain_task_pool,
@@ -294,8 +295,9 @@ def test_resolve_process_profile_merges_shared_process_with_overlay() -> None:
         == "the orchestrator is the manager; subagents execute but do not choose routing."
     )
     assert profile["routing_model"].startswith("manager-owned deterministic routing")
+    assert profile["role_model"].startswith("`planner` owns task shaping")
     assert any("generic base prompt" in line for line in profile["prompt_scaffold"])
-    assert profile["stage_overlay"]["accepting"][0].startswith("- Acceptance is managerial review")
+    assert profile["stage_overlay"]["accepting"][0].startswith("- Reviewer acceptance is managerial")
 
 
 def test_render_context_template_shows_base_and_project_stage_scaffolding() -> None:
@@ -421,6 +423,7 @@ def test_create_task_seeds_requested_task_type_templates(tmp_path: Path, task_ty
 def test_intake_prompt_uses_codehive_style_guidance() -> None:
     prompt = intake_prompt("Need a rough task from this brain dump.")
 
+    assert "You are the planner for a local multi-agent coding workspace." in prompt
     assert "You are handling freeform task intake for a Codehive-style workflow." in prompt
     assert "Preserve execution visibility through task reports, subagent transcripts, and recent progress." in prompt
     assert "Do not add acceptance criteria, implementation plans, decomposition, or detailed structure." in prompt
@@ -457,7 +460,7 @@ def test_intake_command_creates_linked_task_from_freeform_dump(
                 argv=("opencode", "run"),
                 cwd=cwd,
                 exit_code=0,
-                stdout="TITLE: Capture queue visibility gaps\nGOAL: Turn the raw notes into a queued task PM can groom later.\n",
+                stdout="TITLE: Capture queue visibility gaps\nGOAL: Turn the raw notes into a queued task planner can groom later.\n",
                 stderr="",
             )
 
@@ -485,7 +488,7 @@ def test_intake_command_creates_linked_task_from_freeform_dump(
     assert task is not None
     assert task.title == "Capture queue visibility gaps"
     assert task.goal == (
-        "Turn the raw notes into a queued task PM can groom later.\n\n"
+        "Turn the raw notes into a queued task planner can groom later.\n\n"
         "(See intake.md for the original brain dump)"
     )
     assert task.mode == "tasks"
@@ -1371,6 +1374,60 @@ def test_runner_advances_task_to_done(tmp_path: Path) -> None:
     assert (reports / "testing-003.yaml").exists()
     assert (reports / "accepting-004.yaml").exists()
     assert (reports / "commit_to_git-005.yaml").exists()
+
+
+def test_runtime_routes_grooming_to_planner_and_accepting_to_reviewer() -> None:
+    assert _role_for_step("grooming") == "planner"
+    assert _role_for_step("implementing") == "swe"
+    assert _role_for_step("testing") == "qa"
+    assert _role_for_step("accepting") == "reviewer"
+
+
+def test_subagent_manager_persists_planner_and_reviewer_artifacts(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Role split task")
+
+    class FakeEngine:
+        name = "codex"
+        binary = "codex"
+
+        def is_available(self) -> bool:
+            return True
+
+        def run(
+            self,
+            prompt: str,
+            cwd: Path,
+            model: str | None = None,
+            *,
+            max_turns: int | None = None,
+            on_started=None,
+        ) -> CLIExecutionResult:
+            del model, max_turns
+            if on_started is not None:
+                on_started(4242)
+            step = prompt.split("Stage: ", 1)[1].splitlines()[0]
+            return _stage_subagent_result(cwd, step).execution  # type: ignore[return-value]
+
+        def render_transcript(self, execution: CLIExecutionResult) -> str:
+            return execution.transcript
+
+    monkeypatch.setattr("litehive.subagents._supports_live_execution", lambda engine: False)
+    monkeypatch.setattr("litehive.subagents.get_engine", lambda _: FakeEngine())
+    manager = SubagentManager(tmp_path)
+
+    planner_result = manager.run(task, role="planner", engine_name="codex", prompt="Stage: grooming")
+    task = require_task(tmp_path, task.id)
+    reviewer_result = manager.run(task, role="reviewer", engine_name="codex", prompt="Stage: accepting")
+    task = require_task(tmp_path, task.id)
+
+    assert planner_result.failure is None
+    assert reviewer_result.failure is None
+    assert [ref.role for ref in task.subagents] == ["planner", "reviewer"]
+    assert task.subagents[0].path.endswith("-planner")
+    assert task.subagents[-1].path.endswith("-reviewer")
 
 
 def test_runner_requeues_task_after_testing_rejection(tmp_path: Path) -> None:
@@ -3289,9 +3346,11 @@ def test_stage_prompt_surfaces_acceptance_gate_for_large_task_without_inferable_
 
     prompt = stage_prompt(task, "grooming", workspace_context="")
 
+    assert "Stage owner: planner" in prompt
+    assert "You are the planner, a PM-style role representing the user's and product's point of view." in prompt
     assert "Acceptance gate:" in prompt
     assert "Structured acceptance criteria are required before implementation for larger tasks." in prompt
-    assert "As the PM for grooming, provide an `ACCEPTANCE_CRITERIA:` section with concrete `- ` bullets before passing grooming." in prompt
+    assert "As the planner for grooming, provide an `ACCEPTANCE_CRITERIA:` section with concrete `- ` bullets before passing grooming." in prompt
     assert "ACCEPTANCE_CRITERIA:" in prompt
     assert "If the context is still insufficient, return `VERDICT: BLOCKED`" in prompt
 
@@ -3305,8 +3364,9 @@ def test_stage_prompt_allows_grooming_to_pass_with_inferred_acceptance_criteria(
 
     prompt = stage_prompt(task, "grooming", workspace_context="")
 
+    assert "Stage owner: planner" in prompt
     assert "Acceptance gate:" in prompt
-    assert "As the PM for grooming, either provide explicit `ACCEPTANCE_CRITERIA:` bullets or let the runner persist the inferred version by returning `VERDICT: PASS`." in prompt
+    assert "As the planner for grooming, either provide explicit `ACCEPTANCE_CRITERIA:` bullets or let the runner persist the inferred version by returning `VERDICT: PASS`." in prompt
     assert "If the current task context is not sufficient after all, return `VERDICT: BLOCKED` instead of passing grooming without criteria." in prompt
     assert "you may add an `ACCEPTANCE_CRITERIA:` section with concrete `- ` bullets" in prompt
     assert "the current task context is sufficient to infer them" in prompt
@@ -3327,6 +3387,21 @@ def test_stage_prompt_shows_inferred_acceptance_criteria_when_context_is_suffici
     assert "Inferred acceptance criteria available from current task context:" in prompt
     assert "The delivered change achieves the stated goal: Ship deterministic routing." in prompt
     assert "Focused verification demonstrates the targeted behavior works as intended." in prompt
+
+
+def test_stage_prompt_distinguishes_accepting_reviewer_role(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(
+        tmp_path,
+        title="Review final outcome",
+        acceptance_criteria=["The user-visible outcome works end to end."],
+    )
+
+    prompt = stage_prompt(task, "accepting", workspace_context="")
+
+    assert "Stage owner: reviewer" in prompt
+    assert "You are the reviewer, a PM-style role representing the user's and product's point of view." in prompt
+    assert "Validate the strict end-user outcome, look for regressions or missing evidence, and make a final done versus not-done judgment." in prompt
 
 
 def test_stage_prompt_includes_task_type_and_plan(tmp_path: Path) -> None:

@@ -467,7 +467,10 @@ SHARED_PROCESS_PROFILE: dict[str, Any] = {
     "orchestrator_model": "the local runner is the manager and owns stage routing.",
     "routing_model": "routing stays deterministic and local; subagents execute assigned stages but do not self-route.",
     "shared_stages": _shared_stage_sequence(),
-    "role_model": "orchestrator-as-manager: `pm` grooms and accepts, `swe` implements, `qa` verifies.",
+    "role_model": (
+        "orchestrator-as-manager: `planner` owns grooming, `reviewer` owns acceptance, "
+        "both are PM-style product roles, `swe` implements, and `qa` verifies."
+    ),
     "tdd_expectations": "prefer test-first or test-tight changes and explain deviations.",
     "verification_discipline": "verification should be explicit, focused, and independent enough to catch regressions.",
     "acceptance_flow": "implementation must pass verification before acceptance.",
@@ -502,7 +505,8 @@ SHARED_PROCESS_PROFILE: dict[str, Any] = {
     ],
     "stage_instructions": {
         "grooming": [
-            "Clarify the task, inspect the repo if needed, and produce a concrete execution plan.",
+            "Act as the planner: clarify the user problem, inspect the repo if needed, and produce a concrete execution plan.",
+            "Focus on scope clarification, acceptance criteria quality, decomposition, follow-up tasks, and PM sizing.",
             "Do not make code changes in this stage.",
         ],
         "implementing": [
@@ -515,7 +519,8 @@ SHARED_PROCESS_PROFILE: dict[str, Any] = {
             "Only make minimal fixes if absolutely necessary.",
         ],
         "accepting": [
-            "Review the current task result against the acceptance criteria and decide whether it should be accepted or sent back.",
+            "Act as the reviewer: validate the end-user outcome against the acceptance criteria and decide whether it should be accepted or sent back.",
+            "Be strict about regression detection, evidence quality, and final done versus not-done judgment.",
         ],
     },
     "stage_overlay": {},
@@ -529,7 +534,10 @@ PROCESS_PROFILES: dict[str, dict[str, Any]] = {
     "python": {
         "label": "Python",
         "summary": "Python package or application workflow with pytest-oriented verification.",
-        "role_model": "`pm` frames the task, `swe` edits code, `qa` runs focused verification.",
+        "role_model": (
+            "`planner` frames the task, `reviewer` performs final PM-style acceptance, "
+            "`swe` edits code, and `qa` runs focused verification."
+        ),
         "tdd_expectations": "add or update focused tests near the changed Python module before broad suites.",
         "verification_discipline": (
             "prefer targeted `pytest` evidence close to the changed module before broader smoke coverage."
@@ -562,7 +570,8 @@ PROCESS_PROFILES: dict[str, dict[str, Any]] = {
         "label": "Django",
         "summary": "Django application workflow with app-level tests, migrations discipline, and settings awareness.",
         "role_model": (
-            "`pm` frames and accepts, `swe` updates apps/views/models, `qa` verifies user-visible behavior."
+            "`planner` frames the task, `reviewer` performs final PM-style acceptance, "
+            "`swe` updates apps/views/models, and `qa` verifies user-visible behavior."
         ),
         "tdd_expectations": (
             "prefer app-level or regression tests first, especially around models, views, forms, and APIs."
@@ -605,7 +614,10 @@ PROCESS_PROFILES: dict[str, dict[str, Any]] = {
     "rust": {
         "label": "Rust",
         "summary": "Rust crate or workspace workflow with compile-first discipline and tight tests.",
-        "role_model": "`pm` scopes, `swe` edits crates/modules, `qa` verifies compile and test results.",
+        "role_model": (
+            "`planner` scopes the task, `reviewer` performs final PM-style acceptance, "
+            "`swe` edits crates/modules, and `qa` verifies compile and test results."
+        ),
         "tdd_expectations": "prefer regression tests or unit tests close to the affected module before broader runs.",
         "verification_discipline": "treat `cargo check`, focused tests, and compiler warnings as acceptance evidence.",
         "acceptance_flow": "compile, run focused tests, and surface warnings or clippy debt explicitly.",
@@ -640,7 +652,10 @@ PROCESS_PROFILES: dict[str, dict[str, Any]] = {
     "cpp": {
         "label": "C/C++",
         "summary": "C or C++ workflow with compile-heavy verification, native toolchains, and linker-aware debugging.",
-        "role_model": "`pm` scopes the change, `swe` edits native code, `qa` verifies compile and runtime behavior.",
+        "role_model": (
+            "`planner` scopes the change, `reviewer` performs final PM-style acceptance, "
+            "`swe` edits native code, and `qa` verifies compile and runtime behavior."
+        ),
         "tdd_expectations": (
             "prefer focused native regression coverage near the affected target before broader rebuilds."
         ),
@@ -686,7 +701,8 @@ PROCESS_PROFILES: dict[str, dict[str, Any]] = {
         "orchestrator_model": "the orchestrator is the manager; subagents execute but do not choose routing.",
         "routing_model": "manager-owned deterministic routing, retries, and escalation stay in local code rather than prompts.",
         "role_model": (
-            "`pm` owns task shaping and acceptance, `swe` implements, `qa` verifies, all through deterministic stage handoffs."
+            "`planner` owns task shaping, `reviewer` owns final PM-style acceptance, "
+            "`swe` implements, and `qa` verifies, all through deterministic stage handoffs."
         ),
         "tdd_expectations": "default to regression-first or test-first implementation and explain any exception.",
         "verification_discipline": (
@@ -718,6 +734,7 @@ PROCESS_PROFILES: dict[str, dict[str, Any]] = {
         "stage_overlay": {
             "grooming": [
                 "- Break ambiguity down into a concrete, deterministic plan with clear ownership.",
+                "- Planner output should sharpen user value, scope edges, decomposition, and follow-up work.",
             ],
             "implementing": [
                 "- Stay within the current task boundary and prefer test-first changes when the repo supports it.",
@@ -726,7 +743,8 @@ PROCESS_PROFILES: dict[str, dict[str, Any]] = {
                 "- Verification should be independent enough to catch behavioral regressions, not just restate implementation intent.",
             ],
             "accepting": [
-                "- Acceptance is managerial review against task goals, tests, and recovery policy, not a rubber stamp.",
+                "- Reviewer acceptance is managerial PM-style review against task goals, tests, and recovery policy, not a rubber stamp.",
+                "- Reviewer judgment should focus on end-user outcome, regressions, and whether the task is actually done.",
                 "- Accepted tasks proceed to `commit_to_git`, where Litehive creates the final checkpoint commit unless auto-commit is explicitly disabled.",
             ],
         },

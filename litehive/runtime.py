@@ -704,10 +704,10 @@ def _restore_persisted_files(snapshot: dict[Path, str | None]) -> None:
 
 def _role_for_step(step: str) -> str:
     return {
-        "grooming": "pm",
+        "grooming": "planner",
         "implementing": "swe",
         "testing": "qa",
-        "accepting": "pm",
+        "accepting": "reviewer",
     }.get(step, "swe")
 
 

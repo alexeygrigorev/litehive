@@ -624,10 +624,13 @@ def stage_prompt(
     stage_overlay = profile.get("stage_overlay", {}).get(step, [])
     stage_instructions = profile.get("stage_instructions", {}).get(step, ["Complete the requested stage."])
     lifecycle_verification_overlay = _lifecycle_verification_overlay(task, step)
+    stage_owner = _stage_owner_for_step(step)
+    stage_role = _stage_role_prompt(step)
 
     lines = [
         f"Task: {task.id} {task.title}",
         f"Stage: {step}",
+        f"Stage owner: {stage_owner}",
         f"Process profile: {profile['label']}",
         f"Task type: {task.task_type or '-'}",
         "",
@@ -656,6 +659,9 @@ def stage_prompt(
             "Prompt scaffold:",
             *profile.get("prompt_scaffold", []),
             "",
+            "Role focus:",
+            *stage_role,
+            "",
             "Stage instructions:",
             *stage_instructions,
         ]
@@ -683,7 +689,7 @@ def stage_prompt(
             lines.extend(
                 [
                     "- Structured acceptance criteria are still missing on the task record, but the current task context is sufficient to infer them.",
-                    "- As the PM for grooming, either provide explicit `ACCEPTANCE_CRITERIA:` bullets or let the runner persist the inferred version by returning `VERDICT: PASS`.",
+                    "- As the planner for grooming, either provide explicit `ACCEPTANCE_CRITERIA:` bullets or let the runner persist the inferred version by returning `VERDICT: PASS`.",
                     "- You may return `VERDICT: PASS` without restating them; the runner will infer and persist the criteria after grooming.",
                     "- If the current task context is not sufficient after all, return `VERDICT: BLOCKED` instead of passing grooming without criteria.",
                     "- To override the inferred version, you may add an `ACCEPTANCE_CRITERIA:` section with concrete `- ` bullets that can be persisted directly.",
@@ -703,7 +709,7 @@ def stage_prompt(
             if step == "grooming":
                 lines.extend(
                     [
-                        "- As the PM for grooming, provide an `ACCEPTANCE_CRITERIA:` section with concrete `- ` bullets before passing grooming.",
+                        "- As the planner for grooming, provide an `ACCEPTANCE_CRITERIA:` section with concrete `- ` bullets before passing grooming.",
                         "- If the context is still insufficient, return `VERDICT: BLOCKED` and explain the missing information in `SUMMARY` or `WARNINGS`.",
                     ]
                 )
@@ -781,6 +787,36 @@ def stage_prompt(
             ]
         )
     return "\n".join(lines)
+
+
+def _stage_owner_for_step(step: str) -> str:
+    return {
+        "grooming": "planner",
+        "implementing": "swe",
+        "testing": "qa",
+        "accepting": "reviewer",
+        "commit_to_git": "runner",
+    }.get(step, "swe")
+
+
+def _stage_role_prompt(step: str) -> list[str]:
+    if step == "grooming":
+        return [
+            "- You are the planner, a PM-style role representing the user's and product's point of view.",
+            "- Frame the real user problem, clarify scope, sharpen acceptance criteria, decompose the work, identify follow-up tasks, and estimate PM sizing.",
+            "- Do not implement code in this stage.",
+        ]
+    if step == "accepting":
+        return [
+            "- You are the reviewer, a PM-style role representing the user's and product's point of view.",
+            "- Validate the strict end-user outcome, look for regressions or missing evidence, and make a final done versus not-done judgment.",
+            "- Reject work that is incomplete, weakly verified, or misaligned with the promised outcome.",
+        ]
+    if step == "implementing":
+        return ["- You are the SWE responsible for completing the implementation within scope."]
+    if step == "testing":
+        return ["- You are the QA verifier responsible for focused independent validation."]
+    return ["- Follow the stage instructions and keep the report concise and explicit."]
 
 
 def _lifecycle_verification_overlay(task: TaskRecord, step: str) -> list[str]:
@@ -863,7 +899,7 @@ def intake_prompt(brain_dump: str) -> str:
     """Build a prompt to analyze a freeform brain dump and suggest a task title and goal."""
     profile = resolve_process_profile("codehive")
     specifics = "\n".join(str(item) for item in profile.get("specifics", []))
-    return f"""You are the PM for a local multi-agent coding workspace.
+    return f"""You are the planner for a local multi-agent coding workspace.
 You are handling freeform task intake for a Codehive-style workflow.
 
 Codehive-style specifics:
@@ -872,7 +908,7 @@ Codehive-style specifics:
 Analyze the following freeform specification or brain dump and turn it into a rough queued task description.
 Produce only a concise title and a short goal statement that preserve the user's intent.
 Do not add acceptance criteria, implementation plans, decomposition, or detailed structure.
-Keep the scope high-level and reviewable so PM grooming can refine it later.
+Keep the scope high-level and reviewable so planner grooming can refine it later.
 Treat the original dump as the authoritative source of detail.
 
 Return your suggestion in exactly this format:

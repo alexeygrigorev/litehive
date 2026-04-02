@@ -237,10 +237,10 @@ TASK_TEMPLATES: dict[str, dict[str, object]] = {
         "plan": [
             "Review the brain dump for high-level intent.",
             "Extract a concise title and clear goal statement.",
-            "Prepare the task for PM grooming.",
+            "Prepare the task for planner grooming.",
         ],
         "prompt_guidance": [
-            "Keep the scope high-level; the PM will handle decomposition later.",
+            "Keep the scope high-level; the planner will handle decomposition later.",
             "Ensure the original intent is preserved and linked to the task.",
         ],
         "brief_sections": [

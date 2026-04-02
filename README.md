@@ -53,7 +53,7 @@ Common commands:
 `--workspace` defaults to the current directory. In normal repo-local use you should not need to pass it.
 When `litehive add` receives `--task-type`, it now creates the task in `tasks` mode by default so the task folder includes the structured `brief.md` and prompt guidance for that template. Pass `--mode implementation` to keep a typed task on the implementation path without the intake brief.
 Tasks can also carry PM sizing metadata: `--pm-complexity simple|moderate|complex` and `--planned-effort xs|s|m|l|xl`.
-During grooming, PM can emit `PM_COMPLEXITY:` and `PLANNED_EFFORT:` lines and litehive will persist them back into the task record and brief.
+During grooming, the planner can emit `PM_COMPLEXITY:` and `PLANNED_EFFORT:` lines and litehive will persist them back into the task record and brief.
 
 ## Execution model
 
@@ -67,6 +67,7 @@ Each runnable task goes through a fixed stage pipeline:
 
 The orchestrator owns routing and task state. Subagents produce reports and artifacts, but they do not decide the control flow.
 Agents are meant to operate inside this system rather than around it: they implement, verify, and report, while litehive enforces the stage order, validates results, and owns final integration.
+`planner` owns `grooming` and `reviewer` owns `accepting`; both are PM-style roles with different prompts and success criteria.
 Tasks can also opt into `--human-checkpoint before_acceptance` or `--human-checkpoint before_commit`, which pauses the pool and requeues the task at the next stage boundary for manual review.
 External engine choice resolves as:
 
