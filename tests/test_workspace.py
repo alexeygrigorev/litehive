@@ -2712,6 +2712,61 @@ def test_parse_stage_report_text_extracts_follow_up_tasks() -> None:
     ]
 
 
+def test_parse_stage_report_text_accepts_inline_empty_follow_up_tasks_array() -> None:
+    report = parse_stage_report_text(
+        task_id="T-0003",
+        step="accepting",
+        transcript=(
+            "VERDICT: PASS\n"
+            "SUMMARY: acceptance complete\n"
+            "FOLLOW_UP_TASKS: []"
+        ),
+        subagent_status="completed",
+    )
+
+    assert report.verdict == "pass"
+    assert report.follow_up_tasks == []
+    assert report.warnings == []
+
+
+def test_parse_stage_report_text_accepts_block_empty_follow_up_tasks_array() -> None:
+    report = parse_stage_report_text(
+        task_id="T-0003",
+        step="accepting",
+        transcript=(
+            "VERDICT: PASS\n"
+            "SUMMARY: acceptance complete\n"
+            "FOLLOW_UP_TASKS:\n"
+            "[]\n"
+            "WARNINGS:\n"
+        ),
+        subagent_status="completed",
+    )
+
+    assert report.verdict == "pass"
+    assert report.follow_up_tasks == []
+    assert report.warnings == []
+
+
+def test_parse_stage_report_text_extracts_inline_follow_up_tasks_array() -> None:
+    report = parse_stage_report_text(
+        task_id="T-0003",
+        step="accepting",
+        transcript=(
+            "VERDICT: PASS\n"
+            "SUMMARY: acceptance complete\n"
+            'FOLLOW_UP_TASKS: [{"title":"Tighten queue recovery coverage","rationale":"Acceptance found an uncovered recovery path.","blocking":false}]'
+        ),
+        subagent_status="completed",
+    )
+
+    assert report.verdict == "pass"
+    assert len(report.follow_up_tasks) == 1
+    assert report.follow_up_tasks[0].title == "Tighten queue recovery coverage"
+    assert report.follow_up_tasks[0].rationale == "Acceptance found an uncovered recovery path."
+    assert report.follow_up_tasks[0].blocking is False
+
+
 def test_stage_report_from_subagent_uses_adapter_execution_transcript(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Adapter task")

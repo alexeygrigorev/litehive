@@ -439,6 +439,9 @@ def _extract_section_block(text: str, key: str) -> str | None:
         if stripped == header:
             capture = True
             continue
+        if not capture and stripped.startswith(header):
+            inline_value = stripped[len(header) :].strip()
+            return inline_value or None
         if capture and re.match(r"^[A-Z_]+:", stripped):
             break
         if capture:
