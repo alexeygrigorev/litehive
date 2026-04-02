@@ -1361,13 +1361,23 @@ def _commit_to_git_report(
         )
 
     if not dirty_entries:
-        append_journal(root, task, "CommitToGit failed: task worktree has no changes to commit.")
+        head_sha = current_head(root)
+        set_task_commit_sha(task, head_sha)
+        task.status = "done"
+        task.pipeline_status = "done"
+        _cleanup_task_worktree(root, task)
+        append_journal(
+            root,
+            task,
+            "CommitToGit skipped: task worktree was already clean and no task-local changes remained.",
+        )
         return StageReport(
             task_id=task.id,
             step="commit_to_git",
-            verdict="fail",
-            summary="CommitToGit failed: task worktree has no changes to commit",
+            verdict="pass",
+            summary="CommitToGit skipped because task worktree was already clean",
             warnings=["no changes to commit"],
+            files_changed=[],
         )
 
     allowed_paths = _allowed_commit_paths(root, task)
