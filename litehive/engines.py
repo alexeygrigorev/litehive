@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
 import re
 from pathlib import Path
 
@@ -158,12 +159,64 @@ class CodexCLIAdapter(ExternalCLIAdapter):
         return [
             self.binary,
             "exec",
+            "--json",
             "--dangerously-bypass-approvals-and-sandbox",
             "--cd",
             str(cwd),
             "--skip-git-repo-check",
             prompt,
         ]
+
+    def render_transcript(self, execution: CLIExecutionResult) -> str:
+        assistant_text = _extract_codex_transcript(execution.stdout)
+        error_text = "\n".join(_extract_codex_errors(execution.stdout)).strip()
+        if assistant_text or error_text:
+            parts = [part for part in (assistant_text, error_text) if part]
+            if execution.stderr.strip():
+                parts.append(f"[stderr]\n{execution.stderr.strip()}")
+            return "\n\n".join(parts)
+        return execution.transcript
+
+    def extract_usage_observation(
+        self,
+        execution: CLIExecutionResult,
+    ) -> EngineUsageObservation | None:
+        payloads = iter_jsonl_payloads(execution.stdout)
+        saw_payloads = bool(payloads)
+        metadata: dict[str, str | int | bool | None] = {}
+        usage: EngineUsageWindow | None = None
+        limit_reason: str | None = None
+
+        for payload in reversed(payloads):
+            if usage is None:
+                usage = _codex_usage_window(payload, metadata)
+            if limit_reason is None:
+                error_message, error_metadata = _codex_error_details(payload)
+                if error_metadata:
+                    metadata.update(error_metadata)
+                if error_message:
+                    metadata.setdefault("error_message", error_message)
+                    limit_reason = classify_execution_limit(error_message)
+        payload_had_signal = usage is not None or bool(metadata)
+        if limit_reason is None and execution.stderr.strip():
+            limit_reason = classify_execution_limit(execution.stderr)
+            retry_at_hint = _codex_retry_at_hint(execution.stderr)
+            if retry_at_hint:
+                metadata["retry_at_hint"] = retry_at_hint
+            if "purchase more credits" in execution.stderr.lower():
+                metadata["purchase_more_credits"] = True
+        if not saw_payloads and not payload_had_signal:
+            return None
+        if usage is None and limit_reason is None and not metadata:
+            return None
+        return EngineUsageObservation(
+            source="provider",
+            provider="openai",
+            success=execution.exit_code == 0,
+            limit_reason=limit_reason,
+            usage=usage,
+            metadata=metadata,
+        )
 
 
 class OpenCodeAdapter(ExternalCLIAdapter):
@@ -604,6 +657,144 @@ def _extract_claude_transcript(stdout: str) -> str:
     return "\n".join(messages).strip()
 
 
+def _extract_codex_transcript(stdout: str) -> str:
+    messages: list[str] = []
+    for payload in iter_jsonl_payloads(stdout):
+        if payload.get("type") != "item.completed":
+            continue
+        item = payload.get("item")
+        if not isinstance(item, dict):
+            continue
+        if item.get("type") != "agent_message":
+            continue
+        text = item.get("text")
+        if isinstance(text, str) and text:
+            messages.append(text)
+    return "\n".join(messages).strip()
+
+
+def _extract_codex_errors(stdout: str) -> list[str]:
+    errors: list[str] = []
+    for payload in iter_jsonl_payloads(stdout):
+        error_message, _ = _codex_error_details(payload)
+        if error_message:
+            errors.append(error_message)
+    return errors
+
+
+def _codex_usage_window(
+    payload: dict[str, object],
+    metadata: dict[str, str | int | bool | None],
+) -> EngineUsageWindow | None:
+    if payload.get("type") != "turn.completed":
+        return None
+    usage_payload = payload.get("usage")
+    if not isinstance(usage_payload, dict):
+        return None
+
+    input_tokens = usage_payload.get("input_tokens")
+    output_tokens = usage_payload.get("output_tokens")
+    cached_input_tokens = usage_payload.get("cached_input_tokens")
+    reasoning_tokens = usage_payload.get("reasoning_tokens")
+    total_tokens = usage_payload.get("total_tokens")
+
+    if isinstance(input_tokens, int):
+        metadata["input_tokens"] = input_tokens
+    if isinstance(output_tokens, int):
+        metadata["output_tokens"] = output_tokens
+    if isinstance(cached_input_tokens, int):
+        metadata["cached_input_tokens"] = cached_input_tokens
+    if isinstance(reasoning_tokens, int):
+        metadata["reasoning_tokens"] = reasoning_tokens
+    if isinstance(total_tokens, int):
+        metadata["total_tokens"] = total_tokens
+
+    used_tokens: int | None = None
+    if isinstance(total_tokens, int):
+        used_tokens = total_tokens
+    else:
+        token_parts = [value for value in (input_tokens, output_tokens) if isinstance(value, int)]
+        if token_parts:
+            used_tokens = sum(token_parts)
+
+    return EngineUsageWindow(used=used_tokens, unit="tokens") if used_tokens is not None else None
+
+
+def _codex_error_details(
+    payload: dict[str, object],
+) -> tuple[str | None, dict[str, str | int | bool | None]]:
+    raw_error: object | None = None
+    if payload.get("type") == "error":
+        raw_error = payload.get("message")
+    elif payload.get("type") == "turn.failed":
+        raw_failure = payload.get("error")
+        if isinstance(raw_failure, dict):
+            raw_error = raw_failure.get("message")
+    if raw_error is None:
+        return None, {}
+
+    metadata: dict[str, str | int | bool | None] = {}
+    nested = _decode_json_object(raw_error)
+    message = _codex_error_message(raw_error)
+    if isinstance(nested, dict):
+        status = nested.get("status")
+        if isinstance(status, int):
+            metadata["error_status"] = status
+        nested_error = nested.get("error")
+        if isinstance(nested_error, dict):
+            error_type = nested_error.get("type")
+            if isinstance(error_type, str) and error_type:
+                metadata["error_type"] = error_type
+            error_code = nested_error.get("code")
+            if isinstance(error_code, str) and error_code:
+                metadata["error_code"] = error_code
+    retry_at_hint = _codex_retry_at_hint(message)
+    if retry_at_hint:
+        metadata["retry_at_hint"] = retry_at_hint
+    if "purchase more credits" in message.lower():
+        metadata["purchase_more_credits"] = True
+    return message, metadata
+
+
+def _codex_error_message(raw_error: object) -> str | None:
+    if isinstance(raw_error, str):
+        nested = _decode_json_object(raw_error)
+        if isinstance(nested, dict):
+            return _codex_error_message(nested)
+        message = raw_error.strip()
+        return message or None
+    if isinstance(raw_error, dict):
+        nested_error = raw_error.get("error")
+        if isinstance(nested_error, dict):
+            nested_message = nested_error.get("message")
+            if isinstance(nested_message, str) and nested_message.strip():
+                return nested_message.strip()
+        message = raw_error.get("message")
+        if isinstance(message, str) and message.strip():
+            return message.strip()
+    return None
+
+
+def _decode_json_object(raw: object) -> dict[str, object] | None:
+    if not isinstance(raw, str):
+        return raw if isinstance(raw, dict) else None
+    try:
+        decoded = json.loads(raw)
+    except (json.JSONDecodeError, TypeError, ValueError):
+        return None
+    return decoded if isinstance(decoded, dict) else None
+
+
+def _codex_retry_at_hint(text: str | None) -> str | None:
+    if not text:
+        return None
+    match = re.search(r"try again at\s+([^.;]+)", text, re.IGNORECASE)
+    if match is None:
+        return None
+    value = match.group(1).strip()
+    return value or None
+
+
 ENGINE_REGISTRY: dict[str, ExternalCLIAdapter] = {
     "codex": CodexCLIAdapter(
         name="codex",
@@ -611,7 +802,7 @@ ENGINE_REGISTRY: dict[str, ExternalCLIAdapter] = {
         capabilities=AdapterCapabilities(
             supports_model_override=False,
             strips_environment=False,
-            transcript_format="text",
+            transcript_format="jsonl",
         ),
     ),
     "opencode": OpenCodeAdapter(

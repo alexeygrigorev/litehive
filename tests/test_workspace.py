@@ -276,6 +276,48 @@ def test_record_engine_execution_accepts_provider_usage_observation(tmp_path: Pa
     assert record.metadata["project"] == "demo"
 
 
+def test_record_engine_execution_tracks_codex_provider_limit_observation(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+
+    record_engine_execution(
+        tmp_path,
+        task_id="T-0001",
+        engine_name="codex",
+        adapter=get_engine("codex"),
+        execution=CLIExecutionResult(
+            adapter="codex",
+            argv=("codex", "exec", "--json"),
+            cwd=tmp_path,
+            exit_code=1,
+            stdout="\n".join(
+                [
+                    '{"type":"error","message":"{\\"type\\":\\"error\\",\\"status\\":429,\\"error\\":{\\"type\\":\\"rate_limit_error\\",\\"message\\":\\"You\'ve hit your usage limit. Visit https://chatgpt.com/codex/settings/usage to purchase more credits or try again at 5:26 PM.\\"}}"}',
+                    '{"type":"turn.failed","error":{"message":"{\\"type\\":\\"error\\",\\"status\\":429,\\"error\\":{\\"type\\":\\"rate_limit_error\\",\\"message\\":\\"You\'ve hit your usage limit. Visit https://chatgpt.com/codex/settings/usage to purchase more credits or try again at 5:26 PM.\\"}}"}}',
+                ]
+            ),
+            stderr="",
+        ),
+        failure_kind="execution_limit",
+        failure_reason="usage limit reached",
+    )
+
+    monitoring = load_engine_monitoring(tmp_path)
+    record = monitoring.engines["codex"]
+
+    assert record.source == "provider"
+    assert record.provider == "openai"
+    assert record.invocation_count == 1
+    assert record.success_count == 0
+    assert record.failure_count == 1
+    assert record.limit_event_count == 1
+    assert record.last_limit_kind == "quota"
+    assert record.last_limit_reason == "usage limit reached"
+    assert record.metadata["error_status"] == 429
+    assert record.metadata["error_type"] == "rate_limit_error"
+    assert record.metadata["retry_at_hint"] == "5:26 PM"
+    assert record.metadata["purchase_more_credits"] is True
+
+
 def test_gemini_extract_usage_observation_reads_finished_usage_metadata(tmp_path: Path) -> None:
     adapter = get_engine("gemini")
 
@@ -3053,7 +3095,7 @@ def test_sandbox_launcher_wraps_selected_engine_with_docker_policy(
     assert "--env ANTHROPIC_API_KEY=should-not-leak" not in joined
     assert f"src={creds_path},dst=/run/credentials/google.json,readonly" in joined
     assert "--env GOOGLE_APPLICATION_CREDENTIALS=/run/credentials/google.json" in joined
-    assert "/litehive/bin/codex exec --dangerously-bypass-approvals-and-sandbox --cd /workspace" in joined
+    assert "/litehive/bin/codex exec --json --dangerously-bypass-approvals-and-sandbox --cd /workspace" in joined
 
 
 def test_sandbox_launcher_applies_resource_limit_flags_from_profile_defaults(
@@ -3148,7 +3190,7 @@ def test_engine_capabilities_report_availability_and_contract_flags(
 
     assert codex.available is True
     assert codex.supports_model_override is False
-    assert codex.transcript_format == "text"
+    assert codex.transcript_format == "jsonl"
     assert opencode.available is True
     assert opencode.supports_model_override is True
     assert opencode.strips_environment is True
@@ -3167,12 +3209,84 @@ def test_codex_build_invocation_includes_workspace_and_prompt(tmp_path: Path) ->
     assert list(invocation.argv) == [
         "codex",
         "exec",
+        "--json",
         "--dangerously-bypass-approvals-and-sandbox",
         "--cd",
         str(tmp_path),
         "--skip-git-repo-check",
         "ship it",
     ]
+
+
+def test_codex_renders_jsonl_transcript_and_usage_observation(tmp_path: Path) -> None:
+    execution = CLIExecutionResult(
+        adapter="codex",
+        argv=("codex", "exec", "--json"),
+        cwd=tmp_path,
+        exit_code=0,
+        stdout="\n".join(
+            [
+                '{"type":"thread.started","thread_id":"019d5098-77ba-7dc1-8b89-d3bff176bdb1"}',
+                '{"type":"turn.started"}',
+                '{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"OK"}}',
+                '{"type":"turn.completed","usage":{"input_tokens":15442,"cached_input_tokens":5504,"output_tokens":18}}',
+            ]
+        ),
+        stderr="",
+    )
+
+    adapter = get_engine("codex")
+
+    assert adapter.render_transcript(execution) == "OK"
+
+    observation = adapter.extract_usage_observation(execution)
+
+    assert observation is not None
+    assert observation.source == "provider"
+    assert observation.provider == "openai"
+    assert observation.usage is not None
+    assert observation.usage.used == 15460
+    assert observation.usage.unit == "tokens"
+    assert observation.metadata["input_tokens"] == 15442
+    assert observation.metadata["cached_input_tokens"] == 5504
+    assert observation.metadata["output_tokens"] == 18
+
+
+def test_codex_renders_jsonl_error_payloads_and_extracts_limit_observation(tmp_path: Path) -> None:
+    execution = CLIExecutionResult(
+        adapter="codex",
+        argv=("codex", "exec", "--json"),
+        cwd=tmp_path,
+        exit_code=1,
+        stdout="\n".join(
+            [
+                '{"type":"thread.started","thread_id":"019d5098-77ba-7dc1-8b89-d3bff176bdb1"}',
+                '{"type":"turn.started"}',
+                '{"type":"error","message":"{\\"type\\":\\"error\\",\\"status\\":429,\\"error\\":{\\"type\\":\\"rate_limit_error\\",\\"message\\":\\"You\'ve hit your usage limit. Visit https://chatgpt.com/codex/settings/usage to purchase more credits or try again at 5:26 PM.\\"}}"}',
+                '{"type":"turn.failed","error":{"message":"{\\"type\\":\\"error\\",\\"status\\":429,\\"error\\":{\\"type\\":\\"rate_limit_error\\",\\"message\\":\\"You\'ve hit your usage limit. Visit https://chatgpt.com/codex/settings/usage to purchase more credits or try again at 5:26 PM.\\"}}"}}',
+            ]
+        ),
+        stderr="",
+    )
+
+    adapter = get_engine("codex")
+    transcript = adapter.render_transcript(execution)
+
+    assert "usage limit" in transcript
+    assert classify_execution_limit(transcript) == "usage limit reached"
+
+    observation = adapter.extract_usage_observation(execution)
+
+    assert observation is not None
+    assert observation.source == "provider"
+    assert observation.provider == "openai"
+    assert observation.success is False
+    assert observation.limit_reason == "usage limit reached"
+    assert observation.usage is None
+    assert observation.metadata["error_status"] == 429
+    assert observation.metadata["error_type"] == "rate_limit_error"
+    assert observation.metadata["retry_at_hint"] == "5:26 PM"
+    assert observation.metadata["purchase_more_credits"] is True
 
 
 def test_opencode_build_invocation_includes_dir_model_and_prompt(tmp_path: Path) -> None:
@@ -7729,6 +7843,34 @@ def test_cmd_status_includes_engine_monitoring_lines(tmp_path: Path, capsys: pyt
     assert "engine_monitoring: codex source=local invocations=1 success=0 failure=1 limits=1" in output
     assert "last_limit_reason=usage limit reached" in output
     assert "usage=used=1,unit=requests" in output
+
+
+def test_cmd_status_includes_codex_provider_limit_monitoring(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    ensure_workspace(tmp_path)
+    record_engine_execution(
+        tmp_path,
+        task_id="T-0001",
+        engine_name="codex",
+        adapter=get_engine("codex"),
+        execution=CLIExecutionResult(
+            adapter="codex",
+            argv=("codex", "exec", "--json"),
+            cwd=tmp_path,
+            exit_code=1,
+            stdout='{"type":"error","message":"{\\"type\\":\\"error\\",\\"status\\":429,\\"error\\":{\\"type\\":\\"rate_limit_error\\",\\"message\\":\\"You\'ve hit your usage limit. Visit https://chatgpt.com/codex/settings/usage to purchase more credits.\\"}}"}',
+            stderr="",
+        ),
+        failure_kind="execution_limit",
+        failure_reason="usage limit reached",
+    )
+
+    exit_code = _cmd_status(argparse.Namespace(workspace=tmp_path, full=False))
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "engine_monitoring: codex source=provider invocations=1 success=0 failure=1 limits=1" in output
+    assert "provider=openai" in output
+    assert "last_limit_reason=usage limit reached" in output
 
 
 def test_cmd_status_includes_engine_usage_window(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
