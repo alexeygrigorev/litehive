@@ -10,6 +10,7 @@ import re
 import yaml
 
 from litehive.config import load_config, resolve_process_profile
+from litehive.engine_monitoring import record_engine_execution
 from litehive.external_cli import CLIExecutionResult, ExternalCLIAdapter, parse_stage_report_text
 from litehive.engines import (
     EngineError,
@@ -257,6 +258,16 @@ class SubagentManager:
             ),
             resource_limit_event=None if failure is None else failure.resource_limit_event,
         )
+        if proc is not None:
+            record_engine_execution(
+                self.root,
+                task_id=task.id,
+                engine_name=engine_name,
+                adapter=engine,
+                execution=proc,
+                failure_kind=None if failure is None else failure.kind,
+                failure_reason=None if failure is None else failure.reason,
+            )
         return SubagentResult(
             ref=ref,
             execution=proc,

@@ -22,9 +22,11 @@ def _fast_status(argv: list[str]) -> int:
     workspace = _resolve_workspace(argv)
     state_path = workspace / ".litehive" / "state.yaml"
     config_path = workspace / ".litehive" / "config.yaml"
+    monitoring_path = workspace / ".litehive" / "engine-monitoring.yaml"
 
     state = yaml.safe_load(state_path.read_text()) if state_path.exists() else {}
     config = yaml.safe_load(config_path.read_text()) if config_path.exists() else {}
+    monitoring = yaml.safe_load(monitoring_path.read_text()) if monitoring_path.exists() else {}
 
     active_task_id = state.get("active_task_id")
     queue = state.get("queue", []) or []
@@ -66,6 +68,42 @@ def _fast_status(argv: list[str]) -> int:
             )
             print(f"active_stage: {stage}")
             print(f"active_engine: {engine}")
+    for engine_name in sorted((monitoring.get("engines") or {}).keys()):
+        record = monitoring["engines"][engine_name] or {}
+        parts = [
+            f"engine_monitoring: {engine_name}",
+            f"source={record.get('source', 'local')}",
+            f"invocations={record.get('invocation_count', 0)}",
+            f"success={record.get('success_count', 0)}",
+            f"failure={record.get('failure_count', 0)}",
+            f"limits={record.get('limit_event_count', 0)}",
+        ]
+        if record.get("provider"):
+            parts.append(f"provider={record['provider']}")
+        if record.get("last_limit_kind"):
+            parts.append(f"last_limit_kind={record['last_limit_kind']}")
+        if record.get("last_limit_reason"):
+            parts.append(f"last_limit_reason={record['last_limit_reason']}")
+        usage = record.get("usage") or {}
+        if isinstance(usage, dict):
+            usage_parts: list[str] = []
+            if usage.get("used") is not None:
+                usage_parts.append(f"used={usage['used']}")
+            if usage.get("limit") is not None:
+                usage_parts.append(f"limit={usage['limit']}")
+            if usage.get("remaining") is not None:
+                usage_parts.append(f"remaining={usage['remaining']}")
+            if usage.get("unit"):
+                usage_parts.append(f"unit={usage['unit']}")
+            if usage.get("reset_at"):
+                usage_parts.append(f"reset_at={usage['reset_at']}")
+            if usage_parts:
+                parts.append("usage=" + ",".join(usage_parts))
+        if record.get("last_task_id"):
+            parts.append(f"last_task={record['last_task_id']}")
+        if record.get("observed_at"):
+            parts.append(f"observed_at={record['observed_at']}")
+        print(" ".join(parts))
     return 0
 
 

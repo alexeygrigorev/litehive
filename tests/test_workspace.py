@@ -53,6 +53,10 @@ from litehive.config import (
     render_context_template,
     resolve_process_profile,
 )
+from litehive.engine_monitoring import (
+    load_engine_monitoring,
+    record_engine_execution,
+)
 from litehive.external_cli import (
     AdapterCapabilities,
     CLIExecutionResult,
@@ -61,6 +65,8 @@ from litehive.external_cli import (
 )
 from litehive.git_ops import GitError, checkpoint_message, commit_task
 from litehive.models import (
+    EngineUsageObservation,
+    EngineUsageWindow,
     ResourceLimitEvent,
     RuntimeInterruptionState,
     RuntimeStageState,
@@ -178,9 +184,193 @@ def test_ensure_workspace_scaffolds_workspace_gitignore(tmp_path: Path) -> None:
     gitignore = (tmp_path / ".litehive" / ".gitignore").read_text(encoding="utf-8")
 
     assert "logs/" in gitignore
+    assert "engine-monitoring.yaml" in gitignore
     assert "tasks/*/runtime.yaml" in gitignore
     assert "tasks/*/reports/commit_to_git-*.yaml" in gitignore
     assert "state.yaml" not in gitignore
+
+
+def test_record_engine_execution_tracks_local_usage_fallback(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+
+    record_engine_execution(
+        tmp_path,
+        task_id="T-0001",
+        engine_name="codex",
+        adapter=get_engine("codex"),
+        execution=CLIExecutionResult(
+            adapter="codex",
+            argv=("codex", "exec"),
+            cwd=tmp_path,
+            exit_code=1,
+            stdout="",
+            stderr="ERROR: You've hit your usage limit. Try again later.",
+        ),
+        failure_kind="execution_limit",
+        failure_reason="usage limit reached",
+    )
+
+    monitoring = load_engine_monitoring(tmp_path)
+    record = monitoring.engines["codex"]
+
+    assert record.source == "local"
+    assert record.invocation_count == 1
+    assert record.success_count == 0
+    assert record.failure_count == 1
+    assert record.limit_event_count == 1
+    assert record.last_limit_kind == "quota"
+    assert record.last_limit_reason == "usage limit reached"
+    assert record.last_task_id == "T-0001"
+    assert record.usage is not None
+    assert record.usage.used == 1
+    assert record.usage.unit == "requests"
+
+
+def test_record_engine_execution_accepts_provider_usage_observation(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+
+    class ProviderAdapter(ExternalCLIAdapter):
+        def build_command(self, prompt: str, cwd: Path, model: str | None = None, *, max_turns: int | None = None) -> list[str]:  # type: ignore[override]
+            return ["provider-cli", prompt]
+
+        def extract_usage_observation(self, execution: CLIExecutionResult) -> EngineUsageObservation | None:
+            return EngineUsageObservation(
+                source="provider",
+                provider="gemini",
+                success=True,
+                usage=EngineUsageWindow(used=10, limit=100, remaining=90, unit="requests"),
+                metadata={"project": "demo"},
+            )
+
+    record_engine_execution(
+        tmp_path,
+        task_id="T-0002",
+        engine_name="gemini",
+        adapter=ProviderAdapter(
+            name="gemini",
+            binary="provider-cli",
+            capabilities=AdapterCapabilities(supports_model_override=True, transcript_format="jsonl"),
+        ),
+        execution=CLIExecutionResult(
+            adapter="gemini",
+            argv=("provider-cli", "run"),
+            cwd=tmp_path,
+            exit_code=0,
+            stdout="{}",
+            stderr="",
+        ),
+        failure_kind=None,
+        failure_reason=None,
+    )
+
+    monitoring = load_engine_monitoring(tmp_path)
+    record = monitoring.engines["gemini"]
+
+    assert record.source == "provider"
+    assert record.provider == "gemini"
+    assert record.invocation_count == 1
+    assert record.success_count == 1
+    assert record.failure_count == 0
+    assert record.usage is not None
+    assert record.usage.remaining == 90
+    assert record.metadata["project"] == "demo"
+
+
+def test_gemini_extract_usage_observation_reads_finished_usage_metadata(tmp_path: Path) -> None:
+    adapter = get_engine("gemini")
+
+    observation = adapter.extract_usage_observation(
+        CLIExecutionResult(
+            adapter="gemini",
+            argv=("gemini", "-p"),
+            cwd=tmp_path,
+            exit_code=0,
+            stdout=(
+                '{"type":"Content","value":"done"}\n'
+                '{"type":"Finished","value":{"reason":"STOP","usageMetadata":'
+                '{"promptTokenCount":11,"candidatesTokenCount":7,"totalTokenCount":18}}}\n'
+            ),
+            stderr="",
+        )
+    )
+
+    assert observation is not None
+    assert observation.source == "provider"
+    assert observation.provider == "google"
+    assert observation.usage is not None
+    assert observation.usage.used == 18
+    assert observation.usage.unit == "tokens"
+    assert observation.metadata["promptTokenCount"] == 11
+    assert observation.metadata["candidatesTokenCount"] == 7
+    assert observation.metadata["finish_reason"] == "STOP"
+
+
+def test_claude_extract_usage_observation_reads_result_usage_payload(tmp_path: Path) -> None:
+    adapter = get_engine("claude")
+
+    observation = adapter.extract_usage_observation(
+        CLIExecutionResult(
+            adapter="claude",
+            argv=("claude", "-p"),
+            cwd=tmp_path,
+            exit_code=0,
+            stdout=(
+                '{"type":"assistant","message":{"content":[{"type":"text","text":"done"}]}}\n'
+                '{"type":"result","subtype":"success","is_error":false,"duration_ms":1200,'
+                '"total_cost_usd":0.0125,"usage":{"input_tokens":100,"output_tokens":40,'
+                '"cache_creation_input_tokens":5,"cache_read_input_tokens":7,'
+                '"service_tier":"priority"}}\n'
+            ),
+            stderr="",
+        )
+    )
+
+    assert observation is not None
+    assert observation.source == "provider"
+    assert observation.provider == "anthropic"
+    assert observation.usage is not None
+    assert observation.usage.used == 152
+    assert observation.usage.unit == "tokens"
+    assert observation.metadata["input_tokens"] == 100
+    assert observation.metadata["output_tokens"] == 40
+    assert observation.metadata["service_tier"] == "priority"
+    assert observation.metadata["total_cost_usd"] == "0.012500"
+
+
+def test_copilot_extract_usage_observation_reads_quota_snapshot(tmp_path: Path) -> None:
+    adapter = get_engine("copilot")
+
+    observation = adapter.extract_usage_observation(
+        CLIExecutionResult(
+            adapter="copilot",
+            argv=("copilot", "-p"),
+            cwd=tmp_path,
+            exit_code=0,
+            stdout=(
+                '{"type":"assistant.usage","data":{"model":"gpt-5",'
+                '"inputTokens":120,"outputTokens":30,"cost":2,'
+                '"quotaSnapshots":{"premium_interactions":{"isUnlimitedEntitlement":false,'
+                '"entitlementRequests":100,"usedRequests":60,'
+                '"usageAllowedWithExhaustedQuota":false,"overage":0,'
+                '"overageAllowedWithExhaustedQuota":false,'
+                '"remainingPercentage":0.4,'
+                '"resetDate":"2026-04-30T00:00:00Z"}}}}\n'
+            ),
+            stderr="",
+        )
+    )
+
+    assert observation is not None
+    assert observation.source == "provider"
+    assert observation.provider == "github"
+    assert observation.usage is not None
+    assert observation.usage.used == 60
+    assert observation.usage.limit == 100
+    assert observation.usage.remaining == 40
+    assert observation.usage.unit == "requests"
+    assert observation.usage.reset_at == "2026-04-30T00:00:00Z"
+    assert observation.metadata["quota_snapshot"] == "premium_interactions"
+    assert observation.metadata["model"] == "gpt-5"
 
 
 def test_ensure_workspace_scaffolds_profile_specific_context(tmp_path: Path) -> None:
@@ -698,6 +888,9 @@ def test_subagent_artifacts_exist_while_engine_is_running(
     assert refreshed.runtime.active_subagent is None
     assert refreshed.runtime.last_subagent is not None
     assert refreshed.runtime.last_subagent.pid == 4242
+    monitoring = load_engine_monitoring(tmp_path)
+    assert monitoring.engines["codex"].invocation_count == 1
+    assert monitoring.engines["codex"].success_count == 1
 
 
 def test_subagent_artifacts_update_live_during_streaming_execution(
@@ -7508,6 +7701,84 @@ def test_render_task_summary_includes_active_subagent_pid() -> None:
 
     assert any("subagent=SA-0001 swe/codex running pid=31337" in line for line in lines)
     assert any("sandbox=sandbox[docker:test net=none workspace=rw]" in line for line in lines)
+
+
+def test_cmd_status_includes_engine_monitoring_lines(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    ensure_workspace(tmp_path)
+    record_engine_execution(
+        tmp_path,
+        task_id="T-0001",
+        engine_name="codex",
+        adapter=get_engine("codex"),
+        execution=CLIExecutionResult(
+            adapter="codex",
+            argv=("codex", "exec"),
+            cwd=tmp_path,
+            exit_code=1,
+            stdout="",
+            stderr="ERROR: You've hit your usage limit. Try again later.",
+        ),
+        failure_kind="execution_limit",
+        failure_reason="usage limit reached",
+    )
+
+    exit_code = _cmd_status(argparse.Namespace(workspace=tmp_path, full=False))
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "engine_monitoring: codex source=local invocations=1 success=0 failure=1 limits=1" in output
+    assert "last_limit_reason=usage limit reached" in output
+    assert "usage=used=1,unit=requests" in output
+
+
+def test_cmd_status_includes_engine_usage_window(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    ensure_workspace(tmp_path)
+
+    class ProviderAdapter(ExternalCLIAdapter):
+        def build_command(self, prompt: str, cwd: Path, model: str | None = None, *, max_turns: int | None = None) -> list[str]:  # type: ignore[override]
+            return ["provider-cli", prompt]
+
+        def extract_usage_observation(self, execution: CLIExecutionResult) -> EngineUsageObservation | None:
+            return EngineUsageObservation(
+                source="provider",
+                provider="github",
+                success=True,
+                usage=EngineUsageWindow(
+                    used=60,
+                    limit=100,
+                    remaining=40,
+                    unit="requests",
+                    reset_at="2026-04-30T00:00:00Z",
+                ),
+            )
+
+    record_engine_execution(
+        tmp_path,
+        task_id="T-0001",
+        engine_name="copilot",
+        adapter=ProviderAdapter(
+            name="copilot",
+            binary="provider-cli",
+            capabilities=AdapterCapabilities(supports_model_override=True, transcript_format="jsonl"),
+        ),
+        execution=CLIExecutionResult(
+            adapter="copilot",
+            argv=("provider-cli", "run"),
+            cwd=tmp_path,
+            exit_code=0,
+            stdout="{}",
+            stderr="",
+        ),
+        failure_kind=None,
+        failure_reason=None,
+    )
+
+    exit_code = _cmd_status(argparse.Namespace(workspace=tmp_path, full=False))
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "engine_monitoring: copilot source=provider invocations=1 success=1 failure=0 limits=0" in output
+    assert "usage=used=60,limit=100,remaining=40,unit=requests,reset_at=2026-04-30T00:00:00Z" in output
 
 
 def test_render_task_summary_includes_interruption_context() -> None:

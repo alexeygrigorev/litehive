@@ -15,6 +15,7 @@ from litehive.external_cli import (
     iter_jsonl_payloads,
     parse_stage_report_text,
 )
+from litehive.models import EngineUsageObservation, EngineUsageWindow
 
 
 class EngineError(RuntimeError):
@@ -223,6 +224,48 @@ class GeminiCLIAdapter(ExternalCLIAdapter):
             subagent_status=subagent_status,  # type: ignore[arg-type]
         )
 
+    def extract_usage_observation(
+        self,
+        execution: CLIExecutionResult,
+    ) -> EngineUsageObservation | None:
+        payloads = iter_jsonl_payloads(execution.stdout)
+        for payload in reversed(payloads):
+            event_type = str(payload.get("type", "")).lower()
+            if event_type != "finished":
+                continue
+            value = payload.get("value")
+            if not isinstance(value, dict):
+                continue
+            usage_metadata = value.get("usageMetadata")
+            if not isinstance(usage_metadata, dict):
+                continue
+            metadata: dict[str, str | int | bool | None] = {}
+            for field in (
+                "promptTokenCount",
+                "candidatesTokenCount",
+                "thoughtsTokenCount",
+                "cachedContentTokenCount",
+                "toolUsePromptTokenCount",
+            ):
+                raw_value = usage_metadata.get(field)
+                if isinstance(raw_value, int):
+                    metadata[field] = raw_value
+            reason = value.get("reason")
+            if isinstance(reason, str) and reason:
+                metadata["finish_reason"] = reason
+            total_token_count = usage_metadata.get("totalTokenCount")
+            usage = None
+            if isinstance(total_token_count, int):
+                usage = EngineUsageWindow(used=total_token_count, unit="tokens")
+            return EngineUsageObservation(
+                source="provider",
+                provider="google",
+                success=execution.exit_code == 0,
+                usage=usage,
+                metadata=metadata,
+            )
+        return None
+
 
 class ClaudeCLIAdapter(ExternalCLIAdapter):
     DEFAULT_MODEL = "claude-sonnet-4-20250514"
@@ -291,6 +334,62 @@ class ClaudeCLIAdapter(ExternalCLIAdapter):
             subagent_status=subagent_status,  # type: ignore[arg-type]
         )
 
+    def extract_usage_observation(
+        self,
+        execution: CLIExecutionResult,
+    ) -> EngineUsageObservation | None:
+        payloads = iter_jsonl_payloads(execution.stdout)
+        for payload in reversed(payloads):
+            if payload.get("type") != "result":
+                continue
+            usage_payload = payload.get("usage")
+            if not isinstance(usage_payload, dict):
+                continue
+            metadata: dict[str, str | int | bool | None] = {}
+            total_tokens = 0
+            saw_tokens = False
+            for field in (
+                "input_tokens",
+                "output_tokens",
+                "cache_creation_input_tokens",
+                "cache_read_input_tokens",
+            ):
+                raw_value = usage_payload.get(field)
+                if isinstance(raw_value, int):
+                    metadata[field] = raw_value
+                    total_tokens += raw_value
+                    saw_tokens = True
+            server_tool_use = usage_payload.get("server_tool_use")
+            if isinstance(server_tool_use, dict):
+                for field in ("web_search_requests", "web_fetch_requests"):
+                    raw_value = server_tool_use.get(field)
+                    if isinstance(raw_value, int):
+                        metadata[field] = raw_value
+            cache_creation = usage_payload.get("cache_creation")
+            if isinstance(cache_creation, dict):
+                for field in ("ephemeral_1h_input_tokens", "ephemeral_5m_input_tokens"):
+                    raw_value = cache_creation.get(field)
+                    if isinstance(raw_value, int):
+                        metadata[field] = raw_value
+            service_tier = usage_payload.get("service_tier")
+            if isinstance(service_tier, str) and service_tier:
+                metadata["service_tier"] = service_tier
+            total_cost_usd = payload.get("total_cost_usd")
+            if isinstance(total_cost_usd, (int, float)):
+                metadata["total_cost_usd"] = f"{total_cost_usd:.6f}"
+            duration_ms = payload.get("duration_ms")
+            if isinstance(duration_ms, int):
+                metadata["duration_ms"] = duration_ms
+            usage = EngineUsageWindow(used=total_tokens, unit="tokens") if saw_tokens else None
+            return EngineUsageObservation(
+                source="provider",
+                provider="anthropic",
+                success=not bool(payload.get("is_error")),
+                usage=usage,
+                metadata=metadata,
+            )
+        return None
+
 
 class CopilotCLIAdapter(ExternalCLIAdapter):
     def build_command(
@@ -344,6 +443,67 @@ class CopilotCLIAdapter(ExternalCLIAdapter):
             transcript=transcript,
             subagent_status=subagent_status,  # type: ignore[arg-type]
         )
+
+    def extract_usage_observation(
+        self,
+        execution: CLIExecutionResult,
+    ) -> EngineUsageObservation | None:
+        payloads = iter_jsonl_payloads(execution.stdout)
+        for payload in reversed(payloads):
+            if payload.get("type") != "assistant.usage":
+                continue
+            data = payload.get("data")
+            if not isinstance(data, dict):
+                continue
+            metadata: dict[str, str | int | bool | None] = {}
+            total_tokens = 0
+            saw_tokens = False
+            for field in ("inputTokens", "outputTokens", "cacheReadTokens", "cacheWriteTokens"):
+                raw_value = data.get(field)
+                if isinstance(raw_value, int):
+                    metadata[field] = raw_value
+                    total_tokens += raw_value
+                    saw_tokens = True
+            if isinstance(data.get("model"), str) and data["model"]:
+                metadata["model"] = data["model"]
+            if isinstance(data.get("cost"), (int, float)):
+                metadata["cost"] = str(data["cost"])
+            usage = EngineUsageWindow(used=total_tokens, unit="tokens") if saw_tokens else None
+
+            quota_snapshots = data.get("quotaSnapshots")
+            if isinstance(quota_snapshots, dict) and quota_snapshots:
+                selected_name, selected_snapshot = _select_copilot_quota_snapshot(quota_snapshots)
+                if isinstance(selected_snapshot, dict):
+                    quota_usage = _copilot_quota_usage_window(selected_snapshot)
+                    if quota_usage is not None:
+                        usage = quota_usage
+                    metadata["quota_snapshot"] = selected_name
+                    for field in (
+                        "isUnlimitedEntitlement",
+                        "entitlementRequests",
+                        "usedRequests",
+                        "usageAllowedWithExhaustedQuota",
+                        "overage",
+                        "overageAllowedWithExhaustedQuota",
+                        "remainingPercentage",
+                    ):
+                        raw_value = selected_snapshot.get(field)
+                        if isinstance(raw_value, (bool, int)):
+                            metadata[field] = raw_value
+                        elif isinstance(raw_value, float):
+                            metadata[field] = f"{raw_value:.6f}"
+                    reset_date = selected_snapshot.get("resetDate")
+                    if isinstance(reset_date, str) and reset_date:
+                        metadata["resetDate"] = reset_date
+
+            return EngineUsageObservation(
+                source="provider",
+                provider="github",
+                success=execution.exit_code == 0,
+                usage=usage,
+                metadata=metadata,
+            )
+        return None
 
 
 _OPENCODE_STRIPPED_ENV_VARS = (
@@ -580,3 +740,37 @@ def _extract_copilot_errors(stdout: str) -> list[str]:
         elif isinstance(result, str) and result:
             tool_errors.append(result)
     return tool_errors
+
+
+def _copilot_quota_usage_window(snapshot: dict[str, object]) -> EngineUsageWindow | None:
+    entitlement_requests = snapshot.get("entitlementRequests")
+    used_requests = snapshot.get("usedRequests")
+    if not isinstance(used_requests, int):
+        return None
+    remaining: int | None = None
+    if isinstance(entitlement_requests, int):
+        remaining = max(entitlement_requests - used_requests, 0)
+    reset_date = snapshot.get("resetDate")
+    return EngineUsageWindow(
+        used=used_requests,
+        limit=entitlement_requests if isinstance(entitlement_requests, int) else None,
+        remaining=remaining,
+        unit="requests",
+        reset_at=reset_date if isinstance(reset_date, str) and reset_date else None,
+    )
+
+
+def _select_copilot_quota_snapshot(
+    snapshots: dict[object, object],
+) -> tuple[str, dict[str, object] | None]:
+    preferred_names = ("premium_interactions", "chat", "completions")
+    normalized: dict[str, dict[str, object]] = {
+        str(name): value for name, value in snapshots.items() if isinstance(value, dict)
+    }
+    for name in preferred_names:
+        selected = normalized.get(name)
+        if selected is not None:
+            return name, selected
+    for name, snapshot in normalized.items():
+        return name, snapshot
+    return "", None

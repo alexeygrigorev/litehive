@@ -24,6 +24,7 @@ from litehive.config import (
     normalize_task_engine_routing,
     render_context_template,
 )
+from litehive.engine_monitoring import load_engine_monitoring, render_engine_monitoring_lines
 from litehive.git_ops import GitError, checkpoint_message
 from litehive.observability import render_task_summary
 from litehive.models import utcnow
@@ -1481,6 +1482,7 @@ def _cmd_configure(args: argparse.Namespace) -> int:
 def _cmd_status(args: argparse.Namespace) -> int:
     config = load_config(args.workspace)
     state = load_state(args.workspace)
+    monitoring = load_engine_monitoring(args.workspace)
     print(f"workspace: {args.workspace}")
     print(f"default_engine: {config.default_engine}")
     print(f"mode: {state.mode}")
@@ -1508,7 +1510,19 @@ def _cmd_status(args: argparse.Namespace) -> int:
         print(f"active_task_status: {active_task.status}/{active_task.pipeline_status}")
         print(f"active_stage: {active_stage}")
         print(f"active_engine: {active_engine}")
-    if args.full:
+    for line in render_engine_monitoring_lines(monitoring):
+        print(line)
+    if getattr(args, "full", True):
+        print(f"default_retry_limit: {config.default_retry_limit}")
+        print(f"execution_retry_policies: {_format_execution_retry_policies(config)}")
+        print(f"pool_stop_on_failure: {config.pool_stop_on_failure}")
+        print(f"pool_max_tasks: {config.pool_max_tasks}")
+        print(f"pool_stop_on_execution_limit: {config.pool_stop_on_execution_limit}")
+        print(f"pool_quota_threshold: {config.pool_quota_threshold}")
+        print(f"pool_budget_threshold: {config.pool_budget_threshold}")
+        print(f"pool_stop_on_dirty_git: {config.pool_stop_on_dirty_git}")
+        print(f"pool_selection_policy: {config.pool_selection_policy}")
+        print(f"process_profile: {config.process_profile}")
         tasks = list_tasks(args.workspace)
         if tasks:
             print()

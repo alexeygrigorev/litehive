@@ -59,6 +59,8 @@ OutcomeReasonCode = Literal[
     "deferred",
     "duplicate",
 ]
+EngineMonitoringSource = Literal["provider", "local"]
+EngineLimitKind = Literal["quota", "rate", "budget", "capacity"]
 
 
 def utcnow() -> str:
@@ -124,6 +126,48 @@ class RuntimeEngineSwitch(BaseModel):
     to_engine: str
     reason: str
     happened_at: str = Field(default_factory=utcnow)
+
+
+class EngineUsageWindow(BaseModel):
+    used: int | None = None
+    limit: int | None = None
+    remaining: int | None = None
+    unit: str | None = None
+    reset_at: str | None = None
+
+
+class EngineUsageObservation(BaseModel):
+    source: EngineMonitoringSource = "local"
+    provider: str | None = None
+    observed_at: str = Field(default_factory=utcnow)
+    invocation_count: int = 1
+    success: bool | None = None
+    limit_reason: str | None = None
+    limit_kind: EngineLimitKind | None = None
+    usage: EngineUsageWindow | None = None
+    metadata: dict[str, str | int | bool | None] = Field(default_factory=dict)
+
+
+class EngineUsageRecord(BaseModel):
+    engine: str
+    source: EngineMonitoringSource = "local"
+    provider: str | None = None
+    observed_at: str | None = None
+    last_invoked_at: str | None = None
+    last_task_id: str | None = None
+    last_exit_code: int | None = None
+    invocation_count: int = 0
+    success_count: int = 0
+    failure_count: int = 0
+    limit_event_count: int = 0
+    last_limit_reason: str | None = None
+    last_limit_kind: EngineLimitKind | None = None
+    usage: EngineUsageWindow | None = None
+    metadata: dict[str, str | int | bool | None] = Field(default_factory=dict)
+
+
+class WorkspaceEngineMonitoring(BaseModel):
+    engines: dict[str, EngineUsageRecord] = Field(default_factory=dict)
 
 
 class TaskRetryPolicy(BaseModel):

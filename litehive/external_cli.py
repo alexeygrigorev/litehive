@@ -13,7 +13,7 @@ import selectors
 import time
 from typing import Callable, Literal
 
-from litehive.models import FollowUpTaskSpec, StageReport, SubagentStatus
+from litehive.models import EngineUsageObservation, FollowUpTaskSpec, StageReport, SubagentStatus
 
 
 TranscriptFormat = Literal["text", "jsonl"]
@@ -255,6 +255,12 @@ class ExternalCLIAdapter:
 
     def render_transcript(self, execution: CLIExecutionResult) -> str:
         return execution.transcript
+
+    def extract_usage_observation(
+        self,
+        execution: CLIExecutionResult,
+    ) -> EngineUsageObservation | None:
+        return None
 
 
 def extract_jsonl_messages(stdout: str) -> str:
