@@ -10,6 +10,8 @@ from litehive.external_cli import (
     AdapterCapabilities,
     CLIExecutionResult,
     ExternalCLIAdapter,
+    extract_codex_errors,
+    extract_codex_messages,
     extract_jsonl_errors,
     extract_jsonl_messages,
     iter_jsonl_payloads,
@@ -161,8 +163,50 @@ class CodexCLIAdapter(ExternalCLIAdapter):
             "--cd",
             str(cwd),
             "--skip-git-repo-check",
+            "--json",
             prompt,
         ]
+
+    def render_transcript(self, execution: CLIExecutionResult) -> str:
+        assistant_text = extract_codex_messages(execution.stdout)
+        if assistant_text:
+            if execution.stderr.strip():
+                return f"{assistant_text}\n\n[stderr]\n{execution.stderr.strip()}"
+            return assistant_text
+
+        event_errors = extract_codex_errors(execution.stdout)
+        if event_errors:
+            transcript = "\n".join(event_errors)
+            if execution.stderr.strip():
+                return f"{transcript}\n\n[stderr]\n{execution.stderr.strip()}"
+            return transcript
+
+        if iter_jsonl_payloads(execution.stdout):
+            if execution.stderr.strip():
+                return f"[stderr]\n{execution.stderr.strip()}"
+            return ""
+
+        return execution.transcript
+
+    def parse_stage_report(
+        self,
+        *,
+        task_id: str,
+        step: str,
+        execution: CLIExecutionResult,
+        subagent_status: str,
+    ):
+        transcript = self.render_transcript(execution)
+        if transcript == execution.transcript:
+            error_lines = extract_codex_errors(execution.stdout)
+            if error_lines:
+                transcript = "\n".join(error_lines)
+        return parse_stage_report_text(
+            task_id=task_id,
+            step=step,  # type: ignore[arg-type]
+            transcript=transcript,
+            subagent_status=subagent_status,  # type: ignore[arg-type]
+        )
 
 
 class OpenCodeAdapter(ExternalCLIAdapter):
@@ -451,7 +495,7 @@ ENGINE_REGISTRY: dict[str, ExternalCLIAdapter] = {
         capabilities=AdapterCapabilities(
             supports_model_override=False,
             strips_environment=False,
-            transcript_format="text",
+            transcript_format="jsonl",
         ),
     ),
     "opencode": OpenCodeAdapter(

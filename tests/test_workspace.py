@@ -2348,7 +2348,10 @@ def test_sandbox_launcher_wraps_selected_engine_with_docker_policy(
     assert "--env ANTHROPIC_API_KEY=should-not-leak" not in joined
     assert f"src={creds_path},dst=/run/credentials/google.json,readonly" in joined
     assert "--env GOOGLE_APPLICATION_CREDENTIALS=/run/credentials/google.json" in joined
-    assert "/litehive/bin/codex exec --dangerously-bypass-approvals-and-sandbox --cd /workspace" in joined
+    assert (
+        "/litehive/bin/codex exec --dangerously-bypass-approvals-and-sandbox --cd /workspace "
+        "--skip-git-repo-check --json ship it"
+    ) in joined
 
 
 def test_sandbox_launcher_applies_resource_limit_flags_from_profile_defaults(
@@ -2443,7 +2446,7 @@ def test_engine_capabilities_report_availability_and_contract_flags(
 
     assert codex.available is True
     assert codex.supports_model_override is False
-    assert codex.transcript_format == "text"
+    assert codex.transcript_format == "jsonl"
     assert opencode.available is True
     assert opencode.supports_model_override is True
     assert opencode.strips_environment is True
@@ -2466,6 +2469,7 @@ def test_codex_build_invocation_includes_workspace_and_prompt(tmp_path: Path) ->
         "--cd",
         str(tmp_path),
         "--skip-git-repo-check",
+        "--json",
         "ship it",
     ]
 
@@ -2522,6 +2526,132 @@ def test_gemini_renders_jsonl_transcript_and_stage_report(tmp_path: Path) -> Non
     assert report.summary == "implemented Gemini adapter"
     assert report.files_changed == ["litehive/engines.py"]
     assert report.tests == {"added": 4, "passing": 4}
+
+
+def test_codex_renders_jsonl_transcript_and_stage_report(tmp_path: Path) -> None:
+    execution = CLIExecutionResult(
+        adapter="codex",
+        argv=("codex", "exec"),
+        cwd=tmp_path,
+        exit_code=0,
+        stdout="\n".join(
+            [
+                '{"type":"thread.started","thread_id":"thread_123"}',
+                '{"type":"turn.started"}',
+                '{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"VERDICT: PASS\\nSUMMARY: implemented Codex event adapter\\nFILES_CHANGED:\\n- litehive/engines.py\\nTESTS_ADDED: 2\\nTESTS_PASSING: 2\\nWARNINGS:\\n"}}',
+                '{"type":"turn.completed","usage":{"input_tokens":1,"output_tokens":1}}',
+            ]
+        ),
+        stderr="",
+    )
+
+    engine = get_engine("codex")
+
+    assert engine.render_transcript(execution).splitlines()[0] == "VERDICT: PASS"
+    report = engine.parse_stage_report(
+        task_id="T-0092",
+        step="implementing",
+        execution=execution,
+        subagent_status="completed",
+    )
+
+    assert report.verdict == "pass"
+    assert report.summary == "implemented Codex event adapter"
+    assert report.files_changed == ["litehive/engines.py"]
+    assert report.tests == {"added": 2, "passing": 2}
+
+
+def test_codex_render_transcript_ignores_non_message_events_until_text_arrives(tmp_path: Path) -> None:
+    execution = CLIExecutionResult(
+        adapter="codex",
+        argv=("codex", "exec"),
+        cwd=tmp_path,
+        exit_code=0,
+        stdout="\n".join(
+            [
+                '{"type":"thread.started","thread_id":"thread_123"}',
+                '{"type":"turn.started"}',
+                '{"type":"item.started","item":{"id":"item_1","type":"command_execution","command":"pwd","aggregated_output":"","exit_code":null,"status":"in_progress"}}',
+            ]
+        ),
+        stderr="",
+    )
+
+    assert get_engine("codex").render_transcript(execution) == ""
+
+
+def test_codex_render_transcript_replaces_updated_agent_message_text(tmp_path: Path) -> None:
+    execution = CLIExecutionResult(
+        adapter="codex",
+        argv=("codex", "exec"),
+        cwd=tmp_path,
+        exit_code=0,
+        stdout="\n".join(
+            [
+                '{"type":"thread.started","thread_id":"thread_123"}',
+                '{"type":"item.updated","item":{"id":"item_0","type":"agent_message","text":"VERDICT: PASS\\nSUMMARY: draft\\n"}}',
+                '{"type":"item.updated","item":{"id":"item_0","type":"agent_message","text":"VERDICT: PASS\\nSUMMARY: final\\n"}}',
+                '{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"VERDICT: PASS\\nSUMMARY: final\\n"}}',
+            ]
+        ),
+        stderr="",
+    )
+
+    assert get_engine("codex").render_transcript(execution) == "VERDICT: PASS\nSUMMARY: final"
+
+
+def test_codex_stage_report_uses_failed_command_output_when_no_agent_message(tmp_path: Path) -> None:
+    execution = CLIExecutionResult(
+        adapter="codex",
+        argv=("codex", "exec"),
+        cwd=tmp_path,
+        exit_code=1,
+        stdout="\n".join(
+            [
+                '{"type":"thread.started","thread_id":"thread_123"}',
+                '{"type":"turn.started"}',
+                '{"type":"item.completed","item":{"id":"item_1","type":"command_execution","command":"pytest","aggregated_output":"tests failed","exit_code":1,"status":"failed"}}',
+            ]
+        ),
+        stderr="",
+    )
+
+    report = get_engine("codex").parse_stage_report(
+        task_id="T-0092",
+        step="testing",
+        execution=execution,
+        subagent_status="failed",
+    )
+
+    assert report.summary == "tests failed"
+    assert report.verdict == "blocked"
+
+
+def test_codex_stage_report_ignores_stale_failed_command_output_after_restart(tmp_path: Path) -> None:
+    execution = CLIExecutionResult(
+        adapter="codex",
+        argv=("codex", "exec"),
+        cwd=tmp_path,
+        exit_code=0,
+        stdout="\n".join(
+            [
+                '{"type":"thread.started","thread_id":"thread_123"}',
+                '{"type":"item.updated","item":{"id":"item_1","type":"command_execution","command":"pytest","aggregated_output":"tests failed","exit_code":1,"status":"failed"}}',
+                '{"type":"item.completed","item":{"id":"item_1","type":"command_execution","command":"pytest","aggregated_output":"all green","exit_code":0,"status":"completed"}}',
+            ]
+        ),
+        stderr="",
+    )
+
+    report = get_engine("codex").parse_stage_report(
+        task_id="T-0092",
+        step="testing",
+        execution=execution,
+        subagent_status="completed",
+    )
+
+    assert report.summary == "testing completed"
+    assert report.verdict == "pass"
 
 
 def test_gemini_stage_report_uses_tool_error_when_no_assistant_message(tmp_path: Path) -> None:
