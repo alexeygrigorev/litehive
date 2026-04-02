@@ -24,6 +24,7 @@ from litehive.cli import (
     _cmd_resume_task,
     _cmd_rollback,
     _cmd_run,
+    _cmd_stop_task,
     _cmd_status,
     _cmd_update,
     build_parser,
@@ -117,6 +118,7 @@ from litehive.tasks import (
     save_task,
     save_task_runtime,
     set_active_task,
+    stop_current_task,
     restore_untouched_active_task,
     task_dir,
     task_file,
@@ -9135,6 +9137,140 @@ def test_abandon_task_rolls_back_when_runtime_persist_fails(
     assert restored_state.queue == [flagged.id, queued.id]
     journal = (task_dir(tmp_path, refreshed) / "journal.md").read_text(encoding="utf-8")
     assert "Task abandoned via CLI at stage `testing`." not in journal
+
+
+def test_stop_command_interrupts_active_task_cleanly(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Stop active task", auto_commit=False)
+    task.status = "in_progress"
+    task.pipeline_status = "testing"
+    task.runtime.execution_status = "running"
+    task.runtime.current_stage = RuntimeStageState(
+        step="testing",
+        status="running",
+        started_at="2026-04-01T00:00:00+00:00",
+        completed_at=None,
+        updated_at="2026-04-01T00:01:00+00:00",
+        duration_seconds=60,
+        verdict=None,
+        summary="",
+    )
+    save_task(tmp_path, task)
+    save_task_runtime(tmp_path, task)
+
+    state = load_state(tmp_path)
+    state.active_task_id = task.id
+    save_state(tmp_path, state)
+
+    exit_code = _cmd_stop_task(argparse.Namespace(workspace=tmp_path))
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert f"task: {task.id} {task.title}" in output
+    assert "status: interrupted" in output
+    assert "pipeline_status: testing" in output
+    assert "signal_sent: no" in output
+    refreshed = get_task(tmp_path, task.id)
+    assert refreshed is not None
+    assert refreshed.status == "interrupted"
+    assert refreshed.pipeline_status == "testing"
+    assert refreshed.runtime.execution_status == "interrupted"
+    assert refreshed.runtime.current_stage.status == "interrupted"
+    assert load_state(tmp_path).active_task_id is None
+    assert load_state(tmp_path).queue == []
+    journal = (task_dir(tmp_path, refreshed) / "journal.md").read_text(encoding="utf-8")
+    assert "Interrupted runner execution while `testing` was running." in journal
+    assert "Reason: Task stopped via CLI." in journal
+    assert "Resume from `testing`." in journal
+
+
+def test_stop_current_task_requeues_commit_stage_interrupt(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Stop commit task", auto_commit=False)
+    task.status = "in_progress"
+    task.pipeline_status = "commit_to_git"
+    task.runtime.execution_status = "running"
+    task.runtime.current_stage = RuntimeStageState(
+        step="commit_to_git",
+        status="running",
+        started_at="2026-04-01T00:00:00+00:00",
+        completed_at=None,
+        updated_at="2026-04-01T00:01:00+00:00",
+        duration_seconds=60,
+        verdict=None,
+        summary="",
+    )
+    save_task(tmp_path, task)
+    save_task_runtime(tmp_path, task)
+
+    state = load_state(tmp_path)
+    state.active_task_id = task.id
+    save_state(tmp_path, state)
+
+    summary = stop_current_task(tmp_path)
+
+    assert summary.signal_sent is False
+    refreshed = get_task(tmp_path, task.id)
+    assert refreshed is not None
+    assert refreshed.status == "queued"
+    assert refreshed.pipeline_status == "commit_to_git"
+    assert refreshed.runtime.execution_status == "interrupted"
+    assert load_state(tmp_path).active_task_id is None
+    assert load_state(tmp_path).queue == [task.id]
+
+
+def test_stop_current_task_signals_live_runner_before_fallback(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Signal active task", auto_commit=False)
+    task.status = "in_progress"
+    task.pipeline_status = "testing"
+    task.runtime.execution_status = "running"
+    task.runtime.current_stage = RuntimeStageState(
+        step="testing",
+        status="running",
+        started_at="2026-04-01T00:00:00+00:00",
+        completed_at=None,
+        updated_at="2026-04-01T00:01:00+00:00",
+        duration_seconds=60,
+        verdict=None,
+        summary="",
+    )
+    save_task(tmp_path, task)
+    save_task_runtime(tmp_path, task)
+
+    state = load_state(tmp_path)
+    state.active_task_id = task.id
+    save_state(tmp_path, state)
+
+    held_states = iter([True, False])
+    signals: list[tuple[int, int]] = []
+
+    monkeypatch.setattr("litehive.tasks._runner_lock_is_held", lambda root: next(held_states, False))
+    monkeypatch.setattr(
+        "litehive.tasks._read_runner_lock_metadata",
+        lambda root: {"pid": 4242, "started_at": "2026-04-01T00:00:00+00:00"},
+    )
+    monkeypatch.setattr("litehive.tasks._runner_pid_is_alive", lambda pid: True)
+    monkeypatch.setattr("litehive.tasks.recover_stale_runner_state", lambda root: False)
+
+    def fake_kill(pid: int, sig: int) -> None:
+        signals.append((pid, sig))
+
+    monkeypatch.setattr("litehive.tasks.os.kill", fake_kill)
+
+    summary = stop_current_task(tmp_path, wait_timeout_seconds=0.01, poll_interval_seconds=0.01)
+
+    assert signals == [(4242, tasks_module.signal.SIGINT)]
+    assert summary.signal_sent is True
+    assert summary.runner_pid == 4242
+    refreshed = get_task(tmp_path, task.id)
+    assert refreshed is not None
+    assert refreshed.status == "interrupted"
+    assert refreshed.runtime.execution_status == "interrupted"
 
 
 def test_runner_flags_task_when_retry_limit_exhausted(tmp_path: Path) -> None:

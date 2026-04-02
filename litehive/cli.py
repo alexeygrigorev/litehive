@@ -67,6 +67,7 @@ from litehive.tasks import (
     resume_task,
     require_task,
     set_pool_stop_reason,
+    stop_current_task,
     update_task_metadata,
 )
 from litehive.tui.app import LitehiveApp
@@ -1281,6 +1282,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="Repository root containing .litehive/",
     )
 
+    stop = subparsers.add_parser("stop", help="Stop the current active task cleanly")
+    stop.add_argument(
+        "--workspace",
+        type=Path,
+        default=Path.cwd(),
+        help="Repository root containing .litehive/",
+    )
+
     close = subparsers.add_parser(
         "close",
         help="Close a task with an explicit non-implementation outcome (wont_do, deferred, duplicate)",
@@ -2109,6 +2118,21 @@ def _cmd_abandon_task(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_stop_task(args: argparse.Namespace) -> int:
+    ensure_workspace(args.workspace)
+    try:
+        summary = stop_current_task(args.workspace)
+    except (ValueError, WorkspaceConflictError) as exc:
+        print(f"stop failed: {exc}")
+        return 1
+    print(f"task: {summary.task.id} {summary.task.title}")
+    print(f"status: {summary.task.status}")
+    print(f"pipeline_status: {summary.task.pipeline_status}")
+    print(f"runner_pid: {summary.runner_pid if summary.runner_pid is not None else '-'}")
+    print(f"signal_sent: {'yes' if summary.signal_sent else 'no'}")
+    return 0
+
+
 def _cmd_close_task(args: argparse.Namespace) -> int:
     ensure_workspace(args.workspace)
     try:
@@ -2412,6 +2436,8 @@ def main() -> int:
         return _cmd_resume_task(args)
     if args.command == "abandon":
         return _cmd_abandon_task(args)
+    if args.command == "stop":
+        return _cmd_stop_task(args)
     if args.command == "close":
         return _cmd_close_task(args)
     if args.command == "update":

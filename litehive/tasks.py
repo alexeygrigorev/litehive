@@ -7,10 +7,12 @@ import fcntl
 import re
 from contextlib import contextmanager
 import os
+import signal
 import shutil
 from pathlib import Path
 import sys
 import threading
+import time
 from typing import get_args
 
 import yaml
@@ -334,6 +336,13 @@ class WorkspaceRepairSummary:
 
 class WorkspaceConflictError(ValueError):
     """Raised when workspace mutations would conflict with an active runner."""
+
+
+@dataclass(slots=True)
+class StopTaskSummary:
+    task: TaskRecord
+    runner_pid: int | None = None
+    signal_sent: bool = False
 
 
 def normalize_acceptance_criteria(items: list[str] | None) -> list[str]:
@@ -2711,6 +2720,90 @@ def restore_untouched_active_task(root: Path) -> WorkspaceState:
         state.active_task_id = None
         save_state(root, state)
         return state
+
+
+def _active_task_id_for_stop(root: Path, state: WorkspaceState) -> str:
+    markers = active_task_markers(root, state)
+    if not markers:
+        raise ValueError("No active task to stop")
+    if len(markers) > 1:
+        _validate_single_active_task(root, state)
+    return next(iter(sorted(markers)))
+
+
+def _stop_active_task_without_runner_guard(root: Path, task_id: str) -> TaskRecord:
+    with _workspace_lock(root):
+        state = load_state(root)
+        active_task_id = _active_task_id_for_stop(root, state)
+        if active_task_id != task_id:
+            raise WorkspaceConflictError(
+                f"task {task_id} is no longer the active task in this workspace"
+            )
+        task = require_task(root, task_id)
+        if task.pipeline_status == "done":
+            raise ValueError(f"Task {task.id} is already done")
+        stage = task.runtime.current_stage.step or task.pipeline_status
+        _prepare_interrupted_task(
+            root,
+            task,
+            stage=stage,
+            summary=f"Execution interrupted via `litehive stop`. Resume from `{stage}`.",
+            reason="Task stopped via CLI",
+        )
+        if stage == "commit_to_git":
+            task.status = "queued"
+        state.active_task_id = None
+        state.queue = [item for item in state.queue if item != task.id]
+        if task.status == "queued" and task.pipeline_status != "done":
+            state.queue.insert(0, task.id)
+        _persist_task_and_state_without_runner_guard(
+            root,
+            task=task,
+            state=state,
+            journal_message=interruption_journal_message(task),
+        )
+        return task
+
+
+def stop_current_task(
+    root: Path,
+    *,
+    wait_timeout_seconds: float = 5.0,
+    poll_interval_seconds: float = 0.1,
+) -> StopTaskSummary:
+    state = load_state(root)
+    active_task_id = _active_task_id_for_stop(root, state)
+    runner_pid: int | None = None
+    if _runner_lock_is_held(root):
+        metadata = _read_runner_lock_metadata(root)
+        pid = metadata.get("pid")
+        if _runner_pid_is_alive(pid):
+            runner_pid = int(pid)
+            os.kill(runner_pid, signal.SIGINT)
+            deadline = time.monotonic() + max(wait_timeout_seconds, 0.0)
+            sleep_interval = max(poll_interval_seconds, 0.01)
+            while _runner_lock_is_held(root) and time.monotonic() < deadline:
+                time.sleep(sleep_interval)
+            if _runner_lock_is_held(root):
+                raise WorkspaceConflictError(
+                    f"runner for task {active_task_id} did not stop cleanly after SIGINT (pid={runner_pid})"
+                )
+            recover_stale_runner_state(root)
+            state = load_state(root)
+            markers = active_task_markers(root, state)
+            if active_task_id not in markers:
+                return StopTaskSummary(
+                    task=require_task(root, active_task_id),
+                    runner_pid=runner_pid,
+                    signal_sent=True,
+                )
+        else:
+            raise WorkspaceConflictError(
+                f"runner for task {active_task_id} is active but has no live PID to signal cleanly"
+            )
+
+    task = _stop_active_task_without_runner_guard(root, active_task_id)
+    return StopTaskSummary(task=task, runner_pid=runner_pid, signal_sent=runner_pid is not None)
 
 
 def enqueue_task(root: Path, task_id: str) -> WorkspaceState:
