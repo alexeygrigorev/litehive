@@ -199,7 +199,7 @@ Currently implemented adapters:
 - `opencode`
 - `gemini`
 - `copilot`
-
-Planned later:
-
 - `claude`
+
+Claude support is implemented in-tree but remains opt-in. Set `claude_enabled: true`
+in `.litehive/config.yaml` to allow task routing or explicit engine selection to use it.

@@ -53,10 +53,10 @@ Current engine adapters:
 - `opencode`
 - `gemini`
 - `copilot`
-
-Planned next:
-
 - `claude`
+
+Claude support is present in-tree, but runtime selection remains opt-in via
+`claude_enabled: true` in workspace config.
 
 Shared adapter shape:
 
