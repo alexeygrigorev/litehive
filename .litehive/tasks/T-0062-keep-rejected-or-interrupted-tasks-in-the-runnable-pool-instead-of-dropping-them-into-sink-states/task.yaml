@@ -95,7 +95,7 @@ subagents:
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0062 keep-rejected-or-interrupted-tasks-in-the-runnable-pool-instead-of-dropping-them-into-sink-states'
-  commit_sha: null
+  commit_sha: 2ceaacdfbb451ad32bc5a0f6ec82c478bf471516
   checkpoint_base_sha: e52473abaa32cbd21794557bf28c69791585c950
   checkpoint_attempts: 1
   rolled_back_checkpoint_attempt: null

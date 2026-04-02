@@ -40,7 +40,7 @@ subagents:
 git:
   auto_commit: true
   commit_message: 'litehive: checkpoint T-0044 add-run-all-shell-wrapper-that-restarts-litehive-each-iteration'
-  commit_sha: null
+  commit_sha: 1134dc173e54e245f1a14631d3423e07374aea4a
   checkpoint_base_sha: 7b6c6c866b117979439af5660c0fa98a193845bd
   checkpoint_attempts: 1
   rolled_back_checkpoint_attempt: null

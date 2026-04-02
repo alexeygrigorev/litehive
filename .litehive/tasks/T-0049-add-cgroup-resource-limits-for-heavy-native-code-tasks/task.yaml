@@ -272,7 +272,7 @@ subagents:
 git:
   auto_commit: true
   commit_message: 'litehive: checkpoint T-0049 add-cgroup-resource-limits-for-heavy-native-code-tasks'
-  commit_sha: null
+  commit_sha: 51f7c3cca6068f3551dd7beb231f089d40462fdf
   checkpoint_base_sha: cfb0d5d0563e4168655e3812dda8d224ddcbb3cb
   checkpoint_attempts: 1
   rolled_back_checkpoint_attempt: null

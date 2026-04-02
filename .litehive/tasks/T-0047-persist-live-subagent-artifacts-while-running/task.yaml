@@ -105,7 +105,7 @@ subagents:
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0047 persist-live-subagent-artifacts-while-running'
-  commit_sha: null
+  commit_sha: 701752613823a2ab9d2363dce7641f399f08d116
   checkpoint_base_sha: b6de2f740ded0feef8fafda81c84b2005a48276c
   checkpoint_attempts: 1
   rolled_back_checkpoint_attempt: null

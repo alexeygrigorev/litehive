@@ -57,7 +57,7 @@ subagents:
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0026 add-committogit-terminal-stage'
-  commit_sha: null
+  commit_sha: a6f0271c880e7e0c13b1af3689c6dfe151bee80c
   checkpoint_base_sha: 4c9166bd23d08392a4e49225b20e716cf3265183
   checkpoint_attempts: 1
   rolled_back_checkpoint_attempt: null

@@ -6,11 +6,11 @@ task_type: null
 engine: null
 model: null
 mode: implementation
-status: flagged
-pipeline_status: commit_to_git
+status: done
+pipeline_status: done
 priority: medium
 created_at: '2026-03-31T13:17:01+00:00'
-updated_at: '2026-04-01T17:37:50+00:00'
+updated_at: '2026-04-02T19:42:56+00:00'
 goal: Introduce a Docker-based sandbox for external engine execution so subagents
   run with controlled filesystem, network, and permission boundaries instead of broad
   unrestricted execution. Only the specific executor being used for that run should
@@ -24,9 +24,9 @@ acceptance_criteria:
 - External engine execution is routed through a sandbox launcher when configured,
   and the launcher restricts mounts, network mode, and permissions so subagents no
   longer execute with unrestricted host access by default.
-- Only the selected engine’s required binary, credentials, and environment are exposed
-  inside the sandbox for a run; unrelated provider credentials, executor binaries,
-  and unused env vars are not propagated.
+- "Only the selected engine\u2019s required binary, credentials, and environment are\
+  \ exposed inside the sandbox for a run; unrelated provider credentials, executor\
+  \ binaries, and unused env vars are not propagated."
 - Existing engine adapters continue to build their engine-specific commands, but environment
   selection and sandbox wrapping are enforced at a shared invocation boundary so the
   behavior is consistent across `codex`, `opencode`, `gemini`, `copilot`, and opt-in
@@ -165,33 +165,44 @@ subagents:
   engine: codex
   status: failed
   path: subagents/SA-0001-pm
+  sandboxed: false
+  sandbox_summary: ''
 - id: SA-0002
   role: pm
   engine: codex
   status: completed
   path: subagents/SA-0002-pm
+  sandboxed: false
+  sandbox_summary: ''
 - id: SA-0003
   role: swe
   engine: codex
   status: completed
   path: subagents/SA-0003-swe
+  sandboxed: false
+  sandbox_summary: ''
 - id: SA-0004
   role: qa
   engine: codex
   status: completed
   path: subagents/SA-0004-qa
+  sandboxed: false
+  sandbox_summary: ''
 - id: SA-0005
   role: pm
   engine: codex
   status: completed
   path: subagents/SA-0005-pm
+  sandboxed: false
+  sandbox_summary: ''
 git:
   auto_commit: true
   commit_message: 'litehive: checkpoint T-0040 add-proper-sandboxing-for-engine-execution'
-  commit_sha: null
+  commit_sha: 6087b7ce1c73f28b87bd049404e8d882ad3dd271
   checkpoint_base_sha: null
   checkpoint_attempts: 0
   rolled_back_checkpoint_attempt: null
+  worktree_path: null
 retry_policy:
   max_retries: null
 created_from: null

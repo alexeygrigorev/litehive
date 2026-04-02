@@ -40,7 +40,7 @@ subagents:
 git:
   auto_commit: true
   commit_message: 'litehive: checkpoint T-0030 add-dependency-aware-task-execution-planning'
-  commit_sha: null
+  commit_sha: 8f4be5e453ace0315cb457ed59ac05f0a7d15e6a
   checkpoint_base_sha: bef16dd9f0cc90b6af9419f7848f0ee22e593d7d
   checkpoint_attempts: 1
   rolled_back_checkpoint_attempt: null

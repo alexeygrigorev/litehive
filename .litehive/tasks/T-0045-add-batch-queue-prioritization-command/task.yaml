@@ -6,11 +6,11 @@ task_type: null
 engine: null
 model: null
 mode: implementation
-status: flagged
-pipeline_status: commit_to_git
+status: done
+pipeline_status: done
 priority: medium
 created_at: '2026-03-31T14:56:27+00:00'
-updated_at: '2026-04-01T17:43:15+00:00'
+updated_at: '2026-04-02T19:44:05+00:00'
 goal: Provide a single CLI command to reprioritize multiple tasks at once, for example
   by supplying an ordered list of task ids to move to the front in the requested order.
   This should replace repetitive promote/move calls with one atomic queue update and
@@ -195,10 +195,11 @@ subagents:
 git:
   auto_commit: true
   commit_message: 'litehive: checkpoint T-0045 add-batch-queue-prioritization-command'
-  commit_sha: null
+  commit_sha: 6087b7ce1c73f28b87bd049404e8d882ad3dd271
   checkpoint_base_sha: null
   checkpoint_attempts: 0
   rolled_back_checkpoint_attempt: null
+  worktree_path: null
 retry_policy:
   max_retries: null
 created_from: null

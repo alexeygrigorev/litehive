@@ -12016,6 +12016,43 @@ def test_commit_to_git_treats_clean_task_worktree_as_done(tmp_path: Path) -> Non
     assert task.git.commit_sha == _run(["git", "rev-parse", "HEAD"], tmp_path)
 
 
+def test_commit_to_git_treats_metadata_only_changes_as_done(tmp_path: Path) -> None:
+    _init_git_repo(tmp_path)
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Metadata only commit")
+
+    worktree_path = tmp_path / ".litehive" / "worktrees" / f"{task.id}-{task.slug}"
+    worktree_path.parent.mkdir(parents=True, exist_ok=True)
+    _run(["git", "worktree", "add", "--detach", str(worktree_path), "HEAD"], tmp_path)
+    (worktree_path / ".litehive" / "state.yaml").parent.mkdir(parents=True, exist_ok=True)
+    (worktree_path / ".litehive" / "state.yaml").write_text("active_task_id: null\n", encoding="utf-8")
+
+    task.git.worktree_path = str(worktree_path.relative_to(tmp_path))
+    save_task(tmp_path, task)
+    reports_dir = task_dir(tmp_path, task) / "reports"
+    (reports_dir / "accepting-001.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "task_id": task.id,
+                "step": "accepting",
+                "verdict": "pass",
+                "summary": "metadata only",
+                "files_changed": ["path/to/file", "none", "-", " N/A "],
+                "tests": {"added": 0, "passing": 1},
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+
+    report = _commit_to_git_report(tmp_path, worktree_path, task, auto_commit_enabled=True)
+
+    assert report.verdict == "pass"
+    assert task.status == "done"
+    assert task.pipeline_status == "done"
+    assert task.git.commit_sha == _run(["git", "rev-parse", "HEAD"], tmp_path)
+
+
 def test_resolve_next_task_finalizes_existing_checkpoint_commit_without_retry(tmp_path: Path) -> None:
     initial_sha = _init_git_repo(tmp_path)
     ensure_workspace(tmp_path)

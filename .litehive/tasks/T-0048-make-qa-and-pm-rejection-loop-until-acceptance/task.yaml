@@ -56,7 +56,7 @@ subagents:
 git:
   auto_commit: true
   commit_message: 'litehive: checkpoint T-0048 make-qa-and-pm-rejection-loop-until-acceptance'
-  commit_sha: null
+  commit_sha: 08cc9c2efd8b9378f2a6ab94374c605cc49c012a
   checkpoint_base_sha: 1134dc173e54e245f1a14631d3423e07374aea4a
   checkpoint_attempts: 1
   rolled_back_checkpoint_attempt: null

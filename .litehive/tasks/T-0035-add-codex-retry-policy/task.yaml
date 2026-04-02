@@ -6,11 +6,11 @@ task_type: null
 engine: null
 model: null
 mode: implementation
-status: flagged
-pipeline_status: commit_to_git
+status: done
+pipeline_status: done
 priority: medium
 created_at: '2026-03-31T13:14:18+00:00'
-updated_at: '2026-04-01T16:32:30+00:00'
+updated_at: '2026-04-02T19:37:01+00:00'
 goal: Implement Codex-specific retry policy settings and retryable failure detection,
   consistent with the shared engine retry contract and observability.
 acceptance_criteria:
@@ -151,33 +151,44 @@ subagents:
   engine: codex
   status: failed
   path: subagents/SA-0001-pm
+  sandboxed: false
+  sandbox_summary: ''
 - id: SA-0002
   role: pm
   engine: codex
   status: completed
   path: subagents/SA-0002-pm
+  sandboxed: false
+  sandbox_summary: ''
 - id: SA-0003
   role: swe
   engine: codex
   status: completed
   path: subagents/SA-0003-swe
+  sandboxed: false
+  sandbox_summary: ''
 - id: SA-0004
   role: qa
   engine: codex
   status: completed
   path: subagents/SA-0004-qa
+  sandboxed: false
+  sandbox_summary: ''
 - id: SA-0005
   role: pm
   engine: codex
   status: completed
   path: subagents/SA-0005-pm
+  sandboxed: false
+  sandbox_summary: ''
 git:
   auto_commit: true
   commit_message: 'litehive: checkpoint T-0035 add-codex-retry-policy'
-  commit_sha: null
+  commit_sha: 6087b7ce1c73f28b87bd049404e8d882ad3dd271
   checkpoint_base_sha: null
   checkpoint_attempts: 0
   rolled_back_checkpoint_attempt: null
+  worktree_path: null
 retry_policy:
   max_retries: null
 created_from: null

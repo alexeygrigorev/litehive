@@ -39,7 +39,7 @@ subagents:
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0025 add-queue-management-cli'
-  commit_sha: null
+  commit_sha: 2cfce0d18b845e667d8471200138806c504f9f60
   checkpoint_base_sha: a6f0271c880e7e0c13b1af3689c6dfe151bee80c
   checkpoint_attempts: 1
   rolled_back_checkpoint_attempt: null

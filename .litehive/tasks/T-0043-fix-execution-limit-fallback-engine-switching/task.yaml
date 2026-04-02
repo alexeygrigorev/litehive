@@ -55,7 +55,7 @@ subagents:
 git:
   auto_commit: true
   commit_message: 'litehive: checkpoint T-0043 fix-execution-limit-fallback-engine-switching'
-  commit_sha: null
+  commit_sha: bf8b9a4516eba44b4fa4242eed42424f6e917c5b
   checkpoint_base_sha: 08cc9c2efd8b9378f2a6ab94374c605cc49c012a
   checkpoint_attempts: 1
   rolled_back_checkpoint_attempt: null

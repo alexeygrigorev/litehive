@@ -1399,6 +1399,27 @@ def _commit_to_git_report(
         base_sha = current_head(root)
         attempt = task.git.checkpoint_attempts + 1
         message = checkpoint_message(task, attempt=attempt)
+        checkpoint_paths = sorted(
+            str(path) for path in allowed_paths if str(path) and not str(path).startswith(".litehive/")
+        )
+        if not checkpoint_paths:
+            set_task_commit_sha(task, base_sha)
+            task.status = "done"
+            task.pipeline_status = "done"
+            _cleanup_task_worktree(root, task)
+            append_journal(
+                root,
+                task,
+                "CommitToGit skipped: no task-local files were staged and only workspace metadata changed.",
+            )
+            return StageReport(
+                task_id=task.id,
+                step="commit_to_git",
+                verdict="pass",
+                summary="CommitToGit skipped because no task-local files needed a commit",
+                warnings=["no commit-worthy task-local files"],
+                files_changed=[],
+            )
         previous_base_sha = task.git.checkpoint_base_sha
         previous_attempts = task.git.checkpoint_attempts
         previous_rollback_attempt = task.git.rolled_back_checkpoint_attempt
@@ -1425,9 +1446,6 @@ def _commit_to_git_report(
             ),
         )
         persist_task_and_state(root, task=task, state=state)
-        checkpoint_paths = sorted(
-            str(path) for path in allowed_paths if str(path) and not str(path).startswith(".litehive/")
-        )
         checkpoint = commit_task(execution_root, message, paths=checkpoint_paths)
         if checkpoint is None:
             raise GitError("git commit prerequisites were not met")
@@ -1495,7 +1513,7 @@ def _allowed_commit_paths(root: Path, task: TaskRecord) -> set[PurePosixPath]:
         report_data = yaml.safe_load(report_path.read_text(encoding="utf-8")) or {}
         for changed in report_data.get("files_changed") or []:
             normalized = str(changed).strip()
-            if normalized and normalized.lower() not in {"none", "n/a", "-"}:
+            if normalized and normalized.lower() not in {"none", "n/a", "-", "path/to/file"}:
                 allowed.add(PurePosixPath(normalized))
     return allowed
 

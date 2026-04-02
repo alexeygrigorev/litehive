@@ -40,7 +40,7 @@ subagents:
 git:
   auto_commit: true
   commit_message: 'litehive: checkpoint T-0028 add-runtime-engine-override'
-  commit_sha: null
+  commit_sha: bef16dd9f0cc90b6af9419f7848f0ee22e593d7d
   checkpoint_base_sha: b3f78e6389af3ded27e77d5f0807ef041e2f3f75
   checkpoint_attempts: 1
   rolled_back_checkpoint_attempt: null

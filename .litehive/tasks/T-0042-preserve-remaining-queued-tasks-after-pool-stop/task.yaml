@@ -40,7 +40,7 @@ subagents:
 git:
   auto_commit: true
   commit_message: 'litehive: checkpoint T-0042 preserve-remaining-queued-tasks-after-pool-stop'
-  commit_sha: null
+  commit_sha: 9ca220c7f70ff107e0c7a8f9cfd1a7a5d5cb3110
   checkpoint_base_sha: d8576b73dd497dc3100003bbb34b4cb3c457383f
   checkpoint_attempts: 1
   rolled_back_checkpoint_attempt: null

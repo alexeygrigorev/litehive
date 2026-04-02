@@ -6,11 +6,11 @@ task_type: null
 engine: null
 model: null
 mode: implementation
-status: flagged
-pipeline_status: commit_to_git
+status: done
+pipeline_status: done
 priority: medium
 created_at: '2026-04-01T01:13:39+00:00'
-updated_at: '2026-04-02T01:31:35+00:00'
+updated_at: '2026-04-02T19:54:13+00:00'
 goal: ''
 acceptance_criteria: []
 constraints: []
@@ -153,10 +153,11 @@ subagents:
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0063 auto-requeue-tasks-stranded-at-commit-to-git-after-runner-interruption'
-  commit_sha: null
+  commit_sha: 6087b7ce1c73f28b87bd049404e8d882ad3dd271
   checkpoint_base_sha: null
   checkpoint_attempts: 0
   rolled_back_checkpoint_attempt: null
+  worktree_path: null
 retry_policy:
   max_retries: null
 created_from: null
