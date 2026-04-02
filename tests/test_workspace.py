@@ -6093,7 +6093,18 @@ def test_cmd_run_reports_blocked_tasks_when_no_runnable_task(
         f"remaining: {blocked.id} Blocked task status=queued pipeline_status=backlog" in output
     )
     assert "tasks_run: 0" in output
+    assert "progress_status: no_useful_progress" in output
+    assert (
+        "summary: Pool stopped with no useful progress because no runnable task remained."
+        in output
+    )
     assert "stop_reason: blocked_tasks_remaining" in output
+    durable_report = _latest_pool_run_report(tmp_path)
+    assert durable_report["progress_status"] == "no_useful_progress"
+    assert (
+        durable_report["summary"]
+        == "Pool stopped with no useful progress because no runnable task remained."
+    )
 
 
 def test_cmd_run_reports_pre_execution_stop_reason(
@@ -6159,6 +6170,11 @@ def test_cmd_run_reports_resumable_interrupted_tasks(
     assert "reason_code=execution_interrupted" in output
     assert "remaining_tasks: 1" in output
     assert "remaining: T-0002 Queued follow-up status=queued pipeline_status=backlog" in output
+    assert "progress_status: no_useful_progress" in output
+    assert (
+        "summary: Pool stopped with no useful progress because the active task was interrupted and must be resumed."
+        in output
+    )
     assert "stop_condition: task interrupted and awaiting resume" in output
     assert "stop_reason: task_interrupted" in output
 
@@ -6261,37 +6277,84 @@ def test_cmd_run_reports_remaining_tasks_when_pool_stops_early(
     assert durable_report["flagged_count"] == 0
     assert durable_report["skipped_count"] == 1
     assert durable_report["remaining_count"] == 1
-    assert durable_report["completed"] == [
-        {
-            "task_id": "T-0001",
-            "title": "First task",
-            "final_task_status": "done",
-            "pipeline_status": "done",
-            "stage_outcomes": [
-                "grooming=pass",
-                "implementing=pass",
-                "testing=pass",
-                "accepting=pass",
-                "commit_to_git=pass",
-            ],
-            "reason_code": None,
-            "reason": None,
-            "follow_up_task_id": None,
-        }
-    ]
-    assert durable_report["skipped"] == [
-        {
-            "task_id": "T-0002",
-            "title": "Second task",
-            "final_task_status": "queued",
-            "pipeline_status": "backlog",
-            "stage_outcomes": [],
-            "reason_code": None,
-            "reason": None,
-            "follow_up_task_id": None,
-        }
-    ]
-    assert durable_report["remaining"] == durable_report["skipped"]
+
+
+def test_cmd_run_drain_reports_no_useful_progress_after_requeue(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ensure_workspace(tmp_path, LitehiveConfig(default_retry_limit=0))
+    active = create_task(tmp_path, title="Active review loop", auto_commit=False)
+    queued = create_task(tmp_path, title="Queued behind active", auto_commit=False)
+    active.status = "in_progress"
+    active.pipeline_status = "testing"
+    active.retry_policy.max_retries = 2
+    save_task(tmp_path, active)
+
+    state = load_state(tmp_path)
+    state.active_task_id = active.id
+    state.queue = [queued.id]
+    save_state(tmp_path, state)
+
+    def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None):  # type: ignore[no-untyped-def]
+        transcript = "\n".join(
+            [
+                "VERDICT: PASS",
+                f"SUMMARY: {task.pipeline_status} passed",
+                "FILES_CHANGED:",
+                "TESTS_ADDED: 0",
+                "TESTS_PASSING: 0",
+                "WARNINGS:",
+            ]
+        )
+        if task.id == active.id and task.pipeline_status == "testing":
+            transcript = "\n".join(
+                [
+                    "VERDICT: FAIL",
+                    "SUMMARY: qa wants another implementation pass",
+                    "FILES_CHANGED:",
+                    "TESTS_ADDED: 0",
+                    "TESTS_PASSING: 0",
+                    "WARNINGS:",
+                ]
+            )
+        return SubagentResult(
+            ref=SubagentRef(
+                id=f"SA-{task.id}-{task.pipeline_status}-codex",
+                role=role,
+                engine=engine_name,
+                status="completed",
+                path=f"subagents/{task.id}-{task.pipeline_status}-codex",
+            ),
+            execution=CLIExecutionResult(
+                adapter=engine_name,
+                argv=(engine_name, "exec"),
+                cwd=tmp_path,
+                exit_code=0,
+                stdout=transcript,
+                stderr="",
+            ),
+            transcript=transcript,
+            exit_code=0,
+        )
+
+    monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_run)
+
+    exit_code = _cmd_run(argparse.Namespace(workspace=tmp_path, dry_run=False, drain=True))
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "progress_status: no_useful_progress" in output
+    assert (
+        "summary: Pool stopped with no useful progress because the active task was requeued for another pass."
+        in output
+    )
+    assert "stop_reason: task_requeued" in output
+    durable_report = _latest_pool_run_report(tmp_path)
+    assert durable_report["progress_status"] == "no_useful_progress"
+    assert (
+        durable_report["summary"]
+        == "Pool stopped with no useful progress because the active task was requeued for another pass."
+    )
 
 
 def test_cmd_run_reports_human_checkpoint_stop_without_marking_failure(

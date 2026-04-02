@@ -279,6 +279,7 @@ def _print_pool_summary_report(
     *,
     report: dict[str, object],
 ) -> None:
+    report = _ensure_pool_summary_report_fields(report)
     for line in _pool_summary_report_lines(report=report):
         print(line)
 
