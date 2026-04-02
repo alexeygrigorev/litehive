@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import gzip
 import inspect
+import os
 from pathlib import Path
 import re
 
@@ -47,6 +49,41 @@ class SubagentResult:
     transcript: str
     exit_code: int
     failure: EngineFailure | None = None
+
+
+_COMPRESS_STREAM_ARTIFACT_MIN_BYTES = 4096
+
+
+def _write_atomic_gzip_text(path: Path, content: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temp_path = path.with_name(f".{path.name}.tmp-{os.getpid()}")
+    try:
+        with gzip.open(temp_path, "wt", encoding="utf-8") as handle:
+            handle.write(content)
+        os.replace(temp_path, path)
+    finally:
+        if temp_path.exists():
+            temp_path.unlink()
+
+
+def _write_stream_artifact(base: Path, name: str, content: str, *, compress: bool) -> None:
+    plain_path = base / f"{name}.txt"
+    compressed_path = base / f"{name}.txt.gz"
+    if compress and not content:
+        if plain_path.exists():
+            plain_path.unlink()
+        if compressed_path.exists():
+            compressed_path.unlink()
+        return
+    should_compress = compress and len(content.encode("utf-8")) >= _COMPRESS_STREAM_ARTIFACT_MIN_BYTES
+    if should_compress:
+        if plain_path.exists():
+            plain_path.unlink()
+        _write_atomic_gzip_text(compressed_path, content)
+        return
+    if compressed_path.exists():
+        compressed_path.unlink()
+    _write_atomic_files({plain_path: content})
 
 
 def _supports_live_execution(engine: object) -> bool:
@@ -337,6 +374,8 @@ class SubagentManager:
             pid=None if execution is None else execution.pid,
             resource_limit_event=resource_limit_event,
         )
+        _write_stream_artifact(base, "stdout", "" if execution is None else execution.stdout, compress=True)
+        _write_stream_artifact(base, "stderr", "" if execution is None else execution.stderr, compress=True)
 
     def _write_session_progress(
         self,
@@ -348,11 +387,6 @@ class SubagentManager:
     ) -> None:
         transcript = get_engine(ref.engine).render_transcript(execution)
         self._record_subagent_pid(task, base, ref, execution.pid)
-        self._write_session_metadata(base, ref, exit_code=None, pid=execution.pid)
-        (base / "prompt.txt").write_text(prompt, encoding="utf-8")
-        (base / "transcript.md").write_text(transcript, encoding="utf-8")
-        (base / "stdout.txt").write_text(execution.stdout, encoding="utf-8")
-        (base / "stderr.txt").write_text(execution.stderr, encoding="utf-8")
         report_step = (
             task.pipeline_status
             if task.pipeline_status in {"grooming", "implementing", "testing", "accepting", "commit_to_git"}
@@ -494,11 +528,11 @@ class SubagentManager:
                 ),
                 base / "prompt.txt": prompt,
                 base / "transcript.md": transcript,
-                base / "stdout.txt": stdout,
-                base / "stderr.txt": stderr,
                 base / "report.yaml": yaml.safe_dump(report_payload, sort_keys=False),
             }
         )
+        _write_stream_artifact(base, "stdout", stdout, compress=False)
+        _write_stream_artifact(base, "stderr", stderr, compress=False)
 
 
 class _SandboxedAdapter(ExternalCLIAdapter):
