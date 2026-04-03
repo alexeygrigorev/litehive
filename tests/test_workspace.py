@@ -11419,6 +11419,84 @@ exit 1
     assert (log_dir / "0002-post-status.log").exists()
 
 
+def test_run_all_continues_after_task_requeued(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    (workspace / ".litehive").mkdir()
+    (workspace / ".litehive" / "state.yaml").write_text(
+        "active_task_id: null\nqueue:\n  - T-0001\npool_stop_reason: null\n",
+        encoding="utf-8",
+    )
+    counts_dir = tmp_path / "counts"
+    counts_dir.mkdir()
+    run_count_file = counts_dir / "run-count"
+
+    fake_uv = _write_fake_uv(
+        tmp_path,
+        f"""#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ "${{1:-}}" == "run" && "${{2:-}}" == "python" && "${{3:-}}" == "-" ]]; then
+  shift 2
+  exec python3 "$@"
+fi
+
+if [[ "${{1:-}}" == "run" && "${{2:-}}" == "litehive" && "${{3:-}}" == "run" ]]; then
+  count="$(cat "{run_count_file}" 2>/dev/null || echo 0)"
+  count="$((count + 1))"
+  echo "$count" > "{run_count_file}"
+  if [[ "$count" -eq 1 ]]; then
+    cat > "{workspace / '.litehive' / 'state.yaml'}" <<'STATE'
+active_task_id: null
+queue:
+  - T-0001
+pool_stop_reason: null
+STATE
+    echo "tasks_run: 1"
+    echo "stop_reason: task_requeued"
+    exit 0
+  fi
+
+  cat > "{workspace / '.litehive' / 'state.yaml'}" <<'STATE'
+active_task_id: null
+queue: []
+pool_stop_reason: queue_exhausted
+STATE
+  echo "tasks_run: 1"
+  echo "stop_reason: queue_exhausted"
+  exit 0
+fi
+
+echo "unexpected uv invocation: $*" >&2
+exit 1
+""",
+    )
+
+    result = subprocess.run(
+        ["bash", str(_repo_root() / "scripts" / "run-all.sh"), str(workspace)],
+        cwd=_repo_root(),
+        text=True,
+        capture_output=True,
+        env=_with_fake_uv(fake_uv),
+        check=False,
+    )
+
+    assert result.returncode == 0
+    assert "== iteration 1 ==" in result.stdout
+    assert "== iteration 2 ==" in result.stdout
+    assert "Stopping after litehive reported stop_reason: task_requeued" not in result.stdout
+    assert "No active or queued tasks remain. Stopping." in result.stdout
+    assert run_count_file.read_text(encoding="utf-8").strip() == "2"
+
+    log_dirs = list((workspace / ".litehive" / "logs" / "run-all").iterdir())
+    assert len(log_dirs) == 1
+    log_dir = log_dirs[0]
+    assert (log_dir / "0001-run.log").exists()
+    assert (log_dir / "0001-post-status.log").exists()
+    assert (log_dir / "0002-run.log").exists()
+    assert (log_dir / "0002-post-status.log").exists()
+
+
 def _run(cmd: list[str], cwd: Path) -> str:
     proc = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, check=True)
     return proc.stdout.strip()
@@ -13514,6 +13592,36 @@ def test_run_next_task_executes_stage_in_task_worktree(tmp_path: Path, monkeypat
     assert (tmp_path / "app.txt").read_text(encoding="utf-8") == "base\n"
 
 
+def test_run_next_task_keeps_using_task_worktree_when_main_checkout_is_dirty(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _init_git_repo(tmp_path)
+    ensure_workspace(tmp_path)
+    create_task(tmp_path, title="Run in isolated worktree", auto_commit=False)
+    (tmp_path / "README.md").write_text("main checkout dirt\n", encoding="utf-8")
+    seen_execution_roots: list[Path] = []
+
+    def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None):  # type: ignore[no-untyped-def]
+        seen_execution_roots.append(self.execution_root)
+        result = _completed_subagent_result(tmp_path, task.pipeline_status, engine_name=engine_name)
+        if task.pipeline_status == "implementing":
+            assert self.execution_root != tmp_path
+            assert (tmp_path / "app.txt").read_text(encoding="utf-8") == "base\n"
+            (self.execution_root / "app.txt").write_text("worktree-only\n", encoding="utf-8")
+        return result
+
+    monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_run)
+
+    summary = run_next_task(tmp_path)
+
+    assert summary.result is not None
+    assert summary.result.final_status == "done"
+    assert seen_execution_roots
+    assert all(path != tmp_path for path in seen_execution_roots)
+    assert (tmp_path / "app.txt").read_text(encoding="utf-8") == "base\n"
+    assert (tmp_path / "README.md").read_text(encoding="utf-8") == "main checkout dirt\n"
+
+
 def test_run_next_task_cherry_picks_task_commit_back_to_main(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -14144,6 +14252,89 @@ def test_commit_to_git_ignores_unrelated_main_checkout_changes_when_task_worktre
     assert task.git.commit_sha is not None
 
 
+def test_commit_to_git_fast_forwards_main_when_worktree_commit_is_direct_descendant(
+    tmp_path: Path,
+) -> None:
+    initial_sha = _init_git_repo(tmp_path)
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Fast forward worktree commit")
+
+    worktree_path = tmp_path / ".litehive" / "worktrees" / f"{task.id}-{task.slug}"
+    worktree_path.parent.mkdir(parents=True, exist_ok=True)
+    _run(["git", "worktree", "add", "--detach", str(worktree_path), "HEAD"], tmp_path)
+    (worktree_path / "app.txt").write_text("fast-forwarded\n", encoding="utf-8")
+
+    task.git.worktree_path = str(worktree_path.relative_to(tmp_path))
+    save_task(tmp_path, task)
+    reports_dir = task_dir(tmp_path, task) / "reports"
+    (reports_dir / "accepting-001.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "task_id": task.id,
+                "step": "accepting",
+                "verdict": "pass",
+                "summary": "ready to integrate",
+                "files_changed": ["app.txt"],
+                "tests": {"added": 0, "passing": 1},
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+
+    report = _commit_to_git_report(tmp_path, worktree_path, task, auto_commit_enabled=True)
+
+    assert report.verdict == "pass"
+    assert task.git.commit_sha is not None
+    assert task.git.checkpoint_base_sha == initial_sha
+    assert _run(["git", "rev-parse", "HEAD^"], tmp_path) == initial_sha
+    assert _run(["git", "rev-parse", "HEAD"], tmp_path) == task.git.commit_sha
+    assert (tmp_path / "app.txt").read_text(encoding="utf-8") == "fast-forwarded\n"
+
+
+def test_commit_to_git_cherry_picks_when_main_moved_after_worktree_started(tmp_path: Path) -> None:
+    _init_git_repo(tmp_path)
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Cherry pick divergent worktree commit")
+
+    worktree_path = tmp_path / ".litehive" / "worktrees" / f"{task.id}-{task.slug}"
+    worktree_path.parent.mkdir(parents=True, exist_ok=True)
+    _run(["git", "worktree", "add", "--detach", str(worktree_path), "HEAD"], tmp_path)
+    (worktree_path / "app.txt").write_text("from worktree\n", encoding="utf-8")
+
+    task.git.worktree_path = str(worktree_path.relative_to(tmp_path))
+    save_task(tmp_path, task)
+    reports_dir = task_dir(tmp_path, task) / "reports"
+    (reports_dir / "accepting-001.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "task_id": task.id,
+                "step": "accepting",
+                "verdict": "pass",
+                "summary": "ready to integrate",
+                "files_changed": ["app.txt"],
+                "tests": {"added": 0, "passing": 1},
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+
+    (tmp_path / "README.md").write_text("main moved\n", encoding="utf-8")
+    _run(["git", "add", "README.md"], tmp_path)
+    _run(["git", "commit", "-m", "main changed"], tmp_path)
+    moved_sha = _run(["git", "rev-parse", "HEAD"], tmp_path)
+
+    report = _commit_to_git_report(tmp_path, worktree_path, task, auto_commit_enabled=True)
+
+    assert report.verdict == "pass"
+    assert task.git.commit_sha is not None
+    assert task.git.checkpoint_base_sha == moved_sha
+    assert _run(["git", "rev-parse", "HEAD^"], tmp_path) == moved_sha
+    assert _run(["git", "rev-parse", "HEAD"], tmp_path) == task.git.commit_sha
+    assert (tmp_path / "app.txt").read_text(encoding="utf-8") == "from worktree\n"
+
+
 def test_commit_to_git_treats_clean_task_worktree_as_done(tmp_path: Path) -> None:
     _init_git_repo(tmp_path)
     ensure_workspace(tmp_path)
@@ -14177,6 +14368,58 @@ def test_commit_to_git_treats_clean_task_worktree_as_done(tmp_path: Path) -> Non
     assert task.status == "done"
     assert task.pipeline_status == "done"
     assert task.git.commit_sha == _run(["git", "rev-parse", "HEAD"], tmp_path)
+
+
+def test_commit_to_git_integrates_existing_litehive_checkpoint_from_clean_worktree(
+    tmp_path: Path,
+) -> None:
+    initial_sha = _init_git_repo(tmp_path)
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Recover clean worktree checkpoint")
+
+    worktree_path = tmp_path / ".litehive" / "worktrees" / f"{task.id}-{task.slug}"
+    worktree_path.parent.mkdir(parents=True, exist_ok=True)
+    _run(["git", "worktree", "add", "--detach", str(worktree_path), "HEAD"], tmp_path)
+    (worktree_path / "app.txt").write_text("checkpointed\n", encoding="utf-8")
+
+    task.git.worktree_path = str(worktree_path.relative_to(tmp_path))
+    task.git.checkpoint_attempts = 1
+    task.git.checkpoint_base_sha = initial_sha
+    save_task(tmp_path, task)
+    commit_message = checkpoint_message(task, attempt=1)
+    _run(["git", "add", "app.txt"], worktree_path)
+    _run(["git", "commit", "-m", commit_message], worktree_path)
+
+    report = _commit_to_git_report(tmp_path, worktree_path, task, auto_commit_enabled=True)
+
+    assert report.verdict == "pass"
+    assert task.status == "done"
+    assert task.pipeline_status == "done"
+    assert task.git.commit_sha == _run(["git", "rev-parse", "HEAD"], tmp_path)
+    assert (tmp_path / "app.txt").read_text(encoding="utf-8") == "checkpointed\n"
+
+
+def test_commit_to_git_fails_when_agent_precommits_in_task_worktree(tmp_path: Path) -> None:
+    _init_git_repo(tmp_path)
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Agent committed early")
+
+    worktree_path = tmp_path / ".litehive" / "worktrees" / f"{task.id}-{task.slug}"
+    worktree_path.parent.mkdir(parents=True, exist_ok=True)
+    _run(["git", "worktree", "add", "--detach", str(worktree_path), "HEAD"], tmp_path)
+    (worktree_path / "app.txt").write_text("agent-commit\n", encoding="utf-8")
+
+    task.git.worktree_path = str(worktree_path.relative_to(tmp_path))
+    save_task(tmp_path, task)
+    _run(["git", "add", "app.txt"], worktree_path)
+    _run(["git", "commit", "-m", "manual agent commit"], worktree_path)
+
+    report = _commit_to_git_report(tmp_path, worktree_path, task, auto_commit_enabled=True)
+
+    assert report.verdict == "fail"
+    assert "only Litehive may create the final task commit" in report.summary
+    assert task.git.commit_sha is None
+    assert _run(["git", "log", "-1", "--pretty=%s"], tmp_path) == "initial"
 
 
 def test_commit_to_git_treats_metadata_only_changes_as_done(tmp_path: Path) -> None:

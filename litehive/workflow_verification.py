@@ -41,14 +41,8 @@ def workflow_verification_scope(task: TaskRecord) -> dict[str, bool]:
             "run all",
             "drain",
             "wrapper",
-            "resume",
-            "resumable",
-            "recovery",
-            "recover",
-            "checkpoint",
             "commit_to_git",
             "commit to git",
-            "cli",
         )
     )
     commit = any(

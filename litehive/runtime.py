@@ -24,7 +24,9 @@ from litehive.git_ops import (
     current_head,
     find_commit_by_subject,
     has_changes,
+    is_ancestor,
     is_git_repo,
+    merge_commit,
     remove_worktree,
     rollback_message,
     rollback_task,
@@ -483,6 +485,44 @@ def _cleanup_task_worktree(root: Path, task: TaskRecord) -> None:
         remove_worktree(root, worktree_path, force=True)
     task.git.worktree_path = None
     save_task(root, task)
+
+
+def _integrate_task_commit(root: Path, base_sha: str | None, commit_sha: str) -> str:
+    head_sha = current_head(root)
+    if head_sha == base_sha and head_sha is not None and is_ancestor(root, head_sha, commit_sha):
+        return merge_commit(root, commit_sha)
+    return cherry_pick_commit(root, commit_sha)
+
+
+def _recover_or_validate_clean_task_worktree(
+    root: Path,
+    execution_root: Path,
+    task: TaskRecord,
+) -> str | None:
+    if execution_root == root:
+        return None
+
+    worktree_head = current_head(execution_root)
+    main_head = current_head(root)
+    if worktree_head is None or worktree_head == main_head:
+        return None
+
+    if task.git.checkpoint_attempts < 1:
+        raise GitError(
+            "task worktree already contains commits before `commit_to_git`; "
+            "only Litehive may create the final task commit"
+        )
+
+    expected_sha = find_commit_by_subject(
+        execution_root,
+        checkpoint_message(task, attempt=task.git.checkpoint_attempts),
+    )
+    if expected_sha != worktree_head:
+        raise GitError(
+            "task worktree head does not match the expected Litehive checkpoint commit"
+        )
+
+    return _integrate_task_commit(root, task.git.checkpoint_base_sha, worktree_head)
 
 
 def _recover_existing_integrated_checkpoint(root: Path, task: TaskRecord) -> ExecutionSummary | None:
@@ -1455,11 +1495,43 @@ def _commit_to_git_report(
         )
 
     if not dirty_entries:
+        try:
+            recovered_sha = _recover_or_validate_clean_task_worktree(root, execution_root, task)
+        except GitError as exc:
+            append_journal(root, task, f"CommitToGit failed: {exc}")
+            return StageReport(
+                task_id=task.id,
+                step="commit_to_git",
+                verdict="fail",
+                summary=f"CommitToGit failed: {exc}",
+                warnings=[str(exc)],
+            )
+
+        if recovered_sha is not None:
+            set_task_commit_sha(task, recovered_sha)
+            task.status = "done"
+            task.pipeline_status = "done"
+            _cleanup_task_worktree(root, task)
+            save_task(root, task)
+            append_journal(
+                root,
+                task,
+                "CommitToGit recovered and integrated an existing Litehive checkpoint from the task worktree.",
+            )
+            return StageReport(
+                task_id=task.id,
+                step="commit_to_git",
+                verdict="pass",
+                summary="CommitToGit recovered and integrated an existing task worktree checkpoint",
+                files_changed=[],
+            )
+
         head_sha = current_head(root)
         set_task_commit_sha(task, head_sha)
         task.status = "done"
         task.pipeline_status = "done"
         _cleanup_task_worktree(root, task)
+        save_task(root, task)
         append_journal(
             root,
             task,
@@ -1501,6 +1573,7 @@ def _commit_to_git_report(
             task.status = "done"
             task.pipeline_status = "done"
             _cleanup_task_worktree(root, task)
+            save_task(root, task)
             append_journal(
                 root,
                 task,
@@ -1543,7 +1616,10 @@ def _commit_to_git_report(
         checkpoint = commit_task(execution_root, message, paths=checkpoint_paths)
         if checkpoint is None:
             raise GitError("git commit prerequisites were not met")
-        integrated_sha = cherry_pick_commit(root, checkpoint.commit_sha)
+        if execution_root == root:
+            integrated_sha = checkpoint.commit_sha
+        else:
+            integrated_sha = _integrate_task_commit(root, base_sha, checkpoint.commit_sha)
     except GitError as exc:
         task.git.checkpoint_base_sha = previous_base_sha
         task.git.checkpoint_attempts = previous_attempts
@@ -1565,6 +1641,7 @@ def _commit_to_git_report(
 
     set_task_commit_sha(task, integrated_sha)
     _cleanup_task_worktree(root, task)
+    save_task(root, task)
     save_task_runtime(root, task)
     return StageReport(
         task_id=task.id,

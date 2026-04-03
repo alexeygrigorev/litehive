@@ -80,6 +80,25 @@ def add_worktree(root: Path, path: Path, *, ref: str = "HEAD") -> None:
         raise GitError(proc.stderr.strip() or "git worktree add failed")
 
 
+def merge_commit(root: Path, commit_sha: str) -> str:
+    proc = _run_git(root, "merge", "--ff-only", commit_sha)
+    if proc.returncode != 0:
+        raise GitError(proc.stderr.strip() or "git merge --ff-only failed")
+    head = current_head(root)
+    if head is None:
+        raise GitError("git merge completed but HEAD could not be resolved")
+    return head
+
+
+def is_ancestor(root: Path, ancestor_sha: str, descendant_sha: str) -> bool:
+    proc = _run_git(root, "merge-base", "--is-ancestor", ancestor_sha, descendant_sha)
+    if proc.returncode == 0:
+        return True
+    if proc.returncode == 1:
+        return False
+    raise GitError(proc.stderr.strip() or "git merge-base --is-ancestor failed")
+
+
 def remove_worktree(root: Path, path: Path, *, force: bool = False) -> None:
     args = ["worktree", "remove"]
     if force:

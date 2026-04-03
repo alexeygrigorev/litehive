@@ -112,6 +112,10 @@ while true; do
     break
   fi
 
+  if [[ "${stop_reason:-}" == "task_requeued" ]]; then
+    continue
+  fi
+
   if [[ -n "${stop_reason:-}" && "${stop_reason}" != "None" && "${stop_reason}" != "queue_exhausted" ]]; then
     echo "Stopping after litehive reported stop_reason: $stop_reason"
     break
