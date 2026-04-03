@@ -6,11 +6,13 @@ task_type: null
 engine: null
 model: null
 mode: implementation
-status: flagged
-pipeline_status: commit_to_git
+status: done
+pipeline_status: done
 priority: medium
+pm_complexity: null
+planned_effort: null
 created_at: '2026-03-31T13:13:51+00:00'
-updated_at: '2026-04-01T16:21:11+00:00'
+updated_at: '2026-04-03T17:56:02+00:00'
 goal: Implement retry policies per model family/engine category for external CLI execution.
   Support configurable retry count, backoff, and retryable failure classification
   so transient failures can retry before fallback routing. Use the Telegram writing
@@ -27,9 +29,9 @@ acceptance_criteria:
   fallback behavior.
 - Retry behavior is recorded clearly enough in subagent artifacts or warnings/transcript
   output to explain how many attempts ran and why retries occurred or stopped.
-- The implementation follows the Claude retry wrapper pattern from `/home/alexey/git/telegram-writing-assistant/session_retrier.py`
-  where the retry loop is explicit, bounded, and tested, but is adapted to Litehive’s
-  engine/fallback model rather than session resume.
+- "The implementation follows the Claude retry wrapper pattern from `/home/alexey/git/telegram-writing-assistant/session_retrier.py`\
+  \ where the retry loop is explicit, bounded, and tested, but is adapted to Litehive\u2019\
+  s engine/fallback model rather than session resume."
 - 'Focused tests cover at least: retryable failure then success on same engine, retry
   exhaustion leading to normal failure/fallback handling, and non-retryable failure
   skipping retries.'
@@ -159,73 +161,100 @@ subagents:
   engine: codex
   status: failed
   path: subagents/SA-0001-pm
+  sandboxed: false
+  sandbox_summary: ''
 - id: SA-0002
   role: pm
   engine: codex
   status: completed
   path: subagents/SA-0002-pm
+  sandboxed: false
+  sandbox_summary: ''
 - id: SA-0003
   role: swe
   engine: codex
   status: completed
   path: subagents/SA-0003-swe
+  sandboxed: false
+  sandbox_summary: ''
 - id: SA-0004
   role: qa
   engine: codex
   status: completed
   path: subagents/SA-0004-qa
+  sandboxed: false
+  sandbox_summary: ''
 - id: SA-0005
   role: swe
   engine: codex
   status: completed
   path: subagents/SA-0005-swe
+  sandboxed: false
+  sandbox_summary: ''
 - id: SA-0006
   role: qa
   engine: codex
   status: completed
   path: subagents/SA-0006-qa
+  sandboxed: false
+  sandbox_summary: ''
 - id: SA-0007
   role: pm
   engine: codex
   status: completed
   path: subagents/SA-0007-pm
+  sandboxed: false
+  sandbox_summary: ''
 - id: SA-0008
   role: swe
   engine: codex
   status: completed
   path: subagents/SA-0008-swe
+  sandboxed: false
+  sandbox_summary: ''
 - id: SA-0009
   role: qa
   engine: codex
   status: completed
   path: subagents/SA-0009-qa
+  sandboxed: false
+  sandbox_summary: ''
 - id: SA-0010
   role: pm
   engine: codex
   status: completed
   path: subagents/SA-0010-pm
+  sandboxed: false
+  sandbox_summary: ''
 - id: SA-0011
   role: swe
   engine: codex
   status: completed
   path: subagents/SA-0011-swe
+  sandboxed: false
+  sandbox_summary: ''
 - id: SA-0012
   role: qa
   engine: codex
   status: completed
   path: subagents/SA-0012-qa
+  sandboxed: false
+  sandbox_summary: ''
 - id: SA-0013
   role: pm
   engine: codex
   status: completed
   path: subagents/SA-0013-pm
+  sandboxed: false
+  sandbox_summary: ''
 git:
   auto_commit: true
   commit_message: 'litehive: checkpoint T-0034 add-model-family-retry-mechanism-for-engine-execution'
-  commit_sha: null
+  commit_sha: 4ecabfbb311384ae7f6c94d21c94230cea8967eb
   checkpoint_base_sha: null
   checkpoint_attempts: 0
   rolled_back_checkpoint_attempt: null
+  worktree_path: null
 retry_policy:
   max_retries: null
 created_from: null

@@ -1,0 +1,74 @@
+id: T-0133
+slug: add-early-commit-worktree-preflight-before-late-stage-completion
+title: Add early commit/worktree preflight before late-stage completion
+depends_on:
+- T-0132
+task_type: null
+engine: null
+model: null
+mode: implementation
+status: queued
+pipeline_status: backlog
+priority: medium
+pm_complexity: null
+planned_effort: null
+created_at: '2026-04-03T11:01:01+00:00'
+updated_at: '2026-04-03T11:02:13+00:00'
+goal: >-
+  Catch git and worktree completion failures earlier so tasks do not look nearly
+  done and then fail late at commit_to_git. Add an explicit preflight that
+  validates commit and worktree invariants before late-stage completion.
+acceptance_criteria:
+- >-
+  Litehive runs a commit or worktree preflight before final completion, either
+  before acceptance completion or before entering commit_to_git.
+- >-
+  The preflight checks at least task worktree validity, unexpected existing
+  commits in the task worktree, merge-back viability assumptions, and whether
+  task metadata or commit invariants needed by commit_to_git are satisfied.
+- >-
+  If preflight fails, the task is blocked or rerouted earlier with a concrete
+  reason instead of failing late after appearing almost done.
+- >-
+  Status or report output makes the preflight outcome explicit so operators can
+  distinguish a content failure from a git or worktree control-plane failure.
+- >-
+  Focused tests cover at least one passing preflight and multiple failure cases
+  that previously would have failed only at commit_to_git.
+constraints:
+- >-
+  Keep the preflight fast and targeted; it should validate likely late-stage
+  failure modes without re-running the whole lifecycle.
+- >-
+  Reuse existing worktree and commit logic where possible instead of
+  introducing a second conflicting commit path.
+- >-
+  Preserve deterministic commit ownership: only litehive creates the final task
+  checkpoint commit.
+- >-
+  Integrate with the retry and escalation work so repeated preflight failures
+  can route to recovery instead of looping blindly.
+plan:
+- >-
+  Define the preflight contract and the exact invariants that must hold before
+  late-stage completion.
+- >-
+  Add the preflight hook at the appropriate point before commit_to_git or final
+  acceptance.
+- >-
+  Surface explicit preflight pass or fail reasons in reports and status output.
+- >-
+  Add focused regression tests for common late-stage git or worktree failures.
+human_checkpoints: []
+subagents: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0133 add-early-commit-worktree-preflight-before-late-stage-completion'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+  worktree_path: null
+retry_policy:
+  max_retries: null
+created_from: null

@@ -872,7 +872,7 @@ def slugify(value: str) -> str:
     return slug or "task"
 
 
-def _next_task_id(root: Path) -> str:
+def _highest_task_number_on_disk(root: Path) -> int:
     existing = []
     for child in tasks_root(root).iterdir():
         if not child.is_dir():
@@ -880,8 +880,17 @@ def _next_task_id(root: Path) -> str:
         match = re.match(r"^T-(\d{4})-", child.name)
         if match:
             existing.append(int(match.group(1)))
-    next_number = max(existing, default=0) + 1
-    return f"T-{next_number:04d}"
+    return max(existing, default=0)
+
+
+def _reserve_next_task_numbers(root: Path, state: WorkspaceState, *, count: int = 1) -> list[int]:
+    if count < 1:
+        raise ValueError("count must be 1 or greater")
+    if state.next_task_number <= 0:
+        state.next_task_number = _highest_task_number_on_disk(root)
+    start = state.next_task_number + 1
+    state.next_task_number += count
+    return list(range(start, start + count))
 
 
 def task_dir(root: Path, task: TaskRecord) -> Path:
@@ -969,7 +978,8 @@ def create_task(
     if planned_effort is not None and planned_effort not in VALID_PLANNED_EFFORTS:
         raise ValueError(f"Unsupported planned effort '{planned_effort}'")
     with _workspace_lock(root):
-        task_id = _next_task_id(root)
+        state = load_state(root)
+        task_id = f"T-{_reserve_next_task_numbers(root, state)[0]:04d}"
         slug = slugify(title)
         _validate_task_dependencies(root, task_id=task_id, depends_on=depends_on or [])
         task = TaskRecord(
@@ -998,9 +1008,13 @@ def create_task(
         (base / "reports").mkdir(parents=True, exist_ok=False)
         (base / "subagents").mkdir(parents=True, exist_ok=False)
         (base / "artifacts").mkdir(parents=True, exist_ok=False)
-        state = load_state(root)
         state.queue.append(task.id)
         try:
+            state = _merged_state_for_runner_owned_write(
+                root,
+                state=state,
+                protected_task_ids=[task.id],
+            )
             writes = {
                 task_file(root, task): yaml.safe_dump(
                     task.model_dump(mode="python"), sort_keys=False
@@ -1038,19 +1052,10 @@ def create_follow_up_tasks(
     created_dirs: list[Path] = []
     with workspace_mutation_guard(root), _workspace_lock(root):
         state = load_state(root)
-        next_number = max(
-            (
-                int(match.group(1))
-                for child in tasks_root(root).iterdir()
-                if child.is_dir()
-                and (match := re.match(r"^T-(\d{4})-", child.name)) is not None
-            ),
-            default=0,
-        )
+        reserved_numbers = _reserve_next_task_numbers(root, state, count=len(follow_ups))
         writes: dict[Path, str] = {}
 
-        for follow_up in follow_ups:
-            next_number += 1
+        for next_number, follow_up in zip(reserved_numbers, follow_ups):
             task_id = f"T-{next_number:04d}"
             slug = slugify(follow_up.title)
             mode = "tasks" if follow_up.task_type else "implementation"
@@ -1098,6 +1103,11 @@ def create_follow_up_tasks(
                 writes[task_brief_file(root, task)] = render_task_brief(task)
             created_tasks.append(task)
 
+        state = _merged_state_for_runner_owned_write(
+            root,
+            state=state,
+            protected_task_ids=[task.id for task in created_tasks],
+        )
         writes[state_path(root)] = _serialize_state(state)
         try:
             _write_atomic_files(writes)
@@ -1107,6 +1117,18 @@ def create_follow_up_tasks(
             raise
         _ensure_runtime_ignored(root)
     return created_tasks
+
+
+def discard_created_task(root: Path, task_id: str) -> None:
+    with _workspace_lock(root):
+        task = get_task(root, task_id)
+        state = load_state(root)
+        if state.active_task_id == task_id:
+            state.active_task_id = None
+        state.queue = [queued_id for queued_id in state.queue if queued_id != task_id]
+        _save_state_without_runner_guard(root, state)
+        if task is not None:
+            shutil.rmtree(task_dir(root, task), ignore_errors=True)
 
 
 def list_tasks(root: Path) -> list[TaskRecord]:
@@ -1161,8 +1183,72 @@ def _workspace_transition_writes(
         existing = journal_path.read_text(encoding="utf-8") if journal_path.exists() else ""
         writes[journal_path] = f"{existing}\n## {utcnow()}\n{journal_messages[task.id]}\n"
     if state is not None:
+        state = _merged_state_for_runner_owned_write(
+            root,
+            state=state,
+            protected_task_ids=[task.id for task in tasks],
+        )
         writes[state_path(root)] = _serialize_state(state)
     return writes
+
+
+def _merge_queue_preserving_future_changes(
+    *,
+    desired_queue: list[str],
+    latest_queue: list[str],
+    protected_task_ids: list[str] | tuple[str, ...],
+) -> list[str]:
+    protected: list[str] = []
+    seen_protected: set[str] = set()
+    for task_id in protected_task_ids:
+        if task_id in seen_protected:
+            continue
+        seen_protected.add(task_id)
+        protected.append(task_id)
+    if not protected:
+        return list(desired_queue)
+
+    protected_set = set(protected)
+    latest_unprotected = [task_id for task_id in latest_queue if task_id not in protected_set]
+    protected_positions = [
+        (
+            sum(1 for preceding in desired_queue[:index] if preceding not in protected_set),
+            task_id,
+        )
+        for index, task_id in enumerate(desired_queue)
+        if task_id in protected_set
+    ]
+    if not protected_positions:
+        return list(latest_unprotected)
+
+    merged = list(latest_unprotected)
+    inserted = 0
+    inserted_ids: set[str] = set()
+    for unprotected_before, task_id in protected_positions:
+        if task_id in inserted_ids:
+            continue
+        insertion_index = min(unprotected_before + inserted, len(merged))
+        merged.insert(insertion_index, task_id)
+        inserted_ids.add(task_id)
+        inserted += 1
+    return merged
+
+
+def _merged_state_for_runner_owned_write(
+    root: Path,
+    *,
+    state: WorkspaceState,
+    protected_task_ids: list[str] | tuple[str, ...] = (),
+) -> WorkspaceState:
+    latest_state = load_state(root)
+    merged_state = state.model_copy(deep=True)
+    merged_state.queue = _merge_queue_preserving_future_changes(
+        desired_queue=state.queue,
+        latest_queue=latest_state.queue,
+        protected_task_ids=protected_task_ids,
+    )
+    merged_state.next_task_number = max(state.next_task_number, latest_state.next_task_number)
+    return merged_state
 
 
 def populate_missing_acceptance_criteria_from_report(

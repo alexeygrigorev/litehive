@@ -1,0 +1,42 @@
+id: T-0134
+slug: add-cli-command-for-quick-workspace-engine-switching
+title: Add CLI command for quick workspace engine switching
+depends_on: []
+task_type: null
+engine: null
+model: null
+mode: implementation
+status: queued
+pipeline_status: backlog
+priority: medium
+pm_complexity: null
+planned_effort: null
+created_at: '2026-04-03T11:13:38+00:00'
+updated_at: '2026-04-03T13:38:46+00:00'
+goal: 'Complete the work described by: Add CLI command for quick workspace engine
+  switching.'
+acceptance_criteria:
+- 'The delivered change satisfies the task goal: Complete the work described by: Add
+  CLI command for quick workspace engine switching.'
+- The implementation remains scoped to the intended task surface without unrelated
+  changes.
+- Focused verification demonstrates the targeted behavior or workflow works as intended.
+constraints: []
+plan:
+- Inspect the current code path, workflow, or state relevant to 'Add CLI command for
+  quick workspace engine switching'.
+- Implement the smallest scoped change that achieves the task goal.
+- Run focused verification and record the outcome.
+human_checkpoints: []
+subagents: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0134 add-cli-command-for-quick-workspace-engine-switching'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+  worktree_path: null
+retry_policy:
+  max_retries: null
+created_from: null

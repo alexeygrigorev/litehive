@@ -6,11 +6,13 @@ task_type: null
 engine: null
 model: null
 mode: implementation
-status: flagged
-pipeline_status: commit_to_git
+status: done
+pipeline_status: done
 priority: medium
+pm_complexity: null
+planned_effort: null
 created_at: '2026-03-31T18:41:22+00:00'
-updated_at: '2026-04-01T23:01:52+00:00'
+updated_at: '2026-04-03T17:57:20+00:00'
 goal: Introduce intentional non-implementation outcomes such as wont_do, deferred,
   or duplicate so PM can explicitly decide not to proceed without overloading failed
   or silently dropping work. These outcomes should preserve the task record, rationale,
@@ -204,10 +206,11 @@ subagents:
 git:
   auto_commit: true
   commit_message: 'litehive: checkpoint T-0052 add-explicit-wont-do-and-deferred-task-outcomes'
-  commit_sha: null
+  commit_sha: 4ecabfbb311384ae7f6c94d21c94230cea8967eb
   checkpoint_base_sha: null
   checkpoint_attempts: 0
   rolled_back_checkpoint_attempt: null
+  worktree_path: null
 retry_policy:
   max_retries: null
 created_from: null

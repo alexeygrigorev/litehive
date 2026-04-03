@@ -1,5 +1,5 @@
 default_engine: claude
-claude_model: claude-opus-4.6
+claude_model: claude-opus-4-6
 agent_startup_guidance:
   all:
     - Start from the task goal, acceptance criteria, plan, and the latest task-local runtime/subagent artifacts before re-reading broad repo context.

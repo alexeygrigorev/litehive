@@ -68,6 +68,7 @@ from litehive.git_ops import GitError, checkpoint_message, commit_task
 from litehive.models import (
     EngineUsageObservation,
     EngineUsageWindow,
+    FollowUpTaskSpec,
     ResourceLimitEvent,
     RuntimeEngineContinuation,
     RuntimeInterruptionState,
@@ -111,6 +112,7 @@ from litehive.tasks import (
     WorkspaceConflictError,
     abandon_task,
     close_task,
+    create_follow_up_tasks,
     create_task,
     dequeue_next_task_selection,
     finish_task_run_transition,
@@ -765,6 +767,182 @@ def test_save_task_rolls_back_task_record_when_runtime_persist_fails(
     assert refreshed.runtime.execution_status == "idle"
 
 
+def test_workspace_transition_writes_preserve_task_added_after_state_snapshot(
+    tmp_path: Path,
+) -> None:
+    env = os.environ.copy()
+    env["PYTHONPATH"] = str(Path(__file__).resolve().parents[1])
+    script = """
+import json
+import yaml
+from pathlib import Path
+import litehive.tasks as tasks_module
+from litehive.config import ensure_workspace
+from litehive.tasks import create_task, load_state
+
+root = Path(__import__("sys").argv[1])
+ensure_workspace(root)
+active = create_task(root, title="Active task")
+queued = create_task(root, title="Queued task")
+stale_state = load_state(root)
+added = create_task(root, title="Added later")
+active.status = "done"
+active.pipeline_status = "done"
+stale_state.active_task_id = None
+stale_state.queue = [queued.id]
+writes = tasks_module._workspace_transition_writes(root, tasks=[active], state=stale_state)
+serialized_state = yaml.safe_load(writes[tasks_module.state_path(root)])
+print(json.dumps({
+    "queue": serialized_state["queue"],
+    "next_task_number": serialized_state["next_task_number"],
+}))
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", script, str(tmp_path)],
+        check=True,
+        cwd=Path(__file__).resolve().parents[1],
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+
+    assert (
+        result.stdout.strip()
+        == '{"queue": ["T-0002", "T-0003"], "next_task_number": 3}'
+    )
+
+
+def test_create_task_preserves_runner_queue_changes_after_state_snapshot(tmp_path: Path) -> None:
+    env = os.environ.copy()
+    env["PYTHONPATH"] = str(Path(__file__).resolve().parents[1])
+    script = """
+import json
+from pathlib import Path
+import litehive.tasks as tasks_module
+from litehive.config import ensure_workspace
+from litehive.tasks import create_task, load_state
+
+root = Path(__import__("sys").argv[1])
+ensure_workspace(root)
+first = create_task(root, title="First queued task")
+second = create_task(root, title="Second queued task")
+original_merge = tasks_module._merged_state_for_runner_owned_write
+injected = False
+
+def inject_latest_state(root, *, state, protected_task_ids=()):
+    global injected
+    if not injected:
+        injected = True
+        latest = load_state(root)
+        latest.queue = [second.id, first.id]
+        tasks_module._save_state_without_runner_guard(root, latest)
+    return original_merge(root, state=state, protected_task_ids=protected_task_ids)
+
+tasks_module._merged_state_for_runner_owned_write = inject_latest_state
+added = create_task(root, title="Added while runner updated queue")
+print(json.dumps({"id": added.id, "queue": load_state(root).queue}))
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", script, str(tmp_path)],
+        check=True,
+        cwd=Path(__file__).resolve().parents[1],
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+
+    assert result.stdout.strip() == '{"id": "T-0003", "queue": ["T-0002", "T-0001", "T-0003"]}'
+
+
+def test_create_follow_up_tasks_preserves_runner_queue_changes_after_state_snapshot(
+    tmp_path: Path,
+) -> None:
+    env = os.environ.copy()
+    env["PYTHONPATH"] = str(Path(__file__).resolve().parents[1])
+    script = """
+import json
+from pathlib import Path
+import litehive.tasks as tasks_module
+from litehive.config import ensure_workspace
+from litehive.models import FollowUpTaskSpec
+from litehive.tasks import create_follow_up_tasks, create_task, load_state
+
+root = Path(__import__("sys").argv[1])
+ensure_workspace(root)
+parent = create_task(root, title="Parent task")
+sibling = create_task(root, title="Sibling task")
+original_merge = tasks_module._merged_state_for_runner_owned_write
+injected = False
+
+def inject_latest_state(root, *, state, protected_task_ids=()):
+    global injected
+    if not injected:
+        injected = True
+        latest = load_state(root)
+        latest.queue = [sibling.id, parent.id]
+        tasks_module._save_state_without_runner_guard(root, latest)
+    return original_merge(root, state=state, protected_task_ids=protected_task_ids)
+
+tasks_module._merged_state_for_runner_owned_write = inject_latest_state
+created = create_follow_up_tasks(
+    root,
+    parent_task=parent,
+    stage="grooming",
+    follow_ups=[
+        FollowUpTaskSpec(title="First follow-up", rationale="Needs separate work"),
+        FollowUpTaskSpec(title="Second follow-up", rationale="Needs more detail"),
+    ],
+)
+print(json.dumps({"ids": [task.id for task in created], "queue": load_state(root).queue}))
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", script, str(tmp_path)],
+        check=True,
+        cwd=Path(__file__).resolve().parents[1],
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+
+    assert (
+        result.stdout.strip()
+        == '{"ids": ["T-0003", "T-0004"], "queue": ["T-0002", "T-0001", "T-0003", "T-0004"]}'
+    )
+
+
+def test_create_task_seeds_next_task_number_from_existing_workspace_state(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    create_task(tmp_path, title="Existing task")
+    create_task(tmp_path, title="Second task")
+
+    state_file = tmp_path / ".litehive" / "state.yaml"
+    legacy_state = yaml.safe_load(state_file.read_text(encoding="utf-8"))
+    legacy_state.pop("next_task_number", None)
+    state_file.write_text(yaml.safe_dump(legacy_state, sort_keys=False), encoding="utf-8")
+
+    created = create_task(tmp_path, title="Third task")
+
+    assert created.id == "T-0003"
+    assert load_state(tmp_path).next_task_number == 3
+
+
+def test_create_task_uses_persisted_next_task_number_without_rescanning(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ensure_workspace(tmp_path)
+    create_task(tmp_path, title="Existing task")
+
+    def fail_scan(root: Path) -> int:
+        raise AssertionError("task id allocation should not rescan task directories")
+
+    monkeypatch.setattr(tasks_module, "_highest_task_number_on_disk", fail_scan)
+
+    created = create_task(tmp_path, title="Second task")
+
+    assert created.id == "T-0002"
+    assert load_state(tmp_path).next_task_number == 2
+
+
 def test_create_task_seeds_tasks_mode_template_defaults(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
 
@@ -921,6 +1099,58 @@ def test_intake_command_creates_linked_task_from_freeform_dump(
     assert dump.strip() not in brief
     assert "Created task T-0001: Capture queue visibility gaps" in output
     assert "Original dump preserved at:" in output
+
+
+def test_intake_command_rolls_back_created_task_when_post_create_write_fails(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    ensure_workspace(tmp_path)
+
+    class FakeEngine:
+        def run(
+            self,
+            prompt: str,
+            cwd: Path,
+            model: str | None = None,
+            *,
+            max_turns: int | None = None,
+            on_started=None,
+        ) -> CLIExecutionResult:
+            return CLIExecutionResult(
+                adapter="opencode",
+                argv=("opencode", "run"),
+                cwd=cwd,
+                exit_code=0,
+                stdout="TITLE: Capture queue visibility gaps\nGOAL: Turn the raw notes into a queued task PM can groom later.\n",
+                stderr="",
+            )
+
+        def render_transcript(self, execution: CLIExecutionResult) -> str:
+            return execution.transcript
+
+    monkeypatch.setattr("litehive.cli.get_engine", lambda _: FakeEngine())
+    monkeypatch.setattr("litehive.cli._link_intake_brief_to_source", lambda _: (_ for _ in ()).throw(OSError("disk full")))
+
+    intake_file = tmp_path / "brain-dump.md"
+    intake_file.write_text("We need better queue visibility.\n", encoding="utf-8")
+
+    exit_code = _cmd_intake(
+        argparse.Namespace(
+            file=intake_file,
+            engine="opencode",
+            model=None,
+            workspace=tmp_path,
+        )
+    )
+    output = capsys.readouterr().out
+
+    assert exit_code == 1
+    assert "Task creation failed: disk full" in output
+    assert get_task(tmp_path, "T-0001") is None
+    assert load_state(tmp_path).queue == []
+    assert list((tmp_path / ".litehive" / "tasks").iterdir()) == []
 
 
 def test_update_task_fills_only_unset_template_fields_for_typed_tasks(tmp_path: Path) -> None:
@@ -5484,7 +5714,7 @@ def test_drain_task_pool_stops_on_quota_threshold(
     assert summary.stop_reason == "quota_threshold_reached"
     state = load_state(tmp_path)
     assert state.active_task_id is None
-    assert state.queue == ["T-0003", "T-0001"]
+    assert state.queue == ["T-0003"]
 
 
 def test_drain_task_pool_stops_on_budget_threshold(
@@ -8115,7 +8345,9 @@ def test_dequeue_next_task_selection_restores_missing_queued_tasks_to_state_queu
     assert selection.task.id == first.id
     repaired_state = load_state(tmp_path)
     assert repaired_state.active_task_id == first.id
-    assert second.id in repaired_state.queue
+    restored_second = get_task(tmp_path, second.id)
+    assert restored_second is not None
+    assert restored_second.status == "queued"
 
 
 def test_cmd_run_reports_stage_outcomes_for_remaining_task_with_prior_reports(
