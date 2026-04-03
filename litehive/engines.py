@@ -16,7 +16,7 @@ from litehive.external_cli import (
     iter_jsonl_payloads,
     parse_stage_report_text,
 )
-from litehive.models import EngineUsageObservation, EngineUsageWindow
+from litehive.models import EngineUsageObservation, EngineUsageWindow, RuntimeEngineContinuation
 
 
 class EngineError(RuntimeError):
@@ -1370,6 +1370,44 @@ def classify_retryable_execution_failure(text: str) -> RetryableExecutionFailure
     for classification, needles, reason in _RETRYABLE_EXECUTION_PATTERNS:
         if any(needle in normalized for needle in needles):
             return RetryableExecutionFailure(classification=classification, reason=reason)
+    return None
+
+
+def extract_engine_continuation(
+    engine_name: str, execution: CLIExecutionResult | None
+) -> RuntimeEngineContinuation | None:
+    if execution is None or not execution.stdout.strip():
+        return None
+
+    if engine_name == "codex":
+        for payload in iter_jsonl_payloads(execution.stdout):
+            if payload.get("type") != "thread.started":
+                continue
+            thread_id = payload.get("thread_id")
+            if isinstance(thread_id, str) and thread_id:
+                return RuntimeEngineContinuation(thread_id=thread_id)
+        return None
+
+    if engine_name == "opencode":
+        for payload in iter_jsonl_payloads(execution.stdout):
+            session_id = payload.get("sessionID")
+            if isinstance(session_id, str) and session_id:
+                return RuntimeEngineContinuation(session_id=session_id)
+        return None
+
+    if engine_name == "gemini":
+        for payload in iter_jsonl_payloads(execution.stdout):
+            if payload.get("type") != "init":
+                continue
+            session_id = payload.get("session_id")
+            model = payload.get("model")
+            metadata: dict[str, str | int | bool | None] = {}
+            if isinstance(model, str) and model:
+                metadata["model"] = model
+            if isinstance(session_id, str) and session_id:
+                return RuntimeEngineContinuation(session_id=session_id, metadata=metadata)
+        return None
+
     return None
 
 

@@ -17,6 +17,7 @@ from litehive.engines import (
     classify_execution_interruption,
     classify_execution_limit,
     classify_retryable_execution_failure,
+    extract_engine_continuation,
     get_engine,
 )
 from litehive.models import ResourceLimitEvent, StageReport, SubagentRef, TaskRecord, utcnow
@@ -184,6 +185,7 @@ class SubagentManager:
                         max_turns=max_turns,
                     )
             transcript = engine.render_transcript(proc)
+            continuation = extract_engine_continuation(ref.engine, proc)
             ref.status = "completed" if proc.exit_code == 0 else "failed"
             if proc.exit_code != 0:
                 resource_limit_event = self.sandbox.classify_resource_limit_event(
@@ -225,6 +227,7 @@ class SubagentManager:
         except (EngineError, SandboxError) as exc:
             transcript = str(exc)
             proc = None
+            continuation = None
             ref.status = "blocked"
             failure = EngineFailure(kind="engine_error", reason=str(exc))
 
@@ -242,6 +245,7 @@ class SubagentManager:
                 else failure.reason
             ),
             resource_limit_event=None if failure is None else failure.resource_limit_event,
+            continuation=continuation,
         )
         self._write_session_finish(
             task,
@@ -257,6 +261,7 @@ class SubagentManager:
                 else failure.reason
             ),
             resource_limit_event=None if failure is None else failure.resource_limit_event,
+            continuation=continuation,
         )
         if proc is not None:
             record_engine_execution(
@@ -333,6 +338,7 @@ class SubagentManager:
         execution: CLIExecutionResult | None,
         interruption_reason: str | None,
         resource_limit_event: ResourceLimitEvent | None,
+        continuation,
     ) -> None:
         report_step = (
             task.pipeline_status
@@ -376,11 +382,13 @@ class SubagentManager:
                     if report.resource_limit_event is None
                     else report.resource_limit_event.model_dump(mode="python")
                 ),
+                "continuation": None if continuation is None else continuation.model_dump(mode="python"),
             },
             exit_code=exit_code,
             pid=None if execution is None else execution.pid,
             interruption_reason=interruption_reason,
             resource_limit_event=resource_limit_event,
+            continuation=continuation,
         )
 
     def _write_session_progress(
@@ -393,6 +401,7 @@ class SubagentManager:
     ) -> None:
         engine = get_engine(ref.engine)
         transcript = engine.render_transcript(execution)
+        continuation = extract_engine_continuation(ref.engine, execution)
         if isinstance(engine, ExternalCLIAdapter):
             record_engine_observation(
                 self.root,
@@ -407,6 +416,7 @@ class SubagentManager:
             task,
             pid=execution.pid,
             transcript=transcript,
+            continuation=continuation,
         )
         self._write_session_metadata(
             base,
@@ -414,6 +424,7 @@ class SubagentManager:
             exit_code=None,
             pid=execution.pid,
             interruption_reason=None,
+            continuation=continuation,
         )
         (base / "prompt.txt").write_text(prompt, encoding="utf-8")
         (base / "transcript.md").write_text(transcript, encoding="utf-8")
@@ -453,6 +464,7 @@ class SubagentManager:
                     if report.resource_limit_event is None
                     else report.resource_limit_event.model_dump(mode="python")
                 ),
+                "continuation": None if continuation is None else continuation.model_dump(mode="python"),
             }
         self._write_session_snapshot(
             base,
@@ -466,6 +478,7 @@ class SubagentManager:
             pid=execution.pid,
             interruption_reason=None,
             resource_limit_event=None,
+            continuation=continuation,
         )
 
     def _write_session_metadata(
@@ -477,6 +490,7 @@ class SubagentManager:
         pid: int | None,
         interruption_reason: str | None = None,
         resource_limit_event: ResourceLimitEvent | None = None,
+        continuation=None,
     ) -> None:
         created_at = utcnow()
         session_path = base / "session.yaml"
@@ -506,6 +520,7 @@ class SubagentManager:
                             if resource_limit_event is None
                             else resource_limit_event.model_dump(mode="python")
                         ),
+                        "continuation": None if continuation is None else continuation.model_dump(mode="python"),
                     },
                     sort_keys=False,
                 )
@@ -523,6 +538,7 @@ class SubagentManager:
             pid=pid,
             interruption_reason=None,
             resource_limit_event=None,
+            continuation=None,
         )
 
     def _write_session_snapshot(
@@ -539,6 +555,7 @@ class SubagentManager:
         pid: int | None,
         interruption_reason: str | None,
         resource_limit_event: ResourceLimitEvent | None,
+        continuation=None,
     ) -> None:
         created_at = utcnow()
         session_path = base / "session.yaml"
@@ -568,6 +585,7 @@ class SubagentManager:
                             if resource_limit_event is None
                             else resource_limit_event.model_dump(mode="python")
                         ),
+                        "continuation": None if continuation is None else continuation.model_dump(mode="python"),
                     },
                     sort_keys=False,
                 ),
@@ -750,6 +768,54 @@ def stage_prompt(
         if isinstance(brief_sections, list):
             lines.extend(["", "Template sections to fill or verify:"])
             lines.extend(f"- {item}" for item in brief_sections)
+
+    handoff = task.runtime.continuation_handoff
+    if handoff is not None and handoff.step == step:
+        lines.extend(["", "Continuation handoff:"])
+        lines.append(f"- Kind: {handoff.kind}")
+        lines.append(f"- Reason: {handoff.reason}")
+        if handoff.from_engine or handoff.to_engine:
+            lines.append(
+                f"- Engine path: {handoff.from_engine or '-'} -> {handoff.to_engine or handoff.from_engine or '-'}"
+            )
+        if handoff.from_model or handoff.to_model:
+            lines.append(
+                f"- Model path: {handoff.from_model or '-'} -> {handoff.to_model or handoff.from_model or '-'}"
+            )
+        if handoff.attempt is not None:
+            lines.append(f"- Prior attempt: {handoff.attempt}")
+        if handoff.subagent_id or handoff.subagent_path:
+            lines.append(
+                f"- Prior subagent: {handoff.subagent_id or '-'} at `{handoff.subagent_path or '-'}`"
+            )
+        if handoff.summary:
+            lines.append(f"- Prior summary: {handoff.summary}")
+        if handoff.transcript_snippet:
+            lines.append(f"- Prior snippet: {handoff.transcript_snippet}")
+        if handoff.continuation is not None:
+            if handoff.continuation.session_id:
+                lines.append(f"- Engine session id: {handoff.continuation.session_id}")
+            if handoff.continuation.thread_id:
+                lines.append(f"- Engine thread id: {handoff.continuation.thread_id}")
+        artifact_parts = [
+            path
+            for path in (
+                handoff.session_path,
+                handoff.report_path,
+                handoff.transcript_path,
+            )
+            if path
+        ]
+        if artifact_parts:
+            lines.append(f"- Handoff artifacts: {', '.join(f'`{path}`' for path in artifact_parts)}")
+        if handoff.warnings:
+            lines.extend(["- Prior warnings:"] + [f"  - {warning}" for warning in handoff.warnings])
+        lines.extend(
+            [
+                "- Continue from the prior stage context instead of restarting discovery from scratch.",
+                "- Reuse the recorded artifacts and continuation identifiers when they help you preserve progress safely.",
+            ]
+        )
 
     lines.extend(["", "Plan:"])
     if task.plan:

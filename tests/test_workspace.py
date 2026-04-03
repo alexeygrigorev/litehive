@@ -68,6 +68,7 @@ from litehive.models import (
     EngineUsageObservation,
     EngineUsageWindow,
     ResourceLimitEvent,
+    RuntimeEngineContinuation,
     RuntimeInterruptionState,
     RuntimeStageState,
     RuntimeSubagentState,
@@ -1090,6 +1091,7 @@ def test_subagent_artifacts_exist_while_engine_is_running(
         "tests": {"added": 1, "passing": 1},
         "warnings": ["none"],
         "interruption_reason": None,
+        "continuation": None,
         "resource_control": {
             "enabled": False,
             "runtime": None,
@@ -10063,6 +10065,73 @@ def test_resume_command_preserves_interrupted_task_stage(
     assert resumed.runtime.last_subagent.transcript_snippet == "tests were halfway done"
 
 
+def test_resume_run_uses_structured_continuation_handoff_after_interruption(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ensure_workspace(tmp_path, LitehiveConfig(auto_commit=False))
+    create_task(tmp_path, title="Resume with structured handoff", auto_commit=False)
+    task = get_task(tmp_path, "T-0001")
+    assert task is not None
+    task.status = "in_progress"
+    task.pipeline_status = "testing"
+    task.runtime.execution_status = "running"
+    task.runtime.run_started_at = "2026-04-01T00:00:00+00:00"
+    task.runtime.current_stage = RuntimeStageState(
+        step="testing",
+        status="running",
+        started_at="2026-04-01T00:00:00+00:00",
+        updated_at="2026-04-01T00:00:20+00:00",
+    )
+    task.runtime.active_subagent = RuntimeSubagentState(
+        id="SA-0001",
+        role="qa",
+        engine="gemini",
+        status="running",
+        path="subagents/SA-0001-qa",
+        pid=5151,
+        started_at="2026-04-01T00:00:05+00:00",
+        updated_at="2026-04-01T00:00:20+00:00",
+        transcript_snippet="tests were halfway done",
+        continuation=RuntimeEngineContinuation(session_id="gemini_resume_123"),
+    )
+    save_task(tmp_path, task)
+
+    tasks_module._prepare_interrupted_task(
+        tmp_path,
+        task,
+        stage="testing",
+        summary="Runner stopped mid-testing.",
+        reason="Runner stopped mid-testing.",
+    )
+    save_task(tmp_path, task)
+    resumed = tasks_module.resume_task(tmp_path, task.id, front=True)
+    assert resumed.runtime.continuation_handoff is not None
+    assert resumed.runtime.continuation_handoff.kind == "restart"
+
+    prompts: list[str] = []
+
+    def fake_run(self, current_task, role, engine_name, prompt, model=None, max_turns=None):  # type: ignore[no-untyped-def]
+        if current_task.pipeline_status == "testing":
+            prompts.append(prompt)
+        return _completed_subagent_result(tmp_path, current_task.pipeline_status, engine_name=engine_name)
+
+    monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_run)
+
+    summary = run_next_task(tmp_path)
+
+    assert summary.result is not None
+    assert summary.result.final_status in {"done", "queued"}
+    assert len(prompts) == 1
+    assert "Continuation handoff:" in prompts[0]
+    assert "- Kind: restart" in prompts[0]
+    assert "- Engine path: gemini -> gemini" in prompts[0]
+    assert "- Prior subagent: SA-0001 at `subagents/SA-0001-qa`" in prompts[0]
+    assert "- Engine session id: gemini_resume_123" in prompts[0]
+    refreshed = get_task(tmp_path, "T-0001")
+    assert refreshed is not None
+    assert refreshed.runtime.continuation_handoff is None
+
+
 def test_resume_command_preserves_flagged_commit_to_git_stage(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -12486,6 +12555,145 @@ def test_run_next_task_retries_retryable_execution_failure_before_continuing(
         "(classification: timeout, policy: model_family:glm, backoff: 0.25s)."
         in report["warnings"]
     )
+
+
+def test_run_next_task_reuses_structured_continuation_handoff_on_retry(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ensure_workspace(
+        tmp_path,
+        LitehiveConfig(
+            opencode_model="zai-coding-plan/glm-5.1",
+            execution_retry_policies={
+                "model_family:glm": {
+                    "max_retries": 1,
+                    "backoff_seconds": 0.0,
+                    "backoff_multiplier": 2.0,
+                    "retry_on": ["timeout"],
+                }
+            },
+        ),
+    )
+    create_task(tmp_path, title="Retry with continuation handoff", engine="opencode", auto_commit=False)
+
+    prompts: list[str] = []
+    grooming_attempts = 0
+
+    def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None):  # type: ignore[no-untyped-def]
+        nonlocal grooming_attempts
+        step = task.pipeline_status
+        if step == "grooming":
+            prompts.append(prompt)
+            grooming_attempts += 1
+            if grooming_attempts == 1:
+                return SubagentResult(
+                    ref=SubagentRef(
+                        id="SA-grooming-1",
+                        role=role,
+                        engine=engine_name,
+                        status="failed",
+                        path="subagents/grooming-1",
+                    ),
+                    execution=CLIExecutionResult(
+                        adapter=engine_name,
+                        argv=(engine_name, "run"),
+                        cwd=tmp_path,
+                        exit_code=1,
+                        stdout="\n".join(
+                            [
+                                '{"type":"step_start","timestamp":1,"sessionID":"ses_retry","part":{"id":"prt_1","type":"step-start"}}',
+                                '{"type":"text","timestamp":2,"sessionID":"ses_retry","part":{"id":"prt_2","type":"text","text":"Halfway through grooming"}}',
+                            ]
+                        ),
+                        stderr="request timed out",
+                    ),
+                    transcript="Halfway through grooming\n\n[stderr]\nrequest timed out",
+                    exit_code=1,
+                    failure=EngineFailure(
+                        kind="retryable_execution_error",
+                        reason="transient timeout",
+                        classification="timeout",
+                    ),
+                )
+        return _completed_subagent_result(tmp_path, step, engine_name=engine_name)
+
+    monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_run)
+
+    summary = run_next_task(tmp_path)
+
+    assert summary.result is not None
+    assert summary.result.final_status == "done"
+    assert len(prompts) == 2
+    assert "Continuation handoff:" not in prompts[0]
+    assert "Continuation handoff:" in prompts[1]
+    assert "- Kind: retry" in prompts[1]
+    assert "- Reason: transient timeout" in prompts[1]
+    assert "- Prior subagent: SA-grooming-1 at `subagents/grooming-1`" in prompts[1]
+    assert "- Engine session id: ses_retry" in prompts[1]
+    task = get_task(tmp_path, "T-0001")
+    assert task is not None
+    assert task.runtime.continuation_handoff is None
+
+
+def test_run_next_task_passes_structured_continuation_handoff_across_engine_switch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ensure_workspace(
+        tmp_path,
+        LitehiveConfig(engine_fallbacks={"codex": ["opencode"]}),
+    )
+    create_task(tmp_path, title="Engine switch with continuation handoff", engine="codex", auto_commit=False)
+
+    prompts_by_engine: list[tuple[str, str]] = []
+
+    def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None):  # type: ignore[no-untyped-def]
+        step = task.pipeline_status
+        if step == "grooming":
+            prompts_by_engine.append((engine_name, prompt))
+        if engine_name == "codex" and step == "grooming":
+            return SubagentResult(
+                ref=SubagentRef(
+                    id="SA-grooming-codex",
+                    role=role,
+                    engine=engine_name,
+                    status="failed",
+                    path="subagents/grooming-codex",
+                ),
+                execution=CLIExecutionResult(
+                    adapter=engine_name,
+                    argv=(engine_name, "exec"),
+                    cwd=tmp_path,
+                    exit_code=1,
+                        stdout="\n".join(
+                            [
+                                '{"type":"thread.started","thread_id":"thread_codex_123"}',
+                                "{\"type\":\"error\",\"message\":\"You've hit your usage limit\"}",
+                            ]
+                        ),
+                    stderr="",
+                ),
+                transcript="You've hit your usage limit",
+                exit_code=1,
+                failure=EngineFailure(kind="execution_limit", reason="usage limit reached"),
+            )
+        return _completed_subagent_result(tmp_path, step, engine_name=engine_name)
+
+    monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_run)
+
+    summary = run_next_task(tmp_path)
+
+    assert summary.result is not None
+    assert summary.result.final_status == "done"
+    assert [engine for engine, _prompt in prompts_by_engine[:2]] == ["codex", "opencode"]
+    opencode_prompt = prompts_by_engine[1][1]
+    assert "Continuation handoff:" in opencode_prompt
+    assert "- Kind: engine_switch" in opencode_prompt
+    assert "- Reason: usage limit reached" in opencode_prompt
+    assert "- Engine path: codex -> opencode" in opencode_prompt
+    assert "- Engine thread id: thread_codex_123" in opencode_prompt
+    task = get_task(tmp_path, "T-0001")
+    assert task is not None
+    assert task.runtime.continuation_handoff is None
 
 
 def test_run_next_task_uses_default_opencode_retry_policy_and_records_journal(

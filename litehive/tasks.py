@@ -31,6 +31,8 @@ from litehive.git_ops import GitError, checkpoint_message, default_commit_messag
 from litehive.models import (
     FollowUpTaskSpec,
     PlannedEffort,
+    RuntimeContinuationHandoff,
+    RuntimeEngineContinuation,
     RuntimeEngineSwitch,
     RuntimeInterruptionState,
     ResourceLimitEvent,
@@ -1377,6 +1379,22 @@ def clear_task_outcome(root: Path, task: TaskRecord) -> None:
     save_task_runtime(root, task)
 
 
+def set_task_continuation_handoff(
+    root: Path,
+    task: TaskRecord,
+    handoff: RuntimeContinuationHandoff | None,
+) -> None:
+    task.runtime.updated_at = utcnow()
+    task.runtime.continuation_handoff = handoff
+    save_task_runtime(root, task)
+
+
+def clear_task_continuation_handoff(root: Path, task: TaskRecord) -> None:
+    if task.runtime.continuation_handoff is None:
+        return
+    set_task_continuation_handoff(root, task, None)
+
+
 def _apply_task_retry_state(
     task: TaskRecord,
     *,
@@ -1496,6 +1514,8 @@ def _apply_stage_finished(task: TaskRecord, report: StageReport) -> None:
             "summary": "",
         }
     )
+    if task.runtime.continuation_handoff is not None and task.runtime.continuation_handoff.step == report.step:
+        task.runtime.continuation_handoff = None
 
 
 def mark_subagent_started(root: Path, task: TaskRecord, ref: SubagentRef) -> None:
@@ -1511,6 +1531,7 @@ def mark_subagent_started(root: Path, task: TaskRecord, ref: SubagentRef) -> Non
         sandbox_summary=ref.sandbox_summary,
         started_at=now,
         updated_at=now,
+        continuation=None,
     )
     save_task_runtime(root, task)
 
@@ -1530,6 +1551,7 @@ def mark_subagent_progress(
     *,
     pid: int | None = None,
     transcript: str | None = None,
+    continuation: RuntimeEngineContinuation | None = None,
 ) -> None:
     if task.runtime.active_subagent is None:
         return
@@ -1542,6 +1564,8 @@ def mark_subagent_progress(
         updates["pid"] = pid
     if transcript is not None:
         updates["transcript_snippet"] = summarize_transcript(transcript)
+    if continuation is not None:
+        updates["continuation"] = continuation
     task.runtime.active_subagent = task.runtime.active_subagent.model_copy(update=updates)
     save_task_runtime(root, task)
 
@@ -1555,6 +1579,7 @@ def mark_subagent_finished(
     pid: int | None = None,
     interruption_reason: str | None = None,
     resource_limit_event: ResourceLimitEvent | None = None,
+    continuation: RuntimeEngineContinuation | None = None,
 ) -> None:
     now = utcnow()
     started_at = task.runtime.active_subagent.started_at if task.runtime.active_subagent else now
@@ -1578,6 +1603,13 @@ def mark_subagent_finished(
         transcript_snippet=summarize_transcript(transcript),
         interruption_reason=interruption_reason or "",
         resource_limit_event=resource_limit_event,
+        continuation=(
+            continuation
+            if continuation is not None
+            else task.runtime.active_subagent.continuation
+            if task.runtime.active_subagent is not None
+            else None
+        ),
     )
     task.runtime.active_subagent = None
     save_task_runtime(root, task)
@@ -1993,6 +2025,11 @@ def _write_interrupted_subagent_artifacts(
             "exit_code": subagent.exit_code,
             "interruption_reason": subagent.interruption_reason or None,
             "resume_stage": resume_stage,
+            "continuation": (
+                None
+                if subagent.continuation is None
+                else subagent.continuation.model_dump(mode="python")
+            ),
         }
     )
     writes[session_path] = yaml.safe_dump(session_payload, sort_keys=False)
@@ -2007,6 +2044,11 @@ def _write_interrupted_subagent_artifacts(
     report_payload["summary"] = report_payload.get("summary") or subagent.transcript_snippet
     report_payload["interruption_reason"] = subagent.interruption_reason or None
     report_payload["resume_stage"] = resume_stage
+    report_payload["continuation"] = (
+        None
+        if subagent.continuation is None
+        else subagent.continuation.model_dump(mode="python")
+    )
     writes[report_path] = yaml.safe_dump(report_payload, sort_keys=False)
     _write_atomic_files(writes)
 
@@ -2092,6 +2134,40 @@ def _prepare_interrupted_task(
         run_started_at=run_started_at,
         stage_started_at=stage_started_at,
         subagent=interrupted_subagent,
+    )
+    task.runtime.continuation_handoff = RuntimeContinuationHandoff(
+        step=stage,
+        kind="restart",
+        reason=interruption_reason,
+        from_engine=None if interrupted_subagent is None else interrupted_subagent.engine,
+        to_engine=None if interrupted_subagent is None else interrupted_subagent.engine,
+        subagent_id=None if interrupted_subagent is None else interrupted_subagent.id,
+        subagent_path=None if interrupted_subagent is None else interrupted_subagent.path,
+        status=None if interrupted_subagent is None else interrupted_subagent.status,
+        summary=summary,
+        transcript_snippet="" if interrupted_subagent is None else interrupted_subagent.transcript_snippet,
+        warnings=[],
+        session_path=(
+            None
+            if interrupted_subagent is None
+            else f"{interrupted_subagent.path}/session.yaml"
+        ),
+        report_path=(
+            None
+            if interrupted_subagent is None
+            else f"{interrupted_subagent.path}/report.yaml"
+        ),
+        transcript_path=(
+            None
+            if interrupted_subagent is None
+            else f"{interrupted_subagent.path}/transcript.md"
+        ),
+        continuation=(
+            None
+            if interrupted_subagent is None
+            else interrupted_subagent.continuation
+        ),
+        updated_at=now,
     )
     task.runtime.current_stage = task.runtime.current_stage.model_copy(
         update={
@@ -2875,6 +2951,7 @@ def _reset_task_for_recovery(
     status: str,
     pipeline_status: str,
     clear_last_outcome: bool = True,
+    preserve_continuation_handoff: bool = False,
 ) -> None:
     now = utcnow()
     task.status = status
@@ -2887,6 +2964,8 @@ def _reset_task_for_recovery(
     task.runtime.retry_count = 0
     task.runtime.retry_limit = 0
     task.runtime.retry_source = "global"
+    if not preserve_continuation_handoff:
+        task.runtime.continuation_handoff = None
     task.runtime.current_stage = task.runtime.current_stage.model_copy(
         update={
             "step": None,
@@ -2958,6 +3037,7 @@ def resume_task(root: Path, task_id: str, *, front: bool = False) -> TaskRecord:
             status="queued",
             pipeline_status=resumed_stage,
             clear_last_outcome=task.status != "interrupted",
+            preserve_continuation_handoff=task.status == "interrupted",
         )
         state.queue = [item for item in state.queue if item != task.id]
         if front:

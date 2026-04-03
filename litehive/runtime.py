@@ -12,7 +12,7 @@ from typing import Callable
 
 import yaml
 
-from litehive.engines import EngineError, get_engine
+from litehive.engines import EngineError, extract_engine_continuation, get_engine
 from litehive.config import ExecutionRetryPolicy, LitehiveConfig, load_config, load_context, state_path
 from litehive.git_ops import (
     GitError,
@@ -30,7 +30,13 @@ from litehive.git_ops import (
     rollback_task,
     status_porcelain,
 )
-from litehive.models import RuntimeStageState, StageReport, TaskRecord, utcnow
+from litehive.models import (
+    RuntimeContinuationHandoff,
+    RuntimeStageState,
+    StageReport,
+    TaskRecord,
+    utcnow,
+)
 from litehive.runner import RunResult, StageExecutor, TaskExecutionRunner
 from litehive.subagents import SubagentManager, stage_prompt, stage_report_from_subagent
 from litehive.tasks import (
@@ -52,6 +58,7 @@ from litehive.tasks import (
     recover_stale_runner_state,
     restore_untouched_active_task,
     set_pool_stop_reason,
+    set_task_continuation_handoff,
     set_task_commit_sha,
     save_task,
     save_task_runtime,
@@ -845,6 +852,62 @@ def _retry_backoff_seconds(policy: ExecutionRetryPolicy, retry_number: int) -> f
     return policy.backoff_seconds * (policy.backoff_multiplier ** (retry_number - 1))
 
 
+def _set_continuation_handoff(
+    root: Path,
+    task: TaskRecord,
+    *,
+    step: str,
+    kind: str,
+    reason: str,
+    result,
+    from_engine: str,
+    to_engine: str | None,
+    from_model: str | None,
+    to_model: str | None,
+    attempt: int,
+) -> RuntimeContinuationHandoff:
+    transcript_snippet = ""
+    summary = ""
+    warnings: list[str] = []
+    if result.transcript:
+        transcript_snippet = result.transcript.splitlines()[0].strip()
+    if result.execution is not None:
+        rendered = get_engine(from_engine).render_transcript(result.execution)
+        transcript_snippet = transcript_snippet or rendered.splitlines()[0].strip()
+        if rendered.strip():
+            report = get_engine(from_engine).parse_stage_report(
+                task_id=task.id,
+                step=step,  # type: ignore[arg-type]
+                execution=result.execution,
+                subagent_status=result.ref.status,
+            )
+            summary = report.summary
+            warnings = list(report.warnings)
+
+    handoff = RuntimeContinuationHandoff(
+        step=step,
+        kind=kind,  # type: ignore[arg-type]
+        reason=reason,
+        from_engine=from_engine,
+        to_engine=to_engine,
+        from_model=from_model,
+        to_model=to_model,
+        subagent_id=result.ref.id,
+        subagent_path=result.ref.path,
+        status=result.ref.status,
+        attempt=attempt,
+        summary=summary,
+        transcript_snippet=transcript_snippet,
+        warnings=warnings,
+        session_path=f"{result.ref.path}/session.yaml",
+        report_path=f"{result.ref.path}/report.yaml",
+        transcript_path=f"{result.ref.path}/transcript.md",
+        continuation=extract_engine_continuation(from_engine, result.execution),
+    )
+    set_task_continuation_handoff(root, task, handoff)
+    return handoff
+
+
 def _require_completed_task(task: TaskRecord, action: str) -> None:
     if task.status != "done" or task.pipeline_status != "done":
         raise GitError(f"Task {task.id} is not completed; cannot {action}")
@@ -888,12 +951,6 @@ def build_executor(
         if pre_stage_hook_report is not None:
             return pre_stage_hook_report
 
-        prompt = stage_prompt(
-            current_task,
-            step,
-            workspace_context=workspace_context,
-            process_profile=config.process_profile,
-        )
         execution_events: list[str] = []
         engines = _engine_attempt_order(next_stage_engine_names, config.engine_fallbacks)
         limit_trigger_reason: str | None = None
@@ -940,6 +997,12 @@ def build_executor(
             retry_exhausted_reason: str | None = None
             while True:
                 attempt_count += 1
+                prompt = stage_prompt(
+                    current_task,
+                    step,
+                    workspace_context=workspace_context,
+                    process_profile=config.process_profile,
+                )
                 result = subagents.run(
                     current_task,
                     role=_role_for_step(step),
@@ -976,6 +1039,19 @@ def build_executor(
                 )
                 execution_events.append(retry_event)
                 append_journal(root, current_task, retry_event)
+                _set_continuation_handoff(
+                    root,
+                    current_task,
+                    step=step,
+                    kind="retry",
+                    reason=failure.reason,
+                    result=result,
+                    from_engine=engine_name,
+                    to_engine=engine_name,
+                    from_model=model_name,
+                    to_model=model_name,
+                    attempt=attempt_count,
+                )
                 if backoff_seconds > 0:
                     time.sleep(backoff_seconds)
             is_limit_failure = (
@@ -998,6 +1074,24 @@ def build_executor(
                 )
                 execution_events.append(event)
                 append_journal(root, current_task, event)
+                _set_continuation_handoff(
+                    root,
+                    current_task,
+                    step=step,
+                    kind="engine_switch",
+                    reason=failure_reason,
+                    result=result,
+                    from_engine=engine_name,
+                    to_engine=next_engine,
+                    from_model=model_name,
+                    to_model=resolve_model(
+                        task,
+                        config,
+                        engine_name=next_engine,
+                        model_override=model_override,
+                    ),
+                    attempt=attempt_count,
+                )
                 mark_engine_switch(
                     root,
                     current_task,

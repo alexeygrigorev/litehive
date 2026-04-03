@@ -124,6 +124,26 @@ def render_task_summary(task: TaskRecord, *, active: bool) -> list[str]:
             )
         )
 
+    if runtime.continuation_handoff is not None:
+        handoff = runtime.continuation_handoff
+        continuation_parts = [
+            f"continuation={handoff.kind}",
+            f"step={handoff.step}",
+            f"reason={handoff.reason}",
+        ]
+        if handoff.from_engine or handoff.to_engine:
+            continuation_parts.append(
+                f"engine={handoff.from_engine or '-'}->{handoff.to_engine or handoff.from_engine or '-'}"
+            )
+        if handoff.subagent_id:
+            continuation_parts.append(f"subagent={handoff.subagent_id}")
+        if handoff.continuation is not None:
+            if handoff.continuation.session_id:
+                continuation_parts.append(f"session_id={handoff.continuation.session_id}")
+            if handoff.continuation.thread_id:
+                continuation_parts.append(f"thread_id={handoff.continuation.thread_id}")
+        lines.append("  " + " ".join(continuation_parts))
+
     if runtime.last_stage.step:
         summary = runtime.last_stage.summary or "-"
         lines.append(

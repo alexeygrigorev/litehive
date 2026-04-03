@@ -102,6 +102,13 @@ class RuntimeStageState(BaseModel):
     summary: str = ""
 
 
+class RuntimeEngineContinuation(BaseModel):
+    session_id: str | None = None
+    thread_id: str | None = None
+    metadata: dict[str, str | int | bool | None] = Field(default_factory=dict)
+    updated_at: str = Field(default_factory=utcnow)
+
+
 class RuntimeSubagentState(BaseModel):
     id: str
     role: str
@@ -118,6 +125,7 @@ class RuntimeSubagentState(BaseModel):
     transcript_snippet: str = ""
     interruption_reason: str = ""
     resource_limit_event: ResourceLimitEvent | None = None
+    continuation: RuntimeEngineContinuation | None = None
 
 
 class RuntimeEngineSwitch(BaseModel):
@@ -216,6 +224,28 @@ class RuntimeInterruptionState(BaseModel):
     subagent: RuntimeSubagentState | None = None
 
 
+class RuntimeContinuationHandoff(BaseModel):
+    step: str
+    kind: Literal["retry", "engine_switch", "restart"]
+    reason: str
+    from_engine: str | None = None
+    to_engine: str | None = None
+    from_model: str | None = None
+    to_model: str | None = None
+    subagent_id: str | None = None
+    subagent_path: str | None = None
+    status: str | None = None
+    attempt: int | None = None
+    summary: str = ""
+    transcript_snippet: str = ""
+    warnings: list[str] = Field(default_factory=list)
+    session_path: str | None = None
+    report_path: str | None = None
+    transcript_path: str | None = None
+    continuation: RuntimeEngineContinuation | None = None
+    updated_at: str = Field(default_factory=utcnow)
+
+
 class TaskRuntime(BaseModel):
     git: RuntimeGitState = Field(default_factory=RuntimeGitState)
     execution_status: str = "idle"
@@ -229,6 +259,7 @@ class TaskRuntime(BaseModel):
     active_subagent: RuntimeSubagentState | None = None
     last_subagent: RuntimeSubagentState | None = None
     interruption: RuntimeInterruptionState | None = None
+    continuation_handoff: RuntimeContinuationHandoff | None = None
     last_engine_switch: RuntimeEngineSwitch | None = None
     last_outcome: TaskOutcomeState = Field(default_factory=TaskOutcomeState)
 
