@@ -3272,7 +3272,7 @@ def stop_current_task(
     runner_pid: int | None = None
     if _runner_lock_is_held(root):
         metadata = _read_runner_lock_metadata(root)
-        pid = metadata.get("pid")
+        pid = metadata.pid
         if _runner_pid_is_alive(pid):
             runner_pid = int(pid)
             os.kill(runner_pid, signal.SIGINT)

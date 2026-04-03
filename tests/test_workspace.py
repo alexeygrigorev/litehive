@@ -74,6 +74,7 @@ from litehive.models import (
     RuntimeInterruptionState,
     RuntimeStageState,
     RuntimeSubagentState,
+    RunnerStatusState,
     StageReport,
     SubagentRef,
     TaskRecord,
@@ -11567,7 +11568,7 @@ def test_stop_current_task_signals_live_runner_before_fallback(
     monkeypatch.setattr("litehive.tasks._runner_lock_is_held", lambda root: next(held_states, False))
     monkeypatch.setattr(
         "litehive.tasks._read_runner_lock_metadata",
-        lambda root: {"pid": 4242, "started_at": "2026-04-01T00:00:00+00:00"},
+        lambda root: RunnerStatusState(pid=4242, started_at="2026-04-01T00:00:00+00:00"),
     )
     monkeypatch.setattr("litehive.tasks._runner_pid_is_alive", lambda pid: True)
     monkeypatch.setattr("litehive.tasks.recover_stale_runner_state", lambda root: False)
