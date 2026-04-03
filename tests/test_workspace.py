@@ -14933,6 +14933,52 @@ def test_commit_to_git_cherry_picks_when_main_moved_after_worktree_started(tmp_p
     assert (tmp_path / "app.txt").read_text(encoding="utf-8") == "from worktree\n"
 
 
+def test_commit_to_git_rebases_worktree_onto_current_main_before_integrating(
+    tmp_path: Path,
+) -> None:
+    _init_git_repo(tmp_path)
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Rebase before commit")
+
+    worktree_path = tmp_path / ".litehive" / "worktrees" / f"{task.id}-{task.slug}"
+    worktree_path.parent.mkdir(parents=True, exist_ok=True)
+    _run(["git", "worktree", "add", "--detach", str(worktree_path), "HEAD"], tmp_path)
+
+    # Worktree edits app.txt line 2
+    (worktree_path / "app.txt").write_text("base\nworktree addition\n", encoding="utf-8")
+
+    task.git.worktree_path = str(worktree_path.relative_to(tmp_path))
+    save_task(tmp_path, task)
+    reports_dir = task_dir(tmp_path, task) / "reports"
+    (reports_dir / "accepting-001.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "task_id": task.id,
+                "step": "accepting",
+                "verdict": "pass",
+                "summary": "ready",
+                "files_changed": ["app.txt"],
+                "tests": {"added": 0, "passing": 1},
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+
+    # Main adds a new file (non-conflicting change)
+    (tmp_path / "other.txt").write_text("main work\n", encoding="utf-8")
+    _run(["git", "add", "other.txt"], tmp_path)
+    _run(["git", "commit", "-m", "main: add other.txt"], tmp_path)
+
+    report = _commit_to_git_report(tmp_path, worktree_path, task, auto_commit_enabled=True)
+
+    assert report.verdict == "pass"
+    assert task.git.commit_sha is not None
+    # Main should have both the worktree change and the main change
+    assert (tmp_path / "app.txt").read_text(encoding="utf-8") == "base\nworktree addition\n"
+    assert (tmp_path / "other.txt").read_text(encoding="utf-8") == "main work\n"
+
+
 def test_commit_to_git_treats_clean_task_worktree_as_done(tmp_path: Path) -> None:
     _init_git_repo(tmp_path)
     ensure_workspace(tmp_path)

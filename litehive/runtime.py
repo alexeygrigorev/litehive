@@ -27,6 +27,7 @@ from litehive.git_ops import (
     is_ancestor,
     is_git_repo,
     merge_commit,
+    rebase_worktree_onto,
     remove_worktree,
     rollback_message,
     rollback_task,
@@ -1611,6 +1612,12 @@ def _commit_to_git_report(
             ),
         )
         persist_task_and_state(root, task=task, state=state)
+        if execution_root != root:
+            main_head = current_head(root)
+            if main_head and main_head != base_sha:
+                rebase_worktree_onto(execution_root, main_head)
+                base_sha = main_head
+                task.git.checkpoint_base_sha = base_sha
         checkpoint = commit_task(execution_root, message, paths=checkpoint_paths)
         if checkpoint is None:
             raise GitError("git commit prerequisites were not met")

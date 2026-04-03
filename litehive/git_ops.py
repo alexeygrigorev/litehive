@@ -109,6 +109,36 @@ def remove_worktree(root: Path, path: Path, *, force: bool = False) -> None:
         raise GitError(proc.stderr.strip() or "git worktree remove failed")
 
 
+def rebase_worktree_onto(worktree: Path, target_ref: str) -> bool:
+    """Rebase uncommitted-clean worktree HEAD onto *target_ref*.
+
+    Stashes any dirty changes, rebases, then re-applies the stash.
+    Returns True if the rebase succeeded, False if it conflicted
+    (in which case the worktree is left unchanged).
+    """
+    had_changes = has_changes(worktree)
+    if had_changes:
+        stash = _run_git(worktree, "stash", "push", "-u", "-m", "litehive-rebase-temp")
+        if stash.returncode != 0:
+            return False
+
+    rebase = _run_git(worktree, "rebase", target_ref)
+    if rebase.returncode != 0:
+        _run_git(worktree, "rebase", "--abort")
+        if had_changes:
+            _run_git(worktree, "stash", "pop")
+        return False
+
+    if had_changes:
+        pop = _run_git(worktree, "stash", "pop")
+        if pop.returncode != 0:
+            # Stash conflicts with rebased state — undo the rebase too
+            _run_git(worktree, "rebase", "--abort")
+            return False
+
+    return True
+
+
 def cherry_pick_commit(root: Path, commit_sha: str) -> str:
     proc = _run_git(root, "cherry-pick", commit_sha)
     if proc.returncode != 0:
