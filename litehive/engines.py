@@ -13,8 +13,11 @@ from litehive.external_cli import (
     ExternalCLIAdapter,
     extract_jsonl_errors,
     extract_jsonl_messages,
+    extract_stream_errors,
+    extract_stream_transcript,
     iter_jsonl_payloads,
     parse_stage_report_text,
+    StreamEventAdapter,
 )
 from litehive.models import EngineUsageObservation, EngineUsageWindow, RuntimeEngineContinuation
 
@@ -412,6 +415,7 @@ class ClaudeCLIAdapter(ExternalCLIAdapter):
             prompt,
             "--output-format",
             "stream-json",
+            "--include-partial-messages",
             "--verbose",
         ]
         if model:
@@ -421,7 +425,11 @@ class ClaudeCLIAdapter(ExternalCLIAdapter):
         return command
 
     def render_transcript(self, execution: CLIExecutionResult) -> str:
-        assistant_text = _extract_claude_transcript(execution.stdout)
+        assistant_text = extract_stream_transcript(
+            execution.stdout,
+            adapter=_CLAUDE_STREAM_EVENT_ADAPTER,
+            delta_fallback=_extract_claude_text_delta_fallback,
+        )
         if assistant_text:
             if execution.stderr.strip():
                 return f"{assistant_text}\n\n[stderr]\n{execution.stderr.strip()}"
@@ -438,7 +446,10 @@ class ClaudeCLIAdapter(ExternalCLIAdapter):
     ):
         transcript = self.render_transcript(execution)
         if transcript == execution.transcript:
-            stderr_lines = extract_jsonl_errors(execution.stdout)
+            stderr_lines = extract_stream_errors(
+                execution.stdout,
+                adapter=_CLAUDE_STREAM_EVENT_ADAPTER,
+            ) or extract_jsonl_errors(execution.stdout)
             if stderr_lines:
                 transcript = "\n".join(stderr_lines)
         return parse_stage_report_text(
@@ -670,27 +681,94 @@ _OPENCODE_STRIPPED_ENV_VARS = (
 )
 
 
-def _extract_claude_transcript(stdout: str) -> str:
+def _claude_final_messages(payload: dict[str, object]) -> list[str]:
     messages: list[str] = []
-    for payload in iter_jsonl_payloads(stdout):
-        event_type = payload.get("type")
-        if event_type == "assistant":
-            data = payload.get("message")
-            if isinstance(data, dict):
-                content = data.get("content")
-                if isinstance(content, list):
-                    for block in content:
-                        if isinstance(block, dict) and block.get("type") == "text":
-                            text = block.get("text", "")
-                            if text:
-                                messages.append(text)
-                elif isinstance(content, str) and content:
-                    messages.append(content)
-        elif event_type == "result":
-            data = payload.get("result")
-            if isinstance(data, str) and data:
-                messages.append(data)
-    return "\n".join(messages).strip()
+    event_type = payload.get("type")
+    if event_type == "assistant":
+        data = payload.get("message")
+        if isinstance(data, dict):
+            content = data.get("content")
+            if isinstance(content, list):
+                for block in content:
+                    if isinstance(block, dict) and block.get("type") == "text":
+                        text = block.get("text", "")
+                        if isinstance(text, str) and text:
+                            messages.append(text)
+            elif isinstance(content, str) and content:
+                messages.append(content)
+    elif event_type == "result":
+        data = payload.get("result")
+        if isinstance(data, str) and data:
+            messages.append(data)
+    return messages
+
+
+def _claude_text_deltas(payload: dict[str, object]) -> list[tuple[int, str]]:
+    if payload.get("type") != "content_block_delta":
+        return []
+    delta = payload.get("delta")
+    if not isinstance(delta, dict) or delta.get("type") != "text_delta":
+        return []
+    text = delta.get("text")
+    if not isinstance(text, str) or not text:
+        return []
+    index = payload.get("index", 0)
+    if not isinstance(index, int):
+        index = 0
+    return [(index, text)]
+
+
+def _claude_errors(payload: dict[str, object]) -> list[str]:
+    if payload.get("type") != "error":
+        return []
+    data = payload.get("data")
+    if isinstance(data, dict) and isinstance(data.get("message"), str):
+        return [data["message"]]
+    message = payload.get("message")
+    if isinstance(message, str) and message:
+        return [message]
+    return []
+
+
+def _unwrap_claude_stream_event(payload: dict[str, object]) -> dict[str, object]:
+    event = payload.get("event")
+    if isinstance(event, dict):
+        return event
+    return payload
+
+
+_CLAUDE_STREAM_EVENT_ADAPTER = StreamEventAdapter(
+    unwrap_event=_unwrap_claude_stream_event,
+    text_deltas=_claude_text_deltas,
+    final_messages=_claude_final_messages,
+    errors=_claude_errors,
+)
+
+
+_CLAUDE_TEXT_DELTA_RE = re.compile(
+    r'"type"\s*:\s*"content_block_delta".*?"index"\s*:\s*(\d+).*?'
+    r'"delta"\s*:\s*\{.*?"type"\s*:\s*"text_delta".*?"text"\s*:\s*"((?:\\.|[^"\\])*)"',
+)
+
+
+def _extract_claude_text_delta_fallback(stdout: str) -> list[str]:
+    partial_blocks: dict[int, list[str]] = {}
+    for raw_line in stdout.splitlines():
+        match = _CLAUDE_TEXT_DELTA_RE.search(raw_line)
+        if match is None:
+            continue
+        try:
+            index = int(match.group(1))
+            text = _decode_json_string_literal(match.group(2))
+        except (TypeError, ValueError, json.JSONDecodeError):
+            continue
+        if text:
+            partial_blocks.setdefault(index, []).append(text)
+    return ["".join(partial_blocks[index]) for index in sorted(partial_blocks)]
+
+
+def _decode_json_string_literal(value: str) -> str:
+    return json.loads(f'"{value}"')
 
 
 def _extract_codex_transcript(stdout: str) -> str:

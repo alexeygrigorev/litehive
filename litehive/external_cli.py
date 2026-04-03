@@ -58,6 +58,36 @@ class CLIExecutionResult:
         return "\n\n".join(part for part in parts if part).strip()
 
 
+@dataclass(frozen=True, slots=True)
+class StreamEventAdapter:
+    """Adapter hooks for JSONL event streams with partial live output."""
+
+    unwrap_event: Callable[[dict[str, object]], dict[str, object]] | None = None
+    text_deltas: Callable[[dict[str, object]], list[tuple[int, str]]] | None = None
+    final_messages: Callable[[dict[str, object]], list[str]] | None = None
+    errors: Callable[[dict[str, object]], list[str]] | None = None
+
+    def unwrap(self, payload: dict[str, object]) -> dict[str, object]:
+        if self.unwrap_event is None:
+            return payload
+        return self.unwrap_event(payload)
+
+    def extract_text_deltas(self, payload: dict[str, object]) -> list[tuple[int, str]]:
+        if self.text_deltas is None:
+            return []
+        return self.text_deltas(payload)
+
+    def extract_final_messages(self, payload: dict[str, object]) -> list[str]:
+        if self.final_messages is None:
+            return []
+        return self.final_messages(payload)
+
+    def extract_errors(self, payload: dict[str, object]) -> list[str]:
+        if self.errors is None:
+            return []
+        return self.errors(payload)
+
+
 class ExternalCLIAdapter:
     """Shared contract for one-shot external CLI adapters."""
 
@@ -290,6 +320,38 @@ def extract_jsonl_messages(stdout: str) -> str:
             continue
         parts.append(content)
     return "".join(parts).strip()
+
+
+def extract_stream_transcript(
+    stdout: str,
+    *,
+    adapter: StreamEventAdapter,
+    delta_fallback: Callable[[str], list[str]] | None = None,
+) -> str:
+    messages: list[str] = []
+    partial_blocks: dict[int, list[str]] = {}
+    for raw_payload in iter_jsonl_payloads(stdout):
+        payload = adapter.unwrap(raw_payload)
+        for message in adapter.extract_final_messages(payload):
+            if message:
+                messages.append(message)
+        for index, text in adapter.extract_text_deltas(payload):
+            if not text:
+                continue
+            partial_blocks.setdefault(index, []).append(text)
+    if not messages and partial_blocks:
+        messages.extend("".join(partial_blocks[index]) for index in sorted(partial_blocks))
+    if not messages and delta_fallback is not None:
+        messages.extend(text for text in delta_fallback(stdout) if text)
+    return "\n".join(messages).strip()
+
+
+def extract_stream_errors(stdout: str, *, adapter: StreamEventAdapter) -> list[str]:
+    errors: list[str] = []
+    for raw_payload in iter_jsonl_payloads(stdout):
+        payload = adapter.unwrap(raw_payload)
+        errors.extend(error for error in adapter.extract_errors(payload) if error)
+    return errors
 
 
 def iter_jsonl_payloads(stdout: str) -> list[dict[str, object]]:

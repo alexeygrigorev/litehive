@@ -356,11 +356,12 @@ class SubagentManager:
                 resource_limit_event=resource_limit_event,
             )
         else:
-            report = parse_stage_report_text(
-                task_id=task.id,
-                step=report_step,  # type: ignore[arg-type]
+            report = self._parse_execution_report(
+                task=task,
+                step=report_step,
+                ref=ref,
+                execution=execution,
                 transcript=transcript,
-                subagent_status=ref.status,
             )
         self._write_session_snapshot(
             base,
@@ -446,11 +447,12 @@ class SubagentManager:
             "resource_limit_event": None,
         }
         if transcript.strip():
-            report = parse_stage_report_text(
-                task_id=task.id,
-                step=report_step,  # type: ignore[arg-type]
+            report = self._parse_execution_report(
+                task=task,
+                step=report_step,
+                ref=ref,
+                execution=execution,
                 transcript=transcript,
-                subagent_status=ref.status,
             )
             report_payload = {
                 "status": ref.status,
@@ -479,6 +481,31 @@ class SubagentManager:
             interruption_reason=None,
             resource_limit_event=None,
             continuation=continuation,
+        )
+
+    def _parse_execution_report(
+        self,
+        *,
+        task: TaskRecord,
+        step: str,
+        ref: SubagentRef,
+        execution: CLIExecutionResult | None,
+        transcript: str,
+    ) -> StageReport:
+        if execution is not None:
+            engine = get_engine(ref.engine)
+            if hasattr(engine, "parse_stage_report"):
+                return engine.parse_stage_report(
+                    task_id=task.id,
+                    step=step,  # type: ignore[arg-type]
+                    execution=execution,
+                    subagent_status=ref.status,
+                )
+        return parse_stage_report_text(
+            task_id=task.id,
+            step=step,  # type: ignore[arg-type]
+            transcript=transcript,
+            subagent_status=ref.status,
         )
 
     def _write_session_metadata(
