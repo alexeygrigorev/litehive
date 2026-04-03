@@ -951,6 +951,11 @@ def _load_task_runtime(root: Path, task: TaskRecord) -> TaskRecord:
     return task
 
 
+def _load_task_record_file(path: Path) -> TaskRecord:
+    data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    return TaskRecord(**data)
+
+
 def create_task(
     root: Path,
     *,
@@ -1131,7 +1136,7 @@ def discard_created_task(root: Path, task_id: str) -> None:
             shutil.rmtree(task_dir(root, task), ignore_errors=True)
 
 
-def list_tasks(root: Path) -> list[TaskRecord]:
+def list_tasks(root: Path, *, include_runtime: bool = True) -> list[TaskRecord]:
     records: list[TaskRecord] = []
     for child in sorted(tasks_root(root).iterdir()):
         if not child.is_dir():
@@ -1139,9 +1144,48 @@ def list_tasks(root: Path) -> list[TaskRecord]:
         path = child / "task.yaml"
         if not path.exists():
             continue
-        data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-        records.append(_load_task_runtime(root, TaskRecord(**data)))
+        task = _load_task_record_file(path)
+        if include_runtime:
+            task = _load_task_runtime(root, task)
+        records.append(task)
     return records
+
+
+def list_tasks_state_first(
+    root: Path,
+    *,
+    state: WorkspaceState | None = None,
+    include_runtime: bool = False,
+) -> list[TaskRecord]:
+    task_by_id: dict[str, TaskRecord] = {}
+    for child in sorted(tasks_root(root).iterdir()):
+        if not child.is_dir():
+            continue
+        path = child / "task.yaml"
+        if not path.exists():
+            continue
+        task = _load_task_record_file(path)
+        if include_runtime:
+            task = _load_task_runtime(root, task)
+        task_by_id[task.id] = task
+
+    workspace_state = load_state(root) if state is None else state
+    ordered_ids: list[str] = []
+    seen: set[str] = set()
+
+    def add(task_id: str | None) -> None:
+        if task_id is None or task_id in seen or task_id not in task_by_id:
+            return
+        seen.add(task_id)
+        ordered_ids.append(task_id)
+
+    add(workspace_state.active_task_id)
+    for task_id in workspace_state.queue:
+        add(task_id)
+    for task_id in sorted(task_by_id):
+        add(task_id)
+
+    return [task_by_id[task_id] for task_id in ordered_ids]
 
 
 def get_task(root: Path, task_id: str) -> TaskRecord | None:

@@ -9,6 +9,8 @@
 - `uv run pytest -q`
 - `uv run litehive configure --workspace .`
 - `uv run litehive status --workspace .`
+- `uv run litehive status --workspace . --fast`
+  Uses state-first reads and skips per-task runtime hydration for a quicker workspace summary.
 - `uv run litehive queue --workspace .`
 - `uv run litehive repair --workspace .`
 - `uv run litehive add "<title>" --workspace .`

@@ -54,6 +54,7 @@ from litehive.tasks import (
     create_task,
     discard_created_task,
     list_tasks,
+    list_tasks_state_first,
     load_state,
     missing_acceptance_criteria_reason,
     missing_acceptance_criteria_cli_warning,
@@ -979,6 +980,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Include the full per-task status dump.",
     )
+    status.add_argument(
+        "--fast",
+        action="store_true",
+        help="Read workspace state first and skip runtime hydration for faster summaries",
+    )
 
     queue = subparsers.add_parser("queue", help="Show the active task and queued order")
     queue.add_argument(
@@ -1484,7 +1490,9 @@ def _cmd_status(args: argparse.Namespace) -> int:
     config = load_config(args.workspace)
     state = load_state(args.workspace)
     monitoring = load_engine_monitoring(args.workspace)
+    fast_mode = bool(getattr(args, "fast", False))
     print(f"workspace: {args.workspace}")
+    print(f"status_read_mode: {'fast' if fast_mode else 'full'}")
     print(f"default_engine: {config.default_engine}")
     print(f"mode: {state.mode}")
     print(f"active_task_id: {state.active_task_id}")
@@ -1524,7 +1532,11 @@ def _cmd_status(args: argparse.Namespace) -> int:
         print(f"pool_stop_on_dirty_git: {config.pool_stop_on_dirty_git}")
         print(f"pool_selection_policy: {config.pool_selection_policy}")
         print(f"process_profile: {config.process_profile}")
-        tasks = list_tasks(args.workspace)
+        tasks = (
+            list_tasks_state_first(args.workspace, state=state)
+            if fast_mode
+            else list_tasks(args.workspace)
+        )
         if tasks:
             print()
             for task in tasks:

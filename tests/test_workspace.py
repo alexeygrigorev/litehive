@@ -8757,6 +8757,40 @@ def test_status_output_includes_runtime_observability(
     )
 
 
+def test_status_fast_mode_uses_state_first_reads_and_skips_runtime_hydration(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    ensure_workspace(tmp_path, LitehiveConfig())
+    first = create_task(tmp_path, title="First task")
+    second = create_task(tmp_path, title="Second task")
+    second.status = "in_progress"
+    second.pipeline_status = "implementing"
+    second.runtime.execution_status = "running"
+    second.runtime.current_stage = RuntimeStageState(
+        step="implementing",
+        status="running",
+        started_at="2026-03-31T10:00:00+00:00",
+        updated_at="2026-03-31T10:00:01+00:00",
+    )
+    save_task(tmp_path, second)
+
+    state = load_state(tmp_path)
+    state.active_task_id = second.id
+    state.queue = [second.id, first.id]
+    save_state(tmp_path, state)
+
+    exit_code = _cmd_status(argparse.Namespace(workspace=tmp_path, fast=True))
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "status_read_mode: fast" in output
+    assert output.index(f"* {second.id} [in_progress/implementing]") < output.index(
+        f"  {first.id} [queued/backlog]"
+    )
+    assert "run=running" not in output
+    assert "stage=implementing" not in output
+
+
 def test_render_task_summary_includes_active_subagent_pid() -> None:
     task = TaskRecord(id="T-0001", slug="observe-pid", title="Observe PID")
     task.runtime.active_subagent = RuntimeSubagentState(
@@ -9048,6 +9082,16 @@ def test_status_output_includes_default_execution_retry_policies(
         "multiplier:2.00 retry_on:timeout,network,service; opencode=retries:2 "
         "backoff:0.25s multiplier:2.00 retry_on:timeout,network,service"
     ) in output
+
+
+def test_build_parser_accepts_status_fast_flag(tmp_path: Path) -> None:
+    parser = build_parser()
+
+    args = parser.parse_args(["status", "--workspace", str(tmp_path), "--fast"])
+
+    assert args.command == "status"
+    assert args.workspace == tmp_path
+    assert args.fast is True
 
 
 def test_status_output_includes_external_engine_sandbox_settings(
