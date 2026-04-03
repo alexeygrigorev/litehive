@@ -465,6 +465,9 @@ def _resolve_task_execution_root(root: Path, task: TaskRecord) -> Path:
         worktree_path = (root / task.git.worktree_path).resolve()
         if not worktree_path.exists():
             raise GitError(f"task worktree is missing: {task.git.worktree_path}")
+        main_head = current_head(root)
+        if main_head:
+            rebase_worktree_onto(worktree_path, main_head)
         return worktree_path
 
     worktree_path = _task_worktree_path(root, task)
