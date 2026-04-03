@@ -11,6 +11,8 @@ from litehive.external_cli import (
     AdapterCapabilities,
     CLIExecutionResult,
     ExternalCLIAdapter,
+    extract_codex_errors,
+    extract_codex_messages,
     extract_jsonl_errors,
     extract_jsonl_messages,
     extract_stream_errors,
@@ -167,6 +169,7 @@ class CodexCLIAdapter(ExternalCLIAdapter):
             "--cd",
             str(cwd),
             "--skip-git-repo-check",
+            "--json",
             prompt,
         ]
 
@@ -178,7 +181,32 @@ class CodexCLIAdapter(ExternalCLIAdapter):
             if execution.stderr.strip():
                 parts.append(f"[stderr]\n{execution.stderr.strip()}")
             return "\n\n".join(parts)
+        if iter_jsonl_payloads(execution.stdout):
+            if execution.stderr.strip():
+                return f"[stderr]\n{execution.stderr.strip()}"
+            return ""
         return execution.transcript
+
+    def parse_stage_report(
+        self,
+        *,
+        task_id: str,
+        step: str,
+        execution: CLIExecutionResult,
+        subagent_status: str,
+    ):
+        transcript = self.render_transcript(execution)
+        if not transcript:
+            from litehive.external_cli import extract_codex_errors
+            error_lines = extract_codex_errors(execution.stdout)
+            if error_lines:
+                transcript = "\n".join(error_lines)
+        return parse_stage_report_text(
+            task_id=task_id,
+            step=step,  # type: ignore[arg-type]
+            transcript=transcript,
+            subagent_status=subagent_status,  # type: ignore[arg-type]
+        )
 
     def extract_usage_observation(
         self,

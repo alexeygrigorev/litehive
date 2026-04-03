@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+from collections import OrderedDict
 import os
 from pathlib import Path
 import re
@@ -383,6 +384,53 @@ def extract_jsonl_errors(stdout: str) -> list[str]:
             if isinstance(data, dict) and isinstance(data.get("message"), str):
                 errors.append(data["message"])
     return errors
+
+
+def extract_codex_messages(stdout: str) -> str:
+    messages: OrderedDict[str, str] = OrderedDict()
+    for payload in iter_jsonl_payloads(stdout):
+        if payload.get("type") not in {"item.completed", "item.updated"}:
+            continue
+        item = payload.get("item")
+        if not isinstance(item, dict) or item.get("type") != "agent_message":
+            continue
+        item_id = item.get("id")
+        if not isinstance(item_id, str) or not item_id:
+            continue
+        text = item.get("text")
+        if isinstance(text, str) and text:
+            messages[item_id] = text
+    return "\n".join(messages.values()).strip()
+
+
+def extract_codex_errors(stdout: str) -> list[str]:
+    errors: list[str] = []
+    command_errors: OrderedDict[str, str] = OrderedDict()
+    for payload in iter_jsonl_payloads(stdout):
+        event_type = payload.get("type")
+        if event_type in {"error", "turn.failed"}:
+            message = payload.get("message")
+            if isinstance(message, str) and message.strip():
+                errors.append(message.strip())
+            continue
+
+        if event_type not in {"item.completed", "item.updated"}:
+            continue
+        item = payload.get("item")
+        if not isinstance(item, dict):
+            continue
+        if item.get("type") != "command_execution":
+            continue
+        item_id = item.get("id")
+        if not isinstance(item_id, str) or not item_id:
+            continue
+        aggregated_output = item.get("aggregated_output")
+        if isinstance(aggregated_output, str) and aggregated_output.strip():
+            if item.get("status") == "failed" or item.get("exit_code") not in {None, 0}:
+                command_errors[item_id] = aggregated_output.strip()
+                continue
+        command_errors.pop(item_id, None)
+    return [*errors, *command_errors.values()]
 
 
 def parse_stage_report_text(

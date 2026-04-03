@@ -1,7 +1,6 @@
 active_task_id: null
 mode: implementation
 queue:
-- T-0080
 - T-0081
 - T-0082
 - T-0092
