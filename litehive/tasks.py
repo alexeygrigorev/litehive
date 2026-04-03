@@ -69,6 +69,8 @@ class _RunnerLockState:
 _RUNNER_LOCKS: dict[Path, _RunnerLockState] = {}
 _RUNNER_LOCKS_MUTEX = threading.Lock()
 _MISSING = object()
+# A live runner that hasn't refreshed its heartbeat in this many seconds is considered late.
+HEARTBEAT_LATE_THRESHOLD_SECONDS = 60
 CLOSED_TASK_STATUSES = {"cancelled", "wont_do", "deferred", "duplicate"}
 RESUMABLE_TASK_STATUSES = {"interrupted"}
 TASK_TEMPLATES: dict[str, dict[str, object]] = {
@@ -761,10 +763,25 @@ def _clear_runner_lock_metadata(root: Path) -> None:
         fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
 
 
+def _heartbeat_is_late(heartbeat_at: str | None) -> bool:
+    if heartbeat_at is None:
+        return False
+    try:
+        from datetime import UTC, datetime
+
+        ts = datetime.fromisoformat(heartbeat_at)
+        age = (datetime.now(UTC) - ts).total_seconds()
+        return age > HEARTBEAT_LATE_THRESHOLD_SECONDS
+    except (ValueError, TypeError):
+        return False
+
+
 def runner_status(root: Path) -> RunnerStatusState:
     root = root.resolve()
     status = _read_runner_lock_metadata(root)
     if _runner_lock_is_active(root):
+        if _heartbeat_is_late(status.heartbeat_at):
+            return status.model_copy(update={"status": "late"})
         return status.model_copy(update={"status": "running"})
     if not _runner_metadata_present(status):
         return RunnerStatusState()

@@ -32,7 +32,7 @@ PipelineStatus = Literal[
     "done",
 ]
 SubagentStatus = Literal["created", "running", "completed", "failed", "blocked", "interrupted"]
-RunnerExecutionStatus = Literal["idle", "running", "stale"]
+RunnerExecutionStatus = Literal["idle", "running", "late", "stale"]
 OutcomeKind = Literal[
     "flagged",
     "blocked",

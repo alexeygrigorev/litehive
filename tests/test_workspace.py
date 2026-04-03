@@ -9187,6 +9187,39 @@ def test_runner_status_clears_orphaned_metadata_when_no_reconciliation_is_needed
     assert status.status == "idle"
     assert runner_lock.read_text(encoding="utf-8") == ""
 
+
+def test_runner_status_reports_late_when_lock_held_but_heartbeat_expired(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Stale task", auto_commit=False)
+
+    old_heartbeat = "2026-01-01T00:00:00+00:00"
+    runner_lock = tmp_path / ".litehive" / ".runner.lock"
+    runner_lock.write_text(
+        yaml.safe_dump(
+            {
+                "status": "running",
+                "pid": os.getpid(),
+                "workspace": str(tmp_path),
+                "command": "uv run litehive run --workspace .",
+                "started_at": "2026-01-01T00:00:00+00:00",
+                "heartbeat_at": old_heartbeat,
+                "active_task_id": task.id,
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr("litehive.tasks._runner_lock_is_active", lambda root: True)
+
+    status = runner_status(tmp_path)
+
+    assert status.status == "late"
+    assert status.heartbeat_at == old_heartbeat
+    assert status.active_task_id == task.id
+
 def test_format_external_engine_sandbox_renders_engine_policies() -> None:
     config = LitehiveConfig(
         external_engine_sandbox=ExternalEngineSandboxConfig(
