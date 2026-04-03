@@ -128,6 +128,27 @@ Suggested setup workflow for a new project:
 4. Add shared reminders under `all`, and put role-specific guidance under `planner`, `swe`, `qa`, `reviewer`, and `recovery` only when the repo needs it.
 5. Re-run the workflow and refine the guidance if agents still spend time re-deriving the same context.
 
+Backlog-shaping rules for PMs:
+
+- Create runnable generic work with `litehive add "<title>" --goal "..." --acceptance-criteria "..."`.
+- Repeat `--acceptance-criteria` for each concrete done-condition instead of hiding several checks in one sentence.
+- Use `litehive update T-0001 --goal "..."` and repeated `--acceptance-criteria "..."` to repair older tasks before requeueing them.
+- Use `litehive intake <file-or-brief>` when the request is still a rough brief and needs planner grooming before it becomes runnable.
+- If scope, dependencies, or user-visible done-state are unclear, stop and ask the user before creating runnable backlog work.
+
+Grooming rules for PMs:
+
+- Grooming should refine a real task record, not invent a task from a blank title.
+- Before passing grooming, make sure the task has a clear goal, explicit acceptance criteria, constraints when relevant, and a plan or decomposition.
+- Add dependencies in the task record when another task must finish first; do not rely on memory or wrapper order.
+- State the exact evidence later QA and acceptance stages will need, especially for workflow or lifecycle tasks.
+
+SWE startup rules:
+
+- Start from the task folder first: read `task.yaml`, the latest report, and the latest rejection or recovery artifact before broad repo exploration.
+- Treat the task goal, acceptance criteria, and plan as the execution contract; if they are missing or contradictory, route the problem back to grooming or recovery instead of guessing.
+- Prefer targeted file reads and focused tests over rediscovering the whole repo at the start of every run.
+
 What to look for when populating it:
 
 - Files every agent re-opens at startup

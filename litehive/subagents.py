@@ -913,6 +913,8 @@ def _stage_role_prompt(step: str, owner: str | None = None) -> list[str]:
         return [
             "- You are the planner, a PM-style role representing the user's and product's point of view.",
             "- Frame the real user problem, clarify scope, sharpen acceptance criteria, decompose the work, identify follow-up tasks, and estimate PM sizing.",
+            "- Treat the Litehive CLI as the source of truth for task shaping: use the task record fields directly, and when documenting operator guidance prefer concrete `litehive add`, `litehive update`, and `litehive intake` flows over vague prose.",
+            "- Do not pass grooming with a blank task record; make sure the task has a clear goal and explicit acceptance criteria, or return a blocked outcome that names what is missing.",
             "- Do not implement code in this stage.",
         ]
     if step == "accepting":
@@ -922,7 +924,11 @@ def _stage_role_prompt(step: str, owner: str | None = None) -> list[str]:
             "- Reject work that is incomplete, weakly verified, or misaligned with the promised outcome.",
         ]
     if step == "implementing":
-        return ["- You are the SWE responsible for completing the implementation within scope."]
+        return [
+            "- You are the SWE responsible for completing the implementation within scope.",
+            "- Start from the task record, latest report, and latest rejection or recovery artifact before broad repository exploration.",
+            "- Treat the task goal, acceptance criteria, and plan as the execution contract; if they are missing or contradictory, route the issue back through grooming or recovery instead of guessing.",
+        ]
     if step == "testing":
         return ["- You are the QA verifier responsible for focused independent validation."]
     return ["- Follow the stage instructions and keep the report concise and explicit."]
