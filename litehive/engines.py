@@ -228,11 +228,77 @@ class OpenCodeAdapter(ExternalCLIAdapter):
         *,
         max_turns: int | None = None,
     ) -> list[str]:
-        command = [self.binary, "run", "--dir", str(cwd)]
+        command = [self.binary, "run", "--format", "json", "--dir", str(cwd)]
         if model:
             command.extend(["--model", model])
         command.append(prompt)
         return command
+
+    def render_transcript(self, execution: CLIExecutionResult) -> str:
+        assistant_text = _extract_opencode_transcript(execution.stdout)
+        error_text = _extract_opencode_errors(execution.stdout).strip()
+        if assistant_text or error_text:
+            parts = [part for part in (assistant_text, error_text) if part]
+            if execution.stderr.strip():
+                parts.append(f"[stderr]\n{execution.stderr.strip()}")
+            return "\n\n".join(parts)
+        return execution.transcript
+
+    def parse_stage_report(
+        self,
+        *,
+        task_id: str,
+        step: str,
+        execution: CLIExecutionResult,
+        subagent_status: str,
+    ):
+        transcript = self.render_transcript(execution)
+        if transcript == execution.transcript:
+            error_text = _extract_opencode_errors(execution.stdout).strip()
+            if error_text:
+                transcript = error_text
+        return parse_stage_report_text(
+            task_id=task_id,
+            step=step,  # type: ignore[arg-type]
+            transcript=transcript,
+            subagent_status=subagent_status,  # type: ignore[arg-type]
+        )
+
+    def extract_usage_observation(
+        self,
+        execution: CLIExecutionResult,
+    ) -> EngineUsageObservation | None:
+        payloads = iter_jsonl_payloads(execution.stdout)
+        metadata: dict[str, str | int | bool | None] = {}
+        usage: EngineUsageWindow | None = None
+        limit_reason: str | None = None
+        saw_payloads = bool(payloads)
+
+        for payload in reversed(payloads):
+            if usage is None:
+                usage = _opencode_usage_window(payload, metadata)
+            if limit_reason is None:
+                error_message, error_metadata = _opencode_error_details(payload)
+                if error_metadata:
+                    metadata.update(error_metadata)
+                if error_message:
+                    metadata.setdefault("error_message", error_message)
+                    limit_reason = classify_execution_limit(error_message)
+
+        if limit_reason is None and execution.stderr.strip():
+            limit_reason = classify_execution_limit(execution.stderr)
+        if not saw_payloads:
+            return None
+        if usage is None and limit_reason is None and not metadata:
+            return None
+        return EngineUsageObservation(
+            source="provider",
+            provider="z.ai",
+            success=execution.exit_code == 0,
+            limit_reason=limit_reason,
+            usage=usage,
+            metadata=metadata,
+        )
 
 
 class GeminiCLIAdapter(ExternalCLIAdapter):
@@ -657,6 +723,108 @@ def _extract_codex_errors(stdout: str) -> list[str]:
     return errors
 
 
+def _extract_opencode_transcript(stdout: str) -> str:
+    messages: list[str] = []
+    for payload in iter_jsonl_payloads(stdout):
+        if payload.get("type") != "text":
+            continue
+        part = payload.get("part")
+        if not isinstance(part, dict):
+            continue
+        text = part.get("text")
+        if isinstance(text, str) and text:
+            messages.append(text)
+    return "\n".join(part.rstrip() for part in messages if part.strip()).strip()
+
+
+def _extract_opencode_errors(stdout: str) -> str:
+    errors: list[str] = []
+    for payload in iter_jsonl_payloads(stdout):
+        error_message, _ = _opencode_error_details(payload)
+        if error_message:
+            errors.append(error_message)
+    return "\n".join(errors).strip()
+
+
+def _opencode_usage_window(
+    payload: dict[str, object],
+    metadata: dict[str, str | int | bool | None],
+) -> EngineUsageWindow | None:
+    if payload.get("type") != "step_finish":
+        return None
+    part = payload.get("part")
+    if not isinstance(part, dict):
+        return None
+    tokens = part.get("tokens")
+    if not isinstance(tokens, dict):
+        return None
+
+    total_tokens = tokens.get("total")
+    input_tokens = tokens.get("input")
+    output_tokens = tokens.get("output")
+    reasoning_tokens = tokens.get("reasoning")
+    if isinstance(total_tokens, int):
+        metadata["total_tokens"] = total_tokens
+    if isinstance(input_tokens, int):
+        metadata["input_tokens"] = input_tokens
+    if isinstance(output_tokens, int):
+        metadata["output_tokens"] = output_tokens
+    if isinstance(reasoning_tokens, int):
+        metadata["reasoning_tokens"] = reasoning_tokens
+
+    cache = tokens.get("cache")
+    if isinstance(cache, dict):
+        cache_read = cache.get("read")
+        cache_write = cache.get("write")
+        if isinstance(cache_read, int):
+            metadata["cache_read_tokens"] = cache_read
+        if isinstance(cache_write, int):
+            metadata["cache_write_tokens"] = cache_write
+    cost = part.get("cost")
+    if isinstance(cost, (int, float)):
+        metadata["cost"] = f"{cost:.6f}"
+    reason = part.get("reason")
+    if isinstance(reason, str) and reason:
+        metadata["finish_reason"] = reason
+
+    used_tokens: int | None = None
+    if isinstance(total_tokens, int):
+        used_tokens = total_tokens
+    else:
+        token_parts = [value for value in (input_tokens, output_tokens) if isinstance(value, int)]
+        if token_parts:
+            used_tokens = sum(token_parts)
+    return EngineUsageWindow(used=used_tokens, unit="tokens") if used_tokens is not None else None
+
+
+def _opencode_error_details(
+    payload: dict[str, object],
+) -> tuple[str | None, dict[str, str | int | bool | None]]:
+    if payload.get("type") != "error":
+        return None, {}
+    raw_error = payload.get("error")
+    if not isinstance(raw_error, dict):
+        return None, {}
+
+    metadata: dict[str, str | int | bool | None] = {}
+    name = raw_error.get("name")
+    if isinstance(name, str) and name:
+        metadata["error_name"] = name
+    data = raw_error.get("data")
+    if isinstance(data, dict):
+        message = data.get("message")
+        if isinstance(message, str) and message.strip():
+            metadata["error_message"] = message.strip()
+            for field in ("status", "code", "type"):
+                raw_value = data.get(field)
+                if isinstance(raw_value, (str, int)):
+                    metadata[f"error_{field}"] = raw_value
+            return message.strip(), metadata
+    if isinstance(name, str) and name.strip():
+        return name.strip(), metadata
+    return None, metadata
+
+
 def _codex_usage_window(
     payload: dict[str, object],
     metadata: dict[str, str | int | bool | None],
@@ -879,7 +1047,7 @@ ENGINE_REGISTRY: dict[str, ExternalCLIAdapter] = {
         capabilities=AdapterCapabilities(
             supports_model_override=True,
             strips_environment=True,
-            transcript_format="text",
+            transcript_format="jsonl",
         ),
         stripped_env_vars=_OPENCODE_STRIPPED_ENV_VARS,
     ),

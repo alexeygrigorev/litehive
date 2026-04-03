@@ -358,6 +358,45 @@ def test_record_engine_execution_tracks_claude_provider_limit_observation(tmp_pa
     )
 
 
+def test_record_engine_execution_tracks_opencode_provider_usage_observation(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+
+    record_engine_execution(
+        tmp_path,
+        task_id="T-0001",
+        engine_name="opencode",
+        adapter=get_engine("opencode"),
+        execution=CLIExecutionResult(
+            adapter="opencode",
+            argv=("opencode", "run", "--format", "json"),
+            cwd=tmp_path,
+            exit_code=0,
+            stdout=(
+                '{"type":"text","timestamp":2,"sessionID":"ses_123","part":{"id":"prt_2","type":"text","text":"OK"}}\n'
+                '{"type":"step_finish","timestamp":3,"sessionID":"ses_123","part":{"id":"prt_3","type":"step-finish","reason":"stop","cost":0,'
+                '"tokens":{"total":10971,"input":10509,"output":14,"reasoning":11,"cache":{"read":448,"write":0}}}}\n'
+            ),
+            stderr="",
+        ),
+        failure_kind=None,
+        failure_reason=None,
+    )
+
+    monitoring = load_engine_monitoring(tmp_path)
+    record = monitoring.engines["opencode"]
+
+    assert record.source == "provider"
+    assert record.provider == "z.ai"
+    assert record.invocation_count == 1
+    assert record.success_count == 1
+    assert record.failure_count == 0
+    assert record.usage is not None
+    assert record.usage.used == 10971
+    assert record.usage.unit == "tokens"
+    assert record.metadata["input_tokens"] == 10509
+    assert record.metadata["finish_reason"] == "stop"
+
+
 def test_gemini_extract_usage_observation_reads_finished_usage_metadata(tmp_path: Path) -> None:
     adapter = get_engine("gemini")
 
@@ -3105,7 +3144,7 @@ def test_opencode_strips_provider_env(monkeypatch: pytest.MonkeyPatch, tmp_path:
 
     assert result.returncode == 0
     assert calls["cwd"] == str(tmp_path)
-    assert list(calls["cmd"]) == ["opencode", "run", "--dir", str(tmp_path), "hello"]
+    assert list(calls["cmd"]) == ["opencode", "run", "--format", "json", "--dir", str(tmp_path), "hello"]
     assert "OPENAI_API_KEY" not in calls["env"]
     assert "OPENCODE_API_KEY" not in calls["env"]
 
@@ -3368,12 +3407,80 @@ def test_opencode_build_invocation_includes_dir_model_and_prompt(tmp_path: Path)
     assert list(invocation.argv) == [
         "opencode",
         "run",
+        "--format",
+        "json",
         "--dir",
         str(tmp_path),
         "--model",
         "zai-coding-plan/glm-5.1",
         "ship it",
     ]
+
+
+def test_opencode_renders_json_transcript_and_usage_observation(tmp_path: Path) -> None:
+    execution = CLIExecutionResult(
+        adapter="opencode",
+        argv=("opencode", "run", "--format", "json"),
+        cwd=tmp_path,
+        exit_code=0,
+        stdout="\n".join(
+            [
+                '{"type":"step_start","timestamp":1,"sessionID":"ses_123","part":{"id":"prt_1","type":"step-start"}}',
+                '{"type":"text","timestamp":2,"sessionID":"ses_123","part":{"id":"prt_2","type":"text","text":"OK"}}',
+                '{"type":"step_finish","timestamp":3,"sessionID":"ses_123","part":{"id":"prt_3","type":"step-finish","reason":"stop","cost":0,"tokens":{"total":10971,"input":10509,"output":14,"reasoning":11,"cache":{"read":448,"write":0}}}}',
+            ]
+        ),
+        stderr="",
+    )
+
+    adapter = get_engine("opencode")
+
+    assert adapter.render_transcript(execution) == "OK"
+
+    observation = adapter.extract_usage_observation(execution)
+
+    assert observation is not None
+    assert observation.source == "provider"
+    assert observation.provider == "z.ai"
+    assert observation.usage is not None
+    assert observation.usage.used == 10971
+    assert observation.usage.unit == "tokens"
+    assert observation.metadata["input_tokens"] == 10509
+    assert observation.metadata["output_tokens"] == 14
+    assert observation.metadata["reasoning_tokens"] == 11
+    assert observation.metadata["cache_read_tokens"] == 448
+    assert observation.metadata["cache_write_tokens"] == 0
+    assert observation.metadata["finish_reason"] == "stop"
+
+
+def test_opencode_extract_usage_observation_reads_limit_error_payload(tmp_path: Path) -> None:
+    execution = CLIExecutionResult(
+        adapter="opencode",
+        argv=("opencode", "run", "--format", "json"),
+        cwd=tmp_path,
+        exit_code=1,
+        stdout=(
+            '{"type":"error","timestamp":1,"sessionID":"ses_123",'
+            '"error":{"name":"RateLimitError","data":{"message":"429 Too Many Requests: rate limit exceeded"}}}\n'
+        ),
+        stderr="",
+    )
+
+    adapter = get_engine("opencode")
+    transcript = adapter.render_transcript(execution)
+
+    assert "rate limit exceeded" in transcript
+    assert classify_execution_limit(transcript) == "rate limit reached"
+
+    observation = adapter.extract_usage_observation(execution)
+
+    assert observation is not None
+    assert observation.source == "provider"
+    assert observation.provider == "z.ai"
+    assert observation.success is False
+    assert observation.limit_reason == "rate limit reached"
+    assert observation.metadata["error_name"] == "RateLimitError"
+    assert observation.metadata["error_message"] == "429 Too Many Requests: rate limit exceeded"
 
 
 def test_gemini_renders_jsonl_transcript_and_stage_report(tmp_path: Path) -> None:
