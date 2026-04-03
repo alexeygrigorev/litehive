@@ -14,6 +14,7 @@ import yaml
 
 VALID_POOL_SELECTION_POLICIES = {"fifo", "priority_first", "dependency_aware"}
 VALID_ENGINE_NAMES = frozenset({"codex", "opencode", "gemini", "copilot", "claude"})
+VALID_AGENT_STARTUP_GUIDANCE_KEYS = frozenset({"all", "planner", "swe", "qa", "reviewer", "recovery"})
 VALID_EXECUTION_RETRY_SELECTORS = frozenset({*VALID_ENGINE_NAMES, "external_cli"})
 VALID_EXECUTION_RETRY_CLASSIFICATIONS = frozenset({"timeout", "network", "service"})
 VALID_SANDBOX_NETWORK_MODES = frozenset({"none", "bridge", "host"})
@@ -93,6 +94,28 @@ def _normalize_engine_int_map(
         if raw_value < 0:
             raise ValueError(f"{field_name}[{engine_name}] must be 0 or greater")
         normalized[engine_name] = raw_value
+    return normalized
+
+
+def _normalize_agent_startup_guidance(
+    guidance: Mapping[str, Sequence[str]] | None,
+) -> dict[str, list[str]]:
+    if guidance is None:
+        return {}
+
+    normalized: dict[str, list[str]] = {}
+    for role_name, entries in guidance.items():
+        key = str(role_name).strip().lower()
+        if key not in VALID_AGENT_STARTUP_GUIDANCE_KEYS:
+            allowed = ", ".join(sorted(VALID_AGENT_STARTUP_GUIDANCE_KEYS))
+            raise ValueError(f"agent_startup_guidance keys must be one of: {allowed}")
+        cleaned: list[str] = []
+        for item in entries:
+            text = str(item).strip()
+            if text:
+                cleaned.append(text)
+        if cleaned:
+            normalized[key] = cleaned
     return normalized
 
 
@@ -804,6 +827,7 @@ class LitehiveConfig:
             "copilot": ["codex", "opencode", "gemini"],
         }
     )
+    agent_startup_guidance: dict[str, list[str]] = field(default_factory=dict)
     auto_commit: bool = True
     task_mode_name: str = "tasks"
     implementation_mode_name: str = "implementation"
@@ -829,6 +853,9 @@ class LitehiveConfig:
             )
             for engine_name, fallbacks in self.engine_fallbacks.items()
         }
+        self.agent_startup_guidance = _normalize_agent_startup_guidance(
+            self.agent_startup_guidance
+        )
         self.execution_retry_policies = _normalize_execution_retry_policies(
             self.execution_retry_policies
         )

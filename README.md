@@ -105,6 +105,36 @@ Use `.litehive/context.md` to describe the repo, commands, and workflow conventi
 `litehive configure` accepts `--process-profile` so new workspaces start from a shared process scaffold plus a project-specific overlay.
 The shared scaffold captures stages, orchestrator routing, issue/task source of truth, role model, TDD expectations, verification discipline, acceptance flow, and commit/recovery policy.
 Built-in overlays currently include `generic`, `python`, `django`, `rust`, and `codehive`, and the generated context now records both the init scaffold and the prompt scaffold used for stage prompts.
+Workspace config can also define `agent_startup_guidance` in `.litehive/config.yaml` to inject repo-specific startup hints for `planner`, `swe`, `qa`, `reviewer`, `recovery`, or `all`.
+Use that when agents keep rediscovering the same files, commands, lifecycle rules, or evidence expectations on every run.
+
+Example:
+
+```yaml
+agent_startup_guidance:
+  all:
+    - Start from the latest task-local artifacts before broad repo exploration.
+  swe:
+    - Prefer targeted reads in runtime.py, tasks.py, subagents.py, config.py, and focused test slices.
+  qa:
+    - Read the latest implementing report and wrapper logs before rerunning tests.
+```
+
+Suggested setup workflow for a new project:
+
+1. Run Litehive for a few iterations on that repo, usually `5-10` tasks is enough to expose repeated startup waste.
+2. Observe where agents spend time at the beginning of runs by checking task-local transcripts, reports, and `.litehive/logs/run-all/`.
+3. Capture the repeated rediscovery into `agent_startup_guidance` in `.litehive/config.yaml`.
+4. Add shared reminders under `all`, and put role-specific guidance under `planner`, `swe`, `qa`, `reviewer`, and `recovery` only when the repo needs it.
+5. Re-run the workflow and refine the guidance if agents still spend time re-deriving the same context.
+
+What to look for when populating it:
+
+- Files every agent re-opens at startup
+- Commands every agent re-discovers before doing useful work
+- Lifecycle evidence rules QA/reviewer keep repeating
+- Recovery evidence sources the recovery agent always needs first
+- Repo-specific boundaries that should be obvious before implementation starts
 
 ## Observability
 

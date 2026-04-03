@@ -4069,6 +4069,23 @@ def test_stage_prompt_uses_recovery_role_when_requested(tmp_path: Path) -> None:
     assert "Make the smallest effective fix needed so the task can resume the current stage and finish cleanly." in prompt
 
 
+def test_stage_prompt_includes_project_startup_guidance_for_role(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Recovery-heavy task")
+    config = LitehiveConfig(
+        agent_startup_guidance={
+            "all": ["Start from the latest task-local artifacts before broad repo reads."],
+            "qa": ["Check the latest implementing report and wrapper logs before rerunning tests."],
+        }
+    )
+
+    prompt = stage_prompt(task, "testing", workspace_context="", config=config)
+
+    assert "Project startup guidance:" in prompt
+    assert "Start from the latest task-local artifacts before broad repo reads." in prompt
+    assert "Check the latest implementing report and wrapper logs before rerunning tests." in prompt
+
+
 def test_stage_prompt_includes_task_type_and_plan(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Review adapter update", task_type="review", mode="tasks")
@@ -4095,6 +4112,32 @@ def test_stage_prompt_includes_pm_sizing_guidance_for_grooming(tmp_path: Path) -
     assert "Current planned effort: m" in prompt
     assert "Use `PM_COMPLEXITY: simple|moderate|complex`." in prompt
     assert "Use `PLANNED_EFFORT: xs|s|m|l|xl`." in prompt
+
+
+def test_load_config_normalizes_agent_startup_guidance_keys(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    (tmp_path / ".litehive" / "config.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "agent_startup_guidance": {
+                    "QA": [
+                        "Check the latest report first.",
+                        "  ",
+                    ],
+                    "all": ["Use task-local artifacts before broad repo reads."],
+                }
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+
+    config = load_config(tmp_path)
+
+    assert config.agent_startup_guidance == {
+        "qa": ["Check the latest report first."],
+        "all": ["Use task-local artifacts before broad repo reads."],
+    }
 
 
 def test_stage_prompt_requires_real_lifecycle_verification_for_workflow_testing_tasks(
@@ -4819,7 +4862,7 @@ def test_restore_untouched_active_task_requeues_interrupted_commit_stage_task(tm
     assert refreshed.runtime.interruption.source == "runner"
     state = load_state(tmp_path)
     assert state.active_task_id is None
-    assert state.queue == [stranded.id, queued.id]
+    assert state.queue == [queued.id, stranded.id]
     journal = (task_dir(tmp_path, refreshed) / "journal.md").read_text(encoding="utf-8")
     assert "Interrupted runner execution while `commit_to_git` was running." in journal
     assert "Resume from `commit_to_git`." in journal
@@ -4862,7 +4905,7 @@ def test_restore_untouched_active_task_requeues_interrupted_non_commit_task(tmp_
     assert refreshed.runtime.interruption.source == "runner"
     state = load_state(tmp_path)
     assert state.active_task_id is None
-    assert state.queue == [interrupted.id, queued.id]
+    assert state.queue == [queued.id, interrupted.id]
     journal = (task_dir(tmp_path, refreshed) / "journal.md").read_text(encoding="utf-8")
     assert "Interrupted runner execution while `testing` was running." in journal
     assert "Resume from `testing`." in journal
@@ -5746,11 +5789,8 @@ def test_resolve_next_task_priority_first_still_resumes_active_task(tmp_path: Pa
     assert task.id == interrupted.id
 
 
-@pytest.mark.parametrize("policy", ["fifo", "priority_first", "dependency_aware"])
-def test_resolve_next_task_prefers_interrupted_queued_task_before_new_work(
-    tmp_path: Path, policy: str
-) -> None:
-    ensure_workspace(tmp_path, LitehiveConfig(pool_selection_policy=policy))
+def test_resolve_next_task_fifo_prefers_interrupted_queued_task_before_new_work(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path, LitehiveConfig(pool_selection_policy="fifo"))
     new_task = create_task(tmp_path, title="New task")
     interrupted = create_task(tmp_path, title="Interrupted task")
 
@@ -5767,11 +5807,46 @@ def test_resolve_next_task_prefers_interrupted_queued_task_before_new_work(
     assert task.id == interrupted.id
 
 
-def test_resolve_next_task_dependency_aware_prefers_task_with_more_downstream_dependents(
+def test_resolve_next_task_priority_first_prefers_high_priority_queue_head(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path, LitehiveConfig(pool_selection_policy="priority_first"))
+    new_task = create_task(tmp_path, title="New task")
+    interrupted = create_task(tmp_path, title="Interrupted task")
+
+    new_task.priority = "high"
+    interrupted.priority = "low"
+    interrupted.status = "in_progress"
+    interrupted.pipeline_status = "testing"
+    save_task(tmp_path, new_task)
+    save_task(tmp_path, interrupted)
+
+    task = resolve_next_task(tmp_path)
+
+    assert task is not None
+    assert task.id == new_task.id
+
+
+def test_resolve_next_task_dependency_aware_respects_queue_order_before_interrupted_work(
     tmp_path: Path,
 ) -> None:
     ensure_workspace(tmp_path, LitehiveConfig(pool_selection_policy="dependency_aware"))
-    create_task(tmp_path, title="Unrelated ready task")
+    queued = create_task(tmp_path, title="Queue head task")
+    interrupted = create_task(tmp_path, title="Interrupted task")
+
+    interrupted.status = "in_progress"
+    interrupted.pipeline_status = "testing"
+    save_task(tmp_path, interrupted)
+
+    task = resolve_next_task(tmp_path)
+
+    assert task is not None
+    assert task.id == queued.id
+
+
+def test_resolve_next_task_dependency_aware_respects_queue_head_before_downstream_count(
+    tmp_path: Path,
+) -> None:
+    ensure_workspace(tmp_path, LitehiveConfig(pool_selection_policy="dependency_aware"))
+    first = create_task(tmp_path, title="Unrelated ready task")
     root = create_task(tmp_path, title="Dependency root")
     mid = create_task(tmp_path, title="Mid dependency")
     leaf = create_task(tmp_path, title="Leaf dependency")
@@ -5784,7 +5859,7 @@ def test_resolve_next_task_dependency_aware_prefers_task_with_more_downstream_de
     task = resolve_next_task(tmp_path)
 
     assert task is not None
-    assert task.id == root.id
+    assert task.id == first.id
 
 
 def test_peek_next_task_selection_reports_blocked_dependencies(tmp_path: Path) -> None:
@@ -8829,7 +8904,7 @@ def test_repair_workspace_state_requeues_untouched_active_task(tmp_path: Path) -
 
     refreshed_state = load_state(tmp_path)
     assert refreshed_state.active_task_id is None
-    assert refreshed_state.queue == [active.id, queued.id]
+    assert refreshed_state.queue == [queued.id, active.id]
 
     refreshed = get_task(tmp_path, active.id)
     assert refreshed is not None

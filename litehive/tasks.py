@@ -1888,12 +1888,12 @@ def _task_selection_key(
     if policy == "fifo":
         return (interrupted_rank, queue_index, task.id)
     if policy == "priority_first":
-        return (interrupted_rank, TASK_PRIORITY_ORDER.get(task.priority, 1), queue_index, task.id)
+        return (TASK_PRIORITY_ORDER.get(task.priority, 1), queue_index, interrupted_rank, task.id)
     if policy == "dependency_aware":
         return (
-            interrupted_rank,
-            -_dependent_task_count(task.id, queue, tasks_by_id),
             queue_index,
+            -_dependent_task_count(task.id, queue, tasks_by_id),
+            interrupted_rank,
             task.id,
         )
     raise ValueError(f"Unsupported pool selection policy '{policy}'")
@@ -2532,8 +2532,7 @@ def repair_workspace_state(root: Path) -> WorkspaceRepairSummary:
                 journal_message = _recover_existing_checkpoint_commit(root, active_task)
                 if journal_message is None:
                     journal_message = _recover_commit_task(active_task)
-                    state.queue = [item for item in state.queue if item != active_task.id]
-                    state.queue.insert(0, active_task.id)
+                    _enqueue_recovered_task(state, active_task.id)
                     if active_task.id not in summary.requeued_task_ids:
                         summary.requeued_task_ids.append(active_task.id)
                 else:
@@ -2544,8 +2543,7 @@ def repair_workspace_state(root: Path) -> WorkspaceRepairSummary:
                 touched_tasks.append(active_task)
             elif _should_requeue_commit_stage_task(active_task):
                 _prepare_recovered_commit_task(active_task)
-                state.queue = [item for item in state.queue if item != active_task.id]
-                state.queue.insert(0, active_task.id)
+                _enqueue_recovered_task(state, active_task.id)
                 journal_messages[active_task.id] = (
                     "Recovered interrupted `commit_to_git` attempt and requeued the task at "
                     "`commit_to_git`."
@@ -2555,8 +2553,7 @@ def repair_workspace_state(root: Path) -> WorkspaceRepairSummary:
                     summary.requeued_task_ids.append(active_task.id)
             elif _is_task_eligible_for_execution(active_task):
                 _prepare_interrupted_task_for_requeue(active_task)
-                state.queue = [item for item in state.queue if item != active_task.id]
-                state.queue.insert(0, active_task.id)
+                _enqueue_recovered_task(state, active_task.id)
                 journal_messages[active_task.id] = (
                     "Recovered interrupted run and requeued the task at "
                     f"`{active_task.pipeline_status}`."
@@ -2715,7 +2712,7 @@ def restore_untouched_active_task(root: Path) -> WorkspaceState:
                     reason=_stale_interruption_reason(task, "commit_to_git"),
                 )
                 task.status = "queued"
-                state.queue.insert(0, task.id)
+                _enqueue_recovered_task(state, task.id)
                 persist_task_and_state(
                     root,
                     task=task,
@@ -2776,9 +2773,8 @@ def restore_untouched_active_task(root: Path) -> WorkspaceState:
                 summary="Interrupted `commit_to_git` run recovered. Resume from `commit_to_git`.",
                 reason=_stale_interruption_reason(task, "commit_to_git"),
             )
-            state.queue = [item for item in state.queue if item != task.id]
             task.status = "queued"
-            state.queue.insert(0, task.id)
+            _enqueue_recovered_task(state, task.id)
             state.active_task_id = None
             persist_task_and_state(
                 root,
@@ -2794,8 +2790,7 @@ def restore_untouched_active_task(root: Path) -> WorkspaceState:
             and task.runtime.execution_status != "running"
         ):
             task.status = "queued"
-            state.queue = [item for item in state.queue if item != task.id]
-            state.queue.insert(0, task.id)
+            _enqueue_recovered_task(state, task.id)
             state.active_task_id = None
             persist_task_and_state(
                 root,
@@ -2813,10 +2808,9 @@ def restore_untouched_active_task(root: Path) -> WorkspaceState:
                 summary=f"Interrupted run recovered. Resume from `{task.pipeline_status}`.",
                 reason=_stale_interruption_reason(task, task.pipeline_status),
             )
-            state.queue = [item for item in state.queue if item != task.id]
             if not _is_user_parked_interruption(task):
                 task.status = "queued"
-                state.queue.insert(0, task.id)
+                _enqueue_recovered_task(state, task.id)
             state.active_task_id = None
             persist_task_and_state(
                 root,
@@ -3015,6 +3009,11 @@ def _reset_task_for_recovery(
         task.runtime.last_outcome = TaskOutcomeState()
     elif task.runtime.last_outcome.kind == "interrupted":
         task.runtime.last_outcome.stage = pipeline_status
+
+
+def _enqueue_recovered_task(state: WorkspaceState, task_id: str) -> None:
+    state.queue = [queued_id for queued_id in state.queue if queued_id != task_id]
+    state.queue.append(task_id)
 
 
 def prepare_completed_task_for_recovery(task: TaskRecord, *, recovery_stage: str) -> None:

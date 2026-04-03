@@ -794,15 +794,12 @@ def resolve_engine_plan(
     engine_override: str | None = None,
 ) -> list[str]:
     if engine_override is not None:
-        _require_claude_enabled(engine_override, config)
         return [engine_override]
     if task.engine is not None:
-        _require_claude_enabled(task.engine, config)
         return [task.engine]
     routed_engines = _route_engines_for_task(task, config)
     if routed_engines:
         return routed_engines
-    _require_claude_enabled(config.default_engine, config)
     return [config.default_engine]
 
 
@@ -814,8 +811,6 @@ def _route_engines_for_task(task: TaskRecord, config: LitehiveConfig) -> list[st
     engines: list[str] = []
     seen: set[str] = set()
     for engine_name in config.task_engine_routing.get(route_key, []):
-        if engine_name == "claude" and not config.claude_enabled:
-            continue
         if engine_name in seen:
             continue
         seen.add(engine_name)
@@ -856,14 +851,6 @@ def _task_routing_key(task: TaskRecord) -> str | None:
     if re.search(r"\bdoc(s)?\b", text):
         return "docs"
     return None
-
-
-def _require_claude_enabled(engine_name: str, config: LitehiveConfig) -> None:
-    if engine_name == "claude" and not config.claude_enabled:
-        raise EngineError(
-            "Claude engine is opt-in. Set claude_enabled: true in config.yaml to enable it."
-        )
-
 
 def resolve_task_retry_policy(task: TaskRecord, config: LitehiveConfig) -> tuple[int, str]:
     if task.retry_policy.max_retries is not None:
@@ -1052,6 +1039,7 @@ def build_executor(
                     workspace_context=workspace_context,
                     process_profile=config.process_profile,
                     role_name=role_name,
+                    config=config,
                 )
                 result = subagents.run(
                     current_task,

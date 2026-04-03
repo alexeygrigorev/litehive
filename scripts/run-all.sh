@@ -57,12 +57,14 @@ while true; do
   iteration=$((iteration + 1))
   prefix="$(printf '%04d' "$iteration")"
 
+  repair_file="$log_root/${prefix}-repair.log"
   pre_status_file="$log_root/${prefix}-pre-status.log"
   run_file="$log_root/${prefix}-run.log"
   post_status_file="$log_root/${prefix}-post-status.log"
 
   echo
   echo "== iteration $iteration =="
+  uv run litehive repair --workspace "$workspace" >"$repair_file"
   read_state_snapshot "$pre_status_file"
   cat "$pre_status_file"
 

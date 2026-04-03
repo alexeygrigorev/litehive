@@ -9,7 +9,7 @@ import re
 
 import yaml
 
-from litehive.config import load_config, resolve_process_profile
+from litehive.config import LitehiveConfig, load_config, resolve_process_profile
 from litehive.engine_monitoring import record_engine_execution, record_engine_observation
 from litehive.external_cli import CLIExecutionResult, ExternalCLIAdapter, parse_stage_report_text
 from litehive.engines import (
@@ -656,6 +656,7 @@ def stage_prompt(
     *,
     process_profile: str = "generic",
     role_name: str | None = None,
+    config: LitehiveConfig | None = None,
 ) -> str:
     """Build the prompt for a stage subagent."""
     profile = resolve_process_profile(process_profile)
@@ -665,6 +666,7 @@ def stage_prompt(
     lifecycle_verification_overlay = _lifecycle_verification_overlay(task, step)
     stage_owner = role_name or _stage_owner_for_step(step)
     stage_role = _stage_role_prompt(step, stage_owner)
+    startup_guidance = _agent_startup_guidance(config, stage_owner)
 
     lines = [
         f"Task: {task.id} {task.title}",
@@ -700,6 +702,18 @@ def stage_prompt(
             "",
             "Role focus:",
             *stage_role,
+        ]
+    )
+    if startup_guidance:
+        lines.extend(
+            [
+                "",
+                "Project startup guidance:",
+                *startup_guidance,
+            ]
+        )
+    lines.extend(
+        [
             "",
             "Stage instructions:",
             *stage_instructions,
@@ -912,6 +926,17 @@ def _stage_role_prompt(step: str, owner: str | None = None) -> list[str]:
     if step == "testing":
         return ["- You are the QA verifier responsible for focused independent validation."]
     return ["- Follow the stage instructions and keep the report concise and explicit."]
+
+
+def _agent_startup_guidance(config: LitehiveConfig | None, stage_owner: str) -> list[str]:
+    if config is None:
+        return []
+    guidance = config.agent_startup_guidance
+    lines: list[str] = []
+    for key in ("all", stage_owner):
+        for item in guidance.get(key, []):
+            lines.append(f"- {item}")
+    return lines
 
 
 def _lifecycle_verification_overlay(task: TaskRecord, step: str) -> list[str]:
