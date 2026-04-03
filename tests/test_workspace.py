@@ -15691,6 +15691,7 @@ def test_claude_build_invocation_includes_model_and_max_turns(tmp_path: Path) ->
         "stream-json",
         "--include-partial-messages",
         "--verbose",
+        "--dangerously-skip-permissions",
         "--model",
         "claude-sonnet-4-20250514",
         "--max-turns",

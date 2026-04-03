@@ -445,6 +445,7 @@ class ClaudeCLIAdapter(ExternalCLIAdapter):
             "stream-json",
             "--include-partial-messages",
             "--verbose",
+            "--dangerously-skip-permissions",
         ]
         if model:
             command.extend(["--model", model])
