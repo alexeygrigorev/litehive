@@ -2267,8 +2267,22 @@ def _latest_stage_report_verdict(root: Path, task: TaskRecord) -> str | None:
     reports = sorted(reports_dir.glob("*.yaml"))
     if not reports:
         return None
+    return _report_verdict(reports[-1])
+
+
+def _latest_stage_report_verdict_for_step(root: Path, task: TaskRecord, step: str) -> str | None:
+    reports_dir = task_dir(root, task) / "reports"
+    if not reports_dir.exists():
+        return None
+    reports = sorted(reports_dir.glob(f"{step}-*.yaml"))
+    if not reports:
+        return None
+    return _report_verdict(reports[-1])
+
+
+def _report_verdict(path: Path) -> str | None:
     try:
-        report = yaml.safe_load(reports[-1].read_text(encoding="utf-8")) or {}
+        report = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
     except yaml.YAMLError:
         return None
     verdict = str(report.get("verdict") or "").strip().lower()
@@ -2280,7 +2294,11 @@ def _should_recover_flagged_commit_stage_task(root: Path, task: TaskRecord) -> b
         return False
     if task.git.commit_sha is not None:
         return False
-    return _latest_stage_report_verdict(root, task) in {"pass", "accept"}
+    if _latest_stage_report_verdict_for_step(root, task, "accepting") in {"pass", "accept"}:
+        return True
+    if _latest_stage_report_verdict(root, task) in {"pass", "accept"}:
+        return True
+    return _latest_stage_report_verdict_for_step(root, task, "testing") in {"pass", "accept"}
 
 
 def _recover_flagged_commit_task(task: TaskRecord) -> str:
@@ -2485,6 +2503,14 @@ def _recover_stale_runner_state(
                 if previous is None:
                     continue
                 if (
+                    _should_recover_flagged_commit_stage_task(root, previous)
+                    and task.pipeline_status == "commit_to_git"
+                    and task.status == "queued"
+                    and task.id not in summary.requeued_task_ids
+                ):
+                    summary.requeued_task_ids.append(task.id)
+                    continue
+                if (
                     _is_stranded_commit_task(previous)
                     and not _is_stranded_commit_task(task)
                     and task.pipeline_status == "commit_to_git"
@@ -2517,6 +2543,7 @@ def repair_workspace_state(root: Path) -> WorkspaceRepairSummary:
         tasks_by_id = {task.id: task for task in list_tasks(root)}
         touched_tasks: list[TaskRecord] = []
         journal_messages: dict[str, str] = {}
+        recovered_flagged_commit_ids: list[str] = []
 
         if state.active_task_id is not None and state.active_task_id not in tasks_by_id:
             summary.cleared_active_task_id = state.active_task_id
@@ -2561,6 +2588,20 @@ def repair_workspace_state(root: Path) -> WorkspaceRepairSummary:
                 touched_tasks.append(active_task)
                 if active_task.id not in summary.requeued_task_ids:
                     summary.requeued_task_ids.append(active_task.id)
+
+        for task in tasks_by_id.values():
+            if not _should_recover_flagged_commit_stage_task(root, task):
+                continue
+            journal_messages[task.id] = _recover_flagged_commit_task(task)
+            touched_tasks.append(task)
+            recovered_flagged_commit_ids.append(task.id)
+            if task.id not in summary.requeued_task_ids:
+                summary.requeued_task_ids.append(task.id)
+            summary.mutated = True
+
+        if recovered_flagged_commit_ids:
+            state.queue = [task_id for task_id in state.queue if task_id not in recovered_flagged_commit_ids]
+            state.queue = [*recovered_flagged_commit_ids, *state.queue]
 
         seen: set[str] = set()
         normalized_queue: list[str] = []

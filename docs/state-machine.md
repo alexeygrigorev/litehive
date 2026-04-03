@@ -222,6 +222,13 @@ Flagged tasks likewise return to the runnable queue automatically. When they are
 appropriate implementation-entry stage with their failure context preserved so the recovery agent
 can continue from the real problem instead of starting from a blank slate.
 
+For `commit_to_git`, recoverability is anchored to the last successful pre-commit review stage,
+not to the latest report overall. That means a task remains resumable at `commit_to_git` even after
+the most recent `commit_to_git-*.yaml` report recorded a failed integration attempt such as a
+cherry-pick or merge conflict. Litehive treats that as "review passed, integration still pending",
+so the pool can retry or repair the final integration step instead of dropping the task back into
+an earlier stage.
+
 ---
 
 ## Cancellation

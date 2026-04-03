@@ -14886,6 +14886,152 @@ def test_resolve_next_task_recovers_flagged_commit_stage_after_passing_review(
     assert "Recovered flagged accepted task back to `queued/commit_to_git`" in journal
 
 
+def test_resolve_next_task_recovers_flagged_commit_stage_after_failed_commit_report(
+    tmp_path: Path,
+) -> None:
+    ensure_workspace(tmp_path)
+    follow_up = create_task(tmp_path, title="Later task", auto_commit=False)
+    flagged = create_task(tmp_path, title="Accepted but merge conflicted", auto_commit=False)
+
+    flagged.status = "flagged"
+    flagged.pipeline_status = "commit_to_git"
+    flagged.runtime.execution_status = "flagged"
+    flagged.runtime.current_stage = RuntimeStageState(
+        step="commit_to_git",
+        status="blocked",
+        started_at="2026-04-01T00:00:00+00:00",
+        completed_at="2026-04-01T00:01:00+00:00",
+        updated_at="2026-04-01T00:01:00+00:00",
+        duration_seconds=60,
+        verdict="fail",
+        summary="CommitToGit failed: merge conflict while integrating task checkpoint",
+    )
+    flagged.runtime.last_outcome.kind = "flagged"
+    flagged.runtime.last_outcome.stage = "commit_to_git"
+    flagged.runtime.last_outcome.reason_code = "verdict_fail"
+    flagged.runtime.last_outcome.reason = (
+        "CommitToGit failed: merge conflict while integrating task checkpoint"
+    )
+    save_task(tmp_path, flagged)
+    save_task_runtime(tmp_path, flagged)
+    reports_dir = task_dir(tmp_path, flagged) / "reports"
+    (reports_dir / "accepting-001.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "task_id": flagged.id,
+                "step": "accepting",
+                "verdict": "pass",
+                "summary": "ready for final commit",
+                "files_changed": ["litehive/tasks.py"],
+                "tests": {"added": 1, "passing": 1},
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+    (reports_dir / "commit_to_git-002.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "task_id": flagged.id,
+                "step": "commit_to_git",
+                "verdict": "fail",
+                "summary": "CommitToGit failed: merge conflict while integrating task checkpoint",
+                "warnings": ["merge conflict while integrating task checkpoint"],
+                "files_changed": [],
+                "tests": {"added": 0, "passing": 0},
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+
+    state = load_state(tmp_path)
+    state.active_task_id = None
+    state.queue = [follow_up.id]
+    save_state(tmp_path, state)
+
+    task = resolve_next_task(tmp_path)
+
+    assert task is not None
+    assert task.id == flagged.id
+    refreshed = get_task(tmp_path, flagged.id)
+    assert refreshed is not None
+    assert refreshed.status == "queued"
+    assert refreshed.pipeline_status == "commit_to_git"
+    assert load_state(tmp_path).queue == [flagged.id, follow_up.id]
+    journal = (task_dir(tmp_path, refreshed) / "journal.md").read_text(encoding="utf-8")
+    assert "Recovered flagged accepted task back to `queued/commit_to_git`" in journal
+
+
+def test_repair_workspace_state_recovers_flagged_commit_stage_after_failed_commit_report(
+    tmp_path: Path,
+) -> None:
+    ensure_workspace(tmp_path)
+    flagged = create_task(tmp_path, title="Repair conflicted integration", auto_commit=False)
+
+    flagged.status = "flagged"
+    flagged.pipeline_status = "commit_to_git"
+    flagged.runtime.execution_status = "flagged"
+    flagged.runtime.current_stage = RuntimeStageState(
+        step="commit_to_git",
+        status="blocked",
+        started_at="2026-04-01T00:00:00+00:00",
+        completed_at="2026-04-01T00:01:00+00:00",
+        updated_at="2026-04-01T00:01:00+00:00",
+        duration_seconds=60,
+        verdict="fail",
+        summary="CommitToGit failed: cherry-pick conflict while integrating task checkpoint",
+    )
+    save_task(tmp_path, flagged)
+    save_task_runtime(tmp_path, flagged)
+    reports_dir = task_dir(tmp_path, flagged) / "reports"
+    (reports_dir / "accepting-001.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "task_id": flagged.id,
+                "step": "accepting",
+                "verdict": "pass",
+                "summary": "ready for final commit",
+                "files_changed": ["litehive/runtime.py"],
+                "tests": {"added": 1, "passing": 1},
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+    (reports_dir / "commit_to_git-002.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "task_id": flagged.id,
+                "step": "commit_to_git",
+                "verdict": "fail",
+                "summary": "CommitToGit failed: cherry-pick conflict while integrating task checkpoint",
+                "warnings": ["cherry-pick conflict while integrating task checkpoint"],
+                "files_changed": [],
+                "tests": {"added": 0, "passing": 0},
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+
+    state = load_state(tmp_path)
+    state.queue = []
+    save_state(tmp_path, state)
+
+    summary = repair_workspace_state(tmp_path)
+
+    assert summary.mutated is True
+    assert summary.requeued_task_ids == [flagged.id]
+    refreshed = get_task(tmp_path, flagged.id)
+    assert refreshed is not None
+    assert refreshed.status == "queued"
+    assert refreshed.pipeline_status == "commit_to_git"
+    assert load_state(tmp_path).queue == [flagged.id]
+    journal = (task_dir(tmp_path, refreshed) / "journal.md").read_text(encoding="utf-8")
+    assert "Recovered flagged accepted task back to `queued/commit_to_git`" in journal
+
+
 def test_rollback_completed_task_restores_state_when_rollback_commit_fails(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
