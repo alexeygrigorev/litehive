@@ -7,6 +7,8 @@ from pathlib import Path
 
 import yaml
 
+from litehive.config import load_config
+
 
 def _resolve_workspace(argv: list[str]) -> Path:
     workspace = Path.cwd()
@@ -21,18 +23,16 @@ def _resolve_workspace(argv: list[str]) -> Path:
 def _fast_status(argv: list[str]) -> int:
     workspace = _resolve_workspace(argv)
     state_path = workspace / ".litehive" / "state.yaml"
-    config_path = workspace / ".litehive" / "config.yaml"
     monitoring_path = workspace / ".litehive" / "engine-monitoring.yaml"
 
     state = yaml.safe_load(state_path.read_text()) if state_path.exists() else {}
-    config = yaml.safe_load(config_path.read_text()) if config_path.exists() else {}
     monitoring = yaml.safe_load(monitoring_path.read_text()) if monitoring_path.exists() else {}
 
     active_task_id = state.get("active_task_id")
     queue = state.get("queue", []) or []
     stop_reason = state.get("pool_stop_reason")
     mode = state.get("mode", "implementation")
-    default_engine = config.get("default_engine", "codex")
+    default_engine = load_config(workspace).default_engine
 
     print(f"workspace: {workspace}")
     print(f"default_engine: {default_engine}")

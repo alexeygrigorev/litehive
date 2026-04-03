@@ -49,6 +49,7 @@ from litehive.config import (
     ensure_workspace,
     format_external_engine_sandbox,
     format_subagent_resource_limits,
+    global_config_path,
     load_config,
     render_context_template,
     resolve_process_profile,
@@ -6042,6 +6043,86 @@ def test_configure_persists_pool_stop_defaults(tmp_path: Path) -> None:
     assert config.pool_budget_threshold == 1
     assert config.pool_stop_on_dirty_git is True
     assert config.pool_selection_policy == "priority_first"
+
+
+def test_load_config_uses_global_defaults_when_workspace_config_is_empty(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config_home = tmp_path / "xdg"
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(config_home))
+    global_path = global_config_path()
+    global_path.parent.mkdir(parents=True, exist_ok=True)
+    global_path.write_text(
+        yaml.safe_dump(
+            {
+                "default_engine": "gemini",
+                "pool_stop_on_failure": True,
+                "engine_costs": {"codex": 9},
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+
+    workspace = tmp_path / "workspace"
+    ensure_workspace(workspace)
+
+    config = load_config(workspace)
+
+    assert config.default_engine == "gemini"
+    assert config.pool_stop_on_failure is True
+    assert config.engine_costs["codex"] == 9
+    assert config.engine_costs["claude"] == 3
+
+
+def test_load_config_applies_workspace_overrides_on_top_of_global_defaults(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config_home = tmp_path / "xdg"
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(config_home))
+    global_path = global_config_path()
+    global_path.parent.mkdir(parents=True, exist_ok=True)
+    global_path.write_text(
+        yaml.safe_dump(
+            {
+                "default_engine": "gemini",
+                "engine_costs": {"codex": 9, "claude": 7},
+                "task_engine_routing": {"research": ["opencode", "codex"]},
+                "subagent_resource_limits": {
+                    "enabled": True,
+                    "memory_mb": 4096,
+                },
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+
+    workspace = tmp_path / "workspace"
+    ensure_workspace(workspace)
+    (workspace / ".litehive" / "config.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "default_engine": "codex",
+                "engine_costs": {"claude": 4},
+                "task_engine_routing": {"review": ["codex", "copilot"]},
+                "subagent_resource_limits": {"cpu_count": 2.0},
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+
+    config = load_config(workspace)
+
+    assert config.default_engine == "codex"
+    assert config.engine_costs["codex"] == 9
+    assert config.engine_costs["claude"] == 4
+    assert config.task_engine_routing["research"] == ["opencode", "codex"]
+    assert config.task_engine_routing["review"] == ["codex", "copilot"]
+    assert config.subagent_resource_limits.enabled is True
+    assert config.subagent_resource_limits.memory_mb == 4096
+    assert config.subagent_resource_limits.cpu_count == 2.0
 
 
 def test_resolve_engine_name_prefers_run_override_then_task_then_workspace_default(
@@ -14915,7 +14996,11 @@ def test_configure_updates_existing_workspace_budget_settings(tmp_path: Path) ->
     assert config.pool_cost_cap == 30
     assert config.engine_usage_caps == {"claude": 2, "codex": 5}
     assert config.engine_budget_caps == {"claude": 6}
-    assert config.engine_costs == {"claude": 3, "codex": 1}
+    assert config.engine_costs["claude"] == 3
+    assert config.engine_costs["codex"] == 1
+    assert config.engine_costs["opencode"] == 1
+    assert config.engine_costs["gemini"] == 1
+    assert config.engine_costs["copilot"] == 1
     context = (tmp_path / ".litehive" / "context.md").read_text(encoding="utf-8")
     assert "Process profile: Python" in context
 

@@ -54,6 +54,7 @@ Common commands:
 When `litehive add` receives `--task-type`, it now creates the task in `tasks` mode by default so the task folder includes the structured `brief.md` and prompt guidance for that template. Pass `--mode implementation` to keep a typed task on the implementation path without the intake brief.
 Tasks can also carry PM sizing metadata: `--pm-complexity simple|moderate|complex` and `--planned-effort xs|s|m|l|xl`.
 During grooming, the planner can emit `PM_COMPLEXITY:` and `PLANNED_EFFORT:` lines and litehive will persist them back into the task record and brief.
+Configuration now layers built-in defaults, then `~/.config/litehive/config.yaml` (or `$XDG_CONFIG_HOME/litehive/config.yaml`), then workspace-local `.litehive/config.yaml`. Workspace settings take precedence over the global file.
 
 ## Execution model
 

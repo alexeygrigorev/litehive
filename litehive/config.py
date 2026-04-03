@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 from dataclasses import asdict, dataclass, field
+import os
 from pathlib import Path
 import re
 from typing import Any, Mapping, Sequence
@@ -862,6 +863,13 @@ def config_path(root: Path) -> Path:
     return workspace_dir(root) / "config.yaml"
 
 
+def global_config_path() -> Path:
+    config_home = os.environ.get("XDG_CONFIG_HOME")
+    if config_home:
+        return Path(config_home) / "litehive" / "config.yaml"
+    return Path.home() / ".config" / "litehive" / "config.yaml"
+
+
 def state_path(root: Path) -> Path:
     return workspace_dir(root) / "state.yaml"
 
@@ -1019,7 +1027,11 @@ def ensure_workspace(root: Path, config: LitehiveConfig | None = None) -> Path:
 
     cfg = config or LitehiveConfig()
     if not config_path(root).exists():
-        config_path(root).write_text(yaml.safe_dump(asdict(cfg), sort_keys=False), encoding="utf-8")
+        initial_config = asdict(cfg) if config is not None else {}
+        config_path(root).write_text(
+            yaml.safe_dump(initial_config, sort_keys=False),
+            encoding="utf-8",
+        )
 
     if not state_path(root).exists():
         state_path(root).write_text(
@@ -1049,9 +1061,41 @@ def ensure_workspace(root: Path, config: LitehiveConfig | None = None) -> Path:
     return base
 
 
+def _read_config_mapping(path: Path) -> dict[str, Any]:
+    if not path.exists():
+        return {}
+    data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    if not isinstance(data, Mapping):
+        raise ValueError(f"Config file must contain a mapping: {path}")
+    return dict(data)
+
+
+def _merge_config_layers(base: Mapping[str, Any], overlay: Mapping[str, Any]) -> dict[str, Any]:
+    merged = dict(base)
+    for key, value in overlay.items():
+        if isinstance(value, Mapping) and isinstance(merged.get(key), Mapping):
+            merged[key] = _merge_config_layers(
+                dict(merged[key]),
+                value,
+            )
+            continue
+        merged[key] = value
+    return merged
+
+
+def load_effective_config_data(root: Path) -> dict[str, Any]:
+    default_data = asdict(LitehiveConfig())
+    global_data = _read_config_mapping(global_config_path())
+    local_data = _read_config_mapping(config_path(root))
+    return _merge_config_layers(
+        _merge_config_layers(default_data, global_data),
+        local_data,
+    )
+
+
 def load_config(root: Path) -> LitehiveConfig:
     ensure_workspace(root)
-    data = yaml.safe_load(config_path(root).read_text(encoding="utf-8")) or {}
+    data = load_effective_config_data(root)
     if data.get("process_profile") not in PROCESS_PROFILES:
         data["process_profile"] = "generic"
     if data.get("pool_selection_policy") not in VALID_POOL_SELECTION_POLICIES:
