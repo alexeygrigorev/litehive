@@ -426,6 +426,78 @@ def test_gemini_extract_usage_observation_reads_finished_usage_metadata(tmp_path
     assert observation.metadata["finish_reason"] == "STOP"
 
 
+def test_gemini_extract_usage_observation_reads_result_stats_output(tmp_path: Path) -> None:
+    adapter = get_engine("gemini")
+
+    observation = adapter.extract_usage_observation(
+        CLIExecutionResult(
+            adapter="gemini",
+            argv=("gemini", "-p"),
+            cwd=tmp_path,
+            exit_code=0,
+            stdout=(
+                '{"type":"init","model":"gemini-2.5-pro"}\n'
+                '{"type":"result","status":"success","stats":{"total_tokens":18,'
+                '"input_tokens":11,"output_tokens":7,"cached":3,"duration_ms":1200}}\n'
+            ),
+            stderr="",
+        )
+    )
+
+    assert observation is not None
+    assert observation.source == "provider"
+    assert observation.provider == "google"
+    assert observation.usage is not None
+    assert observation.usage.used == 18
+    assert observation.usage.unit == "tokens"
+    assert observation.metadata["model"] == "gemini-2.5-pro"
+    assert observation.metadata["input_tokens"] == 11
+    assert observation.metadata["output_tokens"] == 7
+    assert observation.metadata["cached_tokens"] == 3
+    assert observation.metadata["duration_ms"] == 1200
+
+
+def test_gemini_extract_usage_observation_reads_provider_limit_payload(tmp_path: Path) -> None:
+    adapter = get_engine("gemini")
+
+    observation = adapter.extract_usage_observation(
+        CLIExecutionResult(
+            adapter="gemini",
+            argv=("gemini", "-p"),
+            cwd=tmp_path,
+            exit_code=1,
+            stdout=(
+                '{"type":"Error","value":{"message":"You exceeded your current quota, please check your plan and billing details. '
+                'Please retry in 56s.","status":"RESOURCE_EXHAUSTED","details":['
+                '{"@type":"type.googleapis.com/google.rpc.QuotaFailure","violations":[{'
+                '"quotaMetric":"generativelanguage.googleapis.com/generate_content_free_tier_requests",'
+                '"quotaId":"GenerateRequestsPerMinutePerProjectPerModel-FreeTier",'
+                '"quotaDimensions":{"location":"global","model":"gemini-2.5-pro"},'
+                '"quotaValue":"2"}]},'
+                '{"@type":"type.googleapis.com/google.rpc.RetryInfo","retryDelay":"56s"}]}}\n'
+            ),
+            stderr="",
+        )
+    )
+
+    assert observation is not None
+    assert observation.source == "provider"
+    assert observation.provider == "google"
+    assert observation.success is False
+    assert observation.limit_reason == "quota limit reached"
+    assert observation.usage is not None
+    assert observation.usage.limit == 2
+    assert observation.usage.unit == "requests"
+    assert observation.metadata["error_status"] == "RESOURCE_EXHAUSTED"
+    assert observation.metadata["quota_metric"] == (
+        "generativelanguage.googleapis.com/generate_content_free_tier_requests"
+    )
+    assert observation.metadata["quota_id"] == "GenerateRequestsPerMinutePerProjectPerModel-FreeTier"
+    assert observation.metadata["quota_model"] == "gemini-2.5-pro"
+    assert observation.metadata["retry_delay"] == "56s"
+    assert observation.metadata["retry_delay_ms"] == 56000
+
+
 def test_claude_extract_usage_observation_reads_result_usage_payload(tmp_path: Path) -> None:
     adapter = get_engine("claude")
 
@@ -8079,6 +8151,46 @@ def test_cmd_status_includes_claude_provider_limit_monitoring(
     assert "engine_monitoring: claude source=provider invocations=1 success=0 failure=1 limits=1" in output
     assert "provider=anthropic" in output
     assert "last_limit_reason=rate limit reached" in output
+
+
+def test_cmd_status_includes_gemini_provider_limit_monitoring(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    ensure_workspace(tmp_path)
+    record_engine_execution(
+        tmp_path,
+        task_id="T-0001",
+        engine_name="gemini",
+        adapter=get_engine("gemini"),
+        execution=CLIExecutionResult(
+            adapter="gemini",
+            argv=("gemini", "-p"),
+            cwd=tmp_path,
+            exit_code=1,
+            stdout=(
+                '{"type":"Error","value":{"message":"You exceeded your current quota, please check your plan and billing details. '
+                'Please retry in 56s.","status":"RESOURCE_EXHAUSTED","details":['
+                '{"@type":"type.googleapis.com/google.rpc.QuotaFailure","violations":[{'
+                '"quotaMetric":"generativelanguage.googleapis.com/generate_content_free_tier_requests",'
+                '"quotaId":"GenerateRequestsPerMinutePerProjectPerModel-FreeTier",'
+                '"quotaDimensions":{"location":"global","model":"gemini-2.5-pro"},'
+                '"quotaValue":"2"}]},'
+                '{"@type":"type.googleapis.com/google.rpc.RetryInfo","retryDelay":"56s"}]}}\n'
+            ),
+            stderr="",
+        ),
+        failure_kind="execution_limit",
+        failure_reason="quota limit reached",
+    )
+
+    exit_code = _cmd_status(argparse.Namespace(workspace=tmp_path, full=False))
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "engine_monitoring: gemini source=provider invocations=1 success=0 failure=1 limits=1" in output
+    assert "provider=google" in output
+    assert "last_limit_reason=quota limit reached" in output
+    assert "usage=limit=2,unit=requests" in output
 
 
 def test_cmd_status_includes_engine_usage_window(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
