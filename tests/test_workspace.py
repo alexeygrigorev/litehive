@@ -142,7 +142,6 @@ from litehive.tasks import (
     update_task_metadata,
 )
 
-
 def _block_runner_lock(monkeypatch: pytest.MonkeyPatch) -> None:
     real_flock = tasks_module.fcntl.flock
 
@@ -1314,7 +1313,9 @@ def test_subagent_artifacts_exist_while_engine_is_running(
         "WARNINGS:\n"
         "- none\n"
     )
-    assert (base / "stderr.txt").read_text(encoding="utf-8") == ""
+    assert not (base / "stderr.txt.gz").exists()
+    if (base / "stderr.txt").exists():
+        assert (base / "stderr.txt").read_text(encoding="utf-8") == ""
     assert report == {
         "status": "completed",
         "summary": "artifacts persisted live",
@@ -1606,6 +1607,8 @@ def test_subagent_artifacts_stream_to_disk_while_process_is_still_running(
     assert report["summary"] == "live start"
     assert report["files_changed"] == ["litehive/external_cli.py"]
     assert report["tests"] == {"added": 1, "passing": 1}
+    assert (base / "stdout.txt").read_text(encoding="utf-8").startswith("VERDICT: PASS\nSUMMARY: live start\n")
+    assert (base / "stderr.txt").read_text(encoding="utf-8") == "live stderr\n"
 
 
 def test_subagent_manager_avoids_existing_folder_collisions_for_retries(
