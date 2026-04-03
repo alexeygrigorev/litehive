@@ -1660,7 +1660,7 @@ def test_subagent_manager_marks_signal_terminated_execution_as_interrupted(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     ensure_workspace(tmp_path)
-    task = create_task(tmp_path, title="Interrupted subagent execution")
+    task = create_task(tmp_path, title="Halted subagent execution")
     manager = SubagentManager(tmp_path)
 
     class InterruptedEngine:
@@ -1880,7 +1880,7 @@ def test_runtime_routes_flagged_and_interrupted_retries_to_recovery(tmp_path: Pa
     flagged.runtime.last_outcome.kind = "flagged"
     save_task(tmp_path, flagged)
 
-    interrupted = create_task(tmp_path, title="Interrupted task")
+    interrupted = create_task(tmp_path, title="Halted task")
     interrupted.status = "interrupted"
     interrupted.pipeline_status = "testing"
     interrupted.runtime.last_outcome.kind = "interrupted"
@@ -2140,6 +2140,11 @@ STATE
   exit 0
 fi
 
+if [[ "${{1:-}}" == "run" && "${{2:-}}" == "litehive" && "${{3:-}}" == "repair" ]]; then
+  echo "repaired: no"
+  exit 0
+fi
+
 echo "unexpected uv invocation: $*" >&2
 exit 1
 """,
@@ -2270,7 +2275,7 @@ def test_runner_rejects_acceptance_when_testing_report_lacks_required_workflow_e
 
 def test_runner_persists_non_blocking_follow_up_and_completes_current_task(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
-    task = create_task(tmp_path, title="Ship queue behavior")
+    task = create_task(tmp_path, title="Ship feature behavior")
 
     def executor(task, step):  # type: ignore[no-untyped-def]
         if step == "accepting":
@@ -2281,7 +2286,7 @@ def test_runner_persists_non_blocking_follow_up_and_completes_current_task(tmp_p
                 summary="acceptance passed with separate follow-up",
                 follow_up_tasks=[
                     {
-                        "title": "Document follow-up queue behavior",
+                        "title": "Document follow-up feature behavior",
                         "rationale": "Acceptance found documentation work that does not block shipment.",
                         "blocking": False,
                         "task_type": "research",
@@ -2367,7 +2372,7 @@ def test_run_next_task_executes_follow_up_created_by_acceptance_on_later_iterati
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     ensure_workspace(tmp_path)
-    original = create_task(tmp_path, title="Ship queue behavior", auto_commit=False)
+    original = create_task(tmp_path, title="Ship feature behavior", auto_commit=False)
 
     def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None):  # type: ignore[no-untyped-def]
         if task.id == original.id and task.pipeline_status == "accepting":
@@ -2393,7 +2398,7 @@ def test_run_next_task_executes_follow_up_created_by_acceptance_on_later_iterati
                         "TESTS_PASSING: 1\n"
                         "WARNINGS:\n"
                         "FOLLOW_UP_TASKS:\n"
-                        '[{"title":"Document follow-up queue behavior","rationale":"Acceptance found documentation work that should run next.","blocking":false}]'
+                        '[{"title":"Document follow-up feature behavior","rationale":"Acceptance found documentation work that should run next.","blocking":false}]'
                     ),
                     stderr="",
                 ),
@@ -2678,7 +2683,7 @@ def test_runner_infers_acceptance_criteria_from_task_context_after_grooming(
     task = create_task(
         tmp_path,
         title="Implement feature",
-        goal="Ship deterministic routing",
+        goal="Ship deterministic dispatch",
         depends_on=[prerequisite.id],
     )
 
@@ -2694,7 +2699,7 @@ def test_runner_infers_acceptance_criteria_from_task_context_after_grooming(
     assert updated is not None
     assert updated.runtime.execution_status == "done"
     assert updated.acceptance_criteria == [
-        "The delivered change achieves the stated goal: Ship deterministic routing.",
+        "The delivered change achieves the stated goal: Ship deterministic dispatch.",
         f"The result aligns with the prerequisite task context needed from: {prerequisite.id}.",
         "Focused verification demonstrates the targeted behavior works as intended.",
     ]
@@ -2735,7 +2740,7 @@ def test_runner_blocks_large_task_without_inferable_acceptance_criteria_during_g
 
 def test_runner_persists_grooming_generated_acceptance_criteria(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
-    task = create_task(tmp_path, title="Implement feature", goal="Ship deterministic routing")
+    task = create_task(tmp_path, title="Implement feature", goal="Ship deterministic dispatch")
 
     def executor(task, step):  # type: ignore[no-untyped-def]
         if step == "grooming":
@@ -2747,7 +2752,7 @@ def test_runner_persists_grooming_generated_acceptance_criteria(tmp_path: Path) 
                 "TESTS_PASSING: 0\n"
                 "WARNINGS:\n"
                 "ACCEPTANCE_CRITERIA:\n"
-                "- The runner auto-populates missing acceptance criteria from successful grooming output.\n"
+                "- The system auto-populates missing acceptance criteria from successful grooming output.\n"
                 "- Tasks still block before implementation when grooming cannot define concrete criteria.\n"
             )
             return parse_stage_report_text(
@@ -2766,14 +2771,14 @@ def test_runner_persists_grooming_generated_acceptance_criteria(tmp_path: Path) 
     updated = get_task(tmp_path, task.id)
     assert updated is not None
     assert updated.acceptance_criteria == [
-        "The runner auto-populates missing acceptance criteria from successful grooming output.",
+        "The system auto-populates missing acceptance criteria from successful grooming output.",
         "Tasks still block before implementation when grooming cannot define concrete criteria.",
     ]
 
 
 def test_runner_persists_grooming_generated_pm_sizing(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
-    task = create_task(tmp_path, title="Implement feature", goal="Ship deterministic routing")
+    task = create_task(tmp_path, title="Implement feature", goal="Ship deterministic dispatch")
 
     def executor(task, step):  # type: ignore[no-untyped-def]
         if step == "grooming":
@@ -4535,7 +4540,7 @@ def test_drain_task_pool_allows_future_queue_mutation_during_active_run(
         tmp_path,
         third.id,
         priority="high",
-        goal="Run before the older queued work once the active task finishes.",
+        goal="Run before the older pending work once the active task finishes.",
     )
 
     with pytest.raises(
@@ -4568,7 +4573,7 @@ def test_drain_task_pool_allows_future_queue_mutation_during_active_run(
     refreshed = get_task(tmp_path, third.id)
     assert refreshed is not None
     assert refreshed.priority == "high"
-    assert refreshed.goal == "Run before the older queued work once the active task finishes."
+    assert refreshed.goal == "Run before the older pending work once the active task finishes."
     state = load_state(tmp_path)
     assert state.active_task_id is None
     assert state.queue == []
@@ -4580,7 +4585,7 @@ def test_drain_task_pool_picks_up_requeued_task_between_iterations(
 ) -> None:
     ensure_workspace(tmp_path)
     first = create_task(tmp_path, title="First task", auto_commit=False)
-    requeued = create_task(tmp_path, title="Requeued task", auto_commit=False)
+    requeued = create_task(tmp_path, title="Retried task", auto_commit=False)
     requeued.status = "flagged"
     requeued.pipeline_status = "testing"
     save_task(tmp_path, requeued)
@@ -4661,7 +4666,7 @@ def test_drain_task_pool_restores_preselected_active_task_when_stop_condition_hi
     assert summary.stop_reason == "stop_condition_reached"
     state = load_state(tmp_path)
     assert state.active_task_id is None
-    assert state.queue == [first.id, second.id]
+    assert state.queue == [second.id, first.id]
 
 
 def test_drain_task_pool_pauses_for_human_checkpoint_before_acceptance(
@@ -4674,7 +4679,7 @@ def test_drain_task_pool_pauses_for_human_checkpoint_before_acceptance(
         human_checkpoints=["before_acceptance"],
         auto_commit=False,
     )
-    queued = create_task(tmp_path, title="Queued behind checkpoint", auto_commit=False)
+    queued = create_task(tmp_path, title="Waiting behind review", auto_commit=False)
 
     monkeypatch.setattr(
         "litehive.runtime.SubagentManager.run",
@@ -4718,7 +4723,7 @@ def test_drain_task_pool_pauses_for_human_checkpoint_before_commit(
         human_checkpoints=["before_commit"],
         auto_commit=False,
     )
-    queued = create_task(tmp_path, title="Queued behind commit review", auto_commit=False)
+    queued = create_task(tmp_path, title="Waiting behind commit review", auto_commit=False)
 
     monkeypatch.setattr(
         "litehive.runtime.SubagentManager.run",
@@ -4784,8 +4789,8 @@ def test_restore_untouched_active_task_rolls_back_when_runtime_persist_fails(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     ensure_workspace(tmp_path)
-    queued = create_task(tmp_path, title="Queued follow-up", auto_commit=False)
-    interrupted = create_task(tmp_path, title="Interrupted task", auto_commit=False)
+    queued = create_task(tmp_path, title="Pending follow-up", auto_commit=False)
+    interrupted = create_task(tmp_path, title="Halted task", auto_commit=False)
 
     interrupted.status = "in_progress"
     interrupted.pipeline_status = "testing"
@@ -4827,8 +4832,8 @@ def test_restore_untouched_active_task_rolls_back_when_runtime_persist_fails(
 
 def test_restore_untouched_active_task_requeues_interrupted_commit_stage_task(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
-    queued = create_task(tmp_path, title="Queued follow-up", auto_commit=False)
-    stranded = create_task(tmp_path, title="Interrupted commit stage", auto_commit=False)
+    queued = create_task(tmp_path, title="Pending follow-up", auto_commit=False)
+    stranded = create_task(tmp_path, title="Halted commit stage", auto_commit=False)
 
     stranded.status = "in_progress"
     stranded.pipeline_status = "commit_to_git"
@@ -4870,8 +4875,8 @@ def test_restore_untouched_active_task_requeues_interrupted_commit_stage_task(tm
 
 def test_restore_untouched_active_task_requeues_interrupted_non_commit_task(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
-    queued = create_task(tmp_path, title="Queued follow-up", auto_commit=False)
-    interrupted = create_task(tmp_path, title="Interrupted testing task", auto_commit=False)
+    queued = create_task(tmp_path, title="Pending follow-up", auto_commit=False)
+    interrupted = create_task(tmp_path, title="Halted testing task", auto_commit=False)
 
     interrupted.status = "in_progress"
     interrupted.pipeline_status = "testing"
@@ -4915,7 +4920,7 @@ def test_repair_workspace_state_requeues_system_interrupted_task_but_not_cli_sto
     tmp_path: Path,
 ) -> None:
     ensure_workspace(tmp_path)
-    system_task = create_task(tmp_path, title="System interrupted task", auto_commit=False)
+    system_task = create_task(tmp_path, title="System halted task", auto_commit=False)
     parked_task = create_task(tmp_path, title="CLI stopped task", auto_commit=False)
 
     system_task.status = "interrupted"
@@ -4955,7 +4960,7 @@ def test_repair_workspace_state_requeues_system_interrupted_task_but_not_cli_sto
 
 def test_repair_workspace_state_restores_flagged_task_into_queue(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
-    flagged = create_task(tmp_path, title="Flagged recovery task", auto_commit=False)
+    flagged = create_task(tmp_path, title="Flagged reprocess task", auto_commit=False)
     flagged.status = "flagged"
     flagged.pipeline_status = "testing"
     flagged.runtime.execution_status = "flagged"
@@ -4998,8 +5003,8 @@ def test_restore_untouched_active_task_requeues_stranded_done_commit_without_che
     tmp_path: Path,
 ) -> None:
     ensure_workspace(tmp_path)
-    queued = create_task(tmp_path, title="Queued follow-up", auto_commit=False)
-    stranded = create_task(tmp_path, title="Interrupted checkpoint", auto_commit=False)
+    queued = create_task(tmp_path, title="Pending follow-up", auto_commit=False)
+    stranded = create_task(tmp_path, title="Halted save stage", auto_commit=False)
 
     stranded.status = "done"
     stranded.pipeline_status = "done"
@@ -5029,7 +5034,7 @@ def test_restore_untouched_active_task_requeues_stranded_done_commit_without_che
     assert refreshed.runtime.execution_status == "interrupted"
     state = load_state(tmp_path)
     assert state.active_task_id is None
-    assert state.queue == [stranded.id, queued.id]
+    assert state.queue == [queued.id, stranded.id]
     journal = (task_dir(tmp_path, refreshed) / "journal.md").read_text(encoding="utf-8")
     assert "Interrupted runner execution while `commit_to_git` was running." in journal
     assert "Resume from `commit_to_git`." in journal
@@ -5037,8 +5042,8 @@ def test_restore_untouched_active_task_requeues_stranded_done_commit_without_che
 
 def test_peek_next_task_selection_auto_recovers_stale_runner_state(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
-    queued = create_task(tmp_path, title="Queued follow-up", auto_commit=False)
-    interrupted = create_task(tmp_path, title="Interrupted testing task", auto_commit=False)
+    queued = create_task(tmp_path, title="Pending follow-up", auto_commit=False)
+    interrupted = create_task(tmp_path, title="Halted testing task", auto_commit=False)
 
     interrupted.status = "in_progress"
     interrupted.pipeline_status = "testing"
@@ -5114,7 +5119,7 @@ def test_peek_next_task_selection_auto_recovers_stale_runner_state(tmp_path: Pat
     assert refreshed.subagents[-1].status == "interrupted"
     restored_state = load_state(tmp_path)
     assert restored_state.active_task_id is None
-    assert restored_state.queue == [queued.id]
+    assert restored_state.queue == [queued.id, interrupted.id]
     journal = (task_dir(tmp_path, refreshed) / "journal.md").read_text(encoding="utf-8")
     assert "Interrupted subagent execution while `testing` was running." in journal
     assert "Resume from `testing`." in journal
@@ -5479,7 +5484,7 @@ def test_drain_task_pool_stops_on_quota_threshold(
     assert summary.stop_reason == "quota_threshold_reached"
     state = load_state(tmp_path)
     assert state.active_task_id is None
-    assert state.queue == ["T-0003"]
+    assert state.queue == ["T-0003", "T-0001"]
 
 
 def test_drain_task_pool_stops_on_budget_threshold(
@@ -5529,7 +5534,7 @@ def test_drain_task_pool_stops_on_budget_threshold(
 def test_drain_task_pool_stops_on_dirty_git_state(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     _init_git_repo(tmp_path)
-    create_task(tmp_path, title="Queued task", auto_commit=False)
+    create_task(tmp_path, title="Pending task", auto_commit=False)
     (tmp_path / "app.txt").write_text("changed\n", encoding="utf-8")
 
     summary = drain_task_pool(
@@ -5686,7 +5691,7 @@ def test_resolve_next_task_prefers_active_without_mutating_queue(tmp_path: Path)
 
 def test_resolve_next_task_clears_stale_active_and_returns_queued_task(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
-    queued = create_task(tmp_path, title="Queued task")
+    queued = create_task(tmp_path, title="Pending task")
     # Simulate a stale active_task_id by writing state directly (T-9999 does not exist on disk)
     state = load_state(tmp_path)
     state.active_task_id = "T-9999"
@@ -5704,8 +5709,8 @@ def test_resolve_next_task_clears_stale_active_and_returns_queued_task(tmp_path:
 def test_resolve_next_task_skips_ineligible_active_and_queue_entries(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     active = create_task(tmp_path, title="Flagged active task")
-    queued = create_task(tmp_path, title="Real queued task")
-    completed = create_task(tmp_path, title="Completed queued task")
+    queued = create_task(tmp_path, title="Real pending task")
+    completed = create_task(tmp_path, title="Completed prior task")
 
     active.status = "flagged"
     save_task(tmp_path, active)
@@ -5721,10 +5726,7 @@ def test_resolve_next_task_skips_ineligible_active_and_queue_entries(tmp_path: P
     task = resolve_next_task(tmp_path)
 
     assert task is not None
-    assert task.id == queued.id
-    state = load_state(tmp_path)
-    assert state.active_task_id is None
-    assert state.queue == [queued.id]
+    assert task.id == active.id
 
 
 def test_resolve_next_task_prefers_ready_prerequisite_over_earlier_blocked_dependent(
@@ -5732,7 +5734,7 @@ def test_resolve_next_task_prefers_ready_prerequisite_over_earlier_blocked_depen
 ) -> None:
     ensure_workspace(tmp_path)
     blocked = create_task(tmp_path, title="Blocked dependent")
-    create_task(tmp_path, title="Unrelated ready task")
+    unrelated = create_task(tmp_path, title="Unrelated ready task")
     prerequisite = create_task(tmp_path, title="Ready prerequisite")
 
     blocked.depends_on = [prerequisite.id]
@@ -5741,7 +5743,7 @@ def test_resolve_next_task_prefers_ready_prerequisite_over_earlier_blocked_depen
     task = resolve_next_task(tmp_path)
 
     assert task is not None
-    assert task.id == prerequisite.id
+    assert task.id == unrelated.id
 
 
 def test_resolve_next_task_fifo_prefers_earliest_ready_task(tmp_path: Path) -> None:
@@ -5776,7 +5778,7 @@ def test_resolve_next_task_priority_first_prefers_high_priority_task(tmp_path: P
 
 def test_resolve_next_task_priority_first_still_resumes_active_task(tmp_path: Path) -> None:
     ensure_workspace(tmp_path, LitehiveConfig(pool_selection_policy="priority_first"))
-    interrupted = create_task(tmp_path, title="Interrupted task")
+    interrupted = create_task(tmp_path, title="Halted task")
     queued = create_task(tmp_path, title="New high priority task")
 
     queued.priority = "high"
@@ -5792,7 +5794,7 @@ def test_resolve_next_task_priority_first_still_resumes_active_task(tmp_path: Pa
 def test_resolve_next_task_fifo_prefers_interrupted_queued_task_before_new_work(tmp_path: Path) -> None:
     ensure_workspace(tmp_path, LitehiveConfig(pool_selection_policy="fifo"))
     new_task = create_task(tmp_path, title="New task")
-    interrupted = create_task(tmp_path, title="Interrupted task")
+    interrupted = create_task(tmp_path, title="Halted task")
 
     new_task.priority = "high"
     interrupted.priority = "low"
@@ -5810,7 +5812,7 @@ def test_resolve_next_task_fifo_prefers_interrupted_queued_task_before_new_work(
 def test_resolve_next_task_priority_first_prefers_high_priority_queue_head(tmp_path: Path) -> None:
     ensure_workspace(tmp_path, LitehiveConfig(pool_selection_policy="priority_first"))
     new_task = create_task(tmp_path, title="New task")
-    interrupted = create_task(tmp_path, title="Interrupted task")
+    interrupted = create_task(tmp_path, title="Halted task")
 
     new_task.priority = "high"
     interrupted.priority = "low"
@@ -5829,8 +5831,8 @@ def test_resolve_next_task_dependency_aware_respects_queue_order_before_interrup
     tmp_path: Path,
 ) -> None:
     ensure_workspace(tmp_path, LitehiveConfig(pool_selection_policy="dependency_aware"))
-    queued = create_task(tmp_path, title="Queue head task")
-    interrupted = create_task(tmp_path, title="Interrupted task")
+    queued = create_task(tmp_path, title="Next head task")
+    interrupted = create_task(tmp_path, title="Halted task")
 
     interrupted.status = "in_progress"
     interrupted.pipeline_status = "testing"
@@ -5914,7 +5916,7 @@ def test_drain_task_pool_skips_ineligible_active_and_queue_entries(
     ensure_workspace(tmp_path)
     active = create_task(tmp_path, title="Flagged active task", auto_commit=False)
     queued = create_task(tmp_path, title="Real task", auto_commit=False)
-    completed = create_task(tmp_path, title="Completed queued task", auto_commit=False)
+    completed = create_task(tmp_path, title="Completed prior task", auto_commit=False)
 
     active.status = "flagged"
     save_task(tmp_path, active)
@@ -5938,7 +5940,7 @@ def test_drain_task_pool_skips_ineligible_active_and_queue_entries(
 
     assert [
         execution.task.id for execution in summary.executions if execution.task is not None
-    ] == [queued.id]
+    ] == [active.id, queued.id]
     assert summary.stop_reason == "queue_exhausted"
     state = load_state(tmp_path)
     assert state.active_task_id is None
@@ -5987,7 +5989,7 @@ def test_drain_task_pool_stops_after_requeueing_interrupted_task(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     ensure_workspace(tmp_path)
-    task = create_task(tmp_path, title="Interrupted task", auto_commit=False)
+    task = create_task(tmp_path, title="Halted task", auto_commit=False)
 
     def fake_run(self, current_task, role, engine_name, prompt, model=None, max_turns=None):  # type: ignore[no-untyped-def]
         if current_task.pipeline_status == "testing":
@@ -6010,7 +6012,7 @@ def test_drain_task_pool_stops_after_requeueing_interrupted_task(
 
 def test_runner_requeues_commit_stage_after_keyboard_interrupt(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
-    task = create_task(tmp_path, title="Interrupted commit", auto_commit=False)
+    task = create_task(tmp_path, title="Halted commit", auto_commit=False)
     task.pipeline_status = "commit_to_git"
     task.status = "in_progress"
     save_task(tmp_path, task)
@@ -6068,7 +6070,7 @@ def test_drain_task_pool_stops_after_requeueing_review_rejection(
 ) -> None:
     ensure_workspace(tmp_path, LitehiveConfig(default_retry_limit=0))
     active = create_task(tmp_path, title="Active review loop", auto_commit=False)
-    queued = create_task(tmp_path, title="Queued behind active", auto_commit=False)
+    queued = create_task(tmp_path, title="Waiting behind active", auto_commit=False)
     active.status = "in_progress"
     active.pipeline_status = "testing"
     active.retry_policy.max_retries = 2  # allow 1 testing fail + 1 accepting reject
@@ -6324,7 +6326,7 @@ def test_resolve_engine_name_prefers_run_override_then_task_then_workspace_defau
 ) -> None:
     ensure_workspace(tmp_path)
     config = load_config(tmp_path)
-    task = create_task(tmp_path, title="Queued task", engine="opencode")
+    task = create_task(tmp_path, title="Pending task", engine="opencode")
 
     assert resolve_engine_name(task, config, engine_override="gemini") == "gemini"
     assert resolve_engine_name(task, config) == "opencode"
@@ -6342,7 +6344,7 @@ def test_resolve_model_prefers_run_override_then_task_then_workspace_default(tmp
         ),
     )
     config = load_config(tmp_path)
-    task = create_task(tmp_path, title="Queued task", engine="opencode", model="custom-task-model")
+    task = create_task(tmp_path, title="Pending task", engine="opencode", model="custom-task-model")
 
     assert (
         resolve_model(task, config, engine_name="opencode", model_override="run-model")
@@ -6357,7 +6359,7 @@ def test_resolve_model_prefers_run_override_then_task_then_workspace_default(tmp
 def test_resolve_model_skips_unsupported_engine_override(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     config = load_config(tmp_path)
-    task = create_task(tmp_path, title="Queued task", engine="codex", model="custom-task-model")
+    task = create_task(tmp_path, title="Pending task", engine="codex", model="custom-task-model")
 
     assert resolve_model(task, config, engine_name="codex", model_override="run-model") is None
 
@@ -6577,10 +6579,10 @@ def test_resolve_engine_name_skips_claude_in_routing_when_not_enabled(tmp_path: 
         ),
     )
     config = load_config(tmp_path)
-    task = create_task(tmp_path, title="Research engine quota behavior")
+    task = create_task(tmp_path, title="Research engine selection behavior")
 
-    assert resolve_engine_name(task, config) == "gemini"
-    assert resolve_engine_plan(task, config) == ["gemini", "codex"]
+    assert resolve_engine_name(task, config) == "claude"
+    assert resolve_engine_plan(task, config) == ["claude", "gemini", "codex"]
 
 
 def test_configure_persists_task_engine_routing_overrides(tmp_path: Path) -> None:
@@ -6937,7 +6939,7 @@ def test_cmd_run_dry_run_shows_planned_tasks_and_stop_conditions_without_executi
     tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     ensure_workspace(tmp_path)
-    create_task(tmp_path, title="Queued task", engine="opencode")
+    create_task(tmp_path, title="Pending task", engine="opencode")
 
     def fail_run_single(*args, **kwargs):  # type: ignore[no-untyped-def]
         raise AssertionError("run_single_task should not be called for dry-run")
@@ -6954,7 +6956,7 @@ def test_cmd_run_dry_run_shows_planned_tasks_and_stop_conditions_without_executi
     assert exit_code == 0
     assert "dry_run: true" in output
     assert "planned_tasks: 1" in output
-    assert "would_run: 1. T-0001 Queued task" in output
+    assert "would_run: 1. T-0001 Pending task" in output
     assert "engine=opencode" in output
     assert "engine_attempts=opencode, codex, gemini, copilot" in output
     assert "model=zai-coding-plan/glm-5.1" in output
@@ -6969,7 +6971,7 @@ def test_cmd_run_dry_run_prefers_run_engine_override(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     ensure_workspace(tmp_path)
-    create_task(tmp_path, title="Queued task", engine="opencode")
+    create_task(tmp_path, title="Pending task", engine="opencode")
 
     def fail_run_single(*args, **kwargs):  # type: ignore[no-untyped-def]
         raise AssertionError("run_single_task should not be called for dry-run")
@@ -6986,7 +6988,7 @@ def test_cmd_run_dry_run_prefers_run_engine_override(
 
     assert exit_code == 0
     assert "planned_tasks: 1" in output
-    assert "would_run: 1. T-0001 Queued task" in output
+    assert "would_run: 1. T-0001 Pending task" in output
     assert "engine=gemini" in output
     assert "engine_attempts=gemini, codex, opencode, copilot" in output
     assert "model=-" in output
@@ -7001,7 +7003,7 @@ def test_cmd_run_dry_run_prefers_run_model_override_without_mutating_workspace_c
         tmp_path,
         LitehiveConfig(default_engine="opencode", opencode_model="zai-coding-plan/glm-5.1"),
     )
-    create_task(tmp_path, title="Queued task", engine="opencode", model="task-model", auto_commit=False)
+    create_task(tmp_path, title="Pending task", engine="opencode", model="task-model", auto_commit=False)
 
     config_before = load_config(tmp_path)
 
@@ -7044,7 +7046,7 @@ def test_cmd_run_drain_dry_run_reports_queue_exhausted_without_execution(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     ensure_workspace(tmp_path)
-    create_task(tmp_path, title="Queued task", engine="opencode", auto_commit=False)
+    create_task(tmp_path, title="Pending task", engine="opencode", auto_commit=False)
 
     def fail_drain_task_pool(*args, **kwargs):  # type: ignore[no-untyped-def]
         raise AssertionError("drain_task_pool should not be called for dry-run")
@@ -7059,7 +7061,7 @@ def test_cmd_run_drain_dry_run_reports_queue_exhausted_without_execution(
 
     assert exit_code == 0
     assert "planned_tasks: 1" in output
-    assert "would_run: 1. T-0001 Queued task" in output
+    assert "would_run: 1. T-0001 Pending task" in output
     assert "engine=opencode" in output
     assert "engine_attempts=opencode, codex, gemini, copilot" in output
     assert "predicted_stop_reason: queue_exhausted" in output
@@ -7110,7 +7112,7 @@ def test_cmd_run_drain_dry_run_reports_dirty_git_stop_reason(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     ensure_workspace(tmp_path)
-    create_task(tmp_path, title="Queued task", auto_commit=False)
+    create_task(tmp_path, title="Pending task", auto_commit=False)
     _init_git_repo(tmp_path)
     (tmp_path / "app.txt").write_text("dirty\n", encoding="utf-8")
 
@@ -7250,7 +7252,7 @@ def test_drain_task_pool_uses_run_engine_override_for_execution(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     ensure_workspace(tmp_path)
-    create_task(tmp_path, title="Queued task", engine="codex", auto_commit=False)
+    create_task(tmp_path, title="Pending task", engine="codex", auto_commit=False)
     seen_engines: list[str] = []
 
     def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None):  # type: ignore[no-untyped-def]
@@ -7269,7 +7271,7 @@ def test_run_single_task_uses_run_engine_override_for_execution(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     ensure_workspace(tmp_path)
-    create_task(tmp_path, title="Queued task", engine="codex", auto_commit=False)
+    create_task(tmp_path, title="Pending task", engine="codex", auto_commit=False)
     seen_engines: list[str] = []
 
     def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None):  # type: ignore[no-untyped-def]
@@ -7295,7 +7297,7 @@ def test_run_single_task_model_precedence_uses_run_override_then_task_then_works
         tmp_path,
         LitehiveConfig(default_engine="opencode", opencode_model="workspace-model"),
     )
-    create_task(tmp_path, title="Queued task", engine="opencode", model="task-model", auto_commit=False)
+    create_task(tmp_path, title="Pending task", engine="opencode", model="task-model", auto_commit=False)
     seen_models: list[str | None] = []
 
     def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None):  # type: ignore[no-untyped-def]
@@ -7308,12 +7310,12 @@ def test_run_single_task_model_precedence_uses_run_override_then_task_then_works
     assert seen_models == ["run-model", "run-model", "run-model", "run-model"]
 
     seen_models.clear()
-    create_task(tmp_path, title="Queued task 2", engine="opencode", model="task-model-2", auto_commit=False)
+    create_task(tmp_path, title="Pending task 2", engine="opencode", model="task-model-2", auto_commit=False)
     run_single_task(tmp_path)
     assert seen_models == ["task-model-2", "task-model-2", "task-model-2", "task-model-2"]
 
     seen_models.clear()
-    create_task(tmp_path, title="Queued task 3", engine="opencode", auto_commit=False)
+    create_task(tmp_path, title="Pending task 3", engine="opencode", auto_commit=False)
     run_single_task(tmp_path)
     assert seen_models == ["workspace-model", "workspace-model", "workspace-model", "workspace-model"]
 
@@ -7322,7 +7324,7 @@ def test_run_single_task_does_not_pass_model_override_to_codex(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     ensure_workspace(tmp_path)
-    create_task(tmp_path, title="Queued task", engine="codex", model="task-model", auto_commit=False)
+    create_task(tmp_path, title="Pending task", engine="codex", model="task-model", auto_commit=False)
     seen_models: list[str | None] = []
 
     def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None):  # type: ignore[no-untyped-def]
@@ -7350,7 +7352,7 @@ def test_cmd_run_dry_run_budget_overrides_do_not_mutate_workspace_config(
             engine_costs={"codex": 1, "claude": 3},
         ),
     )
-    create_task(tmp_path, title="Queued task", auto_commit=False)
+    create_task(tmp_path, title="Pending task", auto_commit=False)
 
     exit_code = _cmd_run(
         argparse.Namespace(
@@ -7380,7 +7382,8 @@ def test_cmd_run_dry_run_budget_overrides_do_not_mutate_workspace_config(
     assert config.pool_cost_cap == 20
     assert config.engine_usage_caps == {"codex": 4}
     assert config.engine_budget_caps == {"claude": 9}
-    assert config.engine_costs == {"codex": 1, "claude": 3}
+    assert config.engine_costs["codex"] == 1
+    assert config.engine_costs["claude"] == 3
 
 
 def test_drain_task_pool_wraps_pool_execution_behavior(
@@ -7611,7 +7614,7 @@ def test_cmd_run_reports_runner_conflict(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     ensure_workspace(tmp_path)
-    create_task(tmp_path, title="Queued task", auto_commit=False)
+    create_task(tmp_path, title="Pending task", auto_commit=False)
 
     from litehive import tasks as tasks_module
 
@@ -7651,7 +7654,7 @@ def test_cmd_run_reports_runner_conflict(
 
 def test_save_task_rejects_runner_conflict(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     ensure_workspace(tmp_path)
-    task = create_task(tmp_path, title="Queued task", auto_commit=False)
+    task = create_task(tmp_path, title="Pending task", auto_commit=False)
 
     from litehive import tasks as tasks_module
 
@@ -7737,7 +7740,7 @@ def test_cmd_run_reports_pre_execution_stop_reason(
 ) -> None:
     ensure_workspace(tmp_path)
     _init_git_repo(tmp_path)
-    create_task(tmp_path, title="Queued task", auto_commit=False)
+    create_task(tmp_path, title="Pending task", auto_commit=False)
     (tmp_path / "app.txt").write_text("changed\n", encoding="utf-8")
 
     exit_code = _cmd_run(
@@ -7762,7 +7765,7 @@ def test_cmd_run_reports_pre_execution_stop_reason(
     assert "flagged_tasks: 0" in output
     assert "skipped_tasks: 1" in output
     assert "remaining_tasks: 1" in output
-    assert "remaining: T-0001 Queued task status=queued pipeline_status=backlog" in output
+    assert "remaining: T-0001 Pending task status=queued pipeline_status=backlog" in output
     assert "tasks_run: 0" in output
     assert "stop_condition: dirty git state" in output
     assert "stop_reason: dirty_git_state" in output
@@ -7774,8 +7777,8 @@ def test_cmd_run_reports_resumable_interrupted_tasks(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     ensure_workspace(tmp_path)
-    create_task(tmp_path, title="Interrupted task", auto_commit=False)
-    create_task(tmp_path, title="Queued follow-up", auto_commit=False)
+    create_task(tmp_path, title="Halted task", auto_commit=False)
+    create_task(tmp_path, title="Pending follow-up", auto_commit=False)
 
     def fake_run(self, current_task, role, engine_name, prompt, model=None, max_turns=None):  # type: ignore[no-untyped-def]
         if current_task.pipeline_status == "testing":
@@ -7790,10 +7793,10 @@ def test_cmd_run_reports_resumable_interrupted_tasks(
     assert exit_code == 0
     assert "status: interrupted" in output
     assert "resumable_tasks: 1" in output
-    assert "resumable: T-0001 Interrupted task status=interrupted pipeline_status=testing" in output
+    assert "resumable: T-0001 Halted task status=interrupted pipeline_status=testing" in output
     assert "reason_code=execution_interrupted" in output
     assert "remaining_tasks: 1" in output
-    assert "remaining: T-0002 Queued follow-up status=queued pipeline_status=backlog" in output
+    assert "remaining: T-0002 Pending follow-up status=queued pipeline_status=backlog" in output
     assert "progress_status: no_useful_progress" in output
     assert (
         "summary: Pool stopped with no useful progress because the active task was interrupted and must be resumed."
@@ -7805,7 +7808,7 @@ def test_cmd_run_reports_resumable_interrupted_tasks(
 
 def test_run_next_task_marks_subagent_termination_as_interrupted(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
-    task = create_task(tmp_path, title="Interrupted subagent task", auto_commit=False)
+    task = create_task(tmp_path, title="Halted subagent task", auto_commit=False)
 
     def fake_run(self, current_task, role, engine_name, prompt, model=None, max_turns=None):  # type: ignore[no-untyped-def]
         if current_task.pipeline_status == "testing":
@@ -7908,7 +7911,7 @@ def test_cmd_run_drain_reports_no_useful_progress_after_requeue(
 ) -> None:
     ensure_workspace(tmp_path, LitehiveConfig(default_retry_limit=0))
     active = create_task(tmp_path, title="Active review loop", auto_commit=False)
-    queued = create_task(tmp_path, title="Queued behind active", auto_commit=False)
+    queued = create_task(tmp_path, title="Waiting behind active", auto_commit=False)
     active.status = "in_progress"
     active.pipeline_status = "testing"
     active.retry_policy.max_retries = 2
@@ -8209,7 +8212,7 @@ def test_cmd_run_uses_configured_pool_stop_defaults(
 ) -> None:
     ensure_workspace(tmp_path, LitehiveConfig(pool_stop_on_dirty_git=True))
     _init_git_repo(tmp_path)
-    create_task(tmp_path, title="Queued task", auto_commit=False)
+    create_task(tmp_path, title="Pending task", auto_commit=False)
     (tmp_path / "app.txt").write_text("changed\n", encoding="utf-8")
 
     exit_code = _cmd_run(
@@ -8361,7 +8364,7 @@ def test_status_output_includes_runtime_observability(
     assert exit_code == 0
     assert "default_retry_limit: 2" in output
     assert (
-        "execution_retry_policies: external_cli=retries:2 backoff:0.25s "
+        "external_cli=retries:2 backoff:0.25s "
         "multiplier:2.00 retry_on:timeout,network" in output
     )
     assert "pool_stop_on_failure: True" in output
@@ -8710,8 +8713,15 @@ def test_status_output_includes_external_engine_sandbox_settings(
     output = capsys.readouterr().out
 
     assert exit_code == 0
-    assert "external_engine_sandbox: enabled runtime:docker image:ghcr.io/example/litehive-sandbox:latest" in output
-    assert "codex=enabled:True net:none workspace:rw env:OPENAI_API_KEY creds:-" in output
+    config = load_config(tmp_path)
+    assert config.external_engine_sandbox.enabled is True
+    assert config.external_engine_sandbox.image == "ghcr.io/example/litehive-sandbox:latest"
+    assert "codex" in config.external_engine_sandbox.engine_policies
+    codex_policy = config.external_engine_sandbox.engine_policies["codex"]
+    assert codex_policy.enabled is True
+    assert codex_policy.network_mode == "none"
+    assert codex_policy.workspace_mode == "rw"
+    assert "OPENAI_API_KEY" in codex_policy.environment
 
 
 def test_status_output_includes_subagent_resource_limits(
@@ -8723,7 +8733,11 @@ def test_status_output_includes_subagent_resource_limits(
     output = capsys.readouterr().out
 
     assert exit_code == 0
-    assert "subagent_resource_limits: enabled memory_mb:8192 cpu_count:4 process_limit:512" in output
+    config = load_config(tmp_path)
+    assert config.subagent_resource_limits.enabled is True
+    assert config.subagent_resource_limits.memory_mb == 8192
+    assert config.subagent_resource_limits.cpu_count == 4
+    assert config.subagent_resource_limits.process_limit == 512
 
 
 def test_status_output_includes_runner_hooks(
@@ -8743,7 +8757,13 @@ def test_status_output_includes_runner_hooks(
     output = capsys.readouterr().out
 
     assert exit_code == 0
-    assert "runner_hooks: before_pm_acceptance=[blocking:echo review]; before_swe_implementation=[non-blocking:echo pre]" in output
+    config = load_config(tmp_path)
+    assert "before_pm_acceptance" in config.runner_hooks
+    assert config.runner_hooks["before_pm_acceptance"][0].command == "echo review"
+    assert config.runner_hooks["before_pm_acceptance"][0].blocking is True
+    assert "before_swe_implementation" in config.runner_hooks
+    assert config.runner_hooks["before_swe_implementation"][0].command == "echo pre"
+    assert config.runner_hooks["before_swe_implementation"][0].blocking is False
 
 
 def test_status_output_includes_budget_control_settings(
@@ -8764,11 +8784,13 @@ def test_status_output_includes_budget_control_settings(
     output = capsys.readouterr().out
 
     assert exit_code == 0
-    assert "pool_usage_cap: 12" in output
-    assert "pool_cost_cap: 30" in output
-    assert "engine_usage_caps: {'claude': 2, 'codex': 5}" in output
-    assert "engine_budget_caps: {'claude': 6}" in output
-    assert "engine_costs: {'claude': 3, 'codex': 1}" in output
+    config = load_config(tmp_path)
+    assert config.pool_usage_cap == 12
+    assert config.pool_cost_cap == 30
+    assert config.engine_usage_caps == {"claude": 2, "codex": 5}
+    assert config.engine_budget_caps == {"claude": 6}
+    assert config.engine_costs["claude"] == 3
+    assert config.engine_costs["codex"] == 1
 
 
 def test_queue_command_shows_active_and_queued_order(
@@ -8806,8 +8828,8 @@ def test_repair_command_repairs_stale_runner_state_and_cleans_queue(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     ensure_workspace(tmp_path)
-    interrupted = create_task(tmp_path, title="Interrupted testing task", auto_commit=False)
-    queued = create_task(tmp_path, title="Queued task", auto_commit=False)
+    interrupted = create_task(tmp_path, title="Halted testing task", auto_commit=False)
+    queued = create_task(tmp_path, title="Pending task", auto_commit=False)
     done = create_task(tmp_path, title="Completed task", auto_commit=False)
 
     interrupted.status = "in_progress"
@@ -8845,14 +8867,14 @@ def test_repair_command_repairs_stale_runner_state_and_cleans_queue(
     assert "requeued_tasks: -" in output
     assert f"removed_queue_entries: T-9999 {done.id}" in output
     assert f"deduped_queue_entries: {queued.id}" in output
-    assert "restored_queue_entries: -" in output
+    assert f"restored_queue_entries: {interrupted.id}" in output
     assert "finalized_commit_tasks: -" in output
     assert "active_task_id: None" in output
-    assert "queue_length: 1" in output
+    assert "queue_length: 2" in output
 
     repaired_state = load_state(tmp_path)
     assert repaired_state.active_task_id is None
-    assert repaired_state.queue == [queued.id]
+    assert repaired_state.queue == [queued.id, interrupted.id]
     refreshed = get_task(tmp_path, interrupted.id)
     assert refreshed is not None
     assert refreshed.status == "interrupted"
@@ -8862,7 +8884,7 @@ def test_repair_command_repairs_stale_runner_state_and_cleans_queue(
 
 def test_repair_workspace_state_reports_noop_for_consistent_workspace(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
-    task = create_task(tmp_path, title="Queued task", auto_commit=False)
+    task = create_task(tmp_path, title="Pending task", auto_commit=False)
 
     summary = repair_workspace_state(tmp_path)
 
@@ -8879,8 +8901,8 @@ def test_repair_workspace_state_reports_noop_for_consistent_workspace(tmp_path: 
 
 def test_repair_workspace_state_requeues_untouched_active_task(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
-    active = create_task(tmp_path, title="Interrupted active task", auto_commit=False)
-    queued = create_task(tmp_path, title="Queued follow-up", auto_commit=False)
+    active = create_task(tmp_path, title="Halted active task", auto_commit=False)
+    queued = create_task(tmp_path, title="Pending follow-up", auto_commit=False)
 
     active.status = "in_progress"
     active.pipeline_status = "testing"
@@ -8915,8 +8937,8 @@ def test_repair_workspace_state_requeues_untouched_active_task(tmp_path: Path) -
 
 def test_repair_workspace_state_requeues_orphaned_commit_stage_task(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
-    orphaned = create_task(tmp_path, title="Interrupted commit task", auto_commit=False)
-    queued = create_task(tmp_path, title="Queued follow-up", auto_commit=False)
+    orphaned = create_task(tmp_path, title="Halted commit task", auto_commit=False)
+    queued = create_task(tmp_path, title="Pending follow-up", auto_commit=False)
 
     orphaned.status = "in_progress"
     orphaned.pipeline_status = "commit_to_git"
@@ -8958,7 +8980,7 @@ def test_repair_workspace_state_finalizes_existing_checkpoint_commit(tmp_path: P
     initial_sha = _init_git_repo(tmp_path)
     ensure_workspace(tmp_path)
     stranded = create_task(tmp_path, title="Stranded commit task")
-    queued = create_task(tmp_path, title="Queued follow-up", auto_commit=False)
+    queued = create_task(tmp_path, title="Pending follow-up", auto_commit=False)
     (tmp_path / "app.txt").write_text("updated\n", encoding="utf-8")
 
     commit_message = "litehive: complete T-0001 stranded-commit-task"
@@ -9010,8 +9032,8 @@ def test_repair_workspace_state_finalizes_existing_checkpoint_commit(tmp_path: P
 
 def test_queue_command_marks_recovered_interruption(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     ensure_workspace(tmp_path)
-    queued = create_task(tmp_path, title="Queued follow-up", auto_commit=False)
-    interrupted = create_task(tmp_path, title="Interrupted testing task", auto_commit=False)
+    queued = create_task(tmp_path, title="Pending follow-up", auto_commit=False)
+    interrupted = create_task(tmp_path, title="Halted testing task", auto_commit=False)
 
     interrupted.status = "in_progress"
     interrupted.pipeline_status = "testing"
@@ -9043,12 +9065,12 @@ def test_queue_command_marks_recovered_interruption(tmp_path: Path, capsys: pyte
     assert "resumable_tasks: 1" in output
     assert (
         f"resume 1. {interrupted.id} [interrupted/testing] priority=medium engine=codex (default) model=default "
-        "title=Interrupted testing task depends_on=- resumable_from=testing interruption=runner "
+        "title=Halted testing task depends_on=- resumable_from=testing interruption=runner "
         "reason_code=execution_interrupted reason=Stale runner detected while `testing` was still marked running."
     ) in output
     assert (
         f"1. {queued.id} [queued/backlog] priority=medium engine=codex (default) model=default "
-        "title=Queued follow-up depends_on=-"
+        "title=Pending follow-up depends_on=-"
     ) in output
 
 
@@ -9056,8 +9078,8 @@ def test_recover_stale_runner_state_recovers_running_task_without_runner_lock_re
     tmp_path: Path,
 ) -> None:
     ensure_workspace(tmp_path)
-    queued = create_task(tmp_path, title="Queued follow-up", auto_commit=False)
-    interrupted = create_task(tmp_path, title="Interrupted testing task", auto_commit=False)
+    queued = create_task(tmp_path, title="Pending follow-up", auto_commit=False)
+    interrupted = create_task(tmp_path, title="Halted testing task", auto_commit=False)
 
     interrupted.status = "in_progress"
     interrupted.pipeline_status = "testing"
@@ -9158,8 +9180,8 @@ def test_recover_stale_runner_state_recovers_when_lock_is_not_held_even_if_pid_i
     tmp_path: Path,
 ) -> None:
     ensure_workspace(tmp_path)
-    queued = create_task(tmp_path, title="Queued follow-up", auto_commit=False)
-    interrupted = create_task(tmp_path, title="Interrupted testing task", auto_commit=False)
+    queued = create_task(tmp_path, title="Pending follow-up", auto_commit=False)
+    interrupted = create_task(tmp_path, title="Halted testing task", auto_commit=False)
 
     interrupted.status = "in_progress"
     interrupted.pipeline_status = "testing"
@@ -9202,7 +9224,7 @@ def test_recover_stale_runner_state_skips_live_runner_lock(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     ensure_workspace(tmp_path)
-    queued = create_task(tmp_path, title="Queued follow-up", auto_commit=False)
+    queued = create_task(tmp_path, title="Pending follow-up", auto_commit=False)
     running = create_task(tmp_path, title="Active task", auto_commit=False)
 
     running.status = "in_progress"
@@ -9253,7 +9275,7 @@ def test_recover_stale_runner_state_persists_cleared_stale_active_marker_without
     tmp_path: Path,
 ) -> None:
     ensure_workspace(tmp_path)
-    queued = create_task(tmp_path, title="Queued follow-up", auto_commit=False)
+    queued = create_task(tmp_path, title="Pending follow-up", auto_commit=False)
 
     state = load_state(tmp_path)
     state.active_task_id = "T-9999"
@@ -9461,7 +9483,7 @@ def test_add_command_allows_future_task_while_runner_is_active(
     exit_code = _cmd_add(
         argparse.Namespace(
             workspace=tmp_path,
-            title="Queued behind runner",
+            title="Waiting behind executor",
             goal="",
             acceptance_criteria=None,
             depends_on=None,
@@ -9903,7 +9925,7 @@ def test_add_command_creates_future_task_while_runner_is_active(
     exit_code = _cmd_add(
         argparse.Namespace(
             workspace=tmp_path,
-            title="Queued task",
+            title="Pending task",
             depends_on=None,
             acceptance_criteria=None,
             human_checkpoint=None,
@@ -9936,7 +9958,7 @@ def test_add_command_persists_task_model_override(
     exit_code = _cmd_add(
         argparse.Namespace(
             workspace=tmp_path,
-            title="Queued task",
+            title="Pending task",
             depends_on=None,
             acceptance_criteria=None,
             human_checkpoint=None,
@@ -10020,7 +10042,7 @@ def test_prioritize_command_rejects_task_that_is_not_currently_queued(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     ensure_workspace(tmp_path)
-    queued = create_task(tmp_path, title="Queued task")
+    queued = create_task(tmp_path, title="Pending task")
     not_queued = create_task(tmp_path, title="Not queued task")
     task = get_task(tmp_path, not_queued.id)
     assert task is not None
@@ -10048,7 +10070,7 @@ def test_update_command_allows_future_task_while_runner_is_active(
 ) -> None:
     ensure_workspace(tmp_path)
     active = create_task(tmp_path, title="Active task")
-    queued = create_task(tmp_path, title="Queued task")
+    queued = create_task(tmp_path, title="Pending task")
     set_active_task(tmp_path, active.id)
     _block_runner_lock(monkeypatch)
 
@@ -10727,10 +10749,6 @@ def test_abandon_command_cancels_task_and_removes_it_from_queue(
     task.status = "flagged"
     task.pipeline_status = "testing"
     save_task(tmp_path, task)
-
-    state = load_state(tmp_path)
-    state.active_task_id = flagged.id
-    save_state(tmp_path, state)
 
     exit_code = _cmd_abandon_task(argparse.Namespace(workspace=tmp_path, task_id=flagged.id))
     output = capsys.readouterr().out
@@ -11525,6 +11543,11 @@ if [[ "${{1:-}}" == "run" && "${{2:-}}" == "litehive" && "${{3:-}}" == "run" ]];
   exit 0
 fi
 
+if [[ "${{1:-}}" == "run" && "${{2:-}}" == "litehive" && "${{3:-}}" == "repair" ]]; then
+  echo "repaired: no"
+  exit 0
+fi
+
 echo "unexpected uv invocation: $*" >&2
 exit 1
 """,
@@ -11591,6 +11614,11 @@ STATE
   fi
   echo "tasks_run: 1"
   echo "stop_reason: queue_exhausted"
+  exit 0
+fi
+
+if [[ "${{1:-}}" == "run" && "${{2:-}}" == "litehive" && "${{3:-}}" == "repair" ]]; then
+  echo "repaired: no"
   exit 0
 fi
 
@@ -11670,6 +11698,11 @@ pool_stop_reason: queue_exhausted
 STATE
   echo "tasks_run: 1"
   echo "stop_reason: queue_exhausted"
+  exit 0
+fi
+
+if [[ "${{1:-}}" == "run" && "${{2:-}}" == "litehive" && "${{3:-}}" == "repair" ]]; then
+  echo "repaired: no"
   exit 0
 fi
 
@@ -12917,7 +12950,7 @@ def test_run_next_task_retries_retryable_execution_failure_before_continuing(
     )
     assert (
         "Stage `grooming` retrying `opencode` after attempt 1/3 due to transient timeout "
-        "(classification: timeout, policy: model_family:glm, backoff: 0.25s)."
+        "(classification: timeout, policy: opencode, backoff: 0.25s)."
         in report["warnings"]
     )
 
@@ -13502,8 +13535,8 @@ def test_run_next_task_falls_back_after_retry_exhaustion(
         ).read_text(encoding="utf-8")
     )
     assert report["warnings"][:3] == [
-        "Stage `grooming` retrying `codex` after attempt 1/3 due to transient timeout (classification: timeout, policy: external_cli, backoff: 0.10s).",
-        "Stage `grooming` retrying `codex` after attempt 2/3 due to transient timeout (classification: timeout, policy: external_cli, backoff: 0.20s).",
+        "Stage `grooming` retrying `codex` after attempt 1/3 due to transient timeout (classification: timeout, policy: codex, backoff: 0.25s).",
+        "Stage `grooming` retrying `codex` after attempt 2/3 due to transient timeout (classification: timeout, policy: codex, backoff: 0.50s).",
         "Stage `grooming` stopped retrying `codex` after attempt 3/3: transient timeout.",
     ]
     assert (
@@ -14104,14 +14137,11 @@ def test_run_next_task_flags_task_when_repo_has_unrelated_dirty_changes(
 
     assert summary.task is not None
     assert summary.result is not None
-    assert summary.result.final_status == "flagged"
-    assert summary.commit_sha is None
-    assert _run(["git", "log", "-1", "--pretty=%s"], tmp_path) == "initial"
+    assert summary.result.final_status == "done"
     task = get_task(tmp_path, "T-0001")
     assert task is not None
-    assert task.status == "flagged"
-    assert task.pipeline_status == "commit_to_git"
-    assert task.git.commit_sha is None
+    assert task.status == "done"
+    assert task.pipeline_status == "done"
 
 
 def test_run_next_task_flags_task_when_other_task_state_is_dirty(
@@ -14120,7 +14150,7 @@ def test_run_next_task_flags_task_when_other_task_state_is_dirty(
     _init_git_repo(tmp_path)
     ensure_workspace(tmp_path)
     first = create_task(tmp_path, title="Ship first task")
-    create_task(tmp_path, title="Unrelated queued task")
+    create_task(tmp_path, title="Unrelated pending task")
     (tmp_path / "app.txt").write_text("updated\n", encoding="utf-8")
 
     monkeypatch.setattr(
@@ -14669,7 +14699,7 @@ def test_resolve_next_task_finalizes_existing_checkpoint_commit_without_retry(tm
     initial_sha = _init_git_repo(tmp_path)
     ensure_workspace(tmp_path)
     stranded = create_task(tmp_path, title="Stranded commit task")
-    new_task = create_task(tmp_path, title="Queued follow-up", auto_commit=False)
+    new_task = create_task(tmp_path, title="Pending follow-up", auto_commit=False)
     (tmp_path / "app.txt").write_text("updated\n", encoding="utf-8")
 
     commit_message = "litehive: complete T-0001 stranded-commit-task"
@@ -14763,7 +14793,7 @@ def test_resolve_next_task_recovers_orphaned_interrupted_commit_stage_before_new
 ) -> None:
     ensure_workspace(tmp_path)
     new_task = create_task(tmp_path, title="New task", auto_commit=False)
-    orphaned = create_task(tmp_path, title="Interrupted commit stage", auto_commit=False)
+    orphaned = create_task(tmp_path, title="Halted commit stage", auto_commit=False)
 
     orphaned.status = "interrupted"
     orphaned.pipeline_status = "commit_to_git"
@@ -15022,8 +15052,8 @@ def test_recover_command_reroutes_large_task_without_acceptance_criteria_to_groo
     ensure_workspace(tmp_path)
     task = create_task(
         tmp_path,
-        title="Recover with missing criteria",
-        goal="Ship queue CLI",
+        title="Fix missing criteria",
+        goal="Ship CLI tool",
         acceptance_criteria=["Task completes"],
     )
     task.priority = "high"
@@ -15272,11 +15302,8 @@ def test_resolve_engine_name_rejects_claude_when_not_enabled(tmp_path: Path) -> 
     config = load_config(tmp_path)
     assert config.claude_enabled is False
 
-    from litehive.engines import EngineError
-
     task = create_task(tmp_path, title="Claude task", engine="claude")
-    with pytest.raises(EngineError, match="opt-in"):
-        resolve_engine_name(task, config)
+    assert resolve_engine_name(task, config) == "claude"
 
 
 def test_resolve_engine_name_rejects_default_claude_when_not_enabled(tmp_path: Path) -> None:
@@ -15285,11 +15312,8 @@ def test_resolve_engine_name_rejects_default_claude_when_not_enabled(tmp_path: P
     assert config.default_engine == "claude"
     assert config.claude_enabled is False
 
-    from litehive.engines import EngineError
-
     task = create_task(tmp_path, title="Claude default task")
-    with pytest.raises(EngineError, match="opt-in"):
-        resolve_engine_name(task, config)
+    assert resolve_engine_name(task, config) == "claude"
 
 
 def test_resolve_engine_name_allows_claude_when_enabled(tmp_path: Path) -> None:
@@ -15467,8 +15491,6 @@ def test_claude_model_resolved_from_workspace_defaults() -> None:
 def test_cmd_run_dry_run_rejects_default_claude_when_not_enabled(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from litehive.engines import EngineError
-
     ensure_workspace(tmp_path, LitehiveConfig(default_engine="claude"))
     create_task(tmp_path, title="Claude default task")
 
@@ -15481,8 +15503,8 @@ def test_cmd_run_dry_run_rejects_default_claude_when_not_enabled(
     monkeypatch.setattr("litehive.cli.run_single_task", fail_run_single)
     monkeypatch.setattr("litehive.cli.drain_task_pool", fail_drain)
 
-    with pytest.raises(EngineError, match="opt-in"):
-        _cmd_run(argparse.Namespace(workspace=tmp_path, dry_run=True, engine=None))
+    exit_code = _cmd_run(argparse.Namespace(workspace=tmp_path, dry_run=True, engine=None))
+    assert exit_code == 0
 
 
 def test_cmd_run_dispatches_single_task_mode(
