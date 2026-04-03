@@ -393,51 +393,26 @@ class ClaudeCLIAdapter(ExternalCLIAdapter):
     ) -> EngineUsageObservation | None:
         payloads = iter_jsonl_payloads(execution.stdout)
         for payload in reversed(payloads):
+            error_message, error_metadata = _claude_error_details(payload)
             if payload.get("type") != "result":
+                if error_message is None and not error_metadata:
+                    continue
+                return EngineUsageObservation(
+                    source="provider",
+                    provider="anthropic",
+                    success=False,
+                    limit_reason=classify_execution_limit(error_message) if error_message else None,
+                    metadata=error_metadata,
+                )
+            metadata: dict[str, str | int | bool | None] = dict(error_metadata)
+            usage = _claude_usage_window(payload, metadata)
+            if usage is None and error_message is None and not metadata:
                 continue
-            usage_payload = payload.get("usage")
-            if not isinstance(usage_payload, dict):
-                continue
-            metadata: dict[str, str | int | bool | None] = {}
-            total_tokens = 0
-            saw_tokens = False
-            for field in (
-                "input_tokens",
-                "output_tokens",
-                "cache_creation_input_tokens",
-                "cache_read_input_tokens",
-            ):
-                raw_value = usage_payload.get(field)
-                if isinstance(raw_value, int):
-                    metadata[field] = raw_value
-                    total_tokens += raw_value
-                    saw_tokens = True
-            server_tool_use = usage_payload.get("server_tool_use")
-            if isinstance(server_tool_use, dict):
-                for field in ("web_search_requests", "web_fetch_requests"):
-                    raw_value = server_tool_use.get(field)
-                    if isinstance(raw_value, int):
-                        metadata[field] = raw_value
-            cache_creation = usage_payload.get("cache_creation")
-            if isinstance(cache_creation, dict):
-                for field in ("ephemeral_1h_input_tokens", "ephemeral_5m_input_tokens"):
-                    raw_value = cache_creation.get(field)
-                    if isinstance(raw_value, int):
-                        metadata[field] = raw_value
-            service_tier = usage_payload.get("service_tier")
-            if isinstance(service_tier, str) and service_tier:
-                metadata["service_tier"] = service_tier
-            total_cost_usd = payload.get("total_cost_usd")
-            if isinstance(total_cost_usd, (int, float)):
-                metadata["total_cost_usd"] = f"{total_cost_usd:.6f}"
-            duration_ms = payload.get("duration_ms")
-            if isinstance(duration_ms, int):
-                metadata["duration_ms"] = duration_ms
-            usage = EngineUsageWindow(used=total_tokens, unit="tokens") if saw_tokens else None
             return EngineUsageObservation(
                 source="provider",
                 provider="anthropic",
                 success=not bool(payload.get("is_error")),
+                limit_reason=classify_execution_limit(error_message) if error_message else None,
                 usage=usage,
                 metadata=metadata,
             )
@@ -793,6 +768,99 @@ def _codex_retry_at_hint(text: str | None) -> str | None:
         return None
     value = match.group(1).strip()
     return value or None
+
+
+def _claude_usage_window(
+    payload: dict[str, object],
+    metadata: dict[str, str | int | bool | None],
+) -> EngineUsageWindow | None:
+    usage_payload = payload.get("usage")
+    if not isinstance(usage_payload, dict):
+        return None
+
+    total_tokens = 0
+    saw_tokens = False
+    for field in (
+        "input_tokens",
+        "output_tokens",
+        "cache_creation_input_tokens",
+        "cache_read_input_tokens",
+    ):
+        raw_value = usage_payload.get(field)
+        if isinstance(raw_value, int):
+            metadata[field] = raw_value
+            total_tokens += raw_value
+            saw_tokens = True
+    server_tool_use = usage_payload.get("server_tool_use")
+    if isinstance(server_tool_use, dict):
+        for field in ("web_search_requests", "web_fetch_requests"):
+            raw_value = server_tool_use.get(field)
+            if isinstance(raw_value, int):
+                metadata[field] = raw_value
+    cache_creation = usage_payload.get("cache_creation")
+    if isinstance(cache_creation, dict):
+        for field in ("ephemeral_1h_input_tokens", "ephemeral_5m_input_tokens"):
+            raw_value = cache_creation.get(field)
+            if isinstance(raw_value, int):
+                metadata[field] = raw_value
+    service_tier = usage_payload.get("service_tier")
+    if isinstance(service_tier, str) and service_tier:
+        metadata["service_tier"] = service_tier
+    total_cost_usd = payload.get("total_cost_usd")
+    if isinstance(total_cost_usd, (int, float)):
+        metadata["total_cost_usd"] = f"{total_cost_usd:.6f}"
+    duration_ms = payload.get("duration_ms")
+    if isinstance(duration_ms, int):
+        metadata["duration_ms"] = duration_ms
+    return EngineUsageWindow(used=total_tokens, unit="tokens") if saw_tokens else None
+
+
+def _claude_error_details(
+    payload: dict[str, object],
+) -> tuple[str | None, dict[str, str | int | bool | None]]:
+    raw_error: object | None = None
+    if payload.get("type") == "error":
+        raw_error = payload.get("error")
+        if raw_error is None:
+            raw_error = payload.get("data")
+    elif payload.get("type") == "result" and payload.get("is_error"):
+        raw_error = payload.get("error")
+
+    if raw_error is None:
+        return None, {}
+
+    metadata: dict[str, str | int | bool | None] = {}
+    message = _claude_error_message(raw_error)
+    nested = _decode_json_object(raw_error)
+    if isinstance(nested, dict):
+        error_type = nested.get("type")
+        if isinstance(error_type, str) and error_type:
+            metadata["error_type"] = error_type
+        error_code = nested.get("code")
+        if isinstance(error_code, str) and error_code:
+            metadata["error_code"] = error_code
+    if message:
+        metadata["error_message"] = message
+    return message, metadata
+
+
+def _claude_error_message(raw_error: object) -> str | None:
+    if isinstance(raw_error, str):
+        nested = _decode_json_object(raw_error)
+        if isinstance(nested, dict):
+            return _claude_error_message(nested)
+        message = raw_error.strip()
+        return message or None
+    if isinstance(raw_error, dict):
+        nested_error = raw_error.get("error")
+        if isinstance(nested_error, dict):
+            nested_message = _claude_error_message(nested_error)
+            if nested_message:
+                return nested_message
+        message = raw_error.get("message")
+        if isinstance(message, str) and message.strip():
+            return message.strip()
+    return None
 
 
 ENGINE_REGISTRY: dict[str, ExternalCLIAdapter] = {

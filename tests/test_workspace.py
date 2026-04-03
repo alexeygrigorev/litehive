@@ -318,6 +318,46 @@ def test_record_engine_execution_tracks_codex_provider_limit_observation(tmp_pat
     assert record.metadata["purchase_more_credits"] is True
 
 
+def test_record_engine_execution_tracks_claude_provider_limit_observation(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+
+    record_engine_execution(
+        tmp_path,
+        task_id="T-0001",
+        engine_name="claude",
+        adapter=get_engine("claude"),
+        execution=CLIExecutionResult(
+            adapter="claude",
+            argv=("claude", "-p"),
+            cwd=tmp_path,
+            exit_code=1,
+            stdout=(
+                '{"type":"error","error":{"type":"rate_limit_error","message":"Your account has hit a rate limit. '
+                'Please retry after a short delay."}}\n'
+            ),
+            stderr="",
+        ),
+        failure_kind="execution_limit",
+        failure_reason="rate limit reached",
+    )
+
+    monitoring = load_engine_monitoring(tmp_path)
+    record = monitoring.engines["claude"]
+
+    assert record.source == "provider"
+    assert record.provider == "anthropic"
+    assert record.invocation_count == 1
+    assert record.success_count == 0
+    assert record.failure_count == 1
+    assert record.limit_event_count == 1
+    assert record.last_limit_kind == "rate"
+    assert record.last_limit_reason == "rate limit reached"
+    assert record.metadata["error_type"] == "rate_limit_error"
+    assert record.metadata["error_message"] == (
+        "Your account has hit a rate limit. Please retry after a short delay."
+    )
+
+
 def test_gemini_extract_usage_observation_reads_finished_usage_metadata(tmp_path: Path) -> None:
     adapter = get_engine("gemini")
 
@@ -377,6 +417,34 @@ def test_claude_extract_usage_observation_reads_result_usage_payload(tmp_path: P
     assert observation.metadata["output_tokens"] == 40
     assert observation.metadata["service_tier"] == "priority"
     assert observation.metadata["total_cost_usd"] == "0.012500"
+
+
+def test_claude_extract_usage_observation_reads_provider_limit_payload(tmp_path: Path) -> None:
+    adapter = get_engine("claude")
+
+    observation = adapter.extract_usage_observation(
+        CLIExecutionResult(
+            adapter="claude",
+            argv=("claude", "-p"),
+            cwd=tmp_path,
+            exit_code=1,
+            stdout=(
+                '{"type":"error","error":{"type":"rate_limit_error","message":"Your account has hit a rate limit. '
+                'Please retry after a short delay."}}\n'
+            ),
+            stderr="",
+        )
+    )
+
+    assert observation is not None
+    assert observation.source == "provider"
+    assert observation.provider == "anthropic"
+    assert observation.success is False
+    assert observation.limit_reason == "rate limit reached"
+    assert observation.metadata["error_type"] == "rate_limit_error"
+    assert observation.metadata["error_message"] == (
+        "Your account has hit a rate limit. Please retry after a short delay."
+    )
 
 
 def test_copilot_extract_usage_observation_reads_quota_snapshot(tmp_path: Path) -> None:
@@ -7871,6 +7939,39 @@ def test_cmd_status_includes_codex_provider_limit_monitoring(tmp_path: Path, cap
     assert "engine_monitoring: codex source=provider invocations=1 success=0 failure=1 limits=1" in output
     assert "provider=openai" in output
     assert "last_limit_reason=usage limit reached" in output
+
+
+def test_cmd_status_includes_claude_provider_limit_monitoring(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    ensure_workspace(tmp_path)
+    record_engine_execution(
+        tmp_path,
+        task_id="T-0001",
+        engine_name="claude",
+        adapter=get_engine("claude"),
+        execution=CLIExecutionResult(
+            adapter="claude",
+            argv=("claude", "-p"),
+            cwd=tmp_path,
+            exit_code=1,
+            stdout=(
+                '{"type":"error","error":{"type":"rate_limit_error","message":"Your account has hit a rate limit. '
+                'Please retry after a short delay."}}\n'
+            ),
+            stderr="",
+        ),
+        failure_kind="execution_limit",
+        failure_reason="rate limit reached",
+    )
+
+    exit_code = _cmd_status(argparse.Namespace(workspace=tmp_path, full=False))
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "engine_monitoring: claude source=provider invocations=1 success=0 failure=1 limits=1" in output
+    assert "provider=anthropic" in output
+    assert "last_limit_reason=rate limit reached" in output
 
 
 def test_cmd_status_includes_engine_usage_window(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
