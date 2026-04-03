@@ -13,7 +13,7 @@ from pathlib import Path
 import sys
 import threading
 import time
-from typing import get_args
+from typing import TextIO, get_args
 
 import yaml
 
@@ -35,6 +35,7 @@ from litehive.models import (
     RuntimeEngineContinuation,
     RuntimeEngineSwitch,
     RuntimeInterruptionState,
+    RunnerStatusState,
     ResourceLimitEvent,
     RuntimeSubagentState,
     StageReport,
@@ -55,7 +56,17 @@ VALID_PM_COMPLEXITIES = set(get_args(TaskComplexity))
 VALID_PLANNED_EFFORTS = set(get_args(PlannedEffort))
 VALID_TASK_TYPES = set(VALID_TASK_ROUTING_KEYS)
 TASK_PRIORITY_ORDER = {"high": 0, "medium": 1, "low": 2}
-_RUNNER_LOCKS: dict[Path, tuple[object, int, int]] = {}
+
+@dataclass(slots=True)
+class _RunnerLockState:
+    handle: TextIO
+    depth: int
+    status: RunnerStatusState
+    owner_thread_id: int = 0
+    metadata_lock: threading.Lock = field(default_factory=threading.Lock)
+
+
+_RUNNER_LOCKS: dict[Path, _RunnerLockState] = {}
 _RUNNER_LOCKS_MUTEX = threading.Lock()
 _MISSING = object()
 CLOSED_TASK_STATUSES = {"cancelled", "wont_do", "deferred", "duplicate"}
@@ -680,25 +691,128 @@ def _workspace_lock(root: Path):
             fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
 
 
-def _write_runner_lock_metadata(handle: object, root: Path) -> None:
-    metadata = {
-        "pid": os.getpid(),
-        "workspace": str(root.resolve()),
-        "started_at": utcnow(),
-        "command": " ".join(sys.argv),
-    }
+def _write_runner_lock_metadata(handle: TextIO, status: RunnerStatusState) -> None:
     handle.seek(0)
     handle.truncate()
-    handle.write(yaml.safe_dump(metadata, sort_keys=False))
+    handle.write(yaml.safe_dump(status.model_dump(mode="python"), sort_keys=False))
     handle.flush()
 
 
-def _read_runner_lock_metadata(root: Path) -> dict[str, object]:
+def _read_runner_lock_metadata(root: Path) -> RunnerStatusState:
     lock_path = runner_lock_path(root)
     if not lock_path.exists():
-        return {}
+        return RunnerStatusState()
     data = yaml.safe_load(lock_path.read_text(encoding="utf-8")) or {}
-    return data if isinstance(data, dict) else {}
+    if not isinstance(data, dict):
+        return RunnerStatusState()
+    return RunnerStatusState(**data)
+
+
+def _runner_metadata_present(status: RunnerStatusState) -> bool:
+    return any(
+        (
+            status.pid is not None,
+            bool(status.workspace),
+            bool(status.command),
+            status.started_at is not None,
+            status.heartbeat_at is not None,
+            status.active_task_id is not None,
+        )
+    )
+
+
+def _runner_lock_is_active(root: Path) -> bool:
+    root = root.resolve()
+    if root in _RUNNER_LOCKS:
+        return True
+    lock_path = runner_lock_path(root)
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    with lock_path.open("a+", encoding="utf-8") as handle:
+        try:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            return True
+        fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+        return False
+
+
+def _runner_status_needs_reconciliation(root: Path) -> bool:
+    state = load_state(root)
+    if state.active_task_id is not None:
+        return True
+    return any(task.runtime.execution_status == "running" for task in list_tasks(root))
+
+
+def _clear_runner_lock_metadata(root: Path) -> None:
+    root = root.resolve()
+    if root in _RUNNER_LOCKS:
+        return
+    lock_path = runner_lock_path(root)
+    if not lock_path.exists():
+        return
+    with lock_path.open("a+", encoding="utf-8") as handle:
+        try:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            return
+        handle.seek(0)
+        handle.truncate()
+        handle.flush()
+        fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+
+
+def runner_status(root: Path) -> RunnerStatusState:
+    root = root.resolve()
+    status = _read_runner_lock_metadata(root)
+    if _runner_lock_is_active(root):
+        return status.model_copy(update={"status": "running"})
+    if not _runner_metadata_present(status):
+        return RunnerStatusState()
+    if _runner_status_needs_reconciliation(root):
+        return status.model_copy(update={"status": "stale"})
+    _clear_runner_lock_metadata(root)
+    return RunnerStatusState()
+
+
+def _touch_runner_status(
+    root: Path,
+    *,
+    active_task_id: str | None | object = _MISSING,
+) -> None:
+    root = root.resolve()
+    lock_state = _RUNNER_LOCKS.get(root)
+    if lock_state is None:
+        return
+    with lock_state.metadata_lock:
+        lock_state.status.heartbeat_at = utcnow()
+        lock_state.status.status = "running"
+        if active_task_id is not _MISSING:
+            lock_state.status.active_task_id = active_task_id
+        _write_runner_lock_metadata(lock_state.handle, lock_state.status)
+
+
+@contextmanager
+def runner_heartbeat(
+    root: Path,
+    *,
+    active_task_id: str | None = None,
+    interval_seconds: float = 1.0,
+):
+    stop_event = threading.Event()
+
+    def _heartbeat_loop() -> None:
+        while not stop_event.wait(interval_seconds):
+            _touch_runner_status(root, active_task_id=active_task_id)
+
+    _touch_runner_status(root, active_task_id=active_task_id)
+    thread = threading.Thread(target=_heartbeat_loop, name="litehive-runner-heartbeat", daemon=True)
+    thread.start()
+    try:
+        yield
+    finally:
+        stop_event.set()
+        thread.join(timeout=max(interval_seconds, 0.1) * 2)
+        _touch_runner_status(root, active_task_id=None)
 
 
 def _current_thread_owns_runner_guard(root: Path) -> bool:
@@ -706,7 +820,7 @@ def _current_thread_owns_runner_guard(root: Path) -> bool:
     owner_thread_id = threading.get_ident()
     with _RUNNER_LOCKS_MUTEX:
         existing = _RUNNER_LOCKS.get(root)
-    return existing is not None and existing[2] == owner_thread_id
+    return existing is not None and existing.owner_thread_id == owner_thread_id
 
 
 def _runner_pid_is_alive(pid: object) -> bool:
@@ -741,14 +855,17 @@ def _runner_lock_is_held(root: Path) -> bool:
 
 def _runner_conflict_message(root: Path) -> str:
     metadata = _read_runner_lock_metadata(root)
-    pid = metadata.get("pid")
-    started_at = metadata.get("started_at")
-    command = metadata.get("command")
+    pid = metadata.pid
+    started_at = metadata.started_at
+    heartbeat_at = metadata.heartbeat_at
+    command = metadata.command
     details = []
     if pid is not None:
         details.append(f"pid={pid}")
     if started_at:
         details.append(f"started_at={started_at}")
+    if heartbeat_at:
+        details.append(f"heartbeat_at={heartbeat_at}")
     if command:
         details.append(f"command={command}")
     suffix = f" ({', '.join(details)})" if details else ""
@@ -765,44 +882,64 @@ def workspace_runner_guard(root: Path):
     with _RUNNER_LOCKS_MUTEX:
         existing = _RUNNER_LOCKS.get(root)
         if existing is not None:
-            handle, depth, existing_owner_thread_id = existing
-            if existing_owner_thread_id != owner_thread_id:
+            if existing.owner_thread_id != owner_thread_id:
                 raise WorkspaceConflictError(_runner_conflict_message(root))
-            _RUNNER_LOCKS[root] = (handle, depth + 1, owner_thread_id)
-        else:
-            lock_path = runner_lock_path(root)
-            lock_path.parent.mkdir(parents=True, exist_ok=True)
-            handle = lock_path.open("a+", encoding="utf-8")
-            try:
-                try:
-                    fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-                except BlockingIOError as exc:
-                    raise WorkspaceConflictError(_runner_conflict_message(root)) from exc
-                _write_runner_lock_metadata(handle, root)
-                _RUNNER_LOCKS[root] = (handle, 1, owner_thread_id)
-            except Exception:
+            existing.depth += 1
+    if existing is not None:
+        try:
+            yield
+        finally:
+            with _RUNNER_LOCKS_MUTEX:
+                lock_state = _RUNNER_LOCKS[root]
+                if lock_state.depth <= 1:
+                    _RUNNER_LOCKS.pop(root, None)
+                    should_close = True
+                else:
+                    lock_state.depth -= 1
+                    should_close = False
+            if should_close:
+                handle = lock_state.handle
+                handle.seek(0)
+                handle.truncate()
+                handle.flush()
+                fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
                 handle.close()
-                raise
+        return
+
+    lock_path = runner_lock_path(root)
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    handle = lock_path.open("a+", encoding="utf-8")
+    try:
+        try:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as exc:
+            raise WorkspaceConflictError(_runner_conflict_message(root)) from exc
+        now = utcnow()
+        status = RunnerStatusState(
+            status="running",
+            pid=os.getpid(),
+            workspace=str(root),
+            command=" ".join(sys.argv),
+            started_at=now,
+            heartbeat_at=now,
+        )
+        _write_runner_lock_metadata(handle, status)
+        with _RUNNER_LOCKS_MUTEX:
+            _RUNNER_LOCKS[root] = _RunnerLockState(handle=handle, depth=1, status=status, owner_thread_id=owner_thread_id)
+    except Exception:
+        handle.close()
+        raise
 
     try:
         yield
     finally:
         with _RUNNER_LOCKS_MUTEX:
-            handle, depth, existing_owner_thread_id = _RUNNER_LOCKS[root]
-            if existing_owner_thread_id != owner_thread_id:
-                raise RuntimeError("workspace runner guard released by non-owner thread")
-            if depth <= 1:
-                _RUNNER_LOCKS.pop(root, None)
-                should_close = True
-            else:
-                _RUNNER_LOCKS[root] = (handle, depth - 1, owner_thread_id)
-                should_close = False
-        if should_close:
-            handle.seek(0)
-            handle.truncate()
-            handle.flush()
-            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
-            handle.close()
+            _RUNNER_LOCKS.pop(root, None)
+        handle.seek(0)
+        handle.truncate()
+        handle.flush()
+        fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+        handle.close()
 
 
 @contextmanager
@@ -811,7 +948,7 @@ def workspace_mutation_guard(root: Path):
     owner_thread_id = threading.get_ident()
     with _RUNNER_LOCKS_MUTEX:
         existing = _RUNNER_LOCKS.get(root)
-    if existing is not None and existing[2] == owner_thread_id:
+    if existing is not None and existing.owner_thread_id == owner_thread_id:
         yield
         return
     with workspace_runner_guard(root):
@@ -1823,6 +1960,7 @@ def peek_next_task_selection(root: Path) -> TaskSelection:
     with workspace_mutation_guard(root), _workspace_lock(root):
         state = load_state(root)
         _validate_single_active_task(root, state)
+        _reconcile_stale_runner_tasks(root, state)
         next_task, blocked, mutated = _resolve_next_task_from_state(root, state)
         if mutated:
             save_state(root, state)
@@ -1834,6 +1972,7 @@ def plan_task_selections(root: Path) -> TaskPlan:
     with workspace_mutation_guard(root), _workspace_lock(root):
         state = load_state(root)
         _validate_single_active_task(root, state)
+        _reconcile_stale_runner_tasks(root, state)
         tasks_by_id = {task.id: task.model_copy(deep=True) for task in list_tasks(root)}
         policy = load_config(root).pool_selection_policy
         if policy not in VALID_POOL_SELECTION_POLICIES:
@@ -1867,6 +2006,7 @@ def dequeue_next_task_selection(root: Path) -> TaskSelection:
     with workspace_mutation_guard(root), _workspace_lock(root):
         state = load_state(root)
         _validate_single_active_task(root, state)
+        _reconcile_stale_runner_tasks(root, state)
         next_task, blocked, mutated = _resolve_next_task_from_state(root, state)
         if next_task is None:
             if mutated:
@@ -2558,6 +2698,9 @@ def _recover_stale_runner_state(
         if not _current_thread_owns_runner_guard(root) and _runner_lock_is_held(root):
             return False
 
+        runner_metadata = _read_runner_lock_metadata(root)
+        has_stale_metadata = _runner_metadata_present(runner_metadata)
+
         mutated = False
         transitioned: list[TaskRecord] = []
         journal_messages: dict[str, str] = {}
@@ -2569,6 +2712,8 @@ def _recover_stale_runner_state(
         for task_id in running_task_ids:
             task = tasks_by_id.get(task_id)
             if task is None:
+                continue
+            if task_id != state.active_task_id and not _is_stranded_commit_task(task) and not _should_requeue_commit_stage_task(task) and not has_stale_metadata:
                 continue
             if _is_stranded_commit_task(task):
                 continue
@@ -2688,7 +2833,7 @@ def repair_workspace_state(root: Path) -> WorkspaceRepairSummary:
             if _is_stranded_commit_task(active_task):
                 journal_message = _recover_existing_checkpoint_commit(root, active_task)
                 if journal_message is None:
-                    journal_message = _recover_commit_task(active_task)
+                    journal_message = _recover_commit_task(root, active_task)
                     _enqueue_recovered_task(state, active_task.id)
                     if active_task.id not in summary.requeued_task_ids:
                         summary.requeued_task_ids.append(active_task.id)
@@ -2787,6 +2932,82 @@ def _restore_missing_queued_tasks(
     return restored
 
 
+def _reconcile_stale_runner_tasks(root: Path, state: WorkspaceState) -> bool:
+    tasks = list_tasks(root)
+    tasks_by_id = {task.id: task for task in tasks}
+    transitioned: list[TaskRecord] = []
+    journal_messages: dict[str, str] = {}
+    queue = list(state.queue)
+    active_task = tasks_by_id.get(state.active_task_id) if state.active_task_id is not None else None
+
+    if state.active_task_id is not None and active_task is None:
+        state.active_task_id = None
+
+    running_tasks = [t for t in tasks if t.runtime.execution_status == "running"]
+    if len(running_tasks) > 1:
+        return False
+
+    for task in tasks:
+        if task.runtime.execution_status != "running":
+            continue
+        if task.id == state.active_task_id:
+            continue
+        if _is_stranded_commit_task(task) or _should_requeue_commit_stage_task(task):
+            queue = [item for item in queue if item != task.id]
+            journal_messages[task.id] = (
+                _recover_existing_checkpoint_commit(root, task) or _recover_commit_task(root, task)
+            )
+            if task.status == "queued":
+                queue.insert(0, task.id)
+            transitioned.append(task)
+            continue
+        if _is_task_eligible_for_execution(task):
+            _prepare_interrupted_task_for_requeue(task)
+            queue = [item for item in queue if item != task.id]
+            queue.insert(0, task.id)
+            journal_messages[task.id] = (
+                "Reconciled stale runner state and requeued the task at "
+                f"`{task.pipeline_status}`."
+            )
+            transitioned.append(task)
+
+    # Also reconcile the active task if runner is not live
+    if state.active_task_id is not None:
+        active_task = tasks_by_id.get(state.active_task_id)
+        if active_task is not None and active_task.runtime.execution_status == "running" and not _runner_lock_is_held(root):
+            if _is_stranded_commit_task(active_task) or _should_requeue_commit_stage_task(active_task):
+                queue = [item for item in queue if item != active_task.id]
+                journal_messages[active_task.id] = (
+                    _recover_existing_checkpoint_commit(root, active_task) or _recover_commit_task(root, active_task)
+                )
+                if active_task.status == "queued":
+                    queue.insert(0, active_task.id)
+                transitioned.append(active_task)
+            elif _is_task_eligible_for_execution(active_task):
+                _prepare_interrupted_task_for_requeue(active_task)
+                queue = [item for item in queue if item != active_task.id]
+                queue.insert(0, active_task.id)
+                journal_messages[active_task.id] = (
+                    "Reconciled stale active task and requeued at "
+                    f"`{active_task.pipeline_status}`."
+                )
+                transitioned.append(active_task)
+
+            if active_task in transitioned:
+                state.active_task_id = None
+
+    if transitioned:
+        state.queue = queue
+        _persist_tasks_and_state_without_runner_guard(
+            root,
+            tasks=transitioned,
+            state=state,
+            journal_messages=journal_messages,
+        )
+
+    return bool(transitioned)
+
+
 def _resolve_next_task_from_snapshot(
     state: WorkspaceState,
     tasks_by_id: dict[str, TaskRecord],
@@ -2866,6 +3087,7 @@ def restore_untouched_active_task(root: Path) -> WorkspaceState:
     with workspace_mutation_guard(root), _workspace_lock(root):
         state = load_state(root)
         _validate_single_active_task(root, state)
+        _reconcile_stale_runner_tasks(root, state)
         if state.active_task_id is None:
             return state
 

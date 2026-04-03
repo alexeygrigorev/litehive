@@ -135,6 +135,7 @@ from litehive.tasks import (
     set_active_task,
     stop_current_task,
     restore_untouched_active_task,
+    runner_status,
     task_dir,
     task_file,
     task_runtime_file,
@@ -5359,6 +5360,46 @@ def test_dequeue_next_task_selection_recovers_flagged_task_to_implementation_ent
     assert refreshed.runtime.execution_status == "idle"
 
 
+def test_resolve_next_task_reconciles_orphaned_non_commit_running_task_before_new_work(
+    tmp_path: Path,
+) -> None:
+    ensure_workspace(tmp_path)
+    new_task = create_task(tmp_path, title="New task", auto_commit=False)
+    orphaned = create_task(tmp_path, title="Orphaned testing task", auto_commit=False)
+
+    orphaned.status = "in_progress"
+    orphaned.pipeline_status = "testing"
+    orphaned.runtime.execution_status = "running"
+    orphaned.runtime.current_stage = RuntimeStageState(
+        step="testing",
+        status="running",
+        started_at="2026-04-01T00:00:00+00:00",
+        updated_at="2026-04-01T00:00:00+00:00",
+    )
+    save_task(tmp_path, orphaned)
+    save_task_runtime(tmp_path, orphaned)
+
+    state = load_state(tmp_path)
+    state.active_task_id = None
+    state.queue = [new_task.id]
+    save_state(tmp_path, state)
+
+    task = resolve_next_task(tmp_path)
+
+    assert task is not None
+    assert task.id == orphaned.id
+    refreshed = get_task(tmp_path, orphaned.id)
+    assert refreshed is not None
+    assert refreshed.status == "queued"
+    assert refreshed.pipeline_status == "testing"
+    assert refreshed.runtime.execution_status == "idle"
+    assert refreshed.runtime.current_stage.step == "testing"
+    assert refreshed.runtime.current_stage.status == "interrupted"
+    assert load_state(tmp_path).queue == [orphaned.id, new_task.id]
+    journal = (task_dir(tmp_path, refreshed) / "journal.md").read_text(encoding="utf-8")
+    assert "Reconciled stale runner state and requeued the task at `testing`." in journal
+
+
 def test_restore_untouched_active_task_requeues_stranded_done_commit_without_checkpoint(
     tmp_path: Path,
 ) -> None:
@@ -8641,7 +8682,7 @@ def test_cmd_run_reports_summary_when_queue_is_empty(
 
 
 def test_status_output_includes_runtime_observability(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     ensure_workspace(
         tmp_path,
@@ -8714,11 +8755,6 @@ def test_status_output_includes_runtime_observability(
     task.runtime.last_outcome.recorded_at = "2026-03-31T10:02:30+00:00"
 
     save_task(tmp_path, task)
-    (tmp_path / ".litehive" / ".runner.lock").write_text(
-        yaml.safe_dump({"pid": os.getpid()}, sort_keys=False),
-        encoding="utf-8",
-    )
-    _block_runner_lock(monkeypatch)
 
     exit_code = _cmd_status(argparse.Namespace(workspace=tmp_path))
     output = capsys.readouterr().out
@@ -8736,6 +8772,7 @@ def test_status_output_includes_runtime_observability(
     assert "pool_budget_threshold: 1" in output
     assert "pool_stop_on_dirty_git: True" in output
     assert "pool_selection_policy: priority_first" in output
+    assert "runner_status: idle pid=- started_at=- heartbeat_at=- active_task_id=-" in output
     assert "pool_stop_reason: None" in output
     assert "process_profile: generic" in output
     assert "retry_limit=1" in output
@@ -9037,6 +9074,117 @@ def test_render_task_summary_includes_interruption_context() -> None:
         for line in lines
     )
 
+
+def test_run_task_updates_runner_heartbeat_while_task_is_running(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Heartbeat task", auto_commit=False)
+
+    started = threading.Event()
+    release = threading.Event()
+    snapshots: list[tuple[str | None, str | None, str]] = []
+
+    def run_executor() -> None:
+        def executor(current_task: TaskRecord, step: str) -> StageReport:
+            started.set()
+            first = runner_status(tmp_path)
+            snapshots.append((first.started_at, first.heartbeat_at, first.status))
+            time.sleep(1.2)
+            second = runner_status(tmp_path)
+            snapshots.append((second.started_at, second.heartbeat_at, second.status))
+            release.wait(timeout=5)
+            return StageReport(task_id=current_task.id, step=step, verdict="blocked", summary="pause")
+
+        runner = TaskExecutionRunner(tmp_path, executor)
+        with tasks_module.workspace_runner_guard(tmp_path):
+            tasks_module.mark_task_run_started(tmp_path, task)
+            with tasks_module.runner_heartbeat(tmp_path, active_task_id=task.id):
+                runner.run(task)
+
+    worker = threading.Thread(target=run_executor, daemon=True)
+    worker.start()
+    assert started.wait(timeout=5)
+    release.set()
+    worker.join(timeout=5)
+    assert not worker.is_alive()
+
+    assert len(snapshots) == 2
+    assert snapshots[0][2] == "running"
+    assert snapshots[1][2] == "running"
+    assert snapshots[0][0] is not None
+    assert snapshots[0][1] is not None
+    assert snapshots[1][0] == snapshots[0][0]
+    assert snapshots[1][1] is not None
+    assert snapshots[1][1] != snapshots[0][1]
+    final = runner_status(tmp_path)
+    assert final.status == "idle"
+
+
+def test_runner_status_reports_stale_when_workspace_reconciliation_is_still_needed(
+    tmp_path: Path,
+) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Interrupted task", auto_commit=False)
+    task.status = "in_progress"
+    task.pipeline_status = "testing"
+    task.runtime.execution_status = "running"
+    task.runtime.current_stage = RuntimeStageState(
+        step="testing",
+        status="running",
+        started_at="2026-04-01T00:00:00+00:00",
+        updated_at="2026-04-01T00:00:00+00:00",
+    )
+    save_task(tmp_path, task)
+    save_task_runtime(tmp_path, task)
+
+    runner_lock = tmp_path / ".litehive" / ".runner.lock"
+    runner_lock.write_text(
+        yaml.safe_dump(
+            {
+                "status": "running",
+                "pid": 4242,
+                "workspace": str(tmp_path),
+                "command": "uv run litehive run --workspace .",
+                "started_at": "2026-04-01T00:00:00+00:00",
+                "heartbeat_at": "2026-04-01T00:00:05+00:00",
+                "active_task_id": task.id,
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+
+    status = runner_status(tmp_path)
+
+    assert status.status == "stale"
+    assert status.active_task_id == task.id
+    assert "heartbeat_at:" in runner_lock.read_text(encoding="utf-8")
+
+
+def test_runner_status_clears_orphaned_metadata_when_no_reconciliation_is_needed(
+    tmp_path: Path,
+) -> None:
+    ensure_workspace(tmp_path)
+    runner_lock = tmp_path / ".litehive" / ".runner.lock"
+    runner_lock.write_text(
+        yaml.safe_dump(
+            {
+                "status": "running",
+                "pid": 4242,
+                "workspace": str(tmp_path),
+                "command": "uv run litehive run --workspace .",
+                "started_at": "2026-04-01T00:00:00+00:00",
+                "heartbeat_at": "2026-04-01T00:00:05+00:00",
+                "active_task_id": "T-9999",
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+
+    status = runner_status(tmp_path)
+
+    assert status.status == "idle"
+    assert runner_lock.read_text(encoding="utf-8") == ""
 
 def test_format_external_engine_sandbox_renders_engine_policies() -> None:
     config = LitehiveConfig(

@@ -69,6 +69,7 @@ from litehive.tasks import (
     recover_stale_runner_state,
     resume_task,
     require_task,
+    runner_status,
     set_pool_stop_reason,
     stop_current_task,
     update_task_metadata,
@@ -1487,6 +1488,7 @@ def _cmd_configure(args: argparse.Namespace) -> int:
 
 
 def _cmd_status(args: argparse.Namespace) -> int:
+    root = args.workspace.resolve()
     config = load_config(args.workspace)
     state = load_state(args.workspace)
     monitoring = load_engine_monitoring(args.workspace)
@@ -1496,6 +1498,14 @@ def _cmd_status(args: argparse.Namespace) -> int:
     print(f"default_engine: {config.default_engine}")
     print(f"mode: {state.mode}")
     print(f"active_task_id: {state.active_task_id}")
+    current_runner = runner_status(root)
+    print(
+        "runner_status: "
+        f"{current_runner.status} pid={current_runner.pid or '-'} "
+        f"started_at={current_runner.started_at or '-'} "
+        f"heartbeat_at={current_runner.heartbeat_at or '-'} "
+        f"active_task_id={current_runner.active_task_id or '-'}"
+    )
     print(f"queued_tasks: {len(state.queue)}")
     print(f"pool_stop_reason: {state.pool_stop_reason}")
     if state.queue:

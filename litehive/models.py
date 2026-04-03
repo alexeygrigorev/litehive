@@ -32,6 +32,7 @@ PipelineStatus = Literal[
     "done",
 ]
 SubagentStatus = Literal["created", "running", "completed", "failed", "blocked", "interrupted"]
+RunnerExecutionStatus = Literal["idle", "running", "stale"]
 OutcomeKind = Literal[
     "flagged",
     "blocked",
@@ -262,6 +263,16 @@ class TaskRuntime(BaseModel):
     continuation_handoff: RuntimeContinuationHandoff | None = None
     last_engine_switch: RuntimeEngineSwitch | None = None
     last_outcome: TaskOutcomeState = Field(default_factory=TaskOutcomeState)
+
+
+class RunnerStatusState(BaseModel):
+    status: RunnerExecutionStatus = "idle"
+    pid: int | None = None
+    workspace: str = ""
+    command: str = ""
+    started_at: str | None = None
+    heartbeat_at: str | None = None
+    active_task_id: str | None = None
 
 
 class GitSettings(BaseModel):
