@@ -7,23 +7,81 @@ task_type: null
 engine: null
 model: null
 mode: implementation
-status: queued
-pipeline_status: backlog
+status: done
+pipeline_status: done
 priority: medium
+pm_complexity: null
+planned_effort: null
 created_at: '2026-04-02T10:30:31+00:00'
-updated_at: '2026-04-02T10:30:31+00:00'
+updated_at: '2026-04-02T23:44:02+00:00'
 goal: ''
 acceptance_criteria: []
 constraints: []
 plan: []
 human_checkpoints: []
-subagents: []
+subagents:
+- id: SA-0001
+  role: planner
+  engine: codex
+  status: completed
+  path: subagents/SA-0001-planner
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0002
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0002-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0003
+  role: qa
+  engine: codex
+  status: completed
+  path: subagents/SA-0003-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0004
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0004-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0005
+  role: qa
+  engine: codex
+  status: completed
+  path: subagents/SA-0005-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0006
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0006-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0007
+  role: qa
+  engine: codex
+  status: completed
+  path: subagents/SA-0007-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0008
+  role: reviewer
+  engine: codex
+  status: completed
+  path: subagents/SA-0008-reviewer
+  sandboxed: false
+  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0117 add-quota-and-usage-monitoring-across-engines-with-official-provider-integrations-where-available-and-local-fallback-tracking-elsewhere'
-  commit_sha: null
-  checkpoint_base_sha: null
-  checkpoint_attempts: 0
+  commit_sha: 52dac6d173d8415409b1f86dd06c9bd75a9e29b4
+  checkpoint_base_sha: 5ca5a8961255563b102f8d38975563aa224b5779
+  checkpoint_attempts: 1
   rolled_back_checkpoint_attempt: null
   worktree_path: null
 retry_policy:

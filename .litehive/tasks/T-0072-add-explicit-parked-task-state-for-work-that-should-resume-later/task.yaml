@@ -6,11 +6,13 @@ task_type: null
 engine: null
 model: null
 mode: implementation
-status: interrupted
+status: queued
 pipeline_status: implementing
 priority: medium
+pm_complexity: null
+planned_effort: null
 created_at: '2026-04-01T06:36:00+00:00'
-updated_at: '2026-04-02T05:36:00+00:00'
+updated_at: '2026-04-03T06:15:23+00:00'
 goal: ''
 acceptance_criteria: []
 constraints: []
@@ -50,6 +52,20 @@ subagents:
   engine: codex
   status: interrupted
   path: subagents/SA-0005-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0006
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0006-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0007
+  role: qa
+  engine: codex
+  status: completed
+  path: subagents/SA-0007-qa
   sandboxed: false
   sandbox_summary: host
 git:

@@ -69,6 +69,8 @@ Each runnable task goes through a fixed stage pipeline:
 The orchestrator owns routing and task state. Subagents produce reports and artifacts, but they do not decide the control flow.
 Agents are meant to operate inside this system rather than around it: they implement, verify, and report, while litehive enforces the stage order, validates results, and owns final integration.
 `planner` owns `grooming` and `reviewer` owns `accepting`; both are PM-style roles with different prompts and success criteria.
+When a task is retried after a flagged or system-interrupted run, litehive routes the resumed execution through a dedicated `recovery` role for stage work instead of pretending it is a fresh first-pass SWE/QA/reviewer run.
+The recovery agent's job is to inspect the recorded failure context, fix whatever is necessary to restore a runnable path, and then continue the task toward completion without discarding useful progress.
 Tasks can also opt into `--human-checkpoint before_acceptance` or `--human-checkpoint before_commit`, which pauses the pool and requeues the task at the next stage boundary for manual review.
 External engine choice resolves as:
 
@@ -80,6 +82,7 @@ The full state machine — states, transitions, verdicts, outcome codes, and the
 change-gate rule — is documented in [`docs/state-machine.md`](docs/state-machine.md).
 
 In continuous operation, litehive should be able to keep draining the pool, pick up newly queued work between iterations, and stop only when there is no active or queued runnable task left or when an explicit stop condition is hit.
+System-interrupted or flagged tasks are returned to the runnable pool automatically; tasks explicitly stopped by the user stay parked until resumed manually.
 
 ## Workspace shape
 

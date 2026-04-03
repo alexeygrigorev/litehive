@@ -749,7 +749,15 @@ def _restore_persisted_files(snapshot: dict[Path, str | None]) -> None:
         _atomic_write_text(path, content)
 
 
-def _role_for_step(step: str) -> str:
+def _is_recovery_run(task: TaskRecord) -> bool:
+    if task.runtime.continuation_handoff is not None:
+        return True
+    return task.runtime.last_outcome.kind in {"flagged", "interrupted"}
+
+
+def _role_for_step(step: str, task: TaskRecord | None = None) -> str:
+    if task is not None and step in {"implementing", "testing", "accepting"} and _is_recovery_run(task):
+        return "recovery"
     return {
         "grooming": "planner",
         "implementing": "swe",
@@ -1037,15 +1045,17 @@ def build_executor(
             retry_exhausted_reason: str | None = None
             while True:
                 attempt_count += 1
+                role_name = _role_for_step(step, current_task)
                 prompt = stage_prompt(
                     current_task,
                     step,
                     workspace_context=workspace_context,
                     process_profile=config.process_profile,
+                    role_name=role_name,
                 )
                 result = subagents.run(
                     current_task,
-                    role=_role_for_step(step),
+                    role=role_name,
                     engine_name=engine_name,
                     prompt=prompt,
                     model=model_name,

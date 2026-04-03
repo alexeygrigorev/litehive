@@ -1872,6 +1872,25 @@ def test_runtime_routes_grooming_to_planner_and_accepting_to_reviewer() -> None:
     assert _role_for_step("accepting") == "reviewer"
 
 
+def test_runtime_routes_flagged_and_interrupted_retries_to_recovery(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    flagged = create_task(tmp_path, title="Flagged task")
+    flagged.status = "flagged"
+    flagged.pipeline_status = "implementing"
+    flagged.runtime.last_outcome.kind = "flagged"
+    save_task(tmp_path, flagged)
+
+    interrupted = create_task(tmp_path, title="Interrupted task")
+    interrupted.status = "interrupted"
+    interrupted.pipeline_status = "testing"
+    interrupted.runtime.last_outcome.kind = "interrupted"
+    save_task(tmp_path, interrupted)
+
+    assert _role_for_step("implementing", require_task(tmp_path, flagged.id)) == "recovery"
+    assert _role_for_step("testing", require_task(tmp_path, interrupted.id)) == "recovery"
+    assert _role_for_step("grooming", require_task(tmp_path, interrupted.id)) == "planner"
+
+
 def test_subagent_manager_persists_planner_and_reviewer_artifacts(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -4033,6 +4052,23 @@ def test_stage_prompt_distinguishes_accepting_reviewer_role(tmp_path: Path) -> N
     assert "Validate the strict end-user outcome, look for regressions or missing evidence, and make a final done versus not-done judgment." in prompt
 
 
+def test_stage_prompt_uses_recovery_role_when_requested(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Recover final stage")
+    task.status = "flagged"
+    task.pipeline_status = "implementing"
+    task.runtime.last_outcome.kind = "flagged"
+    task.runtime.last_outcome.reason_code = "stage_exception"
+    task.runtime.last_outcome.reason = "implementing failed with unhandled error: boom"
+    save_task(tmp_path, task)
+
+    prompt = stage_prompt(task, "implementing", workspace_context="", role_name="recovery")
+
+    assert "Stage owner: recovery" in prompt
+    assert "You are the recovery agent responsible for diagnosing why this task stopped making progress and restoring a runnable path." in prompt
+    assert "Make the smallest effective fix needed so the task can resume the current stage and finish cleanly." in prompt
+
+
 def test_stage_prompt_includes_task_type_and_plan(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Review adapter update", task_type="review", mode="tasks")
@@ -4815,7 +4851,7 @@ def test_restore_untouched_active_task_requeues_interrupted_non_commit_task(tmp_
 
     refreshed = get_task(tmp_path, interrupted.id)
     assert refreshed is not None
-    assert refreshed.status == "interrupted"
+    assert refreshed.status == "queued"
     assert refreshed.pipeline_status == "testing"
     assert refreshed.runtime.execution_status == "interrupted"
     assert refreshed.runtime.run_started_at is None
@@ -4826,10 +4862,93 @@ def test_restore_untouched_active_task_requeues_interrupted_non_commit_task(tmp_
     assert refreshed.runtime.interruption.source == "runner"
     state = load_state(tmp_path)
     assert state.active_task_id is None
-    assert state.queue == [queued.id]
+    assert state.queue == [interrupted.id, queued.id]
     journal = (task_dir(tmp_path, refreshed) / "journal.md").read_text(encoding="utf-8")
     assert "Interrupted runner execution while `testing` was running." in journal
     assert "Resume from `testing`." in journal
+
+
+def test_repair_workspace_state_requeues_system_interrupted_task_but_not_cli_stopped_task(
+    tmp_path: Path,
+) -> None:
+    ensure_workspace(tmp_path)
+    system_task = create_task(tmp_path, title="System interrupted task", auto_commit=False)
+    parked_task = create_task(tmp_path, title="CLI stopped task", auto_commit=False)
+
+    system_task.status = "interrupted"
+    system_task.pipeline_status = "testing"
+    system_task.runtime.execution_status = "interrupted"
+    system_task.runtime.interruption = RuntimeInterruptionState(
+        source="runner",
+        stage="testing",
+        pipeline_status="testing",
+        resume_stage="testing",
+        reason="runner died",
+        summary="Interrupted run recovered. Resume from `testing`.",
+    )
+    save_task(tmp_path, system_task)
+    save_task_runtime(tmp_path, system_task)
+
+    parked_task.status = "interrupted"
+    parked_task.pipeline_status = "testing"
+    parked_task.runtime.execution_status = "interrupted"
+    parked_task.runtime.interruption = RuntimeInterruptionState(
+        source="runner",
+        stage="testing",
+        pipeline_status="testing",
+        resume_stage="testing",
+        reason="Task stopped via CLI",
+        summary="Execution interrupted via `litehive stop`. Resume from `testing`.",
+    )
+    save_task(tmp_path, parked_task)
+    save_task_runtime(tmp_path, parked_task)
+
+    repair_workspace_state(tmp_path)
+
+    state = load_state(tmp_path)
+    assert system_task.id in state.queue
+    assert parked_task.id not in state.queue
+
+
+def test_repair_workspace_state_restores_flagged_task_into_queue(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    flagged = create_task(tmp_path, title="Flagged recovery task", auto_commit=False)
+    flagged.status = "flagged"
+    flagged.pipeline_status = "testing"
+    flagged.runtime.execution_status = "flagged"
+    save_task(tmp_path, flagged)
+    save_task_runtime(tmp_path, flagged)
+
+    repair_workspace_state(tmp_path)
+
+    state = load_state(tmp_path)
+    assert flagged.id in state.queue
+
+
+def test_dequeue_next_task_selection_recovers_flagged_task_to_implementation_entry_stage(
+    tmp_path: Path,
+) -> None:
+    ensure_workspace(tmp_path)
+    flagged = create_task(tmp_path, title="Recover flagged task", auto_commit=False)
+    flagged.status = "flagged"
+    flagged.pipeline_status = "testing"
+    flagged.runtime.execution_status = "flagged"
+    save_task(tmp_path, flagged)
+    save_task_runtime(tmp_path, flagged)
+
+    state = load_state(tmp_path)
+    state.queue = [flagged.id]
+    save_state(tmp_path, state)
+
+    selection = dequeue_next_task_selection(tmp_path)
+
+    assert selection.task is not None
+    assert selection.task.id == flagged.id
+    refreshed = get_task(tmp_path, flagged.id)
+    assert refreshed is not None
+    assert refreshed.status == "in_progress"
+    assert refreshed.pipeline_status == "implementing"
+    assert refreshed.runtime.execution_status == "idle"
 
 
 def test_restore_untouched_active_task_requeues_stranded_done_commit_without_checkpoint(
@@ -10066,6 +10185,10 @@ def test_resume_command_preserves_flagged_task_stage(
     task.status = "flagged"
     task.pipeline_status = "accepting"
     task.runtime.execution_status = "flagged"
+    task.runtime.last_outcome.kind = "flagged"
+    task.runtime.last_outcome.stage = "accepting"
+    task.runtime.last_outcome.reason_code = "verdict_fail"
+    task.runtime.last_outcome.reason = "accepting failed"
     save_task(tmp_path, task)
 
     exit_code = _cmd_resume_task(
@@ -10082,6 +10205,8 @@ def test_resume_command_preserves_flagged_task_stage(
     assert resumed.status == "queued"
     assert resumed.pipeline_status == "accepting"
     assert resumed.runtime.execution_status == "idle"
+    assert resumed.runtime.last_outcome.kind == "flagged"
+    assert resumed.runtime.last_outcome.stage == "accepting"
 
 
 def test_resume_command_preserves_interrupted_task_stage(
@@ -10224,6 +10349,10 @@ def test_resume_command_preserves_flagged_commit_to_git_stage(
     task.status = "flagged"
     task.pipeline_status = "commit_to_git"
     task.runtime.execution_status = "flagged"
+    task.runtime.last_outcome.kind = "flagged"
+    task.runtime.last_outcome.stage = "commit_to_git"
+    task.runtime.last_outcome.reason_code = "stage_exception"
+    task.runtime.last_outcome.reason = "commit failed"
     save_task(tmp_path, task)
 
     exit_code = _cmd_resume_task(
@@ -10240,6 +10369,8 @@ def test_resume_command_preserves_flagged_commit_to_git_stage(
     assert resumed.status == "queued"
     assert resumed.pipeline_status == "commit_to_git"
     assert resumed.runtime.execution_status == "idle"
+    assert resumed.runtime.last_outcome.kind == "flagged"
+    assert resumed.runtime.last_outcome.stage == "commit_to_git"
 
 
 def test_resume_command_reroutes_large_task_missing_criteria_from_implementing_to_grooming(

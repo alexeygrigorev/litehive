@@ -7,23 +7,53 @@ task_type: null
 engine: null
 model: null
 mode: implementation
-status: queued
-pipeline_status: backlog
+status: done
+pipeline_status: done
 priority: medium
+pm_complexity: null
+planned_effort: null
 created_at: '2026-04-02T11:11:08+00:00'
-updated_at: '2026-04-02T11:11:08+00:00'
+updated_at: '2026-04-03T01:05:47+00:00'
 goal: ''
 acceptance_criteria: []
 constraints: []
 plan: []
 human_checkpoints: []
-subagents: []
+subagents:
+- id: SA-0001
+  role: planner
+  engine: codex
+  status: completed
+  path: subagents/SA-0001-planner
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0002
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0002-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0003
+  role: qa
+  engine: codex
+  status: completed
+  path: subagents/SA-0003-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0004
+  role: reviewer
+  engine: codex
+  status: completed
+  path: subagents/SA-0004-reviewer
+  sandboxed: false
+  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0124 add-layered-global-and-local-config-with-local-overrides-over-config-litehive-config-yaml-defaults'
-  commit_sha: null
-  checkpoint_base_sha: null
-  checkpoint_attempts: 0
+  commit_sha: 51d00d3f6caea2ce33d8dd65eaaf95f02d98673d
+  checkpoint_base_sha: 6d1debfd45e3879a4f33c726d40e84b64ba3dea8
+  checkpoint_attempts: 1
   rolled_back_checkpoint_attempt: null
   worktree_path: null
 retry_policy:

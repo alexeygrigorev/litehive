@@ -655,6 +655,7 @@ def stage_prompt(
     workspace_context: str = "",
     *,
     process_profile: str = "generic",
+    role_name: str | None = None,
 ) -> str:
     """Build the prompt for a stage subagent."""
     profile = resolve_process_profile(process_profile)
@@ -662,8 +663,8 @@ def stage_prompt(
     stage_overlay = profile.get("stage_overlay", {}).get(step, [])
     stage_instructions = profile.get("stage_instructions", {}).get(step, ["Complete the requested stage."])
     lifecycle_verification_overlay = _lifecycle_verification_overlay(task, step)
-    stage_owner = _stage_owner_for_step(step)
-    stage_role = _stage_role_prompt(step)
+    stage_owner = role_name or _stage_owner_for_step(step)
+    stage_role = _stage_role_prompt(step, stage_owner)
 
     lines = [
         f"Task: {task.id} {task.title}",
@@ -885,7 +886,15 @@ def _stage_owner_for_step(step: str) -> str:
     }.get(step, "swe")
 
 
-def _stage_role_prompt(step: str) -> list[str]:
+def _stage_role_prompt(step: str, owner: str | None = None) -> list[str]:
+    owner = owner or _stage_owner_for_step(step)
+    if owner == "recovery":
+        return [
+            "- You are the recovery agent responsible for diagnosing why this task stopped making progress and restoring a runnable path.",
+            "- Inspect the latest failure context, reports, continuation handoff, and existing artifacts before changing code or task state.",
+            "- Make the smallest effective fix needed so the task can resume the current stage and finish cleanly.",
+            "- Preserve useful progress, avoid restarting discovery from scratch, and keep the task moving toward completion.",
+        ]
     if step == "grooming":
         return [
             "- You are the planner, a PM-style role representing the user's and product's point of view.",

@@ -6,17 +6,33 @@ task_type: null
 engine: null
 model: null
 mode: implementation
-status: queued
-pipeline_status: backlog
+status: flagged
+pipeline_status: implementing
 priority: medium
+pm_complexity: null
+planned_effort: null
 created_at: '2026-04-02T20:52:31+00:00'
-updated_at: '2026-04-02T20:52:31+00:00'
+updated_at: '2026-04-03T03:31:18+00:00'
 goal: ''
 acceptance_criteria: []
 constraints: []
 plan: []
 human_checkpoints: []
-subagents: []
+subagents:
+- id: SA-0001
+  role: planner
+  engine: codex
+  status: completed
+  path: subagents/SA-0001-planner
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0002
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0002-swe
+  sandboxed: false
+  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0126 split-oversized-tests-into-multiple-focused-test-files'
@@ -24,7 +40,7 @@ git:
   checkpoint_base_sha: null
   checkpoint_attempts: 0
   rolled_back_checkpoint_attempt: null
-  worktree_path: null
+  worktree_path: .litehive/worktrees/T-0126-split-oversized-tests-into-multiple-focused-test-files
 retry_policy:
   max_retries: null
 created_from: null

@@ -1747,14 +1747,42 @@ def dequeue_next_task_selection(root: Path) -> TaskSelection:
             state.queue = [item for item in state.queue if item != next_task.id]
             mutated = True
         if mutated:
-            if next_task.status == "queued":
+            if next_task.status == "flagged":
+                _reset_task_for_recovery(
+                    next_task,
+                    status="queued",
+                    pipeline_status=_auto_recovery_stage_for_flagged_task(next_task),
+                    clear_last_outcome=False,
+                )
+            if next_task.status in {"queued", "interrupted"}:
                 next_task.status = "in_progress"
             persist_task_and_state(root, task=next_task, state=state)
         return TaskSelection(task=next_task, blocked=blocked)
 
 
+def _is_user_parked_interruption(task: TaskRecord) -> bool:
+    if task.status != "interrupted":
+        return False
+    interruption = task.runtime.interruption
+    if interruption is None:
+        return False
+    return interruption.reason == "Task stopped via CLI"
+
+
 def _is_task_eligible_for_execution(task: TaskRecord) -> bool:
-    return task.status in {"queued", "in_progress"} and task.pipeline_status != "done"
+    if task.pipeline_status == "done":
+        return False
+    if task.status in {"queued", "in_progress", "flagged"}:
+        return True
+    if task.status == "interrupted":
+        return not _is_user_parked_interruption(task)
+    return False
+
+
+def _auto_recovery_stage_for_flagged_task(task: TaskRecord) -> str:
+    if task.pipeline_status == "commit_to_git":
+        return "commit_to_git"
+    return implementation_entry_stage(task)
 
 
 def _is_task_completed(task: TaskRecord) -> bool:
@@ -2577,9 +2605,11 @@ def _restore_missing_queued_tasks(
     restored: list[str] = []
     queued_ids = set(state.queue)
     for task_id, task in tasks_by_id.items():
-        if task.status != "queued":
+        if task.status not in {"queued", "interrupted", "flagged"}:
             continue
         if task.pipeline_status == "done":
+            continue
+        if task.status == "interrupted" and _is_user_parked_interruption(task):
             continue
         if task_id == state.active_task_id or task_id in queued_ids:
             continue
@@ -2784,6 +2814,9 @@ def restore_untouched_active_task(root: Path) -> WorkspaceState:
                 reason=_stale_interruption_reason(task, task.pipeline_status),
             )
             state.queue = [item for item in state.queue if item != task.id]
+            if not _is_user_parked_interruption(task):
+                task.status = "queued"
+                state.queue.insert(0, task.id)
             state.active_task_id = None
             persist_task_and_state(
                 root,
@@ -3005,6 +3038,7 @@ def requeue_task(root: Path, task_id: str, *, front: bool = False) -> TaskRecord
             task,
             status="queued",
             pipeline_status=implementation_entry_stage(task),
+            clear_last_outcome=task.status != "flagged",
         )
         state.queue = [item for item in state.queue if item != task.id]
         if front:
@@ -3036,7 +3070,7 @@ def resume_task(root: Path, task_id: str, *, front: bool = False) -> TaskRecord:
             task,
             status="queued",
             pipeline_status=resumed_stage,
-            clear_last_outcome=task.status != "interrupted",
+            clear_last_outcome=task.status not in {"interrupted", "flagged"},
             preserve_continuation_handoff=task.status == "interrupted",
         )
         state.queue = [item for item in state.queue if item != task.id]

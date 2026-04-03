@@ -32,7 +32,7 @@ fails, Litehive restores the pre-transition files instead of leaving
 
 | Value | Meaning |
 |-------|---------|
-| `queued` | Waiting in the pool to be picked up, including resumable interrupted or rejected work |
+| `queued` | Waiting in the pool to be picked up, including resumable interrupted, flagged, or rejected work |
 | `in_progress` | Currently running under the pool runner |
 | `interrupted` | Execution stopped by runner or subagent termination; resumable from the preserved stage |
 | `done` | Completed successfully; git checkpoint recorded |
@@ -42,12 +42,13 @@ fails, Litehive restores the pre-transition files instead of leaving
 | `deferred` | Explicit PM close: the task is intentionally parked for later reconsideration |
 | `duplicate` | Explicit PM close: the task is covered elsewhere |
 
-Terminal states (no automatic forward progress): `done`, `interrupted`, `flagged`, `cancelled`, `wont_do`, `deferred`, `duplicate`.
+Terminal states (no automatic forward progress): `done`, `cancelled`, `wont_do`, `deferred`, `duplicate`.
 
 `interrupted`, `flagged`, and explicitly closed tasks can be resumed via `litehive resume`.
 `flagged` and explicitly closed tasks can be requeued via `litehive requeue` if they should re-enter execution from the implementation entry stage.
 `interrupted`, `flagged`, and explicitly closed tasks can be permanently abandoned via `litehive abandon`.
 Any non-done task can be explicitly closed via `litehive close --outcome <code>`.
+System-interrupted and flagged tasks are also returned to the runnable queue automatically unless the interruption reason came from an explicit CLI stop. User-stopped tasks stay parked until resumed manually.
 
 ---
 
@@ -68,6 +69,9 @@ backlog → grooming → implementing → testing → accepting → commit_to_gi
 | `accepting` | Reviewer | PM-style final review: validate the end-user outcome and decide done versus not-done |
 | `commit_to_git` | Runner | Record git checkpoint commit |
 | `done` | — | Task complete |
+
+When a task re-enters a stage after a flagged or system-interrupted run, litehive uses a dedicated `recovery` role for stage execution in `implementing`, `testing`, and `accepting`.
+The recovery agent inspects the recorded failure context, artifacts, and continuation handoff, then makes whatever code or task-state changes are needed to restore a runnable path and finish the task.
 
 ---
 
@@ -206,11 +210,17 @@ records `runtime.last_outcome.kind = interrupted`, keeps the interrupted stage i
 and stops the pool with `task_interrupted`. The task is visible as resumable until
 `litehive resume <id>` returns it to `status = queued` at the preserved stage
 subject only to normal reroutes such as missing acceptance criteria.
+System-triggered interruptions are also reinserted into the runnable queue automatically so the pool can pick them up again without manual repair; explicit CLI stops stay parked.
 
 QA or reviewer rejection also parks the task in the runnable pool. In that case the task
 switches back to `pipeline_status = implementing`, keeps `status = queued`, records
 the rejection report with `retry_decision = retry`, and re-enters the pool for the
 next implementation pass instead of moving to a sink state.
+
+Flagged tasks likewise return to the runnable queue automatically. When they are claimed again,
+`commit_to_git` failures resume at `commit_to_git`, while other flagged tasks restart from the
+appropriate implementation-entry stage with their failure context preserved so the recovery agent
+can continue from the real problem instead of starting from a blank slate.
 
 ---
 
