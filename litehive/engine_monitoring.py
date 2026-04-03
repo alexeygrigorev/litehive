@@ -59,6 +59,67 @@ def record_engine_execution(
         if callable(extract_usage_observation)
         else None
     ) or EngineUsageObservation()
+    monitoring = _apply_engine_observation(
+        monitoring,
+        engine_name=engine_name,
+        task_id=task_id,
+        execution=execution,
+        observation=observation,
+        count_invocation=True,
+        failure_kind=failure_kind,
+        failure_reason=failure_reason,
+    )
+    save_engine_monitoring(root, monitoring)
+    return monitoring
+
+
+def record_engine_observation(
+    root: Path,
+    *,
+    task_id: str,
+    engine_name: str,
+    adapter: ExternalCLIAdapter,
+    execution: CLIExecutionResult,
+) -> WorkspaceEngineMonitoring:
+    monitoring = load_engine_monitoring(root)
+    extract_usage_observation = getattr(adapter, "extract_usage_observation", None)
+    observation = (
+        extract_usage_observation(execution)
+        if callable(extract_usage_observation)
+        else None
+    ) or EngineUsageObservation()
+    if (
+        observation.usage is None
+        and observation.limit_reason is None
+        and not observation.metadata
+        and observation.provider is None
+    ):
+        return monitoring
+    monitoring = _apply_engine_observation(
+        monitoring,
+        engine_name=engine_name,
+        task_id=task_id,
+        execution=execution,
+        observation=observation,
+        count_invocation=False,
+        failure_kind=None,
+        failure_reason=None,
+    )
+    save_engine_monitoring(root, monitoring)
+    return monitoring
+
+
+def _apply_engine_observation(
+    monitoring: WorkspaceEngineMonitoring,
+    *,
+    engine_name: str,
+    task_id: str,
+    execution: CLIExecutionResult,
+    observation: EngineUsageObservation,
+    count_invocation: bool,
+    failure_kind: str | None,
+    failure_reason: str | None,
+) -> WorkspaceEngineMonitoring:
     record = monitoring.engines.get(engine_name)
     if record is None:
         record = EngineUsageRecord(engine=engine_name)
@@ -71,26 +132,29 @@ def record_engine_execution(
     record.last_invoked_at = observed_at
     record.last_task_id = task_id
     record.last_exit_code = execution.exit_code
-    record.invocation_count += max(1, observation.invocation_count)
+    if count_invocation:
+        record.invocation_count += max(1, observation.invocation_count)
 
-    success = observation.success
-    if success is None:
-        success = failure_kind is None and execution.exit_code == 0
-    if success:
-        record.success_count += 1
-    else:
-        record.failure_count += 1
+    if count_invocation:
+        success = observation.success
+        if success is None:
+            success = failure_kind is None and execution.exit_code == 0
+        if success:
+            record.success_count += 1
+        else:
+            record.failure_count += 1
 
     limit_reason = observation.limit_reason or failure_reason
     limit_kind = observation.limit_kind or _limit_kind(limit_reason)
-    if limit_reason is not None and limit_kind is not None:
+    if count_invocation and limit_reason is not None and limit_kind is not None:
         record.limit_event_count += 1
+    if limit_reason is not None and limit_kind is not None:
         record.last_limit_reason = limit_reason
         record.last_limit_kind = limit_kind
 
     if observation.usage is not None:
         record.usage = observation.usage
-    elif record.source == "local":
+    elif count_invocation and record.source == "local":
         record.usage = EngineUsageWindow(
             used=record.invocation_count,
             unit="requests",
@@ -99,7 +163,6 @@ def record_engine_execution(
         record.metadata = {**record.metadata, **observation.metadata}
 
     monitoring.engines[engine_name] = record
-    save_engine_monitoring(root, monitoring)
     return monitoring
 
 

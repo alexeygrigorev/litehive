@@ -1210,6 +1210,78 @@ def test_subagent_artifacts_update_live_during_streaming_execution(
     assert refreshed.runtime.last_subagent.pid == 5151
 
 
+def test_subagent_manager_records_copilot_quota_monitoring_during_live_updates(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Stream Copilot quota usage")
+    manager = SubagentManager(tmp_path)
+    adapter = get_engine("copilot")
+
+    def fake_run_live(
+        prompt: str,
+        cwd: Path,
+        model: str | None = None,
+        *,
+        max_turns: int | None = None,
+        on_started=None,
+        on_update=None,
+    ) -> CLIExecutionResult:
+        del prompt, model, max_turns
+        if on_started is not None:
+            on_started(6262)
+        update = CLIExecutionResult(
+            adapter="copilot",
+            argv=("copilot", "-p"),
+            cwd=cwd,
+            exit_code=0,
+            stdout=(
+                '{"type":"assistant.usage","data":{"model":"gpt-5",'
+                '"inputTokens":120,"outputTokens":30,"cost":2,'
+                '"quotaSnapshots":{"premium_interactions":{"isUnlimitedEntitlement":false,'
+                '"entitlementRequests":100,"usedRequests":60,'
+                '"usageAllowedWithExhaustedQuota":false,"overage":0,'
+                '"overageAllowedWithExhaustedQuota":false,'
+                '"remainingPercentage":0.4,'
+                '"resetDate":"2026-04-30T00:00:00Z"}}}}\n'
+            ),
+            stderr="",
+            pid=6262,
+        )
+        assert on_update is not None
+        on_update(update)
+
+        monitoring = load_engine_monitoring(tmp_path)
+        record = monitoring.engines["copilot"]
+        assert record.source == "provider"
+        assert record.provider == "github"
+        assert record.invocation_count == 0
+        assert record.success_count == 0
+        assert record.failure_count == 0
+        assert record.usage is not None
+        assert record.usage.used == 60
+        assert record.usage.remaining == 40
+        assert record.usage.reset_at == "2026-04-30T00:00:00Z"
+        assert record.metadata["quota_snapshot"] == "premium_interactions"
+
+        return update
+
+    monkeypatch.setattr(adapter, "run_live", fake_run_live)
+    monkeypatch.setattr("litehive.subagents.get_engine", lambda _: adapter)
+
+    result = manager.run(task, role="swe", engine_name="copilot", prompt="monitor quota")
+
+    assert result.ref.status == "completed"
+    monitoring = load_engine_monitoring(tmp_path)
+    record = monitoring.engines["copilot"]
+    assert record.invocation_count == 1
+    assert record.success_count == 1
+    assert record.failure_count == 0
+    assert record.usage is not None
+    assert record.usage.used == 60
+    assert record.usage.remaining == 40
+
+
 def test_subagent_artifacts_stream_to_disk_while_process_is_still_running(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

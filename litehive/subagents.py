@@ -10,7 +10,7 @@ import re
 import yaml
 
 from litehive.config import load_config, resolve_process_profile
-from litehive.engine_monitoring import record_engine_execution
+from litehive.engine_monitoring import record_engine_execution, record_engine_observation
 from litehive.external_cli import CLIExecutionResult, ExternalCLIAdapter, parse_stage_report_text
 from litehive.engines import (
     EngineError,
@@ -391,7 +391,16 @@ class SubagentManager:
         prompt: str,
         execution: CLIExecutionResult,
     ) -> None:
-        transcript = get_engine(ref.engine).render_transcript(execution)
+        engine = get_engine(ref.engine)
+        transcript = engine.render_transcript(execution)
+        if isinstance(engine, ExternalCLIAdapter):
+            record_engine_observation(
+                self.root,
+                task_id=task.id,
+                engine_name=ref.engine,
+                adapter=engine,
+                execution=execution,
+            )
         self._record_subagent_pid(task, base, ref, execution.pid)
         mark_subagent_progress(
             self.root,
