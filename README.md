@@ -36,6 +36,7 @@ Common commands:
 - `litehive configure`
 - `litehive status`
 - `litehive queue`
+- `litehive web`
 - `litehive add "<title>"`
 - `litehive add "<title>" --pm-complexity moderate --planned-effort m`
 - `litehive add "<title>" --task-type review`
@@ -173,6 +174,7 @@ What to look for when populating it:
 - recent checkpoint commit for completed tasks
 
 Task-local artifacts live under `.litehive/tasks/<task-id>/` and include reports, transcripts, prompts, journals, and subagent sessions.
+`litehive web` starts a local-only HTTP monitor on `127.0.0.1:8765` by default and renders the current queue, active task, stage/runtime state, subagent sessions, tailed transcript/stdout/stderr artifacts, and recent run-all logs directly from `.litehive/`.
 
 ## Git checkpoints
 

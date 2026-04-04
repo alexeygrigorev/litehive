@@ -32,6 +32,7 @@ from litehive.runtime import (
     recover_completed_task,
     resolve_model,
     resolve_engine_attempt_order,
+    run_next_task,
     run_single_task,
     rollback_completed_task,
 )
@@ -67,11 +68,11 @@ from litehive.tasks import (
     resume_task,
     require_task,
     runner_status,
-    set_pool_stop_reason,
     stop_current_task,
     update_task_metadata,
 )
 from litehive.tui.app import LitehiveApp
+from litehive.web import serve_monitor
 
 TASK_TYPE_CHOICES = sorted(VALID_TASK_ROUTING_KEYS)
 
@@ -1011,6 +1012,25 @@ def build_parser() -> argparse.ArgumentParser:
         help="Repository root containing .litehive/",
     )
 
+    web = subparsers.add_parser("web", help="Serve the local queue and session monitor")
+    web.add_argument(
+        "--workspace",
+        type=Path,
+        default=Path.cwd(),
+        help="Repository root containing .litehive/",
+    )
+    web.add_argument(
+        "--host",
+        default="127.0.0.1",
+        help="Host interface to bind (default: 127.0.0.1 for local-only access)",
+    )
+    web.add_argument(
+        "--port",
+        type=int,
+        default=8765,
+        help="TCP port to bind",
+    )
+
     add = subparsers.add_parser("add", help="Create a queued task")
     add.add_argument("title", help="Task title")
     add.add_argument("--goal", default="", help="Task goal text")
@@ -1418,7 +1438,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 def _cmd_report(args: argparse.Namespace) -> int:
     from litehive.models import TaskThreadComment
-    from litehive.tasks import append_thread_comment, load_state, get_task, require_task
+    from litehive.tasks import append_thread_comment, load_state, get_task
 
     root = args.workspace
     task_id = args.task_id
@@ -2496,6 +2516,8 @@ def main() -> int:
         return _cmd_repair(args)
     if args.command == "tasks":
         return _launch_app(args.workspace, default_mode="tasks")
+    if args.command == "web":
+        return serve_monitor(args.workspace, host=args.host, port=args.port)
     if args.command == "add":
         return _cmd_add(args)
     if args.command == "intake":
