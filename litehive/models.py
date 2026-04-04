@@ -237,6 +237,8 @@ class TaskOutcomeState(BaseModel):
     stage: str | None = None
     reason_code: OutcomeReasonCode | None = None
     reason: str = ""
+    failure_classification: str | None = None
+    failure_diagnostics: dict[str, str | int | bool | None | list[str]] = Field(default_factory=dict)
     follow_up_task_id: str | None = None
     retry_count: int = 0
     retry_limit: int = 0
@@ -402,6 +404,8 @@ class StageReport(BaseModel):
     outcome: OutcomeKind | None = None
     outcome_reason_code: OutcomeReasonCode | None = None
     outcome_reason: str = ""
+    failure_classification: str | None = None
+    failure_diagnostics: dict[str, str | int | bool | None | list[str]] = Field(default_factory=dict)
     resource_limit_event: ResourceLimitEvent | None = None
     duration_seconds: int = 0
     hook_results: list[dict[str, str | int | bool | None]] = Field(default_factory=list)

@@ -1977,6 +1977,39 @@ def _commit_to_git_report(
     subagents: SubagentManager | None = None,
     config: LitehiveConfig | None = None,
 ) -> StageReport:
+    def failure_report(
+        *,
+        classification: str,
+        summary: str,
+        error_text: str | None = None,
+        phase: str,
+        base_sha: str | None = None,
+        message: str | None = None,
+        dirty_entries: list[str] | None = None,
+        attempt: int | None = None,
+    ) -> StageReport:
+        diagnostics = _commit_to_git_failure_diagnostics(
+            root,
+            execution_root,
+            task,
+            phase=phase,
+            error_text=error_text,
+            base_sha=base_sha,
+            message=message,
+            dirty_entries=dirty_entries,
+            attempt=attempt,
+        )
+        append_journal(root, task, summary)
+        return StageReport(
+            task_id=task.id,
+            step="commit_to_git",
+            verdict="fail",
+            summary=summary,
+            warnings=[warning for warning in [error_text] if warning],
+            failure_classification=classification,
+            failure_diagnostics=diagnostics,
+        )
+
     if not auto_commit_enabled:
         task.status = "done"
         task.pipeline_status = "done"
@@ -1991,38 +2024,32 @@ def _commit_to_git_report(
         )
 
     if not is_git_repo(root):
-        append_journal(root, task, "CommitToGit failed: workspace is not a git repository.")
-        return StageReport(
-            task_id=task.id,
-            step="commit_to_git",
-            verdict="fail",
+        return failure_report(
+            classification="not_git_repo",
             summary="CommitToGit failed: workspace is not a git repository",
-            warnings=["workspace is not a git repository"],
+            error_text="workspace is not a git repository",
+            phase="preflight",
         )
 
     try:
         dirty_entries = status_porcelain(execution_root)
     except GitError as exc:
-        append_journal(root, task, f"CommitToGit failed: {exc}")
-        return StageReport(
-            task_id=task.id,
-            step="commit_to_git",
-            verdict="fail",
+        return failure_report(
+            classification="status_failed",
             summary=f"CommitToGit failed: {exc}",
-            warnings=[str(exc)],
+            error_text=str(exc),
+            phase="status",
         )
 
     if not dirty_entries:
         try:
             recovered_sha = _recover_or_validate_clean_task_worktree(root, execution_root, task)
         except GitError as exc:
-            append_journal(root, task, f"CommitToGit failed: {exc}")
-            return StageReport(
-                task_id=task.id,
-                step="commit_to_git",
-                verdict="fail",
+            return failure_report(
+                classification="clean_worktree_recovery_failed",
                 summary=f"CommitToGit failed: {exc}",
-                warnings=[str(exc)],
+                error_text=str(exc),
+                phase="clean_worktree_recovery",
             )
 
         if recovered_sha is not None:
@@ -2159,13 +2186,15 @@ def _commit_to_git_report(
         state = load_state(root)
         state.queue = [queued_id for queued_id in state.queue if queued_id != task.id]
         persist_task_and_state(root, task=task, state=state)
-        append_journal(root, task, f"CommitToGit failed: {exc}")
-        return StageReport(
-            task_id=task.id,
-            step="commit_to_git",
-            verdict="fail",
+        return failure_report(
+            classification="checkpoint_failed",
             summary=f"CommitToGit failed: {exc}",
-            warnings=[str(exc)],
+            error_text=str(exc),
+            phase="checkpoint",
+            base_sha=base_sha,
+            message=message,
+            dirty_entries=dirty_entries,
+            attempt=attempt,
         )
 
     set_task_commit_sha(task, integrated_sha)
@@ -2217,6 +2246,46 @@ def _unexpected_dirty_paths(
             continue
         unexpected.append(path)
     return unexpected
+
+
+def _commit_to_git_failure_diagnostics(
+    root: Path,
+    execution_root: Path,
+    task: TaskRecord,
+    *,
+    phase: str,
+    error_text: str | None,
+    base_sha: str | None = None,
+    message: str | None = None,
+    dirty_entries: list[str] | None = None,
+    attempt: int | None = None,
+) -> dict[str, str | int | bool | None | list[str]]:
+    worktree_path = task.git.worktree_path or (
+        str(execution_root.relative_to(root))
+        if execution_root != root and execution_root.is_relative_to(root)
+        else str(execution_root)
+    )
+    diagnostics: dict[str, str | int | bool | None | list[str]] = {
+        "phase": phase,
+        "workspace_root": str(root),
+        "execution_root": str(execution_root),
+        "worktree_path": worktree_path,
+        "checkpoint_attempt": attempt if attempt is not None else task.git.checkpoint_attempts,
+        "planned_checkpoint_attempt": attempt if attempt is not None else task.git.checkpoint_attempts + 1,
+        "checkpoint_base_sha": base_sha if base_sha is not None else task.git.checkpoint_base_sha,
+        "planned_commit_message": message if message is not None else checkpoint_message(
+            task,
+            attempt=(attempt if attempt is not None else task.git.checkpoint_attempts + 1),
+        ),
+    }
+    if dirty_entries is not None:
+        diagnostics["dirty_paths"] = [
+            path for path in (_status_entry_path(entry) for entry in dirty_entries) if path
+        ]
+        diagnostics["dirty_entry_count"] = len(dirty_entries)
+    if error_text is not None:
+        diagnostics["error"] = error_text
+    return diagnostics
 
 
 def _allowed_commit_paths(root: Path, task: TaskRecord) -> set[PurePosixPath]:

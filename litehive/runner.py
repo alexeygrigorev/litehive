@@ -337,6 +337,8 @@ class TaskExecutionRunner:
                     retry_count=report.retry_count,
                     retry_limit=self.max_retries,
                     retry_source=self.retry_source,
+                    failure_classification=report.failure_classification,
+                    failure_diagnostics=report.failure_diagnostics,
                 )
                 _apply_stage_finished(task, report)
                 return self._finish_run(
@@ -378,6 +380,8 @@ class TaskExecutionRunner:
                         retry_count=report.retry_count,
                         retry_limit=self.max_retries,
                         retry_source=self.retry_source,
+                        failure_classification=report.failure_classification,
+                        failure_diagnostics=report.failure_diagnostics,
                     )
                     self._write_report(task, report, steps)
                     _apply_stage_finished(task, report)
@@ -429,6 +433,8 @@ class TaskExecutionRunner:
                         retry_count=rejections,
                         retry_limit=self.max_retries,
                         retry_source=self.retry_source,
+                        failure_classification=report.failure_classification,
+                        failure_diagnostics=report.failure_diagnostics,
                     )
                     self._write_report(task, report, steps)
                     _apply_stage_finished(task, report)
@@ -501,6 +507,8 @@ class TaskExecutionRunner:
                     tests=report.tests,
                     resource_limit_event=report.resource_limit_event,
                     hook_results=report.hook_results,
+                    failure_classification=report.failure_classification,
+                    failure_diagnostics=report.failure_diagnostics,
                 )
                 task.status = "flagged"
                 _apply_task_outcome(
@@ -512,6 +520,8 @@ class TaskExecutionRunner:
                     retry_count=report.retry_count,
                     retry_limit=self.max_retries,
                     retry_source=self.retry_source,
+                    failure_classification=report.failure_classification,
+                    failure_diagnostics=report.failure_diagnostics,
                 )
                 self._write_report(task, report, steps)
                 _apply_stage_finished(task, report)
@@ -572,6 +582,8 @@ class TaskExecutionRunner:
         warnings: list[str] | None = None,
         resource_limit_event=None,
         hook_results: list[dict[str, str | int | bool | None]] | None = None,
+        failure_classification: str | None = None,
+        failure_diagnostics: dict[str, str | int | bool | None | list[str]] | None = None,
     ) -> StageReport:
         return StageReport(
             task_id=task.id,
@@ -589,6 +601,8 @@ class TaskExecutionRunner:
             outcome=outcome,
             outcome_reason_code=outcome_reason_code,
             outcome_reason=reason,
+            failure_classification=failure_classification,
+            failure_diagnostics=dict(failure_diagnostics or {}),
             resource_limit_event=resource_limit_event,
             hook_results=hook_results or [],
         )

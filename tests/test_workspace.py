@@ -15553,9 +15553,32 @@ def test_run_next_task_flags_task_when_commit_stage_prerequisite_is_missing(
     assert task.status == "flagged"
     assert task.runtime.last_outcome.kind == "flagged"
     assert task.runtime.last_outcome.reason_code == "verdict_fail"
+    assert task.runtime.last_outcome.failure_classification == "not_git_repo"
+    assert task.runtime.last_outcome.failure_diagnostics["phase"] == "preflight"
+    assert task.runtime.last_outcome.failure_diagnostics["execution_root"] == str(tmp_path)
+    assert task.runtime.last_outcome.failure_diagnostics["planned_checkpoint_attempt"] == 1
+    assert task.runtime.last_outcome.failure_diagnostics["planned_commit_message"] == (
+        "litehive: complete T-0001 needs-git-repo"
+    )
     assert task.runtime.last_outcome.retry_limit == 3
     assert task.pipeline_status == "commit_to_git"
     assert task.git.commit_sha is None
+    report = yaml.safe_load(
+        (
+            tmp_path
+            / ".litehive"
+            / "tasks"
+            / "T-0001-needs-git-repo"
+            / "reports"
+            / "commit_to_git-005.yaml"
+        ).read_text(encoding="utf-8")
+    )
+    assert report["failure_classification"] == "not_git_repo"
+    assert report["failure_diagnostics"]["phase"] == "preflight"
+    assert report["failure_diagnostics"]["planned_checkpoint_attempt"] == 1
+    assert report["failure_diagnostics"]["planned_commit_message"] == (
+        "litehive: complete T-0001 needs-git-repo"
+    )
 
 
 def test_run_next_task_records_blocked_reason_code_when_fallbacks_are_exhausted(
@@ -15610,6 +15633,74 @@ def test_run_next_task_records_blocked_reason_code_when_fallbacks_are_exhausted(
     )
     assert report["outcome"] == "blocked"
     assert report["outcome_reason_code"] == "verdict_blocked"
+
+
+def test_run_next_task_preserves_git_commit_failure_diagnostics(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _init_git_repo(tmp_path)
+    ensure_workspace(tmp_path)
+    create_task(tmp_path, title="Commit diagnostics")
+    (tmp_path / "app.txt").write_text("updated\n", encoding="utf-8")
+
+    monkeypatch.setattr(
+        "litehive.runtime.SubagentManager.run",
+        lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
+            _completed_subagent_result(tmp_path, task.pipeline_status)
+        ),
+    )
+    monkeypatch.setattr("litehive.runtime._attempt_commit_recovery", lambda *a, **kw: None)
+
+    def fail_merge(root: Path, execution_root: Path, message: str, **kwargs) -> str:  # type: ignore[no-untyped-def]
+        raise GitError("simulated git commit failure")
+
+    monkeypatch.setattr("litehive.runtime._merge_worktree_into_main", fail_merge)
+
+    summary = run_next_task(tmp_path)
+
+    assert summary.task is not None
+    assert summary.result is not None
+    assert summary.result.final_status == "flagged"
+    task = get_task(tmp_path, "T-0001")
+    assert task is not None
+    assert task.status == "flagged"
+    assert task.pipeline_status == "commit_to_git"
+    assert task.git.commit_sha is None
+    assert task.git.checkpoint_attempts == 0
+    assert task.runtime.last_outcome.kind == "flagged"
+    assert task.runtime.last_outcome.reason_code == "verdict_fail"
+    assert task.runtime.last_outcome.failure_classification == "checkpoint_failed"
+    assert task.runtime.last_outcome.failure_diagnostics["phase"] == "checkpoint"
+    assert task.runtime.last_outcome.failure_diagnostics["planned_checkpoint_attempt"] == 1
+    assert task.runtime.last_outcome.failure_diagnostics["planned_commit_message"] == (
+        "litehive: complete T-0001 commit-diagnostics"
+    )
+    assert task.runtime.last_outcome.failure_diagnostics["dirty_paths"] == ["app.txt"]
+    assert task.runtime.last_outcome.failure_diagnostics["dirty_entry_count"] == 1
+    assert task.runtime.last_outcome.failure_diagnostics["checkpoint_base_sha"] == _run(
+        ["git", "rev-parse", "HEAD"], tmp_path
+    )
+    assert task.runtime.last_outcome.failure_diagnostics["error"] == "simulated git commit failure"
+
+    report = yaml.safe_load(
+        (
+            tmp_path
+            / ".litehive"
+            / "tasks"
+            / "T-0001-commit-diagnostics"
+            / "reports"
+            / "commit_to_git-005.yaml"
+        ).read_text(encoding="utf-8")
+    )
+    assert report["failure_classification"] == "checkpoint_failed"
+    assert report["failure_diagnostics"]["phase"] == "checkpoint"
+    assert report["failure_diagnostics"]["planned_checkpoint_attempt"] == 1
+    assert report["failure_diagnostics"]["planned_commit_message"] == (
+        "litehive: complete T-0001 commit-diagnostics"
+    )
+    assert report["failure_diagnostics"]["dirty_paths"] == ["app.txt"]
+    assert report["failure_diagnostics"]["dirty_entry_count"] == 1
+    assert report["failure_diagnostics"]["error"] == "simulated git commit failure"
 
 
 def test_run_next_task_skips_commit_stage_when_auto_commit_disabled(

@@ -1788,6 +1788,8 @@ def mark_task_outcome(
     retry_count: int,
     retry_limit: int,
     retry_source: str,
+    failure_classification: str | None = None,
+    failure_diagnostics: dict[str, str | int | bool | None | list[str]] | None = None,
 ) -> None:
     _apply_task_outcome(
         task,
@@ -1798,6 +1800,8 @@ def mark_task_outcome(
         retry_count=retry_count,
         retry_limit=retry_limit,
         retry_source=retry_source,
+        failure_classification=failure_classification,
+        failure_diagnostics=failure_diagnostics,
     )
     save_task_runtime(root, task)
 
@@ -1812,6 +1816,8 @@ def _apply_task_outcome(
     retry_count: int,
     retry_limit: int,
     retry_source: str,
+    failure_classification: str | None = None,
+    failure_diagnostics: dict[str, str | int | bool | None | list[str]] | None = None,
 ) -> None:
     now = utcnow()
     task.runtime.updated_at = now
@@ -1820,6 +1826,8 @@ def _apply_task_outcome(
         stage=stage,
         reason_code=reason_code,
         reason=reason,
+        failure_classification=failure_classification,
+        failure_diagnostics=dict(failure_diagnostics or {}),
         retry_count=retry_count,
         retry_limit=retry_limit,
         retry_source=retry_source,
