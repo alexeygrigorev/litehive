@@ -786,6 +786,7 @@ PROCESS_PROFILES: dict[str, dict[str, Any]] = {
 @dataclass(slots=True)
 class LitehiveConfig:
     default_engine: str = "codex"
+    recovery_engine: str | None = None
     process_profile: str = "generic"
     codex_model: str | None = None
     opencode_model: str = "zai-coding-plan/glm-5.1"

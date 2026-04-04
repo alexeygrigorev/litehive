@@ -1,4 +1,5 @@
 default_engine: codex
+recovery_engine: claude
 codex_model: gpt-5.4-high
 claude_model: claude-opus-4-6
 agent_startup_guidance:

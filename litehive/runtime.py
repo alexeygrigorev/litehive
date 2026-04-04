@@ -748,8 +748,7 @@ def _attempt_commit_recovery(
         f"--message '<what you fixed>'\n"
     )
 
-    engine_name = task.engine or (config.default_engine if config else "codex")
-    model_name = resolve_model(task, config, engine_name=engine_name) if config else None
+    engine_name, model_name = _resolve_recovery_engine(task, config)
     subagents.run(
         task,
         role="recovery",
@@ -770,6 +769,18 @@ def _attempt_commit_recovery(
         return None
 
     return head
+
+
+def _resolve_recovery_engine(
+    task: TaskRecord, config: LitehiveConfig | None,
+) -> tuple[str, str | None]:
+    """Return (engine_name, model_name) for recovery/merge-resolver agents."""
+    if config and config.recovery_engine:
+        engine = config.recovery_engine
+    else:
+        engine = task.engine or (config.default_engine if config else "codex")
+    model = resolve_model(task, config, engine_name=engine) if config else None
+    return engine, model
 
 
 def _pull_rebase_main(
@@ -810,8 +821,7 @@ def _pull_rebase_main(
             f"2. `git add <file>` for each resolved file\n"
             f"3. `git rebase --continue`\n"
         )
-        engine_name = task.engine or (config.default_engine if config else "codex")
-        model_name = resolve_model(task, config, engine_name=engine_name) if config else None
+        engine_name, model_name = _resolve_recovery_engine(task, config)
         subagents.run(task, role="merge-resolver", engine_name=engine_name, prompt=prompt, model=model_name)
 
         remaining = _list_conflict_files(root)
@@ -902,8 +912,7 @@ def _merge_worktree_into_main(
         f"6. Do NOT modify any files beyond resolving the conflicts\n"
     )
 
-    engine_name = task.engine or (config.default_engine if config else "codex")
-    model_name = resolve_model(task, config, engine_name=engine_name) if config else None
+    engine_name, model_name = _resolve_recovery_engine(task, config)
     result = subagents.run(
         task,
         role="merge-resolver",

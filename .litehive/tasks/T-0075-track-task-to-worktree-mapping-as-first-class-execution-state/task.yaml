@@ -3,7 +3,7 @@ slug: track-task-to-worktree-mapping-as-first-class-execution-state
 title: Track task-to-worktree mapping as first-class execution state
 depends_on: []
 task_type: null
-engine: null
+engine: opencode
 model: null
 mode: implementation
 status: flagged
@@ -12,7 +12,7 @@ priority: medium
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-01T06:36:02+00:00'
-updated_at: '2026-04-03T20:52:15+00:00'
+updated_at: '2026-04-04T13:04:46+00:00'
 goal: ''
 acceptance_criteria: []
 constraints: []

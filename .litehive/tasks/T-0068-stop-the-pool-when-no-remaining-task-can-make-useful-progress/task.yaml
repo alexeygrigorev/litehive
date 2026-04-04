@@ -6,16 +6,16 @@ task_type: bugfix
 engine: null
 model: null
 mode: implementation
-status: flagged
-pipeline_status: implementing
+status: done
+pipeline_status: done
 priority: medium
 pm_complexity: moderate
 planned_effort: s
 created_at: '2026-04-01T06:23:17+00:00'
-updated_at: '2026-04-04T00:00:00+00:00'
-goal: Make `litehive run --drain` continue after a task is requeued when another
-  task can still run, and stop only when the refreshed pool has no task that can
-  make useful progress.
+updated_at: '2026-04-04T13:01:59+00:00'
+goal: Make `litehive run --drain` continue after a task is requeued when another task
+  can still run, and stop only when the refreshed pool has no task that can make useful
+  progress.
 acceptance_criteria:
 - '`litehive run --drain` does not stop with `task_requeued` just because the most
   recent task finished in `queued`; after each iteration it re-reads the refreshed
@@ -71,10 +71,31 @@ subagents:
   path: subagents/SA-0004-swe
   sandboxed: false
   sandbox_summary: host
+- id: SA-0005
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0005-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0006
+  role: qa
+  engine: codex
+  status: completed
+  path: subagents/SA-0006-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0007
+  role: reviewer
+  engine: codex
+  status: completed
+  path: subagents/SA-0007-reviewer
+  sandboxed: false
+  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0068 stop-the-pool-when-no-remaining-task-can-make-useful-progress'
-  commit_sha: null
+  commit_sha: 6eb8e225f22f611cc824b6a2a5f21e270073e721
   checkpoint_base_sha: null
   checkpoint_attempts: 0
   rolled_back_checkpoint_attempt: null

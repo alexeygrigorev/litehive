@@ -6,28 +6,15 @@ task_type: null
 engine: null
 model: null
 mode: implementation
-status: flagged
-pipeline_status: implementing
+status: done
+pipeline_status: done
 priority: medium
-pm_complexity: moderate
-planned_effort: s
+pm_complexity: null
+planned_effort: null
 created_at: '2026-04-01T06:36:01+00:00'
-updated_at: '2026-04-04T12:39:09+00:00'
-goal: Add a read-only CLI command that reports whether dirty git state should block
-  the workspace and explains whether each dirty location belongs to the main checkout
-  or a specific task/worktree.
-acceptance_criteria:
-- litehive dirty-worktree-gate --workspace . reports a clean result when the main
-  checkout and recorded task worktrees have no dirty paths.
-- When dirty paths exist, the command classifies the blocking state deterministically
-  and explains ownership as main-checkout, task-owned worktree, ambiguous ownership,
-  or missing recorded worktree using task ids or worktree paths when known.
-- The command reuses shared git/worktree inspection helpers instead of duplicating
-  ad-hoc git status parsing, so ownership-aware dirty-state logic stays consistent
-  with existing pool/worktree behavior.
-- Focused tests cover at least clean workspace, dirty main checkout, dirty known task
-  worktree, and ambiguous or missing ownership cases for the command output and exit
-  behavior.
+updated_at: '2026-04-04T12:56:28+00:00'
+goal: ''
+acceptance_criteria: []
 constraints: []
 plan: []
 human_checkpoints: []
@@ -53,12 +40,47 @@ subagents:
   path: subagents/SA-0003-swe
   sandboxed: false
   sandbox_summary: host
+- id: SA-0004
+  role: planner
+  engine: codex
+  status: completed
+  path: subagents/SA-0004-planner
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0005
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0005-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0006
+  role: qa
+  engine: codex
+  status: completed
+  path: subagents/SA-0006-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0007
+  role: reviewer
+  engine: codex
+  status: completed
+  path: subagents/SA-0007-reviewer
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0008
+  role: recovery
+  engine: codex
+  status: completed
+  path: subagents/SA-0008-recovery
+  sandboxed: false
+  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0073 add-dirty-worktree-gate-command-with-task-ownership-explanation'
-  commit_sha: null
-  checkpoint_base_sha: null
-  checkpoint_attempts: 0
+  commit_sha: 6eb8e225f22f611cc824b6a2a5f21e270073e721
+  checkpoint_base_sha: 5e8cba1a5010c1793a492bda43c3ed586a26e12b
+  checkpoint_attempts: 1
   rolled_back_checkpoint_attempt: null
   worktree_path: null
 retry_policy:
