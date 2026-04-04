@@ -1,11 +1,9 @@
-active_task_id: T-0067
+active_task_id: null
 mode: implementation
 queue:
 - T-0107
 - T-0129
 - T-0133
-- T-0068
-- T-0073
 - T-0074
 - T-0075
 - T-0081
@@ -30,6 +28,7 @@ queue:
 - T-0132
 - T-0135
 - T-0072
+- T-0067
 - T-0098
 - T-0080
 pool_stop_reason: null

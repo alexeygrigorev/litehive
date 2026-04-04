@@ -2,45 +2,21 @@ id: T-0068
 slug: stop-the-pool-when-no-remaining-task-can-make-useful-progress
 title: Stop the pool when no remaining task can make useful progress
 depends_on: []
-task_type: bugfix
+task_type: null
 engine: null
 model: null
 mode: implementation
-status: flagged
-pipeline_status: implementing
+status: done
+pipeline_status: done
 priority: medium
-pm_complexity: moderate
-planned_effort: s
+pm_complexity: null
+planned_effort: null
 created_at: '2026-04-01T06:23:17+00:00'
-updated_at: '2026-04-04T00:00:00+00:00'
-goal: Make `litehive run --drain` continue after a task is requeued when another
-  task can still run, and stop only when the refreshed pool has no task that can
-  make useful progress.
-acceptance_criteria:
-- '`litehive run --drain` does not stop with `task_requeued` just because the most
-  recent task finished in `queued`; after each iteration it re-reads the refreshed
-  queue and continues while at least one task is still runnable.'
-- When a task is requeued and the refreshed pool has no runnable work left, drain
-  mode stops cleanly with the no-useful-progress outcome (`blocked_tasks_remaining`
-  when tasks remain but are blocked, otherwise `queue_exhausted`) instead of treating
-  the requeue itself as the stop reason.
-- Existing stop conditions that genuinely require operator intervention or an intentional
-  pause, including human checkpoints and continue-or-rollback requirements, still
-  stop drain mode immediately.
-- Targeted regression tests cover both the mixed-pool case (requeued task plus another
-  runnable task keeps draining) and the no-runnable-work case (requeued task plus
-  only blocked work stops cleanly).
-constraints:
-- Keep changes scoped to drain stop semantics and directly related tests/reporting.
-plan:
-- Inspect the drain loop and stop-reason helpers in `litehive/runtime.py` to separate
-  pool-level no-progress detection from single-task `task_requeued` semantics.
-- Recompute queue viability after each drained execution using the existing task-selection
-  logic so requeued work only stops the pool when nothing runnable remains.
-- Add focused regression coverage in `tests/test_workspace.py` for mixed runnable
-  and no-runnable requeue scenarios, while keeping human checkpoint behavior unchanged.
-- Update any user-facing stop-reason reporting that would otherwise still describe
-  a no-progress drain stop as `task_requeued`.
+updated_at: '2026-04-04T12:36:34+00:00'
+goal: ''
+acceptance_criteria: []
+constraints: []
+plan: []
 human_checkpoints: []
 subagents:
 - id: SA-0001
@@ -71,12 +47,47 @@ subagents:
   path: subagents/SA-0004-swe
   sandboxed: false
   sandbox_summary: host
+- id: SA-0005
+  role: planner
+  engine: codex
+  status: completed
+  path: subagents/SA-0005-planner
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0006
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0006-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0007
+  role: qa
+  engine: codex
+  status: completed
+  path: subagents/SA-0007-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0008
+  role: reviewer
+  engine: codex
+  status: completed
+  path: subagents/SA-0008-reviewer
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0009
+  role: recovery
+  engine: codex
+  status: completed
+  path: subagents/SA-0009-recovery
+  sandboxed: false
+  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0068 stop-the-pool-when-no-remaining-task-can-make-useful-progress'
-  commit_sha: null
-  checkpoint_base_sha: null
-  checkpoint_attempts: 0
+  commit_sha: 5e8cba1a5010c1793a492bda43c3ed586a26e12b
+  checkpoint_base_sha: 5768c57db559b190303c0be654412d3805157347
+  checkpoint_attempts: 1
   rolled_back_checkpoint_attempt: null
   worktree_path: null
 retry_policy:
