@@ -29,14 +29,6 @@ write_launcher \
   "${target_dir}/litehive" \
   "exec \"$uv_bin\" run --project \"$repo_root\" litehive \"\$@\""
 
-write_launcher \
-  "${target_dir}/litehive-run-all" \
-  "exec \"$repo_root/scripts/run-all.sh\" \"\$@\""
-
-write_launcher \
-  "${target_dir}/litehive-run-all-status" \
-  "exec \"$repo_root/scripts/run-all-status.sh\" \"\$@\""
-
 case ":${PATH}:" in
   *":${HOME}/bin:"*)
     echo "~/bin is on PATH"
@@ -50,5 +42,3 @@ case ":${PATH}:" in
 esac
 
 echo "Resolved launcher: $(command -v litehive || true)"
-echo "Resolved run-all launcher: $(command -v litehive-run-all || true)"
-echo "Resolved run-all-status launcher: $(command -v litehive-run-all-status || true)"

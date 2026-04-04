@@ -191,27 +191,40 @@ of completed attempts.
 
 Rollback and recover are only valid for completed tasks. Rollback also requires a clean git worktree so the revert is deterministic.
 
-## Run-All Wrapper
+## Daemon
 
-Use [`scripts/run-all.sh`](/home/alexey/git/litehive/scripts/run-all.sh) to restart `litehive` on every pool iteration:
+Use `litehive daemon run` to start the background pool daemon for a workspace:
 
 ```bash
-scripts/run-all.sh .
+litehive daemon run --workspace .
 ```
 
-It writes timestamped logs under `.litehive/logs/run-all/<timestamp>/`:
+Inspect a workspace daemon with:
+
+```bash
+litehive daemon status --workspace .
+```
+
+List every live daemon registered across workspaces with:
+
+```bash
+litehive daemon instances
+```
+
+Stop or restart a workspace daemon with:
+
+```bash
+litehive daemon stop --workspace .
+litehive daemon restart --workspace .
+```
+
+Each daemon session writes timestamped iteration logs under `.litehive/logs/run-all/<timestamp>/`:
 
 - `0001-pre-status.log`
 - `0001-run.log`
 - `0001-post-status.log`
 
 That keeps the pool inspectable and ensures each iteration picks up the latest `litehive` code.
-
-Use [`scripts/run-all-status.sh`](/home/alexey/git/litehive/scripts/run-all-status.sh) to inspect the live workspace plus the latest run-all logs in one place:
-
-```bash
-scripts/run-all-status.sh .
-```
 
 ## Local launcher
 
@@ -232,21 +245,19 @@ For this repository, the launcher delegates to the local project via `uv`, but t
 Installed commands:
 
 - `litehive`
-- `litehive-run-all`
-- `litehive-run-all-status`
 
 From any other project, run:
 
 ```bash
-litehive-run-all /path/to/project
-litehive-run-all-status /path/to/project
+litehive daemon run --workspace /path/to/project
+litehive daemon status --workspace /path/to/project
 ```
 
 If you are already in the target project directory, you can omit the path:
 
 ```bash
-litehive-run-all .
-litehive-run-all-status .
+litehive daemon run --workspace .
+litehive daemon status --workspace .
 ```
 
 ## Current engines

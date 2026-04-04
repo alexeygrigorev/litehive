@@ -38,10 +38,14 @@
   Shows the planned pool order, selected engines, and predicted stop reason without invoking any agents.
 - `uv run litehive dirty-worktree-gate --workspace .`
   Reports whether dirty git state should block the workspace and explains whether each dirty location belongs to the main checkout or a recorded task worktree.
-- `scripts/run-all.sh .`
-  Restarts `uv run litehive run` each iteration and writes timestamped logs under `.litehive/logs/run-all/`.
-- `scripts/run-all-status.sh .`
-  Shows current `litehive status` plus the latest run-all log directory and recent output.
+- `uv run litehive daemon run --workspace .`
+  Starts a background daemon that repairs first, runs one fresh `litehive run` subprocess per iteration, and writes timestamped logs under `.litehive/logs/run-all/`.
+- `uv run litehive daemon status --workspace .`
+  Shows the registered daemon PID plus the latest workspace-local run-all logs.
+- `uv run litehive daemon stop --workspace .`
+  Stops the workspace daemon cleanly.
+- `uv run litehive daemon instances`
+  Lists live daemons across workspaces from the global registry at `~/.config/litehive/daemons.yaml`.
 
 ## Engines
 - Implemented adapters: `codex`, `opencode`, `gemini`, `copilot`.

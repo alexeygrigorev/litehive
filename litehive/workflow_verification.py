@@ -78,6 +78,7 @@ def workflow_verification_scope(task: TaskRecord) -> dict[str, bool]:
             "pool",
             "drain",
             "wrapper",
+            "daemon",
         )
     )
     return {
@@ -103,6 +104,7 @@ def workflow_verification_gaps(task: TaskRecord, evidence_text: str) -> list[str
         " litehive status",
         " litehive queue",
         " litehive repair",
+        " litehive daemon",
         "scripts/run-all.sh",
         "run-all.sh",
         "--drain",
@@ -182,6 +184,7 @@ def workflow_verification_gaps(task: TaskRecord, evidence_text: str) -> list[str
     if scope["run_all"]:
         run_all_terms = (
             "run-all.sh",
+            "litehive daemon",
             "--drain",
             "== iteration ",
             "no active or queued tasks remain. stopping.",
@@ -190,7 +193,7 @@ def workflow_verification_gaps(task: TaskRecord, evidence_text: str) -> list[str
         )
         if not _contains_any(normalized, run_all_terms):
             gaps.append(
-                "run-all, drain, wrapper, or pool claims require proof through the wrapper or real CLI execution"
+                "run-all, daemon, drain, wrapper, or pool claims require proof through the real CLI execution path"
             )
 
     return gaps

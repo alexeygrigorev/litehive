@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 from dataclasses import asdict
 from pathlib import Path
+import sys
 
 import yaml
 
@@ -20,6 +21,13 @@ from litehive.config import (
     load_config,
     normalize_task_engine_routing,
     render_context_template,
+)
+from litehive.daemon import (
+    daemon_status_lines,
+    list_daemon_instances,
+    run_daemon_loop,
+    start_background_daemon,
+    stop_workspace_daemon,
 )
 from litehive.engine_monitoring import load_engine_monitoring, render_engine_monitoring_lines
 from litehive.git_ops import GitError, checkpoint_message
@@ -1037,6 +1045,56 @@ def build_parser() -> argparse.ArgumentParser:
         help="TCP port to bind",
     )
 
+    daemon = subparsers.add_parser("daemon", help="Manage the Litehive pool daemon")
+    daemon_subparsers = daemon.add_subparsers(dest="daemon_command")
+
+    daemon_run = daemon_subparsers.add_parser("run", help="Start the workspace daemon")
+    daemon_run.add_argument(
+        "--workspace",
+        type=Path,
+        default=Path.cwd(),
+        help="Repository root containing .litehive/",
+    )
+    daemon_run.add_argument(
+        "--foreground",
+        action="store_true",
+        help=argparse.SUPPRESS,
+    )
+
+    daemon_status = daemon_subparsers.add_parser("status", help="Show daemon state for a workspace")
+    daemon_status.add_argument(
+        "--workspace",
+        type=Path,
+        default=Path.cwd(),
+        help="Repository root containing .litehive/",
+    )
+
+    daemon_stop = daemon_subparsers.add_parser("stop", help="Stop the workspace daemon")
+    daemon_stop.add_argument(
+        "--workspace",
+        type=Path,
+        default=Path.cwd(),
+        help="Repository root containing .litehive/",
+    )
+
+    daemon_restart = daemon_subparsers.add_parser("restart", help="Restart the workspace daemon")
+    daemon_restart.add_argument(
+        "--workspace",
+        type=Path,
+        default=Path.cwd(),
+        help="Repository root containing .litehive/",
+    )
+
+    daemon_instances = daemon_subparsers.add_parser("instances", help="List all live Litehive daemons")
+
+    daemon_worker = daemon_subparsers.add_parser("worker", help=argparse.SUPPRESS)
+    daemon_worker.add_argument(
+        "--workspace",
+        type=Path,
+        default=Path.cwd(),
+        help=argparse.SUPPRESS,
+    )
+
     add = subparsers.add_parser("add", help="Create a queued task")
     add.add_argument("title", help="Task title")
     add.add_argument("--goal", default="", help="Task goal text")
@@ -1628,6 +1686,73 @@ def _cmd_status(args: argparse.Namespace) -> int:
                 for line in render_task_summary(task, active=task.id == state.active_task_id, root=root):
                     print(line)
     return 0
+
+
+def _cmd_daemon_run(args: argparse.Namespace) -> int:
+    ensure_workspace(args.workspace)
+    if getattr(args, "foreground", False):
+        return run_daemon_loop(args.workspace, output_stream=sys.stdout)
+    try:
+        pid = start_background_daemon(args.workspace)
+    except RuntimeError as exc:
+        print(f"daemon run failed: {exc}")
+        return 1
+    print(f"workspace: {args.workspace.resolve()}")
+    print(f"daemon_status: running")
+    print(f"pid: {pid}")
+    return 0
+
+
+def _cmd_daemon_status(args: argparse.Namespace) -> int:
+    ensure_workspace(args.workspace)
+    for line in daemon_status_lines(args.workspace):
+        print(line)
+    return 0
+
+
+def _cmd_daemon_stop(args: argparse.Namespace) -> int:
+    ensure_workspace(args.workspace)
+    entry = stop_workspace_daemon(args.workspace)
+    print(f"workspace: {args.workspace.resolve()}")
+    if entry is None:
+        print("daemon_status: stopped")
+        print("stopped: no")
+        return 1
+    print(f"pid: {entry.get('pid')}")
+    print("daemon_status: stopped")
+    print("stopped: yes")
+    return 0
+
+
+def _cmd_daemon_restart(args: argparse.Namespace) -> int:
+    ensure_workspace(args.workspace)
+    previous = stop_workspace_daemon(args.workspace)
+    try:
+        pid = start_background_daemon(args.workspace)
+    except RuntimeError as exc:
+        print(f"daemon restart failed: {exc}")
+        return 1
+    print(f"workspace: {args.workspace.resolve()}")
+    print(f"previous_pid: {previous.get('pid') if previous is not None else '-'}")
+    print(f"pid: {pid}")
+    print("daemon_status: running")
+    return 0
+
+
+def _cmd_daemon_instances(_: argparse.Namespace) -> int:
+    instances = list_daemon_instances()
+    print(f"instances: {len(instances)}")
+    for index, entry in enumerate(instances, start=1):
+        print(
+            f"{index}. workspace={entry.get('workspace')} pid={entry.get('pid')} "
+            f"started_at={entry.get('started_at')} log_dir={entry.get('log_dir')}"
+        )
+    return 0
+
+
+def _cmd_daemon_worker(args: argparse.Namespace) -> int:
+    ensure_workspace(args.workspace)
+    return run_daemon_loop(args.workspace, output_stream=None)
 
 
 def _cmd_dirty_worktree_gate(args: argparse.Namespace) -> int:
@@ -2555,6 +2680,20 @@ def main() -> int:
         return _launch_app(args.workspace, default_mode="tasks")
     if args.command == "web":
         return serve_monitor(args.workspace, host=args.host, port=args.port)
+    if args.command == "daemon":
+        if args.daemon_command == "run":
+            return _cmd_daemon_run(args)
+        if args.daemon_command == "status":
+            return _cmd_daemon_status(args)
+        if args.daemon_command == "stop":
+            return _cmd_daemon_stop(args)
+        if args.daemon_command == "restart":
+            return _cmd_daemon_restart(args)
+        if args.daemon_command == "instances":
+            return _cmd_daemon_instances(args)
+        if args.daemon_command == "worker":
+            return _cmd_daemon_worker(args)
+        parser.error("daemon requires a subcommand")
     if args.command == "add":
         return _cmd_add(args)
     if args.command == "intake":

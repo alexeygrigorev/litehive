@@ -1,0 +1,38 @@
+- role: qa
+  step: testing
+  verdict: pass
+  message: 'Verified the new daemon CLI end to end. Ran: uv run pytest -q tests/test_workspace.py
+    -k ''daemon_foreground or daemon_background_lifecycle_and_global_instances_registry''
+    -> 4 passed. This covered foreground loop behavior (pre-status explicit stop,
+    multi-iteration restart-until-empty, continue-after-task_requeued) plus background
+    lifecycle (run/status/instances/restart/stop), duplicate-daemon refusal, global
+    registry pruning, and registration under XDG config home litehive/daemons.yaml
+    instead of workspace .litehive. Manual smoke: launched python -m litehive.main
+    daemon run/status/instances/stop against an isolated temp workspace with XDG_CONFIG_HOME
+    set to a temp config dir and a fake nested uv command; observed daemon registration
+    in <tmp>/config-home/litehive/daemons.yaml, workspace-local iteration logs under
+    .litehive/logs/run-all/<timestamp>/, and instances output listing only the live
+    workspace daemon. Evidence supports all acceptance criteria, including fresh subprocess-per-iteration
+    pool wrapper semantics and global daemon registry behavior.'
+  files_changed: []
+  created_at: '2026-04-04T17:47:19+00:00'
+- role: reviewer
+  step: accepting
+  verdict: pass
+  message: 'Accepted. Verified the new litehive daemon workflow replaces the bash
+    run-all wrapper and uses the global registry at ~/.config/litehive/daemons.yaml
+    (via XDG_CONFIG_HOME in tests), not workspace .litehive. Reviewed the implementation
+    in litehive/daemon.py and litehive/cli.py: daemon run/status/stop/restart/instances
+    are wired through the CLI, the loop repairs first, launches a fresh litehive run
+    subprocess each iteration, writes iteration logs under .litehive/logs/run-all/<timestamp>/,
+    continues after task_requeued, and stops on queue exhaustion, blocked_tasks_remaining,
+    and explicit pool stop reasons. Verified operator-facing migration in README.md,
+    .litehive/context.md, scripts/install-bin.sh, and workflow-verification evidence
+    rules. Ran python -m py_compile litehive/daemon.py litehive/cli.py and uv run
+    pytest -q tests/test_workspace.py -k ''daemon_foreground or daemon_background_lifecycle
+    or workflow_testing_with_real_lifecycle_evidence or stage_prompt_requires_real_lifecycle_verification''
+    -> 6 passed. The daemon tests prove duplicate-daemon refusal, background lifecycle
+    control, stale registry pruning, global instances listing, and real CLI proof
+    for daemon/pool behavior.'
+  files_changed: []
+  created_at: '2026-04-04T17:49:11+00:00'

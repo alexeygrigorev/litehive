@@ -2274,7 +2274,7 @@ def test_runner_accepts_workflow_testing_with_real_lifecycle_evidence(
         acceptance_criteria=[
             "commit_to_git succeeds and records the final checkpoint commit",
             "An interrupted task resumes from the correct stage in a real workspace run",
-            "run-all behavior is proven through the wrapper or real CLI execution",
+            "daemon or pool behavior is proven through the real CLI execution path",
         ],
         auto_commit=False,
     )
@@ -2390,17 +2390,17 @@ exit 1
         "active_task_id: null\nqueue:\n  - T-0001\npool_stop_reason: null\n",
         encoding="utf-8",
     )
-    wrapper_result = subprocess.run(
-        ["bash", str(_repo_root() / "scripts" / "run-all.sh"), str(wrapper_workspace)],
+    daemon_result = subprocess.run(
+        [sys.executable, "-m", "litehive.main", "daemon", "run", "--foreground", "--workspace", str(wrapper_workspace)],
         cwd=_repo_root(),
         text=True,
         capture_output=True,
-        env=_with_fake_uv(fake_uv),
+        env=_with_fake_uv(fake_uv, xdg_config_home=tmp_path / "config-home"),
         check=False,
     )
-    assert wrapper_result.returncode == 0
-    assert "== iteration 1 ==" in wrapper_result.stdout
-    assert "No active or queued tasks remain. Stopping." in wrapper_result.stdout
+    assert daemon_result.returncode == 0
+    assert "== iteration 1 ==" in daemon_result.stdout
+    assert "No active or queued tasks remain. Stopping." in daemon_result.stdout
 
     evidence = "\n\n".join(
         [
@@ -2408,7 +2408,7 @@ exit 1
             "$ uv run litehive run --workspace .\n" + interrupted_output.strip(),
             "$ uv run litehive resume T-0001 --workspace .\n" + resume_output.strip(),
             "$ uv run litehive run --workspace .\n" + resumed_output.strip(),
-            "$ bash scripts/run-all.sh .\n" + wrapper_result.stdout.strip(),
+            "$ litehive daemon run --foreground --workspace .\n" + daemon_result.stdout.strip(),
         ]
     )
 
@@ -4870,7 +4870,7 @@ def test_stage_prompt_requires_real_lifecycle_verification_for_workflow_testing_
         acceptance_criteria=[
             "commit_to_git succeeds and records the final checkpoint commit",
             "An interrupted task resumes from the correct stage in a real workspace run",
-            "run-all behavior is proven through the wrapper or real CLI execution",
+            "daemon or pool behavior is proven through the real CLI execution path",
         ],
     )
 
@@ -13024,7 +13024,7 @@ def test_update_command_accepts_copilot_engine(
     assert "engine: copilot" in output
 
 
-def test_run_all_stops_before_run_when_pre_status_has_explicit_pool_stop_reason(
+def test_daemon_foreground_stops_before_run_when_pre_status_has_explicit_pool_stop_reason(
     tmp_path: Path,
 ) -> None:
     workspace = tmp_path / "workspace"
@@ -13066,12 +13066,13 @@ exit 1
 """,
     )
 
+    config_home = tmp_path / "config-home"
     result = subprocess.run(
-        ["bash", str(_repo_root() / "scripts" / "run-all.sh"), str(workspace)],
+        [sys.executable, "-m", "litehive.main", "daemon", "run", "--foreground", "--workspace", str(workspace)],
         cwd=_repo_root(),
         text=True,
         capture_output=True,
-        env=_with_fake_uv(fake_uv),
+        env=_with_fake_uv(fake_uv, xdg_config_home=config_home),
         check=False,
     )
 
@@ -13083,9 +13084,10 @@ exit 1
     assert len(log_dirs) == 1
     assert (log_dirs[0] / "0001-pre-status.log").exists()
     assert not (log_dirs[0] / "0001-run.log").exists()
+    assert (config_home / "litehive" / "daemons.yaml").exists()
 
 
-def test_run_all_restarts_litehive_until_queue_is_empty(tmp_path: Path) -> None:
+def test_daemon_foreground_restarts_litehive_until_queue_is_empty(tmp_path: Path) -> None:
     workspace = tmp_path / "workspace"
     workspace.mkdir()
     (workspace / ".litehive").mkdir()
@@ -13141,11 +13143,11 @@ exit 1
     )
 
     result = subprocess.run(
-        ["bash", str(_repo_root() / "scripts" / "run-all.sh"), str(workspace)],
+        [sys.executable, "-m", "litehive.main", "daemon", "run", "--foreground", "--workspace", str(workspace)],
         cwd=_repo_root(),
         text=True,
         capture_output=True,
-        env=_with_fake_uv(fake_uv),
+        env=_with_fake_uv(fake_uv, xdg_config_home=tmp_path / "config-home"),
         check=False,
     )
 
@@ -13166,7 +13168,7 @@ exit 1
     assert (log_dir / "0002-post-status.log").exists()
 
 
-def test_run_all_continues_after_task_requeued(tmp_path: Path) -> None:
+def test_daemon_foreground_continues_after_task_requeued(tmp_path: Path) -> None:
     workspace = tmp_path / "workspace"
     workspace.mkdir()
     (workspace / ".litehive").mkdir()
@@ -13225,11 +13227,11 @@ exit 1
     )
 
     result = subprocess.run(
-        ["bash", str(_repo_root() / "scripts" / "run-all.sh"), str(workspace)],
+        [sys.executable, "-m", "litehive.main", "daemon", "run", "--foreground", "--workspace", str(workspace)],
         cwd=_repo_root(),
         text=True,
         capture_output=True,
-        env=_with_fake_uv(fake_uv),
+        env=_with_fake_uv(fake_uv, xdg_config_home=tmp_path / "config-home"),
         check=False,
     )
 
@@ -13249,6 +13251,157 @@ exit 1
     assert (log_dir / "0002-post-status.log").exists()
 
 
+def test_daemon_background_lifecycle_and_global_instances_registry(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    (workspace / ".litehive").mkdir()
+    (workspace / ".litehive" / "state.yaml").write_text(
+        "active_task_id: null\nqueue:\n  - T-0001\npool_stop_reason: null\n",
+        encoding="utf-8",
+    )
+    counts_dir = tmp_path / "counts"
+    counts_dir.mkdir()
+    keepalive = counts_dir / "keepalive"
+    keepalive.write_text("1\n", encoding="utf-8")
+    run_started = counts_dir / "run-started"
+
+    fake_uv = _write_fake_uv(
+        tmp_path,
+        f"""#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ "${{1:-}}" == "run" && "${{2:-}}" == "python" && "${{3:-}}" == "-" ]]; then
+  shift 2
+  exec python3 "$@"
+fi
+
+if [[ "${{1:-}}" == "run" && "${{2:-}}" == "litehive" && "${{3:-}}" == "run" ]]; then
+  trap 'exit 0' TERM INT
+  echo started > "{run_started}"
+  while [[ -f "{keepalive}" ]]; do
+    sleep 0.1
+  done
+  cat > "{workspace / ".litehive" / "state.yaml"}" <<'STATE'
+active_task_id: null
+queue: []
+pool_stop_reason: queue_exhausted
+STATE
+  echo "tasks_run: 1"
+  echo "stop_reason: queue_exhausted"
+  exit 0
+fi
+
+if [[ "${{1:-}}" == "run" && "${{2:-}}" == "litehive" && "${{3:-}}" == "repair" ]]; then
+  echo "repaired: no"
+  exit 0
+fi
+
+echo "unexpected uv invocation: $*" >&2
+exit 1
+""",
+    )
+    config_home = tmp_path / "config-home"
+    registry = config_home / "litehive" / "daemons.yaml"
+    registry.parent.mkdir(parents=True, exist_ok=True)
+    registry.write_text(
+        yaml.safe_dump(
+            {
+                "daemons": {
+                    "/stale/workspace": {
+                        "workspace": "/stale/workspace",
+                        "pid": 999999,
+                        "started_at": "2026-04-04T10:00:00+00:00",
+                        "log_dir": "/stale/logs",
+                    }
+                }
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+    env = _with_fake_uv(fake_uv, xdg_config_home=config_home)
+
+    start = subprocess.run(
+        [sys.executable, "-m", "litehive.main", "daemon", "run", "--workspace", str(workspace)],
+        cwd=_repo_root(),
+        text=True,
+        capture_output=True,
+        env=env,
+        check=False,
+    )
+    assert start.returncode == 0
+    first_pid = int(next(line.split(": ", 1)[1] for line in start.stdout.splitlines() if line.startswith("pid: ")))
+
+    deadline = time.time() + 5
+    while time.time() < deadline and not run_started.exists():
+        time.sleep(0.1)
+    assert run_started.exists()
+
+    second_start = subprocess.run(
+        [sys.executable, "-m", "litehive.main", "daemon", "run", "--workspace", str(workspace)],
+        cwd=_repo_root(),
+        text=True,
+        capture_output=True,
+        env=env,
+        check=False,
+    )
+    assert second_start.returncode == 1
+    assert "daemon already running" in second_start.stdout
+
+    status = subprocess.run(
+        [sys.executable, "-m", "litehive.main", "daemon", "status", "--workspace", str(workspace)],
+        cwd=_repo_root(),
+        text=True,
+        capture_output=True,
+        env=env,
+        check=False,
+    )
+    assert status.returncode == 0
+    assert "daemon_status: running" in status.stdout
+    assert f"pid: {first_pid}" in status.stdout
+
+    instances = subprocess.run(
+        [sys.executable, "-m", "litehive.main", "daemon", "instances"],
+        cwd=_repo_root(),
+        text=True,
+        capture_output=True,
+        env=env,
+        check=False,
+    )
+    assert instances.returncode == 0
+    assert "instances: 1" in instances.stdout
+    assert str(workspace.resolve()) in instances.stdout
+    assert "/stale/workspace" not in instances.stdout
+    registry_data = yaml.safe_load(registry.read_text(encoding="utf-8"))
+    assert "/stale/workspace" not in registry_data["daemons"]
+
+    restart = subprocess.run(
+        [sys.executable, "-m", "litehive.main", "daemon", "restart", "--workspace", str(workspace)],
+        cwd=_repo_root(),
+        text=True,
+        capture_output=True,
+        env=env,
+        check=False,
+    )
+    assert restart.returncode == 0
+    second_pid = int(next(line.split(": ", 1)[1] for line in restart.stdout.splitlines() if line.startswith("pid: ")))
+    assert second_pid != first_pid
+    assert f"previous_pid: {first_pid}" in restart.stdout
+
+    stop = subprocess.run(
+        [sys.executable, "-m", "litehive.main", "daemon", "stop", "--workspace", str(workspace)],
+        cwd=_repo_root(),
+        text=True,
+        capture_output=True,
+        env=env,
+        check=False,
+    )
+    assert stop.returncode == 0
+    assert "daemon_status: stopped" in stop.stdout
+    registry_data = yaml.safe_load(registry.read_text(encoding="utf-8"))
+    assert registry_data["daemons"] == {}
+
+
 def _run(cmd: list[str], cwd: Path) -> str:
     proc = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, check=True)
     return proc.stdout.strip()
@@ -13263,9 +13416,11 @@ def _repo_root() -> Path:
     return Path(__file__).resolve().parents[1]
 
 
-def _with_fake_uv(fake_uv: Path) -> dict[str, str]:
+def _with_fake_uv(fake_uv: Path, *, xdg_config_home: Path | None = None) -> dict[str, str]:
     env = os.environ.copy()
     env["PATH"] = f"{fake_uv.parent}:{env['PATH']}"
+    if xdg_config_home is not None:
+        env["XDG_CONFIG_HOME"] = str(xdg_config_home)
     return env
 
 
