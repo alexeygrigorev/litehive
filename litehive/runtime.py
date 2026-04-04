@@ -490,6 +490,78 @@ def _cleanup_task_worktree(root: Path, task: TaskRecord) -> None:
     save_task(root, task)
 
 
+def _attempt_stage_recovery(
+    root: Path,
+    execution_root: Path,
+    task: TaskRecord,
+    step: str,
+    failed_report: StageReport,
+    *,
+    subagents: SubagentManager | None = None,
+    config: LitehiveConfig | None = None,
+    role_name: str = "swe",
+    engine_name: str = "codex",
+    model_name: str | None = None,
+) -> StageReport | None:
+    """Launch a recovery agent after a stage failure. Returns a new report or None."""
+    if subagents is None:
+        return None
+
+    append_journal(
+        root, task,
+        f"Stage `{step}` {failed_report.verdict}: {failed_report.summary}. Launching recovery agent.",
+    )
+
+    prompt = (
+        f"The {step} stage for task {task.id} ({task.title}) ended with verdict: {failed_report.verdict}.\n\n"
+        f"Report from the previous agent:\n{failed_report.feedback}\n\n"
+        f"Working directory: {execution_root}\n\n"
+        f"Your job is to fix the issues described above and complete the {step} stage successfully.\n\n"
+        f"Acceptance criteria:\n"
+        + "\n".join(f"- {c}" for c in task.acceptance_criteria)
+        + f"\n\nAfter fixing, submit your verdict:\n"
+        f"  litehive report --verdict <pass|fail> --role {role_name} --step {step} "
+        f"--message \"<detailed explanation of what you fixed and the result>\"\n"
+    )
+
+    recovery_result = subagents.run(
+        task,
+        role="recovery",
+        engine_name=engine_name,
+        prompt=prompt,
+        model=model_name,
+    )
+
+    # Check if the recovery agent submitted a verdict via thread
+    from litehive.tasks import load_task_thread
+
+    thread = load_task_thread(root, task)
+    recovery_comments = [
+        c for c in thread
+        if c.step == step and c.verdict not in ("comment", "reject", "fail")
+    ]
+    if recovery_comments:
+        latest = recovery_comments[-1]
+        append_journal(root, task, f"Recovery agent resolved {step}: {latest.verdict}")
+        return StageReport(
+            task_id=task.id,
+            step=step,  # type: ignore[arg-type]
+            verdict=latest.verdict,  # type: ignore[arg-type]
+            summary=latest.message.splitlines()[0] if latest.message else f"{step} recovered",
+            feedback=latest.message,
+            files_changed=latest.files_changed,
+        )
+
+    # Fallback: check if recovery agent produced a passing report via stdout
+    recovery_report = stage_report_from_subagent(task, step, recovery_result, root=root)
+    if recovery_report.verdict in ("pass", "accept"):
+        append_journal(root, task, f"Recovery agent resolved {step}: {recovery_report.verdict}")
+        return recovery_report
+
+    append_journal(root, task, f"Recovery agent could not resolve {step}.")
+    return None
+
+
 def _attempt_commit_recovery(
     root: Path,
     execution_root: Path,
@@ -1351,6 +1423,27 @@ def build_executor(
                     )
 
             report = stage_report_from_subagent(current_task, step, result, root=root)
+
+            # If the stage failed or was rejected AND this isn't the first attempt,
+            # launch a recovery agent to fix it instead of bouncing back and forth.
+            from litehive.tasks import task_dir as _task_dir
+
+            _reports_dir = _task_dir(root, current_task) / "reports"
+            prior_attempts = len(list(_reports_dir.glob(f"{step}-*.yaml"))) if _reports_dir.exists() else 0
+            if (
+                report.verdict in ("fail", "reject")
+                and result.failure is None  # not an engine-level failure (crash/limit)
+                and step in ("implementing", "testing")
+                and prior_attempts >= 1  # only after at least one prior attempt on this step
+            ):
+                recovered_report = _attempt_stage_recovery(
+                    root, execution_root, current_task, step, report,
+                    subagents=subagents, config=config,
+                    role_name=role_name, engine_name=engine_name, model_name=model_name,
+                )
+                if recovered_report is not None:
+                    report = recovered_report
+
             if execution_events:
                 report.warnings = [*execution_events, *report.warnings]
                 report.feedback = "\n\n".join([*execution_events, report.feedback]).strip()
