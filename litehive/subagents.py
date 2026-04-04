@@ -1084,16 +1084,17 @@ def stage_prompt(
             "Report requirements:",
             "- On PASS/ACCEPT: explain what you verified, what tests you ran, what evidence confirms the acceptance criteria are met.",
             "- On REJECT: you MUST include ALL of the following:",
-            "  1. What specifically failed or is missing (exact test names, error messages, missing behavior)",
-            "  2. Which files need to be changed and what the fix should look like",
-            "  3. Step-by-step actionable instructions so the next agent can fix it without re-investigating",
-            "  4. Any partial progress that should be kept (do not ask them to start over if 90% is correct)",
+            "  1. EXPECTED behavior: what should happen according to the acceptance criteria",
+            "  2. OBSERVED behavior: what actually happens (exact error messages, test output, wrong values)",
+            "  3. Steps to reproduce: the exact command or test that demonstrates the gap",
+            "  4. Which acceptance criteria are not met and which ones are already satisfied",
             "- On FAIL: explain what went wrong and whether it is fixable or needs a different approach.",
             "- On BLOCKED: explain what dependency or resource is missing.",
             "",
             "A vague rejection like 'tests fail' or 'missing evidence' is useless and causes infinite loops.",
-            "A good rejection looks like: 'test_foo in tests/test_workspace.py fails because bar() returns None instead of a string. "
-            "Fix: in litehive/tasks.py line 42, change the return type to str and handle the None case. Keep the rest of the implementation as-is.'",
+            "A good rejection looks like: 'Expected: `litehive engine gemini` switches the default engine and prints confirmation. "
+            "Observed: command exits 0 but config.yaml still shows the old engine. Reproduce: run `litehive engine gemini` then `cat .litehive/config.yaml`. "
+            "Criteria 1-3 are met, criterion 4 (persistence) is not.'",
             "",
             "The text-based VERDICT/SUMMARY format is accepted as fallback but litehive report is strongly preferred.",
         ]
