@@ -6,15 +6,21 @@ task_type: null
 engine: codex
 model: null
 mode: implementation
-status: flagged
-pipeline_status: implementing
+status: done
+pipeline_status: done
 priority: medium
+pm_complexity: null
+planned_effort: null
 created_at: '2026-03-31T06:07:39+00:00'
-updated_at: '2026-04-02T14:13:31+00:00'
+updated_at: '2026-04-04T10:30:46+00:00'
 goal: Implement per-task and global retry limits with explicit reasons for flagged,
   blocked, cancelled, and failed outcomes. Make the policy visible in task state and
   reports.
-acceptance_criteria: []
+acceptance_criteria:
+- 'The delivered change achieves the stated goal: Implement per-task and global retry
+  limits with explicit reasons for flagged, blocked, cancelled, and failed outcomes.
+  Make the policy visible in task state and reports..'
+- Focused verification demonstrates the targeted behavior works as intended.
 constraints: []
 plan: []
 human_checkpoints: []
@@ -173,6 +179,41 @@ subagents:
   path: subagents/SA-0022-pm
   sandboxed: false
   sandbox_summary: ''
+- id: SA-0023
+  role: planner
+  engine: codex
+  status: failed
+  path: subagents/SA-0023-planner
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0024
+  role: planner
+  engine: codex
+  status: completed
+  path: subagents/SA-0024-planner
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0025
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0025-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0026
+  role: qa
+  engine: codex
+  status: completed
+  path: subagents/SA-0026-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0027
+  role: reviewer
+  engine: codex
+  status: completed
+  path: subagents/SA-0027-reviewer
+  sandboxed: false
+  sandbox_summary: host
 git:
   auto_commit: false
   commit_message: 'litehive: complete T-0008 add-task-retry-and-failure-policy'
@@ -180,7 +221,7 @@ git:
   checkpoint_base_sha: null
   checkpoint_attempts: 0
   rolled_back_checkpoint_attempt: null
-  worktree_path: .litehive/worktrees/T-0008-add-task-retry-and-failure-policy
+  worktree_path: null
 retry_policy:
   max_retries: null
 created_from: null

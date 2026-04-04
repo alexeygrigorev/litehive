@@ -9,8 +9,10 @@ mode: implementation
 status: flagged
 pipeline_status: implementing
 priority: medium
+pm_complexity: null
+planned_effort: null
 created_at: '2026-04-01T06:36:01+00:00'
-updated_at: '2026-04-02T06:13:37+00:00'
+updated_at: '2026-04-03T20:40:33+00:00'
 goal: ''
 acceptance_criteria: []
 constraints: []
@@ -31,6 +33,13 @@ subagents:
   path: subagents/SA-0002-swe
   sandboxed: false
   sandbox_summary: host
+- id: SA-0003
+  role: swe
+  engine: claude
+  status: failed
+  path: subagents/SA-0003-swe
+  sandboxed: false
+  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0073 add-dirty-worktree-gate-command-with-task-ownership-explanation'
@@ -38,7 +47,7 @@ git:
   checkpoint_base_sha: null
   checkpoint_attempts: 0
   rolled_back_checkpoint_attempt: null
-  worktree_path: .litehive/worktrees/T-0073-add-dirty-worktree-gate-command-with-task-ownership-explanation
+  worktree_path: null
 retry_policy:
   max_retries: null
 created_from: null

@@ -3,14 +3,16 @@ slug: add-shared-live-event-schema-for-executor-message-capture-and-timelines
 title: Add shared live event schema for executor message capture and timelines
 depends_on: []
 task_type: null
-engine: null
+engine: opencode
 model: null
 mode: implementation
-status: flagged
-pipeline_status: testing
+status: done
+pipeline_status: done
 priority: medium
+pm_complexity: null
+planned_effort: null
 created_at: '2026-04-01T07:52:13+00:00'
-updated_at: '2026-04-02T04:06:35+00:00'
+updated_at: '2026-04-04T02:03:52+00:00'
 goal: ''
 acceptance_criteria: []
 constraints: []
@@ -38,14 +40,70 @@ subagents:
   path: subagents/SA-0003-qa
   sandboxed: false
   sandbox_summary: host
+- id: SA-0004
+  role: qa
+  engine: opencode
+  status: completed
+  path: subagents/SA-0004-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0005
+  role: swe
+  engine: opencode
+  status: completed
+  path: subagents/SA-0005-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0006
+  role: qa
+  engine: opencode
+  status: completed
+  path: subagents/SA-0006-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0007
+  role: swe
+  engine: opencode
+  status: completed
+  path: subagents/SA-0007-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0008
+  role: qa
+  engine: opencode
+  status: completed
+  path: subagents/SA-0008-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0009
+  role: swe
+  engine: opencode
+  status: completed
+  path: subagents/SA-0009-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0010
+  role: qa
+  engine: opencode
+  status: completed
+  path: subagents/SA-0010-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0011
+  role: reviewer
+  engine: opencode
+  status: completed
+  path: subagents/SA-0011-reviewer
+  sandboxed: false
+  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0089 add-shared-live-event-schema-for-executor-message-capture-and-timelines'
-  commit_sha: null
+  commit_sha: 58ea5736086b67ac4ad20034dcc6d75ce78bff79
   checkpoint_base_sha: null
   checkpoint_attempts: 0
   rolled_back_checkpoint_attempt: null
-  worktree_path: .litehive/worktrees/T-0089-add-shared-live-event-schema-for-executor-message-capture-and-timelines
+  worktree_path: null
 retry_policy:
   max_retries: null
 created_from: null

@@ -6,13 +6,13 @@ task_type: null
 engine: claude
 model: null
 mode: implementation
-status: flagged
-pipeline_status: implementing
+status: done
+pipeline_status: done
 priority: medium
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-03T11:00:59+00:00'
-updated_at: '2026-04-03T14:58:51+00:00'
+updated_at: '2026-04-04T08:34:08+00:00'
 goal: Stop legacy underspecified tasks from bouncing straight back into SWE, QA, or
   reviewer loops. Before retrying queued, interrupted, or flagged tasks that lack
   a usable goal or acceptance criteria, litehive should normalize them through planner
@@ -401,14 +401,35 @@ subagents:
   path: subagents/SA-0050-recovery
   sandboxed: false
   sandbox_summary: host
+- id: SA-0051
+  role: swe
+  engine: claude
+  status: completed
+  path: subagents/SA-0051-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0052
+  role: qa
+  engine: claude
+  status: completed
+  path: subagents/SA-0052-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0053
+  role: reviewer
+  engine: claude
+  status: completed
+  path: subagents/SA-0053-reviewer
+  sandboxed: false
+  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0131 normalize-legacy-queued-interrupted-flagged-tasks-through-planner-before-retry'
-  commit_sha: null
-  checkpoint_base_sha: null
-  checkpoint_attempts: 0
+  commit_sha: 907bfaeda88f7fd97748e50722b3729c4ef189a7
+  checkpoint_base_sha: 68292ce5624e01c820566bc62d136ce360417b99
+  checkpoint_attempts: 1
   rolled_back_checkpoint_attempt: null
-  worktree_path: .litehive/worktrees/T-0131-normalize-legacy-queued-interrupted-flagged-tasks-through-planner-before-retry
+  worktree_path: null
 retry_policy:
   max_retries: null
 created_from: null

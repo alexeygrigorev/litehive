@@ -6,41 +6,17 @@ task_type: null
 engine: null
 model: null
 mode: implementation
-status: flagged
-pipeline_status: testing
+status: done
+pipeline_status: done
 priority: medium
-pm_complexity: moderate
-planned_effort: s
+pm_complexity: null
+planned_effort: null
 created_at: '2026-04-01T06:23:15+00:00'
-updated_at: '2026-04-04T11:05:52+00:00'
-goal: When the workspace is dirty because an interrupted task already owns those paths,
-  let pool execution and dry-run planning continue that task instead of stopping the
-  whole pool, while still blocking on ambiguous or unrelated dirty files.
-acceptance_criteria:
-- When `stop_on_dirty_git` is enabled and the repo has dirty paths, Litehive checks
-  whether those paths can be attributed to exactly one resumable interrupted task
-  before stopping the pool or dry-run planner.
-- Ownership is derived from durable task-local evidence already written under `.litehive/tasks/<task>/reports/`,
-  especially persisted `files_changed` entries, using the same path normalization
-  rules as commit dirty-path validation.
-- If exactly one resumable interrupted task owns all relevant dirty paths, pool execution
-  and `litehive run --dry-run` do not stop with `dirty_git_state`; they plan or resume
-  that task normally.
-- If ownership is ambiguous, missing, or the dirty paths include unrelated files,
-  Litehive keeps the existing `dirty_git_state` stop behavior instead of guessing.
-- Focused tests cover at least one positive ownership case and one ambiguous or unrelated
-  dirty-path case across runtime or CLI dry-run behavior.
+updated_at: '2026-04-04T11:18:19+00:00'
+goal: ''
+acceptance_criteria: []
 constraints: []
-plan:
-- Extract a helper in `litehive/runtime.py` that decides whether dirty git should
-  block the pool or can be attributed to one resumable interrupted task from persisted
-  report evidence.
-- Route both pool execution and dry-run planning through that helper so `stop_on_dirty_git`
-  stays consistent between real runs and planning output.
-- Reuse existing dirty-path normalization and task report parsing logic rather than
-  inventing a new ownership store.
-- Add focused tests for the owned-dirty-path allow case and the ambiguous or unrelated
-  dirty-path block case.
+plan: []
 human_checkpoints: []
 subagents:
 - id: SA-0001
@@ -64,12 +40,54 @@ subagents:
   path: subagents/SA-0003-qa
   sandboxed: false
   sandbox_summary: host
+- id: SA-0004
+  role: swe
+  engine: claude
+  status: failed
+  path: subagents/SA-0004-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0005
+  role: planner
+  engine: codex
+  status: completed
+  path: subagents/SA-0005-planner
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0006
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0006-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0007
+  role: qa
+  engine: codex
+  status: completed
+  path: subagents/SA-0007-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0008
+  role: reviewer
+  engine: codex
+  status: completed
+  path: subagents/SA-0008-reviewer
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0009
+  role: recovery
+  engine: codex
+  status: running
+  path: subagents/SA-0009-recovery
+  sandboxed: false
+  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0066 auto-detect-dirty-worktree-ownership-for-interrupted-tasks'
   commit_sha: null
-  checkpoint_base_sha: null
-  checkpoint_attempts: 0
+  checkpoint_base_sha: c250d3da2f0f331b10de1b461daffa0618a9f16c
+  checkpoint_attempts: 1
   rolled_back_checkpoint_attempt: null
   worktree_path: .litehive/worktrees/T-0066-auto-detect-dirty-worktree-ownership-for-interrupted-tasks
 retry_policy:

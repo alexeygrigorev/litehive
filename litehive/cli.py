@@ -1613,7 +1613,7 @@ def _cmd_status(args: argparse.Namespace) -> int:
         if tasks:
             print()
             for task in tasks:
-                for line in render_task_summary(task, active=task.id == state.active_task_id):
+                for line in render_task_summary(task, active=task.id == state.active_task_id, root=root):
                     print(line)
     return 0
 

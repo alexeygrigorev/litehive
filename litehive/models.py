@@ -403,8 +403,17 @@ class StageReport(BaseModel):
     outcome_reason_code: OutcomeReasonCode | None = None
     outcome_reason: str = ""
     resource_limit_event: ResourceLimitEvent | None = None
+    duration_seconds: int = 0
     hook_results: list[dict[str, str | int | bool | None]] = Field(default_factory=list)
     created_at: str = Field(default_factory=utcnow)
+
+
+class ExecutionEstimate(BaseModel):
+    """Velocity and ETA estimate for task execution."""
+
+    stage_duration_seconds: float = 0.0
+    remaining_seconds: float = 0.0
+    velocity_stages_per_hour: float = 0.0
 
 
 class TaskThreadComment(BaseModel):

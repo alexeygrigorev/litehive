@@ -672,6 +672,55 @@ def _attempt_commit_recovery(
     return head
 
 
+def _pull_rebase_main(
+    root: Path,
+    *,
+    subagents: SubagentManager | None = None,
+    task: TaskRecord | None = None,
+    config: LitehiveConfig | None = None,
+) -> None:
+    """Pull latest from remote with rebase. If rebase conflicts, launch merge agent."""
+    proc = subprocess.run(
+        ["git", "pull", "--rebase"],
+        cwd=root,
+        capture_output=True,
+        text=True,
+    )
+    if proc.returncode == 0:
+        return
+
+    # Rebase failed — check if there are conflicts to resolve
+    conflict_files = _list_conflict_files(root)
+    if not conflict_files:
+        # No conflicts but pull failed (no remote, no tracking branch, etc.) — skip silently
+        subprocess.run(["git", "rebase", "--abort"], cwd=root, capture_output=True)
+        return
+
+    # Launch merge agent to resolve rebase conflicts
+    if subagents is not None and task is not None:
+        append_journal(
+            root, task,
+            f"git pull --rebase conflicted on {len(conflict_files)} file(s). Launching merge agent.",
+        )
+        prompt = (
+            f"A `git pull --rebase` caused conflicts in this repository.\n"
+            f"Conflicting files: {', '.join(conflict_files)}\n\n"
+            f"Resolve the conflicts, then:\n"
+            f"1. Edit each file to remove conflict markers\n"
+            f"2. `git add <file>` for each resolved file\n"
+            f"3. `git rebase --continue`\n"
+        )
+        engine_name = task.engine or (config.default_engine if config else "codex")
+        model_name = resolve_model(task, config, engine_name=engine_name) if config else None
+        subagents.run(task, role="merge-resolver", engine_name=engine_name, prompt=prompt, model=model_name)
+
+        remaining = _list_conflict_files(root)
+        if remaining:
+            subprocess.run(["git", "rebase", "--abort"], cwd=root, capture_output=True)
+    else:
+        subprocess.run(["git", "rebase", "--abort"], cwd=root, capture_output=True)
+
+
 def _commit_all_in_worktree(execution_root: Path, message: str) -> str | None:
     """Stage everything and commit in the worktree. Returns commit SHA or None."""
     subprocess.run(
@@ -1981,6 +2030,8 @@ def _commit_to_git_report(
             ),
         )
         persist_task_and_state(root, task=task, state=state)
+        # Pull latest from remote before merging to avoid push conflicts
+        _pull_rebase_main(root, subagents=subagents, task=task, config=config)
         if execution_root != root:
             _commit_all_in_worktree(execution_root, message)
             integrated_sha = _merge_worktree_into_main(
@@ -2035,11 +2086,27 @@ def _commit_to_git_report(
     _cleanup_task_worktree(root, task)
     save_task(root, task)
     save_task_runtime(root, task)
+
+    # Push to remote if one is configured
+    push_result = subprocess.run(
+        ["git", "push"],
+        cwd=root,
+        capture_output=True,
+        text=True,
+    )
+    push_warning: list[str] = []
+    if push_result.returncode != 0:
+        push_warning = [f"git push failed: {push_result.stderr.strip()}"]
+        append_journal(root, task, f"CommitToGit push failed: {push_result.stderr.strip()}")
+    else:
+        append_journal(root, task, "CommitToGit pushed to remote.")
+
     return StageReport(
         task_id=task.id,
         step="commit_to_git",
         verdict="pass",
         summary="CommitToGit created and integrated the final completion commit",
+        warnings=push_warning,
     )
 
 

@@ -6,8 +6,8 @@ task_type: null
 engine: null
 model: null
 mode: implementation
-status: queued
-pipeline_status: commit_to_git
+status: done
+pipeline_status: done
 priority: medium
 pm_complexity: null
 planned_effort: null
@@ -155,7 +155,7 @@ subagents:
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0082 make-adding-new-tasks-cheap-and-reliable-during-normal-operation'
-  commit_sha: null
+  commit_sha: '87160654c9f45348a1d5f30ccf62ccceb7636be7'
   checkpoint_base_sha: null
   checkpoint_attempts: 0
   rolled_back_checkpoint_attempt: null

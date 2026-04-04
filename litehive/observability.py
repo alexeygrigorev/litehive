@@ -2,12 +2,64 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from datetime import UTC, datetime
 
-from litehive.models import TaskRecord
+import yaml
+
+from litehive.models import ExecutionEstimate, TaskRecord
+
+# Ordered pipeline stages for remaining-time estimation.
+_PIPELINE_STAGES = ["grooming", "implementing", "testing", "accepting", "commit_to_git"]
 
 
-def render_task_summary(task: TaskRecord, *, active: bool) -> list[str]:
+def estimate_task_execution(root: Path, task: TaskRecord) -> ExecutionEstimate:
+    """Return velocity and ETA estimate based on workspace report history."""
+    durations = _collect_report_durations(root)
+    if not durations:
+        return ExecutionEstimate()
+
+    avg_duration = sum(durations) / len(durations)
+    velocity = 3600.0 / avg_duration if avg_duration > 0 else 0.0
+
+    current_step = (
+        task.runtime.current_stage.step
+        or task.pipeline_status
+        or _PIPELINE_STAGES[0]
+    )
+    try:
+        current_idx = _PIPELINE_STAGES.index(current_step)
+    except ValueError:
+        current_idx = 0
+    remaining_stages = len(_PIPELINE_STAGES) - current_idx
+    remaining_seconds = remaining_stages * avg_duration
+
+    return ExecutionEstimate(
+        stage_duration_seconds=avg_duration,
+        remaining_seconds=remaining_seconds,
+        velocity_stages_per_hour=velocity,
+    )
+
+
+def _collect_report_durations(root: Path) -> list[float]:
+    """Scan all workspace report YAMLs and collect positive duration_seconds values."""
+    tasks_dir = root / ".litehive" / "tasks"
+    if not tasks_dir.exists():
+        return []
+    durations: list[float] = []
+    for reports_dir in tasks_dir.glob("*/reports"):
+        for report_path in sorted(reports_dir.glob("*.yaml")):
+            try:
+                data = yaml.safe_load(report_path.read_text(encoding="utf-8")) or {}
+            except (yaml.YAMLError, OSError):
+                continue
+            dur = data.get("duration_seconds", 0)
+            if isinstance(dur, (int, float)) and dur > 0:
+                durations.append(float(dur))
+    return durations
+
+
+def render_task_summary(task: TaskRecord, *, active: bool, root: Path | None = None) -> list[str]:
     marker = "*" if active else " "
     retry_policy = task.retry_policy.max_retries
     retry_label = "default" if retry_policy is None else str(retry_policy)
@@ -177,6 +229,15 @@ def render_task_summary(task: TaskRecord, *, active: bool) -> list[str]:
         lines.append(f"  checkpoint_base={task.git.checkpoint_base_sha}")
     if task.git.rolled_back_checkpoint_attempt is not None:
         lines.append(f"  rolled_back_attempt={task.git.rolled_back_checkpoint_attempt}")
+
+    if root is not None:
+        estimate = estimate_task_execution(root, task)
+        if estimate.stage_duration_seconds > 0:
+            lines.append(
+                f"  stage_estimate={_seconds_label(int(estimate.stage_duration_seconds))} "
+                f"velocity={estimate.velocity_stages_per_hour:.1f}stages/h "
+                f"eta={_seconds_label(int(estimate.remaining_seconds))}"
+            )
 
     return lines
 

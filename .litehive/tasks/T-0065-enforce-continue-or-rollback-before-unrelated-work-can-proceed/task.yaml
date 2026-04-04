@@ -6,34 +6,17 @@ task_type: null
 engine: null
 model: null
 mode: implementation
-status: flagged
-pipeline_status: testing
+status: done
+pipeline_status: done
 priority: medium
-pm_complexity: moderate
-planned_effort: m
+pm_complexity: null
+planned_effort: null
 created_at: '2026-04-01T06:22:26+00:00'
-updated_at: '2026-04-04T10:50:57+00:00'
-goal: Require an explicit operator decision before unrelated queued work proceeds
-  after a task leaves a checkpoint commit.
-acceptance_criteria:
-- When a pool run finishes a task with a checkpoint commit and another queued task
-  remains, the pool stops with continue_or_rollback_required instead of starting unrelated
-  queued work in the same automatic drain.
-- At that stop, the completed task stays done with its checkpoint commit recorded,
-  and unrelated queued tasks remain queued and unstarted so the workspace state is
-  recoverable and deterministic.
-- A later explicit continue (litehive run or another pool run) may advance to the
-  next queued task, and operator-facing output explains that the choices are to continue
-  with a new run or roll back the checkpoint first.
+updated_at: '2026-04-04T11:02:58+00:00'
+goal: ''
+acceptance_criteria: []
 constraints: []
-plan:
-- Add a pool stop condition that detects when a task finished with a checkpoint commit
-  and another queued task is waiting, then stop before unrelated queued work starts.
-- Preserve deterministic recovery state at that stop, including the completed task's
-  recorded checkpoint commit, the untouched queued task order, and explicit operator-facing
-  continue or rollback guidance.
-- Lock the behavior down with focused runtime or CLI tests for the stop reason, preserved
-  queue state, and successful continuation on a later explicit rerun.
+plan: []
 human_checkpoints: []
 subagents:
 - id: SA-0001
@@ -57,14 +40,56 @@ subagents:
   path: subagents/SA-0003-qa
   sandboxed: false
   sandbox_summary: host
+- id: SA-0004
+  role: swe
+  engine: claude
+  status: failed
+  path: subagents/SA-0004-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0005
+  role: planner
+  engine: codex
+  status: completed
+  path: subagents/SA-0005-planner
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0006
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0006-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0007
+  role: qa
+  engine: codex
+  status: completed
+  path: subagents/SA-0007-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0008
+  role: reviewer
+  engine: codex
+  status: completed
+  path: subagents/SA-0008-reviewer
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0009
+  role: recovery
+  engine: codex
+  status: completed
+  path: subagents/SA-0009-recovery
+  sandboxed: false
+  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0065 enforce-continue-or-rollback-before-unrelated-work-can-proceed'
-  commit_sha: null
-  checkpoint_base_sha: null
-  checkpoint_attempts: 0
+  commit_sha: c250d3da2f0f331b10de1b461daffa0618a9f16c
+  checkpoint_base_sha: 357bb074a8331f510e101d242e189e7d6f4ee953
+  checkpoint_attempts: 1
   rolled_back_checkpoint_attempt: null
-  worktree_path: .litehive/worktrees/T-0065-enforce-continue-or-rollback-before-unrelated-work-can-proceed
+  worktree_path: null
 retry_policy:
   max_retries: null
 created_from: null

@@ -6,13 +6,13 @@ task_type: null
 engine: null
 model: null
 mode: implementation
-status: queued
+status: flagged
 pipeline_status: implementing
 priority: medium
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-01T06:36:00+00:00'
-updated_at: '2026-04-03T06:15:23+00:00'
+updated_at: '2026-04-04T09:04:45+00:00'
 goal: ''
 acceptance_criteria: []
 constraints: []
@@ -66,6 +66,41 @@ subagents:
   engine: codex
   status: completed
   path: subagents/SA-0007-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0008
+  role: swe
+  engine: claude
+  status: failed
+  path: subagents/SA-0008-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0009
+  role: planner
+  engine: claude
+  status: completed
+  path: subagents/SA-0009-planner
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0010
+  role: planner
+  engine: claude
+  status: completed
+  path: subagents/SA-0010-planner
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0011
+  role: swe
+  engine: claude
+  status: failed
+  path: subagents/SA-0011-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0012
+  role: swe
+  engine: claude
+  status: completed
+  path: subagents/SA-0012-swe
   sandboxed: false
   sandbox_summary: host
 git:

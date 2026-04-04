@@ -7,65 +7,57 @@ task_type: null
 engine: null
 model: null
 mode: implementation
-status: queued
-pipeline_status: backlog
+status: interrupted
+pipeline_status: grooming
 priority: medium
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-03T11:01:00+00:00'
-updated_at: '2026-04-03T11:02:17+00:00'
-goal: >-
-  Stop endless implementation, testing, and acceptance retry loops by adding
-  durable bounded retry routing. After repeated failures or rejections on the
-  same stage, litehive should route the task to recovery or planner instead of
-  blindly sending it back to SWE again.
+updated_at: '2026-04-04T08:38:59+00:00'
+goal: Stop endless implementation, testing, and acceptance retry loops by adding durable
+  bounded retry routing. After repeated failures or rejections on the same stage,
+  litehive should route the task to recovery or planner instead of blindly sending
+  it back to SWE again.
 acceptance_criteria:
-- >-
-  Litehive tracks retry or loop counts per task and per stage in durable runtime
-  or task state.
-- >-
-  Repeated implementing, testing, or accepting churn stops being treated as
-  normal progress after a configured threshold.
-- >-
-  After the threshold, the task is rerouted deterministically: implementation or
-  testing failures go to recovery, and ambiguous or repeatedly underspecified
-  loops can be routed to planner.
-- >-
-  Status or report output records why the retry policy escalated, including a
-  reason such as stage retry limit reached or repeated review churn.
-- >-
-  The policy does not break normal single-retry behavior for ordinary tasks that
-  fail once and then continue.
-- >-
-  Focused tests cover at least one normal retry path, one recovery escalation,
-  and one planner escalation.
+- Litehive tracks retry or loop counts per task and per stage in durable runtime or
+  task state.
+- Repeated implementing, testing, or accepting churn stops being treated as normal
+  progress after a configured threshold.
+- 'After the threshold, the task is rerouted deterministically: implementation or
+  testing failures go to recovery, and ambiguous or repeatedly underspecified loops
+  can be routed to planner.'
+- Status or report output records why the retry policy escalated, including a reason
+  such as stage retry limit reached or repeated review churn.
+- The policy does not break normal single-retry behavior for ordinary tasks that fail
+  once and then continue.
+- Focused tests cover at least one normal retry path, one recovery escalation, and
+  one planner escalation.
 constraints:
-- >-
-  Build on top of the legacy-task normalization work so underspecified tasks are
-  groomed before retry thresholds are evaluated.
-- >-
-  Keep the routing deterministic and local; the runner decides when to escalate
-  rather than leaving that decision to subagents.
-- >-
-  Preserve existing last-outcome and continuation-handoff context when the task
-  is escalated.
-- >-
-  Avoid creating a new sink state; escalated tasks must remain resumable and
-  visible in the runnable lifecycle.
+- Build on top of the legacy-task normalization work so underspecified tasks are groomed
+  before retry thresholds are evaluated.
+- Keep the routing deterministic and local; the runner decides when to escalate rather
+  than leaving that decision to subagents.
+- Preserve existing last-outcome and continuation-handoff context when the task is
+  escalated.
+- Avoid creating a new sink state; escalated tasks must remain resumable and visible
+  in the runnable lifecycle.
 plan:
-- >-
-  Define stage-level retry counters and which verdicts contribute to churn for
-  implementing, testing, accepting, and commit-adjacent retries.
-- >-
-  Add deterministic escalation rules to recovery or planner after repeated
-  same-stage loops.
-- >-
-  Record durable escalation reasons in runtime or task state and surface them in
-  status or report output.
-- >-
-  Add focused tests for normal retry behavior and anti-churn escalation.
+- Define stage-level retry counters and which verdicts contribute to churn for implementing,
+  testing, accepting, and commit-adjacent retries.
+- Add deterministic escalation rules to recovery or planner after repeated same-stage
+  loops.
+- Record durable escalation reasons in runtime or task state and surface them in status
+  or report output.
+- Add focused tests for normal retry behavior and anti-churn escalation.
 human_checkpoints: []
-subagents: []
+subagents:
+- id: SA-0001
+  role: planner
+  engine: copilot
+  status: interrupted
+  path: subagents/SA-0001-planner
+  sandboxed: false
+  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0132 add-bounded-stage-retry-routing-to-recovery-planner-to-stop-task-churn'
@@ -73,7 +65,7 @@ git:
   checkpoint_base_sha: null
   checkpoint_attempts: 0
   rolled_back_checkpoint_attempt: null
-  worktree_path: null
+  worktree_path: .litehive/worktrees/T-0132-add-bounded-stage-retry-routing-to-recovery-planner-to-stop-task-churn
 retry_policy:
   max_retries: null
 created_from: null

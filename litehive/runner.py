@@ -501,6 +501,13 @@ class TaskExecutionRunner:
         return RunResult(final_status=final_status, steps_executed=steps, last_verdict=last_verdict)
 
     def _write_report(self, task: TaskRecord, report: StageReport, ordinal: int) -> None:
+        if report.duration_seconds == 0:
+            started_at = task.runtime.current_stage.started_at
+            if started_at is not None:
+                from litehive.tasks import _duration_seconds
+                from litehive.models import utcnow
+
+                report.duration_seconds = _duration_seconds(started_at, utcnow())
         reports_dir = task_dir(self.root, task) / "reports"
         filename = f"{report.step}-{ordinal:03d}.yaml"
         (reports_dir / filename).write_text(

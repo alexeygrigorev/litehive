@@ -9,8 +9,10 @@ mode: implementation
 status: flagged
 pipeline_status: implementing
 priority: medium
+pm_complexity: null
+planned_effort: null
 created_at: '2026-04-01T17:31:26+00:00'
-updated_at: '2026-04-02T03:08:22+00:00'
+updated_at: '2026-04-04T02:46:17+00:00'
 goal: ''
 acceptance_criteria: []
 constraints: []
@@ -29,6 +31,13 @@ subagents:
   engine: codex
   status: completed
   path: subagents/SA-0002-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0003
+  role: swe
+  engine: codex
+  status: failed
+  path: subagents/SA-0003-swe
   sandboxed: false
   sandbox_summary: host
 git:
