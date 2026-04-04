@@ -1,4 +1,5 @@
 import argparse
+import gzip
 import os
 from pathlib import Path, PurePosixPath
 import subprocess
@@ -147,6 +148,7 @@ from litehive.tasks import (
     task_requires_acceptance_criteria,
     update_task_metadata,
 )
+from litehive.web import build_workspace_snapshot, read_session_view
 
 
 def _block_runner_lock(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -7682,6 +7684,19 @@ def test_build_parser_accepts_human_checkpoint_flags(tmp_path: Path) -> None:
     assert update_args.human_checkpoint == ["none"]
 
 
+def test_build_parser_accepts_web_monitor_flags(tmp_path: Path) -> None:
+    parser = build_parser()
+
+    args = parser.parse_args(
+        ["web", "--workspace", str(tmp_path), "--host", "127.0.0.1", "--port", "9001"]
+    )
+
+    assert args.command == "web"
+    assert args.workspace == tmp_path
+    assert args.host == "127.0.0.1"
+    assert args.port == 9001
+
+
 def test_cmd_run_dry_run_shows_planned_tasks_and_stop_conditions_without_execution(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -9190,6 +9205,155 @@ def test_status_fast_mode_uses_state_first_reads_and_skips_runtime_hydration(
     )
     assert "run=running" not in output
     assert "stage=implementing" not in output
+
+
+def test_build_workspace_snapshot_includes_active_session_and_run_all_logs(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    queued = create_task(tmp_path, title="Queued task")
+    active = create_task(tmp_path, title="Active task")
+    active.status = "in_progress"
+    active.pipeline_status = "implementing"
+    active.runtime.execution_status = "running"
+    active.runtime.current_stage = RuntimeStageState(
+        step="implementing",
+        status="running",
+        started_at="2026-04-04T10:00:00+00:00",
+        updated_at="2026-04-04T10:00:05+00:00",
+    )
+    active_ref = SubagentRef(
+        id="SA-0001",
+        role="swe",
+        engine="codex",
+        status="running",
+        path="subagents/SA-0001-swe",
+    )
+    active.subagents.append(active_ref)
+    active.runtime.active_subagent = RuntimeSubagentState(
+        id="SA-0001",
+        role="swe",
+        engine="codex",
+        status="running",
+        path="subagents/SA-0001-swe",
+        pid=4321,
+        started_at="2026-04-04T10:00:00+00:00",
+        updated_at="2026-04-04T10:00:05+00:00",
+    )
+    save_task(tmp_path, active)
+
+    base = task_dir(tmp_path, active) / "subagents" / "SA-0001-swe"
+    base.mkdir(parents=True, exist_ok=True)
+    (base / "session.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "id": "SA-0001",
+                "role": "swe",
+                "engine": "codex",
+                "status": "running",
+                "updated_at": "2026-04-04T10:00:05+00:00",
+                "pid": 4321,
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+    (base / "transcript.md").write_text("live transcript\n", encoding="utf-8")
+    (base / "stdout.log").write_text("live stdout\n", encoding="utf-8")
+    (base / "stderr.log").write_text("live stderr\n", encoding="utf-8")
+
+    run_all_dir = tmp_path / ".litehive" / "logs" / "run-all" / "20260404T100000Z"
+    run_all_dir.mkdir(parents=True, exist_ok=True)
+    (run_all_dir / "0001-run.log").write_text("iteration 1\n", encoding="utf-8")
+
+    state = load_state(tmp_path)
+    state.active_task_id = active.id
+    state.queue = [active.id, queued.id]
+    save_state(tmp_path, state)
+
+    snapshot = build_workspace_snapshot(tmp_path)
+
+    assert snapshot["active_task_id"] == active.id
+    assert snapshot["queue"] == [active.id, queued.id]
+    assert snapshot["active_task"]["id"] == active.id
+    assert snapshot["active_task"]["active_subagent"]["id"] == "SA-0001"
+    assert snapshot["active_task"]["subagents"][0]["is_active"] is True
+    assert snapshot["active_task"]["subagents"][0]["tail_targets"]["stdout"].endswith("stdout.log")
+    assert snapshot["run_all_logs"][0]["files"][0]["path"].endswith("0001-run.log")
+    assert snapshot["run_all_logs"][0]["files"][0]["preview"] == "iteration 1\n"
+
+
+def test_read_session_view_prefers_live_logs_for_active_subagent(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Active monitor task")
+    ref = SubagentRef(
+        id="SA-0001",
+        role="swe",
+        engine="codex",
+        status="running",
+        path="subagents/SA-0001-swe",
+    )
+    task.subagents.append(ref)
+    task.runtime.active_subagent = RuntimeSubagentState(
+        id="SA-0001",
+        role="swe",
+        engine="codex",
+        status="running",
+        path="subagents/SA-0001-swe",
+        pid=99,
+        started_at="2026-04-04T10:00:00+00:00",
+        updated_at="2026-04-04T10:00:01+00:00",
+    )
+    save_task(tmp_path, task)
+
+    base = task_dir(tmp_path, task) / "subagents" / "SA-0001-swe"
+    base.mkdir(parents=True, exist_ok=True)
+    (base / "session.yaml").write_text("status: running\npid: 99\n", encoding="utf-8")
+    (base / "transcript.md").write_text("partial transcript\n", encoding="utf-8")
+    (base / "stdout.log").write_text("chunk a\n", encoding="utf-8")
+    (base / "stderr.log").write_text("chunk err\n", encoding="utf-8")
+    (base / "stdout.txt").write_text("stale snapshot\n", encoding="utf-8")
+
+    payload = read_session_view(tmp_path, task.id, "SA-0001")
+
+    stdout_artifact = next(item for item in payload["artifacts"] if item["kind"] == "stdout")
+    stderr_artifact = next(item for item in payload["artifacts"] if item["kind"] == "stderr")
+
+    assert payload["is_active"] is True
+    assert payload["status"] == "running"
+    assert stdout_artifact["path"].endswith("stdout.log")
+    assert stdout_artifact["content"] == "chunk a\n"
+    assert stderr_artifact["path"].endswith("stderr.log")
+
+
+def test_read_session_view_uses_completed_snapshots_for_finished_subagent(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Completed monitor task")
+    ref = SubagentRef(
+        id="SA-0001",
+        role="qa",
+        engine="gemini",
+        status="completed",
+        path="subagents/SA-0001-qa",
+    )
+    task.subagents.append(ref)
+    save_task(tmp_path, task)
+
+    base = task_dir(tmp_path, task) / "subagents" / "SA-0001-qa"
+    base.mkdir(parents=True, exist_ok=True)
+    (base / "session.yaml").write_text("status: completed\nexit_code: 0\n", encoding="utf-8")
+    (base / "transcript.md").write_text("final transcript\n", encoding="utf-8")
+    with gzip.open(base / "stdout.txt.gz", "wt", encoding="utf-8") as handle:
+        handle.write("finished stdout\n")
+    (base / "stderr.txt").write_text("", encoding="utf-8")
+
+    payload = read_session_view(tmp_path, task.id, "SA-0001")
+
+    stdout_artifact = next(item for item in payload["artifacts"] if item["kind"] == "stdout")
+
+    assert payload["is_active"] is False
+    assert payload["status"] == "completed"
+    assert stdout_artifact["path"].endswith("stdout.txt.gz")
+    assert stdout_artifact["source"] == "compressed final snapshot"
+    assert stdout_artifact["content"] == "finished stdout\n"
 
 
 def test_render_task_summary_includes_active_subagent_pid() -> None:
