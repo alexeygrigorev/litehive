@@ -1692,7 +1692,7 @@ def _allowed_commit_paths(root: Path, task: TaskRecord) -> set[PurePosixPath]:
         report_data = yaml.safe_load(report_path.read_text(encoding="utf-8")) or {}
         for changed in report_data.get("files_changed") or []:
             normalized = str(changed).strip()
-            if normalized and normalized.lower() not in {"none", "n/a", "-", "path/to/file"}:
+            if normalized and normalized.lower() not in {"none", "n/a", "-", "path/to/file"} and "none" not in normalized.lower():
                 allowed.add(PurePosixPath(normalized))
     return allowed
 
