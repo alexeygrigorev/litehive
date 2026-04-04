@@ -99,6 +99,7 @@ class ResourceLimitEvent(BaseModel):
 
 class RuntimeGitState(BaseModel):
     commit_sha: str | None = None
+    worktree_path: str | None = None
 
 
 class RuntimeStageState(BaseModel):
