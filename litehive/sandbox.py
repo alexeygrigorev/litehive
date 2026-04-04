@@ -1,4 +1,9 @@
-"""Docker sandbox planning and invocation wrapping for external engine execution."""
+"""Sandbox planning and invocation wrapping for external engine execution.
+
+Supports two backends:
+- ``docker``: container-based isolation using Docker images.
+- ``bubblewrap``: lightweight namespace-based isolation using bwrap(1).
+"""
 
 from __future__ import annotations
 
@@ -19,6 +24,7 @@ from litehive.models import ResourceLimitEvent
 @dataclass(frozen=True, slots=True)
 class SandboxPolicySummary:
     enabled: bool
+    backend: str | None = None
     runtime: str | None = None
     image: str | None = None
     network_mode: str | None = None
@@ -28,10 +34,12 @@ class SandboxPolicySummary:
     process_limit: int | None = None
     environment: tuple[str, ...] = ()
     credential_inputs: tuple[str, ...] = ()
+    propagated_mounts: tuple[str, ...] = ()
 
     def as_dict(self) -> dict[str, object]:
         return {
             "enabled": self.enabled,
+            "backend": self.backend,
             "runtime": self.runtime,
             "image": self.image,
             "network_mode": self.network_mode,
@@ -41,17 +49,25 @@ class SandboxPolicySummary:
             "process_limit": self.process_limit,
             "environment": list(self.environment),
             "credential_inputs": list(self.credential_inputs),
+            "propagated_mounts": list(self.propagated_mounts),
         }
 
     @property
     def summary(self) -> str:
         if not self.enabled:
             return "host"
-        details = [
-            f"{self.runtime}:{self.image}",
-            f"net={self.network_mode}",
-            f"workspace={self.workspace_mode}",
-        ]
+        if self.backend == "bubblewrap":
+            details = [
+                f"bwrap",
+                f"net={self.network_mode}",
+                f"workspace={self.workspace_mode}",
+            ]
+        else:
+            details = [
+                f"{self.runtime}:{self.image}",
+                f"net={self.network_mode}",
+                f"workspace={self.workspace_mode}",
+            ]
         limit_parts: list[str] = []
         if self.memory_mb is not None:
             limit_parts.append(f"memory={self.memory_mb}m")
@@ -65,6 +81,8 @@ class SandboxPolicySummary:
             details.append(f"env={','.join(self.environment)}")
         if self.credential_inputs:
             details.append(f"creds={','.join(self.credential_inputs)}")
+        if self.propagated_mounts:
+            details.append(f"mounts={','.join(self.propagated_mounts)}")
         return "sandbox[" + " ".join(details) + "]"
 
 
@@ -89,6 +107,7 @@ class SandboxLauncher:
             return SandboxPolicySummary(enabled=False)
         return SandboxPolicySummary(
             enabled=True,
+            backend=self.config.external_engine_sandbox.backend,
             runtime=self.config.external_engine_sandbox.runtime_binary,
             image=self.config.external_engine_sandbox.image,
             network_mode=(
@@ -106,6 +125,13 @@ class SandboxLauncher:
             process_limit=limits.process_limit if limits.enabled else None,
             environment=tuple(() if policy is None else policy.environment),
             credential_inputs=tuple(() if policy is None else (item.env_var for item in policy.credential_inputs)),
+            propagated_mounts=(
+                tuple(
+                    p for p in self.BWRAP_SYSTEM_RO_BINDS if Path(p).exists()
+                )
+                if self.config.external_engine_sandbox.backend == "bubblewrap"
+                else ()
+            ),
         )
 
     def wrap_invocation(
@@ -128,6 +154,23 @@ class SandboxLauncher:
         if binary_path is None:
             raise SandboxError(f"Engine '{engine_name}' is unavailable: missing binary '{binary_name}'")
 
+        if runtime_config.backend == "bubblewrap":
+            return self._wrap_bubblewrap(
+                engine_name, binary_name, binary_path, invocation, summary,
+            )
+        return self._wrap_docker(
+            engine_name, binary_name, binary_path, invocation, summary,
+        )
+
+    def _wrap_docker(
+        self,
+        engine_name: str,
+        binary_name: str,
+        binary_path: str,
+        invocation: CLIInvocation,
+        summary: SandboxPolicySummary,
+    ) -> CLIInvocation:
+        runtime_config = self.config.external_engine_sandbox
         policy = self._policy_for_engine(engine_name)
         workspace_mount = PurePosixPath(runtime_config.workspace_mount_path)
         workspace_mode = (
@@ -201,6 +244,102 @@ class SandboxLauncher:
 
         argv.append(runtime_config.image)
         argv.extend(container_argv)
+        return CLIInvocation(argv=tuple(argv), cwd=invocation.cwd, env=invocation.env)
+
+    # Minimal read-only system paths exposed to the bubblewrap sandbox.
+    BWRAP_SYSTEM_RO_BINDS: tuple[str, ...] = (
+        "/usr",
+        "/lib",
+        "/lib64",
+        "/bin",
+        "/sbin",
+        "/etc/alternatives",
+        "/etc/resolv.conf",
+        "/etc/ssl",
+        "/etc/ca-certificates",
+        "/etc/ld.so.cache",
+    )
+
+    def _wrap_bubblewrap(
+        self,
+        engine_name: str,
+        binary_name: str,
+        binary_path: str,
+        invocation: CLIInvocation,
+        summary: SandboxPolicySummary,
+    ) -> CLIInvocation:
+        runtime_config = self.config.external_engine_sandbox
+        policy = self._policy_for_engine(engine_name)
+        workspace_mode = (
+            runtime_config.default_workspace_mode
+            if policy is None or policy.workspace_mode is None
+            else policy.workspace_mode
+        )
+
+        argv: list[str] = [runtime_config.runtime_binary]
+        argv.extend(runtime_config.runtime_args)
+
+        # Namespace isolation.
+        argv.append("--unshare-all")
+        if (summary.network_mode or runtime_config.default_network_mode) != "none":
+            argv.append("--share-net")
+        argv.append("--die-with-parent")
+
+        # Basic virtual filesystems.
+        argv.extend(["--proc", "/proc"])
+        argv.extend(["--dev", "/dev"])
+        for tmpfs_path in runtime_config.tmpfs:
+            argv.extend(["--tmpfs", tmpfs_path])
+
+        # Read-only system mounts (only existing paths).
+        for sys_path in self.BWRAP_SYSTEM_RO_BINDS:
+            if Path(sys_path).exists():
+                argv.extend(["--ro-bind", sys_path, sys_path])
+
+        # Workspace mount.
+        workspace_root = str(self.root)
+        if workspace_mode == "ro":
+            argv.extend(["--ro-bind", workspace_root, workspace_root])
+        else:
+            argv.extend(["--bind", workspace_root, workspace_root])
+
+        # Engine binary (read-only, at its host path).
+        resolved_binary = str(Path(binary_path).resolve())
+        if not resolved_binary.startswith(workspace_root + os.sep):
+            argv.extend(["--ro-bind", resolved_binary, resolved_binary])
+
+        # Credential mounts.
+        for credential in (() if policy is None else policy.credential_inputs):
+            raw_path = invocation.env.get(credential.env_var)
+            if not raw_path:
+                continue
+            host_path = str(Path(raw_path).expanduser().resolve())
+            argv.extend(["--ro-bind", host_path, credential.mount_path])
+
+        # Clear environment and propagate only allowed variables.
+        argv.append("--clearenv")
+        allowed_env: dict[str, str] = {}
+        for env_name in (() if policy is None else policy.environment):
+            value = invocation.env.get(env_name)
+            if value is not None:
+                allowed_env[env_name] = value
+        for credential in (() if policy is None else policy.credential_inputs):
+            if invocation.env.get(credential.env_var):
+                allowed_env[credential.env_var] = credential.mount_path
+        # Always propagate PATH and HOME for basic tool operation.
+        for builtin_var in ("PATH", "HOME"):
+            if builtin_var not in allowed_env:
+                value = invocation.env.get(builtin_var, os.environ.get(builtin_var, ""))
+                if value:
+                    allowed_env[builtin_var] = value
+        for env_name, value in sorted(allowed_env.items()):
+            argv.extend(["--setenv", env_name, value])
+
+        # Working directory and command.
+        argv.extend(["--chdir", workspace_root])
+        argv.append("--")
+        argv.extend(invocation.argv)
+
         return CLIInvocation(argv=tuple(argv), cwd=invocation.cwd, env=invocation.env)
 
     def _policy_for_engine(self, engine_name: str) -> ExternalEngineSandboxPolicy | None:
