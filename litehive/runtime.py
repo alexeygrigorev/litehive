@@ -1404,6 +1404,8 @@ def build_executor(
 
 
 def workspace_model_for_engine(config: LitehiveConfig, engine_name: str) -> str | None:
+    if engine_name == "codex":
+        return config.codex_model
     if engine_name == "opencode":
         return config.opencode_model
     if engine_name == "gemini":

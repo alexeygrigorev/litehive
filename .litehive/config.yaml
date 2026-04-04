@@ -1,34 +1,59 @@
-default_engine: claude
+default_engine: codex
+codex_model: gpt-5.4-high
 claude_model: claude-opus-4-6
 agent_startup_guidance:
   all:
-    - Start from the task goal, acceptance criteria, plan, and the latest task-local runtime/subagent artifacts before re-reading broad repo context.
-    - Prefer targeted search in litehive/runtime.py, litehive/tasks.py, litehive/subagents.py, litehive/config.py, and tests/test_workspace.py instead of broad full-file reads.
-    - Treat .litehive/logs/run-all and the current task's runtime/report/transcript artifacts as the primary source for what already happened.
-    - Do not spend time rediscovering the generic Litehive workflow; use the recorded stage, role, and lifecycle artifacts first.
+  - Start from the task goal, acceptance criteria, plan, and the latest task-local
+    runtime/subagent artifacts before re-reading broad repo context.
+  - Prefer targeted search in litehive/runtime.py, litehive/tasks.py, litehive/subagents.py,
+    litehive/config.py, and tests/test_workspace.py instead of broad full-file reads.
+  - Treat .litehive/logs/run-all and the current task's runtime/report/transcript
+    artifacts as the primary source for what already happened.
+  - Do not spend time rediscovering the generic Litehive workflow; use the recorded
+    stage, role, and lifecycle artifacts first.
   planner:
-    - Check whether the task already has usable goal, acceptance criteria, constraints, and plan before re-grooming it.
-    - When shaping backlog items, prefer explicit CLI flows: use litehive add with --goal and repeated --acceptance-criteria for new runnable work, use litehive update to fill gaps on legacy tasks, and use litehive intake when the request is still too messy to make runnable.
-    - If a request is ambiguous, stop and ask for the missing product constraint instead of inventing acceptance criteria.
-    - For control-plane tasks, identify the exact lifecycle promise and the exact evidence later stages will need to prove it.
-    - If follow-up work is needed, keep the current task narrow and push unrelated cleanup into FOLLOW_UP_TASKS.
+  - Check whether the task already has usable goal, acceptance criteria, constraints,
+    and plan before re-grooming it.
+  - When shaping backlog items, prefer explicit CLI flows: use litehive add with --goal
+      and repeated --acceptance-criteria for new runnable work, use litehive update
+      to fill gaps on legacy tasks, and use litehive intake when the request is still
+      too messy to make runnable.
+  - If a request is ambiguous, stop and ask for the missing product constraint instead
+    of inventing acceptance criteria.
+  - For control-plane tasks, identify the exact lifecycle promise and the exact evidence
+    later stages will need to prove it.
+  - If follow-up work is needed, keep the current task narrow and push unrelated cleanup
+    into FOLLOW_UP_TASKS.
   swe:
-    - Start by reading the task description, goal, acceptance criteria, plan, and latest report in the task folder; do not rediscover them from scratch.
-    - Start from the latest QA/reviewer rejection or recovery report first, then inspect only the files implicated by that feedback.
-    - Pull task context from the task record before broad repo exploration; if the task description is still insufficient, route it back instead of guessing.
-    - For workflow tasks, implement the smallest lifecycle-level change that satisfies the acceptance criteria instead of refactoring the whole runner.
-    - Verify with focused pytest slices and, when required by the task, add real CLI or wrapper-level proof instead of helper-only coverage.
+  - Start by reading the task description, goal, acceptance criteria, plan, and latest
+    report in the task folder; do not rediscover them from scratch.
+  - Start from the latest QA/reviewer rejection or recovery report first, then inspect
+    only the files implicated by that feedback.
+  - Pull task context from the task record before broad repo exploration; if the task
+    description is still insufficient, route it back instead of guessing.
+  - For workflow tasks, implement the smallest lifecycle-level change that satisfies
+    the acceptance criteria instead of refactoring the whole runner.
+  - Verify with focused pytest slices and, when required by the task, add real CLI
+    or wrapper-level proof instead of helper-only coverage.
   qa:
-    - Read the latest implementing report and the task acceptance criteria before exploring code.
-    - Focus on whether the evidence proves the promised lifecycle behavior in real litehive execution, not just helper-level tests.
-    - If rejecting, name the exact missing proof or failing scenario so the next implementing pass can act directly.
+  - Read the latest implementing report and the task acceptance criteria before exploring
+    code.
+  - Focus on whether the evidence proves the promised lifecycle behavior in real litehive
+    execution, not just helper-level tests.
+  - If rejecting, name the exact missing proof or failing scenario so the next implementing
+    pass can act directly.
   reviewer:
-    - Compare the task acceptance criteria to the latest QA evidence and reports first; avoid re-reading the repo unless the evidence is ambiguous.
-    - Reject only for concrete outcome gaps, regressions, or missing proof, and state those gaps explicitly.
+  - Compare the task acceptance criteria to the latest QA evidence and reports first;
+    avoid re-reading the repo unless the evidence is ambiguous.
+  - Reject only for concrete outcome gaps, regressions, or missing proof, and state
+    those gaps explicitly.
   recovery:
-    - Start with task.yaml, runtime.yaml, latest report/transcript/stdout/stderr/events, wrapper logs, and engine monitoring before touching code.
-    - Preserve the current stage whenever safe; fix the smallest state, engine, worktree, or prompt issue needed to return the task to runnable state.
-    - If the task is truly unrecoverable, record a precise blocker instead of leaving ambiguous active state.
+  - Start with task.yaml, runtime.yaml, latest report/transcript/stdout/stderr/events,
+    wrapper logs, and engine monitoring before touching code.
+  - Preserve the current stage whenever safe; fix the smallest state, engine, worktree,
+    or prompt issue needed to return the task to runnable state.
+  - If the task is truly unrecoverable, record a precise blocker instead of leaving
+    ambiguous active state.
 opencode_model: zai-coding-plan/glm-5.1
 auto_commit: true
 task_mode_name: tasks

@@ -787,6 +787,7 @@ PROCESS_PROFILES: dict[str, dict[str, Any]] = {
 class LitehiveConfig:
     default_engine: str = "codex"
     process_profile: str = "generic"
+    codex_model: str | None = None
     opencode_model: str = "zai-coding-plan/glm-5.1"
     gemini_model: str | None = None
     copilot_model: str | None = None
