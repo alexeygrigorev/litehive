@@ -123,6 +123,7 @@ from litehive.tasks import (
     dequeue_next_task_selection,
     finish_task_run_transition,
     get_task,
+    get_task_worktree_path,
     implementation_entry_stage,
     list_tasks,
     load_state,
@@ -12750,6 +12751,24 @@ def test_dirty_worktree_gate_reports_missing_recorded_worktree(
     assert "worktree_path: ../missing-worktree" in output
 
 
+def test_save_task_migrates_legacy_worktree_path_into_runtime_state(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Migrate legacy worktree mapping")
+
+    task.git.worktree_path = ".litehive/worktrees/legacy-task"
+    save_task(tmp_path, task)
+
+    task_payload = yaml.safe_load(task_file(tmp_path, task).read_text(encoding="utf-8")) or {}
+    runtime_payload = yaml.safe_load(task_runtime_file(tmp_path, task).read_text(encoding="utf-8")) or {}
+    refreshed = require_task(tmp_path, task.id)
+
+    assert task_payload["git"]["worktree_path"] is None
+    assert runtime_payload["git"]["worktree_path"] == ".litehive/worktrees/legacy-task"
+    assert refreshed.git.worktree_path is None
+    assert refreshed.runtime.git.worktree_path == ".litehive/worktrees/legacy-task"
+    assert get_task_worktree_path(refreshed) == ".litehive/worktrees/legacy-task"
+
+
 def test_pool_summary_reports_closed_tasks_with_reason_and_follow_up(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -15361,6 +15380,9 @@ def test_run_next_task_executes_stage_in_task_worktree(
         if task.pipeline_status == "implementing":
             assert self.execution_root != tmp_path
             assert (tmp_path / "app.txt").read_text(encoding="utf-8") == "base\n"
+            persisted = require_task(tmp_path, task.id)
+            assert persisted.runtime.git.worktree_path is not None
+            assert get_task_worktree_path(persisted) == str(self.execution_root.relative_to(tmp_path))
             (self.execution_root / "app.txt").write_text("worktree-only\n", encoding="utf-8")
         return result
 
@@ -16390,6 +16412,11 @@ def test_commit_to_git_treats_clean_task_worktree_as_done(tmp_path: Path) -> Non
     assert task.status == "done"
     assert task.pipeline_status == "done"
     assert task.git.commit_sha == _run(["git", "rev-parse", "HEAD"], tmp_path)
+    assert task.runtime.git.worktree_path is None
+
+    refreshed = require_task(tmp_path, task.id)
+    assert refreshed.git.worktree_path is None
+    assert refreshed.runtime.git.worktree_path is None
 
 
 def test_commit_to_git_integrates_existing_litehive_checkpoint_from_clean_worktree(

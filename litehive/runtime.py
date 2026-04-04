@@ -44,8 +44,10 @@ from litehive.tasks import (
     BlockedTask,
     active_task_markers,
     append_journal,
+    clear_task_worktree_path,
     dequeue_next_task,
     dequeue_next_task_selection,
+    get_task_worktree_path,
     get_task,
     implementation_entry_stage,
     list_tasks,
@@ -62,6 +64,7 @@ from litehive.tasks import (
     set_pool_stop_reason,
     set_task_continuation_handoff,
     set_task_commit_sha,
+    set_task_worktree_path,
     save_task,
     save_task_runtime,
     task_dir,
@@ -544,14 +547,14 @@ def inspect_dirty_worktree_gate(root: Path) -> DirtyWorktreeGateReport:
         if len(owners) == 1:
             finding.ownership = "task-owned"
             finding.task_id = owners[0].id
-            finding.worktree_path = owners[0].git.worktree_path
+            finding.worktree_path = get_task_worktree_path(owners[0])
         elif len(owners) > 1:
             finding.ownership = "ambiguous-ownership"
             finding.task_id = ",".join(task.id for task in owners)
         findings.append(finding)
 
     for task in tasks:
-        worktree_path = task.git.worktree_path
+        worktree_path = get_task_worktree_path(task)
         if not worktree_path:
             continue
         resolved_path = (root / worktree_path).resolve()
@@ -615,10 +618,11 @@ def _resolve_task_execution_root(root: Path, task: TaskRecord) -> Path:
     if not is_git_repo(root):
         return root
 
-    if task.git.worktree_path:
-        worktree_path = (root / task.git.worktree_path).resolve()
+    worktree_path_value = get_task_worktree_path(task)
+    if worktree_path_value:
+        worktree_path = (root / worktree_path_value).resolve()
         if not worktree_path.exists():
-            raise GitError(f"task worktree is missing: {task.git.worktree_path}")
+            raise GitError(f"task worktree is missing: {worktree_path_value}")
         main_head = current_head(root)
         if main_head:
             rebase_worktree_onto(worktree_path, main_head)
@@ -629,19 +633,20 @@ def _resolve_task_execution_root(root: Path, task: TaskRecord) -> Path:
     if worktree_path.exists():
         shutil.rmtree(worktree_path)
     add_worktree(root, worktree_path, ref=current_head(root) or "HEAD")
-    task.git.worktree_path = str(worktree_path.relative_to(root))
+    set_task_worktree_path(task, str(worktree_path.relative_to(root)))
     save_task(root, task)
-    append_journal(root, task, f"Created task worktree at `{task.git.worktree_path}`.")
+    append_journal(root, task, f"Created task worktree at `{get_task_worktree_path(task)}`.")
     return worktree_path
 
 
 def _cleanup_task_worktree(root: Path, task: TaskRecord) -> None:
-    if not task.git.worktree_path:
+    worktree_path_value = get_task_worktree_path(task)
+    if not worktree_path_value:
         return
-    worktree_path = (root / task.git.worktree_path).resolve()
+    worktree_path = (root / worktree_path_value).resolve()
     if worktree_path.exists():
         remove_worktree(root, worktree_path, force=True)
-    task.git.worktree_path = None
+    clear_task_worktree_path(task)
     save_task(root, task)
 
 
@@ -2148,7 +2153,7 @@ def _commit_to_git_report(
                 "CommitToGit requested.\n"
                 f"- base: `{base_sha or 'initial commit'}`\n"
                 f"- message: `{message}`\n"
-                f"- worktree: `{task.git.worktree_path or execution_root}`"
+                f"- worktree: `{get_task_worktree_path(task) or execution_root}`"
             ),
         )
         persist_task_and_state(root, task=task, state=state)
@@ -2269,7 +2274,7 @@ def _commit_to_git_failure_diagnostics(
     dirty_entries: list[str] | None = None,
     attempt: int | None = None,
 ) -> dict[str, str | int | bool | None | list[str]]:
-    worktree_path = task.git.worktree_path or (
+    worktree_path = get_task_worktree_path(task) or (
         str(execution_root.relative_to(root))
         if execution_root != root and execution_root.is_relative_to(root)
         else str(execution_root)

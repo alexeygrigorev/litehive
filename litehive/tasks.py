@@ -1147,14 +1147,21 @@ def _ensure_runtime_ignored(root: Path) -> None:
 
 
 def _serialize_task_record(task: TaskRecord) -> str:
-    return yaml.safe_dump(task.model_dump(mode="python"), sort_keys=False)
+    _normalize_task_worktree_state(task)
+    payload = task.model_dump(mode="python")
+    payload["git"]["worktree_path"] = None
+    return yaml.safe_dump(payload, sort_keys=False)
 
 
 def _serialize_task_runtime(task: TaskRecord) -> str:
+    _normalize_task_worktree_state(task)
     return yaml.safe_dump(
         {
             **task.runtime.model_dump(mode="python"),
-            "git": {"commit_sha": task.git.commit_sha},
+            "git": {
+                "commit_sha": task.git.commit_sha,
+                "worktree_path": task.runtime.git.worktree_path,
+            },
         },
         sort_keys=False,
     )
@@ -1170,6 +1177,27 @@ def set_task_commit_sha(task: TaskRecord, commit_sha: str | None) -> None:
     task.runtime.git.commit_sha = commit_sha
 
 
+def get_task_worktree_path(task: TaskRecord) -> str | None:
+    return task.runtime.git.worktree_path or task.git.worktree_path
+
+
+def set_task_worktree_path(task: TaskRecord, worktree_path: str | None) -> None:
+    task.runtime.git.worktree_path = worktree_path
+    task.git.worktree_path = None
+
+
+def clear_task_worktree_path(task: TaskRecord) -> None:
+    set_task_worktree_path(task, None)
+
+
+def _normalize_task_worktree_state(task: TaskRecord) -> None:
+    if task.runtime.git.worktree_path:
+        task.git.worktree_path = None
+        return
+    if task.git.worktree_path:
+        set_task_worktree_path(task, task.git.worktree_path)
+
+
 def save_task_runtime(root: Path, task: TaskRecord) -> None:
     with workspace_mutation_guard(root):
         _write_task_runtime(root, task)
@@ -1178,10 +1206,12 @@ def save_task_runtime(root: Path, task: TaskRecord) -> None:
 def _load_task_runtime(root: Path, task: TaskRecord) -> TaskRecord:
     runtime_file = task_runtime_file(root, task)
     if not runtime_file.exists():
+        _normalize_task_worktree_state(task)
         return task
     data = yaml.safe_load(runtime_file.read_text(encoding="utf-8")) or {}
     task.runtime = TaskRuntime(**data)
     set_task_commit_sha(task, task.runtime.git.commit_sha)
+    _normalize_task_worktree_state(task)
     return task
 
 
