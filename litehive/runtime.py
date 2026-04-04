@@ -60,6 +60,7 @@ from litehive.tasks import (
     prepare_completed_task_for_recovery,
     recover_stale_runner_state,
     restore_untouched_active_task,
+    runner_heartbeat,
     set_pool_stop_reason,
     set_task_continuation_handoff,
     set_task_commit_sha,
@@ -267,7 +268,8 @@ def run_task(
             max_retries=retry_limit,
             retry_source=retry_source,
         )
-        result = runner.run(task)
+        with runner_heartbeat(root, active_task_id=task.id):
+            result = runner.run(task)
         if result.final_status != "done":
             append_journal(root, task, f"Execution finished with status `{result.final_status}`.")
 

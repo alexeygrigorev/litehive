@@ -263,7 +263,58 @@ Checkpoint policy:
 
 ---
 
-## Recovery
+## Runner Status Model
+
+Litehive tracks runner health through a durable `RunnerStatusState` record written
+to `.litehive/.runner.lock` whenever a pool run is active.
+
+| Field | Type | Purpose |
+|-------|------|---------|
+| `status` | `RunnerExecutionStatus` | Current health classification |
+| `pid` | `int \| None` | OS PID of the runner process |
+| `workspace` | `str` | Resolved workspace path |
+| `command` | `str` | Command-line invocation |
+| `started_at` | `str \| None` | ISO-8601 timestamp when the runner acquired the lock |
+| `heartbeat_at` | `str \| None` | ISO-8601 timestamp of the last heartbeat refresh |
+| `active_task_id` | `str \| None` | Task ID currently being executed |
+
+### RunnerExecutionStatus
+
+| Value | Meaning |
+|-------|---------|
+| `idle` | No runner is active and no workspace reconciliation is needed |
+| `running` | Runner holds the OS lock and heartbeat is current |
+| `late` | Runner holds the OS lock but heartbeat has not been refreshed within the threshold (default: 60 seconds); runner may be hung |
+| `stale` | Lock is not held but workspace state still shows a running task; pending reconciliation |
+
+### Heartbeat
+
+While a task is executing, `runner_heartbeat` starts a background thread that
+refreshes `heartbeat_at` in the lock file every second. The heartbeat is written
+atomically under a per-lock `metadata_lock`.
+
+When the heartbeat context exits (normally or via exception), it clears
+`active_task_id` from the metadata so status reads after task completion
+correctly show `idle` once the runner guard releases the lock.
+
+### Reconciliation
+
+`_reconcile_stale_runner_tasks` is called before every task selection
+(`peek_next_task_selection`, `dequeue_next_task_selection`, `plan_task_selections`,
+`restore_untouched_active_task`). It:
+
+1. Requeues tasks whose `execution_status = running` but which are not the current
+   `active_task_id` (orphaned running tasks that the lock holder is not tracking).
+2. Requeues the active task itself when its `execution_status = running` but the
+   runner lock is no longer held (crash or SIGKILL recovery).
+3. Stranded `commit_to_git` tasks are recovered via the existing commit-recovery
+   path rather than plain requeue.
+
+Reconciliation writes to task YAML and the journal but does not mutate the
+runner lock file directly; that cleanup happens in `runner_status()` when
+conditions allow.
+
+
 
 | Command | Effect |
 |---------|--------|
