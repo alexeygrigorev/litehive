@@ -131,6 +131,7 @@ from litehive.tasks import (
     requeue_task,
     recover_stale_runner_state,
     resume_task,
+    needs_normalization,
     reroute_stage_for_acceptance_criteria,
     require_task,
     save_state,
@@ -2816,7 +2817,9 @@ def test_commit_task_can_commit_only_selected_paths_with_other_unstaged_changes(
 
 def test_runner_preserves_retry_count_when_requeued_task_is_rejected_again(tmp_path: Path) -> None:
     ensure_workspace(tmp_path, LitehiveConfig(default_retry_limit=3))
-    task = create_task(tmp_path, title="Review loop")
+    task = create_task(
+        tmp_path, title="Review loop", acceptance_criteria=["Feature works correctly."]
+    )
     task.status = "queued"
     task.pipeline_status = "accepting"
     task.runtime.retry_count = 1
@@ -3096,7 +3099,7 @@ def test_large_task_acceptance_criteria_requirement_heuristic() -> None:
     )
 
 
-def test_runner_blocks_direct_implementing_stage_without_acceptance_criteria(
+def test_runner_normalizes_implementing_stage_without_acceptance_criteria_to_grooming(
     tmp_path: Path,
 ) -> None:
     ensure_workspace(tmp_path)
@@ -3105,37 +3108,24 @@ def test_runner_blocks_direct_implementing_stage_without_acceptance_criteria(
     task.pipeline_status = "implementing"
     save_task(tmp_path, task)
 
+    stages_executed: list[str] = []
+
     def executor(task, step):  # type: ignore[no-untyped-def]
-        raise AssertionError(f"executor should not run for {step}")
+        stages_executed.append(step)
+        return StageReport(task_id=task.id, step=step, verdict="pass", summary=f"{step} ok")
 
     runner = TaskExecutionRunner(tmp_path, executor)
     result = runner.run(task)
 
-    assert result.final_status == "flagged"
-    finish_task_run_transition(tmp_path, task, result.final_status)
-    flagged = get_task(tmp_path, task.id)
-    assert flagged is not None
-    assert flagged.status == "flagged"
-    assert flagged.runtime.last_outcome.stage == "implementing"
-    assert flagged.runtime.last_outcome.reason_code == "missing_acceptance_criteria"
-    report = yaml.safe_load(
-        (
-            tmp_path
-            / ".litehive"
-            / "tasks"
-            / "T-0001-resume-feature"
-            / "reports"
-            / "implementing-001.yaml"
-        ).read_text(encoding="utf-8")
-    )
-    assert report["verdict"] == "blocked"
-    assert (
-        "Structured acceptance criteria are required before implementation for larger tasks."
-        in report["summary"]
-    )
+    assert result.final_status == "done"
+    assert stages_executed[0] == "grooming", "task should be normalized to grooming first"
+    updated = get_task(tmp_path, task.id)
+    assert updated is not None
+    journal = (task_dir(tmp_path, updated) / "journal.md").read_text(encoding="utf-8")
+    assert "Rerouted to grooming for normalization" in journal
 
 
-def test_runner_blocks_later_stage_without_acceptance_criteria(
+def test_runner_normalizes_later_stage_without_acceptance_criteria_to_grooming(
     tmp_path: Path,
 ) -> None:
     ensure_workspace(tmp_path)
@@ -3144,34 +3134,140 @@ def test_runner_blocks_later_stage_without_acceptance_criteria(
     task.pipeline_status = "testing"
     save_task(tmp_path, task)
 
+    stages_executed: list[str] = []
+
     def executor(task, step):  # type: ignore[no-untyped-def]
-        raise AssertionError(f"executor should not run for {step}")
+        stages_executed.append(step)
+        return StageReport(task_id=task.id, step=step, verdict="pass", summary=f"{step} ok")
 
     runner = TaskExecutionRunner(tmp_path, executor)
     result = runner.run(task)
 
-    assert result.final_status == "flagged"
-    finish_task_run_transition(tmp_path, task, result.final_status)
-    flagged = get_task(tmp_path, task.id)
-    assert flagged is not None
-    assert flagged.status == "flagged"
-    assert flagged.runtime.last_outcome.stage == "testing"
-    assert flagged.runtime.last_outcome.reason_code == "missing_acceptance_criteria"
-    report = yaml.safe_load(
-        (
-            tmp_path
-            / ".litehive"
-            / "tasks"
-            / "T-0001-resume-feature"
-            / "reports"
-            / "testing-001.yaml"
-        ).read_text(encoding="utf-8")
+    assert result.final_status == "done"
+    assert stages_executed[0] == "grooming", "task should be normalized to grooming first"
+    updated = get_task(tmp_path, task.id)
+    assert updated is not None
+    journal = (task_dir(tmp_path, updated) / "journal.md").read_text(encoding="utf-8")
+    assert "Rerouted to grooming for normalization" in journal
+
+
+def test_runner_normalizes_underspecified_queued_task_through_grooming(
+    tmp_path: Path,
+) -> None:
+    """Queued task at implementing with no acceptance criteria gets rerouted to grooming."""
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Legacy queued task")
+    task.pipeline_status = "implementing"
+    task.status = "queued"
+    save_task(tmp_path, task)
+
+    stages_executed: list[str] = []
+
+    def executor(task, step):  # type: ignore[no-untyped-def]
+        stages_executed.append(step)
+        return StageReport(task_id=task.id, step=step, verdict="pass", summary=f"{step} ok")
+
+    runner = TaskExecutionRunner(tmp_path, executor)
+    result = runner.run(task)
+
+    assert result.final_status == "done"
+    assert stages_executed[0] == "grooming", "task should start from grooming after normalization"
+    updated = get_task(tmp_path, task.id)
+    assert updated is not None
+    journal = (task_dir(tmp_path, updated) / "journal.md").read_text(encoding="utf-8")
+    assert "Rerouted to grooming for normalization" in journal
+    assert "missing acceptance criteria" in journal
+
+
+def test_runner_normalizes_interrupted_task_without_criteria_through_grooming(
+    tmp_path: Path,
+) -> None:
+    """Interrupted task at testing with no acceptance criteria gets rerouted to grooming."""
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Interrupted legacy task", goal="Deliver the fix")
+    task.pipeline_status = "testing"
+    task.status = "interrupted"
+    task.runtime.last_outcome.kind = "interrupted"
+    save_task(tmp_path, task)
+    save_task_runtime(tmp_path, task)
+
+    stages_executed: list[str] = []
+
+    def executor(task, step):  # type: ignore[no-untyped-def]
+        stages_executed.append(step)
+        return StageReport(task_id=task.id, step=step, verdict="pass", summary=f"{step} ok")
+
+    runner = TaskExecutionRunner(tmp_path, executor)
+    result = runner.run(task)
+
+    assert result.final_status == "done"
+    assert stages_executed[0] == "grooming", "task should start from grooming after normalization"
+    updated = get_task(tmp_path, task.id)
+    assert updated is not None
+    journal = (task_dir(tmp_path, updated) / "journal.md").read_text(encoding="utf-8")
+    assert "missing acceptance criteria" in journal
+
+
+def test_runner_skips_normalization_for_well_specified_task(tmp_path: Path) -> None:
+    """Task with goal and acceptance criteria continues from its current stage without grooming."""
+    ensure_workspace(tmp_path)
+    task = create_task(
+        tmp_path,
+        title="Well specified task",
+        goal="Deliver the feature",
+        acceptance_criteria=["Feature works end to end"],
     )
-    assert report["verdict"] == "blocked"
-    assert (
-        "Structured acceptance criteria are required before implementation for larger tasks."
-        in report["summary"]
-    )
+    task.pipeline_status = "implementing"
+    task.status = "queued"
+    save_task(tmp_path, task)
+
+    stages_executed: list[str] = []
+
+    def executor(task, step):  # type: ignore[no-untyped-def]
+        stages_executed.append(step)
+        return StageReport(task_id=task.id, step=step, verdict="pass", summary=f"{step} ok")
+
+    runner = TaskExecutionRunner(tmp_path, executor)
+    result = runner.run(task)
+
+    assert result.final_status == "done"
+    assert stages_executed[0] == "implementing", "well-specified task should not be rerouted to grooming"
+    assert "grooming" not in stages_executed
+
+
+def test_needs_normalization_returns_none_for_task_already_at_grooming() -> None:
+    """Tasks already at grooming should not be flagged for normalization."""
+    task = TaskRecord(id="T-0001", slug="test", title="Test task")
+    task.pipeline_status = "grooming"
+    task.goal = ""
+    task.acceptance_criteria = []
+    assert needs_normalization(task) is None
+
+
+def test_needs_normalization_detects_missing_criteria() -> None:
+    """Tasks past grooming without acceptance criteria are detected."""
+    task = TaskRecord(id="T-0001", slug="test", title="Test task")
+    task.pipeline_status = "implementing"
+    task.goal = ""
+    task.acceptance_criteria = []
+    reason = needs_normalization(task)
+    assert reason is not None
+    assert "missing acceptance criteria" in reason
+    assert "missing goal" in reason  # secondary signal when goal also empty
+
+    task.goal = "Real goal"
+    reason = needs_normalization(task)
+    assert reason is not None
+    assert "missing acceptance criteria" in reason
+    assert "missing goal" not in reason
+
+    task.acceptance_criteria = ["Criterion"]
+    assert needs_normalization(task) is None
+
+    # Task with criteria but no goal is NOT underspecified
+    task.goal = ""
+    task.acceptance_criteria = ["Criterion"]
+    assert needs_normalization(task) is None
 
 
 def test_runner_cancels_task_with_explicit_reason(tmp_path: Path) -> None:
@@ -3431,7 +3527,9 @@ def test_cli_run_end_to_end_requeues_after_qa_failure_then_commits_in_temp_git_r
 ) -> None:
     initial_sha = _init_git_repo(tmp_path)
     ensure_workspace(tmp_path, LitehiveConfig(default_retry_limit=0))
-    task = create_task(tmp_path, title="QA harness task")
+    task = create_task(
+        tmp_path, title="QA harness task", acceptance_criteria=["Feature works correctly."]
+    )
     task.retry_policy.max_retries = 2
     save_task(tmp_path, task)
 
@@ -5040,9 +5138,15 @@ def test_drain_task_pool_pauses_for_human_checkpoint_before_acceptance(
         tmp_path,
         title="Needs review before acceptance",
         human_checkpoints=["before_acceptance"],
+        acceptance_criteria=["Feature works correctly."],
         auto_commit=False,
     )
-    queued = create_task(tmp_path, title="Waiting behind review", auto_commit=False)
+    queued = create_task(
+        tmp_path,
+        title="Waiting behind review",
+        acceptance_criteria=["Feature works correctly."],
+        auto_commit=False,
+    )
 
     monkeypatch.setattr(
         "litehive.runtime.SubagentManager.run",
@@ -5084,9 +5188,15 @@ def test_drain_task_pool_pauses_for_human_checkpoint_before_commit(
         tmp_path,
         title="Needs review before commit",
         human_checkpoints=["before_commit"],
+        acceptance_criteria=["Feature works correctly."],
         auto_commit=False,
     )
-    queued = create_task(tmp_path, title="Waiting behind commit review", auto_commit=False)
+    queued = create_task(
+        tmp_path,
+        title="Waiting behind commit review",
+        acceptance_criteria=["Feature works correctly."],
+        auto_commit=False,
+    )
 
     monkeypatch.setattr(
         "litehive.runtime.SubagentManager.run",
@@ -8639,8 +8749,8 @@ def test_cmd_run_reports_failed_task_summary_with_stage_outcomes(
     assert exit_code == 0
     assert "flagged_tasks: 1" in output
     assert (
-        "flagged: T-0001 Needs acceptance criteria status=flagged pipeline_status=implementing "
-        "stage_outcomes=implementing=blocked" in output
+        "flagged: T-0001 Needs acceptance criteria status=flagged pipeline_status=grooming "
+        "stage_outcomes=grooming=blocked" in output
     )
     assert "skipped_tasks: 0" in output
     assert "remaining_tasks: 0" in output
@@ -13372,7 +13482,11 @@ def test_run_next_task_keeps_using_fallback_engine_after_implementing_usage_limi
 ) -> None:
     ensure_workspace(tmp_path)
     task = create_task(
-        tmp_path, title="Fallback usage-limit task", engine="codex", auto_commit=False
+        tmp_path,
+        title="Fallback usage-limit task",
+        engine="codex",
+        acceptance_criteria=["Feature works correctly."],
+        auto_commit=False,
     )
     task.status = "in_progress"
     task.pipeline_status = "implementing"

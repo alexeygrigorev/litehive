@@ -559,6 +559,23 @@ def implementation_entry_stage(task: TaskRecord) -> str:
     return "implementing"
 
 
+def needs_normalization(task: TaskRecord) -> str | None:
+    """Return a reason if the task is underspecified and needs planner normalization before retry.
+
+    Tasks already at backlog or grooming will naturally go through planner,
+    so normalization only applies to tasks past grooming that lack meaningful
+    acceptance criteria.
+    """
+    if task.pipeline_status in {"backlog", "grooming"}:
+        return None
+    if task.acceptance_criteria:
+        return None
+    reasons = ["missing acceptance criteria"]
+    if not task.goal.strip():
+        reasons.append("missing goal")
+    return f"Task is underspecified ({', '.join(reasons)}) and needs planner normalization before retry."
+
+
 def reroute_stage_for_acceptance_criteria(task: TaskRecord) -> str:
     if task.pipeline_status in {"implementing", "testing", "accepting", "commit_to_git"}:
         if missing_acceptance_criteria_reason(task) is not None:

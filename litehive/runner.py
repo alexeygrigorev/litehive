@@ -23,6 +23,7 @@ from litehive.tasks import (
     mark_stage_finished,
     mark_stage_started,
     missing_acceptance_criteria_reason,
+    needs_normalization,
     populate_missing_acceptance_criteria_from_report,
     populate_pm_sizing_from_report,
     save_task,
@@ -95,6 +96,16 @@ class TaskExecutionRunner:
 
         if task.pipeline_status == "done":
             return RunResult(final_status="done")
+
+        normalization_reason = needs_normalization(task)
+        if normalization_reason is not None:
+            task.pipeline_status = "grooming"  # type: ignore[assignment]
+            save_task(self.root, task)
+            append_journal(
+                self.root,
+                task,
+                f"Rerouted to grooming for normalization: {normalization_reason}",
+            )
 
         set_task_retry_state(
             self.root,
