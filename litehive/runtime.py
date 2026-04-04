@@ -2043,8 +2043,8 @@ def _commit_to_git_report(
             if checkpoint is None:
                 raise GitError("git commit prerequisites were not met")
             integrated_sha = checkpoint.commit_sha
-    except GitError as exc:
-        # Try recovery agent before giving up
+    except Exception as exc:
+        # Try recovery agent before giving up — catch ALL errors, not just GitError
         if subagents is not None and task is not None:
             append_journal(root, task, f"CommitToGit failed: {exc}. Launching recovery agent.")
             recovery_sha = _attempt_commit_recovery(
@@ -2085,7 +2085,10 @@ def _commit_to_git_report(
     set_task_commit_sha(task, integrated_sha)
     _cleanup_task_worktree(root, task)
     save_task(root, task)
-    save_task_runtime(root, task)
+    try:
+        save_task_runtime(root, task)
+    except Exception as runtime_exc:
+        append_journal(root, task, f"Warning: save_task_runtime failed: {runtime_exc}")
 
     # Push to remote if one is configured
     push_result = subprocess.run(
