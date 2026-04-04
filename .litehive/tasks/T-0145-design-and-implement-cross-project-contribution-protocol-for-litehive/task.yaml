@@ -1,0 +1,100 @@
+id: T-0145
+slug: design-and-implement-cross-project-contribution-protocol-for-litehive
+title: Design and implement cross-project contribution protocol for litehive
+depends_on:
+- T-0140
+task_type: null
+engine: null
+model: null
+mode: implementation
+status: queued
+pipeline_status: grooming
+priority: medium
+pm_complexity: complex
+planned_effort: l
+created_at: '2026-04-04T18:30:00+00:00'
+updated_at: '2026-04-04T18:30:00+00:00'
+goal: >-
+  Establish a local-first upstream contribution protocol so projects orchestrated
+  by litehive can create actionable litehive work without switching context:
+  file upstream issues/tasks, attach source-project context, and hand off
+  candidate fixes or self-heal patches back to the litehive repo.
+acceptance_criteria:
+- >-
+  litehive exposes a supported CLI workflow for filing an upstream litehive
+  issue/task from another project, such as `litehive issue --upstream ...`,
+  and the resulting litehive task record preserves source-project metadata.
+- >-
+  External-project recovery flows can classify a failure as a likely litehive
+  bug and create an upstream litehive task automatically instead of only
+  leaving a local log entry.
+- >-
+  The protocol defines and implements a local-first patch handoff path using
+  `litehive_source_path` so an external project can propose a litehive fix
+  branch/worktree and file the corresponding upstream task or PR context for
+  review.
+- >-
+  The implementation covers the four required contribution classes: runtime
+  bug discovered during task execution, missing feature request, config or
+  prompt improvement based on real usage, and engine adapter fix.
+- >-
+  Litehive durable state and operator-visible views show which upstream
+  contribution tasks came from which project and include enough metadata to
+  navigate back to the originating workspace/task.
+- >-
+  `litehive_source_path` is documented and used as the locator for upstream
+  contributions into the litehive source repo.
+- >-
+  Operator documentation in `docs/contributing-back.md` explains how to file
+  an upstream issue, how recovery agents escalate automatically, and how to
+  hand off a candidate patch without leaving the current project context.
+constraints:
+- >-
+  Keep the protocol local-first and deterministic; a hosted forge integration
+  may be optional, but filing a litehive task in the litehive workspace must
+  work without GitHub-specific dependencies.
+- >-
+  Reuse existing `.litehive/` task state, task records, and worktree flows
+  instead of inventing a separate persistence layer for upstream
+  contributions.
+- >-
+  Treat T-0140 as the underlying self-heal execution slice; this task should
+  integrate that capability into a broader contribution protocol instead of
+  duplicating it.
+- >-
+  Keep source-project attribution explicit in durable state so later QA and
+  reviewer stages can prove which project triggered the upstream
+  contribution.
+plan:
+- >-
+  Define the durable upstream contribution model: what metadata identifies the
+  source project/task, how issue vs patch proposals are represented, and where
+  that data lives in litehive task state.
+- >-
+  Add a supported CLI/operator entrypoint for creating upstream litehive tasks
+  from another project and persist origin metadata plus contribution type.
+- >-
+  Extend external-project recovery behavior so likely litehive bugs or
+  missing-litehive-feature failures can escalate into upstream litehive tasks
+  automatically with reproduction context.
+- >-
+  Integrate the patch handoff path around `litehive_source_path`, including how
+  an external project prepares a litehive branch/worktree or patch proposal and
+  how the litehive workspace records that handoff for follow-up.
+- >-
+  Update status/task visibility and documentation so operators can see
+  upstream-originated litehive work and follow the documented feedback-loop
+  workflow end to end.
+human_checkpoints: []
+subagents: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0145 design-and-implement-cross-project-contribution-protocol-for-litehive'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+  worktree_path: .litehive/worktrees/T-0145-design-and-implement-cross-project-contribution-protocol-for-litehive
+retry_policy:
+  max_retries: null
+created_from: null

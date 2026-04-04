@@ -18,6 +18,8 @@
 - `uv run litehive add "<title>" --workspace .`
 - `uv run litehive add "<title>" --task-type review --workspace .`
   Defaults to `mode: tasks` for typed intake so the task folder gets `brief.md` template guidance; pass `--mode implementation` to opt out.
+- `uv run litehive issue --upstream "<title>" --workspace .`
+  Files an upstream Litehive task into the repo pointed to by `litehive_source_path`, preserving source-project metadata and optional patch-branch handoff details.
 - `uv run litehive intake <file> --workspace .`
   Creates a rough task from a freeform brain dump or specification using an LLM.
 - `uv run litehive move T-0002 1 --workspace .`

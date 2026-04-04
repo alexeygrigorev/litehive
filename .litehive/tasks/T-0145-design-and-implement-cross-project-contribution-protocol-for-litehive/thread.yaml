@@ -1,0 +1,215 @@
+- role: planner
+  step: grooming
+  verdict: pass
+  message: 'Grooming passed after creating the missing local task record for T-0145
+    and turning the prompt into an explicit execution contract. Verified by repository
+    inspection that no cross-project upstream contribution workflow exists yet, that
+    T-0140 already covers the self-heal-litehive-from-external-project slice, and
+    that this task should integrate that capability into a broader local-first contribution
+    protocol rather than duplicate it. No code tests were run because this was planner-stage
+    task shaping only.
+
+
+    Key shaping decisions:
+
+    - T-0145 now depends on T-0140 so the self-heal execution path is treated as a
+    prerequisite slice, while this task owns the broader protocol: upstream issue/task
+    creation, source-project attribution, patch handoff, tracking, and docs.
+
+    - The protocol is explicitly local-first: creating a litehive task in the litehive
+    workspace is the required baseline; hosted PR or issue integrations can be additive
+    but are not required to satisfy the contract.
+
+    - Later stages need proof for four contribution classes: runtime bug, missing
+    feature, config/prompt improvement, and engine adapter fix.
+
+    - Later stages also need durable attribution showing which external project and
+    source task triggered each upstream contribution.
+
+
+    PM_COMPLEXITY: complex
+
+    PLANNED_EFFORT: l
+
+    ACCEPTANCE_CRITERIA:
+
+    - litehive exposes a supported CLI workflow for filing an upstream litehive issue/task
+    from another project, such as `litehive issue --upstream ...`, and the resulting
+    litehive task record preserves source-project metadata.
+
+    - External-project recovery flows can classify a failure as a likely litehive
+    bug and create an upstream litehive task automatically instead of only leaving
+    a local log entry.
+
+    - The protocol defines and implements a local-first patch handoff path using `litehive_source_path`
+    so an external project can propose a litehive fix branch/worktree and file the
+    corresponding upstream task or PR context for review.
+
+    - The implementation covers the four required contribution classes: runtime bug
+    discovered during task execution, missing feature request, config or prompt improvement
+    based on real usage, and engine adapter fix.
+
+    - Litehive durable state and operator-visible views show which upstream contribution
+    tasks came from which project and include enough metadata to navigate back to
+    the originating workspace/task.
+
+    - `litehive_source_path` is documented and used as the locator for upstream contributions
+    into the litehive source repo.
+
+    - Operator documentation in `docs/contributing-back.md` explains how to file an
+    upstream issue, how recovery agents escalate automatically, and how to hand off
+    a candidate patch without leaving the current project context.
+
+
+    Implementation plan:
+
+    1. Define the durable upstream contribution model and origin metadata fields in
+    litehive task state.
+
+    2. Add the CLI/operator entrypoint for creating upstream litehive tasks from another
+    project.
+
+    3. Extend recovery behavior so likely litehive bugs or missing-litehive-feature
+    failures can escalate automatically with reproduction context.
+
+    4. Integrate the `litehive_source_path` patch handoff path for litehive fix proposals.
+
+    5. Surface upstream-origin tracking in operator views and document the end-to-end
+    workflow in `docs/contributing-back.md`.
+
+
+    Warning: the workspace state still has `active_task_id: T-0081`, while this worktree
+    and report target T-0145. The report was submitted with `--task-id T-0145`, but
+    operators should reconcile workspace state separately if they expect T-0145 to
+    become the active queued task in this checkout.'
+  files_changed:
+  - .litehive/tasks/T-0145-design-and-implement-cross-project-contribution-protocol-for-litehive/task.yaml
+  created_at: '2026-04-04T19:08:18+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Implemented a local-first upstream contribution protocol for cross-project
+    Litehive feedback loops. Added litehive_source_path workspace config, typed upstream_origin
+    and patch metadata on task records, a new litehive issue --upstream CLI flow that
+    files upstream Litehive tasks into the configured Litehive workspace and can prepare
+    and record a Litehive patch branch, status and task summary surfacing for source-project
+    attribution, recovery prompt guidance telling external-project recovery agents
+    to escalate Litehive-side bugs with litehive issue, and operator docs in docs/contributing-back.md
+    plus CLI/context updates.
+
+
+    Verified with focused tests: uv run pytest -q tests/test_workspace.py -k issue_command
+    or upstream_origin or recovery_role_when_requested or status_fast_mode_uses_state_first_reads_and_skips_runtime_hydration
+    -> 5 passed. Those tests cover upstream task creation with source-project metadata,
+    patch-branch preparation and persistence, status and summary visibility, and recovery
+    prompt escalation guidance.
+
+
+    Broader regression run: uv run pytest -q tests/test_workspace.py reached 520 passed
+    and 1 failed. The lone failure was tests/test_workspace.py::test_subagent_artifacts_stream_to_disk_while_process_is_still_running,
+    a live-streaming timing test outside this feature area. The new upstream protocol
+    tests passed, and the feature acceptance criteria are covered by the focused additions
+    above. Acceptance evidence: projects can now file upstream Litehive tasks via
+    CLI; upstream tasks persist source project, workspace, and task metadata; patch
+    handoff uses litehive_source_path and optional prepared branch metadata; recovery
+    guidance now explicitly escalates Litehive-side failures upstream; operator-visible
+    summaries show which project triggered the contribution; and docs/contributing-back.md
+    documents bug, feature, config/prompt, and engine-adapter contribution flows.'
+  files_changed: []
+  created_at: '2026-04-04T19:21:53+00:00'
+- role: qa
+  step: testing
+  verdict: pass
+  message: 'QA verified the cross-project upstream contribution protocol in the current
+    worktree. Executed focused regression coverage with: uv run pytest -q tests/test_workspace.py
+    -k ''issue_command or upstream_origin or recovery_role_when_requested or status_fast_mode_uses_state_first_reads_and_skips_runtime_hydration''
+    -> 5 passed, 516 deselected. Independently spot-checked the user-facing docs and
+    CLI flow, and ran a direct Python-driven _cmd_issue exercise that created an upstream
+    Litehive task in a separate Litehive workspace with source-project metadata populated.
+    Evidence by acceptance criterion: (1) litehive issue --upstream creates an upstream
+    task in the Litehive workspace and persists source project/workspace/task/stage
+    metadata; covered by test_issue_command_files_upstream_task_with_origin_metadata
+    and direct command exercise. (2) Recovery agents are instructed to file upstream
+    Litehive issues automatically instead of only logging locally; covered by the
+    recovery prompt assertion in tests and confirmed in litehive/subagents.py. (3)
+    Self-heal patch handoff is supported through patch branch metadata and optional
+    branch preparation in the Litehive repo; covered by test_issue_command_can_prepare_patch_branch.
+    (4) Operator workflow for proposing Litehive changes without switching context
+    is documented in docs/contributing-back.md and linked from docs/cli.md. (5) Required
+    scenarios are documented through contribution types runtime_bug, missing_feature,
+    config_improvement, prompt_improvement, and engine_adapter_fix. (6) litehive_source_path
+    is present in config and used to locate the upstream Litehive workspace. (7) Upstream
+    contributions are visible in status/summary output; covered by test_cmd_status_and_summary_include_upstream_origin.
+    No blocking defects found in the feature area. Residual note: I did not rerun
+    the broad full test suite because the task guidance favors targeted verification,
+    but the feature-specific checks above passed cleanly.'
+  files_changed: []
+  created_at: '2026-04-04T19:23:33+00:00'
+- role: reviewer
+  step: accepting
+  verdict: pass
+  message: 'Reviewer acceptance passed for T-0145 after independent verification of
+    the cross-project Litehive contribution protocol. I verified the new operator
+    flow and durable state end to end by running .....                                                                    [100%]
+
+    5 passed, 516 deselected in 0.93s, which passed with . Those tests cover upstream
+    task creation with source-project metadata, patch-branch preparation metadata,
+    recovery-stage escalation guidance, and operator-visible status/summary surfacing.
+
+
+    I also ran a direct CLI exercise in temporary workspaces: configured an external
+    project with , created a local source task, ran , and confirmed that the Litehive
+    workspace received a new task with  populated (, , , , , , , and ).
+
+
+    Acceptance evidence by criterion: (1) supported CLI issue filing exists via  and
+    creates upstream Litehive tasks with source-project attribution; (2) recovery-agent
+    guidance now explicitly tells recovery flows to file upstream Litehive issues
+    instead of only logging local failures; (3) patch handoff is implemented through
+    , , and , with durable patch metadata on the upstream task; (4) the required contribution
+    classes are represented by supported types , , , , and ; (5) operator-visible
+    status/task summaries show which project triggered the contribution; (6)  is added
+    to config, status output, and the upstream-task locator flow; and (7)  documents
+    filing issues, recovery escalation, and patch handoff without switching context.
+
+
+    No blocking feature gaps found in the implementation area under review.'
+  files_changed: []
+  created_at: '2026-04-04T19:24:56+00:00'
+- role: reviewer
+  step: accepting
+  verdict: pass
+  message: 'Reviewer acceptance passed for T-0145 after independent verification of
+    the cross-project Litehive contribution protocol. I verified the new operator
+    flow and durable state end to end by running uv run pytest -q tests/test_workspace.py
+    -k ''issue_command or upstream_origin or recovery_role_when_requested or status_fast_mode_uses_state_first_reads_and_skips_runtime_hydration'',
+    which passed with 5 passed, 516 deselected. Those tests cover upstream task creation
+    with source-project metadata, patch-branch preparation metadata, recovery-stage
+    escalation guidance, and operator-visible status/summary surfacing.
+
+
+    I also ran a direct CLI exercise in temporary workspaces: configured an external
+    project with --litehive-source-path, created a local source task, ran litehive
+    issue --upstream ''engine timeout not working'' --type runtime_bug --details ''Observed
+    during project recovery.'', and confirmed that the Litehive workspace received
+    a new task with upstream_origin populated (source_project, source_workspace, source_task_id,
+    source_task_title, source_stage, source_role, contribution_kind, and litehive_source_path).
+
+
+    Acceptance evidence by criterion: (1) supported CLI issue filing exists via litehive
+    issue --upstream and creates upstream Litehive tasks with source-project attribution;
+    (2) recovery-agent guidance now explicitly tells recovery flows to file upstream
+    Litehive issues instead of only logging local failures; (3) patch handoff is implemented
+    through litehive_source_path, --patch-branch, and --prepare-patch-branch, with
+    durable patch metadata on the upstream task; (4) the required contribution classes
+    are represented by supported types runtime_bug, missing_feature, config_improvement,
+    prompt_improvement, and engine_adapter_fix; (5) operator-visible status/task summaries
+    show which project triggered the contribution; (6) litehive_source_path is added
+    to config, status output, and the upstream-task locator flow; and (7) docs/contributing-back.md
+    documents filing issues, recovery escalation, and patch handoff without switching
+    context.
+
+
+    No blocking feature gaps found in the implementation area under review.'
+  files_changed: []
+  created_at: '2026-04-04T19:25:12+00:00'

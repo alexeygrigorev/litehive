@@ -43,6 +43,7 @@ from litehive.models import (
     SubagentRef,
     TaskOutcomeState,
     TaskComplexity,
+    UpstreamContributionOrigin,
     TaskRecord,
     TaskRuntime,
     WorkspaceState,
@@ -1236,6 +1237,7 @@ def create_task(
     planned_effort: str | None = None,
     human_checkpoints: list[str] | None = None,
     auto_commit: bool = True,
+    upstream_origin: UpstreamContributionOrigin | None = None,
 ) -> TaskRecord:
     ensure_workspace(root)
     if retry_limit is not None and retry_limit < 0:
@@ -1270,6 +1272,7 @@ def create_task(
                 "auto_commit": auto_commit,
                 "commit_message": default_commit_message(task_id, slug),
             },
+            upstream_origin=upstream_origin,
         )
         task = apply_task_template_defaults(task)
 

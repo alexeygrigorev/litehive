@@ -44,6 +44,13 @@ OutcomeKind = Literal[
 ]
 RetrySource = Literal["global", "task"]
 HumanCheckpoint = Literal["before_acceptance", "before_commit"]
+UpstreamContributionKind = Literal[
+    "runtime_bug",
+    "missing_feature",
+    "config_improvement",
+    "prompt_improvement",
+    "engine_adapter_fix",
+]
 OutcomeReasonCode = Literal[
     "verdict_fail",
     "verdict_reject",
@@ -200,6 +207,27 @@ class TaskCreationSource(BaseModel):
     blocking: bool = False
 
 
+class UpstreamPatchProposal(BaseModel):
+    branch: str | None = None
+    base_ref: str | None = None
+    prepared: bool = False
+    repo_path: str | None = None
+
+
+class UpstreamContributionOrigin(BaseModel):
+    source_project: str
+    source_workspace: str
+    source_task_id: str | None = None
+    source_task_title: str | None = None
+    source_stage: str | None = None
+    source_role: str | None = None
+    contribution_kind: UpstreamContributionKind
+    summary: str = ""
+    details: str = ""
+    litehive_source_path: str
+    patch: UpstreamPatchProposal | None = None
+
+
 class FollowUpTaskSpec(BaseModel):
     title: str
     rationale: str
@@ -346,6 +374,7 @@ class TaskRecord(BaseModel):
     git: GitSettings = Field(default_factory=GitSettings)
     retry_policy: TaskRetryPolicy = Field(default_factory=TaskRetryPolicy)
     created_from: TaskCreationSource | None = None
+    upstream_origin: UpstreamContributionOrigin | None = None
     runtime: TaskRuntime = Field(default_factory=TaskRuntime, exclude=True)
 
 

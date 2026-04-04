@@ -16,6 +16,7 @@ import litehive.tasks as tasks_module
 
 from litehive.cli import (
     _cmd_add,
+    _cmd_issue,
     _cmd_intake,
     _cmd_abandon_task,
     _cmd_close_task,
@@ -83,6 +84,8 @@ from litehive.models import (
     StageReport,
     SubagentRef,
     TaskRecord,
+    UpstreamContributionOrigin,
+    UpstreamPatchProposal,
 )
 from litehive.observability import render_task_summary
 from litehive.sandbox import SandboxLauncher
@@ -4781,6 +4784,8 @@ def test_stage_prompt_uses_recovery_role_when_requested(tmp_path: Path) -> None:
         "Make the smallest effective fix needed so the task can resume the current stage and finish cleanly."
         in prompt
     )
+    assert "file an upstream Litehive task with `litehive issue --upstream ...`" in prompt
+    assert "use it for upstream issue filing and patch handoff without switching context" in prompt
 
 
 def test_stage_prompt_includes_project_startup_guidance_for_role(tmp_path: Path) -> None:
@@ -9406,6 +9411,139 @@ def test_status_fast_mode_uses_state_first_reads_and_skips_runtime_hydration(
     )
     assert "run=running" not in output
     assert "stage=implementing" not in output
+
+
+def test_issue_command_files_upstream_task_with_origin_metadata(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    project_root = tmp_path / "project-x"
+    litehive_root = tmp_path / "litehive-upstream"
+    ensure_workspace(litehive_root)
+    ensure_workspace(project_root, LitehiveConfig(litehive_source_path=str(litehive_root)))
+    source_task = create_task(project_root, title="Fix project timeout handling")
+
+    state = load_state(project_root)
+    state.active_task_id = source_task.id
+    save_state(project_root, state)
+
+    exit_code = _cmd_issue(
+        argparse.Namespace(
+            workspace=project_root,
+            upstream="engine timeout not working",
+            type="runtime_bug",
+            details="Observed while running project X recovery.",
+            acceptance_criteria=["Litehive timeout handling is configurable."],
+            source_task=None,
+            source_stage=None,
+            source_role="recovery",
+            source_project=None,
+            litehive_workspace=None,
+            patch_branch=None,
+            patch_base="HEAD",
+            prepare_patch_branch=False,
+        )
+    )
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "Created upstream task T-0001" in output
+    upstream_task = require_task(litehive_root, "T-0001")
+    assert upstream_task.title == "engine timeout not working"
+    assert upstream_task.task_type == "bugfix"
+    assert upstream_task.upstream_origin is not None
+    assert upstream_task.upstream_origin.source_project == "project-x"
+    assert upstream_task.upstream_origin.source_workspace == str(project_root.resolve())
+    assert upstream_task.upstream_origin.source_task_id == source_task.id
+    assert upstream_task.upstream_origin.source_stage == source_task.pipeline_status
+    assert upstream_task.upstream_origin.contribution_kind == "runtime_bug"
+    assert upstream_task.upstream_origin.litehive_source_path == str(litehive_root)
+    assert upstream_task.acceptance_criteria == ["Litehive timeout handling is configurable."]
+
+
+def test_issue_command_can_prepare_patch_branch(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    project_root = tmp_path / "project-y"
+    litehive_root = tmp_path / "litehive-upstream"
+    ensure_workspace(project_root, LitehiveConfig(litehive_source_path=str(litehive_root)))
+    litehive_root.mkdir(parents=True, exist_ok=True)
+    subprocess.run(["git", "init"], cwd=litehive_root, check=True, capture_output=True, text=True)
+    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=litehive_root, check=True)
+    subprocess.run(["git", "config", "user.name", "Test User"], cwd=litehive_root, check=True)
+    (litehive_root / "README.md").write_text("litehive\n", encoding="utf-8")
+    subprocess.run(["git", "add", "README.md"], cwd=litehive_root, check=True)
+    subprocess.run(["git", "commit", "-m", "init"], cwd=litehive_root, check=True)
+    ensure_workspace(litehive_root)
+
+    exit_code = _cmd_issue(
+        argparse.Namespace(
+            workspace=project_root,
+            upstream="Improve prompt defaults from real usage",
+            type="prompt_improvement",
+            details="Need a handoff branch for a prompt tweak.",
+            acceptance_criteria=None,
+            source_task=None,
+            source_stage="implementing",
+            source_role="recovery",
+            source_project="project-y",
+            litehive_workspace=None,
+            patch_branch="recover/prompt-tune",
+            patch_base="HEAD",
+            prepare_patch_branch=True,
+        )
+    )
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "patch_prepared: yes" in output
+    branch = subprocess.run(
+        ["git", "rev-parse", "--verify", "--quiet", "refs/heads/recover/prompt-tune"],
+        cwd=litehive_root,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert branch.returncode == 0
+    upstream_task = require_task(litehive_root, "T-0001")
+    assert upstream_task.upstream_origin is not None
+    assert upstream_task.upstream_origin.patch is not None
+    assert upstream_task.upstream_origin.patch.branch == "recover/prompt-tune"
+    assert upstream_task.upstream_origin.patch.prepared is True
+
+
+def test_cmd_status_and_summary_include_upstream_origin(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    ensure_workspace(tmp_path, LitehiveConfig(litehive_source_path="/src/litehive"))
+    task = create_task(
+        tmp_path,
+        title="Engine adapter follow-up",
+        upstream_origin=UpstreamContributionOrigin(
+            source_project="project-z",
+            source_workspace="/work/project-z",
+            source_task_id="T-0042",
+            source_task_title="Recover adapter failure",
+            source_stage="testing",
+            source_role="recovery",
+            contribution_kind="engine_adapter_fix",
+            summary="Fix adapter retry handling",
+            details="",
+            litehive_source_path="/src/litehive",
+            patch=UpstreamPatchProposal(branch="fix/adapter-timeout", base_ref="main", prepared=True),
+        ),
+    )
+
+    lines = render_task_summary(task, active=False)
+    combined = "\n".join(lines)
+    assert "upstream_from=project-z kind=engine_adapter_fix source_task=T-0042 source_stage=testing" in combined
+    assert "upstream_patch_branch=fix/adapter-timeout base=main prepared=True" in combined
+
+    exit_code = _cmd_status(argparse.Namespace(workspace=tmp_path, full=True))
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "litehive_source_path: /src/litehive" in output
+    assert "upstream_from=project-z kind=engine_adapter_fix source_task=T-0042 source_stage=testing" in output
 
 
 def test_build_workspace_snapshot_includes_active_session_and_run_all_logs(tmp_path: Path) -> None:

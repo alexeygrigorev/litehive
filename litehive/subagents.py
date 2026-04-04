@@ -1121,6 +1121,8 @@ def _stage_role_prompt(step: str, owner: str | None = None) -> list[str]:
             "- Inspect the latest failure context, reports, continuation handoff, and existing artifacts before changing code or task state.",
             "- Make the smallest effective fix needed so the task can resume the current stage and finish cleanly.",
             "- Preserve useful progress, avoid restarting discovery from scratch, and keep the task moving toward completion.",
+            "- If the failure is caused by Litehive itself rather than the current project, file an upstream Litehive task with `litehive issue --upstream ...` so the bug or missing feature is tracked durably instead of only being logged locally.",
+            "- When the workspace config defines `litehive_source_path`, use it for upstream issue filing and patch handoff without switching context away from the current project.",
         ]
     if step == "grooming":
         return [

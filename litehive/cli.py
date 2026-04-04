@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 from dataclasses import asdict
 from pathlib import Path
+import subprocess
 import sys
 
 import yaml
@@ -30,9 +31,13 @@ from litehive.daemon import (
     stop_workspace_daemon,
 )
 from litehive.engine_monitoring import load_engine_monitoring, render_engine_monitoring_lines
-from litehive.git_ops import GitError, checkpoint_message
+from litehive.git_ops import GitError, checkpoint_message, is_git_repo
 from litehive.observability import render_task_summary
-from litehive.models import utcnow
+from litehive.models import (
+    UpstreamContributionOrigin,
+    UpstreamPatchProposal,
+    utcnow,
+)
 from litehive.runtime import (
     EngineBudgetLedger,
     TaskPoolStopConditions,
@@ -84,6 +89,75 @@ from litehive.tui.app import LitehiveApp
 from litehive.web import serve_monitor
 
 TASK_TYPE_CHOICES = sorted(VALID_TASK_ROUTING_KEYS)
+UPSTREAM_CONTRIBUTION_CHOICES = [
+    "runtime_bug",
+    "missing_feature",
+    "config_improvement",
+    "prompt_improvement",
+    "engine_adapter_fix",
+]
+
+
+def _workspace_project_name(root: Path) -> str:
+    return root.resolve().name
+
+
+def _resolve_litehive_source_root(args: argparse.Namespace) -> Path:
+    explicit = getattr(args, "litehive_workspace", None)
+    if explicit is not None:
+        return explicit.resolve()
+    config = load_config(args.workspace)
+    if not config.litehive_source_path:
+        raise ValueError(
+            "litehive_source_path is not configured; run `litehive configure --litehive-source-path <path>` "
+            "or pass `--litehive-workspace`."
+        )
+    return Path(config.litehive_source_path).expanduser().resolve()
+
+
+def _git_output(root: Path, *args: str) -> str:
+    proc = subprocess.run(
+        ["git", *args],
+        cwd=str(root),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if proc.returncode != 0:
+        raise ValueError(proc.stderr.strip() or f"git {' '.join(args)} failed")
+    return proc.stdout.strip()
+
+
+def _prepare_patch_branch(root: Path, *, branch: str, base_ref: str) -> UpstreamPatchProposal:
+    if not is_git_repo(root):
+        raise ValueError(f"{root} is not a git repository")
+    branch = branch.strip()
+    if not branch:
+        raise ValueError("Patch branch name cannot be empty")
+    existing = subprocess.run(
+        ["git", "rev-parse", "--verify", "--quiet", f"refs/heads/{branch}"],
+        cwd=str(root),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if existing.returncode != 0:
+        _git_output(root, "rev-parse", "--verify", base_ref)
+        proc = subprocess.run(
+            ["git", "branch", branch, base_ref],
+            cwd=str(root),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if proc.returncode != 0:
+            raise ValueError(proc.stderr.strip() or "git branch failed")
+    return UpstreamPatchProposal(
+        branch=branch,
+        base_ref=base_ref,
+        prepared=True,
+        repo_path=str(root),
+    )
 
 
 def _fallback_intake_title(brain_dump: str) -> str:
@@ -829,6 +903,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Default retry limit for tasks without a task-specific override",
     )
     configure.add_argument(
+        "--litehive-source-path",
+        default=None,
+        help="Path to the Litehive source repo/workspace used for upstream issue filing and patch handoff",
+    )
+    configure.add_argument(
         "--opencode-model",
         default="zai-coding-plan/glm-5.1",
         help="Default model identifier when using the opencode adapter",
@@ -1152,6 +1231,80 @@ def build_parser() -> argparse.ArgumentParser:
         help="Disable auto-commit for this task",
     )
     add.add_argument(
+        "--workspace",
+        type=Path,
+        default=Path.cwd(),
+        help="Repository root containing .litehive/",
+    )
+
+    issue = subparsers.add_parser(
+        "issue",
+        help="File an upstream Litehive issue/task from the current project",
+    )
+    issue.add_argument(
+        "--upstream",
+        required=True,
+        help="Upstream Litehive issue title or short summary",
+    )
+    issue.add_argument(
+        "--type",
+        choices=UPSTREAM_CONTRIBUTION_CHOICES,
+        default="runtime_bug",
+        help="Contribution class for the upstream task",
+    )
+    issue.add_argument(
+        "--details",
+        default="",
+        help="Long-form details, reproduction notes, or requested change",
+    )
+    issue.add_argument(
+        "--acceptance-criteria",
+        action="append",
+        default=None,
+        help="Add acceptance criteria for the upstream task; repeat for multiple",
+    )
+    issue.add_argument(
+        "--source-task",
+        default=None,
+        help="Originating task id in the current project; defaults to the active task if any",
+    )
+    issue.add_argument(
+        "--source-stage",
+        default=None,
+        help="Originating pipeline stage in the current project",
+    )
+    issue.add_argument(
+        "--source-role",
+        default="recovery",
+        help="Role filing the upstream task",
+    )
+    issue.add_argument(
+        "--source-project",
+        default=None,
+        help="Override the source project name shown in the upstream task",
+    )
+    issue.add_argument(
+        "--litehive-workspace",
+        type=Path,
+        default=None,
+        help="Override the target Litehive repo/workspace instead of using litehive_source_path",
+    )
+    issue.add_argument(
+        "--patch-branch",
+        default=None,
+        help="Branch name in the Litehive repo for a proposed fix handoff",
+    )
+    issue.add_argument(
+        "--patch-base",
+        default="HEAD",
+        help="Base ref used when preparing --patch-branch (default: HEAD)",
+    )
+    issue.add_argument(
+        "--prepare-patch-branch",
+        action="store_true",
+        help="Create the patch branch in the Litehive repo before filing the task",
+    )
+    issue.add_argument(
         "--workspace",
         type=Path,
         default=Path.cwd(),
@@ -1574,6 +1727,7 @@ def _cmd_configure(args: argparse.Namespace) -> int:
     try:
         config = LitehiveConfig(
             default_engine=args.default_engine,
+            litehive_source_path=getattr(args, "litehive_source_path", None),
             process_profile=getattr(args, "process_profile", "generic"),
             default_retry_limit=getattr(args, "default_retry_limit", 3),
             opencode_model=args.opencode_model,
@@ -1629,6 +1783,7 @@ def _cmd_status(args: argparse.Namespace) -> int:
     print(f"workspace: {args.workspace}")
     print(f"status_read_mode: {'fast' if fast_mode else 'full'}")
     print(f"default_engine: {config.default_engine}")
+    print(f"litehive_source_path: {config.litehive_source_path or '-'}")
     print(f"mode: {state.mode}")
     print(f"active_task_id: {state.active_task_id}")
     current_runner = runner_status(root)
@@ -2470,6 +2625,111 @@ def _cmd_add(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_issue(args: argparse.Namespace) -> int:
+    ensure_workspace(args.workspace)
+    try:
+        litehive_root = _resolve_litehive_source_root(args)
+        ensure_workspace(litehive_root)
+        acceptance_criteria = _parse_acceptance_criteria(
+            getattr(args, "acceptance_criteria", None)
+        )
+    except ValueError as exc:
+        print(f"issue failed: {exc}")
+        return 1
+
+    state = load_state(args.workspace)
+    source_task_id = args.source_task or state.active_task_id
+    source_task = None
+    if source_task_id is not None:
+        try:
+            source_task = require_task(args.workspace, source_task_id)
+        except ValueError as exc:
+            print(f"issue failed: {exc}")
+            return 1
+
+    source_project = args.source_project or _workspace_project_name(args.workspace)
+    source_stage = args.source_stage or (source_task.pipeline_status if source_task is not None else None)
+    source_title = source_task.title if source_task is not None else None
+    patch = None
+    if args.patch_branch:
+        patch = UpstreamPatchProposal(
+            branch=args.patch_branch,
+            base_ref=args.patch_base,
+            prepared=False,
+            repo_path=str(litehive_root),
+        )
+        if args.prepare_patch_branch:
+            try:
+                patch = _prepare_patch_branch(
+                    litehive_root,
+                    branch=args.patch_branch,
+                    base_ref=args.patch_base,
+                )
+            except ValueError as exc:
+                print(f"issue failed: {exc}")
+                return 1
+    elif args.prepare_patch_branch:
+        print("issue failed: --prepare-patch-branch requires --patch-branch")
+        return 1
+
+    contribution_kind = args.type
+    mode = "tasks" if contribution_kind in {"missing_feature", "config_improvement", "prompt_improvement"} else "implementation"
+    task_type = (
+        "bugfix"
+        if contribution_kind == "runtime_bug"
+        else "adapter"
+        if contribution_kind == "engine_adapter_fix"
+        else None
+    )
+    details = args.details.strip()
+    goal_lines = [
+        f"Upstream contribution from `{source_project}`.",
+        f"Contribution kind: `{contribution_kind}`.",
+    ]
+    if source_task_id:
+        goal_lines.append(f"Originating task: `{source_task_id}`.")
+    if details:
+        goal_lines.extend(["", details])
+    goal = "\n".join(goal_lines)
+
+    try:
+        task = create_task(
+            litehive_root,
+            title=args.upstream,
+            mode=mode,
+            task_type=task_type,
+            goal=goal,
+            acceptance_criteria=None if acceptance_criteria is ... else acceptance_criteria,
+            upstream_origin=UpstreamContributionOrigin(
+                source_project=source_project,
+                source_workspace=str(args.workspace.resolve()),
+                source_task_id=source_task_id,
+                source_task_title=source_title,
+                source_stage=source_stage,
+                source_role=args.source_role,
+                contribution_kind=contribution_kind,
+                summary=args.upstream,
+                details=details,
+                litehive_source_path=str(litehive_root),
+                patch=patch,
+            ),
+        )
+    except (ValueError, WorkspaceConflictError) as exc:
+        print(f"issue failed: {exc}")
+        return 1
+
+    print(f"Created upstream task {task.id}")
+    print(f"litehive_workspace: {litehive_root}")
+    print(f"source_project: {source_project}")
+    print(f"source_task: {source_task_id or '-'}")
+    print(f"contribution_type: {contribution_kind}")
+    if patch is not None:
+        print(f"patch_branch: {patch.branch}")
+        print(f"patch_base: {patch.base_ref or '-'}")
+        print(f"patch_prepared: {'yes' if patch.prepared else 'no'}")
+    return 0
+
+
 def _cmd_intake(args: argparse.Namespace) -> int:
     ensure_workspace(args.workspace)
     brain_dump = ""
@@ -2696,6 +2956,8 @@ def main() -> int:
         parser.error("daemon requires a subcommand")
     if args.command == "add":
         return _cmd_add(args)
+    if args.command == "issue":
+        return _cmd_issue(args)
     if args.command == "intake":
         return _cmd_intake(args)
     if args.command == "run":

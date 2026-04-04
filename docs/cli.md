@@ -19,6 +19,7 @@ The CLI is the operator surface for a local deterministic task runner.
 - `litehive status`
 - `litehive queue`
 - `litehive add "<title>"`
+- `litehive issue --upstream "<title>"`
 - `litehive update T-0001 ...`
 - `litehive move T-0001 1`
 - `litehive prioritize T-0003 T-0002 T-0001`
@@ -124,6 +125,35 @@ SWE startup expectation:
 - pull execution context from the task folder first
 - read `task.yaml`, the latest report, and the latest rejection or recovery artifact before exploring broad repo context
 - if those fields are missing or contradictory, bounce the task back through grooming or recovery instead of guessing
+
+## Filing upstream Litehive work
+
+When another project discovers a Litehive bug, missing feature, prompt/config
+improvement, or engine adapter issue, file it into the Litehive workspace
+without leaving the current repo:
+
+```bash
+litehive configure --workspace . --litehive-source-path /abs/path/to/litehive
+
+litehive issue \
+  --upstream "engine timeout not working" \
+  --type runtime_bug \
+  --details "Observed while running recovery in project X." \
+  --workspace .
+```
+
+To hand off a candidate Litehive fix branch at the same time:
+
+```bash
+litehive issue \
+  --upstream "Tune Codex timeout handling" \
+  --type engine_adapter_fix \
+  --patch-branch recover/codex-timeout-fix \
+  --prepare-patch-branch \
+  --workspace .
+```
+
+See [docs/contributing-back.md](contributing-back.md) for the full protocol.
 
 ## Dependencies
 

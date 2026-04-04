@@ -74,6 +74,26 @@ def render_task_summary(task: TaskRecord, *, active: bool, root: Path | None = N
         lines.append(
             f"  pm_complexity={task.pm_complexity or '-'} planned_effort={task.planned_effort or '-'}"
         )
+    if task.upstream_origin is not None:
+        upstream = task.upstream_origin
+        lines.append(
+            "  "
+            + (
+                f"upstream_from={upstream.source_project} "
+                f"kind={upstream.contribution_kind} "
+                f"source_task={upstream.source_task_id or '-'} "
+                f"source_stage={upstream.source_stage or '-'}"
+            )
+        )
+        if upstream.patch is not None and upstream.patch.branch:
+            lines.append(
+                "  "
+                + (
+                    f"upstream_patch_branch={upstream.patch.branch} "
+                    f"base={upstream.patch.base_ref or '-'} "
+                    f"prepared={upstream.patch.prepared}"
+                )
+            )
     lines.append(f"  auto_commit={task.git.auto_commit}")
     if task.git.commit_message:
         lines.append(f"  commit_message={task.git.commit_message}")

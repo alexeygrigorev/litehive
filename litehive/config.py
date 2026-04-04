@@ -793,6 +793,7 @@ PROCESS_PROFILES: dict[str, dict[str, Any]] = {
 class LitehiveConfig:
     default_engine: str = "codex"
     recovery_engine: str | None = None
+    litehive_source_path: str | None = None
     process_profile: str = "generic"
     codex_model: str | None = None
     opencode_model: str = "zai-coding-plan/glm-5.1"
@@ -880,6 +881,8 @@ class LitehiveConfig:
         self.runner_hooks = _normalize_runner_hooks(self.runner_hooks)
         if self.pre_acceptance_command is not None:
             self.pre_acceptance_command = self.pre_acceptance_command.strip() or None
+        if self.litehive_source_path is not None:
+            self.litehive_source_path = self.litehive_source_path.strip() or None
         if self.pre_acceptance_command:
             before_acceptance_hooks = self.runner_hooks.setdefault("before_pm_acceptance", [])
             matched_legacy_hook = False

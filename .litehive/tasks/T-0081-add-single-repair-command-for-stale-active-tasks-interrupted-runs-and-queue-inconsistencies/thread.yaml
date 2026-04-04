@@ -36,3 +36,31 @@
     for daemon/pool behavior.'
   files_changed: []
   created_at: '2026-04-04T17:49:11+00:00'
+- role: qa
+  step: testing
+  verdict: pass
+  message: 'QA verified the cross-project upstream contribution protocol in the current
+    worktree. Executed focused regression coverage with: uv run pytest -q tests/test_workspace.py
+    -k ''issue_command or upstream_origin or recovery_role_when_requested or status_fast_mode_uses_state_first_reads_and_skips_runtime_hydration''
+    -> 5 passed, 516 deselected. Independently spot-checked the user-facing docs and
+    CLI flow, and ran a direct Python-driven _cmd_issue exercise that created an upstream
+    Litehive task in a separate Litehive workspace with source-project metadata populated.
+    Evidence by acceptance criterion: (1) litehive issue --upstream creates an upstream
+    task in the Litehive workspace and persists source project/workspace/task/stage
+    metadata; covered by test_issue_command_files_upstream_task_with_origin_metadata
+    and direct command exercise. (2) Recovery agents are instructed to file upstream
+    Litehive issues automatically instead of only logging locally; covered by the
+    recovery prompt assertion in tests and confirmed in litehive/subagents.py. (3)
+    Self-heal patch handoff is supported through patch branch metadata and optional
+    branch preparation in the Litehive repo; covered by test_issue_command_can_prepare_patch_branch.
+    (4) Operator workflow for proposing Litehive changes without switching context
+    is documented in docs/contributing-back.md and linked from docs/cli.md. (5) Required
+    scenarios are documented through contribution types runtime_bug, missing_feature,
+    config_improvement, prompt_improvement, and engine_adapter_fix. (6) litehive_source_path
+    is present in config and used to locate the upstream Litehive workspace. (7) Upstream
+    contributions are visible in status/summary output; covered by test_cmd_status_and_summary_include_upstream_origin.
+    No blocking defects found in the feature area. Residual note: I did not rerun
+    the broad full test suite because the task guidance favors targeted verification,
+    but the feature-specific checks above passed cleanly.'
+  files_changed: []
+  created_at: '2026-04-04T19:23:19+00:00'
