@@ -428,7 +428,7 @@ class ClaudeCLIAdapter(ExternalCLIAdapter):
         binary: str,
         capabilities: AdapterCapabilities,
         stripped_env_vars: tuple[str, ...] = (),
-        max_turns: int = 30,
+        max_turns: int = 75,
     ) -> None:
         super().__init__(
             name=name, binary=binary, capabilities=capabilities, stripped_env_vars=stripped_env_vars

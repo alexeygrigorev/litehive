@@ -16066,7 +16066,7 @@ def test_claude_build_invocation_includes_model_and_max_turns(tmp_path: Path) ->
     ]
 
 
-def test_claude_default_max_turns_is_30(tmp_path: Path) -> None:
+def test_claude_default_max_turns_is_75(tmp_path: Path) -> None:
     from litehive.engines import ClaudeCLIAdapter
 
     adapter = ClaudeCLIAdapter(
@@ -16082,7 +16082,7 @@ def test_claude_default_max_turns_is_30(tmp_path: Path) -> None:
 
     assert "--max-turns" in invocation.argv
     idx = list(invocation.argv).index("--max-turns")
-    assert list(invocation.argv)[idx + 1] == "30"
+    assert list(invocation.argv)[idx + 1] == "75"
 
 
 def test_claude_build_invocation_allows_max_turn_override(tmp_path: Path) -> None:
