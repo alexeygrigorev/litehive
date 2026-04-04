@@ -2082,6 +2082,7 @@ def test_subagent_manager_prefers_instance_run_override_over_inherited_run_live(
         model: str | None = None,
         *,
         max_turns: int | None = None,
+        resume_session_id: str | None = None,
         on_started=None,
     ) -> CLIExecutionResult:
         calls.append("run")
@@ -2353,7 +2354,7 @@ def test_runner_accepts_workflow_testing_with_real_lifecycle_evidence(
 
     resume_once = {"seen": False}
 
-    def fake_run(self, current_task, role, engine_name, prompt, model=None, max_turns=None):  # type: ignore[no-untyped-def]
+    def fake_run(self, current_task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None):  # type: ignore[no-untyped-def]
         if current_task.pipeline_status == "implementing" and (
             self.execution_root == commit_workspace
             or commit_workspace in self.execution_root.parents
@@ -2680,7 +2681,7 @@ def test_run_next_task_executes_follow_up_created_by_acceptance_on_later_iterati
     ensure_workspace(tmp_path)
     original = create_task(tmp_path, title="Ship feature behavior", auto_commit=False)
 
-    def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None):  # type: ignore[no-untyped-def]
+    def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None):  # type: ignore[no-untyped-def]
         if task.id == original.id and task.pipeline_status == "accepting":
             return SubagentResult(
                 ref=SubagentRef(
@@ -3364,7 +3365,7 @@ def test_run_next_task_uses_task_retry_override(
     save_task(tmp_path, task)
     attempts = {"testing": 0}
 
-    def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None):  # type: ignore[no-untyped-def]
+    def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None):  # type: ignore[no-untyped-def]
         if task.pipeline_status == "testing":
             attempts["testing"] += 1
             if attempts["testing"] == 1:
@@ -3438,7 +3439,7 @@ def test_run_next_task_requeues_after_qa_rejection(
     task.retry_policy.max_retries = 3
     save_task(tmp_path, task)
 
-    def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None):  # type: ignore[no-untyped-def]
+    def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None):  # type: ignore[no-untyped-def]
         transcript = "\n".join(
             [
                 "VERDICT: PASS",
@@ -3528,7 +3529,7 @@ def test_cli_run_end_to_end_requeues_after_qa_failure_then_commits_in_temp_git_r
 
     attempts = {"testing": 0}
 
-    def fake_run(self, current_task, role, engine_name, prompt, model=None, max_turns=None):  # type: ignore[no-untyped-def]
+    def fake_run(self, current_task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None):  # type: ignore[no-untyped-def]
         if current_task.pipeline_status == "implementing":
             (self.execution_root / "app.txt").write_text(
                 f"iteration {attempts['testing'] + 1}\n",
@@ -4828,7 +4829,7 @@ def test_drain_task_pool_drains_dynamic_queue(
     ensure_workspace(tmp_path)
     first = create_task(tmp_path, title="First task", auto_commit=False)
 
-    def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None):  # type: ignore[no-untyped-def]
+    def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None):  # type: ignore[no-untyped-def]
         if task.id == first.id and get_task(tmp_path, "T-0002") is None:
             create_task(tmp_path, title="Second task", auto_commit=False)
         return _completed_subagent_result(tmp_path, task.pipeline_status)
@@ -4857,7 +4858,7 @@ def test_run_next_task_falls_back_to_next_engine_on_execution_limit(
     ensure_workspace(tmp_path)
     create_task(tmp_path, title="Fallback task", engine="codex", auto_commit=False)
 
-    def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None):  # type: ignore[no-untyped-def]
+    def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None):  # type: ignore[no-untyped-def]
         if engine_name == "codex":
             return SubagentResult(
                 ref=SubagentRef(
@@ -4915,7 +4916,7 @@ def test_run_next_task_flags_when_limit_fallbacks_are_exhausted(
     ensure_workspace(tmp_path)
     create_task(tmp_path, title="Exhausted fallback task", engine="codex", auto_commit=False)
 
-    def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None):  # type: ignore[no-untyped-def]
+    def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None):  # type: ignore[no-untyped-def]
         return SubagentResult(
             ref=SubagentRef(
                 id=f"SA-{task.pipeline_status}-{engine_name}",
@@ -4968,7 +4969,7 @@ def test_drain_task_pool_stops_by_default_when_limit_fallbacks_are_exhausted(
     create_task(tmp_path, title="Exhausted fallback task", engine="codex", auto_commit=False)
     create_task(tmp_path, title="Second task", auto_commit=False)
 
-    def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None):  # type: ignore[no-untyped-def]
+    def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None):  # type: ignore[no-untyped-def]
         if task.id == "T-0001":
             return SubagentResult(
                 ref=SubagentRef(
@@ -5018,7 +5019,7 @@ def test_drain_task_pool_rereads_queue_order_between_tasks(
     second = create_task(tmp_path, title="Second task", auto_commit=False)
     third = create_task(tmp_path, title="Third task", auto_commit=False)
 
-    def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None):  # type: ignore[no-untyped-def]
+    def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None):  # type: ignore[no-untyped-def]
         if task.id == first.id:
             move_queued_task(tmp_path, third.id, 1)
         return _completed_subagent_result(tmp_path, task.pipeline_status)
@@ -5051,7 +5052,7 @@ def test_drain_task_pool_allows_future_queue_mutation_during_active_run(
     completed: dict[str, object] = {}
     failures: list[BaseException] = []
 
-    def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None):  # type: ignore[no-untyped-def]
+    def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None):  # type: ignore[no-untyped-def]
         if task.id == first.id:
             started.set()
             assert resume.wait(timeout=5)
@@ -5131,7 +5132,7 @@ def test_drain_task_pool_picks_up_requeued_task_between_iterations(
     save_state(tmp_path, state)
     requeued_once = False
 
-    def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None):  # type: ignore[no-untyped-def]
+    def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None):  # type: ignore[no-untyped-def]
         nonlocal requeued_once
         if task.id == first.id and not requeued_once:
             requeue_task(tmp_path, requeued.id)
@@ -5167,7 +5168,7 @@ def test_drain_task_pool_honors_stop_condition(
 
     monkeypatch.setattr(
         "litehive.runtime.SubagentManager.run",
-        lambda self, task, role, engine_name, prompt, model=None, max_turns=None: (
+        lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
             _completed_subagent_result(tmp_path, task.pipeline_status)
         ),
     )
@@ -5219,7 +5220,7 @@ def test_drain_task_pool_pauses_for_human_checkpoint_before_acceptance(
 
     monkeypatch.setattr(
         "litehive.runtime.SubagentManager.run",
-        lambda self, task, role, engine_name, prompt, model=None, max_turns=None: (
+        lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
             _completed_subagent_result(tmp_path, task.pipeline_status)
         ),
     )
@@ -5263,7 +5264,7 @@ def test_drain_task_pool_pauses_for_human_checkpoint_before_commit(
 
     monkeypatch.setattr(
         "litehive.runtime.SubagentManager.run",
-        lambda self, task, role, engine_name, prompt, model=None, max_turns=None: (
+        lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
             _completed_subagent_result(tmp_path, task.pipeline_status)
         ),
     )
@@ -5912,7 +5913,7 @@ def test_drain_task_pool_stops_after_max_tasks(
 
     monkeypatch.setattr(
         "litehive.runtime.SubagentManager.run",
-        lambda self, task, role, engine_name, prompt, model=None, max_turns=None: (
+        lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
             _completed_subagent_result(tmp_path, task.pipeline_status)
         ),
     )
@@ -5935,7 +5936,7 @@ def test_drain_task_pool_stops_on_first_failure(
     create_task(tmp_path, title="Failing task", engine="codex", auto_commit=False)
     create_task(tmp_path, title="Second task", auto_commit=False)
 
-    def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None):  # type: ignore[no-untyped-def]
+    def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None):  # type: ignore[no-untyped-def]
         if task.id == "T-0001":
             return SubagentResult(
                 ref=SubagentRef(
@@ -5981,7 +5982,7 @@ def test_drain_task_pool_stops_on_execution_limit(
     create_task(tmp_path, title="Limit task", engine="codex", auto_commit=False)
     create_task(tmp_path, title="Second task", auto_commit=False)
 
-    def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None):  # type: ignore[no-untyped-def]
+    def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None):  # type: ignore[no-untyped-def]
         if task.id == "T-0001":
             return SubagentResult(
                 ref=SubagentRef(
@@ -6028,7 +6029,7 @@ def test_drain_task_pool_stops_on_quota_threshold(
     create_task(tmp_path, title="Second limit task", engine="codex", auto_commit=False)
     create_task(tmp_path, title="Third task", auto_commit=False)
 
-    def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None):  # type: ignore[no-untyped-def]
+    def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None):  # type: ignore[no-untyped-def]
         if task.id in {"T-0001", "T-0002"}:
             return SubagentResult(
                 ref=SubagentRef(
@@ -6072,7 +6073,7 @@ def test_drain_task_pool_stops_on_budget_threshold(
     create_task(tmp_path, title="Budget task", engine="codex", auto_commit=False)
     create_task(tmp_path, title="Second task", auto_commit=False)
 
-    def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None):  # type: ignore[no-untyped-def]
+    def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None):  # type: ignore[no-untyped-def]
         if task.id == "T-0001":
             return SubagentResult(
                 ref=SubagentRef(
@@ -6132,7 +6133,7 @@ def test_drain_task_pool_stops_on_pool_usage_cap(
 
     monkeypatch.setattr(
         "litehive.runtime.SubagentManager.run",
-        lambda self, task, role, engine_name, prompt, model=None, max_turns=None: (
+        lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
             _completed_subagent_result(tmp_path, task.pipeline_status)
         ),
     )
@@ -6156,7 +6157,7 @@ def test_drain_task_pool_stops_on_pool_cost_cap(
 
     monkeypatch.setattr(
         "litehive.runtime.SubagentManager.run",
-        lambda self, task, role, engine_name, prompt, model=None, max_turns=None: (
+        lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
             _completed_subagent_result(tmp_path, task.pipeline_status)
         ),
     )
@@ -6184,7 +6185,7 @@ def test_run_next_task_skips_engine_when_usage_cap_is_exhausted(
     create_task(tmp_path, title="Fallback task", engine="codex", auto_commit=False)
     calls: list[str] = []
 
-    def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None):  # type: ignore[no-untyped-def]
+    def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None):  # type: ignore[no-untyped-def]
         calls.append(engine_name)
         return _completed_subagent_result(tmp_path, task.pipeline_status)
 
@@ -6474,7 +6475,7 @@ def test_drain_task_pool_skips_stale_queue_entries(
 
     monkeypatch.setattr(
         "litehive.runtime.SubagentManager.run",
-        lambda self, current_task, role, engine_name, prompt, model=None, max_turns=None: (
+        lambda self, current_task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
             _completed_subagent_result(tmp_path, current_task.pipeline_status)
         ),
     )
@@ -6511,7 +6512,7 @@ def test_drain_task_pool_skips_ineligible_active_and_queue_entries(
 
     monkeypatch.setattr(
         "litehive.runtime.SubagentManager.run",
-        lambda self, current_task, role, engine_name, prompt, model=None, max_turns=None: (
+        lambda self, current_task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
             _completed_subagent_result(tmp_path, current_task.pipeline_status)
         ),
     )
@@ -6571,7 +6572,7 @@ def test_drain_task_pool_stops_after_requeueing_interrupted_task(
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Halted task", auto_commit=False)
 
-    def fake_run(self, current_task, role, engine_name, prompt, model=None, max_turns=None):  # type: ignore[no-untyped-def]
+    def fake_run(self, current_task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None):  # type: ignore[no-untyped-def]
         if current_task.pipeline_status == "testing":
             raise KeyboardInterrupt()
         return _completed_subagent_result(tmp_path, current_task.pipeline_status)
@@ -6629,7 +6630,7 @@ def test_drain_task_pool_drains_active_task_without_queued_entries(
 
     monkeypatch.setattr(
         "litehive.runtime.SubagentManager.run",
-        lambda self, current_task, role, engine_name, prompt, model=None, max_turns=None: (
+        lambda self, current_task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
             _completed_subagent_result(tmp_path, current_task.pipeline_status)
         ),
     )
@@ -6661,7 +6662,7 @@ def test_drain_task_pool_stops_after_requeueing_review_rejection(
     state.queue = [queued.id]
     save_state(tmp_path, state)
 
-    def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None):  # type: ignore[no-untyped-def]
+    def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None):  # type: ignore[no-untyped-def]
         transcript = "\n".join(
             [
                 "VERDICT: PASS",
@@ -7852,7 +7853,7 @@ def test_drain_task_pool_uses_run_engine_override_for_execution(
     create_task(tmp_path, title="Pending task", engine="codex", auto_commit=False)
     seen_engines: list[str] = []
 
-    def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None):  # type: ignore[no-untyped-def]
+    def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None):  # type: ignore[no-untyped-def]
         seen_engines.append(engine_name)
         return _completed_subagent_result(tmp_path, task.pipeline_status)
 
@@ -7871,7 +7872,7 @@ def test_run_single_task_uses_run_engine_override_for_execution(
     create_task(tmp_path, title="Pending task", engine="codex", auto_commit=False)
     seen_engines: list[str] = []
 
-    def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None):  # type: ignore[no-untyped-def]
+    def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None):  # type: ignore[no-untyped-def]
         seen_engines.append(engine_name)
         return _completed_subagent_result(tmp_path, task.pipeline_status)
 
@@ -7899,7 +7900,7 @@ def test_run_single_task_model_precedence_uses_run_override_then_task_then_works
     )
     seen_models: list[str | None] = []
 
-    def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None):  # type: ignore[no-untyped-def]
+    def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None):  # type: ignore[no-untyped-def]
         seen_models.append(model)
         return _completed_subagent_result(tmp_path, task.pipeline_status)
 
@@ -7935,7 +7936,7 @@ def test_run_single_task_does_not_pass_model_override_to_codex(
     )
     seen_models: list[str | None] = []
 
-    def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None):  # type: ignore[no-untyped-def]
+    def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None):  # type: ignore[no-untyped-def]
         seen_models.append(model)
         return _completed_subagent_result(tmp_path, task.pipeline_status)
 
@@ -8003,7 +8004,7 @@ def test_drain_task_pool_wraps_pool_execution_behavior(
 
     monkeypatch.setattr(
         "litehive.runtime.SubagentManager.run",
-        lambda self, task, role, engine_name, prompt, model=None, max_turns=None: (
+        lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
             _completed_subagent_result(tmp_path, task.pipeline_status)
         ),
     )
@@ -8075,7 +8076,7 @@ def test_cmd_run_default_executes_single_task_and_reports_summary(
 
     monkeypatch.setattr(
         "litehive.runtime.SubagentManager.run",
-        lambda self, task, role, engine_name, prompt, model=None, max_turns=None: (
+        lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
             _completed_subagent_result(tmp_path, task.pipeline_status)
         ),
     )
@@ -8159,7 +8160,7 @@ def test_cmd_run_drains_task_pool_and_reports_summary(
 
     monkeypatch.setattr(
         "litehive.runtime.SubagentManager.run",
-        lambda self, task, role, engine_name, prompt, model=None, max_turns=None: (
+        lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
             _completed_subagent_result(tmp_path, task.pipeline_status)
         ),
     )
@@ -8389,7 +8390,7 @@ def test_cmd_run_reports_resumable_interrupted_tasks(
     create_task(tmp_path, title="Halted task", auto_commit=False)
     create_task(tmp_path, title="Pending follow-up", auto_commit=False)
 
-    def fake_run(self, current_task, role, engine_name, prompt, model=None, max_turns=None):  # type: ignore[no-untyped-def]
+    def fake_run(self, current_task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None):  # type: ignore[no-untyped-def]
         if current_task.pipeline_status == "testing":
             raise KeyboardInterrupt()
         return _completed_subagent_result(tmp_path, current_task.pipeline_status)
@@ -8419,7 +8420,7 @@ def test_run_next_task_marks_subagent_termination_as_interrupted(tmp_path: Path)
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Halted subagent task", auto_commit=False)
 
-    def fake_run(self, current_task, role, engine_name, prompt, model=None, max_turns=None):  # type: ignore[no-untyped-def]
+    def fake_run(self, current_task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None):  # type: ignore[no-untyped-def]
         if current_task.pipeline_status == "testing":
             return _interrupted_subagent_result(
                 tmp_path, current_task.pipeline_status, engine_name=engine_name
@@ -8465,7 +8466,7 @@ def test_cmd_run_reports_remaining_tasks_when_pool_stops_early(
 
     monkeypatch.setattr(
         "litehive.runtime.SubagentManager.run",
-        lambda self, task, role, engine_name, prompt, model=None, max_turns=None: (
+        lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
             _completed_subagent_result(tmp_path, task.pipeline_status)
         ),
     )
@@ -8538,7 +8539,7 @@ def test_cmd_run_drain_reports_no_useful_progress_after_requeue(
     state.queue = [queued.id]
     save_state(tmp_path, state)
 
-    def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None):  # type: ignore[no-untyped-def]
+    def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None):  # type: ignore[no-untyped-def]
         transcript = "\n".join(
             [
                 "VERDICT: PASS",
@@ -8616,7 +8617,7 @@ def test_cmd_run_reports_human_checkpoint_stop_without_marking_failure(
 
     monkeypatch.setattr(
         "litehive.runtime.SubagentManager.run",
-        lambda self, task, role, engine_name, prompt, model=None, max_turns=None: (
+        lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
             _completed_subagent_result(tmp_path, task.pipeline_status)
         ),
     )
@@ -8655,7 +8656,7 @@ def test_cmd_run_reports_requeued_task_even_when_other_tasks_are_blocked(
     state.queue = [blocked.id]
     save_state(tmp_path, state)
 
-    def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None):  # type: ignore[no-untyped-def]
+    def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None):  # type: ignore[no-untyped-def]
         transcript = "\n".join(
             [
                 "VERDICT: PASS",
@@ -8759,7 +8760,7 @@ def test_cmd_run_reports_stage_outcomes_for_remaining_task_with_prior_reports(
 
     monkeypatch.setattr(
         "litehive.runtime.SubagentManager.run",
-        lambda self, task, role, engine_name, prompt, model=None, max_turns=None: (
+        lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
             _completed_subagent_result(tmp_path, task.pipeline_status)
         ),
     )
@@ -11269,7 +11270,7 @@ def test_resume_run_uses_structured_continuation_handoff_after_interruption(
 
     prompts: list[str] = []
 
-    def fake_run(self, current_task, role, engine_name, prompt, model=None, max_turns=None):  # type: ignore[no-untyped-def]
+    def fake_run(self, current_task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None):  # type: ignore[no-untyped-def]
         if current_task.pipeline_status == "testing":
             prompts.append(prompt)
         return _completed_subagent_result(
@@ -12824,7 +12825,7 @@ def test_run_task_skips_pre_acceptance_hook_when_not_configured(
 
     monkeypatch.setattr(
         "litehive.runtime.SubagentManager.run",
-        lambda self, task, role, engine_name, prompt, model=None, max_turns=None: (
+        lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
             _completed_subagent_result(  # type: ignore[no-untyped-def]
                 tmp_path, task.pipeline_status
             )
@@ -12861,7 +12862,7 @@ def test_run_next_task_records_structured_resource_limit_outcome(
 
     monkeypatch.setattr(
         "litehive.runtime.SubagentManager.run",
-        lambda self, task, role, engine_name, prompt, model=None, max_turns=None: (
+        lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
             _resource_limited_subagent_result(  # type: ignore[no-untyped-def]
                 tmp_path, "grooming", engine_name=engine_name
             )
@@ -12937,7 +12938,7 @@ def test_run_task_runs_pre_acceptance_hook_after_testing_passes(
     calls: list[str] = []
     real_run = subprocess.run
 
-    def fake_subagent_run(self, task, role, engine_name, prompt, model=None, max_turns=None):  # type: ignore[no-untyped-def]
+    def fake_subagent_run(self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None):  # type: ignore[no-untyped-def]
         calls.append(task.pipeline_status)
         return _completed_subagent_result(tmp_path, task.pipeline_status)
 
@@ -12992,7 +12993,7 @@ def test_run_task_blocks_before_accepting_when_pre_acceptance_hook_fails(
     create_task(tmp_path, title="Block on failing ruff", auto_commit=False)
     calls: list[str] = []
 
-    def fake_subagent_run(self, task, role, engine_name, prompt, model=None, max_turns=None):  # type: ignore[no-untyped-def]
+    def fake_subagent_run(self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None):  # type: ignore[no-untyped-def]
         calls.append(task.pipeline_status)
         return _completed_subagent_result(tmp_path, task.pipeline_status)
 
@@ -13042,7 +13043,7 @@ def test_run_task_records_non_blocking_runner_hook_failure_and_continues(
     create_task(tmp_path, title="Warn on hook failure", auto_commit=False)
     calls: list[str] = []
 
-    def fake_subagent_run(self, task, role, engine_name, prompt, model=None, max_turns=None):  # type: ignore[no-untyped-def]
+    def fake_subagent_run(self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None):  # type: ignore[no-untyped-def]
         calls.append(task.pipeline_status)
         return _completed_subagent_result(tmp_path, task.pipeline_status)
 
@@ -13089,7 +13090,7 @@ def test_run_task_blocks_when_post_implementation_runner_hook_fails(
     create_task(tmp_path, title="Block on post-implementation hook", auto_commit=False)
     calls: list[str] = []
 
-    def fake_subagent_run(self, task, role, engine_name, prompt, model=None, max_turns=None):  # type: ignore[no-untyped-def]
+    def fake_subagent_run(self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None):  # type: ignore[no-untyped-def]
         calls.append(task.pipeline_status)
         return _completed_subagent_result(tmp_path, task.pipeline_status)
 
@@ -13135,7 +13136,7 @@ def test_run_task_runs_after_acceptance_runner_hook_on_accept(
     )
     create_task(tmp_path, title="Run after acceptance hook", auto_commit=False)
 
-    def fake_subagent_run(self, task, role, engine_name, prompt, model=None, max_turns=None):  # type: ignore[no-untyped-def]
+    def fake_subagent_run(self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None):  # type: ignore[no-untyped-def]
         return _completed_subagent_result(tmp_path, task.pipeline_status)
 
     def fake_hook(argv, cwd, capture_output, text, check):  # type: ignore[no-untyped-def]
@@ -13341,7 +13342,7 @@ def test_run_next_task_uses_routing_plan_before_global_fallbacks_when_budget_blo
     ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
     create_task(tmp_path, title="Research engine quota behavior", auto_commit=False)
 
-    def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None):  # type: ignore[no-untyped-def]
+    def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None):  # type: ignore[no-untyped-def]
         assert engine_name == "codex"
         return _completed_subagent_result(tmp_path, task.pipeline_status)
 
@@ -13756,7 +13757,7 @@ def test_run_next_task_retries_retryable_execution_failure_before_continuing(
     attempts: list[tuple[str, str]] = []
     grooming_attempts = 0
 
-    def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None):  # type: ignore[no-untyped-def]
+    def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None):  # type: ignore[no-untyped-def]
         nonlocal grooming_attempts
         step = task.pipeline_status
         attempts.append((engine_name, step))
@@ -13845,7 +13846,7 @@ def test_run_next_task_reuses_structured_continuation_handoff_on_retry(
     prompts: list[str] = []
     grooming_attempts = 0
 
-    def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None):  # type: ignore[no-untyped-def]
+    def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None):  # type: ignore[no-untyped-def]
         nonlocal grooming_attempts
         step = task.pipeline_status
         if step == "grooming":
@@ -13914,7 +13915,7 @@ def test_run_next_task_passes_structured_continuation_handoff_across_engine_swit
 
     prompts_by_engine: list[tuple[str, str]] = []
 
-    def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None):  # type: ignore[no-untyped-def]
+    def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None):  # type: ignore[no-untyped-def]
         step = task.pipeline_status
         if step == "grooming":
             prompts_by_engine.append((engine_name, prompt))
@@ -13980,7 +13981,7 @@ def test_run_next_task_uses_default_opencode_retry_policy_and_records_journal(
     attempts: list[tuple[str, str]] = []
     grooming_attempts = 0
 
-    def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None):  # type: ignore[no-untyped-def]
+    def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None):  # type: ignore[no-untyped-def]
         nonlocal grooming_attempts
         step = task.pipeline_status
         attempts.append((engine_name, step))
@@ -14064,7 +14065,7 @@ def test_run_next_task_uses_default_gemini_retry_policy_and_records_journal(
     attempts: list[tuple[str, str]] = []
     grooming_attempts = 0
 
-    def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None):  # type: ignore[no-untyped-def]
+    def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None):  # type: ignore[no-untyped-def]
         nonlocal grooming_attempts
         step = task.pipeline_status
         attempts.append((engine_name, step))
@@ -14154,7 +14155,7 @@ def test_run_next_task_uses_default_claude_retry_policy_and_records_journal(
     attempts: list[tuple[str, str]] = []
     grooming_attempts = 0
 
-    def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None):  # type: ignore[no-untyped-def]
+    def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None):  # type: ignore[no-untyped-def]
         nonlocal grooming_attempts
         step = task.pipeline_status
         attempts.append((engine_name, step))
@@ -14258,7 +14259,7 @@ def test_run_next_task_uses_codex_retry_policy_before_external_cli_fallback(
     attempts: list[tuple[str, str]] = []
     codex_attempts = 0
 
-    def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None):  # type: ignore[no-untyped-def]
+    def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None):  # type: ignore[no-untyped-def]
         nonlocal codex_attempts
         step = task.pipeline_status
         attempts.append((engine_name, step))
@@ -14354,7 +14355,7 @@ def test_run_next_task_falls_back_after_retry_exhaustion(
 
     attempts: list[tuple[str, str]] = []
 
-    def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None):  # type: ignore[no-untyped-def]
+    def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None):  # type: ignore[no-untyped-def]
         step = task.pipeline_status
         attempts.append((engine_name, step))
         if engine_name == "opencode":
@@ -14450,7 +14451,7 @@ def test_run_next_task_does_not_retry_codex_usage_limit_when_codex_policy_is_con
 
     attempts: list[tuple[str, str]] = []
 
-    def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None):  # type: ignore[no-untyped-def]
+    def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None):  # type: ignore[no-untyped-def]
         step = task.pipeline_status
         attempts.append((engine_name, step))
         if engine_name == "opencode":
@@ -14527,7 +14528,7 @@ def test_run_next_task_skips_retries_for_non_retryable_failure(
 
     attempts: list[tuple[str, str]] = []
 
-    def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None):  # type: ignore[no-untyped-def]
+    def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None):  # type: ignore[no-untyped-def]
         step = task.pipeline_status
         attempts.append((engine_name, step))
         return SubagentResult(
@@ -14657,7 +14658,7 @@ def test_run_next_task_creates_checkpoint_commit_and_persists_policy(
 
     monkeypatch.setattr(
         "litehive.runtime.SubagentManager.run",
-        lambda self, task, role, engine_name, prompt, model=None, max_turns=None: (
+        lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
             _completed_subagent_result(tmp_path, task.pipeline_status)
         ),
     )
@@ -14696,7 +14697,7 @@ def test_run_next_task_executes_stage_in_task_worktree(
     create_task(tmp_path, title="Run in worktree", auto_commit=False)
     seen_execution_roots: list[Path] = []
 
-    def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None):  # type: ignore[no-untyped-def]
+    def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None):  # type: ignore[no-untyped-def]
         seen_execution_roots.append(self.execution_root)
         result = _completed_subagent_result(tmp_path, task.pipeline_status, engine_name=engine_name)
         if task.pipeline_status == "implementing":
@@ -14725,7 +14726,7 @@ def test_run_next_task_keeps_using_task_worktree_when_main_checkout_is_dirty(
     (tmp_path / "README.md").write_text("main checkout dirt\n", encoding="utf-8")
     seen_execution_roots: list[Path] = []
 
-    def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None):  # type: ignore[no-untyped-def]
+    def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None):  # type: ignore[no-untyped-def]
         seen_execution_roots.append(self.execution_root)
         result = _completed_subagent_result(tmp_path, task.pipeline_status, engine_name=engine_name)
         if task.pipeline_status == "implementing":
@@ -14753,7 +14754,7 @@ def test_run_next_task_cherry_picks_task_commit_back_to_main(
     ensure_workspace(tmp_path)
     create_task(tmp_path, title="Cherry-pick worktree commit")
 
-    def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None):  # type: ignore[no-untyped-def]
+    def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None):  # type: ignore[no-untyped-def]
         result = _completed_subagent_result(tmp_path, task.pipeline_status, engine_name=engine_name)
         if task.pipeline_status == "implementing":
             assert (tmp_path / "app.txt").read_text(encoding="utf-8") == "base\n"
@@ -14800,7 +14801,7 @@ def test_run_next_task_appends_attempt_suffix_after_rollback(
 
     monkeypatch.setattr(
         "litehive.runtime.SubagentManager.run",
-        lambda self, task, role, engine_name, prompt, model=None, max_turns=None: (
+        lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
             _completed_subagent_result(tmp_path, task.pipeline_status)
         ),
     )
@@ -14837,18 +14838,18 @@ def test_run_next_task_preserves_future_task_added_during_commit_failure(
 
     monkeypatch.setattr(
         "litehive.runtime.SubagentManager.run",
-        lambda self, task, role, engine_name, prompt, model=None, max_turns=None: (
+        lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
             _completed_subagent_result(tmp_path, task.pipeline_status)
         ),
     )
 
-    def fail_commit_with_concurrent_add(
-        root: Path, message: str, *, paths: list[str] | None = None
-    ) -> None:
+    def fail_merge_with_concurrent_add(
+        root: Path, execution_root: Path, message: str, **kwargs,
+    ) -> str:
         create_task(tmp_path, title="Added during commit failure", auto_commit=False)
-        raise GitError("simulated commit failure")
+        raise GitError("simulated merge failure")
 
-    monkeypatch.setattr("litehive.runtime.commit_task", fail_commit_with_concurrent_add)
+    monkeypatch.setattr("litehive.runtime._merge_worktree_into_main", fail_merge_with_concurrent_add)
 
     summary = run_next_task(tmp_path)
 
@@ -14878,7 +14879,7 @@ def test_run_next_task_flags_task_when_commit_stage_prerequisite_is_missing(
 
     monkeypatch.setattr(
         "litehive.runtime.SubagentManager.run",
-        lambda self, task, role, engine_name, prompt, model=None, max_turns=None: (
+        lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
             _completed_subagent_result(tmp_path, task.pipeline_status)
         ),
     )
@@ -14904,7 +14905,7 @@ def test_run_next_task_records_blocked_reason_code_when_fallbacks_are_exhausted(
     ensure_workspace(tmp_path)
     create_task(tmp_path, title="Exhausted fallback task", engine="codex", auto_commit=False)
 
-    def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None):  # type: ignore[no-untyped-def]
+    def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None):  # type: ignore[no-untyped-def]
         return SubagentResult(
             ref=SubagentRef(
                 id=f"SA-{role}-{engine_name}",
@@ -14962,7 +14963,7 @@ def test_run_next_task_skips_commit_stage_when_auto_commit_disabled(
 
     monkeypatch.setattr(
         "litehive.runtime.SubagentManager.run",
-        lambda self, task, role, engine_name, prompt, model=None, max_turns=None: (
+        lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
             _completed_subagent_result(tmp_path, task.pipeline_status)
         ),
     )
@@ -14990,7 +14991,7 @@ def test_run_next_task_skips_commit_stage_when_workspace_auto_commit_disabled(
 
     monkeypatch.setattr(
         "litehive.runtime.SubagentManager.run",
-        lambda self, task, role, engine_name, prompt, model=None, max_turns=None: (
+        lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
             _completed_subagent_result(tmp_path, task.pipeline_status)
         ),
     )
@@ -15019,7 +15020,7 @@ def test_run_next_task_flags_task_when_repo_has_unrelated_dirty_changes(
 
     monkeypatch.setattr(
         "litehive.runtime.SubagentManager.run",
-        lambda self, task, role, engine_name, prompt, model=None, max_turns=None: (
+        lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
             _completed_subagent_result(tmp_path, task.pipeline_status)
         ),
     )
@@ -15046,7 +15047,7 @@ def test_run_next_task_flags_task_when_other_task_state_is_dirty(
 
     monkeypatch.setattr(
         "litehive.runtime.SubagentManager.run",
-        lambda self, task, role, engine_name, prompt, model=None, max_turns=None: (
+        lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
             _completed_subagent_result(tmp_path, task.pipeline_status)
         ),
     )
@@ -15085,7 +15086,7 @@ def test_rollback_command_requeues_checkpointed_task(
 
     monkeypatch.setattr(
         "litehive.runtime.SubagentManager.run",
-        lambda self, task, role, engine_name, prompt, model=None, max_turns=None: (
+        lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
             _completed_subagent_result(tmp_path, task.pipeline_status)
         ),
     )
@@ -15126,7 +15127,7 @@ def test_recover_command_requeues_completed_task_without_revert(
 
     monkeypatch.setattr(
         "litehive.runtime.SubagentManager.run",
-        lambda self, task, role, engine_name, prompt, model=None, max_turns=None: (
+        lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
             _completed_subagent_result(tmp_path, task.pipeline_status)
         ),
     )
@@ -15160,7 +15161,7 @@ def test_recover_completed_task_clears_checkpoint_pointer_and_next_run_uses_next
 
     monkeypatch.setattr(
         "litehive.runtime.SubagentManager.run",
-        lambda self, task, role, engine_name, prompt, model=None, max_turns=None: (
+        lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
             _completed_subagent_result(tmp_path, task.pipeline_status)
         ),
     )
@@ -15328,7 +15329,7 @@ def test_drain_task_pool_recovers_stranded_commit_stage_before_new_work(
 
     monkeypatch.setattr(
         "litehive.runtime.SubagentManager.run",
-        lambda self, task, role, engine_name, prompt, model=None, max_turns=None: (
+        lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
             _completed_subagent_result(tmp_path, task.pipeline_status)
         ),
     )
@@ -15464,7 +15465,7 @@ def test_commit_to_git_cherry_picks_when_main_moved_after_worktree_started(tmp_p
 
     report = _commit_to_git_report(tmp_path, worktree_path, task, auto_commit_enabled=True)
 
-    assert report.verdict == "pass"
+    assert report.verdict == "pass", f"commit_to_git failed: {report.summary}"
     assert task.git.commit_sha is not None
     assert task.git.checkpoint_base_sha == moved_sha
     assert _run(["git", "rev-parse", "HEAD^"], tmp_path) == moved_sha
@@ -15993,7 +15994,7 @@ def test_rollback_completed_task_restores_state_when_rollback_commit_fails(
 
     monkeypatch.setattr(
         "litehive.runtime.SubagentManager.run",
-        lambda self, task, role, engine_name, prompt, model=None, max_turns=None: (
+        lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
             _completed_subagent_result(tmp_path, task.pipeline_status)
         ),
     )
@@ -16033,7 +16034,7 @@ def test_rollback_completed_task_restores_state_when_atomic_state_persist_fails(
 
     monkeypatch.setattr(
         "litehive.runtime.SubagentManager.run",
-        lambda self, task, role, engine_name, prompt, model=None, max_turns=None: (
+        lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
             _completed_subagent_result(tmp_path, task.pipeline_status)
         ),
     )
@@ -16074,7 +16075,7 @@ def test_rollback_completed_task_restores_state_when_task_persist_fails(
 
     monkeypatch.setattr(
         "litehive.runtime.SubagentManager.run",
-        lambda self, task, role, engine_name, prompt, model=None, max_turns=None: (
+        lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
             _completed_subagent_result(tmp_path, task.pipeline_status)
         ),
     )
@@ -16113,7 +16114,7 @@ def test_rollback_completed_task_restores_state_when_runtime_persist_fails(
 
     monkeypatch.setattr(
         "litehive.runtime.SubagentManager.run",
-        lambda self, task, role, engine_name, prompt, model=None, max_turns=None: (
+        lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
             _completed_subagent_result(tmp_path, task.pipeline_status)
         ),
     )
@@ -16159,7 +16160,7 @@ def test_recover_command_reroutes_large_task_without_acceptance_criteria_to_groo
 
     monkeypatch.setattr(
         "litehive.runtime.SubagentManager.run",
-        lambda self, task, role, engine_name, prompt, model=None, max_turns=None: (
+        lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
             _completed_subagent_result(tmp_path, task.pipeline_status)
         ),
     )
@@ -16212,7 +16213,7 @@ def test_recover_requires_completed_task(
     assert "is not completed; cannot recover" in output
 
 
-def test_claude_build_invocation_includes_model_and_max_turns(tmp_path: Path) -> None:
+def test_claude_build_invocation_includes_model_and_resume(tmp_path: Path) -> None:
     from litehive.engines import ClaudeCLIAdapter
 
     adapter = ClaudeCLIAdapter(
@@ -16223,7 +16224,6 @@ def test_claude_build_invocation_includes_model_and_max_turns(tmp_path: Path) ->
             strips_environment=False,
             transcript_format="jsonl",
         ),
-        max_turns=15,
     )
     invocation = adapter.build_invocation(
         "ship it",
@@ -16243,12 +16243,32 @@ def test_claude_build_invocation_includes_model_and_max_turns(tmp_path: Path) ->
         "--dangerously-skip-permissions",
         "--model",
         "claude-sonnet-4-20250514",
-        "--max-turns",
-        "15",
+    ]
+
+    invocation_resumed = adapter.build_invocation(
+        "continue please",
+        tmp_path,
+        model="claude-sonnet-4-20250514",
+        resume_session_id="abc-123",
+    )
+
+    assert list(invocation_resumed.argv) == [
+        "claude",
+        "--resume",
+        "abc-123",
+        "-p",
+        "continue please",
+        "--output-format",
+        "stream-json",
+        "--include-partial-messages",
+        "--verbose",
+        "--dangerously-skip-permissions",
+        "--model",
+        "claude-sonnet-4-20250514",
     ]
 
 
-def test_claude_default_max_turns_is_75(tmp_path: Path) -> None:
+def test_claude_no_max_turns_by_default(tmp_path: Path) -> None:
     from litehive.engines import ClaudeCLIAdapter
 
     adapter = ClaudeCLIAdapter(
@@ -16262,12 +16282,10 @@ def test_claude_default_max_turns_is_75(tmp_path: Path) -> None:
     )
     invocation = adapter.build_invocation("hello", tmp_path)
 
-    assert "--max-turns" in invocation.argv
-    idx = list(invocation.argv).index("--max-turns")
-    assert list(invocation.argv)[idx + 1] == "75"
+    assert "--max-turns" not in invocation.argv
 
 
-def test_claude_build_invocation_allows_max_turn_override(tmp_path: Path) -> None:
+def test_claude_build_invocation_includes_max_turns(tmp_path: Path) -> None:
     from litehive.engines import ClaudeCLIAdapter
 
     adapter = ClaudeCLIAdapter(
@@ -16278,7 +16296,6 @@ def test_claude_build_invocation_allows_max_turn_override(tmp_path: Path) -> Non
             strips_environment=False,
             transcript_format="jsonl",
         ),
-        max_turns=30,
     )
     invocation = adapter.build_invocation("hello", tmp_path, max_turns=7)
 
@@ -16294,7 +16311,7 @@ def test_run_next_task_passes_configured_claude_max_turns(
     create_task(tmp_path, title="Claude max turns task", engine="claude", auto_commit=False)
     calls: list[int | None] = []
 
-    def fake_run(self, prompt, cwd, model=None, max_turns=None):  # type: ignore[no-untyped-def]
+    def fake_run(self, prompt, cwd, model=None, max_turns=None, resume_session_id=None):  # type: ignore[no-untyped-def]
         calls.append(max_turns)
         return CLIExecutionResult(
             adapter="claude",
@@ -16549,7 +16566,7 @@ def test_claude_is_not_default_engine() -> None:
 def test_claude_config_defaults_to_sonnet() -> None:
     config = LitehiveConfig(claude_enabled=True)
     assert config.claude_model == "claude-sonnet-4-20250514"
-    assert config.claude_max_turns == 30
+    assert config.claude_max_turns == 100
 
 
 def test_claude_not_in_engine_fallbacks() -> None:

@@ -14,12 +14,15 @@ import selectors
 import time
 from typing import Callable, Literal
 
+from pydantic import ValidationError
+
 from litehive.models import (
     EngineUsageObservation,
     FollowUpTaskSpec,
     LiveEvent,
     LiveTimeline,
     StageReport,
+    StageResultSubmission,
     SubagentStatus,
     utcnow,
 )
@@ -134,6 +137,7 @@ class ExternalCLIAdapter:
         model: str | None = None,
         *,
         max_turns: int | None = None,
+        resume_session_id: str | None = None,
     ) -> list[str]:
         raise NotImplementedError
 
@@ -144,12 +148,16 @@ class ExternalCLIAdapter:
         model: str | None = None,
         *,
         max_turns: int | None = None,
+        resume_session_id: str | None = None,
     ) -> CLIInvocation:
         env = os.environ.copy()
         for key in self.stripped_env_vars:
             env.pop(key, None)
         return CLIInvocation(
-            argv=tuple(self.build_command(prompt, cwd, model=model, max_turns=max_turns)),
+            argv=tuple(self.build_command(
+                prompt, cwd, model=model, max_turns=max_turns,
+                resume_session_id=resume_session_id,
+            )),
             cwd=cwd,
             env=env,
         )
@@ -167,10 +175,12 @@ class ExternalCLIAdapter:
         model: str | None = None,
         *,
         max_turns: int | None = None,
+        resume_session_id: str | None = None,
         on_started: Callable[[int], None] | None = None,
     ) -> CLIExecutionResult:
         invocation = self.finalize_invocation(
-            self.build_invocation(prompt, cwd, model=model, max_turns=max_turns)
+            self.build_invocation(prompt, cwd, model=model, max_turns=max_turns,
+                                  resume_session_id=resume_session_id)
         )
         sandboxed, sandbox_summary = self.sandbox_details()
         proc = subprocess.Popen(
@@ -203,11 +213,13 @@ class ExternalCLIAdapter:
         model: str | None = None,
         *,
         max_turns: int | None = None,
+        resume_session_id: str | None = None,
         on_started: Callable[[int], None] | None = None,
         on_update: Callable[[CLIExecutionResult], None] | None = None,
     ) -> CLIExecutionResult:
         invocation = self.finalize_invocation(
-            self.build_invocation(prompt, cwd, model=model, max_turns=max_turns)
+            self.build_invocation(prompt, cwd, model=model, max_turns=max_turns,
+                                  resume_session_id=resume_session_id)
         )
         sandboxed, sandbox_summary = self.sandbox_details()
         proc = subprocess.Popen(
@@ -457,6 +469,27 @@ def parse_stage_report_text(
     transcript: str,
     subagent_status: SubagentStatus,
 ) -> StageReport:
+    # Prefer schema-validated structured submission when present.
+    submission = _extract_stage_result_submission(transcript)
+    if isinstance(submission, StageResultSubmission):
+        return StageReport(
+            task_id=task_id,
+            step=step,
+            verdict=submission.verdict,  # type: ignore[arg-type]
+            summary=submission.summary,
+            feedback=transcript,
+            files_changed=submission.files_changed,
+            follow_up_tasks=submission.follow_up_tasks,
+            tests={"added": submission.tests.added, "passing": submission.tests.passing},
+            warnings=submission.warnings,
+        )
+
+    # Structured submission present but invalid — fall back to text parsing
+    # and attach validation warnings.
+    validation_warnings: list[str] = []
+    if isinstance(submission, ValidationError):
+        validation_warnings = _format_stage_result_validation_errors(submission)
+
     follow_up_tasks, follow_up_warnings = _extract_follow_up_tasks(transcript)
     summary = _extract_line(transcript, "SUMMARY") or (
         transcript.splitlines()[0] if transcript else f"{step} completed"
@@ -473,7 +506,7 @@ def parse_stage_report_text(
             "added": _extract_int(transcript, "TESTS_ADDED"),
             "passing": _extract_int(transcript, "TESTS_PASSING"),
         },
-        warnings=[*_extract_list(transcript, "WARNINGS"), *follow_up_warnings],
+        warnings=[*validation_warnings, *_extract_list(transcript, "WARNINGS"), *follow_up_warnings],
     )
 
 
@@ -589,6 +622,42 @@ def _extract_section_block(text: str, key: str) -> str | None:
             lines.append(line)
     block = "\n".join(lines).strip()
     return block or None
+
+
+def _extract_stage_result_submission(
+    text: str,
+) -> StageResultSubmission | ValidationError | None:
+    """Extract and validate a ``STAGE_RESULT:`` JSON block from transcript text.
+
+    Returns the validated model on success, a ``ValidationError`` when the JSON
+    is present but invalid, or ``None`` when no ``STAGE_RESULT:`` block exists.
+    """
+    section = _extract_section_block(text, "STAGE_RESULT")
+    if section is None:
+        return None
+    try:
+        payload = json.loads(section)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(payload, dict):
+        return None
+    # Normalise verdict to lowercase before validation.
+    verdict = payload.get("verdict")
+    if isinstance(verdict, str):
+        payload["verdict"] = verdict.strip().lower()
+    try:
+        return StageResultSubmission.model_validate(payload)
+    except ValidationError as exc:
+        return exc
+
+
+def _format_stage_result_validation_errors(exc: ValidationError) -> list[str]:
+    """Convert a Pydantic ``ValidationError`` into human-readable warning lines."""
+    warnings: list[str] = []
+    for error in exc.errors():
+        loc = " -> ".join(str(part) for part in error["loc"]) if error["loc"] else "(root)"
+        warnings.append(f"STAGE_RESULT validation: {loc}: {error['msg']}")
+    return warnings
 
 
 def _parse_verdict(text: str, subagent_status: SubagentStatus) -> str:

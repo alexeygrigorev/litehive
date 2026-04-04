@@ -152,6 +152,7 @@ class SubagentManager:
         prompt: str,
         model: str | None = None,
         max_turns: int | None = None,
+        resume_session_id: str | None = None,
     ) -> SubagentResult:
         subagent_id = self._next_subagent_id(task)
         folder_name = f"{subagent_id}-{role}"
@@ -193,40 +194,29 @@ class SubagentManager:
                         execution,
                     ),
                 }
+                if resume_session_id:
+                    live_kwargs["resume_session_id"] = resume_session_id
                 if _supports_live_on_started(engine):
                     live_kwargs["on_started"] = lambda pid: self._record_subagent_pid(
                         task, base, ref, pid
                     )
-                if max_turns is None:
-                    proc = engine.run_live(prompt, **live_kwargs)
-                else:
-                    proc = engine.run_live(prompt, max_turns=max_turns, **live_kwargs)
-            elif max_turns is None:
-                if _supports_on_started(engine):
-                    proc = engine.run(
-                        prompt,
-                        cwd=self.execution_root,
-                        model=model,
-                        on_started=lambda pid: self._record_subagent_pid(task, base, ref, pid),
-                    )
-                else:
-                    proc = engine.run(prompt, cwd=self.execution_root, model=model)
+                if max_turns is not None:
+                    live_kwargs["max_turns"] = max_turns
+                proc = engine.run_live(prompt, **live_kwargs)
             else:
+                run_kwargs: dict[str, object] = {
+                    "cwd": self.execution_root,
+                    "model": model,
+                }
+                if resume_session_id:
+                    run_kwargs["resume_session_id"] = resume_session_id
+                if max_turns is not None:
+                    run_kwargs["max_turns"] = max_turns
                 if _supports_on_started(engine):
-                    proc = engine.run(
-                        prompt,
-                        cwd=self.execution_root,
-                        model=model,
-                        max_turns=max_turns,
-                        on_started=lambda pid: self._record_subagent_pid(task, base, ref, pid),
+                    run_kwargs["on_started"] = lambda pid: self._record_subagent_pid(
+                        task, base, ref, pid
                     )
-                else:
-                    proc = engine.run(
-                        prompt,
-                        cwd=self.execution_root,
-                        model=model,
-                        max_turns=max_turns,
-                    )
+                proc = engine.run(prompt, **run_kwargs)
             transcript = engine.render_transcript(proc)
             continuation = extract_engine_continuation(ref.engine, proc)
             ref.status = "completed" if proc.exit_code == 0 else "failed"
@@ -787,8 +777,12 @@ class _SandboxedAdapter(ExternalCLIAdapter):
         model: str | None = None,
         *,
         max_turns: int | None = None,
+        resume_session_id: str | None = None,
     ) -> list[str]:
-        return self._adapter.build_command(prompt, cwd, model=model, max_turns=max_turns)
+        return self._adapter.build_command(
+            prompt, cwd, model=model, max_turns=max_turns,
+            resume_session_id=resume_session_id,
+        )
 
     def detect_capabilities(self):
         return self._adapter.detect_capabilities()
@@ -1041,6 +1035,14 @@ def stage_prompt(
             "TESTS_PASSING: <integer>",
             "WARNINGS:",
             "- optional warning",
+            "",
+            "Preferred: emit a schema-validated JSON block instead of the text above.",
+            "Place the JSON on the line(s) after `STAGE_RESULT:`.",
+            "STAGE_RESULT:",
+            '{"verdict":"pass","summary":"one-line summary","files_changed":["path/to/file"],'
+            '"tests":{"added":0,"passing":0},"warnings":[],'
+            '"follow_up_tasks":[],"acceptance_criteria":[]}',
+            "The text format above is still accepted as a fallback.",
         ]
     )
     if step in {"grooming", "accepting"}:

@@ -18,15 +18,12 @@ from litehive.git_ops import (
     GitError,
     add_worktree,
     abort_revert,
-    cherry_pick_commit,
     checkpoint_message,
     commit_task,
     current_head,
     find_commit_by_subject,
     has_changes,
-    is_ancestor,
     is_git_repo,
-    merge_commit,
     rebase_worktree_onto,
     remove_worktree,
     rollback_message,
@@ -493,11 +490,124 @@ def _cleanup_task_worktree(root: Path, task: TaskRecord) -> None:
     save_task(root, task)
 
 
-def _integrate_task_commit(root: Path, base_sha: str | None, commit_sha: str) -> str:
-    head_sha = current_head(root)
-    if head_sha == base_sha and head_sha is not None and is_ancestor(root, head_sha, commit_sha):
-        return merge_commit(root, commit_sha)
-    return cherry_pick_commit(root, commit_sha)
+def _commit_all_in_worktree(execution_root: Path, message: str) -> str | None:
+    """Stage everything and commit in the worktree. Returns commit SHA or None."""
+    subprocess.run(
+        ["git", "add", "-A"],
+        cwd=execution_root,
+        capture_output=True,
+        text=True,
+    )
+    proc = subprocess.run(
+        ["git", "commit", "-m", message, "--allow-empty"],
+        cwd=execution_root,
+        capture_output=True,
+        text=True,
+    )
+    if proc.returncode != 0:
+        return None
+    return current_head(execution_root)
+
+
+def _merge_worktree_into_main(
+    root: Path,
+    execution_root: Path,
+    message: str,
+    *,
+    subagents: SubagentManager | None = None,
+    task: TaskRecord | None = None,
+    config: LitehiveConfig | None = None,
+) -> str:
+    """Merge the worktree HEAD into main. On conflict, run an agent to resolve."""
+    wt_head = current_head(execution_root)
+    if wt_head is None:
+        raise GitError("worktree HEAD could not be resolved")
+    proc = subprocess.run(
+        ["git", "merge", wt_head, "-m", message, "--no-edit"],
+        cwd=root,
+        capture_output=True,
+        text=True,
+    )
+    if proc.returncode == 0:
+        head = current_head(root)
+        if head is None:
+            raise GitError("merge completed but HEAD could not be resolved")
+        return head
+
+    # Merge failed — try agent-assisted resolution
+    if subagents is None or task is None:
+        subprocess.run(["git", "merge", "--abort"], cwd=root, capture_output=True)
+        raise GitError(
+            f"merge of worktree into main failed with conflicts: {proc.stderr.strip()}"
+        )
+
+    # Leave conflict markers in place and let an agent resolve them
+    conflict_files = _list_conflict_files(root)
+    if not conflict_files:
+        subprocess.run(["git", "merge", "--abort"], cwd=root, capture_output=True)
+        raise GitError(f"merge failed but no conflict files found: {proc.stderr.strip()}")
+
+    append_journal(
+        root,
+        task,
+        f"CommitToGit merge conflict on {len(conflict_files)} file(s): {', '.join(conflict_files)}. "
+        "Launching merge resolution agent.",
+    )
+
+    prompt = (
+        f"There is a git merge conflict in this repository.\n"
+        f"Conflicting files: {', '.join(conflict_files)}\n\n"
+        f"The merge is in progress. The conflict markers (<<<<<<< ======= >>>>>>>) "
+        f"are in the files listed above.\n\n"
+        f"Task context: {task.title}\n"
+        f"Goal: {task.goal or 'not specified'}\n\n"
+        f"Instructions:\n"
+        f"1. Read each conflicting file\n"
+        f"2. Resolve the conflicts by keeping the correct code (prefer the incoming changes "
+        f"from the task worktree unless they break existing functionality)\n"
+        f"3. Remove all conflict markers\n"
+        f"4. Run: git add <resolved-file> for each file\n"
+        f"5. Run: git commit --no-edit to complete the merge\n"
+        f"6. Do NOT modify any files beyond resolving the conflicts\n"
+    )
+
+    engine_name = task.engine or (config.default_engine if config else "codex")
+    model_name = resolve_model(task, config, engine_name=engine_name) if config else None
+    result = subagents.run(
+        task,
+        role="merge-resolver",
+        engine_name=engine_name,
+        prompt=prompt,
+        model=model_name,
+    )
+
+    # Check if the agent resolved the merge
+    remaining_conflicts = _list_conflict_files(root)
+    if remaining_conflicts:
+        subprocess.run(["git", "merge", "--abort"], cwd=root, capture_output=True)
+        raise GitError(
+            f"merge agent failed to resolve conflicts in: {', '.join(remaining_conflicts)}"
+        )
+
+    head = current_head(root)
+    if head is None:
+        raise GitError("merge completed but HEAD could not be resolved")
+
+    append_journal(root, task, "Merge conflicts resolved by agent.")
+    return head
+
+
+def _list_conflict_files(root: Path) -> list[str]:
+    """List files with unresolved merge conflicts."""
+    proc = subprocess.run(
+        ["git", "diff", "--name-only", "--diff-filter=U"],
+        cwd=root,
+        capture_output=True,
+        text=True,
+    )
+    if proc.returncode != 0:
+        return []
+    return [f.strip() for f in proc.stdout.splitlines() if f.strip()]
 
 
 def _recover_or_validate_clean_task_worktree(
@@ -505,32 +615,17 @@ def _recover_or_validate_clean_task_worktree(
     execution_root: Path,
     task: TaskRecord,
 ) -> str | None:
+    """If the worktree has changes vs main, commit them and merge into main."""
     if execution_root == root:
         return None
 
-    worktree_head = current_head(execution_root)
+    wt_head = current_head(execution_root)
     main_head = current_head(root)
-    if worktree_head is None or worktree_head == main_head:
+    if wt_head is None or wt_head == main_head:
         return None
 
-    if task.git.checkpoint_attempts < 1:
-        # The worktree has commits ahead of main that aren't litehive
-        # checkpoints.  This happens when the SWE agent committed during
-        # implementing or when the worktree was rebased.  Integrate the
-        # worktree HEAD as if it were the task's completion commit.
-        integrated_sha = _integrate_task_commit(root, main_head, worktree_head)
-        return integrated_sha
-
-    expected_sha = find_commit_by_subject(
-        execution_root,
-        checkpoint_message(task, attempt=task.git.checkpoint_attempts),
-    )
-    if expected_sha != worktree_head:
-        raise GitError(
-            "task worktree head does not match the expected Litehive checkpoint commit"
-        )
-
-    return _integrate_task_commit(root, task.git.checkpoint_base_sha, worktree_head)
+    message = checkpoint_message(task, attempt=task.git.checkpoint_attempts + 1)
+    return _merge_worktree_into_main(root, execution_root, message)
 
 
 def _recover_existing_integrated_checkpoint(root: Path, task: TaskRecord) -> ExecutionSummary | None:
@@ -979,6 +1074,8 @@ def build_executor(
                 execution_root,
                 current_task,
                 auto_commit_enabled=config_auto_commit and current_task.git.auto_commit,
+                subagents=subagents,
+                config=config,
             )
 
         pre_stage_hook_results: list[dict[str, str | int | bool | None]] = []
@@ -1038,17 +1135,21 @@ def build_executor(
             max_turns = config.claude_max_turns if engine_name == "claude" else None
             attempt_count = 0
             retry_exhausted_reason: str | None = None
+            resume_session_id: str | None = None
             while True:
                 attempt_count += 1
                 role_name = _role_for_step(step, current_task)
-                prompt = stage_prompt(
-                    current_task,
-                    step,
-                    workspace_context=workspace_context,
-                    process_profile=config.process_profile,
-                    role_name=role_name,
-                    config=config,
-                )
+                if resume_session_id:
+                    prompt = "Please continue where you left off. Complete the task."
+                else:
+                    prompt = stage_prompt(
+                        current_task,
+                        step,
+                        workspace_context=workspace_context,
+                        process_profile=config.process_profile,
+                        role_name=role_name,
+                        config=config,
+                    )
                 result = subagents.run(
                     current_task,
                     role=role_name,
@@ -1056,7 +1157,9 @@ def build_executor(
                     prompt=prompt,
                     model=model_name,
                     max_turns=max_turns,
+                    resume_session_id=resume_session_id,
                 )
+                resume_session_id = None
                 failure = result.failure
                 if failure is not None and failure.kind == "execution_interrupted":
                     raise KeyboardInterrupt(failure.reason)
@@ -1085,7 +1188,7 @@ def build_executor(
                 )
                 execution_events.append(retry_event)
                 append_journal(root, current_task, retry_event)
-                _set_continuation_handoff(
+                handoff = _set_continuation_handoff(
                     root,
                     current_task,
                     step=step,
@@ -1098,6 +1201,12 @@ def build_executor(
                     to_model=model_name,
                     attempt=attempt_count,
                 )
+                if (
+                    engine_name == "claude"
+                    and handoff.continuation
+                    and handoff.continuation.session_id
+                ):
+                    resume_session_id = handoff.continuation.session_id
                 if backoff_seconds > 0:
                     time.sleep(backoff_seconds)
             is_limit_failure = (
@@ -1463,7 +1572,13 @@ def _flatten_runner_hook_feedback(
 
 
 def _commit_to_git_report(
-    root: Path, execution_root: Path, task: TaskRecord, *, auto_commit_enabled: bool
+    root: Path,
+    execution_root: Path,
+    task: TaskRecord,
+    *,
+    auto_commit_enabled: bool,
+    subagents: SubagentManager | None = None,
+    config: LitehiveConfig | None = None,
 ) -> StageReport:
     if not auto_commit_enabled:
         task.status = "done"
@@ -1620,18 +1735,16 @@ def _commit_to_git_report(
         )
         persist_task_and_state(root, task=task, state=state)
         if execution_root != root:
-            main_head = current_head(root)
-            if main_head and main_head != base_sha:
-                rebase_worktree_onto(execution_root, main_head)
-                base_sha = main_head
-                task.git.checkpoint_base_sha = base_sha
-        checkpoint = commit_task(execution_root, message, paths=checkpoint_paths)
-        if checkpoint is None:
-            raise GitError("git commit prerequisites were not met")
-        if execution_root == root:
-            integrated_sha = checkpoint.commit_sha
+            _commit_all_in_worktree(execution_root, message)
+            integrated_sha = _merge_worktree_into_main(
+                root, execution_root, message,
+                subagents=subagents, task=task, config=config,
+            )
         else:
-            integrated_sha = _integrate_task_commit(root, base_sha, checkpoint.commit_sha)
+            checkpoint = commit_task(root, message, paths=checkpoint_paths)
+            if checkpoint is None:
+                raise GitError("git commit prerequisites were not met")
+            integrated_sha = checkpoint.commit_sha
     except GitError as exc:
         task.git.checkpoint_base_sha = previous_base_sha
         task.git.checkpoint_attempts = previous_attempts

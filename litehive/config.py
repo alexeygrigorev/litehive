@@ -785,7 +785,7 @@ class LitehiveConfig:
     copilot_model: str | None = None
     claude_enabled: bool = False
     claude_model: str = "claude-sonnet-4-20250514"
-    claude_max_turns: int = 30
+    claude_max_turns: int = 100
     pool_usage_cap: int | None = None
     pool_cost_cap: int | None = None
     engine_usage_caps: dict[str, int] = field(default_factory=dict)

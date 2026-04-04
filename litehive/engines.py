@@ -165,6 +165,7 @@ class CodexCLIAdapter(ExternalCLIAdapter):
         model: str | None = None,
         *,
         max_turns: int | None = None,
+        resume_session_id: str | None = None,
     ) -> list[str]:
         return [
             self.binary,
@@ -264,6 +265,7 @@ class OpenCodeAdapter(ExternalCLIAdapter):
         model: str | None = None,
         *,
         max_turns: int | None = None,
+        resume_session_id: str | None = None,
     ) -> list[str]:
         command = [self.binary, "run", "--format", "json", "--dir", str(cwd)]
         if model:
@@ -346,6 +348,7 @@ class GeminiCLIAdapter(ExternalCLIAdapter):
         model: str | None = None,
         *,
         max_turns: int | None = None,
+        resume_session_id: str | None = None,
     ) -> list[str]:
         command = [self.binary, "-p", prompt, "--output-format", "stream-json", "--yolo"]
         if model:
@@ -428,12 +431,10 @@ class ClaudeCLIAdapter(ExternalCLIAdapter):
         binary: str,
         capabilities: AdapterCapabilities,
         stripped_env_vars: tuple[str, ...] = (),
-        max_turns: int = 75,
     ) -> None:
         super().__init__(
             name=name, binary=binary, capabilities=capabilities, stripped_env_vars=stripped_env_vars
         )
-        self.max_turns = max_turns
 
     def build_command(
         self,
@@ -442,21 +443,24 @@ class ClaudeCLIAdapter(ExternalCLIAdapter):
         model: str | None = None,
         *,
         max_turns: int | None = None,
+        resume_session_id: str | None = None,
     ) -> list[str]:
-        command = [
-            self.binary,
-            "-p",
-            prompt,
+        command = [self.binary]
+        if resume_session_id:
+            command.extend(["--resume", resume_session_id, "-p", prompt])
+        else:
+            command.extend(["-p", prompt])
+        command.extend([
             "--output-format",
             "stream-json",
             "--include-partial-messages",
             "--verbose",
             "--dangerously-skip-permissions",
-        ]
+        ])
         if model:
             command.extend(["--model", model])
-        effective_max_turns = self.max_turns if max_turns is None else max_turns
-        command.extend(["--max-turns", str(effective_max_turns)])
+        if max_turns is not None:
+            command.extend(["--max-turns", str(max_turns)])
         return command
 
     def render_transcript(self, execution: CLIExecutionResult) -> str:
@@ -534,6 +538,7 @@ class CopilotCLIAdapter(ExternalCLIAdapter):
         model: str | None = None,
         *,
         max_turns: int | None = None,
+        resume_session_id: str | None = None,
     ) -> list[str]:
         command = [
             self.binary,
@@ -1853,6 +1858,14 @@ def extract_engine_continuation(
                 metadata["model"] = model
             if isinstance(session_id, str) and session_id:
                 return RuntimeEngineContinuation(session_id=session_id, metadata=metadata)
+        return None
+
+    if engine_name == "claude":
+        for payload in iter_jsonl_payloads(execution.stdout):
+            if payload.get("type") == "system" and payload.get("subtype") == "init":
+                session_id = payload.get("session_id")
+                if isinstance(session_id, str) and session_id:
+                    return RuntimeEngineContinuation(session_id=session_id)
         return None
 
     return None
