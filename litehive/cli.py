@@ -240,6 +240,7 @@ def _pool_stop_condition_label(stop_reason: str) -> str:
         "queue_exhausted": "queue exhausted",
         "task_requeued": "task requeued for another pass",
         "task_interrupted": "task interrupted and awaiting resume",
+        "continue_or_rollback_required": "continue or rollback required",
         "blocked_tasks_remaining": "blocked tasks remaining",
         "stop_condition_reached": "custom stop condition reached",
         "max_tasks_reached": "max tasks reached",
@@ -271,6 +272,10 @@ def _pool_no_useful_progress_report(stop_reason: str) -> tuple[str | None, str |
         "task_interrupted": (
             "no_useful_progress",
             "Pool stopped with no useful progress because the active task was interrupted and must be resumed.",
+        ),
+        "continue_or_rollback_required": (
+            "operator_action_required",
+            "Pool stopped after a checkpoint commit. Continue with a new run or roll back the checkpoint before unrelated queued work proceeds.",
         ),
         "execution_limit_fallbacks_exhausted": (
             "no_useful_progress",

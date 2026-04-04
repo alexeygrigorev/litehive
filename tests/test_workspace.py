@@ -15515,6 +15515,94 @@ def test_recover_completed_task_clears_checkpoint_pointer_and_next_run_uses_next
     assert refreshed.git.commit_sha == second.commit_sha
 
 
+def test_drain_task_pool_requires_continue_or_rollback_before_unrelated_checkpointed_work(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _init_git_repo(tmp_path)
+    ensure_workspace(tmp_path)
+    first = create_task(tmp_path, title="Ship first task")
+    second = create_task(tmp_path, title="Unrelated pending task")
+    (tmp_path / "app.txt").write_text("first-pass\n", encoding="utf-8")
+
+    monkeypatch.setattr(
+        "litehive.runtime.SubagentManager.run",
+        lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
+            _completed_subagent_result(tmp_path, task.pipeline_status)
+        ),
+    )
+
+    first_summary = drain_task_pool(tmp_path)
+
+    assert [
+        execution.task.id for execution in first_summary.executions if execution.task is not None
+    ] == [first.id]
+    assert first_summary.stop_reason == "continue_or_rollback_required"
+    first_task = require_task(tmp_path, first.id)
+    second_task = require_task(tmp_path, second.id)
+    assert first_task.status == "done"
+    assert first_task.pipeline_status == "done"
+    assert first_task.git.commit_sha is not None
+    assert second_task.status == "queued"
+    assert second_task.pipeline_status == "backlog"
+    state = load_state(tmp_path)
+    assert state.active_task_id is None
+    assert state.queue == [second.id]
+    assert state.pool_stop_reason == "continue_or_rollback_required"
+    journal = (task_dir(tmp_path, first_task) / "journal.md").read_text(encoding="utf-8")
+    assert "Pool stopped: continue_or_rollback_required." in journal
+    assert "Either continue with a new `litehive run`/pool run or roll back the checkpoint first." in journal
+
+    (tmp_path / "app.txt").write_text("second-pass\n", encoding="utf-8")
+    resumed = drain_task_pool(tmp_path)
+
+    assert [execution.task.id for execution in resumed.executions if execution.task is not None] == [
+        second.id
+    ]
+    assert resumed.stop_reason == "queue_exhausted"
+    resumed_second = require_task(tmp_path, second.id)
+    assert resumed_second.status == "done"
+    assert resumed_second.pipeline_status == "done"
+    assert resumed_second.git.commit_sha is not None
+    assert load_state(tmp_path).queue == []
+
+
+def test_cmd_run_drain_reports_continue_or_rollback_guidance_after_checkpoint_commit(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    _init_git_repo(tmp_path)
+    ensure_workspace(tmp_path)
+    create_task(tmp_path, title="Ship first task")
+    create_task(tmp_path, title="Unrelated pending task")
+    (tmp_path / "app.txt").write_text("first-pass\n", encoding="utf-8")
+
+    monkeypatch.setattr(
+        "litehive.runtime.SubagentManager.run",
+        lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
+            _completed_subagent_result(tmp_path, task.pipeline_status)
+        ),
+    )
+
+    exit_code = _cmd_run(argparse.Namespace(workspace=tmp_path, dry_run=False, drain=True))
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "progress_status: operator_action_required" in output
+    assert (
+        "summary: Pool stopped after a checkpoint commit. Continue with a new run or roll back the checkpoint before unrelated queued work proceeds."
+        in output
+    )
+    assert "stop_condition: continue or rollback required" in output
+    assert "stop_reason: continue_or_rollback_required" in output
+    durable_report = _latest_pool_run_report(tmp_path)
+    assert durable_report["progress_status"] == "operator_action_required"
+    assert (
+        durable_report["summary"]
+        == "Pool stopped after a checkpoint commit. Continue with a new run or roll back the checkpoint before unrelated queued work proceeds."
+    )
+
+
 def test_recover_completed_task_rolls_back_when_atomic_state_persist_fails(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

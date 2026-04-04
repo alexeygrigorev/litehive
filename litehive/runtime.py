@@ -400,6 +400,8 @@ def _pool_stop_reason(
         return "task_requeued"
     if latest.result is not None and latest.result.final_status == "interrupted":
         return "task_interrupted"
+    if _requires_continue_or_rollback(root, latest):
+        return "continue_or_rollback_required"
     latest_limit_kind = _execution_limit_kind(latest)
     final_status = latest.result.final_status if latest.result is not None else None
     if conditions.stop_on_failure and final_status is not None and final_status not in {"done", "paused"}:
@@ -446,6 +448,19 @@ def _single_task_stop_reason(execution: ExecutionSummary) -> str:
     if result is not None and result.final_status == "interrupted":
         return "task_interrupted"
     return "single_task_complete"
+
+
+def _requires_continue_or_rollback(root: Path, execution: ExecutionSummary) -> bool:
+    task = execution.task
+    result = execution.result
+    if task is None or result is None:
+        return False
+    if result.final_status != "done":
+        return False
+    if execution.commit_sha is None:
+        return False
+    state = load_state(root)
+    return bool(state.queue)
 
 
 def _git_worktree_is_dirty(root: Path) -> bool:
@@ -874,6 +889,19 @@ def _finalize_pool_run(
         if latest.task is not None:
             checkpoint = stop_reason.removeprefix("human_checkpoint_").replace("_", " ")
             append_journal(root, latest.task, f"Pool stopped: {stop_reason}. Awaiting human review at {checkpoint}.")
+    if stop_reason == "continue_or_rollback_required" and executions:
+        latest = executions[-1]
+        if latest.task is not None and latest.commit_sha is not None:
+            append_journal(
+                root,
+                latest.task,
+                (
+                    "Pool stopped: continue_or_rollback_required. "
+                    "This task finished with checkpoint commit "
+                    f"`{latest.commit_sha}` and unrelated queued work remains. "
+                    "Either continue with a new `litehive run`/pool run or roll back the checkpoint first."
+                ),
+            )
     return TaskPoolRunSummary(executions=executions, stop_reason=stop_reason, blocked=blocked)
 
 

@@ -9,12 +9,31 @@ mode: implementation
 status: flagged
 pipeline_status: testing
 priority: medium
+pm_complexity: moderate
+planned_effort: m
 created_at: '2026-04-01T06:22:26+00:00'
-updated_at: '2026-04-02T04:51:15+00:00'
-goal: ''
-acceptance_criteria: []
+updated_at: '2026-04-04T10:50:57+00:00'
+goal: Require an explicit operator decision before unrelated queued work proceeds
+  after a task leaves a checkpoint commit.
+acceptance_criteria:
+- When a pool run finishes a task with a checkpoint commit and another queued task
+  remains, the pool stops with continue_or_rollback_required instead of starting unrelated
+  queued work in the same automatic drain.
+- At that stop, the completed task stays done with its checkpoint commit recorded,
+  and unrelated queued tasks remain queued and unstarted so the workspace state is
+  recoverable and deterministic.
+- A later explicit continue (litehive run or another pool run) may advance to the
+  next queued task, and operator-facing output explains that the choices are to continue
+  with a new run or roll back the checkpoint first.
 constraints: []
-plan: []
+plan:
+- Add a pool stop condition that detects when a task finished with a checkpoint commit
+  and another queued task is waiting, then stop before unrelated queued work starts.
+- Preserve deterministic recovery state at that stop, including the completed task's
+  recorded checkpoint commit, the untouched queued task order, and explicit operator-facing
+  continue or rollback guidance.
+- Lock the behavior down with focused runtime or CLI tests for the stop reason, preserved
+  queue state, and successful continuation on a later explicit rerun.
 human_checkpoints: []
 subagents:
 - id: SA-0001
