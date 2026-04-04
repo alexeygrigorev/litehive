@@ -9,3 +9,10 @@ build/
 *.egg-info/
 .DS_Store
 tmp_accept_t*/
+
+# Litehive runtime artifacts (execution residue, not project state)
+.litehive/tasks/*/subagents/
+.litehive/tasks/*/events.jsonl
+.litehive/logs/
+.litehive/runtime/
+.litehive/worktrees/
