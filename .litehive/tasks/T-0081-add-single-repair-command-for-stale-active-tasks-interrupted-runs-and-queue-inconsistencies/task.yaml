@@ -7,13 +7,13 @@ task_type: null
 engine: opencode
 model: null
 mode: implementation
-status: in_progress
-pipeline_status: grooming
+status: queued
+pipeline_status: accepting
 priority: medium
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-01T06:36:35+00:00'
-updated_at: '2026-04-04T17:34:22+00:00'
+updated_at: '2026-04-04T17:32:27+00:00'
 goal: ''
 acceptance_criteria: []
 constraints: []
@@ -186,13 +186,6 @@ subagents:
   engine: opencode
   status: running
   path: subagents/SA-0024-reviewer
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0025
-  role: planner
-  engine: opencode
-  status: running
-  path: subagents/SA-0025-planner
   sandboxed: false
   sandbox_summary: host
 git:
