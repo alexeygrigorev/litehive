@@ -2,21 +2,49 @@ id: T-0067
 slug: make-commit-to-git-idempotent-and-resumable
 title: Make commit_to_git idempotent and resumable
 depends_on: []
-task_type: null
+task_type: bugfix
 engine: null
 model: null
 mode: implementation
 status: flagged
 pipeline_status: implementing
 priority: medium
-pm_complexity: null
-planned_effort: null
+pm_complexity: moderate
+planned_effort: m
 created_at: '2026-04-01T06:23:16+00:00'
-updated_at: '2026-04-03T20:33:26+00:00'
-goal: ''
-acceptance_criteria: []
-constraints: []
-plan: []
+updated_at: '2026-04-04T12:04:37+00:00'
+goal: Ensure the commit_to_git stage can be rerun or resumed after an interrupted
+  checkpoint commit without failing, creating a duplicate checkpoint, or leaving task/runtime
+  state inconsistent.
+acceptance_criteria:
+- If commit_to_git reruns after the checkpoint commit already exists for the current
+  task but task.git.commit_sha was not persisted, Litehive must record the existing
+  checkpoint SHA, mark the task done, and not create a second checkpoint commit.
+- If a task is stranded at commit_to_git after a crash or stale runner, the normal
+  recovery/resume path must reconcile any existing checkpoint commit for the current
+  attempt before queueing new work or retrying commit.
+- Focused tests in tests/test_workspace.py must cover both rerun and recovery paths
+  and prove checkpoint_attempts and git history do not advance to a duplicate commit
+  during reconciliation.
+constraints:
+- Keep changes scoped to commit_to_git reconciliation and existing checkpoint recovery;
+  do not broaden into unrelated CLI/import cleanup.
+- Prefer sharing one finalization path between stage rerun recovery and stale-runner/startup
+  recovery so the two behaviors cannot drift.
+- Prefer focused lifecycle tests in tests/test_workspace.py over broad suite changes.
+plan:
+- Inspect litehive/runtime.py commit_to_git flow and existing checkpoint-detection helpers
+  to identify where a rerun currently treats an already-created checkpoint as failure
+  or retry work.
+- Refactor or reuse the existing commit recovery/finalization path in litehive/tasks.py
+  so commit_to_git reruns and stale-runner recovery both reconcile the same existing
+  checkpoint commit and finish with consistent task/runtime state.
+- Add or update focused tests in tests/test_workspace.py for rerunning commit_to_git
+  after the checkpoint already exists and for recovering stranded commit_to_git state
+  without incrementing checkpoint attempts or creating a duplicate git commit.
+- Verify with focused pytest coverage and, if the lifecycle contract changes materially,
+  update docs/state-machine.md to describe that commit_to_git reconciliation now happens
+  during stage execution as well as recovery.
 human_checkpoints: []
 subagents:
 - id: SA-0001

@@ -21,7 +21,6 @@ from litehive.git_ops import (
     checkpoint_message,
     commit_task,
     current_head,
-    find_commit_by_subject,
     has_changes,
     is_git_repo,
     rebase_worktree_onto,
@@ -32,14 +31,14 @@ from litehive.git_ops import (
 )
 from litehive.models import (
     RuntimeContinuationHandoff,
-    RuntimeStageState,
     StageReport,
     TaskRecord,
-    utcnow,
 )
 from litehive.runner import RunResult, StageExecutor, TaskExecutionRunner
 from litehive.subagents import SubagentManager, stage_prompt, stage_report_from_subagent
 from litehive.tasks import (
+    _finalize_recovered_commit_task,
+    _find_existing_checkpoint_commit,
     _atomic_write_text,
     _workspace_lock,
     BlockedTask,
@@ -869,10 +868,7 @@ def _recover_existing_integrated_checkpoint(root: Path, task: TaskRecord) -> Exe
         or task.git.checkpoint_attempts < 1
     ):
         return None
-    existing_integrated_sha = find_commit_by_subject(
-        root,
-        checkpoint_message(task, attempt=task.git.checkpoint_attempts),
-    )
+    existing_integrated_sha = _find_existing_checkpoint_commit(root, task)
     if existing_integrated_sha is None:
         return None
 
@@ -880,23 +876,12 @@ def _recover_existing_integrated_checkpoint(root: Path, task: TaskRecord) -> Exe
     if state.active_task_id == task.id:
         state.active_task_id = None
     state.queue = [queued_id for queued_id in state.queue if queued_id != task.id]
-    set_task_commit_sha(task, existing_integrated_sha)
-    task.runtime.execution_status = "done"
-    task.runtime.current_stage = RuntimeStageState(updated_at=utcnow())
-    task.runtime.last_stage = RuntimeStageState(
-        step="commit_to_git",
-        status="pass",
-        verdict="pass",
-        summary="Recovered existing checkpoint commit after interrupted `commit_to_git`.",
-        started_at=utcnow(),
-        completed_at=utcnow(),
-        updated_at=utcnow(),
-    )
+    journal_message = _finalize_recovered_commit_task(task, commit_sha=existing_integrated_sha)
     persist_task_and_state(
         root,
         task=task,
         state=state,
-        journal_message="Recovered existing checkpoint commit after interrupted `commit_to_git`.",
+        journal_message=journal_message,
     )
     _cleanup_task_worktree(root, task)
     save_task_runtime(root, task)
