@@ -8,7 +8,6 @@ from pathlib import Path, PurePosixPath
 import shutil
 
 from litehive.config import (
-    ExternalEngineSandboxConfig,
     ExternalEngineSandboxPolicy,
     LitehiveConfig,
     SubagentResourceLimitsConfig,

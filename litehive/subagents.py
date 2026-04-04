@@ -20,6 +20,7 @@ from litehive.engines import (
     classify_execution_limit,
     classify_retryable_execution_failure,
     extract_engine_continuation,
+    extract_engine_timeline,
     get_engine,
 )
 from litehive.models import ResourceLimitEvent, StageReport, SubagentRef, TaskRecord, utcnow
@@ -80,7 +81,9 @@ def _write_stream_artifact(base: Path, name: str, content: str, *, compress: boo
         if compressed_path.exists():
             compressed_path.unlink()
         return
-    should_compress = compress and len(content.encode("utf-8")) >= _COMPRESS_STREAM_ARTIFACT_MIN_BYTES
+    should_compress = (
+        compress and len(content.encode("utf-8")) >= _COMPRESS_STREAM_ARTIFACT_MIN_BYTES
+    )
     if should_compress:
         if plain_path.exists():
             plain_path.unlink()
@@ -106,10 +109,7 @@ def _prefers_non_live_run(engine: object) -> bool:
     engine_type = type(engine)
     run_impl = getattr(engine_type, "run", None)
     run_live_impl = getattr(engine_type, "run_live", None)
-    return (
-        run_impl is not ExternalCLIAdapter.run
-        and run_live_impl is ExternalCLIAdapter.run_live
-    )
+    return run_impl is not ExternalCLIAdapter.run and run_live_impl is ExternalCLIAdapter.run_live
 
 
 def _supports_on_started(engine: object) -> bool:
@@ -174,7 +174,9 @@ class SubagentManager:
         failure: EngineFailure | None = None
         try:
             if not engine.is_available():
-                raise EngineError(f"Engine '{engine.name}' is unavailable: missing binary '{engine.binary}'")
+                raise EngineError(
+                    f"Engine '{engine.name}' is unavailable: missing binary '{engine.binary}'"
+                )
             if isinstance(engine, ExternalCLIAdapter) and sandbox_summary.enabled:
                 engine = _SandboxedAdapter(engine, self.sandbox, engine_name)
             if _supports_live_execution(engine):
@@ -190,7 +192,9 @@ class SubagentManager:
                     ),
                 }
                 if _supports_live_on_started(engine):
-                    live_kwargs["on_started"] = lambda pid: self._record_subagent_pid(task, base, ref, pid)
+                    live_kwargs["on_started"] = lambda pid: self._record_subagent_pid(
+                        task, base, ref, pid
+                    )
                 if max_turns is None:
                     proc = engine.run_live(prompt, **live_kwargs)
                 else:
@@ -379,7 +383,8 @@ class SubagentManager:
     ) -> None:
         report_step = (
             task.pipeline_status
-            if task.pipeline_status in {"grooming", "implementing", "testing", "accepting", "commit_to_git"}
+            if task.pipeline_status
+            in {"grooming", "implementing", "testing", "accepting", "commit_to_git"}
             else "implementing"
         )
         if resource_limit_event is not None:
@@ -420,7 +425,9 @@ class SubagentManager:
                     if report.resource_limit_event is None
                     else report.resource_limit_event.model_dump(mode="python")
                 ),
-                "continuation": None if continuation is None else continuation.model_dump(mode="python"),
+                "continuation": None
+                if continuation is None
+                else continuation.model_dump(mode="python"),
             },
             exit_code=exit_code,
             pid=None if execution is None else execution.pid,
@@ -428,8 +435,13 @@ class SubagentManager:
             resource_limit_event=resource_limit_event,
             continuation=continuation,
         )
-        _write_stream_artifact(base, "stdout", "" if execution is None else execution.stdout, compress=True)
-        _write_stream_artifact(base, "stderr", "" if execution is None else execution.stderr, compress=True)
+        _write_stream_artifact(
+            base, "stdout", "" if execution is None else execution.stdout, compress=True
+        )
+        _write_stream_artifact(
+            base, "stderr", "" if execution is None else execution.stderr, compress=True
+        )
+        self._write_timeline(base, ref, task, "" if execution is None else execution.stdout)
 
     def _write_session_progress(
         self,
@@ -472,7 +484,8 @@ class SubagentManager:
         (base / "stderr.txt").write_text(execution.stderr, encoding="utf-8")
         report_step = (
             task.pipeline_status
-            if task.pipeline_status in {"grooming", "implementing", "testing", "accepting", "commit_to_git"}
+            if task.pipeline_status
+            in {"grooming", "implementing", "testing", "accepting", "commit_to_git"}
             else "implementing"
         )
         report_payload = {
@@ -505,7 +518,9 @@ class SubagentManager:
                     if report.resource_limit_event is None
                     else report.resource_limit_event.model_dump(mode="python")
                 ),
-                "continuation": None if continuation is None else continuation.model_dump(mode="python"),
+                "continuation": None
+                if continuation is None
+                else continuation.model_dump(mode="python"),
             }
         self._write_session_snapshot(
             base,
@@ -521,6 +536,7 @@ class SubagentManager:
             resource_limit_event=None,
             continuation=continuation,
         )
+        self._write_timeline(base, ref, task, execution.stdout)
 
     def _parse_execution_report(
         self,
@@ -586,14 +602,18 @@ class SubagentManager:
                             if resource_limit_event is None
                             else resource_limit_event.model_dump(mode="python")
                         ),
-                        "continuation": None if continuation is None else continuation.model_dump(mode="python"),
+                        "continuation": None
+                        if continuation is None
+                        else continuation.model_dump(mode="python"),
                     },
                     sort_keys=False,
                 )
             }
         )
 
-    def _record_subagent_pid(self, task: TaskRecord, base: Path, ref: SubagentRef, pid: int | None) -> None:
+    def _record_subagent_pid(
+        self, task: TaskRecord, base: Path, ref: SubagentRef, pid: int | None
+    ) -> None:
         if pid is None:
             return
         mark_subagent_pid(self.root, task, pid)
@@ -605,6 +625,26 @@ class SubagentManager:
             interruption_reason=None,
             resource_limit_event=None,
             continuation=None,
+        )
+
+    def _write_timeline(
+        self,
+        base: Path,
+        ref: SubagentRef,
+        task: TaskRecord,
+        stdout: str,
+    ) -> None:
+        timeline = extract_engine_timeline(
+            ref.engine,
+            stdout,
+            task_id=task.id,
+            subagent_id=ref.id,
+        )
+        if timeline is None:
+            return
+        (base / "timeline.yaml").write_text(
+            yaml.safe_dump(timeline.model_dump(mode="python"), sort_keys=False),
+            encoding="utf-8",
         )
 
     def _write_session_snapshot(
@@ -651,7 +691,9 @@ class SubagentManager:
                             if resource_limit_event is None
                             else resource_limit_event.model_dump(mode="python")
                         ),
-                        "continuation": None if continuation is None else continuation.model_dump(mode="python"),
+                        "continuation": None
+                        if continuation is None
+                        else continuation.model_dump(mode="python"),
                     },
                     sort_keys=False,
                 ),
@@ -665,7 +707,9 @@ class SubagentManager:
 
 
 class _SandboxedAdapter(ExternalCLIAdapter):
-    def __init__(self, adapter: ExternalCLIAdapter, launcher: SandboxLauncher, engine_name: str) -> None:
+    def __init__(
+        self, adapter: ExternalCLIAdapter, launcher: SandboxLauncher, engine_name: str
+    ) -> None:
         super().__init__(
             name=adapter.name,
             binary=adapter.binary,
@@ -728,7 +772,9 @@ def stage_prompt(
     profile = resolve_process_profile(process_profile)
     workspace_overlay = profile.get("workspace_overlay", [])
     stage_overlay = profile.get("stage_overlay", {}).get(step, [])
-    stage_instructions = profile.get("stage_instructions", {}).get(step, ["Complete the requested stage."])
+    stage_instructions = profile.get("stage_instructions", {}).get(
+        step, ["Complete the requested stage."]
+    )
     lifecycle_verification_overlay = _lifecycle_verification_overlay(task, step)
     stage_owner = role_name or _stage_owner_for_step(step)
     stage_role = _stage_role_prompt(step, stage_owner)
@@ -888,7 +934,9 @@ def stage_prompt(
             if path
         ]
         if artifact_parts:
-            lines.append(f"- Handoff artifacts: {', '.join(f'`{path}`' for path in artifact_parts)}")
+            lines.append(
+                f"- Handoff artifacts: {', '.join(f'`{path}`' for path in artifact_parts)}"
+            )
         if handoff.warnings:
             lines.extend(["- Prior warnings:"] + [f"  - {warning}" for warning in handoff.warnings])
         lines.extend(

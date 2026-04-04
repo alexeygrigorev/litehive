@@ -11,8 +11,6 @@ from litehive.external_cli import (
     AdapterCapabilities,
     CLIExecutionResult,
     ExternalCLIAdapter,
-    extract_codex_errors,
-    extract_codex_messages,
     extract_jsonl_errors,
     extract_jsonl_messages,
     extract_stream_errors,
@@ -21,7 +19,14 @@ from litehive.external_cli import (
     parse_stage_report_text,
     StreamEventAdapter,
 )
-from litehive.models import EngineUsageObservation, EngineUsageWindow, RuntimeEngineContinuation
+from litehive.models import (
+    EngineUsageObservation,
+    EngineUsageWindow,
+    LiveEvent,
+    LiveTimeline,
+    RuntimeEngineContinuation,
+)
+from litehive.external_cli import extract_live_timeline
 
 
 class EngineError(RuntimeError):
@@ -198,6 +203,7 @@ class CodexCLIAdapter(ExternalCLIAdapter):
         transcript = self.render_transcript(execution)
         if not transcript:
             from litehive.external_cli import extract_codex_errors
+
             error_lines = extract_codex_errors(execution.stdout)
             if error_lines:
                 transcript = "\n".join(error_lines)
@@ -766,11 +772,303 @@ def _unwrap_claude_stream_event(payload: dict[str, object]) -> dict[str, object]
     return payload
 
 
+def _claude_live_events(payload: dict[str, object]) -> list[LiveEvent]:
+    events: list[LiveEvent] = []
+    event_type = payload.get("type")
+    if event_type == "content_block_delta":
+        delta = payload.get("delta")
+        if isinstance(delta, dict) and delta.get("type") == "text_delta":
+            text = delta.get("text")
+            if isinstance(text, str) and text:
+                events.append(
+                    LiveEvent(kind="message", engine="claude", role="assistant", content=text)
+                )
+    elif event_type == "content_block_start":
+        block = payload.get("content_block")
+        if isinstance(block, dict) and block.get("type") == "tool_use":
+            tool_name = block.get("name")
+            if isinstance(tool_name, str):
+                tool_input = block.get("input")
+                events.append(
+                    LiveEvent(
+                        kind="tool_call",
+                        engine="claude",
+                        role="assistant",
+                        tool_name=tool_name,
+                        tool_input=json.dumps(tool_input)
+                        if isinstance(tool_input, (dict, list))
+                        else None,
+                    )
+                )
+    elif event_type == "tool_result":
+        content = payload.get("content")
+        tool_output = (
+            content if isinstance(content, str) else json.dumps(content) if content else ""
+        )
+        events.append(
+            LiveEvent(
+                kind="tool_result",
+                engine="claude",
+                role="user",
+                tool_output=tool_output,
+            )
+        )
+    elif event_type == "assistant":
+        data = payload.get("message")
+        if isinstance(data, dict):
+            content = data.get("content")
+            if isinstance(content, list):
+                for block in content:
+                    if isinstance(block, dict) and block.get("type") == "text":
+                        text = block.get("text", "")
+                        if isinstance(text, str) and text:
+                            events.append(
+                                LiveEvent(
+                                    kind="message", engine="claude", role="assistant", content=text
+                                )
+                            )
+    elif event_type == "result":
+        data = payload.get("result")
+        if isinstance(data, str) and data:
+            events.append(
+                LiveEvent(kind="message", engine="claude", role="assistant", content=data)
+            )
+        if payload.get("usage"):
+            usage = payload["usage"]
+            if isinstance(usage, dict):
+                meta: dict[str, str | int | bool | None] = {}
+                for field in ("input_tokens", "output_tokens"):
+                    raw = usage.get(field)
+                    if isinstance(raw, int):
+                        meta[field] = raw
+                events.append(LiveEvent(kind="usage", engine="claude", metadata=meta))
+    elif event_type == "error":
+        data = payload.get("data")
+        message = ""
+        if isinstance(data, dict) and isinstance(data.get("message"), str):
+            message = data["message"]
+        elif isinstance(payload.get("message"), str):
+            message = payload["message"]
+        if message:
+            events.append(LiveEvent(kind="error", engine="claude", error=message))
+    return events
+
+
+def _codex_live_events(payload: dict[str, object]) -> list[LiveEvent]:
+    events: list[LiveEvent] = []
+    event_type = payload.get("type")
+    if event_type == "item.completed":
+        item = payload.get("item")
+        if isinstance(item, dict):
+            item_type = item.get("type")
+            if item_type == "agent_message":
+                text = item.get("text")
+                if isinstance(text, str) and text:
+                    events.append(
+                        LiveEvent(kind="message", engine="codex", role="assistant", content=text)
+                    )
+            elif item_type == "command_execution":
+                command = item.get("command")
+                tool_name = None
+                if isinstance(command, list) and command:
+                    tool_name = str(command[0]) if command[0] else None
+                aggregated = item.get("aggregated_output")
+                exit_code = item.get("exit_code")
+                events.append(
+                    LiveEvent(
+                        kind="tool_result",
+                        engine="codex",
+                        tool_name=tool_name,
+                        tool_output=aggregated if isinstance(aggregated, str) else None,
+                        metadata={"exit_code": exit_code} if isinstance(exit_code, int) else {},
+                    )
+                )
+    elif event_type == "turn.completed":
+        usage_payload = payload.get("usage")
+        if isinstance(usage_payload, dict):
+            meta: dict[str, str | int | bool | None] = {}
+            for field in ("input_tokens", "output_tokens", "total_tokens"):
+                raw = usage_payload.get(field)
+                if isinstance(raw, int):
+                    meta[field] = raw
+            events.append(LiveEvent(kind="usage", engine="codex", metadata=meta))
+    elif event_type in {"error", "turn.failed"}:
+        message = payload.get("message")
+        if isinstance(message, str) and message.strip():
+            events.append(LiveEvent(kind="error", engine="codex", error=message.strip()))
+    return events
+
+
+def _opencode_live_events(payload: dict[str, object]) -> list[LiveEvent]:
+    events: list[LiveEvent] = []
+    event_type = payload.get("type")
+    if event_type == "text":
+        part = payload.get("part")
+        if isinstance(part, dict):
+            text = part.get("text")
+            if isinstance(text, str) and text:
+                events.append(
+                    LiveEvent(kind="message", engine="opencode", role="assistant", content=text)
+                )
+    elif event_type == "step_finish":
+        part = payload.get("part")
+        if isinstance(part, dict):
+            tokens = part.get("tokens")
+            meta: dict[str, str | int | bool | None] = {}
+            if isinstance(tokens, dict):
+                for field in ("total", "input", "output", "reasoning"):
+                    raw = tokens.get(field)
+                    if isinstance(raw, int):
+                        meta[f"{field}_tokens"] = raw
+            cost = part.get("cost")
+            if isinstance(cost, (int, float)):
+                meta["cost"] = f"{cost:.6f}"
+            if meta:
+                events.append(LiveEvent(kind="usage", engine="opencode", metadata=meta))
+    elif event_type == "error":
+        raw_error = payload.get("error")
+        if isinstance(raw_error, dict):
+            data = raw_error.get("data")
+            message = data.get("message") if isinstance(data, dict) else raw_error.get("name")
+            if isinstance(message, str) and message.strip():
+                events.append(LiveEvent(kind="error", engine="opencode", error=message.strip()))
+    return events
+
+
+def _gemini_live_events(payload: dict[str, object]) -> list[LiveEvent]:
+    events: list[LiveEvent] = []
+    event_type = str(payload.get("type", "")).lower()
+    if event_type == "content":
+        text = payload.get("text")
+        if isinstance(text, str) and text:
+            events.append(
+                LiveEvent(kind="message", engine="gemini", role="assistant", content=text)
+            )
+    elif event_type == "tool_call":
+        tool_name = payload.get("name")
+        tool_input = payload.get("args")
+        events.append(
+            LiveEvent(
+                kind="tool_call",
+                engine="gemini",
+                role="assistant",
+                tool_name=tool_name if isinstance(tool_name, str) else None,
+                tool_input=json.dumps(tool_input) if isinstance(tool_input, (dict, list)) else None,
+            )
+        )
+    elif event_type == "tool_result":
+        result = payload.get("result")
+        events.append(
+            LiveEvent(
+                kind="tool_result",
+                engine="gemini",
+                role="user",
+                tool_output=result
+                if isinstance(result, str)
+                else json.dumps(result)
+                if result
+                else None,
+            )
+        )
+    elif event_type == "finished":
+        value = payload.get("value")
+        if isinstance(value, dict):
+            usage_metadata = value.get("usageMetadata")
+            if isinstance(usage_metadata, dict):
+                meta: dict[str, str | int | bool | None] = {}
+                for field in ("promptTokenCount", "candidatesTokenCount", "totalTokenCount"):
+                    raw = usage_metadata.get(field)
+                    if isinstance(raw, int):
+                        meta[field] = raw
+                if meta:
+                    events.append(LiveEvent(kind="usage", engine="gemini", metadata=meta))
+    elif event_type == "error":
+        raw_error = payload.get("value") or payload.get("error") or payload.get("message")
+        message = None
+        if isinstance(raw_error, str):
+            message = raw_error.strip()
+        elif isinstance(raw_error, dict):
+            message = raw_error.get("message")
+            if not isinstance(message, str):
+                message = None
+        if message:
+            events.append(LiveEvent(kind="error", engine="gemini", error=message))
+    return events
+
+
+def _copilot_live_events(payload: dict[str, object]) -> list[LiveEvent]:
+    events: list[LiveEvent] = []
+    event_type = payload.get("type")
+    data = payload.get("data")
+    if event_type == "assistant.message":
+        if isinstance(data, dict):
+            content = data.get("content")
+            if isinstance(content, str) and content:
+                events.append(
+                    LiveEvent(kind="message", engine="copilot", role="assistant", content=content)
+                )
+    elif event_type == "assistant.message_delta":
+        if isinstance(data, dict):
+            content = data.get("deltaContent")
+            if isinstance(content, str) and content:
+                events.append(
+                    LiveEvent(kind="message", engine="copilot", role="assistant", content=content)
+                )
+    elif event_type == "tool.execution_start":
+        if isinstance(data, dict):
+            tool_name = data.get("toolName") or data.get("tool")
+            events.append(
+                LiveEvent(
+                    kind="tool_call",
+                    engine="copilot",
+                    role="assistant",
+                    tool_name=tool_name if isinstance(tool_name, str) else None,
+                )
+            )
+    elif event_type == "tool.execution_complete":
+        if isinstance(data, dict):
+            tool_name = data.get("toolName") or data.get("tool")
+            result = data.get("result")
+            tool_output = None
+            if isinstance(result, str):
+                tool_output = result
+            elif isinstance(result, dict):
+                content = result.get("content") or result.get("detailedContent")
+                if isinstance(content, str):
+                    tool_output = content
+            events.append(
+                LiveEvent(
+                    kind="tool_result",
+                    engine="copilot",
+                    role="user",
+                    tool_name=tool_name if isinstance(tool_name, str) else None,
+                    tool_output=tool_output,
+                )
+            )
+    elif event_type == "assistant.usage":
+        if isinstance(data, dict):
+            meta: dict[str, str | int | bool | None] = {}
+            for field in ("inputTokens", "outputTokens"):
+                raw = data.get(field)
+                if isinstance(raw, int):
+                    meta[field] = raw
+            model = data.get("model")
+            if isinstance(model, str):
+                meta["model"] = model
+            if meta:
+                events.append(LiveEvent(kind="usage", engine="copilot", metadata=meta))
+    elif event_type == "error":
+        if isinstance(data, dict) and isinstance(data.get("message"), str):
+            events.append(LiveEvent(kind="error", engine="copilot", error=data["message"]))
+    return events
+
+
 _CLAUDE_STREAM_EVENT_ADAPTER = StreamEventAdapter(
     unwrap_event=_unwrap_claude_stream_event,
     text_deltas=_claude_text_deltas,
     final_messages=_claude_final_messages,
     errors=_claude_errors,
+    live_events=_claude_live_events,
 )
 
 
@@ -1442,6 +1740,48 @@ def get_engine(name: str) -> ExternalCLIAdapter:
         return ENGINE_REGISTRY[name]
     except KeyError as exc:
         raise EngineError(f"Unknown engine '{name}'") from exc
+
+
+ENGINE_STREAM_EVENT_ADAPTERS: dict[str, StreamEventAdapter] = {
+    "codex": StreamEventAdapter(
+        live_events=_codex_live_events,
+        unwrap_event=_unwrap_claude_stream_event,
+    ),
+    "opencode": StreamEventAdapter(
+        live_events=_opencode_live_events,
+    ),
+    "gemini": StreamEventAdapter(
+        live_events=_gemini_live_events,
+    ),
+    "copilot": StreamEventAdapter(
+        live_events=_copilot_live_events,
+    ),
+    "claude": _CLAUDE_STREAM_EVENT_ADAPTER,
+}
+
+
+def get_stream_event_adapter(engine_name: str) -> StreamEventAdapter | None:
+    return ENGINE_STREAM_EVENT_ADAPTERS.get(engine_name)
+
+
+def extract_engine_timeline(
+    engine_name: str,
+    stdout: str,
+    *,
+    task_id: str | None = None,
+    subagent_id: str | None = None,
+) -> LiveTimeline | None:
+    if not stdout.strip():
+        return None
+    adapter = get_stream_event_adapter(engine_name)
+    timeline = extract_live_timeline(stdout, engine=engine_name, adapter=adapter)
+    if not timeline.events:
+        return None
+    if task_id is not None:
+        timeline.task_id = task_id
+    if subagent_id is not None:
+        timeline.subagent_id = subagent_id
+    return timeline
 
 
 def classify_execution_limit(text: str) -> str | None:

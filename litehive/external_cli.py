@@ -14,7 +14,15 @@ import selectors
 import time
 from typing import Callable, Literal
 
-from litehive.models import EngineUsageObservation, FollowUpTaskSpec, StageReport, SubagentStatus
+from litehive.models import (
+    EngineUsageObservation,
+    FollowUpTaskSpec,
+    LiveEvent,
+    LiveTimeline,
+    StageReport,
+    SubagentStatus,
+    utcnow,
+)
 
 
 TranscriptFormat = Literal["text", "jsonl"]
@@ -67,6 +75,7 @@ class StreamEventAdapter:
     text_deltas: Callable[[dict[str, object]], list[tuple[int, str]]] | None = None
     final_messages: Callable[[dict[str, object]], list[str]] | None = None
     errors: Callable[[dict[str, object]], list[str]] | None = None
+    live_events: Callable[[dict[str, object]], list[LiveEvent]] | None = None
 
     def unwrap(self, payload: dict[str, object]) -> dict[str, object]:
         if self.unwrap_event is None:
@@ -87,6 +96,11 @@ class StreamEventAdapter:
         if self.errors is None:
             return []
         return self.errors(payload)
+
+    def extract_live_events(self, payload: dict[str, object]) -> list[LiveEvent]:
+        if self.live_events is None:
+            return []
+        return self.live_events(payload)
 
 
 class ExternalCLIAdapter:
@@ -236,7 +250,10 @@ class ExternalCLIAdapter:
         while selector.get_map():
             events = selector.select(timeout=self.LIVE_UPDATE_INTERVAL_SECONDS)
             if not events:
-                if proc.poll() is None and time.monotonic() - last_update_at >= self.LIVE_UPDATE_INTERVAL_SECONDS:
+                if (
+                    proc.poll() is None
+                    and time.monotonic() - last_update_at >= self.LIVE_UPDATE_INTERVAL_SECONDS
+                ):
                     emit_update()
                     last_update_at = time.monotonic()
                 continue
@@ -522,7 +539,9 @@ def _extract_follow_up_tasks(text: str) -> tuple[list[FollowUpTaskSpec], list[st
             continue
         task_type = item.get("task_type")
         if task_type is not None and not isinstance(task_type, str):
-            warnings.append(f"Ignoring invalid follow-up task #{index}: task_type must be a string.")
+            warnings.append(
+                f"Ignoring invalid follow-up task #{index}: task_type must be a string."
+            )
             continue
         goal = item.get("goal", "")
         if not isinstance(goal, str):
@@ -530,9 +549,15 @@ def _extract_follow_up_tasks(text: str) -> tuple[list[FollowUpTaskSpec], list[st
             continue
         blocking = item.get("blocking", False)
         if not isinstance(blocking, bool):
-            warnings.append(f"Ignoring invalid follow-up task #{index}: blocking must be true/false.")
+            warnings.append(
+                f"Ignoring invalid follow-up task #{index}: blocking must be true/false."
+            )
             continue
-        criteria = [entry.strip() for entry in acceptance_criteria if isinstance(entry, str) and entry.strip()]
+        criteria = [
+            entry.strip()
+            for entry in acceptance_criteria
+            if isinstance(entry, str) and entry.strip()
+        ]
         follow_up_tasks.append(
             FollowUpTaskSpec(
                 title=title.strip(),
@@ -578,3 +603,93 @@ def _parse_verdict(text: str, subagent_status: SubagentStatus) -> str:
     if verdict in mapping:
         return mapping[verdict]
     return "pass" if subagent_status == "completed" else "blocked"
+
+
+def extract_live_timeline(
+    stdout: str,
+    *,
+    engine: str,
+    adapter: StreamEventAdapter | None = None,
+) -> LiveTimeline:
+    events: list[LiveEvent] = []
+    sequence = 0
+    for raw_payload in iter_jsonl_payloads(stdout):
+        payload = adapter.unwrap(raw_payload) if adapter is not None else raw_payload
+        if adapter is not None:
+            for event in adapter.extract_live_events(payload):
+                events.append(
+                    LiveEvent(
+                        kind=event.kind,
+                        engine=event.engine or engine,
+                        sequence=sequence,
+                        timestamp=event.timestamp or utcnow(),
+                        role=event.role,
+                        content=event.content,
+                        tool_name=event.tool_name,
+                        tool_input=event.tool_input,
+                        tool_output=event.tool_output,
+                        error=event.error,
+                        metadata=event.metadata,
+                    )
+                )
+                sequence += 1
+            continue
+        for message in _generic_final_messages(payload):
+            events.append(
+                LiveEvent(
+                    kind="message",
+                    engine=engine,
+                    sequence=sequence,
+                    role="assistant",
+                    content=message,
+                )
+            )
+            sequence += 1
+        for error in _generic_errors(payload):
+            events.append(
+                LiveEvent(
+                    kind="error",
+                    engine=engine,
+                    sequence=sequence,
+                    error=error,
+                )
+            )
+            sequence += 1
+    timeline = LiveTimeline(engine=engine)
+    timeline.events = events
+    timeline.recompute_counts()
+    return timeline
+
+
+def _generic_final_messages(payload: dict[str, object]) -> list[str]:
+    content: str | None = None
+    if payload.get("type") == "message" and payload.get("role") == "assistant":
+        raw_content = payload.get("content")
+        if isinstance(raw_content, str) and raw_content:
+            content = raw_content
+    elif payload.get("type") == "assistant.message":
+        data = payload.get("data")
+        if isinstance(data, dict):
+            raw_content = data.get("content")
+            if isinstance(raw_content, str) and raw_content:
+                content = raw_content
+    elif payload.get("type") == "item.completed":
+        item = payload.get("item")
+        if isinstance(item, dict) and item.get("type") == "agent_message":
+            text = item.get("text")
+            if isinstance(text, str) and text:
+                content = text
+    if content is None:
+        return []
+    return [content]
+
+
+def _generic_errors(payload: dict[str, object]) -> list[str]:
+    if payload.get("type") == "error":
+        data = payload.get("data")
+        if isinstance(data, dict) and isinstance(data.get("message"), str):
+            return [data["message"]]
+        message = payload.get("message")
+        if isinstance(message, str) and message:
+            return [message]
+    return []

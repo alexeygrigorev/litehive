@@ -17,9 +17,6 @@ from litehive.config import (
     config_path,
     context_path,
     ensure_workspace,
-    format_external_engine_sandbox,
-    format_runner_hooks,
-    format_subagent_resource_limits,
     load_config,
     normalize_task_engine_routing,
     render_context_template,
@@ -69,7 +66,6 @@ from litehive.tasks import (
     recover_stale_runner_state,
     resume_task,
     require_task,
-    set_pool_stop_reason,
     stop_current_task,
     update_task_metadata,
 )
@@ -2298,7 +2294,7 @@ def _cmd_intake(args: argparse.Namespace) -> int:
         from litehive.tasks import task_dir, task_brief_file
 
         task_goal = raw_goal.strip() if raw_goal.strip() else _fallback_intake_goal(brain_dump)
-        task_goal += f"\n\n(See intake.md for the original brain dump)"
+        task_goal += "\n\n(See intake.md for the original brain dump)"
 
         task = create_task(
             args.workspace,

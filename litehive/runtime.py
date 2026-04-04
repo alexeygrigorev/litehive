@@ -12,7 +12,7 @@ from typing import Callable
 
 import yaml
 
-from litehive.engines import EngineError, extract_engine_continuation, get_engine
+from litehive.engines import extract_engine_continuation, get_engine
 from litehive.config import ExecutionRetryPolicy, LitehiveConfig, load_config, load_context, state_path
 from litehive.git_ops import (
     GitError,

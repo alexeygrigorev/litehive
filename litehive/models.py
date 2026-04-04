@@ -61,6 +61,15 @@ OutcomeReasonCode = Literal[
 ]
 EngineMonitoringSource = Literal["provider", "local"]
 EngineLimitKind = Literal["quota", "rate", "budget", "capacity"]
+LiveEventKind = Literal[
+    "message",
+    "tool_call",
+    "tool_result",
+    "error",
+    "usage",
+    "status",
+]
+LiveEventRole = Literal["assistant", "user", "system"]
 
 
 def utcnow() -> str:
@@ -308,6 +317,36 @@ class WorkspaceState(BaseModel):
     queue: list[str] = Field(default_factory=list)
     pool_stop_reason: str | None = None
     next_task_number: int = 0
+
+
+class LiveEvent(BaseModel):
+    kind: LiveEventKind
+    engine: str
+    sequence: int = 0
+    timestamp: str = Field(default_factory=utcnow)
+    role: LiveEventRole | None = None
+    content: str = ""
+    tool_name: str | None = None
+    tool_input: str | None = None
+    tool_output: str | None = None
+    error: str | None = None
+    metadata: dict[str, str | int | bool | None] = Field(default_factory=dict)
+
+
+class LiveTimeline(BaseModel):
+    events: list[LiveEvent] = Field(default_factory=list)
+    engine: str = ""
+    task_id: str | None = None
+    subagent_id: str | None = None
+    started_at: str | None = None
+    completed_at: str | None = None
+    event_counts: dict[str, int] = Field(default_factory=dict)
+
+    def recompute_counts(self) -> None:
+        counts: dict[str, int] = {}
+        for event in self.events:
+            counts[event.kind] = counts.get(event.kind, 0) + 1
+        self.event_counts = counts
 
 
 class StageReport(BaseModel):
