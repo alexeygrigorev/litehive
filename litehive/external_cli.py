@@ -187,6 +187,7 @@ class ExternalCLIAdapter:
             invocation.argv,
             cwd=str(invocation.cwd),
             env=invocation.env,
+            stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
@@ -225,6 +226,7 @@ class ExternalCLIAdapter:
         proc = subprocess.Popen(
             invocation.argv,
             cwd=str(invocation.cwd),
+            stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             env=invocation.env,
