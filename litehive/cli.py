@@ -1404,7 +1404,48 @@ def build_parser() -> argparse.ArgumentParser:
         help="Repository root containing .litehive/",
     )
 
+    report = subparsers.add_parser("report", help="Submit a stage verdict for the active task")
+    report.add_argument("--verdict", required=True, choices=["pass", "fail", "reject", "blocked", "comment"])
+    report.add_argument("--message", required=True, help="Detailed explanation of what was done, what failed, or what needs fixing")
+    report.add_argument("--role", default="swe", help="Role submitting the report (swe, qa, reviewer, planner)")
+    report.add_argument("--step", help="Stage (grooming, implementing, testing, accepting). Defaults to the task's current pipeline_status.")
+    report.add_argument("--files-changed", action="append", default=[], help="Files that were changed (repeat for multiple)")
+    report.add_argument("--task-id", help="Task ID. Defaults to the active task.")
+    report.add_argument("--workspace", type=Path, default=Path.cwd(), help="Repository root containing .litehive/")
+
     return parser
+
+
+def _cmd_report(args: argparse.Namespace) -> int:
+    from litehive.models import TaskThreadComment
+    from litehive.tasks import append_thread_comment, load_state, get_task, require_task
+
+    root = args.workspace
+    task_id = args.task_id
+    if not task_id:
+        state = load_state(root)
+        task_id = state.active_task_id
+    if not task_id:
+        print("report failed: no active task and --task-id not provided")
+        return 1
+    task = get_task(root, task_id)
+    if task is None:
+        print(f"report failed: task {task_id} not found")
+        return 1
+    step = args.step or task.pipeline_status
+    comment = TaskThreadComment(
+        role=args.role,
+        step=step,
+        verdict=args.verdict,
+        message=args.message,
+        files_changed=args.files_changed,
+    )
+    append_thread_comment(root, task, comment)
+    print(f"task: {task.id}")
+    print(f"step: {step}")
+    print(f"verdict: {args.verdict}")
+    print(f"role: {args.role}")
+    return 0
 
 
 def _cmd_configure(args: argparse.Namespace) -> int:
@@ -1661,6 +1702,10 @@ def _cmd_repair(args: argparse.Namespace) -> int:
     print(
         "finalized_commit_tasks: "
         + (" ".join(summary.finalized_commit_task_ids) if summary.finalized_commit_task_ids else "-")
+    )
+    print(
+        "stale_process_tasks: "
+        + (" ".join(summary.stale_process_task_ids) if summary.stale_process_task_ids else "-")
     )
     print(f"active_task_id: {state.active_task_id}")
     print(f"queue_length: {len(state.queue)}")
@@ -2479,6 +2524,8 @@ def main() -> int:
         return _cmd_close_task(args)
     if args.command == "update":
         return _cmd_update(args)
+    if args.command == "report":
+        return _cmd_report(args)
 
     summary = run_next_task(Path.cwd())
     if summary.task is not None:

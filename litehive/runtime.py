@@ -1149,6 +1149,7 @@ def build_executor(
                         process_profile=config.process_profile,
                         role_name=role_name,
                         config=config,
+                        root=root,
                     )
                 result = subagents.run(
                     current_task,
@@ -1257,7 +1258,41 @@ def build_executor(
                 )
                 continue
 
-            report = stage_report_from_subagent(current_task, step, result)
+            # If the agent didn't submit a verdict via `litehive report` and we
+            # have a session to resume, ask it to submit one.
+            from litehive.tasks import load_task_thread
+            from litehive.engines import extract_engine_continuation
+
+            thread_comments = [
+                c for c in load_task_thread(root, current_task)
+                if c.step == step and c.verdict != "comment"
+            ]
+            if (
+                not thread_comments
+                and result.failure is None
+                and engine_name == "claude"
+                and result.execution is not None
+            ):
+                continuation = extract_engine_continuation(engine_name, result.execution)
+                if continuation and continuation.session_id:
+                    nudge_prompt = (
+                        f"You finished the {step} stage but did not submit your verdict. "
+                        f"Please run this command now:\n\n"
+                        f"  litehive report --verdict <pass|fail|reject> --role {role_name} "
+                        f"--step {step} --message \"<detailed explanation of what you did and the result>\"\n\n"
+                        f"The --message should explain what worked, what failed, and what "
+                        f"the next agent needs to know."
+                    )
+                    subagents.run(
+                        current_task,
+                        role=role_name,
+                        engine_name=engine_name,
+                        prompt=nudge_prompt,
+                        model=model_name,
+                        resume_session_id=continuation.session_id,
+                    )
+
+            report = stage_report_from_subagent(current_task, step, result, root=root)
             if execution_events:
                 report.warnings = [*execution_events, *report.warnings]
                 report.feedback = "\n\n".join([*execution_events, report.feedback]).strip()

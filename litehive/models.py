@@ -208,6 +208,30 @@ class FollowUpTaskSpec(BaseModel):
     task_type: str | None = None
 
 
+class StageResultTests(BaseModel):
+    added: int = 0
+    passing: int = 0
+
+
+class StageResultSubmission(BaseModel):
+    """Schema-validated structured stage result submitted by agents.
+
+    Agents emit a ``STAGE_RESULT:`` JSON block in their transcript.
+    This model validates the payload before converting it to a StageReport.
+    Extra keys are forbidden so agents get clear validation errors.
+    """
+
+    model_config = {"extra": "forbid"}
+
+    verdict: Literal["pass", "accept", "fail", "reject", "blocked"]
+    summary: str
+    files_changed: list[str] = Field(default_factory=list)
+    tests: StageResultTests = Field(default_factory=StageResultTests)
+    warnings: list[str] = Field(default_factory=list)
+    follow_up_tasks: list[FollowUpTaskSpec] = Field(default_factory=list)
+    acceptance_criteria: list[str] = Field(default_factory=list)
+
+
 class TaskOutcomeState(BaseModel):
     kind: OutcomeKind | None = None
     stage: str | None = None
@@ -380,4 +404,15 @@ class StageReport(BaseModel):
     outcome_reason: str = ""
     resource_limit_event: ResourceLimitEvent | None = None
     hook_results: list[dict[str, str | int | bool | None]] = Field(default_factory=list)
+    created_at: str = Field(default_factory=utcnow)
+
+
+class TaskThreadComment(BaseModel):
+    """A single comment in the task discussion thread."""
+
+    role: str  # swe, qa, reviewer, planner, merge-resolver, ...
+    step: str  # grooming, implementing, testing, accepting, commit_to_git
+    verdict: Literal["pass", "fail", "reject", "blocked", "comment"] = "comment"
+    message: str
+    files_changed: list[str] = Field(default_factory=list)
     created_at: str = Field(default_factory=utcnow)

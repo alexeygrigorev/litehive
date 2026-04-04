@@ -820,6 +820,7 @@ def stage_prompt(
     process_profile: str = "generic",
     role_name: str | None = None,
     config: LitehiveConfig | None = None,
+    root: Path | None = None,
 ) -> str:
     """Build the prompt for a stage subagent."""
     profile = resolve_process_profile(process_profile)
@@ -1062,6 +1063,25 @@ def stage_prompt(
                 "- optional criterion",
             ]
         )
+
+    # Include the task discussion thread so agents see the full history
+    from litehive.tasks import render_task_thread
+
+    thread_text = render_task_thread(root, task) if root is not None else ""
+    if thread_text:
+        lines.extend(["", thread_text])
+
+    # Instruct agents to submit their verdict via CLI
+    lines.extend(
+        [
+            "",
+            "IMPORTANT: When you are done, submit your verdict by running:",
+            f"  litehive report --verdict <pass|fail|reject|blocked> --role {stage_owner} --step {step} --message \"<detailed explanation>\"",
+            "The --message must explain what you did, what worked, what failed, and what the next agent should fix.",
+            "You MUST run this command before finishing. The text-based VERDICT/SUMMARY format is accepted as fallback.",
+        ]
+    )
+
     return "\n".join(lines)
 
 
@@ -1164,7 +1184,26 @@ def _lifecycle_verification_overlay(task: TaskRecord, step: str) -> list[str]:
     return lines
 
 
-def stage_report_from_subagent(task: TaskRecord, step: str, result: SubagentResult) -> StageReport:
+def stage_report_from_subagent(
+    task: TaskRecord, step: str, result: SubagentResult, *, root: Path | None = None,
+) -> StageReport:
+    # Check if agent submitted a verdict via `litehive report`
+    if root is not None:
+        from litehive.tasks import load_task_thread
+
+        thread = load_task_thread(root, task)
+        step_comments = [c for c in thread if c.step == step and c.verdict != "comment"]
+        if step_comments:
+            latest = step_comments[-1]
+            return StageReport(
+                task_id=task.id,
+                step=step,  # type: ignore[arg-type]
+                verdict=latest.verdict,  # type: ignore[arg-type]
+                summary=latest.message.splitlines()[0] if latest.message else f"{step} {latest.verdict}",
+                feedback=latest.message,
+                files_changed=latest.files_changed,
+            )
+
     if (
         result.failure is not None
         and result.failure.kind == "resource_limit"

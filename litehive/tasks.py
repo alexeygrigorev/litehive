@@ -1079,6 +1079,49 @@ def task_runtime_file(root: Path, task: TaskRecord) -> Path:
     return task_dir(root, task) / "runtime.yaml"
 
 
+def task_thread_file(root: Path, task: TaskRecord) -> Path:
+    return task_dir(root, task) / "thread.yaml"
+
+
+def append_thread_comment(root: Path, task: TaskRecord, comment: "TaskThreadComment") -> None:
+    from litehive.models import TaskThreadComment  # noqa: F811
+
+    path = task_thread_file(root, task)
+    existing: list[dict] = []
+    if path.exists():
+        loaded = yaml.safe_load(path.read_text(encoding="utf-8"))
+        if isinstance(loaded, list):
+            existing = loaded
+    existing.append(comment.model_dump(mode="python"))
+    path.write_text(yaml.safe_dump(existing, sort_keys=False), encoding="utf-8")
+
+
+def load_task_thread(root: Path, task: TaskRecord) -> list["TaskThreadComment"]:
+    from litehive.models import TaskThreadComment
+
+    path = task_thread_file(root, task)
+    if not path.exists():
+        return []
+    loaded = yaml.safe_load(path.read_text(encoding="utf-8"))
+    if not isinstance(loaded, list):
+        return []
+    return [TaskThreadComment(**entry) for entry in loaded if isinstance(entry, dict)]
+
+
+def render_task_thread(root: Path, task: TaskRecord) -> str:
+    thread = load_task_thread(root, task)
+    if not thread:
+        return ""
+    lines = ["Discussion thread:"]
+    for c in thread:
+        header = f"[{c.created_at}] {c.role} ({c.step}) — {c.verdict}"
+        lines.append(f"\n--- {header} ---")
+        lines.append(c.message)
+        if c.files_changed:
+            lines.append(f"Files: {', '.join(c.files_changed)}")
+    return "\n".join(lines)
+
+
 def _ensure_runtime_ignored(root: Path) -> None:
     ignore_path = workspace_gitignore_path(root)
     expected = render_workspace_gitignore()
