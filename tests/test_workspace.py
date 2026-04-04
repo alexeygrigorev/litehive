@@ -4058,7 +4058,6 @@ def test_codex_build_invocation_includes_workspace_and_prompt(tmp_path: Path) ->
         "--cd",
         str(tmp_path),
         "--skip-git-repo-check",
-        "--json",
         "ship it",
     ]
 
@@ -17212,3 +17211,52 @@ def test_subagent_skips_timeline_when_no_events(
 
     base = task_dir(tmp_path, task) / "subagents" / "SA-0001-swe"
     assert not (base / "timeline.yaml").exists()
+
+
+# --- Stage duration and velocity estimation tests ---
+
+
+def test_runner_persists_duration_seconds_in_report_yaml(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Duration tracking task")
+
+    def executor(task, step):  # type: ignore[no-untyped-def]
+        return StageReport(task_id=task.id, step=step, verdict="pass", summary=f"{step} ok")
+
+    runner = TaskExecutionRunner(tmp_path, executor)
+    runner.run(task)
+
+    reports_dir = tmp_path / ".litehive" / "tasks" / f"{task.id}-{task.slug}" / "reports"
+    for report_path in reports_dir.glob("*.yaml"):
+        data = yaml.safe_load(report_path.read_text(encoding="utf-8"))
+        assert "duration_seconds" in data, f"duration_seconds missing in {report_path.name}"
+        assert isinstance(data["duration_seconds"], int)
+        assert data["duration_seconds"] >= 0
+
+
+def test_render_task_summary_includes_estimate_velocity_and_eta(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Estimate demo task")
+
+    # Manually create a report with a known duration to seed the velocity estimate.
+    reports_dir = tmp_path / ".litehive" / "tasks" / f"{task.id}-{task.slug}" / "reports"
+    reports_dir.mkdir(parents=True, exist_ok=True)
+    (reports_dir / "grooming-001.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "task_id": task.id,
+                "step": "grooming",
+                "verdict": "pass",
+                "summary": "ok",
+                "duration_seconds": 120,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    task.pipeline_status = "implementing"
+    lines = render_task_summary(task, active=True, root=tmp_path)
+    combined = "\n".join(lines)
+    assert "stage_estimate=" in combined
+    assert "velocity=" in combined
+    assert "eta=" in combined

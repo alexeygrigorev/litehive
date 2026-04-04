@@ -167,7 +167,7 @@ class CodexCLIAdapter(ExternalCLIAdapter):
         max_turns: int | None = None,
         resume_session_id: str | None = None,
     ) -> list[str]:
-        return [
+        command = [
             self.binary,
             "exec",
             "--json",
@@ -175,9 +175,11 @@ class CodexCLIAdapter(ExternalCLIAdapter):
             "--cd",
             str(cwd),
             "--skip-git-repo-check",
-            "--json",
-            prompt,
         ]
+        if model:
+            command.extend(["--model", model])
+        command.append(prompt)
+        return command
 
     def render_transcript(self, execution: CLIExecutionResult) -> str:
         assistant_text = _extract_codex_transcript(execution.stdout)
