@@ -9,13 +9,13 @@ task_type: null
 engine: null
 model: null
 mode: implementation
-status: queued
-pipeline_status: backlog
+status: interrupted
+pipeline_status: grooming
 priority: medium
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-03T06:53:52+00:00'
-updated_at: '2026-04-03T06:59:30+00:00'
+updated_at: '2026-04-04T15:33:46+00:00'
 goal: Allow litehive to run multiple independent tasks in parallel, each in its own
   dedicated worktree, while keeping runner-owned orchestration and using a dedicated
   agent only when merge conflicts or integration problems need to be resolved. This
@@ -64,7 +64,14 @@ plan:
   conflict recovery, then document the feature as task-level parallelism rather than
   intra-task worker fanout.
 human_checkpoints: []
-subagents: []
+subagents:
+- id: SA-0001
+  role: planner
+  engine: codex
+  status: completed
+  path: subagents/SA-0001-planner
+  sandboxed: false
+  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0129 run-multiple-independent-tasks-in-parallel-using-separate-worktrees-with-agent-assisted-merge-conflict-resolution'

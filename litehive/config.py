@@ -13,7 +13,7 @@ import yaml
 
 
 VALID_POOL_SELECTION_POLICIES = {"fifo", "priority_first", "dependency_aware"}
-VALID_ENGINE_NAMES = frozenset({"codex", "opencode", "gemini", "copilot", "claude"})
+VALID_ENGINE_NAMES = frozenset({"codex", "opencode", "gemini", "copilot", "claude", "goz"})
 VALID_AGENT_STARTUP_GUIDANCE_KEYS = frozenset({"all", "planner", "swe", "qa", "reviewer", "recovery"})
 VALID_EXECUTION_RETRY_SELECTORS = frozenset({*VALID_ENGINE_NAMES, "external_cli"})
 VALID_EXECUTION_RETRY_CLASSIFICATIONS = frozenset({"timeout", "network", "service"})
@@ -50,13 +50,13 @@ def _normalize_execution_retry_selector(selector: str) -> str:
 
 def _default_task_engine_routing() -> dict[str, list[str]]:
     return {
-        "adapter": ["codex", "opencode", "gemini", "copilot"],
-        "bugfix": ["codex", "opencode", "copilot", "gemini"],
-        "research": ["gemini", "codex", "opencode", "copilot"],
-        "review": ["copilot", "codex", "opencode", "gemini"],
-        "refactor": ["opencode", "codex", "copilot", "gemini"],
-        "docs": ["codex", "gemini", "opencode", "copilot"],
-        "intake": ["opencode", "codex", "gemini", "copilot"],
+        "adapter": ["codex", "opencode", "gemini", "copilot", "goz"],
+        "bugfix": ["codex", "opencode", "copilot", "gemini", "goz"],
+        "research": ["gemini", "codex", "opencode", "copilot", "goz"],
+        "review": ["copilot", "codex", "opencode", "gemini", "goz"],
+        "refactor": ["opencode", "codex", "copilot", "gemini", "goz"],
+        "docs": ["codex", "gemini", "opencode", "copilot", "goz"],
+        "intake": ["opencode", "codex", "gemini", "copilot", "goz"],
     }
 
 
@@ -479,6 +479,12 @@ def _default_execution_retry_policies() -> dict[str, ExecutionRetryPolicy]:
             backoff_multiplier=2.0,
             retry_on=["timeout", "network", "service"],
         ),
+        "goz": ExecutionRetryPolicy(
+            max_retries=2,
+            backoff_seconds=0.25,
+            backoff_multiplier=2.0,
+            retry_on=["timeout", "network", "service"],
+        ),
     }
 
 
@@ -806,6 +812,7 @@ class LitehiveConfig:
             "gemini": 1,
             "copilot": 1,
             "claude": 3,
+            "goz": 1,
         }
     )
     default_retry_limit: int = 3
@@ -834,6 +841,7 @@ class LitehiveConfig:
             "opencode": ["codex", "gemini", "copilot"],
             "gemini": ["codex", "opencode", "copilot"],
             "copilot": ["codex", "opencode", "gemini"],
+            "goz": ["opencode", "codex", "gemini", "copilot"],
         }
     )
     agent_startup_guidance: dict[str, list[str]] = field(default_factory=dict)

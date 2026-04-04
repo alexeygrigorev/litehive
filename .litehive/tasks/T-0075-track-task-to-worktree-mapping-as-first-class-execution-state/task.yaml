@@ -2,41 +2,21 @@ id: T-0075
 slug: track-task-to-worktree-mapping-as-first-class-execution-state
 title: Track task-to-worktree mapping as first-class execution state
 depends_on: []
-task_type: refactor
-engine: opencode
+task_type: null
+engine: codex
 model: null
 mode: implementation
-status: flagged
-pipeline_status: implementing
+status: done
+pipeline_status: done
 priority: medium
-pm_complexity: moderate
-planned_effort: m
+pm_complexity: null
+planned_effort: null
 created_at: '2026-04-01T06:36:02+00:00'
-updated_at: '2026-04-04T13:56:09+00:00'
-goal: Make the task-to-worktree relationship durable execution state so active tasks
-  can resolve, report, recover, and clean up their assigned worktree without relying
-  on ad hoc or duplicated git metadata.
-acceptance_criteria:
-- A task with an assigned worktree persists that mapping in the task's live execution
-  state, and later stage/resume paths load the same mapping without recomputing ownership
-  from unrelated state.
-- Worktree creation, reuse, recovery, dirty-worktree ownership checks, and cleanup
-  all read and update the same canonical task-to-worktree execution-state field instead
-  of a split or stale source of truth.
-- Focused tests cover persistence/migration from any legacy task or workspace worktree
-  metadata plus at least one execution path and one cleanup/recovery path that prove
-  the mapping survives until it is intentionally cleared.
+updated_at: '2026-04-04T14:07:44+00:00'
+goal: ''
+acceptance_criteria: []
 constraints: []
-plan:
-- Confirm the canonical execution-state field for task-to-worktree mapping and remove
-  ambiguity between task git metadata, runtime state, and any workspace-level side
-  mapping.
-- Update worktree lifecycle paths to use that canonical mapping consistently for creation,
-  reuse, reporting, recovery, dirty-worktree ownership checks, and cleanup.
-- Keep backward-compatible reads for legacy task/workspace metadata only as migration
-  input, and clear migrated or completed mappings so stale ownership does not persist.
-- Add focused regression coverage for persistence/migration plus at least one execution
-  path and one cleanup or recovery path.
+plan: []
 human_checkpoints: []
 subagents:
 - id: SA-0001
@@ -60,12 +40,54 @@ subagents:
   path: subagents/SA-0031-swe
   sandboxed: false
   sandbox_summary: host
+- id: SA-0032
+  role: planner
+  engine: opencode
+  status: interrupted
+  path: subagents/SA-0032-planner
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0033
+  role: planner
+  engine: codex
+  status: completed
+  path: subagents/SA-0033-planner
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0034
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0034-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0035
+  role: qa
+  engine: codex
+  status: completed
+  path: subagents/SA-0035-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0036
+  role: reviewer
+  engine: codex
+  status: completed
+  path: subagents/SA-0036-reviewer
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0037
+  role: recovery
+  engine: claude
+  status: completed
+  path: subagents/SA-0037-recovery
+  sandboxed: false
+  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0075 track-task-to-worktree-mapping-as-first-class-execution-state'
-  commit_sha: null
-  checkpoint_base_sha: null
-  checkpoint_attempts: 0
+  commit_sha: 721a1ae562f69ea0f8698c6381f5a76e2e77216d
+  checkpoint_base_sha: 17e7ac3fc9b5cd34b834f2fbe305335b560021e6
+  checkpoint_attempts: 1
   rolled_back_checkpoint_attempt: null
   worktree_path: null
 retry_policy:

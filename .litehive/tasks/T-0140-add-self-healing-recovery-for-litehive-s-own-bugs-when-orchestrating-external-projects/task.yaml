@@ -1,0 +1,45 @@
+id: T-0140
+slug: add-self-healing-recovery-for-litehive-s-own-bugs-when-orchestrating-external-projects
+title: Add self-healing recovery for litehive's own bugs when orchestrating external
+  projects
+depends_on: []
+task_type: null
+engine: null
+model: null
+mode: implementation
+status: queued
+pipeline_status: backlog
+priority: medium
+pm_complexity: null
+planned_effort: null
+created_at: '2026-04-04T14:36:58+00:00'
+updated_at: '2026-04-04T14:36:58+00:00'
+goal: When litehive fails due to a bug in its own code (not the target project), the
+  recovery agent should fix the litehive source, run litehive tests, merge the fix,
+  and requeue the original task so it succeeds on the next iteration
+acceptance_criteria:
+- recovery agent classifies errors as litehive bugs vs project bugs by inspecting
+  the traceback
+- litehive_source_path config field points to the litehive source repo
+- for litehive bugs the recovery agent works in a litehive worktree with litehive
+  context, not the target project
+- recovery agent runs uv run pytest on litehive before merging the fix
+- successful self-heal merges to litehive main so the next wrapper iteration uses
+  the fixed code
+- self-heal is capped at 1 attempt per error to prevent loops
+- all self-heal actions are logged to the task thread for auditability
+constraints: []
+plan: []
+human_checkpoints: []
+subagents: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0140 add-self-healing-recovery-for-litehive-s-own-bugs-when-orchestrating-external-projects'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+  worktree_path: null
+retry_policy:
+  max_retries: null
+created_from: null

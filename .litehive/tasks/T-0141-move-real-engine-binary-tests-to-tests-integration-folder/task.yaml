@@ -1,0 +1,40 @@
+id: T-0141
+slug: move-real-engine-binary-tests-to-tests-integration-folder
+title: Move real engine binary tests to tests_integration folder
+depends_on: []
+task_type: null
+engine: null
+model: null
+mode: implementation
+status: queued
+pipeline_status: backlog
+priority: medium
+pm_complexity: null
+planned_effort: null
+created_at: '2026-04-04T16:02:28+00:00'
+updated_at: '2026-04-04T16:02:28+00:00'
+goal: Separate tests that invoke real engine binaries (codex, claude, opencode, gemini,
+  copilot, goz) into tests_integration/ so the main test suite runs fast without needing
+  live engines
+acceptance_criteria:
+- tests_integration/ folder exists with integration tests that call real engine binaries
+- main test suite in tests/ runs without invoking any real engine binary
+- integration tests can be run separately with uv run pytest tests_integration/
+- 'integration tests verify each engine adapter end-to-end: build_command, run, render_transcript,
+  parse_stage_report'
+- main test suite completes in under 60 seconds without recovery agent timeout delays
+constraints: []
+plan: []
+human_checkpoints: []
+subagents: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0141 move-real-engine-binary-tests-to-tests-integration-folder'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+  worktree_path: null
+retry_policy:
+  max_retries: null
+created_from: null

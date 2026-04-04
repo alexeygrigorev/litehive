@@ -1,0 +1,41 @@
+id: T-0138
+slug: kill-stale-subagent-processes-after-5-minutes-of-no-output-and-switch-to-fallback-engine
+title: Kill stale subagent processes after 5 minutes of no output and switch to fallback
+  engine
+depends_on: []
+task_type: null
+engine: null
+model: null
+mode: implementation
+status: queued
+pipeline_status: backlog
+priority: medium
+pm_complexity: null
+planned_effort: null
+created_at: '2026-04-04T13:53:59+00:00'
+updated_at: '2026-04-04T13:53:59+00:00'
+goal: If a running subagent produces no new stdout or events for 5 minutes, kill the
+  process and fail the execution so the engine fallback or recovery agent can take
+  over
+acceptance_criteria:
+- subagent processes that produce no stdout for 5 minutes are killed automatically
+- killed subagent result is classified as a retryable execution error so engine fallback
+  kicks in
+- the timeout duration is configurable via config (default 5 minutes)
+- the timeout check uses the live stdout file modification time, not wall clock from
+  start
+constraints: []
+plan: []
+human_checkpoints: []
+subagents: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0138 kill-stale-subagent-processes-after-5-minutes-of-no-output-and-switch-to-fallback-engine'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+  worktree_path: null
+retry_policy:
+  max_retries: null
+created_from: null

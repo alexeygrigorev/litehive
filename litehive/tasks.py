@@ -50,7 +50,7 @@ from litehive.models import (
 )
 
 VALID_TASK_PRIORITIES = {"low", "medium", "high"}
-VALID_TASK_ENGINES = {"codex", "opencode", "gemini", "copilot", "claude"}
+VALID_TASK_ENGINES = {"codex", "opencode", "gemini", "copilot", "claude", "goz"}
 VALID_HUMAN_CHECKPOINTS = {"before_acceptance", "before_commit"}
 VALID_PM_COMPLEXITIES = set(get_args(TaskComplexity))
 VALID_PLANNED_EFFORTS = set(get_args(PlannedEffort))
