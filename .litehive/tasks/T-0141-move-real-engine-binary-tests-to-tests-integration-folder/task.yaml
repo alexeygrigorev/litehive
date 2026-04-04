@@ -6,13 +6,13 @@ task_type: null
 engine: null
 model: null
 mode: implementation
-status: queued
-pipeline_status: backlog
+status: interrupted
+pipeline_status: grooming
 priority: medium
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-04T16:02:28+00:00'
-updated_at: '2026-04-04T16:02:28+00:00'
+updated_at: '2026-04-04T18:36:27+00:00'
 goal: Separate tests that invoke real engine binaries (codex, claude, opencode, gemini,
   copilot, goz) into tests_integration/ so the main test suite runs fast without needing
   live engines
@@ -26,7 +26,14 @@ acceptance_criteria:
 constraints: []
 plan: []
 human_checkpoints: []
-subagents: []
+subagents:
+- id: SA-0001
+  role: planner
+  engine: codex
+  status: completed
+  path: subagents/SA-0001-planner
+  sandboxed: false
+  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0141 move-real-engine-binary-tests-to-tests-integration-folder'

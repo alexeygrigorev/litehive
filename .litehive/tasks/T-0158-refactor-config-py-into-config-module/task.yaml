@@ -1,0 +1,39 @@
+id: T-0158
+slug: refactor-config-py-into-config-module
+title: Refactor config.py into config/ module
+depends_on: []
+task_type: null
+engine: null
+model: null
+mode: implementation
+status: queued
+pipeline_status: backlog
+priority: medium
+pm_complexity: null
+planned_effort: null
+created_at: '2026-04-04T20:46:35+00:00'
+updated_at: '2026-04-04T20:46:35+00:00'
+goal: Split config.py into config/__init__.py with separate files for profiles, retry
+  policies, normalization, and the LitehiveConfig dataclass. Add docstrings for all
+  config fields.
+acceptance_criteria:
+- litehive/config/ is a package
+- every LitehiveConfig field has a docstring explaining what it does
+- _default_execution_retry_policies has one definition reused everywhere
+- all tests pass
+constraints: []
+plan: []
+human_checkpoints: []
+subagents: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0158 refactor-config-py-into-config-module'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+  worktree_path: null
+retry_policy:
+  max_retries: null
+created_from: null
+upstream_origin: null

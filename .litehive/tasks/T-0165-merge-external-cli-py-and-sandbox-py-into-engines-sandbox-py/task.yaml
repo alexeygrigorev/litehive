@@ -1,0 +1,39 @@
+id: T-0165
+slug: merge-external-cli-py-and-sandbox-py-into-engines-sandbox-py
+title: Merge external_cli.py and sandbox.py into engines/sandbox.py
+depends_on: []
+task_type: null
+engine: null
+model: null
+mode: implementation
+status: queued
+pipeline_status: backlog
+priority: medium
+pm_complexity: null
+planned_effort: null
+created_at: '2026-04-04T20:46:47+00:00'
+updated_at: '2026-04-04T20:46:47+00:00'
+goal: external_cli.py is the base adapter class and sandbox.py wraps it. Merge them
+  into the engines module as engines/base.py and engines/sandbox.py.
+acceptance_criteria:
+- external_cli.py is deleted
+- sandbox.py is deleted
+- engines/base.py has ExternalCLIAdapter
+- engines/sandbox.py has sandbox wrapping
+- all tests pass
+constraints: []
+plan: []
+human_checkpoints: []
+subagents: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0165 merge-external-cli-py-and-sandbox-py-into-engines-sandbox-py'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+  worktree_path: null
+retry_policy:
+  max_retries: null
+created_from: null
+upstream_origin: null

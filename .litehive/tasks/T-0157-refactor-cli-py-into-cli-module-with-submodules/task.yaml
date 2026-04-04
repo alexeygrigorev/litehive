@@ -1,0 +1,37 @@
+id: T-0157
+slug: refactor-cli-py-into-cli-module-with-submodules
+title: Refactor cli.py into cli/ module with submodules
+depends_on: []
+task_type: null
+engine: null
+model: null
+mode: implementation
+status: queued
+pipeline_status: backlog
+priority: medium
+pm_complexity: null
+planned_effort: null
+created_at: '2026-04-04T20:46:33+00:00'
+updated_at: '2026-04-04T20:46:33+00:00'
+goal: Split cli.py into cli/__init__.py with submodules for each command group (status,
+  queue, run, tasks, daemon, etc). Each submodule handles one command.
+acceptance_criteria:
+- litehive/cli/ is a package with separate files per command group
+- all CLI commands work identically after refactoring
+- all tests pass
+constraints: []
+plan: []
+human_checkpoints: []
+subagents: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0157 refactor-cli-py-into-cli-module-with-submodules'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+  worktree_path: null
+retry_policy:
+  max_retries: null
+created_from: null
+upstream_origin: null

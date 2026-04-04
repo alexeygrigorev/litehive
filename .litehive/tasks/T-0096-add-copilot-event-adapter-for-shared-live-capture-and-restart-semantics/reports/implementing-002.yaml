@@ -1,0 +1,73 @@
+task_id: T-0096
+step: implementing
+verdict: pass
+summary: 'Now let me look at the T-0095 gemini adapter commit, and understand the
+  current copilot adapter:Let me look at the gemini adapter and what restart semantics
+  were added:Let me look at the current copilot tests and the external_cli.py:Let
+  me check what the copilot adapter''s capabilities show and understand what''s missing:Let
+  me look at previous subagent reports and understand the current state better:Let
+  me look at what''s imported from external_cli in engines.py:Let me look at what
+  restart semantics mean and check the inactivity test:Let me understand the current
+  state vs. what needs to change:Now I have a complete picture. Let me implement the
+  changes:Now I''ll implement the changes. I need to:'
+feedback: "Now let me look at the T-0095 gemini adapter commit, and understand the\
+  \ current copilot adapter:Let me look at the gemini adapter and what restart semantics\
+  \ were added:Let me look at the current copilot tests and the external_cli.py:Let\
+  \ me check what the copilot adapter's capabilities show and understand what's missing:Let\
+  \ me look at previous subagent reports and understand the current state better:Let\
+  \ me look at what's imported from external_cli in engines.py:Let me look at what\
+  \ restart semantics mean and check the inactivity test:Let me understand the current\
+  \ state vs. what needs to change:Now I have a complete picture. Let me implement\
+  \ the changes:Now I'll implement the changes. I need to:\n1. Add `_copilot_final_messages`,\
+  \ `_copilot_text_deltas`, `_copilot_errors` functions after `_copilot_live_events`\n\
+  2. Create `_COPILOT_STREAM_EVENT_ADAPTER` \n3. Update `CopilotCLIAdapter` methods\
+  \ to use shared functions\n4. Update `ENGINE_STREAM_EVENT_ADAPTERS`\n5. Add copilot\
+  \ to `extract_engine_continuation`Now I'll add the copilot hook functions and `_COPILOT_STREAM_EVENT_ADAPTER`,\
+  \ and update the `CopilotCLIAdapter` methods:Now update the `CopilotCLIAdapter.render_transcript`\
+  \ and `parse_stage_report` methods:Now update `ENGINE_STREAM_EVENT_ADAPTERS` to\
+  \ use `_COPILOT_STREAM_EVENT_ADAPTER`:Now add copilot to `extract_engine_continuation`.\
+  \ Since copilot doesn't emit a session_id, it returns None but is made explicit:Now\
+  \ remove the private `_extract_copilot_transcript` and `_extract_copilot_errors`\
+  \ functions since they're no longer needed:Now run the copilot tests to verify everything\
+  \ still passes:All 10 copilot tests pass. Now let me add tests for the new functionality,\
+  \ particularly to cover:\n1. The `_COPILOT_STREAM_EVENT_ADAPTER` hooks directly\n\
+  2. The `extract_engine_continuation` returning None for copilotNow add the new tests\
+  \ after the existing copilot tests:Wait, I need to add back the `test_execution_result_transcript_combines_stdout_and_stderr`\
+  \ function reference:I see the edit ate part of the next test. Let me fix this:Now\
+  \ run the copilot tests to verify all pass:14 tests pass (4 new ones added). Now\
+  \ let me run a broader set of tests to make sure nothing broke:All 120 relevant\
+  \ tests pass. Let me now submit the report:Implementation complete. Here's what\
+  \ was done:\n\n## Summary\n\nRefactored the Copilot engine adapter to use the **shared\
+  \ `StreamEventAdapter` pattern**, consistent with the Claude adapter (T-0094) and\
+  \ the existing codex/gemini adapters.\n\n**Changes:**\n- **`litehive/engines.py`**:\
+  \ Added per-payload hook functions (`_copilot_final_messages`, `_copilot_text_deltas`,\
+  \ `_copilot_errors`), created `_COPILOT_STREAM_EVENT_ADAPTER` combining all hooks\
+  \ + `_copilot_live_events`, updated `CopilotCLIAdapter.render_transcript` and `parse_stage_report`\
+  \ to use the shared `extract_stream_transcript`/`extract_stream_errors` functions\
+  \ from `external_cli.py`, registered `_COPILOT_STREAM_EVENT_ADAPTER` in `ENGINE_STREAM_EVENT_ADAPTERS`,\
+  \ removed private extraction functions, and added explicit `copilot` case in `extract_engine_continuation`\
+  \ (returns None \u2014 CLI doesn't emit a resumable session_id).\n- **`tests/test_workspace.py`**:\
+  \ Added `extract_engine_continuation` import + 4 new tests for final message extraction,\
+  \ delta fallback, tool error extraction, and continuation returning None.\n\n**Result:**\
+  \ 14 copilot tests pass (10 existing + 4 new), 120 engine-related tests pass, no\
+  \ regressions."
+files_changed: []
+follow_up_tasks: []
+created_follow_up_task_ids: []
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 1011
+hook_results: []
+created_at: '2026-04-04T20:27:05+00:00'

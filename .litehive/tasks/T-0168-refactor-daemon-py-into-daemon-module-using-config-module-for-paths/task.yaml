@@ -1,0 +1,37 @@
+id: T-0168
+slug: refactor-daemon-py-into-daemon-module-using-config-module-for-paths
+title: Refactor daemon.py into daemon/ module using config module for paths
+depends_on: []
+task_type: null
+engine: null
+model: null
+mode: implementation
+status: queued
+pipeline_status: backlog
+priority: medium
+pm_complexity: null
+planned_effort: null
+created_at: '2026-04-04T20:46:52+00:00'
+updated_at: '2026-04-04T20:46:52+00:00'
+goal: Split daemon.py into daemon/__init__.py. Use the config module for global config
+  path instead of hardcoding.
+acceptance_criteria:
+- litehive/daemon/ is a package
+- global config path comes from config module
+- all daemon subcommands work
+constraints: []
+plan: []
+human_checkpoints: []
+subagents: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0168 refactor-daemon-py-into-daemon-module-using-config-module-for-paths'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+  worktree_path: null
+retry_policy:
+  max_retries: null
+created_from: null
+upstream_origin: null

@@ -1,0 +1,37 @@
+id: T-0152
+slug: add-acceptance-criteria-best-practices-to-pm-grooming-prompt
+title: Add acceptance criteria best practices to PM grooming prompt
+depends_on: []
+task_type: docs
+engine: null
+model: null
+mode: tasks
+status: queued
+pipeline_status: backlog
+priority: medium
+pm_complexity: null
+planned_effort: null
+created_at: '2026-04-04T20:45:48+00:00'
+updated_at: '2026-04-04T20:45:48+00:00'
+goal: 'PMs sometimes write acceptance criteria as just command lists. Add guidance
+  to the grooming prompt about writing good acceptance criteria: observable behavior,
+  not implementation steps.'
+acceptance_criteria:
+- grooming prompt includes best practices for writing acceptance criteria
+- examples of good vs bad criteria are included
+constraints: []
+plan: []
+human_checkpoints: []
+subagents: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0152 add-acceptance-criteria-best-practices-to-pm-grooming-prompt'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+  worktree_path: null
+retry_policy:
+  max_retries: null
+created_from: null
+upstream_origin: null

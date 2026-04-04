@@ -1,0 +1,40 @@
+id: T-0146
+slug: test-goz-engine-integration
+title: Test goz engine integration
+depends_on: []
+task_type: null
+engine: goz
+model: null
+mode: tasks
+status: flagged
+pipeline_status: grooming
+priority: medium
+pm_complexity: null
+planned_effort: null
+created_at: '2026-04-04T18:36:13+00:00'
+updated_at: '2026-04-04T18:36:53+00:00'
+goal: Verify goz engine works by running a simple task
+acceptance_criteria:
+- goz engine runs successfully and produces a verdict
+constraints: []
+plan: []
+human_checkpoints: []
+subagents:
+- id: SA-0001
+  role: planner
+  engine: goz
+  status: failed
+  path: subagents/SA-0001-planner
+  sandboxed: false
+  sandbox_summary: host
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0146 test-goz-engine-integration'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+  worktree_path: null
+retry_policy:
+  max_retries: null
+created_from: null

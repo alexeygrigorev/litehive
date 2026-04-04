@@ -12,7 +12,7 @@ priority: medium
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-04T16:07:40+00:00'
-updated_at: '2026-04-04T17:49:56+00:00'
+updated_at: '2026-04-04T17:51:27+00:00'
 goal: Add a litehive daemon subcommand group that replaces scripts/run-all.sh. Supports
   run, status, stop, restart, and instances. Each iteration spawns a fresh subprocess
   so code changes are picked up automatically. Daemon PID and workspace are registered
@@ -55,14 +55,14 @@ subagents:
 - id: SA-0005
   role: recovery
   engine: claude
-  status: running
+  status: completed
   path: subagents/SA-0005-recovery
   sandboxed: false
   sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0142 replace-bash-run-all-wrapper-with-litehive-daemon-command'
-  commit_sha: null
+  commit_sha: 00eb94951448d7457f5e83cb4bd1065865d2ae4e
   checkpoint_base_sha: dbb5f1e3f7f67dddef75ece79652f8b783e1d923
   checkpoint_attempts: 1
   rolled_back_checkpoint_attempt: null

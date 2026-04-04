@@ -1,0 +1,38 @@
+id: T-0149
+slug: support-agent-prompts-as-markdown-files-in-litehive-agents
+title: Support agent prompts as markdown files in .litehive/agents/
+depends_on: []
+task_type: null
+engine: null
+model: null
+mode: implementation
+status: queued
+pipeline_status: backlog
+priority: medium
+pm_complexity: null
+planned_effort: null
+created_at: '2026-04-04T20:45:43+00:00'
+updated_at: '2026-04-04T20:45:43+00:00'
+goal: Allow agent role prompts to be defined in .litehive/agents/qa.md, .litehive/agents/swe.md
+  etc instead of only in config.yaml. Markdown files are easier to edit and version.
+acceptance_criteria:
+- .litehive/agents/qa.md is loaded as the QA prompt if it exists
+- .litehive/agents/swe.md is loaded as the SWE prompt if it exists
+- config.yaml agent_startup_guidance still works as fallback
+- markdown files take precedence over config.yaml
+constraints: []
+plan: []
+human_checkpoints: []
+subagents: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0149 support-agent-prompts-as-markdown-files-in-litehive-agents'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+  worktree_path: null
+retry_policy:
+  max_retries: null
+created_from: null
+upstream_origin: null

@@ -30,7 +30,7 @@ from litehive.tasks import (
     set_task_retry_state,
     task_dir,
 )
-from litehive.workflow_verification import latest_stage_report, workflow_verification_gaps
+
 
 
 class StageExecutor(Protocol):
@@ -607,13 +607,6 @@ class TaskExecutionRunner:
             hook_results=hook_results or [],
         )
 
-    def _enforce_workflow_verification(
-        self, task: TaskRecord, current: str, report: StageReport
-    ) -> StageReport:
-        # Disabled — QA decides whether the implementation is correct.
-        return report
-
-
 def _reason_code_for_report(report: StageReport) -> OutcomeReasonCode:
     verdict = report.verdict
     if verdict == "fail":
@@ -631,19 +624,3 @@ def _human_checkpoint_reason(task: TaskRecord, target: str) -> str | None:
     if target == "commit_to_git" and "before_commit" in task.human_checkpoints:
         return "before_commit"
     return None
-
-
-def _workflow_verification_gaps_for_stage(
-    root: Path, task: TaskRecord, current: str, report: StageReport
-) -> list[str]:
-    if current == "testing":
-        return workflow_verification_gaps(task, report.feedback)
-    if current != "accepting":
-        return []
-
-    testing_report = latest_stage_report(root, task, "testing")
-    if testing_report is None:
-        return [
-            "acceptance requires QA evidence from the testing stage for workflow/control-plane lifecycle claims"
-        ]
-    return workflow_verification_gaps(task, testing_report.feedback)

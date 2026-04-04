@@ -1,0 +1,37 @@
+id: T-0154
+slug: delete-workflow-verification-py-dead-code
+title: Delete workflow_verification.py dead code
+depends_on: []
+task_type: null
+engine: null
+model: null
+mode: implementation
+status: queued
+pipeline_status: backlog
+priority: medium
+pm_complexity: null
+planned_effort: null
+created_at: '2026-04-04T20:45:52+00:00'
+updated_at: '2026-04-04T20:45:52+00:00'
+goal: workflow_verification.py is disabled and unused since we removed the enforcement
+  gate. Delete it and clean up imports.
+acceptance_criteria:
+- workflow_verification.py is deleted
+- all imports of it are removed
+- all tests pass
+constraints: []
+plan: []
+human_checkpoints: []
+subagents: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0154 delete-workflow-verification-py-dead-code'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+  worktree_path: null
+retry_policy:
+  max_retries: null
+created_from: null
+upstream_origin: null

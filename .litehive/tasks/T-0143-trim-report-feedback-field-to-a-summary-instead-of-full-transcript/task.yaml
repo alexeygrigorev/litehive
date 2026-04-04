@@ -1,0 +1,46 @@
+id: T-0143
+slug: trim-report-feedback-field-to-a-summary-instead-of-full-transcript
+title: Trim report feedback field to a summary instead of full transcript
+depends_on: []
+task_type: null
+engine: null
+model: null
+mode: implementation
+status: interrupted
+pipeline_status: grooming
+priority: medium
+pm_complexity: null
+planned_effort: null
+created_at: '2026-04-04T16:46:47+00:00'
+updated_at: '2026-04-04T20:02:54+00:00'
+goal: Stage reports should contain a concise feedback summary (under 2000 chars) instead
+  of the full agent transcript. The full transcript stays in subagents/ artifacts.
+  This keeps reports lightweight enough to track in git.
+acceptance_criteria:
+- report feedback field is capped at 2000 characters with a truncation marker
+- full transcript remains accessible in the subagent stdout/transcript files
+- agents that submit via litehive report have their message stored as-is since it
+  is already a summary
+constraints: []
+plan: []
+human_checkpoints: []
+subagents:
+- id: SA-0001
+  role: planner
+  engine: codex
+  status: completed
+  path: subagents/SA-0001-planner
+  sandboxed: false
+  sandbox_summary: host
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0143 trim-report-feedback-field-to-a-summary-instead-of-full-transcript'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+  worktree_path: null
+retry_policy:
+  max_retries: null
+created_from: null
+upstream_origin: null

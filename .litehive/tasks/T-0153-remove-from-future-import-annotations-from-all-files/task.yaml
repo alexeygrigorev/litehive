@@ -1,0 +1,36 @@
+id: T-0153
+slug: remove-from-future-import-annotations-from-all-files
+title: Remove from __future__ import annotations from all files
+depends_on: []
+task_type: null
+engine: null
+model: null
+mode: implementation
+status: queued
+pipeline_status: backlog
+priority: medium
+pm_complexity: null
+planned_effort: null
+created_at: '2026-04-04T20:45:50+00:00'
+updated_at: '2026-04-04T20:45:50+00:00'
+goal: We require Python 3.12+ so from __future__ import annotations is unnecessary.
+  Remove it everywhere.
+acceptance_criteria:
+- no file contains from __future__ import annotations
+- all tests pass after removal
+constraints: []
+plan: []
+human_checkpoints: []
+subagents: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0153 remove-from-future-import-annotations-from-all-files'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+  worktree_path: null
+retry_policy:
+  max_retries: null
+created_from: null
+upstream_origin: null

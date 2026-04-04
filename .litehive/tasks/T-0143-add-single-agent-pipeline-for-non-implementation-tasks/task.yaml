@@ -1,0 +1,39 @@
+id: T-0143
+slug: add-single-agent-pipeline-for-non-implementation-tasks
+title: Add single-agent pipeline for non-implementation tasks
+depends_on: []
+task_type: null
+engine: null
+model: null
+mode: implementation
+status: queued
+pipeline_status: backlog
+priority: medium
+pm_complexity: null
+planned_effort: null
+created_at: '2026-04-04T18:14:37+00:00'
+updated_at: '2026-04-04T18:16:02+00:00'
+goal: 'Add two pipeline modes: ''full'' (grooming, implementing, testing, accepting,
+  commit_to_git) and ''single'' (one agent executes, then done). Tasks default to
+  full. Use --mode single for simple work like research, docs, config changes.'
+acceptance_criteria:
+- litehive add --mode single creates a task that runs one agent and completes
+- litehive add --mode full creates a task with the full pipeline (default)
+- single mode runs one agent with the goal and acceptance criteria then marks done
+  or commits
+- full mode is unchanged from current behavior
+constraints: []
+plan: []
+human_checkpoints: []
+subagents: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0143 add-single-agent-pipeline-for-non-implementation-tasks'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+  worktree_path: null
+retry_policy:
+  max_retries: null
+created_from: null

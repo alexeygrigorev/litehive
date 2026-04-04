@@ -6,13 +6,13 @@ task_type: null
 engine: copilot
 model: null
 mode: implementation
-status: queued
-pipeline_status: implementing
+status: done
+pipeline_status: done
 priority: medium
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-01T07:52:32+00:00'
-updated_at: '2026-04-04T13:15:20+00:00'
+updated_at: '2026-04-04T20:41:10+00:00'
 goal: ''
 acceptance_criteria: []
 constraints: []
@@ -103,14 +103,50 @@ subagents:
   path: subagents/SA-0012-pm
   sandboxed: false
   sandbox_summary: host
+- id: SA-0013
+  role: planner
+  engine: copilot
+  status: completed
+  path: subagents/SA-0013-planner
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0014
+  role: swe
+  engine: copilot
+  status: completed
+  path: subagents/SA-0014-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0015
+  role: qa
+  engine: copilot
+  status: completed
+  path: subagents/SA-0015-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0016
+  role: reviewer
+  engine: copilot
+  status: completed
+  path: subagents/SA-0016-reviewer
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0017
+  role: recovery
+  engine: claude
+  status: completed
+  path: subagents/SA-0017-recovery
+  sandboxed: false
+  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0096 add-copilot-event-adapter-for-shared-live-capture-and-restart-semantics'
-  commit_sha: null
-  checkpoint_base_sha: null
-  checkpoint_attempts: 0
+  commit_sha: f155d823aad3ab219b06a6fa43f1d992e0f049d3
+  checkpoint_base_sha: f87048af59125bf02a31fad518cece21814e131c
+  checkpoint_attempts: 1
   rolled_back_checkpoint_attempt: null
   worktree_path: null
 retry_policy:
   max_retries: null
 created_from: null
+upstream_origin: null

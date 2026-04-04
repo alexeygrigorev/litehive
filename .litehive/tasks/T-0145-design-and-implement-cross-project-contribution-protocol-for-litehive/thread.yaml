@@ -213,3 +213,11 @@
     No blocking feature gaps found in the implementation area under review.'
   files_changed: []
   created_at: '2026-04-04T19:25:12+00:00'
+- role: recovery
+  step: commit_to_git
+  verdict: pass
+  message: Stashed dirty main working directory, fast-forward merged worktree HEAD
+    f87048a into main, resolved stash pop conflict in T-0081 thread.yaml, restored
+    unstaged state
+  files_changed: []
+  created_at: '2026-04-04T19:26:16+00:00'

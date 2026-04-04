@@ -1,0 +1,37 @@
+id: T-0159
+slug: refactor-engines-py-into-engines-module-with-one-file-per-adapter
+title: Refactor engines.py into engines/ module with one file per adapter
+depends_on: []
+task_type: null
+engine: null
+model: null
+mode: implementation
+status: queued
+pipeline_status: backlog
+priority: medium
+pm_complexity: null
+planned_effort: null
+created_at: '2026-04-04T20:46:37+00:00'
+updated_at: '2026-04-04T20:46:37+00:00'
+goal: Split engines.py into engines/__init__.py with one file per engine adapter (codex.py,
+  claude.py, opencode.py, gemini.py, copilot.py, goz.py). Shared helpers in engines/common.py.
+acceptance_criteria:
+- litehive/engines/ is a package with per-adapter files
+- each adapter is self-contained in its own file
+- all tests pass
+constraints: []
+plan: []
+human_checkpoints: []
+subagents: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0159 refactor-engines-py-into-engines-module-with-one-file-per-adapter'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+  worktree_path: null
+retry_policy:
+  max_retries: null
+created_from: null
+upstream_origin: null

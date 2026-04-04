@@ -38,7 +38,6 @@ from litehive.tasks import (
     task_dir,
     task_template,
 )
-from litehive.workflow_verification import workflow_verification_scope
 
 
 @dataclass(slots=True)
@@ -1157,50 +1156,6 @@ def _agent_startup_guidance(config: LitehiveConfig | None, stage_owner: str) -> 
     for key in ("all", stage_owner):
         for item in guidance.get(key, []):
             lines.append(f"- {item}")
-    return lines
-
-
-def _lifecycle_verification_overlay(task: TaskRecord, step: str) -> list[str]:
-    if step not in {"implementing", "testing", "accepting"}:
-        return []
-
-    scope = workflow_verification_scope(task)
-    if not scope["workflow"]:
-        return []
-
-    lines = [
-        "- This task touches workflow or control-plane behavior; treat real Litehive lifecycle execution as the source of verification truth, not helper-only coverage.",
-    ]
-    if step == "implementing":
-        lines.append(
-            "- Build verification around the real `litehive` CLI/task lifecycle where the acceptance criteria make lifecycle promises."
-        )
-    if step == "testing":
-        lines.append(
-            "- Reject workflow changes that are only covered by isolated unit tests when the claimed behavior depends on real CLI, runner, pool, resume, or git lifecycle execution."
-        )
-    if step == "accepting":
-        lines.extend(
-            [
-                "- Reject the task if QA did not demonstrate the real lifecycle behavior the task claims.",
-                "- Reject the task if the implementation promise is broader than the QA evidence.",
-            ]
-        )
-    if scope["commit"]:
-        lines.append(
-            "- If the task claims completion or commit reliability, require proof that `commit_to_git` succeeded and recorded the final checkpoint commit."
-        )
-        lines.append(
-            "- Do not treat commit reliability as proven unless the CLI evidence also shows Litehive recorded clean completion, such as `status: done`, `pipeline_status=done`, or `commit_to_git=pass`."
-        )
-    if scope["resume"]:
-        lines.append(
-            "- If the task claims resume or recovery behavior, require proof that an interrupted task resumes from the correct stage in a real workspace run."
-        )
-    if scope["run_all"]:
-        lines.append(
-            "- If the task claims run-all, drain, wrapper, or pool behavior, require proof through the wrapper or real CLI execution rather than direct helper-function tests."
-        )
     return lines
 
 

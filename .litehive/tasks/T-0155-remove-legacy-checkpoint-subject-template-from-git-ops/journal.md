@@ -1,0 +1,4 @@
+# T-0155 Remove LEGACY_CHECKPOINT_SUBJECT_TEMPLATE from git_ops
+
+## 2026-04-04T20:45:53+00:00
+Task created.

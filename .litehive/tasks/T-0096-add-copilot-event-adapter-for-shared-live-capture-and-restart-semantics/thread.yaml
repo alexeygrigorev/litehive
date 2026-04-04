@@ -31,3 +31,11 @@
     \ to the Claude adapter."
   files_changed: []
   created_at: '2026-04-04T20:39:57+00:00'
+- role: recovery
+  step: commit_to_git
+  verdict: pass
+  message: Stashed dirty tracked files in main repo that blocked merge, fast-forward
+    merged worktree commit f155d82 into main, resolved stash pop conflict in T-0081
+    thread.yaml
+  files_changed: []
+  created_at: '2026-04-04T20:41:05+00:00'
