@@ -512,10 +512,12 @@ def _recover_or_validate_clean_task_worktree(
         return None
 
     if task.git.checkpoint_attempts < 1:
-        raise GitError(
-            "task worktree already contains commits before `commit_to_git`; "
-            "only Litehive may create the final task commit"
-        )
+        # The worktree has commits ahead of main that aren't litehive
+        # checkpoints.  This happens when the SWE agent committed during
+        # implementing or when the worktree was rebased.  Integrate the
+        # worktree HEAD as if it were the task's completion commit.
+        integrated_sha = _integrate_task_commit(root, main_head, worktree_head)
+        return integrated_sha
 
     expected_sha = find_commit_by_subject(
         execution_root,

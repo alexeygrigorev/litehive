@@ -15087,7 +15087,7 @@ def test_commit_to_git_integrates_existing_litehive_checkpoint_from_clean_worktr
     assert (tmp_path / "app.txt").read_text(encoding="utf-8") == "checkpointed\n"
 
 
-def test_commit_to_git_fails_when_agent_precommits_in_task_worktree(tmp_path: Path) -> None:
+def test_commit_to_git_integrates_agent_precommit_in_task_worktree(tmp_path: Path) -> None:
     _init_git_repo(tmp_path)
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Agent committed early")
@@ -15104,10 +15104,10 @@ def test_commit_to_git_fails_when_agent_precommits_in_task_worktree(tmp_path: Pa
 
     report = _commit_to_git_report(tmp_path, worktree_path, task, auto_commit_enabled=True)
 
-    assert report.verdict == "fail"
-    assert "only Litehive may create the final task commit" in report.summary
-    assert task.git.commit_sha is None
-    assert _run(["git", "log", "-1", "--pretty=%s"], tmp_path) == "initial"
+    assert report.verdict == "pass"
+    assert task.git.commit_sha is not None
+    assert task.status == "done"
+    assert (tmp_path / "app.txt").read_text(encoding="utf-8") == "agent-commit\n"
 
 
 def test_commit_to_git_treats_metadata_only_changes_as_done(tmp_path: Path) -> None:
