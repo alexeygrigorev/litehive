@@ -1724,6 +1724,8 @@ def workspace_model_for_engine(config: LitehiveConfig, engine_name: str) -> str 
         return config.codex_model
     if engine_name == "opencode":
         return config.opencode_model
+    if engine_name == "goz":
+        return config.goz_model
     if engine_name == "gemini":
         return config.gemini_model
     if engine_name == "copilot":

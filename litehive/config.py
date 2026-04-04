@@ -796,6 +796,7 @@ class LitehiveConfig:
     process_profile: str = "generic"
     codex_model: str | None = None
     opencode_model: str = "zai-coding-plan/glm-5.1"
+    goz_model: str = "glm-5-turbo"
     gemini_model: str | None = None
     copilot_model: str | None = None
     claude_enabled: bool = False
