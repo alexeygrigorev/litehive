@@ -1279,9 +1279,12 @@ def build_executor(
                         f"You finished the {step} stage but did not submit your verdict. "
                         f"Please run this command now:\n\n"
                         f"  litehive report --verdict <pass|fail|reject> --role {role_name} "
-                        f"--step {step} --message \"<detailed explanation of what you did and the result>\"\n\n"
-                        f"The --message should explain what worked, what failed, and what "
-                        f"the next agent needs to know."
+                        f"--step {step} --message \"<your detailed report>\"\n\n"
+                        f"Your report is the ONLY thing the next agent will read. Include:\n"
+                        f"- What you did and what the outcome was\n"
+                        f"- If rejecting: exact failures, which files to fix, step-by-step instructions\n"
+                        f"- If passing: what evidence confirms the acceptance criteria are met\n"
+                        f"Do NOT write a vague summary. Be specific and actionable."
                     )
                     subagents.run(
                         current_task,

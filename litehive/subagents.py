@@ -1075,10 +1075,27 @@ def stage_prompt(
     lines.extend(
         [
             "",
-            "IMPORTANT: When you are done, submit your verdict by running:",
-            f"  litehive report --verdict <pass|fail|reject|blocked> --role {stage_owner} --step {step} --message \"<detailed explanation>\"",
-            "The --message must explain what you did, what worked, what failed, and what the next agent should fix.",
-            "You MUST run this command before finishing. The text-based VERDICT/SUMMARY format is accepted as fallback.",
+            "IMPORTANT: When you are done, you MUST submit your verdict by running:",
+            f"  litehive report --verdict <pass|fail|reject|blocked> --role {stage_owner} --step {step} --message \"<your report>\"",
+            "",
+            "Your --message is the PRIMARY way the next agent understands what happened.",
+            "Do NOT rely on your raw transcript being read — write the report as if it is the only thing the next agent will see.",
+            "",
+            "Report requirements:",
+            "- On PASS/ACCEPT: explain what you verified, what tests you ran, what evidence confirms the acceptance criteria are met.",
+            "- On REJECT: you MUST include ALL of the following:",
+            "  1. What specifically failed or is missing (exact test names, error messages, missing behavior)",
+            "  2. Which files need to be changed and what the fix should look like",
+            "  3. Step-by-step actionable instructions so the next agent can fix it without re-investigating",
+            "  4. Any partial progress that should be kept (do not ask them to start over if 90% is correct)",
+            "- On FAIL: explain what went wrong and whether it is fixable or needs a different approach.",
+            "- On BLOCKED: explain what dependency or resource is missing.",
+            "",
+            "A vague rejection like 'tests fail' or 'missing evidence' is useless and causes infinite loops.",
+            "A good rejection looks like: 'test_foo in tests/test_workspace.py fails because bar() returns None instead of a string. "
+            "Fix: in litehive/tasks.py line 42, change the return type to str and handle the None case. Keep the rest of the implementation as-is.'",
+            "",
+            "The text-based VERDICT/SUMMARY format is accepted as fallback but litehive report is strongly preferred.",
         ]
     )
 
