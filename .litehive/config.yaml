@@ -55,6 +55,18 @@ agent_startup_guidance:
     or prompt issue needed to return the task to runnable state.
   - If the task is truly unrecoverable, record a precise blocker instead of leaving
     ambiguous active state.
+  - IMPORTANT - You are running in a git worktree, NOT the main repo. Your working
+    directory is the worktree. All file edits, git adds, and commits happen HERE.
+  - Run `git status` first to understand what state the worktree is in.
+  - Read the error message carefully. Classify it as either a project bug (fix in the
+    worktree) or a litehive infrastructure bug (report it, do not try to fix litehive
+    source from inside a task worktree).
+  - If tests fail, run the specific failing test to see the exact error before changing code.
+  - After fixing, run the relevant tests to verify the fix works.
+  - Always submit your result via `litehive report --verdict <pass|fail> --role recovery
+    --step <stage> --message "<what you found and fixed>"`.
+  - If you cannot fix the issue, submit `--verdict fail` with a detailed explanation
+    of what is broken and why, so the next agent or a human can act on it.
 opencode_model: zai-coding-plan/glm-5.1
 auto_commit: true
 task_mode_name: tasks
