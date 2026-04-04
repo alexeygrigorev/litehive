@@ -19,6 +19,7 @@ VALID_EXECUTION_RETRY_SELECTORS = frozenset({*VALID_ENGINE_NAMES, "external_cli"
 VALID_EXECUTION_RETRY_CLASSIFICATIONS = frozenset({"timeout", "network", "service"})
 VALID_SANDBOX_NETWORK_MODES = frozenset({"none", "bridge", "host"})
 VALID_SANDBOX_WORKSPACE_MODES = frozenset({"ro", "rw"})
+VALID_SANDBOX_BACKENDS = frozenset({"docker", "bubblewrap"})
 VALID_RUNNER_HOOK_POINTS = frozenset(
     {
         "before_swe_implementation",
@@ -165,6 +166,7 @@ class ExternalEngineSandboxPolicy:
 @dataclass(slots=True)
 class ExternalEngineSandboxConfig:
     enabled: bool = False
+    backend: str = "docker"
     runtime_binary: str = "docker"
     image: str = "litehive-external-engine:latest"
     workspace_mount_path: str = "/workspace"
@@ -350,9 +352,11 @@ def _normalize_external_engine_sandbox_config(
     if isinstance(raw_config, ExternalEngineSandboxConfig):
         config = raw_config
     else:
+        backend = str(raw_config.get("backend", "docker")).strip().lower()
         config = ExternalEngineSandboxConfig(
             enabled=bool(raw_config.get("enabled", False)),
-            runtime_binary=str(raw_config.get("runtime_binary", "docker")),
+            backend=backend,
+            runtime_binary=str(raw_config.get("runtime_binary", "bwrap" if backend == "bubblewrap" else "docker")),
             image=str(raw_config.get("image", "litehive-external-engine:latest")),
             workspace_mount_path=str(raw_config.get("workspace_mount_path", "/workspace")),
             binary_mount_root=str(raw_config.get("binary_mount_root", "/litehive/bin")),
@@ -371,6 +375,9 @@ def _normalize_external_engine_sandbox_config(
                 for engine_name, policy in dict(raw_config.get("engine_policies", {})).items()
             },
         )
+    if config.backend not in VALID_SANDBOX_BACKENDS:
+        allowed = ", ".join(sorted(VALID_SANDBOX_BACKENDS))
+        raise ValueError(f"external_engine_sandbox.backend must be one of: {allowed}")
     if config.default_network_mode not in VALID_SANDBOX_NETWORK_MODES:
         allowed = ", ".join(sorted(VALID_SANDBOX_NETWORK_MODES))
         raise ValueError(f"external_engine_sandbox.default_network_mode must be one of: {allowed}")
@@ -1151,7 +1158,7 @@ def format_external_engine_sandbox(config: LitehiveConfig) -> str:
         )
     policies = "; ".join(policy_parts) if policy_parts else "no engine policies"
     return (
-        f"enabled runtime:{sandbox.runtime_binary} image:{sandbox.image} "
+        f"enabled backend:{sandbox.backend} runtime:{sandbox.runtime_binary} image:{sandbox.image} "
         f"default_net:{sandbox.default_network_mode} default_workspace:{sandbox.default_workspace_mode} "
         f"policies: {policies}"
     )

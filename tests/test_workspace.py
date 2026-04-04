@@ -3759,6 +3759,225 @@ def test_sandbox_launcher_classifies_cpu_limit_events() -> None:
     assert event.cpu_count == 4.0
 
 
+def test_sandbox_launcher_wraps_selected_engine_with_bubblewrap_policy(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config = LitehiveConfig(
+        external_engine_sandbox=ExternalEngineSandboxConfig(
+            enabled=True,
+            backend="bubblewrap",
+            runtime_binary="bwrap",
+            engine_policies={
+                "codex": ExternalEngineSandboxPolicy(
+                    enabled=True,
+                    network_mode="none",
+                    workspace_mode="rw",
+                    environment=["OPENAI_API_KEY"],
+                    credential_inputs=[
+                        SandboxCredentialInput(
+                            env_var="GOOGLE_APPLICATION_CREDENTIALS",
+                            mount_path="/run/credentials/google.json",
+                        )
+                    ],
+                )
+            },
+        )
+    )
+    launcher = SandboxLauncher(tmp_path, config)
+    creds_path = tmp_path / "google.json"
+    creds_path.write_text("{}", encoding="utf-8")
+    monkeypatch.setattr("shutil.which", lambda binary: f"/usr/bin/{binary}")
+    invocation = get_engine("codex").build_invocation("ship it", tmp_path)
+    invocation = invocation.__class__(
+        argv=invocation.argv,
+        cwd=invocation.cwd,
+        env={
+            "OPENAI_API_KEY": "secret",
+            "GOOGLE_APPLICATION_CREDENTIALS": str(creds_path),
+            "ANTHROPIC_API_KEY": "should-not-leak",
+            "PATH": "/usr/bin:/bin",
+            "HOME": "/home/test",
+        },
+    )
+
+    wrapped = launcher.wrap_invocation("codex", "codex", invocation)
+    joined = " ".join(wrapped.argv)
+
+    assert wrapped.cwd == tmp_path
+    assert wrapped.argv[0] == "bwrap"
+    assert "--unshare-all" in wrapped.argv
+    assert "--die-with-parent" in wrapped.argv
+    assert "--clearenv" in wrapped.argv
+    assert "--share-net" not in wrapped.argv  # network_mode=none
+    assert f"--bind {tmp_path} {tmp_path}" in joined  # rw workspace
+    assert f"--ro-bind /usr/bin/codex /usr/bin/codex" in joined  # engine binary
+    assert "--setenv OPENAI_API_KEY secret" in joined
+    assert "ANTHROPIC_API_KEY" not in joined  # not in allowed env
+    assert f"--ro-bind {creds_path} /run/credentials/google.json" in joined
+    assert "--setenv GOOGLE_APPLICATION_CREDENTIALS /run/credentials/google.json" in joined
+    assert "--setenv HOME /home/test" in joined
+    assert "--setenv PATH /usr/bin:/bin" in joined
+    assert "--" in wrapped.argv  # separator before command
+
+
+def test_sandbox_bubblewrap_readonly_workspace(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config = LitehiveConfig(
+        external_engine_sandbox=ExternalEngineSandboxConfig(
+            enabled=True,
+            backend="bubblewrap",
+            runtime_binary="bwrap",
+            default_workspace_mode="ro",
+            engine_policies={
+                "codex": ExternalEngineSandboxPolicy(
+                    enabled=True,
+                    workspace_mode="ro",
+                )
+            },
+        )
+    )
+    launcher = SandboxLauncher(tmp_path, config)
+    monkeypatch.setattr("shutil.which", lambda binary: f"/usr/bin/{binary}")
+    invocation = get_engine("codex").build_invocation("ship it", tmp_path)
+
+    wrapped = launcher.wrap_invocation("codex", "codex", invocation)
+    joined = " ".join(wrapped.argv)
+
+    assert f"--ro-bind {tmp_path} {tmp_path}" in joined
+    assert f"--bind {tmp_path}" not in joined
+
+
+def test_sandbox_bubblewrap_shares_net_when_not_none(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config = LitehiveConfig(
+        external_engine_sandbox=ExternalEngineSandboxConfig(
+            enabled=True,
+            backend="bubblewrap",
+            runtime_binary="bwrap",
+            engine_policies={
+                "codex": ExternalEngineSandboxPolicy(
+                    enabled=True,
+                    network_mode="bridge",
+                )
+            },
+        )
+    )
+    launcher = SandboxLauncher(tmp_path, config)
+    monkeypatch.setattr("shutil.which", lambda binary: f"/usr/bin/{binary}")
+    invocation = get_engine("codex").build_invocation("ship it", tmp_path)
+
+    wrapped = launcher.wrap_invocation("codex", "codex", invocation)
+
+    assert "--share-net" in wrapped.argv
+
+
+def test_sandbox_bubblewrap_policy_summary_includes_backend_and_mounts(
+    tmp_path: Path,
+) -> None:
+    config = LitehiveConfig(
+        external_engine_sandbox=ExternalEngineSandboxConfig(
+            enabled=True,
+            backend="bubblewrap",
+            runtime_binary="bwrap",
+            engine_policies={
+                "codex": ExternalEngineSandboxPolicy(
+                    enabled=True,
+                    network_mode="none",
+                    workspace_mode="rw",
+                    environment=["OPENAI_API_KEY"],
+                )
+            },
+        )
+    )
+    launcher = SandboxLauncher(tmp_path, config)
+
+    summary = launcher.policy_summary("codex")
+
+    assert summary.enabled is True
+    assert summary.backend == "bubblewrap"
+    assert summary.runtime == "bwrap"
+    assert summary.network_mode == "none"
+    assert summary.workspace_mode == "rw"
+    assert "OPENAI_API_KEY" in summary.environment
+    assert len(summary.propagated_mounts) > 0
+    assert "/usr" in summary.propagated_mounts
+
+    as_dict = summary.as_dict()
+    assert as_dict["backend"] == "bubblewrap"
+    assert len(as_dict["propagated_mounts"]) > 0
+
+    text = summary.summary
+    assert text.startswith("sandbox[bwrap")
+    assert "net=none" in text
+    assert "workspace=rw" in text
+
+
+def test_sandbox_config_backend_defaults_to_docker() -> None:
+    config = ExternalEngineSandboxConfig()
+    assert config.backend == "docker"
+
+
+def test_sandbox_config_invalid_backend_raises() -> None:
+    with pytest.raises(ValueError, match="external_engine_sandbox.backend must be one of"):
+        LitehiveConfig(
+            external_engine_sandbox=ExternalEngineSandboxConfig(
+                enabled=True,
+                backend="invalid",
+            )
+        )
+
+
+def test_load_config_round_trips_bubblewrap_backend(tmp_path: Path) -> None:
+    ensure_workspace(
+        tmp_path,
+        LitehiveConfig(
+            external_engine_sandbox=ExternalEngineSandboxConfig(
+                enabled=True,
+                backend="bubblewrap",
+                runtime_binary="bwrap",
+                engine_policies={
+                    "codex": ExternalEngineSandboxPolicy(
+                        enabled=True,
+                        network_mode="none",
+                        workspace_mode="rw",
+                        environment=["OPENAI_API_KEY"],
+                    )
+                },
+            )
+        ),
+    )
+
+    config = load_config(tmp_path)
+
+    assert config.external_engine_sandbox.backend == "bubblewrap"
+    assert config.external_engine_sandbox.runtime_binary == "bwrap"
+    assert config.external_engine_sandbox.enabled is True
+
+
+def test_format_external_engine_sandbox_includes_backend() -> None:
+    config = LitehiveConfig(
+        external_engine_sandbox=ExternalEngineSandboxConfig(
+            enabled=True,
+            backend="bubblewrap",
+            runtime_binary="bwrap",
+            engine_policies={
+                "codex": ExternalEngineSandboxPolicy(
+                    enabled=True,
+                    network_mode="none",
+                    workspace_mode="rw",
+                )
+            },
+        )
+    )
+
+    rendered = format_external_engine_sandbox(config)
+
+    assert "backend:bubblewrap" in rendered
+    assert "runtime:bwrap" in rendered
+
+
 def test_gemini_build_invocation_includes_model_and_jsonl_flags(tmp_path: Path) -> None:
     invocation = get_engine("gemini").build_invocation(
         "ship it",
@@ -9411,7 +9630,7 @@ def test_format_external_engine_sandbox_renders_engine_policies() -> None:
 
     rendered = format_external_engine_sandbox(config)
 
-    assert "enabled runtime:docker image:ghcr.io/example/litehive-sandbox:latest" in rendered
+    assert "enabled backend:docker runtime:docker image:ghcr.io/example/litehive-sandbox:latest" in rendered
     assert "codex=enabled:True net:none workspace:rw env:OPENAI_API_KEY creds:-" in rendered
 
 
