@@ -83,11 +83,15 @@ class TaskExecutionRunner:
         executor: StageExecutor,
         max_retries: int = 3,
         retry_source: str = "global",
+        subagents=None,
+        config=None,
     ) -> None:
         self.root = root
         self.executor = executor
         self.max_retries = max_retries
         self.retry_source = retry_source
+        self.subagents = subagents
+        self.config = config
 
     def run(self, task: TaskRecord) -> RunResult:
         steps = 0
@@ -195,6 +199,42 @@ class TaskExecutionRunner:
                 )
             except Exception as exc:
                 reason = f"{current} failed with unhandled error: {exc}"
+                # Try recovery agent before flagging
+                if self.subagents is not None:
+                    from litehive.runtime import _attempt_stage_recovery
+                    from litehive.models import StageReport as _SR
+
+                    append_journal(self.root, task, f"{reason}. Launching recovery agent.")
+                    failed_report = _SR(
+                        task_id=task.id,
+                        step=current,
+                        verdict="fail",
+                        summary=reason,
+                        feedback=f"Unhandled error: {exc}\n\nThe task was at stage '{current}' when this error occurred. "
+                        f"Investigate the error, fix whatever is broken, and ensure the task can proceed.",
+                    )
+                    engine_name = task.engine or (self.config.default_engine if self.config else "codex")
+                    recovered = _attempt_stage_recovery(
+                        self.root,
+                        self.root,
+                        task,
+                        current,
+                        failed_report,
+                        subagents=self.subagents,
+                        config=self.config,
+                        engine_name=engine_name,
+                    )
+                    if recovered is not None and recovered.verdict in ("pass", "accept"):
+                        report = recovered
+                        report.retry_count = rejections
+                        report.retry_limit = self.max_retries
+                        report.retry_source = self.retry_source
+                        self._write_report(task, report, steps + 1)
+                        _apply_stage_finished(task, report)
+                        steps += 1
+                        last_verdict = report.verdict
+                        continue  # proceed to next stage
+
                 task.pipeline_status = current  # type: ignore[assignment]
                 report = self._terminal_report(
                     task,

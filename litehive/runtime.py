@@ -265,6 +265,8 @@ def run_task(
             ),
             max_retries=retry_limit,
             retry_source=retry_source,
+            subagents=subagents,
+            config=config,
         )
         with runner_heartbeat(root, active_task_id=task.id):
             result = runner.run(task)
