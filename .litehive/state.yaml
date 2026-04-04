@@ -4,7 +4,6 @@ queue:
 - T-0107
 - T-0129
 - T-0133
-- T-0075
 - T-0081
 - T-0096
 - T-0077
@@ -28,5 +27,7 @@ queue:
 - T-0067
 - T-0098
 - T-0080
+- T-0138
+- T-0139
 pool_stop_reason: null
-next_task_number: 137
+next_task_number: 139

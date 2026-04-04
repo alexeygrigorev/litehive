@@ -2,55 +2,21 @@ id: T-0074
 slug: add-detailed-commit-to-git-diagnostics-and-failure-classification
 title: Add detailed commit_to_git diagnostics and failure classification
 depends_on: []
-task_type: bugfix
+task_type: null
 engine: null
 model: null
 mode: implementation
 status: done
 pipeline_status: done
 priority: medium
-pm_complexity: moderate
-planned_effort: m
+pm_complexity: null
+planned_effort: null
 created_at: '2026-04-01T06:36:01+00:00'
-updated_at: '2026-04-04T13:15:29+00:00'
-goal: Make commit_to_git failures actionable by recording structured diagnostics and a stable
-  git-specific failure classification in the stage report and durable task/runtime outcome instead
-  of only returning a generic failure string.
-acceptance_criteria:
-- When commit_to_git fails for a git-specific reason such as not being in a git repo, being unable
-  to read git status, or failing to create/integrate the checkpoint commit, the resulting stage
-  report must classify the failure into a stable machine-readable category and include enough
-  diagnostics to explain what Litehive attempted.
-- The recorded diagnostics for commit_to_git failures must include the relevant execution context
-  available at the time of failure, such as execution/worktree path, checkpoint attempt metadata,
-  base SHA, intended commit message, dirty paths when known, and stderr or exception text when
-  available.
-- The runner/task outcome written after a commit_to_git failure must preserve the classification and
-  diagnostics so later recovery, status, and debugging flows do not need to reconstruct the failure
-  from raw transcript text alone.
-- Focused regression tests in tests/test_workspace.py must cover at least one early failure before
-  commit creation and one downstream git-operation failure after commit_to_git has gathered
-  checkpoint context, proving both the classification and diagnostic payload are persisted.
-constraints:
-- Keep the change scoped to commit_to_git diagnostics, outcome/report structure, and closely related
-  runner/task persistence; do not broaden into unrelated retry-policy refactors or generic logging
-  cleanup.
-- Use stable, documented classification values rather than freeform summary parsing so later stages
-  can branch on the recorded failure type.
-- Prefer focused tests around _commit_to_git_report and the commit failure persistence path over
-  broad end-to-end suite expansion.
-- Preserve existing successful commit_to_git behavior, including clean-worktree and metadata-only
-  pass paths.
-plan:
-- Inspect the current _commit_to_git_report flow in litehive/runtime.py and identify each failure
-  branch where commit_to_git currently returns only a generic fail summary or warning string.
-- Extend the stage/task outcome model to carry structured commit_to_git diagnostics and a stable
-  failure classification, then thread that data through the report returned by runtime.py and any
-  runner persistence that records the last failure outcome.
-- Update any git helper or runner code needed so commit_to_git can capture the right context at the
-  point of failure without relying on transcript-only evidence.
-- Add focused regression tests in tests/test_workspace.py covering representative commit_to_git
-  failure modes and asserting the persisted classification/diagnostic payload.
+updated_at: '2026-04-04T13:18:11+00:00'
+goal: ''
+acceptance_criteria: []
+constraints: []
+plan: []
 human_checkpoints: []
 subagents:
 - id: SA-0001
@@ -112,18 +78,18 @@ subagents:
 - id: SA-0009
   role: recovery
   engine: codex
-  status: running
+  status: completed
   path: subagents/SA-0009-recovery
   sandboxed: false
   sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0074 add-detailed-commit-to-git-diagnostics-and-failure-classification'
-  commit_sha: null
+  commit_sha: efdd633bc5bb078471391bd4922b3977aa446164
   checkpoint_base_sha: 6eb8e225f22f611cc824b6a2a5f21e270073e721
   checkpoint_attempts: 1
   rolled_back_checkpoint_attempt: null
-  worktree_path: .litehive/worktrees/T-0074-add-detailed-commit-to-git-diagnostics-and-failure-classification
+  worktree_path: null
 retry_policy:
   max_retries: null
 created_from: null
