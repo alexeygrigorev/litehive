@@ -1705,47 +1705,32 @@ def _commit_to_git_report(
             files_changed=[],
         )
 
-    allowed_paths = _allowed_commit_paths(root, task)
-    unexpected_dirty_paths = _unexpected_dirty_paths(dirty_entries, allowed_paths)
-    if unexpected_dirty_paths:
-        message = "task worktree has unrelated changes: " + ", ".join(
-            f"`{path}`" for path in unexpected_dirty_paths
-        )
-        append_journal(root, task, f"CommitToGit failed: {message}.")
+    # If all dirty entries are under .litehive/, there are no code changes to commit
+    code_dirty = [
+        e for e in dirty_entries
+        if not (_status_entry_path(e) or "").startswith(".litehive/")
+    ]
+    if not code_dirty:
+        head_sha = current_head(root)
+        set_task_commit_sha(task, head_sha)
+        task.status = "done"
+        task.pipeline_status = "done"
+        _cleanup_task_worktree(root, task)
+        save_task(root, task)
+        append_journal(root, task, "CommitToGit skipped: only workspace metadata changed.")
         return StageReport(
             task_id=task.id,
             step="commit_to_git",
-            verdict="fail",
-            summary=f"CommitToGit failed: {message}",
-            warnings=["repository contains unrelated uncommitted changes"],
+            verdict="pass",
+            summary="CommitToGit skipped because only workspace metadata changed",
+            warnings=["no code changes to commit"],
+            files_changed=[],
         )
 
     try:
         base_sha = current_head(root)
         attempt = task.git.checkpoint_attempts + 1
         message = checkpoint_message(task, attempt=attempt)
-        checkpoint_paths = sorted(
-            str(path) for path in allowed_paths if str(path) and not str(path).startswith(".litehive/")
-        )
-        if not checkpoint_paths:
-            set_task_commit_sha(task, base_sha)
-            task.status = "done"
-            task.pipeline_status = "done"
-            _cleanup_task_worktree(root, task)
-            save_task(root, task)
-            append_journal(
-                root,
-                task,
-                "CommitToGit skipped: no task-local files were staged and only workspace metadata changed.",
-            )
-            return StageReport(
-                task_id=task.id,
-                step="commit_to_git",
-                verdict="pass",
-                summary="CommitToGit skipped because no task-local files needed a commit",
-                warnings=["no commit-worthy task-local files"],
-                files_changed=[],
-            )
         previous_base_sha = task.git.checkpoint_base_sha
         previous_attempts = task.git.checkpoint_attempts
         previous_rollback_attempt = task.git.rolled_back_checkpoint_attempt
@@ -1779,7 +1764,7 @@ def _commit_to_git_report(
                 subagents=subagents, task=task, config=config,
             )
         else:
-            checkpoint = commit_task(root, message, paths=checkpoint_paths)
+            checkpoint = commit_task(root, message, paths=None)
             if checkpoint is None:
                 raise GitError("git commit prerequisites were not met")
             integrated_sha = checkpoint.commit_sha
