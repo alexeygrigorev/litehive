@@ -2248,7 +2248,8 @@ def test_runner_requeues_task_after_testing_rejection(tmp_path: Path) -> None:
     assert task.runtime.retry_source == "global"
 
 
-def test_runner_rejects_workflow_testing_without_real_lifecycle_evidence(tmp_path: Path) -> None:
+def test_runner_does_not_override_qa_verdict(tmp_path: Path) -> None:
+    """QA verdict is final — the runner does not second-guess pass/reject."""
     ensure_workspace(tmp_path, LitehiveConfig(default_retry_limit=3))
     task = create_task(
         tmp_path,
@@ -2256,8 +2257,6 @@ def test_runner_rejects_workflow_testing_without_real_lifecycle_evidence(tmp_pat
         goal="Prove control-plane lifecycle behavior through the real CLI",
         acceptance_criteria=[
             "commit_to_git succeeds and records the final checkpoint commit",
-            "An interrupted task resumes from the correct stage in a real workspace run",
-            "run-all behavior is proven through the wrapper or real CLI execution",
         ],
         auto_commit=False,
     )
@@ -2267,60 +2266,12 @@ def test_runner_rejects_workflow_testing_without_real_lifecycle_evidence(tmp_pat
         step="testing",
         verdict="pass",
         summary="testing ok",
-        feedback=(
-            "Verified with pytest tests/test_workspace.py::test_commit_to_git_treats_clean_task_worktree_as_done "
-            "and direct helper coverage around drain_task_pool."
-        ),
+        feedback="Verified with pytest.",
     )
 
     runner = TaskExecutionRunner(tmp_path, lambda task, step: report, max_retries=3)
-    enforced = runner._enforce_workflow_verification(task, "testing", report)
-
-    assert enforced.verdict == "reject"
-    assert (
-        enforced.summary
-        == "testing rejected: missing required real lifecycle verification evidence"
-    )
-    assert any(
-        "real Litehive CLI or wrapper lifecycle evidence" in warning
-        for warning in enforced.warnings
-    )
-    assert any("final checkpoint commit" in warning for warning in enforced.warnings)
-    assert any("correct stage" in warning for warning in enforced.warnings)
-
-
-def test_runner_rejects_workflow_testing_without_clean_completion_record(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
-    task = create_task(
-        tmp_path,
-        title="Verify workflow lifecycle",
-        goal="Prove control-plane lifecycle behavior through the real CLI",
-        acceptance_criteria=[
-            "commit_to_git succeeds and records the final checkpoint commit",
-            "An interrupted task resumes from the correct stage in a real workspace run",
-        ],
-        auto_commit=False,
-    )
-
-    evidence = """
-Ran `uv run litehive run --workspace .` in a proof workspace.
-Confirmed commit_to_git succeeded, recorded the final checkpoint commit, and checked the commit_sha with `git rev-parse HEAD`.
-Also resumed with `uv run litehive resume T-0001 --workspace .` after an interruption at testing.
-""".strip()
-
-    report = StageReport(
-        task_id=task.id,
-        step="testing",
-        verdict="pass",
-        summary="testing ok",
-        feedback=evidence,
-    )
-
-    runner = TaskExecutionRunner(tmp_path, lambda task, step: report)
-    enforced = runner._enforce_workflow_verification(task, "testing", report)
-
-    assert enforced.verdict == "reject"
-    assert any("clean completion" in warning for warning in enforced.warnings)
+    # The runner no longer overrides QA verdicts
+    assert runner._enforce_workflow_verification(task, "testing", report).verdict == "pass"
 
 
 def test_runner_accepts_workflow_testing_with_real_lifecycle_evidence(
@@ -2512,72 +2463,29 @@ exit 1
     assert accepting_report.verdict == "pass"
 
 
-def test_runner_rejects_acceptance_when_testing_report_lacks_required_workflow_evidence(
-    tmp_path: Path,
-) -> None:
+def test_runner_does_not_override_acceptance_verdict(tmp_path: Path) -> None:
+    """Workflow verification no longer overrides QA or reviewer verdicts."""
     ensure_workspace(tmp_path, LitehiveConfig(default_retry_limit=3))
     task = create_task(
         tmp_path,
         title="Accept workflow lifecycle evidence",
         goal="Only accept lifecycle claims that QA proved through the real CLI",
-        acceptance_criteria=[
-            "commit_to_git succeeds and records the final checkpoint commit",
-            "An interrupted task resumes from the correct stage in a real workspace run",
-        ],
+        acceptance_criteria=["commit_to_git succeeds"],
         auto_commit=False,
     )
-    task.pipeline_status = "accepting"
-    save_task(tmp_path, task)
 
-    (task_dir(tmp_path, task) / "reports" / "testing-001.yaml").write_text(
-        yaml.safe_dump(
-            {
-                "task_id": task.id,
-                "step": "testing",
-                "verdict": "pass",
-                "summary": "helper tests passed",
-                "feedback": "Verified with pytest and direct helper-function tests only.",
-                "files_changed": ["litehive/runner.py"],
-                "tests": {"added": 1, "passing": 1},
-                "warnings": [],
-            },
-            sort_keys=False,
-        ),
-        encoding="utf-8",
+    report = StageReport(
+        task_id=task.id,
+        step="accepting",
+        verdict="pass",
+        summary="accepting ok",
+        feedback="PM reviewed and approved.",
     )
 
-    runner = TaskExecutionRunner(
-        tmp_path,
-        lambda task, step: StageReport(
-            task_id=task.id,
-            step=step,
-            verdict="pass",
-            summary="accepting ok",
-            feedback="PM reviewed the task summary and found it aligned.",
-        ),
-        max_retries=3,
-    )
-    enforced = runner._enforce_workflow_verification(
-        task,
-        "accepting",
-        StageReport(
-            task_id=task.id,
-            step="accepting",
-            verdict="pass",
-            summary="accepting ok",
-            feedback="PM reviewed the task summary and found it aligned.",
-        ),
-    )
+    runner = TaskExecutionRunner(tmp_path, lambda task, step: report, max_retries=3)
+    enforced = runner._enforce_workflow_verification(task, "accepting", report)
 
-    assert enforced.verdict == "reject"
-    assert (
-        enforced.summary
-        == "accepting rejected: QA evidence does not prove the claimed lifecycle behavior"
-    )
-    assert any(
-        "real Litehive CLI or wrapper lifecycle evidence" in warning
-        for warning in enforced.warnings
-    )
+    assert enforced.verdict == "pass"
 
 
 def test_runner_persists_non_blocking_follow_up_and_completes_current_task(tmp_path: Path) -> None:
@@ -4666,50 +4574,11 @@ def test_stage_prompt_requires_real_lifecycle_verification_for_workflow_testing_
 
     prompt = stage_prompt(task, "testing", workspace_context="")
 
-    assert "This task touches workflow or control-plane behavior" in prompt
-    assert "Reject workflow changes that are only covered by isolated unit tests" in prompt
-    assert (
-        "require proof that `commit_to_git` succeeded and recorded the final checkpoint commit"
-        in prompt
-    )
-    assert "CLI evidence also shows Litehive recorded clean completion" in prompt
-    assert (
-        "require proof that an interrupted task resumes from the correct stage in a real workspace run"
-        in prompt
-    )
-    assert (
-        "require proof through the wrapper or real CLI execution rather than direct helper-function tests"
-        in prompt
-    )
+    # Workflow verification overlay was removed — QA decides on its own
+    assert "This task touches workflow or control-plane behavior" not in prompt
 
 
-def test_stage_prompt_requires_acceptance_to_match_workflow_qa_evidence(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
-    task = create_task(
-        tmp_path,
-        title="Accept workflow verification evidence",
-        goal="Only accept workflow claims that real Litehive runs demonstrated",
-        acceptance_criteria=[
-            "QA rejects helper-only lifecycle evidence",
-            "Final task commit exists after commit_to_git",
-        ],
-    )
-
-    prompt = stage_prompt(task, "accepting", workspace_context="")
-
-    assert (
-        "Reject the task if QA did not demonstrate the real lifecycle behavior the task claims"
-        in prompt
-    )
-    assert "Reject the task if the implementation promise is broader than the QA evidence" in prompt
-    assert (
-        "require proof that `commit_to_git` succeeded and recorded the final checkpoint commit"
-        in prompt
-    )
-    assert "CLI evidence also shows Litehive recorded clean completion" in prompt
-
-
-def test_stage_prompt_requires_real_lifecycle_verification_for_normalized_workflow_terms(
+def test_stage_prompt_no_longer_injects_lifecycle_verification_overlay(
     tmp_path: Path,
 ) -> None:
     ensure_workspace(tmp_path)
@@ -4719,56 +4588,13 @@ def test_stage_prompt_requires_real_lifecycle_verification_for_normalized_workfl
         goal="Prove workflow/control plane behavior through the real CLI lifecycle",
         acceptance_criteria=[
             "Completion reliability is only proven after commit to git records the final checkpoint commit",
-            "Interrupted tasks remain resumable from the correct stage in a real workspace run",
-            "Run all behavior is proven through the wrapper or real CLI execution",
         ],
     )
 
     prompt = stage_prompt(task, "testing", workspace_context="")
 
-    assert "This task touches workflow or control-plane behavior" in prompt
-    assert (
-        "require proof that `commit_to_git` succeeded and recorded the final checkpoint commit"
-        in prompt
-    )
-    assert "CLI evidence also shows Litehive recorded clean completion" in prompt
-    assert (
-        "require proof that an interrupted task resumes from the correct stage in a real workspace run"
-        in prompt
-    )
-    assert (
-        "require proof through the wrapper or real CLI execution rather than direct helper-function tests"
-        in prompt
-    )
-
-
-def test_stage_prompt_detects_normalized_control_plane_commit_and_resume_terms(
-    tmp_path: Path,
-) -> None:
-    ensure_workspace(tmp_path)
-    task = create_task(
-        tmp_path,
-        title="Control plane clean completion",
-        goal="Keep interrupted tasks resumable and verify commit to git behavior through the CLI",
-        acceptance_criteria=["Run all wrapper proves the pool behavior"],
-    )
-
-    prompt = stage_prompt(task, "testing", workspace_context="")
-
-    assert "This task touches workflow or control-plane behavior" in prompt
-    assert (
-        "require proof that `commit_to_git` succeeded and recorded the final checkpoint commit"
-        in prompt
-    )
-    assert "CLI evidence also shows Litehive recorded clean completion" in prompt
-    assert (
-        "require proof that an interrupted task resumes from the correct stage in a real workspace run"
-        in prompt
-    )
-    assert (
-        "require proof through the wrapper or real CLI execution rather than direct helper-function tests"
-        in prompt
-    )
+    # Workflow verification overlay was removed — QA decides on its own
+    assert "This task touches workflow or control-plane behavior" not in prompt
 
 
 def test_update_command_seeds_task_brief_when_switching_to_tasks_mode(

@@ -347,6 +347,7 @@ class WorkspaceRepairSummary:
     deduped_queue_entries: list[str] = field(default_factory=list)
     restored_queue_entries: list[str] = field(default_factory=list)
     finalized_commit_task_ids: list[str] = field(default_factory=list)
+    stale_process_task_ids: list[str] = field(default_factory=list)
 
 
 class WorkspaceConflictError(ValueError):
@@ -854,6 +855,25 @@ def _runner_pid_is_alive(pid: object) -> bool:
     except PermissionError:
         return True
     return True
+
+
+def _subagent_process_is_stale(task: "TaskRecord") -> bool:
+    """Return True if the task has a recorded subagent PID that is no longer alive."""
+    if task.runtime.execution_status != "running":
+        return False
+    active = task.runtime.active_subagent
+    if active is None or active.pid is None:
+        return False
+    return not _runner_pid_is_alive(active.pid)
+
+
+def _runner_lock_pid_is_stale(root: Path) -> bool:
+    """Return True if the runner lock metadata records a PID that is no longer alive."""
+    metadata = _read_runner_lock_metadata(root)
+    pid = metadata.pid
+    if pid is None:
+        return False
+    return not _runner_pid_is_alive(pid)
 
 
 def _runner_lock_is_held(root: Path) -> bool:
@@ -2524,12 +2544,15 @@ def interruption_journal_message(task: TaskRecord) -> str:
     return " ".join(parts)
 
 
-def _stale_interruption_reason(task: TaskRecord, stage: str) -> str:
+def _stale_interruption_reason(task: TaskRecord, stage: str, *, stale_pid: bool = False) -> str:
     active = task.runtime.active_subagent
     if active is not None:
+        pid_detail = ""
+        if stale_pid and active.pid is not None:
+            pid_detail = f", pid {active.pid} no longer alive"
         return (
             f"Stale runner detected while subagent `{active.id}` "
-            f"({active.role}/{active.engine}) was still marked running in `{stage}`."
+            f"({active.role}/{active.engine}{pid_detail}) was still marked running in `{stage}`."
         )
     return f"Stale runner detected while `{stage}` was still marked running."
 
@@ -2713,7 +2736,8 @@ def _recover_stale_runner_state(
         tasks_by_id = {task.id: task for task in tasks}
         running_task_ids = sorted(task.id for task in tasks if task.runtime.execution_status == "running")
         if not _current_thread_owns_runner_guard(root) and _runner_lock_is_held(root):
-            return False
+            if not _runner_lock_pid_is_stale(root):
+                return False
 
         runner_metadata = _read_runner_lock_metadata(root)
         has_stale_metadata = _runner_metadata_present(runner_metadata)
@@ -2734,10 +2758,13 @@ def _recover_stale_runner_state(
                 continue
             if _is_stranded_commit_task(task):
                 continue
+            stale_pid = _subagent_process_is_stale(task)
             if _should_requeue_commit_stage_task(task):
                 journal_messages[task.id] = _recover_commit_task(root, task)
                 if summary is not None and task.id not in summary.requeued_task_ids:
                     summary.requeued_task_ids.append(task.id)
+                if stale_pid and summary is not None and task.id not in summary.stale_process_task_ids:
+                    summary.stale_process_task_ids.append(task.id)
             elif _is_task_eligible_for_execution(task):
                 _prepare_interrupted_task(
                     root,
@@ -2747,9 +2774,11 @@ def _recover_stale_runner_state(
                         "Interrupted run recovered after stale runner detection. "
                         f"Resume from `{task.pipeline_status}`."
                     ),
-                    reason=_stale_interruption_reason(task, task.pipeline_status),
+                    reason=_stale_interruption_reason(task, task.pipeline_status, stale_pid=stale_pid),
                 )
                 journal_messages[task.id] = interruption_journal_message(task)
+                if stale_pid and summary is not None and task.id not in summary.stale_process_task_ids:
+                    summary.stale_process_task_ids.append(task.id)
             else:
                 continue
             transitioned.append(task)

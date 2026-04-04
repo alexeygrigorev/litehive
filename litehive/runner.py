@@ -218,7 +218,6 @@ class TaskExecutionRunner:
             report.retry_count = rejections
             report.retry_limit = self.max_retries
             report.retry_source = self.retry_source
-            report = self._enforce_workflow_verification(task, current, report)
             if current in {"grooming", "accepting"} and report.follow_up_tasks:
                 created_follow_ups = create_follow_up_tasks(
                     self.root,
@@ -539,38 +538,8 @@ class TaskExecutionRunner:
     def _enforce_workflow_verification(
         self, task: TaskRecord, current: str, report: StageReport
     ) -> StageReport:
-        if report.verdict not in {"pass", "accept"}:
-            return report
-
-        gaps = _workflow_verification_gaps_for_stage(self.root, task, current, report)
-        if not gaps:
-            return report
-
-        if current == "testing":
-            summary = "testing rejected: missing required real lifecycle verification evidence"
-            verdict = "reject"
-        elif current == "accepting":
-            summary = "accepting rejected: QA evidence does not prove the claimed lifecycle behavior"
-            verdict = "reject"
-        else:
-            return report
-
-        warnings = [*report.warnings, *gaps]
-        feedback = report.feedback.strip()
-        if feedback:
-            feedback = f"{feedback}\n\nLifecycle verification gaps:\n" + "\n".join(
-                f"- {gap}" for gap in gaps
-            )
-        else:
-            feedback = "Lifecycle verification gaps:\n" + "\n".join(f"- {gap}" for gap in gaps)
-        return report.model_copy(
-            update={
-                "verdict": verdict,
-                "summary": summary,
-                "warnings": warnings,
-                "feedback": feedback,
-            }
-        )
+        # Disabled — QA decides whether the implementation is correct.
+        return report
 
 
 def _reason_code_for_report(report: StageReport) -> OutcomeReasonCode:

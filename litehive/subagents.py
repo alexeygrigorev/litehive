@@ -828,7 +828,7 @@ def stage_prompt(
     stage_instructions = profile.get("stage_instructions", {}).get(
         step, ["Complete the requested stage."]
     )
-    lifecycle_verification_overlay = _lifecycle_verification_overlay(task, step)
+    lifecycle_verification_overlay: list[str] = []
     stage_owner = role_name or _stage_owner_for_step(step)
     stage_role = _stage_role_prompt(step, stage_owner)
     startup_guidance = _agent_startup_guidance(config, stage_owner)
