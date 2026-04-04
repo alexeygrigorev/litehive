@@ -16253,7 +16253,7 @@ def test_claude_live_progress_report_uses_adapter_summary_for_restart_snippet(
 
     base = task_dir(tmp_path, task) / "subagents" / "SA-0001-swe"
     base.mkdir(parents=True, exist_ok=False)
-    manager._write_session_start(base, ref, "stream partial Claude output")
+    manager._write_session_start(task, base, ref, "stream partial Claude output")
 
     execution = CLIExecutionResult(
         adapter="claude",

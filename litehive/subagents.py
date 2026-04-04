@@ -13,6 +13,7 @@ import yaml
 
 from litehive.config import LitehiveConfig, load_config, resolve_process_profile
 from litehive.engine_monitoring import record_engine_execution, record_engine_observation
+from litehive.events import append_event, append_session_log, ensure_session_log
 from litehive.external_cli import CLIExecutionResult, ExternalCLIAdapter, parse_stage_report_text
 from litehive.engines import (
     EngineError,
@@ -140,6 +141,7 @@ class SubagentManager:
         self.execution_root = (execution_root or root).resolve()
         self.config = load_config(self.root)
         self.sandbox = SandboxLauncher(self.root, self.config)
+        self._stream_offsets: dict[str, int] = {}
 
     def run(
         self,
@@ -170,7 +172,7 @@ class SubagentManager:
         task.subagents.append(ref)
         save_task(self.root, task)
         mark_subagent_started(self.root, task, ref)
-        self._write_session_start(base, ref, prompt)
+        self._write_session_start(task, base, ref, prompt)
         failure: EngineFailure | None = None
         try:
             if not engine.is_available():
@@ -322,6 +324,16 @@ class SubagentManager:
             failure=failure,
         )
 
+    def _append_stream_delta(
+        self, base: Path, ref: SubagentRef, stream: str, full_content: str
+    ) -> None:
+        """Append only the new portion of a stream to the append-only log."""
+        key = f"{ref.id}:{stream}"
+        prev = self._stream_offsets.get(key, 0)
+        if len(full_content) > prev:
+            append_session_log(base, stream, full_content[prev:])
+            self._stream_offsets[key] = len(full_content)
+
     def _next_subagent_id(self, task: TaskRecord) -> str:
         next_number = 1
         for ref in task.subagents:
@@ -342,10 +354,24 @@ class SubagentManager:
 
     def _write_session_start(
         self,
+        task: TaskRecord,
         base: Path,
         ref: SubagentRef,
         prompt: str,
     ) -> None:
+        ensure_session_log(base, "stdout")
+        ensure_session_log(base, "stderr")
+        append_event(
+            self.root,
+            task,
+            "subagent_started",
+            data={
+                "subagent_id": ref.id,
+                "role": ref.role,
+                "engine": ref.engine,
+                "sandboxed": ref.sandboxed,
+            },
+        )
         self._write_session_snapshot(
             base,
             ref,
@@ -441,6 +467,22 @@ class SubagentManager:
         _write_stream_artifact(
             base, "stderr", "" if execution is None else execution.stderr, compress=True
         )
+        if execution is not None:
+            self._append_stream_delta(base, ref, "stdout", execution.stdout)
+            self._append_stream_delta(base, ref, "stderr", execution.stderr)
+        append_event(
+            self.root,
+            task,
+            "subagent_finished",
+            data={
+                "subagent_id": ref.id,
+                "role": ref.role,
+                "engine": ref.engine,
+                "status": ref.status,
+                "exit_code": exit_code,
+                "interruption_reason": interruption_reason,
+            },
+        )
         self._write_timeline(base, ref, task, "" if execution is None else execution.stdout)
 
     def _write_session_progress(
@@ -482,6 +524,17 @@ class SubagentManager:
         (base / "transcript.md").write_text(transcript, encoding="utf-8")
         (base / "stdout.txt").write_text(execution.stdout, encoding="utf-8")
         (base / "stderr.txt").write_text(execution.stderr, encoding="utf-8")
+        self._append_stream_delta(base, ref, "stdout", execution.stdout)
+        self._append_stream_delta(base, ref, "stderr", execution.stderr)
+        append_event(
+            self.root,
+            task,
+            "subagent_progress",
+            data={
+                "subagent_id": ref.id,
+                "pid": execution.pid,
+            },
+        )
         report_step = (
             task.pipeline_status
             if task.pipeline_status
@@ -625,6 +678,12 @@ class SubagentManager:
             interruption_reason=None,
             resource_limit_event=None,
             continuation=None,
+        )
+        append_event(
+            self.root,
+            task,
+            "subagent_pid",
+            data={"subagent_id": ref.id, "pid": pid},
         )
 
     def _write_timeline(
