@@ -490,6 +490,61 @@ def _cleanup_task_worktree(root: Path, task: TaskRecord) -> None:
     save_task(root, task)
 
 
+def _attempt_commit_recovery(
+    root: Path,
+    execution_root: Path,
+    task: TaskRecord,
+    error_message: str,
+    *,
+    subagents: SubagentManager | None = None,
+    config: LitehiveConfig | None = None,
+) -> str | None:
+    """Launch a recovery agent to fix a commit_to_git failure. Returns integrated SHA or None."""
+    if subagents is None:
+        return None
+
+    prompt = (
+        f"The commit_to_git stage failed for task {task.id} ({task.title}).\n\n"
+        f"Error: {error_message}\n\n"
+        f"Working directory: {execution_root}\n"
+        f"Main repo: {root}\n\n"
+        f"Your job is to diagnose and fix whatever is preventing the task's changes "
+        f"from being committed and merged into main. Common issues:\n"
+        f"- Merge conflicts: resolve them and run `git add <file> && git commit --no-edit`\n"
+        f"- Dirty state: stage and commit changes with `git add -A && git commit -m 'fix'`\n"
+        f"- Worktree issues: check `git status` in both {execution_root} and {root}\n\n"
+        f"After fixing, ensure the worktree changes are merged into main:\n"
+        f"1. In the worktree: `git add -A && git commit -m '{checkpoint_message(task)}'`\n"
+        f"2. In main repo: `cd {root} && git merge <worktree-HEAD>`\n\n"
+        f"If you cannot fix it, explain why in your report.\n"
+        f"Submit your result: litehive report --verdict pass --role recovery --step commit_to_git "
+        f"--message '<what you fixed>'\n"
+    )
+
+    engine_name = task.engine or (config.default_engine if config else "codex")
+    model_name = resolve_model(task, config, engine_name=engine_name) if config else None
+    subagents.run(
+        task,
+        role="recovery",
+        engine_name=engine_name,
+        prompt=prompt,
+        model=model_name,
+    )
+
+    # Check if the recovery agent succeeded — is main HEAD ahead of where it was?
+    head = current_head(root)
+    if head is None:
+        return None
+
+    # Check if merge completed (no conflicts left)
+    conflict_files = _list_conflict_files(root)
+    if conflict_files:
+        subprocess.run(["git", "merge", "--abort"], cwd=root, capture_output=True)
+        return None
+
+    return head
+
+
 def _commit_all_in_worktree(execution_root: Path, message: str) -> str | None:
     """Stage everything and commit in the worktree. Returns commit SHA or None."""
     subprocess.run(
@@ -1769,6 +1824,26 @@ def _commit_to_git_report(
                 raise GitError("git commit prerequisites were not met")
             integrated_sha = checkpoint.commit_sha
     except GitError as exc:
+        # Try recovery agent before giving up
+        if subagents is not None and task is not None:
+            append_journal(root, task, f"CommitToGit failed: {exc}. Launching recovery agent.")
+            recovery_sha = _attempt_commit_recovery(
+                root, execution_root, task, str(exc),
+                subagents=subagents, config=config,
+            )
+            if recovery_sha is not None:
+                set_task_commit_sha(task, recovery_sha)
+                _cleanup_task_worktree(root, task)
+                save_task(root, task)
+                save_task_runtime(root, task)
+                append_journal(root, task, "CommitToGit recovered by agent.")
+                return StageReport(
+                    task_id=task.id,
+                    step="commit_to_git",
+                    verdict="pass",
+                    summary="CommitToGit recovered by agent after initial failure",
+                )
+
         task.git.checkpoint_base_sha = previous_base_sha
         task.git.checkpoint_attempts = previous_attempts
         task.git.rolled_back_checkpoint_attempt = previous_rollback_attempt

@@ -14790,6 +14790,7 @@ def test_run_next_task_preserves_future_task_added_during_commit_failure(
         raise GitError("simulated merge failure")
 
     monkeypatch.setattr("litehive.runtime._merge_worktree_into_main", fail_merge_with_concurrent_add)
+    monkeypatch.setattr("litehive.runtime._attempt_commit_recovery", lambda *a, **kw: None)
 
     summary = run_next_task(tmp_path)
 
