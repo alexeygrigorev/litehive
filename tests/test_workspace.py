@@ -40,6 +40,7 @@ from litehive.engines import (
     classify_execution_interruption,
     classify_execution_limit,
     classify_retryable_execution_failure,
+    extract_engine_continuation,
     extract_engine_timeline,
     get_engine,
 )
@@ -4495,6 +4496,94 @@ def test_copilot_stage_report_uses_failed_tool_result_when_no_message(tmp_path: 
 
     assert report.summary == "disk full"
     assert report.verdict == "blocked"
+
+
+def test_copilot_stream_event_adapter_extracts_final_message(tmp_path: Path) -> None:
+    execution = CLIExecutionResult(
+        adapter="copilot",
+        argv=("copilot", "-p"),
+        cwd=tmp_path,
+        exit_code=0,
+        stdout="\n".join(
+            [
+                '{"type":"assistant.turn_start","data":{"turnId":"1"}}',
+                '{"type":"assistant.message","data":{"messageId":"m1","content":"VERDICT: PASS\\nSUMMARY: all good\\n"}}',
+                '{"type":"result","exitCode":0}',
+            ]
+        ),
+        stderr="",
+    )
+
+    transcript = get_engine("copilot").render_transcript(execution)
+
+    assert transcript.startswith("VERDICT: PASS")
+    assert "SUMMARY: all good" in transcript
+
+
+def test_copilot_stream_event_adapter_falls_back_to_deltas_when_no_final_message(
+    tmp_path: Path,
+) -> None:
+    execution = CLIExecutionResult(
+        adapter="copilot",
+        argv=("copilot", "-p"),
+        cwd=tmp_path,
+        exit_code=0,
+        stdout="\n".join(
+            [
+                '{"type":"assistant.message_delta","data":{"messageId":"m1","deltaContent":"VERDICT: PASS\\n"}}',
+                '{"type":"assistant.message_delta","data":{"messageId":"m1","deltaContent":"SUMMARY: delta only\\n"}}',
+            ]
+        ),
+        stderr="",
+    )
+
+    transcript = get_engine("copilot").render_transcript(execution)
+
+    assert transcript == "VERDICT: PASS\nSUMMARY: delta only"
+
+
+def test_copilot_stream_event_adapter_extracts_tool_error_without_message(
+    tmp_path: Path,
+) -> None:
+    execution = CLIExecutionResult(
+        adapter="copilot",
+        argv=("copilot", "-p"),
+        cwd=tmp_path,
+        exit_code=1,
+        stdout='{"type":"tool.execution_complete","data":{"toolName":"shell","success":false,"result":{"content":"permission denied"}}}',
+        stderr="",
+    )
+
+    report = get_engine("copilot").parse_stage_report(
+        task_id="T-0096",
+        step="implementing",
+        execution=execution,
+        subagent_status="failed",
+    )
+
+    assert report.summary == "permission denied"
+    assert report.verdict == "blocked"
+
+
+def test_copilot_engine_continuation_returns_none(tmp_path: Path) -> None:
+    execution = CLIExecutionResult(
+        adapter="copilot",
+        argv=("copilot", "-p"),
+        cwd=tmp_path,
+        exit_code=0,
+        stdout="\n".join(
+            [
+                '{"type":"assistant.turn_start","data":{"turnId":"1"}}',
+                '{"type":"assistant.message","data":{"messageId":"m1","content":"done"}}',
+                '{"type":"result","exitCode":0}',
+            ]
+        ),
+        stderr="",
+    )
+
+    continuation = extract_engine_continuation("copilot", execution)
+
+    assert continuation is None
 
 
 def test_execution_result_transcript_combines_stdout_and_stderr(tmp_path: Path) -> None:

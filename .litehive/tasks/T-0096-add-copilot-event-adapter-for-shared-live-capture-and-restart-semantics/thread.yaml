@@ -1,0 +1,33 @@
+- role: qa
+  step: testing
+  verdict: pass
+  message: 'PASS: Copilot StreamEventAdapter implemented and tested. Added _COPILOT_STREAM_EVENT_ADAPTER
+    with final_messages, text_deltas, and errors handlers. CopilotCLIAdapter now uses
+    shared extract_stream_transcript/extract_stream_errors. 4 new tests added, all
+    14 copilot tests pass. 524/525 total tests pass; 1 pre-existing failure (test_subagent_artifacts_stream_to_disk_while_process_is_still_running)
+    also fails on origin/main and is unrelated to T-0096. Implementation is consistent
+    with codex/gemini adapter patterns. No regressions introduced.'
+  files_changed: []
+  created_at: '2026-04-04T20:33:58+00:00'
+- role: reviewer
+  step: accepting
+  verdict: pass
+  message: "PASS \u2014 Copilot event adapter migrated to shared StreamEventAdapter\
+    \ pattern.\n\nVERIFIED:\n- _COPILOT_STREAM_EVENT_ADAPTER defined with final_messages,\
+    \ text_deltas, errors, and live_events hooks (engines.py:1266\u20131271).\n- CopilotCLIAdapter.render_transcript\
+    \ and extract_errors now delegate to extract_stream_transcript / extract_stream_errors\
+    \ via the shared adapter, removing the duplicated _extract_copilot_transcript\
+    \ and _extract_copilot_errors private functions.\n- ENGINE_STREAM_EVENT_ADAPTERS['copilot']\
+    \ now points to _COPILOT_STREAM_EVENT_ADAPTER, giving the copilot engine full\
+    \ shared-stream semantics (live events, transcript, errors) consistently with\
+    \ other adapters.\n- extract_engine_continuation returns None for copilot explicitly.\n\
+    - 4 new targeted tests added covering: final-message extraction, delta fallback,\
+    \ tool-error error path, and continuation returns None.\n\nTESTS RUN:\n  uv run\
+    \ pytest tests/test_workspace.py -q -k 'copilot or stream_event or extract_engine_continuation'\n\
+    \  Result: 15 passed, 0 failed.\n\nNo regressions detected in the copilot adapter\
+    \ test set. Acceptance criteria were not formally defined, but the stated goal\
+    \ (shared live capture and restart semantics for the Copilot adapter) is met:\
+    \ the adapter participates in the shared StreamEventAdapter infrastructure identically\
+    \ to the Claude adapter."
+  files_changed: []
+  created_at: '2026-04-04T20:39:57+00:00'

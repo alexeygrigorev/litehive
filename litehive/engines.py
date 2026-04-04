@@ -642,7 +642,10 @@ class CopilotCLIAdapter(ExternalCLIAdapter):
         return command
 
     def render_transcript(self, execution: CLIExecutionResult) -> str:
-        assistant_text = _extract_copilot_transcript(execution.stdout)
+        assistant_text = extract_stream_transcript(
+            execution.stdout,
+            adapter=_COPILOT_STREAM_EVENT_ADAPTER,
+        )
         if assistant_text:
             if execution.stderr.strip():
                 return f"{assistant_text}\n\n[stderr]\n{execution.stderr.strip()}"
@@ -659,7 +662,10 @@ class CopilotCLIAdapter(ExternalCLIAdapter):
     ):
         transcript = self.render_transcript(execution)
         if transcript == execution.transcript:
-            error_lines = _extract_copilot_errors(execution.stdout)
+            error_lines = extract_stream_errors(
+                execution.stdout,
+                adapter=_COPILOT_STREAM_EVENT_ADAPTER,
+            )
             if error_lines:
                 transcript = "\n".join(error_lines)
         return parse_stage_report_text(
@@ -1208,6 +1214,61 @@ def _copilot_live_events(payload: dict[str, object]) -> list[LiveEvent]:
         if isinstance(data, dict) and isinstance(data.get("message"), str):
             events.append(LiveEvent(kind="error", engine="copilot", error=data["message"]))
     return events
+
+
+def _copilot_final_messages(payload: dict[str, object]) -> list[str]:
+    if payload.get("type") != "assistant.message":
+        return []
+    data = payload.get("data")
+    if not isinstance(data, dict):
+        return []
+    content = data.get("content")
+    if isinstance(content, str) and content:
+        return [content]
+    return []
+
+
+def _copilot_text_deltas(payload: dict[str, object]) -> list[tuple[int, str]]:
+    if payload.get("type") != "assistant.message_delta":
+        return []
+    data = payload.get("data")
+    if not isinstance(data, dict):
+        return []
+    content = data.get("deltaContent")
+    if isinstance(content, str) and content:
+        return [(0, content)]
+    return []
+
+
+def _copilot_errors(payload: dict[str, object]) -> list[str]:
+    event_type = payload.get("type")
+    if event_type == "error":
+        data = payload.get("data")
+        if isinstance(data, dict):
+            message = data.get("message")
+            if isinstance(message, str) and message:
+                return [message]
+        return []
+    if event_type == "tool.execution_complete":
+        data = payload.get("data")
+        if not isinstance(data, dict) or data.get("success", True):
+            return []
+        result = data.get("result")
+        if isinstance(result, dict):
+            content = result.get("content") or result.get("detailedContent")
+            if isinstance(content, str) and content:
+                return [content]
+        elif isinstance(result, str) and result:
+            return [result]
+    return []
+
+
+_COPILOT_STREAM_EVENT_ADAPTER = StreamEventAdapter(
+    final_messages=_copilot_final_messages,
+    text_deltas=_copilot_text_deltas,
+    errors=_copilot_errors,
+    live_events=_copilot_live_events,
+)
 
 
 _CLAUDE_STREAM_EVENT_ADAPTER = StreamEventAdapter(
@@ -2126,9 +2187,7 @@ ENGINE_STREAM_EVENT_ADAPTERS: dict[str, StreamEventAdapter] = {
     "gemini": StreamEventAdapter(
         live_events=_gemini_live_events,
     ),
-    "copilot": StreamEventAdapter(
-        live_events=_copilot_live_events,
-    ),
+    "copilot": _COPILOT_STREAM_EVENT_ADAPTER,
     "claude": _CLAUDE_STREAM_EVENT_ADAPTER,
 }
 
@@ -2236,50 +2295,10 @@ def extract_engine_continuation(
                     return RuntimeEngineContinuation(session_id=session_id)
         return None
 
+    if engine_name == "copilot":
+        return None
+
     return None
-
-
-def _extract_copilot_transcript(stdout: str) -> str:
-    final_messages: list[str] = []
-    deltas: list[str] = []
-    for payload in iter_jsonl_payloads(stdout):
-        event_type = payload.get("type")
-        data = payload.get("data")
-        if not isinstance(data, dict):
-            continue
-        if event_type == "assistant.message":
-            content = data.get("content")
-            if isinstance(content, str) and content:
-                final_messages.append(content)
-        elif event_type == "assistant.message_delta":
-            content = data.get("deltaContent")
-            if isinstance(content, str) and content:
-                deltas.append(content)
-    if final_messages:
-        return "".join(final_messages).strip()
-    return "".join(deltas).strip()
-
-
-def _extract_copilot_errors(stdout: str) -> list[str]:
-    errors = extract_jsonl_errors(stdout)
-    if errors:
-        return errors
-
-    tool_errors: list[str] = []
-    for payload in iter_jsonl_payloads(stdout):
-        if payload.get("type") != "tool.execution_complete":
-            continue
-        data = payload.get("data")
-        if not isinstance(data, dict) or data.get("success", True):
-            continue
-        result = data.get("result")
-        if isinstance(result, dict):
-            content = result.get("content") or result.get("detailedContent")
-            if isinstance(content, str) and content:
-                tool_errors.append(content)
-        elif isinstance(result, str) and result:
-            tool_errors.append(result)
-    return tool_errors
 
 
 def _copilot_quota_usage_window(snapshot: dict[str, object]) -> EngineUsageWindow | None:
