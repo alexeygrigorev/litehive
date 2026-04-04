@@ -6280,6 +6280,72 @@ def test_drain_task_pool_stops_on_dirty_git_state(tmp_path: Path) -> None:
     assert summary.stop_reason == "dirty_git_state"
 
 
+def test_run_single_task_allows_dirty_git_owned_by_interrupted_task(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ensure_workspace(tmp_path)
+    _init_git_repo(tmp_path)
+    task = create_task(tmp_path, title="Interrupted task", auto_commit=False)
+    task.status = "interrupted"
+    task.pipeline_status = "testing"
+    task.acceptance_criteria = ["Resume the interrupted testing stage."]
+    task.runtime.execution_status = "interrupted"
+    task.runtime.current_stage = RuntimeStageState(
+        step="testing",
+        status="interrupted",
+        started_at="2026-04-01T00:00:00+00:00",
+        completed_at="2026-04-01T00:01:00+00:00",
+        updated_at="2026-04-01T00:01:00+00:00",
+        duration_seconds=60,
+        verdict="blocked",
+        summary="Execution interrupted. Resume from `testing`.",
+    )
+    task.runtime.interruption = RuntimeInterruptionState(
+        source="runner",
+        stage="testing",
+        pipeline_status="testing",
+        resume_stage="testing",
+        reason="Interrupted run recovered after stale runner detection.",
+        summary="Resume from `testing`.",
+        interrupted_at="2026-04-01T00:01:00+00:00",
+        detected_at="2026-04-01T00:01:05+00:00",
+    )
+    save_task(tmp_path, task)
+    save_task_runtime(tmp_path, task)
+
+    (task_dir(tmp_path, task) / "reports" / "implementing-001.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "task_id": task.id,
+                "step": "implementing",
+                "verdict": "pass",
+                "summary": "implemented task changes",
+                "files_changed": ["app.txt"],
+                "tests": {"added": 0, "passing": 0},
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+    (tmp_path / "app.txt").write_text("dirty\n", encoding="utf-8")
+
+    monkeypatch.setattr(
+        "litehive.runtime.SubagentManager.run",
+        lambda self, current_task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
+            _completed_subagent_result(tmp_path, current_task.pipeline_status)
+        ),
+    )
+
+    summary = run_single_task(
+        tmp_path, stop_conditions=TaskPoolStopConditions(stop_on_dirty_git=True)
+    )
+
+    assert summary.execution is not None
+    assert summary.execution.task is not None
+    assert summary.execution.task.id == task.id
+    assert summary.stop_reason == "single_task_complete"
+
+
 def test_drain_task_pool_stops_on_pool_usage_cap(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -7881,6 +7947,73 @@ def test_cmd_run_drain_dry_run_reports_dirty_git_stop_reason(
     ensure_workspace(tmp_path)
     create_task(tmp_path, title="Pending task", auto_commit=False)
     _init_git_repo(tmp_path)
+    (tmp_path / "app.txt").write_text("dirty\n", encoding="utf-8")
+
+    exit_code = _cmd_run(
+        argparse.Namespace(
+            workspace=tmp_path,
+            dry_run=True,
+            drain=True,
+            stop_on_dirty_git=True,
+        )
+    )
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "planned_tasks: 0" in output
+    assert "predicted_stop_reason: dirty_git_state" in output
+
+
+def test_cmd_run_drain_dry_run_keeps_dirty_git_stop_for_ambiguous_interrupted_ownership(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    ensure_workspace(tmp_path)
+    _init_git_repo(tmp_path)
+    first = create_task(tmp_path, title="First interrupted task", auto_commit=False)
+    second = create_task(tmp_path, title="Second interrupted task", auto_commit=False)
+
+    for task in (first, second):
+        task.status = "interrupted"
+        task.pipeline_status = "testing"
+        task.acceptance_criteria = ["Resume the interrupted testing stage."]
+        task.runtime.execution_status = "interrupted"
+        task.runtime.current_stage = RuntimeStageState(
+            step="testing",
+            status="interrupted",
+            started_at="2026-04-01T00:00:00+00:00",
+            completed_at="2026-04-01T00:01:00+00:00",
+            updated_at="2026-04-01T00:01:00+00:00",
+            duration_seconds=60,
+            verdict="blocked",
+            summary="Execution interrupted. Resume from `testing`.",
+        )
+        task.runtime.interruption = RuntimeInterruptionState(
+            source="runner",
+            stage="testing",
+            pipeline_status="testing",
+            resume_stage="testing",
+            reason="Interrupted run recovered after stale runner detection.",
+            summary="Resume from `testing`.",
+            interrupted_at="2026-04-01T00:01:00+00:00",
+            detected_at="2026-04-01T00:01:05+00:00",
+        )
+        save_task(tmp_path, task)
+        save_task_runtime(tmp_path, task)
+        (task_dir(tmp_path, task) / "reports" / "implementing-001.yaml").write_text(
+            yaml.safe_dump(
+                {
+                    "task_id": task.id,
+                    "step": "implementing",
+                    "verdict": "pass",
+                    "summary": "implemented task changes",
+                    "files_changed": ["app.txt"],
+                    "tests": {"added": 0, "passing": 0},
+                },
+                sort_keys=False,
+            ),
+            encoding="utf-8",
+        )
+
     (tmp_path / "app.txt").write_text("dirty\n", encoding="utf-8")
 
     exit_code = _cmd_run(

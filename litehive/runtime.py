@@ -49,6 +49,7 @@ from litehive.tasks import (
     dequeue_next_task_selection,
     get_task,
     implementation_entry_stage,
+    list_tasks,
     load_state,
     mark_engine_switch,
     mark_task_run_started,
@@ -382,7 +383,7 @@ def _pool_stop_reason(
     *,
     budget_ledger: EngineBudgetLedger | None = None,
 ) -> str | None:
-    if conditions.stop_on_dirty_git and _git_worktree_is_dirty(root):
+    if conditions.stop_on_dirty_git and _git_worktree_blocks_pool(root):
         return "dirty_git_state"
     if conditions.max_tasks is not None and len(executions) >= conditions.max_tasks:
         return "max_tasks_reached"
@@ -434,7 +435,7 @@ def _single_task_pre_stop_reason(
     stop_conditions: TaskPoolStopConditions,
     budget_ledger: EngineBudgetLedger,
 ) -> str | None:
-    if stop_conditions.stop_on_dirty_git and _git_worktree_is_dirty(root):
+    if stop_conditions.stop_on_dirty_git and _git_worktree_blocks_pool(root):
         return "dirty_git_state"
     return budget_ledger.pool_stop_reason()
 
@@ -465,6 +466,45 @@ def _requires_continue_or_rollback(root: Path, execution: ExecutionSummary) -> b
 
 def _git_worktree_is_dirty(root: Path) -> bool:
     return is_git_repo(root) and has_changes(root)
+
+
+def _git_worktree_blocks_pool(root: Path) -> bool:
+    if not _git_worktree_is_dirty(root):
+        return False
+    return _dirty_worktree_owner_task(root) is None
+
+
+def _dirty_worktree_owner_task(root: Path) -> TaskRecord | None:
+    try:
+        dirty_entries = status_porcelain(root)
+    except GitError:
+        return None
+    if not dirty_entries:
+        return None
+
+    owners = [
+        task
+        for task in list_tasks(root)
+        if _task_can_resume_with_owned_dirty_paths(root, task, dirty_entries)
+    ]
+    if len(owners) != 1:
+        return None
+    return owners[0]
+
+
+def _task_can_resume_with_owned_dirty_paths(
+    root: Path,
+    task: TaskRecord,
+    dirty_entries: list[str],
+) -> bool:
+    if task.status != "interrupted":
+        return False
+    if task.pipeline_status in {"backlog", "done"}:
+        return False
+    interruption = task.runtime.interruption
+    if interruption is not None and interruption.reason == "Task stopped via CLI":
+        return False
+    return not _unexpected_dirty_paths(dirty_entries, _allowed_commit_paths(root, task))
 
 
 def _task_worktree_path(root: Path, task: TaskRecord) -> Path:

@@ -9,12 +9,38 @@ mode: implementation
 status: flagged
 pipeline_status: testing
 priority: medium
+pm_complexity: moderate
+planned_effort: s
 created_at: '2026-04-01T06:23:15+00:00'
-updated_at: '2026-04-02T05:12:29+00:00'
-goal: ''
-acceptance_criteria: []
+updated_at: '2026-04-04T11:05:52+00:00'
+goal: When the workspace is dirty because an interrupted task already owns those paths,
+  let pool execution and dry-run planning continue that task instead of stopping the
+  whole pool, while still blocking on ambiguous or unrelated dirty files.
+acceptance_criteria:
+- When `stop_on_dirty_git` is enabled and the repo has dirty paths, Litehive checks
+  whether those paths can be attributed to exactly one resumable interrupted task
+  before stopping the pool or dry-run planner.
+- Ownership is derived from durable task-local evidence already written under `.litehive/tasks/<task>/reports/`,
+  especially persisted `files_changed` entries, using the same path normalization
+  rules as commit dirty-path validation.
+- If exactly one resumable interrupted task owns all relevant dirty paths, pool execution
+  and `litehive run --dry-run` do not stop with `dirty_git_state`; they plan or resume
+  that task normally.
+- If ownership is ambiguous, missing, or the dirty paths include unrelated files,
+  Litehive keeps the existing `dirty_git_state` stop behavior instead of guessing.
+- Focused tests cover at least one positive ownership case and one ambiguous or unrelated
+  dirty-path case across runtime or CLI dry-run behavior.
 constraints: []
-plan: []
+plan:
+- Extract a helper in `litehive/runtime.py` that decides whether dirty git should
+  block the pool or can be attributed to one resumable interrupted task from persisted
+  report evidence.
+- Route both pool execution and dry-run planning through that helper so `stop_on_dirty_git`
+  stays consistent between real runs and planning output.
+- Reuse existing dirty-path normalization and task report parsing logic rather than
+  inventing a new ownership store.
+- Add focused tests for the owned-dirty-path allow case and the ambiguous or unrelated
+  dirty-path block case.
 human_checkpoints: []
 subagents:
 - id: SA-0001

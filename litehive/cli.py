@@ -482,9 +482,9 @@ def _plan_pool_dry_run(
     engine_override: str | None,
     model_override: str | None,
 ) -> tuple[list[tuple[object, str, list[str], str | None]], str]:
-    from litehive.runtime import _git_worktree_is_dirty
+    from litehive.runtime import _git_worktree_blocks_pool
 
-    if stop_conditions.stop_on_dirty_git and _git_worktree_is_dirty(root):
+    if stop_conditions.stop_on_dirty_git and _git_worktree_blocks_pool(root):
         return [], "dirty_git_state"
 
     budget_ledger = EngineBudgetLedger(
@@ -550,9 +550,9 @@ def _plan_single_task_dry_run(
     engine_override: str | None,
     model_override: str | None,
 ) -> tuple[list[tuple[object, str, list[str], str | None]], str]:
-    from litehive.runtime import _git_worktree_is_dirty
+    from litehive.runtime import _git_worktree_blocks_pool
 
-    if stop_conditions.stop_on_dirty_git and _git_worktree_is_dirty(root):
+    if stop_conditions.stop_on_dirty_git and _git_worktree_blocks_pool(root):
         return [], "dirty_git_state"
     if not planned_tasks:
         if blocked_count:
