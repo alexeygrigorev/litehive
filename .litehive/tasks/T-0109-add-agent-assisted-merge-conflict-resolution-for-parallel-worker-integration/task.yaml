@@ -9,33 +9,14 @@ mode: implementation
 status: interrupted
 pipeline_status: grooming
 priority: medium
-pm_complexity: moderate
-planned_effort: m
+pm_complexity: null
+planned_effort: null
 created_at: '2026-04-01T16:05:03+00:00'
-updated_at: '2026-04-04T10:05:03+00:00'
-goal: Make commit_to_git resilient when parallel task worktree integration hits git
-  conflicts by invoking an agent with constrained conflict-resolution instructions,
-  preserving deterministic task state on both success and failure.
-acceptance_criteria:
-- When commit_to_git integration of a task worktree into the main checkout encounters
-  git conflicts, Litehive invokes a dedicated subagent path instead of immediately
-  failing the task.
-- On successful agent-assisted resolution, Litehive finishes the in-progress merge/commit,
-  records a passing commit_to_git report, persists the final commit SHA, and cleans
-  up the task worktree.
-- If the agent does not clear all conflicts, Litehive aborts or restores the integration
-  attempt safely, leaves the task resumable/flagged at commit_to_git with explicit
-  diagnostics, and does not corrupt queue state or checkpoint metadata.
-- Targeted regression tests cover at least one successful agent-assisted conflict
-  resolution flow and one unresolved-conflict failure/recovery flow for task worktree
-  integration.
-constraints:
-- Keep changes scoped to commit_to_git/task-worktree integration and its existing recovery surfaces.
-plan:
-- Audit the current commit_to_git integration flow in litehive/runtime.py and decide the single conflict-resolution entrypoint for merge/cherry-pick style failures during task worktree integration.
-- Tighten the conflict-resolution subagent contract so it receives the exact repo/worktree context, only resolves conflicted files, and leaves deterministic evidence in task journal/report artifacts.
-- Ensure failed conflict resolution restores or aborts the git operation cleanly and preserves resumable task metadata, queue state, and checkpoint bookkeeping.
-- Add targeted tests in tests/test_workspace.py for a successful agent-assisted conflict resolution path and an unresolved-conflict path that proves safe failure behavior.
+updated_at: '2026-04-02T22:02:24+00:00'
+goal: ''
+acceptance_criteria: []
+constraints: []
+plan: []
 human_checkpoints: []
 subagents:
 - id: SA-0001

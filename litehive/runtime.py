@@ -574,8 +574,6 @@ def _attempt_commit_recovery(
     """Launch a recovery agent to fix a commit_to_git failure. Returns integrated SHA or None."""
     if subagents is None:
         return None
-    head_before = current_head(root)
-    recovery_subagents = SubagentManager(root, execution_root=root)
 
     prompt = (
         f"The commit_to_git stage failed for task {task.id} ({task.title}).\n\n"
@@ -597,7 +595,7 @@ def _attempt_commit_recovery(
 
     engine_name = task.engine or (config.default_engine if config else "codex")
     model_name = resolve_model(task, config, engine_name=engine_name) if config else None
-    recovery_subagents.run(
+    subagents.run(
         task,
         role="recovery",
         engine_name=engine_name,
@@ -609,15 +607,10 @@ def _attempt_commit_recovery(
     head = current_head(root)
     if head is None:
         return None
-    if head == head_before:
-        return None
 
     # Check if merge completed (no conflicts left)
     conflict_files = _list_conflict_files(root)
     if conflict_files:
-        subprocess.run(["git", "merge", "--abort"], cwd=root, capture_output=True)
-        return None
-    if _git_operation_in_progress(root, "MERGE_HEAD"):
         subprocess.run(["git", "merge", "--abort"], cwd=root, capture_output=True)
         return None
 
@@ -687,12 +680,9 @@ def _merge_worktree_into_main(
         f"CommitToGit merge conflict on {len(conflict_files)} file(s): {', '.join(conflict_files)}. "
         "Launching merge resolution agent.",
     )
-    merge_subagents = SubagentManager(root, execution_root=root)
 
     prompt = (
         f"There is a git merge conflict in this repository.\n"
-        f"Main checkout: {root}\n"
-        f"Task worktree: {execution_root}\n"
         f"Conflicting files: {', '.join(conflict_files)}\n\n"
         f"The merge is in progress. The conflict markers (<<<<<<< ======= >>>>>>>) "
         f"are in the files listed above.\n\n"
@@ -710,7 +700,7 @@ def _merge_worktree_into_main(
 
     engine_name = task.engine or (config.default_engine if config else "codex")
     model_name = resolve_model(task, config, engine_name=engine_name) if config else None
-    result = merge_subagents.run(
+    result = subagents.run(
         task,
         role="merge-resolver",
         engine_name=engine_name,
@@ -725,9 +715,6 @@ def _merge_worktree_into_main(
         raise GitError(
             f"merge agent failed to resolve conflicts in: {', '.join(remaining_conflicts)}"
         )
-    if _git_operation_in_progress(root, "MERGE_HEAD"):
-        subprocess.run(["git", "merge", "--abort"], cwd=root, capture_output=True)
-        raise GitError("merge agent resolved files but did not complete the merge commit")
 
     head = current_head(root)
     if head is None:
@@ -748,21 +735,6 @@ def _list_conflict_files(root: Path) -> list[str]:
     if proc.returncode != 0:
         return []
     return [f.strip() for f in proc.stdout.splitlines() if f.strip()]
-
-
-def _git_operation_in_progress(root: Path, ref_name: str) -> bool:
-    proc = subprocess.run(
-        ["git", "rev-parse", "--git-path", ref_name],
-        cwd=root,
-        capture_output=True,
-        text=True,
-    )
-    if proc.returncode != 0:
-        return False
-    git_path = proc.stdout.strip()
-    if not git_path:
-        return False
-    return (root / git_path).exists()
 
 
 def _recover_or_validate_clean_task_worktree(
@@ -1452,18 +1424,24 @@ def build_executor(
 
             report = stage_report_from_subagent(current_task, step, result, root=root)
 
-            # If the stage failed or was rejected AND this isn't the first attempt,
-            # launch a recovery agent to fix it instead of bouncing back and forth.
+            # Launch recovery agent in two cases:
+            # 1. Something broke (engine error/crash on a stage)
+            # 2. Too many rejections on the same step (stuck in a loop)
             from litehive.tasks import task_dir as _task_dir
 
             _reports_dir = _task_dir(root, current_task) / "reports"
             prior_attempts = len(list(_reports_dir.glob(f"{step}-*.yaml"))) if _reports_dir.exists() else 0
-            if (
-                report.verdict in ("fail", "reject")
-                and result.failure is None  # not an engine-level failure (crash/limit)
+            is_engine_break = (
+                result.failure is not None
+                and result.failure.kind in ("retryable_execution_error", "engine_error")
                 and step in ("implementing", "testing")
-                and prior_attempts >= 1  # only after at least one prior attempt on this step
-            ):
+            )
+            is_stuck_loop = (
+                report.verdict in ("fail", "reject")
+                and step in ("implementing", "testing")
+                and prior_attempts >= 3  # 3+ prior attempts = stuck
+            )
+            if is_engine_break or is_stuck_loop:
                 recovered_report = _attempt_stage_recovery(
                     root, execution_root, current_task, step, report,
                     subagents=subagents, config=config,
