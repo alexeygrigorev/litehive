@@ -6,13 +6,13 @@ task_type: bugfix
 engine: null
 model: null
 mode: implementation
-status: flagged
-pipeline_status: implementing
+status: in_progress
+pipeline_status: testing
 priority: medium
 pm_complexity: moderate
 planned_effort: m
 created_at: '2026-04-01T06:23:16+00:00'
-updated_at: '2026-04-04T12:04:37+00:00'
+updated_at: '2026-04-04T12:21:23+00:00'
 goal: Ensure the commit_to_git stage can be rerun or resumed after an interrupted
   checkpoint commit without failing, creating a duplicate checkpoint, or leaving task/runtime
   state inconsistent.
@@ -33,9 +33,9 @@ constraints:
   recovery so the two behaviors cannot drift.
 - Prefer focused lifecycle tests in tests/test_workspace.py over broad suite changes.
 plan:
-- Inspect litehive/runtime.py commit_to_git flow and existing checkpoint-detection helpers
-  to identify where a rerun currently treats an already-created checkpoint as failure
-  or retry work.
+- Inspect litehive/runtime.py commit_to_git flow and existing checkpoint-detection
+  helpers to identify where a rerun currently treats an already-created checkpoint
+  as failure or retry work.
 - Refactor or reuse the existing commit recovery/finalization path in litehive/tasks.py
   so commit_to_git reruns and stale-runner recovery both reconcile the same existing
   checkpoint commit and finish with consistent task/runtime state.
@@ -103,6 +103,20 @@ subagents:
   path: subagents/SA-0010-swe
   sandboxed: false
   sandbox_summary: host
+- id: SA-0011
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0011-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0012
+  role: qa
+  engine: codex
+  status: running
+  path: subagents/SA-0012-qa
+  sandboxed: false
+  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0067 make-commit-to-git-idempotent-and-resumable'
@@ -110,7 +124,7 @@ git:
   checkpoint_base_sha: null
   checkpoint_attempts: 0
   rolled_back_checkpoint_attempt: null
-  worktree_path: null
+  worktree_path: .litehive/worktrees/T-0067-make-commit-to-git-idempotent-and-resumable
 retry_policy:
   max_retries: null
 created_from: null

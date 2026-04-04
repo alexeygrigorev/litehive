@@ -1,10 +1,9 @@
-active_task_id: null
+active_task_id: T-0067
 mode: implementation
 queue:
 - T-0107
 - T-0129
 - T-0133
-- T-0067
 - T-0068
 - T-0073
 - T-0074

@@ -53,6 +53,7 @@ from litehive.tasks import (
     mark_engine_switch,
     mark_task_run_started,
     peek_next_task,
+    peek_next_task_selection,
     persist_task_and_state,
     prepare_completed_task_for_recovery,
     recover_stale_runner_state,
@@ -332,8 +333,11 @@ def drain_task_pool(
         while True:
             stop_reason = _pool_stop_reason(root, executions, conditions, budget_ledger=budget_ledger)
             if stop_reason is not None:
+                blocked: list[BlockedTask] = []
+                if stop_reason == "blocked_tasks_remaining":
+                    blocked = peek_next_task_selection(root).blocked
                 return _finalize_pool_run(
-                    root, executions=executions, stop_reason=stop_reason, blocked=[]
+                    root, executions=executions, stop_reason=stop_reason, blocked=blocked
                 )
             if stop_when is not None and stop_when(executions):
                 return _finalize_pool_run(
@@ -399,7 +403,12 @@ def _pool_stop_reason(
     if latest.result is not None and latest.result.final_status == "paused":
         return _human_checkpoint_stop_reason(latest)
     if latest.result is not None and latest.result.final_status == "queued":
-        return "task_requeued"
+        if conditions.stop_on_failure:
+            return "failure_detected"
+        selection = peek_next_task_selection(root)
+        if selection.task is not None:
+            return None
+        return "blocked_tasks_remaining" if selection.blocked else "queue_exhausted"
     if latest.result is not None and latest.result.final_status == "interrupted":
         return "task_interrupted"
     if _requires_continue_or_rollback(root, latest):

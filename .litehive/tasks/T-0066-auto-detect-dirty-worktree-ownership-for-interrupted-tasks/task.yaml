@@ -12,7 +12,7 @@ priority: medium
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-01T06:23:15+00:00'
-updated_at: '2026-04-04T11:18:19+00:00'
+updated_at: '2026-04-04T12:19:51+00:00'
 goal: ''
 acceptance_criteria: []
 constraints: []
@@ -85,7 +85,7 @@ subagents:
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0066 auto-detect-dirty-worktree-ownership-for-interrupted-tasks'
-  commit_sha: null
+  commit_sha: 74a9aea40f391d90e9af91c9322483b8edd766f1
   checkpoint_base_sha: c250d3da2f0f331b10de1b461daffa0618a9f16c
   checkpoint_attempts: 1
   rolled_back_checkpoint_attempt: null
