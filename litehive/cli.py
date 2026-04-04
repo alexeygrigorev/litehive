@@ -29,6 +29,7 @@ from litehive.runtime import (
     EngineBudgetLedger,
     TaskPoolStopConditions,
     drain_task_pool,
+    inspect_dirty_worktree_gate,
     recover_completed_task,
     resolve_model,
     resolve_engine_attempt_order,
@@ -1215,6 +1216,17 @@ def build_parser() -> argparse.ArgumentParser:
         help="Stop the pool when the git worktree is dirty before starting another task",
     )
 
+    dirty_worktree_gate = subparsers.add_parser(
+        "dirty-worktree-gate",
+        help="Report whether dirty git state should block the workspace and explain ownership",
+    )
+    dirty_worktree_gate.add_argument(
+        "--workspace",
+        type=Path,
+        default=Path.cwd(),
+        help="Repository root containing .litehive/",
+    )
+
     rollback = subparsers.add_parser(
         "rollback", help="Revert a task checkpoint commit and requeue the task"
     )
@@ -1616,6 +1628,26 @@ def _cmd_status(args: argparse.Namespace) -> int:
                 for line in render_task_summary(task, active=task.id == state.active_task_id, root=root):
                     print(line)
     return 0
+
+
+def _cmd_dirty_worktree_gate(args: argparse.Namespace) -> int:
+    report = inspect_dirty_worktree_gate(args.workspace)
+    print(f"workspace: {args.workspace}")
+    print(f"dirty_worktree_gate: {'blocked' if report.blocks_pool else 'open'}")
+    print(f"clean: {'yes' if report.is_clean else 'no'}")
+    if report.is_clean:
+        print("details: workspace checkout and recorded task worktrees are clean")
+        return 0
+    for finding in report.findings:
+        print()
+        print(f"location_kind: {finding.location_kind}")
+        print(f"ownership: {finding.ownership}")
+        if finding.task_id is not None:
+            print(f"task_id: {finding.task_id}")
+        if finding.worktree_path is not None:
+            print(f"worktree_path: {finding.worktree_path}")
+        print("dirty_paths: " + (", ".join(finding.dirty_paths) if finding.dirty_paths else "-"))
+    return 1 if report.blocks_pool else 0
 
 
 def _task_engine_label(task_engine: str | None, default_engine: str) -> str:
@@ -2529,6 +2561,8 @@ def main() -> int:
         return _cmd_intake(args)
     if args.command == "run":
         return _cmd_run(args)
+    if args.command == "dirty-worktree-gate":
+        return _cmd_dirty_worktree_gate(args)
     if args.command == "rollback":
         return _cmd_rollback(args)
     if args.command == "recover":

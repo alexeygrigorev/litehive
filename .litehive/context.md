@@ -36,6 +36,8 @@
   Drains the live task pool until no active or queued task remains, re-reading queue state between tasks.
 - `uv run litehive run --workspace . --drain --dry-run`
   Shows the planned pool order, selected engines, and predicted stop reason without invoking any agents.
+- `uv run litehive dirty-worktree-gate --workspace .`
+  Reports whether dirty git state should block the workspace and explains whether each dirty location belongs to the main checkout or a recorded task worktree.
 - `scripts/run-all.sh .`
   Restarts `uv run litehive run` each iteration and writes timestamped logs under `.litehive/logs/run-all/`.
 - `scripts/run-all-status.sh .`

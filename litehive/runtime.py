@@ -116,6 +116,31 @@ class RollbackSummary:
     rolled_back_sha: str
 
 
+@dataclass(slots=True)
+class DirtyWorktreeFinding:
+    location_kind: str
+    ownership: str
+    dirty_paths: list[str] = field(default_factory=list)
+    task_id: str | None = None
+    worktree_path: str | None = None
+
+
+@dataclass(slots=True)
+class DirtyWorktreeGateReport:
+    findings: list[DirtyWorktreeFinding] = field(default_factory=list)
+
+    @property
+    def is_clean(self) -> bool:
+        return not self.findings
+
+    @property
+    def blocks_pool(self) -> bool:
+        return any(
+            finding.ownership in {"main-checkout", "ambiguous-ownership", "missing-recorded-worktree"}
+            for finding in self.findings
+        )
+
+
 @dataclass(frozen=True, slots=True)
 class ResolvedExecutionRetryPolicy:
     selector: str
@@ -479,27 +504,92 @@ def _git_worktree_is_dirty(root: Path) -> bool:
 
 
 def _git_worktree_blocks_pool(root: Path) -> bool:
-    if not _git_worktree_is_dirty(root):
-        return False
-    return _dirty_worktree_owner_task(root) is None
+    return inspect_dirty_worktree_gate(root).blocks_pool
 
 
 def _dirty_worktree_owner_task(root: Path) -> TaskRecord | None:
+    report = inspect_dirty_worktree_gate(root)
+    task_ids = [
+        finding.task_id
+        for finding in report.findings
+        if finding.location_kind == "main-checkout" and finding.ownership == "task-owned" and finding.task_id
+    ]
+    if len(task_ids) != 1:
+        return None
+    return get_task(root, task_ids[0])
+
+
+def inspect_dirty_worktree_gate(root: Path) -> DirtyWorktreeGateReport:
+    if not is_git_repo(root):
+        return DirtyWorktreeGateReport()
+
+    findings: list[DirtyWorktreeFinding] = []
     try:
         dirty_entries = status_porcelain(root)
     except GitError:
-        return None
-    if not dirty_entries:
-        return None
+        return DirtyWorktreeGateReport()
 
-    owners = [
-        task
-        for task in list_tasks(root)
-        if _task_can_resume_with_owned_dirty_paths(root, task, dirty_entries)
-    ]
-    if len(owners) != 1:
-        return None
-    return owners[0]
+    tasks = list_tasks(root)
+    if dirty_entries:
+        owners = [
+            task
+            for task in tasks
+            if _task_can_resume_with_owned_dirty_paths(root, task, dirty_entries)
+        ]
+        finding = DirtyWorktreeFinding(
+            location_kind="main-checkout",
+            ownership="main-checkout",
+            dirty_paths=_dirty_entry_paths(dirty_entries),
+        )
+        if len(owners) == 1:
+            finding.ownership = "task-owned"
+            finding.task_id = owners[0].id
+            finding.worktree_path = owners[0].git.worktree_path
+        elif len(owners) > 1:
+            finding.ownership = "ambiguous-ownership"
+            finding.task_id = ",".join(task.id for task in owners)
+        findings.append(finding)
+
+    for task in tasks:
+        worktree_path = task.git.worktree_path
+        if not worktree_path:
+            continue
+        resolved_path = (root / worktree_path).resolve()
+        if not resolved_path.exists():
+            findings.append(
+                DirtyWorktreeFinding(
+                    location_kind="task-worktree",
+                    ownership="missing-recorded-worktree",
+                    task_id=task.id,
+                    worktree_path=worktree_path,
+                )
+            )
+            continue
+        try:
+            worktree_dirty_entries = status_porcelain(resolved_path)
+        except GitError:
+            findings.append(
+                DirtyWorktreeFinding(
+                    location_kind="task-worktree",
+                    ownership="missing-recorded-worktree",
+                    task_id=task.id,
+                    worktree_path=worktree_path,
+                )
+            )
+            continue
+        if not worktree_dirty_entries:
+            continue
+        findings.append(
+            DirtyWorktreeFinding(
+                location_kind="task-worktree",
+                ownership="task-owned-worktree",
+                task_id=task.id,
+                worktree_path=worktree_path,
+                dirty_paths=_dirty_entry_paths(worktree_dirty_entries),
+            )
+        )
+
+    return DirtyWorktreeGateReport(findings=findings)
 
 
 def _task_can_resume_with_owned_dirty_paths(
@@ -2165,3 +2255,8 @@ def _status_entry_path(entry: str) -> str | None:
     if normalized.startswith('"') and normalized.endswith('"') and len(normalized) >= 2:
         normalized = normalized[1:-1]
     return normalized.strip() or None
+
+
+def _dirty_entry_paths(entries: list[str]) -> list[str]:
+    paths = [path for entry in entries if (path := _status_entry_path(entry)) is not None]
+    return sorted(dict.fromkeys(paths))

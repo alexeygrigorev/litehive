@@ -19,6 +19,7 @@ from litehive.cli import (
     _cmd_intake,
     _cmd_abandon_task,
     _cmd_close_task,
+    _cmd_dirty_worktree_gate,
     _cmd_move,
     _cmd_prioritize,
     _cmd_promote,
@@ -12637,6 +12638,118 @@ def test_status_command_shows_explicit_close_outcome(
     assert "reason=Revisit after launch" in output
 
 
+def test_dirty_worktree_gate_reports_clean_workspace(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    ensure_workspace(tmp_path)
+    _init_git_repo(tmp_path)
+    create_task(tmp_path, title="Clean task")
+    _commit_repo_state(tmp_path)
+
+    exit_code = _cmd_dirty_worktree_gate(argparse.Namespace(workspace=tmp_path))
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "dirty_worktree_gate: open" in output
+    assert "clean: yes" in output
+    assert "recorded task worktrees are clean" in output
+
+
+def test_dirty_worktree_gate_reports_dirty_main_checkout(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    ensure_workspace(tmp_path)
+    _init_git_repo(tmp_path)
+    create_task(tmp_path, title="Pending task")
+    _commit_repo_state(tmp_path)
+    (tmp_path / "app.txt").write_text("changed\n", encoding="utf-8")
+
+    exit_code = _cmd_dirty_worktree_gate(argparse.Namespace(workspace=tmp_path))
+    output = capsys.readouterr().out
+
+    assert exit_code == 1
+    assert "dirty_worktree_gate: blocked" in output
+    assert "location_kind: main-checkout" in output
+    assert "ownership: main-checkout" in output
+    assert "dirty_paths: app.txt" in output
+
+
+def test_dirty_worktree_gate_reports_task_owned_worktree(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    ensure_workspace(tmp_path)
+    _init_git_repo(tmp_path)
+    task = create_task(tmp_path, title="Interrupted task")
+    worktree_path = tmp_path.parent / "owned-worktree"
+    _run(["git", "worktree", "add", "--detach", str(worktree_path), "HEAD"], tmp_path)
+    task.git.worktree_path = "../owned-worktree"
+    save_task(tmp_path, task)
+    _commit_repo_state(tmp_path)
+    (worktree_path / "app.txt").write_text("worktree change\n", encoding="utf-8")
+
+    exit_code = _cmd_dirty_worktree_gate(argparse.Namespace(workspace=tmp_path))
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "dirty_worktree_gate: open" in output
+    assert "location_kind: task-worktree" in output
+    assert "ownership: task-owned-worktree" in output
+    assert f"task_id: {task.id}" in output
+    assert "worktree_path: ../owned-worktree" in output
+    assert "dirty_paths: app.txt" in output
+
+
+def test_dirty_worktree_gate_reports_ambiguous_main_checkout_ownership(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    ensure_workspace(tmp_path)
+    _init_git_repo(tmp_path)
+    first = create_task(tmp_path, title="First interrupted task")
+    second = create_task(tmp_path, title="Second interrupted task")
+    for task in (first, second):
+        task.status = "interrupted"
+        task.pipeline_status = "testing"
+        save_task(tmp_path, task)
+        reports_dir = task_dir(tmp_path, task) / "reports"
+        reports_dir.mkdir(parents=True, exist_ok=True)
+        (reports_dir / "testing-001.yaml").write_text(
+            yaml.safe_dump({"files_changed": ["app.txt"]}, sort_keys=False),
+            encoding="utf-8",
+        )
+    _commit_repo_state(tmp_path)
+    (tmp_path / "app.txt").write_text("changed\n", encoding="utf-8")
+
+    exit_code = _cmd_dirty_worktree_gate(argparse.Namespace(workspace=tmp_path))
+    output = capsys.readouterr().out
+
+    assert exit_code == 1
+    assert "dirty_worktree_gate: blocked" in output
+    assert "location_kind: main-checkout" in output
+    assert "ownership: ambiguous-ownership" in output
+    assert f"task_id: {first.id},{second.id}" in output
+
+
+def test_dirty_worktree_gate_reports_missing_recorded_worktree(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    ensure_workspace(tmp_path)
+    _init_git_repo(tmp_path)
+    task = create_task(tmp_path, title="Missing worktree task")
+    task.git.worktree_path = "../missing-worktree"
+    save_task(tmp_path, task)
+    _commit_repo_state(tmp_path)
+
+    exit_code = _cmd_dirty_worktree_gate(argparse.Namespace(workspace=tmp_path))
+    output = capsys.readouterr().out
+
+    assert exit_code == 1
+    assert "dirty_worktree_gate: blocked" in output
+    assert "location_kind: task-worktree" in output
+    assert "ownership: missing-recorded-worktree" in output
+    assert f"task_id: {task.id}" in output
+    assert "worktree_path: ../missing-worktree" in output
+
+
 def test_pool_summary_reports_closed_tasks_with_reason_and_follow_up(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -13176,6 +13289,12 @@ def _init_git_repo(tmp_path: Path) -> str:
     _run(["git", "add", "app.txt"], tmp_path)
     _run(["git", "commit", "-m", "initial"], tmp_path)
     return _run(["git", "rev-parse", "HEAD"], tmp_path)
+
+
+def _commit_repo_state(cwd: Path, message: str = "baseline") -> str:
+    _run(["git", "add", "-A"], cwd)
+    _run(["git", "commit", "-m", message], cwd)
+    return _run(["git", "rev-parse", "HEAD"], cwd)
 
 
 def _completed_subagent_result(
