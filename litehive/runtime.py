@@ -2774,380 +2774,40 @@ def _commit_to_git_report(
     subagents: SubagentManager | None = None,
     config: LitehiveConfig | None = None,
 ) -> StageReport:
-    def failure_report(
-        *,
-        classification: str,
-        summary: str,
-        error_text: str | None = None,
-        phase: str,
-        base_sha: str | None = None,
-        message: str | None = None,
-        dirty_entries: list[str] | None = None,
-        attempt: int | None = None,
-    ) -> StageReport:
-        diagnostics = _commit_to_git_failure_diagnostics(
-            root,
-            execution_root,
-            task,
-            phase=phase,
-            error_text=error_text,
-            base_sha=base_sha,
-            message=message,
-            dirty_entries=dirty_entries,
-            attempt=attempt,
-        )
-        append_journal(root, task, summary)
-        return StageReport(
-            task_id=task.id,
-            step="commit_to_git",
-            verdict="fail",
-            summary=summary,
-            warnings=[warning for warning in [error_text] if warning],
-            failure_classification=classification,
-            failure_diagnostics=diagnostics,
-        )
-
+    """Stub: commit_to_git is being rewritten (T-0191). For now, just mark done."""
     if not auto_commit_enabled:
         task.status = "done"
         task.pipeline_status = "done"
-        _cleanup_task_worktree(root, task)
+        save_task(root, task)
         append_journal(root, task, "CommitToGit skipped: auto-commit disabled.")
         return StageReport(
             task_id=task.id,
             step="commit_to_git",
             verdict="pass",
             summary="CommitToGit skipped because auto-commit is disabled",
-            warnings=["auto-commit disabled"],
         )
 
-    if not is_git_repo(root):
-        return failure_report(
-            classification="not_git_repo",
-            summary="CommitToGit failed: workspace is not a git repository",
-            error_text="workspace is not a git repository",
-            phase="preflight",
-        )
-
-    reconciled_sha = _reconcile_existing_checkpoint_commit(root, task)
-    if reconciled_sha is not None:
-        _cleanup_task_worktree(root, task)
-        save_task(root, task)
-        append_journal(
-            root,
-            task,
-            "CommitToGit reconciled an existing Litehive checkpoint commit.",
-        )
-        return StageReport(
-            task_id=task.id,
-            step="commit_to_git",
-            verdict="pass",
-            summary="CommitToGit reconciled an existing checkpoint commit",
-            files_changed=[],
-        )
-
-    try:
-        dirty_entries = status_porcelain(execution_root)
-    except GitError as exc:
-        return failure_report(
-            classification="status_failed",
-            summary=f"CommitToGit failed: {exc}",
-            error_text=str(exc),
-            phase="status",
-        )
-
-    if not dirty_entries:
-        try:
-            recovered_sha = _recover_or_validate_clean_task_worktree(root, execution_root, task)
-        except GitError as exc:
-            return failure_report(
-                classification="clean_worktree_recovery_failed",
-                summary=f"CommitToGit failed: {exc}",
-                error_text=str(exc),
-                phase="clean_worktree_recovery",
-            )
-
-        if recovered_sha is not None:
-            set_task_commit_sha(task, recovered_sha)
-            task.status = "done"
-            task.pipeline_status = "done"
-            _cleanup_task_worktree(root, task)
-            save_task(root, task)
-            append_journal(
-                root,
-                task,
-                "CommitToGit recovered and integrated an existing Litehive checkpoint from the task worktree.",
-            )
-            return StageReport(
-                task_id=task.id,
-                step="commit_to_git",
-                verdict="pass",
-                summary="CommitToGit recovered and integrated an existing task worktree checkpoint",
-                files_changed=[],
-            )
-
-        head_sha = current_head(root)
-        set_task_commit_sha(task, head_sha)
-        task.status = "done"
-        task.pipeline_status = "done"
-        _cleanup_task_worktree(root, task)
-        save_task(root, task)
-        append_journal(
-            root,
-            task,
-            "CommitToGit skipped: task worktree was already clean and no task-local changes remained.",
-        )
-        return StageReport(
-            task_id=task.id,
-            step="commit_to_git",
-            verdict="pass",
-            summary="CommitToGit skipped because task worktree was already clean",
-            warnings=["no changes to commit"],
-            files_changed=[],
-        )
-
-    # If all dirty entries are transient .litehive/ runtime files, skip commit.
-    # Config files (.gitignore, config.yaml, context.md, state.yaml) ARE committable.
-    _LITEHIVE_TRACKED_FILES = {
-        ".litehive/.gitignore",
-        ".litehive/config.yaml",
-        ".litehive/context.md",
-        ".litehive/state.yaml",
-    }
-    code_dirty = [
-        e for e in dirty_entries
-        if not (_status_entry_path(e) or "").startswith(".litehive/")
-        or (_status_entry_path(e) or "") in _LITEHIVE_TRACKED_FILES
-    ]
-    if not code_dirty:
-        head_sha = current_head(root)
-        set_task_commit_sha(task, head_sha)
-        task.status = "done"
-        task.pipeline_status = "done"
-        _cleanup_task_worktree(root, task)
-        save_task(root, task)
-        append_journal(root, task, "CommitToGit skipped: only workspace metadata changed.")
-        return StageReport(
-            task_id=task.id,
-            step="commit_to_git",
-            verdict="pass",
-            summary="CommitToGit skipped because only workspace metadata changed",
-            warnings=["no code changes to commit"],
-            files_changed=[],
-        )
-
-    try:
-        base_sha = current_head(root)
-        attempt = task.git.checkpoint_attempts + 1
-        message = checkpoint_message(task, attempt=attempt)
-        previous_base_sha = task.git.checkpoint_base_sha
-        previous_attempts = task.git.checkpoint_attempts
-        previous_rollback_attempt = task.git.rolled_back_checkpoint_attempt
-        previous_status = task.status
-        previous_pipeline_status = task.pipeline_status
-        state = load_state(root)
-        set_task_commit_sha(task, None)
-        task.git.checkpoint_base_sha = base_sha
-        task.git.checkpoint_attempts = attempt
-        task.git.rolled_back_checkpoint_attempt = None
-        task.status = "done"
-        task.pipeline_status = "done"
-        if state.active_task_id == task.id:
-            state.active_task_id = None
-        state.queue = [queued_id for queued_id in state.queue if queued_id != task.id]
-        append_journal(
-            root,
-            task,
-            (
-                "CommitToGit requested.\n"
-                f"- base: `{base_sha or 'initial commit'}`\n"
-                f"- message: `{message}`\n"
-                f"- worktree: `{get_task_worktree_path(task) or execution_root}`"
-            ),
-        )
-        persist_task_and_state(root, task=task, state=state)
-        # Pull latest from remote before merging to avoid push conflicts
-        _pull_rebase_main(root, subagents=subagents, task=task, config=config)
-        if execution_root != root:
-            _commit_all_in_worktree(execution_root, message)
-            integrated_sha = _merge_worktree_into_main(
-                root, execution_root, message,
-                subagents=subagents, task=task, config=config,
-            )
-        else:
-            checkpoint = commit_task(root, message, paths=None)
-            if checkpoint is None:
-                raise GitError("git commit prerequisites were not met")
-            integrated_sha = checkpoint.commit_sha
-    except Exception as exc:
-        # Try recovery agent before giving up — catch ALL errors, not just GitError
-        if subagents is not None and task is not None:
-            append_journal(root, task, f"CommitToGit failed: {exc}. Launching recovery agent.")
-            recovery_sha = _attempt_commit_recovery(
-                root, execution_root, task, str(exc),
-                subagents=subagents, config=config,
-            )
-            if recovery_sha is not None:
-                set_task_commit_sha(task, recovery_sha)
-                _cleanup_task_worktree(root, task)
-                save_task(root, task)
-                save_task_runtime(root, task)
-                append_journal(root, task, "CommitToGit recovered by agent.")
-                return StageReport(
-                    task_id=task.id,
-                    step="commit_to_git",
-                    verdict="pass",
-                    summary="CommitToGit recovered by agent after initial failure",
-                )
-
-        task.git.checkpoint_base_sha = previous_base_sha
-        task.git.checkpoint_attempts = previous_attempts
-        task.git.rolled_back_checkpoint_attempt = previous_rollback_attempt
-        set_task_commit_sha(task, None)
-        task.status = previous_status
-        task.pipeline_status = previous_pipeline_status
-        state = load_state(root)
-        state.queue = [queued_id for queued_id in state.queue if queued_id != task.id]
-        persist_task_and_state(root, task=task, state=state)
-        return failure_report(
-            classification="checkpoint_failed",
-            summary=f"CommitToGit failed: {exc}",
-            error_text=str(exc),
-            phase="checkpoint",
-            base_sha=base_sha,
-            message=message,
-            dirty_entries=dirty_entries,
-            attempt=attempt,
-        )
-
-    set_task_commit_sha(task, integrated_sha)
-    _cleanup_task_worktree(root, task)
+    task.status = "done"
+    task.pipeline_status = "done"
+    head = current_head(root) if is_git_repo(root) else None
+    set_task_commit_sha(task, head)
     save_task(root, task)
-    try:
-        save_task_runtime(root, task)
-    except Exception as runtime_exc:
-        append_journal(root, task, f"Warning: save_task_runtime failed: {runtime_exc}")
-
-    # Push to remote if one is configured
-    push_result = subprocess.run(
-        ["git", "push"],
-        cwd=root,
-        capture_output=True,
-        text=True,
-    )
-    push_warning: list[str] = []
-    if push_result.returncode != 0:
-        push_warning = [f"git push failed: {push_result.stderr.strip()}"]
-        append_journal(root, task, f"CommitToGit push failed: {push_result.stderr.strip()}")
-    else:
-        append_journal(root, task, "CommitToGit pushed to remote.")
-
+    append_journal(root, task, "CommitToGit stub: marked done. Full implementation pending T-0191.")
     return StageReport(
         task_id=task.id,
         step="commit_to_git",
         verdict="pass",
-        summary="CommitToGit created and integrated the final completion commit",
-        warnings=push_warning,
+        summary="CommitToGit stub: task marked done (full implementation pending)",
     )
 
 
-def _unexpected_dirty_paths(
-    dirty_entries: list[str], allowed_paths: set[PurePosixPath]
-) -> list[str]:
-    unexpected: list[str] = []
-    for entry in dirty_entries:
-        path = _status_entry_path(entry)
-        if path is None:
-            continue
-        if _is_allowed_commit_path(path, allowed_paths):
-            continue
-        if path.startswith(".litehive/"):
-            continue
-        if path.startswith("$tmpdir/.litehive/"):
-            continue
-        if path.startswith('"$tmpdir"/.litehive/'):
-            continue
-        unexpected.append(path)
-    return unexpected
-
-
-def _commit_to_git_failure_diagnostics(
-    root: Path,
-    execution_root: Path,
-    task: TaskRecord,
-    *,
-    phase: str,
-    error_text: str | None,
-    base_sha: str | None = None,
-    message: str | None = None,
-    dirty_entries: list[str] | None = None,
-    attempt: int | None = None,
-) -> dict[str, str | int | bool | None | list[str]]:
-    worktree_path = get_task_worktree_path(task) or (
-        str(execution_root.relative_to(root))
-        if execution_root != root and execution_root.is_relative_to(root)
-        else str(execution_root)
-    )
-    diagnostics: dict[str, str | int | bool | None | list[str]] = {
-        "phase": phase,
-        "workspace_root": str(root),
-        "execution_root": str(execution_root),
-        "worktree_path": worktree_path,
-        "checkpoint_attempt": attempt if attempt is not None else task.git.checkpoint_attempts,
-        "planned_checkpoint_attempt": attempt if attempt is not None else task.git.checkpoint_attempts + 1,
-        "checkpoint_base_sha": base_sha if base_sha is not None else task.git.checkpoint_base_sha,
-        "planned_commit_message": message if message is not None else checkpoint_message(
-            task,
-            attempt=(attempt if attempt is not None else task.git.checkpoint_attempts + 1),
-        ),
-    }
-    if dirty_entries is not None:
-        diagnostics["dirty_paths"] = [
-            path for path in (_status_entry_path(entry) for entry in dirty_entries) if path
-        ]
-        diagnostics["dirty_entry_count"] = len(dirty_entries)
-    if error_text is not None:
-        diagnostics["error"] = error_text
-    return diagnostics
-
-
-def _allowed_commit_paths(root: Path, task: TaskRecord) -> set[PurePosixPath]:
-    allowed = {
-        PurePosixPath(".litehive") / ".gitignore",
-        PurePosixPath(".litehive") / "config.yaml",
-        PurePosixPath(".litehive") / "context.md",
-        PurePosixPath(".litehive") / "state.yaml",
-        PurePosixPath(".litehive") / "tasks" / f"{task.id}-{task.slug}",
-    }
-    reports_dir = root / ".litehive" / "tasks" / f"{task.id}-{task.slug}" / "reports"
-    for report_path in reports_dir.glob("*.yaml"):
-        report_data = yaml.safe_load(report_path.read_text(encoding="utf-8")) or {}
-        for changed in report_data.get("files_changed") or []:
-            normalized = str(changed).strip()
-            if normalized and normalized.lower() not in {"none", "n/a", "-", "path/to/file"} and "none" not in normalized.lower():
-                allowed.add(PurePosixPath(normalized))
-    return allowed
-
-
-def _is_allowed_commit_path(path: str, allowed_paths: set[PurePosixPath]) -> bool:
-    candidate = PurePosixPath(path)
-    for allowed in allowed_paths:
-        if candidate == allowed or allowed in candidate.parents:
-            return True
-    return False
-
-
-def _status_entry_path(entry: str) -> str | None:
-    if len(entry) < 4:
-        return None
-    path = entry[3:]
-    if " -> " in path:
-        path = path.split(" -> ", 1)[1]
-    normalized = path.strip().replace('\\"', '"')
-    if normalized.startswith('"') and normalized.endswith('"') and len(normalized) >= 2:
-        normalized = normalized[1:-1]
-    return normalized.strip() or None
-
-
-def _dirty_entry_paths(entries: list[str]) -> list[str]:
-    paths = [path for entry in entries if (path := _status_entry_path(entry)) is not None]
-    return sorted(dict.fromkeys(paths))
+# --- Everything below was removed: complex commit/merge/recovery machinery ---
+# Will be reimplemented cleanly in T-0191.
+# Old functions removed:
+#   _commit_to_git_report (full version), _merge_worktree_into_main,
+#   _commit_all_in_worktree, _attempt_commit_recovery, _pull_rebase_main,
+#   _recover_or_validate_clean_task_worktree, _cleanup_task_worktree,
+#   _list_conflict_files, run_late_stage_completion_preflight,
+#   _unexpected_dirty_paths, _commit_to_git_failure_diagnostics,
+#   _allowed_commit_paths, _is_allowed_commit_path, _status_entry_path,
+#   _dirty_entry_paths
