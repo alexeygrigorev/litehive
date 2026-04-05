@@ -260,7 +260,7 @@ def _pending_pool_tasks(root: Path) -> list[dict[str, object]]:
 def _resumable_pool_tasks(root: Path) -> list[dict[str, object]]:
     resumable: list[dict[str, object]] = []
     for task in list_tasks(root):
-        if task.status != "interrupted" or task.pipeline_status == "done":
+        if task.status not in {"interrupted", "parked"} or task.pipeline_status == "done":
             continue
         resumable.append(
             _pool_task_report_entry(
@@ -1788,7 +1788,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     resume = subparsers.add_parser(
-        "resume", help="Resume an interrupted, flagged, or closed task from its current stage"
+        "resume", help="Resume an interrupted, parked, flagged, or closed task from its current stage"
     )
     resume.add_argument("task_id", help="Task id to resume")
     resume.add_argument(
@@ -2334,7 +2334,7 @@ def _cmd_queue(args: argparse.Namespace) -> int:
             f"title={task.title} depends_on={_task_dependencies_label(task.id, task.depends_on)}"
             f"{_task_interruption_label(task)}"
         )
-    resumable = [task for task in tasks if task.status == "interrupted"]
+    resumable = [task for task in tasks if task.status in {"interrupted", "parked"}]
     print(f"resumable_tasks: {len(resumable)}")
     for index, task in enumerate(resumable, start=1):
         print(
@@ -2790,7 +2790,7 @@ def _cmd_promote(args: argparse.Namespace) -> int:
     ensure_workspace(args.workspace)
     try:
         task = require_task(args.workspace, args.task_id)
-        if task.status in {"interrupted", "flagged", "cancelled", "wont_do", "deferred", "duplicate"}:
+        if task.status in {"interrupted", "parked", "flagged", "cancelled", "wont_do", "deferred", "duplicate"}:
             task = resume_task(args.workspace, args.task_id, front=True)
             print(f"task: {task.id} {task.title}")
             print("status: queued")

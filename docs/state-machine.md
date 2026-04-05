@@ -34,7 +34,8 @@ fails, Litehive restores the pre-transition files instead of leaving
 |-------|---------|
 | `queued` | Waiting in the pool to be picked up, including resumable interrupted, flagged, or rejected work |
 | `in_progress` | Currently running under the pool runner |
-| `interrupted` | Execution stopped by runner or subagent termination; resumable from the preserved stage |
+| `interrupted` | Execution stopped by runner or subagent termination; resumable from the preserved stage and eligible for automatic recovery/requeue |
+| `parked` | Execution intentionally stopped by an operator; resumable from the preserved stage but excluded from automatic recovery/requeue |
 | `done` | Completed successfully; git checkpoint recorded |
 | `flagged` | Blocked, unresolvable, or interrupted by an unhandled error — needs human attention |
 | `cancelled` | Explicitly abandoned or execution-cancelled without a PM close outcome |
@@ -44,11 +45,11 @@ fails, Litehive restores the pre-transition files instead of leaving
 
 Terminal states (no automatic forward progress): `done`, `cancelled`, `wont_do`, `deferred`, `duplicate`.
 
-`interrupted`, `flagged`, and explicitly closed tasks can be resumed via `litehive resume`.
-`flagged` and explicitly closed tasks can be requeued via `litehive requeue` if they should re-enter execution from the implementation entry stage.
-`interrupted`, `flagged`, and explicitly closed tasks can be permanently abandoned via `litehive abandon`.
+`interrupted`, `parked`, `flagged`, and explicitly closed tasks can be resumed via `litehive resume`.
+`parked`, `flagged`, and explicitly closed tasks can be requeued via `litehive requeue` if they should re-enter execution from the implementation entry stage.
+`interrupted`, `parked`, `flagged`, and explicitly closed tasks can be permanently abandoned via `litehive abandon`.
 Any non-done task can be explicitly closed via `litehive close --outcome <code>`.
-System-interrupted and flagged tasks are also returned to the runnable queue automatically unless the interruption reason came from an explicit CLI stop. User-stopped tasks stay parked until resumed manually.
+System-interrupted and flagged tasks are also returned to the runnable queue automatically. User-stopped tasks persist as `parked` until resumed or requeued manually.
 
 ---
 
@@ -246,7 +247,13 @@ records `runtime.last_outcome.kind = interrupted`, keeps the interrupted stage i
 and stops the pool with `task_interrupted`. The task is visible as resumable until
 `litehive resume <id>` returns it to `status = queued` at the preserved stage
 subject only to normal reroutes such as missing acceptance criteria.
-System-triggered interruptions are also reinserted into the runnable queue automatically so the pool can pick them up again without manual repair; explicit CLI stops stay parked.
+System-triggered interruptions are also reinserted into the runnable queue automatically so the pool can pick them up again without manual repair.
+
+Explicit `litehive stop` transitions the task to `status = parked` while preserving
+the same interruption metadata and stage context. Parked tasks are listed as resumable
+but are not auto-requeued by repair or stale-runner recovery. `litehive resume <id>`
+returns parked work to the queue at the preserved stage; `litehive requeue <id>`
+returns it to the implementation entry stage.
 
 QA or reviewer rejection also parks the task in the runnable pool. In that case the task
 switches back to `pipeline_status = implementing`, keeps `status = queued`, records
@@ -354,7 +361,7 @@ conditions allow.
 
 | Command | Effect |
 |---------|--------|
-| `litehive requeue <id>` | Re-adds a `flagged` or explicitly closed task to the queue at the implementation entry stage |
-| `litehive resume <id>` | Re-adds an `interrupted`, `flagged`, or explicitly closed task to the queue at its preserved stage, subject to normal reroutes |
+| `litehive requeue <id>` | Re-adds a `parked`, `flagged`, or explicitly closed task to the queue at the implementation entry stage |
+| `litehive resume <id>` | Re-adds an `interrupted`, `parked`, `flagged`, or explicitly closed task to the queue at its preserved stage, subject to normal reroutes |
 | `litehive rollback <id>` | Reverts the checkpoint commit and requeues the task at `implementing` |
 | `litehive recover <id>` | Requeues a completed task at `implementing` without reverting code |

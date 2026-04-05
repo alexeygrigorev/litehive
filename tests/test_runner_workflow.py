@@ -2,7 +2,7 @@ from tests.workspace_helpers import *  # noqa: F401,F403
 
 def test_runner_advances_task_to_done(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
-    task = create_task(tmp_path, title="Implement feature")
+    task = create_task(tmp_path, title="Implement feature", auto_commit=False)
 
     def executor(task, step):  # type: ignore[no-untyped-def]
         return StageReport(task_id=task.id, step=step, verdict="pass", summary=f"{step} ok")
@@ -325,7 +325,7 @@ def test_runner_does_not_override_acceptance_verdict(tmp_path: Path) -> None:
 
 def test_runner_persists_non_blocking_follow_up_and_completes_current_task(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
-    task = create_task(tmp_path, title="Ship feature behavior")
+    task = create_task(tmp_path, title="Ship feature behavior", auto_commit=False)
 
     def executor(task, step):  # type: ignore[no-untyped-def]
         if step == "accepting":
@@ -730,6 +730,7 @@ def test_runner_infers_acceptance_criteria_from_task_context_after_grooming(
         title="Implement feature",
         goal="Ship deterministic dispatch",
         depends_on=[prerequisite.id],
+        auto_commit=False,
     )
 
     def executor(task, step):  # type: ignore[no-untyped-def]
@@ -786,7 +787,7 @@ def test_runner_blocks_large_task_without_inferable_acceptance_criteria_during_g
 
 def test_runner_persists_grooming_generated_acceptance_criteria(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
-    task = create_task(tmp_path, title="Implement feature", goal="Ship deterministic dispatch")
+    task = create_task(tmp_path, title="Implement feature", goal="Ship deterministic dispatch", auto_commit=False)
 
     def executor(task, step):  # type: ignore[no-untyped-def]
         if step == "grooming":
@@ -823,7 +824,7 @@ def test_runner_persists_grooming_generated_acceptance_criteria(tmp_path: Path) 
 
 def test_runner_persists_grooming_generated_pm_sizing(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
-    task = create_task(tmp_path, title="Implement feature", goal="Ship deterministic dispatch")
+    task = create_task(tmp_path, title="Implement feature", goal="Ship deterministic dispatch", auto_commit=False)
 
     def executor(task, step):  # type: ignore[no-untyped-def]
         if step == "grooming":
@@ -921,7 +922,7 @@ def test_runner_normalizes_implementing_stage_without_acceptance_criteria_to_gro
     tmp_path: Path,
 ) -> None:
     ensure_workspace(tmp_path)
-    task = create_task(tmp_path, title="Resume feature", goal="Ship deterministic routing")
+    task = create_task(tmp_path, title="Resume feature", goal="Ship deterministic routing", auto_commit=False)
     task.plan = ["Inspect current flow", "Implement gate"]
     task.pipeline_status = "implementing"
     save_task(tmp_path, task)
@@ -946,7 +947,7 @@ def test_runner_normalizes_later_stage_without_acceptance_criteria_to_grooming(
     tmp_path: Path,
 ) -> None:
     ensure_workspace(tmp_path)
-    task = create_task(tmp_path, title="Resume feature", goal="Ship deterministic routing")
+    task = create_task(tmp_path, title="Resume feature", goal="Ship deterministic routing", auto_commit=False)
     task.plan = ["Inspect current flow", "Implement gate"]
     task.pipeline_status = "testing"
     save_task(tmp_path, task)
@@ -972,7 +973,7 @@ def test_runner_normalizes_underspecified_queued_task_through_grooming(
 ) -> None:
     """Queued task at implementing with no acceptance criteria gets rerouted to grooming."""
     ensure_workspace(tmp_path)
-    task = create_task(tmp_path, title="Legacy queued task")
+    task = create_task(tmp_path, title="Legacy queued task", auto_commit=False)
     task.pipeline_status = "implementing"
     task.status = "queued"
     save_task(tmp_path, task)
@@ -999,7 +1000,7 @@ def test_runner_normalizes_interrupted_task_without_criteria_through_grooming(
 ) -> None:
     """Interrupted task at testing with no acceptance criteria gets rerouted to grooming."""
     ensure_workspace(tmp_path)
-    task = create_task(tmp_path, title="Interrupted legacy task", goal="Deliver the fix")
+    task = create_task(tmp_path, title="Interrupted legacy task", goal="Deliver the fix", auto_commit=False)
     task.pipeline_status = "testing"
     task.status = "interrupted"
     task.runtime.last_outcome.kind = "interrupted"
@@ -1030,6 +1031,7 @@ def test_runner_skips_normalization_for_well_specified_task(tmp_path: Path) -> N
         title="Well specified task",
         goal="Deliver the feature",
         acceptance_criteria=["Feature works end to end"],
+        auto_commit=False,
     )
     task.pipeline_status = "implementing"
     task.status = "queued"
@@ -2794,7 +2796,8 @@ def test_runner_normal_retry_within_stage_limit(tmp_path: Path) -> None:
     """Testing rejects once (within stage limit=2), task requeues at implementing — not escalated."""
     ensure_workspace(tmp_path, LitehiveConfig(default_retry_limit=3, default_stage_retry_limit=2))
     task = create_task(
-        tmp_path, title="Normal retry", acceptance_criteria=["Feature works."]
+        tmp_path, title="Normal retry", acceptance_criteria=["Feature works."],
+        auto_commit=False,
     )
     call_count: dict[str, int] = {}
 

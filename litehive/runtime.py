@@ -616,9 +616,6 @@ def _task_can_resume_with_owned_dirty_paths(
         return False
     if task.pipeline_status in {"backlog", "done"}:
         return False
-    interruption = task.runtime.interruption
-    if interruption is not None and interruption.reason == "Task stopped via CLI":
-        return False
     return not _unexpected_dirty_paths(dirty_entries, _allowed_commit_paths(root, task))
 
 

@@ -1124,6 +1124,38 @@ def test_requeue_command_reroutes_large_task_without_acceptance_criteria_to_groo
     assert requeued.status == "queued"
     assert requeued.pipeline_status == "grooming"
 
+def test_requeue_command_restarts_parked_task_from_implementation_entry_stage(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    ensure_workspace(tmp_path)
+    first = create_task(tmp_path, title="First task")
+    parked = create_task(tmp_path, title="Parked task")
+    task = get_task(tmp_path, parked.id)
+    assert task is not None
+    task.status = "parked"
+    task.pipeline_status = "testing"
+    task.runtime.execution_status = "interrupted"
+    task.runtime.last_outcome.kind = "interrupted"
+    task.runtime.last_outcome.stage = "testing"
+    task.runtime.last_outcome.reason_code = "execution_interrupted"
+    task.runtime.last_outcome.reason = "Task stopped via CLI."
+    save_task(tmp_path, task)
+
+    exit_code = _cmd_requeue_task(
+        argparse.Namespace(workspace=tmp_path, task_id=parked.id, front=True)
+    )
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "status: queued" in output
+    assert "pipeline_status: implementing" in output
+    assert load_state(tmp_path).queue == [parked.id, first.id]
+    requeued = get_task(tmp_path, parked.id)
+    assert requeued is not None
+    assert requeued.status == "queued"
+    assert requeued.pipeline_status == "implementing"
+    assert requeued.runtime.last_outcome.kind == "interrupted"
+
 def test_resume_command_preserves_flagged_task_stage(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -1218,6 +1250,50 @@ def test_resume_command_preserves_interrupted_task_stage(
     assert resumed.runtime.last_outcome.reason_code == "execution_interrupted"
     assert resumed.runtime.last_subagent is not None
     assert resumed.runtime.last_subagent.transcript_snippet == "tests were halfway done"
+
+def test_resume_command_preserves_parked_task_stage(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    ensure_workspace(tmp_path)
+    first = create_task(tmp_path, title="First task")
+    parked = create_task(tmp_path, title="Resume parked task")
+    task = get_task(tmp_path, parked.id)
+    assert task is not None
+    task.status = "parked"
+    task.pipeline_status = "testing"
+    task.runtime.execution_status = "interrupted"
+    task.runtime.last_outcome.kind = "interrupted"
+    task.runtime.last_outcome.stage = "testing"
+    task.runtime.last_outcome.reason_code = "execution_interrupted"
+    task.runtime.last_outcome.reason = "Task stopped via CLI."
+    task.runtime.current_stage = RuntimeStageState(
+        step="testing",
+        status="interrupted",
+        started_at="2026-04-01T00:00:00+00:00",
+        completed_at="2026-04-01T00:01:00+00:00",
+        updated_at="2026-04-01T00:01:00+00:00",
+        duration_seconds=60,
+        verdict="blocked",
+        summary="Execution interrupted via `litehive stop`. Resume from `testing`.",
+    )
+    save_task(tmp_path, task)
+
+    exit_code = _cmd_resume_task(
+        argparse.Namespace(workspace=tmp_path, task_id=parked.id, front=False)
+    )
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "status: queued" in output
+    assert "pipeline_status: testing" in output
+    assert load_state(tmp_path).queue == [first.id, parked.id]
+    resumed = get_task(tmp_path, parked.id)
+    assert resumed is not None
+    assert resumed.status == "queued"
+    assert resumed.pipeline_status == "testing"
+    assert resumed.runtime.execution_status == "idle"
+    assert resumed.runtime.last_outcome.kind == "interrupted"
+    assert resumed.runtime.last_outcome.stage == "testing"
 
 def test_resume_run_uses_structured_continuation_handoff_after_interruption(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -1394,7 +1470,7 @@ def test_requeue_command_requires_flagged_or_cancelled(
     output = capsys.readouterr().out
 
     assert exit_code == 1
-    assert "is not flagged or closed" in output
+    assert "is not flagged, parked, or closed" in output
 
 def test_requeue_task_rolls_back_when_atomic_state_persist_fails(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -1773,12 +1849,12 @@ def test_stop_command_interrupts_active_task_cleanly(
 
     assert exit_code == 0
     assert f"task: {task.id} {task.title}" in output
-    assert "status: interrupted" in output
+    assert "status: parked" in output
     assert "pipeline_status: testing" in output
     assert "signal_sent: no" in output
     refreshed = get_task(tmp_path, task.id)
     assert refreshed is not None
-    assert refreshed.status == "interrupted"
+    assert refreshed.status == "parked"
     assert refreshed.pipeline_status == "testing"
     assert refreshed.runtime.execution_status == "interrupted"
     assert refreshed.runtime.current_stage.status == "interrupted"
@@ -1873,7 +1949,7 @@ def test_stop_current_task_signals_live_runner_before_fallback(
     assert summary.runner_pid == 4242
     refreshed = get_task(tmp_path, task.id)
     assert refreshed is not None
-    assert refreshed.status == "interrupted"
+    assert refreshed.status == "parked"
     assert refreshed.runtime.execution_status == "interrupted"
 
 def test_switch_command_interrupts_active_task_persists_engine_and_records_thread_comment(
@@ -2304,6 +2380,46 @@ def test_dirty_worktree_gate_reports_ambiguous_main_checkout_ownership(
     assert "location_kind: main-checkout" in output
     assert "ownership: ambiguous-ownership" in output
     assert f"task_id: {first.id},{second.id}" in output
+
+def test_queue_command_lists_parked_task_as_resumable_with_distinct_status(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    ensure_workspace(tmp_path)
+    parked = create_task(tmp_path, title="Parked task", auto_commit=False)
+    parked.status = "parked"
+    parked.pipeline_status = "testing"
+    parked.runtime.execution_status = "interrupted"
+    parked.runtime.current_stage = RuntimeStageState(
+        step="testing",
+        status="interrupted",
+        started_at="2026-04-01T00:00:00+00:00",
+        completed_at="2026-04-01T00:01:00+00:00",
+        updated_at="2026-04-01T00:01:00+00:00",
+        duration_seconds=60,
+        verdict=None,
+        summary="Execution interrupted via `litehive stop`. Resume from `testing`.",
+    )
+    parked.runtime.interruption = RuntimeInterruptionState(
+        source="runner",
+        stage="testing",
+        pipeline_status="testing",
+        resume_stage="testing",
+        reason="Task stopped via CLI",
+        summary="Execution interrupted via `litehive stop`. Resume from `testing`.",
+    )
+    save_task(tmp_path, parked)
+    save_task_runtime(tmp_path, parked)
+
+    exit_code = _cmd_queue(argparse.Namespace(workspace=tmp_path))
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "queue_length: 1" in output
+    assert "resumable_tasks: 1" in output
+    assert (
+        f"resume 1. {parked.id} [parked/testing] priority=medium engine=codex (default) model=default "
+        "title=Parked task depends_on=-"
+    ) in output
 
 def test_dirty_worktree_gate_reports_missing_recorded_worktree(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]

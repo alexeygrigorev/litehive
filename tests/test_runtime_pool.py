@@ -666,7 +666,7 @@ def test_repair_workspace_state_requeues_system_interrupted_task_but_not_cli_sto
     save_task(tmp_path, system_task)
     save_task_runtime(tmp_path, system_task)
 
-    parked_task.status = "interrupted"
+    parked_task.status = "parked"
     parked_task.pipeline_status = "testing"
     parked_task.runtime.execution_status = "interrupted"
     parked_task.runtime.interruption = RuntimeInterruptionState(
@@ -1360,6 +1360,73 @@ def test_run_single_task_allows_dirty_git_owned_by_interrupted_task(
     assert summary.execution.task is not None
     assert summary.execution.task.id == task.id
     assert summary.stop_reason == "single_task_complete"
+
+
+def test_run_single_task_blocks_dirty_git_owned_by_parked_task(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ensure_workspace(tmp_path)
+    _init_git_repo(tmp_path)
+    task = create_task(tmp_path, title="Parked task", auto_commit=False)
+    task.status = "parked"
+    task.pipeline_status = "testing"
+    task.acceptance_criteria = ["Resume the parked testing stage manually."]
+    task.runtime.execution_status = "interrupted"
+    task.runtime.current_stage = RuntimeStageState(
+        step="testing",
+        status="interrupted",
+        started_at="2026-04-01T00:00:00+00:00",
+        completed_at="2026-04-01T00:01:00+00:00",
+        updated_at="2026-04-01T00:01:00+00:00",
+        duration_seconds=60,
+        verdict="blocked",
+        summary="Execution interrupted via `litehive stop`. Resume from `testing`.",
+    )
+    task.runtime.interruption = RuntimeInterruptionState(
+        source="runner",
+        stage="testing",
+        pipeline_status="testing",
+        resume_stage="testing",
+        reason="Task stopped via CLI",
+        summary="Execution interrupted via `litehive stop`. Resume from `testing`.",
+        interrupted_at="2026-04-01T00:01:00+00:00",
+        detected_at="2026-04-01T00:01:05+00:00",
+    )
+    save_task(tmp_path, task)
+    save_task_runtime(tmp_path, task)
+
+    (task_dir(tmp_path, task) / "reports" / "implementing-001.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "task_id": task.id,
+                "step": "implementing",
+                "verdict": "pass",
+                "summary": "implemented task changes",
+                "files_changed": ["app.txt"],
+                "tests": {"added": 0, "passing": 0},
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+    (tmp_path / "app.txt").write_text("dirty\n", encoding="utf-8")
+
+    def fail_stage(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("parked task should not run past dirty-worktree gate")
+
+    monkeypatch.setattr("litehive.runtime.SubagentManager.run", fail_stage)
+
+    summary = run_single_task(
+        tmp_path, stop_conditions=TaskPoolStopConditions(stop_on_dirty_git=True)
+    )
+
+    assert summary.execution is None
+    assert summary.stop_reason == "dirty_git_state"
+    refreshed = get_task(tmp_path, task.id)
+    assert refreshed is not None
+    assert refreshed.status == "parked"
+    assert refreshed.pipeline_status == "testing"
+
 
 def test_drain_task_pool_stops_on_pool_usage_cap(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch

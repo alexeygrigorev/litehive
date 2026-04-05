@@ -15,6 +15,7 @@ TaskStatus = Literal[
     "queued",
     "in_progress",
     "interrupted",
+    "parked",
     "done",
     "flagged",
     "cancelled",
