@@ -12,15 +12,34 @@ priority: medium
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-04T20:46:43+00:00'
-updated_at: '2026-04-04T20:46:43+00:00'
+updated_at: '2026-04-05T22:06:17+00:00'
 goal: Split subagents.py into subagents/__init__.py with separate files for prompt
   building, stage report parsing, execution management, and continuation handling.
 acceptance_criteria:
-- litehive/subagents/ is a package
-- prompt building is in its own file
-- all tests pass
+- 'litehive/subagents/ is a Python package with an __init__.py that re-exports the
+  full existing public API: SubagentManager, SubagentResult, EngineFailure, SubagentInactivityTimeout,
+  stage_prompt, stage_report_from_subagent, intake_prompt'
+- Prompt-building code (stage_prompt, intake_prompt, _stage_owner_for_step, _stage_role_prompt,
+  _load_agent_md, _agent_startup_guidance) lives in litehive/subagents/_prompts.py
+- Stage-report parsing code (stage_report_from_subagent) lives in litehive/subagents/_parsing.py
+- Execution-management code (SubagentManager, _SandboxedAdapter, EngineFailure, SubagentResult,
+  SubagentInactivityTimeout, artifact helpers) lives in litehive/subagents/_execution.py
+- Continuation-handling code lives in litehive/subagents/_continuation.py (token extraction
+  helpers and/or prompt continuation assembly)
+- All existing imports of litehive.subagents in the codebase (runtime, cli, tests)
+  continue to work without modification
+- uv run pytest -q passes with zero failures after the refactor
 constraints: []
-plan: []
+plan:
+- 'Create litehive/subagents/ directory and move litehive/subagents.py content into
+  submodules: _prompts.py (prompt building), _parsing.py (stage report parsing), _execution.py
+  (execution management: SubagentManager, _SandboxedAdapter, dataclasses, artifact
+  helpers), _continuation.py (continuation token extraction and serialization helpers)'
+- 'Create litehive/subagents/__init__.py that re-exports the full public API: SubagentManager,
+  SubagentResult, EngineFailure, SubagentInactivityTimeout, stage_prompt, stage_report_from_subagent,
+  intake_prompt'
+- Delete litehive/subagents.py (replaced by the new package)
+- Run uv run pytest -q and confirm zero failures
 human_checkpoints: []
 subagents: []
 git:
@@ -33,5 +52,6 @@ git:
   worktree_path: null
 retry_policy:
   max_retries: null
+  stage_retry_limit: null
 created_from: null
 upstream_origin: null
