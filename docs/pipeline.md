@@ -10,7 +10,7 @@ local code rather than in agent prompts.
 `litehive run` executes one selection cycle:
 
 ```bash
-litehive run --workspace .
+litehive run
 ```
 
 Use this when you want tight operator control, are validating a new engine
@@ -22,7 +22,7 @@ setup, or want to inspect the workspace after each task.
 condition:
 
 ```bash
-litehive run --drain --workspace .
+litehive run --drain
 ```
 
 Typical stop conditions include:
@@ -37,8 +37,8 @@ Typical stop conditions include:
 Dry-run either mode without invoking agents:
 
 ```bash
-litehive run --dry-run --workspace .
-litehive run --drain --dry-run --workspace .
+litehive run --dry-run
+litehive run --drain --dry-run
 ```
 
 ## Stages
@@ -125,10 +125,10 @@ Selection is deterministic and local. By default, the pool uses the
 Inspect the queue with:
 
 ```bash
-litehive queue --workspace .
-litehive status --workspace .
-litehive status --full --workspace .
-litehive status --fast --workspace .
+litehive queue
+litehive status
+litehive status --full
+litehive status --fast
 ```
 
 ## State Machine Summary
@@ -205,8 +205,8 @@ If the same review stage keeps rejecting:
 Tasks can pause before important boundaries:
 
 ```bash
-litehive update T-0007 --human-checkpoint before_acceptance --workspace .
-litehive update T-0007 --human-checkpoint before_commit --workspace .
+litehive update T-0007 --human-checkpoint before_acceptance
+litehive update T-0007 --human-checkpoint before_commit
 ```
 
 When a checkpoint is reached, the pool stops cleanly and leaves the task queued
@@ -217,9 +217,9 @@ at the next stage.
 The daemon wraps the same pool logic but repeats it in the background:
 
 ```bash
-litehive daemon run --workspace .
-litehive daemon status --workspace .
-litehive daemon stop --workspace .
+litehive daemon run
+litehive daemon status
+litehive daemon stop
 ```
 
 A daemon iteration:
@@ -234,11 +234,11 @@ A daemon iteration:
 Useful intervention commands:
 
 ```bash
-litehive stop --workspace .
-litehive resume T-0003 --workspace .
-litehive requeue T-0003 --workspace .
-litehive abandon T-0003 --workspace .
-litehive close T-0003 --outcome deferred --reason "waiting on upstream dependency" --workspace .
+litehive stop
+litehive resume T-0003
+litehive requeue T-0003
+litehive abandon T-0003
+litehive close T-0003 --outcome deferred --reason "waiting on upstream dependency"
 ```
 
 The main principle is: tasks that cannot make progress right now should stay

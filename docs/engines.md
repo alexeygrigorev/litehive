@@ -48,9 +48,9 @@ Litehive resolves engine order in this precedence:
 Examples:
 
 ```bash
-litehive engine codex --workspace .
-litehive update T-0005 --engine opencode --workspace .
-litehive run --engine gemini --model gemini-2.5-pro --workspace .
+litehive engine codex
+litehive update T-0005 --engine opencode
+litehive run --engine gemini --model gemini-2.5-pro
 ```
 
 ## Task-Type Routing

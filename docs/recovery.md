@@ -15,7 +15,7 @@ If a prior run crashed, was interrupted, or left stale queue state behind, start
 with:
 
 ```bash
-litehive repair --workspace .
+litehive repair
 ```
 
 `repair` is the manual entrypoint for:
@@ -39,9 +39,9 @@ These states can still move forward:
 Main controls:
 
 ```bash
-litehive resume T-0008 --workspace .
-litehive requeue T-0008 --front --workspace .
-litehive abandon T-0008 --workspace .
+litehive resume T-0008
+litehive requeue T-0008 --front
+litehive abandon T-0008
 ```
 
 Use `resume` when you want to continue from the task's current preserved stage.
@@ -121,7 +121,7 @@ Two commands bring a completed task back into the queue:
 ### `rollback`
 
 ```bash
-litehive rollback T-0009 --workspace .
+litehive rollback T-0009
 ```
 
 This reverts the recorded checkpoint commit and requeues the task.
@@ -132,7 +132,7 @@ implementation pass.
 ### `recover`
 
 ```bash
-litehive recover T-0009 --workspace .
+litehive recover T-0009
 ```
 
 This requeues the completed task without reverting workspace code.
@@ -145,7 +145,7 @@ If an engine runs out of quota or becomes unsuitable mid-task, switch it without
 losing history:
 
 ```bash
-litehive switch T-0004 gemini --reason "codex quota exhausted" --workspace .
+litehive switch T-0004 gemini --reason "codex quota exhausted"
 ```
 
 Litehive records the switch in task artifacts and keeps continuation pointers so
@@ -156,7 +156,7 @@ the next pass has the right context.
 Use this before long pool runs if you suspect unowned local changes:
 
 ```bash
-litehive dirty-worktree-gate --workspace .
+litehive dirty-worktree-gate
 ```
 
 The report explains whether dirty git state should block the pool and whether
@@ -176,9 +176,9 @@ Automatic recovery is intentionally bounded. Expect manual intervention when:
 In those cases, the right move is usually:
 
 ```bash
-litehive repair --workspace .
-litehive status --full --workspace .
-litehive queue --workspace .
+litehive repair
+litehive status --full
+litehive queue
 ```
 
 Then decide whether to resume, requeue, close, or file upstream Litehive work

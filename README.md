@@ -218,7 +218,7 @@ High-volume raw execution artifacts are treated as disposable support data:
 The daemon runs tasks continuously in the background:
 
 ```bash
-litehive daemon run --workspace .
+litehive daemon run
 ```
 
 Each iteration spawns a fresh subprocess, so code changes to litehive itself are picked up automatically without restarting.
@@ -268,6 +268,8 @@ litehive daemon instances
 ```
 
 All instances share quota tracking at `~/.config/litehive/quota.yaml` so they coordinate engine usage across projects.
+
+All commands default to the current directory. If you need to target a different project without changing directories, use `--workspace /path/to/project`.
 
 ## Engines
 

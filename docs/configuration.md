@@ -14,14 +14,14 @@ can override the resolved engine for a single run.
 Initialize a workspace with defaults:
 
 ```bash
-litehive configure --workspace .
+litehive configure
 ```
 
 Seed common settings at creation time:
 
 ```bash
 litehive configure \
-  --workspace . \
+  \
   --default-engine codex \
   --process-profile python \
   --default-retry-limit 3 \
@@ -89,19 +89,19 @@ Supported engines are:
 Set the workspace default engine:
 
 ```bash
-litehive engine gemini --workspace .
+litehive engine gemini
 ```
 
 Set a task-specific engine:
 
 ```bash
-litehive update T-0002 --engine opencode --workspace .
+litehive update T-0002 --engine opencode
 ```
 
 Switch a task to a different engine mid-stream and record the reason:
 
 ```bash
-litehive switch T-0002 gemini --reason "quota exhausted" --workspace .
+litehive switch T-0002 gemini --reason "quota exhausted"
 ```
 
 Model resolution is:
@@ -149,14 +149,14 @@ litehive add "Stabilize flaky API test" \
   --goal "..." \
   --acceptance-criteria "..." \
   --retry-limit 5 \
-  --workspace .
+ 
 ```
 
 Per-task override after creation:
 
 ```bash
-litehive update T-0004 --retry-limit 5 --workspace .
-litehive update T-0004 --retry-limit default --workspace .
+litehive update T-0004 --retry-limit 5
+litehive update T-0004 --retry-limit default
 ```
 
 Behavior:
@@ -232,7 +232,7 @@ You can also add hooks at workspace creation time:
 
 ```bash
 litehive configure \
-  --workspace . \
+  \
   --hook 'before_swe_implementation=blocking:uv run python scripts/preflight.py' \
   --hook 'after_pm_acceptance=nonblocking:uv run python scripts/notify.py'
 ```

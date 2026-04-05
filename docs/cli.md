@@ -44,8 +44,8 @@ Top-level commands:
 Initialize `.litehive/` and optionally seed config values.
 
 ```bash
-litehive configure --workspace .
-litehive configure --workspace . --default-engine codex --process-profile python
+litehive configure
+litehive configure --default-engine codex --process-profile python
 ```
 
 Useful options:
@@ -69,9 +69,9 @@ Useful options:
 Show workspace status.
 
 ```bash
-litehive status --workspace .
-litehive status --fast --workspace .
-litehive status --full --workspace .
+litehive status
+litehive status --fast
+litehive status --full
 ```
 
 Options:
@@ -84,7 +84,7 @@ Options:
 Show the active task and queued order.
 
 ```bash
-litehive queue --workspace .
+litehive queue
 ```
 
 ### `litehive tasks`
@@ -92,7 +92,7 @@ litehive queue --workspace .
 Open the task view TUI.
 
 ```bash
-litehive tasks --workspace .
+litehive tasks
 ```
 
 ### `litehive web`
@@ -100,8 +100,8 @@ litehive tasks --workspace .
 Serve the local queue and session monitor.
 
 ```bash
-litehive web --workspace .
-litehive web --workspace . --host 127.0.0.1 --port 8765
+litehive web
+litehive web --host 127.0.0.1 --port 8765
 ```
 
 ## Engine Management
@@ -111,8 +111,8 @@ litehive web --workspace . --host 127.0.0.1 --port 8765
 Persist the workspace default engine.
 
 ```bash
-litehive engine codex --workspace .
-litehive engine gemini --workspace .
+litehive engine codex
+litehive engine gemini
 ```
 
 ## Task Creation
@@ -127,13 +127,13 @@ Implementation-style task:
 litehive add "Fix queue ordering bug" \
   --goal "Dependency-blocked tasks do not jump ahead of runnable work." \
   --acceptance-criteria "Blocked tasks remain visible but are not selected before prerequisites finish." \
-  --workspace .
+ 
 ```
 
 Typed task:
 
 ```bash
-litehive add "Write admin guide" --task-type docs --workspace .
+litehive add "Write admin guide" --task-type docs
 ```
 
 Useful options:
@@ -154,9 +154,9 @@ Useful options:
 Create a rough task from a freeform specification using an engine.
 
 ```bash
-litehive intake spec.md --workspace .
-cat notes.txt | litehive intake --workspace .
-litehive intake spec.md --engine gemini --model gemini-2.5-pro --workspace .
+litehive intake spec.md
+cat notes.txt | litehive intake
+litehive intake spec.md --engine gemini --model gemini-2.5-pro
 ```
 
 ### `litehive issue`
@@ -168,7 +168,7 @@ litehive issue \
   --upstream "engine timeout not handled correctly" \
   --type runtime_bug \
   --details "Observed during recovery in project X." \
-  --workspace .
+ 
 ```
 
 Patch handoff example:
@@ -179,7 +179,7 @@ litehive issue \
   --type engine_adapter_fix \
   --patch-branch recover/codex-timeout-fix \
   --prepare-patch-branch \
-  --workspace .
+ 
 ```
 
 ## Task Editing
@@ -189,9 +189,9 @@ litehive issue \
 Update task metadata after creation.
 
 ```bash
-litehive update T-0002 --engine opencode --workspace .
-litehive update T-0002 --priority high --workspace .
-litehive update T-0002 --human-checkpoint before_acceptance --workspace .
+litehive update T-0002 --engine opencode
+litehive update T-0002 --priority high
+litehive update T-0002 --human-checkpoint before_acceptance
 ```
 
 Replace durable shaping fields:
@@ -202,17 +202,17 @@ litehive update T-0002 \
   --acceptance-criteria "Interrupted tasks resume at the preserved stage." \
   --constraint "Keep changes scoped to queue state handling." \
   --plan-step "Inspect stale-runner recovery paths." \
-  --workspace .
+ 
 ```
 
 Other supported patterns:
 
 ```bash
-litehive update T-0002 --depends-on T-0001,T-0003 --workspace .
-litehive update T-0002 --depends-on none --workspace .
-litehive update T-0002 --from-file task-shape.yaml --workspace .
-litehive update T-0002 --edit --workspace .
-litehive update T-0002 --retry-limit default --workspace .
+litehive update T-0002 --depends-on T-0001,T-0003
+litehive update T-0002 --depends-on none
+litehive update T-0002 --from-file task-shape.yaml
+litehive update T-0002 --edit
+litehive update T-0002 --retry-limit default
 ```
 
 ### `litehive switch`
@@ -220,7 +220,7 @@ litehive update T-0002 --retry-limit default --workspace .
 Switch the task-level engine override and requeue the task for the next pass.
 
 ```bash
-litehive switch T-0002 gemini --reason "quota exhausted" --workspace .
+litehive switch T-0002 gemini --reason "quota exhausted"
 ```
 
 ### `litehive close`
@@ -228,9 +228,9 @@ litehive switch T-0002 gemini --reason "quota exhausted" --workspace .
 Close a task with an explicit non-implementation outcome.
 
 ```bash
-litehive close T-0007 --outcome wont_do --reason "superseded by T-0011" --workspace .
-litehive close T-0008 --outcome deferred --reason "revisit after release" --workspace .
-litehive close T-0009 --outcome duplicate --follow-up-task T-0004 --workspace .
+litehive close T-0007 --outcome wont_do --reason "superseded by T-0011"
+litehive close T-0008 --outcome deferred --reason "revisit after release"
+litehive close T-0009 --outcome duplicate --follow-up-task T-0004
 ```
 
 ## Queue Management
@@ -240,7 +240,7 @@ litehive close T-0009 --outcome duplicate --follow-up-task T-0004 --workspace .
 Move a queued task to a 1-based position.
 
 ```bash
-litehive move T-0004 1 --workspace .
+litehive move T-0004 1
 ```
 
 ### `litehive prioritize`
@@ -248,7 +248,7 @@ litehive move T-0004 1 --workspace .
 Move multiple queued tasks to the front in the order given.
 
 ```bash
-litehive prioritize T-0003 T-0002 T-0005 --workspace .
+litehive prioritize T-0003 T-0002 T-0005
 ```
 
 ### `litehive promote`
@@ -256,7 +256,7 @@ litehive prioritize T-0003 T-0002 T-0005 --workspace .
 Promote one queued task to the front.
 
 ```bash
-litehive promote T-0006 --workspace .
+litehive promote T-0006
 ```
 
 ### `litehive requeue`
@@ -264,8 +264,8 @@ litehive promote T-0006 --workspace .
 Requeue a flagged or closed task.
 
 ```bash
-litehive requeue T-0006 --workspace .
-litehive requeue T-0006 --front --workspace .
+litehive requeue T-0006
+litehive requeue T-0006 --front
 ```
 
 ### `litehive resume`
@@ -273,8 +273,8 @@ litehive requeue T-0006 --front --workspace .
 Resume an interrupted, parked, flagged, or closed task from its current stage.
 
 ```bash
-litehive resume T-0006 --workspace .
-litehive resume T-0006 --front --workspace .
+litehive resume T-0006
+litehive resume T-0006 --front
 ```
 
 ### `litehive abandon`
@@ -282,7 +282,7 @@ litehive resume T-0006 --front --workspace .
 Cancel a flagged or closed task and remove it from the queue.
 
 ```bash
-litehive abandon T-0006 --workspace .
+litehive abandon T-0006
 ```
 
 ## Running Work
@@ -292,26 +292,26 @@ litehive abandon T-0006 --workspace .
 Run the next task once:
 
 ```bash
-litehive run --workspace .
+litehive run
 ```
 
 Drain the pool:
 
 ```bash
-litehive run --drain --workspace .
+litehive run --drain
 ```
 
 Preview selection without invoking agents:
 
 ```bash
-litehive run --dry-run --workspace .
-litehive run --drain --dry-run --workspace .
+litehive run --dry-run
+litehive run --drain --dry-run
 ```
 
 Override the run engine:
 
 ```bash
-litehive run --engine gemini --model gemini-2.5-pro --workspace .
+litehive run --engine gemini --model gemini-2.5-pro
 ```
 
 Useful pool controls:
@@ -333,7 +333,7 @@ Useful pool controls:
 Stop the current active task cleanly.
 
 ```bash
-litehive stop --workspace .
+litehive stop
 ```
 
 ## Recovery And Diagnostics
@@ -343,7 +343,7 @@ litehive stop --workspace .
 Repair stale active tasks, interrupted runs, and queue inconsistencies.
 
 ```bash
-litehive repair --workspace .
+litehive repair
 ```
 
 ### `litehive dirty-worktree-gate`
@@ -351,7 +351,7 @@ litehive repair --workspace .
 Report whether dirty git state should block the pool and explain ownership.
 
 ```bash
-litehive dirty-worktree-gate --workspace .
+litehive dirty-worktree-gate
 ```
 
 ### `litehive rollback`
@@ -359,7 +359,7 @@ litehive dirty-worktree-gate --workspace .
 Revert a task checkpoint commit and requeue the task.
 
 ```bash
-litehive rollback T-0010 --workspace .
+litehive rollback T-0010
 ```
 
 ### `litehive recover`
@@ -367,7 +367,7 @@ litehive rollback T-0010 --workspace .
 Requeue a completed task without reverting code.
 
 ```bash
-litehive recover T-0010 --workspace .
+litehive recover T-0010
 ```
 
 ## Reporting From Agents
@@ -384,7 +384,7 @@ litehive report \
   --message "Implemented the documentation set and verified the files exist." \
   --files-changed docs/README.md \
   --files-changed docs/cli.md \
-  --workspace .
+ 
 ```
 
 Allowed verdicts:
@@ -409,7 +409,7 @@ Useful options:
 Start the workspace daemon.
 
 ```bash
-litehive daemon run --workspace .
+litehive daemon run
 ```
 
 ### `litehive daemon status`
@@ -417,7 +417,7 @@ litehive daemon run --workspace .
 Show the registered daemon PID and recent workspace-local logs.
 
 ```bash
-litehive daemon status --workspace .
+litehive daemon status
 ```
 
 ### `litehive daemon stop`
@@ -425,7 +425,7 @@ litehive daemon status --workspace .
 Stop the workspace daemon.
 
 ```bash
-litehive daemon stop --workspace .
+litehive daemon stop
 ```
 
 ### `litehive daemon restart`
@@ -433,7 +433,7 @@ litehive daemon stop --workspace .
 Restart the workspace daemon.
 
 ```bash
-litehive daemon restart --workspace .
+litehive daemon restart
 ```
 
 ### `litehive daemon instances`
@@ -449,8 +449,8 @@ litehive daemon instances
 ### Start a new workspace
 
 ```bash
-litehive configure --workspace .
-litehive status --workspace .
+litehive configure
+litehive status
 ```
 
 ### Add and run a task
@@ -459,24 +459,24 @@ litehive status --workspace .
 litehive add "Implement feature X" \
   --goal "..." \
   --acceptance-criteria "..." \
-  --workspace .
-litehive run --workspace .
+ 
+litehive run
 ```
 
 ### Operate a background queue
 
 ```bash
-litehive daemon run --workspace .
-litehive daemon status --workspace .
-litehive queue --workspace .
+litehive daemon run
+litehive daemon status
+litehive queue
 ```
 
 ### Recover from interruption
 
 ```bash
-litehive repair --workspace .
-litehive status --full --workspace .
-litehive resume T-0004 --workspace .
+litehive repair
+litehive status --full
+litehive resume T-0004
 ```
 
 For workflow behavior and routing semantics, continue with

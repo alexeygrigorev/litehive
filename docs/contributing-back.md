@@ -10,7 +10,7 @@ In the external project workspace, point Litehive at the Litehive source repo:
 
 ```bash
 litehive configure \
-  --workspace . \
+  \
   --litehive-source-path /abs/path/to/litehive
 ```
 
@@ -27,7 +27,7 @@ litehive issue \
   --upstream "engine timeout not working" \
   --type runtime_bug \
   --details "Observed during recovery while running project X." \
-  --workspace .
+ 
 ```
 
 The created upstream task stores:
@@ -67,7 +67,7 @@ litehive issue \
   --details "Include traceback, reproduction steps, and why this is a Litehive failure." \
   --source-role recovery \
   --source-stage implementing \
-  --workspace .
+ 
 ```
 
 The recovery prompt now explicitly tells recovery agents to use this flow when
@@ -86,7 +86,7 @@ litehive issue \
   --patch-branch recover/codex-timeout-fix \
   --prepare-patch-branch \
   --details "Branch prepared for a candidate fix in the Litehive repo." \
-  --workspace .
+ 
 ```
 
 This local-first handoff gives the Litehive workspace a durable task plus patch

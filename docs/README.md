@@ -58,7 +58,7 @@ Initialize a repository as a Litehive workspace:
 
 ```bash
 cd /path/to/your/project
-litehive configure --workspace .
+litehive configure
 ```
 
 Create a few tasks:
@@ -67,31 +67,31 @@ Create a few tasks:
 litehive add "Fix queue ordering bug" \
   --goal "Dependency-blocked tasks do not jump ahead of runnable work." \
   --acceptance-criteria "Blocked tasks remain visible but are not selected before prerequisites finish." \
-  --workspace .
+ 
 
 litehive add "Document API auth flow" \
   --task-type docs \
-  --workspace .
+ 
 ```
 
 Inspect the workspace:
 
 ```bash
-litehive status --workspace .
-litehive queue --workspace .
+litehive status
+litehive queue
 ```
 
 Run one task:
 
 ```bash
-litehive run --workspace .
+litehive run
 ```
 
 Or run continuously in the background:
 
 ```bash
-litehive daemon run --workspace .
-litehive daemon status --workspace .
+litehive daemon run
+litehive daemon status
 ```
 
 ## First Concepts To Know
@@ -110,11 +110,11 @@ litehive daemon status --workspace .
 ## Minimal Daily Workflow
 
 ```bash
-litehive configure --workspace .
-litehive add "Implement feature X" --goal "..." --acceptance-criteria "..." --workspace .
-litehive run --workspace .
-litehive status --workspace .
-litehive repair --workspace .   # when a prior run was interrupted
+litehive configure
+litehive add "Implement feature X" --goal "..." --acceptance-criteria "..."
+litehive run
+litehive status
+litehive repair   # when a prior run was interrupted
 ```
 
 Once that feels natural, move to [cli.md](cli.md) and [pipeline.md](pipeline.md).
