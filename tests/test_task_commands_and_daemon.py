@@ -269,6 +269,210 @@ def test_update_command_replaces_and_clears_acceptance_criteria(
     )
     assert "Use `--acceptance-criteria` to persist at least one structured bullet." in output
 
+def test_update_command_supports_rich_task_shaping_from_yaml_file(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    ensure_workspace(tmp_path)
+    prerequisite = create_task(tmp_path, title="Prerequisite")
+    task = create_task(tmp_path, title="Shape task", task_type="review", mode="tasks")
+    update_file = tmp_path / "task-shape.yaml"
+    update_file.write_text(
+        "\n".join(
+            [
+                "goal: |",
+                "  Refine the queued review task with richer operator-authored shaping.",
+                "  Keep the durable task record aligned with planner grooming.",
+                "acceptance_criteria:",
+                "  - The CLI persists rich shaping fields through the task record.",
+                "  - Operators can refine the task later without editing YAML directly.",
+                "constraints:",
+                "  - Reuse the existing task record fields.",
+                "  - Keep failed updates atomic.",
+                "plan:",
+                "  - Design the operator-facing shaping flow.",
+                "  - Implement the supported CLI update path.",
+                "pm_complexity: moderate",
+                "planned_effort: m",
+                "depends_on:",
+                f"  - {prerequisite.id}",
+                "human_checkpoints:",
+                "  - before_acceptance",
+                "priority: high",
+                "auto_commit: false",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    exit_code = _cmd_update(
+        argparse.Namespace(
+            workspace=tmp_path,
+            task_id=task.id,
+            depends_on=None,
+            acceptance_criteria=None,
+            constraint=None,
+            plan_step=None,
+            human_checkpoint=None,
+            task_type=None,
+            engine=None,
+            model=None,
+            retry_limit=None,
+            priority=None,
+            pm_complexity=None,
+            planned_effort=None,
+            goal=None,
+            mode=None,
+            auto_commit=None,
+            from_file=update_file,
+            edit=False,
+        )
+    )
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    updated = get_task(tmp_path, task.id)
+    assert updated is not None
+    assert updated.goal.startswith("Refine the queued review task")
+    assert updated.acceptance_criteria == [
+        "The CLI persists rich shaping fields through the task record.",
+        "Operators can refine the task later without editing YAML directly.",
+    ]
+    assert updated.constraints == [
+        "Reuse the existing task record fields.",
+        "Keep failed updates atomic.",
+    ]
+    assert updated.plan == [
+        "Design the operator-facing shaping flow.",
+        "Implement the supported CLI update path.",
+    ]
+    assert updated.pm_complexity == "moderate"
+    assert updated.planned_effort == "m"
+    assert updated.depends_on == [prerequisite.id]
+    assert updated.human_checkpoints == ["before_acceptance"]
+    assert updated.priority == "high"
+    assert updated.git.auto_commit is False
+    brief = (task_dir(tmp_path, updated) / "brief.md").read_text(encoding="utf-8")
+    assert "## Constraints" in brief
+    assert "- Reuse the existing task record fields." in brief
+    assert "## Plan" in brief
+    assert "- Implement the supported CLI update path." in brief
+    assert "acceptance_criteria: 2" in output
+    assert "constraints: 2" in output
+    assert "plan: 2" in output
+
+def test_update_command_rejects_malformed_rich_task_update_file(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Shape task")
+    update_file = tmp_path / "bad-task-shape.yaml"
+    update_file.write_text("acceptance_criteria: not-a-list\n", encoding="utf-8")
+
+    exit_code = _cmd_update(
+        argparse.Namespace(
+            workspace=tmp_path,
+            task_id=task.id,
+            depends_on=None,
+            acceptance_criteria=None,
+            constraint=None,
+            plan_step=None,
+            human_checkpoint=None,
+            task_type=None,
+            engine=None,
+            model=None,
+            retry_limit=None,
+            priority=None,
+            pm_complexity=None,
+            planned_effort=None,
+            goal=None,
+            mode=None,
+            auto_commit=None,
+            from_file=update_file,
+            edit=False,
+        )
+    )
+    output = capsys.readouterr().out
+
+    assert exit_code == 1
+    assert "update failed: acceptance_criteria must be a YAML list of strings" in output
+    unchanged = get_task(tmp_path, task.id)
+    assert unchanged is not None
+    assert unchanged.acceptance_criteria == []
+
+def test_update_command_supports_rich_task_shaping_via_editor(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Edit task")
+
+    monkeypatch.setenv("EDITOR", "fake-editor")
+
+    def fake_editor(argv: list[str], check: bool = False):  # type: ignore[no-untyped-def]
+        edit_path = Path(argv[-1])
+        edit_path.write_text(
+            "\n".join(
+                [
+                    "goal: |",
+                    "  Capture a larger task refresh through the editor flow.",
+                    "acceptance_criteria:",
+                    "  - The editor-backed update persists structured fields.",
+                    "constraints:",
+                    "  - Avoid direct task.yaml edits.",
+                    "plan:",
+                    "  - Open the editor template.",
+                    "  - Persist the edited task record.",
+                    "",
+                ]
+            ),
+            encoding="utf-8",
+        )
+        return subprocess.CompletedProcess(argv, 0)
+
+    monkeypatch.setattr("litehive.cli.subprocess.run", fake_editor)
+
+    exit_code = _cmd_update(
+        argparse.Namespace(
+            workspace=tmp_path,
+            task_id=task.id,
+            depends_on=None,
+            acceptance_criteria=None,
+            constraint=None,
+            plan_step=None,
+            human_checkpoint=None,
+            task_type=None,
+            engine=None,
+            model=None,
+            retry_limit=None,
+            priority=None,
+            pm_complexity=None,
+            planned_effort=None,
+            goal=None,
+            mode=None,
+            auto_commit=None,
+            from_file=None,
+            edit=True,
+        )
+    )
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    updated = get_task(tmp_path, task.id)
+    assert updated is not None
+    assert updated.goal == "Capture a larger task refresh through the editor flow."
+    assert updated.acceptance_criteria == [
+        "The editor-backed update persists structured fields."
+    ]
+    assert updated.constraints == ["Avoid direct task.yaml edits."]
+    assert updated.plan == [
+        "Open the editor template.",
+        "Persist the edited task record.",
+    ]
+    assert "constraints: 1" in output
+    assert "plan: 2" in output
+
 def test_update_command_replaces_and_clears_pm_sizing(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:

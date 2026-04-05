@@ -375,6 +375,10 @@ def normalize_acceptance_criteria(items: list[str] | None) -> list[str]:
     return normalized
 
 
+def normalize_task_text_list(items: list[str] | None) -> list[str]:
+    return normalize_acceptance_criteria(items)
+
+
 def extract_report_line(text: str, key: str) -> str | None:
     match = re.search(rf"^{key}:\s*(.+)$", text, re.MULTILINE)
     return match.group(1).strip() if match else None
@@ -3762,6 +3766,8 @@ def update_task(
     priority: str | object = ...,
     goal: str | object = ...,
     acceptance_criteria: list[str] | object = ...,
+    constraints: list[str] | object = ...,
+    plan: list[str] | object = ...,
     pm_complexity: str | None | object = ...,
     planned_effort: str | None | object = ...,
     human_checkpoints: list[str] | object = ...,
@@ -3815,6 +3821,12 @@ def update_task(
 
         if acceptance_criteria is not ...:
             task.acceptance_criteria = normalize_acceptance_criteria(list(acceptance_criteria))
+
+        if constraints is not ...:
+            task.constraints = normalize_task_text_list(list(constraints))
+
+        if plan is not ...:
+            task.plan = normalize_task_text_list(list(plan))
 
         if human_checkpoints is not ...:
             task.human_checkpoints = normalize_human_checkpoints(list(human_checkpoints))

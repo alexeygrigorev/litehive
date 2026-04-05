@@ -42,6 +42,9 @@ Common commands:
 - `litehive add "<title>" --task-type review`
 - `litehive update T-0001 --engine opencode`
 - `litehive update T-0001 --pm-complexity complex --planned-effort l`
+- `litehive update T-0001 --goal "..." --constraint "..." --plan-step "..."`
+- `litehive update T-0001 --from-file task-shape.yaml`
+- `litehive update T-0001 --edit`
 - `litehive move T-0001 1`
 - `litehive prioritize T-0003 T-0002 T-0001`
 - `litehive promote T-0001`
@@ -54,6 +57,7 @@ Common commands:
 `--workspace` defaults to the current directory. In normal repo-local use you should not need to pass it.
 When `litehive add` receives `--task-type`, it now creates the task in `tasks` mode by default so the task folder includes the structured `brief.md` and prompt guidance for that template. Pass `--mode implementation` to keep a typed task on the implementation path without the intake brief.
 Tasks can also carry PM sizing metadata: `--pm-complexity simple|moderate|complex` and `--planned-effort xs|s|m|l|xl`.
+For larger task shaping updates, `litehive update` can load a YAML mapping with durable task fields such as `goal`, `acceptance_criteria`, `constraints`, `plan`, PM sizing, dependencies, checkpoints, and routing metadata via `--from-file`, or open the same schema in your editor via `--edit`.
 During grooming, the planner can emit `PM_COMPLEXITY:` and `PLANNED_EFFORT:` lines and litehive will persist them back into the task record and brief.
 Configuration now layers built-in defaults, then `~/.config/litehive/config.yaml` (or `$XDG_CONFIG_HOME/litehive/config.yaml`), then workspace-local `.litehive/config.yaml`. Workspace settings take precedence over the global file.
 
@@ -133,7 +137,8 @@ Backlog-shaping rules for PMs:
 
 - Create runnable generic work with `litehive add "<title>" --goal "..." --acceptance-criteria "..."`.
 - Repeat `--acceptance-criteria` for each concrete done-condition instead of hiding several checks in one sentence.
-- Use `litehive update T-0001 --goal "..."` and repeated `--acceptance-criteria "..."` to repair older tasks before requeueing them.
+- Use `litehive update T-0001 --goal "..."`, repeated `--acceptance-criteria`, `--constraint`, and `--plan-step` flags for small repairs.
+- Use `litehive update T-0001 --from-file task-shape.yaml` or `litehive update T-0001 --edit` when the task needs a larger multi-line refresh without hand-editing `task.yaml`.
 - Use `litehive intake <file-or-brief>` when the request is still a rough brief and needs planner grooming before it becomes runnable.
 - If scope, dependencies, or user-visible done-state are unclear, stop and ask the user before creating runnable backlog work.
 

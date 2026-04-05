@@ -30,6 +30,9 @@
 - `uv run litehive abandon T-0002 --workspace .`
 - `uv run litehive update T-0002 --engine opencode --priority high --workspace .`
 - `uv run litehive update T-0002 --human-checkpoint before_acceptance --workspace .`
+- `uv run litehive update T-0002 --goal "..." --constraint "..." --plan-step "..." --workspace .`
+- `uv run litehive update T-0002 --from-file task-shape.yaml --workspace .`
+- `uv run litehive update T-0002 --edit --workspace .`
 - `uv run litehive run --workspace .`
   Runs the next active or queued task once and leaves remaining work queued.
 - `uv run litehive run --workspace . --dry-run`

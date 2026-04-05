@@ -4,9 +4,12 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import asdict
+import os
 from pathlib import Path
+import shlex
 import subprocess
 import sys
+import tempfile
 
 import yaml
 
@@ -73,6 +76,7 @@ from litehive.tasks import (
     move_queued_task,
     prioritize_queued_tasks,
     normalize_acceptance_criteria,
+    normalize_task_text_list,
     normalize_human_checkpoints,
     plan_task_selections,
     peek_next_task_selection,
@@ -855,6 +859,263 @@ def _parse_acceptance_criteria(
     return normalized
 
 
+def _parse_text_list_option(
+    raw_values: list[str] | None,
+    *,
+    option_name: str,
+    allow_clear: bool = False,
+) -> list[str] | object:
+    if not raw_values:
+        return ...
+
+    normalized = normalize_task_text_list(raw_values)
+    if allow_clear and len(normalized) == 1 and normalized[0].lower() == "none":
+        return []
+    if any(item.lower() == "none" for item in normalized):
+        raise ValueError("'none' can only be used by itself")
+    if not normalized:
+        raise ValueError(f"{option_name} must not be empty")
+    return normalized
+
+
+_RICH_TASK_UPDATE_KEYS = {
+    "goal",
+    "acceptance_criteria",
+    "constraints",
+    "plan",
+    "pm_complexity",
+    "planned_effort",
+    "depends_on",
+    "human_checkpoints",
+    "task_type",
+    "mode",
+    "priority",
+    "engine",
+    "model",
+    "retry_limit",
+    "auto_commit",
+}
+
+
+def _normalize_yaml_text_list(value: object, *, key: str) -> list[str]:
+    if value is None:
+        return []
+    if not isinstance(value, list):
+        raise ValueError(f"{key} must be a YAML list of strings")
+    if any(not isinstance(item, str) for item in value):
+        raise ValueError(f"{key} must be a YAML list of strings")
+    return normalize_task_text_list(value)
+
+
+def _parse_rich_task_update_document(data: object, *, source: str) -> dict[str, object]:
+    if data is None:
+        raise ValueError(f"{source} is empty")
+    if not isinstance(data, dict):
+        raise ValueError(f"{source} must contain a YAML mapping of task fields")
+
+    unknown = sorted(key for key in data if key not in _RICH_TASK_UPDATE_KEYS)
+    if unknown:
+        allowed = ", ".join(sorted(_RICH_TASK_UPDATE_KEYS))
+        raise ValueError(
+            f"{source} contains unsupported field(s): {', '.join(unknown)}. "
+            f"Supported fields: {allowed}"
+        )
+
+    updates: dict[str, object] = {}
+
+    if "goal" in data:
+        goal = data["goal"]
+        if goal is None:
+            updates["goal"] = ""
+        elif isinstance(goal, str):
+            updates["goal"] = goal.strip()
+        else:
+            raise ValueError(f"{source} field 'goal' must be a string or null")
+
+    if "acceptance_criteria" in data:
+        updates["acceptance_criteria"] = normalize_acceptance_criteria(
+            _normalize_yaml_text_list(data["acceptance_criteria"], key="acceptance_criteria")
+        )
+
+    if "constraints" in data:
+        updates["constraints"] = _normalize_yaml_text_list(data["constraints"], key="constraints")
+
+    if "plan" in data:
+        updates["plan"] = _normalize_yaml_text_list(data["plan"], key="plan")
+
+    if "pm_complexity" in data:
+        pm_complexity = data["pm_complexity"]
+        if pm_complexity is not None and pm_complexity not in VALID_PM_COMPLEXITIES:
+            allowed = ", ".join(sorted(VALID_PM_COMPLEXITIES))
+            raise ValueError(
+                f"{source} field 'pm_complexity' must be one of: {allowed}, or null"
+            )
+        updates["pm_complexity"] = pm_complexity
+
+    if "planned_effort" in data:
+        planned_effort = data["planned_effort"]
+        if planned_effort is not None and planned_effort not in VALID_PLANNED_EFFORTS:
+            allowed = ", ".join(sorted(VALID_PLANNED_EFFORTS))
+            raise ValueError(
+                f"{source} field 'planned_effort' must be one of: {allowed}, or null"
+            )
+        updates["planned_effort"] = planned_effort
+
+    if "depends_on" in data:
+        depends_on = data["depends_on"]
+        if depends_on is None:
+            updates["depends_on"] = []
+        else:
+            if not isinstance(depends_on, list) or any(not isinstance(item, str) for item in depends_on):
+                raise ValueError(f"{source} field 'depends_on' must be a YAML list of task ids")
+            updates["depends_on"] = depends_on
+
+    if "human_checkpoints" in data:
+        checkpoints = data["human_checkpoints"]
+        if checkpoints is None:
+            updates["human_checkpoints"] = []
+        else:
+            if not isinstance(checkpoints, list) or any(not isinstance(item, str) for item in checkpoints):
+                raise ValueError(f"{source} field 'human_checkpoints' must be a YAML list of strings")
+            updates["human_checkpoints"] = normalize_human_checkpoints(checkpoints)
+
+    if "task_type" in data:
+        task_type = data["task_type"]
+        if task_type is not None and task_type not in TASK_TYPE_CHOICES:
+            allowed = ", ".join(TASK_TYPE_CHOICES)
+            raise ValueError(f"{source} field 'task_type' must be one of: {allowed}, or null")
+        updates["task_type"] = task_type
+
+    if "mode" in data:
+        mode = data["mode"]
+        if mode not in {"tasks", "implementation"}:
+            raise ValueError(f"{source} field 'mode' must be `tasks` or `implementation`")
+        updates["mode"] = mode
+
+    if "priority" in data:
+        priority = data["priority"]
+        if priority not in VALID_TASK_PRIORITIES:
+            allowed = ", ".join(sorted(VALID_TASK_PRIORITIES))
+            raise ValueError(f"{source} field 'priority' must be one of: {allowed}")
+        updates["priority"] = priority
+
+    if "engine" in data:
+        engine = data["engine"]
+        if engine is not None and engine not in ENGINE_CHOICES:
+            allowed = ", ".join(ENGINE_CHOICES)
+            raise ValueError(f"{source} field 'engine' must be one of: {allowed}, or null")
+        updates["engine"] = engine
+
+    if "model" in data:
+        model = data["model"]
+        if model is not None and not isinstance(model, str):
+            raise ValueError(f"{source} field 'model' must be a string or null")
+        updates["model"] = model
+
+    if "retry_limit" in data:
+        retry_limit = data["retry_limit"]
+        if retry_limit is not None and (not isinstance(retry_limit, int) or retry_limit < 0):
+            raise ValueError(f"{source} field 'retry_limit' must be an integer >= 0 or null")
+        updates["retry_limit"] = retry_limit
+
+    if "auto_commit" in data:
+        auto_commit = data["auto_commit"]
+        if not isinstance(auto_commit, bool):
+            raise ValueError(f"{source} field 'auto_commit' must be true or false")
+        updates["auto_commit"] = auto_commit
+
+    if not updates:
+        raise ValueError(
+            f"{source} does not contain any supported task fields to update"
+        )
+
+    return updates
+
+
+def _editable_task_update_payload(task: object) -> dict[str, object]:
+    return {
+        "goal": task.goal,
+        "acceptance_criteria": list(task.acceptance_criteria),
+        "constraints": list(task.constraints),
+        "plan": list(task.plan),
+        "pm_complexity": task.pm_complexity,
+        "planned_effort": task.planned_effort,
+        "depends_on": list(task.depends_on),
+        "human_checkpoints": list(task.human_checkpoints),
+        "task_type": task.task_type,
+        "mode": task.mode,
+        "priority": task.priority,
+        "engine": task.engine,
+        "model": task.model,
+        "retry_limit": task.retry_policy.max_retries,
+        "auto_commit": task.git.auto_commit,
+    }
+
+
+def _render_task_update_template(task: object) -> str:
+    lines = [
+        "# Edit the fields you want Litehive to persist for this task.",
+        "# This document uses YAML and writes back into the existing task record fields.",
+        "# Use [] to clear list fields, null to clear optional scalar fields, and keep strings multi-line with | when needed.",
+        "",
+    ]
+    payload = yaml.safe_dump(
+        _editable_task_update_payload(task),
+        sort_keys=False,
+        allow_unicode=False,
+    ).rstrip()
+    lines.append(payload)
+    lines.append("")
+    return "\n".join(lines)
+
+
+def _load_rich_task_update_file(path: Path) -> dict[str, object]:
+    try:
+        data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except yaml.YAMLError as exc:
+        raise ValueError(f"{path} is not valid YAML: {exc}") from exc
+    return _parse_rich_task_update_document(data, source=str(path))
+
+
+def _resolve_editor_command() -> list[str]:
+    raw = os.environ.get("VISUAL") or os.environ.get("EDITOR")
+    if raw is None or not raw.strip():
+        raise ValueError("No editor configured. Set $VISUAL or $EDITOR, or use --from-file.")
+    return shlex.split(raw)
+
+
+def _collect_editor_task_updates(workspace: Path, task_id: str) -> dict[str, object]:
+    task = require_task(workspace, task_id)
+    editor_cmd = _resolve_editor_command()
+    fd, raw_path = tempfile.mkstemp(prefix=f"litehive-{task.id.lower()}-", suffix=".yaml")
+    edit_path = Path(raw_path)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(_render_task_update_template(task))
+        proc = subprocess.run([*editor_cmd, str(edit_path)], check=False)
+        if proc.returncode != 0:
+            raise ValueError(f"Editor exited with status {proc.returncode}")
+        return _load_rich_task_update_file(edit_path)
+    finally:
+        edit_path.unlink(missing_ok=True)
+
+
+def _merge_task_updates(
+    base_updates: dict[str, object],
+    overlay_updates: dict[str, object],
+    *,
+    overlay_source: str,
+) -> dict[str, object]:
+    conflicts = sorted(set(base_updates) & set(overlay_updates))
+    if conflicts:
+        raise ValueError(
+            f"{overlay_source} overlaps with another update source for field(s): {', '.join(conflicts)}"
+        )
+    merged = dict(base_updates)
+    merged.update(overlay_updates)
+    return merged
+
+
 def _parse_human_checkpoints(
     raw_values: list[str] | None,
     *,
@@ -1616,6 +1877,18 @@ def build_parser() -> argparse.ArgumentParser:
         help="Replace acceptance criteria; repeat the flag or use 'none' to clear",
     )
     update.add_argument(
+        "--constraint",
+        action="append",
+        default=None,
+        help="Replace constraints; repeat the flag or use 'none' to clear",
+    )
+    update.add_argument(
+        "--plan-step",
+        action="append",
+        default=None,
+        help="Replace the task plan; repeat the flag or use 'none' to clear",
+    )
+    update.add_argument(
         "--human-checkpoint",
         action="append",
         default=None,
@@ -1644,6 +1917,16 @@ def build_parser() -> argparse.ArgumentParser:
         dest="auto_commit",
         action="store_false",
         help="Disable auto-commit for this task",
+    )
+    update.add_argument(
+        "--from-file",
+        type=Path,
+        help="Load rich task updates from a YAML file mapped onto durable task fields",
+    )
+    update.add_argument(
+        "--edit",
+        action="store_true",
+        help="Open the current task shaping fields in $VISUAL or $EDITOR and persist the edited YAML",
     )
     update.add_argument(
         "--workspace",
@@ -2825,29 +3108,54 @@ def _cmd_intake(args: argparse.Namespace) -> int:
 def _cmd_update(args: argparse.Namespace) -> int:
     ensure_workspace(args.workspace)
     retry_limit_arg = getattr(args, "retry_limit", None)
+    rich_file = getattr(args, "from_file", None)
+    edit_mode = bool(getattr(args, "edit", False))
+    if rich_file is not None and edit_mode:
+        print("update failed: use either --from-file or --edit, not both")
+        return 1
     if (
         getattr(args, "depends_on", None) is None
         and getattr(args, "acceptance_criteria", None) is None
+        and getattr(args, "constraint", None) is None
+        and getattr(args, "plan_step", None) is None
         and getattr(args, "human_checkpoint", None) is None
         and getattr(args, "task_type", None) is None
-        and args.engine is None
+        and getattr(args, "engine", None) is None
         and getattr(args, "model", None) is None
         and retry_limit_arg is None
-        and args.priority is None
+        and getattr(args, "priority", None) is None
         and getattr(args, "pm_complexity", None) is None
         and getattr(args, "planned_effort", None) is None
-        and args.goal is None
-        and args.mode is None
+        and getattr(args, "goal", None) is None
+        and getattr(args, "mode", None) is None
         and args.auto_commit is None
+        and rich_file is None
+        and not edit_mode
     ):
         print("update failed: no changes requested")
         return 1
     try:
+        rich_updates: dict[str, object] = {}
+        if rich_file is not None:
+            rich_updates = _load_rich_task_update_file(rich_file)
+        elif edit_mode:
+            rich_updates = _collect_editor_task_updates(args.workspace, args.task_id)
+
         depends_on = _parse_dependency_ids(
             getattr(args, "depends_on", None), task_id=args.task_id, allow_clear=True
         )
         acceptance_criteria = _parse_acceptance_criteria(
             getattr(args, "acceptance_criteria", None),
+            allow_clear=True,
+        )
+        constraints = _parse_text_list_option(
+            getattr(args, "constraint", None),
+            option_name="Constraints",
+            allow_clear=True,
+        )
+        plan = _parse_text_list_option(
+            getattr(args, "plan_step", None),
+            option_name="Plan steps",
             allow_clear=True,
         )
         human_checkpoints = _parse_human_checkpoints(
@@ -2860,40 +3168,67 @@ def _cmd_update(args: argparse.Namespace) -> int:
             retry_limit = None
         else:
             retry_limit = int(retry_limit_arg)
-        task = update_task_metadata(
-            args.workspace,
-            args.task_id,
-            depends_on=depends_on,
-            task_type=(
+        flag_updates: dict[str, object] = {}
+        if depends_on is not ...:
+            flag_updates["depends_on"] = depends_on
+        if acceptance_criteria is not ...:
+            flag_updates["acceptance_criteria"] = acceptance_criteria
+        if constraints is not ...:
+            flag_updates["constraints"] = constraints
+        if plan is not ...:
+            flag_updates["plan"] = plan
+        if human_checkpoints is not ...:
+            flag_updates["human_checkpoints"] = human_checkpoints
+        if getattr(args, "task_type", None) is not None:
+            flag_updates["task_type"] = (
                 None if getattr(args, "task_type", None) == "default" else getattr(args, "task_type", None)
             )
-            if getattr(args, "task_type", None) is not None
-            else ...,
-            engine=(None if args.engine == "default" else args.engine)
-            if args.engine is not None
-            else ...,
-            model=(None if getattr(args, "model", None) == "default" else getattr(args, "model", None))
-            if getattr(args, "model", None) is not None
-            else ...,
-            retry_limit=retry_limit,
-            priority=args.priority if args.priority is not None else ...,
-            pm_complexity=(
+        if getattr(args, "engine", None) is not None:
+            flag_updates["engine"] = None if args.engine == "default" else args.engine
+        if getattr(args, "model", None) is not None:
+            flag_updates["model"] = (
+                None if getattr(args, "model", None) == "default" else getattr(args, "model", None)
+            )
+        if retry_limit is not ...:
+            flag_updates["retry_limit"] = retry_limit
+        if getattr(args, "priority", None) is not None:
+            flag_updates["priority"] = args.priority
+        if getattr(args, "pm_complexity", None) is not None:
+            flag_updates["pm_complexity"] = (
                 None if getattr(args, "pm_complexity", None) == "none" else getattr(args, "pm_complexity", None)
             )
-            if getattr(args, "pm_complexity", None) is not None
-            else ...,
-            planned_effort=(
+        if getattr(args, "planned_effort", None) is not None:
+            flag_updates["planned_effort"] = (
                 None
                 if getattr(args, "planned_effort", None) == "none"
                 else getattr(args, "planned_effort", None)
             )
-            if getattr(args, "planned_effort", None) is not None
-            else ...,
-            goal=args.goal if args.goal is not None else ...,
-            acceptance_criteria=acceptance_criteria,
-            human_checkpoints=human_checkpoints,
-            mode=args.mode if args.mode is not None else ...,
-            auto_commit=args.auto_commit if args.auto_commit is not None else ...,
+        if getattr(args, "goal", None) is not None:
+            flag_updates["goal"] = args.goal
+        if getattr(args, "mode", None) is not None:
+            flag_updates["mode"] = args.mode
+        if args.auto_commit is not None:
+            flag_updates["auto_commit"] = args.auto_commit
+
+        updates = _merge_task_updates(rich_updates, flag_updates, overlay_source="CLI flags")
+        task = update_task_metadata(
+            args.workspace,
+            args.task_id,
+            depends_on=updates.get("depends_on", ...),
+            task_type=updates.get("task_type", ...),
+            engine=updates.get("engine", ...),
+            model=updates.get("model", ...),
+            retry_limit=updates.get("retry_limit", ...),
+            priority=updates.get("priority", ...),
+            pm_complexity=updates.get("pm_complexity", ...),
+            planned_effort=updates.get("planned_effort", ...),
+            goal=updates.get("goal", ...),
+            acceptance_criteria=updates.get("acceptance_criteria", ...),
+            constraints=updates.get("constraints", ...),
+            plan=updates.get("plan", ...),
+            human_checkpoints=updates.get("human_checkpoints", ...),
+            mode=updates.get("mode", ...),
+            auto_commit=updates.get("auto_commit", ...),
         )
     except (ValueError, WorkspaceConflictError) as exc:
         print(f"update failed: {exc}")
@@ -2918,6 +3253,8 @@ def _cmd_update(args: argparse.Namespace) -> int:
     print(f"depends_on: {_task_dependencies_label(task.id, task.depends_on)}")
     print(f"goal: {task.goal}")
     print(f"acceptance_criteria: {len(task.acceptance_criteria)}")
+    print(f"constraints: {len(task.constraints)}")
+    print(f"plan: {len(task.plan)}")
     missing_criteria_reason = missing_acceptance_criteria_cli_warning(task)
     if missing_criteria_reason is not None:
         print(f"warning: {missing_criteria_reason}")
