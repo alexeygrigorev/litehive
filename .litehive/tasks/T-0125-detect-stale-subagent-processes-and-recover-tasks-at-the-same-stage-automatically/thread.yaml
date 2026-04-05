@@ -1,0 +1,63 @@
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'STAGE_RESULT:
+
+    {"verdict":"pass","summary":"Moved stale-runner recovery ahead of run_task conflict
+    checks and requeued stale running tasks at the same stage automatically.","files_changed":["litehive/runtime.py","litehive/tasks.py","tests/test_workspace.py"],"tests":{"added":1,"passing":8},"warnings":[],"follow_up_tasks":[],"acceptance_criteria":[{"criterion":"T-0125
+    only handles stale or missing process detection and state/process mismatch; it
+    does not define the primary inactivity heartbeat.","status":"met","evidence":"The
+    change only touches stale-process recovery ordering in run_task() and stale-runner
+    requeue behavior in _recover_stale_runner_state(); no heartbeat thresholds or
+    inactivity timers were added."},{"criterion":"If the recorded subagent or runner
+    pid is gone while the task still says running, recover the task at the same stage
+    automatically.","status":"met","evidence":"recover_stale_runner_state() now prepends
+    recovered stale tasks back onto the queue at their current stage, and run_task()
+    invokes stale recovery before active-marker conflict checks so a dead recorded
+    runner/subagent pid no longer blocks automatic same-stage recovery. Verified with
+    targeted pytest coverage for stale runner lock, stale subagent pid, queue/repair
+    output, and a run_task regression."}]}'
+  files_changed: []
+  created_at: '2026-04-05T02:40:19+00:00'
+- role: qa
+  step: testing
+  verdict: pass
+  message: 'STAGE_RESULT:
+
+    {"verdict":"pass","summary":"Verified stale runner/subagent recovery now requeues
+    the interrupted task at the same stage automatically and no longer blocks a new
+    run behind stale active markers.","files_changed":["litehive/runtime.py","litehive/tasks.py","tests/test_workspace.py"],"tests":{"added":1,"passing":6},"warnings":[],"follow_up_tasks":[],"acceptance_criteria":[{"criterion":"T-0125
+    only handles stale or missing process detection and state/process mismatch; it
+    does not define the primary inactivity heartbeat.","status":"met","evidence":"Reviewed
+    diff in litehive/runtime.py and litehive/tasks.py; changes only reorder stale-runner
+    recovery before active-task conflict checks and requeue recovered stale tasks.
+    No heartbeat or inactivity timeout logic was added."},{"criterion":"If the recorded
+    subagent or runner pid is gone while the task still says running, recover the
+    task at the same stage automatically.","status":"met","evidence":"Focused pytest
+    slice passed: test_run_task_recovers_stale_active_task_before_conflict_check,
+    test_recover_stale_runner_state_recovers_running_task_without_runner_lock_record,
+    test_recover_stale_runner_state_recovers_when_lock_is_not_held_even_if_pid_is_alive,
+    test_repair_command_repairs_stale_runner_state_and_cleans_queue, test_queue_command_marks_recovered_interruption,
+    and test_run_task_rejects_starting_a_second_active_task. These prove stale subagent
+    and stale runner states become interrupted at the same stage, are requeued to
+    the front, and no longer block run_task when the recorded process is gone."}]}'
+  files_changed: []
+  created_at: '2026-04-05T02:42:07+00:00'
+- role: reviewer
+  step: accepting
+  verdict: pass
+  message: 'Accepted T-0125. Verified the change is scoped to stale or missing process
+    detection and state/process mismatch only: run_task() now calls stale-runner recovery
+    before active-task conflict checks, and _recover_stale_runner_state() requeues
+    recovered running tasks at their current stage to the front of the queue. No heartbeat
+    or inactivity timeout policy was added. I reran focused verification with: uv
+    run pytest -q tests/test_workspace.py -k ''stale_active_task_before_conflict_check
+    or stale_runner_state_recovers_running_task_without_runner_lock_record or stale_runner_state_recovers_when_lock_is_not_held_even_if_pid_is_alive
+    or repair_command_repairs_stale_runner_state_and_cleans_queue or queue_command_marks_recovered_interruption
+    or rejects_starting_a_second_active_task'' and got 7 passed. This confirms that
+    when a recorded runner or subagent pid is stale while the task remains marked
+    running, Litehive interrupts and recovers the task at the same stage, requeues
+    it automatically, clears stale active-task state, and no longer blocks a subsequent
+    run behind stale markers.'
+  files_changed: []
+  created_at: '2026-04-05T02:44:15+00:00'

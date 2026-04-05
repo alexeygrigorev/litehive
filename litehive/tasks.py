@@ -2901,6 +2901,8 @@ def _recover_stale_runner_state(
                     reason=_stale_interruption_reason(task, task.pipeline_status, stale_pid=stale_pid),
                 )
                 journal_messages[task.id] = interruption_journal_message(task)
+                if summary is not None and task.id not in summary.requeued_task_ids:
+                    summary.requeued_task_ids.append(task.id)
                 if stale_pid and summary is not None and task.id not in summary.stale_process_task_ids:
                     summary.stale_process_task_ids.append(task.id)
             else:
@@ -2915,13 +2917,9 @@ def _recover_stale_runner_state(
                     summary.cleared_active_task_id = state.active_task_id
                 state.active_task_id = None
             state.queue = [task_id for task_id in state.queue if task_id not in running_task_ids]
-            commit_requeued_ids = [
-                task.id
-                for task in transitioned
-                if task.pipeline_status == "commit_to_git" and task.status == "queued"
-            ]
-            if commit_requeued_ids:
-                state.queue = [*commit_requeued_ids, *state.queue]
+            requeued_ids = list(prioritized_ids)
+            if requeued_ids:
+                state.queue = [*requeued_ids, *state.queue]
 
         if state.active_task_id is not None and (
             state.active_task_id not in tasks_by_id or state.active_task_id in prioritized_ids

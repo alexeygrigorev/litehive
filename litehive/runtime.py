@@ -230,6 +230,7 @@ def run_task(
     root = root.resolve()
     if task is None:
         return ExecutionSummary(task=None, result=None)
+    recover_stale_runner_state(root)
     markers = active_task_markers(root)
     if markers:
         active_ids = sorted(markers)
@@ -245,7 +246,6 @@ def run_task(
             raise WorkspaceConflictError(
                 f"task {task.id} cannot start because task {active_id} is already active in this workspace."
             )
-    recover_stale_runner_state(root)
     with workspace_runner_guard(root):
         markers = active_task_markers(root)
         if markers:

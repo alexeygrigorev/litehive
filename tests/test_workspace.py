@@ -8480,7 +8480,9 @@ def test_drain_task_pool_wraps_pool_execution_behavior(
     ]
 
 
-def test_run_task_rejects_starting_a_second_active_task(tmp_path: Path) -> None:
+def test_run_task_rejects_starting_a_second_active_task(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     ensure_workspace(tmp_path)
     active = create_task(tmp_path, title="Active task", auto_commit=False)
     pending = create_task(tmp_path, title="Pending task", auto_commit=False)
@@ -8490,12 +8492,96 @@ def test_run_task_rejects_starting_a_second_active_task(tmp_path: Path) -> None:
     state = load_state(tmp_path)
     state.active_task_id = active.id
     save_state(tmp_path, state)
+    (tmp_path / ".litehive" / ".runner.lock").write_text(
+        yaml.safe_dump({"pid": os.getpid()}, sort_keys=False),
+        encoding="utf-8",
+    )
+    _block_runner_lock(monkeypatch)
 
     with pytest.raises(
         WorkspaceConflictError,
         match=f"task {pending.id} cannot start because task {active.id} is already active",
     ):
         run_task(tmp_path, pending)
+
+
+def test_run_task_recovers_stale_active_task_before_conflict_check(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ensure_workspace(tmp_path)
+    active = create_task(
+        tmp_path,
+        title="Stale active task",
+        acceptance_criteria=["Resume from the same stage after stale process recovery."],
+        auto_commit=False,
+    )
+    pending = create_task(
+        tmp_path,
+        title="Pending task",
+        acceptance_criteria=["Run after stale active state is recovered."],
+        auto_commit=False,
+    )
+
+    active.status = "in_progress"
+    active.pipeline_status = "testing"
+    active.runtime.execution_status = "running"
+    active.runtime.run_started_at = "2026-04-01T00:00:00+00:00"
+    active.runtime.current_stage = RuntimeStageState(
+        step="testing",
+        status="running",
+        started_at="2026-04-01T00:00:00+00:00",
+        updated_at="2026-04-01T00:00:00+00:00",
+    )
+    active.runtime.active_subagent = RuntimeSubagentState(
+        id="SA-0001",
+        role="qa",
+        engine="codex",
+        status="running",
+        path="subagents/SA-0001-qa",
+        pid=999999,
+        started_at="2026-04-01T00:00:10+00:00",
+        updated_at="2026-04-01T00:00:10+00:00",
+    )
+    active.subagents.append(
+        SubagentRef(
+            id="SA-0001",
+            role="qa",
+            engine="codex",
+            status="running",
+            path="subagents/SA-0001-qa",
+        )
+    )
+    save_task(tmp_path, active)
+    save_task_runtime(tmp_path, active)
+
+    state = load_state(tmp_path)
+    state.active_task_id = active.id
+    save_state(tmp_path, state)
+
+    monkeypatch.setattr(
+        "litehive.runtime.SubagentManager.run",
+        lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
+            _completed_subagent_result(tmp_path, task.pipeline_status)
+        ),
+    )
+
+    summary = run_task(tmp_path, pending)
+
+    assert summary.task is not None
+    assert summary.task.id == pending.id
+    assert summary.result is not None
+    assert summary.result.final_status == "done"
+
+    refreshed_active = require_task(tmp_path, active.id)
+    assert refreshed_active.status == "interrupted"
+    assert refreshed_active.pipeline_status == "testing"
+    assert refreshed_active.runtime.execution_status == "interrupted"
+    assert refreshed_active.runtime.interruption is not None
+    assert refreshed_active.runtime.interruption.resume_stage == "testing"
+
+    restored_state = load_state(tmp_path)
+    assert restored_state.active_task_id is None
+    assert active.id in restored_state.queue
 
 
 def test_dequeue_next_task_selection_rejects_multiple_active_tasks(tmp_path: Path) -> None:
@@ -10431,17 +10517,17 @@ def test_repair_command_repairs_stale_runner_state_and_cleans_queue(
     assert "repaired: yes" in output
     assert "stale_runner_recovered: yes" in output
     assert f"cleared_active_task_id: {interrupted.id}" in output
-    assert "requeued_tasks: -" in output
+    assert f"requeued_tasks: {interrupted.id}" in output
     assert f"removed_queue_entries: T-9999 {done.id}" in output
     assert f"deduped_queue_entries: {queued.id}" in output
-    assert f"restored_queue_entries: {interrupted.id}" in output
+    assert "restored_queue_entries: -" in output
     assert "finalized_commit_tasks: -" in output
     assert "active_task_id: None" in output
     assert "queue_length: 2" in output
 
     repaired_state = load_state(tmp_path)
     assert repaired_state.active_task_id is None
-    assert repaired_state.queue == [queued.id, interrupted.id]
+    assert repaired_state.queue == [interrupted.id, queued.id]
     refreshed = get_task(tmp_path, interrupted.id)
     assert refreshed is not None
     assert refreshed.status == "interrupted"
@@ -10630,7 +10716,7 @@ def test_queue_command_marks_recovered_interruption(
 
     assert exit_code == 0
     assert "active_task_id: None" in output
-    assert "queue_length: 1" in output
+    assert "queue_length: 2" in output
     assert "resumable_tasks: 1" in output
     assert (
         f"resume 1. {interrupted.id} [interrupted/testing] priority=medium engine=codex (default) model=default "
@@ -10638,7 +10724,7 @@ def test_queue_command_marks_recovered_interruption(
         "reason_code=execution_interrupted reason=Stale runner detected while `testing` was still marked running."
     ) in output
     assert (
-        f"1. {queued.id} [queued/backlog] priority=medium engine=codex (default) model=default "
+        f"2. {queued.id} [queued/backlog] priority=medium engine=codex (default) model=default "
         "title=Pending follow-up depends_on=-"
     ) in output
 
@@ -10740,7 +10826,7 @@ def test_recover_stale_runner_state_recovers_running_task_without_runner_lock_re
     assert report["interruption_reason"].startswith("Stale runner detected while subagent")
     restored_state = load_state(tmp_path)
     assert restored_state.active_task_id is None
-    assert restored_state.queue == [queued.id]
+    assert restored_state.queue == [interrupted.id, queued.id]
     journal = (task_dir(tmp_path, refreshed) / "journal.md").read_text(encoding="utf-8")
     assert "Interrupted subagent execution while `testing` was running." in journal
     assert "Subagent `SA-0001` (qa/codex, pid=4242, path `subagents/SA-0001-qa`) stopped" in journal
@@ -10793,7 +10879,7 @@ def test_recover_stale_runner_state_recovers_when_lock_is_not_held_even_if_pid_i
     )
     restored_state = load_state(tmp_path)
     assert restored_state.active_task_id is None
-    assert restored_state.queue == [queued.id]
+    assert restored_state.queue == [interrupted.id, queued.id]
 
 
 def test_recover_stale_runner_state_skips_live_runner_lock(
