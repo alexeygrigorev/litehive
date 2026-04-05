@@ -58,6 +58,7 @@ OutcomeReasonCode = Literal[
     "resource_limit",
     "missing_acceptance_criteria",
     "retry_limit_exhausted",
+    "stage_retry_limit_exhausted",
     "execution_interrupted",
     "execution_cancelled",
     "stage_exception",
@@ -198,6 +199,7 @@ class WorkspaceEngineMonitoring(BaseModel):
 
 class TaskRetryPolicy(BaseModel):
     max_retries: int | None = None
+    stage_retry_limit: int | None = None
 
 
 class TaskCreationSource(BaseModel):
@@ -319,6 +321,7 @@ class TaskRuntime(BaseModel):
     retry_count: int = 0
     retry_limit: int = 0
     retry_source: RetrySource = "global"
+    stage_retry_counts: dict[str, int] = Field(default_factory=dict)
     current_stage: RuntimeStageState = Field(default_factory=RuntimeStageState)
     last_stage: RuntimeStageState = Field(default_factory=RuntimeStageState)
     active_subagent: RuntimeSubagentState | None = None

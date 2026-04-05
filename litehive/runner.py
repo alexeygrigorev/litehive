@@ -8,7 +8,7 @@ from typing import Protocol
 
 import yaml
 
-from litehive.models import OutcomeKind, OutcomeReasonCode, StageReport, TaskRecord
+from litehive.models import OutcomeKind, OutcomeReasonCode, RuntimeContinuationHandoff, StageReport, TaskRecord
 from litehive.tasks import (
     _apply_task_retry_state,
     _apply_stage_finished,
@@ -83,6 +83,7 @@ class TaskExecutionRunner:
         executor: StageExecutor,
         max_retries: int = 3,
         retry_source: str = "global",
+        stage_retry_limit: int = 2,
         subagents=None,
         config=None,
     ) -> None:
@@ -90,6 +91,7 @@ class TaskExecutionRunner:
         self.executor = executor
         self.max_retries = max_retries
         self.retry_source = retry_source
+        self.stage_retry_limit = stage_retry_limit
         self.subagents = subagents
         self.config = config
 
@@ -396,12 +398,55 @@ class TaskExecutionRunner:
                 rejections += 1
                 report.retry_count = rejections
                 report.retry_limit = self.max_retries
+                stage_count = task.runtime.stage_retry_counts.get(current, 0) + 1
+                task.runtime.stage_retry_counts[current] = stage_count
+                effective_stage_limit = (
+                    task.retry_policy.stage_retry_limit
+                    if task.retry_policy.stage_retry_limit is not None
+                    else self.stage_retry_limit
+                )
                 _apply_task_retry_state(
                     task,
                     retry_count=rejections,
                     retry_limit=self.max_retries,
                     retry_source=self.retry_source,
                 )
+                if stage_count > effective_stage_limit:
+                    if current == "testing":
+                        escalation_target = "recovery"
+                        escalation_kind = "recovery escalation"
+                    else:
+                        escalation_target = "planner"
+                        escalation_kind = "planner escalation"
+                    escalation_reason = (
+                        f"Stage retry limit exhausted for `{current}` "
+                        f"({stage_count} rejection(s), limit: {effective_stage_limit}); "
+                        f"escalating to grooming for {escalation_kind}"
+                    )
+                    report.outcome_reason_code = "stage_retry_limit_exhausted"
+                    report.outcome_reason = escalation_reason
+                    report.retry_decision = "retry"
+                    self._write_report(task, report, steps)
+                    _apply_stage_finished(task, report)
+                    task.runtime.continuation_handoff = RuntimeContinuationHandoff(
+                        step=current,
+                        kind="restart",
+                        reason=escalation_reason,
+                        summary=(
+                            f"Repeated {current} rejections ({stage_count}) "
+                            f"triggered {escalation_kind} reroute to grooming. "
+                            f"Retry count: {rejections}/{self.max_retries}."
+                        ),
+                    )
+                    task.pipeline_status = "grooming"  # type: ignore[assignment]
+                    task.status = "queued"
+                    append_journal(self.root, task, escalation_reason)
+                    return self._finish_run(
+                        task,
+                        final_status="queued",
+                        steps=steps,
+                        last_verdict=last_verdict,
+                    )
                 if rejections > self.max_retries:
                     exhausted_reason = (
                         f"Retry limit exhausted after {rejections} rejection(s) "

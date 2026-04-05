@@ -2786,3 +2786,198 @@ def test_update_command_seeds_task_brief_when_switching_to_tasks_mode(
     assert "## Intake Notes" in brief
     assert "### Findings" in brief
     assert "_TBD_" in brief
+
+
+# ── Per-stage retry escalation tests ─────────────────────────────────────────
+
+def test_runner_normal_retry_within_stage_limit(tmp_path: Path) -> None:
+    """Testing rejects once (within stage limit=2), task requeues at implementing — not escalated."""
+    ensure_workspace(tmp_path, LitehiveConfig(default_retry_limit=3, default_stage_retry_limit=2))
+    task = create_task(
+        tmp_path, title="Normal retry", acceptance_criteria=["Feature works."]
+    )
+    call_count: dict[str, int] = {}
+
+    def executor(task, step):  # type: ignore[no-untyped-def]
+        call_count[step] = call_count.get(step, 0) + 1
+        if step == "testing" and call_count.get("testing", 0) == 1:
+            return StageReport(task_id=task.id, step=step, verdict="fail", summary="test failed")
+        return StageReport(task_id=task.id, step=step, verdict="pass", summary=f"{step} ok")
+
+    runner = TaskExecutionRunner(tmp_path, executor, max_retries=3, stage_retry_limit=2)
+
+    # First run: grooming+implementing pass, testing fails → requeue at implementing
+    result1 = runner.run(task)
+    assert result1.final_status == "queued"
+    task = get_task(tmp_path, task.id)
+    assert task is not None
+    assert task.pipeline_status == "implementing"
+    assert task.runtime.stage_retry_counts.get("testing", 0) == 1
+
+    # Second run: implementing pass, testing passes now → completes
+    result2 = runner.run(task)
+    assert result2.final_status == "done"
+    refreshed = get_task(tmp_path, task.id)
+    assert refreshed is not None
+    assert refreshed.runtime.stage_retry_counts.get("testing", 0) == 1
+
+
+def test_runner_escalates_to_grooming_after_testing_stage_limit_exhausted(tmp_path: Path) -> None:
+    """After testing rejects 3 times (stage limit=2), task routes to grooming for recovery."""
+    ensure_workspace(tmp_path, LitehiveConfig(default_retry_limit=10, default_stage_retry_limit=2))
+    task = create_task(
+        tmp_path, title="Testing churn", acceptance_criteria=["Feature works."]
+    )
+    testing_calls: list[int] = [0]
+
+    def executor(task, step):  # type: ignore[no-untyped-def]
+        if step == "testing":
+            testing_calls[0] += 1
+        if step == "testing":
+            return StageReport(task_id=task.id, step=step, verdict="fail", summary="tests fail")
+        return StageReport(task_id=task.id, step=step, verdict="pass", summary=f"{step} ok")
+
+    # Run 3 times to accumulate 3 testing rejections:
+    # Run 1: implementing pass → testing fail (stage_count=1) → requeue at implementing
+    runner = TaskExecutionRunner(tmp_path, executor, max_retries=10, stage_retry_limit=2)
+    result1 = runner.run(task)
+    assert result1.final_status == "queued"
+    task = get_task(tmp_path, task.id)
+    assert task is not None
+    assert task.pipeline_status == "implementing"
+
+    # Run 2: implementing pass → testing fail (stage_count=2) → requeue at implementing
+    result2 = runner.run(task)
+    assert result2.final_status == "queued"
+    task = get_task(tmp_path, task.id)
+    assert task is not None
+    assert task.pipeline_status == "implementing"
+
+    # Run 3: implementing pass → testing fail (stage_count=3 > limit=2) → escalate to grooming
+    result3 = runner.run(task)
+    assert result3.final_status == "queued"
+    task = get_task(tmp_path, task.id)
+    assert task is not None
+    assert task.status == "queued"
+    assert task.pipeline_status == "grooming"
+    assert task.runtime.stage_retry_counts.get("testing", 0) == 3
+    assert task.runtime.continuation_handoff is not None
+    assert "testing" in task.runtime.continuation_handoff.reason
+    assert "recovery escalation" in task.runtime.continuation_handoff.reason
+    assert task.runtime.continuation_handoff.kind == "restart"
+
+    # Verify report recorded the escalation reason code
+    # Escalation report is the last one written by run 3 (ordinal may collide with run 2's ordinal)
+    reports_dir = task_dir(tmp_path, task) / "reports"
+    testing_reports = sorted(reports_dir.glob("testing-*.yaml"))
+    all_testing_outcomes = [
+        yaml.safe_load(r.read_text(encoding="utf-8")).get("outcome_reason_code")
+        for r in testing_reports
+    ]
+    assert "stage_retry_limit_exhausted" in all_testing_outcomes
+    escalation_report = next(
+        yaml.safe_load(r.read_text(encoding="utf-8"))
+        for r in testing_reports
+        if yaml.safe_load(r.read_text(encoding="utf-8")).get("outcome_reason_code") == "stage_retry_limit_exhausted"
+    )
+    assert "recovery escalation" in escalation_report["outcome_reason"]
+    assert escalation_report["retry_decision"] == "retry"
+
+
+def test_runner_escalates_to_grooming_after_accepting_stage_limit_exhausted(tmp_path: Path) -> None:
+    """After accepting rejects 3 times (stage limit=2), task routes to grooming for planner."""
+    ensure_workspace(tmp_path, LitehiveConfig(default_retry_limit=10, default_stage_retry_limit=2))
+    task = create_task(
+        tmp_path, title="Accepting churn", acceptance_criteria=["Feature works."]
+    )
+
+    def executor(task, step):  # type: ignore[no-untyped-def]
+        if step == "accepting":
+            return StageReport(task_id=task.id, step=step, verdict="reject", summary="rejected")
+        return StageReport(task_id=task.id, step=step, verdict="pass", summary=f"{step} ok")
+
+    runner = TaskExecutionRunner(tmp_path, executor, max_retries=10, stage_retry_limit=2)
+
+    # Run 3 times to exhaust per-stage accepting limit
+    for i in range(2):
+        result = runner.run(task)
+        assert result.final_status == "queued"
+        task = get_task(tmp_path, task.id)
+        assert task is not None
+        assert task.pipeline_status == "implementing"
+
+    # Third run: stage_count=3 > limit=2 → escalate to grooming
+    result = runner.run(task)
+    assert result.final_status == "queued"
+    task = get_task(tmp_path, task.id)
+    assert task is not None
+    assert task.status == "queued"
+    assert task.pipeline_status == "grooming"
+    assert task.runtime.stage_retry_counts.get("accepting", 0) == 3
+    assert task.runtime.continuation_handoff is not None
+    assert "accepting" in task.runtime.continuation_handoff.reason
+    assert "planner escalation" in task.runtime.continuation_handoff.reason
+
+    # Stage counts should be preserved
+    reports_dir = task_dir(tmp_path, task) / "reports"
+    accepting_reports = sorted(reports_dir.glob("accepting-*.yaml"))
+    all_outcomes = [
+        yaml.safe_load(r.read_text(encoding="utf-8")).get("outcome_reason_code")
+        for r in accepting_reports
+    ]
+    assert "stage_retry_limit_exhausted" in all_outcomes
+    escalation_report = next(
+        yaml.safe_load(r.read_text(encoding="utf-8"))
+        for r in accepting_reports
+        if yaml.safe_load(r.read_text(encoding="utf-8")).get("outcome_reason_code") == "stage_retry_limit_exhausted"
+    )
+    assert "planner escalation" in escalation_report["outcome_reason"]
+
+
+def test_runner_task_level_stage_retry_limit_overrides_global(tmp_path: Path) -> None:
+    """Task-level stage_retry_limit overrides the workspace default."""
+    ensure_workspace(tmp_path, LitehiveConfig(default_retry_limit=10, default_stage_retry_limit=5))
+    task = create_task(
+        tmp_path, title="Low stage limit", acceptance_criteria=["Feature works."]
+    )
+    task.retry_policy = task.retry_policy.model_copy(update={"stage_retry_limit": 1})
+    save_task(tmp_path, task)
+
+    def executor(task, step):  # type: ignore[no-untyped-def]
+        if step == "testing":
+            return StageReport(task_id=task.id, step=step, verdict="fail", summary="fail")
+        return StageReport(task_id=task.id, step=step, verdict="pass", summary=f"{step} ok")
+
+    runner = TaskExecutionRunner(tmp_path, executor, max_retries=10, stage_retry_limit=5)
+
+    # Run 1: testing rejects (stage_count=1, limit=1) → normal retry
+    result1 = runner.run(task)
+    assert result1.final_status == "queued"
+    task = get_task(tmp_path, task.id)
+    assert task is not None
+    assert task.pipeline_status == "implementing"
+
+    # Run 2: testing rejects (stage_count=2 > limit=1) → escalate to grooming
+    result2 = runner.run(task)
+    assert result2.final_status == "queued"
+    task = get_task(tmp_path, task.id)
+    assert task is not None
+    assert task.pipeline_status == "grooming"
+    assert task.runtime.stage_retry_counts.get("testing", 0) == 2
+
+
+def test_runner_stage_counts_persist_across_requeued_runs(tmp_path: Path) -> None:
+    """stage_retry_counts survive serialization and are loaded on the next run."""
+    ensure_workspace(tmp_path, LitehiveConfig(default_retry_limit=10, default_stage_retry_limit=3))
+    task = create_task(
+        tmp_path, title="Count persistence", acceptance_criteria=["Feature works."]
+    )
+    runner = TaskExecutionRunner(tmp_path, lambda t, s: StageReport(
+        task_id=t.id, step=s, verdict="fail" if s == "testing" else "pass", summary=f"{s} done"
+    ), max_retries=10, stage_retry_limit=3)
+
+    runner.run(task)
+    # Re-load task from disk (simulating a fresh pool iteration)
+    reloaded = get_task(tmp_path, task.id)
+    assert reloaded is not None
+    assert reloaded.runtime.stage_retry_counts.get("testing", 0) == 1
