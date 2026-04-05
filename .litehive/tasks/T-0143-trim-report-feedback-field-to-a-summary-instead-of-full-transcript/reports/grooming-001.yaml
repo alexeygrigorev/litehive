@@ -1,0 +1,71 @@
+task_id: T-0143
+step: grooming
+verdict: pass
+summary: I'll investigate how reports are currently generated and stored to shape
+  a concrete plan.
+feedback: "I'll investigate how reports are currently generated and stored to shape\
+  \ a concrete plan.\nNow let me check the specific code paths to confirm the key\
+  \ locations.\nNow let me check how feedback is augmented in runtime.py and confirm\
+  \ the report writing path.\nI have enough context to shape this task. Let me check\
+  \ one more thing - the `litehive report` CLI path to confirm it's a direct message,\
+  \ not a transcript.\nGood. Now I have the full picture. Let me submit the grooming\
+  \ verdict.\n\n\nNow I have a complete picture of the codebase. Let me summarize\
+  \ the findings and submit the grooming verdict.\n\n**Key findings:**\n\n1. **Feedback\
+  \ is set to full transcript** in `parse_stage_report_text()` (external_cli.py:521,\
+  \ 543) and `stage_report_from_subagent()` for resource-limit failures (subagents.py:1402).\n\
+  2. **`litehive report --message`** stores the user-provided message directly (subagents.py:1387)\
+  \ \u2014 already a summary.\n3. **Downstream consumers** of `report.feedback` in\
+  \ the same run: `populate_missing_acceptance_criteria_from_report()` and `populate_pm_sizing_from_report()`\
+  \ extract structured markers from feedback text. Recovery prompts also embed `failed_report.feedback`.\n\
+  4. **Full transcripts** are independently saved as subagent artifacts (`transcript.md`,\
+  \ `stdout.txt`) under `.litehive/tasks/{ID}/subagents/`.\n\n**Recommended approach\
+  \ \u2014 truncate at write time:**\n- Add a `_cap_feedback()` helper that truncates\
+  \ to 2000 chars with a `\\n\\n[\u2026 truncated, see subagents/ for full transcript]`\
+  \ marker.\n- Apply it in `_write_report()` (runner.py) so in-memory processing (acceptance\
+  \ criteria extraction, recovery prompts) still sees the full text during the current\
+  \ run.\n- Do NOT truncate when `feedback == latest.message` from `litehive report`\
+  \ (AC #3). This can be handled by checking feedback length \u2014 `litehive report`\
+  \ messages are already summaries and unlikely to exceed 2000 chars, but if they\
+  \ do, store as-is per the AC.\n\nLet me submit the verdict.\nGrooming passed. Here's\
+  \ the plan summary for T-0143:\n\n**Approach:** Truncate `report.feedback` at **write\
+  \ time** in `_write_report()` (runner.py), not at creation time.\n\n**Why write\
+  \ time:** In-memory consumers during the same run (`populate_missing_acceptance_criteria_from_report`,\
+  \ `populate_pm_sizing_from_report`, recovery prompts) need the full text. Only the\
+  \ persisted YAML reports need to be lightweight for git.\n\n**Implementation steps:**\n\
+  1. Add `_cap_feedback(text, limit=2000)` helper \u2014 truncates with `[\u2026 truncated,\
+  \ see subagents/ for full transcript]` marker\n2. Apply in `_write_report()` before\
+  \ YAML serialization\n3. Skip truncation for short messages (covers `litehive report\
+  \ --message` which is already a summary)\n4. Add 3 targeted tests: truncation with\
+  \ marker, no-op under limit, litehive report messages preserved\n\n**Sizing:** simple\
+  \ complexity, S effort.\nGrooming passed. Here's the plan summary for T-0143:\n\n\
+  **Approach:** Truncate `report.feedback` at **write time** in `_write_report()`\
+  \ (runner.py), not at creation time.\n\n**Why write time:** In-memory consumers\
+  \ during the same run (`populate_missing_acceptance_criteria_from_report`, `populate_pm_sizing_from_report`,\
+  \ recovery prompts) need the full text. Only the persisted YAML reports need to\
+  \ be lightweight for git.\n\n**Implementation steps:**\n1. Add `_cap_feedback(text,\
+  \ limit=2000)` helper \u2014 truncates with `[\u2026 truncated, see subagents/ for\
+  \ full transcript]` marker\n2. Apply in `_write_report()` before YAML serialization\n\
+  3. Skip truncation for short messages (covers `litehive report --message` which\
+  \ is already a summary)\n4. Add 3 targeted tests: truncation with marker, no-op\
+  \ under limit, litehive report messages preserved\n\n**Sizing:** simple complexity,\
+  \ S effort."
+files_changed: []
+follow_up_tasks: []
+created_follow_up_task_ids: []
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 214
+hook_results: []
+created_at: '2026-04-05T15:38:16+00:00'

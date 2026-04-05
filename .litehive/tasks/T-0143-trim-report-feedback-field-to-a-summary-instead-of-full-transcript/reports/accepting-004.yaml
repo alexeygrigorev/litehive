@@ -1,0 +1,46 @@
+task_id: T-0143
+step: accepting
+verdict: pass
+summary: I'll review this task by examining the task artifacts, implementation changes,
+  and test evidence.
+feedback: "I'll review this task by examining the task artifacts, implementation changes,\
+  \ and test evidence.\nThe diff against main is empty - let me check the branch situation\
+  \ and actual code changes.\nThe changes are already committed to main. Let me verify\
+  \ the implementation directly.\nNow let me run the tests to verify they pass.\n\
+  All 7 tests pass. Let me also verify `litehive report` CLI path doesn't apply `cap_feedback`.\n\
+  Good. The `_cmd_report` CLI path uses `append_thread_comment` directly with the\
+  \ raw message \u2014 no `cap_feedback` applied. AC #3 is satisfied.\n\nAll acceptance\
+  \ criteria verified:\n\n1. **AC #1 - 2000-char cap with truncation marker**: `cap_feedback()`\
+  \ in `models.py:486` enforces the limit. Applied at all transcript-to-feedback write\
+  \ points in `external_cli.py` (2 locations), `subagents.py` (1), and `runtime.py`\
+  \ (3).\n\n2. **AC #2 - Full transcript in subagent artifacts**: `cap_feedback` only\
+  \ touches the `feedback` field on `StageReport`. The full transcript remains in\
+  \ subagent stdout/transcript files.\n\n3. **AC #3 - `litehive report` messages stored\
+  \ as-is**: The CLI `report` command goes through `append_thread_comment`, which\
+  \ stores the message directly without capping.\n\n7/7 tests pass.\n**PASS** \u2014\
+  \ All acceptance criteria met. The `cap_feedback()` function caps report feedback\
+  \ at 2000 chars with a truncation marker, full transcripts remain in subagent artifacts,\
+  \ and `litehive report --message` bypasses capping. 7/7 tests passing.\n**PASS**\
+  \ \u2014 All acceptance criteria met. The `cap_feedback()` function caps report\
+  \ feedback at 2000 chars with a truncation marker, full transcripts remain in subagent\
+  \ artifacts, and `litehive report --message` bypasses capping. 7/7 tests passing."
+files_changed: []
+follow_up_tasks: []
+created_follow_up_task_ids: []
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 107
+hook_results: []
+created_at: '2026-04-05T15:48:02+00:00'

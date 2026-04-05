@@ -1,0 +1,80 @@
+task_id: T-0145
+step: testing
+verdict: pass
+summary: "I\u2019m validating the testing-stage implementation against the task artifacts\
+  \ first, then I\u2019ll run focused checks around the upstream contribution flow\
+  \ and only widen scope if the recorded evidence is incomplete."
+feedback: "I\u2019m validating the testing-stage implementation against the task artifacts\
+  \ first, then I\u2019ll run focused checks around the upstream contribution flow\
+  \ and only widen scope if the recorded evidence is incomplete.\nI\u2019ve confirmed\
+  \ the feature landed in the codebase and the task thread includes an implementation\
+  \ report. Next I\u2019m checking the actual diff and running only the targeted tests\
+  \ that prove the cross-project protocol behaviors end to end.\nThe worktree changes\
+  \ are still uncommitted, so I\u2019m validating the current filesystem state rather\
+  \ than relying on the last commit. I\u2019m pulling a narrow diff for the touched\
+  \ files and then running the targeted pytest selection the implementation report\
+  \ claims passed.\nThe focused tests do pass in this worktree. I\u2019m doing one\
+  \ more pass on the user-facing entrypoints and documentation so the verdict reflects\
+  \ both executable coverage and whether the promised protocol is actually exposed\
+  \ to operators.\nI have enough evidence for the feature-specific behavior. I\u2019\
+  m extracting the exact test additions and then I\u2019ll submit the QA report into\
+  \ Litehive so the next stage has a durable pass/fail record with concrete verification\
+  \ details.\nI\u2019m submitting a PASS report now with the concrete checks I ran\
+  \ and the evidence tied back to the acceptance criteria, so acceptance doesn\u2019\
+  t have to reconstruct this from raw logs.\nThe report command defaulted to the workspace\u2019\
+  s current task and wrote to `T-0081`, so I\u2019m correcting that by explicitly\
+  \ targeting `T-0145`. The testing verdict itself is unchanged; this is just fixing\
+  \ the durable routing of the report.\nSTAGE_RESULT:\n{\"verdict\":\"pass\",\"summary\"\
+  :\"Focused QA validation passed for the cross-project Litehive contribution protocol:\
+  \ upstream issue filing, recovery escalation guidance, patch handoff metadata, operator\
+  \ visibility, and documentation are in place and covered by targeted checks.\",\"\
+  files_changed\":[\".litehive/context.md\",\"docs/cli.md\",\"docs/contributing-back.md\"\
+  ,\"litehive/cli.py\",\"litehive/config.py\",\"litehive/models.py\",\"litehive/observability.py\"\
+  ,\"litehive/subagents.py\",\"litehive/tasks.py\",\"tests/test_workspace.py\"],\"\
+  tests\":{\"added\":3,\"passing\":5},\"warnings\":[\"Targeted verification only;\
+  \ I did not rerun the broad full test suite during QA.\"],\"follow_up_tasks\":[],\"\
+  acceptance_criteria\":[{\"criterion\":\"A project can file a litehive issue via\
+  \ CLI that creates a task in the litehive workspace.\",\"status\":\"verified\",\"\
+  evidence\":\"Validated by tests/test_workspace.py::test_issue_command_files_upstream_task_with_origin_metadata\
+  \ and an independent direct _cmd_issue exercise.\"},{\"criterion\":\"Recovery agents\
+  \ in external projects can detect litehive bugs and file upstream issues automatically\
+  \ instead of just logging them.\",\"status\":\"verified\",\"evidence\":\"Validated\
+  \ by recovery prompt coverage in the targeted pytest selection and spot-check of\
+  \ litehive/subagents.py guidance.\"},{\"criterion\":\"A litehive self-heal flow\
+  \ can accept a patch from an external project.\",\"status\":\"verified\",\"evidence\"\
+  :\"Validated by tests/test_workspace.py::test_issue_command_can_prepare_patch_branch\
+  \ covering patch branch preparation and persisted patch metadata.\"},{\"criterion\"\
+  :\"There is a documented way to propose Litehive changes without switching context.\"\
+  ,\"status\":\"verified\",\"evidence\":\"Validated by docs/contributing-back.md and\
+  \ docs/cli.md.\"},{\"criterion\":\"Protocol handles bug, missing feature, config/prompt\
+  \ improvement, and engine adapter fix scenarios.\",\"status\":\"verified\",\"evidence\"\
+  :\"Validated by documented contribution kinds and CLI/docs coverage.\"},{\"criterion\"\
+  :\"litehive_source_path config field is used to locate the litehive repo for upstream\
+  \ contributions.\",\"status\":\"verified\",\"evidence\":\"Validated by config/CLI\
+  \ spot-check and successful upstream task creation into the configured Litehive\
+  \ workspace.\"},{\"criterion\":\"Contributions are tracked and the litehive workspace\
+  \ shows which issues came from which project.\",\"status\":\"verified\",\"evidence\"\
+  :\"Validated by tests/test_workspace.py::test_cmd_status_and_summary_include_upstream_origin.\"\
+  },{\"criterion\":\"Protocol is documented in docs/contributing-back.md.\",\"status\"\
+  :\"verified\",\"evidence\":\"Validated by direct doc review.\"}]}\n\n[stderr]\n\
+  Reading additional input from stdin..."
+files_changed: []
+follow_up_tasks: []
+created_follow_up_task_ids: []
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 98
+hook_results: []
+created_at: '2026-04-04T19:23:45+00:00'

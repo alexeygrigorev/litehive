@@ -1,0 +1,140 @@
+- role: planner
+  step: grooming
+  verdict: pass
+  message: "Verified the task is now runnable from a product/process perspective.\
+    \ The task record already had a clear goal, acceptance criteria, constraints,\
+    \ and plan; I set PM sizing to `moderate` / `m`.\n\nRepo evidence reviewed:\n\
+    - `litehive/runtime.py:_commit_to_git_report` already performs late git/worktree\
+    \ checks and records structured `failure_classification` / `failure_diagnostics`,\
+    \ but only after the task has entered `commit_to_git`.\n- `litehive/runner.py`\
+    \ currently routes `accepting -> commit_to_git` on pass and can already preserve\
+    \ blocked/flagged control-plane outcomes with structured diagnostics.\n- Existing\
+    \ regression coverage in `tests/test_retry_commit_and_recovery.py` proves current\
+    \ failures like `not_git_repo` and `checkpoint_failed` are only surfaced at `commit_to_git`\
+    \ today.\n\nImplementation contract for the next stage:\n1. Add a shared fast\
+    \ preflight helper for commit/worktree readiness. Reuse existing git/worktree\
+    \ helpers instead of creating a second commit path.\n2. Prefer running that preflight\
+    \ immediately after `accepting` passes and before routing into `commit_to_git`.\
+    \ That is the earliest deterministic boundary that still has the full accepted\
+    \ task context. Reusing the same helper inside `commit_to_git` as defense-in-depth\
+    \ is fine, but the first operator-visible failure should happen before the task\
+    \ appears to be in final completion.\n3. The preflight should validate, at minimum:\n\
+    \   - recorded task worktree path exists and resolves correctly when a task worktree\
+    \ is expected\n   - worktree/repo invariants needed by `commit_to_git` are present\
+    \ (git repo, task metadata needed for checkpoint message / attempt bookkeeping,\
+    \ sane task state)\n   - unexpected existing commits in the task worktree are\
+    \ detected explicitly so Litehive remains the owner of the final checkpoint commit\n\
+    \   - merge-back viability assumptions are checked without performing the full\
+    \ final commit path; keep this targeted and cheap\n4. On preflight failure, stop\
+    \ before `commit_to_git` with a concrete control-plane reason and structured diagnostics.\
+    \ Best fit is an `accepting`-stage blocked/flagged outcome so the task does not\
+    \ look content-complete and a later retry can come back through recovery-aware\
+    \ routing instead of blindly looping into `commit_to_git`.\n5. Make the preflight\
+    \ result explicit in operator-facing artifacts. At minimum ensure the stage report\
+    \ summary plus `failure_classification` / `failure_diagnostics` clearly say this\
+    \ was a preflight control-plane failure rather than a content rejection. If a\
+    \ status/task-detail command already prints last outcome data, extend that surface\
+    \ as needed so operators can distinguish preflight failures from normal acceptance/test\
+    \ failures.\n\nFocused test scope expected:\n- one passing path where preflight\
+    \ succeeds and the task proceeds to successful completion\n- multiple early-failure\
+    \ paths that previously failed only at `commit_to_git`, such as `not_git_repo`,\
+    \ missing/invalid recorded worktree, and unexpected pre-existing task-worktree\
+    \ commit / merge-back assumption failure\n- assertions that the task stops before\
+    \ `commit_to_git` on those failures and that runtime/report diagnostics explicitly\
+    \ record the preflight classification\n\nNo code changes were made during grooming,\
+    \ and no tests were run in this stage."
+  files_changed: []
+  created_at: '2026-04-05T05:08:56+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Added a late-stage commit/worktree preflight on the accepting->commit_to_git
+    transition. The runner now validates git repo presence, recorded task worktree
+    validity/registration, unexpected pre-existing worktree commits, duplicate planned
+    checkpoint commits, unresolved merge-back conflicts, and stale commit metadata
+    before entering commit_to_git. Passing accepting reports now record an explicit
+    preflight hook result; failures block earlier at accepting with structured failure_classification/failure_diagnostics
+    so operators can distinguish control-plane git/worktree failures from content
+    failures in status/report output. Verified with focused pytest coverage: uv run
+    pytest -q tests/test_retry_commit_and_recovery.py::test_run_next_task_flags_task_when_commit_stage_prerequisite_is_missing
+    tests/test_retry_commit_and_recovery.py::test_run_next_task_records_passing_late_stage_preflight
+    tests/test_retry_commit_and_recovery.py::test_run_next_task_blocks_before_commit_when_task_worktree_path_is_missing
+    tests/test_retry_commit_and_recovery.py::test_run_next_task_blocks_before_commit_when_worktree_has_unexpected_commit
+    tests/test_retry_commit_and_recovery.py::test_run_next_task_preserves_git_commit_failure_diagnostics
+    (5 passed). Acceptance criteria met: preflight now runs before commit_to_git,
+    checks worktree/commit invariants, blocks earlier with concrete reasons, surfaces
+    explicit preflight outcome in accepting reports plus status summaries, and covers
+    one passing plus multiple failure cases that previously surfaced only later.'
+  files_changed:
+  - litehive/runtime.py
+  - litehive/runner.py
+  - litehive/observability.py
+  - tests/test_retry_commit_and_recovery.py
+  created_at: '2026-04-05T05:16:22+00:00'
+- role: qa
+  step: testing
+  verdict: pass
+  message: 'Verified the new late-stage commit/worktree preflight runs on the accepting
+    -> commit_to_git transition and blocks earlier with structured control-plane diagnostics
+    instead of failing late in commit_to_git. Code inspection confirmed the hook in
+    litehive/runner.py calls run_late_stage_completion_preflight before routing into
+    commit_to_git; litehive/runtime.py validates workspace git repo presence, planned
+    checkpoint commit uniqueness, recorded task worktree presence/registration/git
+    validity, unexpected worktree HEAD divergence, unresolved conflict state, and
+    stale recorded commit metadata; litehive/observability.py now surfaces failure_classification/failure_phase
+    in task summaries so operators can distinguish preflight control-plane failures
+    from content failures.\n\nFocused verification run: uv run pytest -q tests/test_retry_commit_and_recovery.py::test_run_next_task_flags_task_when_commit_stage_prerequisite_is_missing
+    tests/test_retry_commit_and_recovery.py::test_run_next_task_records_passing_late_stage_preflight
+    tests/test_retry_commit_and_recovery.py::test_run_next_task_blocks_before_commit_when_task_worktree_path_is_missing
+    tests/test_retry_commit_and_recovery.py::test_run_next_task_blocks_before_commit_when_worktree_has_unexpected_commit
+    tests/test_retry_commit_and_recovery.py::test_run_next_task_preserves_git_commit_failure_diagnostics\nResult:
+    5 passed in 3.62s.\n\nEvidence from the assertions: a passing path records hook_results
+    point before_commit_to_git_preflight with status=passed and an explicit preflight
+    warning on the accepting report; failure paths stop with task.pipeline_status
+    still accepting, verdict blocked, failure_diagnostics.phase=late_stage_preflight,
+    concrete classifications including not_git_repo, missing_task_worktree, and unexpected_worktree_commits,
+    and accepting-stage reports record the failed preflight hook result. render_task_summary
+    also emits failure_classification/failure_phase for operator visibility.\n\nAcceptance
+    criteria status: 1) preflight runs before final completion: satisfied. 2) worktree
+    validity, unexpected commits, merge-back/conflict viability assumptions, and commit
+    metadata/invariants are checked: satisfied by the new preflight helper. 3) failures
+    are blocked earlier with concrete reasons instead of late commit_to_git failure:
+    satisfied. 4) status/report output makes preflight outcome explicit: satisfied.
+    5) focused tests cover one pass path and multiple former late-failure cases: satisfied.'
+  files_changed: []
+  created_at: '2026-04-05T05:18:35+00:00'
+- role: reviewer
+  step: accepting
+  verdict: pass
+  message: 'Verified the new late-stage commit and worktree preflight runs on the
+    accepting to commit_to_git transition and blocks earlier with explicit control-plane
+    diagnostics. Code inspection confirmed TaskExecutionRunner now calls run_late_stage_completion_preflight
+    before routing into commit_to_git; passing accepting reports append the before_commit_to_git_preflight
+    hook result and record a visible preflight success warning, while failures stay
+    at accepting with verdict blocked, structured failure_classification, and failure_diagnostics.phase
+    set to late_stage_preflight. The preflight checks workspace git repo presence,
+    duplicate planned checkpoint commits, recorded task worktree presence and registration,
+    task worktree git validity, unexpected worktree HEAD divergence, unresolved merge
+    or conflict state, and stale final commit metadata. render_task_summary now prints
+    failure_classification and failure_phase so operators can distinguish git and
+    worktree control-plane failures from content failures. Tests run: uv run pytest
+    -q tests/test_retry_commit_and_recovery.py::test_run_next_task_flags_task_when_commit_stage_prerequisite_is_missing
+    tests/test_retry_commit_and_recovery.py::test_run_next_task_records_passing_late_stage_preflight
+    tests/test_retry_commit_and_recovery.py::test_run_next_task_blocks_before_commit_when_task_worktree_path_is_missing
+    tests/test_retry_commit_and_recovery.py::test_run_next_task_blocks_before_commit_when_worktree_has_unexpected_commit
+    tests/test_retry_commit_and_recovery.py::test_run_next_task_preserves_git_commit_failure_diagnostics.
+    Result: 5 passed in 3.95s. This covers one passing preflight path plus multiple
+    early-failure paths that previously would have surfaced only at commit_to_git,
+    including not_git_repo, missing task worktree, and unexpected worktree commits,
+    and confirms failures are rerouted earlier with explicit status and report evidence.
+    Acceptance criteria are satisfied.'
+  files_changed: []
+  created_at: '2026-04-05T05:20:26+00:00'
+- role: recovery
+  step: commit_to_git
+  verdict: pass
+  message: Stashed dirty main state, fast-forward merged worktree commit fce4c62 into
+    main, resolved stash pop conflict on T-0133 task.yaml keeping merged version,
+    dropped stash
+  files_changed: []
+  created_at: '2026-04-05T05:21:38+00:00'

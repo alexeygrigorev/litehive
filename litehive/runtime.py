@@ -739,20 +739,6 @@ def _attempt_stage_recovery(
         root, task,
         f"Stage `{step}` {failed_report.verdict}: {failed_report.summary}. Launching recovery agent.",
     )
-    if failure_owner == "litehive" and config is not None and (source_root is None or source_root != root.resolve()):
-        return _attempt_litehive_self_heal(
-            root,
-            task,
-            step,
-            failed_report,
-            subagents=subagents,
-            config=config,
-            engine_name=engine_name,
-            model_name=model_name,
-            traceback_text=traceback_text,
-            source_root=source_root,
-        )
-
     prompt = (
         f"You are running as Litehive's recovery agent for task {task.id} ({task.title}).\n\n"
         f"Failure trigger: stage `{step}` ended with verdict `{failed_report.verdict}`.\n"

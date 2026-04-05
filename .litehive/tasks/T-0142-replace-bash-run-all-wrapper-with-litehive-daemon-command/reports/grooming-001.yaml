@@ -1,0 +1,87 @@
+task_id: T-0142
+step: grooming
+verdict: pass
+summary: Groomed T-0142 into a runnable implementation task by verifying current run-all
+  wrapper behavior, setting PM sizing, and expanding acceptance criteria to cover
+  the daemon CLI, fresh-subprocess loop semantics, global registry, and operator-surface
+  migration.
+feedback: "I\u2019m treating this as grooming only: I\u2019ll inspect the current\
+  \ task record and any task-local/runtime artifacts first, then read the targeted\
+  \ daemon/run-all code paths to tighten scope, acceptance criteria, and implementation\
+  \ plan before filing the planner report.\nI\u2019ve confirmed this is largely a\
+  \ control-plane replacement task: current behavior lives in `scripts/run-all.sh`,\
+  \ there\u2019s also an ad hoc `scripts/run-all-daemon.sh`, and tests/docs still\
+  \ anchor on the wrapper. Next I\u2019m checking the task record plus the exact wrapper\
+  \ behavior the daemon command has to preserve or intentionally replace.\nThe task\
+  \ record is under-specified right now: it only has one acceptance criterion, while\
+  \ the goal implies a real CLI surface, background lifecycle semantics, and cross-project\
+  \ instance discovery. I\u2019m reading the CLI and config layers next so the grooming\
+  \ report can pin down the exact contract the implementer should satisfy without\
+  \ widening scope.\nI have the key leverage points now: the CLI is plain `argparse`,\
+  \ there\u2019s already a reusable global config path helper in [`litehive/config.py`](/home/alexey/git/litehive/.litehive/worktrees/T-0142-replace-bash-run-all-wrapper-with-litehive-daemon-command/litehive/config.py),\
+  \ and the existing shell daemon writes only a workspace-local PID. I\u2019m checking\
+  \ the wrapper tests next so the plan preserves the important lifecycle and logging\
+  \ behavior instead of just renaming commands.\nThe existing tests make the intended\
+  \ replacement clearer: the important contract is not \u201Cshell script exists,\u201D\
+  \ it\u2019s \u201Cfresh `litehive run` process per iteration, durable timestamped\
+  \ logs, and correct stop behavior for queue exhaustion, explicit pool stops, and\
+  \ `task_requeued`.\u201D I\u2019m checking current runner PID/status plumbing so\
+  \ the grooming report can distinguish daemon-level state from existing single-runner\
+  \ state instead of conflating them.\nThere are no prior task-local reports or transcripts\
+  \ for T-0142, so the groomed handoff needs to carry the contract cleanly by itself.\
+  \ I\u2019m checking the `litehive update` surface now so I can decide whether to\
+  \ leave this as a pass with explicit criteria/plan in the report only, or also backfill\
+  \ the task record fields before handing off.\nI have enough context to groom it\
+  \ concretely. I\u2019m going to backfill the task metadata with explicit acceptance\
+  \ criteria and PM sizing now, then I\u2019ll file a planner report that tells the\
+  \ implementer exactly which behavior to preserve, which new daemon contracts to\
+  \ add, and which legacy script/docs surfaces to migrate.\nThe metadata backfill\
+  \ hit a shell quoting issue because the acceptance text included backticks. I\u2019\
+  m retrying with plain text criteria so the task record is actually updated rather\
+  \ than relying on the report alone.\nI\u2019ve finished grooming: the task record\
+  \ now carries explicit criteria and sizing, and the handoff is going to call out\
+  \ the exact behavior that must be preserved from `scripts/run-all.sh` plus the new\
+  \ global-registry daemon lifecycle. I\u2019m submitting the planner report now;\
+  \ after that I\u2019ll return the required stage-result block.\nSTAGE_RESULT:\n\
+  {\"verdict\":\"pass\",\"summary\":\"Groomed T-0142 into a runnable implementation\
+  \ task by verifying current run-all wrapper behavior, setting PM sizing, and expanding\
+  \ acceptance criteria to cover the daemon CLI, fresh-subprocess loop semantics,\
+  \ global registry, and operator-surface migration.\",\"files_changed\":[\".litehive/tasks/T-0142-replace-bash-run-all-wrapper-with-litehive-daemon-command/task.yaml\"\
+  ],\"tests\":{\"added\":0,\"passing\":0},\"warnings\":[],\"follow_up_tasks\":[],\"\
+  acceptance_criteria\":[\"litehive daemon run --workspace <root> starts a background\
+  \ daemon for that workspace, refuses a second live daemon for the same workspace,\
+  \ and records the live daemon in the global registry at ~/.config/litehive/daemons.yaml\
+  \ rather than under .litehive/.\",\"The daemon loop preserves current run-all semantics:\
+  \ it repairs first, runs one fresh litehive run subprocess per iteration so new\
+  \ code is picked up automatically, writes timestamped iteration logs under .litehive/logs/run-all/,\
+  \ continues after task_requeued, and stops on queue exhaustion, blocked-tasks-only,\
+  \ or explicit pool stop reasons.\",\"litehive daemon status --workspace <root>,\
+  \ stop, and restart operate on the workspace daemon lifecycle and report useful\
+  \ state using the registered PID plus workspace-local logs/status.\",\"litehive\
+  \ daemon instances lists running daemons across workspaces from the global registry\
+  \ and prunes or ignores stale entries whose PIDs are no longer alive.\",\"Operator-facing\
+  \ docs, tests, and install flow are updated so the supported workflow uses litehive\
+  \ daemon subcommands instead of scripts/run-all.sh and scripts/run-all-status.sh,\
+  \ while preserving proof through real CLI execution for pool-wrapper behavior.\"\
+  ]}\nFOLLOW_UP_TASKS:\n[]\n\n[stderr]\nReading additional input from stdin..."
+files_changed:
+- .litehive/tasks/T-0142-replace-bash-run-all-wrapper-with-litehive-daemon-command/task.yaml
+follow_up_tasks: []
+created_follow_up_task_ids: []
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 134
+hook_results: []
+created_at: '2026-04-04T17:34:59+00:00'

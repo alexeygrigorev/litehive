@@ -1,0 +1,167 @@
+- role: planner
+  step: grooming
+  verdict: pass
+  message: 'Grooming passed. I verified the task record already had a usable goal
+    and explicit acceptance criteria, then filled in the missing plan and PM sizing
+    in .litehive/tasks/T-0138-kill-stale-subagent-processes-after-5-minutes-of-no-output-and-switch-to-fallback-engine/task.yaml.
+    PM sizing is moderate / m. No task-local runtime artifacts or prior reports exist
+    for T-0138 yet, so grooming was based on targeted repo inspection.
+
+
+    Relevant implementation path: litehive/runtime.py already falls through engine
+    attempts when SubagentManager returns failure.kind=retryable_execution_error and
+    the classification matches the retry policy. litehive/subagents.py is where live
+    stdout/stderr artifacts are persisted and where execution failures are classified.
+    litehive/config.py has no existing subagent inactivity timeout knob, so this task
+    should add one there with a default of 300 seconds and normal config loading/serialization
+    coverage.
+
+
+    Important implementation constraint: ExternalCLIAdapter.run_live emits periodic
+    heartbeat on_update calls even when no new bytes arrive, and SubagentManager._write_session_progress
+    currently rewrites stdout.txt on every update. If implemented naively, stdout.txt
+    mtime will stay fresh forever and the acceptance criterion about using live stdout
+    file modification time will never trigger. The implementation should preserve
+    stdout.txt mtime as a signal of real stdout growth, not heartbeat snapshot churn.
+
+
+    Recommended execution plan for SWE:
+
+    1. Add config for subagent inactivity timeout with default 5 minutes.
+
+    2. Adjust live artifact persistence so unchanged stdout snapshots do not refresh
+    stdout.txt mtime.
+
+    3. Detect stale stdout inactivity during live execution, terminate the recorded
+    subagent pid, and surface the result as retryable_execution_error with classification
+    timeout.
+
+    4. Add focused tests in config/subagent/runtime coverage for config loading, mtime-based
+    timeout behavior, and engine fallback after the killed stale subagent.
+
+
+    Tests run during grooming: none. Evidence gathered by inspection only.'
+  files_changed: []
+  created_at: '2026-04-05T06:40:51+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Implemented stale live subagent timeout handling with configurable subagent_inactivity_timeout_seconds
+    defaulting to 300 seconds. Live progress persistence now preserves stdout.txt
+    mtime when stdout is unchanged, so inactivity is measured from the stdout artifact
+    mtime instead of process start or heartbeat callbacks. When a live subagent exceeds
+    the timeout, Litehive sends SIGTERM to the recorded pid, aborts the live adapter
+    cleanly, converts the result into a retryable execution error classified as timeout,
+    and runtime engine fallback continues through the existing fallback path.
+
+
+    Verified with focused pytest coverage:
+
+    - uv run pytest -q tests/test_config_and_run_cli.py -k subagent_inactivity_timeout
+    or defaults_include_claude_retry_policy
+
+    - uv run pytest -q tests/test_tasks_and_subagents.py -k stale_live_process_using_stdout_mtime
+
+    - uv run pytest -q tests/test_retry_commit_and_recovery.py -k stale_subagent_timeout
+
+    - uv run pytest -q tests/test_tasks_and_subagents.py -k artifacts_update_live_during_streaming_execution
+    or artifacts_stream_to_disk_while_process_is_still_running or uses_inherited_run_live_when_available
+
+    - uv run pytest -q tests/test_retry_commit_and_recovery.py -k falls_back_from_codex_to_opencode_on_usage_limit
+
+
+    Evidence against acceptance criteria:
+
+    1. Stale subagents with no new stdout are killed automatically via pid SIGTERM
+    once stdout mtime exceeds the configured timeout.
+
+    2. The killed result is reported as retryable_execution_error with classification
+    timeout, and runtime fallback switches engines after the timeout.
+
+    3. Timeout duration is configurable in Litehive config and defaults to 300 seconds.
+
+    4. Timeout detection is based on the live stdout.txt modification time, and unchanged
+    heartbeat updates no longer refresh that file timestamp.'
+  files_changed: []
+  created_at: '2026-04-05T06:47:45+00:00'
+- role: qa
+  step: testing
+  verdict: pass
+  message: 'Validated T-0138 with focused pytest coverage and code inspection. Verified
+    the new config knob defaults to 300.0 seconds and loads workspace overrides via
+    tests/test_config_and_run_cli.py. Verified SubagentManager preserves stdout.txt
+    mtime when stdout is unchanged, detects inactivity from stdout.txt stat().st_mtime,
+    sends SIGTERM to the recorded pid, and converts the outcome into EngineFailure(kind=retryable_execution_error,
+    classification=timeout) via tests/test_tasks_and_subagents.py::test_subagent_manager_kills_stale_live_process_using_stdout_mtime.
+    Verified runtime fallback continues from codex to opencode after the stale timeout
+    through tests/test_retry_commit_and_recovery.py::test_run_next_task_falls_back_after_stale_subagent_timeout,
+    including the recorded engine-switch reason transient timeout.
+
+
+    Commands run:
+
+    - uv run pytest -q tests/test_config_and_run_cli.py -k "subagent_inactivity_timeout
+    or defaults_include_claude_retry_policy"
+
+    - uv run pytest -q tests/test_tasks_and_subagents.py -k "stale_live_process_using_stdout_mtime
+    or artifacts_update_live_during_streaming_execution or artifacts_stream_to_disk_while_process_is_still_running
+    or uses_inherited_run_live_when_available"
+
+    - uv run pytest -q tests/test_retry_commit_and_recovery.py -k "stale_subagent_timeout
+    or falls_back_from_codex_to_opencode_on_usage_limit"
+
+
+    Acceptance criteria status:
+
+    1. Met: stale live subagents are killed automatically after the configured stdout
+    inactivity timeout.
+
+    2. Met: the killed run is classified as retryable_execution_error with timeout
+    classification, and fallback engages.
+
+    3. Met: the timeout is configurable through Litehive config and defaults to 5
+    minutes / 300 seconds.
+
+    4. Met: timeout detection is based on live stdout.txt modification time, not process
+    start time.'
+  files_changed: []
+  created_at: '2026-04-05T06:49:22+00:00'
+- role: reviewer
+  step: accepting
+  verdict: pass
+  message: 'Verified stale subagent handling end to end for T-0138. Evidence: litehive/config.py
+    adds subagent_inactivity_timeout_seconds with a default of 300.0s and validation,
+    and tests/test_config_and_run_cli.py -k subagent_inactivity_timeout passed, confirming
+    config override loading. litehive/subagents.py now preserves stdout.txt mtime
+    by avoiding rewrites when content is unchanged, checks live stdout.txt modification
+    time during live updates, terminates the recorded pid on inactivity, and converts
+    the result into a retryable execution error with classification timeout; tests/test_tasks_and_subagents.py
+    -k stale_live_process_using_stdout_mtime passed and confirms the pid is terminated,
+    exit code becomes 124, and the timeout is derived from stdout mtime rather than
+    process start time. tests/test_retry_commit_and_recovery.py -k stale_subagent_timeout
+    passed and confirms the killed stale subagent is treated as transient timeout
+    so normal engine fallback switches from codex to opencode. Acceptance criteria
+    met: auto-kill after stdout inactivity, retryable timeout classification for fallback,
+    configurable timeout with 5 minute default, and mtime-based detection using the
+    live stdout artifact.'
+  files_changed: []
+  created_at: '2026-04-05T06:50:44+00:00'
+- role: recovery
+  step: commit_to_git
+  verdict: pass
+  message: Stashed dirty task.yaml and moved untracked journal.md in main repo, then
+    fast-forward merged worktree commit 2cd17e5 into main. Resolved stash pop conflict
+    by keeping stashed runtime state.
+  files_changed: []
+  created_at: '2026-04-05T06:52:02+00:00'
+- role: recovery
+  step: commit_to_git
+  verdict: comment
+  message: 'Recovery trigger `commit_to_git_failure`: Recovery agent completed bounded
+    commit_to_git repair.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0138-kill-stale-subagent-processes-after-5-minutes-of-no-output-and-switch-to-fallback-engine/recovery/recovery-001.yaml'
+  files_changed: []
+  created_at: '2026-04-05T06:52:07+00:00'

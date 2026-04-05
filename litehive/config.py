@@ -844,7 +844,7 @@ class LitehiveConfig:
             "opencode": ["codex", "gemini", "copilot"],
             "gemini": ["codex", "opencode", "copilot"],
             "copilot": ["codex", "opencode", "gemini"],
-            "goz": ["opencode", "codex", "gemini", "copilot"],
+            "goz": ["copilot", "codex", "opencode", "gemini"],
         }
     )
     agent_startup_guidance: dict[str, list[str]] = field(default_factory=dict)
