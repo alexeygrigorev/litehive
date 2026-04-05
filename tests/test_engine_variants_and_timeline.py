@@ -402,6 +402,36 @@ def test_goz_build_command_render_transcript_and_stage_report(tmp_path: Path) ->
     assert report.files_changed == ["litehive/engines.py", "litehive/config.py"]
     assert report.tests == {"added": 5, "passing": 5}
 
+
+def test_goz_render_transcript_joins_streaming_text_and_formats_tool_blocks(tmp_path: Path) -> None:
+    adapter = get_engine("goz")
+    execution = CLIExecutionResult(
+        adapter="goz",
+        argv=("goz", "run", "--format", "json"),
+        cwd=tmp_path,
+        exit_code=0,
+        stdout="\n".join(
+            [
+                '{"type":"text","part":{"text":"I am checking observ"}}',
+                '{"type":"text","part":{"text":"ability and writing a "}}',
+                '{"type":"text","part":{"text":"readable transcript.\\n\\n"}}',
+                '{"type":"tool_use","part":{"id":"call_1","name":"bash","input":{"command":"pwd"},"output":"/tmp/work","is_error":false}}',
+                '{"type":"text","part":{"text":"The command finished and "}}',
+                '{"type":"text","part":{"text":"the sentence stays intact."}}',
+            ]
+        ),
+        stderr="",
+    )
+
+    transcript = adapter.render_transcript(execution)
+
+    assert "observability and writing a readable transcript." in transcript
+    assert "observ\nability" not in transcript
+    assert "```tool\nname: bash\nid: call_1" in transcript
+    assert 'input:\n{\n  "command": "pwd"\n}' in transcript
+    assert "output:\n/tmp/work" in transcript
+    assert "The command finished and the sentence stays intact." in transcript
+
 def test_goz_extract_usage_observation_reads_tokens_and_cost(tmp_path: Path) -> None:
     adapter = get_engine("goz")
 
@@ -843,6 +873,8 @@ def test_subagent_writes_timeline_during_live_progress(
             *,
             max_turns=None,
             on_update=None,
+            inactivity_timeout_seconds=0,
+            **kwargs,
         ):
             first = CLIExecutionResult(
                 adapter="opencode",

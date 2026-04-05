@@ -217,6 +217,7 @@ class ExternalCLIAdapter:
         resume_session_id: str | None = None,
         on_started: Callable[[int], None] | None = None,
         on_update: Callable[[CLIExecutionResult], None] | None = None,
+        inactivity_timeout_seconds: float = 0,
     ) -> CLIExecutionResult:
         invocation = self.finalize_invocation(
             self.build_invocation(prompt, cwd, model=model, max_turns=max_turns,
@@ -274,6 +275,8 @@ class ExternalCLIAdapter:
                 )
             )
 
+        last_output_at = time.monotonic()
+
         try:
             while selector.get_map():
                 events = selector.select(timeout=self.LIVE_UPDATE_INTERVAL_SECONDS)
@@ -284,6 +287,22 @@ class ExternalCLIAdapter:
                     ):
                         emit_update()
                         last_update_at = time.monotonic()
+                    # Kill if no output for too long
+                    if (
+                        inactivity_timeout_seconds > 0
+                        and proc.poll() is None
+                        and time.monotonic() - last_output_at > inactivity_timeout_seconds
+                    ):
+                        proc.terminate()
+                        try:
+                            proc.wait(timeout=5)
+                        except subprocess.TimeoutExpired:
+                            proc.kill()
+                            proc.wait()
+                        stderr_chunks.extend(
+                            f"\n[litehive] Process killed after {inactivity_timeout_seconds:.0f}s of inactivity.\n".encode()
+                        )
+                        break
                     continue
                 for key, _ in events:
                     chunk = os.read(key.fileobj.fileno(), 4096)
@@ -294,6 +313,7 @@ class ExternalCLIAdapter:
                             stderr_chunks.extend(chunk)
                         emit_update()
                         last_update_at = time.monotonic()
+                        last_output_at = time.monotonic()
                         continue
                     selector.unregister(key.fileobj)
                     key.fileobj.close()

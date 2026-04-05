@@ -165,10 +165,31 @@ def _unwrap_bound_callable(method: object) -> object:
     return getattr(method, "__func__", method)
 
 
+def _callable_resolution_rank(engine: object, name: str) -> int | None:
+    instance_dict = getattr(engine, "__dict__", None)
+    if isinstance(instance_dict, dict) and name in instance_dict:
+        value = instance_dict[name]
+        if callable(value):
+            return -1
+    for index, cls in enumerate(type(engine).__mro__):
+        value = cls.__dict__.get(name)
+        if callable(value):
+            return index
+    return None
+
+
 def _prefers_non_live_run(engine: object) -> bool:
     run_impl = _unwrap_bound_callable(getattr(engine, "run", None))
     run_live_impl = _unwrap_bound_callable(getattr(engine, "run_live", None))
-    return run_impl is not ExternalCLIAdapter.run and run_live_impl is ExternalCLIAdapter.run_live
+    if run_impl is ExternalCLIAdapter.run:
+        return False
+    run_rank = _callable_resolution_rank(engine, "run")
+    run_live_rank = _callable_resolution_rank(engine, "run_live")
+    if run_rank is None:
+        return False
+    if run_live_rank is None:
+        return True
+    return run_rank < run_live_rank
 
 
 def _supports_on_started(engine: object) -> bool:
@@ -261,6 +282,8 @@ class SubagentManager:
                     )
                 if max_turns is not None:
                     live_kwargs["max_turns"] = max_turns
+                if self.config.subagent_inactivity_timeout_seconds > 0:
+                    live_kwargs["inactivity_timeout_seconds"] = self.config.subagent_inactivity_timeout_seconds
                 proc = execution_engine.run_live(prompt, **live_kwargs)
             else:
                 run_kwargs: dict[str, object] = {
@@ -898,6 +921,68 @@ class _SandboxedAdapter(ExternalCLIAdapter):
 
     def sandbox_details(self) -> tuple[bool, str]:
         return (self._summary.enabled, self._summary.summary)
+
+    def run(
+        self,
+        prompt: str,
+        cwd: Path,
+        model: str | None = None,
+        *,
+        max_turns: int | None = None,
+        resume_session_id: str | None = None,
+        on_started=None,
+    ) -> CLIExecutionResult:
+        if _unwrap_bound_callable(getattr(self._adapter, "run", None)) is not ExternalCLIAdapter.run:
+            return self._adapter.run(
+                prompt,
+                cwd,
+                model=model,
+                max_turns=max_turns,
+                resume_session_id=resume_session_id,
+                on_started=on_started,
+            )
+        return super().run(
+            prompt,
+            cwd,
+            model=model,
+            max_turns=max_turns,
+            resume_session_id=resume_session_id,
+            on_started=on_started,
+        )
+
+    def run_live(
+        self,
+        prompt: str,
+        cwd: Path,
+        model: str | None = None,
+        *,
+        max_turns: int | None = None,
+        resume_session_id: str | None = None,
+        on_started=None,
+        on_update=None,
+    ) -> CLIExecutionResult:
+        if (
+            _unwrap_bound_callable(getattr(self._adapter, "run_live", None))
+            is not ExternalCLIAdapter.run_live
+        ):
+            return self._adapter.run_live(
+                prompt,
+                cwd,
+                model=model,
+                max_turns=max_turns,
+                resume_session_id=resume_session_id,
+                on_started=on_started,
+                on_update=on_update,
+            )
+        return super().run_live(
+            prompt,
+            cwd,
+            model=model,
+            max_turns=max_turns,
+            resume_session_id=resume_session_id,
+            on_started=on_started,
+            on_update=on_update,
+        )
 
     def render_transcript(self, execution: CLIExecutionResult) -> str:
         return self._adapter.render_transcript(execution)
