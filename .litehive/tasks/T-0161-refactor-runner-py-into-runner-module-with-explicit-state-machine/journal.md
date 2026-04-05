@@ -38,3 +38,9 @@ Execution started with engine `goz`.
 
 ## 2026-04-05T20:34:00+00:00
 Merge conflict on 2 file(s). Launching merge agent.
+
+## 2026-04-05T20:35:07+00:00
+CommitToGit complete. Commit: 315204d6bbfe8f36bf9ef94ef7b894bfc9bc078c
+
+## 2026-04-05T20:35:12+00:00
+Pool stopped: continue_or_rollback_required. This task finished with checkpoint commit `315204d6bbfe8f36bf9ef94ef7b894bfc9bc078c` and unrelated queued work remains. Either continue with a new `litehive run`/pool run or roll back the checkpoint first.
