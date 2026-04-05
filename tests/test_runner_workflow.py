@@ -73,8 +73,8 @@ def test_subagent_manager_persists_planner_and_reviewer_artifacts(
         def render_transcript(self, execution: CLIExecutionResult) -> str:
             return execution.transcript
 
-    monkeypatch.setattr("litehive.subagents._supports_live_execution", lambda engine: False)
-    monkeypatch.setattr("litehive.subagents.get_engine", lambda _: FakeEngine())
+    monkeypatch.setattr("litehive.subagents._execution._supports_live_execution", lambda engine: False)
+    monkeypatch.setattr("litehive.subagents._execution.get_engine", lambda _: FakeEngine())
     manager = SubagentManager(tmp_path)
 
     planner_result = manager.run(

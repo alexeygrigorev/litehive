@@ -72,6 +72,13 @@ subagents:
   path: subagents/SA-0007-reviewer
   sandboxed: false
   sandbox_summary: host
+- id: SA-0008
+  role: merge-resolver
+  engine: claude
+  status: running
+  path: subagents/SA-0008-merge-resolver
+  sandboxed: false
+  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0163 refactor-subagents-py-into-subagents-module'
