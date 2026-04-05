@@ -1,6 +1,5 @@
 """Shared adapter contract for fire-and-forget external CLIs."""
 
-from __future__ import annotations
 
 from dataclasses import dataclass, replace
 from collections import OrderedDict

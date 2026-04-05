@@ -1,6 +1,5 @@
 """Task storage helpers for the local YAML workspace."""
 
-from __future__ import annotations
 
 from dataclasses import dataclass, field
 import fcntl

@@ -44,3 +44,12 @@ Recovered flagged accepted task back to `queued/commit_to_git` for final checkpo
 
 ## 2026-04-05T16:59:56+00:00
 Execution started with engine `codex`.
+
+## 2026-04-05T16:59:56+00:00
+Merge conflict on 1 file(s). Launching merge agent.
+
+## 2026-04-05T17:00:41+00:00
+CommitToGit complete. Commit: 30f3017d1c0968fa670d292322ddb652bce136aa
+
+## 2026-04-05T17:00:46+00:00
+Pool stopped: continue_or_rollback_required. This task finished with checkpoint commit `30f3017d1c0968fa670d292322ddb652bce136aa` and unrelated queued work remains. Either continue with a new `litehive run`/pool run or roll back the checkpoint first.

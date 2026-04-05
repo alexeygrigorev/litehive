@@ -1,6 +1,5 @@
 """Workspace configuration, process profiles, and bootstrap helpers."""
 
-from __future__ import annotations
 
 from copy import deepcopy
 from dataclasses import asdict, dataclass, field

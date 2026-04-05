@@ -1,6 +1,5 @@
 """CLI entrypoint for litehive."""
 
-from __future__ import annotations
 
 import argparse
 from dataclasses import asdict

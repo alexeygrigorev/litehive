@@ -5,7 +5,6 @@ Supports two backends:
 - ``bubblewrap``: lightweight namespace-based isolation using bwrap(1).
 """
 
-from __future__ import annotations
 
 from dataclasses import dataclass
 import os

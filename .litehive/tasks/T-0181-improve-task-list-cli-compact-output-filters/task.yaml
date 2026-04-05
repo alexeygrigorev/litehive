@@ -1,0 +1,42 @@
+id: T-0181
+slug: improve-task-list-cli-compact-output-filters
+title: 'Improve task list CLI: compact output, filters, active-only default'
+depends_on: []
+task_type: null
+engine: null
+model: null
+mode: implementation
+status: queued
+pipeline_status: backlog
+priority: medium
+pm_complexity: null
+planned_effort: null
+created_at: '2026-04-05T17:03:20+00:00'
+updated_at: '2026-04-05T17:03:20+00:00'
+goal: Make litehive tasks/status/queue commands useful for both agents and humans.
+  Default to showing only active (not-done) tasks. Show compact output (ID + title)
+  by default. Add filters (--status, --stage, --engine). Add --all flag to show everything.
+  Add litehive show T-XXXX for detailed single-task view.
+acceptance_criteria:
+- Default output excludes done tasks
+- 'Compact mode shows one line per task: ID, status, title'
+- 'Filters: --status, --pipeline-status, --engine narrow the list'
+- --all flag shows all tasks including done
+- litehive show T-XXXX prints full task details
+constraints: []
+plan: []
+human_checkpoints: []
+subagents: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0181 improve-task-list-cli-compact-output-filters'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+  worktree_path: null
+retry_policy:
+  max_retries: null
+  stage_retry_limit: null
+created_from: null
+upstream_origin: null
