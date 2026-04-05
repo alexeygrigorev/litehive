@@ -1,6 +1,5 @@
 """Local-only HTTP monitor for queue, task, and session artifacts."""
 
-from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 from functools import partial

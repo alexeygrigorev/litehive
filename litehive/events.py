@@ -1,6 +1,5 @@
 """Append-only JSONL event persistence for task lifecycle and subagent sessions."""
 
-from __future__ import annotations
 
 import json
 import os

@@ -1,6 +1,5 @@
 """High-level runtime flow for executing queued tasks."""
 
-from __future__ import annotations
 
 from dataclasses import dataclass, field
 import hashlib

@@ -1,6 +1,5 @@
 """Workspace-level engine usage and quota monitoring."""
 
-from __future__ import annotations
 
 from pathlib import Path
 
