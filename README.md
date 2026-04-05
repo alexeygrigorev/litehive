@@ -28,7 +28,6 @@ grooming -> implementing -> testing -> accepting -> commit_to_git
 git clone git@github.com:alexeygrigorev/litehive.git
 cd litehive
 uv sync
-scripts/install-bin.sh
 
 # Set up a project
 cd /path/to/your/project

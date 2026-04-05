@@ -37,20 +37,16 @@ linked pages as reference once your workspace is running.
 
 ## Installation
 
-Clone the repository, install dependencies, and either use `uv run litehive`
-directly or install the local wrapper script:
+Clone the repository and install dependencies:
 
 ```bash
 git clone git@github.com:alexeygrigorev/litehive.git
 cd litehive
 uv sync
-
-# Optional convenience wrapper
-scripts/install-bin.sh
 ```
 
-If you skip `scripts/install-bin.sh`, replace `litehive ...` with
-`uv run litehive ...` in the examples below.
+Use `uv run litehive ...` to run commands, or install the package with
+`uv tool install --editable .` for a global `litehive` binary.
 
 ## Quick Start
 
