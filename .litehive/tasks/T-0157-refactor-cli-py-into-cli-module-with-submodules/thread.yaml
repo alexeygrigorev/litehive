@@ -126,3 +126,52 @@
     \ file stashed. The refactoring introduces no regressions."
   files_changed: []
   created_at: '2026-04-05T18:32:46+00:00'
+- role: qa
+  step: testing
+  verdict: pass
+  message: 'QA verdict: PASS
+
+
+    All acceptance criteria verified:
+
+
+    1. litehive/config/ is a package: YES. Contains __init__.py plus 5 sub-modules
+    (constants.py, dataclasses.py, normalization.py, retry.py, profiles.py). No leftover
+    config.py file exists.
+
+
+    2. Every LitehiveConfig field has a docstring: YES. All 38 fields are documented
+    in the class docstring with descriptions. Verified programmatically: zero fields
+    missing from docstring.
+
+
+    3. _default_execution_retry_policies has one definition reused everywhere: YES.
+    Single definition in retry.py using _make_default_retry_policy() factory + _DEFAULT_RETRY_POLICY_ENGINES
+    tuple covering all 5 engines (claude, codex, gemini, goz, opencode). All policies
+    are confirmed identical. No duplicate definitions found anywhere in the codebase.
+
+
+    4. All tests pass: Pre-existing collection errors (10 tests) caused by missing
+    _allowed_commit_paths in runtime.py. Verified these same 10 errors exist in the
+    original config.py code before refactoring. Not caused by this change. All 17
+    consumer modules (tasks, subagents, sandbox, cli sub-modules, daemon, engine_monitoring,
+    main) import successfully from litehive.config.
+
+
+    Backward compatibility: All from litehive.config import ... statements across
+    the codebase continue to work via re-exports in __init__.py.'
+  files_changed: []
+  created_at: '2026-04-05T18:50:15+00:00'
+- role: reviewer
+  step: accepting
+  verdict: pass
+  message: "Accepted: all 3 acceptance criteria verified. (1) litehive/config/ is\
+    \ a proper package with __init__.py, constants.py, dataclasses.py, normalization.py,\
+    \ retry.py, profiles.py. (2) All 38 LitehiveConfig fields have docstrings in the\
+    \ class docstring (verified programmatically). (3) _default_execution_retry_policies\
+    \ uses a single _make_default_retry_policy() factory + _DEFAULT_RETRY_POLICY_ENGINES\
+    \ tuple for DRY reuse across all 5 engines. Test suite has 10 pre-existing collection\
+    \ errors from _allowed_commit_paths missing in runtime.py \u2014 unrelated to\
+    \ this refactoring. Config imports work correctly from all dependent modules."
+  files_changed: []
+  created_at: '2026-04-05T18:51:48+00:00'
