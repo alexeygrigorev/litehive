@@ -2718,6 +2718,61 @@ def test_load_config_normalizes_agent_startup_guidance_keys(tmp_path: Path) -> N
         "all": ["Use task-local artifacts before broad repo reads."],
     }
 
+def test_agent_md_overrides_config_startup_guidance(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="MD override test")
+    config = LitehiveConfig(
+        agent_startup_guidance={"swe": ["Config SWE guidance."]}
+    )
+    agents_dir = tmp_path / ".litehive" / "agents"
+    agents_dir.mkdir(parents=True, exist_ok=True)
+    (agents_dir / "swe.md").write_text("MD SWE guidance line one.\nMD SWE guidance line two.")
+
+    prompt = stage_prompt(task, "implementing", workspace_context="", config=config, root=tmp_path)
+
+    assert "MD SWE guidance line one." in prompt
+    assert "MD SWE guidance line two." in prompt
+    assert "Config SWE guidance." not in prompt
+
+
+def test_agent_md_absent_falls_back_to_config(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Fallback test")
+    config = LitehiveConfig(
+        agent_startup_guidance={"swe": ["Config SWE fallback."]}
+    )
+
+    prompt = stage_prompt(task, "implementing", workspace_context="", config=config, root=tmp_path)
+
+    assert "Config SWE fallback." in prompt
+
+
+def test_agent_md_all_and_role_combine(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Combine test")
+    agents_dir = tmp_path / ".litehive" / "agents"
+    agents_dir.mkdir(parents=True, exist_ok=True)
+    (agents_dir / "all.md").write_text("Global guidance from md.")
+    (agents_dir / "qa.md").write_text("QA guidance from md.")
+
+    prompt = stage_prompt(task, "testing", workspace_context="", root=tmp_path)
+
+    assert "Global guidance from md." in prompt
+    assert "QA guidance from md." in prompt
+
+
+def test_agent_md_empty_file_produces_no_guidance(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Empty md test")
+    agents_dir = tmp_path / ".litehive" / "agents"
+    agents_dir.mkdir(parents=True, exist_ok=True)
+    (agents_dir / "swe.md").write_text("   \n  \n")
+
+    prompt = stage_prompt(task, "implementing", workspace_context="", root=tmp_path)
+
+    assert "Project startup guidance:" not in prompt
+
+
 def test_stage_prompt_requires_real_lifecycle_verification_for_workflow_testing_tasks(
     tmp_path: Path,
 ) -> None:

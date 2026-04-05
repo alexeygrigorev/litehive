@@ -1023,7 +1023,7 @@ def stage_prompt(
     lifecycle_verification_overlay: list[str] = []
     stage_owner = role_name or _stage_owner_for_step(step)
     stage_role = _stage_role_prompt(step, stage_owner)
-    startup_guidance = _agent_startup_guidance(config, stage_owner)
+    startup_guidance = _agent_startup_guidance(config, stage_owner, root=root)
 
     lines = [
         f"Task: {task.id} {task.title}",
@@ -1340,14 +1340,31 @@ def _stage_role_prompt(step: str, owner: str | None = None) -> list[str]:
     return ["- Follow the stage instructions and keep the report concise and explicit."]
 
 
-def _agent_startup_guidance(config: LitehiveConfig | None, stage_owner: str) -> list[str]:
-    if config is None:
-        return []
-    guidance = config.agent_startup_guidance
+def _load_agent_md(root: Path | None, role: str) -> list[str] | None:
+    """Read .litehive/agents/{role}.md and return content as '- ' prefixed lines, or None."""
+    if root is None:
+        return None
+    md_path = root / ".litehive" / "agents" / f"{role}.md"
+    if not md_path.is_file():
+        return None
+    text = md_path.read_text(encoding="utf-8").strip()
+    if not text:
+        return None
+    return [f"- {line}" for line in text.splitlines()]
+
+
+def _agent_startup_guidance(
+    config: LitehiveConfig | None, stage_owner: str, *, root: Path | None = None,
+) -> list[str]:
     lines: list[str] = []
+    guidance = config.agent_startup_guidance if config is not None else {}
     for key in ("all", stage_owner):
-        for item in guidance.get(key, []):
-            lines.append(f"- {item}")
+        md_lines = _load_agent_md(root, key)
+        if md_lines is not None:
+            lines.extend(md_lines)
+        else:
+            for item in guidance.get(key, []):
+                lines.append(f"- {item}")
     return lines
 
 
