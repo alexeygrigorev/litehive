@@ -6,13 +6,13 @@ task_type: null
 engine: null
 model: null
 mode: implementation
-status: in_progress
-pipeline_status: commit_to_git
+status: done
+pipeline_status: done
 priority: medium
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-04T20:45:50+00:00'
-updated_at: '2026-04-05T17:08:55+00:00'
+updated_at: '2026-04-05T17:08:56+00:00'
 goal: We require Python 3.12+ so from __future__ import annotations is unnecessary.
   Remove it everywhere.
 acceptance_criteria:
@@ -67,7 +67,7 @@ subagents:
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0153 remove-from-future-import-annotations-from-all-files'
-  commit_sha: null
+  commit_sha: 5dddceaa3dc500d12afae16244dc956acb43ef3c
   checkpoint_base_sha: null
   checkpoint_attempts: 0
   rolled_back_checkpoint_attempt: null
