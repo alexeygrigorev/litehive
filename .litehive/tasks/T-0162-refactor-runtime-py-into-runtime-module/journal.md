@@ -32,3 +32,9 @@ Task metadata updated via CLI.
 
 ## 2026-04-05T22:01:30+00:00
 Merge conflict on 2 file(s). Launching merge agent.
+
+## 2026-04-05T22:02:10+00:00
+CommitToGit complete. Commit: 7aaa39cb80120a6ccf4ff66780f843b2511d618c
+
+## 2026-04-05T22:02:15+00:00
+Pool stopped: continue_or_rollback_required. This task finished with checkpoint commit `7aaa39cb80120a6ccf4ff66780f843b2511d618c` and unrelated queued work remains. Either continue with a new `litehive run`/pool run or roll back the checkpoint first.

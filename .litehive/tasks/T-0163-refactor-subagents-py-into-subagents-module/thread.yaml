@@ -1,0 +1,32 @@
+- role: planner
+  step: grooming
+  verdict: pass
+  message: "GROOMING PASS for T-0163: Refactor subagents.py into subagents/ module\n\
+    \nSCOPE ANALYSIS: litehive/subagents.py is 1,486 lines. Analyzed full content:\n\
+    - Lines 52-85: Dataclasses (EngineFailure, SubagentResult, SubagentInactivityTimeout)\n\
+    - Lines 87-219: Artifact helpers and engine capability checks\n- Lines 221-893:\
+    \ SubagentManager class (main execution orchestration)\n- Lines 895-1017: _SandboxedAdapter\
+    \ (sandbox wrapper around CLI adapters)\n- Lines 1020-1403: Prompt building (stage_prompt,\
+    \ intake_prompt, helpers)\n- Lines 1406-1460: Stage report parsing (stage_report_from_subagent)\n\
+    - Lines 1463-1486: intake_prompt\n\nPUBLIC API used by runtime, cli, and tests:\n\
+    \  SubagentManager, SubagentResult, EngineFailure, SubagentInactivityTimeout,\n\
+    \  stage_prompt, stage_report_from_subagent, intake_prompt\n\nACCEPTANCE CRITERIA\
+    \ (7 criteria, updated on task):\n1. litehive/subagents/ is a Python package with\
+    \ __init__.py re-exporting the full public API\n2. Prompt building in litehive/subagents/_prompts.py\
+    \ (stage_prompt, intake_prompt, _stage_owner_for_step, _stage_role_prompt, _load_agent_md,\
+    \ _agent_startup_guidance)\n3. Stage report parsing in litehive/subagents/_parsing.py\
+    \ (stage_report_from_subagent)\n4. Execution management in litehive/subagents/_execution.py\
+    \ (SubagentManager, _SandboxedAdapter, EngineFailure, SubagentResult, SubagentInactivityTimeout,\
+    \ artifact helpers)\n5. Continuation handling in litehive/subagents/_continuation.py\
+    \ (token extraction/serialization helpers used by both _execution.py and _prompts.py)\n\
+    6. All existing imports of litehive.subagents continue to work without modification\n\
+    7. uv run pytest -q passes with zero failures\n\nPLAN (4 steps on task):\n1. Split\
+    \ subagents.py into _prompts.py, _parsing.py, _execution.py, _continuation.py\n\
+    2. Create __init__.py re-exporting public API\n3. Delete litehive/subagents.py\n\
+    4. Run pytest to confirm zero failures\n\nNOTE: Continuation logic is embedded\
+    \ in SubagentManager.run() and stage_prompt(). _continuation.py should hold the\
+    \ helper functions for token extraction/serialization (extract_engine_continuation\
+    \ wrappers, continuation YAML serialization) so they are importable by both modules\
+    \ cleanly.\n\nPM_COMPLEXITY: simple\nPLANNED_EFFORT: s"
+  files_changed: []
+  created_at: '2026-04-05T22:06:55+00:00'
