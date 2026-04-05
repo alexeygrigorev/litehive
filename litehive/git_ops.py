@@ -10,7 +10,6 @@ from pathlib import Path
 from litehive.models import TaskRecord
 
 DEFAULT_CHECKPOINT_SUBJECT_TEMPLATE = "litehive: complete {task_id} {slug}"
-LEGACY_CHECKPOINT_SUBJECT_TEMPLATE = "litehive: checkpoint {task_id} {slug}"
 CHECKPOINT_ATTEMPT_SUFFIX_TEMPLATE = "{base} (attempt {attempt})"
 ROLLBACK_SUBJECT_TEMPLATE = "litehive: rollback {task_id} {slug} (attempt {attempt})"
 
@@ -158,18 +157,11 @@ def default_commit_message(task_id: str, slug: str) -> str:
     return DEFAULT_CHECKPOINT_SUBJECT_TEMPLATE.format(task_id=task_id, slug=slug)
 
 
-def _legacy_default_commit_message(task_id: str, slug: str) -> str:
-    return LEGACY_CHECKPOINT_SUBJECT_TEMPLATE.format(task_id=task_id, slug=slug)
-
-
 def _uses_generated_commit_message(task: TaskRecord) -> bool:
     message = task.git.commit_message
     if message is None:
         return True
-    return message in {
-        default_commit_message(task.id, task.slug),
-        _legacy_default_commit_message(task.id, task.slug),
-    }
+    return message == default_commit_message(task.id, task.slug)
 
 
 def checkpoint_message(task: TaskRecord, attempt: int | None = None) -> str:
