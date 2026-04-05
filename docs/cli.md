@@ -1,289 +1,483 @@
-# litehive CLI
+# CLI Reference
 
-This document explains the main `litehive` CLI flows, with emphasis on task
-creation, updates, dependencies, queue control, and execution.
+This page covers the full `litehive` command surface as of the current
+repository state.
 
-## Core idea
+If you installed the local wrapper, use `litehive ...`. Otherwise run the same
+commands as `uv run litehive ...`.
 
-The CLI is the operator surface for a local deterministic task runner.
+## Command Groups
 
-- create and shape tasks
-- express dependencies between tasks
-- inspect queue and runtime state
-- resume, requeue, close, or repair work
-- run one task at a time or drain the queue through the wrapper
+Top-level commands:
 
-## Common commands
+- `configure`
+- `status`
+- `engine`
+- `queue`
+- `repair`
+- `tasks`
+- `web`
+- `daemon`
+- `add`
+- `issue`
+- `intake`
+- `run`
+- `dirty-worktree-gate`
+- `rollback`
+- `recover`
+- `move`
+- `prioritize`
+- `promote`
+- `requeue`
+- `resume`
+- `abandon`
+- `stop`
+- `switch`
+- `close`
+- `update`
+- `report`
 
-- `litehive configure`
-- `litehive status`
-- `litehive queue`
-- `litehive add "<title>"`
-- `litehive issue --upstream "<title>"`
-- `litehive update T-0001 ...`
-- `litehive move T-0001 1`
-- `litehive prioritize T-0003 T-0002 T-0001`
-- `litehive promote T-0001`
-- `litehive requeue T-0001 --front`
-- `litehive resume T-0001 --front`
-- `litehive close T-0001 --outcome wont_do --reason "..."`
-- `litehive repair`
-- `litehive run`
-- `scripts/run-all.sh .`
+## Workspace Setup And Inspection
 
-`--workspace` defaults to the current directory in normal repo-local use.
+### `litehive configure`
 
-## Creating tasks
-
-Generic runnable task:
+Initialize `.litehive/` and optionally seed config values.
 
 ```bash
-litehive add "Investigate queue stalls" \
-  --goal "Explain why queue and status commands slow down on large workspaces." \
-  --acceptance-criteria "The root cause is identified and documented."
+litehive configure --workspace .
+litehive configure --workspace . --default-engine codex --process-profile python
+```
+
+Useful options:
+
+- `--default-engine`
+- `--process-profile`
+- `--default-retry-limit`
+- `--litehive-source-path`
+- `--opencode-model`
+- `--gemini-model`
+- `--copilot-model`
+- `--claude-enabled`
+- `--claude-model`
+- `--claude-max-turns`
+- pool limit flags such as `--pool-max-tasks`
+- hook flags such as `--hook`
+- subagent resource-limit flags
+
+### `litehive status`
+
+Show workspace status.
+
+```bash
+litehive status --workspace .
+litehive status --fast --workspace .
+litehive status --full --workspace .
+```
+
+Options:
+
+- `--fast`: state-first summary without runtime hydration
+- `--full`: full per-task dump
+
+### `litehive queue`
+
+Show the active task and queued order.
+
+```bash
+litehive queue --workspace .
+```
+
+### `litehive tasks`
+
+Open the task view TUI.
+
+```bash
+litehive tasks --workspace .
+```
+
+### `litehive web`
+
+Serve the local queue and session monitor.
+
+```bash
+litehive web --workspace .
+litehive web --workspace . --host 127.0.0.1 --port 8765
+```
+
+## Engine Management
+
+### `litehive engine`
+
+Persist the workspace default engine.
+
+```bash
+litehive engine codex --workspace .
+litehive engine gemini --workspace .
+```
+
+## Task Creation
+
+### `litehive add`
+
+Create a queued task.
+
+Implementation-style task:
+
+```bash
+litehive add "Fix queue ordering bug" \
+  --goal "Dependency-blocked tasks do not jump ahead of runnable work." \
+  --acceptance-criteria "Blocked tasks remain visible but are not selected before prerequisites finish." \
+  --workspace .
 ```
 
 Typed task:
 
 ```bash
-litehive add "Review adapter update" --task-type review
+litehive add "Write admin guide" --task-type docs --workspace .
 ```
 
-Task with PM sizing:
+Useful options:
+
+- `--goal`
+- `--acceptance-criteria` (repeatable)
+- `--depends-on`
+- `--human-checkpoint`
+- `--task-type`
+- `--mode implementation|tasks`
+- `--engine`
+- `--model`
+- `--retry-limit`
+- `--no-auto-commit`
+
+### `litehive intake`
+
+Create a rough task from a freeform specification using an engine.
 
 ```bash
-litehive add "Stabilize commit recovery" \
-  --pm-complexity moderate \
-  --planned-effort m
+litehive intake spec.md --workspace .
+cat notes.txt | litehive intake --workspace .
+litehive intake spec.md --engine gemini --model gemini-2.5-pro --workspace .
 ```
 
-Task with dependencies:
+### `litehive issue`
+
+File upstream Litehive work from another project.
 
 ```bash
-litehive add "Implement queue graph view" --depends-on T-0010
-```
-
-Notes:
-
-- Generic tasks now require a minimum spec at creation time: a non-empty `--goal` and at least one `--acceptance-criteria`.
-- Typed tasks can still be created from templates with `--task-type`; litehive will seed goal, criteria, constraints, and plan from the template.
-- Use `litehive intake` when the request is still a messy brain dump and needs planner refinement before it becomes runnable work.
-- If the scope or constraints are unclear, stop and ask the user for the missing information instead of creating a blank backlog item.
-- PM rule: runnable backlog items should enter the queue with a real goal and explicit acceptance criteria; grooming should refine that spec, not invent it from a title alone.
-
-Recommended patterns:
-
-```bash
-litehive add "Stabilize commit recovery" \
-  --goal "Make commit_to_git idempotent and resumable after interruptions." \
-  --acceptance-criteria "Successful commit_to_git retries do not duplicate commits." \
-  --acceptance-criteria "A resumed task can finish commit_to_git without manual cleanup."
-
-litehive add "Review adapter update" --task-type review
-
-litehive intake spec.md
-```
-
-## Updating tasks
-
-Examples:
-
-```bash
-litehive update T-0001 --engine opencode
-litehive update T-0001 --pm-complexity complex --planned-effort l
-litehive update T-0002 --depends-on T-0001,T-0003
-litehive update T-0002 --depends-on none
-```
-
-`--depends-on` can be repeated or passed as a comma-separated list.
-Use `none` to clear dependencies on update.
-Use `litehive update` to add missing goal, acceptance criteria, or dependencies before requeueing legacy tasks:
-
-```bash
-litehive update T-0001 --goal "Clarify the exact done-state for queue recovery."
-litehive update T-0001 --acceptance-criteria "Queued interrupted tasks are rerouted through planner before implementation."
-```
-
-Recommended PM grooming flow:
-
-```bash
-litehive update T-0001 \
-  --goal "Normalize underspecified queued, interrupted, and flagged tasks before implementation retries." \
-  --acceptance-criteria "Tasks missing a usable goal or acceptance criteria are routed through planner before implementation." \
-  --acceptance-criteria "Planner grooming persists the normalized goal and acceptance criteria back to the task record." \
-  --acceptance-criteria "Legacy tasks are not allowed to re-enter implementing with a blank task spec."
-```
-
-Use that flow when:
-
-- the task was created too early and only has a title
-- acceptance criteria changed after discussion
-- dependencies or constraints became clearer during grooming
-
-SWE startup expectation:
-
-- pull execution context from the task folder first
-- read `task.yaml`, the latest report, and the latest rejection or recovery artifact before exploring broad repo context
-- if those fields are missing or contradictory, bounce the task back through grooming or recovery instead of guessing
-
-## Filing upstream Litehive work
-
-When another project discovers a Litehive bug, missing feature, prompt/config
-improvement, or engine adapter issue, file it into the Litehive workspace
-without leaving the current repo:
-
-```bash
-litehive configure --workspace . --litehive-source-path /abs/path/to/litehive
-
 litehive issue \
-  --upstream "engine timeout not working" \
+  --upstream "engine timeout not handled correctly" \
   --type runtime_bug \
-  --details "Observed while running recovery in project X." \
+  --details "Observed during recovery in project X." \
   --workspace .
 ```
 
-To hand off a candidate Litehive fix branch at the same time:
+Patch handoff example:
 
 ```bash
 litehive issue \
-  --upstream "Tune Codex timeout handling" \
+  --upstream "improve codex timeout handling" \
   --type engine_adapter_fix \
   --patch-branch recover/codex-timeout-fix \
   --prepare-patch-branch \
   --workspace .
 ```
 
-See [docs/contributing-back.md](contributing-back.md) for the full protocol.
+## Task Editing
 
-## Dependencies
+### `litehive update`
 
-Dependencies are durable task metadata stored in `depends_on`.
-
-What they do:
-
-- a task that depends on another task is not runnable until the prerequisite task is `done`
-- queue selection is dependency-aware
-- blocked tasks stay visible without being incorrectly picked too early
-
-Example:
+Update task metadata after creation.
 
 ```bash
-litehive add "Parallel task execution" --depends-on T-0130,T-0075
+litehive update T-0002 --engine opencode --workspace .
+litehive update T-0002 --priority high --workspace .
+litehive update T-0002 --human-checkpoint before_acceptance --workspace .
 ```
 
-In that case:
-
-- `T-0130` and `T-0075` must be completed first
-- `litehive` will keep the dependent task in the queue
-- but it will not claim it while prerequisites are unfinished
-
-Dependency rules:
-
-- no self-dependency
-- no missing task ids
-- no dependency cycles
-
-## Queue control
-
-Move a task to a specific position:
+Replace durable shaping fields:
 
 ```bash
-litehive move T-0001 1
+litehive update T-0002 \
+  --goal "Clarify final done-state for queue recovery." \
+  --acceptance-criteria "Interrupted tasks resume at the preserved stage." \
+  --constraint "Keep changes scoped to queue state handling." \
+  --plan-step "Inspect stale-runner recovery paths." \
+  --workspace .
 ```
 
-Prioritize a set of tasks to the front in the given order:
+Other supported patterns:
 
 ```bash
-litehive prioritize T-0003 T-0002 T-0001
+litehive update T-0002 --depends-on T-0001,T-0003 --workspace .
+litehive update T-0002 --depends-on none --workspace .
+litehive update T-0002 --from-file task-shape.yaml --workspace .
+litehive update T-0002 --edit --workspace .
+litehive update T-0002 --retry-limit default --workspace .
 ```
 
-Promote one task to the front:
+### `litehive switch`
+
+Switch the task-level engine override and requeue the task for the next pass.
 
 ```bash
-litehive promote T-0001
+litehive switch T-0002 gemini --reason "quota exhausted" --workspace .
 ```
 
-Important:
+### `litehive close`
 
-- queue order still respects dependency constraints
-- a dependent task at the front of the queue can still remain unpicked if its blockers are not done
-
-## Recovering and closing work
-
-Requeue a task for another implementation pass:
+Close a task with an explicit non-implementation outcome.
 
 ```bash
-litehive requeue T-0001 --front
+litehive close T-0007 --outcome wont_do --reason "superseded by T-0011" --workspace .
+litehive close T-0008 --outcome deferred --reason "revisit after release" --workspace .
+litehive close T-0009 --outcome duplicate --follow-up-task T-0004 --workspace .
 ```
 
-Resume a task from its current preserved stage:
+## Queue Management
+
+### `litehive move`
+
+Move a queued task to a 1-based position.
 
 ```bash
-litehive resume T-0001 --front
+litehive move T-0004 1 --workspace .
 ```
 
-Repair stale workspace state:
+### `litehive prioritize`
+
+Move multiple queued tasks to the front in the order given.
 
 ```bash
-litehive repair
+litehive prioritize T-0003 T-0002 T-0005 --workspace .
 ```
 
-Close a task explicitly:
+### `litehive promote`
+
+Promote one queued task to the front.
 
 ```bash
-litehive close T-0001 --outcome wont_do --reason "Superseded by T-0039"
-litehive close T-0002 --outcome deferred --reason "Revisit after release"
-litehive close T-0003 --outcome duplicate
+litehive promote T-0006 --workspace .
 ```
 
-## Running work
+### `litehive requeue`
 
-Run one task:
+Requeue a flagged or closed task.
 
 ```bash
-litehive run
+litehive requeue T-0006 --workspace .
+litehive requeue T-0006 --front --workspace .
 ```
 
-Preview the next run:
+### `litehive resume`
+
+Resume an interrupted, parked, flagged, or closed task from its current stage.
 
 ```bash
-litehive run --dry-run
+litehive resume T-0006 --workspace .
+litehive resume T-0006 --front --workspace .
 ```
 
-Use the wrapper for continuous execution:
+### `litehive abandon`
+
+Cancel a flagged or closed task and remove it from the queue.
 
 ```bash
-scripts/run-all.sh .
+litehive abandon T-0006 --workspace .
 ```
 
-The wrapper restarts `litehive run` each iteration and writes per-iteration logs
-under `.litehive/logs/run-all/`.
+## Running Work
 
-## Status and queue inspection
+### `litehive run`
 
-Short status:
+Run the next task once:
 
 ```bash
-litehive status
+litehive run --workspace .
 ```
 
-Queue listing:
+Drain the pool:
 
 ```bash
-litehive queue
+litehive run --drain --workspace .
 ```
 
-What status is meant to answer quickly:
+Preview selection without invoking agents:
 
-- active task id
-- current stage
-- queue size
-- stop reason
-- current engine
+```bash
+litehive run --dry-run --workspace .
+litehive run --drain --dry-run --workspace .
+```
 
-## Current limitation
+Override the run engine:
 
-The CLI is good at creating tasks and updating common scalar fields, but richer
-human task-shaping flows are still improving. Planner grooming can already persist
-structured task updates during execution; richer operator-side CLI shaping is the
-subject of backlog work rather than a complete solved surface today.
+```bash
+litehive run --engine gemini --model gemini-2.5-pro --workspace .
+```
+
+Useful pool controls:
+
+- `--stop-on-failure`
+- `--max-tasks`
+- `--stop-on-limit`
+- `--quota-threshold`
+- `--budget-threshold`
+- `--pool-usage-cap`
+- `--pool-cost-cap`
+- `--engine-usage-cap ENGINE=COUNT`
+- `--engine-budget-cap ENGINE=UNITS`
+- `--engine-cost ENGINE=UNITS`
+- `--stop-on-dirty-git`
+
+### `litehive stop`
+
+Stop the current active task cleanly.
+
+```bash
+litehive stop --workspace .
+```
+
+## Recovery And Diagnostics
+
+### `litehive repair`
+
+Repair stale active tasks, interrupted runs, and queue inconsistencies.
+
+```bash
+litehive repair --workspace .
+```
+
+### `litehive dirty-worktree-gate`
+
+Report whether dirty git state should block the pool and explain ownership.
+
+```bash
+litehive dirty-worktree-gate --workspace .
+```
+
+### `litehive rollback`
+
+Revert a task checkpoint commit and requeue the task.
+
+```bash
+litehive rollback T-0010 --workspace .
+```
+
+### `litehive recover`
+
+Requeue a completed task without reverting code.
+
+```bash
+litehive recover T-0010 --workspace .
+```
+
+## Reporting From Agents
+
+### `litehive report`
+
+Submit a stage verdict for the active task or an explicit task id.
+
+```bash
+litehive report \
+  --verdict pass \
+  --role swe \
+  --step implementing \
+  --message "Implemented the documentation set and verified the files exist." \
+  --files-changed docs/README.md \
+  --files-changed docs/cli.md \
+  --workspace .
+```
+
+Allowed verdicts:
+
+- `pass`
+- `fail`
+- `reject`
+- `blocked`
+- `comment`
+
+Useful options:
+
+- `--role`
+- `--step`
+- `--files-changed` (repeatable)
+- `--task-id`
+
+## Daemon Commands
+
+### `litehive daemon run`
+
+Start the workspace daemon.
+
+```bash
+litehive daemon run --workspace .
+```
+
+### `litehive daemon status`
+
+Show the registered daemon PID and recent workspace-local logs.
+
+```bash
+litehive daemon status --workspace .
+```
+
+### `litehive daemon stop`
+
+Stop the workspace daemon.
+
+```bash
+litehive daemon stop --workspace .
+```
+
+### `litehive daemon restart`
+
+Restart the workspace daemon.
+
+```bash
+litehive daemon restart --workspace .
+```
+
+### `litehive daemon instances`
+
+List live Litehive daemons across workspaces from the global registry.
+
+```bash
+litehive daemon instances
+```
+
+## Common Workflows
+
+### Start a new workspace
+
+```bash
+litehive configure --workspace .
+litehive status --workspace .
+```
+
+### Add and run a task
+
+```bash
+litehive add "Implement feature X" \
+  --goal "..." \
+  --acceptance-criteria "..." \
+  --workspace .
+litehive run --workspace .
+```
+
+### Operate a background queue
+
+```bash
+litehive daemon run --workspace .
+litehive daemon status --workspace .
+litehive queue --workspace .
+```
+
+### Recover from interruption
+
+```bash
+litehive repair --workspace .
+litehive status --full --workspace .
+litehive resume T-0004 --workspace .
+```
+
+For workflow behavior and routing semantics, continue with
+[pipeline.md](pipeline.md).

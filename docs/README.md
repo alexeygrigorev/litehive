@@ -1,0 +1,120 @@
+# litehive Documentation
+
+litehive is a local-first task runner for software projects. It stores task and
+workspace state under `.litehive/`, routes work through a fixed pipeline, and
+uses external coding-agent CLIs such as Codex, Gemini, OpenCode, Copilot,
+Claude, and Goz to execute each stage.
+
+This guide set is written for a first-time user. Start here, then use the
+linked pages as reference once your workspace is running.
+
+## What litehive does
+
+- Keeps a queue of tasks in your repository.
+- Runs each task through `grooming -> implementing -> testing -> accepting -> commit_to_git`.
+- Persists queue state, reports, retries, recovery context, and task history in
+  `.litehive/`.
+- Can recover interrupted or failed work and continue without losing context.
+- Can run one task at a time or drain the whole queue through the daemon.
+
+## Documentation Map
+
+- [configuration.md](configuration.md): workspace config, global config, models,
+  hooks, retry policies, sandboxing, and routing.
+- [cli.md](cli.md): every CLI command with examples.
+- [pipeline.md](pipeline.md): single-task runs, drain mode, stages, roles, and
+  the state machine.
+- [engines.md](engines.md): supported adapters, model resolution, fallbacks, and
+  adding a new engine.
+- [recovery.md](recovery.md): repair, recovery agents, rollback, recover, and
+  merge-conflict handling.
+- [workspace-layout.md](workspace-layout.md): what lives under `.litehive/` and
+  what is tracked versus ignored.
+- [state-machine.md](state-machine.md): the exhaustive transition reference used
+  by the codebase.
+- [contributing-back.md](contributing-back.md): filing upstream Litehive work
+  from another project.
+
+## Installation
+
+Clone the repository, install dependencies, and either use `uv run litehive`
+directly or install the local wrapper script:
+
+```bash
+git clone git@github.com:alexeygrigorev/litehive.git
+cd litehive
+uv sync
+
+# Optional convenience wrapper
+scripts/install-bin.sh
+```
+
+If you skip `scripts/install-bin.sh`, replace `litehive ...` with
+`uv run litehive ...` in the examples below.
+
+## Quick Start
+
+Initialize a repository as a Litehive workspace:
+
+```bash
+cd /path/to/your/project
+litehive configure --workspace .
+```
+
+Create a few tasks:
+
+```bash
+litehive add "Fix queue ordering bug" \
+  --goal "Dependency-blocked tasks do not jump ahead of runnable work." \
+  --acceptance-criteria "Blocked tasks remain visible but are not selected before prerequisites finish." \
+  --workspace .
+
+litehive add "Document API auth flow" \
+  --task-type docs \
+  --workspace .
+```
+
+Inspect the workspace:
+
+```bash
+litehive status --workspace .
+litehive queue --workspace .
+```
+
+Run one task:
+
+```bash
+litehive run --workspace .
+```
+
+Or run continuously in the background:
+
+```bash
+litehive daemon run --workspace .
+litehive daemon status --workspace .
+```
+
+## First Concepts To Know
+
+- The workspace root is your project root. Litehive keeps its own state in
+  `.litehive/`.
+- `task.yaml` is the durable task record. Reports and runtime artifacts add
+  evidence around that record.
+- `litehive run` executes one selection cycle. `litehive run --drain` keeps
+  going until Litehive reaches an explicit stop condition.
+- `litehive repair` is the manual recovery entrypoint for stale active tasks,
+  interrupted runs, and queue cleanup.
+- Each task can have a preferred engine, but the final attempt order is resolved
+  from run overrides, task overrides, task-type routing, and workspace defaults.
+
+## Minimal Daily Workflow
+
+```bash
+litehive configure --workspace .
+litehive add "Implement feature X" --goal "..." --acceptance-criteria "..." --workspace .
+litehive run --workspace .
+litehive status --workspace .
+litehive repair --workspace .   # when a prior run was interrupted
+```
+
+Once that feels natural, move to [cli.md](cli.md) and [pipeline.md](pipeline.md).
