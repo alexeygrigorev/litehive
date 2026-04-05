@@ -21,6 +21,9 @@ Stage `grooming` stopped retrying `goz` after attempt 3/3: transient network fai
 ## 2026-04-05T19:47:15+00:00
 Stage `grooming` switched from `goz` to `copilot` after transient network failure.
 
+## 2026-04-05T19:50:04+00:00
+Task metadata updated via CLI.
+
 ## 2026-04-05T20:33:44+00:00
 CommitToGit failed: merge did not produce new commits on main.
 
@@ -32,3 +35,6 @@ Recovered flagged accepted task back to `queued/commit_to_git` for final checkpo
 
 ## 2026-04-05T20:33:59+00:00
 Execution started with engine `goz`.
+
+## 2026-04-05T20:34:00+00:00
+Merge conflict on 2 file(s). Launching merge agent.

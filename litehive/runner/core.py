@@ -1,5 +1,4 @@
-"""Deterministic local task runner."""
-
+"""Core task execution runner."""
 
 from dataclasses import dataclass
 from pathlib import Path
@@ -38,7 +37,7 @@ from litehive.tasks import (
     set_task_retry_state,
     task_dir,
 )
-
+from litehive.runner.states import _ROUTES, _STEPS_FROM
 
 
 class StageExecutor(Protocol):
@@ -52,38 +51,13 @@ class RunResult:
     last_verdict: str | None = None
 
 
-_STEPS_FROM: dict[str, str] = {
-    "backlog": "grooming",
-    "grooming": "grooming",
-    "implementing": "implementing",
-    "testing": "testing",
-    "accepting": "accepting",
-    "commit_to_git": "commit_to_git",
-}
-
-_ROUTES: dict[tuple[str, str], str] = {
-    ("grooming", "pass"): "implementing",
-    ("grooming", "accept"): "implementing",
-    ("implementing", "pass"): "testing",
-    ("implementing", "accept"): "testing",
-    ("testing", "pass"): "accepting",
-    ("testing", "accept"): "accepting",
-    ("testing", "fail"): "implementing",
-    ("testing", "reject"): "implementing",
-    ("accepting", "pass"): "commit_to_git",
-    ("accepting", "accept"): "commit_to_git",
-    ("accepting", "fail"): "implementing",
-    ("accepting", "reject"): "implementing",
-    ("commit_to_git", "pass"): "done",
-    ("commit_to_git", "accept"): "done",
-    ("commit_to_git", "fail"): "flagged",
-    ("commit_to_git", "reject"): "flagged",
-    ("commit_to_git", "blocked"): "flagged",
-}
-
-
 class TaskExecutionRunner:
-    """Drive one task through the fixed pipeline using a deterministic router."""
+    """Drive one task through the fixed pipeline using a deterministic router.
+
+    The runner uses the transition table in ``litehive.runner.states._ROUTES`` to
+    decide the next stage after each executor call.  All routing is local and
+    deterministic; the executor (a subagent or test stub) only produces reports.
+    """
 
     def __init__(
         self,
@@ -440,8 +414,6 @@ class TaskExecutionRunner:
                         last_verdict=last_verdict,
                     )
 
-
-
             if target == "implementing" and current in {"testing", "accepting"}:
                 rejections += 1
                 report.retry_count = rejections
@@ -722,6 +694,7 @@ class TaskExecutionRunner:
             resource_limit_event=resource_limit_event,
             hook_results=hook_results or [],
         )
+
 
 def _reason_code_for_report(report: StageReport) -> OutcomeReasonCode:
     verdict = report.verdict
