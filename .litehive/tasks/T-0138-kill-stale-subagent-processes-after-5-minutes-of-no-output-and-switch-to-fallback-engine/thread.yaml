@@ -146,3 +146,22 @@
     live stdout artifact.'
   files_changed: []
   created_at: '2026-04-05T06:50:44+00:00'
+- role: recovery
+  step: commit_to_git
+  verdict: pass
+  message: Stashed dirty task.yaml and moved untracked journal.md in main repo, then
+    fast-forward merged worktree commit 2cd17e5 into main. Resolved stash pop conflict
+    by keeping stashed runtime state.
+  files_changed: []
+  created_at: '2026-04-05T06:52:02+00:00'
+- role: recovery
+  step: commit_to_git
+  verdict: comment
+  message: 'Recovery trigger `commit_to_git_failure`: Recovery agent completed bounded
+    commit_to_git repair.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0138-kill-stale-subagent-processes-after-5-minutes-of-no-output-and-switch-to-fallback-engine/recovery/recovery-001.yaml'
+  files_changed: []
+  created_at: '2026-04-05T06:52:07+00:00'

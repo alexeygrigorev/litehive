@@ -130,3 +130,11 @@
     Acceptance criteria are satisfied.'
   files_changed: []
   created_at: '2026-04-05T05:20:26+00:00'
+- role: recovery
+  step: commit_to_git
+  verdict: pass
+  message: Stashed dirty main state, fast-forward merged worktree commit fce4c62 into
+    main, resolved stash pop conflict on T-0133 task.yaml keeping merged version,
+    dropped stash
+  files_changed: []
+  created_at: '2026-04-05T05:21:38+00:00'

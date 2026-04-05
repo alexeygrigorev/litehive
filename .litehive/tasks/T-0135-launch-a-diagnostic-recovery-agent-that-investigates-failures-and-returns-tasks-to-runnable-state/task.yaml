@@ -7,13 +7,13 @@ task_type: null
 engine: null
 model: null
 mode: implementation
-status: flagged
-pipeline_status: implementing
+status: done
+pipeline_status: done
 priority: medium
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-03T14:16:22+00:00'
-updated_at: '2026-04-04T08:39:24+00:00'
+updated_at: '2026-04-05T05:35:50+00:00'
 goal: When a task breaks, litehive should launch a dedicated recovery agent that gathers
   the right logs and task/runtime artifacts, classifies the failure, applies bounded
   repairs, and returns the task to a runnable state whenever possible.
@@ -204,14 +204,37 @@ subagents:
   path: subagents/SA-0021-recovery
   sandboxed: false
   sandbox_summary: host
+- id: SA-0022
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0022-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0023
+  role: qa
+  engine: codex
+  status: completed
+  path: subagents/SA-0023-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0024
+  role: reviewer
+  engine: codex
+  status: completed
+  path: subagents/SA-0024-reviewer
+  sandboxed: false
+  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0135 launch-a-diagnostic-recovery-agent-that-investigates-failures-and-returns-tasks-to-runnable-state'
-  commit_sha: null
-  checkpoint_base_sha: null
-  checkpoint_attempts: 0
+  commit_sha: cf349c58b99c73f6f58dfe7ef6528381aaa47588
+  checkpoint_base_sha: fce4c6260ace4fcfe61de6b6fbd0fad576e9e5c6
+  checkpoint_attempts: 1
   rolled_back_checkpoint_attempt: null
   worktree_path: null
 retry_policy:
   max_retries: null
+  stage_retry_limit: null
 created_from: null
+upstream_origin: null

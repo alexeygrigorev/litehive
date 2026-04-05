@@ -7,12 +7,12 @@ engine: null
 model: null
 mode: implementation
 status: queued
-pipeline_status: testing
+pipeline_status: implementing
 priority: medium
 pm_complexity: moderate
 planned_effort: m
 created_at: '2026-04-01T06:23:16+00:00'
-updated_at: '2026-04-04T12:56:46+00:00'
+updated_at: '2026-04-05T07:22:53+00:00'
 goal: Ensure the commit_to_git stage can be rerun or resumed after an interrupted
   checkpoint commit without failing, creating a duplicate checkpoint, or leaving task/runtime
   state inconsistent.
@@ -117,6 +117,20 @@ subagents:
   path: subagents/SA-0012-qa
   sandboxed: false
   sandbox_summary: host
+- id: SA-0013
+  role: qa
+  engine: codex
+  status: completed
+  path: subagents/SA-0013-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0014
+  role: reviewer
+  engine: codex
+  status: completed
+  path: subagents/SA-0014-reviewer
+  sandboxed: false
+  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0067 make-commit-to-git-idempotent-and-resumable'
@@ -127,4 +141,6 @@ git:
   worktree_path: null
 retry_policy:
   max_retries: null
+  stage_retry_limit: null
 created_from: null
+upstream_origin: null

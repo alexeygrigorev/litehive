@@ -6,51 +6,17 @@ task_type: null
 engine: null
 model: null
 mode: implementation
-status: queued
-pipeline_status: commit_to_git
+status: done
+pipeline_status: done
 priority: medium
-pm_complexity: moderate
-planned_effort: m
+pm_complexity: null
+planned_effort: null
 created_at: '2026-04-01T06:36:34+00:00'
-updated_at: '2026-04-05T06:23:10+00:00'
-goal: Reduce noisy Litehive execution residue after T-0127 by pruning or compressing
-  high-volume runtime artifacts while preserving the durable evidence needed for status,
-  repair, recovery, and human diagnosis of the latest task attempt.
-acceptance_criteria:
-- Litehive defines the retention policy for execution artifacts after the tracked-vs-untracked
-  split, explicitly naming which raw files may be pruned or compressed and which durable
-  evidence must remain available.
-- High-volume raw execution artifacts such as subagent transcripts, stdout/stderr,
-  session/timeline dumps, run-all logs, or hook artifact dumps are either compressed,
-  bounded, or pruned so repeated task execution does not accumulate unbounded noise
-  in the workspace.
-- Durable evidence for the latest relevant attempt remains available without relying
-  on full raw logs, including enough structured summary data for status, repair/recovery
-  evidence, continuation handoff, and human diagnosis of what happened.
-- Commands and code paths that inspect prior execution state continue to work when
-  pruned artifacts are absent and when compressed artifacts are present, with graceful
-  handling for both cases.
-- The implementation includes focused tests covering the selected retention behavior
-  and proving that evidence consumers still surface actionable task context after
-  cleanup.
-constraints:
-- Keep changes scoped to artifact retention and evidence durability; do not redesign
-  the broader task state model.
-- Do not make raw transcripts, logs, or session dumps the source of truth for queue
-  routing or task lifecycle reconstruction.
-- Preserve explicit operator-facing evidence for the latest useful failure or handoff
-  even if older or bulkier artifacts are compressed or deleted.
-plan:
-- Inventory the current runtime artifacts written under task subagent folders, task
-  artifact/report paths, and workspace log paths, and classify which consumers still
-  read each artifact.
-- Choose a narrow retention strategy for the noisiest artifacts, such as compressing
-  large payloads, keeping only the latest/raw attempt, or pruning superseded files
-  while retaining a durable summary.
-- Update the artifact writers and any readers that assume uncompressed or always-present
-  files so the retained evidence path remains stable after cleanup.
-- Add focused tests for retention behavior and for evidence/recovery/status consumers
-  with compressed or missing raw artifacts.
+updated_at: '2026-04-05T07:33:11+00:00'
+goal: ''
+acceptance_criteria: []
+constraints: []
+plan: []
 human_checkpoints: []
 subagents:
 - id: SA-0001
@@ -95,12 +61,75 @@ subagents:
   path: subagents/SA-0006-pm
   sandboxed: false
   sandbox_summary: host
+- id: SA-0007
+  role: planner
+  engine: codex
+  status: completed
+  path: subagents/SA-0007-planner
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0008
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0008-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0009
+  role: qa
+  engine: codex
+  status: completed
+  path: subagents/SA-0009-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0010
+  role: reviewer
+  engine: codex
+  status: completed
+  path: subagents/SA-0010-reviewer
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0011
+  role: planner
+  engine: codex
+  status: completed
+  path: subagents/SA-0011-planner
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0012
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0012-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0013
+  role: qa
+  engine: codex
+  status: completed
+  path: subagents/SA-0013-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0014
+  role: reviewer
+  engine: codex
+  status: completed
+  path: subagents/SA-0014-reviewer
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0015
+  role: recovery
+  engine: claude
+  status: completed
+  path: subagents/SA-0015-recovery
+  sandboxed: false
+  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0080 prune-or-compress-noisy-execution-artifacts-while-keeping-durable-evidence'
-  commit_sha: null
-  checkpoint_base_sha: null
-  checkpoint_attempts: 0
+  commit_sha: 2f0a715b2ea1e4d8996903995d51f2b2f5636d3a
+  checkpoint_base_sha: 1119b2e960686a33c3ff3c05f11a569718f0d2e4
+  checkpoint_attempts: 1
   rolled_back_checkpoint_attempt: null
   worktree_path: null
 retry_policy:

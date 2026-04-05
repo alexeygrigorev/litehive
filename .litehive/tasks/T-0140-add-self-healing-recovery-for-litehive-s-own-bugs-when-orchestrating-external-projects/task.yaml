@@ -7,13 +7,13 @@ task_type: bugfix
 engine: null
 model: null
 mode: implementation
-status: queued
-pipeline_status: backlog
+status: done
+pipeline_status: done
 priority: medium
 pm_complexity: moderate
 planned_effort: m
 created_at: '2026-04-04T14:36:58+00:00'
-updated_at: '2026-04-05T07:08:35+00:00'
+updated_at: '2026-04-05T07:39:28+00:00'
 goal: When an external-project task fails because of a Litehive control-plane bug,
   Litehive should perform one bounded self-heal attempt against the configured Litehive
   source repo, validate the fix with uv run pytest, merge the fix to Litehive main,
@@ -60,15 +60,73 @@ plan:
 - Add focused regression coverage for classification, attempt-capping, successful
   self-heal plus requeue, and failed-pytest or blocked-source-path cases.
 human_checkpoints: []
-subagents: []
+subagents:
+- id: SA-0001
+  role: planner
+  engine: codex
+  status: completed
+  path: subagents/SA-0001-planner
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0002
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0002-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0003
+  role: qa
+  engine: codex
+  status: completed
+  path: subagents/SA-0003-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0004
+  role: reviewer
+  engine: codex
+  status: completed
+  path: subagents/SA-0004-reviewer
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0005
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0005-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0006
+  role: qa
+  engine: codex
+  status: completed
+  path: subagents/SA-0006-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0007
+  role: reviewer
+  engine: codex
+  status: completed
+  path: subagents/SA-0007-reviewer
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0008
+  role: recovery
+  engine: claude
+  status: running
+  path: subagents/SA-0008-recovery
+  sandboxed: false
+  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0140 add-self-healing-recovery-for-litehive-s-own-bugs-when-orchestrating-external-projects'
   commit_sha: null
-  checkpoint_base_sha: null
-  checkpoint_attempts: 0
+  checkpoint_base_sha: 2f0a715b2ea1e4d8996903995d51f2b2f5636d3a
+  checkpoint_attempts: 1
   rolled_back_checkpoint_attempt: null
   worktree_path: null
 retry_policy:
   max_retries: null
+  stage_retry_limit: null
 created_from: null
+upstream_origin: null
