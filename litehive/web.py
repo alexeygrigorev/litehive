@@ -495,6 +495,7 @@ _INDEX_HTML = """<!doctype html>
     .badge.running {{ background: var(--accent-soft); border-color: #9acaba; color: var(--accent); }}
     .badge.completed {{ background: #eef4ec; border-color: #b9cfb4; color: #2f6842; }}
     .badge.failed, .badge.blocked, .badge.interrupted {{ background: var(--danger-soft); border-color: #e0a193; color: var(--danger); }}
+    .badge.parked {{ background: var(--warn-soft); border-color: #e1c06e; color: var(--warn); }}
     .badge.late, .badge.stale {{ background: var(--warn-soft); border-color: #e1c06e; color: var(--warn); }}
     .kv {{ display: grid; grid-template-columns: 140px 1fr; gap: 8px 12px; font-size: 14px; }}
     .kv div:nth-child(odd) {{ color: var(--muted); }}

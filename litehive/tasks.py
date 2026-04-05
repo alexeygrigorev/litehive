@@ -84,7 +84,7 @@ _MISSING = object()
 # A live runner that hasn't refreshed its heartbeat in this many seconds is considered late.
 HEARTBEAT_LATE_THRESHOLD_SECONDS = 60
 CLOSED_TASK_STATUSES = {"cancelled", "wont_do", "deferred", "duplicate"}
-RESUMABLE_TASK_STATUSES = {"interrupted"}
+RESUMABLE_TASK_STATUSES = {"interrupted", "parked"}
 TASK_TEMPLATES: dict[str, dict[str, object]] = {
     "adapter": {
         "goal": "Define the adapter change clearly and land the required integration behavior.",
@@ -2472,13 +2472,8 @@ def dequeue_next_task_selection(root: Path) -> TaskSelection:
         return TaskSelection(task=next_task, blocked=blocked)
 
 
-def _is_user_parked_interruption(task: TaskRecord) -> bool:
-    if task.status != "interrupted":
-        return False
-    interruption = task.runtime.interruption
-    if interruption is None:
-        return False
-    return interruption.reason == "Task stopped via CLI"
+def _is_parked_task(task: TaskRecord) -> bool:
+    return task.status == "parked"
 
 
 def _is_task_eligible_for_execution(task: TaskRecord) -> bool:
@@ -2487,7 +2482,7 @@ def _is_task_eligible_for_execution(task: TaskRecord) -> bool:
     if task.status in {"queued", "in_progress", "flagged"}:
         return True
     if task.status == "interrupted":
-        return not _is_user_parked_interruption(task)
+        return True
     return False
 
 
@@ -3438,7 +3433,7 @@ def _restore_missing_queued_tasks(
             continue
         if task.pipeline_status == "done":
             continue
-        if task.status == "interrupted" and _is_user_parked_interruption(task):
+        if _is_parked_task(task):
             continue
         if task_id == state.active_task_id or task_id in queued_ids:
             continue
@@ -3717,7 +3712,7 @@ def restore_untouched_active_task(root: Path) -> WorkspaceState:
                 summary=f"Interrupted run recovered. Resume from `{task.pipeline_status}`.",
                 reason=_stale_interruption_reason(task, task.pipeline_status),
             )
-            if not _is_user_parked_interruption(task):
+            if not _is_parked_task(task):
                 task.status = "queued"
                 _enqueue_recovered_task(state, task.id)
             state.active_task_id = None
@@ -3762,6 +3757,7 @@ def _stop_active_task_without_runner_guard(root: Path, task_id: str) -> TaskReco
             summary=f"Execution interrupted via `litehive stop`. Resume from `{stage}`.",
             reason="Task stopped via CLI",
         )
+        task.status = "parked"
         if stage == "commit_to_git":
             task.status = "queued"
         state.active_task_id = None
@@ -3940,13 +3936,13 @@ def requeue_task(root: Path, task_id: str, *, front: bool = False) -> TaskRecord
         task = require_task(root, task_id)
         state = load_state(root)
         _ensure_future_task_mutation_allowed(root, [task.id], state=state)
-        if task.status not in {"flagged", *CLOSED_TASK_STATUSES}:
-            raise ValueError(f"Task {task.id} is not flagged or closed")
+        if task.status not in {"flagged", "parked", *CLOSED_TASK_STATUSES}:
+            raise ValueError(f"Task {task.id} is not flagged, parked, or closed")
         _reset_task_for_recovery(
             task,
             status="queued",
             pipeline_status=implementation_entry_stage(task),
-            clear_last_outcome=task.status != "flagged",
+            clear_last_outcome=task.status not in {"flagged", "parked"},
         )
         state.queue = [item for item in state.queue if item != task.id]
         if front:
@@ -3968,7 +3964,7 @@ def resume_task(root: Path, task_id: str, *, front: bool = False) -> TaskRecord:
         state = load_state(root)
         _ensure_future_task_mutation_allowed(root, [task.id], state=state)
         if task.status not in {"flagged", *CLOSED_TASK_STATUSES, *RESUMABLE_TASK_STATUSES}:
-            raise ValueError(f"Task {task.id} is not interrupted, flagged, or closed")
+            raise ValueError(f"Task {task.id} is not interrupted, parked, flagged, or closed")
         if task.pipeline_status in {"backlog", "done"}:
             raise ValueError(f"Task {task.id} has no resumable stage")
         resumed_stage = task.pipeline_status
@@ -3978,8 +3974,8 @@ def resume_task(root: Path, task_id: str, *, front: bool = False) -> TaskRecord:
             task,
             status="queued",
             pipeline_status=resumed_stage,
-            clear_last_outcome=task.status not in {"interrupted", "flagged"},
-            preserve_continuation_handoff=task.status == "interrupted",
+            clear_last_outcome=task.status not in {"interrupted", "parked", "flagged"},
+            preserve_continuation_handoff=task.status in {"interrupted", "parked"},
         )
         state.queue = [item for item in state.queue if item != task.id]
         if front:
@@ -4001,7 +3997,7 @@ def abandon_task(root: Path, task_id: str) -> TaskRecord:
         state = load_state(root)
         _ensure_future_task_mutation_allowed(root, [task.id], state=state)
         if task.status not in {"flagged", *CLOSED_TASK_STATUSES, *RESUMABLE_TASK_STATUSES}:
-            raise ValueError(f"Task {task.id} is not interrupted, flagged, or closed")
+            raise ValueError(f"Task {task.id} is not interrupted, parked, flagged, or closed")
         task.status = "cancelled"
         task.runtime.execution_status = "cancelled"
         task.runtime.run_started_at = None

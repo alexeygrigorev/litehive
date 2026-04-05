@@ -11,5 +11,10 @@ Rerouted to grooming for normalization: Task is underspecified (missing acceptan
 ## 2026-04-04T20:41:44+00:00
 Stage `grooming` switched from `gemini` to `codex` after quota limit reached.
 
+<<<<<<< Updated upstream
 ## 2026-04-04T22:02:42+00:00
 Interrupted runner execution while `grooming` was running. Reason: Stale runner detected while `grooming` was still marked running.. Resume from `grooming`.
+=======
+## 2026-04-05T05:37:26+00:00
+Interrupted runner execution while `grooming` was running. Reason: Task stopped via CLI. Resume from `grooming`.
+>>>>>>> Stashed changes
