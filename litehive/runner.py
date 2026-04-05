@@ -559,6 +559,7 @@ class TaskExecutionRunner:
 
                 report.duration_seconds = _duration_seconds(started_at, utcnow())
         reports_dir = task_dir(self.root, task) / "reports"
+        reports_dir.mkdir(parents=True, exist_ok=True)
         filename = f"{report.step}-{ordinal:03d}.yaml"
         (reports_dir / filename).write_text(
             yaml.safe_dump(report.model_dump(mode="python"), sort_keys=False),
