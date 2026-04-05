@@ -124,7 +124,7 @@ git:
   checkpoint_base_sha: null
   checkpoint_attempts: 0
   rolled_back_checkpoint_attempt: null
-  worktree_path: .litehive/worktrees/T-0067-make-commit-to-git-idempotent-and-resumable
+  worktree_path: null
 retry_policy:
   max_retries: null
 created_from: null

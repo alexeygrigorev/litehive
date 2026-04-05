@@ -7,12 +7,12 @@ engine: goz
 model: null
 mode: tasks
 status: flagged
-pipeline_status: grooming
+pipeline_status: testing
 priority: medium
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-04T18:36:13+00:00'
-updated_at: '2026-04-04T18:36:53+00:00'
+updated_at: '2026-04-04T22:08:57+00:00'
 goal: Verify goz engine works by running a simple task
 acceptance_criteria:
 - goz engine runs successfully and produces a verdict
@@ -27,6 +27,20 @@ subagents:
   path: subagents/SA-0001-planner
   sandboxed: false
   sandbox_summary: host
+- id: SA-0002
+  role: swe
+  engine: goz
+  status: completed
+  path: subagents/SA-0002-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0003
+  role: qa
+  engine: goz
+  status: failed
+  path: subagents/SA-0003-qa
+  sandboxed: false
+  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0146 test-goz-engine-integration'
@@ -38,3 +52,4 @@ git:
 retry_policy:
   max_retries: null
 created_from: null
+upstream_origin: null

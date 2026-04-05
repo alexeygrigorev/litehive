@@ -61,11 +61,11 @@ subagents:
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0130 redesign-the-state-machine-for-parallel-task-execution-integration-and-merge-conflict-recovery'
-  commit_sha: '06f1ac2117e80a259a63fe7735c011d89b46e5f7'
+  commit_sha: 06f1ac2117e80a259a63fe7735c011d89b46e5f7
   checkpoint_base_sha: null
   checkpoint_attempts: 0
   rolled_back_checkpoint_attempt: null
-  worktree_path: .litehive/worktrees/T-0130-redesign-the-state-machine-for-parallel-task-execution-integration-and-merge-conflict-recovery
+  worktree_path: null
 retry_policy:
   max_retries: null
 created_from: null

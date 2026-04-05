@@ -158,6 +158,7 @@ class SubagentManager:
         base.mkdir(parents=True, exist_ok=False)
 
         engine = get_engine(engine_name)
+        execution_engine = engine
         sandbox_summary = self.sandbox.policy_summary(engine_name)
         ref = SubagentRef(
             id=subagent_id,
@@ -179,7 +180,7 @@ class SubagentManager:
                     f"Engine '{engine.name}' is unavailable: missing binary '{engine.binary}'"
                 )
             if isinstance(engine, ExternalCLIAdapter) and sandbox_summary.enabled:
-                engine = _SandboxedAdapter(engine, self.sandbox, engine_name)
+                execution_engine = _SandboxedAdapter(engine, self.sandbox, engine_name)
             if _supports_live_execution(engine):
                 live_kwargs: dict[str, object] = {
                     "cwd": self.execution_root,
@@ -200,7 +201,7 @@ class SubagentManager:
                     )
                 if max_turns is not None:
                     live_kwargs["max_turns"] = max_turns
-                proc = engine.run_live(prompt, **live_kwargs)
+                proc = execution_engine.run_live(prompt, **live_kwargs)
             else:
                 run_kwargs: dict[str, object] = {
                     "cwd": self.execution_root,
@@ -214,8 +215,8 @@ class SubagentManager:
                     run_kwargs["on_started"] = lambda pid: self._record_subagent_pid(
                         task, base, ref, pid
                     )
-                proc = engine.run(prompt, **run_kwargs)
-            transcript = engine.render_transcript(proc)
+                proc = execution_engine.run(prompt, **run_kwargs)
+            transcript = execution_engine.render_transcript(proc)
             continuation = extract_engine_continuation(ref.engine, proc)
             ref.status = "completed" if proc.exit_code == 0 else "failed"
             if proc.exit_code != 0:
@@ -299,7 +300,7 @@ class SubagentManager:
                 self.root,
                 task_id=task.id,
                 engine_name=engine_name,
-                adapter=engine,
+                adapter=execution_engine,
                 execution=proc,
                 failure_kind=None if failure is None else failure.kind,
                 failure_reason=None if failure is None else failure.reason,

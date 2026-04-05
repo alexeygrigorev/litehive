@@ -6,13 +6,13 @@ task_type: null
 engine: null
 model: null
 mode: implementation
-status: flagged
-pipeline_status: implementing
+status: done
+pipeline_status: done
 priority: medium
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-02T11:14:54+00:00'
-updated_at: '2026-04-04T02:53:02+00:00'
+updated_at: '2026-04-05T02:44:28+00:00'
 goal: Detect stale subagent or runner processes when process state disagrees with
   task state, and recover the task at the same stage automatically as a fallback to
   event-based timeout handling.
@@ -368,14 +368,36 @@ subagents:
   path: subagents/SA-0049-swe
   sandboxed: false
   sandbox_summary: host
+- id: SA-0050
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0050-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0051
+  role: qa
+  engine: codex
+  status: completed
+  path: subagents/SA-0051-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0052
+  role: reviewer
+  engine: codex
+  status: completed
+  path: subagents/SA-0052-reviewer
+  sandboxed: false
+  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0125 detect-stale-subagent-processes-and-recover-tasks-at-the-same-stage-automatically'
-  commit_sha: null
-  checkpoint_base_sha: null
-  checkpoint_attempts: 0
+  commit_sha: 4bb3126050bf493951ff0728aea498e5e186152c
+  checkpoint_base_sha: 1c86277b597e4269a3ccdd4bea279bd6804947bd
+  checkpoint_attempts: 1
   rolled_back_checkpoint_attempt: null
-  worktree_path: .litehive/worktrees/T-0125-detect-stale-subagent-processes-and-recover-tasks-at-the-same-stage-automatically
+  worktree_path: null
 retry_policy:
   max_retries: null
 created_from: null
+upstream_origin: null

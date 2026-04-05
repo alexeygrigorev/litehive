@@ -155,11 +155,11 @@ subagents:
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0082 make-adding-new-tasks-cheap-and-reliable-during-normal-operation'
-  commit_sha: '87160654c9f45348a1d5f30ccf62ccceb7636be7'
+  commit_sha: 87160654c9f45348a1d5f30ccf62ccceb7636be7
   checkpoint_base_sha: null
   checkpoint_attempts: 0
   rolled_back_checkpoint_attempt: null
-  worktree_path: .litehive/worktrees/T-0082-make-adding-new-tasks-cheap-and-reliable-during-normal-operation
+  worktree_path: null
 retry_policy:
   max_retries: null
 created_from: null

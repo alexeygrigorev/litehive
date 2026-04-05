@@ -6,13 +6,13 @@ task_type: null
 engine: null
 model: null
 mode: implementation
-status: flagged
-pipeline_status: grooming
+status: done
+pipeline_status: done
 priority: medium
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-03T06:47:30+00:00'
-updated_at: '2026-04-04T05:03:22+00:00'
+updated_at: '2026-04-05T04:06:46+00:00'
 goal: Add first-class CLI support for rich structured task shaping and updates so
   humans can refine tasks through litehive itself instead of editing YAML directly.
   The CLI should support the same kinds of structured task updates that the planner
@@ -59,14 +59,36 @@ subagents:
   path: subagents/SA-0001-planner
   sandboxed: false
   sandbox_summary: host
+- id: SA-0002
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0002-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0003
+  role: qa
+  engine: codex
+  status: completed
+  path: subagents/SA-0003-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0004
+  role: reviewer
+  engine: codex
+  status: completed
+  path: subagents/SA-0004-reviewer
+  sandboxed: false
+  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0128 add-cli-support-for-rich-structured-task-shaping-and-updates'
-  commit_sha: null
-  checkpoint_base_sha: null
-  checkpoint_attempts: 0
+  commit_sha: 1cd8cb57b6d52fe921ed1ca6819ecbba3f064f62
+  checkpoint_base_sha: cc6b86bcb0576d7ef0f25aa58d4dcf03daef8f89
+  checkpoint_attempts: 1
   rolled_back_checkpoint_attempt: null
-  worktree_path: .litehive/worktrees/T-0128-add-cli-support-for-rich-structured-task-shaping-and-updates
+  worktree_path: null
 retry_policy:
   max_retries: null
 created_from: null
+upstream_origin: null

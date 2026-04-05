@@ -7,13 +7,13 @@ task_type: null
 engine: null
 model: null
 mode: implementation
-status: queued
-pipeline_status: backlog
+status: done
+pipeline_status: done
 priority: medium
-pm_complexity: moderate
-planned_effort: m
+pm_complexity: null
+planned_effort: null
 created_at: '2026-04-03T11:01:01+00:00'
-updated_at: '2026-04-05T05:06:20+00:00'
+updated_at: '2026-04-05T05:20:41+00:00'
 goal: Catch git and worktree completion failures earlier so tasks do not look nearly
   done and then fail late at commit_to_git. Add an explicit preflight that validates
   commit and worktree invariants before late-stage completion.
@@ -45,13 +45,48 @@ plan:
 - Surface explicit preflight pass or fail reasons in reports and status output.
 - Add focused regression tests for common late-stage git or worktree failures.
 human_checkpoints: []
-subagents: []
+subagents:
+- id: SA-0001
+  role: planner
+  engine: codex
+  status: completed
+  path: subagents/SA-0001-planner
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0002
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0002-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0003
+  role: qa
+  engine: codex
+  status: completed
+  path: subagents/SA-0003-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0004
+  role: reviewer
+  engine: codex
+  status: completed
+  path: subagents/SA-0004-reviewer
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0005
+  role: recovery
+  engine: claude
+  status: running
+  path: subagents/SA-0005-recovery
+  sandboxed: false
+  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0133 add-early-commit-worktree-preflight-before-late-stage-completion'
   commit_sha: null
-  checkpoint_base_sha: null
-  checkpoint_attempts: 0
+  checkpoint_base_sha: 1330bdf126e9ff78d67466741ffb7cf305bc1f85
+  checkpoint_attempts: 1
   rolled_back_checkpoint_attempt: null
   worktree_path: null
 retry_policy:

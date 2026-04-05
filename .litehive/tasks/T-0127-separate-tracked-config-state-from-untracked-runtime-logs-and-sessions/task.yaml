@@ -6,13 +6,13 @@ task_type: null
 engine: null
 model: null
 mode: implementation
-status: interrupted
-pipeline_status: implementing
+status: done
+pipeline_status: done
 priority: medium
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-03T06:45:41+00:00'
-updated_at: '2026-04-04T05:02:46+00:00'
+updated_at: '2026-04-05T03:55:56+00:00'
 goal: Separate durable tracked litehive config/state from untracked runtime residue
   so logs, sessions, prompts, stdout/stderr, and live coordination files no longer
   pollute git history or task checkpoint commits. The end state should make it obvious
@@ -105,14 +105,36 @@ subagents:
   path: subagents/SA-0002-swe
   sandboxed: false
   sandbox_summary: host
+- id: SA-0003
+  role: recovery
+  engine: opencode
+  status: completed
+  path: subagents/SA-0003-recovery
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0004
+  role: qa
+  engine: opencode
+  status: completed
+  path: subagents/SA-0004-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0005
+  role: reviewer
+  engine: opencode
+  status: completed
+  path: subagents/SA-0005-reviewer
+  sandboxed: false
+  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0127 separate-tracked-config-state-from-untracked-runtime-logs-and-sessions'
-  commit_sha: null
+  commit_sha: cc6b86bcb0576d7ef0f25aa58d4dcf03daef8f89
   checkpoint_base_sha: null
   checkpoint_attempts: 0
   rolled_back_checkpoint_attempt: null
-  worktree_path: .litehive/worktrees/T-0127-separate-tracked-config-state-from-untracked-runtime-logs-and-sessions
+  worktree_path: null
 retry_policy:
   max_retries: null
 created_from: null
+upstream_origin: null

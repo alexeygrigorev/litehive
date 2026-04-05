@@ -1,279 +1,271 @@
 # litehive
 
-Local-first autonomous coding workspace with deterministic task execution.
+Autonomous task execution for software projects using AI coding agents.
 
-litehive is about making agent-driven development deterministic and system-controlled.
-The goal is to let agents perform at their best while constraining them to a clear process:
-the runner owns state transitions, routing, and git integration so agents cannot freely invent
-workflow state or skip required steps. In practice, the restriction is a feature. Agents tend
-to perform better when the process is explicit, validated, and enforced.
+litehive manages a queue of tasks and runs them through a structured pipeline using AI coding agents (Codex, Claude, Copilot, Gemini, OpenCode, and others). Each task goes through grooming, implementation, testing, acceptance, and git commit - all without human intervention. When something breaks, a recovery agent investigates and fixes it automatically.
 
-The intended operating mode is simple:
+You describe what needs to be done. litehive figures out how to get it done, assigns it to an agent, verifies the result, and commits the code.
 
-- keep a working queue of tasks
-- run the queue in order
-- let the system continue until there is no runnable work left
-- allow agents to add follow-up work to the queue while the project is in progress
-- keep execution, verification, acceptance, and integration under runner control
+## How it works
 
-## Current model
+1. You add tasks to a queue
+2. litehive picks the next task and sends it through a pipeline
+3. Different agents handle different stages - a planner grooms the task, an engineer implements it, a QA agent tests it, a reviewer accepts it
+4. When everything passes, the code is committed to git and pushed
+5. If something fails, a recovery agent diagnoses the problem and fixes it
+6. The queue keeps moving until all tasks are done
 
-- Single active task at a time
-- Local YAML-backed workspace state
-- Two modes: `tasks` and `implementation`
-- Deterministic stage pipeline
-- Subagents executed through external CLIs (`codex`, `opencode`, `gemini`, and `copilot`)
-- Checkpoint commit after successful task completion
-- Queue state, runtime state, and task artifacts stored under `.litehive/`
-- `litehive run` drains the active and queued pool, re-reading queue state between tasks
-- `litehive run --dry-run` previews the planned pool order, engine selection, and predicted stop reason without invoking any agents
-- Optional per-task human checkpoints can pause the pool before `accepting` or `commit_to_git`
+The pipeline for each task:
 
-## CLI workflow
-
-Common commands:
-
-- `litehive configure`
-- `litehive status`
-- `litehive queue`
-- `litehive web`
-- `litehive add "<title>"`
-- `litehive add "<title>" --pm-complexity moderate --planned-effort m`
-- `litehive add "<title>" --task-type review`
-- `litehive update T-0001 --engine opencode`
-- `litehive update T-0001 --pm-complexity complex --planned-effort l`
-- `litehive update T-0001 --goal "..." --constraint "..." --plan-step "..."`
-- `litehive update T-0001 --from-file task-shape.yaml`
-- `litehive update T-0001 --edit`
-- `litehive move T-0001 1`
-- `litehive prioritize T-0003 T-0002 T-0001`
-- `litehive promote T-0001`
-- `litehive requeue T-0001 --front`
-- `litehive run`
-- `litehive run --dry-run`
-- `litehive rollback T-0001`
-- `litehive recover T-0001`
-
-`--workspace` defaults to the current directory. In normal repo-local use you should not need to pass it.
-When `litehive add` receives `--task-type`, it now creates the task in `tasks` mode by default so the task folder includes the structured `brief.md` and prompt guidance for that template. Pass `--mode implementation` to keep a typed task on the implementation path without the intake brief.
-Tasks can also carry PM sizing metadata: `--pm-complexity simple|moderate|complex` and `--planned-effort xs|s|m|l|xl`.
-For larger task shaping updates, `litehive update` can load a YAML mapping with durable task fields such as `goal`, `acceptance_criteria`, `constraints`, `plan`, PM sizing, dependencies, checkpoints, and routing metadata via `--from-file`, or open the same schema in your editor via `--edit`.
-During grooming, the planner can emit `PM_COMPLEXITY:` and `PLANNED_EFFORT:` lines and litehive will persist them back into the task record and brief.
-Configuration now layers built-in defaults, then `~/.config/litehive/config.yaml` (or `$XDG_CONFIG_HOME/litehive/config.yaml`), then workspace-local `.litehive/config.yaml`. Workspace settings take precedence over the global file.
-
-## Execution model
-
-Each runnable task goes through a fixed stage pipeline:
-
-1. `grooming`
-2. `implementing`
-3. `testing`
-4. `accepting`
-5. `commit_to_git`
-
-The orchestrator owns routing and task state. Subagents produce reports and artifacts, but they do not decide the control flow.
-Agents are meant to operate inside this system rather than around it: they implement, verify, and report, while litehive enforces the stage order, validates results, and owns final integration.
-`planner` owns `grooming` and `reviewer` owns `accepting`; both are PM-style roles with different prompts and success criteria.
-When a task is retried after a flagged or system-interrupted run, litehive routes the resumed execution through a dedicated `recovery` role for stage work instead of pretending it is a fresh first-pass SWE/QA/reviewer run.
-The recovery agent's job is to inspect the recorded failure context, fix whatever is necessary to restore a runnable path, and then continue the task toward completion without discarding useful progress.
-Tasks can also opt into `--human-checkpoint before_acceptance` or `--human-checkpoint before_commit`, which pauses the pool and requeues the task at the next stage boundary for manual review.
-External engine choice resolves as:
-
-1. run-time override
-2. task-level preference
-3. workspace default engine
-
-The full state machine — states, transitions, verdicts, outcome codes, and the
-change-gate rule — is documented in [`docs/state-machine.md`](docs/state-machine.md).
-
-In continuous operation, litehive should be able to keep draining the pool, pick up newly queued work between iterations, and stop only when there is no active or queued runnable task left or when an explicit stop condition is hit.
-System-interrupted or flagged tasks are returned to the runnable pool automatically; tasks explicitly stopped by the user stay parked until resumed manually.
-
-## Workspace shape
-
-```text
-.litehive/
-  config.yaml
-  context.md
-  state.yaml
-  tasks/
-    T-0001-example/
-      task.yaml
-      brief.md
-      journal.md
-      subagents/
-      reports/
-      artifacts/
+```
+grooming -> implementing -> testing -> accepting -> commit_to_git
 ```
 
-Use `.litehive/context.md` to describe the repo, commands, and workflow conventions that every future subagent run should inherit.
-`litehive configure` accepts `--process-profile` so new workspaces start from a shared process scaffold plus a project-specific overlay.
-The shared scaffold captures stages, orchestrator routing, issue/task source of truth, role model, TDD expectations, verification discipline, acceptance flow, and commit/recovery policy.
-Built-in overlays currently include `generic`, `python`, `django`, `rust`, and `codehive`, and the generated context now records both the init scaffold and the prompt scaffold used for stage prompts.
-Workspace config can also define `agent_startup_guidance` in `.litehive/config.yaml` to inject repo-specific startup hints for `planner`, `swe`, `qa`, `reviewer`, `recovery`, or `all`.
-Use that when agents keep rediscovering the same files, commands, lifecycle rules, or evidence expectations on every run.
+## Quick start
 
-Example:
+```bash
+# Install
+git clone git@github.com:alexeygrigorev/litehive.git
+cd litehive
+uv sync
+scripts/install-bin.sh
+
+# Set up a project
+cd /path/to/your/project
+litehive configure
+
+# Add some tasks
+litehive add "Add user authentication" --goal "Users can sign up and log in"
+litehive add "Fix the search bug" --goal "Search returns results for partial matches"
+litehive add "Write API documentation" --task-type docs
+
+# Start the daemon
+litehive daemon run
+
+# Check progress
+litehive status
+litehive daemon status
+```
+
+## Engines
+
+litehive works with multiple AI coding agents. Each one is a separate CLI tool that litehive calls as a subprocess:
+
+- codex - OpenAI Codex CLI (gpt-5.4-high, o3, etc.)
+- claude - Anthropic Claude Code CLI
+- copilot - GitHub Copilot CLI
+- gemini - Google Gemini CLI
+- opencode - OpenCode CLI (Z.AI models)
+- goz - Goz CLI (Z.AI models)
+
+Set your default engine in `.litehive/config.yaml`:
 
 ```yaml
-agent_startup_guidance:
-  all:
-    - Start from the latest task-local artifacts before broad repo exploration.
-  swe:
-    - Prefer targeted reads in runtime.py, tasks.py, subagents.py, config.py, and focused test slices.
-  qa:
-    - Read the latest implementing report and wrapper logs before rerunning tests.
+default_engine: codex
+codex_model: gpt-5.4-high
 ```
 
-Suggested setup workflow for a new project:
+You can also set engines per task:
 
-1. Run Litehive for a few iterations on that repo, usually `5-10` tasks is enough to expose repeated startup waste.
-2. Observe where agents spend time at the beginning of runs by checking task-local transcripts, reports, and `.litehive/logs/run-all/`.
-3. Capture the repeated rediscovery into `agent_startup_guidance` in `.litehive/config.yaml`.
-4. Add shared reminders under `all`, and put role-specific guidance under `planner`, `swe`, `qa`, `reviewer`, and `recovery` only when the repo needs it.
-5. Re-run the workflow and refine the guidance if agents still spend time re-deriving the same context.
+```bash
+litehive add "Refactor the database layer" --engine claude
+litehive update T-0005 --engine copilot
+```
 
-Backlog-shaping rules for PMs:
+When an engine hits its quota limit, litehive can fall back to another engine automatically.
 
-- Create runnable generic work with `litehive add "<title>" --goal "..." --acceptance-criteria "..."`.
-- Repeat `--acceptance-criteria` for each concrete done-condition instead of hiding several checks in one sentence.
-- Use `litehive update T-0001 --goal "..."`, repeated `--acceptance-criteria`, `--constraint`, and `--plan-step` flags for small repairs.
-- Use `litehive update T-0001 --from-file task-shape.yaml` or `litehive update T-0001 --edit` when the task needs a larger multi-line refresh without hand-editing `task.yaml`.
-- Use `litehive intake <file-or-brief>` when the request is still a rough brief and needs planner grooming before it becomes runnable.
-- If scope, dependencies, or user-visible done-state are unclear, stop and ask the user before creating runnable backlog work.
+## CLI commands
 
-Grooming rules for PMs:
+Task management:
 
-- Grooming should refine a real task record, not invent a task from a blank title.
-- Before passing grooming, make sure the task has a clear goal, explicit acceptance criteria, constraints when relevant, and a plan or decomposition.
-- Add dependencies in the task record when another task must finish first; do not rely on memory or wrapper order.
-- State the exact evidence later QA and acceptance stages will need, especially for workflow or lifecycle tasks.
+```bash
+litehive add "Task title" --goal "What needs to happen"
+litehive add "Research task" --task-type research --mode tasks
+litehive update T-0001 --engine opencode --priority high
+litehive move T-0003 1                    # move to position 1
+litehive promote T-0005                   # move to front
+litehive requeue T-0002 --front           # requeue a flagged task
+litehive close T-0004 --outcome wont_do --reason "No longer needed"
+litehive abandon T-0006
+```
 
-SWE startup rules:
+Execution:
 
-- Start from the task folder first: read `task.yaml`, the latest report, and the latest rejection or recovery artifact before broad repo exploration.
-- Treat the task goal, acceptance criteria, and plan as the execution contract; if they are missing or contradictory, route the problem back to grooming or recovery instead of guessing.
-- Prefer targeted file reads and focused tests over rediscovering the whole repo at the start of every run.
+```bash
+litehive run                              # run one task
+litehive run --drain                      # run until queue is empty
+litehive run --dry-run                    # preview what would run
+litehive daemon run                       # start background daemon
+litehive daemon stop                      # stop daemon
+litehive daemon status                    # check daemon state
+litehive daemon instances                 # list all running daemons
+```
 
-What to look for when populating it:
+Monitoring:
 
-- Files every agent re-opens at startup
-- Commands every agent re-discovers before doing useful work
-- Lifecycle evidence rules QA/reviewer keep repeating
-- Recovery evidence sources the recovery agent always needs first
-- Repo-specific boundaries that should be obvious before implementation starts
+```bash
+litehive status                           # workspace overview
+litehive status --fast                    # quick state-only read
+litehive queue                            # show queue order
+litehive web                              # local web dashboard
+```
 
-## Observability
+Recovery:
 
-`litehive status` shows:
+```bash
+litehive repair                           # fix stale state
+litehive rollback T-0001                  # revert a completed task
+litehive recover T-0001                   # requeue without reverting
+litehive resume T-0002                    # resume an interrupted task
+```
 
-- active task
-- queue size
-- current stage
-- PM complexity and planned effort when present
-- explicit close outcomes such as `wont_do`, `deferred`, and `duplicate`
-- live subagent role and engine
-- latest report summary
-- persisted rationale and follow-up task linkage for closed work
-- retry policy details
-- recent checkpoint commit for completed tasks
+Agent interaction:
 
-Task-local artifacts live under `.litehive/tasks/<task-id>/` and include reports, transcripts, prompts, journals, and subagent sessions.
-`litehive web` starts a local-only HTTP monitor on `127.0.0.1:8765` by default and renders the current queue, active task, stage/runtime state, subagent sessions, tailed transcript/stdout/stderr artifacts, and recent run-all logs directly from `.litehive/`.
+```bash
+litehive report --verdict pass --role qa --step testing --message "All tests pass"
+litehive report --verdict reject --role qa --step testing --message "Expected: login returns 200. Observed: returns 500."
+```
 
-## Git checkpoints
+## Self-healing
 
-By default, litehive records a git completion commit whenever a task reaches `done` and the workspace is a git repository.
-The task stores the checkpoint policy in `task.yaml`, including the commit subject, the base `HEAD`, and the number
-of completed attempts.
+When a stage fails or an agent crashes, litehive does not just give up:
 
-- Default checkpoint subject: `litehive: complete <task-id> <slug>`
-- Repeat completion attempts keep the same generated subject and append an attempt suffix: `litehive: complete <task-id> <slug> (attempt N)`
-- The checkpoint happens at `commit_to_git`; a task only reaches and stays `done` after that checkpoint is recorded unless task-level or workspace-level auto-commit is disabled
-- `litehive rollback <task-id>` preserves the attempt counter, reverts the recorded checkpoint into a new rollback commit, and requeues the task at the implementation entry stage
-- `litehive recover <task-id>` clears the recorded checkpoint pointer without reverting code, keeps the attempt counter, and requeues the task at the implementation entry stage
-- The implementation entry stage is normally `implementing`; Litehive reroutes recovery to `grooming` instead when structured acceptance criteria are still required.
+- If an agent crashes or returns an error, a recovery agent is launched to investigate and fix the problem
+- If a merge conflict occurs during commit, a merge resolution agent resolves it
+- If the same stage fails 3 or more times, the task gets escalated back to grooming for replanning
+- If an engine hits its quota, litehive switches to another engine
+- The recovery engine can be different from the task engine (e.g. use Claude for recovery while Codex does the work)
 
-Rollback and recover are only valid for completed tasks. Rollback also requires a clean git worktree so the revert is deterministic.
+Configure the recovery engine:
+
+```yaml
+recovery_engine: claude
+```
+
+## Configuration
+
+Workspace config lives in `.litehive/config.yaml`. Global defaults go in `~/.config/litehive/config.yaml`. Workspace settings take precedence.
+
+```yaml
+default_engine: codex
+recovery_engine: claude
+codex_model: gpt-5.4-high
+claude_model: claude-opus-4-6
+auto_commit: true
+
+# Hooks that run before/after stages
+runner_hooks:
+  before_pm_acceptance:
+    - command: "uv run ruff check ."
+      blocking: true
+  after_swe_implementation:
+    - command: "uv run pytest -x -q"
+      blocking: false
+
+# Agent-specific startup guidance
+agent_startup_guidance:
+  all:
+    - Start from the latest task artifacts before broad repo exploration.
+  swe:
+    - Prefer targeted file reads over full repo scans.
+  qa:
+    - Read the latest implementing report before running tests.
+```
+
+Describe your project in `.litehive/context.md` so agents understand the codebase:
+
+```bash
+litehive configure --process-profile python
+```
+
+This generates a context template you can customize. Available profiles: generic, python, django, rust.
+
+## Workspace layout
+
+```
+.litehive/
+  config.yaml          # workspace configuration
+  context.md           # project description for agents
+  state.yaml           # queue and active task state
+  .gitignore           # keeps runtime artifacts out of git
+  tasks/
+    T-0001-example/
+      task.yaml        # task definition and status
+      brief.md         # structured task brief
+      reports/         # stage verdicts (gitignored)
+      subagents/       # execution artifacts (gitignored)
+      thread.yaml      # agent discussion history (gitignored)
+      journal.md       # event log (gitignored)
+  worktrees/           # git worktrees for task isolation (gitignored)
+  logs/                # daemon and run-all logs (gitignored)
+  runtime/             # live coordination state (gitignored)
+```
+
+Each task runs in its own git worktree. When it passes all stages, the worktree is merged into main and cleaned up.
 
 ## Daemon
 
-Use `litehive daemon run` to start the background pool daemon for a workspace:
+The daemon runs tasks continuously in the background:
 
 ```bash
 litehive daemon run --workspace .
 ```
 
-Inspect a workspace daemon with:
+Each iteration spawns a fresh subprocess, so code changes to litehive itself are picked up automatically without restarting.
 
 ```bash
-litehive daemon status --workspace .
+litehive daemon status                    # this workspace
+litehive daemon instances                 # all workspaces
+litehive daemon stop
+litehive daemon restart
 ```
 
-List every live daemon registered across workspaces with:
+## Git integration
+
+When a task passes all stages, litehive commits the changes to git:
+
+1. All changes in the task worktree are committed
+2. The worktree is merged into main
+3. If there are merge conflicts, a resolution agent fixes them
+4. The result is pushed to the remote
+
+Commit format: `litehive: complete T-0001 task-slug`
+
+To undo a completed task:
 
 ```bash
+litehive rollback T-0001     # reverts the commit and requeues the task
+litehive recover T-0001      # requeues without reverting (keeps the code)
+```
+
+## Running on multiple projects
+
+Install litehive once, use it anywhere:
+
+```bash
+# Project A
+cd ~/projects/webapp
+litehive configure
+litehive daemon run
+
+# Project B
+cd ~/projects/api-server
+litehive configure
+litehive daemon run
+
+# See all running daemons
 litehive daemon instances
 ```
 
-Stop or restart a workspace daemon with:
+All instances share quota tracking at `~/.config/litehive/quota.yaml` so they coordinate engine usage across projects.
 
-```bash
-litehive daemon stop --workspace .
-litehive daemon restart --workspace .
-```
+## Engines
 
-Each daemon session writes timestamped iteration logs under `.litehive/logs/run-all/<timestamp>/`:
+Currently supported:
 
-- `0001-pre-status.log`
-- `0001-run.log`
-- `0001-post-status.log`
-
-That keeps the pool inspectable and ensures each iteration picks up the latest `litehive` code.
-
-## Local launcher
-
-Install a `~/bin/litehive` launcher for this repo with:
-
-```bash
-scripts/install-bin.sh
-```
-
-The script:
-
-- writes launchers into `~/bin`
-- checks that `~/bin` is on `PATH`
-- prints the resolved command paths
-
-For this repository, the launcher delegates to the local project via `uv`, but that is an implementation detail. User-facing workflow should treat `litehive` as the command.
-
-Installed commands:
-
-- `litehive`
-
-From any other project, run:
-
-```bash
-litehive daemon run --workspace /path/to/project
-litehive daemon status --workspace /path/to/project
-```
-
-If you are already in the target project directory, you can omit the path:
-
-```bash
-litehive daemon run --workspace .
-litehive daemon status --workspace .
-```
-
-## Current engines
-
-Currently implemented adapters:
-
-- `codex`
-- `opencode`
-- `gemini`
-- `copilot`
-- `claude`
-
-Claude support is implemented in-tree but remains opt-in. Set `claude_enabled: true`
-in `.litehive/config.yaml` to allow task routing or explicit engine selection to use it.
+- codex - OpenAI Codex CLI
+- claude - Anthropic Claude Code
+- copilot - GitHub Copilot CLI
+- gemini - Google Gemini CLI
+- opencode - OpenCode CLI
+- goz - Goz CLI

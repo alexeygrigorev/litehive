@@ -161,3 +161,11 @@
     []'
   files_changed: []
   created_at: '2026-04-05T03:20:19+00:00'
+- role: recovery
+  step: commit_to_git
+  verdict: pass
+  message: Stashed dirty working tree on main, fast-forward merged worktree commit
+    cc6b86b into main, resolved stash pop conflicts (deleted test_workspace.py accepted,
+    task.yaml restored from HEAD), unstaged litehive state files
+  files_changed: []
+  created_at: '2026-04-05T03:21:58+00:00'

@@ -89,7 +89,7 @@ git:
   checkpoint_base_sha: c250d3da2f0f331b10de1b461daffa0618a9f16c
   checkpoint_attempts: 1
   rolled_back_checkpoint_attempt: null
-  worktree_path: .litehive/worktrees/T-0066-auto-detect-dirty-worktree-ownership-for-interrupted-tasks
+  worktree_path: null
 retry_policy:
   max_retries: null
 created_from: null

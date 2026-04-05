@@ -202,3 +202,11 @@
     \ docs/state-machine.md, tests/test_runner_workflow.py (+195 lines)."
   files_changed: []
   created_at: '2026-04-05T05:03:07+00:00'
+- role: recovery
+  step: commit_to_git
+  verdict: pass
+  message: Stashed dirty main state, merged worktree commits (139f45b, b72d032), resolved
+    stash-pop conflicts in subagents.py and task.yaml, dropped stash. T-0132 changes
+    now on main.
+  files_changed: []
+  created_at: '2026-04-05T05:04:18+00:00'

@@ -64,11 +64,11 @@ subagents:
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0092 add-codex-event-adapter-for-shared-live-capture-and-restart-semantics'
-  commit_sha: '978ef9b29e8a7cec21f424028234c65af82ad77b'
+  commit_sha: 978ef9b29e8a7cec21f424028234c65af82ad77b
   checkpoint_base_sha: null
   checkpoint_attempts: 0
   rolled_back_checkpoint_attempt: null
-  worktree_path: .litehive/worktrees/T-0092-add-codex-event-adapter-for-shared-live-capture-and-restart-semantics
+  worktree_path: null
 retry_policy:
   max_retries: null
 created_from: null

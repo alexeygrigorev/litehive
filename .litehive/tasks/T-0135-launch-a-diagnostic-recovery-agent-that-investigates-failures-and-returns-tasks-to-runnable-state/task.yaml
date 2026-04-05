@@ -211,7 +211,7 @@ git:
   checkpoint_base_sha: null
   checkpoint_attempts: 0
   rolled_back_checkpoint_attempt: null
-  worktree_path: .litehive/worktrees/T-0135-launch-a-diagnostic-recovery-agent-that-investigates-failures-and-returns-tasks-to-runnable-state
+  worktree_path: null
 retry_policy:
   max_retries: null
 created_from: null
