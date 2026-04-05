@@ -244,6 +244,19 @@ class ExternalCLIAdapter:
         selector.register(proc.stderr, selectors.EVENT_READ, data="stderr")
         last_update_at = time.monotonic()
 
+        def drain_after_abort() -> None:
+            if proc.poll() is None:
+                proc.terminate()
+                try:
+                    stdout_tail, stderr_tail = proc.communicate(timeout=1.0)
+                except subprocess.TimeoutExpired:
+                    proc.kill()
+                    stdout_tail, stderr_tail = proc.communicate()
+            else:
+                stdout_tail, stderr_tail = proc.communicate()
+            stdout_chunks.extend(stdout_tail or b"")
+            stderr_chunks.extend(stderr_tail or b"")
+
         def emit_update() -> None:
             if on_update is None:
                 return
@@ -261,44 +274,50 @@ class ExternalCLIAdapter:
                 )
             )
 
-        while selector.get_map():
-            events = selector.select(timeout=self.LIVE_UPDATE_INTERVAL_SECONDS)
-            if not events:
-                if (
-                    proc.poll() is None
-                    and time.monotonic() - last_update_at >= self.LIVE_UPDATE_INTERVAL_SECONDS
-                ):
-                    emit_update()
-                    last_update_at = time.monotonic()
-                continue
-            for key, _ in events:
-                chunk = os.read(key.fileobj.fileno(), 4096)
-                if chunk:
-                    if key.data == "stdout":
-                        stdout_chunks.extend(chunk)
-                    else:
-                        stderr_chunks.extend(chunk)
-                    emit_update()
-                    last_update_at = time.monotonic()
+        try:
+            while selector.get_map():
+                events = selector.select(timeout=self.LIVE_UPDATE_INTERVAL_SECONDS)
+                if not events:
+                    if (
+                        proc.poll() is None
+                        and time.monotonic() - last_update_at >= self.LIVE_UPDATE_INTERVAL_SECONDS
+                    ):
+                        emit_update()
+                        last_update_at = time.monotonic()
                     continue
-                selector.unregister(key.fileobj)
-                key.fileobj.close()
+                for key, _ in events:
+                    chunk = os.read(key.fileobj.fileno(), 4096)
+                    if chunk:
+                        if key.data == "stdout":
+                            stdout_chunks.extend(chunk)
+                        else:
+                            stderr_chunks.extend(chunk)
+                        emit_update()
+                        last_update_at = time.monotonic()
+                        continue
+                    selector.unregister(key.fileobj)
+                    key.fileobj.close()
 
-        exit_code = proc.wait()
-        result = CLIExecutionResult(
-            adapter=self.name,
-            argv=invocation.argv,
-            cwd=invocation.cwd,
-            exit_code=exit_code,
-            stdout=stdout_chunks.decode("utf-8", errors="replace"),
-            stderr=stderr_chunks.decode("utf-8", errors="replace"),
-            pid=proc.pid,
-            sandboxed=sandboxed,
-            sandbox_summary=sandbox_summary,
-        )
-        if on_update is not None:
-            on_update(result)
-        return result
+            exit_code = proc.wait()
+            result = CLIExecutionResult(
+                adapter=self.name,
+                argv=invocation.argv,
+                cwd=invocation.cwd,
+                exit_code=exit_code,
+                stdout=stdout_chunks.decode("utf-8", errors="replace"),
+                stderr=stderr_chunks.decode("utf-8", errors="replace"),
+                pid=proc.pid,
+                sandboxed=sandboxed,
+                sandbox_summary=sandbox_summary,
+            )
+            if on_update is not None:
+                on_update(result)
+            return result
+        except BaseException:
+            drain_after_abort()
+            raise
+        finally:
+            selector.close()
 
     def parse_stage_report(
         self,

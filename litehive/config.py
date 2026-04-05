@@ -831,6 +831,7 @@ class LitehiveConfig:
     pool_selection_policy: str = "dependency_aware"
     pre_acceptance_command: str | None = None
     runner_hooks: dict[str, list[RunnerHookConfig]] = field(default_factory=dict)
+    subagent_inactivity_timeout_seconds: float = 300.0
     subagent_resource_limits: SubagentResourceLimitsConfig = field(
         default_factory=SubagentResourceLimitsConfig
     )
@@ -880,6 +881,9 @@ class LitehiveConfig:
             self.execution_retry_policies
         )
         self.runner_hooks = _normalize_runner_hooks(self.runner_hooks)
+        self.subagent_inactivity_timeout_seconds = float(self.subagent_inactivity_timeout_seconds)
+        if self.subagent_inactivity_timeout_seconds <= 0:
+            raise ValueError("subagent_inactivity_timeout_seconds must be greater than 0")
         if self.pre_acceptance_command is not None:
             self.pre_acceptance_command = self.pre_acceptance_command.strip() or None
         if self.litehive_source_path is not None:

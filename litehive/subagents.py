@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import gzip
 import inspect
 import os
 from pathlib import Path
 import re
+import signal
+import time
 
 import yaml
 
@@ -57,6 +59,19 @@ class SubagentResult:
     failure: EngineFailure | None = None
 
 
+class SubagentInactivityTimeout(RuntimeError):
+    """Raised when a live subagent stops producing stdout for too long."""
+
+    def __init__(self, execution: CLIExecutionResult, *, idle_seconds: float, limit_seconds: float) -> None:
+        self.execution = execution
+        self.idle_seconds = idle_seconds
+        self.limit_seconds = limit_seconds
+        super().__init__(
+            "litehive killed stale subagent after "
+            f"{limit_seconds:g}s without new stdout (idle {idle_seconds:.1f}s)"
+        )
+
+
 _COMPRESS_STREAM_ARTIFACT_MIN_BYTES = 4096
 
 
@@ -91,7 +106,14 @@ def _write_stream_artifact(base: Path, name: str, content: str, *, compress: boo
         return
     if compressed_path.exists():
         compressed_path.unlink()
-    _write_atomic_files({plain_path: content})
+    _write_text_if_changed(plain_path, content)
+
+
+def _write_text_if_changed(path: Path, content: str) -> bool:
+    if path.exists() and path.read_text(encoding="utf-8") == content:
+        return False
+    _write_atomic_files({path: content})
+    return True
 
 
 def _supports_live_execution(engine: object) -> bool:
@@ -256,6 +278,20 @@ class SubagentManager:
                                     reason=retryable_failure.reason,
                                     classification=retryable_failure.classification,
                                 )
+        except SubagentInactivityTimeout as exc:
+            timeout_note = str(exc)
+            stderr = exc.execution.stderr
+            if timeout_note not in stderr:
+                stderr = f"{stderr.rstrip()}\n{timeout_note}".strip()
+            proc = replace(exc.execution, exit_code=124, stderr=stderr)
+            transcript = execution_engine.render_transcript(proc)
+            continuation = extract_engine_continuation(ref.engine, proc)
+            ref.status = "failed"
+            failure = EngineFailure(
+                kind="retryable_execution_error",
+                reason="transient timeout",
+                classification="timeout",
+            )
         except (EngineError, SandboxError) as exc:
             transcript = str(exc)
             proc = None
@@ -509,10 +545,10 @@ class SubagentManager:
             interruption_reason=None,
             continuation=continuation,
         )
-        (base / "prompt.txt").write_text(prompt, encoding="utf-8")
-        (base / "transcript.md").write_text(transcript, encoding="utf-8")
-        (base / "stdout.txt").write_text(execution.stdout, encoding="utf-8")
-        (base / "stderr.txt").write_text(execution.stderr, encoding="utf-8")
+        _write_text_if_changed(base / "prompt.txt", prompt)
+        _write_text_if_changed(base / "transcript.md", transcript)
+        _write_text_if_changed(base / "stdout.txt", execution.stdout)
+        _write_text_if_changed(base / "stderr.txt", execution.stderr)
         self._append_stream_delta(base, ref, "stdout", execution.stdout)
         self._append_stream_delta(base, ref, "stderr", execution.stderr)
         append_event(
@@ -579,6 +615,7 @@ class SubagentManager:
             continuation=continuation,
         )
         self._write_timeline(base, ref, task, execution.stdout)
+        self._check_stdout_inactivity(base, execution)
 
     def _parse_execution_report(
         self,
@@ -674,6 +711,28 @@ class SubagentManager:
             "subagent_pid",
             data={"subagent_id": ref.id, "pid": pid},
         )
+
+    def _check_stdout_inactivity(self, base: Path, execution: CLIExecutionResult) -> None:
+        if execution.pid is None:
+            return
+        stdout_path = base / "stdout.txt"
+        if not stdout_path.exists():
+            return
+        idle_seconds = max(0.0, time.time() - stdout_path.stat().st_mtime)
+        if idle_seconds < self.config.subagent_inactivity_timeout_seconds:
+            return
+        self._terminate_stale_pid(execution.pid)
+        raise SubagentInactivityTimeout(
+            execution,
+            idle_seconds=idle_seconds,
+            limit_seconds=self.config.subagent_inactivity_timeout_seconds,
+        )
+
+    def _terminate_stale_pid(self, pid: int) -> None:
+        try:
+            os.kill(pid, signal.SIGTERM)
+        except ProcessLookupError:
+            return
 
     def _write_timeline(
         self,

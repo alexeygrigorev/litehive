@@ -302,6 +302,7 @@ def test_litehive_config_normalizes_external_cli_engine_category_alias() -> None
 def test_litehive_config_defaults_include_claude_retry_policy() -> None:
     config = LitehiveConfig()
 
+    assert config.subagent_inactivity_timeout_seconds == 300.0
     assert config.execution_retry_policies["claude"].max_retries == 2
     assert config.execution_retry_policies["claude"].backoff_seconds == 0.25
     assert config.execution_retry_policies["claude"].backoff_multiplier == 2.0
@@ -350,6 +351,19 @@ def test_litehive_config_defaults_include_claude_retry_policy() -> None:
         ).selector
         == "gemini"
     )
+
+def test_load_config_reads_subagent_inactivity_timeout_override(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    raw_config = yaml.safe_load((tmp_path / ".litehive" / "config.yaml").read_text(encoding="utf-8"))
+    raw_config["subagent_inactivity_timeout_seconds"] = 42
+    (tmp_path / ".litehive" / "config.yaml").write_text(
+        yaml.safe_dump(raw_config, sort_keys=False),
+        encoding="utf-8",
+    )
+
+    config = load_config(tmp_path)
+
+    assert config.subagent_inactivity_timeout_seconds == 42.0
 
 def test_resolve_execution_retry_policy_prefers_claude_selector_before_model_family_and_external_cli() -> (
     None

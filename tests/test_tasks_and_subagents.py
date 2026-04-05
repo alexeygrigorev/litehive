@@ -868,6 +868,84 @@ def test_subagent_artifacts_stream_to_disk_while_process_is_still_running(
     )
     assert (base / "stderr.txt").read_text(encoding="utf-8") == "live stderr\n"
 
+def test_subagent_manager_kills_stale_live_process_using_stdout_mtime(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ensure_workspace(tmp_path, LitehiveConfig(subagent_inactivity_timeout_seconds=0.1))
+    task = create_task(tmp_path, title="Kill stale live subagent")
+    manager = SubagentManager(tmp_path)
+
+    class FakeStreamingEngine:
+        name = "codex"
+        binary = "codex"
+
+        def is_available(self) -> bool:
+            return True
+
+        def run_live(
+            self,
+            prompt: str,
+            cwd: Path,
+            model: str | None = None,
+            *,
+            max_turns: int | None = None,
+            on_started=None,
+            on_update=None,
+        ) -> CLIExecutionResult:
+            del prompt, model, max_turns
+            assert on_started is not None
+            assert on_update is not None
+            on_started(6161)
+            first = CLIExecutionResult(
+                adapter="codex",
+                argv=("codex", "exec"),
+                cwd=cwd,
+                exit_code=0,
+                stdout="VERDICT: PASS\nSUMMARY: partial",
+                stderr="",
+                pid=6161,
+            )
+            on_update(first)
+            stdout_path = task_dir(tmp_path, task) / "subagents" / "SA-0001-swe" / "stdout.txt"
+            stale_at = time.time() - 5
+            os.utime(stdout_path, (stale_at, stale_at))
+            on_update(
+                CLIExecutionResult(
+                    adapter="codex",
+                    argv=("codex", "exec"),
+                    cwd=cwd,
+                    exit_code=0,
+                    stdout="VERDICT: PASS\nSUMMARY: partial",
+                    stderr="heartbeat only",
+                    pid=6161,
+                )
+            )
+            raise AssertionError("expected stale timeout to interrupt live execution")
+
+        def render_transcript(self, execution: CLIExecutionResult) -> str:
+            return execution.transcript
+
+    killed_pids: list[int] = []
+
+    monkeypatch.setattr("litehive.subagents.get_engine", lambda _: FakeStreamingEngine())
+    monkeypatch.setattr("litehive.subagents.os.kill", lambda pid, sig: killed_pids.append(pid))
+
+    result = manager.run(task, role="swe", engine_name="codex", prompt="stream it")
+
+    assert killed_pids == [6161]
+    assert result.ref.status == "failed"
+    assert result.exit_code == 124
+    assert result.failure == EngineFailure(
+        kind="retryable_execution_error",
+        reason="transient timeout",
+        classification="timeout",
+    )
+    assert "litehive killed stale subagent after 0.1s without new stdout" in result.transcript
+    base = task_dir(tmp_path, task) / "subagents" / "SA-0001-swe"
+    session = yaml.safe_load((base / "session.yaml").read_text(encoding="utf-8"))
+    assert session["status"] == "failed"
+    assert session["exit_code"] == 124
+
 def test_subagent_manager_avoids_existing_folder_collisions_for_retries(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -248,6 +248,124 @@ def test_run_next_task_falls_back_from_codex_to_opencode_on_usage_limit(
     output = capsys.readouterr().out
     assert "engine_switch=grooming codex->opencode reason=usage limit reached" in output
 
+def test_run_next_task_falls_back_after_stale_subagent_timeout(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ensure_workspace(
+        tmp_path,
+        LitehiveConfig(
+            engine_fallbacks={
+                "codex": ["opencode"],
+                "opencode": ["codex", "gemini", "copilot"],
+                "gemini": ["codex", "opencode", "copilot"],
+                "copilot": ["codex", "opencode", "gemini"],
+                "goz": ["opencode", "codex", "gemini", "copilot"],
+            },
+            execution_retry_policies={
+                "codex": {
+                    "max_retries": 0,
+                    "backoff_seconds": 0.25,
+                    "backoff_multiplier": 2.0,
+                    "retry_on": ["timeout"],
+                }
+            },
+            subagent_inactivity_timeout_seconds=0.1,
+        ),
+    )
+    create_task(tmp_path, title="Fallback stale timeout task", engine="codex", auto_commit=False)
+    task = require_task(tmp_path, "T-0001")
+    codex = get_engine("codex")
+    opencode = get_engine("opencode")
+
+    monkeypatch.setattr(codex, "is_available", lambda: True)
+    monkeypatch.setattr(opencode, "is_available", lambda: True)
+    monkeypatch.setattr(
+        "litehive.subagents._supports_live_execution",
+        lambda engine: getattr(engine, "name", None) == "codex",
+    )
+    monkeypatch.setattr(codex, "run", lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("codex run should not be used")))  # type: ignore[no-untyped-call]
+
+    def fake_codex_run_live(
+        prompt: str,
+        cwd: Path,
+        model: str | None = None,
+        *,
+        max_turns: int | None = None,
+        on_started=None,
+        on_update=None,
+    ) -> CLIExecutionResult:
+        del prompt, model, max_turns
+        assert on_started is not None
+        assert on_update is not None
+        on_started(7171)
+        update = CLIExecutionResult(
+            adapter="codex",
+            argv=("codex", "exec"),
+            cwd=cwd,
+            exit_code=0,
+            stdout="VERDICT: PASS\nSUMMARY: partial",
+            stderr="",
+            pid=7171,
+        )
+        on_update(update)
+        base = next((task_dir(tmp_path, task) / "subagents").iterdir())
+        stdout_path = base / "stdout.txt"
+        stale_at = time.time() - 5
+        os.utime(stdout_path, (stale_at, stale_at))
+        on_update(
+            CLIExecutionResult(
+                adapter="codex",
+                argv=("codex", "exec"),
+                cwd=cwd,
+                exit_code=0,
+                stdout="VERDICT: PASS\nSUMMARY: partial",
+                stderr="heartbeat only",
+                pid=7171,
+            )
+        )
+        raise AssertionError("expected stale timeout to interrupt live execution")
+
+    def fake_opencode_run(
+        prompt: str,
+        cwd: Path,
+        model: str | None = None,
+        *,
+        max_turns: int | None = None,
+        on_started=None,
+    ) -> CLIExecutionResult:
+        step = prompt.split("Stage: ", 1)[1].splitlines()[0]
+        return _successful_stage_execution(tmp_path, "opencode", step)
+
+    monkeypatch.setattr(codex, "run_live", fake_codex_run_live)
+    monkeypatch.setattr(opencode, "run", fake_opencode_run)
+    monkeypatch.setattr("litehive.subagents.os.kill", lambda pid, sig: None)
+
+    summary = run_next_task(tmp_path)
+
+    assert summary.task is not None
+    assert summary.result is not None
+    assert summary.result.final_status == "done"
+    task = get_task(tmp_path, "T-0001")
+    assert task is not None
+    assert task.runtime.last_engine_switch is not None
+    assert task.runtime.last_engine_switch.from_engine == "codex"
+    assert task.runtime.last_engine_switch.to_engine == "opencode"
+    assert task.runtime.last_engine_switch.reason == "transient timeout"
+    report = yaml.safe_load(
+        (
+            tmp_path
+            / ".litehive"
+            / "tasks"
+            / "T-0001-fallback-stale-timeout-task"
+            / "reports"
+            / "grooming-001.yaml"
+        ).read_text(encoding="utf-8")
+    )
+    assert (
+        "Stage `grooming` switched from `codex` to `opencode` after transient timeout."
+        in report["warnings"]
+    )
+
 def test_run_next_task_falls_back_from_codex_to_gemini_on_usage_limit(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
