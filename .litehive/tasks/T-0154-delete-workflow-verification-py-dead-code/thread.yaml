@@ -1,0 +1,34 @@
+- role: qa
+  step: testing
+  verdict: reject
+  message: "REJECTION for T-0154 (testing stage).\n\nACCEPTANCE CRITERIA STATUS:\n\
+    1. workflow_verification.py is deleted - MET. File removed in commit 3f120ba (already\
+    \ on main). Confirmed via glob search and git show returning 'does not exist'.\n\
+    2. All imports of it are removed - MET. No source code files reference workflow_verification.\
+    \ The import was removed from litehive/runner.py and litehive/subagents.py in\
+    \ commit 3f120ba. Only historical task artifacts under .litehive/tasks/ mention\
+    \ it.\n3. All tests pass - NOT MET. 10 test files fail at collection with ImportError.\n\
+    \nEXPECTED: uv run pytest -q exits cleanly with 0 errors during collection.\n\
+    OBSERVED: 10 collection errors from two missing symbols in litehive/runtime.py:\n\
+    \  - '_allowed_commit_paths': imported in tests/workspace_helpers.py:117, used\
+    \ in tests/test_runner_workflow.py:563, referenced in litehive/runtime.py:612\
+    \ \u2014 but the function definition does not exist anywhere.\n  - '_attempt_commit_recovery':\
+    \ imported in tests/test_recovery_agent.py:8, monkeypatched in tests/test_retry_commit_and_recovery.py:1744,2003\
+    \ \u2014 but the function definition does not exist anywhere.\nReproduce: uv run\
+    \ pytest -q immediately shows ImportError for both symbols.\n\nROOT CAUSE: These\
+    \ failures are PRE-EXISTING and UNRELATED to T-0154. The symbols were not part\
+    \ of workflow_verification.py. The test suite was already broken before any T-0154\
+    \ changes.\n\nSTAGE_RESULT:\n{\"verdict\":\"reject\",\"summary\":\"workflow_verification.py\
+    \ deleted and imports cleaned but tests fail from pre-existing unrelated ImportErrors\"\
+    ,\"files_changed\":[\"litehive/workflow_verification.py\",\"litehive/runner.py\"\
+    ,\"litehive/subagents.py\"],\"tests\":{\"added\":0,\"passing\":0},\"warnings\"\
+    :[\"10 collection errors from missing _allowed_commit_paths and _attempt_commit_recovery\
+    \ are pre-existing and unrelated to T-0154\"],\"follow_up_tasks\":[\"Fix stale\
+    \ imports of _allowed_commit_paths and _attempt_commit_recovery in test helpers\"\
+    ],\"acceptance_criteria\":[{\"criterion\":\"workflow_verification.py is deleted\"\
+    ,\"met\":true},{\"criterion\":\"all imports of it are removed\",\"met\":true},{\"\
+    criterion\":\"all tests pass\",\"met\":false,\"detail\":\"10 collection ImportErrors\
+    \ from _allowed_commit_paths and _attempt_commit_recovery \u2014 pre-existing,\
+    \ not caused by T-0154\"}]}"
+  files_changed: []
+  created_at: '2026-04-05T17:17:50+00:00'
