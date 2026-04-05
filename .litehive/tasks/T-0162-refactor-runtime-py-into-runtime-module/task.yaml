@@ -12,7 +12,7 @@ priority: medium
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-04T20:46:42+00:00'
-updated_at: '2026-04-05T22:01:29+00:00'
+updated_at: '2026-04-05T22:01:30+00:00'
 goal: Split runtime.py into runtime/__init__.py with separate files for execution,
   commit_to_git, recovery, model resolution, and budget tracking.
 acceptance_criteria:
@@ -71,6 +71,13 @@ subagents:
   engine: copilot
   status: completed
   path: subagents/SA-0007-reviewer
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0008
+  role: merge-resolver
+  engine: claude
+  status: running
+  path: subagents/SA-0008-merge-resolver
   sandboxed: false
   sandbox_summary: host
 git:

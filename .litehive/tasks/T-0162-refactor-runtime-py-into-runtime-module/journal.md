@@ -20,3 +20,15 @@ Stage `grooming` stopped retrying `goz` after attempt 3/3: transient network fai
 
 ## 2026-04-05T20:35:33+00:00
 Stage `grooming` switched from `goz` to `copilot` after transient network failure.
+
+## 2026-04-05T20:38:12+00:00
+Task metadata updated via CLI.
+
+## 2026-04-05T20:38:30+00:00
+Task metadata updated via CLI.
+
+## 2026-04-05T20:38:38+00:00
+Task metadata updated via CLI.
+
+## 2026-04-05T22:01:30+00:00
+Merge conflict on 2 file(s). Launching merge agent.
