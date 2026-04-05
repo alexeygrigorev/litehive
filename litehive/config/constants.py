@@ -23,15 +23,9 @@ ENGINE_CATEGORY_RETRY_SELECTOR_PREFIX = "engine_category:"
 
 
 def _default_task_engine_routing() -> dict[str, list[str]]:
-    return {
-        "adapter": ["codex", "opencode", "gemini", "copilot", "goz"],
-        "bugfix": ["codex", "opencode", "copilot", "gemini", "goz"],
-        "research": ["gemini", "codex", "opencode", "copilot", "goz"],
-        "review": ["copilot", "codex", "opencode", "gemini", "goz"],
-        "refactor": ["opencode", "codex", "copilot", "gemini", "goz"],
-        "docs": ["codex", "gemini", "opencode", "copilot", "goz"],
-        "intake": ["opencode", "codex", "gemini", "copilot", "goz"],
-    }
+    # Empty by default — respect default_engine from config.
+    # Users can override per task_type in config.yaml if needed.
+    return {}
 
 
 VALID_TASK_ROUTING_KEYS = frozenset(_default_task_engine_routing())

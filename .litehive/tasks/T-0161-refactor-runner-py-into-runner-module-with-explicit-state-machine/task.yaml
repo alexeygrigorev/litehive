@@ -6,13 +6,13 @@ task_type: null
 engine: null
 model: null
 mode: implementation
-status: queued
-pipeline_status: backlog
+status: in_progress
+pipeline_status: commit_to_git
 priority: medium
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-04T20:46:40+00:00'
-updated_at: '2026-04-04T20:46:40+00:00'
+updated_at: '2026-04-05T20:33:17+00:00'
 goal: Split runner.py into runner/__init__.py with a clear state machine implementation.
   States and transitions should be explicit, possibly OOP with State classes.
 acceptance_criteria:
@@ -23,7 +23,56 @@ acceptance_criteria:
 constraints: []
 plan: []
 human_checkpoints: []
-subagents: []
+subagents:
+- id: SA-0001
+  role: planner
+  engine: goz
+  status: failed
+  path: subagents/SA-0001-planner
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0002
+  role: planner
+  engine: goz
+  status: failed
+  path: subagents/SA-0002-planner
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0003
+  role: planner
+  engine: goz
+  status: failed
+  path: subagents/SA-0003-planner
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0004
+  role: planner
+  engine: copilot
+  status: completed
+  path: subagents/SA-0004-planner
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0005
+  role: swe
+  engine: copilot
+  status: completed
+  path: subagents/SA-0005-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0006
+  role: qa
+  engine: copilot
+  status: completed
+  path: subagents/SA-0006-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0007
+  role: reviewer
+  engine: copilot
+  status: completed
+  path: subagents/SA-0007-reviewer
+  sandboxed: false
+  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0161 refactor-runner-py-into-runner-module-with-explicit-state-machine'
@@ -34,5 +83,6 @@ git:
   worktree_path: null
 retry_policy:
   max_retries: null
+  stage_retry_limit: null
 created_from: null
 upstream_origin: null

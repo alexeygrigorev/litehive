@@ -280,6 +280,24 @@ class ExternalCLIAdapter:
         try:
             while selector.get_map():
                 events = selector.select(timeout=self.LIVE_UPDATE_INTERVAL_SECONDS)
+
+                # Always check inactivity timeout, even when data is flowing
+                if (
+                    inactivity_timeout_seconds > 0
+                    and proc.poll() is None
+                    and time.monotonic() - last_output_at > inactivity_timeout_seconds
+                ):
+                    proc.terminate()
+                    try:
+                        proc.wait(timeout=5)
+                    except subprocess.TimeoutExpired:
+                        proc.kill()
+                        proc.wait()
+                    stderr_chunks.extend(
+                        f"\n[litehive] Process killed after {inactivity_timeout_seconds:.0f}s of inactivity.\n".encode()
+                    )
+                    break
+
                 if not events:
                     if (
                         proc.poll() is None
@@ -287,33 +305,17 @@ class ExternalCLIAdapter:
                     ):
                         emit_update()
                         last_update_at = time.monotonic()
-                    # Kill if no output for too long
-                    if (
-                        inactivity_timeout_seconds > 0
-                        and proc.poll() is None
-                        and time.monotonic() - last_output_at > inactivity_timeout_seconds
-                    ):
-                        proc.terminate()
-                        try:
-                            proc.wait(timeout=5)
-                        except subprocess.TimeoutExpired:
-                            proc.kill()
-                            proc.wait()
-                        stderr_chunks.extend(
-                            f"\n[litehive] Process killed after {inactivity_timeout_seconds:.0f}s of inactivity.\n".encode()
-                        )
-                        break
                     continue
                 for key, _ in events:
                     chunk = os.read(key.fileobj.fileno(), 4096)
                     if chunk:
                         if key.data == "stdout":
                             stdout_chunks.extend(chunk)
+                            last_output_at = time.monotonic()
                         else:
                             stderr_chunks.extend(chunk)
                         emit_update()
                         last_update_at = time.monotonic()
-                        last_output_at = time.monotonic()
                         continue
                     selector.unregister(key.fileobj)
                     key.fileobj.close()

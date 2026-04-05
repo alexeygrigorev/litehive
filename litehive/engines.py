@@ -2129,7 +2129,7 @@ ENGINE_REGISTRY: dict[str, ExternalCLIAdapter] = {
         name="goz",
         binary="goz",
         capabilities=AdapterCapabilities(
-            supports_model_override=False,
+            supports_model_override=True,
             strips_environment=False,
             transcript_format="jsonl",
         ),
