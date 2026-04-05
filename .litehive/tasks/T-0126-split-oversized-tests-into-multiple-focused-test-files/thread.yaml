@@ -1,134 +1,3 @@
-- role: swe
-  step: implementing
-  verdict: pass
-  message: 'Implemented automatic recovery for accepted tasks that were marked done
-    without a final checkpoint commit. The stale-runner/task-selection recovery path
-    now detects auto-commit-enabled tasks with status/pipeline_status done, no commit_sha,
-    and a passing accepting report, then requeues them at commit_to_git instead of
-    leaving them finished. This keeps commit_to_git runner-owned and lets worktree-backed
-    tasks resume deterministic final integration under the existing commit_to_git
-    path.
-
-
-    Verified with focused pytest coverage:
-
-    - uv run pytest -q tests/test_workspace.py -k "test_resolve_next_task_recovers_done_accepted_task_without_checkpoint_commit
-    or test_commit_to_git_resumes_recovered_done_accepted_worktree_task or recovers_flagged_commit_stage_after_failed_commit_report
-    or recovers_flagged_commit_stage_after_passing_review or recovers_orphaned_commit_stage_before_new_work
-    or finalizes_existing_checkpoint_commit_without_retry"
-
-    - Result: 7 passed, 520 deselected
-
-
-    Evidence against acceptance criteria:
-
-    1. Accepted task changes without a final checkpoint commit are detected automatically:
-    new recovery helper identifies done/accepted auto-commit tasks with no commit_sha
-    and requeues them.
-
-    2. Litehive resumes or continues the runner-owned commit_to_git path: recovered
-    tasks are moved back to queued/commit_to_git and prioritized ahead of later queued
-    work.
-
-    3. Agents are not required to run git commit themselves for normal task completion:
-    recovery now routes these tasks back through commit_to_git instead of treating
-    them as finished.
-
-    4. For worktree-backed tasks, the runner completes deterministic integration:
-    new test proves a recovered accepted task with an existing task worktree is resumed
-    through _commit_to_git_report, produces checkpoint_attempts == 1, clears the worktree
-    record, and lands the change in the main checkout.'
-  files_changed: []
-  created_at: '2026-04-05T02:18:55+00:00'
-- role: qa
-  step: testing
-  verdict: pass
-  message: 'Verified automatic recovery of accepted tasks that reached done without
-    a checkpoint commit and confirmed they are requeued at runner-owned commit_to_git
-    instead of being treated as finished.
-
-
-    Focused checks run:
-
-    - uv run pytest -q tests/test_workspace.py -k "test_resolve_next_task_recovers_done_accepted_task_without_checkpoint_commit
-    or test_commit_to_git_resumes_recovered_done_accepted_worktree_task or recovers_flagged_commit_stage_after_failed_commit_report
-    or recovers_flagged_commit_stage_after_passing_review or recovers_orphaned_commit_stage_before_new_work
-    or finalizes_existing_checkpoint_commit_without_retry"
-
-    - Result: 7 passed, 520 deselected in 2.30s
-
-
-    Evidence by acceptance criterion:
-
-    1. Accepted task changes without a final checkpoint commit are detected automatically:
-    test_resolve_next_task_recovers_done_accepted_task_without_checkpoint_commit proves
-    a task with status/pipeline_status done, no commit_sha, and a passing accepting
-    report is recovered and selected ahead of later queued work.
-
-    2. Litehive resumes or continues the runner-owned commit_to_git path instead of
-    treating the task as finished: the recovered task is rewritten to queued/commit_to_git
-    and added to the front of the queue by resolve_next_task recovery.
-
-    3. Agents are not required to run git commit themselves for normal task completion:
-    recovery routes the task back into commit_to_git rather than expecting an agent-side
-    commit after acceptance.
-
-    4. For worktree-backed tasks, the runner completes the commit and deterministic
-    integration step: test_commit_to_git_resumes_recovered_done_accepted_worktree_task
-    drives the recovered task through _commit_to_git_report, records commit_sha, increments
-    checkpoint_attempts to 1, clears worktree_path, and lands the worktree file content
-    in the main checkout.
-
-
-    Files inspected: litehive/tasks.py, tests/test_workspace.py. No additional issues
-    found in the validated scope.'
-  files_changed: []
-  created_at: '2026-04-05T02:20:17+00:00'
-- role: reviewer
-  step: accepting
-  verdict: pass
-  message: 'Verified runner-owned recovery for accepted tasks that were marked done
-    without a final checkpoint commit. I reviewed the scoped changes in litehive/tasks.py
-    and tests/test_workspace.py and confirmed the new recovery helper only targets
-    auto-commit-enabled tasks with status/pipeline_status done, no recorded commit_sha,
-    and a passing accepting report, then rewrites them back to queued/commit_to_git
-    instead of leaving them finished. This satisfies the detection and resume criteria
-    and keeps commit_to_git runner-owned rather than requiring an agent-side git commit.
-    I also verified the worktree-backed completion path still runs through the existing
-    commit_to_git integration flow and deterministically lands the worktree change
-    in the main checkout with commit_sha recorded and worktree metadata cleared. Tests
-    run: uv run pytest -q tests/test_workspace.py -k ''test_resolve_next_task_recovers_done_accepted_task_without_checkpoint_commit
-    or test_commit_to_git_resumes_recovered_done_accepted_worktree_task or recovers_flagged_commit_stage_after_failed_commit_report
-    or recovers_flagged_commit_stage_after_passing_review or recovers_orphaned_commit_stage_before_new_work
-    or finalizes_existing_checkpoint_commit_without_retry'' -> 7 passed; uv run pytest
-    -q tests/test_workspace.py -k ''commit_to_git_treats_clean_task_worktree_as_done
-    or commit_to_git_integrates_existing_litehive_checkpoint_from_clean_worktree or
-    commit_to_git_integrates_agent_precommit_in_task_worktree or commit_to_git_rebases_worktree_onto_current_main_before_integrating
-    or commit_to_git_cherry_picks_when_main_moved_after_worktree_started'' -> 5 passed.
-    Acceptance criteria met: automatic detection of accepted tasks missing a checkpoint
-    commit, automatic resumption at runner-owned commit_to_git, no normal requirement
-    for agents to run git commit, and deterministic worktree integration under runner
-    control.'
-  files_changed: []
-  created_at: '2026-04-05T02:22:00+00:00'
-- role: reviewer
-  step: accepting
-  verdict: pass
-  message: 'Accepted T-0125. Verified the change is scoped to stale or missing process
-    detection and state/process mismatch only: run_task() now calls stale-runner recovery
-    before active-task conflict checks, and _recover_stale_runner_state() requeues
-    recovered running tasks at their current stage to the front of the queue. No heartbeat
-    or inactivity timeout policy was added. I reran focused verification with: uv
-    run pytest -q tests/test_workspace.py -k ''stale_active_task_before_conflict_check
-    or stale_runner_state_recovers_running_task_without_runner_lock_record or stale_runner_state_recovers_when_lock_is_not_held_even_if_pid_is_alive
-    or repair_command_repairs_stale_runner_state_and_cleans_queue or queue_command_marks_recovered_interruption
-    or rejects_starting_a_second_active_task'' and got 7 passed. This confirms that
-    when a recorded runner or subagent pid is stale while the task remains marked
-    running, Litehive interrupts and recovers the task at the same stage, requeues
-    it automatically, clears stale active-task state, and no longer blocks a subsequent
-    run behind stale markers.'
-  files_changed: []
-  created_at: '2026-04-05T02:43:57+00:00'
 - role: planner
   step: grooming
   verdict: pass
@@ -165,8 +34,9 @@
 
     - No blocker or missing product constraint remains; implementation can proceed
     directly from the recorded task metadata.'
-  files_changed: []
-  created_at: '2026-04-05T02:47:20+00:00'
+  files_changed:
+  - .litehive/tasks/T-0126-split-oversized-tests-into-multiple-focused-test-files/task.yaml
+  created_at: '2026-04-05T02:47:46+00:00'
 - role: swe
   step: implementing
   verdict: pass
@@ -191,8 +61,20 @@
     tests/test_engine_variants_and_timeline.py::test_extract_engine_timeline_mixed_events
     (6 passed). Evidence now covers all new split files plus clean collection for
     the full reorganized suite.'
-  files_changed: []
-  created_at: '2026-04-05T03:05:20+00:00'
+  files_changed:
+  - tests/__init__.py
+  - tests/workspace_helpers.py
+  - tests/test_workspace_bootstrap.py
+  - tests/test_tasks_and_subagents.py
+  - tests/test_runner_workflow.py
+  - tests/test_runtime_pool.py
+  - tests/test_config_and_run_cli.py
+  - tests/test_observability_and_status.py
+  - tests/test_task_commands_and_daemon.py
+  - tests/test_retry_commit_and_recovery.py
+  - tests/test_engine_variants_and_timeline.py
+  - tests/test_workspace.py
+  created_at: '2026-04-05T03:05:46+00:00'
 - role: qa
   step: testing
   verdict: pass
@@ -233,15 +115,7 @@
     tests/test_engine_variants_and_timeline.py::test_extract_engine_timeline_mixed_events
     (6 passed in 6.52s)."}]}'
   files_changed: []
-  created_at: '2026-04-05T03:17:05+00:00'
-- role: qa
-  step: testing
-  verdict: comment
-  message: 'Administrative note: the immediately preceding QA testing PASS report
-    was submitted from the T-0126 worktree by mistake due to active-task default resolution.
-    It does not apply to T-0077 and should be ignored.'
-  files_changed: []
-  created_at: '2026-04-05T03:17:22+00:00'
+  created_at: '2026-04-05T03:17:43+00:00'
 - role: reviewer
   step: accepting
   verdict: pass
@@ -250,8 +124,8 @@
     {"verdict":"pass","summary":"Verified the oversized workspace test monolith was
     replaced by focused modules with centralized shared helpers, clean collection,
     and passing targeted regression coverage.","files_changed":["tests/__init__.py","tests/workspace_helpers.py","tests/test_workspace_bootstrap.py","tests/test_tasks_and_subagents.py","tests/test_runner_workflow.py","tests/test_runtime_pool.py","tests/test_config_and_run_cli.py","tests/test_observability_and_status.py","tests/test_task_commands_and_daemon.py","tests/test_retry_commit_and_recovery.py","tests/test_engine_variants_and_timeline.py","tests/test_workspace.py"],"tests":{"added":0,"passing":156},"warnings":["Workspace
-    has an unrelated dirty task artifact at .litehive/tasks/T-0077-add-structured-pm-task-edit-actions-during-grooming/thread.yaml;
-    it does not affect this task verdict."],"follow_up_tasks":[],"acceptance_criteria":[{"criterion":"tests/test_workspace.py
+    state currently has active_task_id=T-0077, so acceptance was submitted explicitly
+    with --task-id T-0126 to avoid cross-task reporting."],"follow_up_tasks":[],"acceptance_criteria":[{"criterion":"tests/test_workspace.py
     is no longer a single oversized catch-all test module; the workspace tests are
     split across multiple focused files under tests/ grouped by coherent behavior
     areas.","status":"met","evidence":"tests/test_workspace.py is deleted and replaced
@@ -285,14 +159,5 @@
     FOLLOW_UP_TASKS:
 
     []'
-  files_changed: []
-  created_at: '2026-04-05T03:19:29+00:00'
-- role: reviewer
-  step: accepting
-  verdict: comment
-  message: 'Administrative correction: the immediately preceding reviewer accepting
-    PASS report describing test-suite splitting belongs to T-0126, not T-0077. Ignore
-    that report for T-0077; it was submitted from the wrong worktree context due to
-    active-task default resolution.'
   files_changed: []
   created_at: '2026-04-05T03:20:19+00:00'

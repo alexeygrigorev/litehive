@@ -2,21 +2,42 @@ id: T-0126
 slug: split-oversized-tests-into-multiple-focused-test-files
 title: Split oversized tests into multiple focused test files
 depends_on: []
-task_type: null
+task_type: refactor
 engine: null
 model: null
 mode: implementation
 status: flagged
 pipeline_status: implementing
 priority: medium
-pm_complexity: null
-planned_effort: null
+pm_complexity: moderate
+planned_effort: m
 created_at: '2026-04-02T20:52:31+00:00'
-updated_at: '2026-04-04T02:58:24+00:00'
-goal: ''
-acceptance_criteria: []
-constraints: []
-plan: []
+updated_at: '2026-04-05T02:46:39+00:00'
+goal: Split the oversized tests/test_workspace.py monolith into multiple focused test
+  modules organized by behavior area, while preserving the current test surface and
+  keeping verification targeted.
+acceptance_criteria:
+- tests/test_workspace.py is no longer a single oversized catch-all test module; the
+  workspace tests are split across multiple focused files under tests/ grouped by
+  coherent behavior areas.
+- Any shared fixtures or helper functions needed by the split suite are centralized
+  in an appropriate shared test helper module instead of being copied across files.
+- The moved tests still collect cleanly without duplicate-test or import errors when
+  run with uv run pytest tests --collect-only -q.
+- Focused pytest runs covering the new split files pass, demonstrating the reorganization
+  preserved existing behavior without unrelated production changes.
+constraints:
+- Keep changes scoped to the test suite reorganization; avoid unrelated production
+  refactors.
+plan:
+- Inventory the logical seams inside tests/test_workspace.py and choose a small set
+  of focused destination files grouped by behavior area.
+- Extract any shared helpers or fixtures needed across files into a shared test helper
+  module so moved tests keep the same setup behavior without copy-paste.
+- Move tests in reviewable batches, keeping names stable and removing the oversized
+  catch-all file once the new structure covers the same surface area.
+- Verify the split suite with clean pytest collection plus focused pytest runs for
+  the new files that prove the reorganization did not change behavior.
 human_checkpoints: []
 subagents:
 - id: SA-0001
@@ -47,7 +68,8 @@ git:
   checkpoint_base_sha: null
   checkpoint_attempts: 0
   rolled_back_checkpoint_attempt: null
-  worktree_path: .litehive/worktrees/T-0126-split-oversized-tests-into-multiple-focused-test-files
+  worktree_path: null
 retry_policy:
   max_retries: null
 created_from: null
+upstream_origin: null
