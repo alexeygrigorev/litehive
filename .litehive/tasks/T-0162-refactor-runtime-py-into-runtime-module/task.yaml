@@ -12,16 +12,56 @@ priority: medium
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-04T20:46:42+00:00'
-updated_at: '2026-04-04T20:46:42+00:00'
+updated_at: '2026-04-05T20:38:38+00:00'
 goal: Split runtime.py into runtime/__init__.py with separate files for execution,
   commit_to_git, recovery, model resolution, and budget tracking.
 acceptance_criteria:
-- litehive/runtime/ is a package
-- commit_to_git logic is in its own file
-- recovery agent logic is in its own file
-- all tests pass
-constraints: []
-plan: []
+- "litehive/runtime/ is a Python package whose __init__.py re-exports all symbols\
+  \ previously importable from litehive.runtime \u2014 no callers need to change their\
+  \ import paths"
+- commit_to_git logic (_commit_to_git_report and its direct helpers) lives in litehive/runtime/commit.py
+- recovery agent logic (_attempt_stage_recovery, _attempt_commit_recovery, _classify_recovery_failure_owner
+  and helpers) lives in litehive/runtime/recovery.py
+- engine/model resolution logic (resolve_engine_name, resolve_model, resolve_engine_plan,
+  workspace_model_for_engine, and related) lives in litehive/runtime/models.py
+- budget tracking (EngineBudgetLedger and its helpers) lives in litehive/runtime/budget.py
+- core execution/pool management (drain_task_pool, run_task, run_single_task, run_next_task
+  and related) lives in litehive/runtime/execution.py
+- litehive/runtime.py flat file no longer exists after the refactor
+- uv run pytest -q passes with zero failures
+constraints:
+- "litehive/runtime/__init__.py must re-export all symbols that were importable from\
+  \ litehive.runtime \u2014 no callers (cli/, runner/, tests/) should need import\
+  \ path changes"
+- 'Watch for circular imports: budget and models submodules must not import from execution.py;
+  recovery may import from models but not execution'
+plan:
+- Create litehive/runtime/ directory and empty __init__.py
+- 'Create litehive/runtime/budget.py: move EngineBudgetLedger, _budget_ledger_from_config,
+  _budget_ledger_from_conditions, _execution_hit_limit, _execution_exhausted_limit_fallbacks,
+  _execution_limit_kind, _count_execution_limits, _limit_stop_condition_is_configured'
+- 'Create litehive/runtime/models.py: move resolve_engine_name, resolve_engine_attempt_order,
+  resolve_engine_plan, resolve_task_retry_policy, resolve_execution_retry_policy,
+  workspace_model_for_engine, resolve_model, ResolvedExecutionRetryPolicy, and all
+  private engine/model helpers (_route_engines_for_task, _task_routing_key, _engine_attempt_order,
+  _resolve_stage_retry_limit, _execution_retry_model_family)'
+- 'Create litehive/runtime/recovery.py: move _attempt_stage_recovery, _attempt_commit_recovery,
+  _resolve_recovery_engine, _classify_recovery_failure_owner, _traceback_text, _traceback_frame_paths,
+  _traceback_fingerprint, _capture_persisted_files, _restore_persisted_files'
+- 'Create litehive/runtime/commit.py: move _commit_to_git_report and its direct helpers
+  (_task_worktree_path, _resolve_task_execution_root, _allowed_commit_paths, _unexpected_dirty_paths,
+  _path_within)'
+- "Create litehive/runtime/execution.py: move all remaining pool/task execution code\
+  \ \u2014 ExecutionSummary, TaskPoolRunSummary, SingleTaskRunSummary, TaskPoolStopConditions,\
+  \ RollbackSummary, DirtyWorktreeFinding, DirtyWorktreeGateReport, drain_task_pool,\
+  \ run_task, run_single_task, run_next_task, run_next_task_with_override, resolve_next_task,\
+  \ rollback_completed_task, recover_completed_task, inspect_dirty_worktree_gate,\
+  \ build_executor, all dirty-worktree helpers, stop-condition helpers, runner-hook\
+  \ helpers, and small utilities"
+- Populate litehive/runtime/__init__.py with re-exports of all public symbols from
+  each submodule to preserve backward compatibility
+- Delete litehive/runtime.py
+- Run uv run pytest -q and fix any import or circular-dependency issues
 human_checkpoints: []
 subagents: []
 git:
@@ -34,5 +74,6 @@ git:
   worktree_path: null
 retry_policy:
   max_retries: null
+  stage_retry_limit: null
 created_from: null
 upstream_origin: null
