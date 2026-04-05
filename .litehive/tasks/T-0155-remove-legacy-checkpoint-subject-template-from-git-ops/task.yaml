@@ -6,13 +6,13 @@ task_type: null
 engine: null
 model: null
 mode: implementation
-status: queued
-pipeline_status: backlog
+status: in_progress
+pipeline_status: commit_to_git
 priority: medium
-pm_complexity: null
-planned_effort: null
+pm_complexity: simple
+planned_effort: xs
 created_at: '2026-04-04T20:45:53+00:00'
-updated_at: '2026-04-04T20:45:53+00:00'
+updated_at: '2026-04-05T17:36:37+00:00'
 goal: Fresh project, no legacy needed. Remove LEGACY_CHECKPOINT_SUBJECT_TEMPLATE and
   any code that references it.
 acceptance_criteria:
@@ -21,7 +21,35 @@ acceptance_criteria:
 constraints: []
 plan: []
 human_checkpoints: []
-subagents: []
+subagents:
+- id: SA-0001
+  role: planner
+  engine: claude
+  status: completed
+  path: subagents/SA-0001-planner
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0002
+  role: swe
+  engine: claude
+  status: completed
+  path: subagents/SA-0002-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0003
+  role: qa
+  engine: claude
+  status: completed
+  path: subagents/SA-0003-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0004
+  role: reviewer
+  engine: claude
+  status: completed
+  path: subagents/SA-0004-reviewer
+  sandboxed: false
+  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0155 remove-legacy-checkpoint-subject-template-from-git-ops'
@@ -32,5 +60,6 @@ git:
   worktree_path: null
 retry_policy:
   max_retries: null
+  stage_retry_limit: null
 created_from: null
 upstream_origin: null
