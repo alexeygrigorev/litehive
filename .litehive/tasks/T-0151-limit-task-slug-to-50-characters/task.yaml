@@ -12,7 +12,7 @@ priority: medium
 pm_complexity: simple
 planned_effort: xs
 created_at: '2026-04-04T20:45:47+00:00'
-updated_at: '2026-04-05T16:42:36+00:00'
+updated_at: '2026-04-05T16:43:18+00:00'
 goal: Task slugs are too long, making paths unwieldy. Cap at 50 characters.
 acceptance_criteria:
 - new tasks get slugs of max 50 characters
@@ -89,6 +89,13 @@ subagents:
   engine: claude
   status: completed
   path: subagents/SA-0010-merge-resolver
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0011
+  role: merge-resolver
+  engine: claude
+  status: completed
+  path: subagents/SA-0011-merge-resolver
   sandboxed: false
   sandbox_summary: host
 git:
