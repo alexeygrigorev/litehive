@@ -2107,10 +2107,18 @@ def _commit_to_git_report(
             files_changed=[],
         )
 
-    # If all dirty entries are under .litehive/, there are no code changes to commit
+    # If all dirty entries are transient .litehive/ runtime files, skip commit.
+    # Config files (.gitignore, config.yaml, context.md, state.yaml) ARE committable.
+    _LITEHIVE_TRACKED_FILES = {
+        ".litehive/.gitignore",
+        ".litehive/config.yaml",
+        ".litehive/context.md",
+        ".litehive/state.yaml",
+    }
     code_dirty = [
         e for e in dirty_entries
         if not (_status_entry_path(e) or "").startswith(".litehive/")
+        or (_status_entry_path(e) or "") in _LITEHIVE_TRACKED_FILES
     ]
     if not code_dirty:
         head_sha = current_head(root)
