@@ -600,6 +600,80 @@ def inspect_dirty_worktree_gate(root: Path) -> DirtyWorktreeGateReport:
     return DirtyWorktreeGateReport(findings=findings)
 
 
+def _dirty_entry_paths(dirty_entries: list[str]) -> list[str]:
+    """Extract bare paths from git status porcelain output lines."""
+    paths = []
+    for entry in dirty_entries:
+        if len(entry) < 3:
+            continue
+        raw = entry[3:].strip()
+        if raw.startswith('"') and raw.endswith('"'):
+            raw = raw[1:-1].replace('\\"', '"')
+        if raw:
+            paths.append(raw)
+    return paths
+
+
+def _allowed_commit_paths(root: Path, task: TaskRecord) -> set[PurePosixPath]:
+    """Return paths expected to be dirty at commit time for this task.
+
+    Includes the task's own .litehive directory and any files listed in
+    stage reports under files_changed (placeholder entries are filtered out).
+    """
+    _PLACEHOLDERS = {"none", "n/a", "-", ""}
+    paths: set[PurePosixPath] = set()
+    paths.add(PurePosixPath(".litehive") / "tasks" / f"{task.id}-{task.slug}")
+    reports_dir = root / ".litehive" / "tasks" / f"{task.id}-{task.slug}" / "reports"
+    if reports_dir.exists():
+        for report_file in sorted(reports_dir.glob("*.yaml")):
+            try:
+                data = yaml.safe_load(report_file.read_text(encoding="utf-8"))
+                if not isinstance(data, dict):
+                    continue
+                for f in data.get("files_changed", []) or []:
+                    stripped = str(f).strip().strip("/")
+                    if stripped.lower() not in _PLACEHOLDERS:
+                        paths.add(PurePosixPath(stripped))
+            except Exception:
+                pass
+    return paths
+
+
+def _unexpected_dirty_paths(
+    dirty_entries: list[str],
+    allowed_paths: set[PurePosixPath],
+) -> list[str]:
+    """Return dirty paths that are not covered by the allowed set.
+
+    Workspace-internal churn under .litehive/ and stray tmp-path deletions
+    are always ignored regardless of the allowed set.
+    """
+    unexpected = []
+    for entry in dirty_entries:
+        if len(entry) < 3:
+            continue
+        raw = entry[3:].strip()
+        if raw.startswith('"') and raw.endswith('"'):
+            raw = raw[1:-1].replace('\\"', '"')
+        if not raw:
+            continue
+        # Ignore stray tmpdir cleanup entries (deleted temp workspaces)
+        if "$tmpdir" in raw or raw.startswith("/tmp/"):
+            continue
+        # Ignore all .litehive/ workspace-internal churn
+        if raw.startswith(".litehive/"):
+            if not any(
+                raw == str(p) or raw.startswith(str(p) + "/")
+                for p in allowed_paths
+            ):
+                continue
+        path = PurePosixPath(raw)
+        if any(raw == str(p) or raw.startswith(str(p) + "/") for p in allowed_paths):
+            continue
+        unexpected.append(raw)
+    return unexpected
+
+
 def _task_can_resume_with_owned_dirty_paths(
     root: Path,
     task: TaskRecord,
@@ -868,6 +942,61 @@ def _resolve_recovery_engine(
         engine = task.engine or (config.default_engine if config else "codex")
     model = resolve_model(task, config, engine_name=engine) if config else None
     return engine, model
+
+
+def _attempt_commit_recovery(
+    root: Path,
+    execution_root: Path,
+    task: TaskRecord,
+    reason: str,
+    *,
+    subagents: SubagentManager | None = None,
+    config: "LitehiveConfig | None" = None,
+) -> str | None:
+    """Launch a recovery agent after a commit_to_git failure.
+
+    Writes a structured recovery report and returns the current HEAD SHA when
+    the agent succeeds (exit_code == 0), or ``None`` if recovery failed or no
+    subagents manager was provided.
+    """
+    if subagents is None:
+        return None
+
+    engine_name, model = _resolve_recovery_engine(task, config)
+    prompt = (
+        f"CommitToGit failed: {reason}\n"
+        f"Investigate and fix the commit failure, then complete the commit."
+    )
+    recovery_result = subagents.run(
+        task,
+        role="recovery",
+        engine_name=engine_name,
+        model=model,
+        prompt=prompt,
+    )
+    subagent_id = recovery_result.ref.id if recovery_result and recovery_result.ref else None
+    subagent_path = recovery_result.ref.path if recovery_result and recovery_result.ref else None
+
+    record_recovery_report(
+        root,
+        task,
+        trigger="commit_to_git_failure",
+        stage="commit_to_git",
+        summary=f"Recovery agent launched for commit failure: {reason}",
+        runnable_state="runnable",
+        actions=[
+            RecoveryAction(
+                action="recover_commit_to_git",
+                summary="Ran recovery agent to fix commit failure.",
+            )
+        ],
+        recovery_subagent_id=subagent_id,
+        recovery_subagent_path=subagent_path,
+    )
+
+    if recovery_result and recovery_result.exit_code == 0:
+        return current_head(root) or "recovered"
+    return None
 
 
 

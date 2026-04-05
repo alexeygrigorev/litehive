@@ -9,10 +9,10 @@ mode: implementation
 status: queued
 pipeline_status: backlog
 priority: medium
-pm_complexity: null
-planned_effort: null
+pm_complexity: moderate
+planned_effort: s
 created_at: '2026-04-04T20:46:40+00:00'
-updated_at: '2026-04-04T20:46:40+00:00'
+updated_at: '2026-04-05T19:50:04+00:00'
 goal: Split runner.py into runner/__init__.py with a clear state machine implementation.
   States and transitions should be explicit, possibly OOP with State classes.
 acceptance_criteria:
@@ -21,7 +21,15 @@ acceptance_criteria:
 - state transitions are documented and easy to follow
 - all tests pass
 constraints: []
-plan: []
+plan:
+- Create litehive/runner/ package directory
+- Move state machine logic to litehive/runner/states.py with PipelineState enum and
+  TRANSITIONS table
+- Move TaskExecutionRunner, RunResult, StageExecutor to litehive/runner/executor.py
+- Create litehive/runner/__init__.py that re-exports the public API (RunResult, StageExecutor,
+  TaskExecutionRunner)
+- Delete litehive/runner.py
+- Run uv run pytest -q to confirm all tests pass
 human_checkpoints: []
 subagents: []
 git:
@@ -34,5 +42,6 @@ git:
   worktree_path: null
 retry_policy:
   max_retries: null
+  stage_retry_limit: null
 created_from: null
 upstream_origin: null

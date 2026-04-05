@@ -1,0 +1,73 @@
+- role: planner
+  step: grooming
+  verdict: pass
+  message: 'GROOMING PASS for T-0161 (Refactor runner.py into runner/ module with
+    explicit state machine)
+
+
+    ## What was verified
+
+
+    Inspected litehive/runner.py (742 lines). The file contains:
+
+    - StageExecutor (Protocol), RunResult (dataclass), TaskExecutionRunner (main class
+    ~575 lines)
+
+    - State machine expressed as two module-level dicts: _STEPS_FROM (pipeline_status
+    -> step) and _ROUTES ((step, verdict) -> next_step)
+
+    - Helper functions: _reason_code_for_report, _human_checkpoint_reason
+
+
+    The existing ACs are clear and independently verifiable. Task record was updated
+    with PM sizing (moderate / s) and a concrete 6-step implementation plan.
+
+
+    ## Implementation plan (written to task.yaml)
+
+    1. Create litehive/runner/ package directory
+
+    2. Move state machine logic to litehive/runner/states.py with PipelineState enum
+    and TRANSITIONS table replacing the _STEPS_FROM/_ROUTES dicts
+
+    3. Move TaskExecutionRunner, RunResult, StageExecutor to litehive/runner/executor.py
+
+    4. Create litehive/runner/__init__.py re-exporting the public API (RunResult,
+    StageExecutor, TaskExecutionRunner) so all existing import sites work without
+    change
+
+    5. Delete litehive/runner.py
+
+    6. Run uv run pytest -q to confirm all 101+ runner tests pass
+
+
+    ## Import surface (only 3 sites)
+
+    - litehive/runtime.py: imports RunResult, StageExecutor, TaskExecutionRunner
+
+    - tests/test_recovery_agent.py: imports TaskExecutionRunner
+
+    - tests/workspace_helpers.py: imports TaskExecutionRunner
+
+
+    All three will continue to work unchanged via the __init__.py re-export.
+
+
+    ## Acceptance criteria review
+
+    - ''litehive/runner/ is a package'': verifiable by directory existence and importability
+
+    - ''state machine has explicit State classes or an enum with a transition table'':
+    verifiable by code inspection of states.py
+
+    - ''state transitions are documented and easy to follow'': verifiable by code
+    review
+
+    - ''all tests pass'': verifiable by uv run pytest -q
+
+
+    PM_COMPLEXITY: moderate
+
+    PLANNED_EFFORT: s'
+  files_changed: []
+  created_at: '2026-04-05T19:50:47+00:00'
