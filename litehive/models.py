@@ -362,6 +362,7 @@ class TaskRuntime(BaseModel):
     continuation_handoff: RuntimeContinuationHandoff | None = None
     last_engine_switch: RuntimeEngineSwitch | None = None
     last_outcome: TaskOutcomeState = Field(default_factory=TaskOutcomeState)
+    self_heal_traceback_fingerprints: list[str] = Field(default_factory=list)
 
 
 class RunnerStatusState(BaseModel):

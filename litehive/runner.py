@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+import traceback
 from typing import Protocol
 
 import yaml
@@ -209,6 +210,7 @@ class TaskExecutionRunner:
                 )
             except Exception as exc:
                 reason = f"{current} failed with unhandled error: {exc}"
+                traceback_text = traceback.format_exc()
                 # Try recovery agent before flagging
                 if self.subagents is not None:
                     from litehive.runtime import _attempt_stage_recovery
@@ -222,6 +224,8 @@ class TaskExecutionRunner:
                         summary=reason,
                         feedback=f"Unhandled error: {exc}\n\nThe task was at stage '{current}' when this error occurred. "
                         f"Investigate the error, fix whatever is broken, and ensure the task can proceed.",
+                        failure_classification="stage_exception",
+                        failure_diagnostics={"traceback": traceback_text, "exception": str(exc)},
                     )
                     engine_name = task.engine or (self.config.default_engine if self.config else "codex")
                     recovered = _attempt_stage_recovery(
@@ -234,7 +238,7 @@ class TaskExecutionRunner:
                         config=self.config,
                         engine_name=engine_name,
                     )
-                    if recovered is not None and recovered.verdict in ("pass", "accept"):
+                    if recovered is not None:
                         report = recovered
                         report.retry_count = rejections
                         report.retry_limit = self.max_retries
@@ -243,7 +247,42 @@ class TaskExecutionRunner:
                         _apply_stage_finished(task, report)
                         steps += 1
                         last_verdict = report.verdict
-                        continue  # proceed to next stage
+                        if report.retry_decision == "retry":
+                            task.pipeline_status = current  # type: ignore[assignment]
+                            task.status = "queued"
+                            return self._finish_run(
+                                task,
+                                final_status="queued",
+                                steps=steps,
+                                last_verdict=report.verdict,
+                            )
+                        if recovered.verdict in ("pass", "accept"):
+                            continue  # proceed to next stage
+                        outcome = "blocked" if report.verdict == "blocked" else "flagged"
+                        outcome_reason_code = (
+                            _reason_code_for_report(report)
+                            if report.verdict == "blocked"
+                            else "stage_exception"
+                        )
+                        task.status = "flagged"
+                        _apply_task_outcome(
+                            task,
+                            kind=outcome,
+                            stage=current,
+                            reason_code=outcome_reason_code,
+                            reason=report.summary,
+                            retry_count=rejections,
+                            retry_limit=self.max_retries,
+                            retry_source=self.retry_source,
+                            failure_classification=report.failure_classification,
+                            failure_diagnostics=report.failure_diagnostics,
+                        )
+                        return self._finish_run(
+                            task,
+                            final_status=task.status,
+                            steps=steps,
+                            last_verdict=report.verdict,
+                        )
 
                 task.pipeline_status = current  # type: ignore[assignment]
                 report = self._terminal_report(

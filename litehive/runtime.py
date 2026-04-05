@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import hashlib
 from pathlib import Path, PurePosixPath
 import re
 import shutil
@@ -34,6 +35,7 @@ from litehive.models import (
     RecoveryAction,
     RuntimeContinuationHandoff,
     StageReport,
+    TaskThreadComment,
     TaskRecord,
 )
 from litehive.runner import RunResult, StageExecutor, TaskExecutionRunner
@@ -45,10 +47,12 @@ from litehive.tasks import (
     _atomic_write_text,
     _workspace_lock,
     BlockedTask,
+    append_thread_comment,
     collect_recovery_evidence,
     record_recovery_report,
     active_task_markers,
     append_journal,
+    clear_task_outcome,
     clear_task_worktree_path,
     dequeue_next_task,
     dequeue_next_task_selection,
@@ -658,6 +662,470 @@ def _cleanup_task_worktree(root: Path, task: TaskRecord) -> None:
     save_task(root, task)
 
 
+def _path_within(candidate: Path, root: Path) -> bool:
+    try:
+        candidate.resolve().relative_to(root.resolve())
+    except ValueError:
+        return False
+    return True
+
+
+def _traceback_text(failed_report: StageReport) -> str:
+    traceback_text = failed_report.failure_diagnostics.get("traceback")
+    if isinstance(traceback_text, str) and traceback_text.strip():
+        return traceback_text
+    feedback = failed_report.feedback or ""
+    return feedback if "Traceback" in feedback else ""
+
+
+def _traceback_frame_paths(traceback_text: str) -> list[Path]:
+    return [Path(match) for match in re.findall(r'File "([^"]+)"', traceback_text)]
+
+
+def _traceback_fingerprint(traceback_text: str, summary: str) -> str:
+    signature_lines = [
+        line.strip()
+        for line in traceback_text.splitlines()
+        if line.strip().startswith('File "') or line.strip().startswith(("raise ", "AssertionError", "RuntimeError", "ValueError", "TypeError"))
+    ]
+    payload = "\n".join(signature_lines) or summary
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
+
+
+def _classify_recovery_failure_owner(
+    root: Path,
+    failed_report: StageReport,
+    *,
+    config: LitehiveConfig | None,
+) -> tuple[str, str, Path | None]:
+    traceback_text = _traceback_text(failed_report)
+    if not traceback_text:
+        return "unknown", "", None
+    frame_paths = _traceback_frame_paths(traceback_text)
+    source_root = None
+    if config and config.litehive_source_path:
+        source_root = Path(config.litehive_source_path).expanduser().resolve()
+    for frame in frame_paths:
+        if source_root is not None and _path_within(frame, source_root):
+            return "litehive", traceback_text, source_root
+        if _path_within(frame, root):
+            return "project", traceback_text, source_root
+        normalized = frame.as_posix()
+        if "/site-packages/litehive/" in normalized or normalized.endswith("/litehive/__init__.py") or "/litehive/" in normalized:
+            return "litehive", traceback_text, source_root
+    return "unknown", traceback_text, source_root
+
+
+def _self_heal_worktree_path(source_root: Path, task: TaskRecord, fingerprint: str) -> Path:
+    return source_root / ".litehive" / "worktrees" / f"self-heal-{task.id}-{fingerprint}"
+
+
+def _run_repo_pytest(repo_root: Path) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        ["uv", "run", "pytest"],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+def _append_self_heal_thread_comment(
+    root: Path,
+    task: TaskRecord,
+    *,
+    step: str,
+    headline: str,
+    fingerprint: str,
+    source_root: Path | None = None,
+    worktree_path: Path | None = None,
+    test_command: str | None = None,
+    test_result: str | None = None,
+    merge_outcome: str,
+    requeue_decision: str,
+    blocker: str | None = None,
+) -> None:
+    fields = [
+        headline,
+        "classification: litehive_bug",
+        f"traceback_fingerprint: {fingerprint}",
+        f"litehive_source_path: {source_root if source_root is not None else 'unavailable'}",
+        f"litehive_worktree: {worktree_path if worktree_path is not None else 'not-created'}",
+    ]
+    if test_command is not None:
+        fields.append(f"test_command: {test_command}")
+    if test_result is not None:
+        fields.append(f"test_result: {test_result}")
+    fields.append(f"merge_outcome: {merge_outcome}")
+    fields.append(f"requeue_decision: {requeue_decision}")
+    if blocker:
+        fields.append(f"blocker: {blocker}")
+    append_thread_comment(
+        root,
+        task,
+        TaskThreadComment(
+            role="recovery",
+            step=step,
+            verdict="comment",
+            message="\n".join(fields),
+        ),
+    )
+
+
+def _attempt_litehive_self_heal(
+    root: Path,
+    task: TaskRecord,
+    step: str,
+    failed_report: StageReport,
+    *,
+    subagents: SubagentManager,
+    config: LitehiveConfig,
+    engine_name: str,
+    model_name: str | None,
+    traceback_text: str,
+    source_root: Path | None,
+) -> StageReport:
+    fingerprint = _traceback_fingerprint(traceback_text, failed_report.summary)
+    if fingerprint in task.runtime.self_heal_traceback_fingerprints:
+        summary = (
+            "Litehive self-heal already ran once for this traceback fingerprint; leaving the task blocked to avoid a recovery loop."
+        )
+        record_recovery_report(
+            root,
+            task,
+            trigger="stage_failure",
+            stage=step,
+            summary=summary,
+            runnable_state="blocked",
+            failure_classification="litehive_bug",
+            blocker=summary,
+            actions=[
+                RecoveryAction(
+                    action="self_heal_skip_repeat",
+                    applied=False,
+                    summary="Skipped repeated Litehive self-heal attempt for an already-seen traceback fingerprint.",
+                    metadata={"traceback_fingerprint": fingerprint},
+                )
+            ],
+            warnings=[failed_report.summary],
+        )
+        _append_self_heal_thread_comment(
+            root,
+            task,
+            step=step,
+            headline="Litehive self-heal skipped.",
+            fingerprint=fingerprint,
+            source_root=source_root,
+            merge_outcome="not-attempted",
+            requeue_decision="blocked same-stage retry to avoid loop",
+            blocker=summary,
+        )
+        return StageReport(
+            task_id=task.id,
+            step=step,  # type: ignore[arg-type]
+            verdict="blocked",
+            summary=summary,
+            failure_classification="litehive_bug",
+            failure_diagnostics={"traceback_fingerprint": fingerprint},
+        )
+
+    if source_root is None or not source_root.exists() or not is_git_repo(source_root):
+        blocker = (
+            "Litehive bug detected from traceback, but `litehive_source_path` is missing or is not a git repository."
+        )
+        record_recovery_report(
+            root,
+            task,
+            trigger="stage_failure",
+            stage=step,
+            summary="Litehive self-heal is blocked because the configured source repo is unavailable.",
+            runnable_state="blocked",
+            failure_classification="litehive_bug",
+            blocker=blocker,
+            actions=[
+                RecoveryAction(
+                    action="self_heal_blocked",
+                    applied=False,
+                    summary="Could not launch Litehive self-heal because `litehive_source_path` did not resolve to a usable git repo.",
+                    metadata={
+                        "configured_litehive_source_path": config.litehive_source_path,
+                        "traceback_fingerprint": fingerprint,
+                    },
+                )
+            ],
+            warnings=[failed_report.summary],
+        )
+        _append_self_heal_thread_comment(
+            root,
+            task,
+            step=step,
+            headline="Litehive self-heal blocked before launch.",
+            fingerprint=fingerprint,
+            source_root=source_root,
+            merge_outcome="not-attempted",
+            requeue_decision="blocked awaiting usable litehive_source_path",
+            blocker=blocker,
+        )
+        return StageReport(
+            task_id=task.id,
+            step=step,  # type: ignore[arg-type]
+            verdict="blocked",
+            summary=blocker,
+            failure_classification="litehive_bug",
+            failure_diagnostics={"traceback_fingerprint": fingerprint},
+        )
+
+    task.runtime.self_heal_traceback_fingerprints.append(fingerprint)
+    save_task_runtime(root, task)
+
+    worktree_path = _self_heal_worktree_path(source_root, task, fingerprint)
+    worktree_path.parent.mkdir(parents=True, exist_ok=True)
+    if worktree_path.exists():
+        shutil.rmtree(worktree_path)
+    add_worktree(source_root, worktree_path, ref=current_head(source_root) or "HEAD")
+    _append_self_heal_thread_comment(
+        root,
+        task,
+        step=step,
+        headline="Litehive self-heal launched.",
+        fingerprint=fingerprint,
+        source_root=source_root,
+        worktree_path=worktree_path,
+        merge_outcome="pending",
+        requeue_decision=f"pending same-stage `{step}` if self-heal succeeds",
+    )
+    append_journal(
+        root,
+        task,
+        (
+            "Traceback classified as Litehive-owned. Launching self-heal in the Litehive repo.\n"
+            f"- litehive_source_path: `{source_root}`\n"
+            f"- litehive_worktree: `{worktree_path}`\n"
+            f"- traceback_fingerprint: `{fingerprint}`"
+        ),
+    )
+    try:
+        recovery_manager = SubagentManager(root, execution_root=worktree_path)
+        prompt = (
+            f"You are repairing a Litehive bug that interrupted external-project task {task.id} ({task.title}).\n\n"
+            f"Do all code changes inside the Litehive worktree at: {worktree_path}\n"
+            f"Do not edit the external project at: {root}\n\n"
+            f"Current stage to unblock: {step}\n"
+            f"Failure summary: {failed_report.summary}\n"
+            f"Traceback:\n{traceback_text}\n\n"
+            "Requirements:\n"
+            "- fix the Litehive bug in this Litehive worktree\n"
+            "- keep the fix scoped to the failure above\n"
+            "- do not merge anything yourself; the wrapper will run `uv run pytest` and merge if the worktree is good\n"
+            "- submit a detailed `litehive report` explaining the fix and evidence\n"
+        )
+        recovery_result = recovery_manager.run(
+            task,
+            role="recovery",
+            engine_name=engine_name,
+            prompt=prompt,
+            model=model_name,
+        )
+        pytest_result = _run_repo_pytest(worktree_path)
+        pytest_command = "uv run pytest"
+        pytest_summary = f"{pytest_command} exited {pytest_result.returncode}"
+        if pytest_result.returncode != 0:
+            summary = "Litehive self-heal produced changes, but `uv run pytest` failed so the fix was not merged."
+            record_recovery_report(
+                root,
+                task,
+                trigger="stage_failure",
+                stage=step,
+                summary=summary,
+                runnable_state="blocked",
+                failure_classification="litehive_bug",
+                blocker=pytest_summary,
+                actions=[
+                    RecoveryAction(
+                        action="self_heal_attempt",
+                        summary="Ran Litehive self-heal in the configured Litehive repo.",
+                        metadata={
+                            "traceback_fingerprint": fingerprint,
+                            "litehive_worktree": str(worktree_path),
+                        },
+                    ),
+                    RecoveryAction(
+                        action="run_pytest",
+                        applied=False,
+                        summary="Litehive test gate failed; merge was skipped.",
+                        metadata={
+                            "command": pytest_command,
+                            "exit_code": pytest_result.returncode,
+                        },
+                    ),
+                ],
+                warnings=[pytest_result.stderr.strip() or pytest_result.stdout.strip()],
+                recovery_subagent_id=recovery_result.ref.id,
+                recovery_subagent_path=recovery_result.ref.path,
+            )
+            _append_self_heal_thread_comment(
+                root,
+                task,
+                step=step,
+                headline="Litehive self-heal blocked after test gate.",
+                fingerprint=fingerprint,
+                source_root=source_root,
+                worktree_path=worktree_path,
+                test_command=pytest_command,
+                test_result=f"fail (exit {pytest_result.returncode})",
+                merge_outcome="skipped because pytest failed",
+                requeue_decision="blocked until Litehive tests pass",
+                blocker=pytest_summary,
+            )
+            return StageReport(
+                task_id=task.id,
+                step=step,  # type: ignore[arg-type]
+                verdict="blocked",
+                summary=summary,
+                failure_classification="litehive_bug",
+                failure_diagnostics={
+                    "traceback_fingerprint": fingerprint,
+                    "pytest_exit_code": pytest_result.returncode,
+                },
+                warnings=[pytest_summary],
+            )
+
+        _pull_rebase_main(source_root, subagents=subagents, task=task, config=config)
+        commit_message = f"litehive: self-heal {task.id} {step} {fingerprint}"
+        healed_commit = _commit_all_in_worktree(worktree_path, commit_message)
+        if healed_commit is None:
+            summary = "Litehive self-heal did not produce a committable fix."
+            record_recovery_report(
+                root,
+                task,
+                trigger="stage_failure",
+                stage=step,
+                summary=summary,
+                runnable_state="blocked",
+                failure_classification="litehive_bug",
+                blocker=summary,
+                actions=[
+                    RecoveryAction(
+                        action="self_heal_attempt",
+                        summary="Litehive recovery agent ran but left no committable changes.",
+                        metadata={"traceback_fingerprint": fingerprint, "litehive_worktree": str(worktree_path)},
+                    ),
+                    RecoveryAction(
+                        action="run_pytest",
+                        summary="Litehive test gate passed before merge evaluation.",
+                        metadata={"command": pytest_command, "exit_code": 0},
+                    ),
+                ],
+                recovery_subagent_id=recovery_result.ref.id,
+                recovery_subagent_path=recovery_result.ref.path,
+            )
+            _append_self_heal_thread_comment(
+                root,
+                task,
+                step=step,
+                headline="Litehive self-heal blocked after no committable fix.",
+                fingerprint=fingerprint,
+                source_root=source_root,
+                worktree_path=worktree_path,
+                test_command=pytest_command,
+                test_result="pass",
+                merge_outcome="skipped because no committable changes were produced",
+                requeue_decision="blocked pending manual recovery",
+                blocker=summary,
+            )
+            return StageReport(
+                task_id=task.id,
+                step=step,  # type: ignore[arg-type]
+                verdict="blocked",
+                summary=summary,
+                failure_classification="litehive_bug",
+                failure_diagnostics={"traceback_fingerprint": fingerprint},
+            )
+
+        merged_sha = _merge_worktree_into_main(
+            source_root,
+            worktree_path,
+            commit_message,
+            subagents=subagents,
+            task=task,
+            config=config,
+        )
+        task.status = "queued"
+        task.pipeline_status = step  # type: ignore[assignment]
+        clear_task_outcome(root, task)
+        summary = f"Litehive self-heal merged to Litehive main and requeued the task at `{step}`."
+        actions = [
+            RecoveryAction(
+                action="self_heal_attempt",
+                summary="Ran Litehive self-heal in a Litehive-owned worktree.",
+                metadata={"traceback_fingerprint": fingerprint, "litehive_worktree": str(worktree_path)},
+            ),
+            RecoveryAction(
+                action="run_pytest",
+                summary="Litehive test gate passed before merge.",
+                metadata={"command": pytest_command, "exit_code": 0},
+            ),
+            RecoveryAction(
+                action="merge_litehive_main",
+                summary="Merged the Litehive self-heal fix onto Litehive main.",
+                metadata={"commit_sha": merged_sha, "source_root": str(source_root)},
+            ),
+            RecoveryAction(
+                action="requeue_stage",
+                summary="Requeued the originating task at the same stage for the next wrapper iteration.",
+                metadata={"stage": step, "decision": "requeue"},
+            ),
+        ]
+        record_recovery_report(
+            root,
+            task,
+            trigger="stage_failure",
+            stage=step,
+            summary=summary,
+            runnable_state="runnable",
+            failure_classification="litehive_bug",
+            actions=actions,
+            recovery_subagent_id=recovery_result.ref.id,
+            recovery_subagent_path=recovery_result.ref.path,
+        )
+        append_thread_comment(
+            root,
+            task,
+            TaskThreadComment(
+                role="recovery",
+                step=step,
+                verdict="comment",
+                message=(
+                    "Litehive self-heal completed.\n"
+                    "classification: litehive_bug\n"
+                    f"traceback_fingerprint: {fingerprint}\n"
+                    f"litehive_source_path: {source_root}\n"
+                    f"litehive_worktree: {worktree_path}\n"
+                    f"test_command: {pytest_command}\n"
+                    "test_result: pass\n"
+                    f"merge_outcome: merged to Litehive main at {merged_sha}\n"
+                    f"requeue_decision: same-stage `{step}`"
+                ),
+            ),
+        )
+        return StageReport(
+            task_id=task.id,
+            step=step,  # type: ignore[arg-type]
+            verdict="pass",
+            summary=summary,
+            failure_classification="litehive_bug",
+            failure_diagnostics={
+                "traceback_fingerprint": fingerprint,
+                "litehive_merge_commit": merged_sha,
+            },
+            retry_decision="retry",
+            warnings=["self-heal applied in Litehive main; rerun required to pick up the fix"],
+        )
+    finally:
+        if worktree_path.exists():
+            remove_worktree(source_root, worktree_path, force=True)
+
+
 def _attempt_stage_recovery(
     root: Path,
     execution_root: Path,
@@ -680,15 +1148,34 @@ def _attempt_stage_recovery(
         f"- {item.label}: {item.path or 'n/a'} ({'present' if item.exists else 'missing'}) :: {item.summary}"
         for item in evidence
     )
+    failure_owner, traceback_text, source_root = _classify_recovery_failure_owner(
+        root,
+        failed_report,
+        config=config,
+    )
     append_journal(
         root, task,
         f"Stage `{step}` {failed_report.verdict}: {failed_report.summary}. Launching recovery agent.",
     )
+    if failure_owner == "litehive" and config is not None and (source_root is None or source_root != root.resolve()):
+        return _attempt_litehive_self_heal(
+            root,
+            task,
+            step,
+            failed_report,
+            subagents=subagents,
+            config=config,
+            engine_name=engine_name,
+            model_name=model_name,
+            traceback_text=traceback_text,
+            source_root=source_root,
+        )
 
     prompt = (
         f"You are running as Litehive's recovery agent for task {task.id} ({task.title}).\n\n"
         f"Failure trigger: stage `{step}` ended with verdict `{failed_report.verdict}`.\n"
         f"Failure summary: {failed_report.summary}\n\n"
+        f"Failure ownership classification: {failure_owner}\n\n"
         f"Previous report feedback:\n{failed_report.feedback or '(none)'}\n\n"
         f"Working directory: {execution_root}\n\n"
         f"Recovery evidence gathered automatically:\n{evidence_lines}\n\n"

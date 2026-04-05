@@ -1,5 +1,6 @@
 from tests.workspace_helpers import *  # noqa: F401,F403
 from litehive.observability import render_task_summary
+from litehive.runtime import _attempt_stage_recovery, _classify_recovery_failure_owner
 
 def test_classify_execution_limit_matches_codex_usage_limit_transcript() -> None:
     transcript = (
@@ -2066,6 +2067,334 @@ def test_run_next_task_preserves_git_commit_failure_diagnostics(
     assert report["failure_diagnostics"]["dirty_paths"] == ["app.txt"]
     assert report["failure_diagnostics"]["dirty_entry_count"] == 1
     assert report["failure_diagnostics"]["error"] == "simulated git commit failure"
+
+def test_attempt_stage_recovery_blocks_when_litehive_traceback_has_no_source_repo(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ensure_workspace(tmp_path, LitehiveConfig(litehive_source_path="/missing/litehive"))
+    task = create_task(tmp_path, title="External project task", auto_commit=False)
+    save_task(tmp_path, task)
+
+    failed_report = StageReport(
+        task_id=task.id,
+        step="implementing",
+        verdict="fail",
+        summary="implementing failed with unhandled error: boom",
+        failure_diagnostics={
+            "traceback": (
+                "Traceback (most recent call last):\n"
+                '  File "/usr/lib/python3.12/site-packages/litehive/runtime.py", line 1, in run_task\n'
+                "    raise RuntimeError('boom')\n"
+                "RuntimeError: boom\n"
+            )
+        },
+    )
+
+    report = _attempt_stage_recovery(
+        tmp_path,
+        tmp_path,
+        task,
+        "implementing",
+        failed_report,
+        subagents=SubagentManager(tmp_path),
+        config=load_config(tmp_path),
+    )
+
+    assert report is not None
+    assert report.verdict == "blocked"
+    assert report.failure_classification == "litehive_bug"
+    recovery_report = yaml.safe_load(
+        (task_dir(tmp_path, task) / "recovery" / "recovery-001.yaml").read_text(encoding="utf-8")
+    )
+    assert recovery_report["blocker"] == (
+        "Litehive bug detected from traceback, but `litehive_source_path` is missing or is not a git repository."
+    )
+    assert recovery_report["actions"][0]["action"] == "self_heal_blocked"
+    thread = yaml.safe_load((task_dir(tmp_path, task) / "thread.yaml").read_text(encoding="utf-8"))
+    assert any(
+        "classification: litehive_bug" in comment["message"]
+        and "traceback_fingerprint:" in comment["message"]
+        and "litehive_source_path: /missing/litehive" in comment["message"]
+        and "litehive_worktree: not-created" in comment["message"]
+        and "merge_outcome: not-attempted" in comment["message"]
+        and "requeue_decision: blocked awaiting usable litehive_source_path" in comment["message"]
+        for comment in thread
+        if comment["role"] == "recovery"
+    )
+
+def test_classify_recovery_failure_owner_prefers_project_paths_over_name_overlap(
+    tmp_path: Path,
+) -> None:
+    ensure_workspace(tmp_path, LitehiveConfig(litehive_source_path="/missing/litehive"))
+    failed_report = StageReport(
+        task_id="T-0001",
+        step="implementing",
+        verdict="fail",
+        summary="implementing failed with unhandled error: boom",
+        failure_diagnostics={
+            "traceback": (
+                "Traceback (most recent call last):\n"
+                f'  File "{tmp_path / "litehive" / "module.py"}", line 4, in explode\n'
+                "    raise RuntimeError('boom')\n"
+                "RuntimeError: boom\n"
+            )
+        },
+    )
+
+    owner, traceback_text, source_root = _classify_recovery_failure_owner(
+        tmp_path,
+        failed_report,
+        config=load_config(tmp_path),
+    )
+
+    assert owner == "project"
+    assert "RuntimeError: boom" in traceback_text
+    assert source_root == Path("/missing/litehive")
+
+def test_attempt_stage_recovery_caps_litehive_self_heal_by_traceback_fingerprint(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    litehive_root = tmp_path / "litehive-src"
+    litehive_root.mkdir()
+    _init_git_repo(litehive_root)
+    ensure_workspace(tmp_path, LitehiveConfig(litehive_source_path=str(litehive_root)))
+    task = create_task(tmp_path, title="External project task", auto_commit=False)
+    task.runtime.self_heal_traceback_fingerprints = ["a47f5f97cb7bc6c5"]
+    save_task(tmp_path, task)
+    save_task_runtime(tmp_path, task)
+
+    failed_report = StageReport(
+        task_id=task.id,
+        step="implementing",
+        verdict="fail",
+        summary="implementing failed with unhandled error: boom",
+        failure_diagnostics={
+            "traceback": (
+                "Traceback (most recent call last):\n"
+                '  File "/usr/lib/python3.12/site-packages/litehive/runtime.py", line 1, in run_task\n'
+                "    raise RuntimeError('boom')\n"
+                "RuntimeError: boom\n"
+            )
+        },
+    )
+    monkeypatch.setattr(
+        "litehive.runtime._traceback_fingerprint",
+        lambda traceback_text, summary: "a47f5f97cb7bc6c5",
+    )
+
+    report = _attempt_stage_recovery(
+        tmp_path,
+        tmp_path,
+        task,
+        "implementing",
+        failed_report,
+        subagents=SubagentManager(tmp_path),
+        config=load_config(tmp_path),
+    )
+
+    assert report is not None
+    assert report.verdict == "blocked"
+    recovery_report = yaml.safe_load(
+        (task_dir(tmp_path, task) / "recovery" / "recovery-001.yaml").read_text(encoding="utf-8")
+    )
+    assert recovery_report["actions"][0]["action"] == "self_heal_skip_repeat"
+
+def test_attempt_stage_recovery_self_heal_runs_pytest_merges_and_requeues(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    litehive_root = tmp_path / "litehive-src"
+    litehive_root.mkdir()
+    _init_git_repo(litehive_root)
+    ensure_workspace(tmp_path, LitehiveConfig(litehive_source_path=str(litehive_root)))
+    task = create_task(tmp_path, title="External project task", auto_commit=False)
+    save_task(tmp_path, task)
+
+    failed_report = StageReport(
+        task_id=task.id,
+        step="implementing",
+        verdict="fail",
+        summary="implementing failed with unhandled error: boom",
+        failure_diagnostics={
+            "traceback": (
+                "Traceback (most recent call last):\n"
+                f'  File "{litehive_root / "litehive" / "runtime.py"}", line 10, in run_task\n'
+                "    raise RuntimeError('boom')\n"
+                "RuntimeError: boom\n"
+            )
+        },
+    )
+
+    observed: dict[str, object] = {}
+
+    def fake_run(self, task_arg, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None):  # type: ignore[no-untyped-def]
+        observed["cwd"] = self.execution_root
+        observed["role"] = role
+        Path(self.execution_root, "litehive_fix.py").write_text("fixed = True\n", encoding="utf-8")
+        return _stage_subagent_result(
+            self.execution_root,
+            "implementing",
+            role="recovery",
+            summary="litehive self-heal complete",
+            files_changed=["litehive_fix.py"],
+        )
+
+    monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_run)
+    monkeypatch.setattr(
+        "litehive.runtime._run_repo_pytest",
+        lambda repo_root: subprocess.CompletedProcess(["uv", "run", "pytest"], 0, stdout="ok", stderr=""),
+    )
+    monkeypatch.setattr("litehive.runtime._pull_rebase_main", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        "litehive.runtime._commit_all_in_worktree",
+        lambda execution_root, message: "abc123selfheal",
+    )
+    monkeypatch.setattr(
+        "litehive.runtime._merge_worktree_into_main",
+        lambda source_root_arg, worktree_arg, message, **kwargs: "merged456selfheal",
+    )
+
+    report = _attempt_stage_recovery(
+        tmp_path,
+        tmp_path,
+        task,
+        "implementing",
+        failed_report,
+        subagents=SubagentManager(tmp_path),
+        config=load_config(tmp_path),
+    )
+
+    assert report is not None
+    assert report.verdict == "pass"
+    assert report.retry_decision == "retry"
+    assert report.failure_classification == "litehive_bug"
+    assert task.status == "queued"
+    assert task.pipeline_status == "implementing"
+    assert isinstance(observed["cwd"], Path)
+    assert str(observed["cwd"]).startswith(str(litehive_root / ".litehive" / "worktrees" / "self-heal-"))
+    recovery_report = yaml.safe_load(
+        (task_dir(tmp_path, task) / "recovery" / "recovery-001.yaml").read_text(encoding="utf-8")
+    )
+    action_names = [action["action"] for action in recovery_report["actions"]]
+    assert action_names == ["self_heal_attempt", "run_pytest", "merge_litehive_main", "requeue_stage"]
+    assert recovery_report["actions"][1]["metadata"]["command"] == "uv run pytest"
+    assert recovery_report["actions"][2]["metadata"]["commit_sha"] == "merged456selfheal"
+    thread = yaml.safe_load((task_dir(tmp_path, task) / "thread.yaml").read_text(encoding="utf-8"))
+    assert any(
+        "test_command: uv run pytest" in comment["message"]
+        and "merge_outcome: merged to Litehive main at merged456selfheal" in comment["message"]
+        and "requeue_decision: same-stage `implementing`" in comment["message"]
+        for comment in thread
+        if comment["role"] == "recovery"
+    )
+
+def test_attempt_stage_recovery_self_heal_stops_before_merge_when_pytest_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    litehive_root = tmp_path / "litehive-src"
+    litehive_root.mkdir()
+    _init_git_repo(litehive_root)
+    ensure_workspace(tmp_path, LitehiveConfig(litehive_source_path=str(litehive_root)))
+    task = create_task(tmp_path, title="External project task", auto_commit=False)
+    save_task(tmp_path, task)
+
+    failed_report = StageReport(
+        task_id=task.id,
+        step="implementing",
+        verdict="fail",
+        summary="implementing failed with unhandled error: boom",
+        failure_diagnostics={
+            "traceback": (
+                "Traceback (most recent call last):\n"
+                f'  File "{litehive_root / "litehive" / "runtime.py"}", line 10, in run_task\n'
+                "    raise RuntimeError('boom')\n"
+                "RuntimeError: boom\n"
+            )
+        },
+    )
+
+    monkeypatch.setattr(
+        "litehive.runtime.SubagentManager.run",
+        lambda self, task_arg, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: _stage_subagent_result(  # type: ignore[no-untyped-def]
+            self.execution_root,
+            "implementing",
+            role="recovery",
+            summary="litehive self-heal attempted",
+            files_changed=["litehive_fix.py"],
+        ),
+    )
+    monkeypatch.setattr(
+        "litehive.runtime._run_repo_pytest",
+        lambda repo_root: subprocess.CompletedProcess(["uv", "run", "pytest"], 1, stdout="", stderr="tests failed"),
+    )
+    merge_called = {"value": False}
+
+    def fail_if_merge(*args, **kwargs):  # type: ignore[no-untyped-def]
+        merge_called["value"] = True
+        raise AssertionError("merge should not run after pytest failure")
+
+    monkeypatch.setattr("litehive.runtime._merge_worktree_into_main", fail_if_merge)
+
+    report = _attempt_stage_recovery(
+        tmp_path,
+        tmp_path,
+        task,
+        "implementing",
+        failed_report,
+        subagents=SubagentManager(tmp_path),
+        config=load_config(tmp_path),
+    )
+
+    assert report is not None
+    assert report.verdict == "blocked"
+    assert report.warnings == ["uv run pytest exited 1"]
+    assert merge_called["value"] is False
+    thread = yaml.safe_load((task_dir(tmp_path, task) / "thread.yaml").read_text(encoding="utf-8"))
+    assert any(
+        "test_command: uv run pytest" in comment["message"]
+        and "test_result: fail (exit 1)" in comment["message"]
+        and "merge_outcome: skipped because pytest failed" in comment["message"]
+        and "requeue_decision: blocked until Litehive tests pass" in comment["message"]
+        for comment in thread
+        if comment["role"] == "recovery"
+    )
+
+def test_runner_requeues_same_stage_after_successful_litehive_self_heal(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(
+        tmp_path,
+        title="External project task",
+        acceptance_criteria=["The current implementing stage should resume after self-heal."],
+        auto_commit=False,
+    )
+    task.pipeline_status = "implementing"
+    save_task(tmp_path, task)
+
+    def exploding_executor(task_arg, step):  # type: ignore[no-untyped-def]
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(
+        "litehive.runtime._attempt_stage_recovery",
+        lambda *args, **kwargs: StageReport(
+            task_id=task.id,
+            step="implementing",
+            verdict="pass",
+            summary="Litehive self-heal merged to main and requeued implementing.",
+            retry_decision="retry",
+            failure_classification="litehive_bug",
+        ),
+    )
+
+    runner = TaskExecutionRunner(tmp_path, exploding_executor, subagents=object(), config=load_config(tmp_path))
+    result = runner.run(task)
+
+    refreshed = require_task(tmp_path, task.id)
+    state = load_state(tmp_path)
+    assert result.final_status == "queued"
+    assert refreshed.status == "queued"
+    assert refreshed.pipeline_status == "implementing"
+    assert state.queue[0] == task.id
 
 def test_run_next_task_skips_commit_stage_when_auto_commit_disabled(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch

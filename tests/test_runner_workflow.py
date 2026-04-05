@@ -2641,8 +2641,8 @@ def test_stage_prompt_uses_recovery_role_when_requested(tmp_path: Path) -> None:
         "Make the smallest effective fix needed so the task can resume the current stage and finish cleanly."
         in prompt
     )
-    assert "file an upstream Litehive task with `litehive issue --upstream ...`" in prompt
-    assert "use it for upstream issue filing and patch handoff without switching context" in prompt
+    assert "switch into the repo at `litehive_source_path` and repair Litehive there" in prompt
+    assert "run `uv run pytest` in the Litehive repo before reporting success" in prompt
 
 def test_stage_prompt_includes_project_startup_guidance_for_role(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
