@@ -981,6 +981,38 @@ def test_status_fast_mode_uses_state_first_reads_and_skips_runtime_hydration(
     assert "run=running" not in output
     assert "stage=implementing" not in output
 
+def test_status_output_includes_execution_estimate_fields(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Estimated task")
+    task.pipeline_status = "implementing"
+    save_task(tmp_path, task)
+
+    reports_dir = tmp_path / ".litehive" / "tasks" / f"{task.id}-{task.slug}" / "reports"
+    reports_dir.mkdir(parents=True, exist_ok=True)
+    (reports_dir / "grooming-001.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "task_id": task.id,
+                "step": "grooming",
+                "verdict": "pass",
+                "summary": "ok",
+                "duration_seconds": 120,
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+
+    exit_code = _cmd_status(argparse.Namespace(workspace=tmp_path))
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "stage_estimate=2m00s" in output
+    assert "velocity=30.0stages/h" in output
+    assert "eta=8m00s" in output
+
 def test_issue_command_files_upstream_task_with_origin_metadata(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
