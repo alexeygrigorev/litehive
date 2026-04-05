@@ -79,3 +79,12 @@ Recovered flagged accepted task back to `queued/commit_to_git` for final checkpo
 
 ## 2026-04-05T16:43:18+00:00
 Execution started with engine `claude`.
+
+## 2026-04-05T16:43:18+00:00
+Merge conflict on 2 file(s). Launching merge agent.
+
+## 2026-04-05T16:44:20+00:00
+CommitToGit complete. Commit: 15a670b92fe5751b5a21b6c4ece6c7ded32cfc03
+
+## 2026-04-05T16:44:24+00:00
+Pool stopped: continue_or_rollback_required. This task finished with checkpoint commit `15a670b92fe5751b5a21b6c4ece6c7ded32cfc03` and unrelated queued work remains. Either continue with a new `litehive run`/pool run or roll back the checkpoint first.

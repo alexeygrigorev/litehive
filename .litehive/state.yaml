@@ -1,8 +1,7 @@
-active_task_id: T-0151
+active_task_id: T-0152
 mode: implementation
 queue:
 - T-0107
-- T-0152
 - T-0153
 - T-0154
 - T-0155
