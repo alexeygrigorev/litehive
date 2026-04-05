@@ -818,6 +818,7 @@ class LitehiveConfig:
         }
     )
     default_retry_limit: int = 3
+    default_stage_retry_limit: int = 2
     execution_retry_policies: dict[str, ExecutionRetryPolicy] = field(
         default_factory=_default_execution_retry_policies
     )

@@ -120,6 +120,40 @@ When the rejection counter exceeds `max_retries` (i.e. `rejections > max_retries
 the runner terminates the task as `flagged` with
 `reason_code = "retry_limit_exhausted"` instead of requeuing it again.
 
+### Per-stage retry escalation
+
+In addition to the global retry limit, the runner tracks a per-stage rejection counter
+stored in `task.runtime.stage_retry_counts`. When the same review stage (`testing` or
+`accepting`) rejects too many times, the runner escalates the task to `grooming` instead
+of requeuing it at `implementing`. This stops implementation churn without flagging the
+task as terminal.
+
+The per-stage limit is resolved in order: task-level override
+(`task.retry_policy.stage_retry_limit`) → workspace default
+(`config.default_stage_retry_limit`, default: `2`).
+
+When `stage_retry_counts[stage] > effective_stage_limit`:
+
+- `testing` exhausted → rerouted to `grooming` with **recovery escalation** context so
+  the planner can investigate why the implementation keeps failing verification.
+- `accepting` exhausted → rerouted to `grooming` with **planner escalation** context so
+  the planner can clarify requirements, acceptance criteria, or task scope.
+
+In both cases the task remains `queued` at `grooming` — it is still runnable and visible
+in the queue. The escalation reason is recorded in:
+
+- The stage report (`outcome_reason_code = "stage_retry_limit_exhausted"`,
+  `outcome_reason` with the stage name and count).
+- `task.runtime.continuation_handoff` with `kind = "restart"`, `reason`, and `summary`
+  describing the escalation type so the next grooming run has context.
+- The task journal.
+
+The global `max_retries` check still applies after the per-stage check; a task that
+exhausts the global limit before any single stage hits its per-stage limit is still
+flagged as `retry_limit_exhausted`.
+
+Escalated `OutcomeReasonCode`: `stage_retry_limit_exhausted`
+
 ---
 
 ## Terminal outcomes
@@ -151,6 +185,8 @@ and an `OutcomeReasonCode`.
 | `execution_cancelled` | cancelled | Runner interrupted mid-stage and requeued the task, or `litehive abandon` closed it |
 | `stage_exception` | flagged | Unhandled Python exception during stage execution; the task stays queued with failure context recorded |
 | `unsupported_verdict` | flagged | Stage returned a verdict not in the transition table |
+| `retry_limit_exhausted` | flagged | Global rejection counter exceeded `max_retries`; task is flagged as terminal |
+| `stage_retry_limit_exhausted` | — (queued) | Per-stage rejection counter exceeded `stage_retry_limit`; task is rerouted to `grooming` and stays runnable |
 | `wont_do` | wont_do | Task explicitly closed with `status = wont_do` |
 | `deferred` | deferred | Task explicitly closed with `status = deferred` |
 | `duplicate` | duplicate | Task explicitly closed with `status = duplicate` |

@@ -1311,6 +1311,74 @@ def test_subagent_manager_prefers_instance_run_override_over_inherited_run_live(
     assert calls == ["run"]
     assert result.failure == EngineFailure(kind="execution_limit", reason="usage limit reached")
 
+def test_subagent_manager_prefers_class_run_override_over_inherited_run_live(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Fallback usage-limit task")
+    manager = SubagentManager(tmp_path)
+
+    calls: list[str] = []
+
+    class RunOnlyEngine(ExternalCLIAdapter):
+        def __init__(self) -> None:
+            super().__init__(
+                name="codex",
+                binary="codex",
+                capabilities=AdapterCapabilities(available=True),
+            )
+
+        def is_available(self) -> bool:
+            return True
+
+        def build_command(
+            self,
+            prompt: str,
+            cwd: Path,
+            model: str | None = None,
+            *,
+            max_turns: int | None = None,
+            resume_session_id: str | None = None,
+        ) -> list[str]:
+            raise AssertionError("build_command should not be used in this regression test")
+
+        def run(
+            self,
+            prompt: str,
+            cwd: Path,
+            model: str | None = None,
+            *,
+            max_turns: int | None = None,
+            resume_session_id: str | None = None,
+            on_started=None,
+        ) -> CLIExecutionResult:
+            del prompt, model, max_turns, resume_session_id
+            calls.append("run")
+            assert on_started is not None
+            on_started(4343)
+            return CLIExecutionResult(
+                adapter="codex",
+                argv=("codex", "exec"),
+                cwd=cwd,
+                exit_code=1,
+                stdout="",
+                stderr="ERROR: You've hit your usage limit. Try again later.",
+                pid=4343,
+            )
+
+    engine = RunOnlyEngine()
+
+    def fail_run_live(*args, **kwargs) -> CLIExecutionResult:  # type: ignore[no-untyped-def]
+        raise AssertionError("run_live should not be used when only run is overridden")
+
+    monkeypatch.setattr("litehive.subagents.get_engine", lambda _: engine)
+    monkeypatch.setattr("litehive.external_cli.ExternalCLIAdapter.run_live", fail_run_live)
+
+    result = manager.run(task, role="swe", engine_name="codex", prompt="implement it")
+
+    assert calls == ["run"]
+    assert result.failure == EngineFailure(kind="execution_limit", reason="usage limit reached")
+
 def test_create_task_rejects_missing_dependency(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
 

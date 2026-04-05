@@ -293,6 +293,7 @@ def run_task(
             ),
             max_retries=retry_limit,
             retry_source=retry_source,
+            stage_retry_limit=_resolve_stage_retry_limit(task, config),
             subagents=subagents,
             config=config,
         )
@@ -1303,6 +1304,12 @@ def resolve_task_retry_policy(task: TaskRecord, config: LitehiveConfig) -> tuple
     if task.retry_policy.max_retries is not None:
         return task.retry_policy.max_retries, "task"
     return config.default_retry_limit, "global"
+
+
+def _resolve_stage_retry_limit(task: TaskRecord, config: LitehiveConfig) -> int:
+    if task.retry_policy.stage_retry_limit is not None:
+        return task.retry_policy.stage_retry_limit
+    return config.default_stage_retry_limit
 
 
 def _execution_retry_model_family(*, engine_name: str, model_name: str | None) -> str:
