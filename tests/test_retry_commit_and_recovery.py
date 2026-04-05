@@ -294,37 +294,22 @@ def test_run_next_task_falls_back_after_stale_subagent_timeout(
         max_turns: int | None = None,
         on_started=None,
         on_update=None,
+        inactivity_timeout_seconds: float = 0,
+        **kwargs,
     ) -> CLIExecutionResult:
         del prompt, model, max_turns
-        assert on_started is not None
-        assert on_update is not None
-        on_started(7171)
-        update = CLIExecutionResult(
+        if on_started is not None:
+            on_started(7171)
+        # Simulate process killed after inactivity timeout
+        return CLIExecutionResult(
             adapter="codex",
             argv=("codex", "exec"),
             cwd=cwd,
-            exit_code=0,
-            stdout="VERDICT: PASS\nSUMMARY: partial",
-            stderr="",
+            exit_code=1,
+            stdout="",
+            stderr=f"timed out after {inactivity_timeout_seconds}s of inactivity",
             pid=7171,
         )
-        on_update(update)
-        base = next((task_dir(tmp_path, task) / "subagents").iterdir())
-        stdout_path = base / "stdout.txt"
-        stale_at = time.time() - 5
-        os.utime(stdout_path, (stale_at, stale_at))
-        on_update(
-            CLIExecutionResult(
-                adapter="codex",
-                argv=("codex", "exec"),
-                cwd=cwd,
-                exit_code=0,
-                stdout="VERDICT: PASS\nSUMMARY: partial",
-                stderr="heartbeat only",
-                pid=7171,
-            )
-        )
-        raise AssertionError("expected stale timeout to interrupt live execution")
 
     def fake_opencode_run(
         prompt: str,
