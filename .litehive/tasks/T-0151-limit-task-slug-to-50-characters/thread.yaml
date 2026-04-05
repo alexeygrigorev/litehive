@@ -205,3 +205,37 @@
     \ trimming \u2014 MET\"]}"
   files_changed: []
   created_at: '2026-04-05T16:40:37+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Added acceptance criteria best practices section to the grooming prompt
+    in litehive/subagents.py:1127-1141. The new block appears only when step == ''grooming''
+    and includes: (1) guidance to write criteria as observable outcomes rather than
+    implementation steps, (2) six paired bad/good examples covering common anti-patterns
+    (implementation-as-criterion, vague refactoring, bare commands without expected
+    results). Verified via inline Python that the guidance appears in grooming prompts
+    and does NOT appear in implementing/testing/accepting prompts. Existing test suite
+    has a pre-existing import error (_allowed_commit_paths) unrelated to this change.'
+  files_changed: []
+  created_at: '2026-04-05T16:51:43+00:00'
+- role: qa
+  step: testing
+  verdict: pass
+  message: "T-0152 PASS: Both acceptance criteria verified.\n\n1. Grooming prompt\
+    \ includes best practices for writing acceptance criteria: CONFIRMED. The stage_prompt()\
+    \ function in litehive/subagents.py:1142-1158 adds an 'Acceptance criteria best\
+    \ practices' section when step == 'grooming', with guidance on observable outcomes,\
+    \ independent checkability, and pairing commands with expected outcomes.\n\n2.\
+    \ Examples of good vs bad criteria are included: CONFIRMED. Three bad/good pairs\
+    \ are present:\n   - Bad: 'Add a validation function' vs Good: 'Submitting invalid\
+    \ input shows a clear error message'\n   - Bad: 'Refactor the module' vs Good:\
+    \ 'The module exports the same public API and all existing tests still pass'\n\
+    \   - Bad: 'Run npm test' vs Good: 'npm test passes with zero failures'\n\nVerified\
+    \ by: (a) git diff confirms the only task-relevant change is the new grooming\
+    \ block in subagents.py, (b) runtime invocation of stage_prompt() with a grooming\
+    \ step produces the expected guidance and examples, (c) the new test_slugify.py\
+    \ (5 passing) and no test regressions from this change. Pre-existing import error\
+    \ in workspace_helpers (_allowed_commit_paths) is unrelated and blocks most of\
+    \ the suite independently."
+  files_changed: []
+  created_at: '2026-04-05T16:55:47+00:00'

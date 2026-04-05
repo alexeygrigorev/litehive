@@ -25,7 +25,14 @@ from litehive.engines import (
     extract_engine_timeline,
     get_engine,
 )
-from litehive.models import ResourceLimitEvent, StageReport, SubagentRef, TaskRecord, cap_feedback, utcnow
+from litehive.models import (
+    ResourceLimitEvent,
+    StageReport,
+    SubagentRef,
+    TaskRecord,
+    cap_feedback,
+    utcnow,
+)
 from litehive.sandbox import SandboxError, SandboxLauncher
 from litehive.tasks import (
     _atomic_write_gzip_text,
@@ -62,7 +69,9 @@ class SubagentResult:
 class SubagentInactivityTimeout(RuntimeError):
     """Raised when a live subagent stops producing stdout for too long."""
 
-    def __init__(self, execution: CLIExecutionResult, *, idle_seconds: float, limit_seconds: float) -> None:
+    def __init__(
+        self, execution: CLIExecutionResult, *, idle_seconds: float, limit_seconds: float
+    ) -> None:
         self.execution = execution
         self.idle_seconds = idle_seconds
         self.limit_seconds = limit_seconds
@@ -115,9 +124,7 @@ def _write_text_artifact(
 ) -> Path:
     plain_path = base / f"{name}{suffix}"
     compressed_path = base / f"{name}{suffix}.gz"
-    should_compress = (
-        compress and len(content.encode("utf-8")) >= _COMPRESS_TEXT_ARTIFACT_MIN_BYTES
-    )
+    should_compress = compress and len(content.encode("utf-8")) >= _COMPRESS_TEXT_ARTIFACT_MIN_BYTES
     if should_compress:
         if plain_path.exists():
             plain_path.unlink()
@@ -283,7 +290,9 @@ class SubagentManager:
                 if max_turns is not None:
                     live_kwargs["max_turns"] = max_turns
                 if self.config.subagent_inactivity_timeout_seconds > 0:
-                    live_kwargs["inactivity_timeout_seconds"] = self.config.subagent_inactivity_timeout_seconds
+                    live_kwargs["inactivity_timeout_seconds"] = (
+                        self.config.subagent_inactivity_timeout_seconds
+                    )
                 proc = execution_engine.run_live(prompt, **live_kwargs)
             else:
                 run_kwargs: dict[str, object] = {
@@ -909,7 +918,10 @@ class _SandboxedAdapter(ExternalCLIAdapter):
         resume_session_id: str | None = None,
     ) -> list[str]:
         return self._adapter.build_command(
-            prompt, cwd, model=model, max_turns=max_turns,
+            prompt,
+            cwd,
+            model=model,
+            max_turns=max_turns,
             resume_session_id=resume_session_id,
         )
 
@@ -932,7 +944,10 @@ class _SandboxedAdapter(ExternalCLIAdapter):
         resume_session_id: str | None = None,
         on_started=None,
     ) -> CLIExecutionResult:
-        if _unwrap_bound_callable(getattr(self._adapter, "run", None)) is not ExternalCLIAdapter.run:
+        if (
+            _unwrap_bound_callable(getattr(self._adapter, "run", None))
+            is not ExternalCLIAdapter.run
+        ):
             return self._adapter.run(
                 prompt,
                 cwd,
@@ -1124,6 +1139,24 @@ def stage_prompt(
                     ]
                 )
 
+    if step == "grooming":
+        lines.extend(
+            [
+                "",
+                "Acceptance criteria best practices:",
+                "- Write each criterion as an observable outcome the user or reviewer can verify, not an implementation step.",
+                "- A good criterion answers: what should happen or be true when this task is done?",
+                '- Bad: "Add a validation function" — describes code to write, not behavior to verify.',
+                '- Good: "Submitting invalid input shows a clear error message" — describes observable behavior.',
+                '- Bad: "Refactor the module" — vague, no verifiable outcome.',
+                '- Good: "The module exports the same public API and all existing tests still pass" — specific and testable.',
+                '- Bad: "Run `npm test`" — just a command, not an expectation.',
+                '- Good: "`npm test` passes with zero failures" — ties the command to a verifiable result.',
+                "- Each criterion should be independently checkable without reading the implementation.",
+                "- Avoid listing commands alone; always pair them with the expected outcome.",
+            ]
+        )
+
     template = task_template(task)
     if template is not None:
         lines.extend(
@@ -1267,7 +1300,7 @@ def stage_prompt(
         [
             "",
             "IMPORTANT: When you are done, you MUST submit your verdict by running:",
-            f"  litehive report --verdict <pass|fail|reject|blocked> --role {stage_owner} --step {step} --message \"<your report>\"",
+            f'  litehive report --verdict <pass|fail|reject|blocked> --role {stage_owner} --step {step} --message "<your report>"',
             "",
             "Your --message is the PRIMARY way the next agent understands what happened.",
             "Do NOT rely on your raw transcript being read — write the report as if it is the only thing the next agent will see.",
@@ -1354,7 +1387,10 @@ def _load_agent_md(root: Path | None, role: str) -> list[str] | None:
 
 
 def _agent_startup_guidance(
-    config: LitehiveConfig | None, stage_owner: str, *, root: Path | None = None,
+    config: LitehiveConfig | None,
+    stage_owner: str,
+    *,
+    root: Path | None = None,
 ) -> list[str]:
     lines: list[str] = []
     guidance = config.agent_startup_guidance if config is not None else {}
@@ -1369,7 +1405,11 @@ def _agent_startup_guidance(
 
 
 def stage_report_from_subagent(
-    task: TaskRecord, step: str, result: SubagentResult, *, root: Path | None = None,
+    task: TaskRecord,
+    step: str,
+    result: SubagentResult,
+    *,
+    root: Path | None = None,
 ) -> StageReport:
     # Check if agent submitted a verdict via `litehive report`
     if root is not None:
@@ -1383,7 +1423,9 @@ def stage_report_from_subagent(
                 task_id=task.id,
                 step=step,  # type: ignore[arg-type]
                 verdict=latest.verdict,  # type: ignore[arg-type]
-                summary=latest.message.splitlines()[0] if latest.message else f"{step} {latest.verdict}",
+                summary=latest.message.splitlines()[0]
+                if latest.message
+                else f"{step} {latest.verdict}",
                 feedback=latest.message,
                 files_changed=latest.files_changed,
             )
