@@ -30,3 +30,4 @@ def test_slugify_truncation_word_boundary() -> None:
 def test_slugify_empty_gives_task() -> None:
     assert slugify("") == "task"
     assert slugify("!!!") == "task"
+    assert slugify("@#$%") == "task"
