@@ -2712,6 +2712,17 @@ def _should_recover_flagged_commit_stage_task(root: Path, task: TaskRecord) -> b
     return _latest_stage_report_verdict_for_step(root, task, "testing") in {"pass", "accept"}
 
 
+def _should_resume_done_task_at_commit_stage(root: Path, task: TaskRecord) -> bool:
+    if task.status != "done" or task.pipeline_status != "done":
+        return False
+    if task.git.commit_sha is not None:
+        return False
+    config = load_config(root)
+    if not config.auto_commit or not task.git.auto_commit:
+        return False
+    return _latest_stage_report_verdict_for_step(root, task, "accepting") in {"pass", "accept"}
+
+
 def _recover_flagged_commit_task(task: TaskRecord) -> str:
     _prepare_recovered_commit_task(task)
     return "Recovered flagged accepted task back to `queued/commit_to_git` for final checkpoint commit."
@@ -2781,6 +2792,9 @@ def _recover_existing_checkpoint_commit(root: Path, task: TaskRecord) -> str | N
 def _recover_stranded_commit_tasks(root: Path, state: WorkspaceState) -> bool:
     tasks = list_tasks(root)
     stranded = [task for task in tasks if _is_stranded_commit_task(task)]
+    accepted_without_commit = {
+        task.id: task for task in tasks if _should_resume_done_task_at_commit_stage(root, task)
+    }
     orphaned = [task for task in tasks if _is_orphaned_commit_stage_task(task, state)]
     flagged_commit_ready = {
         task.id: task for task in tasks if _should_recover_flagged_commit_stage_task(root, task)
@@ -2797,13 +2811,22 @@ def _recover_stranded_commit_tasks(root: Path, state: WorkspaceState) -> bool:
             journal_messages[task.id] = journal_message
             continue
         recovered.append(task)
+    recovered.extend(
+        task for task_id, task in accepted_without_commit.items() if task_id not in completed_ids
+    )
     recovered.extend(orphaned)
     recovered.extend(flagged_commit_ready.values())
     recovered_ids = {task.id for task in recovered}
     resolved_ids = {*recovered_ids, *completed_ids}
     queue = [task_id for task_id in state.queue if task_id not in recovered_ids]
     for task in recovered:
-        if task.id in flagged_commit_ready:
+        if task.id in accepted_without_commit:
+            journal_messages[task.id] = (
+                "Recovered accepted task back to `queued/commit_to_git` "
+                "because no final checkpoint commit was recorded."
+            )
+            _prepare_recovered_commit_task(task)
+        elif task.id in flagged_commit_ready:
             journal_messages[task.id] = _recover_flagged_commit_task(task)
         else:
             journal_messages[task.id] = _recover_commit_task(root, task)

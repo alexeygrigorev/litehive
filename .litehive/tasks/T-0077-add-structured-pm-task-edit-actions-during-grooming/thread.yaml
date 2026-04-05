@@ -1,0 +1,113 @@
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Implemented automatic recovery for accepted tasks that were marked done
+    without a final checkpoint commit. The stale-runner/task-selection recovery path
+    now detects auto-commit-enabled tasks with status/pipeline_status done, no commit_sha,
+    and a passing accepting report, then requeues them at commit_to_git instead of
+    leaving them finished. This keeps commit_to_git runner-owned and lets worktree-backed
+    tasks resume deterministic final integration under the existing commit_to_git
+    path.
+
+
+    Verified with focused pytest coverage:
+
+    - uv run pytest -q tests/test_workspace.py -k "test_resolve_next_task_recovers_done_accepted_task_without_checkpoint_commit
+    or test_commit_to_git_resumes_recovered_done_accepted_worktree_task or recovers_flagged_commit_stage_after_failed_commit_report
+    or recovers_flagged_commit_stage_after_passing_review or recovers_orphaned_commit_stage_before_new_work
+    or finalizes_existing_checkpoint_commit_without_retry"
+
+    - Result: 7 passed, 520 deselected
+
+
+    Evidence against acceptance criteria:
+
+    1. Accepted task changes without a final checkpoint commit are detected automatically:
+    new recovery helper identifies done/accepted auto-commit tasks with no commit_sha
+    and requeues them.
+
+    2. Litehive resumes or continues the runner-owned commit_to_git path: recovered
+    tasks are moved back to queued/commit_to_git and prioritized ahead of later queued
+    work.
+
+    3. Agents are not required to run git commit themselves for normal task completion:
+    recovery now routes these tasks back through commit_to_git instead of treating
+    them as finished.
+
+    4. For worktree-backed tasks, the runner completes deterministic integration:
+    new test proves a recovered accepted task with an existing task worktree is resumed
+    through _commit_to_git_report, produces checkpoint_attempts == 1, clears the worktree
+    record, and lands the change in the main checkout.'
+  files_changed: []
+  created_at: '2026-04-05T02:18:55+00:00'
+- role: qa
+  step: testing
+  verdict: pass
+  message: 'Verified automatic recovery of accepted tasks that reached done without
+    a checkpoint commit and confirmed they are requeued at runner-owned commit_to_git
+    instead of being treated as finished.
+
+
+    Focused checks run:
+
+    - uv run pytest -q tests/test_workspace.py -k "test_resolve_next_task_recovers_done_accepted_task_without_checkpoint_commit
+    or test_commit_to_git_resumes_recovered_done_accepted_worktree_task or recovers_flagged_commit_stage_after_failed_commit_report
+    or recovers_flagged_commit_stage_after_passing_review or recovers_orphaned_commit_stage_before_new_work
+    or finalizes_existing_checkpoint_commit_without_retry"
+
+    - Result: 7 passed, 520 deselected in 2.30s
+
+
+    Evidence by acceptance criterion:
+
+    1. Accepted task changes without a final checkpoint commit are detected automatically:
+    test_resolve_next_task_recovers_done_accepted_task_without_checkpoint_commit proves
+    a task with status/pipeline_status done, no commit_sha, and a passing accepting
+    report is recovered and selected ahead of later queued work.
+
+    2. Litehive resumes or continues the runner-owned commit_to_git path instead of
+    treating the task as finished: the recovered task is rewritten to queued/commit_to_git
+    and added to the front of the queue by resolve_next_task recovery.
+
+    3. Agents are not required to run git commit themselves for normal task completion:
+    recovery routes the task back into commit_to_git rather than expecting an agent-side
+    commit after acceptance.
+
+    4. For worktree-backed tasks, the runner completes the commit and deterministic
+    integration step: test_commit_to_git_resumes_recovered_done_accepted_worktree_task
+    drives the recovered task through _commit_to_git_report, records commit_sha, increments
+    checkpoint_attempts to 1, clears worktree_path, and lands the worktree file content
+    in the main checkout.
+
+
+    Files inspected: litehive/tasks.py, tests/test_workspace.py. No additional issues
+    found in the validated scope.'
+  files_changed: []
+  created_at: '2026-04-05T02:20:17+00:00'
+- role: reviewer
+  step: accepting
+  verdict: pass
+  message: 'Verified runner-owned recovery for accepted tasks that were marked done
+    without a final checkpoint commit. I reviewed the scoped changes in litehive/tasks.py
+    and tests/test_workspace.py and confirmed the new recovery helper only targets
+    auto-commit-enabled tasks with status/pipeline_status done, no recorded commit_sha,
+    and a passing accepting report, then rewrites them back to queued/commit_to_git
+    instead of leaving them finished. This satisfies the detection and resume criteria
+    and keeps commit_to_git runner-owned rather than requiring an agent-side git commit.
+    I also verified the worktree-backed completion path still runs through the existing
+    commit_to_git integration flow and deterministically lands the worktree change
+    in the main checkout with commit_sha recorded and worktree metadata cleared. Tests
+    run: uv run pytest -q tests/test_workspace.py -k ''test_resolve_next_task_recovers_done_accepted_task_without_checkpoint_commit
+    or test_commit_to_git_resumes_recovered_done_accepted_worktree_task or recovers_flagged_commit_stage_after_failed_commit_report
+    or recovers_flagged_commit_stage_after_passing_review or recovers_orphaned_commit_stage_before_new_work
+    or finalizes_existing_checkpoint_commit_without_retry'' -> 7 passed; uv run pytest
+    -q tests/test_workspace.py -k ''commit_to_git_treats_clean_task_worktree_as_done
+    or commit_to_git_integrates_existing_litehive_checkpoint_from_clean_worktree or
+    commit_to_git_integrates_agent_precommit_in_task_worktree or commit_to_git_rebases_worktree_onto_current_main_before_integrating
+    or commit_to_git_cherry_picks_when_main_moved_after_worktree_started'' -> 5 passed.
+    Acceptance criteria met: automatic detection of accepted tasks missing a checkpoint
+    commit, automatic resumption at runner-owned commit_to_git, no normal requirement
+    for agents to run git commit, and deterministic worktree integration under runner
+    control.'
+  files_changed: []
+  created_at: '2026-04-05T02:22:00+00:00'

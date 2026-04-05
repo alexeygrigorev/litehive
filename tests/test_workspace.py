@@ -17140,6 +17140,112 @@ def test_resolve_next_task_recovers_flagged_commit_stage_after_failed_commit_rep
     assert "Recovered flagged accepted task back to `queued/commit_to_git`" in journal
 
 
+def test_resolve_next_task_recovers_done_accepted_task_without_checkpoint_commit(
+    tmp_path: Path,
+) -> None:
+    _init_git_repo(tmp_path)
+    ensure_workspace(tmp_path)
+    follow_up = create_task(tmp_path, title="Later task", auto_commit=False)
+    accepted = create_task(tmp_path, title="Accepted without checkpoint")
+
+    worktree_path = tmp_path / ".litehive" / "worktrees" / f"{accepted.id}-{accepted.slug}"
+    worktree_path.parent.mkdir(parents=True, exist_ok=True)
+    _run(["git", "worktree", "add", "--detach", str(worktree_path), "HEAD"], tmp_path)
+    (worktree_path / "app.txt").write_text("resumed-commit\n", encoding="utf-8")
+
+    accepted.status = "done"
+    accepted.pipeline_status = "done"
+    accepted.runtime.execution_status = "done"
+    accepted.git.worktree_path = str(worktree_path.relative_to(tmp_path))
+    save_task(tmp_path, accepted)
+    save_task_runtime(tmp_path, accepted)
+    reports_dir = task_dir(tmp_path, accepted) / "reports"
+    (reports_dir / "accepting-001.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "task_id": accepted.id,
+                "step": "accepting",
+                "verdict": "pass",
+                "summary": "accepted and ready for final checkpoint",
+                "files_changed": ["app.txt"],
+                "tests": {"added": 1, "passing": 1},
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+
+    state = load_state(tmp_path)
+    state.active_task_id = None
+    state.queue = [follow_up.id]
+    save_state(tmp_path, state)
+
+    task = resolve_next_task(tmp_path)
+
+    assert task is not None
+    assert task.id == accepted.id
+    refreshed = require_task(tmp_path, accepted.id)
+    assert refreshed.status == "queued"
+    assert refreshed.pipeline_status == "commit_to_git"
+    assert load_state(tmp_path).queue == [accepted.id, follow_up.id]
+    journal = (task_dir(tmp_path, refreshed) / "journal.md").read_text(encoding="utf-8")
+    assert "Recovered accepted task back to `queued/commit_to_git`" in journal
+
+
+def test_commit_to_git_resumes_recovered_done_accepted_worktree_task(
+    tmp_path: Path,
+) -> None:
+    _init_git_repo(tmp_path)
+    ensure_workspace(tmp_path)
+    accepted = create_task(tmp_path, title="Resume final checkpoint")
+
+    worktree_path = tmp_path / ".litehive" / "worktrees" / f"{accepted.id}-{accepted.slug}"
+    worktree_path.parent.mkdir(parents=True, exist_ok=True)
+    _run(["git", "worktree", "add", "--detach", str(worktree_path), "HEAD"], tmp_path)
+    (worktree_path / "app.txt").write_text("runner-owned-commit\n", encoding="utf-8")
+
+    accepted.status = "done"
+    accepted.pipeline_status = "done"
+    accepted.runtime.execution_status = "done"
+    accepted.git.worktree_path = str(worktree_path.relative_to(tmp_path))
+    save_task(tmp_path, accepted)
+    save_task_runtime(tmp_path, accepted)
+    reports_dir = task_dir(tmp_path, accepted) / "reports"
+    (reports_dir / "accepting-001.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "task_id": accepted.id,
+                "step": "accepting",
+                "verdict": "pass",
+                "summary": "accepted and ready for final checkpoint",
+                "files_changed": ["app.txt"],
+                "tests": {"added": 1, "passing": 1},
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+
+    state = load_state(tmp_path)
+    state.active_task_id = None
+    state.queue = []
+    save_state(tmp_path, state)
+
+    task = resolve_next_task(tmp_path)
+
+    assert task is not None
+    assert task.id == accepted.id
+    refreshed = require_task(tmp_path, accepted.id)
+    report = _commit_to_git_report(tmp_path, worktree_path, refreshed, auto_commit_enabled=True)
+
+    assert report.verdict == "pass"
+    assert refreshed.status == "done"
+    assert refreshed.pipeline_status == "done"
+    assert refreshed.git.commit_sha == _run(["git", "rev-parse", "HEAD"], tmp_path)
+    assert refreshed.git.checkpoint_attempts == 1
+    assert refreshed.git.worktree_path is None
+    assert (tmp_path / "app.txt").read_text(encoding="utf-8") == "runner-owned-commit\n"
+
 def test_repair_workspace_state_recovers_flagged_commit_stage_after_failed_commit_report(
     tmp_path: Path,
 ) -> None:
