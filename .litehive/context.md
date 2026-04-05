@@ -11,6 +11,8 @@
 - `uv run litehive status --workspace .`
 - `uv run litehive status --workspace . --fast`
   Uses state-first reads and skips per-task runtime hydration for a quicker workspace summary.
+- `uv run litehive engine gemini --workspace .`
+  Persists the workspace default engine in `.litehive/config.yaml` for quick routing changes across tasks.
 - `uv run litehive web --workspace .`
   Starts a local-only HTTP monitor for queue state, task/session details, tailed artifacts, and recent run-all logs.
 - `uv run litehive queue --workspace .`

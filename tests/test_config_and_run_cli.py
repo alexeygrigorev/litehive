@@ -1,5 +1,36 @@
 from tests.workspace_helpers import *  # noqa: F401,F403
 
+def test_engine_command_switches_workspace_default_engine(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
+
+    from litehive.cli import _cmd_engine
+
+    exit_code = _cmd_engine(
+        argparse.Namespace(
+            workspace=tmp_path,
+            engine="gemini",
+        )
+    )
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    config = load_config(tmp_path)
+    assert config.default_engine == "gemini"
+    raw_config = yaml.safe_load((tmp_path / ".litehive" / "config.yaml").read_text(encoding="utf-8"))
+    assert raw_config["default_engine"] == "gemini"
+    assert "default_engine: codex -> gemini" in output
+
+def test_engine_command_parser_accepts_workspace_switch_args() -> None:
+    parser = build_parser()
+
+    args = parser.parse_args(["engine", "opencode", "--workspace", "/tmp/demo"])
+
+    assert args.command == "engine"
+    assert args.engine == "opencode"
+    assert args.workspace == Path("/tmp/demo")
+
 def test_configure_persists_gemini_model(tmp_path: Path) -> None:
     parser = argparse.Namespace(
         workspace=tmp_path,
