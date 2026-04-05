@@ -13,6 +13,8 @@
   Uses state-first reads and skips per-task runtime hydration for a quicker workspace summary.
 - `uv run litehive engine gemini --workspace .`
   Persists the workspace default engine in `.litehive/config.yaml` for quick routing changes across tasks.
+- `uv run litehive switch T-0002 gemini --reason "quota exhausted" --workspace .`
+  Stops the task if it is active, persists a task-level engine override, appends a thread comment with prior-work pointers, and requeues it at the same stage for the next iteration.
 - `uv run litehive web --workspace .`
   Starts a local-only HTTP monitor for queue state, task/session details, tailed artifacts, and recent run-all logs.
 - `uv run litehive queue --workspace .`

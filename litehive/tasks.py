@@ -373,6 +373,17 @@ class StopTaskSummary:
     signal_sent: bool = False
 
 
+@dataclass(slots=True)
+class SwitchTaskSummary:
+    task: TaskRecord
+    previous_engine: str
+    new_engine: str
+    was_active: bool = False
+    runner_pid: int | None = None
+    signal_sent: bool = False
+    prior_work_paths: list[str] = field(default_factory=list)
+
+
 def normalize_acceptance_criteria(items: list[str] | None) -> list[str]:
     if not items:
         return []
@@ -3816,6 +3827,136 @@ def stop_current_task(
 
     task = _stop_active_task_without_runner_guard(root, active_task_id)
     return StopTaskSummary(task=task, runner_pid=runner_pid, signal_sent=runner_pid is not None)
+
+
+def _effective_task_engine(root: Path, task: TaskRecord) -> str:
+    if task.runtime.active_subagent is not None:
+        return task.runtime.active_subagent.engine
+    if task.runtime.last_subagent is not None:
+        return task.runtime.last_subagent.engine
+    return task.engine or load_config(root).default_engine
+
+
+def _switch_prior_work_paths(root: Path, task: TaskRecord) -> list[str]:
+    paths: list[str] = []
+    handoff = task.runtime.continuation_handoff
+    for candidate in (
+        None if handoff is None else handoff.subagent_path,
+        None if handoff is None else handoff.transcript_path,
+        None if handoff is None else handoff.report_path,
+        None if handoff is None else handoff.session_path,
+        None if task.runtime.last_subagent is None else task.runtime.last_subagent.path,
+    ):
+        if candidate and candidate not in paths:
+            paths.append(candidate)
+    base = _latest_subagent_base(root, task)
+    if base is not None:
+        rel_path = str(base.relative_to(task_dir(root, task)))
+        if rel_path not in paths:
+            paths.append(rel_path)
+    return paths
+
+
+def _switch_thread_comment_message(
+    task: TaskRecord,
+    *,
+    reason: str,
+    previous_engine: str,
+    new_engine: str,
+    prior_work_paths: list[str],
+) -> str:
+    lines = [
+        f"Engine switch requested: {reason}",
+        f"engine: {previous_engine} -> {new_engine}",
+        f"resume_from: {task.pipeline_status}",
+    ]
+    if prior_work_paths:
+        lines.append("prior_work:")
+        lines.extend(f"- {path}" for path in prior_work_paths)
+    else:
+        lines.append("prior_work: no prior subagent artifacts recorded")
+    return "\n".join(lines)
+
+
+def switch_task_engine(root: Path, task_id: str, *, engine: str, reason: str) -> SwitchTaskSummary:
+    if engine not in VALID_TASK_ENGINES:
+        raise ValueError(f"Unsupported engine '{engine}'")
+    if not reason.strip():
+        raise ValueError("Switch reason must not be empty")
+
+    task = require_task(root, task_id)
+    if task.pipeline_status == "done":
+        raise ValueError(f"Task {task.id} is already done")
+    if task.pipeline_status == "backlog":
+        raise ValueError(f"Task {task.id} is still in backlog and has no runnable stage to resume")
+
+    state = load_state(root)
+    was_active = state.active_task_id == task_id
+    runner_pid: int | None = None
+    signal_sent = False
+    if was_active:
+        stop_summary = stop_current_task(root)
+        task = stop_summary.task
+        runner_pid = stop_summary.runner_pid
+        signal_sent = stop_summary.signal_sent
+    else:
+        task = require_task(root, task_id)
+
+    previous_engine = _effective_task_engine(root, task)
+    update_task(
+        root,
+        task.id,
+        engine=engine,
+    )
+    task = require_task(root, task.id)
+    mark_engine_switch(
+        root,
+        task,
+        step=task.pipeline_status,
+        from_engine=previous_engine,
+        to_engine=engine,
+        reason=reason.strip(),
+    )
+    task = require_task(root, task.id)
+
+    if task.status == "queued":
+        move_queued_task(root, task.id, 1)
+        task = require_task(root, task.id)
+    elif task.status in {"interrupted", "flagged", *CLOSED_TASK_STATUSES}:
+        task = resume_task(root, task.id, front=True)
+    else:
+        raise ValueError(
+            f"Task {task.id} is {task.status} and cannot be switched into a queued runnable state"
+        )
+
+    prior_work_paths = _switch_prior_work_paths(root, task)
+    from litehive.models import TaskThreadComment
+
+    append_thread_comment(
+        root,
+        task,
+        TaskThreadComment(
+            role="operator",
+            step=task.pipeline_status,
+            verdict="comment",
+            message=_switch_thread_comment_message(
+                task,
+                reason=reason.strip(),
+                previous_engine=previous_engine,
+                new_engine=engine,
+                prior_work_paths=prior_work_paths,
+            ),
+        ),
+    )
+    return SwitchTaskSummary(
+        task=task,
+        previous_engine=previous_engine,
+        new_engine=engine,
+        was_active=was_active,
+        runner_pid=runner_pid,
+        signal_sent=signal_sent,
+        prior_work_paths=prior_work_paths,
+    )
 
 
 def enqueue_task(root: Path, task_id: str) -> WorkspaceState:

@@ -31,6 +31,19 @@ def test_engine_command_parser_accepts_workspace_switch_args() -> None:
     assert args.engine == "opencode"
     assert args.workspace == Path("/tmp/demo")
 
+def test_switch_command_parser_accepts_task_engine_reason_and_workspace() -> None:
+    parser = build_parser()
+
+    args = parser.parse_args(
+        ["switch", "T-0007", "gemini", "--reason", "quota exhausted", "--workspace", "/tmp/demo"]
+    )
+
+    assert args.command == "switch"
+    assert args.task_id == "T-0007"
+    assert args.engine == "gemini"
+    assert args.reason == "quota exhausted"
+    assert args.workspace == Path("/tmp/demo")
+
 def test_configure_persists_gemini_model(tmp_path: Path) -> None:
     parser = argparse.Namespace(
         workspace=tmp_path,

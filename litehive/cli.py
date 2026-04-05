@@ -87,6 +87,7 @@ from litehive.tasks import (
     require_task,
     runner_status,
     stop_current_task,
+    switch_task_engine,
     update_task_metadata,
 )
 from litehive.tui.app import LitehiveApp
@@ -1821,6 +1822,24 @@ def build_parser() -> argparse.ArgumentParser:
         help="Repository root containing .litehive/",
     )
 
+    switch = subparsers.add_parser(
+        "switch",
+        help="Stop or resume a task, switch its task-level engine override, and queue it for the next iteration",
+    )
+    switch.add_argument("task_id", help="Task id to switch")
+    switch.add_argument("engine", choices=sorted(ENGINE_CHOICES), help="Task-level engine override to persist")
+    switch.add_argument(
+        "--reason",
+        required=True,
+        help="Why the engine switch happened; recorded in the task thread comment",
+    )
+    switch.add_argument(
+        "--workspace",
+        type=Path,
+        default=Path.cwd(),
+        help="Repository root containing .litehive/",
+    )
+
     close = subparsers.add_parser(
         "close",
         help="Close a task with an explicit non-implementation outcome (wont_do, deferred, duplicate)",
@@ -2868,6 +2887,30 @@ def _cmd_stop_task(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_switch_task(args: argparse.Namespace) -> int:
+    ensure_workspace(args.workspace)
+    try:
+        summary = switch_task_engine(
+            args.workspace,
+            args.task_id,
+            engine=args.engine,
+            reason=args.reason,
+        )
+    except (ValueError, WorkspaceConflictError) as exc:
+        print(f"switch failed: {exc}")
+        return 1
+    state = load_state(args.workspace)
+    print(f"task: {summary.task.id} {summary.task.title}")
+    print("status: queued")
+    print(f"pipeline_status: {summary.task.pipeline_status}")
+    print(f"engine: {summary.previous_engine} -> {summary.new_engine}")
+    print(f"was_active: {'yes' if summary.was_active else 'no'}")
+    print(f"runner_pid: {summary.runner_pid if summary.runner_pid is not None else '-'}")
+    print(f"signal_sent: {'yes' if summary.signal_sent else 'no'}")
+    print(f"position: {state.queue.index(summary.task.id) + 1}")
+    return 0
+
+
 def _cmd_close_task(args: argparse.Namespace) -> int:
     ensure_workspace(args.workspace)
     try:
@@ -3357,6 +3400,8 @@ def main() -> int:
         return _cmd_abandon_task(args)
     if args.command == "stop":
         return _cmd_stop_task(args)
+    if args.command == "switch":
+        return _cmd_switch_task(args)
     if args.command == "close":
         return _cmd_close_task(args)
     if args.command == "update":

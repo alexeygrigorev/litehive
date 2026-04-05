@@ -1876,6 +1876,154 @@ def test_stop_current_task_signals_live_runner_before_fallback(
     assert refreshed.status == "interrupted"
     assert refreshed.runtime.execution_status == "interrupted"
 
+def test_switch_command_interrupts_active_task_persists_engine_and_records_thread_comment(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
+    task = create_task(tmp_path, title="Switch active task", auto_commit=False)
+    task.status = "in_progress"
+    task.pipeline_status = "testing"
+    task.runtime.execution_status = "running"
+    task.runtime.run_started_at = "2026-04-01T00:00:00+00:00"
+    task.runtime.current_stage = RuntimeStageState(
+        step="testing",
+        status="running",
+        started_at="2026-04-01T00:00:00+00:00",
+        completed_at=None,
+        updated_at="2026-04-01T00:01:00+00:00",
+        duration_seconds=60,
+        verdict=None,
+        summary="",
+    )
+    task.runtime.active_subagent = RuntimeSubagentState(
+        id="SA-0001",
+        role="qa",
+        engine="codex",
+        status="running",
+        path="subagents/SA-0001-qa",
+        pid=5151,
+        started_at="2026-04-01T00:00:05+00:00",
+        updated_at="2026-04-01T00:01:00+00:00",
+        transcript_snippet="tests were halfway done",
+        continuation=RuntimeEngineContinuation(session_id="codex_resume_123"),
+    )
+    save_task(tmp_path, task)
+    save_task_runtime(tmp_path, task)
+    (task_dir(tmp_path, task) / "subagents" / "SA-0001-qa").mkdir(parents=True)
+
+    set_active_task(tmp_path, task.id)
+
+    exit_code = _cmd_switch_task(
+        argparse.Namespace(
+            workspace=tmp_path,
+            task_id=task.id,
+            engine="gemini",
+            reason="codex quota exhausted",
+        )
+    )
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "status: queued" in output
+    assert "pipeline_status: testing" in output
+    assert "engine: codex -> gemini" in output
+    assert "was_active: yes" in output
+    assert "position: 1" in output
+
+    refreshed = get_task(tmp_path, task.id)
+    assert refreshed is not None
+    assert refreshed.engine == "gemini"
+    assert refreshed.status == "queued"
+    assert refreshed.pipeline_status == "testing"
+    assert refreshed.runtime.execution_status == "idle"
+    assert refreshed.runtime.active_subagent is None
+    assert refreshed.runtime.continuation_handoff is not None
+    assert refreshed.runtime.continuation_handoff.kind == "restart"
+    assert refreshed.runtime.continuation_handoff.subagent_path == "subagents/SA-0001-qa"
+    assert refreshed.runtime.last_engine_switch is not None
+    assert refreshed.runtime.last_engine_switch.from_engine == "codex"
+    assert refreshed.runtime.last_engine_switch.to_engine == "gemini"
+    assert refreshed.runtime.last_engine_switch.reason == "codex quota exhausted"
+    assert load_state(tmp_path).active_task_id is None
+    assert load_state(tmp_path).queue == [task.id]
+
+    thread = tasks_module.load_task_thread(tmp_path, refreshed)
+    assert thread[-1].role == "operator"
+    assert "Engine switch requested: codex quota exhausted" in thread[-1].message
+    assert "engine: codex -> gemini" in thread[-1].message
+    assert "resume_from: testing" in thread[-1].message
+    assert "- subagents/SA-0001-qa" in thread[-1].message
+    assert "- subagents/SA-0001-qa/transcript.md" in thread[-1].message
+
+def test_switch_task_engine_resumes_interrupted_task_at_same_stage_and_front_of_queue(
+    tmp_path: Path,
+) -> None:
+    ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
+    first = create_task(tmp_path, title="Keep first queued", auto_commit=False)
+    interrupted = create_task(tmp_path, title="Switch interrupted task", auto_commit=False)
+    interrupted.status = "interrupted"
+    interrupted.pipeline_status = "implementing"
+    interrupted.engine = "codex"
+    interrupted.runtime.execution_status = "interrupted"
+    interrupted.runtime.last_outcome.kind = "interrupted"
+    interrupted.runtime.last_outcome.stage = "implementing"
+    interrupted.runtime.last_outcome.reason_code = "execution_interrupted"
+    interrupted.runtime.last_subagent = RuntimeSubagentState(
+        id="SA-0002",
+        role="swe",
+        engine="codex",
+        status="interrupted",
+        path="subagents/SA-0002-swe",
+        started_at="2026-04-01T00:00:00+00:00",
+        updated_at="2026-04-01T00:00:30+00:00",
+        completed_at="2026-04-01T00:00:30+00:00",
+        transcript_snippet="implementation half done",
+    )
+    interrupted.runtime.continuation_handoff = RuntimeContinuationHandoff(
+        step="implementing",
+        kind="restart",
+        reason="Need a different engine",
+        from_engine="codex",
+        to_engine="codex",
+        subagent_id="SA-0002",
+        subagent_path="subagents/SA-0002-swe",
+        status="interrupted",
+        summary="implementation half done",
+        transcript_snippet="implementation half done",
+        warnings=[],
+        transcript_path="subagents/SA-0002-swe/transcript.md",
+        updated_at="2026-04-01T00:00:30+00:00",
+    )
+    save_task(tmp_path, interrupted)
+    save_task_runtime(tmp_path, interrupted)
+    (task_dir(tmp_path, interrupted) / "subagents" / "SA-0002-swe").mkdir(parents=True)
+
+    switched = switch_task_engine(
+        tmp_path,
+        interrupted.id,
+        engine="gemini",
+        reason="Need larger context window",
+    )
+
+    assert switched.was_active is False
+    assert switched.previous_engine == "codex"
+    assert switched.new_engine == "gemini"
+    assert load_state(tmp_path).queue == [interrupted.id, first.id]
+
+    refreshed = get_task(tmp_path, interrupted.id)
+    assert refreshed is not None
+    assert refreshed.engine == "gemini"
+    assert refreshed.status == "queued"
+    assert refreshed.pipeline_status == "implementing"
+    assert refreshed.runtime.continuation_handoff is not None
+    assert refreshed.runtime.continuation_handoff.subagent_path == "subagents/SA-0002-swe"
+
+    thread = tasks_module.load_task_thread(tmp_path, refreshed)
+    assert "Engine switch requested: Need larger context window" in thread[-1].message
+    assert "engine: codex -> gemini" in thread[-1].message
+    assert "resume_from: implementing" in thread[-1].message
+    assert "- subagents/SA-0002-swe" in thread[-1].message
+
 def test_runner_flags_task_when_retry_limit_exhausted(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Exhausted task")

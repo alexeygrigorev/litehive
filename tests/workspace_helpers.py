@@ -41,6 +41,7 @@ from litehive.cli import (
     _cmd_run,
     _cmd_stop_task,
     _cmd_status,
+    _cmd_switch_task,
     _cmd_update,
     build_parser,
 )
@@ -91,6 +92,7 @@ from litehive.models import (
     LiveEvent,
     LiveTimeline,
     ResourceLimitEvent,
+    RuntimeContinuationHandoff,
     RuntimeEngineContinuation,
     RuntimeInterruptionState,
     RuntimeStageState,
@@ -166,6 +168,7 @@ from litehive.tasks import (
     save_task_runtime,
     set_active_task,
     stop_current_task,
+    switch_task_engine,
     restore_untouched_active_task,
     runner_status,
     task_dir,
