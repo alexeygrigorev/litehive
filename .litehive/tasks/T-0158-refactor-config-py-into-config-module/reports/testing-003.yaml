@@ -1,0 +1,59 @@
+task_id: T-0158
+step: testing
+verdict: pass
+summary: Package exists with 6 sub-modules. Now let me read all the source files to
+  verify the acceptance criteria.
+feedback: 'Package exists with 6 sub-modules. Now let me read all the source files
+  to verify the acceptance criteria.
+
+  Now let me verify there''s no leftover `config.py` and check imports are working
+  correctly.
+
+  The errors are all about `_allowed_commit_paths` missing from `litehive/runtime.py`
+  - not related to the config refactoring. Let me verify this is pre-existing.
+
+  Confirmed: the same 10 collection errors exist on the original code (pre-existing).
+  Not caused by the config refactoring.
+
+
+  Let me verify the config package imports work correctly:
+
+  Now let me verify backward compatibility by checking the critical consumer imports
+  work:
+
+  All acceptance criteria verified. Let me submit the report.
+
+  QA verdict submitted: **PASS**.
+
+
+  All 4 acceptance criteria verified:
+
+  - **Package structure**: `litehive/config/` with 6 modules (including `__init__.py`)
+
+  - **Docstrings**: All 38 `LitehiveConfig` fields documented in class docstring
+
+  - **DRY retry policies**: Single `_make_default_retry_policy()` factory reused for
+  all 5 engines
+
+  - **Tests**: 10 pre-existing collection errors from `_allowed_commit_paths` in `runtime.py`
+  (confirmed identical on original code); all 17 consumer modules import successfully'
+files_changed: []
+follow_up_tasks: []
+created_follow_up_task_ids: []
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 170
+hook_results: []
+created_at: '2026-04-05T18:50:30+00:00'
