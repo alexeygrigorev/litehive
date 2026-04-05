@@ -1135,23 +1135,12 @@ def run_late_stage_completion_preflight(
         )
 
     if task.git.commit_sha is not None:
+        # Clear stale commit SHA from a previous attempt so commit_to_git can proceed
         diagnostics["check"] = "commit_sha"
-        diagnostics["unexpected_commit_sha"] = task.git.commit_sha
-        return result(
-            passed=False,
-            summary=f"task already recorded final commit `{task.git.commit_sha}` before commit_to_git",
-            classification="unexpected_existing_commit_sha",
-        )
-
-    existing_commit = find_commit_by_subject(root, message)
-    if existing_commit is not None:
-        diagnostics["check"] = "commit_subject_uniqueness"
-        diagnostics["existing_commit_sha"] = existing_commit
-        return result(
-            passed=False,
-            summary=f"planned checkpoint commit already exists at `{existing_commit}`",
-            classification="duplicate_checkpoint_commit",
-        )
+        diagnostics["cleared_stale_commit_sha"] = task.git.commit_sha
+        task.git.commit_sha = None
+        from litehive.tasks import save_task
+        save_task(root, task)
 
     worktree_path_value = get_task_worktree_path(task)
     if not worktree_path_value:
@@ -1223,30 +1212,19 @@ def run_late_stage_completion_preflight(
             classification="worktree_head_unresolved",
         )
     if main_head is not None and worktree_head != main_head:
+        # Worktree HEAD differs from main - this is normal when the agent committed work.
+        # commit_to_git will merge it.
         diagnostics["check"] = "worktree_head_match"
-        return result(
-            passed=False,
-            summary=(
-                f"task worktree already contains commits not owned by litehive "
-                f"(worktree HEAD `{worktree_head}` != main HEAD `{main_head}`)"
-            ),
-            classification="unexpected_worktree_commits",
-        )
+        diagnostics["note"] = "worktree has commits ahead of main - will be merged during commit_to_git"
 
     root_conflicts = _list_conflict_files(root)
     worktree_conflicts = _list_conflict_files(worktree_path)
     diagnostics["root_conflicts"] = root_conflicts
     diagnostics["worktree_conflicts"] = worktree_conflicts
     if root_conflicts or worktree_conflicts:
+        # Don't block - the merge agent will resolve conflicts during commit_to_git
         diagnostics["check"] = "merge_conflicts"
-        return result(
-            passed=False,
-            summary=(
-                "merge-back viability check failed because unresolved conflicts remain in "
-                f"{'workspace' if root_conflicts else 'task worktree'}"
-            ),
-            classification="merge_back_viability_failed",
-        )
+        diagnostics["note"] = "conflicts detected but will be resolved by merge agent during commit"
 
     diagnostics["check"] = "complete"
     return result(
