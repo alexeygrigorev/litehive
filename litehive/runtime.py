@@ -33,6 +33,7 @@ from litehive.models import (
     StageReport,
     TaskThreadComment,
     TaskRecord,
+    cap_feedback,
 )
 from litehive.runner import RunResult, StageExecutor, TaskExecutionRunner
 from litehive.subagents import SubagentManager, stage_prompt, stage_report_from_subagent
@@ -272,9 +273,6 @@ def run_task(
 
         config = load_config(root)
         workspace_context = load_context(root)
-        recovered_summary = _recover_existing_integrated_checkpoint(root, task)
-        if recovered_summary is not None:
-            return recovered_summary
         engine_plan = resolve_engine_plan(task, config, engine_override=engine_override)
         engine_name = engine_plan[0]
         execution_root = _resolve_task_execution_root(root, task)
@@ -627,11 +625,14 @@ def _resolve_task_execution_root(root: Path, task: TaskRecord) -> Path:
     if worktree_path_value:
         worktree_path = (root / worktree_path_value).resolve()
         if not worktree_path.exists():
-            raise GitError(f"task worktree is missing: {worktree_path_value}")
-        main_head = current_head(root)
-        if main_head:
-            rebase_worktree_onto(worktree_path, main_head)
-        return worktree_path
+            # Worktree was deleted (manual cleanup or prior crash) — clear stale ref and recreate below
+            set_task_worktree_path(task, None)
+            save_task(root, task)
+        else:
+            main_head = current_head(root)
+            if main_head:
+                rebase_worktree_onto(worktree_path, main_head)
+            return worktree_path
 
     worktree_path = _task_worktree_path(root, task)
     worktree_path.parent.mkdir(parents=True, exist_ok=True)
@@ -1570,7 +1571,7 @@ def build_executor(
 
             if execution_events:
                 report.warnings = [*execution_events, *report.warnings]
-                report.feedback = "\n\n".join([*execution_events, report.feedback]).strip()
+                report.feedback = cap_feedback("\n\n".join([*execution_events, report.feedback]).strip())
             _attach_runner_hook_results(report, pre_stage_hook_results)
             if limit_trigger_reason is not None and (is_limit_failure or is_unavailable_fallback):
                 if (
@@ -1586,7 +1587,7 @@ def build_executor(
                     report.summary = (
                         f"{step} blocked after exhausting engine fallbacks: {result.failure.reason}"
                     )
-                report.feedback = "\n\n".join([*execution_events, result.transcript]).strip()
+                report.feedback = cap_feedback("\n\n".join([*execution_events, result.transcript]).strip())
                 if not report.warnings or report.warnings[-1] != result.failure.reason:
                     report.warnings.append(result.failure.reason)
                 return report
@@ -1769,12 +1770,12 @@ def _attach_runner_hook_results(
         *_flatten_runner_hook_warnings(hook_results),
         *report.warnings,
     ]
-    report.feedback = "\n\n".join(
+    report.feedback = cap_feedback("\n\n".join(
         [
             *_flatten_runner_hook_feedback(hook_results),
             report.feedback,
         ]
-    ).strip()
+    ).strip())
 
 
 def _runner_hook_point(
@@ -1925,7 +1926,7 @@ def _commit_to_git_report(
     if execution_root != root:
         subprocess.run(["git", "add", "-A"], cwd=execution_root, capture_output=True)
         subprocess.run(
-            ["git", "commit", "-m", f"litehive: complete {task.id} {task.slug}", "--allow-empty"],
+            ["git", "commit", "-m", f"litehive: complete {task.id} {task.slug}"],
             cwd=execution_root, capture_output=True,
         )
 
@@ -1934,8 +1935,9 @@ def _commit_to_git_report(
     if execution_root != root:
         wt_head = current_head(execution_root)
         if wt_head:
-            # Stash any dirty .litehive/ files on main so they don't block merge
-            subprocess.run(["git", "stash", "push", "-u", "-m", "litehive-pre-merge"],
+            # Add and commit any dirty files on main so they don't block merge
+            subprocess.run(["git", "add", "-A"], cwd=root, capture_output=True)
+            subprocess.run(["git", "commit", "-m", "chore: sync workspace state"],
                            cwd=root, capture_output=True)
             merge = subprocess.run(
                 ["git", "merge", wt_head, "-m", f"litehive: complete {task.id} {task.slug}", "--no-edit"],
@@ -1973,8 +1975,6 @@ def _commit_to_git_report(
                             merge_ok = True
                 if not merge_ok:
                     subprocess.run(["git", "merge", "--abort"], cwd=root, capture_output=True)
-            # Pop stash
-            subprocess.run(["git", "stash", "pop"], cwd=root, capture_output=True)
     else:
         merge_ok = True
 

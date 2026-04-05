@@ -6,13 +6,13 @@ task_type: docs
 engine: null
 model: null
 mode: tasks
-status: queued
-pipeline_status: backlog
+status: interrupted
+pipeline_status: accepting
 priority: medium
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-04T18:20:17+00:00'
-updated_at: '2026-04-04T18:20:17+00:00'
+updated_at: '2026-04-05T15:33:48+00:00'
 goal: Create a docs/ folder with complete user-facing documentation covering installation,
   configuration, CLI commands, pipeline modes, engine adapters, hooks, recovery agents,
   daemon management, and workspace layout. Written for someone who has never used
@@ -29,15 +29,66 @@ acceptance_criteria:
 constraints: []
 plan: []
 human_checkpoints: []
-subagents: []
+subagents:
+- id: SA-0006
+  role: planner
+  engine: codex
+  status: failed
+  path: subagents/SA-0006-planner
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0007
+  role: planner
+  engine: gemini
+  status: completed
+  path: subagents/SA-0007-planner
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0008
+  role: swe
+  engine: gemini
+  status: failed
+  path: subagents/SA-0008-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0009
+  role: recovery
+  engine: codex
+  status: failed
+  path: subagents/SA-0009-recovery
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0010
+  role: recovery
+  engine: opencode
+  status: completed
+  path: subagents/SA-0010-recovery
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0011
+  role: qa
+  engine: opencode
+  status: completed
+  path: subagents/SA-0011-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0012
+  role: reviewer
+  engine: opencode
+  status: interrupted
+  path: subagents/SA-0012-reviewer
+  sandboxed: false
+  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0144 write-comprehensive-documentation-for-litehive-in-docs'
-  commit_sha: null
+  commit_sha: d5430ca18d979101b58fec255099df8fc27f2507
   checkpoint_base_sha: null
   checkpoint_attempts: 0
   rolled_back_checkpoint_attempt: null
   worktree_path: null
 retry_policy:
   max_retries: null
+  stage_retry_limit: null
 created_from: null
+upstream_origin: null

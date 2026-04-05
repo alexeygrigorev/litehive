@@ -2404,6 +2404,7 @@ def test_parse_stage_report_text_extracts_shared_report_fields() -> None:
     assert report.tests == {"added": 3, "passing": 8}
     assert report.warnings == ["kept claude deferred"]
 
+
 def test_parse_stage_report_text_extracts_follow_up_tasks() -> None:
     report = parse_stage_report_text(
         task_id="T-0003",

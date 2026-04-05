@@ -377,3 +377,14 @@
     the implemented contract.'
   files_changed: []
   created_at: '2026-04-05T06:07:36+00:00'
+- role: recovery
+  step: implementing
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0072-add-explicit-parked-task-state-for-work-that-should-resume-later/recovery/recovery-001.yaml'
+  files_changed: []
+  created_at: '2026-04-05T14:34:20+00:00'

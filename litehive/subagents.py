@@ -25,7 +25,7 @@ from litehive.engines import (
     extract_engine_timeline,
     get_engine,
 )
-from litehive.models import ResourceLimitEvent, StageReport, SubagentRef, TaskRecord, utcnow
+from litehive.models import ResourceLimitEvent, StageReport, SubagentRef, TaskRecord, cap_feedback, utcnow
 from litehive.sandbox import SandboxError, SandboxLauncher
 from litehive.tasks import (
     _atomic_write_gzip_text,
@@ -506,7 +506,7 @@ class SubagentManager:
                 step=report_step,  # type: ignore[arg-type]
                 verdict="blocked",
                 summary=f"{report_step} blocked: {resource_limit_event.reason}",
-                feedback=transcript,
+                feedback=cap_feedback(transcript),
                 warnings=[resource_limit_event.reason],
                 resource_limit_event=resource_limit_event,
             )

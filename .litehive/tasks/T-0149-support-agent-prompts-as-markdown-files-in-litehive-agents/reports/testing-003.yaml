@@ -1,0 +1,57 @@
+task_id: T-0149
+step: testing
+verdict: pass
+summary: 'VERDICT: PASS'
+feedback: "VERDICT: PASS\nSUMMARY: All four acceptance criteria verified by direct\
+  \ functional testing of _load_agent_md and _agent_startup_guidance.\n\n## Verification\
+  \ performed\n\nSix targeted checks executed via Python against the live implementation:\n\
+  \n1. **qa.md loaded as QA prompt** \u2014 PASS: `.litehive/agents/qa.md` content\
+  \ returned as prefixed lines for the `qa` role.\n2. **swe.md loaded as SWE prompt**\
+  \ \u2014 PASS: `.litehive/agents/swe.md` content returned for the `swe` role.\n\
+  3. **Markdown takes precedence over config.yaml** \u2014 PASS: when both `swe.md`\
+  \ and `agent_startup_guidance.swe` exist, only the md content appears; config is\
+  \ ignored.\n4. **config.yaml fallback works** \u2014 PASS: when no md file exists\
+  \ for a role, `agent_startup_guidance` config entries are used.\n5. **all.md + role.md\
+  \ combine** \u2014 PASS: both global and role-specific md files contribute lines.\n\
+  6. **Empty md file produces no guidance** \u2014 PASS: whitespace-only md returns\
+  \ None, no spurious guidance injected.\n\n## Implementation locations\n- `_load_agent_md()`:\
+  \ `litehive/subagents.py:1343-1353`\n- `_agent_startup_guidance()`: `litehive/subagents.py:1356-1368`\n\
+  - Integration in prompt assembly: `litehive/subagents.py:1026`\n\n## Tests\n- 4\
+  \ unit tests exist at `tests/test_runner_workflow.py:2721-2774` covering override,\
+  \ fallback, combination, and empty-file scenarios.\n- Tests could not be collected\
+  \ via pytest due to a pre-existing `ImportError` (`_allowed_commit_paths` removed\
+  \ from `litehive/runtime.py` but still imported in `tests/workspace_helpers.py:112`).\
+  \ This is unrelated to this task.\n- All acceptance criteria were verified by direct\
+  \ Python execution against the actual implementation functions.\n\n## Warnings\n\
+  - Pre-existing ImportError in tests/workspace_helpers.py blocks pytest collection\
+  \ for test_runner_workflow.py (unrelated to this task).\n\nSTAGE_RESULT:\n{\"verdict\"\
+  :\"pass\",\"summary\":\"All acceptance criteria verified \u2014 md files load, take\
+  \ precedence, fallback works, and combine correctly\",\"files_changed\":[],\"tests\"\
+  :{\"added\":0,\"passing\":6},\"warnings\":[\"Pre-existing ImportError in tests/workspace_helpers.py\
+  \ blocks pytest collection \u2014 unrelated to this task\"],\"follow_up_tasks\"\
+  :[{\"title\":\"Fix broken import of _allowed_commit_paths in tests/workspace_helpers.py\"\
+  ,\"rationale\":\"_allowed_commit_paths was removed from litehive/runtime.py but\
+  \ tests/workspace_helpers.py:112 still imports it, blocking test collection for\
+  \ test_runner_workflow.py\",\"blocking\":false}],\"acceptance_criteria\":[\"qa.md\
+  \ loaded as QA prompt - MET\",\"swe.md loaded as SWE prompt - MET\",\"config.yaml\
+  \ fallback works - MET\",\"markdown precedence over config - MET\"]}"
+files_changed: []
+follow_up_tasks: []
+created_follow_up_task_ids: []
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 63
+hook_results: []
+created_at: '2026-04-05T16:05:45+00:00'

@@ -479,6 +479,17 @@ class StageReport(BaseModel):
     created_at: str = Field(default_factory=utcnow)
 
 
+FEEDBACK_CAP = 2000
+_TRUNCATION_MARKER = "\n\n… [truncated — full transcript in subagent artifacts]"
+
+
+def cap_feedback(text: str, *, limit: int = FEEDBACK_CAP) -> str:
+    """Truncate feedback to *limit* characters, appending a marker if trimmed."""
+    if len(text) <= limit:
+        return text
+    return text[: limit - len(_TRUNCATION_MARKER)] + _TRUNCATION_MARKER
+
+
 class ExecutionEstimate(BaseModel):
     """Velocity and ETA estimate for task execution."""
 

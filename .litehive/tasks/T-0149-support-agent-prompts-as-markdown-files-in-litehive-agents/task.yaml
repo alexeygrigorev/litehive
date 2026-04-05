@@ -6,13 +6,13 @@ task_type: null
 engine: null
 model: null
 mode: implementation
-status: queued
-pipeline_status: backlog
+status: done
+pipeline_status: done
 priority: medium
-pm_complexity: null
-planned_effort: null
+pm_complexity: simple
+planned_effort: xs
 created_at: '2026-04-04T20:45:43+00:00'
-updated_at: '2026-04-04T20:45:43+00:00'
+updated_at: '2026-04-05T16:06:27+00:00'
 goal: Allow agent role prompts to be defined in .litehive/agents/qa.md, .litehive/agents/swe.md
   etc instead of only in config.yaml. Markdown files are easier to edit and version.
 acceptance_criteria:
@@ -23,16 +23,45 @@ acceptance_criteria:
 constraints: []
 plan: []
 human_checkpoints: []
-subagents: []
+subagents:
+- id: SA-0010
+  role: planner
+  engine: claude
+  status: completed
+  path: subagents/SA-0010-planner
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0011
+  role: swe
+  engine: claude
+  status: completed
+  path: subagents/SA-0011-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0012
+  role: qa
+  engine: claude
+  status: completed
+  path: subagents/SA-0012-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0013
+  role: reviewer
+  engine: claude
+  status: completed
+  path: subagents/SA-0013-reviewer
+  sandboxed: false
+  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0149 support-agent-prompts-as-markdown-files-in-litehive-agents'
-  commit_sha: null
+  commit_sha: 5a338526facf73242805cd6a48982ba9d6497c68
   checkpoint_base_sha: null
   checkpoint_attempts: 0
   rolled_back_checkpoint_attempt: null
   worktree_path: null
 retry_policy:
   max_retries: null
+  stage_retry_limit: null
 created_from: null
 upstream_origin: null

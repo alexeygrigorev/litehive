@@ -441,76 +441,7 @@ class TaskExecutionRunner:
                         last_verdict=last_verdict,
                     )
 
-            if current == "accepting" and target == "commit_to_git":
-                from litehive.runtime import run_late_stage_completion_preflight
 
-                preflight = run_late_stage_completion_preflight(self.root, task)
-                report.hook_results.append(preflight["hook_result"])  # type: ignore[arg-type]
-                if preflight["passed"]:
-                    report.warnings.append(str(preflight["summary"]))
-                else:
-                    summary = (
-                        "accepting blocked by late-stage commit/worktree preflight: "
-                        f"{preflight['summary']}"
-                    )
-                    record_recovery_report(
-                        self.root,
-                        task,
-                        trigger="engine_preflight_failure",
-                        stage=current,
-                        summary="Late-stage preflight left the task blocked.",
-                        runnable_state="blocked",
-                        failure_classification=str(preflight["classification"]),
-                        blocker=summary,
-                        actions=[
-                            RecoveryAction(
-                                action="no_safe_repair",
-                                applied=False,
-                                summary="The runner left the task flagged because late-stage preflight could not be repaired safely.",
-                            )
-                        ],
-                        warnings=[str(item) for item in preflight["warnings"]],  # type: ignore[arg-type]
-                    )
-                    report = self._terminal_report(
-                        task,
-                        step=current,
-                        verdict="blocked",
-                        summary=summary,
-                        outcome="blocked",
-                        outcome_reason_code="verdict_blocked",
-                        reason=summary,
-                        retry_count=report.retry_count,
-                        feedback=report.feedback,
-                        files_changed=report.files_changed,
-                        tests=report.tests,
-                        warnings=[*report.warnings, *preflight["warnings"]],  # type: ignore[arg-type]
-                        resource_limit_event=report.resource_limit_event,
-                        hook_results=report.hook_results,
-                        failure_classification=preflight["classification"],  # type: ignore[arg-type]
-                        failure_diagnostics=preflight["diagnostics"],  # type: ignore[arg-type]
-                    )
-                    last_verdict = report.verdict
-                    task.status = "flagged"
-                    _apply_task_outcome(
-                        task,
-                        kind="blocked",
-                        stage=current,
-                        reason_code="verdict_blocked",
-                        reason=summary,
-                        retry_count=report.retry_count,
-                        retry_limit=self.max_retries,
-                        retry_source=self.retry_source,
-                        failure_classification=report.failure_classification,
-                        failure_diagnostics=report.failure_diagnostics,
-                    )
-                    self._write_report(task, report, steps)
-                    _apply_stage_finished(task, report)
-                    return self._finish_run(
-                        task,
-                        final_status="flagged",
-                        steps=steps,
-                        last_verdict=last_verdict,
-                    )
 
             if target == "implementing" and current in {"testing", "accepting"}:
                 rejections += 1

@@ -1,0 +1,68 @@
+task_id: T-0144
+step: testing
+verdict: pass
+summary: Verified the new docs set against the task acceptance criteria and the current
+  CLI/code surface. Confirmed docs/README.md provides an overview, installation, quick
+  start, and workflow orientation; docs/configuration.md covers workspace/global config,
+  engine setup, hooks, retry policies, pool controls, sandboxing, and startup guidance;
+  docs/cli.md documents the full top-level CLI surface with examples for configure/status/engine/queue/repair/tasks/web/daemon/add/issue/intake/run/dirty-worktree-gate/rollback/recover/move/prioritize/promote/requeue/resume/abandon/stop/switch/close/update/report;
+  docs/pipeline.md explains single-task vs drain mode, stages, roles, verdict routing,
+  retries, checkpoints, and daemon behavior; docs/engines.md covers all shipped adapters
+  plus engine routing/fallbacks and how to add a new adapter; docs/recovery.md covers
+  repair, resumable task states, recovery agents, commit recovery, merge resolution,
+  rollback/recover, engine switching, and dirty-worktree gating; docs/workspace-layout.md
+  explains tracked vs ignored .litehive state and the purpose of key files.
+feedback: 'Verified the new docs set against the task acceptance criteria and the
+  current CLI/code surface. Confirmed docs/README.md provides an overview, installation,
+  quick start, and workflow orientation; docs/configuration.md covers workspace/global
+  config, engine setup, hooks, retry policies, pool controls, sandboxing, and startup
+  guidance; docs/cli.md documents the full top-level CLI surface with examples for
+  configure/status/engine/queue/repair/tasks/web/daemon/add/issue/intake/run/dirty-worktree-gate/rollback/recover/move/prioritize/promote/requeue/resume/abandon/stop/switch/close/update/report;
+  docs/pipeline.md explains single-task vs drain mode, stages, roles, verdict routing,
+  retries, checkpoints, and daemon behavior; docs/engines.md covers all shipped adapters
+  plus engine routing/fallbacks and how to add a new adapter; docs/recovery.md covers
+  repair, resumable task states, recovery agents, commit recovery, merge resolution,
+  rollback/recover, engine switching, and dirty-worktree gating; docs/workspace-layout.md
+  explains tracked vs ignored .litehive state and the purpose of key files.
+
+
+  Verification included direct reads of all new docs, `uv run litehive --help`, and
+  subcommand help for configure/run/update/report/daemon/issue/rollback/recover/switch/close
+  to confirm the documented command names and examples match the current CLI. Also
+  checked .litehive/.gitignore against docs/workspace-layout.md.
+
+
+  Warning: the repository context points to tests/test_workspace.py, but that file
+  does not exist in this checkout. A focused existing suite was run instead with `uv
+  run pytest -q tests/test_workspace_bootstrap.py`; 19 tests passed and 1 unrelated
+  pre-existing failure remains in test_gemini_extract_usage_observation_reads_provider_limit_payload
+  (expected observation.limit_reason == "quota limit reached", observed None). This
+  failure is outside the documentation changes and does not invalidate the docs acceptance
+  criteria.'
+files_changed:
+- docs/README.md
+- docs/configuration.md
+- docs/cli.md
+- docs/pipeline.md
+- docs/engines.md
+- docs/recovery.md
+- docs/workspace-layout.md
+follow_up_tasks: []
+created_follow_up_task_ids: []
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 160
+hook_results: []
+created_at: '2026-04-05T15:33:05+00:00'

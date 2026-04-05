@@ -24,6 +24,7 @@ from litehive.models import (
     StageReport,
     StageResultSubmission,
     SubagentStatus,
+    cap_feedback,
     utcnow,
 )
 
@@ -518,7 +519,7 @@ def parse_stage_report_text(
             step=step,
             verdict=submission.verdict,  # type: ignore[arg-type]
             summary=submission.summary,
-            feedback=transcript,
+            feedback=cap_feedback(transcript),
             files_changed=submission.files_changed,
             follow_up_tasks=submission.follow_up_tasks,
             tests={"added": submission.tests.added, "passing": submission.tests.passing},
@@ -540,7 +541,7 @@ def parse_stage_report_text(
         step=step,
         verdict=_parse_verdict(transcript, subagent_status),  # type: ignore[arg-type]
         summary=summary,
-        feedback=transcript,
+        feedback=cap_feedback(transcript),
         files_changed=_extract_list(transcript, "FILES_CHANGED"),
         follow_up_tasks=follow_up_tasks,
         tests={
