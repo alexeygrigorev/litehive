@@ -101,14 +101,13 @@ def _supports_live_execution(engine: object) -> bool:
     return not _prefers_non_live_run(engine)
 
 
-def _prefers_non_live_run(engine: object) -> bool:
-    engine_dict = getattr(engine, "__dict__", {})
-    if "run" in engine_dict and "run_live" not in engine_dict:
-        return True
+def _unwrap_bound_callable(method: object) -> object:
+    return getattr(method, "__func__", method)
 
-    engine_type = type(engine)
-    run_impl = getattr(engine_type, "run", None)
-    run_live_impl = getattr(engine_type, "run_live", None)
+
+def _prefers_non_live_run(engine: object) -> bool:
+    run_impl = _unwrap_bound_callable(getattr(engine, "run", None))
+    run_live_impl = _unwrap_bound_callable(getattr(engine, "run_live", None))
     return run_impl is not ExternalCLIAdapter.run and run_live_impl is ExternalCLIAdapter.run_live
 
 
