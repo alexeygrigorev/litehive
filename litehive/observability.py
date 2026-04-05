@@ -242,6 +242,15 @@ def render_task_summary(task: TaskRecord, *, active: bool, root: Path | None = N
                 f"retry_source={runtime.last_outcome.retry_source} reason={reason}"
             )
         )
+        if runtime.last_outcome.failure_classification is not None:
+            phase = runtime.last_outcome.failure_diagnostics.get("phase", "-")
+            lines.append(
+                "  "
+                + (
+                    f"failure_classification={runtime.last_outcome.failure_classification} "
+                    f"failure_phase={phase}"
+                )
+            )
 
     if task.git.commit_sha:
         lines.append(f"  commit={task.git.commit_sha}")

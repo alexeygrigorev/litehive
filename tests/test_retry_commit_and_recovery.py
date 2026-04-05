@@ -1,4 +1,5 @@
 from tests.workspace_helpers import *  # noqa: F401,F403
+from litehive.observability import render_task_summary
 
 def test_classify_execution_limit_matches_codex_usage_limit_transcript() -> None:
     transcript = (
@@ -1678,18 +1679,23 @@ def test_run_next_task_flags_task_when_commit_stage_prerequisite_is_missing(
     task = get_task(tmp_path, "T-0001")
     assert task is not None
     assert task.status == "flagged"
-    assert task.runtime.last_outcome.kind == "flagged"
-    assert task.runtime.last_outcome.reason_code == "verdict_fail"
+    assert task.runtime.last_outcome.kind == "blocked"
+    assert task.runtime.last_outcome.reason_code == "verdict_blocked"
     assert task.runtime.last_outcome.failure_classification == "not_git_repo"
-    assert task.runtime.last_outcome.failure_diagnostics["phase"] == "preflight"
-    assert task.runtime.last_outcome.failure_diagnostics["execution_root"] == str(tmp_path)
+    assert task.runtime.last_outcome.failure_diagnostics["phase"] == "late_stage_preflight"
+    assert task.runtime.last_outcome.failure_diagnostics["workspace_root"] == str(tmp_path)
     assert task.runtime.last_outcome.failure_diagnostics["planned_checkpoint_attempt"] == 1
     assert task.runtime.last_outcome.failure_diagnostics["planned_commit_message"] == (
         "litehive: complete T-0001 needs-git-repo"
     )
     assert task.runtime.last_outcome.retry_limit == 3
-    assert task.pipeline_status == "commit_to_git"
+    assert task.pipeline_status == "accepting"
     assert task.git.commit_sha is None
+    summary_lines = render_task_summary(task, active=False, root=tmp_path)
+    assert any(
+        "failure_classification=not_git_repo failure_phase=late_stage_preflight" in line
+        for line in summary_lines
+    )
     report = yaml.safe_load(
         (
             tmp_path
@@ -1697,15 +1703,131 @@ def test_run_next_task_flags_task_when_commit_stage_prerequisite_is_missing(
             / "tasks"
             / "T-0001-needs-git-repo"
             / "reports"
-            / "commit_to_git-005.yaml"
+            / "accepting-004.yaml"
         ).read_text(encoding="utf-8")
     )
+    assert report["verdict"] == "blocked"
     assert report["failure_classification"] == "not_git_repo"
-    assert report["failure_diagnostics"]["phase"] == "preflight"
+    assert report["failure_diagnostics"]["phase"] == "late_stage_preflight"
     assert report["failure_diagnostics"]["planned_checkpoint_attempt"] == 1
     assert report["failure_diagnostics"]["planned_commit_message"] == (
         "litehive: complete T-0001 needs-git-repo"
     )
+    assert report["hook_results"][-1]["point"] == "before_commit_to_git_preflight"
+    assert report["hook_results"][-1]["status"] == "failed"
+
+
+def test_run_next_task_records_passing_late_stage_preflight(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _init_git_repo(tmp_path)
+    ensure_workspace(tmp_path)
+    create_task(tmp_path, title="Preflight passes")
+    (tmp_path / "app.txt").write_text("updated\n", encoding="utf-8")
+
+    monkeypatch.setattr(
+        "litehive.runtime.SubagentManager.run",
+        lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
+            _completed_subagent_result(tmp_path, task.pipeline_status)
+        ),
+    )
+
+    summary = run_next_task(tmp_path)
+
+    assert summary.result is not None
+    assert summary.result.final_status == "done"
+    accepting_report = yaml.safe_load(
+        (
+            tmp_path
+            / ".litehive"
+            / "tasks"
+            / "T-0001-preflight-passes"
+            / "reports"
+            / "accepting-004.yaml"
+        ).read_text(encoding="utf-8")
+    )
+    assert accepting_report["hook_results"][-1]["point"] == "before_commit_to_git_preflight"
+    assert accepting_report["hook_results"][-1]["status"] == "passed"
+    assert "Late-stage commit/worktree preflight passed" in accepting_report["warnings"]
+
+
+def test_run_next_task_blocks_before_commit_when_task_worktree_path_is_missing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _init_git_repo(tmp_path)
+    ensure_workspace(tmp_path)
+    create_task(tmp_path, title="Missing preflight worktree")
+    (tmp_path / "app.txt").write_text("updated\n", encoding="utf-8")
+
+    def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None):  # type: ignore[no-untyped-def]
+        if task.pipeline_status == "accepting":
+            task.runtime.git.worktree_path = "../missing-preflight-worktree"
+        return _completed_subagent_result(tmp_path, task.pipeline_status)
+
+    monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_run)
+
+    summary = run_next_task(tmp_path)
+
+    assert summary.result is not None
+    assert summary.result.final_status == "flagged"
+    task = get_task(tmp_path, "T-0001")
+    assert task is not None
+    assert task.pipeline_status == "accepting"
+    assert task.runtime.last_outcome.kind == "blocked"
+    assert task.runtime.last_outcome.failure_classification == "missing_task_worktree"
+    accepting_report = yaml.safe_load(
+        (
+            tmp_path
+            / ".litehive"
+            / "tasks"
+            / "T-0001-missing-preflight-worktree"
+            / "reports"
+            / "accepting-004.yaml"
+        ).read_text(encoding="utf-8")
+    )
+    assert accepting_report["verdict"] == "blocked"
+    assert accepting_report["failure_classification"] == "missing_task_worktree"
+    assert accepting_report["hook_results"][-1]["status"] == "failed"
+
+
+def test_run_next_task_blocks_before_commit_when_worktree_has_unexpected_commit(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _init_git_repo(tmp_path)
+    ensure_workspace(tmp_path)
+    create_task(tmp_path, title="Unexpected worktree commit")
+    (tmp_path / "app.txt").write_text("updated\n", encoding="utf-8")
+
+    def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None):  # type: ignore[no-untyped-def]
+        if task.pipeline_status == "accepting":
+            worktree_path = tmp_path / str(task.runtime.git.worktree_path)
+            _run(["git", "commit", "--allow-empty", "-m", "manual worktree commit"], worktree_path)
+        return _completed_subagent_result(tmp_path, task.pipeline_status)
+
+    monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_run)
+
+    summary = run_next_task(tmp_path)
+
+    assert summary.result is not None
+    assert summary.result.final_status == "flagged"
+    task = get_task(tmp_path, "T-0001")
+    assert task is not None
+    assert task.pipeline_status == "accepting"
+    assert task.runtime.last_outcome.kind == "blocked"
+    assert task.runtime.last_outcome.failure_classification == "unexpected_worktree_commits"
+    accepting_report = yaml.safe_load(
+        (
+            tmp_path
+            / ".litehive"
+            / "tasks"
+            / "T-0001-unexpected-worktree-commit"
+            / "reports"
+            / "accepting-004.yaml"
+        ).read_text(encoding="utf-8")
+    )
+    assert accepting_report["verdict"] == "blocked"
+    assert accepting_report["failure_classification"] == "unexpected_worktree_commits"
+    assert accepting_report["failure_diagnostics"]["phase"] == "late_stage_preflight"
 
 def test_run_next_task_records_blocked_reason_code_when_fallbacks_are_exhausted(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch

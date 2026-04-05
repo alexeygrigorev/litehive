@@ -21,6 +21,7 @@ from litehive.git_ops import (
     checkpoint_message,
     commit_task,
     current_head,
+    find_commit_by_subject,
     has_changes,
     is_git_repo,
     rebase_worktree_onto,
@@ -954,6 +955,183 @@ def _list_conflict_files(root: Path) -> list[str]:
     if proc.returncode != 0:
         return []
     return [f.strip() for f in proc.stdout.splitlines() if f.strip()]
+
+
+def run_late_stage_completion_preflight(
+    root: Path,
+    task: TaskRecord,
+) -> dict[str, object]:
+    root = root.resolve()
+    diagnostics: dict[str, str | int | bool | None | list[str]] = {
+        "phase": "late_stage_preflight",
+        "workspace_root": str(root),
+        "auto_commit_enabled": task.git.auto_commit,
+        "pipeline_status": task.pipeline_status,
+        "checkpoint_attempt": task.git.checkpoint_attempts,
+        "planned_checkpoint_attempt": task.git.checkpoint_attempts + 1,
+    }
+
+    def result(
+        *,
+        passed: bool,
+        summary: str,
+        classification: str | None = None,
+        warnings: list[str] | None = None,
+    ) -> dict[str, object]:
+        hook_result: dict[str, str | int | bool | None] = {
+            "point": "before_commit_to_git_preflight",
+            "status": "passed" if passed else "failed",
+            "summary": summary,
+        }
+        if classification is not None:
+            hook_result["classification"] = classification
+        return {
+            "passed": passed,
+            "summary": summary,
+            "classification": classification,
+            "warnings": warnings or [],
+            "diagnostics": dict(diagnostics),
+            "hook_result": hook_result,
+        }
+
+    if not task.git.auto_commit:
+        diagnostics["check"] = "auto_commit_disabled"
+        return result(
+            passed=True,
+            summary="Late-stage commit/worktree preflight skipped because auto-commit is disabled",
+        )
+
+    message = checkpoint_message(task, attempt=task.git.checkpoint_attempts + 1)
+    diagnostics["planned_commit_message"] = message
+    diagnostics["recorded_worktree_path"] = get_task_worktree_path(task)
+
+    if not is_git_repo(root):
+        diagnostics["check"] = "git_repo"
+        return result(
+            passed=False,
+            summary="workspace is not a git repository",
+            classification="not_git_repo",
+        )
+
+    if task.git.commit_sha is not None:
+        diagnostics["check"] = "commit_sha"
+        diagnostics["unexpected_commit_sha"] = task.git.commit_sha
+        return result(
+            passed=False,
+            summary=f"task already recorded final commit `{task.git.commit_sha}` before commit_to_git",
+            classification="unexpected_existing_commit_sha",
+        )
+
+    existing_commit = find_commit_by_subject(root, message)
+    if existing_commit is not None:
+        diagnostics["check"] = "commit_subject_uniqueness"
+        diagnostics["existing_commit_sha"] = existing_commit
+        return result(
+            passed=False,
+            summary=f"planned checkpoint commit already exists at `{existing_commit}`",
+            classification="duplicate_checkpoint_commit",
+        )
+
+    worktree_path_value = get_task_worktree_path(task)
+    if not worktree_path_value:
+        diagnostics["check"] = "task_worktree"
+        return result(
+            passed=False,
+            summary="task worktree path is missing before commit_to_git",
+            classification="missing_task_worktree",
+        )
+
+    worktree_path = (root / worktree_path_value).resolve()
+    diagnostics["worktree_path"] = str(worktree_path)
+    if not worktree_path.exists():
+        diagnostics["check"] = "task_worktree"
+        return result(
+            passed=False,
+            summary=f"task worktree is missing: {worktree_path_value}",
+            classification="missing_task_worktree",
+        )
+
+    worktree_list = subprocess.run(
+        ["git", "worktree", "list", "--porcelain"],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if worktree_list.returncode != 0:
+        diagnostics["check"] = "worktree_registry"
+        diagnostics["error"] = worktree_list.stderr.strip() or "git worktree list failed"
+        return result(
+            passed=False,
+            summary=diagnostics["error"],
+            classification="worktree_registry_check_failed",
+            warnings=[str(diagnostics["error"])],
+        )
+
+    registered_worktrees = {
+        line.removeprefix("worktree ").strip()
+        for line in worktree_list.stdout.splitlines()
+        if line.startswith("worktree ")
+    }
+    diagnostics["registered_worktree"] = str(worktree_path) in registered_worktrees
+    if str(worktree_path) not in registered_worktrees:
+        diagnostics["check"] = "worktree_registry"
+        return result(
+            passed=False,
+            summary=f"task worktree is not registered with git: {worktree_path_value}",
+            classification="invalid_task_worktree",
+        )
+
+    if not is_git_repo(worktree_path):
+        diagnostics["check"] = "worktree_git_dir"
+        return result(
+            passed=False,
+            summary=f"task worktree is not a git checkout: {worktree_path_value}",
+            classification="invalid_task_worktree",
+        )
+
+    main_head = current_head(root)
+    worktree_head = current_head(worktree_path)
+    diagnostics["main_head"] = main_head
+    diagnostics["worktree_head"] = worktree_head
+    if worktree_head is None:
+        diagnostics["check"] = "worktree_head"
+        return result(
+            passed=False,
+            summary=f"task worktree HEAD could not be resolved: {worktree_path_value}",
+            classification="worktree_head_unresolved",
+        )
+    if main_head is not None and worktree_head != main_head:
+        diagnostics["check"] = "worktree_head_match"
+        return result(
+            passed=False,
+            summary=(
+                f"task worktree already contains commits not owned by litehive "
+                f"(worktree HEAD `{worktree_head}` != main HEAD `{main_head}`)"
+            ),
+            classification="unexpected_worktree_commits",
+        )
+
+    root_conflicts = _list_conflict_files(root)
+    worktree_conflicts = _list_conflict_files(worktree_path)
+    diagnostics["root_conflicts"] = root_conflicts
+    diagnostics["worktree_conflicts"] = worktree_conflicts
+    if root_conflicts or worktree_conflicts:
+        diagnostics["check"] = "merge_conflicts"
+        return result(
+            passed=False,
+            summary=(
+                "merge-back viability check failed because unresolved conflicts remain in "
+                f"{'workspace' if root_conflicts else 'task worktree'}"
+            ),
+            classification="merge_back_viability_failed",
+        )
+
+    diagnostics["check"] = "complete"
+    return result(
+        passed=True,
+        summary="Late-stage commit/worktree preflight passed",
+    )
 
 
 def _recover_or_validate_clean_task_worktree(
