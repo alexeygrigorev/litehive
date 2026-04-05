@@ -9,14 +9,48 @@ mode: implementation
 status: queued
 pipeline_status: commit_to_git
 priority: medium
-pm_complexity: null
-planned_effort: null
+pm_complexity: moderate
+planned_effort: m
 created_at: '2026-04-01T06:36:34+00:00'
-updated_at: '2026-04-04T11:03:12+00:00'
-goal: ''
-acceptance_criteria: []
-constraints: []
-plan: []
+updated_at: '2026-04-05T06:23:10+00:00'
+goal: Reduce noisy Litehive execution residue after T-0127 by pruning or compressing
+  high-volume runtime artifacts while preserving the durable evidence needed for status,
+  repair, recovery, and human diagnosis of the latest task attempt.
+acceptance_criteria:
+- Litehive defines the retention policy for execution artifacts after the tracked-vs-untracked
+  split, explicitly naming which raw files may be pruned or compressed and which durable
+  evidence must remain available.
+- High-volume raw execution artifacts such as subagent transcripts, stdout/stderr,
+  session/timeline dumps, run-all logs, or hook artifact dumps are either compressed,
+  bounded, or pruned so repeated task execution does not accumulate unbounded noise
+  in the workspace.
+- Durable evidence for the latest relevant attempt remains available without relying
+  on full raw logs, including enough structured summary data for status, repair/recovery
+  evidence, continuation handoff, and human diagnosis of what happened.
+- Commands and code paths that inspect prior execution state continue to work when
+  pruned artifacts are absent and when compressed artifacts are present, with graceful
+  handling for both cases.
+- The implementation includes focused tests covering the selected retention behavior
+  and proving that evidence consumers still surface actionable task context after
+  cleanup.
+constraints:
+- Keep changes scoped to artifact retention and evidence durability; do not redesign
+  the broader task state model.
+- Do not make raw transcripts, logs, or session dumps the source of truth for queue
+  routing or task lifecycle reconstruction.
+- Preserve explicit operator-facing evidence for the latest useful failure or handoff
+  even if older or bulkier artifacts are compressed or deleted.
+plan:
+- Inventory the current runtime artifacts written under task subagent folders, task
+  artifact/report paths, and workspace log paths, and classify which consumers still
+  read each artifact.
+- Choose a narrow retention strategy for the noisiest artifacts, such as compressing
+  large payloads, keeping only the latest/raw attempt, or pruning superseded files
+  while retaining a durable summary.
+- Update the artifact writers and any readers that assume uncompressed or always-present
+  files so the retained evidence path remains stable after cleanup.
+- Add focused tests for retention behavior and for evidence/recovery/status consumers
+  with compressed or missing raw artifacts.
 human_checkpoints: []
 subagents:
 - id: SA-0001
@@ -71,4 +105,6 @@ git:
   worktree_path: null
 retry_policy:
   max_retries: null
+  stage_retry_limit: null
 created_from: null
+upstream_origin: null

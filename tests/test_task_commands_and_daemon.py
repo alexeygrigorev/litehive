@@ -2884,6 +2884,7 @@ echo "unexpected uv invocation: $*" >&2
 exit 1
 """,
     )
+
     config_home = tmp_path / "config-home"
     registry = config_home / "litehive" / "daemons.yaml"
     registry.parent.mkdir(parents=True, exist_ok=True)
@@ -2984,6 +2985,54 @@ exit 1
     assert "daemon_status: stopped" in stop.stdout
     registry_data = yaml.safe_load(registry.read_text(encoding="utf-8"))
     assert registry_data["daemons"] == {}
+
+
+def test_run_daemon_loop_prunes_old_run_all_log_directories(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import litehive.daemon as daemon_module
+
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    (workspace / ".litehive").mkdir()
+    (workspace / ".litehive" / "state.yaml").write_text(
+        "active_task_id: null\nqueue: []\npool_stop_reason: null\n",
+        encoding="utf-8",
+    )
+    logs_root = workspace / ".litehive" / "logs" / "run-all"
+    logs_root.mkdir(parents=True, exist_ok=True)
+    for index in range(10):
+        directory = logs_root / f"20260404T10000{index}Z"
+        directory.mkdir()
+        (directory / "0001-run.log").write_text(f"old {index}\n", encoding="utf-8")
+
+    fake_uv = _write_fake_uv(
+        tmp_path,
+        """#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ "${1:-}" == "run" && "${2:-}" == "litehive" && "${3:-}" == "repair" ]]; then
+  echo "repaired: no"
+  exit 0
+fi
+
+echo "unexpected uv invocation: $*" >&2
+exit 1
+""",
+    )
+    monkeypatch.setattr(
+        "litehive.daemon._default_command_prefix",
+        lambda: [str(fake_uv), "run", "litehive"],
+    )
+
+    exit_code = daemon_module.run_daemon_loop(workspace, output_stream=None)
+
+    assert exit_code == 0
+    directories = sorted(path.name for path in logs_root.iterdir() if path.is_dir())
+    assert len(directories) == 8
+    assert "20260404T100000Z" not in directories
+    assert "20260404T100001Z" not in directories
+    assert any(name.startswith("2026") for name in directories)
 
 def test_run_task_skips_pre_acceptance_hook_when_not_configured(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch

@@ -41,6 +41,7 @@ from litehive.subagents import SubagentManager, stage_prompt, stage_report_from_
 from litehive.tasks import (
     _finalize_recovered_commit_task,
     _find_existing_checkpoint_commit,
+    _atomic_write_gzip_text,
     _atomic_write_text,
     _workspace_lock,
     BlockedTask,
@@ -78,6 +79,8 @@ from litehive.tasks import (
     workspace_runner_guard,
     WorkspaceConflictError,
 )
+
+_COMPRESS_HOOK_ARTIFACT_MIN_BYTES = 4096
 
 
 @dataclass(slots=True)
@@ -2206,10 +2209,12 @@ def _execute_runner_hook(
         "stdout": completed.stdout,
         "stderr": completed.stderr,
     }
-    _atomic_write_text(
-        artifact_path,
-        yaml.safe_dump(artifact_payload, sort_keys=False),
-    )
+    artifact_content = yaml.safe_dump(artifact_payload, sort_keys=False)
+    if len(artifact_content.encode("utf-8")) >= _COMPRESS_HOOK_ARTIFACT_MIN_BYTES:
+        artifact_path = artifact_path.with_name(f"{artifact_path.name}.gz")
+        _atomic_write_gzip_text(artifact_path, artifact_content)
+    else:
+        _atomic_write_text(artifact_path, artifact_content)
     artifact_label = artifact_path.relative_to(task_dir(root, task)).as_posix()
     status = "passed" if completed.returncode == 0 else "failed"
     append_journal(

@@ -1,4 +1,5 @@
 from tests.workspace_helpers import *  # noqa: F401,F403
+from litehive.tasks import collect_recovery_evidence
 
 def test_dequeue_next_task_selection_rejects_multiple_active_tasks(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
@@ -1288,6 +1289,44 @@ def test_read_session_view_uses_completed_snapshots_for_finished_subagent(tmp_pa
     assert stdout_artifact["path"].endswith("stdout.txt.gz")
     assert stdout_artifact["source"] == "compressed final snapshot"
     assert stdout_artifact["content"] == "finished stdout\n"
+
+
+def test_read_session_view_and_recovery_evidence_support_compressed_subagent_artifacts(
+    tmp_path: Path,
+) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Compressed evidence task")
+    ref = SubagentRef(
+        id="SA-0001",
+        role="qa",
+        engine="codex",
+        status="completed",
+        path="subagents/SA-0001-qa",
+    )
+    task.subagents.append(ref)
+    save_task(tmp_path, task)
+
+    base = task_dir(tmp_path, task) / "subagents" / "SA-0001-qa"
+    base.mkdir(parents=True, exist_ok=True)
+    (base / "session.yaml").write_text("status: completed\nexit_code: 0\n", encoding="utf-8")
+    with gzip.open(base / "transcript.md.gz", "wt", encoding="utf-8") as handle:
+        handle.write("final transcript\n")
+    with gzip.open(base / "stdout.txt.gz", "wt", encoding="utf-8") as handle:
+        handle.write("finished stdout\n")
+    with gzip.open(base / "timeline.yaml.gz", "wt", encoding="utf-8") as handle:
+        handle.write("engine: codex\n")
+
+    payload = read_session_view(tmp_path, task.id, "SA-0001")
+    transcript_artifact = next(item for item in payload["artifacts"] if item["kind"] == "transcript")
+
+    assert transcript_artifact["path"].endswith("transcript.md.gz")
+    assert transcript_artifact["content"] == "final transcript\n"
+
+    evidence = {item.label: item for item in collect_recovery_evidence(tmp_path, task)}
+    assert evidence["latest subagent transcript"].exists is True
+    assert evidence["latest subagent transcript"].path.endswith("transcript.md.gz")
+    assert evidence["latest subagent stdout"].path.endswith("stdout.txt.gz")
+    assert evidence["latest subagent events timeline"].path.endswith("timeline.yaml.gz")
 
 def test_render_task_summary_includes_active_subagent_pid() -> None:
     task = TaskRecord(id="T-0001", slug="observe-pid", title="Observe PID")

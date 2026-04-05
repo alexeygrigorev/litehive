@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-import gzip
 import inspect
 import os
 from pathlib import Path
@@ -29,6 +28,7 @@ from litehive.engines import (
 from litehive.models import ResourceLimitEvent, StageReport, SubagentRef, TaskRecord, utcnow
 from litehive.sandbox import SandboxError, SandboxLauncher
 from litehive.tasks import (
+    _atomic_write_gzip_text,
     _write_atomic_files,
     infer_acceptance_criteria,
     mark_subagent_finished,
@@ -73,18 +73,7 @@ class SubagentInactivityTimeout(RuntimeError):
 
 
 _COMPRESS_STREAM_ARTIFACT_MIN_BYTES = 4096
-
-
-def _write_atomic_gzip_text(path: Path, content: str) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temp_path = path.with_name(f".{path.name}.tmp-{os.getpid()}")
-    try:
-        with gzip.open(temp_path, "wt", encoding="utf-8") as handle:
-            handle.write(content)
-        os.replace(temp_path, path)
-    finally:
-        if temp_path.exists():
-            temp_path.unlink()
+_COMPRESS_TEXT_ARTIFACT_MIN_BYTES = 4096
 
 
 def _write_stream_artifact(base: Path, name: str, content: str, *, compress: bool) -> None:
@@ -102,7 +91,7 @@ def _write_stream_artifact(base: Path, name: str, content: str, *, compress: boo
     if should_compress:
         if plain_path.exists():
             plain_path.unlink()
-        _write_atomic_gzip_text(compressed_path, content)
+        _atomic_write_gzip_text(compressed_path, content)
         return
     if compressed_path.exists():
         compressed_path.unlink()
@@ -114,6 +103,55 @@ def _write_text_if_changed(path: Path, content: str) -> bool:
         return False
     _write_atomic_files({path: content})
     return True
+
+
+def _write_text_artifact(
+    base: Path,
+    name: str,
+    suffix: str,
+    content: str,
+    *,
+    compress: bool,
+) -> Path:
+    plain_path = base / f"{name}{suffix}"
+    compressed_path = base / f"{name}{suffix}.gz"
+    should_compress = (
+        compress and len(content.encode("utf-8")) >= _COMPRESS_TEXT_ARTIFACT_MIN_BYTES
+    )
+    if should_compress:
+        if plain_path.exists():
+            plain_path.unlink()
+        _atomic_write_gzip_text(compressed_path, content)
+        return compressed_path
+    if compressed_path.exists():
+        compressed_path.unlink()
+    _write_atomic_files({plain_path: content})
+    return plain_path
+
+
+def _prune_superseded_subagent_artifacts(task_root: Path, *, keep_subagent_id: str) -> None:
+    subagents_root = task_root / "subagents"
+    if not subagents_root.exists():
+        return
+    raw_names = (
+        "prompt.txt",
+        "transcript.md",
+        "transcript.md.gz",
+        "stdout.log",
+        "stdout.txt",
+        "stdout.txt.gz",
+        "stderr.log",
+        "stderr.txt",
+        "stderr.txt.gz",
+        "timeline.yaml",
+        "timeline.yaml.gz",
+    )
+    prefix = f"{keep_subagent_id}-"
+    for child in subagents_root.iterdir():
+        if not child.is_dir() or child.name.startswith(prefix):
+            continue
+        for name in raw_names:
+            (child / name).unlink(missing_ok=True)
 
 
 def _supports_live_execution(engine: object) -> bool:
@@ -331,6 +369,7 @@ class SubagentManager:
             resource_limit_event=None if failure is None else failure.resource_limit_event,
             continuation=continuation,
         )
+        _prune_superseded_subagent_artifacts(task_dir(self.root, task), keep_subagent_id=ref.id)
         if proc is not None:
             record_engine_execution(
                 self.root,
@@ -749,9 +788,12 @@ class SubagentManager:
         )
         if timeline is None:
             return
-        (base / "timeline.yaml").write_text(
+        _write_text_artifact(
+            base,
+            "timeline",
+            ".yaml",
             yaml.safe_dump(timeline.model_dump(mode="python"), sort_keys=False),
-            encoding="utf-8",
+            compress=ref.status != "running",
         )
 
     def _write_session_snapshot(
@@ -804,10 +846,16 @@ class SubagentManager:
                     },
                     sort_keys=False,
                 ),
-                base / "prompt.txt": prompt,
-                base / "transcript.md": transcript,
                 base / "report.yaml": yaml.safe_dump(report_payload, sort_keys=False),
             }
+        )
+        _write_text_artifact(base, "prompt", ".txt", prompt, compress=False)
+        _write_text_artifact(
+            base,
+            "transcript",
+            ".md",
+            transcript,
+            compress=ref.status != "running",
         )
         _write_stream_artifact(base, "stdout", stdout, compress=False)
         _write_stream_artifact(base, "stderr", stderr, compress=False)

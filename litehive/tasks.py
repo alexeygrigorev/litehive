@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 import fcntl
+import gzip
 import re
 from contextlib import contextmanager
 import os
@@ -675,6 +676,18 @@ def _atomic_write_text(path: Path, content: str) -> None:
             temp_path.unlink()
 
 
+def _atomic_write_gzip_text(path: Path, content: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temp_path = path.with_name(f".{path.name}.tmp-{os.getpid()}")
+    try:
+        with gzip.open(temp_path, "wt", encoding="utf-8") as handle:
+            handle.write(content)
+        os.replace(temp_path, path)
+    finally:
+        if temp_path.exists():
+            temp_path.unlink()
+
+
 def _write_atomic_files(writes: dict[Path, str]) -> None:
     snapshots = {
         path: path.read_text(encoding="utf-8") if path.exists() else _MISSING for path in writes
@@ -1138,11 +1151,39 @@ def _latest_path(paths: list[Path]) -> Path | None:
     return sorted(existing)[-1]
 
 
+def _artifact_candidates(base: Path, *names: str) -> list[Path]:
+    candidates: list[Path] = []
+    for name in names:
+        path = base / name
+        candidates.append(path)
+        if path.suffix != ".gz":
+            candidates.append(base / f"{name}.gz")
+    return candidates
+
+
+def _resolve_artifact_path(base: Path, *names: str) -> Path | None:
+    for candidate in _artifact_candidates(base, *names):
+        if candidate.exists():
+            return candidate
+    return None
+
+
+def _read_text_artifact(path: Path) -> str:
+    if path.suffix == ".gz":
+        with gzip.open(path, "rt", encoding="utf-8") as handle:
+            return handle.read()
+    return path.read_text(encoding="utf-8")
+
+
 def _latest_run_all_log_path(root: Path) -> Path | None:
     logs_root = root / ".litehive" / "logs" / "run-all"
     if not logs_root.exists():
         return None
-    candidates = [path for path in logs_root.rglob("*") if path.is_file()]
+    candidates = [
+        path
+        for path in logs_root.rglob("*")
+        if path.is_file() and (path.suffix == ".log" or path.name.endswith(".log.gz"))
+    ]
     if not candidates:
         return None
     return sorted(candidates)[-1]
@@ -1261,13 +1302,14 @@ def collect_recovery_evidence(
             ("stderr.txt", "latest subagent stderr"),
             ("timeline.yaml", "latest subagent events timeline"),
         ):
-            path = subagent_base / name
+            path = _resolve_artifact_path(subagent_base, name)
+            display_path = path if path is not None else subagent_base / name
             evidence.append(
                 RecoveryEvidenceItem(
                     kind="subagent_artifact",
                     label=label,
-                    path=str(path.relative_to(root)),
-                    exists=path.exists(),
+                    path=str(display_path.relative_to(root)),
+                    exists=path is not None,
                     summary=f"artifact from {subagent_base.name}",
                 )
             )
@@ -2724,8 +2766,9 @@ def _interrupted_subagent_snippet(root: Path, task: TaskRecord, active: RuntimeS
             if summary:
                 return summary
     transcript_path = subagent_base / "transcript.md"
-    if transcript_path.exists():
-        transcript = transcript_path.read_text(encoding="utf-8")
+    transcript_path = _resolve_artifact_path(subagent_base, "transcript.md")
+    if transcript_path is not None:
+        transcript = _read_text_artifact(transcript_path)
         snippet = summarize_transcript(transcript)
         if snippet:
             return snippet

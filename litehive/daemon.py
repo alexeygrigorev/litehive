@@ -38,6 +38,7 @@ _EXPLICIT_POOL_STOP_REASONS = {
     "continue_or_rollback_required",
     "task_interrupted",
 }
+_RUN_ALL_SESSION_RETENTION = 8
 
 
 def daemon_config_dir() -> Path:
@@ -166,6 +167,14 @@ def latest_run_all_log_dir(workspace: Path) -> Path | None:
     return candidates[-1] if candidates else None
 
 
+def _prune_run_all_log_dirs(log_base: Path, *, keep: int = _RUN_ALL_SESSION_RETENTION) -> None:
+    if not log_base.exists():
+        return
+    directories = sorted(path for path in log_base.iterdir() if path.is_dir())
+    for directory in directories[:-keep]:
+        shutil.rmtree(directory, ignore_errors=True)
+
+
 def _latest_matching(log_dir: Path | None, pattern: str) -> Path | None:
     if log_dir is None or not log_dir.exists():
         return None
@@ -257,8 +266,10 @@ def run_daemon_loop(
     ensure_workspace(workspace)
     command_prefix = _default_command_prefix()
     timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
-    log_root = session_dir or (workspace / ".litehive" / "logs" / "run-all" / timestamp)
+    log_base = workspace / ".litehive" / "logs" / "run-all"
+    log_root = session_dir or (log_base / timestamp)
     log_root.mkdir(parents=True, exist_ok=True)
+    _prune_run_all_log_dirs(log_base)
     register_daemon(workspace, pid=os.getpid(), log_dir=log_root)
 
     stop_requested = False

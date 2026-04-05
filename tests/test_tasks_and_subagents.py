@@ -1475,3 +1475,72 @@ def test_create_task_rejects_dependency_cycle(tmp_path: Path) -> None:
         ValueError, match=rf"Task {second.id} dependency cycle detected via {first.id}"
     ):
         update_task_metadata(tmp_path, second.id, depends_on=[first.id])
+
+
+def test_subagent_prunes_superseded_raw_artifacts_and_compresses_latest_snapshots(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Prune superseded artifacts")
+    manager = SubagentManager(tmp_path)
+    monkeypatch.setattr("litehive.subagents._COMPRESS_STREAM_ARTIFACT_MIN_BYTES", 1)
+    monkeypatch.setattr("litehive.subagents._COMPRESS_TEXT_ARTIFACT_MIN_BYTES", 1)
+
+    class FakeEngine:
+        name = "codex"
+        binary = "codex"
+
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def is_available(self) -> bool:
+            return True
+
+        def run(
+            self,
+            prompt: str,
+            cwd: Path,
+            model: str | None = None,
+            *,
+            max_turns: int | None = None,
+            on_started=None,
+        ) -> CLIExecutionResult:
+            del prompt, model, max_turns
+            self.calls += 1
+            if on_started is not None:
+                on_started(5000 + self.calls)
+            return CLIExecutionResult(
+                adapter="codex",
+                argv=("codex", "exec"),
+                cwd=cwd,
+                exit_code=0,
+                stdout=f"VERDICT: PASS\nSUMMARY: artifact pass {self.calls}\n",
+                stderr=f"stderr {self.calls}\n",
+                pid=5000 + self.calls,
+            )
+
+        def render_transcript(self, execution: CLIExecutionResult) -> str:
+            return execution.transcript
+
+    engine = FakeEngine()
+    monkeypatch.setattr("litehive.subagents.get_engine", lambda _: engine)
+
+    manager.run(task, role="swe", engine_name="codex", prompt="first")
+    manager.run(task, role="qa", engine_name="codex", prompt="second")
+
+    first_base = task_dir(tmp_path, task) / "subagents" / "SA-0001-swe"
+    second_base = task_dir(tmp_path, task) / "subagents" / "SA-0002-qa"
+
+    assert (first_base / "session.yaml").exists()
+    assert (first_base / "report.yaml").exists()
+    assert not (first_base / "prompt.txt").exists()
+    assert not (first_base / "transcript.md").exists()
+    assert not (first_base / "transcript.md.gz").exists()
+    assert not (first_base / "stdout.txt").exists()
+    assert not (first_base / "stdout.txt.gz").exists()
+    assert not (first_base / "stderr.txt").exists()
+    assert not (first_base / "stderr.txt.gz").exists()
+
+    assert (second_base / "transcript.md.gz").exists()
+    assert (second_base / "stdout.txt.gz").exists()
+    assert (second_base / "stderr.txt.gz").exists()

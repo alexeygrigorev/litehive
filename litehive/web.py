@@ -267,12 +267,13 @@ def _serialize_task(root: Path, task: TaskRecord, active_task_id: str | None) ->
 
 def _read_session_artifact(root: Path, base: Path, kind: str, *, active: bool) -> SessionArtifact:
     if kind == "transcript":
-        path = base / "transcript.md"
+        path = _resolve_artifact_path(base, "transcript.md")
+        display_path = path if path is not None else base / "transcript.md"
         payload = _read_text_file(path, max_bytes=_MAX_ARTIFACT_BYTES)
         return SessionArtifact(
             kind=kind,
             label="Transcript",
-            path=_relative_to_root(root, path),
+            path=_relative_to_root(root, display_path),
             source="rewrite",
             content=payload["content"],
             size=payload["size"],
@@ -309,7 +310,8 @@ def _read_session_artifact(root: Path, base: Path, kind: str, *, active: bool) -
 
 def _artifact_path(root: Path, base: Path, kind: str, *, active: bool) -> str:
     if kind == "transcript":
-        return _relative_to_root(root, base / "transcript.md")
+        path = _resolve_artifact_path(base, "transcript.md")
+        return _relative_to_root(root, path if path is not None else base / "transcript.md")
     candidates = [base / f"{kind}.log", base / f"{kind}.txt", base / f"{kind}.txt.gz"] if active else [base / f"{kind}.txt", base / f"{kind}.txt.gz", base / f"{kind}.log"]
     for candidate in candidates:
         if candidate.exists():
@@ -317,8 +319,18 @@ def _artifact_path(root: Path, base: Path, kind: str, *, active: bool) -> str:
     return _relative_to_root(root, candidates[0])
 
 
-def _read_text_file(path: Path, *, max_bytes: int) -> dict[str, Any]:
-    if not path.exists():
+def _resolve_artifact_path(base: Path, name: str) -> Path | None:
+    direct = base / name
+    if direct.exists():
+        return direct
+    gzip_path = base / f"{name}.gz"
+    if gzip_path.exists():
+        return gzip_path
+    return None
+
+
+def _read_text_file(path: Path | None, *, max_bytes: int) -> dict[str, Any]:
+    if path is None or not path.exists():
         return {"content": "", "size": 0, "truncated": False, "available": False}
     if path.suffix == ".gz":
         raw = gzip.decompress(path.read_bytes())

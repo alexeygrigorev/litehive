@@ -203,6 +203,16 @@ This generates a context template you can customize. Available profiles: generic
 
 Each task runs in its own git worktree. When it passes all stages, the worktree is merged into main and cleaned up.
 
+## Artifact retention
+
+Litehive keeps `task.yaml`, `runtime.yaml`, stage reports, `thread.yaml`, `journal.md`, `events.jsonl`, `session.yaml`, and `report.yaml` as the durable evidence surface for status, repair, recovery, and handoff.
+
+High-volume raw execution artifacts are treated as disposable support data:
+
+- Only the latest subagent attempt keeps raw `prompt`, transcript, stdout/stderr, and timeline artifacts; older subagent folders keep their `session.yaml` and `report.yaml` but have raw files pruned.
+- Final subagent transcript, stdout/stderr, timeline, and large runner hook artifacts may be stored as gzip snapshots when they are large; readers are expected to handle both plain and `.gz` files.
+- Daemon `logs/run-all/` sessions are bounded to the most recent 8 directories so repeated pool runs do not accumulate unbounded wrapper logs.
+
 ## Daemon
 
 The daemon runs tasks continuously in the background:
