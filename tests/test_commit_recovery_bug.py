@@ -103,3 +103,103 @@ def test_head_unchanged_means_fail(tmp_path: Path) -> None:
     # No worktree means merge_ok=True but head shouldn't change
     # This is the same-repo case, so it marks done
     assert current_head(tmp_path) == head_before
+
+
+def test_merge_conflict_resolved_by_agent(tmp_path: Path) -> None:
+    """Agent resolves merge conflict, task completes successfully."""
+    _init_git_repo(tmp_path)
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Agent resolves conflict")
+
+    worktree_path = tmp_path / ".litehive" / "worktrees" / f"{task.id}-{task.slug}"
+    worktree_path.parent.mkdir(parents=True, exist_ok=True)
+    _run(["git", "worktree", "add", "--detach", str(worktree_path), "HEAD"], tmp_path)
+    (worktree_path / "feature.py").write_text("def feature(): return 'worktree'\n")
+    _run(["git", "add", "feature.py"], worktree_path)
+    _run(["git", "commit", "-m", "add feature in worktree"], worktree_path)
+
+    task.git.worktree_path = str(worktree_path.relative_to(tmp_path))
+    task.pipeline_status = "commit_to_git"
+    save_task(tmp_path, task)
+
+    # Create conflict on main
+    (tmp_path / "feature.py").write_text("def feature(): return 'main'\n")
+    _run(["git", "add", "feature.py"], tmp_path)
+    _run(["git", "commit", "-m", "conflicting change"], tmp_path)
+
+    # Fake subagent that resolves the conflict
+    class FakeSubagents:
+        def __init__(self):
+            self.execution_root = worktree_path
+
+        def run(self, task, *, role, engine_name, prompt, model=None):
+            from litehive.subagents import SubagentResult
+            from litehive.models import SubagentRef
+            # Resolve the conflict by picking the worktree version
+            conflict_file = tmp_path / "feature.py"
+            conflict_file.write_text("def feature(): return 'worktree'\n")
+            _run(["git", "add", "feature.py"], tmp_path)
+            _run(["git", "commit", "--no-edit"], tmp_path)
+            return SubagentResult(
+                ref=SubagentRef(id="SA-merge", role=role, engine=engine_name,
+                                status="completed", path="subagents/SA-merge"),
+                execution=None, transcript="Resolved conflict", exit_code=0,
+            )
+
+    report = _commit_to_git_report(
+        tmp_path, worktree_path, task, auto_commit_enabled=True,
+        subagents=FakeSubagents(), config=LitehiveConfig(),
+    )
+
+    assert report.verdict == "pass"
+    assert task.status == "done"
+    assert (tmp_path / "feature.py").read_text() == "def feature(): return 'worktree'\n"
+    assert not worktree_path.exists()
+
+
+def test_merge_conflict_agent_fails_to_resolve(tmp_path: Path) -> None:
+    """Agent tries but can't resolve conflict. Task fails, worktree survives."""
+    _init_git_repo(tmp_path)
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Agent fails to resolve")
+
+    worktree_path = tmp_path / ".litehive" / "worktrees" / f"{task.id}-{task.slug}"
+    worktree_path.parent.mkdir(parents=True, exist_ok=True)
+    _run(["git", "worktree", "add", "--detach", str(worktree_path), "HEAD"], tmp_path)
+    (worktree_path / "feature.py").write_text("def feature(): return 'worktree'\n")
+    _run(["git", "add", "feature.py"], worktree_path)
+    _run(["git", "commit", "-m", "add feature in worktree"], worktree_path)
+
+    task.git.worktree_path = str(worktree_path.relative_to(tmp_path))
+    task.pipeline_status = "commit_to_git"
+    save_task(tmp_path, task)
+
+    # Create conflict on main
+    (tmp_path / "feature.py").write_text("def feature(): return 'main'\n")
+    _run(["git", "add", "feature.py"], tmp_path)
+    _run(["git", "commit", "-m", "conflicting change"], tmp_path)
+
+    # Fake subagent that does nothing (can't resolve the conflict)
+    class FakeSubagents:
+        def __init__(self):
+            self.execution_root = worktree_path
+
+        def run(self, task, *, role, engine_name, prompt, model=None):
+            from litehive.subagents import SubagentResult
+            from litehive.models import SubagentRef
+            # Agent runs but doesn't fix anything
+            return SubagentResult(
+                ref=SubagentRef(id="SA-merge", role=role, engine=engine_name,
+                                status="completed", path="subagents/SA-merge"),
+                execution=None, transcript="Could not resolve", exit_code=1,
+            )
+
+    report = _commit_to_git_report(
+        tmp_path, worktree_path, task, auto_commit_enabled=True,
+        subagents=FakeSubagents(), config=LitehiveConfig(),
+    )
+
+    assert report.verdict == "fail"
+    assert task.status != "done"
+    assert worktree_path.exists(), "Worktree deleted despite failed merge!"
+    assert (worktree_path / "feature.py").read_text() == "def feature(): return 'worktree'\n"
