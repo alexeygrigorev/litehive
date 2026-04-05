@@ -31,6 +31,7 @@ from litehive.git_ops import (
     status_porcelain,
 )
 from litehive.models import (
+    RecoveryAction,
     RuntimeContinuationHandoff,
     StageReport,
     TaskRecord,
@@ -43,6 +44,8 @@ from litehive.tasks import (
     _atomic_write_text,
     _workspace_lock,
     BlockedTask,
+    collect_recovery_evidence,
+    record_recovery_report,
     active_task_markers,
     append_journal,
     clear_task_worktree_path,
@@ -669,21 +672,33 @@ def _attempt_stage_recovery(
     if subagents is None:
         return None
 
+    evidence = collect_recovery_evidence(root, task, stage=step)
+    evidence_lines = "\n".join(
+        f"- {item.label}: {item.path or 'n/a'} ({'present' if item.exists else 'missing'}) :: {item.summary}"
+        for item in evidence
+    )
     append_journal(
         root, task,
         f"Stage `{step}` {failed_report.verdict}: {failed_report.summary}. Launching recovery agent.",
     )
 
     prompt = (
-        f"The {step} stage for task {task.id} ({task.title}) ended with verdict: {failed_report.verdict}.\n\n"
-        f"Report from the previous agent:\n{failed_report.feedback}\n\n"
+        f"You are running as Litehive's recovery agent for task {task.id} ({task.title}).\n\n"
+        f"Failure trigger: stage `{step}` ended with verdict `{failed_report.verdict}`.\n"
+        f"Failure summary: {failed_report.summary}\n\n"
+        f"Previous report feedback:\n{failed_report.feedback or '(none)'}\n\n"
         f"Working directory: {execution_root}\n\n"
-        f"Your job is to fix the issues described above and complete the {step} stage successfully.\n\n"
+        f"Recovery evidence gathered automatically:\n{evidence_lines}\n\n"
+        f"Bounded recovery policy:\n"
+        f"- gather enough evidence to classify the failure\n"
+        f"- apply only the smallest safe repair needed to restore a runnable path\n"
+        f"- prefer fixing continuation state, engine bindings, prompts, or task-local state over broad refactors\n"
+        f"- if the task is underspecified, leave explicit notes and keep it runnable for planner/grooming\n\n"
         f"Acceptance criteria:\n"
         + "\n".join(f"- {c}" for c in task.acceptance_criteria)
-        + f"\n\nAfter fixing, submit your verdict:\n"
-        f"  litehive report --verdict <pass|fail> --role {role_name} --step {step} "
-        f"--message \"<detailed explanation of what you fixed and the result>\"\n"
+        + f"\n\nWhen you finish, submit a detailed report with `litehive report`.\n"
+        f"Use verdict `pass` only if the task is runnable again or the current stage is now complete.\n"
+        f"Use verdict `blocked` or `fail` if a blocker remains.\n"
     )
 
     recovery_result = subagents.run(
@@ -700,10 +715,29 @@ def _attempt_stage_recovery(
     thread = load_task_thread(root, task)
     recovery_comments = [
         c for c in thread
-        if c.step == step and c.verdict not in ("comment", "reject", "fail")
+        if c.step == step and c.verdict in ("pass", "accept")
     ]
     if recovery_comments:
         latest = recovery_comments[-1]
+        record_recovery_report(
+            root,
+            task,
+            trigger="stage_failure",
+            stage=step,
+            summary=latest.message.splitlines()[0] if latest.message else f"{step} recovered",
+            runnable_state="runnable",
+            failure_classification=failed_report.failure_classification or failed_report.verdict,
+            actions=[
+                RecoveryAction(
+                    action="resume_current_stage",
+                    summary=f"Recovery agent repaired the task and returned `{step}` to a runnable state.",
+                    metadata={"verdict": latest.verdict},
+                )
+            ],
+            warnings=list(failed_report.warnings),
+            recovery_subagent_id=recovery_result.ref.id,
+            recovery_subagent_path=recovery_result.ref.path,
+        )
         append_journal(root, task, f"Recovery agent resolved {step}: {latest.verdict}")
         return StageReport(
             task_id=task.id,
@@ -717,9 +751,49 @@ def _attempt_stage_recovery(
     # Fallback: check if recovery agent produced a passing report via stdout
     recovery_report = stage_report_from_subagent(task, step, recovery_result, root=root)
     if recovery_report.verdict in ("pass", "accept"):
+        record_recovery_report(
+            root,
+            task,
+            trigger="stage_failure",
+            stage=step,
+            summary=recovery_report.summary,
+            runnable_state="runnable",
+            failure_classification=failed_report.failure_classification or failed_report.verdict,
+            actions=[
+                RecoveryAction(
+                    action="resume_current_stage",
+                    summary=f"Recovery agent repaired the task and returned `{step}` to a runnable state.",
+                    metadata={"verdict": recovery_report.verdict},
+                )
+            ],
+            warnings=[*failed_report.warnings, *recovery_report.warnings],
+            recovery_subagent_id=recovery_result.ref.id,
+            recovery_subagent_path=recovery_result.ref.path,
+        )
         append_journal(root, task, f"Recovery agent resolved {step}: {recovery_report.verdict}")
         return recovery_report
 
+    blocker = recovery_report.summary or failed_report.summary
+    record_recovery_report(
+        root,
+        task,
+        trigger="stage_failure",
+        stage=step,
+        summary=f"Recovery agent could not restore `{step}` to a runnable state.",
+        runnable_state="blocked",
+        failure_classification=failed_report.failure_classification or failed_report.verdict,
+        blocker=blocker,
+        actions=[
+            RecoveryAction(
+                action="no_safe_repair",
+                applied=False,
+                summary="Recovery agent investigated the failure but could not apply a safe bounded repair.",
+            )
+        ],
+        warnings=[*failed_report.warnings, *recovery_report.warnings],
+        recovery_subagent_id=recovery_result.ref.id,
+        recovery_subagent_path=recovery_result.ref.path,
+    )
     append_journal(root, task, f"Recovery agent could not resolve {step}.")
     return None
 
@@ -737,11 +811,18 @@ def _attempt_commit_recovery(
     if subagents is None:
         return None
 
+    evidence = collect_recovery_evidence(root, task, stage="commit_to_git")
+    evidence_lines = "\n".join(
+        f"- {item.label}: {item.path or 'n/a'} ({'present' if item.exists else 'missing'}) :: {item.summary}"
+        for item in evidence
+    )
     prompt = (
-        f"The commit_to_git stage failed for task {task.id} ({task.title}).\n\n"
+        f"You are running as Litehive's recovery agent for task {task.id} ({task.title}).\n\n"
+        f"Trigger: commit_to_git failed.\n"
         f"Error: {error_message}\n\n"
         f"Working directory: {execution_root}\n"
         f"Main repo: {root}\n\n"
+        f"Recovery evidence gathered automatically:\n{evidence_lines}\n\n"
         f"Your job is to diagnose and fix whatever is preventing the task's changes "
         f"from being committed and merged into main. Common issues:\n"
         f"- Merge conflicts: resolve them and run `git add <file> && git commit --no-edit`\n"
@@ -756,7 +837,7 @@ def _attempt_commit_recovery(
     )
 
     engine_name, model_name = _resolve_recovery_engine(task, config)
-    subagents.run(
+    recovery_result = subagents.run(
         task,
         role="recovery",
         engine_name=engine_name,
@@ -773,8 +854,48 @@ def _attempt_commit_recovery(
     conflict_files = _list_conflict_files(root)
     if conflict_files:
         subprocess.run(["git", "merge", "--abort"], cwd=root, capture_output=True)
+        record_recovery_report(
+            root,
+            task,
+            trigger="commit_to_git_failure",
+            stage="commit_to_git",
+            summary="Recovery agent could not safely complete commit_to_git.",
+            runnable_state="blocked",
+            failure_classification="commit_to_git_failure",
+            blocker="merge conflicts remained after recovery attempt",
+            actions=[
+                RecoveryAction(
+                    action="recover_commit_to_git",
+                    applied=False,
+                    summary="Recovery agent attempted commit recovery but unresolved conflicts remained.",
+                    metadata={"conflict_files": conflict_files},
+                )
+            ],
+            warnings=[error_message],
+            recovery_subagent_id=recovery_result.ref.id,
+            recovery_subagent_path=recovery_result.ref.path,
+        )
         return None
 
+    record_recovery_report(
+        root,
+        task,
+        trigger="commit_to_git_failure",
+        stage="commit_to_git",
+        summary="Recovery agent completed bounded commit_to_git repair.",
+        runnable_state="runnable",
+        failure_classification="commit_to_git_failure",
+        actions=[
+            RecoveryAction(
+                action="recover_commit_to_git",
+                summary="Recovery agent repaired the failed commit_to_git flow and produced an integrated commit.",
+                metadata={"commit_sha": head},
+            )
+        ],
+        warnings=[error_message],
+        recovery_subagent_id=recovery_result.ref.id,
+        recovery_subagent_path=recovery_result.ref.path,
+    )
     return head
 
 
@@ -1836,7 +1957,7 @@ def build_executor(
             is_engine_break = (
                 result.failure is not None
                 and result.failure.kind in ("retryable_execution_error", "engine_error")
-                and step in ("implementing", "testing")
+                and step != "commit_to_git"
             )
             is_stuck_loop = (
                 report.verdict in ("fail", "reject")

@@ -263,6 +263,38 @@ class StageResultSubmission(BaseModel):
     acceptance_criteria: list[str] = Field(default_factory=list)
 
 
+class RecoveryEvidenceItem(BaseModel):
+    kind: str
+    label: str
+    path: str | None = None
+    exists: bool = False
+    summary: str = ""
+    metadata: dict[str, str | int | bool | None | list[str]] = Field(default_factory=dict)
+
+
+class RecoveryAction(BaseModel):
+    action: str
+    applied: bool = True
+    summary: str = ""
+    metadata: dict[str, str | int | bool | None | list[str]] = Field(default_factory=dict)
+
+
+class RecoveryReport(BaseModel):
+    task_id: str
+    stage: str | None = None
+    trigger: str
+    summary: str
+    failure_classification: str | None = None
+    runnable_state: Literal["runnable", "parked", "blocked"] = "blocked"
+    blocker: str | None = None
+    evidence: list[RecoveryEvidenceItem] = Field(default_factory=list)
+    actions: list[RecoveryAction] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    recovery_subagent_id: str | None = None
+    recovery_subagent_path: str | None = None
+    created_at: str = Field(default_factory=utcnow)
+
+
 class TaskOutcomeState(BaseModel):
     kind: OutcomeKind | None = None
     stage: str | None = None

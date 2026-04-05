@@ -27,10 +27,21 @@ from litehive.config import (
     workspace_dir,
     workspace_gitignore_path,
 )
-from litehive.git_ops import GitError, checkpoint_message, default_commit_message, find_commit_by_subject, is_git_repo
+from litehive.git_ops import (
+    GitError,
+    checkpoint_message,
+    current_head,
+    default_commit_message,
+    find_commit_by_subject,
+    is_git_repo,
+    status_porcelain,
+)
 from litehive.models import (
     FollowUpTaskSpec,
     PlannedEffort,
+    RecoveryAction,
+    RecoveryEvidenceItem,
+    RecoveryReport,
     RuntimeContinuationHandoff,
     RuntimeEngineContinuation,
     RuntimeEngineSwitch,
@@ -1105,6 +1116,276 @@ def task_thread_file(root: Path, task: TaskRecord) -> Path:
     return task_dir(root, task) / "thread.yaml"
 
 
+def task_recovery_dir(root: Path, task: TaskRecord) -> Path:
+    return task_dir(root, task) / "recovery"
+
+
+def _latest_path(paths: list[Path]) -> Path | None:
+    existing = [path for path in paths if path.exists()]
+    if not existing:
+        return None
+    return sorted(existing)[-1]
+
+
+def _latest_run_all_log_path(root: Path) -> Path | None:
+    logs_root = root / ".litehive" / "logs" / "run-all"
+    if not logs_root.exists():
+        return None
+    candidates = [path for path in logs_root.rglob("*") if path.is_file()]
+    if not candidates:
+        return None
+    return sorted(candidates)[-1]
+
+
+def _latest_subagent_base(root: Path, task: TaskRecord) -> Path | None:
+    refs = list(task.subagents)
+    preferred = []
+    if task.runtime.active_subagent is not None:
+        preferred.append(task.runtime.active_subagent.path)
+    if task.runtime.last_subagent is not None:
+        preferred.append(task.runtime.last_subagent.path)
+    preferred.extend(ref.path for ref in refs)
+    for rel_path in reversed(preferred):
+        base = task_dir(root, task) / rel_path
+        if base.exists():
+            return base
+    subagents_root = task_dir(root, task) / "subagents"
+    if not subagents_root.exists():
+        return None
+    candidates = [path for path in subagents_root.iterdir() if path.is_dir()]
+    if not candidates:
+        return None
+    return sorted(candidates)[-1]
+
+
+def _status_entry_paths(entries: list[str]) -> list[str]:
+    paths: list[str] = []
+    for entry in entries:
+        stripped = entry.strip()
+        if not stripped:
+            continue
+        if " -> " in stripped:
+            stripped = stripped.split(" -> ", 1)[1]
+        if len(stripped) > 3:
+            stripped = stripped[3:]
+        paths.append(stripped)
+    return paths
+
+
+def collect_recovery_evidence(
+    root: Path,
+    task: TaskRecord,
+    *,
+    stage: str | None = None,
+) -> list[RecoveryEvidenceItem]:
+    from litehive.engine_monitoring import engine_monitoring_file, load_engine_monitoring
+
+    evidence: list[RecoveryEvidenceItem] = []
+    task_path = task_file(root, task)
+    runtime_path = task_runtime_file(root, task)
+    thread_path = task_thread_file(root, task)
+    events_path = task_dir(root, task) / "events.jsonl"
+    latest_report_path = _latest_path(sorted((task_dir(root, task) / "reports").glob("*.yaml")))
+    latest_run_log = _latest_run_all_log_path(root)
+    monitoring_path = engine_monitoring_file(root)
+    monitoring = load_engine_monitoring(root)
+    engine_record = monitoring.engines.get(task.engine or "")
+    subagent_base = _latest_subagent_base(root, task)
+
+    evidence.append(
+        RecoveryEvidenceItem(
+            kind="task",
+            label="task.yaml",
+            path=str(task_path.relative_to(root)),
+            exists=task_path.exists(),
+            summary=f"status={task.status} pipeline_status={task.pipeline_status} priority={task.priority}",
+        )
+    )
+    evidence.append(
+        RecoveryEvidenceItem(
+            kind="runtime",
+            label="runtime.yaml",
+            path=str(runtime_path.relative_to(root)),
+            exists=runtime_path.exists(),
+            summary=(
+                f"execution_status={task.runtime.execution_status} current_stage={task.runtime.current_stage.step} "
+                f"last_outcome={task.runtime.last_outcome.kind or 'none'}"
+            ),
+        )
+    )
+    evidence.append(
+        RecoveryEvidenceItem(
+            kind="thread",
+            label="thread.yaml",
+            path=str(thread_path.relative_to(root)),
+            exists=thread_path.exists(),
+            summary=f"discussion entries={len(load_task_thread(root, task))}",
+        )
+    )
+    evidence.append(
+        RecoveryEvidenceItem(
+            kind="events",
+            label="events.jsonl",
+            path=str(events_path.relative_to(root)),
+            exists=events_path.exists(),
+            summary="task lifecycle and subagent event stream",
+        )
+    )
+    if latest_report_path is not None:
+        evidence.append(
+            RecoveryEvidenceItem(
+                kind="stage_report",
+                label="latest stage report",
+                path=str(latest_report_path.relative_to(root)),
+                exists=True,
+                summary=f"latest report for {task.id}",
+            )
+        )
+    if subagent_base is not None:
+        for name, label in (
+            ("session.yaml", "latest subagent session"),
+            ("report.yaml", "latest subagent report"),
+            ("transcript.md", "latest subagent transcript"),
+            ("stdout.txt", "latest subagent stdout"),
+            ("stderr.txt", "latest subagent stderr"),
+            ("timeline.yaml", "latest subagent events timeline"),
+        ):
+            path = subagent_base / name
+            evidence.append(
+                RecoveryEvidenceItem(
+                    kind="subagent_artifact",
+                    label=label,
+                    path=str(path.relative_to(root)),
+                    exists=path.exists(),
+                    summary=f"artifact from {subagent_base.name}",
+                )
+            )
+    if latest_run_log is not None:
+        evidence.append(
+            RecoveryEvidenceItem(
+                kind="wrapper_log",
+                label="latest run-all log",
+                path=str(latest_run_log.relative_to(root)),
+                exists=True,
+                summary="latest daemon/run-all wrapper log",
+            )
+        )
+    evidence.append(
+        RecoveryEvidenceItem(
+            kind="engine_monitoring",
+            label="engine-monitoring.yaml",
+            path=str(monitoring_path.relative_to(root)),
+            exists=monitoring_path.exists(),
+            summary=(
+                "no engine record"
+                if engine_record is None
+                else (
+                    f"engine={engine_record.engine} invocations={engine_record.invocation_count} "
+                    f"failures={engine_record.failure_count} limits={engine_record.limit_event_count}"
+                )
+            ),
+        )
+    )
+
+    if is_git_repo(root):
+        worktree_rel = get_task_worktree_path(task)
+        worktree_path = root / worktree_rel if worktree_rel else None
+        try:
+            root_status = status_porcelain(root)
+        except GitError:
+            root_status = []
+        worktree_status: list[str] = []
+        if worktree_path is not None and worktree_path.exists():
+            try:
+                worktree_status = status_porcelain(worktree_path)
+            except GitError:
+                worktree_status = []
+        evidence.append(
+            RecoveryEvidenceItem(
+                kind="git",
+                label="main checkout git state",
+                exists=True,
+                summary=f"head={current_head(root) or 'missing'} dirty={len(root_status)}",
+                metadata={"dirty_paths": _status_entry_paths(root_status)},
+            )
+        )
+        evidence.append(
+            RecoveryEvidenceItem(
+                kind="worktree",
+                label="task worktree state",
+                path=worktree_rel,
+                exists=worktree_path.exists() if worktree_path is not None else False,
+                summary=(
+                    "task worktree not configured"
+                    if worktree_path is None
+                    else f"dirty={len(worktree_status)}"
+                ),
+                metadata={"dirty_paths": _status_entry_paths(worktree_status), "stage": stage},
+            )
+        )
+    return evidence
+
+
+def write_recovery_report(root: Path, task: TaskRecord, report: RecoveryReport) -> Path:
+    reports_dir = task_recovery_dir(root, task)
+    reports_dir.mkdir(parents=True, exist_ok=True)
+    existing = sorted(reports_dir.glob("recovery-*.yaml"))
+    ordinal = len(existing) + 1
+    path = reports_dir / f"recovery-{ordinal:03d}.yaml"
+    path.write_text(yaml.safe_dump(report.model_dump(mode="python"), sort_keys=False), encoding="utf-8")
+    return path
+
+
+def record_recovery_report(
+    root: Path,
+    task: TaskRecord,
+    *,
+    trigger: str,
+    stage: str | None,
+    summary: str,
+    runnable_state: str,
+    actions: list[RecoveryAction] | None = None,
+    failure_classification: str | None = None,
+    blocker: str | None = None,
+    warnings: list[str] | None = None,
+    recovery_subagent_id: str | None = None,
+    recovery_subagent_path: str | None = None,
+) -> Path:
+    from litehive.models import TaskThreadComment
+
+    report = RecoveryReport(
+        task_id=task.id,
+        stage=stage,
+        trigger=trigger,
+        summary=summary,
+        failure_classification=failure_classification,
+        runnable_state=runnable_state,  # type: ignore[arg-type]
+        blocker=blocker,
+        evidence=collect_recovery_evidence(root, task, stage=stage),
+        actions=list(actions or []),
+        warnings=list(warnings or []),
+        recovery_subagent_id=recovery_subagent_id,
+        recovery_subagent_path=recovery_subagent_path,
+    )
+    path = write_recovery_report(root, task, report)
+    append_thread_comment(
+        root,
+        task,
+        TaskThreadComment(
+            role="recovery",
+            step=stage or task.pipeline_status,
+            verdict="comment",
+            message=(
+                f"Recovery trigger `{trigger}`: {summary}\n"
+                f"runnable_state: {runnable_state}\n"
+                f"report: {path.relative_to(root)}"
+                + (f"\nblocker: {blocker}" if blocker else "")
+            ),
+        ),
+    )
+    return path
+
+
 def append_thread_comment(root: Path, task: TaskRecord, comment: "TaskThreadComment") -> None:
     from litehive.models import TaskThreadComment  # noqa: F811
 
@@ -2160,10 +2441,29 @@ def dequeue_next_task_selection(root: Path) -> TaskSelection:
             mutated = True
         if mutated:
             if next_task.status == "flagged":
+                recovery_stage = _auto_recovery_stage_for_flagged_task(next_task)
+                record_recovery_report(
+                    root,
+                    next_task,
+                    trigger="flagged_task",
+                    stage=next_task.pipeline_status,
+                    summary=(
+                        f"Recovered flagged task back to `{recovery_stage}` so it can run again."
+                    ),
+                    runnable_state="runnable",
+                    failure_classification=next_task.runtime.last_outcome.reason_code,
+                    actions=[
+                        RecoveryAction(
+                            action="requeue_stage",
+                            summary=f"Reset task from flagged to queued/{recovery_stage}.",
+                            metadata={"from_stage": next_task.pipeline_status, "to_stage": recovery_stage},
+                        )
+                    ],
+                )
                 _reset_task_for_recovery(
                     next_task,
                     status="queued",
-                    pipeline_status=_auto_recovery_stage_for_flagged_task(next_task),
+                    pipeline_status=recovery_stage,
                     clear_last_outcome=False,
                 )
             if next_task.status in {"queued", "interrupted"}:
@@ -2889,6 +3189,27 @@ def _recover_stale_runner_state(
             stale_pid = _subagent_process_is_stale(task)
             if _should_requeue_commit_stage_task(task):
                 journal_messages[task.id] = _recover_commit_task(root, task)
+                record_recovery_report(
+                    root,
+                    task,
+                    trigger="stale_runner_recovery",
+                    stage="commit_to_git",
+                    summary="Recovered stale runner state and requeued commit_to_git.",
+                    runnable_state="runnable",
+                    failure_classification="stale_runner",
+                    actions=[
+                        RecoveryAction(
+                            action="clear_stale_active_state",
+                            summary="Cleared stale active runner state for the task.",
+                        ),
+                        RecoveryAction(
+                            action="requeue_stage",
+                            summary="Requeued the task at commit_to_git.",
+                            metadata={"stage": "commit_to_git"},
+                        ),
+                    ],
+                    warnings=["stale subagent pid detected"] if stale_pid else [],
+                )
                 if summary is not None and task.id not in summary.requeued_task_ids:
                     summary.requeued_task_ids.append(task.id)
                 if stale_pid and summary is not None and task.id not in summary.stale_process_task_ids:
@@ -2905,6 +3226,29 @@ def _recover_stale_runner_state(
                     reason=_stale_interruption_reason(task, task.pipeline_status, stale_pid=stale_pid),
                 )
                 journal_messages[task.id] = interruption_journal_message(task)
+                record_recovery_report(
+                    root,
+                    task,
+                    trigger="stale_runner_recovery",
+                    stage=task.pipeline_status,
+                    summary=(
+                        f"Recovered stale runner state and returned the task to `{task.pipeline_status}`."
+                    ),
+                    runnable_state="runnable",
+                    failure_classification="stale_runner",
+                    actions=[
+                        RecoveryAction(
+                            action="clear_stale_active_state",
+                            summary="Cleared stale active runner state for the task.",
+                        ),
+                        RecoveryAction(
+                            action="requeue_stage",
+                            summary=f"Requeued the task at {task.pipeline_status}.",
+                            metadata={"stage": task.pipeline_status},
+                        ),
+                    ],
+                    warnings=["stale subagent pid detected"] if stale_pid else [],
+                )
                 if summary is not None and task.id not in summary.requeued_task_ids:
                     summary.requeued_task_ids.append(task.id)
                 if stale_pid and summary is not None and task.id not in summary.stale_process_task_ids:

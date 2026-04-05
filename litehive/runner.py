@@ -8,7 +8,14 @@ from typing import Protocol
 
 import yaml
 
-from litehive.models import OutcomeKind, OutcomeReasonCode, RuntimeContinuationHandoff, StageReport, TaskRecord
+from litehive.models import (
+    OutcomeKind,
+    OutcomeReasonCode,
+    RecoveryAction,
+    RuntimeContinuationHandoff,
+    StageReport,
+    TaskRecord,
+)
 from litehive.tasks import (
     _apply_task_retry_state,
     _apply_stage_finished,
@@ -26,6 +33,7 @@ from litehive.tasks import (
     needs_normalization,
     populate_missing_acceptance_criteria_from_report,
     populate_pm_sizing_from_report,
+    record_recovery_report,
     save_task,
     set_task_retry_state,
     task_dir,
@@ -406,6 +414,24 @@ class TaskExecutionRunner:
                         "accepting blocked by late-stage commit/worktree preflight: "
                         f"{preflight['summary']}"
                     )
+                    record_recovery_report(
+                        self.root,
+                        task,
+                        trigger="engine_preflight_failure",
+                        stage=current,
+                        summary="Late-stage preflight left the task blocked.",
+                        runnable_state="blocked",
+                        failure_classification=str(preflight["classification"]),
+                        blocker=summary,
+                        actions=[
+                            RecoveryAction(
+                                action="no_safe_repair",
+                                applied=False,
+                                summary="The runner left the task flagged because late-stage preflight could not be repaired safely.",
+                            )
+                        ],
+                        warnings=[str(item) for item in preflight["warnings"]],  # type: ignore[arg-type]
+                    )
                     report = self._terminal_report(
                         task,
                         step=current,
@@ -493,6 +519,28 @@ class TaskExecutionRunner:
                     )
                     task.pipeline_status = "grooming"  # type: ignore[assignment]
                     task.status = "queued"
+                    record_recovery_report(
+                        self.root,
+                        task,
+                        trigger="same_stage_retry_churn",
+                        stage=current,
+                        summary=escalation_reason,
+                        runnable_state="runnable",
+                        failure_classification="stage_retry_limit_exhausted",
+                        actions=[
+                            RecoveryAction(
+                                action="reroute_to_planner",
+                                summary="Rerouted the task to grooming after same-stage retry churn.",
+                                metadata={
+                                    "from_stage": current,
+                                    "to_stage": "grooming",
+                                    "rejections": stage_count,
+                                    "limit": effective_stage_limit,
+                                    "owner": escalation_target,
+                                },
+                            )
+                        ],
+                    )
                     append_journal(self.root, task, escalation_reason)
                     return self._finish_run(
                         task,
