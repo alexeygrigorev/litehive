@@ -3100,6 +3100,34 @@ def test_commit_to_git_integrates_existing_litehive_checkpoint_from_clean_worktr
     assert task.git.commit_sha == _run(["git", "rev-parse", "HEAD"], tmp_path)
     assert (tmp_path / "app.txt").read_text(encoding="utf-8") == "checkpointed\n"
 
+def test_commit_to_git_reconciles_existing_checkpoint_commit_without_duplicate_retry(
+    tmp_path: Path,
+) -> None:
+    initial_sha = _init_git_repo(tmp_path)
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Resume committed checkpoint")
+    (tmp_path / "app.txt").write_text("checkpointed\n", encoding="utf-8")
+
+    task.git.checkpoint_attempts = 1
+    task.git.checkpoint_base_sha = initial_sha
+    save_task(tmp_path, task)
+
+    commit_message = checkpoint_message(task, attempt=1)
+    _run(["git", "add", "-A"], tmp_path)
+    _run(["git", "commit", "-m", commit_message], tmp_path)
+    existing_checkpoint_sha = _run(["git", "rev-parse", "HEAD"], tmp_path)
+    commit_count_before = _run(["git", "rev-list", "--count", "HEAD"], tmp_path)
+
+    report = _commit_to_git_report(tmp_path, tmp_path, task, auto_commit_enabled=True)
+
+    assert report.verdict == "pass"
+    assert task.status == "done"
+    assert task.pipeline_status == "done"
+    assert task.git.commit_sha == existing_checkpoint_sha
+    assert task.git.checkpoint_attempts == 1
+    assert _run(["git", "rev-list", "--count", "HEAD"], tmp_path) == commit_count_before
+    assert _run(["git", "log", "-1", "--pretty=%s"], tmp_path) == commit_message
+
 def test_commit_to_git_integrates_agent_precommit_in_task_worktree(tmp_path: Path) -> None:
     _init_git_repo(tmp_path)
     ensure_workspace(tmp_path)
@@ -3211,6 +3239,56 @@ def test_resolve_next_task_finalizes_existing_checkpoint_commit_without_retry(
     assert load_state(tmp_path).queue == [new_task.id]
     journal = (task_dir(tmp_path, refreshed) / "journal.md").read_text(encoding="utf-8")
     assert "Recovered existing checkpoint commit after interrupted `commit_to_git`" in journal
+    assert _run(["git", "rev-list", "--count", "HEAD"], tmp_path) == "2"
+    assert _run(["git", "log", "-1", "--pretty=%s"], tmp_path) == commit_message
+
+def test_resolve_next_task_finalizes_running_commit_stage_with_existing_checkpoint_before_new_work(
+    tmp_path: Path,
+) -> None:
+    initial_sha = _init_git_repo(tmp_path)
+    ensure_workspace(tmp_path)
+    stranded = create_task(tmp_path, title="Running commit stage")
+    follow_up = create_task(tmp_path, title="Pending follow-up", auto_commit=False)
+    (tmp_path / "app.txt").write_text("updated\n", encoding="utf-8")
+
+    commit_message = checkpoint_message(stranded, attempt=1)
+    _run(["git", "add", "-A"], tmp_path)
+    _run(["git", "commit", "-m", commit_message], tmp_path)
+    existing_checkpoint_sha = _run(["git", "rev-parse", "HEAD"], tmp_path)
+    commit_count_before = _run(["git", "rev-list", "--count", "HEAD"], tmp_path)
+
+    stranded.status = "in_progress"
+    stranded.pipeline_status = "commit_to_git"
+    stranded.git.checkpoint_attempts = 1
+    stranded.git.checkpoint_base_sha = initial_sha
+    stranded.git.commit_sha = None
+    stranded.runtime.execution_status = "running"
+    stranded.runtime.current_stage = RuntimeStageState(
+        step="commit_to_git",
+        status="running",
+        started_at="2026-04-01T00:00:00+00:00",
+        updated_at="2026-04-01T00:00:00+00:00",
+    )
+    save_task(tmp_path, stranded)
+    save_task_runtime(tmp_path, stranded)
+
+    state = load_state(tmp_path)
+    state.active_task_id = stranded.id
+    state.queue = [follow_up.id]
+    save_state(tmp_path, state)
+
+    task = resolve_next_task(tmp_path)
+
+    assert task is not None
+    assert task.id == follow_up.id
+    refreshed = require_task(tmp_path, stranded.id)
+    assert refreshed.status == "done"
+    assert refreshed.pipeline_status == "done"
+    assert refreshed.git.commit_sha == existing_checkpoint_sha
+    assert refreshed.git.checkpoint_attempts == 1
+    assert refreshed.runtime.execution_status == "done"
+    assert load_state(tmp_path).queue == [follow_up.id]
+    assert _run(["git", "rev-list", "--count", "HEAD"], tmp_path) == commit_count_before
     assert _run(["git", "log", "-1", "--pretty=%s"], tmp_path) == commit_message
 
 def test_resolve_next_task_recovers_orphaned_commit_stage_before_new_work(tmp_path: Path) -> None:

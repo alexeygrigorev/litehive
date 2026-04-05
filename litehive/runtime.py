@@ -1741,15 +1741,23 @@ def _recover_or_validate_clean_task_worktree(
     return _merge_worktree_into_main(root, execution_root, message)
 
 
+def _reconcile_existing_checkpoint_commit(root: Path, task: TaskRecord) -> str | None:
+    if task.git.commit_sha is not None or task.git.checkpoint_attempts < 1:
+        return None
+    existing_integrated_sha = _find_existing_checkpoint_commit(root, task)
+    if existing_integrated_sha is None:
+        return None
+    _finalize_recovered_commit_task(task, commit_sha=existing_integrated_sha)
+    return existing_integrated_sha
+
+
 def _recover_existing_integrated_checkpoint(root: Path, task: TaskRecord) -> ExecutionSummary | None:
     if (
         task.status != "done"
         or task.pipeline_status != "done"
-        or task.git.commit_sha is not None
-        or task.git.checkpoint_attempts < 1
     ):
         return None
-    existing_integrated_sha = _find_existing_checkpoint_commit(root, task)
+    existing_integrated_sha = _reconcile_existing_checkpoint_commit(root, task)
     if existing_integrated_sha is None:
         return None
 
@@ -2821,6 +2829,23 @@ def _commit_to_git_report(
             summary="CommitToGit failed: workspace is not a git repository",
             error_text="workspace is not a git repository",
             phase="preflight",
+        )
+
+    reconciled_sha = _reconcile_existing_checkpoint_commit(root, task)
+    if reconciled_sha is not None:
+        _cleanup_task_worktree(root, task)
+        save_task(root, task)
+        append_journal(
+            root,
+            task,
+            "CommitToGit reconciled an existing Litehive checkpoint commit.",
+        )
+        return StageReport(
+            task_id=task.id,
+            step="commit_to_git",
+            verdict="pass",
+            summary="CommitToGit reconciled an existing checkpoint commit",
+            files_changed=[],
         )
 
     try:

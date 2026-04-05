@@ -3242,30 +3242,60 @@ def _recover_stale_runner_state(
                 continue
             stale_pid = _subagent_process_is_stale(task)
             if _should_requeue_commit_stage_task(task):
-                journal_messages[task.id] = _recover_commit_task(root, task)
-                record_recovery_report(
-                    root,
-                    task,
-                    trigger="stale_runner_recovery",
-                    stage="commit_to_git",
-                    summary="Recovered stale runner state and requeued commit_to_git.",
-                    runnable_state="runnable",
-                    failure_classification="stale_runner",
-                    actions=[
-                        RecoveryAction(
-                            action="clear_stale_active_state",
-                            summary="Cleared stale active runner state for the task.",
-                        ),
-                        RecoveryAction(
-                            action="requeue_stage",
-                            summary="Requeued the task at commit_to_git.",
-                            metadata={"stage": "commit_to_git"},
-                        ),
-                    ],
-                    warnings=["stale subagent pid detected"] if stale_pid else [],
-                )
-                if summary is not None and task.id not in summary.requeued_task_ids:
-                    summary.requeued_task_ids.append(task.id)
+                journal_message = _recover_existing_checkpoint_commit(root, task)
+                if journal_message is not None:
+                    journal_messages[task.id] = journal_message
+                    record_recovery_report(
+                        root,
+                        task,
+                        trigger="stale_runner_recovery",
+                        stage="commit_to_git",
+                        summary="Recovered existing checkpoint commit during stale runner recovery.",
+                        runnable_state="runnable",
+                        failure_classification="stale_runner",
+                        actions=[
+                            RecoveryAction(
+                                action="clear_stale_active_state",
+                                summary="Cleared stale active runner state for the task.",
+                            ),
+                            RecoveryAction(
+                                action="finalize_existing_checkpoint",
+                                summary="Recorded the existing checkpoint commit and finalized the task.",
+                                metadata={"commit_sha": task.git.commit_sha},
+                            ),
+                        ],
+                        warnings=["stale subagent pid detected"] if stale_pid else [],
+                    )
+                    if summary is not None and task.id not in summary.finalized_commit_task_ids:
+                        summary.finalized_commit_task_ids.append(task.id)
+                    if stale_pid and summary is not None and task.id not in summary.stale_process_task_ids:
+                        summary.stale_process_task_ids.append(task.id)
+                else:
+                    journal_messages[task.id] = _recover_commit_task(root, task)
+                    record_recovery_report(
+                        root,
+                        task,
+                        trigger="stale_runner_recovery",
+                        stage="commit_to_git",
+                        summary="Recovered stale runner state and requeued commit_to_git.",
+                        runnable_state="runnable",
+                        failure_classification="stale_runner",
+                        actions=[
+                            RecoveryAction(
+                                action="clear_stale_active_state",
+                                summary="Cleared stale active runner state for the task.",
+                            ),
+                            RecoveryAction(
+                                action="requeue_stage",
+                                summary="Requeued the task at commit_to_git.",
+                                metadata={"stage": "commit_to_git"},
+                            ),
+                        ],
+                        warnings=["stale subagent pid detected"] if stale_pid else [],
+                    )
+                    if summary is not None and task.id not in summary.requeued_task_ids:
+                        summary.requeued_task_ids.append(task.id)
+                    prioritized_ids.append(task.id)
                 if stale_pid and summary is not None and task.id not in summary.stale_process_task_ids:
                     summary.stale_process_task_ids.append(task.id)
             elif _is_task_eligible_for_execution(task):
@@ -3310,7 +3340,6 @@ def _recover_stale_runner_state(
             else:
                 continue
             transitioned.append(task)
-            prioritized_ids.append(task.id)
             mutated = True
 
         if transitioned:
@@ -3663,10 +3692,10 @@ def restore_untouched_active_task(root: Path) -> WorkspaceState:
 
         task = get_task(root, state.active_task_id)
         if task is not None and _is_stranded_commit_task(task):
-            commit_sha = _find_existing_checkpoint_commit(root, task)
+            journal_message = _recover_existing_checkpoint_commit(root, task)
             state.active_task_id = None
             state.queue = [item for item in state.queue if item != task.id]
-            if commit_sha is None:
+            if journal_message is None:
                 _prepare_interrupted_task(
                     root,
                     task,
@@ -3684,51 +3713,26 @@ def restore_untouched_active_task(root: Path) -> WorkspaceState:
                 )
                 return state
 
-            now = utcnow()
-            started_at = task.runtime.current_stage.started_at
-            task.status = "done"
-            task.pipeline_status = "done"
-            set_task_commit_sha(task, commit_sha)
-            task.runtime.execution_status = "done"
-            task.runtime.run_started_at = None
-            task.runtime.active_subagent = None
-            task.runtime.updated_at = now
-            task.runtime.last_stage = task.runtime.last_stage.model_copy(
-                update={
-                    "step": "commit_to_git",
-                    "status": "completed",
-                    "started_at": started_at,
-                    "completed_at": now,
-                    "updated_at": now,
-                    "duration_seconds": _duration_seconds(started_at, now),
-                    "verdict": "pass",
-                    "summary": "Recovered existing checkpoint commit after interrupted `commit_to_git`.",
-                }
-            )
-            task.runtime.current_stage = task.runtime.current_stage.model_copy(
-                update={
-                    "step": None,
-                    "status": "idle",
-                    "started_at": None,
-                    "completed_at": None,
-                    "updated_at": now,
-                    "duration_seconds": 0,
-                    "verdict": None,
-                    "summary": "",
-                }
-            )
             persist_task_and_state(
                 root,
                 task=task,
                 state=state,
-                journal_message=(
-                    "Recovered existing checkpoint commit after interrupted `commit_to_git` "
-                    f"and finalized the task at `{commit_sha}`."
-                ),
+                journal_message=journal_message,
             )
             return state
 
         if task is not None and _should_requeue_commit_stage_task(task):
+            journal_message = _recover_existing_checkpoint_commit(root, task)
+            if journal_message is not None:
+                state.active_task_id = None
+                state.queue = [item for item in state.queue if item != task.id]
+                persist_task_and_state(
+                    root,
+                    task=task,
+                    state=state,
+                    journal_message=journal_message,
+                )
+                return state
             _prepare_interrupted_task(
                 root,
                 task,
