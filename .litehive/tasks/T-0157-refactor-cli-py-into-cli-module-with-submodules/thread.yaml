@@ -1,0 +1,14 @@
+- role: qa
+  step: testing
+  verdict: pass
+  message: "QA PASS for T-0157 CLI refactoring. Verified: (1) litehive/cli/ is a proper\
+    \ package with 14 submodules covering all command groups (configure, engine, status,\
+    \ daemon, run, tasks, queue, report) and helper modules (_pool, _dry_run, _parse,\
+    \ _display, parser). (2) Old cli.py is removed. (3) All backward-compatible imports\
+    \ work: main, build_parser, and all _cmd_* functions importable from litehive.cli.\
+    \ (4) Parser correctly handles all CLI commands. (5) Test collection failures\
+    \ (10 errors importing _allowed_commit_paths from litehive.runtime) are PRE-EXISTING\
+    \ on main \u2014 confirmed by running the same tests with the original cli.py\
+    \ file stashed. The refactoring introduces no regressions."
+  files_changed: []
+  created_at: '2026-04-05T18:32:46+00:00'
