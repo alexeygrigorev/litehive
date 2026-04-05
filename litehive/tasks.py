@@ -1098,9 +1098,17 @@ def _persist_future_task_update(
     _ensure_runtime_ignored(root)
 
 
-def slugify(value: str) -> str:
+def slugify(value: str, max_length: int = 50) -> str:
     slug = re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")
-    return slug or "task"
+    if not slug:
+        return "task"
+    if len(slug) <= max_length:
+        return slug
+    truncated = slug[:max_length]
+    # Try to cut at the last hyphen to avoid mid-word truncation
+    if "-" in truncated:
+        truncated = truncated.rsplit("-", 1)[0]
+    return truncated.strip("-")
 
 
 def _highest_task_number_on_disk(root: Path) -> int:
