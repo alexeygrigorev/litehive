@@ -12,7 +12,7 @@ priority: medium
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-01T06:36:23+00:00'
-updated_at: '2026-04-06T05:31:56+00:00'
+updated_at: '2026-04-06T05:59:35+00:00'
 goal: ''
 acceptance_criteria: []
 constraints: []
@@ -129,6 +129,55 @@ subagents:
   engine: opencode
   status: completed
   path: subagents/SA-0016-reviewer
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0017
+  role: merge-resolver
+  engine: claude
+  status: completed
+  path: subagents/SA-0017-merge-resolver
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0018
+  role: planner
+  engine: gemini
+  status: failed
+  path: subagents/SA-0018-planner
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0019
+  role: planner
+  engine: codex
+  status: failed
+  path: subagents/SA-0019-planner
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0020
+  role: planner
+  engine: opencode
+  status: completed
+  path: subagents/SA-0020-planner
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0021
+  role: swe
+  engine: opencode
+  status: completed
+  path: subagents/SA-0021-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0022
+  role: qa
+  engine: opencode
+  status: completed
+  path: subagents/SA-0022-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0023
+  role: reviewer
+  engine: opencode
+  status: completed
+  path: subagents/SA-0023-reviewer
   sandboxed: false
   sandbox_summary: host
 git:
