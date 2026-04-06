@@ -1,0 +1,15 @@
+- role: recovery
+  step: testing
+  verdict: pass
+  message: 'T-0194 testing verification complete. All keyword-based task_type auto-classification
+    removed: _task_routing_key, _route_engines_for_task, routing_patterns gone from
+    _models.py. task_engine_routing removed from LitehiveConfig. _default_task_engine_routing
+    and VALID_TASK_ROUTING_KEYS removed from constants.py. normalize_task_engine_routing
+    removed from normalization.py. CLI --task-engine-route argument removed. VALID_TASK_TYPES
+    now hardcoded as a simple set. Engine selection now only uses default_engine,
+    task.engine, or CLI --engine override. All 99 tests in test_config_and_run_cli.py
+    and test_engine_variants_and_timeline.py pass. 7 pre-existing failures in test_tasks_and_subagents.py
+    (get_engine attribute/inactivity_timeout kwarg) and 1 pre-existing failure in
+    test_configure_persists_process_profile are unrelated to this task.'
+  files_changed: []
+  created_at: '2026-04-06T22:24:34+00:00'
