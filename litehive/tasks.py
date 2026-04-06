@@ -28,9 +28,6 @@ from litehive.config import (
 )
 
 
-from litehive.events import last_event_timestamp
-
-
 from litehive.git_ops import (
     GitError,
     checkpoint_message,
@@ -3261,6 +3258,8 @@ def _has_inactive_running_tasks(
 ) -> bool:
     """Check whether any running task has been inactive based on last event timestamp."""
     from datetime import UTC, datetime
+
+    from litehive.events import last_event_timestamp
 
     for task_id, task in tasks_by_id.items():
         if task.runtime.execution_status != "running":
