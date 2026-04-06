@@ -16,3 +16,12 @@ Interrupted subagent execution while `grooming` was running. Reason: Stale runne
 
 ## 2026-04-06T09:05:21+00:00
 Execution started with engine `copilot`.
+
+## 2026-04-06T09:43:39+00:00
+Merge conflict on 1 file(s). Launching merge agent.
+
+## 2026-04-06T09:44:30+00:00
+CommitToGit complete. Commit: f087179ad5b98d31a12f571e765aacc030b15244
+
+## 2026-04-06T09:44:35+00:00
+Pool stopped: continue_or_rollback_required. This task finished with checkpoint commit `f087179ad5b98d31a12f571e765aacc030b15244` and unrelated queued work remains. Either continue with a new `litehive run`/pool run or roll back the checkpoint first.

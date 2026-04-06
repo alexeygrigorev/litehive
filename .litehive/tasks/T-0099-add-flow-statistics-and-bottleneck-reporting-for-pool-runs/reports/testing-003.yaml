@@ -1,0 +1,50 @@
+task_id: T-0099
+step: testing
+verdict: pass
+summary: 'Now let me run the tests:'
+feedback: "Now let me run the tests:\nAll 7 new tests pass. Now let me run the full\
+  \ test suite:\nThe 40 failures are pre-existing (confirmed on HEAD without changes).\
+  \ The implementation adds 7 new tests to `tests/test_observability_and_status.py`,\
+  \ all passing.\n\nLet me verify the key acceptance criteria are covered:\nThe durable\
+  \ YAML under `.litehive/logs/pool-runs/` is written with `flow_stats` included (same\
+  \ dict is passed to `_write_durable_pool_run_report`). Let me also verify the acceptance\
+  \ criteria around the task summary text format vs \"flow_statistics\" naming:\n\
+  Let me check the pool-summary.txt format more carefully vs the acceptance criteria:\n\
+  Now I have a clear picture of the gaps. Let me submit the verdict:\n**VERDICT: REJECT**\n\
+  \nThe implementation correctly handles the core mechanics (flow aggregation, bottleneck\
+  \ identification, scoping to current run, omitting empty stages, durable YAML inclusion)\
+  \ and all 7 new tests pass. However, it has 4 concrete gaps against the explicitly\
+  \ stated acceptance criteria:\n\n1. **Naming mismatch**: Output key is `flow_stats:`\
+  \ everywhere \u2014 criteria require `flow_statistics:` in pool-summary.txt and\
+  \ durable YAML\n2. **Missing min/max metrics**: Only `avg_seconds` is computed;\
+  \ `min_seconds` and `max_seconds` are never tracked\n3. **No tie-breaking by retry\
+  \ count**: `bottleneck_stage = max(stage_avg_durations, ...)` uses only avg duration\
+  \ with no secondary sort key\n4. **Missing tie-breaking test**: Acceptance criteria\
+  \ explicitly require a test for \"bottleneck tie-breaking by retry count\" \u2014\
+  \ none exists\n\n**Fixes needed**: rename `flow_stats` \u2192 `flow_statistics`,\
+  \ track raw durations to compute min/max, add retry-count secondary sort to bottleneck\
+  \ selection, add the tie-breaking test.\nNow I'll make the fixes:\nNow update `_pool_summary_report_data`\
+  \ to use `flow_statistics` key, and update `_pool_summary_report_lines` to use the\
+  \ new structure:\nNow update `_pool_summary_report_lines` to use `flow_sta\n\n\u2026\
+  \ [truncated \u2014 full transcript in subagent artifacts]"
+files_changed: []
+follow_up_tasks: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 966
+hook_results: []
+created_at: '2026-04-06T10:28:13+00:00'

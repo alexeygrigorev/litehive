@@ -6,13 +6,13 @@ task_type: null
 engine: copilot
 model: null
 mode: implementation
-status: in_progress
-pipeline_status: commit_to_git
+status: done
+pipeline_status: done
 priority: medium
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-01T06:56:13+00:00'
-updated_at: '2026-04-06T09:43:39+00:00'
+updated_at: '2026-04-06T09:44:32+00:00'
 goal: ''
 acceptance_criteria: []
 constraints: []
@@ -187,10 +187,17 @@ subagents:
   path: subagents/SA-0024-reviewer
   sandboxed: false
   sandbox_summary: host
+- id: SA-0025
+  role: merge-resolver
+  engine: claude
+  status: completed
+  path: subagents/SA-0025-merge-resolver
+  sandboxed: false
+  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0083 add-reliable-runner-status-model-with-heartbeat-and-reconciliation'
-  commit_sha: null
+  commit_sha: f087179ad5b98d31a12f571e765aacc030b15244
   checkpoint_base_sha: null
   checkpoint_attempts: 0
   rolled_back_checkpoint_attempt: null
