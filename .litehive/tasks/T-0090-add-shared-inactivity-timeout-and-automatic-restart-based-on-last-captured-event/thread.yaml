@@ -57,3 +57,125 @@
     Both criteria FAIL because the application cannot start.'
   files_changed: []
   created_at: '2026-04-06T08:07:22+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'T-0083 runner status model with heartbeat and reconciliation is fully
+    implemented and verified.
+
+
+    IMPLEMENTATION VERIFIED (already merged in main):
+
+    - RunnerStatusState model in litehive/models.py
+
+    - runner_heartbeat() context manager in litehive/tasks.py (background thread writes
+    heartbeat every 1s)
+
+    - runner_status() returning running/late/stale/idle in litehive/tasks.py
+
+    - _reconcile_stale_runner_tasks() handling orphaned non-active and active tasks
+
+    - dequeue_next_task_selection() calling reconciliation before picking work
+
+    - repair_workspace_state() recovering stale runners
+
+    - litehive status CLI surfacing runner health (runner_status: ...)
+
+    - runner_heartbeat used in litehive/runtime/_execution.py wrapping task execution
+
+
+    CIRCULAR IMPORT FIXED:
+
+    tasks.py imported last_event_timestamp from events.py at module level, while events.py
+    imported task_dir from tasks.py at module level (introduced in T-0090). Fixed
+    by making last_event_timestamp a lazy import inside _has_inactive_running_tasks().
+
+
+    TESTS RUN:
+
+    - tests/test_observability_and_status.py: all 85 passed (including 4 runner-specific
+    tests: test_run_task_updates_runner_heartbeat_while_task_is_running, test_runner_status_reports_stale_when_workspace_reconciliation_is_still_needed,
+    test_runner_status_clears_orphaned_metadata_when_no_reconciliation_is_needed,
+    test_runner_status_reports_late_when_lock_held_but_heartbeat_expired)
+
+    - tests/test_runner_workflow.py: all 65 passed
+
+    - Total: 560 passed (40 pre-existing failures unrelated to T-0083, verified they
+    existed before the fix)
+
+
+    FILES CHANGED:
+
+    - litehive/tasks.py (circular import fix only)'
+  files_changed: []
+  created_at: '2026-04-06T09:30:41+00:00'
+- role: qa
+  step: testing
+  verdict: pass
+  message: 'QA PASS for T-0083. All 4 runner-status specific tests pass: test_run_task_updates_runner_heartbeat_while_task_is_running,
+    test_runner_status_reports_stale_when_workspace_reconciliation_is_still_needed,
+    test_runner_status_clears_orphaned_metadata_when_no_reconciliation_is_needed,
+    test_runner_status_reports_late_when_lock_held_but_heartbeat_expired. Also 14
+    runner-related tests in test_task_commands_and_daemon.py all pass. Implementation
+    verified: RunnerStatusState model in models.py, runner_heartbeat() context manager
+    with 1s background thread in tasks.py, runner_status() returning running/late/stale/idle
+    states, _reconcile_stale_runner_tasks() handling both orphaned non-active and
+    active tasks, dequeue_next_task_selection() calling reconciliation before picking
+    work, and the circular import fix (lazy import of last_event_timestamp inside
+    _has_inactive_running_tasks). The 40 failures in the full suite are pre-existing
+    on origin/main (worktree tests are identical to main, only change is the circular
+    import fix). No regressions introduced by T-0083 changes.'
+  files_changed: []
+  created_at: '2026-04-06T09:40:00+00:00'
+- role: reviewer
+  step: accepting
+  verdict: pass
+  message: 'ACCEPT: T-0083 runner status model with heartbeat and reconciliation is
+    fully implemented and verified.
+
+
+    WHAT WAS VERIFIED:
+
+    - RunnerStatusState model in litehive/models.py (fields: status, pid, workspace,
+    command, started_at, heartbeat_at, active_task_id)
+
+    - runner_heartbeat() context manager in litehive/tasks.py (background thread writes
+    heartbeat every 1s)
+
+    - runner_status() returning running/late/stale/idle states
+
+    - _reconcile_stale_runner_tasks() handling orphaned non-active and active tasks
+
+    - dequeue_next_task_selection() calls reconciliation before picking work
+
+    - repair_workspace_state() recovers stale runners
+
+    - litehive status CLI surfaces runner health
+
+
+    CIRCULAR IMPORT FIX:
+
+    tasks.py had a module-level import of last_event_timestamp from events.py, while
+    events.py imported task_dir from tasks.py (introduced in T-0090). Fixed in HEAD
+    commit 9a34d4f by making the import lazy inside _has_inactive_running_tasks().
+
+
+    TESTS:
+
+    - tests/test_observability_and_status.py + tests/test_runner_workflow.py: 164
+    passed, 0 failed
+
+
+    FILES CHANGED (already merged to main in commits prior to this worktree):
+
+    - litehive/models.py: RunnerStatusState model
+
+    - litehive/tasks.py: runner_heartbeat, runner_status, _reconcile_stale_runner_tasks,
+    dequeue integration, repair integration
+
+    - litehive/runtime/_execution.py: runner_heartbeat wrapping task execution
+
+
+    Worktree HEAD adds only the circular import fix (litehive/tasks.py, 2 lines changed).'
+  files_changed: []
+  created_at: '2026-04-06T09:43:20+00:00'

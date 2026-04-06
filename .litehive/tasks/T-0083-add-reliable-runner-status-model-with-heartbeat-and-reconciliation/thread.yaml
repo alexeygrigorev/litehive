@@ -1,0 +1,60 @@
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'T-0083 runner status model with heartbeat and reconciliation is fully
+    implemented and verified.
+
+
+    IMPLEMENTATION VERIFIED (already merged in main):
+
+    - RunnerStatusState model in litehive/models.py
+
+    - runner_heartbeat() context manager in litehive/tasks.py (background thread writes
+    heartbeat every 1s)
+
+    - runner_status() returning running/late/stale/idle in litehive/tasks.py
+
+    - _reconcile_stale_runner_tasks() handling orphaned non-active and active tasks
+
+    - dequeue_next_task_selection() calling reconciliation before picking work
+
+    - repair_workspace_state() recovering stale runners
+
+    - litehive status CLI surfacing runner health (runner_status: ...)
+
+    - runner_heartbeat used in litehive/runtime/_execution.py wrapping task execution
+
+
+    CIRCULAR IMPORT FIXED:
+
+    tasks.py imported last_event_timestamp from events.py at module level, while events.py
+    imported task_dir from tasks.py at module level (introduced in T-0090). Fixed
+    by making last_event_timestamp a lazy import inside _has_inactive_running_tasks().
+
+
+    TESTS RUN:
+
+    - tests/test_observability_and_status.py: all 85 passed (including 4 runner-specific
+    tests)
+
+    - tests/test_runner_workflow.py: all 65 passed
+
+    - Total: 560 passed (40 pre-existing failures unrelated to T-0083)
+
+
+    FILES CHANGED:
+
+    - litehive/tasks.py (circular import fix only)'
+  files_changed: []
+  created_at: '2026-04-06T09:31:11+00:00'
+- role: reviewer
+  step: accepting
+  verdict: pass
+  message: 'ACCEPT: T-0083 runner status model with heartbeat and reconciliation is
+    fully implemented and verified. Tests: 164 passed (test_observability_and_status.py
+    + test_runner_workflow.py). Circular import fix confirmed in HEAD commit 9a34d4f.
+    All key components present: RunnerStatusState model, runner_heartbeat() context
+    manager, runner_status(), _reconcile_stale_runner_tasks(), dequeue integration,
+    repair integration.'
+  files_changed: []
+  created_at: '2026-04-06T09:43:28+00:00'
