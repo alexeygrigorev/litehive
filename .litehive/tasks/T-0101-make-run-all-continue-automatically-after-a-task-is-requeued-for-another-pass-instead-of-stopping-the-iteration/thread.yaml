@@ -126,3 +126,132 @@
     goal.'
   files_changed: []
   created_at: '2026-04-06T11:37:03+00:00'
+- role: planner
+  step: grooming
+  verdict: pass
+  message: "## Grooming complete for T-0104\n\n### What I verified\nExplored the codebase\
+    \ to assess the current implementation state. The core schema-validated stage\
+    \ result submission API is substantially implemented:\n- `StageResultSubmission`\
+    \ Pydantic model (extra=forbid) in `litehive/models.py` lines 270-287\n- `_extract_stage_result_submission()`\
+    \ + `_format_stage_result_validation_errors()` in `litehive/engines/base.py`\n\
+    - `parse_stage_report_text()` prefers structured STAGE_RESULT over text fallback\n\
+    - Agent prompts in `litehive/subagents/_prompts.py` instruct agents to emit STAGE_RESULT\
+    \ JSON\n\n### Gap identified\nTop-level `acceptance_criteria` in `StageResultSubmission`\
+    \ is accepted by the schema but silently dropped when building the StageReport.\
+    \ The prompt example shows `\"acceptance_criteria\":[]` at the top level of STAGE_RESULT,\
+    \ but this value is never forwarded to task updates. To update task acceptance\
+    \ criteria via the structured path, agents must use `task_update.acceptance_criteria`\
+    \ \u2014 but the prompt does not show this. The fix: when `submission.acceptance_criteria`\
+    \ is non-empty and `task_update` does not already set `acceptance_criteria`, merge\
+    \ it into the task_update dict before constructing the StageReport.\n\n### Test\
+    \ coverage gap\nNo dedicated unit tests exist for the structured STAGE_RESULT\
+    \ path: valid all-fields parsing, extra-field rejection, missing required field,\
+    \ validation warning format, task_update forwarding. Only indirect coverage in\
+    \ test_feedback_cap.py and test_engine_variants_and_timeline.py.\n\n### Task update\n\
+    Goal: Add a Pydantic-validated JSON submission format (STAGE_RESULT:) that agents\
+    \ use to report stage outcomes. Extra fields are rejected, validation errors surface\
+    \ as warnings and trigger text fallback, and all declared fields (verdict, summary,\
+    \ files_changed, tests, warnings, follow_up_tasks, task_update, acceptance_criteria)\
+    \ are correctly routed into the downstream pipeline.\n\nAcceptance criteria:\n\
+    1. A valid STAGE_RESULT: JSON block is parsed via the structured path (not text\
+    \ fallback), producing a StageReport with correct verdict, summary, files_changed,\
+    \ tests, and warnings.\n2. A STAGE_RESULT: block with an extra (unknown) field\
+    \ is rejected, its validation error is appended as a warning, and parsing falls\
+    \ back to the text format.\n3. A STAGE_RESULT: block missing the required verdict\
+    \ field produces a human-readable validation warning, and parsing falls back to\
+    \ the text format.\n4. acceptance_criteria provided at the top level of STAGE_RESULT\
+    \ are applied to the task record (same outcome as providing them via task_update.acceptance_criteria).\n\
+    5. task_update fields inside STAGE_RESULT (e.g. goal, acceptance_criteria, pm_complexity)\
+    \ are applied to the task record after grooming.\n6. Dedicated unit tests cover:\
+    \ valid structured submission, extra-field rejection, missing-field rejection,\
+    \ validation warning format, and acceptance_criteria forwarding. All existing\
+    \ tests pass.\n\nPlan:\n1. In parse_stage_report_text (engines/base.py): when\
+    \ submission.acceptance_criteria is non-empty and task_update dict does not already\
+    \ set acceptance_criteria, merge it in before constructing StageReport.\n2. Add\
+    \ dedicated tests in tests/test_runner_workflow.py or a new tests/test_stage_result_submission.py\
+    \ covering the six acceptance criteria above.\n3. Optionally: update the prompt\
+    \ example to show acceptance_criteria inside task_update to guide agents toward\
+    \ the correct pattern.\n\nPM_COMPLEXITY: simple\nPLANNED_EFFORT: s"
+  files_changed: []
+  created_at: '2026-04-06T11:51:07+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'STAGE_RESULT:
+
+    {"verdict":"pass","summary":"Added acceptance_criteria forwarding in STAGE_RESULT
+    structured path and 8 dedicated unit tests","files_changed":["litehive/engines/base.py","tests/test_stage_result_submission.py"],"tests":{"added":8,"passing":8},"warnings":[]}
+
+
+    Gap fixed: parse_stage_report_text now merges submission.acceptance_criteria into
+    task_update when non-empty and task_update does not already set it. task_update.acceptance_criteria
+    takes precedence when both are present.
+
+
+    Tests added: tests/test_stage_result_submission.py with 8 tests covering AC-1
+    through AC-6:
+
+    - AC-1: valid STAGE_RESULT produces structured StageReport with correct fields
+
+    - AC-2: extra field causes ValidationError, text fallback, warning present
+
+    - AC-3: missing verdict causes ValidationError mentioning verdict, text fallback
+
+    - AC-4: top-level acceptance_criteria forwarded to task_update
+
+    - AC-4 precedence: task_update.acceptance_criteria wins when both provided
+
+    - AC-5: task_update goal/pm_complexity forwarded correctly
+
+    - AC-6: validation warning is human-readable
+
+    - AC-6: extra-field warning mentions the field name
+
+
+    Verification: 8 new tests pass. 115 related tests pass (test_feedback_cap, test_grooming_task_updates,
+    test_runner_workflow). 40 pre-existing failures in unrelated files are not caused
+    by this change.
+
+    '
+  files_changed: []
+  created_at: '2026-04-06T12:01:28+00:00'
+- role: qa
+  step: testing
+  verdict: pass
+  message: 'Validated T-0104 schema-validated stage result submission API. All 8 new
+    tests in tests/test_stage_result_submission.py pass. Verified: (1) Valid STAGE_RESULT
+    JSON produces StageReport via structured path; (2) Extra/unknown fields rejected
+    with human-readable validation warning and fallback to text path; (3) Missing
+    required verdict field triggers warning and fallback; (4) Top-level acceptance_criteria
+    forwarded to task_update; (5) task_update.acceptance_criteria takes precedence
+    when both provided; (6) task_update fields (goal, pm_complexity) forwarded correctly.
+    Implementation in litehive/engines/base.py correctly merges acceptance_criteria
+    into task_update_dict before constructing StageReport. StageResultSubmission model
+    in litehive/models.py has extra=''forbid'' enforcing strict schema. 154 tests
+    pass across test_stage_result_submission, test_engine_variants_and_timeline, and
+    test_runner_workflow. No regressions.'
+  files_changed: []
+  created_at: '2026-04-06T12:08:30+00:00'
+- role: reviewer
+  step: accepting
+  verdict: pass
+  message: "STAGE_RESULT: {\"verdict\":\"pass\",\"summary\":\"Schema-validated stage\
+    \ result submission API verified complete\",\"files_changed\":[\"litehive/engines/base.py\"\
+    ,\"tests/test_stage_result_submission.py\"],\"tests\":{\"added\":8,\"passing\"\
+    :8},\"warnings\":[\"7 pre-existing test failures in test_tasks_and_subagents.py\
+    \ exist on main before T-0104 changes \u2014 not caused by this task\"],\"follow_up_tasks\"\
+    :[],\"acceptance_criteria\":[]}"
+  files_changed: []
+  created_at: '2026-04-06T12:19:06+00:00'
+- role: reviewer
+  step: accepting
+  verdict: pass
+  message: 'Verified: StageResultSubmission schema enforces extra=forbid (AC-2), missing
+    required fields fall back to text path with human-readable validation warnings
+    (AC-3,AC-6), top-level acceptance_criteria merged into task_update with task_update
+    taking precedence (AC-4), task_update fields forwarded correctly (AC-5), valid
+    submission produces StageReport via structured path (AC-1). All 8 new tests in
+    tests/test_stage_result_submission.py pass. 7 pre-existing test failures in test_tasks_and_subagents.py
+    exist on main before T-0104 changes.'
+  files_changed: []
+  created_at: '2026-04-06T12:19:47+00:00'
