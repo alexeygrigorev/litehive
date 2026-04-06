@@ -269,6 +269,7 @@ def stage_prompt(
                 "FOLLOW_UP_TASKS:",
                 '[{"title":"optional follow-up title","rationale":"why this separate task is needed","blocking":false}]',
                 "- Use a JSON array on the line(s) after `FOLLOW_UP_TASKS:` when you discover separate follow-up work.",
+                "- Primary use case at grooming: scope contamination — when a task mixes in work that belongs to a separate concern, extract each out-of-scope item as a follow-up and narrow the current task via TASK_UPDATE.",
                 "- Set `blocking` to `true` only when the extra work blocks the current task from continuing.",
                 "- Optional keys per follow-up: `goal`, `acceptance_criteria` (array of strings), `task_type`.",
             ]
@@ -352,6 +353,10 @@ def _stage_role_prompt(step: str, owner: str | None = None) -> list[str]:
             "- To park a task (pause without closing), include `action: park` in the TASK_UPDATE block.",
             "- To requeue a previously parked or closed task for another pass, include `action: requeue`. To abandon it entirely, include `action: abandon`.",
             "- Do not implement code in this stage.",
+            "- Scope contamination: if the task mixes in work that belongs to a separate concern, extract that work into follow-up tasks and narrow the current task.",
+            "  - For each out-of-scope item, emit a FOLLOW_UP_TASKS entry with a clear title and rationale.",
+            "  - Pair every FOLLOW_UP_TASKS emission with a TASK_UPDATE that removes the extracted work from the current goal, acceptance_criteria, and plan.",
+            "  - Set `blocking: true` on a follow-up only when the extracted work must complete before the current task can proceed.",
         ]
     if step == "accepting":
         return [
