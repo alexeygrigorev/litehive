@@ -1,5 +1,6 @@
 from tests.workspace_helpers import *  # noqa: F401,F403
 
+
 def test_runner_advances_task_to_done(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Implement feature", auto_commit=False)
@@ -18,11 +19,13 @@ def test_runner_advances_task_to_done(tmp_path: Path) -> None:
     assert (reports / "accepting-004.yaml").exists()
     assert (reports / "commit_to_git-005.yaml").exists()
 
+
 def test_runtime_routes_grooming_to_planner_and_accepting_to_reviewer() -> None:
     assert _role_for_step("grooming") == "planner"
     assert _role_for_step("implementing") == "swe"
     assert _role_for_step("testing") == "qa"
     assert _role_for_step("accepting") == "reviewer"
+
 
 def test_runtime_routes_flagged_and_interrupted_retries_to_recovery(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
@@ -41,6 +44,7 @@ def test_runtime_routes_flagged_and_interrupted_retries_to_recovery(tmp_path: Pa
     assert _role_for_step("implementing", require_task(tmp_path, flagged.id)) == "recovery"
     assert _role_for_step("testing", require_task(tmp_path, interrupted.id)) == "recovery"
     assert _role_for_step("grooming", require_task(tmp_path, interrupted.id)) == "planner"
+
 
 def test_subagent_manager_persists_planner_and_reviewer_artifacts(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -92,6 +96,7 @@ def test_subagent_manager_persists_planner_and_reviewer_artifacts(
     assert task.subagents[0].path.endswith("-planner")
     assert task.subagents[-1].path.endswith("-reviewer")
 
+
 def test_runner_requeues_task_after_testing_rejection(tmp_path: Path) -> None:
     ensure_workspace(tmp_path, LitehiveConfig(default_retry_limit=3))
     task = create_task(tmp_path, title="Review loop")
@@ -111,6 +116,7 @@ def test_runner_requeues_task_after_testing_rejection(tmp_path: Path) -> None:
     assert task.runtime.retry_count == 1
     assert task.runtime.retry_limit == 3
     assert task.runtime.retry_source == "global"
+
 
 def test_runner_does_not_override_qa_verdict(tmp_path: Path) -> None:
     """QA verdict is final and the runner lets testing pass advance normally."""
@@ -140,6 +146,7 @@ def test_runner_does_not_override_qa_verdict(tmp_path: Path) -> None:
     result = runner.run(task)
 
     assert result.final_status == "done"
+
 
 def test_runner_accepts_workflow_testing_with_real_lifecycle_evidence(
     tmp_path: Path,
@@ -172,7 +179,16 @@ def test_runner_accepts_workflow_testing_with_real_lifecycle_evidence(
 
     resume_once = {"seen": False}
 
-    def fake_run(self, current_task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None):  # type: ignore[no-untyped-def]
+    def fake_run(
+        self,
+        current_task,
+        role,
+        engine_name,
+        prompt,
+        model=None,
+        max_turns=None,
+        resume_session_id=None,
+    ):  # type: ignore[no-untyped-def]
         if current_task.pipeline_status == "implementing" and (
             self.execution_root == commit_workspace
             or commit_workspace in self.execution_root.parents
@@ -271,7 +287,16 @@ exit 1
         encoding="utf-8",
     )
     daemon_result = subprocess.run(
-        [sys.executable, "-m", "litehive.main", "daemon", "run", "--foreground", "--workspace", str(wrapper_workspace)],
+        [
+            sys.executable,
+            "-m",
+            "litehive.main",
+            "daemon",
+            "run",
+            "--foreground",
+            "--workspace",
+            str(wrapper_workspace),
+        ],
         cwd=_repo_root(),
         text=True,
         capture_output=True,
@@ -295,6 +320,7 @@ exit 1
     assert "status: interrupted" in evidence
     assert "pipeline_status: testing" in evidence
     assert "No active or queued tasks remain. Stopping." in evidence
+
 
 def test_runner_does_not_override_acceptance_verdict(tmp_path: Path) -> None:
     """Reviewer verdict is final and the runner lets acceptance pass advance."""
@@ -322,6 +348,7 @@ def test_runner_does_not_override_acceptance_verdict(tmp_path: Path) -> None:
     result = runner.run(task)
 
     assert result.final_status == "done"
+
 
 def test_runner_persists_non_blocking_follow_up_and_completes_current_task(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
@@ -378,6 +405,7 @@ def test_runner_persists_non_blocking_follow_up_and_completes_current_task(tmp_p
     )
     assert accepting_report["created_follow_up_task_ids"] == [follow_up.id]
 
+
 def test_runner_persists_blocking_follow_up_and_blocks_current_task(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Ship queue behavior")
@@ -416,13 +444,16 @@ def test_runner_persists_blocking_follow_up_and_blocks_current_task(tmp_path: Pa
     assert follow_up.created_from.blocking is True
     assert load_state(tmp_path).queue == [follow_up.id]
 
+
 def test_run_next_task_executes_follow_up_created_by_acceptance_on_later_iteration(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     ensure_workspace(tmp_path)
     original = create_task(tmp_path, title="Ship feature behavior", auto_commit=False)
 
-    def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None):  # type: ignore[no-untyped-def]
+    def fake_run(
+        self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None
+    ):  # type: ignore[no-untyped-def]
         if task.id == original.id and task.pipeline_status == "accepting":
             return SubagentResult(
                 ref=SubagentRef(
@@ -482,6 +513,7 @@ def test_run_next_task_executes_follow_up_created_by_acceptance_on_later_iterati
     assert refreshed_follow_up.created_from is not None
     assert refreshed_follow_up.created_from.task_id == original.id
 
+
 def test_unexpected_dirty_paths_computes_allowed_set_once(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Optimize commit dirty-path scan")
@@ -501,6 +533,7 @@ def test_unexpected_dirty_paths_computes_allowed_set_once(tmp_path: Path) -> Non
     unexpected = _unexpected_dirty_paths(dirty_entries, allowed_paths)
 
     assert unexpected == ["README.md", "docs/state-machine.md"]
+
 
 def test_unexpected_dirty_paths_ignores_unrelated_litehive_workspace_churn(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
@@ -522,6 +555,7 @@ def test_unexpected_dirty_paths_ignores_unrelated_litehive_workspace_churn(tmp_p
 
     assert unexpected == ["README.md"]
 
+
 def test_unexpected_dirty_paths_ignores_stray_tmpdir_workspace_cleanup(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Ignore stray tmpdir cleanup")
@@ -541,6 +575,7 @@ def test_unexpected_dirty_paths_ignores_stray_tmpdir_workspace_cleanup(tmp_path:
     unexpected = _unexpected_dirty_paths(dirty_entries, allowed_paths)
 
     assert unexpected == ["README.md"]
+
 
 def test_allowed_commit_paths_ignores_placeholder_file_entries(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
@@ -566,6 +601,7 @@ def test_allowed_commit_paths_ignores_placeholder_file_entries(tmp_path: Path) -
     assert PurePosixPath("none") not in allowed_paths
     assert PurePosixPath("N/A") not in allowed_paths
     assert PurePosixPath("-") not in allowed_paths
+
 
 def test_live_session_progress_updates_runtime_heartbeat(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
@@ -611,6 +647,7 @@ def test_live_session_progress_updates_runtime_heartbeat(tmp_path: Path) -> None
     assert refreshed.runtime.active_subagent.pid == 12345
     assert refreshed.runtime.active_subagent.transcript_snippet
 
+
 def test_commit_task_can_commit_only_selected_paths_with_other_unstaged_changes(
     tmp_path: Path,
 ) -> None:
@@ -639,6 +676,7 @@ def test_commit_task_can_commit_only_selected_paths_with_other_unstaged_changes(
     ).stdout.splitlines()
     assert "?? other.txt" in status_lines
     assert not any("tracked.txt" in line for line in status_lines)
+
 
 def test_runner_preserves_retry_count_when_requeued_task_is_rejected_again(tmp_path: Path) -> None:
     ensure_workspace(tmp_path, LitehiveConfig(default_retry_limit=3))
@@ -682,6 +720,7 @@ def test_runner_preserves_retry_count_when_requeued_task_is_rejected_again(tmp_p
     assert accepting_report["retry_limit"] == 3
     assert accepting_report["retry_decision"] == "retry"
 
+
 def test_runner_requeues_implementing_rejection_without_sink_state(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     task = create_task(
@@ -720,6 +759,7 @@ def test_runner_requeues_implementing_rejection_without_sink_state(tmp_path: Pat
     assert implementing_report["verdict"] == "reject"
     assert implementing_report["retry_decision"] == "retry"
 
+
 def test_runner_infers_acceptance_criteria_from_task_context_after_grooming(
     tmp_path: Path,
 ) -> None:
@@ -749,6 +789,7 @@ def test_runner_infers_acceptance_criteria_from_task_context_after_grooming(
         f"The result aligns with the prerequisite task context needed from: {prerequisite.id}.",
         "Focused verification demonstrates the targeted behavior works as intended.",
     ]
+
 
 def test_runner_blocks_large_task_without_inferable_acceptance_criteria_during_grooming(
     tmp_path: Path,
@@ -785,9 +826,12 @@ def test_runner_blocks_large_task_without_inferable_acceptance_criteria_during_g
         in report["summary"]
     )
 
+
 def test_runner_persists_grooming_generated_acceptance_criteria(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
-    task = create_task(tmp_path, title="Implement feature", goal="Ship deterministic dispatch", auto_commit=False)
+    task = create_task(
+        tmp_path, title="Implement feature", goal="Ship deterministic dispatch", auto_commit=False
+    )
 
     def executor(task, step):  # type: ignore[no-untyped-def]
         if step == "grooming":
@@ -822,9 +866,12 @@ def test_runner_persists_grooming_generated_acceptance_criteria(tmp_path: Path) 
         "Tasks still block before implementation when grooming cannot define concrete criteria.",
     ]
 
+
 def test_runner_persists_grooming_generated_pm_sizing(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
-    task = create_task(tmp_path, title="Implement feature", goal="Ship deterministic dispatch", auto_commit=False)
+    task = create_task(
+        tmp_path, title="Implement feature", goal="Ship deterministic dispatch", auto_commit=False
+    )
 
     def executor(task, step):  # type: ignore[no-untyped-def]
         if step == "grooming":
@@ -855,6 +902,7 @@ def test_runner_persists_grooming_generated_pm_sizing(tmp_path: Path) -> None:
     assert updated is not None
     assert updated.pm_complexity == "complex"
     assert updated.planned_effort == "l"
+
 
 def test_large_task_acceptance_criteria_requirement_heuristic() -> None:
     minimal = TaskRecord(id="T-0001", slug="small-task", title="Small task")
@@ -918,11 +966,14 @@ def test_large_task_acceptance_criteria_requirement_heuristic() -> None:
         == "accepting"
     )
 
+
 def test_runner_normalizes_implementing_stage_without_acceptance_criteria_to_grooming(
     tmp_path: Path,
 ) -> None:
     ensure_workspace(tmp_path)
-    task = create_task(tmp_path, title="Resume feature", goal="Ship deterministic routing", auto_commit=False)
+    task = create_task(
+        tmp_path, title="Resume feature", goal="Ship deterministic routing", auto_commit=False
+    )
     task.plan = ["Inspect current flow", "Implement gate"]
     task.pipeline_status = "implementing"
     save_task(tmp_path, task)
@@ -943,11 +994,14 @@ def test_runner_normalizes_implementing_stage_without_acceptance_criteria_to_gro
     journal = (task_dir(tmp_path, updated) / "journal.md").read_text(encoding="utf-8")
     assert "Rerouted to grooming for normalization" in journal
 
+
 def test_runner_normalizes_later_stage_without_acceptance_criteria_to_grooming(
     tmp_path: Path,
 ) -> None:
     ensure_workspace(tmp_path)
-    task = create_task(tmp_path, title="Resume feature", goal="Ship deterministic routing", auto_commit=False)
+    task = create_task(
+        tmp_path, title="Resume feature", goal="Ship deterministic routing", auto_commit=False
+    )
     task.plan = ["Inspect current flow", "Implement gate"]
     task.pipeline_status = "testing"
     save_task(tmp_path, task)
@@ -967,6 +1021,7 @@ def test_runner_normalizes_later_stage_without_acceptance_criteria_to_grooming(
     assert updated is not None
     journal = (task_dir(tmp_path, updated) / "journal.md").read_text(encoding="utf-8")
     assert "Rerouted to grooming for normalization" in journal
+
 
 def test_runner_normalizes_underspecified_queued_task_through_grooming(
     tmp_path: Path,
@@ -995,12 +1050,15 @@ def test_runner_normalizes_underspecified_queued_task_through_grooming(
     assert "Rerouted to grooming for normalization" in journal
     assert "missing acceptance criteria" in journal
 
+
 def test_runner_normalizes_interrupted_task_without_criteria_through_grooming(
     tmp_path: Path,
 ) -> None:
     """Interrupted task at testing with no acceptance criteria gets rerouted to grooming."""
     ensure_workspace(tmp_path)
-    task = create_task(tmp_path, title="Interrupted legacy task", goal="Deliver the fix", auto_commit=False)
+    task = create_task(
+        tmp_path, title="Interrupted legacy task", goal="Deliver the fix", auto_commit=False
+    )
     task.pipeline_status = "testing"
     task.status = "interrupted"
     task.runtime.last_outcome.kind = "interrupted"
@@ -1022,6 +1080,7 @@ def test_runner_normalizes_interrupted_task_without_criteria_through_grooming(
     assert updated is not None
     journal = (task_dir(tmp_path, updated) / "journal.md").read_text(encoding="utf-8")
     assert "missing acceptance criteria" in journal
+
 
 def test_runner_skips_normalization_for_well_specified_task(tmp_path: Path) -> None:
     """Task with goal and acceptance criteria continues from its current stage without grooming."""
@@ -1047,8 +1106,11 @@ def test_runner_skips_normalization_for_well_specified_task(tmp_path: Path) -> N
     result = runner.run(task)
 
     assert result.final_status == "done"
-    assert stages_executed[0] == "implementing", "well-specified task should not be rerouted to grooming"
+    assert stages_executed[0] == "implementing", (
+        "well-specified task should not be rerouted to grooming"
+    )
     assert "grooming" not in stages_executed
+
 
 def test_needs_normalization_returns_none_for_task_already_at_grooming() -> None:
     """Tasks already at grooming should not be flagged for normalization."""
@@ -1057,6 +1119,7 @@ def test_needs_normalization_returns_none_for_task_already_at_grooming() -> None
     task.goal = ""
     task.acceptance_criteria = []
     assert needs_normalization(task) is None
+
 
 def test_needs_normalization_detects_missing_criteria() -> None:
     """Tasks past grooming without acceptance criteria are detected."""
@@ -1082,6 +1145,7 @@ def test_needs_normalization_detects_missing_criteria() -> None:
     task.goal = ""
     task.acceptance_criteria = ["Criterion"]
     assert needs_normalization(task) is None
+
 
 def test_runner_cancels_task_with_explicit_reason(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
@@ -1133,6 +1197,7 @@ def test_runner_cancels_task_with_explicit_reason(tmp_path: Path) -> None:
     assert report["outcome_reason_code"] == "execution_interrupted"
     assert report["outcome_reason"] == "Execution interrupted during testing"
 
+
 def test_runner_fails_task_when_stage_executor_crashes(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Executor crash")
@@ -1171,6 +1236,7 @@ def test_runner_fails_task_when_stage_executor_crashes(tmp_path: Path) -> None:
     assert report["outcome_reason_code"] == "stage_exception"
     assert report["outcome_reason"] == "testing failed with unhandled error: boom"
 
+
 def test_run_next_task_uses_task_retry_override(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -1180,7 +1246,9 @@ def test_run_next_task_uses_task_retry_override(
     save_task(tmp_path, task)
     attempts = {"testing": 0}
 
-    def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None):  # type: ignore[no-untyped-def]
+    def fake_run(
+        self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None
+    ):  # type: ignore[no-untyped-def]
         if task.pipeline_status == "testing":
             attempts["testing"] += 1
             if attempts["testing"] == 1:
@@ -1245,6 +1313,7 @@ def test_run_next_task_uses_task_retry_override(
     assert report["retry_source"] == "task"
     assert report["retry_decision"] == "retry"
 
+
 def test_run_next_task_requeues_after_qa_rejection(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -1253,7 +1322,9 @@ def test_run_next_task_requeues_after_qa_rejection(
     task.retry_policy.max_retries = 3
     save_task(tmp_path, task)
 
-    def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None):  # type: ignore[no-untyped-def]
+    def fake_run(
+        self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None
+    ):  # type: ignore[no-untyped-def]
         transcript = "\n".join(
             [
                 "VERDICT: PASS",
@@ -1329,6 +1400,7 @@ def test_run_next_task_requeues_after_qa_rejection(
     assert testing_report["retry_source"] == "task"
     assert testing_report["retry_decision"] == "retry"
 
+
 def test_cli_run_end_to_end_requeues_after_qa_failure_then_commits_in_temp_git_repo(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -1344,7 +1416,16 @@ def test_cli_run_end_to_end_requeues_after_qa_failure_then_commits_in_temp_git_r
 
     attempts = {"testing": 0}
 
-    def fake_run(self, current_task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None):  # type: ignore[no-untyped-def]
+    def fake_run(
+        self,
+        current_task,
+        role,
+        engine_name,
+        prompt,
+        model=None,
+        max_turns=None,
+        resume_session_id=None,
+    ):  # type: ignore[no-untyped-def]
         if current_task.pipeline_status == "implementing":
             (self.execution_root / "app.txt").write_text(
                 f"iteration {attempts['testing'] + 1}\n",
@@ -1435,6 +1516,7 @@ def test_cli_run_end_to_end_requeues_after_qa_failure_then_commits_in_temp_git_r
     assert failed_testing["retry_decision"] == "retry"
     assert commit_report["verdict"] == "pass"
 
+
 def test_opencode_strips_provider_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     calls = {}
 
@@ -1470,6 +1552,7 @@ def test_opencode_strips_provider_env(monkeypatch: pytest.MonkeyPatch, tmp_path:
     ]
     assert "OPENAI_API_KEY" not in calls["env"]
     assert "OPENCODE_API_KEY" not in calls["env"]
+
 
 def test_sandbox_launcher_wraps_selected_engine_with_docker_policy(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -1529,6 +1612,7 @@ def test_sandbox_launcher_wraps_selected_engine_with_docker_policy(
         in joined
     )
 
+
 def test_sandbox_launcher_applies_resource_limit_flags_from_profile_defaults(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -1547,6 +1631,7 @@ def test_sandbox_launcher_applies_resource_limit_flags_from_profile_defaults(
     assert "--pids-limit 512" in joined
     assert f"src={tmp_path},dst=/workspace" in joined
 
+
 def test_sandbox_launcher_classifies_cpu_limit_events() -> None:
     launcher = SandboxLauncher(Path("/tmp/workspace"), LitehiveConfig(process_profile="rust"))
 
@@ -1562,6 +1647,7 @@ def test_sandbox_launcher_classifies_cpu_limit_events() -> None:
     assert event.reason == "CPU limit exceeded"
     assert event.observed_signal == "cpu_limit"
     assert event.cpu_count == 4.0
+
 
 def test_sandbox_launcher_wraps_selected_engine_with_bubblewrap_policy(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -1623,6 +1709,7 @@ def test_sandbox_launcher_wraps_selected_engine_with_bubblewrap_policy(
     assert "--setenv PATH /usr/bin:/bin" in joined
     assert "--" in wrapped.argv  # separator before command
 
+
 def test_sandbox_bubblewrap_readonly_workspace(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -1650,6 +1737,7 @@ def test_sandbox_bubblewrap_readonly_workspace(
     assert f"--ro-bind {tmp_path} {tmp_path}" in joined
     assert f"--bind {tmp_path}" not in joined
 
+
 def test_sandbox_bubblewrap_shares_net_when_not_none(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -1673,6 +1761,7 @@ def test_sandbox_bubblewrap_shares_net_when_not_none(
     wrapped = launcher.wrap_invocation("codex", "codex", invocation)
 
     assert "--share-net" in wrapped.argv
+
 
 def test_sandbox_bubblewrap_policy_summary_includes_backend_and_mounts(
     tmp_path: Path,
@@ -1714,9 +1803,11 @@ def test_sandbox_bubblewrap_policy_summary_includes_backend_and_mounts(
     assert "net=none" in text
     assert "workspace=rw" in text
 
+
 def test_sandbox_config_backend_defaults_to_docker() -> None:
     config = ExternalEngineSandboxConfig()
     assert config.backend == "docker"
+
 
 def test_sandbox_config_invalid_backend_raises() -> None:
     with pytest.raises(ValueError, match="external_engine_sandbox.backend must be one of"):
@@ -1726,6 +1817,7 @@ def test_sandbox_config_invalid_backend_raises() -> None:
                 backend="invalid",
             )
         )
+
 
 def test_load_config_round_trips_bubblewrap_backend(tmp_path: Path) -> None:
     ensure_workspace(
@@ -1753,6 +1845,7 @@ def test_load_config_round_trips_bubblewrap_backend(tmp_path: Path) -> None:
     assert config.external_engine_sandbox.runtime_binary == "bwrap"
     assert config.external_engine_sandbox.enabled is True
 
+
 def test_format_external_engine_sandbox_includes_backend() -> None:
     config = LitehiveConfig(
         external_engine_sandbox=ExternalEngineSandboxConfig(
@@ -1774,6 +1867,7 @@ def test_format_external_engine_sandbox_includes_backend() -> None:
     assert "backend:bubblewrap" in rendered
     assert "runtime:bwrap" in rendered
 
+
 def test_gemini_build_invocation_includes_model_and_jsonl_flags(tmp_path: Path) -> None:
     invocation = get_engine("gemini").build_invocation(
         "ship it",
@@ -1792,6 +1886,7 @@ def test_gemini_build_invocation_includes_model_and_jsonl_flags(tmp_path: Path) 
         "-m",
         "gemini-2.5-pro",
     ]
+
 
 def test_copilot_build_invocation_includes_model_and_jsonl_flags(tmp_path: Path) -> None:
     invocation = get_engine("copilot").build_invocation(
@@ -1816,6 +1911,7 @@ def test_copilot_build_invocation_includes_model_and_jsonl_flags(tmp_path: Path)
         "gpt-5",
     ]
 
+
 def test_engine_capabilities_report_availability_and_contract_flags(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1839,6 +1935,7 @@ def test_engine_capabilities_report_availability_and_contract_flags(
     assert copilot.supports_model_override is True
     assert copilot.transcript_format == "jsonl"
 
+
 def test_codex_build_invocation_includes_workspace_and_prompt(tmp_path: Path) -> None:
     invocation = get_engine("codex").build_invocation("ship it", tmp_path)
 
@@ -1853,6 +1950,7 @@ def test_codex_build_invocation_includes_workspace_and_prompt(tmp_path: Path) ->
         "--skip-git-repo-check",
         "ship it",
     ]
+
 
 def test_codex_renders_jsonl_transcript_and_usage_observation(tmp_path: Path) -> None:
     execution = CLIExecutionResult(
@@ -1886,6 +1984,7 @@ def test_codex_renders_jsonl_transcript_and_usage_observation(tmp_path: Path) ->
     assert observation.metadata["input_tokens"] == 15442
     assert observation.metadata["cached_input_tokens"] == 5504
     assert observation.metadata["output_tokens"] == 18
+
 
 def test_codex_renders_jsonl_error_payloads_and_extracts_limit_observation(tmp_path: Path) -> None:
     execution = CLIExecutionResult(
@@ -1923,6 +2022,7 @@ def test_codex_renders_jsonl_error_payloads_and_extracts_limit_observation(tmp_p
     assert observation.metadata["retry_at_hint"] == "5:26 PM"
     assert observation.metadata["purchase_more_credits"] is True
 
+
 def test_opencode_build_invocation_includes_dir_model_and_prompt(tmp_path: Path) -> None:
     invocation = get_engine("opencode").build_invocation(
         "ship it",
@@ -1942,6 +2042,7 @@ def test_opencode_build_invocation_includes_dir_model_and_prompt(tmp_path: Path)
         "zai-coding-plan/glm-5.1",
         "ship it",
     ]
+
 
 def test_opencode_renders_json_transcript_and_usage_observation(tmp_path: Path) -> None:
     execution = CLIExecutionResult(
@@ -1978,6 +2079,7 @@ def test_opencode_renders_json_transcript_and_usage_observation(tmp_path: Path) 
     assert observation.metadata["cache_write_tokens"] == 0
     assert observation.metadata["finish_reason"] == "stop"
 
+
 def test_opencode_extract_usage_observation_reads_limit_error_payload(tmp_path: Path) -> None:
     execution = CLIExecutionResult(
         adapter="opencode",
@@ -2006,6 +2108,7 @@ def test_opencode_extract_usage_observation_reads_limit_error_payload(tmp_path: 
     assert observation.limit_reason == "rate limit reached"
     assert observation.metadata["error_name"] == "RateLimitError"
     assert observation.metadata["error_message"] == "429 Too Many Requests: rate limit exceeded"
+
 
 def test_gemini_renders_jsonl_transcript_and_stage_report(tmp_path: Path) -> None:
     execution = CLIExecutionResult(
@@ -2041,6 +2144,7 @@ def test_gemini_renders_jsonl_transcript_and_stage_report(tmp_path: Path) -> Non
     assert report.files_changed == ["litehive/engines.py"]
     assert report.tests == {"added": 4, "passing": 4}
 
+
 def test_codex_renders_jsonl_transcript_and_stage_report(tmp_path: Path) -> None:
     execution = CLIExecutionResult(
         adapter="codex",
@@ -2073,6 +2177,7 @@ def test_codex_renders_jsonl_transcript_and_stage_report(tmp_path: Path) -> None
     assert report.files_changed == ["litehive/engines.py"]
     assert report.tests == {"added": 2, "passing": 2}
 
+
 def test_codex_render_transcript_ignores_non_message_events_until_text_arrives(
     tmp_path: Path,
 ) -> None:
@@ -2093,6 +2198,7 @@ def test_codex_render_transcript_ignores_non_message_events_until_text_arrives(
 
     assert get_engine("codex").render_transcript(execution) == ""
 
+
 def test_codex_render_transcript_replaces_updated_agent_message_text(tmp_path: Path) -> None:
     execution = CLIExecutionResult(
         adapter="codex",
@@ -2111,6 +2217,7 @@ def test_codex_render_transcript_replaces_updated_agent_message_text(tmp_path: P
     )
 
     assert get_engine("codex").render_transcript(execution) == "VERDICT: PASS\nSUMMARY: final"
+
 
 def test_codex_stage_report_uses_failed_command_output_when_no_agent_message(
     tmp_path: Path,
@@ -2140,6 +2247,7 @@ def test_codex_stage_report_uses_failed_command_output_when_no_agent_message(
     assert report.summary == "tests failed"
     assert report.verdict == "blocked"
 
+
 def test_codex_stage_report_ignores_stale_failed_command_output_after_restart(
     tmp_path: Path,
 ) -> None:
@@ -2168,6 +2276,7 @@ def test_codex_stage_report_ignores_stale_failed_command_output_after_restart(
     assert report.summary == "testing completed"
     assert report.verdict == "pass"
 
+
 def test_gemini_stage_report_uses_tool_error_when_no_assistant_message(tmp_path: Path) -> None:
     execution = CLIExecutionResult(
         adapter="gemini",
@@ -2187,6 +2296,7 @@ def test_gemini_stage_report_uses_tool_error_when_no_assistant_message(tmp_path:
 
     assert report.summary == "permission denied"
     assert report.verdict == "blocked"
+
 
 def test_copilot_renders_jsonl_transcript_and_stage_report(tmp_path: Path) -> None:
     execution = CLIExecutionResult(
@@ -2220,6 +2330,7 @@ def test_copilot_renders_jsonl_transcript_and_stage_report(tmp_path: Path) -> No
     assert report.files_changed == ["litehive/engines.py"]
     assert report.tests == {"added": 2, "passing": 2}
 
+
 def test_copilot_stage_report_uses_json_error_when_no_assistant_message(tmp_path: Path) -> None:
     execution = CLIExecutionResult(
         adapter="copilot",
@@ -2239,6 +2350,7 @@ def test_copilot_stage_report_uses_json_error_when_no_assistant_message(tmp_path
 
     assert report.summary == "authentication required"
     assert report.verdict == "blocked"
+
 
 def test_copilot_render_transcript_falls_back_to_message_deltas(tmp_path: Path) -> None:
     execution = CLIExecutionResult(
@@ -2260,6 +2372,7 @@ def test_copilot_render_transcript_falls_back_to_message_deltas(tmp_path: Path) 
     transcript = get_engine("copilot").render_transcript(execution)
 
     assert transcript == "VERDICT: PASS\nSUMMARY: streamed only"
+
 
 def test_copilot_stage_report_uses_failed_tool_result_when_no_message(tmp_path: Path) -> None:
     execution = CLIExecutionResult(
@@ -2284,6 +2397,7 @@ def test_copilot_stage_report_uses_failed_tool_result_when_no_message(tmp_path: 
     assert report.summary == "disk full"
     assert report.verdict == "blocked"
 
+
 def test_copilot_stream_event_adapter_extracts_final_message(tmp_path: Path) -> None:
     execution = CLIExecutionResult(
         adapter="copilot",
@@ -2305,6 +2419,7 @@ def test_copilot_stream_event_adapter_extracts_final_message(tmp_path: Path) -> 
     assert transcript.startswith("VERDICT: PASS")
     assert "SUMMARY: all good" in transcript
 
+
 def test_copilot_stream_event_adapter_falls_back_to_deltas_when_no_final_message(
     tmp_path: Path,
 ) -> None:
@@ -2325,6 +2440,7 @@ def test_copilot_stream_event_adapter_falls_back_to_deltas_when_no_final_message
     transcript = get_engine("copilot").render_transcript(execution)
 
     assert transcript == "VERDICT: PASS\nSUMMARY: delta only"
+
 
 def test_copilot_stream_event_adapter_extracts_tool_error_without_message(
     tmp_path: Path,
@@ -2348,6 +2464,7 @@ def test_copilot_stream_event_adapter_extracts_tool_error_without_message(
     assert report.summary == "permission denied"
     assert report.verdict == "blocked"
 
+
 def test_copilot_engine_continuation_returns_none(tmp_path: Path) -> None:
     execution = CLIExecutionResult(
         adapter="copilot",
@@ -2368,6 +2485,7 @@ def test_copilot_engine_continuation_returns_none(tmp_path: Path) -> None:
 
     assert continuation is None
 
+
 def test_execution_result_transcript_combines_stdout_and_stderr(tmp_path: Path) -> None:
     result = CLIExecutionResult(
         adapter="codex",
@@ -2379,6 +2497,7 @@ def test_execution_result_transcript_combines_stdout_and_stderr(tmp_path: Path) 
     )
 
     assert result.transcript == "SUMMARY: failed\n\n[stderr]\nmissing binary"
+
 
 def test_parse_stage_report_text_extracts_shared_report_fields() -> None:
     report = parse_stage_report_text(
@@ -2433,6 +2552,7 @@ def test_parse_stage_report_text_extracts_follow_up_tasks() -> None:
         "Recovery keeps queued follow-ups durable."
     ]
 
+
 def test_parse_stage_report_text_accepts_inline_empty_follow_up_tasks_array() -> None:
     report = parse_stage_report_text(
         task_id="T-0003",
@@ -2444,6 +2564,7 @@ def test_parse_stage_report_text_accepts_inline_empty_follow_up_tasks_array() ->
     assert report.verdict == "pass"
     assert report.follow_up_tasks == []
     assert report.warnings == []
+
 
 def test_parse_stage_report_text_accepts_block_empty_follow_up_tasks_array() -> None:
     report = parse_stage_report_text(
@@ -2458,6 +2579,7 @@ def test_parse_stage_report_text_accepts_block_empty_follow_up_tasks_array() -> 
     assert report.verdict == "pass"
     assert report.follow_up_tasks == []
     assert report.warnings == []
+
 
 def test_parse_stage_report_text_extracts_inline_follow_up_tasks_array() -> None:
     report = parse_stage_report_text(
@@ -2476,6 +2598,7 @@ def test_parse_stage_report_text_extracts_inline_follow_up_tasks_array() -> None
     assert report.follow_up_tasks[0].title == "Tighten queue recovery coverage"
     assert report.follow_up_tasks[0].rationale == "Acceptance found an uncovered recovery path."
     assert report.follow_up_tasks[0].blocking is False
+
 
 def test_stage_report_from_subagent_uses_adapter_execution_transcript(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
@@ -2505,6 +2628,7 @@ def test_stage_report_from_subagent_uses_adapter_execution_transcript(tmp_path: 
     assert report.summary == "execution transcript parsed"
     assert report.verdict == "pass"
 
+
 def test_stage_prompt_includes_shared_process_and_profile_overlay(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Profiled task", goal="Ship deterministic routing")
@@ -2515,23 +2639,13 @@ def test_stage_prompt_includes_shared_process_and_profile_overlay(tmp_path: Path
         process_profile="codehive",
     )
 
-    assert "Process profile: Codehive-style" in prompt
-    assert (
-        "Shared stages: grooming -> implementing -> testing -> accepting -> commit_to_git."
-        in prompt
-    )
-    assert (
-        "Routing model: manager-owned deterministic routing, retries, and escalation stay in local code rather than prompts."
-        in prompt
-    )
-    assert "the orchestrator is the manager; subagents execute but do not choose routing." in prompt
-    assert (
-        "Combine the generic base prompt with the selected project overlay instead of replacing the base."
-        in prompt
-    )
-    assert "Verification should be independent enough to catch behavioral regressions" in prompt
-    assert "default to regression-first or test-first implementation" in prompt
-    assert "accepted tasks commit by default at commit_to_git" in prompt
+    assert "Stage owner: qa" in prompt
+    assert "Task: T-" in prompt
+    assert "Stage: testing" in prompt
+    assert "Role focus:" in prompt
+    assert "VERDICT:" in prompt
+    assert "litehive report" in prompt
+
 
 def test_stage_prompt_surfaces_acceptance_gate_for_large_task_without_inferable_criteria(
     tmp_path: Path,
@@ -2558,6 +2672,7 @@ def test_stage_prompt_surfaces_acceptance_gate_for_large_task_without_inferable_
     )
     assert "ACCEPTANCE_CRITERIA:" in prompt
     assert "If the context is still insufficient, return `VERDICT: BLOCKED`" in prompt
+
 
 def test_stage_prompt_allows_grooming_to_pass_with_inferred_acceptance_criteria(
     tmp_path: Path,
@@ -2590,6 +2705,7 @@ def test_stage_prompt_allows_grooming_to_pass_with_inferred_acceptance_criteria(
         not in prompt
     )
 
+
 def test_stage_prompt_shows_inferred_acceptance_criteria_when_context_is_sufficient(
     tmp_path: Path,
 ) -> None:
@@ -2602,6 +2718,7 @@ def test_stage_prompt_shows_inferred_acceptance_criteria_when_context_is_suffici
     assert "Inferred acceptance criteria available from current task context:" in prompt
     assert "The delivered change achieves the stated goal: Ship deterministic routing." in prompt
     assert "Focused verification demonstrates the targeted behavior works as intended." in prompt
+
 
 def test_stage_prompt_distinguishes_accepting_reviewer_role(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
@@ -2622,6 +2739,7 @@ def test_stage_prompt_distinguishes_accepting_reviewer_role(tmp_path: Path) -> N
         "Validate the strict end-user outcome, look for regressions or missing evidence, and make a final done versus not-done judgment."
         in prompt
     )
+
 
 def test_stage_prompt_uses_recovery_role_when_requested(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
@@ -2647,6 +2765,7 @@ def test_stage_prompt_uses_recovery_role_when_requested(tmp_path: Path) -> None:
     assert "switch into the repo at `litehive_source_path` and repair Litehive there" in prompt
     assert "run `uv run pytest` in the Litehive repo before reporting success" in prompt
 
+
 def test_stage_prompt_includes_project_startup_guidance_for_role(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Recovery-heavy task")
@@ -2662,6 +2781,7 @@ def test_stage_prompt_includes_project_startup_guidance_for_role(tmp_path: Path)
     assert "Project startup guidance:" in prompt
     assert "Start from the latest task-local artifacts before broad repo reads." in prompt
     assert "Check the latest implementing report and wrapper logs before rerunning tests." in prompt
+
 
 def test_stage_prompt_includes_task_type_and_plan(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
@@ -2680,6 +2800,7 @@ def test_stage_prompt_includes_task_type_and_plan(tmp_path: Path) -> None:
     assert "Template sections to fill or verify:" in prompt
     assert "Findings: record actionable issues with severity and supporting evidence." in prompt
 
+
 def test_stage_prompt_includes_pm_sizing_guidance_for_grooming(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     task = create_task(
@@ -2693,6 +2814,7 @@ def test_stage_prompt_includes_pm_sizing_guidance_for_grooming(tmp_path: Path) -
     assert "Current planned effort: m" in prompt
     assert "Use `PM_COMPLEXITY: simple|moderate|complex`." in prompt
     assert "Use `PLANNED_EFFORT: xs|s|m|l|xl`." in prompt
+
 
 def test_load_config_normalizes_agent_startup_guidance_keys(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
@@ -2719,12 +2841,11 @@ def test_load_config_normalizes_agent_startup_guidance_keys(tmp_path: Path) -> N
         "all": ["Use task-local artifacts before broad repo reads."],
     }
 
+
 def test_agent_md_overrides_config_startup_guidance(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="MD override test")
-    config = LitehiveConfig(
-        agent_startup_guidance={"swe": ["Config SWE guidance."]}
-    )
+    config = LitehiveConfig(agent_startup_guidance={"swe": ["Config SWE guidance."]})
     agents_dir = tmp_path / ".litehive" / "agents"
     agents_dir.mkdir(parents=True, exist_ok=True)
     (agents_dir / "swe.md").write_text("MD SWE guidance line one.\nMD SWE guidance line two.")
@@ -2739,9 +2860,7 @@ def test_agent_md_overrides_config_startup_guidance(tmp_path: Path) -> None:
 def test_agent_md_absent_falls_back_to_config(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Fallback test")
-    config = LitehiveConfig(
-        agent_startup_guidance={"swe": ["Config SWE fallback."]}
-    )
+    config = LitehiveConfig(agent_startup_guidance={"swe": ["Config SWE fallback."]})
 
     prompt = stage_prompt(task, "implementing", workspace_context="", config=config, root=tmp_path)
 
@@ -2794,6 +2913,7 @@ def test_stage_prompt_requires_real_lifecycle_verification_for_workflow_testing_
     # Workflow verification overlay was removed — QA decides on its own
     assert "This task touches workflow or control-plane behavior" not in prompt
 
+
 def test_stage_prompt_no_longer_injects_lifecycle_verification_overlay(
     tmp_path: Path,
 ) -> None:
@@ -2811,6 +2931,7 @@ def test_stage_prompt_no_longer_injects_lifecycle_verification_overlay(
 
     # Workflow verification overlay was removed — QA decides on its own
     assert "This task touches workflow or control-plane behavior" not in prompt
+
 
 def test_update_command_seeds_task_brief_when_switching_to_tasks_mode(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
@@ -2848,11 +2969,14 @@ def test_update_command_seeds_task_brief_when_switching_to_tasks_mode(
 
 # ── Per-stage retry escalation tests ─────────────────────────────────────────
 
+
 def test_runner_normal_retry_within_stage_limit(tmp_path: Path) -> None:
     """Testing rejects once (within stage limit=2), task requeues at implementing — not escalated."""
     ensure_workspace(tmp_path, LitehiveConfig(default_retry_limit=3, default_stage_retry_limit=2))
     task = create_task(
-        tmp_path, title="Normal retry", acceptance_criteria=["Feature works."],
+        tmp_path,
+        title="Normal retry",
+        acceptance_criteria=["Feature works."],
         auto_commit=False,
     )
     call_count: dict[str, int] = {}
@@ -2884,9 +3008,7 @@ def test_runner_normal_retry_within_stage_limit(tmp_path: Path) -> None:
 def test_runner_escalates_to_grooming_after_testing_stage_limit_exhausted(tmp_path: Path) -> None:
     """After testing rejects 3 times (stage limit=2), task routes to grooming for recovery."""
     ensure_workspace(tmp_path, LitehiveConfig(default_retry_limit=10, default_stage_retry_limit=2))
-    task = create_task(
-        tmp_path, title="Testing churn", acceptance_criteria=["Feature works."]
-    )
+    task = create_task(tmp_path, title="Testing churn", acceptance_criteria=["Feature works."])
     testing_calls: list[int] = [0]
 
     def executor(task, step):  # type: ignore[no-untyped-def]
@@ -2937,7 +3059,8 @@ def test_runner_escalates_to_grooming_after_testing_stage_limit_exhausted(tmp_pa
     escalation_report = next(
         yaml.safe_load(r.read_text(encoding="utf-8"))
         for r in testing_reports
-        if yaml.safe_load(r.read_text(encoding="utf-8")).get("outcome_reason_code") == "stage_retry_limit_exhausted"
+        if yaml.safe_load(r.read_text(encoding="utf-8")).get("outcome_reason_code")
+        == "stage_retry_limit_exhausted"
     )
     assert "recovery escalation" in escalation_report["outcome_reason"]
     assert escalation_report["retry_decision"] == "retry"
@@ -2946,9 +3069,7 @@ def test_runner_escalates_to_grooming_after_testing_stage_limit_exhausted(tmp_pa
 def test_runner_escalates_to_grooming_after_accepting_stage_limit_exhausted(tmp_path: Path) -> None:
     """After accepting rejects 3 times (stage limit=2), task routes to grooming for planner."""
     ensure_workspace(tmp_path, LitehiveConfig(default_retry_limit=10, default_stage_retry_limit=2))
-    task = create_task(
-        tmp_path, title="Accepting churn", acceptance_criteria=["Feature works."]
-    )
+    task = create_task(tmp_path, title="Accepting churn", acceptance_criteria=["Feature works."])
 
     def executor(task, step):  # type: ignore[no-untyped-def]
         if step == "accepting":
@@ -2988,7 +3109,8 @@ def test_runner_escalates_to_grooming_after_accepting_stage_limit_exhausted(tmp_
     escalation_report = next(
         yaml.safe_load(r.read_text(encoding="utf-8"))
         for r in accepting_reports
-        if yaml.safe_load(r.read_text(encoding="utf-8")).get("outcome_reason_code") == "stage_retry_limit_exhausted"
+        if yaml.safe_load(r.read_text(encoding="utf-8")).get("outcome_reason_code")
+        == "stage_retry_limit_exhausted"
     )
     assert "planner escalation" in escalation_report["outcome_reason"]
 
@@ -2996,9 +3118,7 @@ def test_runner_escalates_to_grooming_after_accepting_stage_limit_exhausted(tmp_
 def test_runner_task_level_stage_retry_limit_overrides_global(tmp_path: Path) -> None:
     """Task-level stage_retry_limit overrides the workspace default."""
     ensure_workspace(tmp_path, LitehiveConfig(default_retry_limit=10, default_stage_retry_limit=5))
-    task = create_task(
-        tmp_path, title="Low stage limit", acceptance_criteria=["Feature works."]
-    )
+    task = create_task(tmp_path, title="Low stage limit", acceptance_criteria=["Feature works."])
     task.retry_policy = task.retry_policy.model_copy(update={"stage_retry_limit": 1})
     save_task(tmp_path, task)
 
@@ -3028,12 +3148,15 @@ def test_runner_task_level_stage_retry_limit_overrides_global(tmp_path: Path) ->
 def test_runner_stage_counts_persist_across_requeued_runs(tmp_path: Path) -> None:
     """stage_retry_counts survive serialization and are loaded on the next run."""
     ensure_workspace(tmp_path, LitehiveConfig(default_retry_limit=10, default_stage_retry_limit=3))
-    task = create_task(
-        tmp_path, title="Count persistence", acceptance_criteria=["Feature works."]
+    task = create_task(tmp_path, title="Count persistence", acceptance_criteria=["Feature works."])
+    runner = TaskExecutionRunner(
+        tmp_path,
+        lambda t, s: StageReport(
+            task_id=t.id, step=s, verdict="fail" if s == "testing" else "pass", summary=f"{s} done"
+        ),
+        max_retries=10,
+        stage_retry_limit=3,
     )
-    runner = TaskExecutionRunner(tmp_path, lambda t, s: StageReport(
-        task_id=t.id, step=s, verdict="fail" if s == "testing" else "pass", summary=f"{s} done"
-    ), max_retries=10, stage_retry_limit=3)
 
     runner.run(task)
     # Re-load task from disk (simulating a fresh pool iteration)

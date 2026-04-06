@@ -1,5 +1,6 @@
 from tests.workspace_helpers import *  # noqa: F401,F403
 
+
 def test_ensure_workspace_creates_layout(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
 
@@ -7,6 +8,7 @@ def test_ensure_workspace_creates_layout(tmp_path: Path) -> None:
     assert (tmp_path / ".litehive" / "state.yaml").exists()
     assert (tmp_path / ".litehive" / ".gitignore").exists()
     assert (tmp_path / ".litehive" / "tasks").exists()
+
 
 def test_ensure_workspace_scaffolds_workspace_gitignore(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
@@ -18,6 +20,7 @@ def test_ensure_workspace_scaffolds_workspace_gitignore(tmp_path: Path) -> None:
     assert "tasks/*/runtime.yaml" in gitignore
     assert "tasks/*/reports/commit_to_git-*.yaml" in gitignore
     assert "state.yaml" not in gitignore
+
 
 def test_record_engine_execution_tracks_local_usage_fallback(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
@@ -53,6 +56,7 @@ def test_record_engine_execution_tracks_local_usage_fallback(tmp_path: Path) -> 
     assert record.usage is not None
     assert record.usage.used == 1
     assert record.usage.unit == "requests"
+
 
 def test_record_engine_execution_accepts_provider_usage_observation(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
@@ -109,6 +113,7 @@ def test_record_engine_execution_accepts_provider_usage_observation(tmp_path: Pa
     assert record.usage.remaining == 90
     assert record.metadata["project"] == "demo"
 
+
 def test_record_engine_execution_tracks_codex_provider_limit_observation(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
 
@@ -150,6 +155,7 @@ def test_record_engine_execution_tracks_codex_provider_limit_observation(tmp_pat
     assert record.metadata["retry_at_hint"] == "5:26 PM"
     assert record.metadata["purchase_more_credits"] is True
 
+
 def test_record_engine_execution_tracks_claude_provider_limit_observation(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
 
@@ -189,6 +195,7 @@ def test_record_engine_execution_tracks_claude_provider_limit_observation(tmp_pa
         "Your account has hit a rate limit. Please retry after a short delay."
     )
 
+
 def test_record_engine_execution_tracks_opencode_provider_usage_observation(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
 
@@ -227,6 +234,7 @@ def test_record_engine_execution_tracks_opencode_provider_usage_observation(tmp_
     assert record.metadata["input_tokens"] == 10509
     assert record.metadata["finish_reason"] == "stop"
 
+
 def test_gemini_extract_usage_observation_reads_finished_usage_metadata(tmp_path: Path) -> None:
     adapter = get_engine("gemini")
 
@@ -254,6 +262,7 @@ def test_gemini_extract_usage_observation_reads_finished_usage_metadata(tmp_path
     assert observation.metadata["promptTokenCount"] == 11
     assert observation.metadata["candidatesTokenCount"] == 7
     assert observation.metadata["finish_reason"] == "STOP"
+
 
 def test_gemini_extract_usage_observation_reads_result_stats_output(tmp_path: Path) -> None:
     adapter = get_engine("gemini")
@@ -284,6 +293,7 @@ def test_gemini_extract_usage_observation_reads_result_stats_output(tmp_path: Pa
     assert observation.metadata["output_tokens"] == 7
     assert observation.metadata["cached_tokens"] == 3
     assert observation.metadata["duration_ms"] == 1200
+
 
 def test_gemini_extract_usage_observation_reads_provider_limit_payload(tmp_path: Path) -> None:
     adapter = get_engine("gemini")
@@ -327,6 +337,7 @@ def test_gemini_extract_usage_observation_reads_provider_limit_payload(tmp_path:
     assert observation.metadata["retry_delay"] == "56s"
     assert observation.metadata["retry_delay_ms"] == 56000
 
+
 def test_claude_extract_usage_observation_reads_result_usage_payload(tmp_path: Path) -> None:
     adapter = get_engine("claude")
 
@@ -358,6 +369,7 @@ def test_claude_extract_usage_observation_reads_result_usage_payload(tmp_path: P
     assert observation.metadata["service_tier"] == "priority"
     assert observation.metadata["total_cost_usd"] == "0.012500"
 
+
 def test_claude_extract_usage_observation_reads_provider_limit_payload(tmp_path: Path) -> None:
     adapter = get_engine("claude")
 
@@ -384,6 +396,7 @@ def test_claude_extract_usage_observation_reads_provider_limit_payload(tmp_path:
     assert observation.metadata["error_message"] == (
         "Your account has hit a rate limit. Please retry after a short delay."
     )
+
 
 def test_copilot_extract_usage_observation_reads_quota_snapshot(tmp_path: Path) -> None:
     adapter = get_engine("copilot")
@@ -420,6 +433,7 @@ def test_copilot_extract_usage_observation_reads_quota_snapshot(tmp_path: Path) 
     assert observation.metadata["quota_snapshot"] == "premium_interactions"
     assert observation.metadata["model"] == "gpt-5"
 
+
 def test_ensure_workspace_scaffolds_profile_specific_context(tmp_path: Path) -> None:
     django_path = tmp_path / "django"
     django_path.mkdir()
@@ -430,16 +444,11 @@ def test_ensure_workspace_scaffolds_profile_specific_context(tmp_path: Path) -> 
 
     context = (django_path / ".litehive" / "context.md").read_text(encoding="utf-8")
 
-    assert "Process profile: Django" in context
-    assert "## Init scaffold" in context
-    assert "## Prompt scaffold" in context
-    assert "## Stage prompt scaffolding" in context
+    assert "# Workspace Context" in context
     assert "## Django specifics" in context
     assert "migrations" in context
-    assert (
-        "Shared stages: grooming -> implementing -> testing -> accepting -> commit_to_git."
-        in context
-    )
+    assert "## Working rules" in context
+
 
 def test_load_config_round_trips_external_engine_sandbox(tmp_path: Path) -> None:
     ensure_workspace(
@@ -479,6 +488,7 @@ def test_load_config_round_trips_external_engine_sandbox(tmp_path: Path) -> None
     assert policy.environment == ["OPENAI_API_KEY"]
     assert [item.env_var for item in policy.credential_inputs] == ["GOOGLE_APPLICATION_CREDENTIALS"]
 
+
 def test_native_process_profiles_expose_resource_limit_defaults() -> None:
     rust = LitehiveConfig(process_profile="rust")
     cpp = LitehiveConfig(process_profile="cpp")
@@ -491,6 +501,7 @@ def test_native_process_profiles_expose_resource_limit_defaults() -> None:
     assert cpp.subagent_resource_limits.memory_mb == 12288
     assert cpp.subagent_resource_limits.cpu_count == 6.0
     assert cpp.subagent_resource_limits.process_limit == 1024
+
 
 def test_workspace_resource_limit_overrides_replace_profile_defaults() -> None:
     config = LitehiveConfig(
@@ -508,6 +519,7 @@ def test_workspace_resource_limit_overrides_replace_profile_defaults() -> None:
     assert config.subagent_resource_limits.cpu_count == 1.5
     assert config.subagent_resource_limits.process_limit == 96
 
+
 def test_available_process_profiles_include_generic_and_project_templates() -> None:
     assert available_process_profiles() == [
         "codehive",
@@ -517,6 +529,7 @@ def test_available_process_profiles_include_generic_and_project_templates() -> N
         "python",
         "rust",
     ]
+
 
 def test_resolve_process_profile_merges_shared_process_with_overlay() -> None:
     profile = resolve_process_profile("codehive")
@@ -540,20 +553,13 @@ def test_resolve_process_profile_merges_shared_process_with_overlay() -> None:
         "- Reviewer acceptance is managerial"
     )
 
+
 def test_render_context_template_shows_base_and_project_stage_scaffolding() -> None:
     context = render_context_template("rust")
 
-    assert "## Stage prompt scaffolding" in context
-    assert "### grooming" in context
-    assert "### implementing" in context
-    assert "### testing" in context
-    assert "### accepting" in context
-    assert (
-        "Apply stage defaults first, then append any project-specific stage overlay for that step."
-        in context
-    )
-    assert "Add or adjust focused Rust tests close to the changed crate or module." in context
-    assert (
-        "Prefer targeted `cargo test`, `cargo check`, or package-scoped verification before workspace-wide runs."
-        in context
-    )
+    assert "# Workspace Context" in context
+    assert "## Working rules" in context
+    assert "## Rust specifics" in context
+    assert "## Tool usage" in context
+    assert "Favor small, compile-safe changes with clear module ownership." in context
+    assert "`cargo test`" in context

@@ -1,5 +1,6 @@
 from tests.workspace_helpers import *  # noqa: F401,F403
 
+
 def test_claude_build_invocation_includes_model_and_resume(tmp_path: Path) -> None:
     from litehive.engines import ClaudeCLIAdapter
 
@@ -54,6 +55,7 @@ def test_claude_build_invocation_includes_model_and_resume(tmp_path: Path) -> No
         "claude-sonnet-4-20250514",
     ]
 
+
 def test_claude_no_max_turns_by_default(tmp_path: Path) -> None:
     from litehive.engines import ClaudeCLIAdapter
 
@@ -69,6 +71,7 @@ def test_claude_no_max_turns_by_default(tmp_path: Path) -> None:
     invocation = adapter.build_invocation("hello", tmp_path)
 
     assert "--max-turns" not in invocation.argv
+
 
 def test_claude_build_invocation_includes_max_turns(tmp_path: Path) -> None:
     from litehive.engines import ClaudeCLIAdapter
@@ -87,6 +90,7 @@ def test_claude_build_invocation_includes_max_turns(tmp_path: Path) -> None:
     assert "--max-turns" in invocation.argv
     idx = list(invocation.argv).index("--max-turns")
     assert list(invocation.argv)[idx + 1] == "7"
+
 
 def test_run_next_task_passes_configured_claude_max_turns(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -124,6 +128,7 @@ def test_run_next_task_passes_configured_claude_max_turns(
     assert summary.result.final_status == "done"
     assert calls
     assert calls[0] == 7
+
 
 def test_claude_renders_jsonl_transcript_and_stage_report(tmp_path: Path) -> None:
     from litehive.engines import ClaudeCLIAdapter
@@ -169,6 +174,7 @@ def test_claude_renders_jsonl_transcript_and_stage_report(tmp_path: Path) -> Non
     assert report.files_changed == ["litehive/engines.py"]
     assert report.tests == {"added": 3, "passing": 3}
 
+
 def test_claude_renders_partial_stream_events_for_live_capture(tmp_path: Path) -> None:
     from litehive.engines import ClaudeCLIAdapter
 
@@ -210,6 +216,7 @@ def test_claude_renders_partial_stream_events_for_live_capture(tmp_path: Path) -
     assert report.summary == "partial Claude output"
     assert report.files_changed == ["litehive/engines.py"]
     assert report.tests == {"added": 1, "passing": 1}
+
 
 def test_claude_live_progress_report_uses_adapter_summary_for_restart_snippet(
     tmp_path: Path,
@@ -277,6 +284,7 @@ def test_claude_live_progress_report_uses_adapter_summary_for_restart_snippet(
     assert resumed_report["summary"] == "partial Claude output"
     assert resumed_report["resume_stage"] == "implementing"
 
+
 def test_claude_stage_report_uses_error_when_no_assistant_message(tmp_path: Path) -> None:
     from litehive.engines import ClaudeCLIAdapter
 
@@ -308,6 +316,7 @@ def test_claude_stage_report_uses_error_when_no_assistant_message(tmp_path: Path
     assert report.summary == "authentication required"
     assert report.verdict == "blocked"
 
+
 def test_resolve_engine_name_rejects_claude_when_not_enabled(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     config = load_config(tmp_path)
@@ -315,6 +324,7 @@ def test_resolve_engine_name_rejects_claude_when_not_enabled(tmp_path: Path) -> 
 
     task = create_task(tmp_path, title="Claude task", engine="claude")
     assert resolve_engine_name(task, config) == "claude"
+
 
 def test_resolve_engine_name_rejects_default_claude_when_not_enabled(tmp_path: Path) -> None:
     ensure_workspace(tmp_path, LitehiveConfig(default_engine="claude"))
@@ -325,6 +335,7 @@ def test_resolve_engine_name_rejects_default_claude_when_not_enabled(tmp_path: P
     task = create_task(tmp_path, title="Claude default task")
     assert resolve_engine_name(task, config) == "claude"
 
+
 def test_resolve_engine_name_allows_claude_when_enabled(tmp_path: Path) -> None:
     ensure_workspace(tmp_path, LitehiveConfig(claude_enabled=True))
     config = load_config(tmp_path)
@@ -333,20 +344,24 @@ def test_resolve_engine_name_allows_claude_when_enabled(tmp_path: Path) -> None:
     task = create_task(tmp_path, title="Claude task", engine="claude")
     assert resolve_engine_name(task, config) == "claude"
 
+
 def test_claude_is_not_default_engine() -> None:
     config = LitehiveConfig()
     assert config.default_engine != "claude"
     assert config.claude_enabled is False
+
 
 def test_claude_config_defaults_to_sonnet() -> None:
     config = LitehiveConfig(claude_enabled=True)
     assert config.claude_model == "claude-sonnet-4-20250514"
     assert config.claude_max_turns == 100
 
+
 def test_claude_not_in_engine_fallbacks() -> None:
     config = LitehiveConfig()
     for engine, fallbacks in config.engine_fallbacks.items():
         assert "claude" not in fallbacks, f"claude should not be a fallback for {engine}"
+
 
 def test_claude_engine_in_registry() -> None:
     engine = get_engine("claude")
@@ -354,11 +369,13 @@ def test_claude_engine_in_registry() -> None:
     assert engine.capabilities.supports_model_override is True
     assert engine.capabilities.transcript_format == "jsonl"
 
+
 def test_goz_engine_in_registry() -> None:
     engine = get_engine("goz")
     assert engine.name == "goz"
     assert engine.capabilities.supports_model_override is False
     assert engine.capabilities.transcript_format == "jsonl"
+
 
 def test_goz_build_command_render_transcript_and_stage_report(tmp_path: Path) -> None:
     engine = get_engine("goz")
@@ -432,6 +449,7 @@ def test_goz_render_transcript_joins_streaming_text_and_formats_tool_blocks(tmp_
     assert "output:\n/tmp/work" in transcript
     assert "The command finished and the sentence stays intact." in transcript
 
+
 def test_goz_extract_usage_observation_reads_tokens_and_cost(tmp_path: Path) -> None:
     adapter = get_engine("goz")
 
@@ -461,6 +479,7 @@ def test_goz_extract_usage_observation_reads_tokens_and_cost(tmp_path: Path) -> 
     assert observation.metadata["model"] == "glm-4.5"
     assert observation.metadata["cost"] == "0.012300"
 
+
 def test_update_command_accepts_claude_engine(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -487,6 +506,7 @@ def test_update_command_accepts_claude_engine(
     assert updated.engine == "claude"
     assert "engine: claude" in output
 
+
 def test_update_command_accepts_goz_engine(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -512,6 +532,7 @@ def test_update_command_accepts_goz_engine(
     assert updated is not None
     assert updated.engine == "goz"
     assert "engine: goz" in output
+
 
 def test_configure_persists_claude_settings(tmp_path: Path) -> None:
     from litehive.cli import _cmd_configure
@@ -551,6 +572,7 @@ def test_configure_persists_claude_settings(tmp_path: Path) -> None:
     assert config.engine_budget_caps == {"claude": 6}
     assert config.engine_costs["claude"] == 3
     assert config.task_engine_routing["research"][0] == "gemini"
+
 
 def test_configure_updates_existing_workspace_budget_settings(tmp_path: Path) -> None:
     from litehive.cli import _cmd_configure
@@ -610,7 +632,8 @@ def test_configure_updates_existing_workspace_budget_settings(tmp_path: Path) ->
     assert config.engine_costs["gemini"] == 1
     assert config.engine_costs["copilot"] == 1
     context = (tmp_path / ".litehive" / "context.md").read_text(encoding="utf-8")
-    assert "Process profile: Python" in context
+    assert "## Python specifics" in context
+
 
 def test_claude_model_resolved_from_workspace_defaults() -> None:
     from litehive.runtime import workspace_model_for_engine
@@ -620,6 +643,7 @@ def test_claude_model_resolved_from_workspace_defaults() -> None:
 
     config_default = LitehiveConfig()
     assert workspace_model_for_engine(config_default, "claude") == "claude-sonnet-4-20250514"
+
 
 def test_cmd_run_dry_run_rejects_default_claude_when_not_enabled(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -638,6 +662,7 @@ def test_cmd_run_dry_run_rejects_default_claude_when_not_enabled(
 
     exit_code = _cmd_run(argparse.Namespace(workspace=tmp_path, dry_run=True, engine=None))
     assert exit_code == 0
+
 
 def test_cmd_run_dispatches_single_task_mode(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -660,6 +685,7 @@ def test_cmd_run_dispatches_single_task_mode(
     assert exit_code == 0
     assert called == ["single"]
 
+
 def test_cmd_run_dispatches_pool_drain_mode(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -681,17 +707,21 @@ def test_cmd_run_dispatches_pool_drain_mode(
     assert exit_code == 0
     assert called == ["drain"]
 
+
 def test_extract_engine_timeline_returns_none_for_empty_stdout() -> None:
     result = extract_engine_timeline("opencode", "")
     assert result is None
+
 
 def test_extract_engine_timeline_returns_none_for_blank_stdout() -> None:
     result = extract_engine_timeline("opencode", "   \n  \n  ")
     assert result is None
 
+
 def test_extract_engine_timeline_returns_none_when_no_events_extracted() -> None:
     result = extract_engine_timeline("opencode", "not jsonl at all\njust plain text")
     assert result is None
+
 
 def test_extract_engine_timeline_opencode_message_events() -> None:
     stdout = '{"type":"text","part":{"text":"VERDICT: PASS\\nSUMMARY: did the thing"}}\n'
@@ -706,6 +736,7 @@ def test_extract_engine_timeline_opencode_message_events() -> None:
     assert "VERDICT: PASS" in timeline.events[0].content
     assert timeline.event_counts == {"message": 1}
 
+
 def test_extract_engine_timeline_opencode_usage_events() -> None:
     stdout = '{"type":"step_finish","part":{"tokens":{"total":100,"input":60,"output":40},"cost":0.001}}\n'
     timeline = extract_engine_timeline("opencode", stdout)
@@ -713,6 +744,7 @@ def test_extract_engine_timeline_opencode_usage_events() -> None:
     assert len(timeline.events) == 1
     assert timeline.events[0].kind == "usage"
     assert timeline.events[0].metadata.get("total_tokens") == 100
+
 
 def test_extract_engine_timeline_codex_message_events() -> None:
     stdout = '{"type":"item.completed","item":{"type":"agent_message","text":"I did the work"}}\n'
@@ -724,6 +756,7 @@ def test_extract_engine_timeline_codex_message_events() -> None:
     assert timeline.events[0].kind == "message"
     assert timeline.events[0].content == "I did the work"
 
+
 def test_extract_engine_timeline_gemini_content_events() -> None:
     stdout = '{"type":"content","text":"Hello from Gemini"}\n'
     timeline = extract_engine_timeline("gemini", stdout)
@@ -732,6 +765,7 @@ def test_extract_engine_timeline_gemini_content_events() -> None:
     assert len(timeline.events) == 1
     assert timeline.events[0].kind == "message"
     assert timeline.events[0].content == "Hello from Gemini"
+
 
 def test_extract_engine_timeline_claude_delta_events() -> None:
     stdout = '{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Hi from Claude"}}\n'
@@ -742,6 +776,7 @@ def test_extract_engine_timeline_claude_delta_events() -> None:
     assert timeline.events[0].kind == "message"
     assert timeline.events[0].content == "Hi from Claude"
 
+
 def test_extract_engine_timeline_copilot_message_events() -> None:
     stdout = '{"type":"assistant.message","data":{"content":"Copilot response"}}\n'
     timeline = extract_engine_timeline("copilot", stdout)
@@ -750,6 +785,7 @@ def test_extract_engine_timeline_copilot_message_events() -> None:
     assert len(timeline.events) == 1
     assert timeline.events[0].kind == "message"
     assert timeline.events[0].content == "Copilot response"
+
 
 def test_extract_engine_timeline_goz_message_and_usage_events() -> None:
     stdout = (
@@ -769,6 +805,7 @@ def test_extract_engine_timeline_goz_message_and_usage_events() -> None:
     assert timeline.events[1].metadata["cost"] == "0.001500"
     assert timeline.event_counts == {"message": 1, "usage": 1}
 
+
 def test_extract_engine_timeline_error_events() -> None:
     stdout = (
         '{"type":"error","error":{"name":"RateLimitError","data":{"message":"rate limit hit"}}}\n'
@@ -779,6 +816,7 @@ def test_extract_engine_timeline_error_events() -> None:
     assert timeline.events[0].kind == "error"
     assert "rate limit hit" in timeline.events[0].error
 
+
 def test_extract_engine_timeline_mixed_events() -> None:
     stdout = (
         '{"type":"text","part":{"text":"thinking..."}}\n'
@@ -788,6 +826,7 @@ def test_extract_engine_timeline_mixed_events() -> None:
     assert timeline is not None
     assert len(timeline.events) == 2
     assert timeline.event_counts == {"message": 1, "usage": 1}
+
 
 def test_live_timeline_model_task_and_subagent_fields() -> None:
     timeline = LiveTimeline(
@@ -803,6 +842,7 @@ def test_live_timeline_model_task_and_subagent_fields() -> None:
     assert data["task_id"] == "T-0001"
     assert data["subagent_id"] == "SA-0001"
     assert data["event_counts"] == {"message": 1}
+
 
 def test_subagent_writes_timeline_on_finish(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -848,6 +888,7 @@ def test_subagent_writes_timeline_on_finish(
     assert timeline_data["subagent_id"] == "SA-0001"
     assert len(timeline_data["events"]) == 1
     assert timeline_data["events"][0]["kind"] == "message"
+
 
 def test_subagent_writes_timeline_during_live_progress(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -921,6 +962,7 @@ def test_subagent_writes_timeline_during_live_progress(
     assert len(timeline_data["events"]) == 2
     assert timeline_data["event_counts"] == {"message": 1, "usage": 1}
 
+
 def test_subagent_skips_timeline_when_no_events(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -957,6 +999,7 @@ def test_subagent_skips_timeline_when_no_events(
     base = task_dir(tmp_path, task) / "subagents" / "SA-0001-swe"
     assert not (base / "timeline.yaml").exists()
 
+
 def test_runner_persists_duration_seconds_in_report_yaml(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Duration tracking task")
@@ -973,6 +1016,7 @@ def test_runner_persists_duration_seconds_in_report_yaml(tmp_path: Path) -> None
         assert "duration_seconds" in data, f"duration_seconds missing in {report_path.name}"
         assert isinstance(data["duration_seconds"], int)
         assert data["duration_seconds"] >= 0
+
 
 def test_render_task_summary_includes_estimate_velocity_and_eta(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)

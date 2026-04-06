@@ -1,5 +1,6 @@
 from tests.workspace_helpers import *  # noqa: F401,F403
 
+
 def test_engine_command_switches_workspace_default_engine(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -18,9 +19,12 @@ def test_engine_command_switches_workspace_default_engine(
     assert exit_code == 0
     config = load_config(tmp_path)
     assert config.default_engine == "gemini"
-    raw_config = yaml.safe_load((tmp_path / ".litehive" / "config.yaml").read_text(encoding="utf-8"))
+    raw_config = yaml.safe_load(
+        (tmp_path / ".litehive" / "config.yaml").read_text(encoding="utf-8")
+    )
     assert raw_config["default_engine"] == "gemini"
     assert "default_engine: codex -> gemini" in output
+
 
 def test_engine_command_parser_accepts_workspace_switch_args() -> None:
     parser = build_parser()
@@ -30,6 +34,7 @@ def test_engine_command_parser_accepts_workspace_switch_args() -> None:
     assert args.command == "engine"
     assert args.engine == "opencode"
     assert args.workspace == Path("/tmp/demo")
+
 
 def test_switch_command_parser_accepts_task_engine_reason_and_workspace() -> None:
     parser = build_parser()
@@ -43,6 +48,7 @@ def test_switch_command_parser_accepts_task_engine_reason_and_workspace() -> Non
     assert args.engine == "gemini"
     assert args.reason == "quota exhausted"
     assert args.workspace == Path("/tmp/demo")
+
 
 def test_configure_persists_gemini_model(tmp_path: Path) -> None:
     parser = argparse.Namespace(
@@ -60,6 +66,7 @@ def test_configure_persists_gemini_model(tmp_path: Path) -> None:
     assert config.default_engine == "gemini"
     assert config.gemini_model == "gemini-2.5-pro"
 
+
 def test_configure_persists_copilot_model(tmp_path: Path) -> None:
     parser = argparse.Namespace(
         workspace=tmp_path,
@@ -76,6 +83,7 @@ def test_configure_persists_copilot_model(tmp_path: Path) -> None:
     config = load_config(tmp_path)
     assert config.default_engine == "copilot"
     assert config.copilot_model == "gpt-5"
+
 
 def test_configure_persists_process_profile(tmp_path: Path) -> None:
     parser = argparse.Namespace(
@@ -100,9 +108,9 @@ def test_configure_persists_process_profile(tmp_path: Path) -> None:
     context = (tmp_path / ".litehive" / "context.md").read_text(encoding="utf-8")
 
     assert config.process_profile == "rust"
-    assert "Process profile: Rust" in context
-    assert "## Init scaffold" in context
+    assert "# Workspace Context" in context
     assert "## Rust specifics" in context
+
 
 def test_configure_persists_pool_stop_defaults(tmp_path: Path) -> None:
     parser = argparse.Namespace(
@@ -134,6 +142,7 @@ def test_configure_persists_pool_stop_defaults(tmp_path: Path) -> None:
     assert config.pool_stop_on_dirty_git is True
     assert config.pool_selection_policy == "priority_first"
 
+
 def test_load_config_uses_global_defaults_when_workspace_config_is_empty(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -162,6 +171,7 @@ def test_load_config_uses_global_defaults_when_workspace_config_is_empty(
     assert config.pool_stop_on_failure is True
     assert config.engine_costs["codex"] == 9
     assert config.engine_costs["claude"] == 3
+
 
 def test_load_config_applies_workspace_overrides_on_top_of_global_defaults(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -212,6 +222,7 @@ def test_load_config_applies_workspace_overrides_on_top_of_global_defaults(
     assert config.subagent_resource_limits.memory_mb == 4096
     assert config.subagent_resource_limits.cpu_count == 2.0
 
+
 def test_resolve_engine_name_prefers_run_override_then_task_then_workspace_default(
     tmp_path: Path,
 ) -> None:
@@ -224,6 +235,7 @@ def test_resolve_engine_name_prefers_run_override_then_task_then_workspace_defau
 
     task.engine = None
     assert resolve_engine_name(task, config) == config.default_engine
+
 
 def test_resolve_model_prefers_run_override_then_task_then_workspace_default(
     tmp_path: Path,
@@ -247,6 +259,7 @@ def test_resolve_model_prefers_run_override_then_task_then_workspace_default(
     task.model = None
     assert resolve_model(task, config, engine_name="opencode") == "zai-coding-plan/glm-5.1"
 
+
 def test_resolve_model_skips_unsupported_engine_override(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     config = load_config(tmp_path)
@@ -254,11 +267,13 @@ def test_resolve_model_skips_unsupported_engine_override(tmp_path: Path) -> None
 
     assert resolve_model(task, config, engine_name="codex", model_override="run-model") is None
 
+
 def test_litehive_config_merges_partial_task_engine_routing_override() -> None:
     config = LitehiveConfig(task_engine_routing={"research": ["opencode", "gemini", "codex"]})
 
     assert config.task_engine_routing["research"] == ["opencode", "gemini", "codex"]
     assert config.task_engine_routing["review"] == ["copilot", "codex", "opencode", "gemini", "goz"]
+
 
 def test_litehive_config_normalizes_execution_retry_policies() -> None:
     config = LitehiveConfig(
@@ -298,6 +313,7 @@ def test_litehive_config_normalizes_execution_retry_policies() -> None:
         == "model_family:glm"
     )
 
+
 def test_litehive_config_normalizes_external_cli_engine_category_alias() -> None:
     config = LitehiveConfig(
         execution_retry_policies={
@@ -311,6 +327,7 @@ def test_litehive_config_normalizes_external_cli_engine_category_alias() -> None
     )
 
     assert list(config.execution_retry_policies) == ["external_cli"]
+
 
 def test_litehive_config_defaults_include_claude_retry_policy() -> None:
     config = LitehiveConfig()
@@ -365,9 +382,12 @@ def test_litehive_config_defaults_include_claude_retry_policy() -> None:
         == "gemini"
     )
 
+
 def test_load_config_reads_subagent_inactivity_timeout_override(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
-    raw_config = yaml.safe_load((tmp_path / ".litehive" / "config.yaml").read_text(encoding="utf-8"))
+    raw_config = yaml.safe_load(
+        (tmp_path / ".litehive" / "config.yaml").read_text(encoding="utf-8")
+    )
     raw_config["subagent_inactivity_timeout_seconds"] = 42
     (tmp_path / ".litehive" / "config.yaml").write_text(
         yaml.safe_dump(raw_config, sort_keys=False),
@@ -377,6 +397,7 @@ def test_load_config_reads_subagent_inactivity_timeout_override(tmp_path: Path) 
     config = load_config(tmp_path)
 
     assert config.subagent_inactivity_timeout_seconds == 42.0
+
 
 def test_resolve_execution_retry_policy_prefers_claude_selector_before_model_family_and_external_cli() -> (
     None
@@ -414,6 +435,7 @@ def test_resolve_execution_retry_policy_prefers_claude_selector_before_model_fam
     assert resolved.selector == "claude"
     assert resolved.policy.max_retries == 1
 
+
 def test_resolve_execution_retry_policy_prefers_codex_selector_before_external_cli() -> None:
     config = LitehiveConfig(
         execution_retry_policies={
@@ -437,6 +459,7 @@ def test_resolve_execution_retry_policy_prefers_codex_selector_before_external_c
     assert resolved.selector == "codex"
     assert resolved.policy.max_retries == 1
 
+
 def test_resolve_engine_name_uses_task_routing_rule_before_workspace_default(
     tmp_path: Path,
 ) -> None:
@@ -447,6 +470,7 @@ def test_resolve_engine_name_uses_task_routing_rule_before_workspace_default(
     assert resolve_engine_name(task, config) == "gemini"
     assert resolve_engine_plan(task, config)[:3] == ["gemini", "codex", "opencode"]
 
+
 def test_resolve_engine_name_prefers_explicit_task_type_over_keyword_inference(
     tmp_path: Path,
 ) -> None:
@@ -456,6 +480,7 @@ def test_resolve_engine_name_prefers_explicit_task_type_over_keyword_inference(
 
     assert resolve_engine_name(task, config) == "copilot"
     assert resolve_engine_plan(task, config)[:3] == ["copilot", "codex", "opencode"]
+
 
 def test_resolve_engine_name_uses_configured_task_routing_override(
     tmp_path: Path,
@@ -473,6 +498,7 @@ def test_resolve_engine_name_uses_configured_task_routing_override(
     assert resolve_engine_name(task, config) == "opencode"
     assert resolve_engine_plan(task, config) == ["opencode", "gemini", "codex"]
 
+
 def test_resolve_engine_name_skips_claude_in_routing_when_not_enabled(tmp_path: Path) -> None:
     ensure_workspace(
         tmp_path,
@@ -486,6 +512,7 @@ def test_resolve_engine_name_skips_claude_in_routing_when_not_enabled(tmp_path: 
 
     assert resolve_engine_name(task, config) == "claude"
     assert resolve_engine_plan(task, config) == ["claude", "gemini", "codex"]
+
 
 def test_configure_persists_task_engine_routing_overrides(tmp_path: Path) -> None:
     from litehive.cli import _cmd_configure
@@ -524,6 +551,7 @@ def test_configure_persists_task_engine_routing_overrides(tmp_path: Path) -> Non
     assert config.task_engine_routing["research"] == ["gemini", "claude", "codex"]
     assert config.task_engine_routing["bugfix"] == ["codex", "opencode", "copilot"]
     assert config.task_engine_routing["review"] == ["copilot", "codex", "opencode", "gemini", "goz"]
+
 
 def test_configure_persists_pre_acceptance_command(tmp_path: Path) -> None:
     from litehive.cli import _cmd_configure
@@ -565,6 +593,7 @@ def test_configure_persists_pre_acceptance_command(tmp_path: Path) -> None:
     )
     assert config.runner_hooks["before_pm_acceptance"][0].blocking is True
 
+
 def test_pre_acceptance_command_forces_matching_runner_hook_to_blocking() -> None:
     config = LitehiveConfig(
         pre_acceptance_command="uv run ruff check litehive tests",
@@ -579,6 +608,7 @@ def test_pre_acceptance_command_forces_matching_runner_hook_to_blocking() -> Non
     assert len(before_acceptance_hooks) == 1
     assert before_acceptance_hooks[0].command == "uv run ruff check litehive tests"
     assert before_acceptance_hooks[0].blocking is True
+
 
 def test_configure_persists_runner_hooks(tmp_path: Path) -> None:
     from litehive.cli import _cmd_configure
@@ -624,6 +654,7 @@ def test_configure_persists_runner_hooks(tmp_path: Path) -> None:
     assert config.runner_hooks["before_pm_acceptance"][0].command == "echo review"
     assert config.runner_hooks["after_pm_acceptance"][0].blocking is False
 
+
 def test_configure_rejects_invalid_runner_hook_point(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -666,6 +697,7 @@ def test_configure_rejects_invalid_runner_hook_point(
 
     assert "configure failed: runner_hooks key must be one of:" in output
 
+
 def test_configure_rejects_invalid_task_engine_route(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -700,6 +732,7 @@ def test_configure_rejects_invalid_task_engine_route(
     assert _cmd_configure(parser) == 1
     assert "--task-engine-route engine must be one of:" in capsys.readouterr().out
 
+
 def test_build_parser_accepts_run_dry_run_flag(tmp_path: Path) -> None:
     parser = build_parser()
 
@@ -711,6 +744,7 @@ def test_build_parser_accepts_run_dry_run_flag(tmp_path: Path) -> None:
     assert args.drain is False
     assert args.engine is None
 
+
 def test_build_parser_accepts_run_drain_flag(tmp_path: Path) -> None:
     parser = build_parser()
 
@@ -720,6 +754,7 @@ def test_build_parser_accepts_run_drain_flag(tmp_path: Path) -> None:
     assert args.workspace == tmp_path
     assert args.drain is True
     assert args.dry_run is False
+
 
 def test_build_parser_accepts_model_flags(tmp_path: Path) -> None:
     parser = build_parser()
@@ -735,6 +770,7 @@ def test_build_parser_accepts_model_flags(tmp_path: Path) -> None:
     assert add_args.model == "gemini-2.5-pro"
     assert run_args.model == "gpt-5"
     assert update_args.model == "default"
+
 
 def test_build_parser_accepts_acceptance_criteria_flags(tmp_path: Path) -> None:
     parser = build_parser()
@@ -764,6 +800,7 @@ def test_build_parser_accepts_acceptance_criteria_flags(tmp_path: Path) -> None:
 
     assert add_args.acceptance_criteria == ["first criterion", "second criterion"]
     assert update_args.acceptance_criteria == ["none"]
+
 
 def test_build_parser_accepts_pm_sizing_flags(tmp_path: Path) -> None:
     parser = build_parser()
@@ -798,6 +835,7 @@ def test_build_parser_accepts_pm_sizing_flags(tmp_path: Path) -> None:
     assert update_args.pm_complexity == "none"
     assert update_args.planned_effort == "none"
 
+
 def test_build_parser_accepts_human_checkpoint_flags(tmp_path: Path) -> None:
     parser = build_parser()
 
@@ -827,6 +865,7 @@ def test_build_parser_accepts_human_checkpoint_flags(tmp_path: Path) -> None:
     assert add_args.human_checkpoint == ["before_acceptance", "before_commit"]
     assert update_args.human_checkpoint == ["none"]
 
+
 def test_build_parser_accepts_web_monitor_flags(tmp_path: Path) -> None:
     parser = build_parser()
 
@@ -838,6 +877,7 @@ def test_build_parser_accepts_web_monitor_flags(tmp_path: Path) -> None:
     assert args.workspace == tmp_path
     assert args.host == "127.0.0.1"
     assert args.port == 9001
+
 
 def test_cmd_run_dry_run_shows_planned_tasks_and_stop_conditions_without_execution(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
@@ -870,6 +910,7 @@ def test_cmd_run_dry_run_shows_planned_tasks_and_stop_conditions_without_executi
     assert "stop_on_failure: False" in output
     assert load_state(tmp_path).queue == ["T-0001"]
 
+
 def test_cmd_run_dry_run_prefers_run_engine_override(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -898,6 +939,7 @@ def test_cmd_run_dry_run_prefers_run_engine_override(
     assert "model=-" in output
     assert "human_checkpoints=-" in output
     assert load_state(tmp_path).queue == ["T-0001"]
+
 
 def test_cmd_run_dry_run_prefers_run_model_override_without_mutating_workspace_config(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
@@ -928,6 +970,7 @@ def test_cmd_run_dry_run_prefers_run_model_override_without_mutating_workspace_c
     assert "model=run-model" in output
     assert load_config(tmp_path) == config_before
 
+
 def test_cmd_run_dry_run_plans_dependency_aware_pool_order(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -946,6 +989,7 @@ def test_cmd_run_dry_run_plans_dependency_aware_pool_order(
     assert "would_run: 1. T-0002 Prerequisite" in output
     assert "would_run: 2. T-0001 Blocked dependent" in output
     assert "blocked_tasks: 0" in output
+
 
 def test_cmd_run_drain_dry_run_reports_queue_exhausted_without_execution(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
@@ -975,6 +1019,7 @@ def test_cmd_run_drain_dry_run_reports_queue_exhausted_without_execution(
     assert not (tmp_path / ".litehive" / "pool-summary.txt").exists()
     assert not (tmp_path / ".litehive" / "logs" / "pool-runs").exists()
 
+
 def test_cmd_run_drain_dry_run_reports_empty_queue_stop_reason(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -987,6 +1032,7 @@ def test_cmd_run_drain_dry_run_reports_empty_queue_stop_reason(
     assert "planned_tasks: 0" in output
     assert "blocked_tasks: 0" in output
     assert "predicted_stop_reason: queue_exhausted" in output
+
 
 def test_cmd_run_drain_dry_run_reports_blocked_tasks_remaining_without_mutation(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
@@ -1010,6 +1056,7 @@ def test_cmd_run_drain_dry_run_reports_blocked_tasks_remaining_without_mutation(
     assert load_state(tmp_path).model_dump() == state_before
     assert require_task(tmp_path, task.id).model_dump() == task_before
 
+
 def test_cmd_run_drain_dry_run_reports_dirty_git_stop_reason(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -1031,6 +1078,7 @@ def test_cmd_run_drain_dry_run_reports_dirty_git_stop_reason(
     assert exit_code == 0
     assert "planned_tasks: 0" in output
     assert "predicted_stop_reason: dirty_git_state" in output
+
 
 def test_cmd_run_drain_dry_run_keeps_dirty_git_stop_for_ambiguous_interrupted_ownership(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
@@ -1098,6 +1146,7 @@ def test_cmd_run_drain_dry_run_keeps_dirty_git_stop_for_ambiguous_interrupted_ow
     assert "planned_tasks: 0" in output
     assert "predicted_stop_reason: dirty_git_state" in output
 
+
 def test_cmd_run_dry_run_reports_max_tasks_predicted_stop_reason(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -1116,6 +1165,7 @@ def test_cmd_run_dry_run_reports_max_tasks_predicted_stop_reason(
     assert "would_run: 2." not in output
     assert "predicted_stop_reason: max_tasks_reached" in output
 
+
 def test_cmd_run_dry_run_predicts_pool_usage_cap_stop_reason(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -1133,6 +1183,7 @@ def test_cmd_run_dry_run_predicts_pool_usage_cap_stop_reason(
     assert "would_run: 1. T-0001 First task" in output
     assert "would_run: 2." not in output
     assert "predicted_stop_reason: pool_usage_cap_reached" in output
+
 
 def test_cmd_run_dry_run_predicts_pool_cost_cap_stop_reason(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
@@ -1158,6 +1209,7 @@ def test_cmd_run_dry_run_predicts_pool_cost_cap_stop_reason(
     assert "would_run: 2. T-0002 Second task" in output
     assert "engine=opencode" in output
     assert "predicted_stop_reason: pool_cost_cap_reached" in output
+
 
 def test_cmd_run_dry_run_predicts_claude_budget_block_without_fallback(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
@@ -1188,6 +1240,7 @@ def test_cmd_run_dry_run_predicts_claude_budget_block_without_fallback(
     assert "engine_budget_caps: claude=2" in output
     assert "engine_costs: claude=3" in output
 
+
 def test_cmd_run_dry_run_uses_budget_allowed_fallback_engine(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -1210,6 +1263,7 @@ def test_cmd_run_dry_run_uses_budget_allowed_fallback_engine(
     assert "engine_attempts=gemini, codex, opencode, copilot" in output
     assert "predicted_stop_reason: single_task_complete" in output
 
+
 def test_drain_task_pool_uses_run_engine_override_for_execution(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -1217,7 +1271,9 @@ def test_drain_task_pool_uses_run_engine_override_for_execution(
     create_task(tmp_path, title="Pending task", engine="codex", auto_commit=False)
     seen_engines: list[str] = []
 
-    def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None):  # type: ignore[no-untyped-def]
+    def fake_run(
+        self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None
+    ):  # type: ignore[no-untyped-def]
         seen_engines.append(engine_name)
         return _completed_subagent_result(tmp_path, task.pipeline_status)
 
@@ -1228,6 +1284,7 @@ def test_drain_task_pool_uses_run_engine_override_for_execution(
     assert summary.stop_reason == "queue_exhausted"
     assert seen_engines == ["opencode", "opencode", "opencode", "opencode"]
 
+
 def test_run_single_task_uses_run_engine_override_for_execution(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -1235,7 +1292,9 @@ def test_run_single_task_uses_run_engine_override_for_execution(
     create_task(tmp_path, title="Pending task", engine="codex", auto_commit=False)
     seen_engines: list[str] = []
 
-    def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None):  # type: ignore[no-untyped-def]
+    def fake_run(
+        self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None
+    ):  # type: ignore[no-untyped-def]
         seen_engines.append(engine_name)
         return _completed_subagent_result(tmp_path, task.pipeline_status)
 
@@ -1250,6 +1309,7 @@ def test_run_single_task_uses_run_engine_override_for_execution(
     assert seen_engines == ["opencode", "opencode", "opencode", "opencode"]
     assert load_state(tmp_path).queue == []
 
+
 def test_run_single_task_model_precedence_uses_run_override_then_task_then_workspace_default(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -1262,7 +1322,9 @@ def test_run_single_task_model_precedence_uses_run_override_then_task_then_works
     )
     seen_models: list[str | None] = []
 
-    def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None):  # type: ignore[no-untyped-def]
+    def fake_run(
+        self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None
+    ):  # type: ignore[no-untyped-def]
         seen_models.append(model)
         return _completed_subagent_result(tmp_path, task.pipeline_status)
 
@@ -1288,6 +1350,7 @@ def test_run_single_task_model_precedence_uses_run_override_then_task_then_works
         "workspace-model",
     ]
 
+
 def test_run_single_task_does_not_pass_model_override_to_codex(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -1297,7 +1360,9 @@ def test_run_single_task_does_not_pass_model_override_to_codex(
     )
     seen_models: list[str | None] = []
 
-    def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None):  # type: ignore[no-untyped-def]
+    def fake_run(
+        self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None
+    ):  # type: ignore[no-untyped-def]
         seen_models.append(model)
         return _completed_subagent_result(tmp_path, task.pipeline_status)
 
@@ -1307,6 +1372,7 @@ def test_run_single_task_does_not_pass_model_override_to_codex(
 
     assert summary.stop_reason == "single_task_complete"
     assert seen_models == [None, None, None, None]
+
 
 def test_cmd_run_dry_run_budget_overrides_do_not_mutate_workspace_config(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
@@ -1354,6 +1420,7 @@ def test_cmd_run_dry_run_budget_overrides_do_not_mutate_workspace_config(
     assert config.engine_costs["codex"] == 1
     assert config.engine_costs["claude"] == 3
 
+
 def test_drain_task_pool_wraps_pool_execution_behavior(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -1378,6 +1445,7 @@ def test_drain_task_pool_wraps_pool_execution_behavior(
         "T-0002",
     ]
 
+
 def test_run_task_rejects_starting_a_second_active_task(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -1401,6 +1469,7 @@ def test_run_task_rejects_starting_a_second_active_task(
         match=f"task {pending.id} cannot start because task {active.id} is already active",
     ):
         run_task(tmp_path, pending)
+
 
 def test_run_task_recovers_stale_active_task_before_conflict_check(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
