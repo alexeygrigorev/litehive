@@ -16,7 +16,13 @@ from typing import TextIO
 
 import yaml
 
-from litehive.config import ensure_workspace
+from litehive.config import (
+    daemon_config_dir,
+    daemon_registry_path,
+    ensure_workspace,
+    state_path,
+    workspace_dir,
+)
 from litehive.models import utcnow
 from litehive.tasks import runner_status
 
@@ -38,17 +44,6 @@ _EXPLICIT_POOL_STOP_REASONS = {
     "task_interrupted",
 }
 _RUN_ALL_SESSION_RETENTION = 8
-
-
-def daemon_config_dir() -> Path:
-    base = os.environ.get("XDG_CONFIG_HOME")
-    if base:
-        return Path(base).expanduser() / "litehive"
-    return Path.home() / ".config" / "litehive"
-
-
-def daemon_registry_path() -> Path:
-    return daemon_config_dir() / "daemons.yaml"
 
 
 def _pid_is_alive(pid: int) -> bool:
@@ -159,7 +154,7 @@ def unregister_daemon(workspace: Path, *, pid: int | None = None) -> None:
 
 
 def latest_run_all_log_dir(workspace: Path) -> Path | None:
-    log_base = workspace.resolve() / ".litehive" / "logs" / "run-all"
+    log_base = workspace_dir(workspace.resolve()) / "logs" / "run-all"
     if not log_base.exists():
         return None
     candidates = sorted(path for path in log_base.iterdir() if path.is_dir())
@@ -182,8 +177,8 @@ def _latest_matching(log_dir: Path | None, pattern: str) -> Path | None:
 
 
 def _state_snapshot(workspace: Path) -> tuple[dict[str, object], str]:
-    state_path = workspace / ".litehive" / "state.yaml"
-    state = yaml.safe_load(state_path.read_text(encoding="utf-8")) if state_path.exists() else {}
+    sp = state_path(workspace)
+    state = yaml.safe_load(sp.read_text(encoding="utf-8")) if sp.exists() else {}
     if not isinstance(state, dict):
         state = {}
     active_task_id = state.get("active_task_id")
@@ -265,7 +260,7 @@ def run_daemon_loop(
     ensure_workspace(workspace)
     command_prefix = _default_command_prefix()
     timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
-    log_base = workspace / ".litehive" / "logs" / "run-all"
+    log_base = workspace_dir(workspace) / "logs" / "run-all"
     log_root = session_dir or (log_base / timestamp)
     log_root.mkdir(parents=True, exist_ok=True)
     _prune_run_all_log_dirs(log_base)
@@ -381,7 +376,7 @@ def start_background_daemon(workspace: Path) -> int:
     if existing is not None:
         pid = existing.get("pid")
         raise RuntimeError(f"daemon already running for {workspace}: pid={pid}")
-    project_root = Path(__file__).resolve().parents[1]
+    project_root = Path(__file__).resolve().parents[2]
     process = subprocess.Popen(
         [
             sys.executable,
