@@ -9,14 +9,40 @@ mode: implementation
 status: interrupted
 pipeline_status: grooming
 priority: medium
-pm_complexity: null
-planned_effort: null
+pm_complexity: simple
+planned_effort: s
 created_at: '2026-04-01T06:36:23+00:00'
-updated_at: '2026-04-05T05:37:26+00:00'
-goal: ''
-acceptance_criteria: []
+updated_at: '2026-04-06T04:56:58+00:00'
+goal: Enable PM-style agents (planner, reviewer) to perform lifecycle actions (close,
+  park, requeue) directly through structured output during grooming or acceptance.
+acceptance_criteria:
+- TaskUpdateSubmission model includes outcome (for closing), outcome_reason, and action
+  (e.g., park, requeue) fields.
+- apply_task_updates_from_report in litehive/tasks.py detects these fields and invokes
+  the corresponding task-lifecycle functions (close_task, etc.).
+- The planner (grooming) and reviewer (accepting) can trigger a task closure (as duplicate,
+  wont_do, or deferred) by emitting a TASK_UPDATE or STAGE_RESULT with the outcome
+  field.
+- The runner (in litehive/runner/core.py) correctly handles cases where a task is
+  closed or parked mid-run by terminating the execution cycle cleanly.
+- Documentation in litehive/subagents/_prompts.py is updated to guide agents on how
+  to use these new actions.
+- 'Tests verify that a structured outcome: duplicate in a grooming report successfully
+  closes the task and stops the runner from proceeding to implementation.'
 constraints: []
-plan: []
+plan:
+- Enhance TaskUpdateSubmission model in litehive/models.py with outcome, outcome_reason,
+  and action fields.
+- Update update_task in litehive/tasks.py to support the new lifecycle fields, invoking
+  close_task, abandon_task, or status updates as needed.
+- Update apply_task_updates_from_report in litehive/tasks.py to handle the new fields
+  from report.task_update.
+- Modify TaskExecutionRunner.run in litehive/runner/core.py to detect terminal task
+  status after updates and exit cleanly.
+- Update planner and reviewer prompts in litehive/subagents/_prompts.py with structured
+  action guidance.
+- Add comprehensive tests in tests/test_grooming_task_updates.py and verify via full
+  runner simulation.
 human_checkpoints: []
 subagents:
 - id: SA-0001

@@ -259,7 +259,7 @@ def stage_prompt(
             "STAGE_RESULT:",
             '{"verdict":"pass","summary":"one-line summary","files_changed":["path/to/file"],'
             '"tests":{"added":0,"passing":0},"warnings":[],'
-            '"follow_up_tasks":[],"acceptance_criteria":[]}',
+            '"follow_up_tasks":[],"acceptance_criteria":[],"task_update":{}}',
             "The text format above is still accepted as a fallback.",
         ]
     )
@@ -347,6 +347,7 @@ def _stage_role_prompt(step: str, owner: str | None = None) -> list[str]:
             "- Frame the real user problem, clarify scope, sharpen acceptance criteria, decompose the work, identify follow-up tasks, and estimate PM sizing.",
             "- Treat the Litehive CLI as the source of truth for task shaping: use the task record fields directly, and when documenting operator guidance prefer concrete `litehive add`, `litehive update`, and `litehive intake` flows over vague prose.",
             "- Do not pass grooming with a blank task record; make sure the task has a clear goal and explicit acceptance criteria, or return a blocked outcome that names what is missing.",
+            "- During grooming, you can emit a structured `TASK_UPDATE:` YAML block to update any task field (goal, acceptance_criteria, constraints, plan, pm_complexity, planned_effort, priority, auto_commit, etc.).",
             "- Do not implement code in this stage.",
         ]
     if step == "accepting":

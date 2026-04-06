@@ -732,3 +732,24 @@
     pass entry for T-0077; no acceptance review was performed for T-0077 in this session.'
   files_changed: []
   created_at: '2026-04-05T05:35:28+00:00'
+- role: planner
+  step: grooming
+  verdict: pass
+  message: 'Added support for structured task-edit actions during grooming. Planners
+    can now emit a TASK_UPDATE: YAML block or include task_update in STAGE_RESULT:
+    JSON to update any task field (goal, acceptance_criteria, constraints, plan, PM
+    sizing, priority, etc.). Consolidated auto-population logic into apply_task_updates_from_report
+    and preserved existing inference fallbacks. Verified with 3 new tests in tests/test_grooming_task_updates.py
+    and regression checks in tests/test_runner_workflow.py.'
+  files_changed: []
+  created_at: '2026-04-06T04:51:06+00:00'
+- role: planner
+  step: grooming
+  verdict: pass
+  message: 'Groomed T-0077: Add structured PM task-edit actions during grooming. Defined
+    the goal to enable lifecycle actions (close, park, requeue) via structured output,
+    established 6 explicit acceptance criteria covering model updates, runner integration,
+    and documentation, and produced a 6-step execution plan. The task is now runnable
+    and fully specified for implementation.'
+  files_changed: []
+  created_at: '2026-04-06T04:57:28+00:00'
