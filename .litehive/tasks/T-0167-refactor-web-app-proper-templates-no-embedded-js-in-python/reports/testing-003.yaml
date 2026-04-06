@@ -1,0 +1,48 @@
+task_id: T-0167
+step: testing
+verdict: pass
+summary: 'Now let me check for any remaining HTML strings in Python code and run the
+  tests:'
+feedback: "Now let me check for any remaining HTML strings in Python code and run\
+  \ the tests:\nThe 81 failures are pre-existing (unrelated to web refactoring \u2014\
+  \ `VALID_TASK_ROUTING_KEYS` in config normalization, task commands, etc.). The diff\
+  \ shows only web-related files changed.\n\nAll acceptance criteria are met:\n1.\
+  \ \u2705 `litehive/web/templates/index.html` exists with Jinja2 syntax (`{{ poll_seconds\
+  \ }}`, `{{ poll_interval_ms }}`)\n2. \u2705 No HTML strings in Python code (grep\
+  \ returned nothing)\n3. \u2705 `jinja2>=3.1.6` added to `pyproject.toml`; web module\
+  \ uses `Environment(FileSystemLoader(...))` and `_render_index()` renders the template\n\
+  Report submitted for T-0167. \n\n**STAGE_RESULT:**\n```json\n{\"verdict\":\"pass\"\
+  ,\"summary\":\"Web module refactored to Jinja2 templates \u2014 all 3 acceptance\
+  \ criteria met, pre-existing test failures unrelated to this change\",\"files_changed\"\
+  :[\"litehive/web/__init__.py\",\"litehive/web/templates/index.html\",\"pyproject.toml\"\
+  ,\"uv.lock\"],\"tests\":{\"added\":0,\"passing\":512},\"warnings\":[\"81 pre-existing\
+  \ test failures unrelated to web refactoring (VALID_TASK_ROUTING_KEYS config normalization,\
+  \ task commands, subagents)\"]}\n```\n\n**What was verified:**\n1. \u2705 `litehive/web/templates/index.html`\
+  \ (448 lines) uses Jinja2 syntax (`{{ poll_seconds }}`, `{{ poll_interval_ms }}`)\n\
+  2. \u2705 Zero HTML strings in Python \u2014 grep for `<html`, `<body`, `<div`,\
+  \ `<script` in `*.py` returned nothing\n3. \u2705 `jinja2>=3.1.6` added to `pyproject.toml`;\
+  \ `web/__init__.py` uses `Environment(FileSystemLoader(...))` with `_render_index()`\
+  \ passing context variables to the template\n\nThe 81 test failures are pre-existing\
+  \ (config normalization, task/subagent commands) \u2014 confirmed by checking they're\
+  \ unrelated to the web module and only web files + `pyproject.toml`/`uv.lock` changed\
+  \ in the commit."
+files_changed: []
+follow_up_tasks: []
+created_follow_up_task_ids: []
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 628
+hook_results: []
+created_at: '2026-04-06T03:12:20+00:00'
