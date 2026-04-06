@@ -1,0 +1,128 @@
+- role: planner
+  step: grooming
+  verdict: pass
+  message: "## Grooming: T-0101 \u2014 run-all continue after task requeue\n\n###\
+    \ What I found\n\nCode analysis reveals two separate execution paths:\n\n**1.\
+    \ daemon run (run-all loop):**\nThe daemon calls `litehive run` (single-task mode)\
+    \ as a subprocess each iteration, then reads `pool_stop_reason` from state.yaml.\
+    \ After a task is requeued, `run_single_task` currently:\n- Clears `pool_stop_reason`\
+    \ to null at the start\n- Computes stop_reason = 'task_requeued' via _single_task_stop_reason\n\
+    - Does NOT persist 'task_requeued' back to state.yaml (only human_checkpoint reasons\
+    \ are persisted)\n\nSo the daemon reads pool_stop_reason: null and continues \u2014\
+    \ but only because null is in the daemon allow-list. The explicit 'if stop_reason\
+    \ == task_requeued: continue' guard at daemon line 359 is never actually exercised\
+    \ in production.\n\n**2. run --drain (drain_task_pool):**\ndrain_task_pool handles\
+    \ requeue via _pool_stop_reason -> peek_next_task_selection -> returns None (continue)\
+    \ when the requeued task is back in state.queue. However, there is no test for\
+    \ the single-task requeue scenario (one task, no other tasks in queue).\n\n**3.\
+    \ The gap:**\n- run_single_task should persist pool_stop_reason: task_requeued\
+    \ to state.yaml so the daemon's explicit continuation logic (line 359) is exercised\
+    \ in production, not just the null-passthrough at line 361.\n- Missing test: drain_task_pool\
+    \ with exactly one task that gets requeued and must run again.\n- Missing test:\
+    \ run_single_task persisting task_requeued to state.yaml.\n\n### Acceptance criteria\
+    \ set on the task\n\n1. After litehive run requeues a task (any stage), state.yaml\
+    \ shows pool_stop_reason: task_requeued (not null), making the outcome observable\
+    \ via litehive status.\n2. litehive daemon run continues to the next iteration\
+    \ when pool_stop_reason is task_requeued (daemon line 359 is exercised, not just\
+    \ the null-passthrough).\n3. litehive run --drain continues running when the only\
+    \ task in the pool is requeued for another pass (no stop on single-task requeue\
+    \ with no other tasks present).\n4. All existing tests continue to pass after\
+    \ the change.\n\n### Plan\n\n1. litehive/runtime/_execution.py: In run_single_task,\
+    \ add elif stop_reason == 'task_requeued': set_pool_stop_reason(root, stop_reason)\
+    \ alongside the existing human_checkpoint persistence (one-line change).\n2. tests/test_task_commands_and_daemon.py:\
+    \ Update test_daemon_foreground_continues_after_task_requeued mock so the first\
+    \ iteration sets pool_stop_reason: task_requeued in state.yaml (not null), confirming\
+    \ the daemon line-359 path is exercised.\n3. tests/test_runtime_pool.py: Add a\
+    \ test for drain_task_pool with a single task that fails and is requeued, verifying\
+    \ the drain continues and eventually exhausts the queue.\n4. tests/test_runtime_pool.py:\
+    \ Add a test asserting run_single_task persists pool_stop_reason: task_requeued\
+    \ to state.yaml when a task is requeued.\n\n### Sizing: PM_COMPLEXITY: simple,\
+    \ PLANNED_EFFORT: xs"
+  files_changed: []
+  created_at: '2026-04-06T10:56:06+00:00'
+- role: qa
+  step: testing
+  verdict: pass
+  message: 'VERDICT: PASS
+
+
+    Verified implementation commit b98b4d7: ''fix: persist task_requeued stop reason
+    to state so daemon continues explicitly''.
+
+
+    CHANGE: In litehive/runtime/_execution.py, run_single_task now calls set_pool_stop_reason(root,
+    ''task_requeued'') when a task is requeued, alongside the existing human_checkpoint_*
+    cases. Previously pool_stop_reason stayed null after a requeue.
+
+
+    DAEMON BEHAVIOR: The daemon loop at daemon/__init__.py:359 has an explicit ''if
+    stop_reason == task_requeued: continue'' guard. This guard now fires reliably.
+    Before the fix, the daemon continued only via the null-passthrough path (line
+    361), which also worked but was implicit and less robust.
+
+
+    TESTS RUN:
+
+    - tests/test_runtime_pool.py -k requeue: 12 passed (includes 2 new tests)
+
+    - New test test_run_single_task_persists_task_requeued_stop_reason: PASS - asserts
+    run_single_task writes pool_stop_reason=task_requeued to state and task is requeued
+    to implementing
+
+    - New test test_drain_task_pool_continues_when_only_task_is_requeued_for_another_pass:
+    PASS - asserts drain_task_pool completes (queue_exhausted) when task fails testing
+    once, gets requeued, then passes on the second pass
+
+    - Full suite test_task_commands_and_daemon.py + test_runtime_pool.py: 156 passed,
+    3 failed
+
+    - The 3 failures are pre-existing on the base branch (confirmed by stash test)
+    and unrelated to this change.
+
+
+    FILES CHANGED: litehive/runtime/_execution.py, tests/test_runtime_pool.py, tests/test_task_commands_and_daemon.py
+
+
+    ACCEPTANCE CRITERIA: No explicit criteria defined. Goal met: run-all (daemon)
+    continues after task_requeued rather than relying on implicit null passthrough.
+    State is now explicit and the explicit task_requeued guard fires correctly.'
+  files_changed: []
+  created_at: '2026-04-06T11:30:42+00:00'
+- role: reviewer
+  step: accepting
+  verdict: pass
+  message: 'PASS. The implementation correctly makes run-all continue automatically
+    after a task is requeued for another pass.
+
+
+    WHAT WAS VERIFIED:
+
+    1. Core fix in litehive/runtime/_execution.py: run_single_task now persists pool_stop_reason=task_requeued
+    to state.yaml when a task is requeued (testing/accepting rejection routes back
+    to implementing). Previously pool_stop_reason stayed null, relying on the null-passthrough
+    path in the daemon. The fix activates the explicit task_requeued guard at daemon/__init__.py:359
+    (continue vs return 0).
+
+
+    2. New test test_run_single_task_persists_task_requeued_stop_reason: confirms
+    that run_single_task writes pool_stop_reason=task_requeued to state and leaves
+    the task queued at implementing. PASSES.
+
+
+    3. New test test_drain_task_pool_continues_when_only_task_is_requeued_for_another_pass:
+    simulates a testing FAIL on first pass, drain_task_pool continues to a second
+    testing pass, task reaches done, stop_reason=queue_exhausted. PASSES.
+
+
+    4. Updated test_task_commands_and_daemon.py mock to write pool_stop_reason=task_requeued
+    (previously null), now exercises the explicit guard path at daemon line 359.
+
+
+    REGRESSIONS: None. 3 pre-existing test failures confirmed on main/origin, not
+    introduced by this change.
+
+
+    The one-line code change is minimal, targeted, and correctly addresses the stated
+    goal.'
+  files_changed: []
+  created_at: '2026-04-06T11:37:03+00:00'

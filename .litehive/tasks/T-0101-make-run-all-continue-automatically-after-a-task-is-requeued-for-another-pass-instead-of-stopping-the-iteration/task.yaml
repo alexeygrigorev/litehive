@@ -10,14 +10,34 @@ mode: implementation
 status: interrupted
 pipeline_status: grooming
 priority: medium
-pm_complexity: null
-planned_effort: null
+pm_complexity: simple
+planned_effort: xs
 created_at: '2026-04-01T12:08:23+00:00'
-updated_at: '2026-04-05T02:03:18+00:00'
-goal: ''
-acceptance_criteria: []
+updated_at: '2026-04-06T10:56:48+00:00'
+goal: 'When run_single_task requeues a task for another pass, persist pool_stop_reason:
+  task_requeued to state.yaml and ensure both run --drain and the daemon run-all loop
+  continue automatically without stopping the iteration.'
+acceptance_criteria:
+- 'After litehive run requeues a task at any stage, state.yaml shows pool_stop_reason:
+  task_requeued (not null), visible via litehive status'
+- litehive daemon run continues to the next iteration when pool_stop_reason is task_requeued
+  (daemon line-359 guard is exercised, not just the null-passthrough at line 361)
+- litehive run --drain continues running when the only queued task is requeued for
+  another pass (drain does not stop on single-task requeue)
+- All existing tests continue to pass after the change
 constraints: []
-plan: []
+plan:
+- 'litehive/runtime/_execution.py: In run_single_task, add elif stop_reason == ''task_requeued'':
+  set_pool_stop_reason(root, stop_reason) alongside the existing human_checkpoint
+  persistence'
+- 'tests/test_task_commands_and_daemon.py: Update test_daemon_foreground_continues_after_task_requeued
+  mock to set pool_stop_reason: task_requeued in state.yaml after first run so daemon
+  line-359 is exercised'
+- 'tests/test_runtime_pool.py: Add test for drain_task_pool with a single task that
+  fails and is requeued, verifying the drain continues and eventually exhausts the
+  queue'
+- 'tests/test_runtime_pool.py: Add test asserting run_single_task persists pool_stop_reason:
+  task_requeued to state.yaml when a task is requeued'
 human_checkpoints: []
 subagents:
 - id: SA-0001
@@ -58,5 +78,6 @@ git:
   worktree_path: null
 retry_policy:
   max_retries: null
+  stage_retry_limit: null
 created_from: null
 upstream_origin: null
