@@ -54,3 +54,24 @@ Stage `grooming` switched from `gemini` to `codex` after quota limit reached.
 
 ## 2026-04-06T05:33:14+00:00
 Stage `grooming` switched from `codex` to `opencode` after usage limit reached.
+
+## 2026-04-06T06:00:23+00:00
+CommitToGit failed: merge did not produce new commits on main.
+
+## 2026-04-06T06:00:23+00:00
+Execution finished with status `flagged`.
+
+## 2026-04-06T06:00:26+00:00
+Recovered flagged accepted task back to `queued/commit_to_git` for final checkpoint commit.
+
+## 2026-04-06T06:00:39+00:00
+Execution started with engine `gemini`.
+
+## 2026-04-06T06:00:39+00:00
+Rerouted to grooming for normalization: Task is underspecified (missing acceptance criteria, missing goal) and needs planner normalization before retry.
+
+## 2026-04-06T06:00:52+00:00
+Stage `grooming` switched from `gemini` to `codex` after quota limit reached.
+
+## 2026-04-06T06:00:56+00:00
+Stage `grooming` switched from `codex` to `opencode` after usage limit reached.

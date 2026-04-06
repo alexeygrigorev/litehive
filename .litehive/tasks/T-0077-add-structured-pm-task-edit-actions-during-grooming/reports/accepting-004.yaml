@@ -1,54 +1,21 @@
 task_id: T-0077
 step: accepting
 verdict: pass
-summary: 'Verified the recovery workflow against the task acceptance criteria. I reviewed
-  the implementation in litehive/tasks.py, litehive/runtime.py, litehive/runner.py,
-  and litehive/models.py plus the focused new regression file tests/test_recovery_agent.py.
-  Evidence confirms recovery reports are now persisted under each task with structured
-  trigger/stage/classification/runnable_state/blocker/evidence/actions/warnings fields;
-  evidence collection includes task.yaml, runtime.yaml, thread.yaml, events.jsonl,
-  latest stage report, latest subagent session/report/transcript/stdout/stderr/timeline
-  artifacts when present, latest run-all log, engine-monitoring state, and git/worktree
-  status. Recovery triggers are implemented for stale runner recovery, flagged task
-  dequeue recovery, same-stage retry churn rerouting to grooming, commit_to_git recovery,
-  and engine/stage failure recovery paths, with late-stage preflight blocked outcomes
-  also recorded explicitly. Bounded repairs are explicit and auditable: clearing stale
-  active state, requeueing at the correct stage, rerouting to planner/grooming after
-  retry churn, resuming the current stage after recovery-agent repair, and recovering
-  commit_to_git when safe; unrecoverable cases persist a blocked recovery report with
-  an explicit blocker instead of leaving limbo. Tests run: uv run pytest -q tests/test_recovery_agent.py
-  (4 passed); uv run pytest -q tests/test_observability_and_status.py::test_recover_stale_runner_state_recovers_running_task_without_runner_lock_record
-  tests/test_retry_commit_and_recovery.py::test_resolve_next_task_recovers_flagged_commit_stage_after_passing_review
-  tests/test_runner_workflow.py::test_runner_escalates_to_grooming_after_testing_stage_limit_exhausted
-  (3 passed). Acceptance criteria are satisfied. Non-blocking caution: there is no
-  dedicated regression test that isolates an engine-startup failure path, but the
-  runtime recovery hook now routes engine_error/retryable_execution_error failures
-  into stage recovery and late-stage preflight blocked outcomes are covered by the
-  focused blocked-case test.'
-feedback: 'Verified the recovery workflow against the task acceptance criteria. I
-  reviewed the implementation in litehive/tasks.py, litehive/runtime.py, litehive/runner.py,
-  and litehive/models.py plus the focused new regression file tests/test_recovery_agent.py.
-  Evidence confirms recovery reports are now persisted under each task with structured
-  trigger/stage/classification/runnable_state/blocker/evidence/actions/warnings fields;
-  evidence collection includes task.yaml, runtime.yaml, thread.yaml, events.jsonl,
-  latest stage report, latest subagent session/report/transcript/stdout/stderr/timeline
-  artifacts when present, latest run-all log, engine-monitoring state, and git/worktree
-  status. Recovery triggers are implemented for stale runner recovery, flagged task
-  dequeue recovery, same-stage retry churn rerouting to grooming, commit_to_git recovery,
-  and engine/stage failure recovery paths, with late-stage preflight blocked outcomes
-  also recorded explicitly. Bounded repairs are explicit and auditable: clearing stale
-  active state, requeueing at the correct stage, rerouting to planner/grooming after
-  retry churn, resuming the current stage after recovery-agent repair, and recovering
-  commit_to_git when safe; unrecoverable cases persist a blocked recovery report with
-  an explicit blocker instead of leaving limbo. Tests run: uv run pytest -q tests/test_recovery_agent.py
-  (4 passed); uv run pytest -q tests/test_observability_and_status.py::test_recover_stale_runner_state_recovers_running_task_without_runner_lock_record
-  tests/test_retry_commit_and_recovery.py::test_resolve_next_task_recovers_flagged_commit_stage_after_passing_review
-  tests/test_runner_workflow.py::test_runner_escalates_to_grooming_after_testing_stage_limit_exhausted
-  (3 passed). Acceptance criteria are satisfied. Non-blocking caution: there is no
-  dedicated regression test that isolates an engine-startup failure path, but the
-  runtime recovery hook now routes engine_error/retryable_execution_error failures
-  into stage recovery and late-stage preflight blocked outcomes are covered by the
-  focused blocked-case test.'
+summary: 'STAGE_RESULT:'
+feedback: 'STAGE_RESULT:
+
+  {"verdict":"pass","summary":"Added structured PM task-edit actions during grooming:
+  planners can now emit TASK_UPDATE YAML blocks to shape task fields, close tasks
+  with outcomes, or park/requeue/abandon.","files_changed":["litehive/models.py","litehive/cli/_parse.py","litehive/engines/base.py","litehive/runner/core.py","litehive/tasks.py","litehive/subagents/_prompts.py","tests/test_grooming_task_updates.py"],"tests":{"added":7,"passing":7},"warnings":["11
+  pre-existing test failures in test_tasks_and_subagents.py and test_runtime_pool.py
+  are unrelated to T-0077."],"follow_up_tasks":[],"acceptance_criteria":[]}
+
+
+  VERIFIED: TaskUpdateSubmission model carries structured fields. StageReport.task_update
+  parses JSON and TASK_UPDATE YAML blocks. _parse.py validates outcome/action enums.
+  apply_task_updates_from_report unifies structured+text grooming updates. update_task
+  handles outcome/action inline to avoid deadlock. Runner exits cleanly when grooming
+  closes/parks a task. 7/7 new tests pass. All broader-suite failures are pre-existing.'
 files_changed: []
 follow_up_tasks: []
 created_follow_up_task_ids: []
@@ -66,6 +33,6 @@ outcome_reason: ''
 failure_classification: null
 failure_diagnostics: {}
 resource_limit_event: null
-duration_seconds: 326
+duration_seconds: 405
 hook_results: []
-created_at: '2026-04-06T05:59:35+00:00'
+created_at: '2026-04-06T06:26:18+00:00'
