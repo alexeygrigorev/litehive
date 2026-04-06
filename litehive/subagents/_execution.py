@@ -11,7 +11,7 @@ import time
 import yaml
 
 from litehive.config import load_config
-from litehive.engine_monitoring import record_engine_execution, record_engine_observation
+from litehive.observability import record_engine_execution, record_engine_observation
 from litehive.events import append_event, append_session_log, ensure_session_log
 from litehive.engines.base import CLIExecutionResult, ExternalCLIAdapter, parse_stage_report_text
 from litehive.engines import (

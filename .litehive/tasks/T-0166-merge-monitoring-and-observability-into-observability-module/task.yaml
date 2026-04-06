@@ -9,17 +9,29 @@ mode: implementation
 status: queued
 pipeline_status: backlog
 priority: medium
-pm_complexity: null
-planned_effort: null
+pm_complexity: simple
+planned_effort: xs
 created_at: '2026-04-04T20:46:49+00:00'
-updated_at: '2026-04-04T20:46:49+00:00'
-goal: engine_monitoring.py and observability.py should be one module.
+updated_at: '2026-04-06T01:48:53+00:00'
+goal: Merge litehive/engine_monitoring.py and litehive/observability.py into a litehive/observability/
+  package so monitoring and observability live in one module with a single import
+  surface.
 acceptance_criteria:
 - litehive/observability/ is a package
 - old files are deleted
 - all tests pass
 constraints: []
-plan: []
+plan:
+- Create litehive/observability/ package directory with __init__.py that re-exports
+  all public symbols
+- Move engine_monitoring.py content into litehive/observability/_monitoring.py
+- Move observability.py content into litehive/observability/_status.py
+- Update __init__.py to re-export all symbols from both submodules preserving the
+  existing import surface
+- 'Update all import sites: litehive/cli/status.py, litehive/subagents/_execution.py,
+  litehive/tasks.py (lazy import), tests/workspace_helpers.py, tests/test_retry_commit_and_recovery.py'
+- Delete litehive/engine_monitoring.py and litehive/observability.py flat files
+- Run uv run pytest -q to confirm all tests pass
 human_checkpoints: []
 subagents: []
 git:
@@ -32,5 +44,6 @@ git:
   worktree_path: null
 retry_policy:
   max_retries: null
+  stage_retry_limit: null
 created_from: null
 upstream_origin: null
