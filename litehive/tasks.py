@@ -26,6 +26,11 @@ from litehive.config import (
     workspace_dir,
     workspace_gitignore_path,
 )
+
+
+from litehive.events import last_event_timestamp
+
+
 from litehive.git_ops import (
     GitError,
     checkpoint_message,
@@ -360,6 +365,7 @@ class WorkspaceRepairSummary:
     restored_queue_entries: list[str] = field(default_factory=list)
     finalized_commit_task_ids: list[str] = field(default_factory=list)
     stale_process_task_ids: list[str] = field(default_factory=list)
+    inactivity_recovered_task_ids: list[str] = field(default_factory=list)
 
 
 class WorkspaceConflictError(ValueError):
@@ -3248,6 +3254,33 @@ def _recover_stranded_commit_tasks(root: Path, state: WorkspaceState) -> bool:
     return True
 
 
+def _has_inactive_running_tasks(
+    root: Path,
+    tasks_by_id: dict[str, TaskRecord],
+    timeout_seconds: float,
+) -> bool:
+    """Check whether any running task has been inactive based on last event timestamp."""
+    from datetime import UTC, datetime
+
+    for task_id, task in tasks_by_id.items():
+        if task.runtime.execution_status != "running":
+            continue
+        ts_str = last_event_timestamp(root, task)
+        if ts_str is None:
+            continue
+        try:
+            event_time = datetime.fromisoformat(ts_str)
+        except (ValueError, TypeError):
+            continue
+        if event_time.tzinfo is None:
+            event_time = event_time.replace(tzinfo=UTC)
+        now = datetime.now(UTC)
+        elapsed = (now - event_time).total_seconds()
+        if elapsed > timeout_seconds:
+            return True
+    return False
+
+
 def _recover_stale_runner_state(
     root: Path,
     *,
@@ -3263,7 +3296,13 @@ def _recover_stale_runner_state(
         )
         if not _current_thread_owns_runner_guard(root) and _runner_lock_is_held(root):
             if not _runner_lock_pid_is_stale(root):
-                return False
+                config = load_config(root)
+                if config.inactivity_timeout_seconds is None:
+                    return False
+                if not _has_inactive_running_tasks(
+                    root, tasks_by_id, config.inactivity_timeout_seconds
+                ):
+                    return False
 
         runner_metadata = _read_runner_lock_metadata(root)
         has_stale_metadata = _runner_metadata_present(runner_metadata)

@@ -130,6 +130,11 @@ class LitehiveConfig:
             ``before_swe_implementation``).
         subagent_inactivity_timeout_seconds: Maximum seconds a subagent
             can be idle before it is considered stalled.
+        inactivity_timeout_seconds: Shared workspace-level inactivity
+            timeout based on the last persisted event timestamp. When
+            set, tasks with no new events for this many seconds are
+            recovered at their current stage. ``None`` disables the
+            check.
         subagent_resource_limits: Resource constraints (memory, CPU,
             process count) applied to subagent execution sandboxes.
         external_engine_sandbox: Container-based sandbox configuration
@@ -191,6 +196,7 @@ class LitehiveConfig:
     pre_acceptance_command: str | None = None
     runner_hooks: dict[str, list[RunnerHookConfig]] = field(default_factory=dict)
     subagent_inactivity_timeout_seconds: float = 300.0
+    inactivity_timeout_seconds: float | None = None
     subagent_resource_limits: SubagentResourceLimitsConfig = field(
         default_factory=SubagentResourceLimitsConfig
     )
@@ -241,6 +247,10 @@ class LitehiveConfig:
         self.subagent_inactivity_timeout_seconds = float(self.subagent_inactivity_timeout_seconds)
         if self.subagent_inactivity_timeout_seconds <= 0:
             raise ValueError("subagent_inactivity_timeout_seconds must be greater than 0")
+        if self.inactivity_timeout_seconds is not None:
+            self.inactivity_timeout_seconds = float(self.inactivity_timeout_seconds)
+            if self.inactivity_timeout_seconds <= 0:
+                raise ValueError("inactivity_timeout_seconds must be greater than 0 when set")
         if self.pre_acceptance_command is not None:
             self.pre_acceptance_command = self.pre_acceptance_command.strip() or None
         if self.litehive_source_path is not None:

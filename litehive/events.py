@@ -1,6 +1,5 @@
 """Append-only JSONL event persistence for task lifecycle and subagent sessions."""
 
-
 import json
 import os
 from pathlib import Path
@@ -54,6 +53,32 @@ def read_events(root: Path, task: TaskRecord) -> list[dict[str, Any]]:
         if line:
             events.append(json.loads(line))
     return events
+
+
+def last_event_timestamp(root: Path, task: TaskRecord) -> str | None:
+    """Return the timestamp of the last persisted event for a task.
+
+    Reads only the last line of the JSONL file for efficiency.
+    Returns ``None`` if no events exist.
+    """
+    path = _events_path(root, task)
+    if not path.exists():
+        return None
+    try:
+        raw = path.read_text(encoding="utf-8").rstrip("\n")
+    except OSError:
+        return None
+    if not raw:
+        return None
+    last_line = raw.rsplit("\n", 1)[-1].strip()
+    if not last_line:
+        return None
+    try:
+        event = json.loads(last_line)
+    except json.JSONDecodeError:
+        return None
+    ts = event.get("ts")
+    return ts if isinstance(ts, str) else None
 
 
 def append_session_log(

@@ -1,0 +1,59 @@
+- role: reviewer
+  step: accepting
+  verdict: reject
+  message: 'REJECT: circular import breaks entire application + no feature tests.
+
+
+    EXPECTED: workspace-level inactivity_timeout_seconds uses last persisted event
+    timestamp to detect stalled tasks and recovers them at the same stage.
+
+
+    OBSERVED: circular import between litehive/tasks.py and litehive/events.py crashes
+    the entire application. No test can run. Even the litehive report CLI itself crashes.
+
+
+    CIRCULAR IMPORT:
+
+    - litehive/tasks.py line 29: from litehive.events import last_event_timestamp
+    (module-level import)
+
+    - litehive/events.py line 9: from litehive.tasks import task_dir (module-level
+    import)
+
+    Result: ImportError: cannot import name ''task_dir'' from partially initialized
+    module ''litehive.tasks'' -- all 13 test files fail collection, 0 tests execute.
+
+
+    REPRODUCE: uv run pytest -q (or even python -c "import litehive.events")
+
+
+    FIX: Use a deferred import pattern. Move the last_event_timestamp import inside
+    _has_inactive_running_tasks() since events.py already imports task_dir at module
+    level.
+
+
+    MISSING TESTS (0 tests for the new feature):
+
+    1. No test for last_event_timestamp() in events.py
+
+    2. No test for _has_inactive_running_tasks() in tasks.py
+
+    3. No test for the modified _recover_stale_runner_state() inactivity path
+
+    4. No test for inactivity_timeout_seconds config field validation
+
+
+    Note: tests/test_inactivity_timeout.py tests the EXISTING subagent-level stdout
+    inactivity timeout (run_live), NOT the new workspace-level event-based timeout.
+
+
+    Acceptance criterion 1 (event-based inactivity): Design is correct -- last_event_timestamp
+    reads from events.jsonl, no separate heartbeat. But code is broken.
+
+    Acceptance criterion 2 (same-stage recovery): Recovery logic at tasks.py:3397
+    correctly preserves pipeline_status. But untestable due to import crash.
+
+
+    Both criteria FAIL because the application cannot start.'
+  files_changed: []
+  created_at: '2026-04-06T08:07:22+00:00'
