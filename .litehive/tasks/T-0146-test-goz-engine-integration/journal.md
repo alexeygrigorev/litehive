@@ -41,3 +41,12 @@ Stage `implementing` stopped retrying `goz` after attempt 3/3: transient network
 
 ## 2026-04-06T07:04:45+00:00
 Stage `implementing` switched from `goz` to `copilot` after transient network failure.
+
+## 2026-04-06T07:42:31+00:00
+Merge conflict on 1 file(s). Launching merge agent.
+
+## 2026-04-06T07:43:06+00:00
+CommitToGit complete. Commit: beacce1e634e1b8f9d3214b5e8f8dd134b2f0501
+
+## 2026-04-06T07:43:10+00:00
+Pool stopped: continue_or_rollback_required. This task finished with checkpoint commit `beacce1e634e1b8f9d3214b5e8f8dd134b2f0501` and unrelated queued work remains. Either continue with a new `litehive run`/pool run or roll back the checkpoint first.
