@@ -571,7 +571,6 @@ def test_configure_persists_claude_settings(tmp_path: Path) -> None:
     assert config.engine_usage_caps == {"claude": 2, "codex": 5}
     assert config.engine_budget_caps == {"claude": 6}
     assert config.engine_costs["claude"] == 3
-    assert config.task_engine_routing["research"][0] == "gemini"
 
 
 def test_configure_updates_existing_workspace_budget_settings(tmp_path: Path) -> None:

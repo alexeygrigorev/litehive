@@ -14,8 +14,6 @@ from litehive.config.constants import (
     VALID_SANDBOX_BACKENDS,
     VALID_SANDBOX_NETWORK_MODES,
     VALID_SANDBOX_WORKSPACE_MODES,
-    VALID_TASK_ROUTING_KEYS,
-    _default_task_engine_routing,
 )
 from litehive.config.dataclasses import (
     ExecutionRetryPolicy,
@@ -97,24 +95,6 @@ def _normalize_agent_startup_guidance(
                 cleaned.append(text)
         if cleaned:
             normalized[key] = cleaned
-    return normalized
-
-
-def normalize_task_engine_routing(
-    routing: Mapping[str, Sequence[str]] | None,
-) -> dict[str, list[str]]:
-    normalized = _default_task_engine_routing()
-    if routing is None:
-        return normalized
-
-    for route_key, engines in routing.items():
-        if route_key not in VALID_TASK_ROUTING_KEYS:
-            allowed = ", ".join(sorted(VALID_TASK_ROUTING_KEYS))
-            raise ValueError(f"task_engine_routing key must be one of: {allowed}")
-        normalized[route_key] = _normalize_engine_sequence(
-            list(engines),
-            field_name=f"task_engine_routing[{route_key}]",
-        )
     return normalized
 
 

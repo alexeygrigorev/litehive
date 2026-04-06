@@ -17,7 +17,6 @@ from typing import TextIO, get_args
 import yaml
 
 from litehive.config import (
-    VALID_TASK_ROUTING_KEYS,
     VALID_POOL_SELECTION_POLICIES,
     ensure_workspace,
     load_config,
@@ -67,7 +66,7 @@ VALID_TASK_ENGINES = {"codex", "opencode", "gemini", "copilot", "claude", "goz"}
 VALID_HUMAN_CHECKPOINTS = {"before_acceptance", "before_commit"}
 VALID_PM_COMPLEXITIES = set(get_args(TaskComplexity))
 VALID_PLANNED_EFFORTS = set(get_args(PlannedEffort))
-VALID_TASK_TYPES = set(VALID_TASK_ROUTING_KEYS)
+VALID_TASK_TYPES = {"adapter", "bugfix", "docs", "intake", "refactor", "research", "review"}
 TASK_PRIORITY_ORDER = {"high": 0, "medium": 1, "low": 2}
 
 

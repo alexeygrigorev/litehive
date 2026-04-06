@@ -1,4 +1,4 @@
-"""Validation constants and default routing for the config package."""
+"""Validation constants for the config package."""
 
 VALID_POOL_SELECTION_POLICIES = {"fifo", "priority_first", "dependency_aware"}
 VALID_ENGINE_NAMES = frozenset({"codex", "opencode", "gemini", "copilot", "claude", "goz"})
@@ -20,18 +20,3 @@ VALID_RUNNER_HOOK_POINTS = frozenset(
 )
 MODEL_FAMILY_RETRY_SELECTOR_PREFIX = "model_family:"
 ENGINE_CATEGORY_RETRY_SELECTOR_PREFIX = "engine_category:"
-
-
-def _default_task_engine_routing() -> dict[str, list[str]]:
-    return {
-        "adapter": ["codex", "opencode", "gemini", "copilot", "goz"],
-        "bugfix": ["codex", "opencode", "copilot", "gemini", "goz"],
-        "research": ["gemini", "codex", "opencode", "copilot", "goz"],
-        "review": ["copilot", "codex", "opencode", "gemini", "goz"],
-        "refactor": ["opencode", "codex", "copilot", "gemini", "goz"],
-        "docs": ["codex", "gemini", "opencode", "copilot", "goz"],
-        "intake": ["opencode", "codex", "gemini", "copilot", "goz"],
-    }
-
-
-VALID_TASK_ROUTING_KEYS = frozenset(_default_task_engine_routing())
