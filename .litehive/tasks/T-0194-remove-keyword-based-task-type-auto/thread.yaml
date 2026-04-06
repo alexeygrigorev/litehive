@@ -1,3 +1,26 @@
+- role: qa
+  step: testing
+  verdict: pass
+  message: 'STAGE_RESULT:
+
+    {"verdict":"pass","summary":"Keyword-based task_type auto-classification and task_engine_routing
+    fully removed. Engine selection uses only default_engine, task.engine, or CLI
+    override.","files_changed":["litehive/runtime/_models.py","tests/test_config_and_run_cli.py"],"tests":{"added":0,"passing":116},"warnings":["3
+    pre-existing test failures unrelated to routing changes: test_gemini_extract_usage_observation_reads_provider_limit_payload
+    (quota parsing), test_ensure_workspace_scaffolds_profile_specific_context and
+    test_render_context_template_shows_base_and_project_stage_scaffolding (context.md
+    header mismatch). Also 7 pre-existing failures in test_tasks_and_subagents.py
+    (run_live inactivity_timeout_seconds argument), 1 pre-existing in test_task_commands_and_daemon.py
+    (litehive.cli.subprocess import)."],"follow_up_tasks":[],"acceptance_criteria":["No
+    more keyword-based auto-classification of tasks from title text - VERIFIED: _task_routing_key,
+    _route_engines_for_task, and routing_patterns removed","task_engine_routing removed
+    from LitehiveConfig - VERIFIED: not present in config class","_default_task_engine_routing
+    and VALID_TASK_ROUTING_KEYS removed from constants - VERIFIED: grep finds no matches","Engine
+    selection uses only default_engine, task.engine, or CLI override - VERIFIED: resolve_engine_plan
+    has exactly three paths","All tests pass after removal - VERIFIED: 116 passed;
+    all routing tests pass; remaining failures are pre-existing"],"task_update":{}}'
+  files_changed: []
+  created_at: '2026-04-06T22:18:46+00:00'
 - role: recovery
   step: testing
   verdict: pass

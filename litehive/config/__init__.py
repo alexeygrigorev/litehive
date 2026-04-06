@@ -31,8 +31,6 @@ from litehive.config.constants import (  # noqa: F401
     VALID_SANDBOX_BACKENDS,
     VALID_SANDBOX_NETWORK_MODES,
     VALID_SANDBOX_WORKSPACE_MODES,
-    VALID_TASK_ROUTING_KEYS,
-    _default_task_engine_routing,
 )
 from litehive.config.dataclasses import (  # noqa: F401
     ExecutionRetryPolicy,
@@ -50,7 +48,6 @@ from litehive.config.normalization import (  # noqa: F401
     _normalize_external_engine_sandbox_config,
     _normalize_runner_hooks,
     _normalize_subagent_resource_limits,
-    normalize_task_engine_routing,
 )
 from litehive.config.profiles import (  # noqa: F401
     PROCESS_PROFILES,
@@ -139,9 +136,6 @@ class LitehiveConfig:
             process count) applied to subagent execution sandboxes.
         external_engine_sandbox: Container-based sandbox configuration
             for external engine isolation.
-        task_engine_routing: Per-task-type engine preference ordering.
-            Maps task types (e.g. ``research``, ``bugfix``) to an
-            ordered list of engines.
         engine_fallbacks: Ordered fallback engines when the primary
             engine for a task is unavailable due to quota, budget, or
             transient failures.
@@ -203,7 +197,6 @@ class LitehiveConfig:
     external_engine_sandbox: ExternalEngineSandboxConfig = field(
         default_factory=ExternalEngineSandboxConfig
     )
-    task_engine_routing: dict[str, list[str]] = field(default_factory=_default_task_engine_routing)
     engine_fallbacks: dict[str, list[str]] = field(
         default_factory=lambda: {
             "codex": ["opencode", "gemini", "copilot"],
@@ -219,7 +212,6 @@ class LitehiveConfig:
     implementation_mode_name: str = "implementation"
 
     def __post_init__(self) -> None:
-        self.task_engine_routing = normalize_task_engine_routing(self.task_engine_routing)
         self.engine_usage_caps = _normalize_engine_int_map(
             self.engine_usage_caps,
             field_name="engine_usage_caps",

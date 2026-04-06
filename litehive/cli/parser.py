@@ -116,12 +116,6 @@ def build_parser():
         help="Per-engine cost per invocation as ENGINE=UNITS; repeat to override defaults",
     )
     configure.add_argument(
-        "--task-engine-route",
-        action="append",
-        default=None,
-        help="Task routing override as TASK_TYPE=ENGINE[,ENGINE...]; repeat to override multiple task types",
-    )
-    configure.add_argument(
         "--pool-stop-on-failure",
         action="store_true",
         help="Default pool behavior: stop after the first task that does not finish successfully",

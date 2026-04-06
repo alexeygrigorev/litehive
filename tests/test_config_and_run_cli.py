@@ -185,7 +185,6 @@ def test_load_config_applies_workspace_overrides_on_top_of_global_defaults(
             {
                 "default_engine": "gemini",
                 "engine_costs": {"codex": 9, "claude": 7},
-                "task_engine_routing": {"research": ["opencode", "codex"]},
                 "subagent_resource_limits": {
                     "enabled": True,
                     "memory_mb": 4096,
@@ -203,7 +202,6 @@ def test_load_config_applies_workspace_overrides_on_top_of_global_defaults(
             {
                 "default_engine": "codex",
                 "engine_costs": {"claude": 4},
-                "task_engine_routing": {"review": ["codex", "copilot"]},
                 "subagent_resource_limits": {"cpu_count": 2.0},
             },
             sort_keys=False,
@@ -216,8 +214,6 @@ def test_load_config_applies_workspace_overrides_on_top_of_global_defaults(
     assert config.default_engine == "codex"
     assert config.engine_costs["codex"] == 9
     assert config.engine_costs["claude"] == 4
-    assert config.task_engine_routing["research"] == ["opencode", "codex"]
-    assert config.task_engine_routing["review"] == ["codex", "copilot"]
     assert config.subagent_resource_limits.enabled is True
     assert config.subagent_resource_limits.memory_mb == 4096
     assert config.subagent_resource_limits.cpu_count == 2.0
@@ -266,13 +262,6 @@ def test_resolve_model_skips_unsupported_engine_override(tmp_path: Path) -> None
     task = create_task(tmp_path, title="Pending task", engine="codex", model="custom-task-model")
 
     assert resolve_model(task, config, engine_name="codex", model_override="run-model") is None
-
-
-def test_litehive_config_merges_partial_task_engine_routing_override() -> None:
-    config = LitehiveConfig(task_engine_routing={"research": ["opencode", "gemini", "codex"]})
-
-    assert config.task_engine_routing["research"] == ["opencode", "gemini", "codex"]
-    assert config.task_engine_routing["review"] == ["copilot", "codex", "opencode", "gemini", "goz"]
 
 
 def test_litehive_config_normalizes_execution_retry_policies() -> None:
@@ -460,61 +449,45 @@ def test_resolve_execution_retry_policy_prefers_codex_selector_before_external_c
     assert resolved.policy.max_retries == 1
 
 
-def test_resolve_engine_name_uses_task_routing_rule_before_workspace_default(
+def test_resolve_engine_name_ignores_title_keywords_uses_default(
     tmp_path: Path,
 ) -> None:
     ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
     config = load_config(tmp_path)
     task = create_task(tmp_path, title="Research engine quota behavior")
 
-    assert resolve_engine_name(task, config) == "gemini"
-    assert resolve_engine_plan(task, config)[:3] == ["gemini", "codex", "opencode"]
+    assert resolve_engine_name(task, config) == "codex"
+    assert resolve_engine_plan(task, config) == ["codex"]
 
 
-def test_resolve_engine_name_prefers_explicit_task_type_over_keyword_inference(
+def test_resolve_engine_name_ignores_task_type_for_engine_selection(
     tmp_path: Path,
 ) -> None:
     ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
     config = load_config(tmp_path)
     task = create_task(tmp_path, title="Research engine quota behavior", task_type="review")
 
-    assert resolve_engine_name(task, config) == "copilot"
-    assert resolve_engine_plan(task, config)[:3] == ["copilot", "codex", "opencode"]
+    assert resolve_engine_name(task, config) == "codex"
+    assert resolve_engine_plan(task, config) == ["codex"]
 
 
-def test_resolve_engine_name_uses_configured_task_routing_override(
+def test_resolve_engine_name_uses_default_engine_without_task_override(
     tmp_path: Path,
 ) -> None:
     ensure_workspace(
         tmp_path,
         LitehiveConfig(
-            default_engine="codex",
-            task_engine_routing={"research": ["opencode", "gemini", "codex"]},
+            default_engine="gemini",
         ),
     )
     config = load_config(tmp_path)
     task = create_task(tmp_path, title="Research engine quota behavior")
 
-    assert resolve_engine_name(task, config) == "opencode"
-    assert resolve_engine_plan(task, config) == ["opencode", "gemini", "codex"]
+    assert resolve_engine_name(task, config) == "gemini"
+    assert resolve_engine_plan(task, config) == ["gemini"]
 
 
-def test_resolve_engine_name_skips_claude_in_routing_when_not_enabled(tmp_path: Path) -> None:
-    ensure_workspace(
-        tmp_path,
-        LitehiveConfig(
-            default_engine="codex",
-            task_engine_routing={"research": ["claude", "gemini", "codex"]},
-        ),
-    )
-    config = load_config(tmp_path)
-    task = create_task(tmp_path, title="Research engine selection behavior")
-
-    assert resolve_engine_name(task, config) == "claude"
-    assert resolve_engine_plan(task, config) == ["claude", "gemini", "codex"]
-
-
-def test_configure_persists_task_engine_routing_overrides(tmp_path: Path) -> None:
+def test_configure_no_longer_has_task_engine_routing(tmp_path: Path) -> None:
     from litehive.cli import _cmd_configure
 
     parser = argparse.Namespace(
@@ -533,10 +506,6 @@ def test_configure_persists_task_engine_routing_overrides(tmp_path: Path) -> Non
         engine_usage_cap=None,
         engine_budget_cap=None,
         engine_cost=None,
-        task_engine_route=[
-            "research=gemini,claude,codex",
-            "bugfix=codex,opencode,copilot",
-        ],
         pool_stop_on_failure=False,
         pool_max_tasks=None,
         pool_stop_on_limit=False,
@@ -548,9 +517,7 @@ def test_configure_persists_task_engine_routing_overrides(tmp_path: Path) -> Non
 
     assert _cmd_configure(parser) == 0
     config = load_config(tmp_path)
-    assert config.task_engine_routing["research"] == ["gemini", "claude", "codex"]
-    assert config.task_engine_routing["bugfix"] == ["codex", "opencode", "copilot"]
-    assert config.task_engine_routing["review"] == ["copilot", "codex", "opencode", "gemini", "goz"]
+    assert config.default_engine == "codex"
 
 
 def test_configure_persists_pre_acceptance_command(tmp_path: Path) -> None:
@@ -696,41 +663,6 @@ def test_configure_rejects_invalid_runner_hook_point(
     output = capsys.readouterr().out
 
     assert "configure failed: runner_hooks key must be one of:" in output
-
-
-def test_configure_rejects_invalid_task_engine_route(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
-    from litehive.cli import _cmd_configure
-
-    parser = argparse.Namespace(
-        workspace=tmp_path,
-        default_engine="codex",
-        process_profile="generic",
-        default_retry_limit=3,
-        opencode_model="zai-coding-plan/glm-5.1",
-        gemini_model=None,
-        copilot_model=None,
-        claude_enabled=False,
-        claude_model="claude-sonnet-4-20250514",
-        claude_max_turns=30,
-        pool_usage_cap=None,
-        pool_cost_cap=None,
-        engine_usage_cap=None,
-        engine_budget_cap=None,
-        engine_cost=None,
-        task_engine_route=["research=gemini,unknown"],
-        pool_stop_on_failure=False,
-        pool_max_tasks=None,
-        pool_stop_on_limit=False,
-        pool_quota_threshold=None,
-        pool_budget_threshold=None,
-        pool_stop_on_dirty_git=False,
-        pool_selection_policy="dependency_aware",
-    )
-
-    assert _cmd_configure(parser) == 1
-    assert "--task-engine-route engine must be one of:" in capsys.readouterr().out
 
 
 def test_build_parser_accepts_run_dry_run_flag(tmp_path: Path) -> None:
@@ -1260,7 +1192,7 @@ def test_cmd_run_dry_run_uses_budget_allowed_fallback_engine(
     assert exit_code == 0
     assert "would_run: 1. T-0001 Research engine quota behavior" in output
     assert "engine=codex" in output
-    assert "engine_attempts=gemini, codex, opencode, copilot" in output
+    assert "engine_attempts=codex, opencode, gemini, copilot" in output
     assert "predicted_stop_reason: single_task_complete" in output
 
 

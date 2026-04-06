@@ -9,12 +9,10 @@ from litehive.config import (
     context_path,
     ensure_workspace,
     load_config,
-    normalize_task_engine_routing,
     render_context_template,
 )
 from litehive.cli._parse import (
     _parse_engine_int_map,
-    _parse_task_engine_routing,
     _parse_runner_hooks,
 )
 
@@ -32,12 +30,6 @@ def _cmd_configure(args):
         engine_costs = _parse_engine_int_map(
             getattr(args, "engine_cost", None),
             option_name="--engine-cost",
-        )
-        task_engine_routing = normalize_task_engine_routing(
-            _parse_task_engine_routing(
-                getattr(args, "task_engine_route", None),
-                option_name="--task-engine-route",
-            )
         )
         runner_hooks = _parse_runner_hooks(
             getattr(args, "hook", None),
@@ -79,7 +71,6 @@ def _cmd_configure(args):
                 cpu_count=getattr(args, "subagent_cpu_count", None),
                 process_limit=getattr(args, "subagent_process_limit", None),
             ),
-            task_engine_routing=task_engine_routing,
         )
     except ValueError as exc:
         print(f"configure failed: {exc}")

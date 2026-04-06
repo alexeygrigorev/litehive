@@ -5,20 +5,20 @@ import tempfile
 
 import yaml
 
-from litehive.config import VALID_TASK_ROUTING_KEYS
 from litehive.engines import ENGINE_CHOICES
 from litehive.tasks import (
     VALID_HUMAN_CHECKPOINTS,
     VALID_PM_COMPLEXITIES,
     VALID_PLANNED_EFFORTS,
     VALID_TASK_PRIORITIES,
+    VALID_TASK_TYPES,
     normalize_acceptance_criteria,
     normalize_human_checkpoints,
     normalize_task_text_list,
     require_task,
 )
 
-TASK_TYPE_CHOICES = sorted(VALID_TASK_ROUTING_KEYS)
+TASK_TYPE_CHOICES = sorted(VALID_TASK_TYPES)
 
 
 def _parse_dependency_ids(
@@ -76,38 +76,6 @@ def _parse_engine_int_map(raw_values, *, option_name):
             raise ValueError(f"{option_name} value for {engine_name} must be 0 or greater")
         mapping[engine_name] = value
     return mapping
-
-
-def _parse_task_engine_routing(
-    raw_values,
-    *,
-    option_name,
-):
-    if not raw_values:
-        return {}
-
-    routing = {}
-    for raw_value in raw_values:
-        route_key, separator, raw_engines = raw_value.partition("=")
-        if separator != "=":
-            raise ValueError(f"{option_name} entries must use TASK_TYPE=ENGINE[,ENGINE...]")
-        route_key = route_key.strip()
-        if route_key not in TASK_TYPE_CHOICES:
-            raise ValueError(
-                f"{option_name} task type must be one of: {', '.join(TASK_TYPE_CHOICES)}"
-            )
-        engines = [engine.strip() for engine in raw_engines.split(",") if engine.strip()]
-        if not engines:
-            raise ValueError(
-                f"{option_name} route for {route_key} must include at least one engine"
-            )
-        for engine_name in engines:
-            if engine_name not in ENGINE_CHOICES:
-                raise ValueError(
-                    f"{option_name} engine must be one of: {', '.join(ENGINE_CHOICES)}"
-                )
-        routing[route_key] = engines
-    return routing
 
 
 def _parse_runner_hooks(
