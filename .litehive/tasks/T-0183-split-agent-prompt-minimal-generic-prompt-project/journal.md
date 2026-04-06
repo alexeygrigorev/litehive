@@ -35,3 +35,12 @@ Interrupted subagent execution while `accepting` was running. Reason: Stale runn
 
 ## 2026-04-06T16:28:34+00:00
 Task resumed from `accepting`.
+
+## 2026-04-06T18:55:52+00:00
+Execution started with engine `codex`.
+
+## 2026-04-06T18:55:56+00:00
+Stage `accepting` switched from `codex` to `gemini` after usage limit reached.
+
+## 2026-04-06T18:56:07+00:00
+Stage `accepting` switched from `gemini` to `opencode` after usage limit reached.

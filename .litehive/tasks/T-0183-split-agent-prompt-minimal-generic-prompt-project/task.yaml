@@ -6,13 +6,13 @@ task_type: null
 engine: null
 model: null
 mode: implementation
-status: queued
-pipeline_status: accepting
+status: in_progress
+pipeline_status: commit_to_git
 priority: medium
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-05T17:10:49+00:00'
-updated_at: '2026-04-06T16:28:34+00:00'
+updated_at: '2026-04-06T19:22:37+00:00'
 goal: 'Agents get a bloated 34K prompt where the task is buried under litehive internals.
   Split into: (1) Generic prompt built into litehive code (~500 chars): role, pipeline
   stages, how to report verdicts, basic rules. Same for every project. (2) Project
@@ -80,6 +80,27 @@ subagents:
   engine: opencode
   status: interrupted
   path: subagents/SA-0010-reviewer
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0011
+  role: recovery
+  engine: codex
+  status: failed
+  path: subagents/SA-0011-recovery
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0012
+  role: recovery
+  engine: gemini
+  status: failed
+  path: subagents/SA-0012-recovery
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0013
+  role: recovery
+  engine: opencode
+  status: completed
+  path: subagents/SA-0013-recovery
   sandboxed: false
   sandbox_summary: host
 git:

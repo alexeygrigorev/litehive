@@ -1402,3 +1402,9 @@ Recovered flagged accepted task back to `queued/commit_to_git` for final checkpo
 
 ## 2026-04-06T18:55:16+00:00
 Execution started with engine `codex`.
+
+## 2026-04-06T18:55:17+00:00
+CommitToGit complete. Commit: 72fb1fd31b5bbd7f965e25361ae1fc34ef430126
+
+## 2026-04-06T18:55:22+00:00
+Pool stopped: continue_or_rollback_required. This task finished with checkpoint commit `72fb1fd31b5bbd7f965e25361ae1fc34ef430126` and unrelated queued work remains. Either continue with a new `litehive run`/pool run or roll back the checkpoint first.
