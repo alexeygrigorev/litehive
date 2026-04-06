@@ -1,0 +1,56 @@
+task_id: T-0164
+step: grooming
+verdict: pass
+summary: I'll analyze the tasks.py file comprehensively. Let me start by viewing it
+  and searching for related information in parallel.
+feedback: "Stage `grooming` retrying `goz` after attempt 1/3 due to transient network\
+  \ failure (classification: network, policy: goz, backoff: 0.25s).\n\nStage `grooming`\
+  \ retrying `goz` after attempt 2/3 due to transient network failure (classification:\
+  \ network, policy: goz, backoff: 0.50s).\n\nStage `grooming` stopped retrying `goz`\
+  \ after attempt 3/3: transient network failure.\n\nStage `grooming` switched from\
+  \ `goz` to `copilot` after transient network failure.\n\nI'll analyze the tasks.py\
+  \ file comprehensively. Let me start by viewing it and searching for related information\
+  \ in parallel.\nNow let me view the tasks.py file and search for imports:\nNow let\
+  \ me use bash to examine the file structure and extract functions/classes with line\
+  \ numbers:\nLet me get the full imports section and check for __all__:\nLet me check\
+  \ if there's an __all__ by searching differently:\nNow let me create a comprehensive\
+  \ list. Let me check the full imports section:\nNow let me get a comprehensive categorization\
+  \ by viewing sections of the file:\nPerfect! Now let me get brief descriptions for\
+  \ each by examining key sections:\nNow let me view specific sections to understand\
+  \ what each function does, and create a comprehensive summary:\nExcellent! Now let\
+  \ me view a few more key sections to get full descriptions. Let me check a broader\
+  \ sample:\nPerfect! Now let me generate a comprehensive analysis document. Let me\
+  \ also get more specific info by looking at sections of key functions:\nPerfect!\
+  \ Now let me compile the comprehensive analysis:\n\n## ANALYSIS OF `/litehive/tasks.py`\n\
+  \n### 1. **File Statistics**\n- **Total lines:** 4,409\n- **File size:** 157.8 KB\n\
+  - **Total functions and classes:** 163 definitions\n  - Classes: 8 (including 1\
+  \ exception, 6 dataclasses)\n  - Functions: 155 (public + private)\n\n### 2. **Dependencies\
+  \ (Imports)**\n\n**Standard library:**\n- `dataclasses`, `fcntl`, `gzip`, `re`,\
+  \ `contextlib`, `os`, `signal`, `shutil`, `pathlib.Path`, `sys`, `threading`, `time`,\
+  \ \n\n\u2026 [truncated \u2014 full transcript in subagent artifacts]"
+files_changed: []
+follow_up_tasks: []
+created_follow_up_task_ids: []
+tests:
+  added: 0
+  passing: 0
+warnings:
+- 'Stage `grooming` retrying `goz` after attempt 1/3 due to transient network failure
+  (classification: network, policy: goz, backoff: 0.25s).'
+- 'Stage `grooming` retrying `goz` after attempt 2/3 due to transient network failure
+  (classification: network, policy: goz, backoff: 0.50s).'
+- 'Stage `grooming` stopped retrying `goz` after attempt 3/3: transient network failure.'
+- Stage `grooming` switched from `goz` to `copilot` after transient network failure.
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 217
+hook_results: []
+created_at: '2026-04-05T23:15:52+00:00'
