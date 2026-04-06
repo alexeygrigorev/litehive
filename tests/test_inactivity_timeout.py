@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from litehive.external_cli import ExternalCLIAdapter, AdapterCapabilities, CLIInvocation
+from litehive.engines.base import ExternalCLIAdapter, AdapterCapabilities, CLIInvocation
 
 
 class _StubAdapter(ExternalCLIAdapter):

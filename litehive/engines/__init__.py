@@ -1,12 +1,11 @@
 """External CLI engine adapters."""
 
-
 from dataclasses import dataclass
 import json
 import re
 from pathlib import Path
 
-from litehive.external_cli import (
+from litehive.engines.base import (
     AdapterCapabilities,
     CLIExecutionResult,
     ExternalCLIAdapter,
@@ -25,7 +24,7 @@ from litehive.models import (
     LiveTimeline,
     RuntimeEngineContinuation,
 )
-from litehive.external_cli import extract_live_timeline
+from litehive.engines.base import extract_live_timeline
 
 
 class EngineError(RuntimeError):
@@ -205,7 +204,7 @@ class CodexCLIAdapter(ExternalCLIAdapter):
     ):
         transcript = self.render_transcript(execution)
         if not transcript:
-            from litehive.external_cli import extract_codex_errors
+            from litehive.engines.base import extract_codex_errors
 
             error_lines = extract_codex_errors(execution.stdout)
             if error_lines:
@@ -535,13 +534,15 @@ class ClaudeCLIAdapter(ExternalCLIAdapter):
             command.extend(["--resume", resume_session_id, "-p", prompt])
         else:
             command.extend(["-p", prompt])
-        command.extend([
-            "--output-format",
-            "stream-json",
-            "--include-partial-messages",
-            "--verbose",
-            "--dangerously-skip-permissions",
-        ])
+        command.extend(
+            [
+                "--output-format",
+                "stream-json",
+                "--include-partial-messages",
+                "--verbose",
+                "--dangerously-skip-permissions",
+            ]
+        )
         if model:
             command.extend(["--model", model])
         if max_turns is not None:

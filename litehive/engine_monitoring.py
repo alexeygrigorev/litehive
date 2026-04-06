@@ -1,12 +1,11 @@
 """Workspace-level engine usage and quota monitoring."""
 
-
 from pathlib import Path
 
 import yaml
 
 from litehive.config import render_workspace_gitignore, workspace_gitignore_path
-from litehive.external_cli import CLIExecutionResult, ExternalCLIAdapter
+from litehive.engines.base import CLIExecutionResult, ExternalCLIAdapter
 from litehive.models import (
     EngineUsageObservation,
     EngineUsageRecord,
@@ -54,9 +53,7 @@ def record_engine_execution(
     monitoring = load_engine_monitoring(root)
     extract_usage_observation = getattr(adapter, "extract_usage_observation", None)
     observation = (
-        extract_usage_observation(execution)
-        if callable(extract_usage_observation)
-        else None
+        extract_usage_observation(execution) if callable(extract_usage_observation) else None
     ) or EngineUsageObservation()
     monitoring = _apply_engine_observation(
         monitoring,
@@ -83,9 +80,7 @@ def record_engine_observation(
     monitoring = load_engine_monitoring(root)
     extract_usage_observation = getattr(adapter, "extract_usage_observation", None)
     observation = (
-        extract_usage_observation(execution)
-        if callable(extract_usage_observation)
-        else None
+        extract_usage_observation(execution) if callable(extract_usage_observation) else None
     ) or EngineUsageObservation()
     if (
         observation.usage is None

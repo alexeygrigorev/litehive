@@ -3,7 +3,7 @@
 from pathlib import Path
 
 from litehive.engines import get_engine
-from litehive.external_cli import parse_stage_report_text
+from litehive.engines.base import parse_stage_report_text
 from litehive.models import StageReport, TaskRecord
 
 from litehive.subagents._execution import SubagentResult

@@ -233,7 +233,7 @@ def _cmd_intake(args):
         execution = engine.run(prompt, cwd=args.workspace, model=model)
         if execution.exit_code == 0:
             transcript = engine.render_transcript(execution)
-            from litehive.external_cli import _extract_line
+            from litehive.engines.base import _extract_line
 
             extracted_title = _extract_line(transcript, "TITLE")
             extracted_goal = _extract_line(transcript, "GOAL")

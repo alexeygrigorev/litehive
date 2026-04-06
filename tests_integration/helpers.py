@@ -1,4 +1,3 @@
-
 import json
 import os
 import subprocess
@@ -9,7 +8,7 @@ import pytest
 
 from litehive.config import LitehiveConfig, VALID_ENGINE_NAMES, ensure_workspace
 from litehive.engines import get_engine
-from litehive.external_cli import CLIExecutionResult
+from litehive.engines.base import CLIExecutionResult
 from litehive.models import StageResultSubmission
 
 
