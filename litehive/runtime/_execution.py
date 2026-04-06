@@ -223,7 +223,7 @@ def run_single_task(
             return SingleTaskRunSummary(execution=None, stop_reason=stop_reason, blocked=blocked)
 
         stop_reason = _single_task_stop_reason(execution)
-        if stop_reason.startswith("human_checkpoint_"):
+        if stop_reason.startswith("human_checkpoint_") or stop_reason == "task_requeued":
             set_pool_stop_reason(root, stop_reason)
         return SingleTaskRunSummary(execution=execution, stop_reason=stop_reason, blocked=blocked)
 
