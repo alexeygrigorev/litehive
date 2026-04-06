@@ -1,0 +1,53 @@
+task_id: T-0077
+step: testing
+verdict: pass
+summary: 'Validated the diagnostic recovery workflow with focused execution and evidence
+  inspection. Verified recovery reports are written for stale-runner recovery, flagged-task
+  requeue, same-stage retry churn reroute to grooming, commit_to_git recovery, and
+  late-stage preflight blocked outcomes. Ran: uv run pytest -q tests/test_recovery_agent.py
+  (4 passed); uv run pytest -q tests/test_observability_and_status.py::test_recover_stale_runner_state_recovers_running_task_without_runner_lock_record
+  tests/test_retry_commit_and_recovery.py::test_resolve_next_task_recovers_flagged_commit_stage_after_passing_review
+  tests/test_runner_workflow.py::test_runner_escalates_to_grooming_after_testing_stage_limit_exhausted
+  (3 passed). Also executed targeted ad hoc evidence checks showing recovery reports
+  include task/runtime/thread, subagent session/report/transcript/stdout/stderr/timeline,
+  wrapper log, engine-monitoring, and git/worktree evidence when present. Acceptance
+  criteria status: met for recovery triggers (stale-runner, flagged task, retry churn,
+  commit_to_git failure, engine preflight/engine-error paths), structured recovery
+  report output, bounded repair actions, explicit blocked reporting, and focused regression
+  coverage for stale-runner, flagged, late-stage commit_to_git, and unrecoverable
+  blocked cases. No blocking issues found in the tested paths.'
+feedback: 'Validated the diagnostic recovery workflow with focused execution and evidence
+  inspection. Verified recovery reports are written for stale-runner recovery, flagged-task
+  requeue, same-stage retry churn reroute to grooming, commit_to_git recovery, and
+  late-stage preflight blocked outcomes. Ran: uv run pytest -q tests/test_recovery_agent.py
+  (4 passed); uv run pytest -q tests/test_observability_and_status.py::test_recover_stale_runner_state_recovers_running_task_without_runner_lock_record
+  tests/test_retry_commit_and_recovery.py::test_resolve_next_task_recovers_flagged_commit_stage_after_passing_review
+  tests/test_runner_workflow.py::test_runner_escalates_to_grooming_after_testing_stage_limit_exhausted
+  (3 passed). Also executed targeted ad hoc evidence checks showing recovery reports
+  include task/runtime/thread, subagent session/report/transcript/stdout/stderr/timeline,
+  wrapper log, engine-monitoring, and git/worktree evidence when present. Acceptance
+  criteria status: met for recovery triggers (stale-runner, flagged task, retry churn,
+  commit_to_git failure, engine preflight/engine-error paths), structured recovery
+  report output, bounded repair actions, explicit blocked reporting, and focused regression
+  coverage for stale-runner, flagged, late-stage commit_to_git, and unrecoverable
+  blocked cases. No blocking issues found in the tested paths.'
+files_changed: []
+follow_up_tasks: []
+created_follow_up_task_ids: []
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 316
+hook_results: []
+created_at: '2026-04-06T05:25:22+00:00'

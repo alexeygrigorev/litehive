@@ -1,0 +1,56 @@
+task_id: T-0169
+step: grooming
+verdict: pass
+summary: Now I have a full picture. Let me compose the grooming verdict and submit
+  it.
+feedback: "Stage `grooming` retrying `goz` after attempt 1/3 due to transient network\
+  \ failure (classification: network, policy: goz, backoff: 0.25s).\n\nStage `grooming`\
+  \ retrying `goz` after attempt 2/3 due to transient network failure (classification:\
+  \ network, policy: goz, backoff: 0.50s).\n\nStage `grooming` stopped retrying `goz`\
+  \ after attempt 3/3: transient network failure.\n\nStage `grooming` switched from\
+  \ `goz` to `copilot` after transient network failure.\n\nNow I have a full picture.\
+  \ Let me compose the grooming verdict and submit it.\nI have enough context. Here's\
+  \ the plan:\nI need to update the task.yaml with the grooming output (plan, acceptance\
+  \ criteria, pm_complexity, planned_effort, and advance pipeline_status to implementing).\n\
+  Now let me write the grooming report to the task reports directory:\nThe grooming\
+  \ report was recorded in thread.yaml via the `litehive report` command earlier.\
+  \ The task.yaml has been updated with the full plan, sharpened acceptance criteria,\
+  \ pm_complexity, planned_effort, and pipeline_status advanced to `implementing`.\n\
+  \nLet me do a final verification:\nGrooming complete. Here's the summary:\n\n**T-0169\
+  \ groomed \u2192 PASS**\n\n**What's changing:** Pure test file reorganization \u2014\
+  \ no logic changes, only moving tests to 1:1 match with source modules.\n\n**File\
+  \ mapping (584 tests, same count after):**\n| New file | Source(s) |\n|---|---|\n\
+  | `test_cli.py` | CLI portions of `test_config_and_run_cli.py` + task command portions\
+  \ of `test_task_commands_and_daemon.py` |\n| `test_config.py` | Config portions\
+  \ of `test_config_and_run_cli.py` |\n| `test_engines.py` | Rename `test_engine_variants_and_timeline.py`\
+  \ |\n| `test_runner.py` | Rename `test_runner_workflow.py` |\n| `test_runtime.py`\
+  \ | Rename `test_runtime_pool.py` |\n| `test_tasks.py` + `test_subagents.py` | Split\
+  \ `test_tasks_and_subagents.py` at ~line 498 |\n| `test_daemon.py` | Daemon portion\
+  \ of `test_task_commands_and_daemon.py` (~line 2730+) |\n| `test_observability.py`\
+  \ |\n\n\u2026 [truncated \u2014 full transcript in subagent artifacts]"
+files_changed: []
+follow_up_tasks: []
+created_follow_up_task_ids: []
+tests:
+  added: 0
+  passing: 0
+warnings:
+- 'Stage `grooming` retrying `goz` after attempt 1/3 due to transient network failure
+  (classification: network, policy: goz, backoff: 0.25s).'
+- 'Stage `grooming` retrying `goz` after attempt 2/3 due to transient network failure
+  (classification: network, policy: goz, backoff: 0.50s).'
+- 'Stage `grooming` stopped retrying `goz` after attempt 3/3: transient network failure.'
+- Stage `grooming` switched from `goz` to `copilot` after transient network failure.
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 307
+hook_results: []
+created_at: '2026-04-06T04:04:03+00:00'
