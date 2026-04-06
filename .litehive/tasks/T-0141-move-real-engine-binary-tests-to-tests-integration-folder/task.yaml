@@ -12,7 +12,7 @@ priority: medium
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-04T16:02:28+00:00'
-updated_at: '2026-04-06T18:02:38+00:00'
+updated_at: '2026-04-06T18:03:20+00:00'
 goal: Separate tests that invoke real engine binaries (codex, claude, opencode, gemini,
   copilot, goz) into tests_integration/ so the main test suite runs fast without needing
   live engines
@@ -137,6 +137,13 @@ subagents:
   engine: copilot
   status: completed
   path: subagents/SA-0016-recovery
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0017
+  role: merge-resolver
+  engine: claude
+  status: completed
+  path: subagents/SA-0017-merge-resolver
   sandboxed: false
   sandbox_summary: host
 git:
