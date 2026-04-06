@@ -12,7 +12,7 @@ priority: medium
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-05T17:10:49+00:00'
-updated_at: '2026-04-06T19:23:14+00:00'
+updated_at: '2026-04-06T19:23:50+00:00'
 goal: 'Agents get a bloated 34K prompt where the task is buried under litehive internals.
   Split into: (1) Generic prompt built into litehive code (~500 chars): role, pipeline
   stages, how to report verdicts, basic rules. Same for every project. (2) Project
@@ -108,6 +108,13 @@ subagents:
   engine: claude
   status: completed
   path: subagents/SA-0014-merge-resolver
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0015
+  role: merge-resolver
+  engine: claude
+  status: completed
+  path: subagents/SA-0015-merge-resolver
   sandboxed: false
   sandbox_summary: host
 git:
