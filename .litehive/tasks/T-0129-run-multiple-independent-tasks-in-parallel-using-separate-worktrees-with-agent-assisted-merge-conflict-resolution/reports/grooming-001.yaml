@@ -1,4 +1,4 @@
-task_id: T-0081
+task_id: T-0129
 step: grooming
 verdict: blocked
 summary: Execution interrupted during grooming
@@ -21,6 +21,6 @@ outcome_reason: Execution interrupted during grooming
 failure_classification: null
 failure_diagnostics: {}
 resource_limit_event: null
-duration_seconds: 288
+duration_seconds: 28
 hook_results: []
-created_at: '2026-04-06T14:59:18+00:00'
+created_at: '2026-04-06T15:00:15+00:00'

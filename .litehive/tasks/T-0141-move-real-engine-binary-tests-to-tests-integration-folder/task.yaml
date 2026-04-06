@@ -6,13 +6,13 @@ task_type: null
 engine: null
 model: null
 mode: implementation
-status: interrupted
-pipeline_status: grooming
+status: in_progress
+pipeline_status: commit_to_git
 priority: medium
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-04T16:02:28+00:00'
-updated_at: '2026-04-05T15:34:31+00:00'
+updated_at: '2026-04-06T18:02:38+00:00'
 goal: Separate tests that invoke real engine binaries (codex, claude, opencode, gemini,
   copilot, goz) into tests_integration/ so the main test suite runs fast without needing
   live engines
@@ -46,6 +46,97 @@ subagents:
   engine: opencode
   status: interrupted
   path: subagents/SA-0003-planner
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0004
+  role: planner
+  engine: codex
+  status: failed
+  path: subagents/SA-0004-planner
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0005
+  role: planner
+  engine: opencode
+  status: completed
+  path: subagents/SA-0005-planner
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0006
+  role: swe
+  engine: opencode
+  status: failed
+  path: subagents/SA-0006-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0007
+  role: recovery
+  engine: opencode
+  status: failed
+  path: subagents/SA-0007-recovery
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0008
+  role: recovery
+  engine: opencode
+  status: completed
+  path: subagents/SA-0008-recovery
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0009
+  role: qa
+  engine: opencode
+  status: failed
+  path: subagents/SA-0009-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0010
+  role: recovery
+  engine: opencode
+  status: completed
+  path: subagents/SA-0010-recovery
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0011
+  role: reviewer
+  engine: opencode
+  status: failed
+  path: subagents/SA-0011-reviewer
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0012
+  role: recovery
+  engine: opencode
+  status: failed
+  path: subagents/SA-0012-recovery
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0013
+  role: recovery
+  engine: opencode
+  status: failed
+  path: subagents/SA-0013-recovery
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0014
+  role: recovery
+  engine: codex
+  status: failed
+  path: subagents/SA-0014-recovery
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0015
+  role: recovery
+  engine: gemini
+  status: failed
+  path: subagents/SA-0015-recovery
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0016
+  role: recovery
+  engine: copilot
+  status: completed
+  path: subagents/SA-0016-recovery
   sandboxed: false
   sandbox_summary: host
 git:

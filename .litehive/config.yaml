@@ -1,4 +1,4 @@
-default_engine: goz
+default_engine: claude
 goz_model: auto
 recovery_engine: claude
 codex_model: gpt-5.4-high

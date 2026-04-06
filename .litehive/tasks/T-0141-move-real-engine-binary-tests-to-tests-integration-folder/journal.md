@@ -19,3 +19,36 @@ Stage `grooming` switched from `codex` to `opencode` after usage limit reached.
 
 ## 2026-04-05T15:34:31+00:00
 Interrupted subagent execution while `grooming` was running. Reason: Stale runner detected while subagent `SA-0003` (planner/opencode, pid 3250050 no longer alive) was still marked running in `grooming`.. Subagent `SA-0003` (planner/opencode, pid=3250050, path `subagents/SA-0003-planner`) stopped with status `interrupted`. Last snippet: {"type":"step_start","timestamp":1775403256780,"sessionID":"ses_2a1b85f1affe990TfL01uiW63W","part":{"id":"prt_d5e47cbc6001EiKYiniBx8L7Od","messageID":"msg_d5e47a16c001ASDxGgd6W2jPop","sessionID":"ses_2a1b85f1affe990TfL01uiW63W","snapshot":"f9931e0f1fc041518616404df444d9c97c777157","type":"step-start"}}. Resume from `grooming`.
+
+## 2026-04-06T15:00:44+00:00
+Execution started with engine `codex`.
+
+## 2026-04-06T15:00:48+00:00
+Stage `grooming` switched from `codex` to `opencode` after usage limit reached.
+
+## 2026-04-06T16:02:55+00:00
+Stage `implementing` retrying `opencode` after attempt 1/3 due to transient timeout (classification: timeout, policy: opencode, backoff: 0.25s).
+
+## 2026-04-06T16:52:09+00:00
+Stage `implementing` retrying `opencode` after attempt 2/3 due to transient timeout (classification: timeout, policy: opencode, backoff: 0.50s).
+
+## 2026-04-06T17:21:02+00:00
+Stage `testing` retrying `opencode` after attempt 1/3 due to transient timeout (classification: timeout, policy: opencode, backoff: 0.25s).
+
+## 2026-04-06T17:32:31+00:00
+Stage `accepting` retrying `opencode` after attempt 1/3 due to transient timeout (classification: timeout, policy: opencode, backoff: 0.25s).
+
+## 2026-04-06T17:41:37+00:00
+Stage `accepting` retrying `opencode` after attempt 2/3 due to transient timeout (classification: timeout, policy: opencode, backoff: 0.50s).
+
+## 2026-04-06T18:01:40+00:00
+Stage `accepting` stopped retrying `opencode` after attempt 3/3: transient timeout.
+
+## 2026-04-06T18:01:40+00:00
+Stage `accepting` switched from `opencode` to `codex` after transient timeout.
+
+## 2026-04-06T18:01:42+00:00
+Stage `accepting` switched from `codex` to `gemini` after usage limit reached.
+
+## 2026-04-06T18:01:54+00:00
+Stage `accepting` switched from `gemini` to `copilot` after usage limit reached.

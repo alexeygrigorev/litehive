@@ -32,3 +32,6 @@ Stage `grooming` switched from `gemini` to `opencode` after usage limit reached.
 
 ## 2026-04-05T18:02:50+00:00
 Interrupted subagent execution while `accepting` was running. Reason: Stale runner detected while subagent `SA-0010` (reviewer/opencode, pid 3444542 no longer alive) was still marked running in `accepting`.. Subagent `SA-0010` (reviewer/opencode, pid=3444542, path `subagents/SA-0010-reviewer`) stopped with status `interrupted`. Last snippet: Let me look at the task artifacts and the full implementation more closely.. Resume from `accepting`.
+
+## 2026-04-06T16:28:34+00:00
+Task resumed from `accepting`.

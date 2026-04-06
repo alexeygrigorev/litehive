@@ -8,12 +8,12 @@ engine: opencode
 model: null
 mode: implementation
 status: interrupted
-pipeline_status: accepting
+pipeline_status: grooming
 priority: medium
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-01T06:36:35+00:00'
-updated_at: '2026-04-05T15:19:23+00:00'
+updated_at: '2026-04-06T14:59:18+00:00'
 goal: ''
 acceptance_criteria: []
 constraints: []
@@ -214,6 +214,13 @@ subagents:
   engine: opencode
   status: completed
   path: subagents/SA-0028-recovery
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0029
+  role: planner
+  engine: opencode
+  status: interrupted
+  path: subagents/SA-0029-planner
   sandboxed: false
   sandbox_summary: host
 git:

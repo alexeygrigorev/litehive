@@ -20,3 +20,6 @@ Stage `implementing` switched from `codex` to `opencode` after usage limit reach
 
 ## 2026-04-05T15:33:48+00:00
 Interrupted subagent execution while `accepting` was running. Reason: Stale runner detected while subagent `SA-0012` (reviewer/opencode, pid 3248433 no longer alive) was still marked running in `accepting`.. Subagent `SA-0012` (reviewer/opencode, pid=3248433, path `subagents/SA-0012-reviewer`) stopped with status `interrupted`. Last snippet: Let me verify the documentation files against the acceptance criteria.. Resume from `accepting`.
+
+## 2026-04-06T16:28:44+00:00
+Task resumed from `accepting`.
