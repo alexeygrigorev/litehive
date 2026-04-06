@@ -55,19 +55,36 @@ System-interrupted and flagged tasks are also returned to the runnable queue aut
 
 ## PipelineStatus — stage position
 
-Stages run in fixed order:
+Stages run in fixed order depending on the task's `pipeline_mode`.
+
+**Full mode** (default):
 
 ```
 backlog → grooming → implementing → testing → accepting → commit_to_git → done
 ```
 
+**Single mode** (`pipeline_mode: single`):
+
+```
+backlog → implementing → commit_to_git → done
+                      ↘ done  (when no files changed)
+```
+
+Single mode runs one agent that completes the entire task. There is no grooming,
+QA, or reviewer stage. After the implementing stage succeeds:
+- If the agent produced code changes (`files_changed` is non-empty), the task
+  proceeds to `commit_to_git` and then `done`.
+- If no files were changed, the task goes directly to `done`.
+
+Use `litehive add --single` to create a task in single pipeline mode.
+
 | Stage | Role | Description |
 |-------|------|-------------|
 | `backlog` | — | Task created but not yet started |
-| `grooming` | Planner | PM-style planning: clarify the user problem, define acceptance criteria, decompose scope, and produce a plan |
-| `implementing` | SWE | Write the code change |
-| `testing` | QA | Verify the change passes tests and review |
-| `accepting` | Reviewer | PM-style final review: validate the end-user outcome and decide done versus not-done |
+| `grooming` | Planner | PM-style planning: clarify the user problem, define acceptance criteria, decompose scope, and produce a plan *(full mode only)* |
+| `implementing` | SWE | Write the code change (or complete the entire task in single mode) |
+| `testing` | QA | Verify the change passes tests and review *(full mode only)* |
+| `accepting` | Reviewer | PM-style final review: validate the end-user outcome and decide done versus not-done *(full mode only)* |
 | `commit_to_git` | Runner | Record git checkpoint commit |
 | `done` | — | Task complete |
 
@@ -92,7 +109,9 @@ Each stage execution produces one verdict:
 
 ## Transition table
 
-Source: `_ROUTES` dict in `litehive/runner.py`.
+Source: `_ROUTES` and `_SINGLE_ROUTES` dicts in `litehive/runner/states.py`.
+
+### Full mode
 
 | Stage | Verdict | Next stage | Notes |
 |-------|---------|------------|-------|
@@ -103,6 +122,15 @@ Source: `_ROUTES` dict in `litehive/runner.py`.
 | testing | fail / reject | implementing | Task is requeued at `implementing` for another runnable pass; counts against retry limit |
 | accepting | pass / accept | commit_to_git | |
 | accepting | fail / reject | implementing | Task is requeued at `implementing` for another runnable pass; counts against retry limit |
+| commit_to_git | pass / accept | done | |
+| commit_to_git | fail / reject / blocked | — (flagged) | Commit failed |
+
+### Single mode
+
+| Stage | Verdict | Next stage | Notes |
+|-------|---------|------------|-------|
+| implementing | pass / accept + files changed | commit_to_git | |
+| implementing | pass / accept + no files changed | done | Skips commit when no code was produced |
 | commit_to_git | pass / accept | done | |
 | commit_to_git | fail / reject / blocked | — (flagged) | Commit failed |
 

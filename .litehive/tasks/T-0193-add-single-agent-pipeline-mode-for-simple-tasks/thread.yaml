@@ -1,0 +1,44 @@
+- role: planner
+  step: grooming
+  verdict: pass
+  message: "Groomed T-0193: Add single-agent pipeline mode for simple tasks.\n\nSCOPE:\
+    \ Add a pipeline_mode field (single|full) to TaskRecord. full = existing pipeline.\
+    \ single = backlog \u2192 implementing \u2192 commit_to_git \u2192 done, skipping\
+    \ grooming, testing, and accepting. commit_to_git always runs after implementing\
+    \ in single mode (handles the no-changes case gracefully). litehive add --single\
+    \ and --pipeline-mode single both create single-mode tasks.\n\nACCEPTANCE CRITERIA\
+    \ (8):\n1. task.yaml has a pipeline_mode field accepting 'full' or 'single'; tasks\
+    \ without the field default to 'full'\n2. pipeline_mode: single routes backlog\
+    \ \u2192 implementing \u2192 commit_to_git \u2192 done, skipping grooming, testing,\
+    \ and accepting\n3. pipeline_mode: full follows the existing pipeline: grooming\
+    \ \u2192 implementing \u2192 testing \u2192 accepting \u2192 commit_to_git \u2192\
+    \ done\n4. pipeline_mode defaults to 'full' when creating a task without an explicit\
+    \ flag\n5. litehive add --single <title> creates a task with pipeline_mode: single\n\
+    6. litehive add --pipeline-mode single <title> is the explicit form and produces\
+    \ the same result as --single\n7. litehive update T-XXXX --pipeline-mode single\
+    \ updates an existing task's pipeline_mode field in task.yaml\n8. commit_to_git\
+    \ in single mode completes without error when implementing makes no git changes,\
+    \ and the task moves to done\n\nPLAN (7 steps):\n1. Add pipeline_mode: Literal['full','single']\
+    \ = 'full' field to TaskRecord in litehive/models.py\n2. Add _STEPS_FROM_SINGLE\
+    \ and _ROUTES_SINGLE routing tables to litehive/runner/states.py\n3. Update TaskExecutionRunner.run()\
+    \ in litehive/runner/core.py to select routing tables based on pipeline_mode\n\
+    4. Add pipeline_mode parameter to create_task() and update_task_metadata() in\
+    \ litehive/tasks.py\n5. Add --single and --pipeline-mode flags to litehive add\
+    \ and litehive update in litehive/cli/parser.py\n6. Handle new flags in _cmd_add()\
+    \ and _cmd_update() in litehive/cli/tasks.py\n7. Write tests: single-mode routing,\
+    \ full-mode default, --single and --pipeline-mode CLI flags, update via litehive\
+    \ update\n\nKEY FILES:\n- litehive/models.py (TaskRecord field)\n- litehive/runner/states.py\
+    \ (_STEPS_FROM_SINGLE, _ROUTES_SINGLE)\n- litehive/runner/core.py (routing table\
+    \ selection)\n- litehive/tasks.py (create_task, update_task_metadata)\n- litehive/cli/parser.py\
+    \ (CLI flags)\n- litehive/cli/tasks.py (_cmd_add, _cmd_update)\n\nDESIGN NOTE:\
+    \ commit_to_git always runs after implementing in single mode. The existing commit_to_git\
+    \ stage handles 'nothing to commit' gracefully. No conditional routing needed.\n\
+    \nPM SIZING: moderate complexity, m effort."
+  files_changed: []
+  created_at: '2026-04-06T22:35:04+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: Implemented single-agent pipeline mode.
+  files_changed: []
+  created_at: '2026-04-06T23:07:08+00:00'

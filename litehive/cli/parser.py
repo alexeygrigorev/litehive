@@ -370,6 +370,12 @@ def build_parser():
         help="Explicit routing class for this task",
     )
     add.add_argument(
+        "--single",
+        action="store_true",
+        default=False,
+        help="Use single-agent pipeline mode: one agent completes the task with no grooming, QA, or review stages",
+    )
+    add.add_argument(
         "--mode",
         choices=["implementation", "tasks"],
         help="Task creation mode; defaults to `tasks` when `--task-type` is set, otherwise `implementation`",

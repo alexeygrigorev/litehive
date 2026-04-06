@@ -98,3 +98,24 @@ _ROUTES: dict[tuple[str, str], str] = {
     ("commit_to_git", "reject"): "flagged",
     ("commit_to_git", "blocked"): "flagged",
 }
+
+# Single-mode pipeline: backlog ──► implementing ──► commit_to_git ──► done
+# The transition from implementing → commit_to_git vs. done is resolved in the runner
+# based on whether files_changed is non-empty.
+_SINGLE_STEPS_FROM: dict[str, str] = {
+    "backlog": "implementing",
+    "implementing": "implementing",
+    "commit_to_git": "commit_to_git",
+}
+
+_SINGLE_ROUTES: dict[tuple[str, str], str] = {
+    # implementing ──► commit_to_git (runner may redirect to done when no files changed)
+    ("implementing", "pass"): "commit_to_git",
+    ("implementing", "accept"): "commit_to_git",
+    # commit_to_git ──► done (on success) or flagged (on any failure)
+    ("commit_to_git", "pass"): "done",
+    ("commit_to_git", "accept"): "done",
+    ("commit_to_git", "fail"): "flagged",
+    ("commit_to_git", "reject"): "flagged",
+    ("commit_to_git", "blocked"): "flagged",
+}

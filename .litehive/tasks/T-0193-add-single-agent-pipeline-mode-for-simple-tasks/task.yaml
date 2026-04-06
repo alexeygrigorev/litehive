@@ -55,6 +55,13 @@ subagents:
   path: subagents/SA-0004-reviewer
   sandboxed: false
   sandbox_summary: host
+- id: SA-0005
+  role: merge-resolver
+  engine: claude
+  status: running
+  path: subagents/SA-0005-merge-resolver
+  sandboxed: false
+  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0193 add-single-agent-pipeline-mode-for-simple-tasks'

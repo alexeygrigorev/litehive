@@ -3163,3 +3163,132 @@ def test_runner_stage_counts_persist_across_requeued_runs(tmp_path: Path) -> Non
     reloaded = get_task(tmp_path, task.id)
     assert reloaded is not None
     assert reloaded.runtime.stage_retry_counts.get("testing", 0) == 1
+
+
+# ── Single pipeline mode tests ─────────────────────────────────────────────────
+
+
+def test_single_mode_task_with_code_changes_goes_through_commit(tmp_path: Path) -> None:
+    """Single-mode tasks skip grooming/testing/accepting; if files changed, commit_to_git runs."""
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Quick fix", pipeline_mode="single", auto_commit=False)
+    assert task.pipeline_mode == "single"
+
+    stages_executed: list[str] = []
+
+    def executor(t, step):  # type: ignore[no-untyped-def]
+        stages_executed.append(step)
+        files = ["litehive/tasks.py"] if step == "implementing" else []
+        return StageReport(task_id=t.id, step=step, verdict="pass", summary=f"{step} ok", files_changed=files)
+
+    runner = TaskExecutionRunner(tmp_path, executor)
+    result = runner.run(task)
+
+    assert result.final_status == "done"
+    assert stages_executed == ["implementing", "commit_to_git"]
+    reports = tmp_path / ".litehive" / "tasks" / "T-0001-quick-fix" / "reports"
+    assert (reports / "implementing-001.yaml").exists()
+    assert (reports / "commit_to_git-002.yaml").exists()
+    assert not (reports / "grooming-001.yaml").exists()
+    assert not (reports / "testing-003.yaml").exists()
+    assert not (reports / "accepting-004.yaml").exists()
+
+
+def test_single_mode_task_without_code_changes_goes_directly_to_done(tmp_path: Path) -> None:
+    """Single-mode tasks with no files_changed skip commit_to_git and go directly to done."""
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Research task", pipeline_mode="single", auto_commit=False)
+
+    stages_executed: list[str] = []
+
+    def executor(t, step):  # type: ignore[no-untyped-def]
+        stages_executed.append(step)
+        return StageReport(task_id=t.id, step=step, verdict="pass", summary=f"{step} ok", files_changed=[])
+
+    runner = TaskExecutionRunner(tmp_path, executor)
+    result = runner.run(task)
+
+    assert result.final_status == "done"
+    assert stages_executed == ["implementing"]
+    task = require_task(tmp_path, task.id)
+    assert task.status == "done"
+    assert task.pipeline_status == "done"
+
+
+def test_single_mode_task_fail_routes_to_flagged(tmp_path: Path) -> None:
+    """Single-mode tasks that fail go to flagged, same as full mode."""
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Failing task", pipeline_mode="single", auto_commit=False)
+
+    def executor(t, step):  # type: ignore[no-untyped-def]
+        return StageReport(task_id=t.id, step=step, verdict="fail", summary="failed")
+
+    runner = TaskExecutionRunner(tmp_path, executor, max_retries=0)
+    result = runner.run(task)
+
+    assert result.final_status == "flagged"
+    task = require_task(tmp_path, task.id)
+    assert task.status == "flagged"
+
+
+def test_single_mode_task_skips_normalization(tmp_path: Path) -> None:
+    """Single-mode tasks are not rerouted to grooming even without acceptance criteria."""
+    ensure_workspace(tmp_path)
+    task = create_task(
+        tmp_path,
+        title="Simple task",
+        pipeline_mode="single",
+        goal="Do something",
+        auto_commit=False,
+    )
+    # Simulate a previous flagged state that would normally trigger normalization
+    task.pipeline_status = "implementing"  # type: ignore[assignment]
+    task.status = "flagged"
+    save_task(tmp_path, task)
+    task = require_task(tmp_path, task.id)
+
+    stages_executed: list[str] = []
+
+    def executor(t, step):  # type: ignore[no-untyped-def]
+        stages_executed.append(step)
+        return StageReport(task_id=t.id, step=step, verdict="pass", summary=f"{step} ok")
+
+    runner = TaskExecutionRunner(tmp_path, executor)
+    result = runner.run(task)
+
+    assert result.final_status == "done"
+    assert "grooming" not in stages_executed
+    assert "implementing" in stages_executed
+
+
+def test_create_task_pipeline_mode_field_persists(tmp_path: Path) -> None:
+    """pipeline_mode is persisted and loaded correctly from task.yaml."""
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Single task", pipeline_mode="single")
+    loaded = require_task(tmp_path, task.id)
+    assert loaded.pipeline_mode == "single"
+
+    task2 = create_task(tmp_path, title="Full task")
+    loaded2 = require_task(tmp_path, task2.id)
+    assert loaded2.pipeline_mode == "full"
+
+
+def test_full_mode_is_default_pipeline_mode(tmp_path: Path) -> None:
+    """Tasks created without pipeline_mode default to full mode."""
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Default task", auto_commit=False)
+    assert task.pipeline_mode == "full"
+
+    stages_executed: list[str] = []
+
+    def executor(t, step):  # type: ignore[no-untyped-def]
+        stages_executed.append(step)
+        return StageReport(task_id=t.id, step=step, verdict="pass", summary=f"{step} ok")
+
+    runner = TaskExecutionRunner(tmp_path, executor)
+    result = runner.run(task)
+
+    assert result.final_status == "done"
+    assert "grooming" in stages_executed
+    assert "testing" in stages_executed
+    assert "accepting" in stages_executed

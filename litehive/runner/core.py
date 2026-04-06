@@ -36,7 +36,7 @@ from litehive.tasks import (
     set_task_retry_state,
     task_dir,
 )
-from litehive.runner.states import _ROUTES, _STEPS_FROM
+from litehive.runner.states import _ROUTES, _SINGLE_ROUTES, _SINGLE_STEPS_FROM, _STEPS_FROM
 
 
 class StageExecutor(Protocol):
@@ -80,19 +80,23 @@ class TaskExecutionRunner:
         steps = 0
         rejections = task.runtime.retry_count
         last_verdict: str | None = None
+        single_mode = getattr(task, "pipeline_mode", "full") == "single"
+        steps_from = _SINGLE_STEPS_FROM if single_mode else _STEPS_FROM
+        routes = _SINGLE_ROUTES if single_mode else _ROUTES
 
         if task.pipeline_status == "done":
             return RunResult(final_status="done")
 
-        normalization_reason = needs_normalization(task)
-        if normalization_reason is not None:
-            task.pipeline_status = "grooming"  # type: ignore[assignment]
-            save_task(self.root, task)
-            append_journal(
-                self.root,
-                task,
-                f"Rerouted to grooming for normalization: {normalization_reason}",
-            )
+        if not single_mode:
+            normalization_reason = needs_normalization(task)
+            if normalization_reason is not None:
+                task.pipeline_status = "grooming"  # type: ignore[assignment]
+                save_task(self.root, task)
+                append_journal(
+                    self.root,
+                    task,
+                    f"Rerouted to grooming for normalization: {normalization_reason}",
+                )
 
         set_task_retry_state(
             self.root,
@@ -104,7 +108,7 @@ class TaskExecutionRunner:
         clear_task_outcome(self.root, task)
 
         while True:
-            current = _STEPS_FROM.get(task.pipeline_status)
+            current = steps_from.get(task.pipeline_status)
             if current is None:
                 return self._finish_run(
                     task,
@@ -115,7 +119,7 @@ class TaskExecutionRunner:
 
             missing_criteria_reason = (
                 missing_acceptance_criteria_reason(task)
-                if current in {"implementing", "testing", "accepting", "commit_to_git"}
+                if not single_mode and current in {"implementing", "testing", "accepting", "commit_to_git"}
                 else None
             )
             if missing_criteria_reason is not None:
@@ -312,7 +316,7 @@ class TaskExecutionRunner:
 
             steps += 1
             last_verdict = report.verdict
-            target = _ROUTES.get((current, report.verdict))
+            target = routes.get((current, report.verdict))
             if target is None and report.verdict == "reject" and current != "commit_to_git":
                 report.retry_decision = "retry"
                 self._write_report(task, report, steps)
@@ -433,6 +437,11 @@ class TaskExecutionRunner:
                         steps=steps,
                         last_verdict=last_verdict,
                     )
+
+            # Single mode: skip commit_to_git when no code changes were produced.
+            if single_mode and current == "implementing" and target == "commit_to_git":
+                if not report.files_changed:
+                    target = "done"
 
             if target == "implementing" and current in {"testing", "accepting"}:
                 rejections += 1
