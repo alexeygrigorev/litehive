@@ -13,7 +13,7 @@ import yaml
 from litehive.config import load_config
 from litehive.engine_monitoring import record_engine_execution, record_engine_observation
 from litehive.events import append_event, append_session_log, ensure_session_log
-from litehive.external_cli import CLIExecutionResult, ExternalCLIAdapter, parse_stage_report_text
+from litehive.engines.base import CLIExecutionResult, ExternalCLIAdapter, parse_stage_report_text
 from litehive.engines import (
     EngineError,
     classify_execution_interruption,
@@ -31,7 +31,7 @@ from litehive.models import (
     cap_feedback,
     utcnow,
 )
-from litehive.sandbox import SandboxError, SandboxLauncher
+from litehive.engines.sandbox import SandboxError, SandboxLauncher
 from litehive.tasks import (
     _atomic_write_gzip_text,
     _write_atomic_files,
@@ -973,6 +973,7 @@ class _SandboxedAdapter(ExternalCLIAdapter):
         resume_session_id: str | None = None,
         on_started=None,
         on_update=None,
+        inactivity_timeout_seconds: float = 0,
     ) -> CLIExecutionResult:
         if (
             _unwrap_bound_callable(getattr(self._adapter, "run_live", None))
@@ -986,6 +987,7 @@ class _SandboxedAdapter(ExternalCLIAdapter):
                 resume_session_id=resume_session_id,
                 on_started=on_started,
                 on_update=on_update,
+                inactivity_timeout_seconds=inactivity_timeout_seconds,
             )
         return super().run_live(
             prompt,
@@ -995,6 +997,7 @@ class _SandboxedAdapter(ExternalCLIAdapter):
             resume_session_id=resume_session_id,
             on_started=on_started,
             on_update=on_update,
+            inactivity_timeout_seconds=inactivity_timeout_seconds,
         )
 
     def render_transcript(self, execution: CLIExecutionResult) -> str:

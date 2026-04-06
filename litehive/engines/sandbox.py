@@ -5,7 +5,6 @@ Supports two backends:
 - ``bubblewrap``: lightweight namespace-based isolation using bwrap(1).
 """
 
-
 from dataclasses import dataclass
 import os
 from pathlib import Path, PurePosixPath
@@ -16,7 +15,7 @@ from litehive.config import (
     LitehiveConfig,
     SubagentResourceLimitsConfig,
 )
-from litehive.external_cli import CLIInvocation
+from litehive.engines.base import CLIInvocation
 from litehive.models import ResourceLimitEvent
 
 
@@ -98,9 +97,7 @@ class SandboxLauncher:
         policy = self._policy_for_engine(engine_name)
         limits = self.config.subagent_resource_limits
         sandbox_enabled = bool(limits.enabled) or (
-            self.config.external_engine_sandbox.enabled
-            and policy is not None
-            and policy.enabled
+            self.config.external_engine_sandbox.enabled and policy is not None and policy.enabled
         )
         if not sandbox_enabled:
             return SandboxPolicySummary(enabled=False)
@@ -123,11 +120,11 @@ class SandboxLauncher:
             cpu_count=limits.cpu_count if limits.enabled else None,
             process_limit=limits.process_limit if limits.enabled else None,
             environment=tuple(() if policy is None else policy.environment),
-            credential_inputs=tuple(() if policy is None else (item.env_var for item in policy.credential_inputs)),
+            credential_inputs=tuple(
+                () if policy is None else (item.env_var for item in policy.credential_inputs)
+            ),
             propagated_mounts=(
-                tuple(
-                    p for p in self.BWRAP_SYSTEM_RO_BINDS if Path(p).exists()
-                )
+                tuple(p for p in self.BWRAP_SYSTEM_RO_BINDS if Path(p).exists())
                 if self.config.external_engine_sandbox.backend == "bubblewrap"
                 else ()
             ),
@@ -151,14 +148,24 @@ class SandboxLauncher:
             )
         binary_path = shutil.which(binary_name)
         if binary_path is None:
-            raise SandboxError(f"Engine '{engine_name}' is unavailable: missing binary '{binary_name}'")
+            raise SandboxError(
+                f"Engine '{engine_name}' is unavailable: missing binary '{binary_name}'"
+            )
 
         if runtime_config.backend == "bubblewrap":
             return self._wrap_bubblewrap(
-                engine_name, binary_name, binary_path, invocation, summary,
+                engine_name,
+                binary_name,
+                binary_path,
+                invocation,
+                summary,
             )
         return self._wrap_docker(
-            engine_name, binary_name, binary_path, invocation, summary,
+            engine_name,
+            binary_name,
+            binary_path,
+            invocation,
+            summary,
         )
 
     def _wrap_docker(
@@ -184,7 +191,9 @@ class SandboxLauncher:
         )
 
         mounted_binary_name = Path(binary_path).name
-        container_binary_path = PurePosixPath(runtime_config.binary_mount_root) / mounted_binary_name
+        container_binary_path = (
+            PurePosixPath(runtime_config.binary_mount_root) / mounted_binary_name
+        )
         if container_argv:
             container_argv[0] = str(container_binary_path)
 
@@ -216,16 +225,18 @@ class SandboxLauncher:
                     read_only=workspace_mode == "ro",
                 ),
                 "--mount",
-                self._bind_mount_spec(Path(binary_path).resolve(), container_binary_path, read_only=True),
+                self._bind_mount_spec(
+                    Path(binary_path).resolve(), container_binary_path, read_only=True
+                ),
             ]
         )
 
         allowed_env: dict[str, str] = {}
-        for env_name in (() if policy is None else policy.environment):
+        for env_name in () if policy is None else policy.environment:
             value = invocation.env.get(env_name)
             if value is not None:
                 allowed_env[env_name] = value
-        for credential in (() if policy is None else policy.credential_inputs):
+        for credential in () if policy is None else policy.credential_inputs:
             raw_path = invocation.env.get(credential.env_var)
             if not raw_path:
                 continue
@@ -233,7 +244,9 @@ class SandboxLauncher:
             argv.extend(
                 [
                     "--mount",
-                    self._bind_mount_spec(host_path, PurePosixPath(credential.mount_path), read_only=True),
+                    self._bind_mount_spec(
+                        host_path, PurePosixPath(credential.mount_path), read_only=True
+                    ),
                 ]
             )
             allowed_env[credential.env_var] = credential.mount_path
@@ -308,7 +321,7 @@ class SandboxLauncher:
             argv.extend(["--ro-bind", resolved_binary, resolved_binary])
 
         # Credential mounts.
-        for credential in (() if policy is None else policy.credential_inputs):
+        for credential in () if policy is None else policy.credential_inputs:
             raw_path = invocation.env.get(credential.env_var)
             if not raw_path:
                 continue
@@ -318,11 +331,11 @@ class SandboxLauncher:
         # Clear environment and propagate only allowed variables.
         argv.append("--clearenv")
         allowed_env: dict[str, str] = {}
-        for env_name in (() if policy is None else policy.environment):
+        for env_name in () if policy is None else policy.environment:
             value = invocation.env.get(env_name)
             if value is not None:
                 allowed_env[env_name] = value
-        for credential in (() if policy is None else policy.credential_inputs):
+        for credential in () if policy is None else policy.credential_inputs:
             if invocation.env.get(credential.env_var):
                 allowed_env[credential.env_var] = credential.mount_path
         # Always propagate PATH and HOME for basic tool operation.
@@ -360,7 +373,16 @@ class SandboxLauncher:
             return None
 
         text = "\n".join(part for part in (stdout, stderr) if part).lower()
-        if any(marker in text for marker in ("oomkilled", "oom killed", "out of memory", "oom", "cannot allocate memory")):
+        if any(
+            marker in text
+            for marker in (
+                "oomkilled",
+                "oom killed",
+                "out of memory",
+                "oom",
+                "cannot allocate memory",
+            )
+        ):
             return self._resource_limit_event(
                 limits,
                 resource="memory",
@@ -409,7 +431,8 @@ class SandboxLauncher:
                 exit_code=exit_code,
             )
         if "cgroup" in text and any(
-            limit is not None for limit in (summary.memory_mb, summary.cpu_count, summary.process_limit)
+            limit is not None
+            for limit in (summary.memory_mb, summary.cpu_count, summary.process_limit)
         ):
             return self._resource_limit_event(
                 limits,
