@@ -280,6 +280,14 @@ def global_config_path() -> Path:
     return Path.home() / ".config" / "litehive" / "config.yaml"
 
 
+def daemon_config_dir() -> Path:
+    return global_config_path().parent
+
+
+def daemon_registry_path() -> Path:
+    return daemon_config_dir() / "daemons.yaml"
+
+
 def state_path(root: Path) -> Path:
     return workspace_dir(root) / "state.yaml"
 
