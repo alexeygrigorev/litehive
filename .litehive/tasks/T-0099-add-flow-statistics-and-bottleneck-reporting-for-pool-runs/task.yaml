@@ -96,6 +96,13 @@ subagents:
   path: subagents/SA-0011-reviewer
   sandboxed: false
   sandbox_summary: host
+- id: SA-0012
+  role: merge-resolver
+  engine: claude
+  status: running
+  path: subagents/SA-0012-merge-resolver
+  sandboxed: false
+  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0099 add-flow-statistics-and-bottleneck-reporting-for-pool-runs'
