@@ -1,0 +1,49 @@
+task_id: T-0081
+step: testing
+verdict: pass
+summary: 'Verified the new daemon CLI end to end. Ran: uv run pytest -q tests/test_workspace.py
+  -k ''daemon_foreground or daemon_background_lifecycle_and_global_instances_registry''
+  -> 4 passed. This covered foreground loop behavior (pre-status explicit stop, multi-iteration
+  restart-until-empty, continue-after-task_requeued) plus background lifecycle (run/status/instances/restart/stop),
+  duplicate-daemon refusal, global registry pruning, and registration under XDG config
+  home litehive/daemons.yaml instead of workspace .litehive. Manual smoke: launched
+  python -m litehive.main daemon run/status/instances/stop against an isolated temp
+  workspace with XDG_CONFIG_HOME set to a temp config dir and a fake nested uv command;
+  observed daemon registration in <tmp>/config-home/litehive/daemons.yaml, workspace-local
+  iteration logs under .litehive/logs/run-all/<timestamp>/, and instances output listing
+  only the live workspace daemon. Evidence supports all acceptance criteria, including
+  fresh subprocess-per-iteration pool wrapper semantics and global daemon registry
+  behavior.'
+feedback: 'Verified the new daemon CLI end to end. Ran: uv run pytest -q tests/test_workspace.py
+  -k ''daemon_foreground or daemon_background_lifecycle_and_global_instances_registry''
+  -> 4 passed. This covered foreground loop behavior (pre-status explicit stop, multi-iteration
+  restart-until-empty, continue-after-task_requeued) plus background lifecycle (run/status/instances/restart/stop),
+  duplicate-daemon refusal, global registry pruning, and registration under XDG config
+  home litehive/daemons.yaml instead of workspace .litehive. Manual smoke: launched
+  python -m litehive.main daemon run/status/instances/stop against an isolated temp
+  workspace with XDG_CONFIG_HOME set to a temp config dir and a fake nested uv command;
+  observed daemon registration in <tmp>/config-home/litehive/daemons.yaml, workspace-local
+  iteration logs under .litehive/logs/run-all/<timestamp>/, and instances output listing
+  only the live workspace daemon. Evidence supports all acceptance criteria, including
+  fresh subprocess-per-iteration pool wrapper semantics and global daemon registry
+  behavior.'
+files_changed: []
+follow_up_tasks: []
+created_follow_up_task_ids: []
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 168
+hook_results: []
+created_at: '2026-04-05T15:18:28+00:00'

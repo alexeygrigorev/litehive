@@ -1,5 +1,6 @@
 from tests.workspace_helpers import *  # noqa: F401,F403
 
+
 def test_create_task_persists_folder_and_queue(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
 
@@ -11,6 +12,7 @@ def test_create_task_persists_folder_and_queue(tmp_path: Path) -> None:
     assert len(tasks) == 1
     assert state.queue == ["T-0001"]
     assert (tmp_path / ".litehive" / "tasks" / "T-0001-fix-login-race" / "task.yaml").exists()
+
 
 def test_save_task_rolls_back_task_record_when_runtime_persist_fails(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -36,6 +38,7 @@ def test_save_task_rolls_back_task_record_when_runtime_persist_fails(
     assert refreshed.status == "queued"
     assert refreshed.pipeline_status == "backlog"
     assert refreshed.runtime.execution_status == "idle"
+
 
 def test_workspace_transition_writes_preserve_task_added_after_state_snapshot(
     tmp_path: Path,
@@ -78,6 +81,7 @@ print(json.dumps({
 
     assert result.stdout.strip() == '{"queue": ["T-0002", "T-0003"], "next_task_number": 3}'
 
+
 def test_create_task_preserves_runner_queue_changes_after_state_snapshot(tmp_path: Path) -> None:
     env = os.environ.copy()
     env["PYTHONPATH"] = str(Path(__file__).resolve().parents[1])
@@ -118,6 +122,7 @@ print(json.dumps({"id": added.id, "queue": load_state(root).queue}))
     )
 
     assert result.stdout.strip() == '{"id": "T-0003", "queue": ["T-0002", "T-0001", "T-0003"]}'
+
 
 def test_create_follow_up_tasks_preserves_runner_queue_changes_after_state_snapshot(
     tmp_path: Path,
@@ -174,6 +179,7 @@ print(json.dumps({"ids": [task.id for task in created], "queue": load_state(root
         == '{"ids": ["T-0003", "T-0004"], "queue": ["T-0002", "T-0001", "T-0003", "T-0004"]}'
     )
 
+
 def test_create_task_seeds_next_task_number_from_existing_workspace_state(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     create_task(tmp_path, title="Existing task")
@@ -188,6 +194,7 @@ def test_create_task_seeds_next_task_number_from_existing_workspace_state(tmp_pa
 
     assert created.id == "T-0003"
     assert load_state(tmp_path).next_task_number == 3
+
 
 def test_create_task_uses_persisted_next_task_number_without_rescanning(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -204,6 +211,7 @@ def test_create_task_uses_persisted_next_task_number_without_rescanning(
 
     assert created.id == "T-0002"
     assert load_state(tmp_path).next_task_number == 2
+
 
 def test_create_task_seeds_tasks_mode_template_defaults(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
@@ -237,6 +245,7 @@ def test_create_task_seeds_tasks_mode_template_defaults(tmp_path: Path) -> None:
     assert "### Question and Scope" in brief
     assert "Define what is being investigated and what is out of scope." in brief
     assert "_TBD_" in brief
+
 
 @pytest.mark.parametrize(
     ("task_type", "title"),
@@ -278,6 +287,7 @@ def test_create_task_seeds_requested_task_type_templates(
         assert f"### {stub['title']}" in brief
         assert stub["prompt"] in brief
 
+
 def test_intake_prompt_uses_codehive_style_guidance() -> None:
     prompt = intake_prompt("Need a rough task from this brain dump.")
 
@@ -294,6 +304,7 @@ def test_intake_prompt_uses_codehive_style_guidance() -> None:
     assert "Treat the original dump as the authoritative source of detail." in prompt
     assert "TITLE: <concise rough task title>" in prompt
     assert "GOAL: <1-3 sentence high-level goal statement>" in prompt
+
 
 def test_intake_command_creates_linked_task_from_freeform_dump(
     tmp_path: Path,
@@ -372,6 +383,7 @@ def test_intake_command_creates_linked_task_from_freeform_dump(
     assert "Created task T-0001: Capture queue visibility gaps" in output
     assert "Original dump preserved at:" in output
 
+
 def test_intake_command_rolls_back_created_task_when_post_create_write_fails(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -426,6 +438,7 @@ def test_intake_command_rolls_back_created_task_when_post_create_write_fails(
     assert load_state(tmp_path).queue == []
     assert list((tmp_path / ".litehive" / "tasks").iterdir()) == []
 
+
 def test_update_task_fills_only_unset_template_fields_for_typed_tasks(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     task = create_task(
@@ -443,6 +456,7 @@ def test_update_task_fills_only_unset_template_fields_for_typed_tasks(tmp_path: 
     assert updated.acceptance_criteria == ["Call out the highest-risk regression first."]
     assert updated.constraints == tasks_module.TASK_TEMPLATES["review"]["constraints"]
     assert updated.plan == tasks_module.TASK_TEMPLATES["review"]["plan"]
+
 
 def test_create_task_preserves_explicit_fields_when_seeding_template_defaults(
     tmp_path: Path,
@@ -463,6 +477,7 @@ def test_create_task_preserves_explicit_fields_when_seeding_template_defaults(
     assert task.constraints
     assert task.plan
 
+
 def test_create_task_persists_dependencies(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
 
@@ -478,6 +493,7 @@ def test_create_task_persists_dependencies(tmp_path: Path) -> None:
 
     assert persisted is not None
     assert persisted.depends_on == [first.id, second.id]
+
 
 def test_subagent_artifacts_exist_while_engine_is_running(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -550,7 +566,7 @@ def test_subagent_artifacts_exist_while_engine_is_running(
         def render_transcript(self, execution: CLIExecutionResult) -> str:
             return execution.transcript
 
-    monkeypatch.setattr("litehive.subagents.get_engine", lambda _: FakeEngine())
+    monkeypatch.setattr("litehive.subagents._execution.get_engine", lambda _: FakeEngine())
 
     result = manager.run(task, role="swe", engine_name="codex", prompt="implement it")
 
@@ -601,6 +617,7 @@ def test_subagent_artifacts_exist_while_engine_is_running(
     monitoring = load_engine_monitoring(tmp_path)
     assert monitoring.engines["codex"].invocation_count == 1
     assert monitoring.engines["codex"].success_count == 1
+
 
 def test_subagent_artifacts_update_live_during_streaming_execution(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -673,7 +690,7 @@ def test_subagent_artifacts_update_live_during_streaming_execution(
         def render_transcript(self, execution: CLIExecutionResult) -> str:
             return execution.transcript
 
-    monkeypatch.setattr("litehive.subagents.get_engine", lambda _: FakeStreamingEngine())
+    monkeypatch.setattr("litehive.subagents._execution.get_engine", lambda _: FakeStreamingEngine())
 
     result = manager.run(task, role="swe", engine_name="codex", prompt="stream it")
 
@@ -695,6 +712,7 @@ def test_subagent_artifacts_update_live_during_streaming_execution(
     assert refreshed is not None
     assert refreshed.runtime.last_subagent is not None
     assert refreshed.runtime.last_subagent.pid == 5151
+
 
 def test_subagent_manager_records_copilot_quota_monitoring_during_live_updates(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -753,7 +771,7 @@ def test_subagent_manager_records_copilot_quota_monitoring_during_live_updates(
         return update
 
     monkeypatch.setattr(adapter, "run_live", fake_run_live)
-    monkeypatch.setattr("litehive.subagents.get_engine", lambda _: adapter)
+    monkeypatch.setattr("litehive.subagents._execution.get_engine", lambda _: adapter)
 
     result = manager.run(task, role="swe", engine_name="copilot", prompt="monitor quota")
 
@@ -766,6 +784,7 @@ def test_subagent_manager_records_copilot_quota_monitoring_during_live_updates(
     assert record.usage is not None
     assert record.usage.used == 60
     assert record.usage.remaining == 40
+
 
 def test_subagent_artifacts_stream_to_disk_while_process_is_still_running(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -804,7 +823,7 @@ def test_subagent_artifacts_stream_to_disk_while_process_is_still_running(
                 "printf 'FILES_CHANGED:\\n- litehive/external_cli.py\\nTESTS_ADDED: 1\\nTESTS_PASSING: 1\\nWARNINGS:\\n';",
             ]
 
-    monkeypatch.setattr("litehive.subagents.get_engine", lambda _: TestAdapter())
+    monkeypatch.setattr("litehive.subagents._execution.get_engine", lambda _: TestAdapter())
 
     result_holder: dict[str, SubagentResult] = {}
     error_holder: list[BaseException] = []
@@ -868,6 +887,7 @@ def test_subagent_artifacts_stream_to_disk_while_process_is_still_running(
     )
     assert (base / "stderr.txt").read_text(encoding="utf-8") == "live stderr\n"
 
+
 def test_subagent_manager_kills_stale_live_process_using_stdout_mtime(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -927,8 +947,10 @@ def test_subagent_manager_kills_stale_live_process_using_stdout_mtime(
 
     killed_pids: list[int] = []
 
-    monkeypatch.setattr("litehive.subagents.get_engine", lambda _: FakeStreamingEngine())
-    monkeypatch.setattr("litehive.subagents.os.kill", lambda pid, sig: killed_pids.append(pid))
+    monkeypatch.setattr("litehive.subagents._execution.get_engine", lambda _: FakeStreamingEngine())
+    monkeypatch.setattr(
+        "litehive.subagents._execution.os.kill", lambda pid, sig: killed_pids.append(pid)
+    )
 
     result = manager.run(task, role="swe", engine_name="codex", prompt="stream it")
 
@@ -945,6 +967,7 @@ def test_subagent_manager_kills_stale_live_process_using_stdout_mtime(
     session = yaml.safe_load((base / "session.yaml").read_text(encoding="utf-8"))
     assert session["status"] == "failed"
     assert session["exit_code"] == 124
+
 
 def test_subagent_manager_avoids_existing_folder_collisions_for_retries(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -998,13 +1021,14 @@ def test_subagent_manager_avoids_existing_folder_collisions_for_retries(
         def render_transcript(self, execution: CLIExecutionResult) -> str:
             return execution.transcript
 
-    monkeypatch.setattr("litehive.subagents.get_engine", lambda _: FakeEngine())
+    monkeypatch.setattr("litehive.subagents._execution.get_engine", lambda _: FakeEngine())
 
     result = manager.run(task, role="swe", engine_name="codex", prompt="retry safely")
 
     assert result.ref.id == "SA-0002"
     assert result.ref.path == "subagents/SA-0002-swe"
     assert (task_dir(tmp_path, task) / "subagents" / "SA-0002-swe").exists()
+
 
 def test_subagent_streaming_pid_persists_before_first_live_output(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -1061,7 +1085,9 @@ def test_subagent_streaming_pid_persists_before_first_live_output(
         def render_transcript(self, execution: CLIExecutionResult) -> str:
             return execution.transcript
 
-    monkeypatch.setattr("litehive.subagents.get_engine", lambda _: SilentStreamingEngine())
+    monkeypatch.setattr(
+        "litehive.subagents._execution.get_engine", lambda _: SilentStreamingEngine()
+    )
 
     result = manager.run(task, role="swe", engine_name="codex", prompt="stream it silently")
 
@@ -1077,6 +1103,7 @@ def test_subagent_streaming_pid_persists_before_first_live_output(
     assert refreshed.runtime.active_subagent is None
     assert refreshed.runtime.last_subagent is not None
     assert refreshed.runtime.last_subagent.pid == 6161
+
 
 def test_subagent_artifacts_capture_sandbox_metadata(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -1131,7 +1158,9 @@ def test_subagent_artifacts_capture_sandbox_metadata(
 
     monkeypatch.setattr("shutil.which", lambda binary: f"/usr/bin/{binary}")
     monkeypatch.setattr("subprocess.Popen", FakePopen)
-    monkeypatch.setattr("litehive.subagents._supports_live_on_started", lambda engine: False)
+    monkeypatch.setattr(
+        "litehive.subagents._execution._supports_live_on_started", lambda engine: False
+    )
     monkeypatch.setenv("OPENAI_API_KEY", "secret")
     monkeypatch.setenv("ANTHROPIC_API_KEY", "should-not-leak")
 
@@ -1153,6 +1182,7 @@ def test_subagent_artifacts_capture_sandbox_metadata(
     assert refreshed.runtime.last_subagent is not None
     assert refreshed.runtime.last_subagent.sandboxed is True
     assert refreshed.runtime.last_subagent.sandbox_summary.startswith("sandbox[")
+
 
 def test_subagent_artifacts_capture_structured_resource_limit_event(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -1193,7 +1223,9 @@ def test_subagent_artifacts_capture_structured_resource_limit_event(
 
     monkeypatch.setattr("shutil.which", lambda binary: f"/usr/bin/{binary}")
     monkeypatch.setattr("subprocess.Popen", FakePopen)
-    monkeypatch.setattr("litehive.subagents._supports_live_on_started", lambda engine: False)
+    monkeypatch.setattr(
+        "litehive.subagents._execution._supports_live_on_started", lambda engine: False
+    )
 
     result = manager.run(task, role="swe", engine_name="codex", prompt="implement it")
 
@@ -1221,6 +1253,7 @@ def test_subagent_artifacts_capture_structured_resource_limit_event(
     assert (
         refreshed.runtime.last_subagent.resource_limit_event.reason == "memory limit exceeded (OOM)"
     )
+
 
 def test_subagent_manager_marks_signal_terminated_execution_as_interrupted(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -1261,7 +1294,7 @@ def test_subagent_manager_marks_signal_terminated_execution_as_interrupted(
         def render_transcript(self, execution: CLIExecutionResult) -> str:
             return execution.transcript
 
-    monkeypatch.setattr("litehive.subagents.get_engine", lambda _: InterruptedEngine())
+    monkeypatch.setattr("litehive.subagents._execution.get_engine", lambda _: InterruptedEngine())
 
     result = manager.run(task, role="swe", engine_name="codex", prompt="resume safely")
 
@@ -1283,6 +1316,7 @@ def test_subagent_manager_marks_signal_terminated_execution_as_interrupted(
     assert refreshed.runtime.last_subagent.pid == 7171
     assert refreshed.runtime.last_subagent.interruption_reason == "execution interrupted"
 
+
 def test_subagent_manager_uses_inherited_run_live_when_available(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -1291,7 +1325,7 @@ def test_subagent_manager_uses_inherited_run_live_when_available(
     manager = SubagentManager(tmp_path)
     engine = get_engine("codex")
 
-    monkeypatch.setattr("litehive.subagents.get_engine", lambda _: engine)
+    monkeypatch.setattr("litehive.subagents._execution.get_engine", lambda _: engine)
     monkeypatch.setattr(engine, "is_available", lambda: True)
 
     calls: list[str] = []
@@ -1335,13 +1369,14 @@ def test_subagent_manager_uses_inherited_run_live_when_available(
             pid=4242,
         )
 
-    monkeypatch.setattr("litehive.external_cli.ExternalCLIAdapter.run", fail_run)
-    monkeypatch.setattr("litehive.external_cli.ExternalCLIAdapter.run_live", fake_run_live)
+    monkeypatch.setattr("litehive.engines.base.ExternalCLIAdapter.run", fail_run)
+    monkeypatch.setattr("litehive.engines.base.ExternalCLIAdapter.run_live", fake_run_live)
 
     result = manager.run(task, role="swe", engine_name="codex", prompt="implement it")
 
     assert calls == ["run_live"]
     assert result.failure == EngineFailure(kind="execution_limit", reason="usage limit reached")
+
 
 def test_subagent_manager_prefers_instance_run_override_over_inherited_run_live(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -1351,7 +1386,7 @@ def test_subagent_manager_prefers_instance_run_override_over_inherited_run_live(
     manager = SubagentManager(tmp_path)
     engine = get_engine("codex")
 
-    monkeypatch.setattr("litehive.subagents.get_engine", lambda _: engine)
+    monkeypatch.setattr("litehive.subagents._execution.get_engine", lambda _: engine)
     monkeypatch.setattr(engine, "is_available", lambda: True)
 
     calls: list[str] = []
@@ -1382,12 +1417,13 @@ def test_subagent_manager_prefers_instance_run_override_over_inherited_run_live(
         raise AssertionError("run_live should not be used when only run is overridden")
 
     monkeypatch.setattr(engine, "run", fake_run)
-    monkeypatch.setattr("litehive.external_cli.ExternalCLIAdapter.run_live", fail_run_live)
+    monkeypatch.setattr("litehive.engines.base.ExternalCLIAdapter.run_live", fail_run_live)
 
     result = manager.run(task, role="swe", engine_name="codex", prompt="implement it")
 
     assert calls == ["run"]
     assert result.failure == EngineFailure(kind="execution_limit", reason="usage limit reached")
+
 
 def test_subagent_manager_prefers_class_run_override_over_inherited_run_live(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -1449,19 +1485,21 @@ def test_subagent_manager_prefers_class_run_override_over_inherited_run_live(
     def fail_run_live(*args, **kwargs) -> CLIExecutionResult:  # type: ignore[no-untyped-def]
         raise AssertionError("run_live should not be used when only run is overridden")
 
-    monkeypatch.setattr("litehive.subagents.get_engine", lambda _: engine)
-    monkeypatch.setattr("litehive.external_cli.ExternalCLIAdapter.run_live", fail_run_live)
+    monkeypatch.setattr("litehive.subagents._execution.get_engine", lambda _: engine)
+    monkeypatch.setattr("litehive.engines.base.ExternalCLIAdapter.run_live", fail_run_live)
 
     result = manager.run(task, role="swe", engine_name="codex", prompt="implement it")
 
     assert calls == ["run"]
     assert result.failure == EngineFailure(kind="execution_limit", reason="usage limit reached")
 
+
 def test_create_task_rejects_missing_dependency(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
 
     with pytest.raises(ValueError, match="Task T-9999 not found"):
         create_task(tmp_path, title="Dependent task", depends_on=["T-9999"])
+
 
 def test_create_task_rejects_dependency_cycle(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
@@ -1483,8 +1521,8 @@ def test_subagent_prunes_superseded_raw_artifacts_and_compresses_latest_snapshot
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Prune superseded artifacts")
     manager = SubagentManager(tmp_path)
-    monkeypatch.setattr("litehive.subagents._COMPRESS_STREAM_ARTIFACT_MIN_BYTES", 1)
-    monkeypatch.setattr("litehive.subagents._COMPRESS_TEXT_ARTIFACT_MIN_BYTES", 1)
+    monkeypatch.setattr("litehive.subagents._execution._COMPRESS_STREAM_ARTIFACT_MIN_BYTES", 1)
+    monkeypatch.setattr("litehive.subagents._execution._COMPRESS_TEXT_ARTIFACT_MIN_BYTES", 1)
 
     class FakeEngine:
         name = "codex"
@@ -1523,7 +1561,7 @@ def test_subagent_prunes_superseded_raw_artifacts_and_compresses_latest_snapshot
             return execution.transcript
 
     engine = FakeEngine()
-    monkeypatch.setattr("litehive.subagents.get_engine", lambda _: engine)
+    monkeypatch.setattr("litehive.subagents._execution.get_engine", lambda _: engine)
 
     manager.run(task, role="swe", engine_name="codex", prompt="first")
     manager.run(task, role="qa", engine_name="codex", prompt="second")

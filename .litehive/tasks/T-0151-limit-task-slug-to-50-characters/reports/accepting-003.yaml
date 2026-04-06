@@ -1,0 +1,49 @@
+task_id: T-0151
+step: accepting
+verdict: pass
+summary: "PASS \u2014 T-0151: Limit task slug to 50 characters"
+feedback: "PASS \u2014 T-0151: Limit task slug to 50 characters\n\n## Verified\n\n\
+  1. **slugify() truncates output to at most 50 characters** \u2014 MET. Confirmed\
+  \ at litehive/tasks.py:1101-1111. max_length=50 default parameter with truncation\
+  \ logic. Manual test: slugify('this-is-a-very-long-task-slug-that-should-be-truncated-at-fifty-characters-or-fewer')\
+  \ returns 44-char slug 'this-is-a-very-long-task-slug-that-should-be'.\n\n2. **Truncation\
+  \ avoids cutting mid-word and strips trailing hyphens** \u2014 MET. rsplit(\"-\"\
+  , 1)[0] at line 1110 ensures word-boundary truncation. strip(\"-\") at line 1111\
+  \ removes trailing hyphens. Hard truncation fallback when no hyphen present.\n\n\
+  3. **Existing tasks with longer slugs load and resolve correctly** \u2014 MET by\
+  \ design. slugify() is only called at task creation. task_dir() reads stored slug\
+  \ from task.yaml, never re-slugifies. Directory scanning uses T-(\\d{4})- prefix\
+  \ pattern.\n\n4. **Unit test covers slug truncation and word-boundary trimming**\
+  \ \u2014 MET. 5 tests in tests/test_slugify.py all passing: short slugs unchanged,\
+  \ truncation at 50 chars with word boundary, exactly 50 chars unchanged, word-boundary\
+  \ trimming, empty/special-char input.\n\n## Evidence\n- git diff HEAD shows 10 insertions\
+  \ in litehive/tasks.py\n- tests/test_slugify.py exists with 5 tests\n- uv run pytest\
+  \ tests/test_slugify.py -v \u2014 5/5 passed\n- Manual verification confirms truncation\
+  \ at word boundary\n\nSTAGE_RESULT:\n{\"verdict\":\"pass\",\"summary\":\"slugify()\
+  \ correctly truncates to 50 chars at word boundaries; 5/5 tests pass; existing long\
+  \ slugs unaffected\",\"files_changed\":[\"litehive/tasks.py\",\"tests/test_slugify.py\"\
+  ],\"tests\":{\"added\":5,\"passing\":5},\"warnings\":[],\"follow_up_tasks\":[],\"\
+  acceptance_criteria\":[\"slugify() truncates output to at most 50 characters \u2014\
+  \ MET\",\"Truncation avoids cutting mid-word and strips trailing hyphens \u2014\
+  \ MET\",\"Existing tasks with longer slugs load and resolve correctly \u2014 MET\"\
+  ,\"Unit test covers slug truncation and word-boundary trimming \u2014 MET\"]}"
+files_changed: []
+follow_up_tasks: []
+created_follow_up_task_ids: []
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 35
+hook_results: []
+created_at: '2026-04-05T16:40:41+00:00'

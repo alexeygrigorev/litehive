@@ -71,12 +71,12 @@ from litehive.config import (
     resolve_process_profile,
 )
 
-from litehive.engine_monitoring import (
+from litehive.observability import (
     load_engine_monitoring,
     record_engine_execution,
 )
 
-from litehive.external_cli import (
+from litehive.engines.base import (
     AdapterCapabilities,
     CLIExecutionResult,
     ExternalCLIAdapter,
@@ -107,7 +107,7 @@ from litehive.models import (
 
 from litehive.observability import render_task_summary
 
-from litehive.sandbox import SandboxLauncher
+from litehive.engines.sandbox import SandboxLauncher
 
 from litehive.runtime import (
     EngineBudgetLedger,
@@ -180,6 +180,7 @@ from litehive.tasks import (
 
 from litehive.web import build_workspace_snapshot, read_session_view
 
+
 def _block_runner_lock(monkeypatch: pytest.MonkeyPatch) -> None:
     real_flock = tasks_module.fcntl.flock
 
@@ -189,6 +190,7 @@ def _block_runner_lock(monkeypatch: pytest.MonkeyPatch) -> None:
         return real_flock(fd, flags)
 
     monkeypatch.setattr("litehive.tasks.fcntl.flock", fake_flock)
+
 
 def _fail_atomic_write_on_path(
     monkeypatch: pytest.MonkeyPatch, failing_path: Path, message: str = "write failed"
@@ -202,21 +204,26 @@ def _fail_atomic_write_on_path(
 
     monkeypatch.setattr("litehive.tasks._atomic_write_text", fail_on_selected_write)
 
+
 def _latest_pool_run_report(root: Path) -> dict[str, object]:
     reports = sorted((root / ".litehive" / "logs" / "pool-runs").glob("*.yaml"))
     assert reports
     return yaml.safe_load(reports[-1].read_text(encoding="utf-8")) or {}
 
+
 def _run(cmd: list[str], cwd: Path) -> str:
     proc = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, check=True)
     return proc.stdout.strip()
+
 
 def _git_status_without_litehive(cwd: Path) -> list[str]:
     status = _run(["git", "status", "--short"], cwd)
     return [line for line in status.splitlines() if line and not line.endswith(".litehive/")]
 
+
 def _repo_root() -> Path:
     return Path(__file__).resolve().parents[1]
+
 
 def _with_fake_uv(fake_uv: Path, *, xdg_config_home: Path | None = None) -> dict[str, str]:
     env = os.environ.copy()
@@ -225,6 +232,7 @@ def _with_fake_uv(fake_uv: Path, *, xdg_config_home: Path | None = None) -> dict
         env["XDG_CONFIG_HOME"] = str(xdg_config_home)
     return env
 
+
 def _write_fake_uv(tmp_path: Path, script: str) -> Path:
     fake_bin = tmp_path / "bin"
     fake_bin.mkdir(exist_ok=True)
@@ -232,6 +240,7 @@ def _write_fake_uv(tmp_path: Path, script: str) -> Path:
     fake_uv.write_text(script, encoding="utf-8")
     fake_uv.chmod(0o755)
     return fake_uv
+
 
 def _init_git_repo(tmp_path: Path) -> str:
     _run(["git", "init"], tmp_path)
@@ -242,10 +251,12 @@ def _init_git_repo(tmp_path: Path) -> str:
     _run(["git", "commit", "-m", "initial"], tmp_path)
     return _run(["git", "rev-parse", "HEAD"], tmp_path)
 
+
 def _commit_repo_state(cwd: Path, message: str = "baseline") -> str:
     _run(["git", "add", "-A"], cwd)
     _run(["git", "commit", "-m", message], cwd)
     return _run(["git", "rev-parse", "HEAD"], cwd)
+
 
 def _completed_subagent_result(
     tmp_path: Path, step: str, *, engine_name: str = "codex"
@@ -289,6 +300,7 @@ def _completed_subagent_result(
         transcript="",
         exit_code=0,
     )
+
 
 def _stage_subagent_result(
     cwd: Path,
@@ -340,6 +352,7 @@ def _stage_subagent_result(
         exit_code=0,
     )
 
+
 def _resource_limited_subagent_result(
     tmp_path: Path,
     step: str,
@@ -383,6 +396,7 @@ def _resource_limited_subagent_result(
         ),
     )
 
+
 def _interrupted_subagent_result(
     tmp_path: Path, step: str, *, engine_name: str = "codex"
 ) -> SubagentResult:
@@ -409,6 +423,7 @@ def _interrupted_subagent_result(
             reason="execution interrupted",
         ),
     )
+
 
 def _successful_stage_execution(tmp_path: Path, adapter: str, step: str) -> CLIExecutionResult:
     return CLIExecutionResult(

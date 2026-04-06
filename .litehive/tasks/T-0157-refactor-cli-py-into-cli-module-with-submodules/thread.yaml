@@ -1,0 +1,177 @@
+- role: planner
+  step: grooming
+  verdict: pass
+  message: 'GROOMING COMPLETE for T-0157.
+
+
+    ## Current State
+
+    litehive/cli.py is a 3420-line monolith containing all CLI command handlers, argparse
+    definitions, pool reporting, dry-run planning, argument parsing helpers, and the
+    main() dispatch.
+
+
+    ## Proposed Decomposition
+
+
+    ### Shared helper modules:
+
+    - cli/_pool.py (~180 lines): pool summary report helpers (_task_stage_outcomes,
+    _pool_task_report_entry, _pending_pool_tasks, _resumable_pool_tasks, _closed_pool_tasks,
+    _format_pool_task_report_line, _pool_stop_condition_label, _pool_no_useful_progress_report,
+    _print_pool_summary_report, _pool_summary_report_data, _pool_summary_report_lines,
+    _ensure_pool_summary_report_fields, _write_pool_summary_report, _write_durable_pool_run_report)
+
+    - cli/_dry_run.py (~100 lines): dry-run planning (_determine_dry_run_stop_reason,
+    _plan_pool_dry_run, _plan_single_task_dry_run, _print_pool_dry_run_plan, _budget_ledger_from_stop_conditions)
+
+    - cli/_parse.py (~250 lines): argument parsing helpers (_parse_dependency_ids,
+    _parse_engine_int_map, _parse_task_engine_routing, _parse_runner_hooks, _parse_acceptance_criteria,
+    _parse_text_list_option, _parse_human_checkpoints, _RICH_TASK_UPDATE_KEYS, _normalize_yaml_text_list,
+    _parse_rich_task_update_document, _editable_task_update_payload, _render_task_update_template,
+    _load_rich_task_update_file, _resolve_editor_command, _collect_editor_task_updates,
+    _merge_task_updates)
+
+    - cli/_display.py (~40 lines): formatting helpers (_task_engine_label, _task_model_label,
+    _task_dependencies_label, _task_interruption_label, _format_engine_int_map, _format_execution_retry_policies,
+    _workspace_project_name, _resolve_litehive_source_root, _git_output, _prepare_patch_branch,
+    _fallback_intake_title, _fallback_intake_goal, _link_intake_brief_to_source, _cli_override_or_default)
+
+
+    ### Command group modules:
+
+    - cli/configure.py (~75 lines): _cmd_configure
+
+    - cli/status.py (~250 lines): _cmd_status, _cmd_queue, _cmd_repair
+
+    - cli/engine.py (~20 lines): _cmd_engine
+
+    - cli/daemon.py (~80 lines): _cmd_daemon_run, _cmd_daemon_status, _cmd_daemon_stop,
+    _cmd_daemon_restart, _cmd_daemon_instances, _cmd_daemon_worker
+
+    - cli/run.py (~330 lines): _cmd_run, _cmd_run_drain, _cmd_run_single
+
+    - cli/tasks.py (~400 lines): _cmd_add, _cmd_update, _cmd_issue, _cmd_intake
+
+    - cli/queue.py (~350 lines): _cmd_move, _cmd_promote, _cmd_prioritize, _cmd_requeue_task,
+    _cmd_resume_task, _cmd_abandon_task, _cmd_stop_task, _cmd_switch_task, _cmd_close_task,
+    _cmd_rollback, _cmd_recover, _cmd_dirty_worktree_gate, _launch_app
+
+    - cli/report.py (~30 lines): _cmd_report
+
+
+    ### Top level:
+
+    - cli/parser.py (~840 lines): build_parser() with all subparser registrations,
+    TASK_TYPE_CHOICES, UPSTREAM_CONTRIBUTION_CHOICES
+
+    - cli/__init__.py (~100 lines): main() dispatch, re-exports of all _cmd_* functions
+    and build_parser so that existing ''from litehive.cli import _cmd_engine'' calls
+    in tests continue to work unchanged
+
+
+    ## Backward Compatibility
+
+    Key import sites that must continue to work:
+
+    - litehive/main.py: imports litehive.cli.main
+
+    - tests/workspace_helpers.py: imports 15+ _cmd_* functions and build_parser from
+    litehive.cli
+
+    - tests/test_config_and_run_cli.py: imports _cmd_engine, _cmd_configure, build_parser,
+    _cmd_run
+
+    - tests/test_engine_variants_and_timeline.py: imports _cmd_configure
+
+    - Thread artifacts reference litehive.cli._cmd_dirty_worktree_gate
+
+
+    ## Implementation Steps
+
+    1. Create cli/ directory with __init__.py
+
+    2. Extract helper modules (_pool.py, _dry_run.py, _parse.py, _display.py)
+
+    3. Extract command group modules (configure.py, status.py, engine.py, daemon.py,
+    run.py, tasks.py, queue.py, report.py)
+
+    4. Extract parser.py
+
+    5. Wire up __init__.py with main() dispatch and re-exports
+
+    6. Remove old cli.py
+
+    7. Run all tests to verify no regressions
+
+
+    ## PM Sizing
+
+    PM_COMPLEXITY: moderate
+
+    PLANNED_EFFORT: m'
+  files_changed: []
+  created_at: '2026-04-05T18:13:47+00:00'
+- role: qa
+  step: testing
+  verdict: pass
+  message: "QA PASS for T-0157 CLI refactoring. Verified: (1) litehive/cli/ is a proper\
+    \ package with 14 submodules covering all command groups (configure, engine, status,\
+    \ daemon, run, tasks, queue, report) and helper modules (_pool, _dry_run, _parse,\
+    \ _display, parser). (2) Old cli.py is removed. (3) All backward-compatible imports\
+    \ work: main, build_parser, and all _cmd_* functions importable from litehive.cli.\
+    \ (4) Parser correctly handles all CLI commands. (5) Test collection failures\
+    \ (10 errors importing _allowed_commit_paths from litehive.runtime) are PRE-EXISTING\
+    \ on main \u2014 confirmed by running the same tests with the original cli.py\
+    \ file stashed. The refactoring introduces no regressions."
+  files_changed: []
+  created_at: '2026-04-05T18:32:46+00:00'
+- role: qa
+  step: testing
+  verdict: pass
+  message: 'QA verdict: PASS
+
+
+    All acceptance criteria verified:
+
+
+    1. litehive/config/ is a package: YES. Contains __init__.py plus 5 sub-modules
+    (constants.py, dataclasses.py, normalization.py, retry.py, profiles.py). No leftover
+    config.py file exists.
+
+
+    2. Every LitehiveConfig field has a docstring: YES. All 38 fields are documented
+    in the class docstring with descriptions. Verified programmatically: zero fields
+    missing from docstring.
+
+
+    3. _default_execution_retry_policies has one definition reused everywhere: YES.
+    Single definition in retry.py using _make_default_retry_policy() factory + _DEFAULT_RETRY_POLICY_ENGINES
+    tuple covering all 5 engines (claude, codex, gemini, goz, opencode). All policies
+    are confirmed identical. No duplicate definitions found anywhere in the codebase.
+
+
+    4. All tests pass: Pre-existing collection errors (10 tests) caused by missing
+    _allowed_commit_paths in runtime.py. Verified these same 10 errors exist in the
+    original config.py code before refactoring. Not caused by this change. All 17
+    consumer modules (tasks, subagents, sandbox, cli sub-modules, daemon, engine_monitoring,
+    main) import successfully from litehive.config.
+
+
+    Backward compatibility: All from litehive.config import ... statements across
+    the codebase continue to work via re-exports in __init__.py.'
+  files_changed: []
+  created_at: '2026-04-05T18:50:15+00:00'
+- role: reviewer
+  step: accepting
+  verdict: pass
+  message: "Accepted: all 3 acceptance criteria verified. (1) litehive/config/ is\
+    \ a proper package with __init__.py, constants.py, dataclasses.py, normalization.py,\
+    \ retry.py, profiles.py. (2) All 38 LitehiveConfig fields have docstrings in the\
+    \ class docstring (verified programmatically). (3) _default_execution_retry_policies\
+    \ uses a single _make_default_retry_policy() factory + _DEFAULT_RETRY_POLICY_ENGINES\
+    \ tuple for DRY reuse across all 5 engines. Test suite has 10 pre-existing collection\
+    \ errors from _allowed_commit_paths missing in runtime.py \u2014 unrelated to\
+    \ this refactoring. Config imports work correctly from all dependent modules."
+  files_changed: []
+  created_at: '2026-04-05T18:51:48+00:00'

@@ -1,0 +1,45 @@
+id: T-0188
+slug: show-elapsed-duration-in-litehive-status-for
+title: Redesign litehive status as a useful operator dashboard
+depends_on: []
+task_type: null
+engine: null
+model: null
+mode: implementation
+status: queued
+pipeline_status: backlog
+priority: medium
+pm_complexity: null
+planned_effort: null
+created_at: '2026-04-05T20:14:54+00:00'
+updated_at: '2026-04-05T20:14:54+00:00'
+goal: Redesign litehive status to be a useful operator dashboard instead of a config
+  dump. Show what matters at a glance - active task with duration, engine health, recent
+  activity, queue summary. Remove noise like pool policies and retry config from default
+  output.
+acceptance_criteria:
+- Active task shows title, stage, engine, and elapsed duration (e.g. "T-0161 implementing with copilot, running for 3m")
+- Current stage shows elapsed duration
+- Last completed task shown with outcome (pass/fail) and when
+- Queue summary shows count and next task title
+- Engine health shows which engines are available and which hit quota with reset time
+- Recent activity shows last 3-5 events (task completed, engine switched, error)
+- Config details (retry limits, pool policies, etc.) only shown with --full flag, not by default
+- No full task dump in default output
+constraints: []
+plan: []
+human_checkpoints: []
+subagents: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0188 show-elapsed-duration-in-litehive-status-for'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+  worktree_path: null
+retry_policy:
+  max_retries: null
+  stage_retry_limit: null
+created_from: null
+upstream_origin: null

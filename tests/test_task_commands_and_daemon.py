@@ -2900,7 +2900,7 @@ if [[ "${{1:-}}" == "run" && "${{2:-}}" == "litehive" && "${{3:-}}" == "run" ]];
 active_task_id: null
 queue:
   - T-0001
-pool_stop_reason: null
+pool_stop_reason: task_requeued
 STATE
     echo "tasks_run: 1"
     echo "stop_reason: task_requeued"

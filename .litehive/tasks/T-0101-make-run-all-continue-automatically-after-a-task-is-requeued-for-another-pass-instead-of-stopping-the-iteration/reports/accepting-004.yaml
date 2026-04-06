@@ -1,0 +1,41 @@
+task_id: T-0101
+step: accepting
+verdict: pass
+summary: 'Now let me run the tests to verify everything passes:'
+feedback: 'Now let me run the tests to verify everything passes:
+
+  All 3 failures are pre-existing (they fail on `main` too). Now let me verify the
+  T-0101 new tests specifically pass:
+
+  Both new tests pass. Let me now submit the verdict:
+
+  STAGE_RESULT:
+
+  ```json
+
+  {"verdict":"pass","summary":"run_single_task now persists pool_stop_reason=task_requeued
+  so the daemon''s explicit continue guard fires; 2 new targeted tests pass, no regressions
+  introduced","files_changed":["litehive/runtime/_execution.py","tests/test_runtime_pool.py","tests/test_task_commands_and_daemon.py"],"tests":{"added":2,"passing":2},"warnings":[],"follow_up_tasks":[],"acceptance_criteria":[],"task_update":{}}
+
+  ```'
+files_changed: []
+follow_up_tasks: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 379
+hook_results: []
+created_at: '2026-04-06T11:37:13+00:00'

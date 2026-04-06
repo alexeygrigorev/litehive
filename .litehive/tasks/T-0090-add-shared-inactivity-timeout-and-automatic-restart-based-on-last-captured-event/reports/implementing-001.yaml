@@ -1,0 +1,53 @@
+task_id: T-0090
+step: implementing
+verdict: pass
+summary: Let me start by exploring the codebase structure and understanding the key
+  files.
+feedback: "Stage `implementing` switched from `gemini` to `codex` after quota limit\
+  \ reached.\n\nStage `implementing` switched from `codex` to `opencode` after usage\
+  \ limit reached.\n\nLet me start by exploring the codebase structure and understanding\
+  \ the key files.\nLet me read the key files directly to understand the details:\n\
+  Now let me read the config, models, runner, and tasks heartbeat sections:\nNow let\
+  \ me understand the existing inactivity timeout usage and the task heartbeat:\n\
+  Let me look at the repair flow and the task's events.jsonl usage:\nNow let me look\
+  \ at the `recover_stale_runner_state` and the `_recover_stale_runner_state` functions:\n\
+  Now let me look at the `WorkspaceRepairSummary` and `_prepare_interrupted_task_for_requeue`:\n\
+  Now let me look at `_prepare_interrupted_task_for_requeue`:\nNow I have a clear\
+  \ understanding. Let me also look at the existing tests for reference:\nNow let\
+  \ me implement the changes. First, add `last_event_timestamp()` to `events.py`:\n\
+  Now add the `inactivity_timeout_seconds` config field:\nNow add the field to the\
+  \ dataclass:\nNow add validation in `__post_init__`:\nNow let me add the `WorkspaceRepairSummary`\
+  \ field for inactivity recovery tracking and the inactivity check logic:\nNow I\
+  \ need to add the inactivity-based recovery logic. Let me add it to `repair_workspace_state()`.\
+  \ The key is to check the last event timestamp of the active task and recover it\
+  \ if it exceeds the configured timeout. Let me find the right place in `repair_workspace_state`:\n\
+  Let me check how the heartbeat staleness is currently used:\nNow let me check `_is_task_eligible_for_execution`\
+  \ and how the runner staleness check works:\nNow I understand the full picture.\
+  \ Let me implement the inactivity-based recovery. The key changes:\n\n1. `events.py`\
+  \ - already done (added `last_event_timestamp`)\n2. `config/__init__.py` - already\
+  \ done (added `inactivity_timeout_seconds`)\n3. `tasks.py` - add inactivity check\
+  \ to `_recover_stale_runner_state` a\n\n\u2026 [truncated \u2014 full transcript\
+  \ in subagent artifacts]"
+files_changed: []
+follow_up_tasks: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings:
+- Stage `implementing` switched from `gemini` to `codex` after quota limit reached.
+- Stage `implementing` switched from `codex` to `opencode` after usage limit reached.
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 1037
+hook_results: []
+created_at: '2026-04-06T08:00:44+00:00'

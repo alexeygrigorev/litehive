@@ -6,13 +6,13 @@ task_type: null
 engine: null
 model: null
 mode: implementation
-status: in_progress
-pipeline_status: commit_to_git
+status: done
+pipeline_status: done
 priority: medium
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-04T20:45:52+00:00'
-updated_at: '2026-04-05T17:19:31+00:00'
+updated_at: '2026-04-05T17:36:43+00:00'
 goal: workflow_verification.py is disabled and unused since we removed the enforcement
   gate. Delete it and clean up imports.
 acceptance_criteria:
@@ -54,7 +54,7 @@ subagents:
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0154 delete-workflow-verification-py-dead-code'
-  commit_sha: null
+  commit_sha: daafc313b9dd925e261291067d64b4f0218e13ea
   checkpoint_base_sha: null
   checkpoint_attempts: 0
   rolled_back_checkpoint_attempt: null

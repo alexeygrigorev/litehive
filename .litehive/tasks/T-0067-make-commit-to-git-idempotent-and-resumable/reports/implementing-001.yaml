@@ -1,0 +1,65 @@
+task_id: T-0067
+step: implementing
+verdict: pass
+summary: 'Implemented shared checkpoint reconciliation so commit_to_git now finalizes
+  an already-created Litehive checkpoint instead of retrying it. In litehive/runtime.py,
+  commit_to_git now checks for an existing checkpoint commit before incrementing attempts
+  or creating a new commit, and the existing done-task recovery path reuses the same
+  helper. In litehive/tasks.py, stale-runner recovery now reconciles an existing checkpoint
+  for running commit_to_git tasks before requeueing, and the active-task recovery/finalization
+  path now reuses the shared recovered-commit finalizer instead of duplicating state
+  updates. Added focused tests in tests/test_retry_commit_and_recovery.py for: 1)
+  rerunning commit_to_git after the checkpoint commit already exists in the main checkout
+  with commit_sha missing, and 2) resolving a running commit_to_git task with an existing
+  checkpoint before selecting new work. Tightened the existing stranded-commit recovery
+  assertion to prove git history does not advance. Verified with: uv run pytest -q
+  tests/test_retry_commit_and_recovery.py -k ''integrates_existing_litehive_checkpoint_from_clean_worktree
+  or reconciles_existing_checkpoint_commit_without_duplicate_retry or finalizes_existing_checkpoint_commit_without_retry
+  or finalizes_running_commit_stage_with_existing_checkpoint_before_new_work or recovers_orphaned_commit_stage_before_new_work''
+  -> 5 passed, 85 deselected. Evidence: checkpoint_attempts stays at 1 in rerun/recovery
+  cases, HEAD commit count stays unchanged during reconciliation, and the recovered
+  task records the existing commit SHA instead of creating a duplicate checkpoint.'
+feedback: 'Stage `implementing` switched from `codex` to `opencode` after usage limit
+  reached.
+
+
+  Implemented shared checkpoint reconciliation so commit_to_git now finalizes an already-created
+  Litehive checkpoint instead of retrying it. In litehive/runtime.py, commit_to_git
+  now checks for an existing checkpoint commit before incrementing attempts or creating
+  a new commit, and the existing done-task recovery path reuses the same helper. In
+  litehive/tasks.py, stale-runner recovery now reconciles an existing checkpoint for
+  running commit_to_git tasks before requeueing, and the active-task recovery/finalization
+  path now reuses the shared recovered-commit finalizer instead of duplicating state
+  updates. Added focused tests in tests/test_retry_commit_and_recovery.py for: 1)
+  rerunning commit_to_git after the checkpoint commit already exists in the main checkout
+  with commit_sha missing, and 2) resolving a running commit_to_git task with an existing
+  checkpoint before selecting new work. Tightened the existing stranded-commit recovery
+  assertion to prove git history does not advance. Verified with: uv run pytest -q
+  tests/test_retry_commit_and_recovery.py -k ''integrates_existing_litehive_checkpoint_from_clean_worktree
+  or reconciles_existing_checkpoint_commit_without_duplicate_retry or finalizes_existing_checkpoint_commit_without_retry
+  or finalizes_running_commit_stage_with_existing_checkpoint_before_new_work or recovers_orphaned_commit_stage_before_new_work''
+  -> 5 passed, 85 deselected. Evidence: checkpoint_attempts stays at 1 in rerun/recovery
+  cases, HEAD commit count stays unchanged during reconciliation, and the recovered
+  task records the existing commit SHA instead of creating a duplicate checkpoint.'
+files_changed: []
+follow_up_tasks: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings:
+- Stage `implementing` switched from `codex` to `opencode` after usage limit reached.
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 80
+hook_results: []
+created_at: '2026-04-06T12:22:12+00:00'

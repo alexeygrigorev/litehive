@@ -2086,3 +2086,82 @@ def test_drain_task_pool_stops_after_requeueing_review_rejection_when_only_block
     state = load_state(tmp_path)
     assert state.active_task_id is None
     assert state.queue == [active.id, blocked.id]
+
+
+def test_run_single_task_persists_task_requeued_stop_reason(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """run_single_task writes pool_stop_reason=task_requeued to state when the task is requeued."""
+    ensure_workspace(tmp_path, LitehiveConfig(default_retry_limit=2))
+    task = create_task(tmp_path, title="Requeue test", auto_commit=False)
+    task.retry_policy.max_retries = 2
+    save_task(tmp_path, task)
+
+    def fake_run(self, current_task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None):  # type: ignore[no-untyped-def]
+        if current_task.pipeline_status == "testing":
+            return _stage_subagent_result(
+                tmp_path,
+                "testing",
+                role=role,
+                engine_name=engine_name,
+                verdict="FAIL",
+                summary="needs another implementation pass",
+                files_changed=[],
+                tests_added=0,
+                tests_passing=0,
+            )
+        return _completed_subagent_result(tmp_path, current_task.pipeline_status)
+
+    monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_run)
+
+    summary = run_single_task(tmp_path)
+
+    assert summary.stop_reason == "task_requeued"
+    state = load_state(tmp_path)
+    assert state.pool_stop_reason == "task_requeued"
+    requeued = get_task(tmp_path, task.id)
+    assert requeued is not None
+    assert requeued.status == "queued"
+    assert requeued.pipeline_status == "implementing"
+
+
+def test_drain_task_pool_continues_when_only_task_is_requeued_for_another_pass(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """drain_task_pool continues past a task_requeued result when no other tasks are present."""
+    ensure_workspace(tmp_path, LitehiveConfig(default_retry_limit=2))
+    task = create_task(tmp_path, title="Requeue drain test", auto_commit=False)
+    task.retry_policy.max_retries = 2
+    save_task(tmp_path, task)
+
+    testing_calls = {"count": 0}
+
+    def fake_run(self, current_task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None):  # type: ignore[no-untyped-def]
+        if current_task.pipeline_status == "testing":
+            testing_calls["count"] += 1
+            if testing_calls["count"] == 1:
+                return _stage_subagent_result(
+                    tmp_path,
+                    "testing",
+                    role=role,
+                    engine_name=engine_name,
+                    verdict="FAIL",
+                    summary="first testing pass failed",
+                    files_changed=[],
+                    tests_added=0,
+                    tests_passing=0,
+                )
+        return _completed_subagent_result(tmp_path, current_task.pipeline_status)
+
+    monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_run)
+
+    summary = drain_task_pool(tmp_path)
+
+    assert summary.stop_reason == "queue_exhausted"
+    assert testing_calls["count"] == 2
+    state = load_state(tmp_path)
+    assert state.active_task_id is None
+    assert state.queue == []
+    done_task = get_task(tmp_path, task.id)
+    assert done_task is not None
+    assert done_task.status == "done"

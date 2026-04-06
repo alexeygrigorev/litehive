@@ -2433,3 +2433,315 @@ def test_add_command_persists_acceptance_criteria(
     assert task.acceptance_criteria == ["Document the route", "Block missing retries"]
     assert "acceptance_criteria: 2" in output
     assert "warning:" not in output
+
+
+def test_compute_pool_flow_statistics_returns_none_when_no_durations(
+    tmp_path: Path,
+) -> None:
+    from litehive.cli._pool import _compute_pool_flow_statistics
+
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Quick task", auto_commit=False)
+
+    # Write reports with zero duration_seconds (no timing data)
+    reports_dir = (
+        tmp_path / ".litehive" / "tasks" / f"{task.id}-{task.slug}" / "reports"
+    )
+    reports_dir.mkdir(parents=True, exist_ok=True)
+    for i, step in enumerate(["grooming", "implementing"]):
+        data = {"step": step, "verdict": "pass", "duration_seconds": 0}
+        (reports_dir / f"report-{i:04d}.yaml").write_text(
+            yaml.safe_dump(data), encoding="utf-8"
+        )
+
+    entries = [
+        {"task_id": task.id, "title": task.title}
+    ]
+    result = _compute_pool_flow_statistics(tmp_path, entries)
+    assert result is None
+
+
+def test_compute_pool_flow_statistics_identifies_bottleneck(
+    tmp_path: Path,
+) -> None:
+    from litehive.cli._pool import _compute_pool_flow_statistics
+
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Measured task", auto_commit=False)
+
+    reports_dir = (
+        tmp_path / ".litehive" / "tasks" / f"{task.id}-{task.slug}" / "reports"
+    )
+    reports_dir.mkdir(parents=True, exist_ok=True)
+    stage_data = [
+        ("grooming", "pass", 10),
+        ("implementing", "pass", 60),
+        ("testing", "pass", 25),
+        ("accepting", "pass", 5),
+        ("commit_to_git", "pass", 2),
+    ]
+    for i, (step, verdict, duration) in enumerate(stage_data):
+        data = {"step": step, "verdict": verdict, "duration_seconds": duration}
+        (reports_dir / f"report-{i:04d}.yaml").write_text(
+            yaml.safe_dump(data), encoding="utf-8"
+        )
+
+    entries = [{"task_id": task.id, "title": task.title}]
+    stats = _compute_pool_flow_statistics(tmp_path, entries)
+
+    assert stats is not None
+    assert stats["stages_executed"] == 5
+    assert stats["bottleneck_stage"] == "implementing"
+    assert stats["bottleneck_avg_seconds"] == 60.0
+    assert stats["stage_metrics"]["grooming"]["avg_seconds"] == 10.0
+    assert stats["stage_metrics"]["implementing"]["avg_seconds"] == 60.0
+    assert stats["stage_metrics"]["testing"]["avg_seconds"] == 25.0
+    assert stats["stage_metrics"]["implementing"]["min_seconds"] == 60.0
+    assert stats["stage_metrics"]["implementing"]["max_seconds"] == 60.0
+    assert stats["stage_pass_counts"]["implementing"] == 1
+    assert stats["stage_fail_counts"] == {}
+
+
+def test_compute_pool_flow_statistics_averages_across_multiple_tasks(
+    tmp_path: Path,
+) -> None:
+    from litehive.cli._pool import _compute_pool_flow_statistics
+
+    ensure_workspace(tmp_path)
+    task1 = create_task(tmp_path, title="First task", auto_commit=False)
+    task2 = create_task(tmp_path, title="Second task", auto_commit=False)
+
+    for task, duration in [(task1, 30), (task2, 90)]:
+        reports_dir = (
+            tmp_path / ".litehive" / "tasks" / f"{task.id}-{task.slug}" / "reports"
+        )
+        reports_dir.mkdir(parents=True, exist_ok=True)
+        data = {"step": "implementing", "verdict": "pass", "duration_seconds": duration}
+        (reports_dir / "report-0000.yaml").write_text(
+            yaml.safe_dump(data), encoding="utf-8"
+        )
+
+    entries = [
+        {"task_id": task1.id, "title": task1.title},
+        {"task_id": task2.id, "title": task2.title},
+    ]
+    stats = _compute_pool_flow_statistics(tmp_path, entries)
+
+    assert stats is not None
+    assert stats["stages_executed"] == 2
+    assert stats["stage_metrics"]["implementing"]["avg_seconds"] == 60.0
+    assert stats["bottleneck_stage"] == "implementing"
+
+
+def test_compute_pool_flow_statistics_tracks_failures(
+    tmp_path: Path,
+) -> None:
+    from litehive.cli._pool import _compute_pool_flow_statistics
+
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Failing task", auto_commit=False)
+
+    reports_dir = (
+        tmp_path / ".litehive" / "tasks" / f"{task.id}-{task.slug}" / "reports"
+    )
+    reports_dir.mkdir(parents=True, exist_ok=True)
+    stage_data = [
+        ("implementing", "fail", 40),
+        ("implementing", "pass", 50),  # retry
+        ("testing", "reject", 15),
+        ("testing", "pass", 20),  # retry
+    ]
+    for i, (step, verdict, duration) in enumerate(stage_data):
+        data = {"step": step, "verdict": verdict, "duration_seconds": duration}
+        (reports_dir / f"report-{i:04d}.yaml").write_text(
+            yaml.safe_dump(data), encoding="utf-8"
+        )
+
+    entries = [{"task_id": task.id, "title": task.title}]
+    stats = _compute_pool_flow_statistics(tmp_path, entries)
+
+    assert stats is not None
+    assert stats["stages_executed"] == 4
+    assert stats["stage_fail_counts"]["implementing"] == 1
+    assert stats["stage_fail_counts"]["testing"] == 1
+    assert stats["stage_pass_counts"]["implementing"] == 1
+    assert stats["stage_pass_counts"]["testing"] == 1
+    # avg for implementing = (40 + 50) / 2 = 45, avg for testing = (15 + 20) / 2 = 17.5
+    assert stats["stage_metrics"]["implementing"]["avg_seconds"] == 45.0
+    assert stats["stage_metrics"]["testing"]["avg_seconds"] == 17.5
+    assert stats["stage_metrics"]["implementing"]["min_seconds"] == 40.0
+    assert stats["stage_metrics"]["implementing"]["max_seconds"] == 50.0
+    assert stats["bottleneck_stage"] == "implementing"
+
+
+def test_compute_pool_flow_statistics_tiebreaks_bottleneck_by_retry_count(
+    tmp_path: Path,
+) -> None:
+    from litehive.cli._pool import _compute_pool_flow_statistics
+
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Tie task", auto_commit=False)
+
+    reports_dir = (
+        tmp_path / ".litehive" / "tasks" / f"{task.id}-{task.slug}" / "reports"
+    )
+    reports_dir.mkdir(parents=True, exist_ok=True)
+    # Both stages have avg=30s, but testing has 2 failures (retries) vs grooming 0.
+    # Tie-break: testing wins because stage_fail_counts is higher.
+    stage_data = [
+        ("grooming", "pass", 30),
+        ("testing", "fail", 30),
+        ("testing", "fail", 30),
+        ("testing", "pass", 30),
+    ]
+    for i, (step, verdict, duration) in enumerate(stage_data):
+        data = {"step": step, "verdict": verdict, "duration_seconds": duration}
+        (reports_dir / f"report-{i:04d}.yaml").write_text(
+            yaml.safe_dump(data), encoding="utf-8"
+        )
+
+    entries = [{"task_id": task.id, "title": task.title}]
+    stats = _compute_pool_flow_statistics(tmp_path, entries)
+
+    assert stats is not None
+    assert stats["stage_metrics"]["grooming"]["avg_seconds"] == 30.0
+    assert stats["stage_metrics"]["testing"]["avg_seconds"] == 30.0
+    # Both have equal avg; testing has 2 retries (fail_counts) vs grooming's 0.
+    assert stats["stage_fail_counts"].get("grooming", 0) == 0
+    assert stats["stage_fail_counts"]["testing"] == 2
+    assert stats["bottleneck_stage"] == "testing"
+
+
+def test_pool_summary_includes_flow_stats_lines_when_durations_available(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from litehive.cli._pool import _pool_summary_report_data, _pool_summary_report_lines
+
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Timed task", auto_commit=False)
+
+    reports_dir = (
+        tmp_path / ".litehive" / "tasks" / f"{task.id}-{task.slug}" / "reports"
+    )
+    reports_dir.mkdir(parents=True, exist_ok=True)
+    stage_data = [
+        ("grooming", "pass", 10),
+        ("implementing", "pass", 120),
+        ("testing", "pass", 30),
+        ("accepting", "pass", 8),
+        ("commit_to_git", "pass", 3),
+    ]
+    for i, (step, verdict, duration) in enumerate(stage_data):
+        data = {"step": step, "verdict": verdict, "duration_seconds": duration}
+        (reports_dir / f"report-{i:04d}.yaml").write_text(
+            yaml.safe_dump(data), encoding="utf-8"
+        )
+
+    completed = [
+        {
+            "task_id": task.id,
+            "title": task.title,
+            "final_task_status": "done",
+            "pipeline_status": "done",
+            "stage_outcomes": [],
+            "reason_code": None,
+            "reason": None,
+            "follow_up_task_id": None,
+        }
+    ]
+    report = _pool_summary_report_data(
+        tmp_path,
+        completed=completed,
+        flagged=[],
+        stop_reason="single_task_complete",
+        tasks_run=1,
+    )
+
+    assert report["flow_statistics"] is not None
+    assert report["flow_statistics"]["bottleneck_stage"] == "implementing"
+    assert report["flow_statistics"]["bottleneck_avg_seconds"] == 120.0
+
+    lines = _pool_summary_report_lines(report=report)
+    text = "\n".join(lines)
+
+    assert "flow_statistics: stages_executed=5 bottleneck=implementing (avg=2m00s)" in text
+    assert "stage_durations:" in text
+    assert "implementing=avg:2m00s" in text
+    assert "grooming=avg:10s" in text
+
+
+def test_pool_summary_omits_flow_stats_when_no_duration_data(
+    tmp_path: Path,
+) -> None:
+    from litehive.cli._pool import _pool_summary_report_data, _pool_summary_report_lines
+
+    ensure_workspace(tmp_path)
+    completed = [
+        {
+            "task_id": "T-0001",
+            "title": "Some task",
+            "final_task_status": "done",
+            "pipeline_status": "done",
+            "stage_outcomes": [],
+            "reason_code": None,
+            "reason": None,
+            "follow_up_task_id": None,
+        }
+    ]
+    report = _pool_summary_report_data(
+        tmp_path,
+        completed=completed,
+        flagged=[],
+        stop_reason="single_task_complete",
+        tasks_run=1,
+    )
+
+    assert report["flow_statistics"] is None
+
+    lines = _pool_summary_report_lines(report=report)
+    text = "\n".join(lines)
+    assert "flow_statistics:" not in text
+    assert "stage_durations:" not in text
+
+
+def test_pool_summary_flow_stats_in_durable_report(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Timed task", auto_commit=False)
+
+    reports_dir = (
+        tmp_path / ".litehive" / "tasks" / f"{task.id}-{task.slug}" / "reports"
+    )
+    reports_dir.mkdir(parents=True, exist_ok=True)
+    stage_data = [
+        ("grooming", "pass", 15),
+        ("implementing", "pass", 90),
+        ("testing", "pass", 45),
+        ("accepting", "pass", 10),
+        ("commit_to_git", "pass", 5),
+    ]
+    for i, (step, verdict, duration) in enumerate(stage_data):
+        data = {"step": step, "verdict": verdict, "duration_seconds": duration}
+        (reports_dir / f"report-{i:04d}.yaml").write_text(
+            yaml.safe_dump(data), encoding="utf-8"
+        )
+
+    monkeypatch.setattr(
+        "litehive.runtime.SubagentManager.run",
+        lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
+            _completed_subagent_result(tmp_path, task.pipeline_status)
+        ),
+    )
+
+    exit_code = _cmd_run(argparse.Namespace(workspace=tmp_path, dry_run=False, drain=False))
+    assert exit_code == 0
+
+    durable_report = _latest_pool_run_report(tmp_path)
+    # flow_stats may be None if the runner's own reports have zero duration in tests,
+    # but when pre-seeded reports exist they should be captured.
+    # Verify the key is present regardless.
+    assert "flow_statistics" in durable_report

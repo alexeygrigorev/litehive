@@ -177,7 +177,7 @@ def test_run_next_task_falls_back_from_codex_to_opencode_on_usage_limit(
 
     monkeypatch.setattr(codex, "is_available", lambda: True)
     monkeypatch.setattr(opencode, "is_available", lambda: True)
-    monkeypatch.setattr("litehive.subagents._supports_live_execution", lambda engine: False)
+    monkeypatch.setattr("litehive.subagents._execution._supports_live_execution", lambda engine: False)
 
     def fake_codex_run(
         prompt: str,
@@ -281,7 +281,7 @@ def test_run_next_task_falls_back_after_stale_subagent_timeout(
     monkeypatch.setattr(codex, "is_available", lambda: True)
     monkeypatch.setattr(opencode, "is_available", lambda: True)
     monkeypatch.setattr(
-        "litehive.subagents._supports_live_execution",
+        "litehive.subagents._execution._supports_live_execution",
         lambda engine: getattr(engine, "name", None) == "codex",
     )
     monkeypatch.setattr(codex, "run", lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("codex run should not be used")))  # type: ignore[no-untyped-call]
@@ -324,7 +324,7 @@ def test_run_next_task_falls_back_after_stale_subagent_timeout(
 
     monkeypatch.setattr(codex, "run_live", fake_codex_run_live)
     monkeypatch.setattr(opencode, "run", fake_opencode_run)
-    monkeypatch.setattr("litehive.subagents.os.kill", lambda pid, sig: None)
+    monkeypatch.setattr("litehive.subagents._execution.os.kill", lambda pid, sig: None)
 
     summary = run_next_task(tmp_path)
 
@@ -372,7 +372,7 @@ def test_run_next_task_falls_back_from_codex_to_gemini_on_usage_limit(
 
     monkeypatch.setattr(codex, "is_available", lambda: True)
     monkeypatch.setattr(gemini, "is_available", lambda: True)
-    monkeypatch.setattr("litehive.subagents._supports_live_execution", lambda engine: False)
+    monkeypatch.setattr("litehive.subagents._execution._supports_live_execution", lambda engine: False)
 
     def fake_codex_run(
         prompt: str,
@@ -464,7 +464,7 @@ def test_run_next_task_keeps_using_fallback_engine_after_implementing_usage_limi
 
     monkeypatch.setattr(codex, "is_available", lambda: True)
     monkeypatch.setattr(opencode, "is_available", lambda: True)
-    monkeypatch.setattr("litehive.subagents._supports_live_execution", lambda engine: False)
+    monkeypatch.setattr("litehive.subagents._execution._supports_live_execution", lambda engine: False)
 
     attempted_stages: list[tuple[str, str]] = []
 
@@ -542,7 +542,7 @@ def test_run_next_task_walks_same_stage_fallback_graph_after_usage_limit(
     monkeypatch.setattr(codex, "is_available", lambda: True)
     monkeypatch.setattr(opencode, "is_available", lambda: True)
     monkeypatch.setattr(gemini, "is_available", lambda: True)
-    monkeypatch.setattr("litehive.subagents._supports_live_execution", lambda engine: False)
+    monkeypatch.setattr("litehive.subagents._execution._supports_live_execution", lambda engine: False)
 
     def fake_codex_run(
         prompt: str,
@@ -1478,7 +1478,7 @@ def test_run_next_task_skips_unavailable_fallback_engine_after_usage_limit(
     monkeypatch.setattr(codex, "is_available", lambda: True)
     monkeypatch.setattr(gemini, "is_available", lambda: False)
     monkeypatch.setattr(opencode, "is_available", lambda: True)
-    monkeypatch.setattr("litehive.subagents._supports_live_execution", lambda engine: False)
+    monkeypatch.setattr("litehive.subagents._execution._supports_live_execution", lambda engine: False)
 
     def fake_codex_run(
         prompt: str,

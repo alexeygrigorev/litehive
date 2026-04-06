@@ -244,6 +244,29 @@ class StageResultTests(BaseModel):
     passing: int = 0
 
 
+class TaskUpdateSubmission(BaseModel):
+    """Structured task updates submitted by agents during grooming."""
+
+    goal: str | None = None
+    acceptance_criteria: list[str] | None = None
+    constraints: list[str] | None = None
+    plan: list[str] | None = None
+    pm_complexity: TaskComplexity | None = None
+    planned_effort: PlannedEffort | None = None
+    depends_on: list[str] | None = None
+    human_checkpoints: list[HumanCheckpoint] | None = None
+    task_type: str | None = None
+    mode: TaskMode | None = None
+    priority: str | None = None
+    engine: str | None = None
+    model: str | None = None
+    retry_limit: int | None = None
+    auto_commit: bool | None = None
+    outcome: TaskStatus | None = None
+    outcome_reason: str | None = None
+    action: Literal["park", "requeue", "abandon"] | None = None
+
+
 class StageResultSubmission(BaseModel):
     """Schema-validated structured stage result submitted by agents.
 
@@ -261,6 +284,7 @@ class StageResultSubmission(BaseModel):
     warnings: list[str] = Field(default_factory=list)
     follow_up_tasks: list[FollowUpTaskSpec] = Field(default_factory=list)
     acceptance_criteria: list[str] = Field(default_factory=list)
+    task_update: TaskUpdateSubmission | None = None
 
 
 class RecoveryEvidenceItem(BaseModel):
@@ -461,6 +485,7 @@ class StageReport(BaseModel):
     files_changed: list[str] = Field(default_factory=list)
     follow_up_tasks: list[FollowUpTaskSpec] = Field(default_factory=list)
     created_follow_up_task_ids: list[str] = Field(default_factory=list)
+    task_update: dict[str, object] = Field(default_factory=dict)
     tests: dict[str, int] = Field(default_factory=lambda: {"added": 0, "passing": 0})
     warnings: list[str] = Field(default_factory=list)
     retry_count: int = 0

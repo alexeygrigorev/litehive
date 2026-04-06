@@ -1,0 +1,38 @@
+task_id: T-0077
+step: accepting
+verdict: pass
+summary: 'STAGE_RESULT:'
+feedback: 'STAGE_RESULT:
+
+  {"verdict":"pass","summary":"Added structured PM task-edit actions during grooming:
+  planners can now emit TASK_UPDATE YAML blocks to shape task fields, close tasks
+  with outcomes, or park/requeue/abandon.","files_changed":["litehive/models.py","litehive/cli/_parse.py","litehive/engines/base.py","litehive/runner/core.py","litehive/tasks.py","litehive/subagents/_prompts.py","tests/test_grooming_task_updates.py"],"tests":{"added":7,"passing":7},"warnings":["11
+  pre-existing test failures in test_tasks_and_subagents.py and test_runtime_pool.py
+  are unrelated to T-0077."],"follow_up_tasks":[],"acceptance_criteria":[]}
+
+
+  VERIFIED: TaskUpdateSubmission model carries structured fields. StageReport.task_update
+  parses JSON and TASK_UPDATE YAML blocks. _parse.py validates outcome/action enums.
+  apply_task_updates_from_report unifies structured+text grooming updates. update_task
+  handles outcome/action inline to avoid deadlock. Runner exits cleanly when grooming
+  closes/parks a task. 7/7 new tests pass. All broader-suite failures are pre-existing.'
+files_changed: []
+follow_up_tasks: []
+created_follow_up_task_ids: []
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 405
+hook_results: []
+created_at: '2026-04-06T06:26:18+00:00'

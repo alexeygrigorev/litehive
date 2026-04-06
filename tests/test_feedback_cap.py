@@ -1,7 +1,7 @@
 """Tests for report feedback capping (T-0143)."""
 
 from litehive.models import cap_feedback, FEEDBACK_CAP, _TRUNCATION_MARKER
-from litehive.external_cli import parse_stage_report_text
+from litehive.engines.base import parse_stage_report_text
 
 
 def test_cap_feedback_short_text_unchanged() -> None:
@@ -32,7 +32,7 @@ def test_parse_stage_report_text_caps_feedback_structured() -> None:
     long_preamble = "z" * 5000
     transcript = (
         long_preamble + "\n"
-        'STAGE_RESULT:\n'
+        "STAGE_RESULT:\n"
         '{"verdict":"pass","summary":"done","files_changed":["foo.py"],'
         '"tests":{"added":1,"passing":1},"warnings":[],"follow_up_tasks":[],'
         '"acceptance_criteria":[]}\n'

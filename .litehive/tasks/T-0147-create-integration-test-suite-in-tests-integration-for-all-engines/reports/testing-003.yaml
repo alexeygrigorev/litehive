@@ -1,0 +1,61 @@
+task_id: T-0147
+step: testing
+verdict: pass
+summary: 'Verified the new tests_integration suite meets the task criteria. Evidence:
+  `uv run pytest tests_integration/ -q` completed with `1 passed, 7 skipped`, proving
+  the suite is collected separately from unit tests and the documented opt-in skip
+  behavior is active for real-engine files. `LITEHIVE_INTEGRATION_ENGINES=codex uv
+  run pytest tests_integration/test_codex.py tests_integration/test_switching.py -q`
+  completed with `3 passed`, proving a real adapter invocation through the Litehive
+  codex engine path, successful parsing and schema validation of structured `STAGE_RESULT`,
+  successful `litehive report` side effects persisted into task thread state, and
+  CLI-level engine switching that persists continuation_handoff and last_engine_switch
+  metadata while requeueing the task. I also inspected tests_integration/README.md
+  and the per-engine files for codex, opencode, gemini, copilot, claude, and goz;
+  the matrix is explicit, each adapter has its own test module, skip conditions and
+  commands are documented, and the shared harness validates StageResultSubmission.
+  Acceptance criteria satisfied: dedicated tests_integration package, explicit engine
+  matrix with opt-in and skip semantics, per-engine real-binary coverage, report CLI
+  side-effect coverage, mid-task engine switching coverage, and separate invocation
+  via `uv run pytest tests_integration/`. Warning: the working tree currently contains
+  generated `tests_integration/__pycache__/` artifacts alongside the new suite; they
+  are not part of the verification outcome but should not be committed.'
+feedback: 'Verified the new tests_integration suite meets the task criteria. Evidence:
+  `uv run pytest tests_integration/ -q` completed with `1 passed, 7 skipped`, proving
+  the suite is collected separately from unit tests and the documented opt-in skip
+  behavior is active for real-engine files. `LITEHIVE_INTEGRATION_ENGINES=codex uv
+  run pytest tests_integration/test_codex.py tests_integration/test_switching.py -q`
+  completed with `3 passed`, proving a real adapter invocation through the Litehive
+  codex engine path, successful parsing and schema validation of structured `STAGE_RESULT`,
+  successful `litehive report` side effects persisted into task thread state, and
+  CLI-level engine switching that persists continuation_handoff and last_engine_switch
+  metadata while requeueing the task. I also inspected tests_integration/README.md
+  and the per-engine files for codex, opencode, gemini, copilot, claude, and goz;
+  the matrix is explicit, each adapter has its own test module, skip conditions and
+  commands are documented, and the shared harness validates StageResultSubmission.
+  Acceptance criteria satisfied: dedicated tests_integration package, explicit engine
+  matrix with opt-in and skip semantics, per-engine real-binary coverage, report CLI
+  side-effect coverage, mid-task engine switching coverage, and separate invocation
+  via `uv run pytest tests_integration/`. Warning: the working tree currently contains
+  generated `tests_integration/__pycache__/` artifacts alongside the new suite; they
+  are not part of the verification outcome but should not be committed.'
+files_changed: []
+follow_up_tasks: []
+created_follow_up_task_ids: []
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 227
+hook_results: []
+created_at: '2026-04-05T15:57:07+00:00'

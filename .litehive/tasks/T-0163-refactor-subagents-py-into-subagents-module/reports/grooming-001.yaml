@@ -1,0 +1,55 @@
+task_id: T-0163
+step: grooming
+verdict: pass
+summary: 'GROOMING PASS for T-0163: Refactor subagents.py into subagents/ module'
+feedback: "Stage `grooming` retrying `goz` after attempt 1/3 due to transient network\
+  \ failure (classification: network, policy: goz, backoff: 0.25s).\n\nStage `grooming`\
+  \ retrying `goz` after attempt 2/3 due to transient network failure (classification:\
+  \ network, policy: goz, backoff: 0.50s).\n\nStage `grooming` stopped retrying `goz`\
+  \ after attempt 3/3: transient network failure.\n\nStage `grooming` switched from\
+  \ `goz` to `copilot` after transient network failure.\n\nGROOMING PASS for T-0163:\
+  \ Refactor subagents.py into subagents/ module\n\nSCOPE ANALYSIS: litehive/subagents.py\
+  \ is 1,486 lines. Analyzed full content:\n- Lines 52-85: Dataclasses (EngineFailure,\
+  \ SubagentResult, SubagentInactivityTimeout)\n- Lines 87-219: Artifact helpers and\
+  \ engine capability checks\n- Lines 221-893: SubagentManager class (main execution\
+  \ orchestration)\n- Lines 895-1017: _SandboxedAdapter (sandbox wrapper around CLI\
+  \ adapters)\n- Lines 1020-1403: Prompt building (stage_prompt, intake_prompt, helpers)\n\
+  - Lines 1406-1460: Stage report parsing (stage_report_from_subagent)\n- Lines 1463-1486:\
+  \ intake_prompt\n\nPUBLIC API used by runtime, cli, and tests:\n  SubagentManager,\
+  \ SubagentResult, EngineFailure, SubagentInactivityTimeout,\n  stage_prompt, stage_report_from_subagent,\
+  \ intake_prompt\n\nACCEPTANCE CRITERIA (7 criteria, updated on task):\n1. litehive/subagents/\
+  \ is a Python package with __init__.py re-exporting the full public API\n2. Prompt\
+  \ building in litehive/subagents/_prompts.py (stage_prompt, intake_prompt, _stage_owner_for_step,\
+  \ _stage_role_prompt, _load_agent_md, _agent_startup_guidance)\n3. Stage report\
+  \ parsing in litehive/subagents/_parsing.py (stage_report_from_subagent)\n4. Execution\
+  \ management in litehive/subagents/_execution.py (SubagentManager, _SandboxedAdapter,\
+  \ EngineFailure, SubagentResult, SubagentInactivityTimeout, artifact helpers)\n\
+  5. Continuation handling in litehive/subagents/_continuation.py (token extraction/serialization\
+  \ helpers used by both _executi\n\n\u2026 [truncated \u2014 full transcript in subagent\
+  \ artifacts]"
+files_changed: []
+follow_up_tasks: []
+created_follow_up_task_ids: []
+tests:
+  added: 0
+  passing: 0
+warnings:
+- 'Stage `grooming` retrying `goz` after attempt 1/3 due to transient network failure
+  (classification: network, policy: goz, backoff: 0.25s).'
+- 'Stage `grooming` retrying `goz` after attempt 2/3 due to transient network failure
+  (classification: network, policy: goz, backoff: 0.50s).'
+- 'Stage `grooming` stopped retrying `goz` after attempt 3/3: transient network failure.'
+- Stage `grooming` switched from `goz` to `copilot` after transient network failure.
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 286
+hook_results: []
+created_at: '2026-04-05T22:07:16+00:00'

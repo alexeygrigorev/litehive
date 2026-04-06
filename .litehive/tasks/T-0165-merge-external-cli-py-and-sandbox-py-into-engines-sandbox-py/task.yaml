@@ -6,13 +6,13 @@ task_type: null
 engine: null
 model: null
 mode: implementation
-status: queued
-pipeline_status: backlog
+status: done
+pipeline_status: done
 priority: medium
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-04T20:46:47+00:00'
-updated_at: '2026-04-04T20:46:47+00:00'
+updated_at: '2026-04-06T01:47:20+00:00'
 goal: external_cli.py is the base adapter class and sandbox.py wraps it. Merge them
   into the engines module as engines/base.py and engines/sandbox.py.
 acceptance_criteria:
@@ -24,16 +24,94 @@ acceptance_criteria:
 constraints: []
 plan: []
 human_checkpoints: []
-subagents: []
+subagents:
+- id: SA-0001
+  role: planner
+  engine: goz
+  status: failed
+  path: subagents/SA-0001-planner
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0002
+  role: planner
+  engine: goz
+  status: failed
+  path: subagents/SA-0002-planner
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0003
+  role: planner
+  engine: goz
+  status: failed
+  path: subagents/SA-0003-planner
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0004
+  role: planner
+  engine: copilot
+  status: failed
+  path: subagents/SA-0004-planner
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0005
+  role: planner
+  engine: codex
+  status: failed
+  path: subagents/SA-0005-planner
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0006
+  role: planner
+  engine: opencode
+  status: completed
+  path: subagents/SA-0006-planner
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0007
+  role: swe
+  engine: opencode
+  status: completed
+  path: subagents/SA-0007-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0008
+  role: qa
+  engine: opencode
+  status: failed
+  path: subagents/SA-0008-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0009
+  role: recovery
+  engine: opencode
+  status: completed
+  path: subagents/SA-0009-recovery
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0010
+  role: reviewer
+  engine: opencode
+  status: failed
+  path: subagents/SA-0010-reviewer
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0011
+  role: recovery
+  engine: opencode
+  status: completed
+  path: subagents/SA-0011-recovery
+  sandboxed: false
+  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0165 merge-external-cli-py-and-sandbox-py-into-engines-sandbox-py'
-  commit_sha: null
+  commit_sha: 59fc69a652cdec26fbe7490a4e47ebc72c025d47
   checkpoint_base_sha: null
   checkpoint_attempts: 0
   rolled_back_checkpoint_attempt: null
   worktree_path: null
 retry_policy:
   max_retries: null
+  stage_retry_limit: null
 created_from: null
 upstream_origin: null

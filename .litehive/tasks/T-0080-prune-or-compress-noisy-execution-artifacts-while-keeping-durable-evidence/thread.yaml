@@ -1,0 +1,239 @@
+- role: planner
+  step: grooming
+  verdict: pass
+  message: 'Grooming completed. I filled the previously blank task record with a concrete
+    goal, 5 acceptance criteria, 3 constraints, a 4-step implementation plan, and
+    PM sizing PM_COMPLEXITY=moderate / PLANNED_EFFORT=m. Evidence reviewed: .litehive/tasks/T-0080-*/task.yaml
+    was blank; prior storage-boundary task T-0127 already moved raw runtime residue
+    out of the tracked surface; .litehive/.gitignore ignores logs/, pool-summary.txt,
+    worktrees/, tasks/*/runtime.yaml, and commit_to_git reports; litehive/subagents.py
+    already compresses large stream artifacts selectively but still writes transcript/session/report/timeline
+    artifacts; litehive/events.py and litehive/tasks.py/collect_recovery_evidence
+    show the durable evidence consumers that must survive cleanup. Scope clarified
+    for implementation: treat this as a retention-policy task after the tracked-vs-untracked
+    split, focusing on high-volume runtime artifacts such as transcripts, stdout/stderr,
+    session/timeline dumps, run-all logs, and hook artifact dumps. Preserve enough
+    durable evidence for status, repair/recovery, continuation handoff, and human
+    diagnosis of the latest relevant attempt even when older or raw artifacts are
+    pruned or compressed. Implementation should update both writers and readers so
+    compressed or missing raw artifacts are handled gracefully, then add focused tests
+    proving evidence consumers still surface actionable context after cleanup. No
+    code tests were run in grooming.'
+  files_changed:
+  - .litehive/tasks/T-0080-prune-or-compress-noisy-execution-artifacts-while-keeping-durable-evidence/task.yaml
+  created_at: '2026-04-05T06:23:30+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Implemented artifact retention without changing task state as source of
+    truth. README now defines the retention policy: durable evidence stays in task.yaml,
+    runtime.yaml, reports, thread.yaml, journal.md, events.jsonl, and the latest subagent
+    session.yaml plus report.yaml. Only the latest subagent attempt keeps raw prompt,
+    transcript, stdout, stderr, and timeline artifacts; older subagent folders keep
+    session.yaml and report.yaml but have raw artifacts pruned after a newer attempt
+    completes. Large final transcript, stdout, stderr, timeline, and runner hook artifacts
+    may be stored as gzip snapshots, and daemon run-all logs are bounded to the most
+    recent 8 session directories. Updated readers so recovery evidence and the web
+    monitor handle missing superseded artifacts and resolve compressed transcript,
+    stdout, stderr, timeline, and latest run-all logs when present. Verified with
+    focused and broader pytest coverage: tests/test_tasks_and_subagents.py selected
+    slices 3 passed, tests/test_observability_and_status.py selected slices 3 passed,
+    tests/test_engine_variants_and_timeline.py selected slices 3 passed, tests/test_task_commands_and_daemon.py
+    selected slices 2 passed, hook slices 6 passed, tests/test_retry_commit_and_recovery.py
+    selected slice 1 passed, full tests/test_tasks_and_subagents.py plus tests/test_observability_and_status.py
+    97 passed, and full tests/test_engine_variants_and_timeline.py plus tests/test_task_commands_and_daemon.py
+    134 passed. This confirms durable evidence consumers still surface actionable
+    context after pruning or compression, hook reporting still works, and run-all
+    log growth is bounded.'
+  files_changed: []
+  created_at: '2026-04-05T06:33:43+00:00'
+- role: qa
+  step: testing
+  verdict: pass
+  message: 'Validated T-0080 artifact-retention behavior with focused QA checks. Verified
+    that superseded subagent attempts keep durable evidence (`session.yaml`, `report.yaml`)
+    while raw prompt/transcript/stdout/stderr artifacts are pruned after a newer attempt
+    completes; verified the latest completed attempt can expose compressed `transcript.md.gz`,
+    `stdout.txt.gz`, and `timeline.yaml.gz` through the session and recovery evidence
+    readers; verified daemon run-all logs are bounded by pruning older session directories.
+    Tests run: `uv run pytest -q tests/test_tasks_and_subagents.py -k ''prunes_superseded_raw_artifacts
+    or completed_snapshots or live_execution''` -> 1 passed; `uv run pytest -q tests/test_observability_and_status.py
+    -k ''compressed_subagent_artifacts or completed_snapshots or session_view''` ->
+    3 passed; `uv run pytest -q tests/test_task_commands_and_daemon.py -k ''prunes_old_run_all_log_directories
+    or daemon_status''` -> 1 passed. Evidence from code inspection confirms the durable
+    evidence surface remains `task.yaml`, `runtime.yaml`, reports, `thread.yaml`,
+    `journal.md`, `events.jsonl`, and latest subagent `session.yaml`/`report.yaml`,
+    while readers in recovery/status/web paths resolve missing or `.gz` artifacts
+    gracefully.
+
+
+    STAGE_RESULT:
+
+    {"verdict":"pass","summary":"Focused QA checks confirmed artifact pruning/compression
+    preserves durable evidence and reader compatibility.","files_changed":["README.md","litehive/daemon.py","litehive/runtime.py","litehive/subagents.py","litehive/tasks.py","litehive/web.py","tests/test_observability_and_status.py","tests/test_task_commands_and_daemon.py","tests/test_tasks_and_subagents.py"],"tests":{"added":3,"passing":5},"warnings":[],"follow_up_tasks":[],"acceptance_criteria":["Retention
+    policy is documented and names durable evidence versus disposable raw artifacts.","Superseded
+    or large raw execution artifacts are pruned, compressed, or bounded to avoid unbounded
+    workspace noise.","Durable evidence for the latest relevant attempt remains available
+    through structured task/runtime/report/session data.","Evidence consumers continue
+    to work when raw artifacts are absent or gzip-compressed.","Focused tests cover
+    retention behavior and evidence-consumer compatibility."]}'
+  files_changed: []
+  created_at: '2026-04-05T06:36:14+00:00'
+- role: reviewer
+  step: accepting
+  verdict: pass
+  message: 'Accepted T-0080. Verified that the retention policy is now explicit in
+    README.md and matches the code paths: durable evidence remains in task.yaml, runtime.yaml,
+    stage reports, thread.yaml, journal.md, events.jsonl, and the latest subagent
+    session/report snapshots, while high-volume raw artifacts are pruned, bounded,
+    or gzip-compressed. Reviewed the implementation in litehive/subagents.py, litehive/tasks.py,
+    litehive/runtime.py, litehive/daemon.py, and litehive/web.py: superseded subagent
+    folders now prune prompt/transcript/stdout/stderr/timeline artifacts after a newer
+    attempt completes; large final transcript/stdout/stderr/timeline and runner hook
+    artifacts may be stored as .gz; daemon run-all logs are bounded to the most recent
+    8 session directories; recovery/status/web readers resolve missing or compressed
+    artifacts gracefully. Tests run by reviewer: uv run pytest -q tests/test_tasks_and_subagents.py
+    -k ''prunes_superseded_raw_artifacts or completed_snapshots or live_execution''
+    -> 1 passed; uv run pytest -q tests/test_observability_and_status.py -k ''compressed_subagent_artifacts
+    or completed_snapshots or session_view'' -> 3 passed; uv run pytest -q tests/test_task_commands_and_daemon.py
+    -k ''prunes_old_run_all_log_directories or daemon_status'' -> 1 passed. This provides
+    direct evidence that durable task context remains available after cleanup and
+    that noisy execution residue is bounded rather than accumulating unboundedly.'
+  files_changed:
+  - README.md
+  - litehive/daemon.py
+  - litehive/runtime.py
+  - litehive/subagents.py
+  - litehive/tasks.py
+  - litehive/web.py
+  - tests/test_observability_and_status.py
+  - tests/test_task_commands_and_daemon.py
+  - tests/test_tasks_and_subagents.py
+  created_at: '2026-04-05T06:37:49+00:00'
+- role: planner
+  step: grooming
+  verdict: pass
+  message: 'Grooming remains complete for T-0080. I verified the task record already
+    has a concrete goal, 5 explicit acceptance criteria, 3 scoped constraints, a 4-step
+    implementation plan, and PM sizing PM_COMPLEXITY=moderate / PLANNED_EFFORT=m in
+    .litehive/tasks/T-0080-prune-or-compress-noisy-execution-artifacts-while-keeping-durable-evidence/task.yaml.
+    I also verified from thread history that implementing, testing, and accepting
+    already passed for this scope, so no re-grooming changes are needed. Important
+    context for the next agent: the current blocker is not missing product definition
+    but late-stage recovery/preflight. The recorded blocker says commit/worktree preflight
+    found an existing planned checkpoint commit, and git confirms commit b44143279d061d8824cb516926954a681a82050c
+    exists with message ''litehive: complete T-0080 prune-or-compress-noisy-execution-artifacts-while-keeping-durable-evidence''.
+    Treat this as a commit/recovery handoff problem: determine whether runtime/task
+    git metadata should be reconciled to the existing checkpoint commit or whether
+    the preflight should recognize and reuse an already-created checkpoint instead
+    of blocking. No code changes or tests were run in grooming.'
+  files_changed: []
+  created_at: '2026-04-05T07:24:36+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: Implemented execution-artifact retention without changing task-state source-of-truth.
+    Subagent writers now keep durable evidence (session.yaml, report.yaml) while compressing
+    large latest-attempt transcript/stdout/stderr/timeline snapshots and pruning raw
+    prompt/transcript/stdout/stderr/timeline artifacts from older subagent folders;
+    run-all wrapper logs are bounded to the newest 8 directories; recovery/status/web
+    readers resolve both plain and .gz artifacts so missing pruned files degrade gracefully.
+    Verified with python -m py_compile litehive/subagents.py litehive/tasks.py litehive/web.py
+    litehive/daemon.py, uv run pytest -q tests/test_observability_and_status.py -k
+    'compressed_subagent_artifacts or completed_snapshots_for_finished_subagent or
+    active_logs_for_running_subagent' (2 passed), uv run pytest -q tests/test_tasks_and_subagents.py
+    -k 'prunes_superseded_raw_artifacts or artifacts_update_live_during_streaming_execution'
+    (2 passed), uv run pytest -q tests/test_tasks_and_subagents.py tests/test_observability_and_status.py
+    (98 passed), and uv run pytest -q tests/test_task_commands_and_daemon.py -k 'run_all
+    or daemon' (92 passed). Evidence coverage includes compressed artifact reads in
+    observability/recovery/web paths, live-vs-finished session artifact behavior,
+    superseded-subagent pruning, and bounded daemon log retention. Files implicated
+    by the task are README.md, litehive/daemon.py, litehive/runtime.py, litehive/subagents.py,
+    litehive/tasks.py, litehive/web.py, tests/test_observability_and_status.py, tests/test_task_commands_and_daemon.py,
+    and tests/test_tasks_and_subagents.py.
+  files_changed:
+  - README.md
+  - litehive/daemon.py
+  - litehive/runtime.py
+  - litehive/subagents.py
+  - litehive/tasks.py
+  - litehive/web.py
+  - tests/test_observability_and_status.py
+  - tests/test_task_commands_and_daemon.py
+  - tests/test_tasks_and_subagents.py
+  created_at: '2026-04-05T07:28:53+00:00'
+- role: qa
+  step: testing
+  verdict: pass
+  message: 'Validated T-0080 on the current workspace state. Verified from the committed
+    implementation and focused tests that the retention policy keeps durable evidence
+    in task/runtime/report/thread/journal/session/report artifacts while pruning or
+    compressing noisy raw execution residue. Confirmed subagent retention behavior
+    with uv run pytest -q tests/test_tasks_and_subagents.py -k ''prunes_superseded_raw_artifacts
+    or compresses_latest_snapshots'' -> 1 passed: superseded subagent folders keep
+    session/report snapshots but raw prompt/transcript/stdout/stderr artifacts are
+    pruned, and the latest completed attempt keeps compressed transcript/stdout/stderr
+    snapshots. Confirmed evidence-consumer compatibility with uv run pytest -q tests/test_observability_and_status.py
+    -k ''compressed_subagent_artifacts or completed_snapshots or session_view_and_recovery_evidence_support_compressed_subagent_artifacts''
+    -> 2 passed: session/recovery readers surface compressed transcript/stdout/timeline
+    artifacts correctly when plain files are absent. Confirmed bounded daemon log
+    retention with uv run pytest -q tests/test_task_commands_and_daemon.py -k ''prunes_old_run_all_log_directories
+    or daemon_status'' -> 1 passed: old .litehive/logs/run-all session directories
+    are pruned and the daemon status path still works. This provides direct evidence
+    that noisy execution artifacts are bounded without breaking repair/recovery/status
+    visibility for the latest relevant attempt.'
+  files_changed: []
+  created_at: '2026-04-05T07:30:03+00:00'
+- role: reviewer
+  step: accepting
+  verdict: pass
+  message: 'Accepted T-0080. Verified the staged implementation defines and enforces
+    an explicit artifact-retention policy while preserving durable evidence for the
+    latest relevant attempt. README.md documents the policy: durable evidence remains
+    in task.yaml, runtime.yaml, stage reports, thread.yaml, journal.md, events.jsonl,
+    and latest subagent session/report snapshots; noisy raw artifacts are disposable,
+    with older subagent prompt/transcript/stdout/stderr/timeline files pruned, large
+    latest transcript/stdout/stderr/timeline and hook artifacts allowed as .gz snapshots,
+    and daemon run-all logs bounded to the newest 8 session directories. Reviewed
+    the code paths in litehive/subagents.py, litehive/tasks.py, litehive/runtime.py,
+    litehive/daemon.py, and litehive/web.py and confirmed readers now resolve missing
+    or gzip-compressed artifacts gracefully so recovery, status, and web inspection
+    still surface actionable context after cleanup. Reviewer verification on the current
+    staged state: uv run pytest -q tests/test_tasks_and_subagents.py -k ''prunes_superseded_raw_artifacts
+    or compresses_latest_snapshots'' -> 1 passed; uv run pytest -q tests/test_observability_and_status.py
+    -k ''compressed_subagent_artifacts or completed_snapshots or session_view_and_recovery_evidence_support_compressed_subagent_artifacts''
+    -> 2 passed; uv run pytest -q tests/test_task_commands_and_daemon.py -k ''prunes_old_run_all_log_directories
+    or daemon_status'' -> 1 passed. Acceptance conclusion: task outcome is complete
+    and accepted; the remaining blocker described in recovery is a later commit/worktree
+    preflight bookkeeping issue around an existing checkpoint commit, not a gap in
+    the accepted implementation.'
+  files_changed:
+  - README.md
+  - litehive/daemon.py
+  - litehive/runtime.py
+  - litehive/subagents.py
+  - litehive/tasks.py
+  - litehive/web.py
+  - tests/test_observability_and_status.py
+  - tests/test_task_commands_and_daemon.py
+  - tests/test_tasks_and_subagents.py
+  created_at: '2026-04-05T07:31:57+00:00'
+- role: recovery
+  step: commit_to_git
+  verdict: pass
+  message: Stashed dirty runtime artifacts and moved untracked files blocking merge,
+    then fast-forwarded main to worktree commit 2f0a715. Resolved stash-pop conflict
+    on task.yaml by keeping the merged version.
+  files_changed: []
+  created_at: '2026-04-05T07:33:06+00:00'
+- role: recovery
+  step: commit_to_git
+  verdict: comment
+  message: 'Recovery trigger `commit_to_git_failure`: Recovery agent completed bounded
+    commit_to_git repair.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0080-prune-or-compress-noisy-execution-artifacts-while-keeping-durable-evidence/recovery/recovery-002.yaml'
+  files_changed: []
+  created_at: '2026-04-05T07:33:11+00:00'

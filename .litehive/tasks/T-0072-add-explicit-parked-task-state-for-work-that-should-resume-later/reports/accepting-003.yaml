@@ -1,0 +1,52 @@
+task_id: T-0072
+step: accepting
+verdict: pass
+summary: 'STAGE_RESULT:'
+feedback: "Stage `accepting` retrying `opencode` after attempt 1/3 due to transient\
+  \ timeout (classification: timeout, policy: opencode, backoff: 0.25s).\n\nSTAGE_RESULT:\n\
+  {\"verdict\":\"pass\",\"summary\":\"Explicit parked task state is implemented, documented,\
+  \ and verified across stop, repair, resume/requeue, queue visibility, and dirty-worktree\
+  \ gating semantics.\",\"files_changed\":[\"docs/state-machine.md\",\"litehive/cli.py\"\
+  ,\"litehive/models.py\",\"litehive/runtime.py\",\"litehive/tasks.py\",\"litehive/web.py\"\
+  ,\"tests/test_runtime_pool.py\",\"tests/test_task_commands_and_daemon.py\"],\"tests\"\
+  :{\"added\":4,\"passing\":20},\"warnings\":[\"Unrelated unresolved merge files for\
+  \ T-0077 remain in the worktree but were not part of this review.\",\"Pytest emitted\
+  \ a non-blocking uv environment warning about VIRTUAL_ENV not matching .venv.\"\
+  ],\"follow_up_tasks\":[],\"acceptance_criteria\":[\"Task lifecycle models and transition\
+  \ logic support an explicit parked task status, and litehive stop records parked\
+  \ work through that status instead of relying on the interruption reason string\
+  \ Task stopped via CLI.\",\"Parked tasks stay out of automatic runnable recovery\
+  \ and queue reinsertion, while system-interrupted tasks remain resumable and continue\
+  \ to re-enter the runnable queue through repair and recovery flows.\",\"Operator\
+  \ flows remain explicit: litehive resume can return a parked task to the queue at\
+  \ its current stage, litehive requeue continues to mean restart from the implementation\
+  \ entry stage, and queue/status output makes parked work visibly distinct from interrupted,\
+  \ flagged, queued, and closed tasks.\",\"Focused pytest coverage proves the parked\
+  \ versus interrupted behavior for stop, repair, dirty-worktree resume gating, and\
+  \ resume/requeue command semantics.\",\"docs/state-machine.md and user-facing lifecycle\
+  \ copy describe parked work as an explicit status distinct from interrupted work.\"\
+  ]}\nFOLLOW_UP_TASKS:\n[]\n\nReviewer acceptance pass.\n\nWhat I verified:\n- The\
+  \ durable task mo\n\n\u2026 [truncated \u2014 full transcript in subagent artifacts]"
+files_changed: []
+follow_up_tasks: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings:
+- 'Stage `accepting` retrying `opencode` after attempt 1/3 due to transient timeout
+  (classification: timeout, policy: opencode, backoff: 0.25s).'
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 1129
+hook_results: []
+created_at: '2026-04-06T14:53:52+00:00'

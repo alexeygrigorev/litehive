@@ -657,8 +657,8 @@ def test_cmd_run_dry_run_rejects_default_claude_when_not_enabled(
     def fail_drain(*args, **kwargs):  # type: ignore[no-untyped-def]
         raise AssertionError("drain_task_pool should not be called for dry-run")
 
-    monkeypatch.setattr("litehive.cli.run_single_task", fail_run_single)
-    monkeypatch.setattr("litehive.cli.drain_task_pool", fail_drain)
+    monkeypatch.setattr("litehive.cli.run.run_single_task", fail_run_single)
+    monkeypatch.setattr("litehive.cli.run.drain_task_pool", fail_drain)
 
     exit_code = _cmd_run(argparse.Namespace(workspace=tmp_path, dry_run=True, engine=None))
     assert exit_code == 0
@@ -677,8 +677,8 @@ def test_cmd_run_dispatches_single_task_mode(
     def fail_run_drain(*args, **kwargs):  # type: ignore[no-untyped-def]
         raise AssertionError("drain handler should not run for single-task mode")
 
-    monkeypatch.setattr("litehive.cli._cmd_run_single", fake_run_single)
-    monkeypatch.setattr("litehive.cli._cmd_run_drain", fail_run_drain)
+    monkeypatch.setattr("litehive.cli.run._cmd_run_single", fake_run_single)
+    monkeypatch.setattr("litehive.cli.run._cmd_run_drain", fail_run_drain)
 
     exit_code = _cmd_run(argparse.Namespace(workspace=tmp_path, dry_run=False, drain=False))
 
@@ -699,8 +699,8 @@ def test_cmd_run_dispatches_pool_drain_mode(
         called.append("drain")
         return 0
 
-    monkeypatch.setattr("litehive.cli._cmd_run_single", fail_run_single)
-    monkeypatch.setattr("litehive.cli._cmd_run_drain", fake_run_drain)
+    monkeypatch.setattr("litehive.cli.run._cmd_run_single", fail_run_single)
+    monkeypatch.setattr("litehive.cli.run._cmd_run_drain", fake_run_drain)
 
     exit_code = _cmd_run(argparse.Namespace(workspace=tmp_path, dry_run=False, drain=True))
 
@@ -874,7 +874,7 @@ def test_subagent_writes_timeline_on_finish(
         def render_transcript(self, execution):
             return execution.stdout
 
-    monkeypatch.setattr("litehive.subagents.get_engine", lambda _: FakeEngine())
+    monkeypatch.setattr("litehive.subagents._execution.get_engine", lambda _: FakeEngine())
 
     result = manager.run(task, role="swe", engine_name="opencode", prompt="do it")
 
@@ -950,7 +950,7 @@ def test_subagent_writes_timeline_during_live_progress(
         def render_transcript(self, execution):
             return execution.transcript
 
-    monkeypatch.setattr("litehive.subagents.get_engine", lambda _: FakeStreamingEngine())
+    monkeypatch.setattr("litehive.subagents._execution.get_engine", lambda _: FakeStreamingEngine())
 
     result = manager.run(task, role="swe", engine_name="opencode", prompt="stream it")
     assert result.ref.status == "completed"
@@ -991,7 +991,7 @@ def test_subagent_skips_timeline_when_no_events(
         def render_transcript(self, execution):
             return execution.stdout
 
-    monkeypatch.setattr("litehive.subagents.get_engine", lambda _: FakeEngine())
+    monkeypatch.setattr("litehive.subagents._execution.get_engine", lambda _: FakeEngine())
 
     result = manager.run(task, role="swe", engine_name="codex", prompt="no events")
     assert result.ref.status == "completed"

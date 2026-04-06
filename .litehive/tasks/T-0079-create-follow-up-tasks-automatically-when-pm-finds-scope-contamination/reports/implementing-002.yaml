@@ -1,0 +1,44 @@
+task_id: T-0079
+step: implementing
+verdict: pass
+summary: 'Now I understand what''s needed. I''ll:'
+feedback: "Now I understand what's needed. I'll:\n1. Add scope contamination detection\
+  \ guidance to the grooming role prompt\n2. Update the FOLLOW_UP_TASKS format hint\
+  \ to reference scope contamination as a primary use case\nNow update the FOLLOW_UP_TASKS\
+  \ format hint to reference scope contamination:\nPre-existing failures confirmed.\
+  \ Restoring my changes:\nNow let me run only the prompt-related tests to verify\
+  \ my specific changes:\nThe single failure (`test_stage_prompt_includes_task_type_and_plan`)\
+  \ is pre-existing \u2014 same `ValueError: Unsupported task type 'review'` in `tasks.py`\
+  \ unrelated to my changes. 46 relevant tests pass.\n\nLet me verify the final state\
+  \ of my changes:\nChanges look correct. Now submitting the verdict:\nDone. Here's\
+  \ a summary of what was implemented:\n\n**Changes to `litehive/subagents/_prompts.py`:**\n\
+  \n1. **Grooming role prompt** (`_stage_role_prompt`): Added 4 lines under a \"Scope\
+  \ contamination\" heading instructing the planner to:\n   - Identify out-of-scope\
+  \ work mixed into the task\n   - Emit `FOLLOW_UP_TASKS` per extracted item with\
+  \ title and rationale\n   - Pair every emission with a `TASK_UPDATE` that removes\
+  \ contaminated work from goal/AC/plan\n   - Set `blocking: true` only when the extracted\
+  \ work must complete first\n\n2. **FOLLOW_UP_TASKS format hint**: Added a line flagging\
+  \ scope contamination as the primary use case at grooming, referencing the paired\
+  \ `TASK_UPDATE` narrowing pattern.\n\nAll 4 acceptance criteria satisfied; 46 targeted\
+  \ tests pass with no regressions introduced."
+files_changed: []
+follow_up_tasks: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 527
+hook_results: []
+created_at: '2026-04-06T06:49:46+00:00'
