@@ -1,0 +1,39 @@
+task_id: T-0168
+step: accepting
+verdict: pass
+summary: 'Pre-existing failures confirmed. Let me verify the daemon CLI subcommands
+  and config usage:'
+feedback: "Pre-existing failures confirmed. Let me verify the daemon CLI subcommands\
+  \ and config usage:\nAll three acceptance criteria are met. Let me file the report:\n\
+  STAGE_RESULT:\n```json\n{\"verdict\":\"pass\",\"summary\":\"daemon.py converted\
+  \ to daemon/ package; global config paths sourced from litehive.config; all daemon\
+  \ tests pass\",\"files_changed\":[\"litehive/daemon/__init__.py\"],\"tests\":{\"\
+  added\":0,\"passing\":87},\"warnings\":[\"8 pre-existing test failures in test_task_commands_and_daemon.py\
+  \ unrelated to this refactor (review task-type validation issue on main)\"],\"follow_up_tasks\"\
+  :[],\"acceptance_criteria\":[{\"criterion\":\"litehive/daemon/ is a package\",\"\
+  status\":\"met\"},{\"criterion\":\"global config path comes from config module\"\
+  ,\"status\":\"met\"},{\"criterion\":\"all daemon subcommands work\",\"status\":\"\
+  met\"}]}\n```\n\n**PASS.** All acceptance criteria satisfied:\n1. `litehive/daemon/__init__.py`\
+  \ exists; old `daemon.py` removed\n2. `daemon_config_dir()` and `daemon_registry_path()`\
+  \ are imported from `litehive.config` \u2014 no hardcoded paths\n3. 87 tests pass;\
+  \ 8 failures are pre-existing on `main` (unrelated `review` task-type issue)"
+files_changed: []
+follow_up_tasks: []
+created_follow_up_task_ids: []
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 274
+hook_results: []
+created_at: '2026-04-06T03:58:34+00:00'

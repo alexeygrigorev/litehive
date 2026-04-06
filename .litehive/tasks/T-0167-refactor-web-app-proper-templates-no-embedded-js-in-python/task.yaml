@@ -6,13 +6,13 @@ task_type: null
 engine: null
 model: null
 mode: implementation
-status: in_progress
-pipeline_status: commit_to_git
+status: done
+pipeline_status: done
 priority: medium
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-04T20:46:50+00:00'
-updated_at: '2026-04-06T03:17:47+00:00'
+updated_at: '2026-04-06T03:17:48+00:00'
 goal: The web module should use Jinja2 templates in a templates/ folder. No HTML or
   JS embedded in Python strings.
 acceptance_criteria:
@@ -75,7 +75,7 @@ subagents:
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0167 refactor-web-app-proper-templates-no-embedded-js-in-python'
-  commit_sha: null
+  commit_sha: e09318a1eaab5daf2e3f50e1304322dce340c36a
   checkpoint_base_sha: null
   checkpoint_attempts: 0
   rolled_back_checkpoint_attempt: null
