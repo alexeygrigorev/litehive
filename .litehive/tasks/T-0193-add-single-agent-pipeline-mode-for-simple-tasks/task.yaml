@@ -9,22 +9,50 @@ mode: implementation
 status: queued
 pipeline_status: backlog
 priority: medium
-pm_complexity: null
-planned_effort: null
+pm_complexity: moderate
+planned_effort: m
 created_at: '2026-04-06T20:14:34+00:00'
-updated_at: '2026-04-06T20:14:34+00:00'
-goal: 'Add single-agent pipeline mode. Single mode is work -> done. One agent gets the
-  task, does whatever is needed, and submits a verdict. No grooming, QA, or reviewer
-  stages. Goes to commit_to_git if there are code changes, otherwise straight to done.'
+updated_at: '2026-04-06T22:33:47+00:00'
+goal: "Add a pipeline_mode field (single|full) to tasks. full mode is the existing\
+  \ pipeline (grooming \u2192 implementing \u2192 testing \u2192 accepting \u2192\
+  \ commit_to_git \u2192 done). single mode skips grooming, testing, and accepting:\
+  \ backlog \u2192 implementing \u2192 commit_to_git \u2192 done (one agent, no PM\
+  \ or QA stages). commit_to_git always runs after implementing in single mode; if\
+  \ there is nothing to commit it completes without error. litehive add --single creates\
+  \ a task with pipeline_mode: single. full is the default."
 acceptance_criteria:
-- Tasks have a pipeline_mode field which is either single or full
-- 'single mode: work -> done (one agent, no grooming/QA/review stages)'
-- If single mode produces code changes, commit_to_git runs after work stage
-- 'full mode: current pipeline (grooming, implementing, testing, accepting, commit_to_git)'
-- full is the default pipeline_mode
-- litehive add --single creates a task with single pipeline mode
+- task.yaml has a pipeline_mode field that accepts 'full' or 'single'; tasks without
+  the field default to 'full'
+- "A task with pipeline_mode: single routes backlog \u2192 implementing \u2192 commit_to_git\
+  \ \u2192 done, skipping grooming, testing, and accepting stages"
+- "A task with pipeline_mode: full follows the existing pipeline: grooming \u2192\
+  \ implementing \u2192 testing \u2192 accepting \u2192 commit_to_git \u2192 done"
+- pipeline_mode defaults to 'full' when creating a task without an explicit flag
+- 'litehive add --single <title> creates a task with pipeline_mode: single and pipeline_status:
+  backlog'
+- litehive add --pipeline-mode single <title> is accepted as the explicit form and
+  produces the same result as --single
+- litehive update T-XXXX --pipeline-mode single updates an existing task's pipeline_mode
+  field in task.yaml
+- commit_to_git in single mode completes without error when implementing makes no
+  git changes, and the task moves to done
 constraints: []
-plan: []
+plan:
+- 'Add pipeline_mode: Literal[''full'',''single''] = ''full'' field to TaskRecord
+  in litehive/models.py'
+- "Add _STEPS_FROM_SINGLE and _ROUTES_SINGLE routing tables to litehive/runner/states.py:\
+  \ backlog\u2192implementing, implementing\u2192commit_to_git on pass, commit_to_git\u2192\
+  done on pass"
+- Update TaskExecutionRunner.run() in litehive/runner/core.py to select _STEPS_FROM_SINGLE/_ROUTES_SINGLE
+  when task.pipeline_mode == 'single'
+- Add pipeline_mode parameter to create_task() and update_task_metadata() in litehive/tasks.py
+- Add --single (shorthand) and --pipeline-mode {full,single} flags to litehive add
+  and litehive update in litehive/cli/parser.py
+- Handle new flags in _cmd_add() and _cmd_update() in litehive/cli/tasks.py; --single
+  implies --pipeline-mode single
+- "Add tests: single-mode routing (backlog\u2192implementing\u2192commit_to_git\u2192\
+  done), full-mode default, --single CLI flag, --pipeline-mode CLI flag, update via\
+  \ litehive update"
 human_checkpoints: []
 subagents: []
 git:
