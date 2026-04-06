@@ -82,3 +82,9 @@ Stage `grooming` switched from `codex` to `opencode` after usage limit reached.
 
 ## 2026-04-06T06:26:18+00:00
 Merge conflict on 3 file(s). Launching merge agent.
+
+## 2026-04-06T06:29:39+00:00
+CommitToGit complete. Commit: 5a3f7d58523f004481fe5cd5a427cb31b77c7ec8
+
+## 2026-04-06T06:29:43+00:00
+Pool stopped: continue_or_rollback_required. This task finished with checkpoint commit `5a3f7d58523f004481fe5cd5a427cb31b77c7ec8` and unrelated queued work remains. Either continue with a new `litehive run`/pool run or roll back the checkpoint first.

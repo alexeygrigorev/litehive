@@ -1,0 +1,20 @@
+- role: planner
+  step: grooming
+  verdict: pass
+  message: 'Groomed T-0079. Infrastructure exists (T-0031): runner parses FOLLOW_UP_TASKS
+    from agent output and automatically creates queued tasks during grooming/accepting.
+    Gap: the planner role prompt in litehive/subagents/_prompts.py does not explicitly
+    instruct detection of scope contamination or the paired TASK_UPDATE+FOLLOW_UP_TASKS
+    response workflow. Goal: when the planner finds out-of-scope work mixed into a
+    task during grooming, they emit FOLLOW_UP_TASKS for extracted work paired with
+    a TASK_UPDATE that narrows the current task scope. AC: (1) grooming role prompt
+    explicitly instructs scope contamination detection and response; (2) prompt covers:
+    identify out-of-scope work, emit FOLLOW_UP_TASKS per extracted item, emit TASK_UPDATE
+    removing contaminated work from goal/AC/plan, set blocking=true when extracted
+    work must complete first; (3) FOLLOW_UP_TASKS format hint references scope contamination
+    as a primary use case; (4) uv run pytest -q passes with no regressions. Plan:
+    (1) edit _stage_role_prompt grooming branch in litehive/subagents/_prompts.py
+    to add scope contamination guidance; (2) optionally update FOLLOW_UP_TASKS format
+    comment; (3) run pytest. PM_COMPLEXITY: simple. PLANNED_EFFORT: xs.'
+  files_changed: []
+  created_at: '2026-04-06T06:40:48+00:00'

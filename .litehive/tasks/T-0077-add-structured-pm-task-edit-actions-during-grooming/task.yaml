@@ -6,13 +6,13 @@ task_type: null
 engine: gemini
 model: null
 mode: implementation
-status: in_progress
-pipeline_status: commit_to_git
+status: done
+pipeline_status: done
 priority: medium
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-01T06:36:23+00:00'
-updated_at: '2026-04-06T06:26:18+00:00'
+updated_at: '2026-04-06T06:29:40+00:00'
 goal: ''
 acceptance_criteria: []
 constraints: []
@@ -232,14 +232,14 @@ subagents:
 - id: SA-0031
   role: merge-resolver
   engine: claude
-  status: running
+  status: completed
   path: subagents/SA-0031-merge-resolver
   sandboxed: false
   sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0077 add-structured-pm-task-edit-actions-during-grooming'
-  commit_sha: null
+  commit_sha: 5a3f7d58523f004481fe5cd5a427cb31b77c7ec8
   checkpoint_base_sha: null
   checkpoint_attempts: 0
   rolled_back_checkpoint_attempt: null
