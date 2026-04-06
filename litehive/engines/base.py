@@ -523,7 +523,9 @@ def parse_stage_report_text(
             feedback=cap_feedback(transcript),
             files_changed=submission.files_changed,
             follow_up_tasks=submission.follow_up_tasks,
+            task_update=submission.task_update.model_dump(exclude_unset=True) if submission.task_update else {},
             tests={"added": submission.tests.added, "passing": submission.tests.passing},
+
             warnings=submission.warnings,
         )
 
@@ -534,6 +536,19 @@ def parse_stage_report_text(
         validation_warnings = _format_stage_result_validation_errors(submission)
 
     follow_up_tasks, follow_up_warnings = _extract_follow_up_tasks(transcript)
+    task_update_section = _extract_section_block(transcript, "TASK_UPDATE")
+    task_update: dict[str, object] = {}
+    if task_update_section:
+        try:
+            import yaml
+            parsed = yaml.safe_load(task_update_section)
+            if isinstance(parsed, dict):
+                task_update = parsed
+            else:
+                follow_up_warnings.append("Ignoring invalid TASK_UPDATE section: expected YAML mapping.")
+        except Exception as exc:
+            follow_up_warnings.append(f"Ignoring invalid TASK_UPDATE section: {exc}")
+
     summary = _extract_line(transcript, "SUMMARY") or (
         transcript.splitlines()[0] if transcript else f"{step} completed"
     )
@@ -545,6 +560,7 @@ def parse_stage_report_text(
         feedback=cap_feedback(transcript),
         files_changed=_extract_list(transcript, "FILES_CHANGED"),
         follow_up_tasks=follow_up_tasks,
+        task_update=task_update,
         tests={
             "added": _extract_int(transcript, "TESTS_ADDED"),
             "passing": _extract_int(transcript, "TESTS_PASSING"),
@@ -663,7 +679,7 @@ def _extract_section_block(text: str, key: str) -> str | None:
             break
         if capture:
             lines.append(line)
-    block = "\n".join(lines).strip()
+    block = "\n".join(lines).rstrip()
     return block or None
 
 

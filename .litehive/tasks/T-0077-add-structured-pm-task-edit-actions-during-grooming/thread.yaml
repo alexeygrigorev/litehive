@@ -732,6 +732,27 @@
     pass entry for T-0077; no acceptance review was performed for T-0077 in this session.'
   files_changed: []
   created_at: '2026-04-05T05:35:28+00:00'
+- role: planner
+  step: grooming
+  verdict: pass
+  message: 'Added support for structured task-edit actions during grooming. Planners
+    can now emit a TASK_UPDATE: YAML block or include task_update in STAGE_RESULT:
+    JSON to update any task field (goal, acceptance_criteria, constraints, plan, PM
+    sizing, priority, etc.). Consolidated auto-population logic into apply_task_updates_from_report
+    and preserved existing inference fallbacks. Verified with 3 new tests in tests/test_grooming_task_updates.py
+    and regression checks in tests/test_runner_workflow.py.'
+  files_changed: []
+  created_at: '2026-04-06T04:51:06+00:00'
+- role: planner
+  step: grooming
+  verdict: pass
+  message: 'Groomed T-0077: Add structured PM task-edit actions during grooming. Defined
+    the goal to enable lifecycle actions (close, park, requeue) via structured output,
+    established 6 explicit acceptance criteria covering model updates, runner integration,
+    and documentation, and produced a 6-step execution plan. The task is now runnable
+    and fully specified for implementation.'
+  files_changed: []
+  created_at: '2026-04-06T04:57:28+00:00'
 - role: recovery
   step: implementing
   verdict: pass
@@ -750,6 +771,201 @@
     \ in broader suites are pre-existing."
   files_changed: []
   created_at: '2026-04-06T05:19:33+00:00'
+- role: planner
+  step: grooming
+  verdict: pass
+  message: 'T-0077 implementation verified: structured PM task-edit actions during
+    grooming are complete and committed (c41e096). All 6 acceptance criteria satisfied:
+    (1) TaskUpdateSubmission model includes outcome, outcome_reason, and action fields
+    (models.py:265-267). (2) apply_task_updates_from_report detects lifecycle fields
+    and inlines close/park/requeue logic to avoid deadlock (tasks.py:4406-4520). (3)
+    Planner and reviewer can trigger closure via TASK_UPDATE YAML block with outcome:
+    duplicate/wont_do/deferred. (4) Runner exits cleanly when grooming closes/parks
+    a task mid-run (runner/core.py:380-386). (5) Prompt guidance updated for TASK_UPDATE
+    YAML blocks (_prompts.py:350). (6) Tests verify structured outcome closes task
+    and stops runner - 7 focused tests in test_grooming_task_updates.py all pass.
+    One minor gap: prompt does not explicitly enumerate lifecycle action fields (outcome,
+    action), but the model and parsing fully support them. No blocker remains.'
+  files_changed: []
+  created_at: '2026-04-06T05:38:19+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Verified T-0077: structured PM task-edit actions during grooming. All
+    6 acceptance criteria are met.
+
+
+    IMPLEMENTATION SUMMARY:
+
+    1. TaskUpdateSubmission model in litehive/models.py now includes outcome (TaskStatus),
+    outcome_reason (str), and action (Literal[park,requeue,abandon]) fields.
+
+    2. apply_task_updates_from_report in litehive/tasks.py detects outcome/action
+    fields and invokes the corresponding lifecycle logic (close, park, requeue, abandon)
+    through update_task.
+
+    3. The planner and reviewer can trigger task closure via structured TASK_UPDATE
+    YAML blocks or STAGE_RESULT JSON with task_update field. parse_stage_report_text
+    in engines/base.py extracts TASK_UPDATE sections; StageResultSubmission has a
+    task_update field.
+
+    4. The runner in litehive/runner/core.py detects terminal task status after apply_task_updates_from_report
+    during grooming->implementing transition and exits cleanly via _finish_run.
+
+    5. litehive/subagents/_prompts.py updated with task_update guidance in grooming
+    prompt and STAGE_RESULT JSON example.
+
+    6. Tests verify structured outcome: duplicate closes task and stops runner from
+    proceeding.
+
+
+    FOCUSED TESTS: uv run pytest -q tests/test_grooming_task_updates.py -> 7 passed.
+    uv run pytest -q tests/test_runner_workflow.py excluding 2 pre-existing failures
+    -> 99 passed. Total: 106 passed.
+
+
+    FILES CHANGED: litehive/models.py, litehive/tasks.py, litehive/runner/core.py,
+    litehive/cli/_parse.py, litehive/engines/base.py, litehive/subagents/_prompts.py,
+    tests/test_grooming_task_updates.py.
+
+
+    WARNINGS: 22 pre-existing test failures in broader suite (empty VALID_TASK_ROUTING_KEYS,
+    renamed CLI functions, goz adapter changes, thread-safety timing) none related
+    to T-0077.'
+  files_changed: []
+  created_at: '2026-04-06T05:47:01+00:00'
+- role: reviewer
+  step: accepting
+  verdict: pass
+  message: 'STAGE_RESULT:
+
+    {"verdict":"pass","summary":"Verified structured PM task-edit actions during grooming:
+    TaskUpdateSubmission model with outcome/action/outcome_reason fields, apply_task_updates_from_report
+    routing into update_task with lifecycle support (close/park/requeue/abandon),
+    runner clean-exit on mid-run close/park, TASK_UPDATE YAML block parsing in engines/base.py,
+    prompt guidance in _prompts.py, and 7 focused tests all passing.","files_changed":["litehive/cli/_parse.py","litehive/models.py","litehive/runner/core.py","litehive/tasks.py","litehive/engines/base.py","litehive/subagents/_prompts.py","tests/test_grooming_task_updates.py"],"tests":{"added":7,"passing":7},"warnings":["3
+    pre-existing test failures unrelated to T-0077: test_stage_prompt_includes_task_type_and_plan,
+    test_add_command_persists_task_type (both due to review not in VALID_TASK_TYPES),
+    and test_goz_engine_in_registry (supports_model_override capability changed)."],"follow_up_tasks":[],"acceptance_criteria":[{"criterion":"TaskUpdateSubmission
+    model includes outcome, outcome_reason, and action fields","status":"met","evidence":"TaskUpdateSubmission
+    in models.py has outcome: TaskStatus | None, outcome_reason: str | None, action:
+    Literal[park/requeue/abandon] | None. StageResultSubmission has task_update: TaskUpdateSubmission
+    | None. StageReport has task_update: dict."},{"criterion":"apply_task_updates_from_report
+    detects lifecycle fields and invokes corresponding functions","status":"met","evidence":"apply_task_updates_from_report
+    in tasks.py parses task_update dict via _parse_rich_task_update_document, then
+    calls update_task with all fields including outcome/outcome_reason/action. update_task
+    handles outcome (close), action=park, action=requeue, action=abandon inline without
+    nested lock acquisition."},{"criterion":"Planner/reviewer can trigger task closure
+    via outcome field in report","status":"met","evidence":"engines/base.py parse_stage_report_text
+    extracts TASK_UPDATE YAML block and wires task_update through both structured
+    JSON STAGE_RESULT and text-based paths."},{"criterion":"Runner handles closed/parked
+    tasks mid-run by terminating execution cleanly","status":"met","evidence":"runner/core.py
+    checks task.status in CLOSED_TASK_STATUSES | parked after apply_task_updates_from_report
+    and returns _finish_run. Tests confirm executor called exactly once and final_status
+    correct."},{"criterion":"Documentation in _prompts.py updated to guide agents
+    on new actions","status":"met","evidence":"Added grooming prompt guidance about
+    TASK_UPDATE YAML blocks. Updated STAGE_RESULT JSON example to include task_update
+    field."},{"criterion":"Tests verify duplicate outcome closes task and stops runner","status":"met","evidence":"test_apply_task_updates_with_outcome_duplicate_closes_task
+    confirms status=duplicate, pipeline_status=done, removed from queue. test_runner_exits_cleanly_when_grooming_report_closes_task
+    confirms runner exits with final_status=duplicate after one executor call."}]}'
+  files_changed: []
+  created_at: '2026-04-06T05:59:13+00:00'
+- role: planner
+  step: grooming
+  verdict: pass
+  message: 'T-0077 is complete and ready for commit_to_git. The implementation is
+    committed at ce4ee84. All 6 acceptance criteria verified: (1) TaskUpdateSubmission
+    model has outcome, outcome_reason, action fields (models.py:265-267). (2) apply_task_updates_from_report
+    detects lifecycle fields and routes through update_task with inline close/park/requeue/abandon
+    handling (tasks.py:4392-4531). (3) Planner/reviewer can trigger closure via TASK_UPDATE
+    YAML or STAGE_RESULT JSON with outcome field (engines/base.py:516-550). (4) Runner
+    exits cleanly when grooming closes/parks a task mid-run (runner/core.py:376-386).
+    (5) Prompt guidance updated for TASK_UPDATE blocks (_prompts.py:350). (6) 7 focused
+    tests pass including test_apply_task_updates_with_outcome_duplicate_closes_task
+    and test_runner_exits_cleanly_when_grooming_report_closes_task. The reviewer accepted
+    at 2026-04-06T05:59:13 with full evidence. Task status interrupted/grooming is
+    an artifact of engine-switch continuation; the work is done and should proceed
+    to commit_to_git.'
+  files_changed: []
+  created_at: '2026-04-06T06:07:11+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Completed T-0077: Added structured PM task-edit actions during grooming.
+    Verified and completed the prior recovery-pass implementation by adding missing
+    prompt guidance in litehive/subagents/_prompts.py. ACCEPTANCE CRITERIA VERIFICATION:
+    1) TaskUpdateSubmission model includes outcome, outcome_reason, and action fields
+    (models.py:265-267). 2) apply_task_updates_from_report detects these fields and
+    invokes lifecycle functions (tasks.py:1910-1995, update_task handles close/park/requeue/abandon
+    at tasks.py:4421-4531). 3) Planner and reviewer can trigger closure via TASK_UPDATE
+    or STAGE_RESULT with outcome field. 4) Runner exits cleanly when task is closed/parked
+    mid-run (runner/core.py:380-386). 5) Prompt guidance added in _prompts.py for
+    outcome-based closure, park, requeue, abandon actions in both grooming and accepting
+    prompts. 6) Tests verify duplicate closure and runner exit: 7 tests pass. FILES
+    CHANGED: litehive/subagents/_prompts.py.'
+  files_changed: []
+  created_at: '2026-04-06T06:14:11+00:00'
+- role: qa
+  step: testing
+  verdict: pass
+  message: 'Verified structured PM task-edit actions during grooming. All 6 acceptance
+    criteria met. All 7 focused tests pass (tests/test_grooming_task_updates.py: 7
+    passed in 1.23s).
+
+
+    ACCEPTANCE CRITERIA VERIFIED:
+
+
+    1. TaskUpdateSubmission model includes outcome, outcome_reason, and action fields:
+    confirmed in litehive/models.py. TaskUpdateSubmission has outcome: TaskStatus
+    | None, outcome_reason: str | None, action: Literal["park","requeue","abandon"]
+    | None. _parse_rich_task_update_document in litehive/cli/_parse.py recognizes
+    all three. StageReport and StageResultSubmission both carry task_update.
+
+
+    2. apply_task_updates_from_report detects these fields and invokes corresponding
+    lifecycle functions: confirmed in litehive/tasks.py. The function parses structured
+    task_update + text fallbacks, then calls update_task() with outcome/outcome_reason/action
+    params. update_task inlines close/park/requeue/abandon logic directly to avoid
+    the deadlock the recovery agent fixed.
+
+
+    3. Planner/reviewer can trigger task closure via TASK_UPDATE or STAGE_RESULT:
+    confirmed. parse_stage_report_text in litehive/engines/base.py extracts TASK_UPDATE
+    YAML blocks from transcripts and populates report.task_update. Both JSON STAGE_RESULT
+    and text TASK_UPDATE paths work. Tests: test_apply_task_updates_with_outcome_duplicate_closes_task,
+    test_apply_task_updates_from_yaml_block.
+
+
+    4. Runner correctly handles mid-run task close/park: confirmed in litehive/runner/core.py.
+    After apply_task_updates_from_report, the runner checks task.status in CLOSED_TASK_STATUSES
+    | {"parked"} and calls _finish_run to exit cleanly. Tests: test_runner_exits_cleanly_when_grooming_report_closes_task
+    (final_status=duplicate, call_count=1), test_runner_exits_cleanly_when_grooming_report_parks_task
+    (final_status=parked, call_count=1).
+
+
+    5. Documentation in litehive/subagents/_prompts.py updated: confirmed. Grooming
+    prompt has 4 new bullet points about TASK_UPDATE YAML blocks, outcome closure,
+    parking, requeue/abandon. Accepting prompt includes closing/parking guidance.
+    STAGE_RESULT example updated to include task_update:{}.
+
+
+    6. Tests verify structured outcome: duplicate closes task and stops runner: confirmed.
+    test_apply_task_updates_with_outcome_duplicate_closes_task verifies status=duplicate,
+    pipeline_status=done, removed from queue. test_runner_exits_cleanly_when_grooming_report_closes_task
+    confirms runner stops after grooming with no further stages executed.
+
+
+    FILES CHANGED: litehive/models.py, litehive/tasks.py, litehive/runner/core.py,
+    litehive/cli/_parse.py, litehive/engines/base.py, litehive/subagents/_prompts.py,
+    tests/test_grooming_task_updates.py (new, 223 lines, 7 tests).
+
+
+    PRE-EXISTING FAILURES: 6 test_task_commands_and_daemon.py failures (task_type=review
+    not in VALID_TASK_TYPES) and 1 test_runner_workflow.py failure exist prior to
+    this commit and are unrelated to T-0077.'
+  files_changed: []
+  created_at: '2026-04-06T06:19:16+00:00'
 - role: reviewer
   step: accepting
   verdict: pass

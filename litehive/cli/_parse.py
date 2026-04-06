@@ -195,7 +195,13 @@ _RICH_TASK_UPDATE_KEYS = {
     "model",
     "retry_limit",
     "auto_commit",
+    "outcome",
+    "outcome_reason",
+    "action",
 }
+
+_VALID_CLOSE_OUTCOMES = {"wont_do", "deferred", "duplicate"}
+_VALID_ACTIONS = {"park", "requeue", "abandon"}
 
 
 def _normalize_yaml_text_list(value, *, key):
@@ -326,6 +332,29 @@ def _parse_rich_task_update_document(data, *, source):
         if not isinstance(auto_commit, bool):
             raise ValueError(f"{source} field 'auto_commit' must be true or false")
         updates["auto_commit"] = auto_commit
+
+    if "outcome" in data:
+        outcome = data["outcome"]
+        if outcome is not None and outcome not in _VALID_CLOSE_OUTCOMES:
+            allowed = ", ".join(sorted(_VALID_CLOSE_OUTCOMES))
+            raise ValueError(f"{source} field 'outcome' must be one of: {allowed}, or null")
+        if outcome is not None:
+            updates["outcome"] = outcome
+
+    if "outcome_reason" in data:
+        outcome_reason = data["outcome_reason"]
+        if outcome_reason is not None and not isinstance(outcome_reason, str):
+            raise ValueError(f"{source} field 'outcome_reason' must be a string or null")
+        if outcome_reason is not None:
+            updates["outcome_reason"] = outcome_reason
+
+    if "action" in data:
+        action = data["action"]
+        if action is not None and action not in _VALID_ACTIONS:
+            allowed = ", ".join(sorted(_VALID_ACTIONS))
+            raise ValueError(f"{source} field 'action' must be one of: {allowed}, or null")
+        if action is not None:
+            updates["action"] = action
 
     if not updates:
         raise ValueError(f"{source} does not contain any supported task fields to update")

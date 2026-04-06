@@ -259,7 +259,7 @@ def stage_prompt(
             "STAGE_RESULT:",
             '{"verdict":"pass","summary":"one-line summary","files_changed":["path/to/file"],'
             '"tests":{"added":0,"passing":0},"warnings":[],'
-            '"follow_up_tasks":[],"acceptance_criteria":[]}',
+            '"follow_up_tasks":[],"acceptance_criteria":[],"task_update":{}}',
             "The text format above is still accepted as a fallback.",
         ]
     )
@@ -347,6 +347,10 @@ def _stage_role_prompt(step: str, owner: str | None = None) -> list[str]:
             "- Frame the real user problem, clarify scope, sharpen acceptance criteria, decompose the work, identify follow-up tasks, and estimate PM sizing.",
             "- Treat the Litehive CLI as the source of truth for task shaping: use the task record fields directly, and when documenting operator guidance prefer concrete `litehive add`, `litehive update`, and `litehive intake` flows over vague prose.",
             "- Do not pass grooming with a blank task record; make sure the task has a clear goal and explicit acceptance criteria, or return a blocked outcome that names what is missing.",
+            "- During grooming, you can emit a structured `TASK_UPDATE:` YAML block to update any task field (goal, acceptance_criteria, constraints, plan, pm_complexity, planned_effort, priority, auto_commit, etc.).",
+            "- To close a task as duplicate, wont_do, or deferred, include `outcome: <status>` and optional `outcome_reason: <text>` in the TASK_UPDATE block.",
+            "- To park a task (pause without closing), include `action: park` in the TASK_UPDATE block.",
+            "- To requeue a previously parked or closed task for another pass, include `action: requeue`. To abandon it entirely, include `action: abandon`.",
             "- Do not implement code in this stage.",
         ]
     if step == "accepting":
@@ -354,6 +358,7 @@ def _stage_role_prompt(step: str, owner: str | None = None) -> list[str]:
             "- You are the reviewer, a PM-style role representing the user's and product's point of view.",
             "- Validate the strict end-user outcome, look for regressions or missing evidence, and make a final done versus not-done judgment.",
             "- Reject work that is incomplete, weakly verified, or misaligned with the promised outcome.",
+            "- You may close a task as duplicate, wont_do, or deferred by including `outcome: <status>` with optional `outcome_reason` in a TASK_UPDATE block. You may park a task with `action: park`.",
         ]
     if step == "implementing":
         return [

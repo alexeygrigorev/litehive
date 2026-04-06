@@ -229,6 +229,13 @@ subagents:
   path: subagents/SA-0030-reviewer
   sandboxed: false
   sandbox_summary: host
+- id: SA-0031
+  role: merge-resolver
+  engine: claude
+  status: running
+  path: subagents/SA-0031-merge-resolver
+  sandboxed: false
+  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0077 add-structured-pm-task-edit-actions-during-grooming'

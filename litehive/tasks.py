@@ -1,6 +1,5 @@
 """Task storage helpers for the local YAML workspace."""
 
-
 from dataclasses import dataclass, field
 import fcntl
 import gzip
@@ -68,6 +67,7 @@ VALID_PM_COMPLEXITIES = set(get_args(TaskComplexity))
 VALID_PLANNED_EFFORTS = set(get_args(PlannedEffort))
 VALID_TASK_TYPES = set(VALID_TASK_ROUTING_KEYS)
 TASK_PRIORITY_ORDER = {"high": 0, "medium": 1, "low": 2}
+
 
 @dataclass(slots=True)
 class _RunnerLockState:
@@ -434,7 +434,9 @@ def normalize_human_checkpoints(items: list[str] | None) -> list[str]:
             continue
         if checkpoint not in VALID_HUMAN_CHECKPOINTS:
             allowed = ", ".join(sorted(VALID_HUMAN_CHECKPOINTS))
-            raise ValueError(f"Unsupported human checkpoint '{checkpoint}'. Expected one of: {allowed}")
+            raise ValueError(
+                f"Unsupported human checkpoint '{checkpoint}'. Expected one of: {allowed}"
+            )
         if checkpoint in seen:
             continue
         seen.add(checkpoint)
@@ -639,7 +641,9 @@ def infer_acceptance_criteria(task: TaskRecord) -> list[str]:
         if len(task.plan) == 1:
             inferred.append(f"The implementation completes the planned work: {task.plan[0]}.")
         else:
-            inferred.append("The implementation covers the defined plan end-to-end without broad unrelated changes.")
+            inferred.append(
+                "The implementation covers the defined plan end-to-end without broad unrelated changes."
+            )
         anchored = True
 
     if task.depends_on and anchored:
@@ -1018,7 +1022,9 @@ def workspace_runner_guard(root: Path):
         )
         _write_runner_lock_metadata(handle, status)
         with _RUNNER_LOCKS_MUTEX:
-            _RUNNER_LOCKS[root] = _RunnerLockState(handle=handle, depth=1, status=status, owner_thread_id=owner_thread_id)
+            _RUNNER_LOCKS[root] = _RunnerLockState(
+                handle=handle, depth=1, status=status, owner_thread_id=owner_thread_id
+            )
     except Exception:
         handle.close()
         raise
@@ -1389,7 +1395,9 @@ def write_recovery_report(root: Path, task: TaskRecord, report: RecoveryReport) 
     existing = sorted(reports_dir.glob("recovery-*.yaml"))
     ordinal = len(existing) + 1
     path = reports_dir / f"recovery-{ordinal:03d}.yaml"
-    path.write_text(yaml.safe_dump(report.model_dump(mode="python"), sort_keys=False), encoding="utf-8")
+    path.write_text(
+        yaml.safe_dump(report.model_dump(mode="python"), sort_keys=False), encoding="utf-8"
+    )
     return path
 
 
@@ -1435,8 +1443,7 @@ def record_recovery_report(
             message=(
                 f"Recovery trigger `{trigger}`: {summary}\n"
                 f"runnable_state: {runnable_state}\n"
-                f"report: {path.relative_to(root)}"
-                + (f"\nblocker: {blocker}" if blocker else "")
+                f"report: {path.relative_to(root)}" + (f"\nblocker: {blocker}" if blocker else "")
             ),
         ),
     )
@@ -1639,9 +1646,7 @@ def create_task(
             }
             if task.mode == "tasks":
                 writes[task_brief_file(root, task)] = render_task_brief(task)
-            _write_atomic_files(
-                writes
-            )
+            _write_atomic_files(writes)
         except Exception:
             shutil.rmtree(base, ignore_errors=True)
             raise
@@ -1704,9 +1709,7 @@ def create_follow_up_tasks(
                 task.model_dump(mode="python"), sort_keys=False
             )
             writes[task_runtime_file(root, task)] = _serialize_task_runtime(task)
-            writes[
-                base / "journal.md"
-            ] = (
+            writes[base / "journal.md"] = (
                 f"# {task.id} {task.title}\n\n"
                 f"## {utcnow()}\n"
                 "Task created.\n\n"
@@ -1904,59 +1907,91 @@ def _merged_state_for_runner_owned_write(
     return merged_state
 
 
-def populate_missing_acceptance_criteria_from_report(
-    root: Path, task: TaskRecord, feedback: str
-) -> list[str]:
-    if task.acceptance_criteria:
-        return []
-    acceptance_criteria = normalize_acceptance_criteria(
-        extract_report_list_section(feedback, "ACCEPTANCE_CRITERIA")
-    )
-    journal_message = "Acceptance criteria auto-populated from grooming output."
-    if not acceptance_criteria:
-        acceptance_criteria = infer_acceptance_criteria(task)
-        journal_message = "Acceptance criteria inferred from task context after grooming."
-    if not acceptance_criteria:
-        return []
+def apply_task_updates_from_report(root: Path, task: TaskRecord, report: "StageReport") -> bool:
+    """Apply structured and text-based task updates from a stage report."""
+    from litehive.cli._parse import _parse_rich_task_update_document
 
-    task.acceptance_criteria = acceptance_criteria
-    save_task(root, task)
-    if task.mode == "tasks":
-        _atomic_write_text(task_brief_file(root, task), render_task_brief(task))
-    append_journal(
-        root,
-        task,
-        journal_message,
-    )
-    return acceptance_criteria
+    updates: dict[str, object] = {}
 
+    # Preferred: structured task_update from STAGE_RESULT or TASK_UPDATE YAML block.
+    if report.task_update:
+        try:
+            updates = _parse_rich_task_update_document(
+                report.task_update, source="report task_update"
+            )
+        except ValueError as exc:
+            append_journal(root, task, f"Warning: Ignoring malformed task update in report: {exc}")
 
-def populate_pm_sizing_from_report(root: Path, task: TaskRecord, feedback: str) -> bool:
+    # Fallback/Supplemental: text-based list sections.
+    feedback = report.feedback
+    if "acceptance_criteria" not in updates:
+        text_criteria = normalize_acceptance_criteria(
+            extract_report_list_section(feedback, "ACCEPTANCE_CRITERIA")
+        )
+        if not text_criteria and not task.acceptance_criteria:
+            text_criteria = infer_acceptance_criteria(task)
+        if text_criteria and not task.acceptance_criteria:
+            updates["acceptance_criteria"] = text_criteria
+
+    if "constraints" not in updates:
+        text_constraints = normalize_task_text_list(
+            extract_report_list_section(feedback, "CONSTRAINTS")
+        )
+        if text_constraints and not task.constraints:
+            updates["constraints"] = text_constraints
+
+    if "plan" not in updates:
+        text_plan = normalize_task_text_list(extract_report_list_section(feedback, "PLAN"))
+        if text_plan and not task.plan:
+            updates["plan"] = text_plan
+
+    # Fallback/Supplemental: PM sizing lines.
     pm_complexity = extract_report_line(feedback, "PM_COMPLEXITY")
+    if "pm_complexity" not in updates and pm_complexity in VALID_PM_COMPLEXITIES:
+        updates["pm_complexity"] = pm_complexity
+
     planned_effort = extract_report_line(feedback, "PLANNED_EFFORT")
+    if "planned_effort" not in updates and planned_effort in VALID_PLANNED_EFFORTS:
+        updates["planned_effort"] = planned_effort
 
-    updates: list[str] = []
-    changed = False
-    if pm_complexity in VALID_PM_COMPLEXITIES and task.pm_complexity != pm_complexity:
-        task.pm_complexity = pm_complexity  # type: ignore[assignment]
-        updates.append(f"- pm_complexity: `{pm_complexity}`")
-        changed = True
-    if planned_effort in VALID_PLANNED_EFFORTS and task.planned_effort != planned_effort:
-        task.planned_effort = planned_effort  # type: ignore[assignment]
-        updates.append(f"- planned_effort: `{planned_effort}`")
-        changed = True
-
-    if not changed:
+    if not updates:
         return False
 
-    save_task(root, task)
-    if task.mode == "tasks":
-        _atomic_write_text(task_brief_file(root, task), render_task_brief(task))
-    append_journal(
-        root,
-        task,
-        "PM sizing updated from grooming output.\n" + "\n".join(updates),
+    journal_message = "Task record updated from grooming output:\n" + "\n".join(
+        f"- {key}: `{value}`" for key, value in updates.items()
     )
+
+    # Use update_task logic to apply updates.
+    updated = update_task(
+        root,
+        task.id,
+        goal=updates.get("goal", ...),
+        acceptance_criteria=updates.get("acceptance_criteria", ...),
+        constraints=updates.get("constraints", ...),
+        plan=updates.get("plan", ...),
+        pm_complexity=updates.get("pm_complexity", ...),
+        planned_effort=updates.get("planned_effort", ...),
+        depends_on=updates.get("depends_on", ...),
+        human_checkpoints=updates.get("human_checkpoints", ...),
+        task_type=updates.get("task_type", ...),
+        mode=updates.get("mode", ...),
+        priority=updates.get("priority", ...),
+        engine=updates.get("engine", ...),
+        model=updates.get("model", ...),
+        retry_limit=updates.get("retry_limit", ...),
+        auto_commit=updates.get("auto_commit", ...),
+        outcome=updates.get("outcome", ...),
+        outcome_reason=updates.get("outcome_reason", ...),
+        action=updates.get("action", ...),
+        journal_message=journal_message,
+    )
+
+    # Re-sync the passed-in task object so the caller sees the changes.
+    for field_name in updated.__class__.model_fields:
+        if field_name == "runtime":
+            continue
+        setattr(task, field_name, getattr(updated, field_name))
+
     return True
 
 
@@ -2261,7 +2296,10 @@ def _apply_stage_finished(task: TaskRecord, report: StageReport) -> None:
             "summary": "",
         }
     )
-    if task.runtime.continuation_handoff is not None and task.runtime.continuation_handoff.step == report.step:
+    if (
+        task.runtime.continuation_handoff is not None
+        and task.runtime.continuation_handoff.step == report.step
+    ):
         task.runtime.continuation_handoff = None
 
 
@@ -2284,11 +2322,17 @@ def mark_subagent_started(root: Path, task: TaskRecord, ref: SubagentRef) -> Non
 
 
 def mark_subagent_pid(root: Path, task: TaskRecord, pid: int | None) -> None:
-    if pid is None or task.runtime.active_subagent is None or task.runtime.active_subagent.pid == pid:
+    if (
+        pid is None
+        or task.runtime.active_subagent is None
+        or task.runtime.active_subagent.pid == pid
+    ):
         return
     now = utcnow()
     task.runtime.updated_at = now
-    task.runtime.active_subagent = task.runtime.active_subagent.model_copy(update={"pid": pid, "updated_at": now})
+    task.runtime.active_subagent = task.runtime.active_subagent.model_copy(
+        update={"pid": pid, "updated_at": now}
+    )
     save_task_runtime(root, task)
 
 
@@ -2305,7 +2349,9 @@ def mark_subagent_progress(
     now = utcnow()
     task.runtime.updated_at = now
     if task.runtime.current_stage.step is not None:
-        task.runtime.current_stage = task.runtime.current_stage.model_copy(update={"updated_at": now})
+        task.runtime.current_stage = task.runtime.current_stage.model_copy(
+            update={"updated_at": now}
+        )
     updates: dict[str, object] = {"updated_at": now}
     if pid is not None:
         updates["pid"] = pid
@@ -2513,7 +2559,10 @@ def dequeue_next_task_selection(root: Path) -> TaskSelection:
                         RecoveryAction(
                             action="requeue_stage",
                             summary=f"Reset task from flagged to queued/{recovery_stage}.",
-                            metadata={"from_stage": next_task.pipeline_status, "to_stage": recovery_stage},
+                            metadata={
+                                "from_stage": next_task.pipeline_status,
+                                "to_stage": recovery_stage,
+                            },
                         )
                     ],
                 )
@@ -2614,7 +2663,9 @@ def _dependent_task_count(
             and _is_task_eligible_for_execution(queued_task)
         )
     }
-    reverse_dependencies: dict[str, set[str]] = {candidate_id: set() for candidate_id in eligible_task_ids}
+    reverse_dependencies: dict[str, set[str]] = {
+        candidate_id: set() for candidate_id in eligible_task_ids
+    }
     for queued_id in eligible_task_ids:
         queued_task = tasks_by_id[queued_id]
         for dependency_id in queued_task.depends_on:
@@ -2752,7 +2803,9 @@ def _prepare_interrupted_task_for_requeue(task: TaskRecord) -> None:
         )
 
 
-def _interrupted_subagent_snippet(root: Path, task: TaskRecord, active: RuntimeSubagentState) -> str:
+def _interrupted_subagent_snippet(
+    root: Path, task: TaskRecord, active: RuntimeSubagentState
+) -> str:
     subagent_base = task_dir(root, task) / active.path
     report_path = subagent_base / "report.yaml"
     if report_path.exists():
@@ -2838,15 +2891,15 @@ def _write_interrupted_subagent_artifacts(
     report_payload["interruption_reason"] = subagent.interruption_reason or None
     report_payload["resume_stage"] = resume_stage
     report_payload["continuation"] = (
-        None
-        if subagent.continuation is None
-        else subagent.continuation.model_dump(mode="python")
+        None if subagent.continuation is None else subagent.continuation.model_dump(mode="python")
     )
     writes[report_path] = yaml.safe_dump(report_payload, sort_keys=False)
     _write_atomic_files(writes)
 
 
-def _mark_interrupted_subagent(root: Path, task: TaskRecord, *, reason: str, stage: str) -> RuntimeSubagentState | None:
+def _mark_interrupted_subagent(
+    root: Path, task: TaskRecord, *, reason: str, stage: str
+) -> RuntimeSubagentState | None:
     active = task.runtime.active_subagent
     existing = task.runtime.last_subagent if task.runtime.last_subagent is not None else None
     if active is None and (existing is None or existing.status != "interrupted"):
@@ -2894,16 +2947,16 @@ def _prepare_interrupted_task(
     interrupted_at = (
         task.runtime.active_subagent.updated_at
         if task.runtime.active_subagent is not None
-        else task.runtime.current_stage.updated_at
-        or started_at
-        or now
+        else task.runtime.current_stage.updated_at or started_at or now
     )
     task.status = "interrupted"
     task.pipeline_status = stage  # type: ignore[assignment]
     task.runtime.execution_status = "interrupted"
     task.runtime.run_started_at = None
     interruption_reason = reason or summary
-    interrupted_subagent = _mark_interrupted_subagent(root, task, reason=interruption_reason, stage=stage)
+    interrupted_subagent = _mark_interrupted_subagent(
+        root, task, reason=interruption_reason, stage=stage
+    )
     _apply_task_outcome(
         task,
         kind="interrupted",
@@ -2938,28 +2991,20 @@ def _prepare_interrupted_task(
         subagent_path=None if interrupted_subagent is None else interrupted_subagent.path,
         status=None if interrupted_subagent is None else interrupted_subagent.status,
         summary=summary,
-        transcript_snippet="" if interrupted_subagent is None else interrupted_subagent.transcript_snippet,
+        transcript_snippet=""
+        if interrupted_subagent is None
+        else interrupted_subagent.transcript_snippet,
         warnings=[],
         session_path=(
-            None
-            if interrupted_subagent is None
-            else f"{interrupted_subagent.path}/session.yaml"
+            None if interrupted_subagent is None else f"{interrupted_subagent.path}/session.yaml"
         ),
         report_path=(
-            None
-            if interrupted_subagent is None
-            else f"{interrupted_subagent.path}/report.yaml"
+            None if interrupted_subagent is None else f"{interrupted_subagent.path}/report.yaml"
         ),
         transcript_path=(
-            None
-            if interrupted_subagent is None
-            else f"{interrupted_subagent.path}/transcript.md"
+            None if interrupted_subagent is None else f"{interrupted_subagent.path}/transcript.md"
         ),
-        continuation=(
-            None
-            if interrupted_subagent is None
-            else interrupted_subagent.continuation
-        ),
+        continuation=(None if interrupted_subagent is None else interrupted_subagent.continuation),
         updated_at=now,
     )
     task.runtime.current_stage = task.runtime.current_stage.model_copy(
@@ -3120,10 +3165,8 @@ def _finalize_recovered_commit_task(task: TaskRecord, *, commit_sha: str) -> str
         }
     )
     return (
-        (
-            "Recovered existing checkpoint commit after interrupted `commit_to_git` "
-            f"and finalized the task at `{commit_sha}`."
-        )
+        "Recovered existing checkpoint commit after interrupted `commit_to_git` "
+        f"and finalized the task at `{commit_sha}`."
     )
 
 
@@ -3215,7 +3258,9 @@ def _recover_stale_runner_state(
         state = load_state(root)
         tasks = list_tasks(root)
         tasks_by_id = {task.id: task for task in tasks}
-        running_task_ids = sorted(task.id for task in tasks if task.runtime.execution_status == "running")
+        running_task_ids = sorted(
+            task.id for task in tasks if task.runtime.execution_status == "running"
+        )
         if not _current_thread_owns_runner_guard(root) and _runner_lock_is_held(root):
             if not _runner_lock_pid_is_stale(root):
                 return False
@@ -3235,7 +3280,12 @@ def _recover_stale_runner_state(
             task = tasks_by_id.get(task_id)
             if task is None:
                 continue
-            if task_id != state.active_task_id and not _is_stranded_commit_task(task) and not _should_requeue_commit_stage_task(task) and not has_stale_metadata:
+            if (
+                task_id != state.active_task_id
+                and not _is_stranded_commit_task(task)
+                and not _should_requeue_commit_stage_task(task)
+                and not has_stale_metadata
+            ):
                 continue
             if _is_stranded_commit_task(task):
                 continue
@@ -3267,7 +3317,11 @@ def _recover_stale_runner_state(
                     )
                     if summary is not None and task.id not in summary.finalized_commit_task_ids:
                         summary.finalized_commit_task_ids.append(task.id)
-                    if stale_pid and summary is not None and task.id not in summary.stale_process_task_ids:
+                    if (
+                        stale_pid
+                        and summary is not None
+                        and task.id not in summary.stale_process_task_ids
+                    ):
                         summary.stale_process_task_ids.append(task.id)
                 else:
                     journal_messages[task.id] = _recover_commit_task(root, task)
@@ -3295,7 +3349,11 @@ def _recover_stale_runner_state(
                     if summary is not None and task.id not in summary.requeued_task_ids:
                         summary.requeued_task_ids.append(task.id)
                     prioritized_ids.append(task.id)
-                if stale_pid and summary is not None and task.id not in summary.stale_process_task_ids:
+                if (
+                    stale_pid
+                    and summary is not None
+                    and task.id not in summary.stale_process_task_ids
+                ):
                     summary.stale_process_task_ids.append(task.id)
             elif _is_task_eligible_for_execution(task):
                 _prepare_interrupted_task(
@@ -3306,7 +3364,9 @@ def _recover_stale_runner_state(
                         "Interrupted run recovered after stale runner detection. "
                         f"Resume from `{task.pipeline_status}`."
                     ),
-                    reason=_stale_interruption_reason(task, task.pipeline_status, stale_pid=stale_pid),
+                    reason=_stale_interruption_reason(
+                        task, task.pipeline_status, stale_pid=stale_pid
+                    ),
                 )
                 journal_messages[task.id] = interruption_journal_message(task)
                 record_recovery_report(
@@ -3334,7 +3394,11 @@ def _recover_stale_runner_state(
                 )
                 if summary is not None and task.id not in summary.requeued_task_ids:
                     summary.requeued_task_ids.append(task.id)
-                if stale_pid and summary is not None and task.id not in summary.stale_process_task_ids:
+                if (
+                    stale_pid
+                    and summary is not None
+                    and task.id not in summary.stale_process_task_ids
+                ):
                     summary.stale_process_task_ids.append(task.id)
             else:
                 continue
@@ -3423,7 +3487,9 @@ def repair_workspace_state(root: Path) -> WorkspaceRepairSummary:
             state.active_task_id = None
             summary.mutated = True
 
-        active_task = tasks_by_id.get(state.active_task_id) if state.active_task_id is not None else None
+        active_task = (
+            tasks_by_id.get(state.active_task_id) if state.active_task_id is not None else None
+        )
         if active_task is not None and active_task.runtime.execution_status != "running":
             state.active_task_id = None
             summary.cleared_active_task_id = active_task.id
@@ -3473,7 +3539,9 @@ def repair_workspace_state(root: Path) -> WorkspaceRepairSummary:
             summary.mutated = True
 
         if recovered_flagged_commit_ids:
-            state.queue = [task_id for task_id in state.queue if task_id not in recovered_flagged_commit_ids]
+            state.queue = [
+                task_id for task_id in state.queue if task_id not in recovered_flagged_commit_ids
+            ]
             state.queue = [*recovered_flagged_commit_ids, *state.queue]
 
         seen: set[str] = set()
@@ -3536,7 +3604,9 @@ def _reconcile_stale_runner_tasks(root: Path, state: WorkspaceState) -> bool:
     transitioned: list[TaskRecord] = []
     journal_messages: dict[str, str] = {}
     queue = list(state.queue)
-    active_task = tasks_by_id.get(state.active_task_id) if state.active_task_id is not None else None
+    active_task = (
+        tasks_by_id.get(state.active_task_id) if state.active_task_id is not None else None
+    )
 
     if state.active_task_id is not None and active_task is None:
         state.active_task_id = None
@@ -3552,9 +3622,9 @@ def _reconcile_stale_runner_tasks(root: Path, state: WorkspaceState) -> bool:
             continue
         if _is_stranded_commit_task(task) or _should_requeue_commit_stage_task(task):
             queue = [item for item in queue if item != task.id]
-            journal_messages[task.id] = (
-                _recover_existing_checkpoint_commit(root, task) or _recover_commit_task(root, task)
-            )
+            journal_messages[task.id] = _recover_existing_checkpoint_commit(
+                root, task
+            ) or _recover_commit_task(root, task)
             if task.status == "queued":
                 queue.insert(0, task.id)
             transitioned.append(task)
@@ -3564,20 +3634,25 @@ def _reconcile_stale_runner_tasks(root: Path, state: WorkspaceState) -> bool:
             queue = [item for item in queue if item != task.id]
             queue.insert(0, task.id)
             journal_messages[task.id] = (
-                "Reconciled stale runner state and requeued the task at "
-                f"`{task.pipeline_status}`."
+                f"Reconciled stale runner state and requeued the task at `{task.pipeline_status}`."
             )
             transitioned.append(task)
 
     # Also reconcile the active task if runner is not live
     if state.active_task_id is not None:
         active_task = tasks_by_id.get(state.active_task_id)
-        if active_task is not None and active_task.runtime.execution_status == "running" and not _runner_lock_is_held(root):
-            if _is_stranded_commit_task(active_task) or _should_requeue_commit_stage_task(active_task):
+        if (
+            active_task is not None
+            and active_task.runtime.execution_status == "running"
+            and not _runner_lock_is_held(root)
+        ):
+            if _is_stranded_commit_task(active_task) or _should_requeue_commit_stage_task(
+                active_task
+            ):
                 queue = [item for item in queue if item != active_task.id]
-                journal_messages[active_task.id] = (
-                    _recover_existing_checkpoint_commit(root, active_task) or _recover_commit_task(root, active_task)
-                )
+                journal_messages[active_task.id] = _recover_existing_checkpoint_commit(
+                    root, active_task
+                ) or _recover_commit_task(root, active_task)
                 if active_task.status == "queued":
                     queue.insert(0, active_task.id)
                 transitioned.append(active_task)
@@ -3586,8 +3661,7 @@ def _reconcile_stale_runner_tasks(root: Path, state: WorkspaceState) -> bool:
                 queue = [item for item in queue if item != active_task.id]
                 queue.insert(0, active_task.id)
                 journal_messages[active_task.id] = (
-                    "Reconciled stale active task and requeued at "
-                    f"`{active_task.pipeline_status}`."
+                    f"Reconciled stale active task and requeued at `{active_task.pipeline_status}`."
                 )
                 transitioned.append(active_task)
 
@@ -4286,6 +4360,35 @@ def close_task(
         return task
 
 
+def park_task(root: Path, task_id: str) -> TaskRecord:
+    """Mark a task as parked.
+
+    The task is removed from the queue and set to status 'parked'.
+    """
+    with _workspace_lock(root):
+        task = require_task(root, task_id)
+        state = load_state(root)
+        _ensure_future_task_mutation_allowed(root, [task.id], state=state)
+        if task.status == "done":
+            raise ValueError(f"Task {task.id} is already done and cannot be parked")
+        now = utcnow()
+        task.status = "parked"
+        task.runtime.execution_status = "paused"
+        task.runtime.run_started_at = None
+        task.runtime.updated_at = now
+        task.runtime.active_subagent = None
+        if state.active_task_id == task.id:
+            state.active_task_id = None
+        state.queue = [item for item in state.queue if item != task.id]
+        _persist_task_and_state_without_runner_guard(
+            root,
+            task=task,
+            state=state,
+            journal_message=f"Task parked via CLI at stage `{task.pipeline_status}`.",
+        )
+        return task
+
+
 def update_task(
     root: Path,
     task_id: str,
@@ -4305,11 +4408,127 @@ def update_task(
     human_checkpoints: list[str] | object = ...,
     mode: str | object = ...,
     auto_commit: bool | object = ...,
+    outcome: str | None | object = ...,
+    outcome_reason: str | None | object = ...,
+    action: str | None | object = ...,
+    journal_message: str | None = None,
 ) -> TaskRecord:
     with _workspace_lock(root):
         state = load_state(root)
         task = require_task(root, task_id)
         _ensure_future_task_mutation_allowed(root, [task.id], state=state)
+
+        if outcome is not ... and outcome is not None:
+            outcome_str = str(outcome)
+            reason_str = (
+                str(outcome_reason)
+                if outcome_reason is not ... and outcome_reason is not None
+                else None
+            )
+            if outcome_str not in _CLOSE_OUTCOME_REASON_CODES:
+                allowed = ", ".join(sorted(_CLOSE_OUTCOME_REASON_CODES))
+                raise ValueError(
+                    f"Unsupported close outcome '{outcome_str}'. Expected one of: {allowed}"
+                )
+            if task.status == "done":
+                raise ValueError(f"Task {task.id} is already done and cannot be closed")
+            now = utcnow()
+            task.status = outcome_str
+            task.pipeline_status = "done"
+            task.runtime.execution_status = "cancelled"
+            task.runtime.run_started_at = None
+            task.runtime.updated_at = now
+            task.runtime.active_subagent = None
+            task.runtime.last_outcome.kind = outcome_str
+            task.runtime.last_outcome.stage = task.pipeline_status
+            task.runtime.last_outcome.reason_code = outcome_str
+            task.runtime.last_outcome.reason = reason_str or _CLOSE_REASON_CODE_LABELS.get(
+                outcome_str, f"Task closed: {outcome_str}."
+            )
+            task.runtime.last_outcome.retry_count = 0
+            task.runtime.last_outcome.retry_limit = 0
+            task.runtime.last_outcome.retry_source = "global"
+            task.runtime.last_outcome.recorded_at = now
+            if state.active_task_id == task.id:
+                state.active_task_id = None
+            state.queue = [item for item in state.queue if item != task.id]
+            close_msg = f"Task closed: {outcome_str}."
+            if reason_str:
+                close_msg += f" {reason_str}"
+            _persist_task_and_state_without_runner_guard(
+                root,
+                task=task,
+                state=state,
+                journal_message=close_msg,
+            )
+            return task
+
+        if action is not ... and action is not None:
+            if action == "park":
+                if task.status == "done":
+                    raise ValueError(f"Task {task.id} is already done and cannot be parked")
+                now = utcnow()
+                task.status = "parked"
+                task.runtime.execution_status = "paused"
+                task.runtime.run_started_at = None
+                task.runtime.updated_at = now
+                task.runtime.active_subagent = None
+                if state.active_task_id == task.id:
+                    state.active_task_id = None
+                state.queue = [item for item in state.queue if item != task.id]
+                _persist_task_and_state_without_runner_guard(
+                    root,
+                    task=task,
+                    state=state,
+                    journal_message=f"Task parked via structured report at stage `{task.pipeline_status}`.",
+                )
+                return task
+            if action == "requeue":
+                if task.status not in {"flagged", "parked", *CLOSED_TASK_STATUSES}:
+                    raise ValueError(f"Task {task.id} is not flagged, parked, or closed")
+                _reset_task_for_recovery(
+                    task,
+                    status="queued",
+                    pipeline_status=implementation_entry_stage(task),
+                    clear_last_outcome=task.status not in {"flagged", "parked"},
+                )
+                state.queue = [item for item in state.queue if item != task.id]
+                state.queue.append(task.id)
+                _persist_task_and_state_without_runner_guard(
+                    root,
+                    task=task,
+                    state=state,
+                    journal_message="Task requeued for another implementation pass.",
+                )
+                return task
+            if action == "abandon":
+                if task.status not in {"flagged", *CLOSED_TASK_STATUSES, *RESUMABLE_TASK_STATUSES}:
+                    raise ValueError(f"Task {task.id} is not interruptible or closed")
+                now = utcnow()
+                task.status = "cancelled"
+                task.runtime.execution_status = "cancelled"
+                task.runtime.run_started_at = None
+                task.runtime.updated_at = now
+                task.runtime.active_subagent = None
+                task.runtime.last_outcome.kind = "cancelled"
+                task.runtime.last_outcome.stage = task.pipeline_status
+                task.runtime.last_outcome.reason_code = "execution_cancelled"
+                task.runtime.last_outcome.reason = "Task abandoned via structured report."
+                task.runtime.last_outcome.retry_count = 0
+                task.runtime.last_outcome.retry_limit = 0
+                task.runtime.last_outcome.retry_source = "global"
+                task.runtime.last_outcome.recorded_at = now
+                if state.active_task_id == task.id:
+                    state.active_task_id = None
+                state.queue = [item for item in state.queue if item != task.id]
+                _persist_task_and_state_without_runner_guard(
+                    root,
+                    task=task,
+                    state=state,
+                    journal_message=f"Task abandoned via structured report at stage `{task.pipeline_status}`.",
+                )
+                return task
+            raise ValueError(f"Unsupported action '{action}'")
 
         if depends_on is not ...:
             _validate_task_dependencies(root, task_id=task.id, depends_on=list(depends_on))
@@ -4374,9 +4593,15 @@ def update_task(
         apply_task_template_defaults(task)
         task.pipeline_status = reroute_stage_for_acceptance_criteria(task)
 
-        journal_message = "Task metadata updated via CLI."
-        if task.pipeline_status == "grooming" and missing_acceptance_criteria_reason(task) is not None:
-            journal_message += " Rerouted to `grooming` until structured acceptance criteria are added."
+        if journal_message is None:
+            journal_message = "Task metadata updated via CLI."
+        if (
+            task.pipeline_status == "grooming"
+            and missing_acceptance_criteria_reason(task) is not None
+        ):
+            journal_message += (
+                " Rerouted to `grooming` until structured acceptance criteria are added."
+            )
         _persist_future_task_update(root, task, journal_message=journal_message)
         return task
 
@@ -4384,9 +4609,7 @@ def update_task(
 update_task_metadata = update_task
 
 
-def active_task_markers(
-    root: Path, state: WorkspaceState | None = None
-) -> dict[str, list[str]]:
+def active_task_markers(root: Path, state: WorkspaceState | None = None) -> dict[str, list[str]]:
     markers: dict[str, list[str]] = {}
     current_state = state or load_state(root)
     if current_state.active_task_id is not None:
@@ -4402,7 +4625,8 @@ def _validate_single_active_task(root: Path, state: WorkspaceState | None = None
     if len(markers) <= 1:
         return
     details = "; ".join(
-        f"{task_id} ({', '.join(task_markers)})" for task_id, task_markers in sorted(markers.items())
+        f"{task_id} ({', '.join(task_markers)})"
+        for task_id, task_markers in sorted(markers.items())
     )
     raise WorkspaceConflictError(
         f"workspace has multiple active tasks: {details}. Clear the stale active task state before running again."

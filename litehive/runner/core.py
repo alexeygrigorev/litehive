@@ -16,6 +16,7 @@ from litehive.models import (
     TaskRecord,
 )
 from litehive.tasks import (
+    CLOSED_TASK_STATUSES,
     _apply_task_retry_state,
     _apply_stage_finished,
     _apply_task_outcome,
@@ -30,8 +31,6 @@ from litehive.tasks import (
     mark_stage_started,
     missing_acceptance_criteria_reason,
     needs_normalization,
-    populate_missing_acceptance_criteria_from_report,
-    populate_pm_sizing_from_report,
     record_recovery_report,
     save_task,
     set_task_retry_state,
@@ -200,7 +199,9 @@ class TaskExecutionRunner:
                         failure_classification="stage_exception",
                         failure_diagnostics={"traceback": traceback_text, "exception": str(exc)},
                     )
-                    engine_name = task.engine or (self.config.default_engine if self.config else "codex")
+                    engine_name = task.engine or (
+                        self.config.default_engine if self.config else "codex"
+                    )
                     recovered = _attempt_stage_recovery(
                         self.root,
                         self.root,
@@ -326,7 +327,9 @@ class TaskExecutionRunner:
                 )
             if target is None:
                 outcome = "blocked" if report.verdict == "blocked" else "flagged"
-                reason = report.summary or f"{current} returned unsupported verdict `{report.verdict}`"
+                reason = (
+                    report.summary or f"{current} returned unsupported verdict `{report.verdict}`"
+                )
                 outcome_reason_code = (
                     _reason_code_for_report(report)
                     if report.verdict == "blocked"
@@ -371,8 +374,16 @@ class TaskExecutionRunner:
                 )
 
             if current == "grooming" and target == "implementing":
-                populate_missing_acceptance_criteria_from_report(self.root, task, report.feedback)
-                populate_pm_sizing_from_report(self.root, task, report.feedback)
+                from litehive.tasks import apply_task_updates_from_report
+
+                apply_task_updates_from_report(self.root, task, report)
+                if task.status in CLOSED_TASK_STATUSES | {"parked"}:
+                    return self._finish_run(
+                        task,
+                        final_status=task.status,
+                        steps=steps,
+                        last_verdict=last_verdict,
+                    )
                 missing_criteria_reason = missing_acceptance_criteria_reason(task)
                 if missing_criteria_reason is not None:
                     report = self._terminal_report(
