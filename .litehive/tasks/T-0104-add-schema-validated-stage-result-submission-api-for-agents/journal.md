@@ -16,3 +16,9 @@ Stage `grooming` stopped retrying `goz` after attempt 3/3: transient network fai
 
 ## 2026-04-06T11:38:24+00:00
 Stage `grooming` switched from `goz` to `copilot` after transient network failure.
+
+## 2026-04-06T12:20:20+00:00
+CommitToGit complete. Commit: 73a978001c1070b8c35d63b5a95d2af8dc22dd5c
+
+## 2026-04-06T12:20:25+00:00
+Pool stopped: continue_or_rollback_required. This task finished with checkpoint commit `73a978001c1070b8c35d63b5a95d2af8dc22dd5c` and unrelated queued work remains. Either continue with a new `litehive run`/pool run or roll back the checkpoint first.

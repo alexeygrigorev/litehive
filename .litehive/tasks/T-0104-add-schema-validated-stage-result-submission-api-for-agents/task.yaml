@@ -6,13 +6,13 @@ task_type: null
 engine: null
 model: null
 mode: implementation
-status: in_progress
-pipeline_status: commit_to_git
+status: done
+pipeline_status: done
 priority: medium
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-01T12:16:29+00:00'
-updated_at: '2026-04-06T12:20:20+00:00'
+updated_at: '2026-04-06T12:20:22+00:00'
 goal: ''
 acceptance_criteria: []
 constraints: []
@@ -106,7 +106,7 @@ subagents:
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0104 add-schema-validated-stage-result-submission-api-for-agents'
-  commit_sha: null
+  commit_sha: 73a978001c1070b8c35d63b5a95d2af8dc22dd5c
   checkpoint_base_sha: null
   checkpoint_attempts: 0
   rolled_back_checkpoint_attempt: null
