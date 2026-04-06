@@ -1234,7 +1234,7 @@ def collect_recovery_evidence(
     *,
     stage: str | None = None,
 ) -> list[RecoveryEvidenceItem]:
-    from litehive.engine_monitoring import engine_monitoring_file, load_engine_monitoring
+    from litehive.observability import engine_monitoring_file, load_engine_monitoring
 
     evidence: list[RecoveryEvidenceItem] = []
     task_path = task_file(root, task)

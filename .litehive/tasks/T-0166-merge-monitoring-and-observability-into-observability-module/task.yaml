@@ -85,6 +85,13 @@ subagents:
   path: subagents/SA-0009-reviewer
   sandboxed: false
   sandbox_summary: host
+- id: SA-0010
+  role: merge-resolver
+  engine: claude
+  status: running
+  path: subagents/SA-0010-merge-resolver
+  sandboxed: false
+  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0166 merge-monitoring-and-observability-into-observability-module'

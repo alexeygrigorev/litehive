@@ -71,7 +71,7 @@ from litehive.config import (
     resolve_process_profile,
 )
 
-from litehive.engine_monitoring import (
+from litehive.observability import (
     load_engine_monitoring,
     record_engine_execution,
 )

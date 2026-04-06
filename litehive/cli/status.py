@@ -1,6 +1,5 @@
 from litehive.config import ensure_workspace, load_config
-from litehive.engine_monitoring import load_engine_monitoring, render_engine_monitoring_lines
-from litehive.observability import render_task_summary
+from litehive.observability import load_engine_monitoring, render_engine_monitoring_lines, render_task_summary
 from litehive.tasks import (
     WorkspaceConflictError,
     list_tasks,
