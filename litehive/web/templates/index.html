@@ -1,0 +1,448 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Litehive Monitor</title>
+  <style>
+    :root {
+      --bg: #f3efe6;
+      --panel: #fffaf2;
+      --ink: #1e2220;
+      --muted: #6c7067;
+      --line: #d9d1c2;
+      --accent: #165d52;
+      --accent-soft: #d8eee7;
+      --warn: #925100;
+      --warn-soft: #fff0cf;
+      --danger: #8d2d1f;
+      --danger-soft: #f8ddd7;
+      --mono: "IBM Plex Mono", "SFMono-Regular", Consolas, monospace;
+      --sans: "Iosevka Aile", "Segoe UI", sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: var(--sans);
+      color: var(--ink);
+      background:
+        radial-gradient(circle at top left, #fff8e8 0, transparent 30%),
+        linear-gradient(180deg, #efe7d9 0, var(--bg) 28%, #ede7dd 100%);
+    }
+    header {
+      padding: 20px 24px 12px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(255, 250, 242, 0.9);
+      backdrop-filter: blur(12px);
+      position: sticky;
+      top: 0;
+      z-index: 2;
+    }
+    h1, h2, h3 { margin: 0; }
+    h1 {
+      font-size: 28px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    main {
+      display: grid;
+      grid-template-columns: 340px minmax(420px, 1fr) minmax(360px, 1fr);
+      gap: 16px;
+      padding: 16px;
+    }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      box-shadow: 0 10px 30px rgba(66, 43, 14, 0.07);
+      overflow: hidden;
+      min-height: 180px;
+    }
+    .panel > .hd {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--line);
+      background: linear-gradient(180deg, rgba(255,255,255,0.8), rgba(247,241,231,0.9));
+    }
+    .panel > .bd { padding: 14px 16px; }
+    .task-list {
+      display: grid;
+      gap: 10px;
+      max-height: calc(100vh - 170px);
+      overflow: auto;
+      padding: 14px;
+    }
+    button.task {
+      width: 100%;
+      text-align: left;
+      border: 1px solid var(--line);
+      background: white;
+      border-radius: 14px;
+      padding: 12px;
+      cursor: pointer;
+      transition: transform 140ms ease, border-color 140ms ease, box-shadow 140ms ease;
+    }
+    button.task:hover {
+      transform: translateY(-1px);
+      border-color: var(--accent);
+      box-shadow: 0 8px 18px rgba(22, 93, 82, 0.09);
+    }
+    button.task.active {
+      border-color: var(--accent);
+      background: var(--accent-soft);
+    }
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 8px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 8px;
+      border-radius: 999px;
+      font-size: 12px;
+      border: 1px solid var(--line);
+      background: #fff;
+    }
+    .badge.running { background: var(--accent-soft); border-color: #9acaba; color: var(--accent); }
+    .badge.completed { background: #eef4ec; border-color: #b9cfb4; color: #2f6842; }
+    .badge.failed, .badge.blocked, .badge.interrupted { background: var(--danger-soft); border-color: #e0a193; color: var(--danger); }
+    .badge.parked { background: var(--warn-soft); border-color: #e1c06e; color: var(--warn); }
+    .badge.late, .badge.stale { background: var(--warn-soft); border-color: #e1c06e; color: var(--warn); }
+    .kv { display: grid; grid-template-columns: 140px 1fr; gap: 8px 12px; font-size: 14px; }
+    .kv div:nth-child(odd) { color: var(--muted); }
+    .section { margin-top: 18px; }
+    .section:first-child { margin-top: 0; }
+    ul.flat { list-style: none; padding: 0; margin: 8px 0 0; display: grid; gap: 8px; }
+    li.card {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 10px 12px;
+      background: white;
+    }
+    .artifact {
+      margin-top: 14px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      overflow: hidden;
+      background: #fdfcf8;
+    }
+    .artifact .bar {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--line);
+      font-size: 12px;
+      color: var(--muted);
+    }
+    pre {
+      margin: 0;
+      padding: 12px;
+      font-family: var(--mono);
+      font-size: 12px;
+      line-height: 1.45;
+      white-space: pre-wrap;
+      word-break: break-word;
+      max-height: 240px;
+      overflow: auto;
+      background: #171b19;
+      color: #eff7f3;
+    }
+    .logs { display: grid; gap: 12px; }
+    .muted { color: var(--muted); }
+    .mono { font-family: var(--mono); }
+    @media (max-width: 1200px) {
+      main { grid-template-columns: 1fr; }
+      .task-list { max-height: none; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Litehive Monitor</h1>
+    <div class="meta">
+      <span id="runner-badge-slot"><span class="badge" id="runner-badge">loading</span></span>
+      <span class="badge mono" id="workspace-path">...</span>
+      <span class="badge mono">poll {{ poll_seconds }}s</span>
+    </div>
+  </header>
+  <main>
+    <section class="panel">
+      <div class="hd">
+        <h2>Queue</h2>
+        <span class="muted mono" id="queue-summary"></span>
+      </div>
+      <div class="task-list" id="task-list"></div>
+    </section>
+    <section class="panel">
+      <div class="hd">
+        <h2>Task</h2>
+        <span class="muted mono" id="task-summary"></span>
+      </div>
+      <div class="bd" id="task-detail"></div>
+    </section>
+    <section class="panel">
+      <div class="hd">
+        <h2>Live Session + Run-All</h2>
+        <span class="muted mono" id="session-summary"></span>
+      </div>
+      <div class="bd" id="session-detail"></div>
+    </section>
+  </main>
+  <script>
+    const state = {
+      snapshot: null,
+      selectedTaskId: null,
+      selectedSubagentId: null,
+    };
+
+    function esc(value) {
+      return String(value ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;");
+    }
+
+    function badge(label, extra = "") {
+      return `<span class="badge ${extra}">${esc(label)}</span>`;
+    }
+
+    async function fetchJson(url) {
+      const response = await fetch(url, { cache: "no-store" });
+      if (!response.ok) {
+        throw new Error(`${response.status} ${response.statusText}`);
+      }
+      return response.json();
+    }
+
+    function chooseDefaults(snapshot) {
+      if (!state.selectedTaskId) {
+        state.selectedTaskId = snapshot.active_task_id || snapshot.queue[0] || snapshot.tasks[0]?.id || null;
+      }
+      const task = snapshot.tasks.find((item) => item.id === state.selectedTaskId) || snapshot.tasks[0] || null;
+      if (task && (!state.selectedSubagentId || !task.subagents.some((item) => item.id === state.selectedSubagentId))) {
+        state.selectedSubagentId = task.subagents.find((item) => item.is_active)?.id || task.subagents[0]?.id || null;
+      }
+      if (!task) {
+        state.selectedTaskId = null;
+        state.selectedSubagentId = null;
+      }
+    }
+
+    function renderQueue(snapshot) {
+      const list = document.getElementById("task-list");
+      document.getElementById("queue-summary").textContent = `${snapshot.state.queue.length} queued`;
+      document.getElementById("workspace-path").textContent = snapshot.workspace;
+      document.getElementById("runner-badge-slot").innerHTML = badge(
+        `runner:${snapshot.runner.status}`,
+        snapshot.runner.status
+      );
+
+      if (!snapshot.tasks.length) {
+        list.innerHTML = `<div class="muted">No tasks in this workspace.</div>`;
+        return;
+      }
+      list.innerHTML = snapshot.tasks.map((task) => `
+        <button class="task ${task.id === state.selectedTaskId ? "active" : ""}" data-task-id="${esc(task.id)}">
+          <div><strong>${esc(task.id)}</strong> ${esc(task.title)}</div>
+          <div class="meta">
+            ${badge(task.status, task.status)}
+            ${badge(task.pipeline_status)}
+            ${task.is_active_task ? badge("active task", "running") : ""}
+            ${task.active_subagent ? badge(`${task.active_subagent.role}:${task.active_subagent.status}`, task.active_subagent.status) : ""}
+          </div>
+        </button>
+      `).join("");
+      list.querySelectorAll("button.task").forEach((button) => {
+        button.addEventListener("click", () => {
+          state.selectedTaskId = button.dataset.taskId;
+          const selected = snapshot.tasks.find((item) => item.id === state.selectedTaskId);
+          state.selectedSubagentId = selected?.subagents.find((item) => item.is_active)?.id || selected?.subagents[0]?.id || null;
+          render(snapshot);
+          refreshSession();
+        });
+      });
+    }
+
+    function renderTask(snapshot) {
+      const task = snapshot.tasks.find((item) => item.id === state.selectedTaskId);
+      const container = document.getElementById("task-detail");
+      document.getElementById("task-summary").textContent = task ? `${task.status} / ${task.pipeline_status}` : "no task";
+      if (!task) {
+        container.innerHTML = `<div class="muted">Select a task.</div>`;
+        return;
+      }
+
+      const reports = task.reports.length ? task.reports.map((report) => `
+        <li class="card">
+          <strong>${esc(report.name)}</strong><br>
+          <span class="muted">${esc(report.step || "-")} / ${esc(report.verdict || "-")}</span><br>
+          <span>${esc(report.summary || "")}</span><br>
+          <span class="mono muted">${esc(report.path)}</span>
+        </li>
+      `).join("") : `<li class="card muted">No reports yet.</li>`;
+
+      const sessions = task.subagents.length ? task.subagents.map((session) => `
+        <li class="card">
+          <div>
+            <button class="task ${session.id === state.selectedSubagentId ? "active" : ""}" data-subagent-id="${esc(session.id)}" style="padding:0;border:0;background:transparent">
+              <strong>${esc(session.id)}</strong> ${esc(session.role)} / ${esc(session.engine)}
+            </button>
+          </div>
+          <div class="meta">
+            ${badge(session.status, session.status)}
+            ${session.is_active ? badge("actively tailed", "running") : badge("completed snapshot")}
+          </div>
+          <div class="muted mono">transcript: ${esc(session.tail_targets.transcript)}</div>
+          <div class="muted mono">stdout: ${esc(session.tail_targets.stdout)}</div>
+          <div class="muted mono">stderr: ${esc(session.tail_targets.stderr)}</div>
+        </li>
+      `).join("") : `<li class="card muted">No subagent sessions yet.</li>`;
+
+      container.innerHTML = `
+        <div class="section">
+          <h3>${esc(task.id)} ${esc(task.title)}</h3>
+          <div class="meta">
+            ${badge(task.status, task.status)}
+            ${badge(task.pipeline_status)}
+            ${task.is_active_task ? badge("workspace active", "running") : ""}
+          </div>
+        </div>
+        <div class="section kv">
+          <div>Task dir</div><div class="mono">${esc(task.task_path)}</div>
+          <div>Task file</div><div class="mono">${esc(task.task_file)}</div>
+          <div>Runtime file</div><div class="mono">${esc(task.runtime_file)}</div>
+          <div>Goal</div><div>${esc(task.goal || "-")}</div>
+          <div>Current stage</div><div>${esc(task.current_stage.step || "-")} / ${esc(task.current_stage.status || "-")}</div>
+          <div>Last stage</div><div>${esc(task.last_stage.step || "-")} / ${esc(task.last_stage.verdict || "-")}</div>
+        </div>
+        <div class="section">
+          <h3>Acceptance Criteria</h3>
+          <ul class="flat">${(task.acceptance_criteria.length ? task.acceptance_criteria : ["No criteria recorded."]).map((item) => `<li class="card">${esc(item)}</li>`).join("")}</ul>
+        </div>
+        <div class="section">
+          <h3>Subagent Sessions</h3>
+          <ul class="flat" id="task-sessions">${sessions}</ul>
+        </div>
+        <div class="section">
+          <h3>Recent Reports</h3>
+          <ul class="flat">${reports}</ul>
+        </div>
+      `;
+      container.querySelectorAll("[data-subagent-id]").forEach((button) => {
+        button.addEventListener("click", () => {
+          state.selectedSubagentId = button.dataset.subagentId;
+          render(snapshot);
+          refreshSession();
+        });
+      });
+    }
+
+    function renderRunAll(snapshot) {
+      const entries = snapshot.run_all_logs.length ? snapshot.run_all_logs.map((entry) => `
+        <div class="artifact">
+          <div class="bar">
+            <strong>${esc(entry.name)}</strong>
+            <span class="mono">${esc(entry.path)}</span>
+          </div>
+          <div style="padding:12px">
+            ${entry.files.length ? entry.files.map((file) => `
+              <div class="artifact" style="margin-top:10px">
+                <div class="bar">
+                  <span>${esc(file.name)}</span>
+                  <span class="mono">${esc(file.path)}</span>
+                </div>
+                <pre>${esc(file.preview || "(empty)")}</pre>
+              </div>
+            `).join("") : `<div class="muted">No files in this run-all directory.</div>`}
+          </div>
+        </div>
+      `).join("") : `<div class="muted">No run-all logs found under .litehive/logs/run-all/.</div>`;
+      return `<div class="section"><h3>Recent Run-All Logs</h3><div class="logs">${entries}</div></div>`;
+    }
+
+    function renderSessionPayload(payload, snapshot) {
+      const container = document.getElementById("session-detail");
+      document.getElementById("session-summary").textContent = payload
+        ? `${payload.subagent_id} / ${payload.status}`
+        : "no session";
+      if (!payload) {
+        container.innerHTML = renderRunAll(snapshot);
+        return;
+      }
+      const artifacts = payload.artifacts.map((artifact) => `
+        <div class="artifact">
+          <div class="bar">
+            <strong>${esc(artifact.label)}</strong>
+            <span>${artifact.available ? esc(payload.is_active ? "actively tailed" : "completed snapshot") : "unavailable"}</span>
+          </div>
+          <div class="bar">
+            <span class="mono">${esc(artifact.path)}</span>
+            <span>${esc(artifact.source)}${artifact.truncated ? " / tail view" : ""}</span>
+          </div>
+          <pre>${esc(artifact.content || "(empty)")}</pre>
+        </div>
+      `).join("");
+      container.innerHTML = `
+        <div class="section">
+          <h3>${esc(payload.subagent_id)} ${esc(payload.role)} / ${esc(payload.engine)}</h3>
+          <div class="meta">
+            ${badge(payload.status, payload.status)}
+            ${payload.is_active ? badge("active session", "running") : badge("completed session")}
+          </div>
+          <div class="kv" style="margin-top:12px">
+            <div>Session file</div><div class="mono">${esc(payload.session_path)}</div>
+            <div>PID</div><div>${esc(payload.session.pid || "-")}</div>
+            <div>Exit code</div><div>${esc(payload.session.exit_code ?? "-")}</div>
+            <div>Updated</div><div>${esc(payload.session.updated_at || "-")}</div>
+          </div>
+        </div>
+        <div class="section">
+          <h3>Artifacts</h3>
+          ${artifacts}
+        </div>
+        ${renderRunAll(snapshot)}
+      `;
+    }
+
+    async function refreshSnapshot() {
+      state.snapshot = await fetchJson("/api/snapshot");
+      chooseDefaults(state.snapshot);
+      render(state.snapshot);
+      await refreshSession();
+    }
+
+    async function refreshSession() {
+      if (!state.snapshot) return;
+      const task = state.snapshot.tasks.find((item) => item.id === state.selectedTaskId);
+      if (!task || !state.selectedSubagentId) {
+        renderSessionPayload(null, state.snapshot);
+        return;
+      }
+      try {
+        const payload = await fetchJson(`/api/session?task_id=${encodeURIComponent(task.id)}&subagent_id=${encodeURIComponent(state.selectedSubagentId)}`);
+        renderSessionPayload(payload, state.snapshot);
+      } catch (error) {
+        renderSessionPayload(null, state.snapshot);
+      }
+    }
+
+    function render(snapshot) {
+      renderQueue(snapshot);
+      renderTask(snapshot);
+    }
+
+    refreshSnapshot();
+    setInterval(refreshSnapshot, {{ poll_interval_ms }});
+  </script>
+</body>
+</html>
