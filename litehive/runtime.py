@@ -1,6 +1,5 @@
 """High-level runtime flow for executing queued tasks."""
 
-
 from dataclasses import dataclass, field
 import hashlib
 from pathlib import Path, PurePosixPath
@@ -13,7 +12,13 @@ from typing import Callable
 import yaml
 
 from litehive.engines import extract_engine_continuation, get_engine
-from litehive.config import ExecutionRetryPolicy, LitehiveConfig, load_config, load_context, state_path
+from litehive.config import (
+    ExecutionRetryPolicy,
+    LitehiveConfig,
+    load_config,
+    load_context,
+    state_path,
+)
 from litehive.git_ops import (
     GitError,
     add_worktree,
@@ -146,7 +151,8 @@ class DirtyWorktreeGateReport:
     @property
     def blocks_pool(self) -> bool:
         return any(
-            finding.ownership in {"main-checkout", "ambiguous-ownership", "missing-recorded-worktree"}
+            finding.ownership
+            in {"main-checkout", "ambiguous-ownership", "missing-recorded-worktree"}
             for finding in self.findings
         )
 
@@ -364,7 +370,9 @@ def drain_task_pool(
         set_pool_stop_reason(root, None)
 
         while True:
-            stop_reason = _pool_stop_reason(root, executions, conditions, budget_ledger=budget_ledger)
+            stop_reason = _pool_stop_reason(
+                root, executions, conditions, budget_ledger=budget_ledger
+            )
             if stop_reason is not None:
                 blocked: list[BlockedTask] = []
                 if stop_reason == "blocked_tasks_remaining":
@@ -448,7 +456,11 @@ def _pool_stop_reason(
         return "continue_or_rollback_required"
     latest_limit_kind = _execution_limit_kind(latest)
     final_status = latest.result.final_status if latest.result is not None else None
-    if conditions.stop_on_failure and final_status is not None and final_status not in {"done", "paused"}:
+    if (
+        conditions.stop_on_failure
+        and final_status is not None
+        and final_status not in {"done", "paused"}
+    ):
         return "failure_detected"
     if conditions.stop_on_execution_limit and _execution_hit_limit(latest):
         return "execution_limit_reached"
@@ -520,7 +532,9 @@ def _dirty_worktree_owner_task(root: Path) -> TaskRecord | None:
     task_ids = [
         finding.task_id
         for finding in report.findings
-        if finding.location_kind == "main-checkout" and finding.ownership == "task-owned" and finding.task_id
+        if finding.location_kind == "main-checkout"
+        and finding.ownership == "task-owned"
+        and finding.task_id
     ]
     if len(task_ids) != 1:
         return None
@@ -600,6 +614,51 @@ def inspect_dirty_worktree_gate(root: Path) -> DirtyWorktreeGateReport:
     return DirtyWorktreeGateReport(findings=findings)
 
 
+def _allowed_commit_paths(root: Path, task: TaskRecord) -> set[PurePosixPath]:
+    _PLACEHOLDERS = {"none", "n/a", "-", ""}
+    paths: set[PurePosixPath] = set()
+    paths.add(PurePosixPath(".litehive") / "tasks" / f"{task.id}-{task.slug}")
+    reports_dir = root / ".litehive" / "tasks" / f"{task.id}-{task.slug}" / "reports"
+    if reports_dir.exists():
+        for report_file in sorted(reports_dir.glob("*.yaml")):
+            try:
+                data = yaml.safe_load(report_file.read_text(encoding="utf-8"))
+                if not isinstance(data, dict):
+                    continue
+                for f in data.get("files_changed", []) or []:
+                    stripped = str(f).strip().strip("/")
+                    if stripped.lower() not in _PLACEHOLDERS:
+                        paths.add(PurePosixPath(stripped))
+            except Exception:
+                pass
+    return paths
+
+
+def _unexpected_dirty_paths(
+    dirty_entries: list[str],
+    allowed_paths: set[PurePosixPath],
+) -> list[str]:
+    unexpected = []
+    for entry in dirty_entries:
+        if len(entry) < 3:
+            continue
+        raw = entry[3:].strip()
+        if raw.startswith('"') and raw.endswith('"'):
+            raw = raw[1:-1].replace('\\"', '"')
+        if not raw:
+            continue
+        if "$tmpdir" in raw or raw.startswith("/tmp/"):
+            continue
+        if raw.startswith(".litehive/"):
+            if not any(raw == str(p) or raw.startswith(str(p) + "/") for p in allowed_paths):
+                continue
+        path = PurePosixPath(raw)
+        if any(raw == str(p) or raw.startswith(str(p) + "/") for p in allowed_paths):
+            continue
+        unexpected.append(raw)
+    return unexpected
+
+
 def _task_can_resume_with_owned_dirty_paths(
     root: Path,
     task: TaskRecord,
@@ -644,8 +703,6 @@ def _resolve_task_execution_root(root: Path, task: TaskRecord) -> Path:
     return worktree_path
 
 
-
-
 def _path_within(candidate: Path, root: Path) -> bool:
     try:
         candidate.resolve().relative_to(root.resolve())
@@ -670,7 +727,10 @@ def _traceback_fingerprint(traceback_text: str, summary: str) -> str:
     signature_lines = [
         line.strip()
         for line in traceback_text.splitlines()
-        if line.strip().startswith('File "') or line.strip().startswith(("raise ", "AssertionError", "RuntimeError", "ValueError", "TypeError"))
+        if line.strip().startswith('File "')
+        or line.strip().startswith(
+            ("raise ", "AssertionError", "RuntimeError", "ValueError", "TypeError")
+        )
     ]
     payload = "\n".join(signature_lines) or summary
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
@@ -695,17 +755,13 @@ def _classify_recovery_failure_owner(
         if _path_within(frame, root):
             return "project", traceback_text, source_root
         normalized = frame.as_posix()
-        if "/site-packages/litehive/" in normalized or normalized.endswith("/litehive/__init__.py") or "/litehive/" in normalized:
+        if (
+            "/site-packages/litehive/" in normalized
+            or normalized.endswith("/litehive/__init__.py")
+            or "/litehive/" in normalized
+        ):
             return "litehive", traceback_text, source_root
     return "unknown", traceback_text, source_root
-
-
-
-
-
-
-
-
 
 
 def _attempt_stage_recovery(
@@ -736,10 +792,15 @@ def _attempt_stage_recovery(
         config=config,
     )
     append_journal(
-        root, task,
+        root,
+        task,
         f"Stage `{step}` {failed_report.verdict}: {failed_report.summary}. Launching recovery agent.",
     )
-    if failure_owner == "litehive" and config is not None and (source_root is None or source_root != root.resolve()):
+    if (
+        failure_owner == "litehive"
+        and config is not None
+        and (source_root is None or source_root != root.resolve())
+    ):
         return _attempt_litehive_self_heal(
             root,
             task,
@@ -785,10 +846,7 @@ def _attempt_stage_recovery(
     from litehive.tasks import load_task_thread
 
     thread = load_task_thread(root, task)
-    recovery_comments = [
-        c for c in thread
-        if c.step == step and c.verdict in ("pass", "accept")
-    ]
+    recovery_comments = [c for c in thread if c.step == step and c.verdict in ("pass", "accept")]
     if recovery_comments:
         latest = recovery_comments[-1]
         record_recovery_report(
@@ -870,10 +928,9 @@ def _attempt_stage_recovery(
     return None
 
 
-
-
 def _resolve_recovery_engine(
-    task: TaskRecord, config: LitehiveConfig | None,
+    task: TaskRecord,
+    config: LitehiveConfig | None,
 ) -> tuple[str, str | None]:
     """Return (engine_name, model_name) for recovery/merge-resolver agents."""
     if config and config.recovery_engine:
@@ -882,22 +939,6 @@ def _resolve_recovery_engine(
         engine = task.engine or (config.default_engine if config else "codex")
     model = resolve_model(task, config, engine_name=engine) if config else None
     return engine, model
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 def _execution_hit_limit(execution: ExecutionSummary) -> bool:
@@ -972,7 +1013,11 @@ def _finalize_pool_run(
         latest = executions[-1]
         if latest.task is not None:
             checkpoint = stop_reason.removeprefix("human_checkpoint_").replace("_", " ")
-            append_journal(root, latest.task, f"Pool stopped: {stop_reason}. Awaiting human review at {checkpoint}.")
+            append_journal(
+                root,
+                latest.task,
+                f"Pool stopped: {stop_reason}. Awaiting human review at {checkpoint}.",
+            )
     if stop_reason == "continue_or_rollback_required" and executions:
         latest = executions[-1]
         if latest.task is not None and latest.commit_sha is not None:
@@ -1076,10 +1121,7 @@ def recover_completed_task(root: Path, task_id: str) -> TaskRecord:
 
 
 def _capture_persisted_files(paths: list[Path]) -> dict[Path, str | None]:
-    return {
-        path: path.read_text(encoding="utf-8") if path.exists() else None
-        for path in paths
-    }
+    return {path: path.read_text(encoding="utf-8") if path.exists() else None for path in paths}
 
 
 def _restore_persisted_files(snapshot: dict[Path, str | None]) -> None:
@@ -1098,7 +1140,11 @@ def _is_recovery_run(task: TaskRecord) -> bool:
 
 
 def _role_for_step(step: str, task: TaskRecord | None = None) -> str:
-    if task is not None and step in {"implementing", "testing", "accepting"} and _is_recovery_run(task):
+    if (
+        task is not None
+        and step in {"implementing", "testing", "accepting"}
+        and _is_recovery_run(task)
+    ):
         return "recovery"
     return {
         "grooming": "planner",
@@ -1178,10 +1224,28 @@ def _task_routing_key(task: TaskRecord) -> str | None:
 
     routing_patterns: tuple[tuple[str, tuple[str, ...]], ...] = (
         ("adapter", ("adapter", "integration", "provider", "cli adapter", "engine adapter")),
-        ("bugfix", ("bugfix", "bug fix", "fix ", "fixes ", "fixing ", "regression", "hotfix", "flaky")),
+        (
+            "bugfix",
+            ("bugfix", "bug fix", "fix ", "fixes ", "fixing ", "regression", "hotfix", "flaky"),
+        ),
         ("review", ("review", "review feedback", "requested changes", "triage", "comments")),
-        ("research", ("research", "investigate", "investigation", "spike", "analyze", "analysis", "explore", "evaluate")),
-        ("refactor", ("refactor", "cleanup", "clean up", "rename", "reorganize", "extract", "simplify")),
+        (
+            "research",
+            (
+                "research",
+                "investigate",
+                "investigation",
+                "spike",
+                "analyze",
+                "analysis",
+                "explore",
+                "evaluate",
+            ),
+        ),
+        (
+            "refactor",
+            ("refactor", "cleanup", "clean up", "rename", "reorganize", "extract", "simplify"),
+        ),
         ("docs", (" docs", "doc ", "documentation", "document ", "readme", "guide")),
     )
     padded = f" {text} "
@@ -1193,6 +1257,7 @@ def _task_routing_key(task: TaskRecord) -> str | None:
     if re.search(r"\bdoc(s)?\b", text):
         return "docs"
     return None
+
 
 def resolve_task_retry_policy(task: TaskRecord, config: LitehiveConfig) -> tuple[int, str]:
     if task.retry_policy.max_retries is not None:
@@ -1371,7 +1436,9 @@ def build_executor(
                 return report
 
             budget_ledger.record(engine_name)
-            model_name = resolve_model(task, config, engine_name=engine_name, model_override=model_override)
+            model_name = resolve_model(
+                task, config, engine_name=engine_name, model_override=model_override
+            )
             retry_policy = resolve_execution_retry_policy(
                 config,
                 engine_name=engine_name,
@@ -1466,9 +1533,13 @@ def build_executor(
                 and result.failure is not None
                 and result.failure.kind == "engine_error"
             )
-            if (is_limit_failure or is_unavailable_fallback or is_retry_exhausted_failure) and index + 1 < len(engines):
+            if (
+                is_limit_failure or is_unavailable_fallback or is_retry_exhausted_failure
+            ) and index + 1 < len(engines):
                 next_engine = engines[index + 1]
-                failure_reason = result.failure.reason if result.failure is not None else retry_exhausted_reason
+                failure_reason = (
+                    result.failure.reason if result.failure is not None else retry_exhausted_reason
+                )
                 event = (
                     f"Stage `{step}` switched from `{engine_name}` to `{next_engine}` "
                     f"after {failure_reason}."
@@ -1509,7 +1580,8 @@ def build_executor(
             from litehive.engines import extract_engine_continuation
 
             thread_comments = [
-                c for c in load_task_thread(root, current_task)
+                c
+                for c in load_task_thread(root, current_task)
                 if c.step == step and c.verdict != "comment"
             ]
             if (
@@ -1524,7 +1596,7 @@ def build_executor(
                         f"You finished the {step} stage but did not submit your verdict. "
                         f"Please run this command now:\n\n"
                         f"  litehive report --verdict <pass|fail|reject> --role {role_name} "
-                        f"--step {step} --message \"<your detailed report>\"\n\n"
+                        f'--step {step} --message "<your detailed report>"\n\n'
                         f"Your report is the ONLY thing the next agent will read. Include:\n"
                         f"- What you did and what the outcome was\n"
                         f"- If rejecting: exact failures, which files to fix, step-by-step instructions\n"
@@ -1548,7 +1620,9 @@ def build_executor(
             from litehive.tasks import task_dir as _task_dir
 
             _reports_dir = _task_dir(root, current_task) / "reports"
-            prior_attempts = len(list(_reports_dir.glob(f"{step}-*.yaml"))) if _reports_dir.exists() else 0
+            prior_attempts = (
+                len(list(_reports_dir.glob(f"{step}-*.yaml"))) if _reports_dir.exists() else 0
+            )
             is_engine_break = (
                 result.failure is not None
                 and result.failure.kind in ("retryable_execution_error", "engine_error")
@@ -1561,16 +1635,25 @@ def build_executor(
             )
             if is_engine_break or is_stuck_loop:
                 recovered_report = _attempt_stage_recovery(
-                    root, execution_root, current_task, step, report,
-                    subagents=subagents, config=config,
-                    role_name=role_name, engine_name=engine_name, model_name=model_name,
+                    root,
+                    execution_root,
+                    current_task,
+                    step,
+                    report,
+                    subagents=subagents,
+                    config=config,
+                    role_name=role_name,
+                    engine_name=engine_name,
+                    model_name=model_name,
                 )
                 if recovered_report is not None:
                     report = recovered_report
 
             if execution_events:
                 report.warnings = [*execution_events, *report.warnings]
-                report.feedback = cap_feedback("\n\n".join([*execution_events, report.feedback]).strip())
+                report.feedback = cap_feedback(
+                    "\n\n".join([*execution_events, report.feedback]).strip()
+                )
             _attach_runner_hook_results(report, pre_stage_hook_results)
             if limit_trigger_reason is not None and (is_limit_failure or is_unavailable_fallback):
                 if (
@@ -1586,7 +1669,9 @@ def build_executor(
                     report.summary = (
                         f"{step} blocked after exhausting engine fallbacks: {result.failure.reason}"
                     )
-                report.feedback = cap_feedback("\n\n".join([*execution_events, result.transcript]).strip())
+                report.feedback = cap_feedback(
+                    "\n\n".join([*execution_events, result.transcript]).strip()
+                )
                 if not report.warnings or report.warnings[-1] != result.failure.reason:
                     report.warnings.append(result.failure.reason)
                 return report
@@ -1769,12 +1854,14 @@ def _attach_runner_hook_results(
         *_flatten_runner_hook_warnings(hook_results),
         *report.warnings,
     ]
-    report.feedback = cap_feedback("\n\n".join(
-        [
-            *_flatten_runner_hook_feedback(hook_results),
-            report.feedback,
-        ]
-    ).strip())
+    report.feedback = cap_feedback(
+        "\n\n".join(
+            [
+                *_flatten_runner_hook_feedback(hook_results),
+                report.feedback,
+            ]
+        ).strip()
+    )
 
 
 def _runner_hook_point(
@@ -1873,7 +1960,7 @@ def _runner_hook_feedback(hook_result: dict[str, str | int | bool | None]) -> st
 
 
 def _flatten_runner_hook_warnings(
-    hook_results: list[dict[str, str | int | bool | None]]
+    hook_results: list[dict[str, str | int | bool | None]],
 ) -> list[str]:
     warnings: list[str] = []
     for hook_result in hook_results:
@@ -1882,7 +1969,7 @@ def _flatten_runner_hook_warnings(
 
 
 def _flatten_runner_hook_feedback(
-    hook_results: list[dict[str, str | int | bool | None]]
+    hook_results: list[dict[str, str | int | bool | None]],
 ) -> list[str]:
     return [_runner_hook_feedback(hook_result) for hook_result in hook_results]
 
@@ -1926,7 +2013,8 @@ def _commit_to_git_report(
         subprocess.run(["git", "add", "-A"], cwd=execution_root, capture_output=True)
         subprocess.run(
             ["git", "commit", "-m", f"litehive: complete {task.id} {task.slug}"],
-            cwd=execution_root, capture_output=True,
+            cwd=execution_root,
+            capture_output=True,
         )
 
     # Step 2: merge worktree into main
@@ -1936,11 +2024,23 @@ def _commit_to_git_report(
         if wt_head:
             # Add and commit any dirty files on main so they don't block merge
             subprocess.run(["git", "add", "-A"], cwd=root, capture_output=True)
-            subprocess.run(["git", "commit", "-m", "chore: sync workspace state"],
-                           cwd=root, capture_output=True)
+            subprocess.run(
+                ["git", "commit", "-m", "chore: sync workspace state"],
+                cwd=root,
+                capture_output=True,
+            )
             merge = subprocess.run(
-                ["git", "merge", wt_head, "-m", f"litehive: complete {task.id} {task.slug}", "--no-edit"],
-                cwd=root, capture_output=True, text=True,
+                [
+                    "git",
+                    "merge",
+                    wt_head,
+                    "-m",
+                    f"litehive: complete {task.id} {task.slug}",
+                    "--no-edit",
+                ],
+                cwd=root,
+                capture_output=True,
+                text=True,
             )
             if merge.returncode == 0:
                 merge_ok = True
@@ -1949,17 +2049,30 @@ def _commit_to_git_report(
                 if subagents is not None:
                     conflict_proc = subprocess.run(
                         ["git", "diff", "--name-only", "--diff-filter=U"],
-                        cwd=root, capture_output=True, text=True,
+                        cwd=root,
+                        capture_output=True,
+                        text=True,
                     )
                     conflicts = [f.strip() for f in conflict_proc.stdout.splitlines() if f.strip()]
                     if conflicts:
-                        append_journal(root, task,
-                            f"Merge conflict on {len(conflicts)} file(s). Launching merge agent.")
-                        engine_name = (config.recovery_engine if config and config.recovery_engine
-                                       else task.engine or (config.default_engine if config else "codex"))
-                        model = resolve_model(task, config, engine_name=engine_name) if config else None
+                        append_journal(
+                            root,
+                            task,
+                            f"Merge conflict on {len(conflicts)} file(s). Launching merge agent.",
+                        )
+                        engine_name = (
+                            config.recovery_engine
+                            if config and config.recovery_engine
+                            else task.engine or (config.default_engine if config else "codex")
+                        )
+                        model = (
+                            resolve_model(task, config, engine_name=engine_name) if config else None
+                        )
                         subagents.run(
-                            task, role="merge-resolver", engine_name=engine_name, model=model,
+                            task,
+                            role="merge-resolver",
+                            engine_name=engine_name,
+                            model=model,
                             prompt=(
                                 f"Git merge conflict. Conflicting files: {', '.join(conflicts)}\n"
                                 f"Resolve the conflicts, git add the files, and git commit --no-edit.\n"
@@ -1968,7 +2081,9 @@ def _commit_to_git_report(
                         # Check if agent resolved it
                         remaining = subprocess.run(
                             ["git", "diff", "--name-only", "--diff-filter=U"],
-                            cwd=root, capture_output=True, text=True,
+                            cwd=root,
+                            capture_output=True,
+                            text=True,
                         )
                         if not remaining.stdout.strip():
                             merge_ok = True
@@ -1981,7 +2096,9 @@ def _commit_to_git_report(
     head_after = current_head(root)
     if not merge_ok or head_after == head_before:
         # Merge failed or nothing changed - do NOT mark done, do NOT delete worktree
-        append_journal(root, task, f"CommitToGit failed: merge did not produce new commits on main.")
+        append_journal(
+            root, task, f"CommitToGit failed: merge did not produce new commits on main."
+        )
         return StageReport(
             task_id=task.id,
             step="commit_to_git",
@@ -1994,8 +2111,9 @@ def _commit_to_git_report(
         worktree_path = get_task_worktree_path(task)
         if worktree_path:
             wt = (root / worktree_path).resolve()
-            subprocess.run(["git", "worktree", "remove", "--force", str(wt)],
-                           cwd=root, capture_output=True)
+            subprocess.run(
+                ["git", "worktree", "remove", "--force", str(wt)], cwd=root, capture_output=True
+            )
             task.git.worktree_path = None
 
     task.status = "done"

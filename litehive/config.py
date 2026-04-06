@@ -1,6 +1,5 @@
 """Workspace configuration, process profiles, and bootstrap helpers."""
 
-
 from copy import deepcopy
 from dataclasses import asdict, dataclass, field
 import os
@@ -13,7 +12,9 @@ import yaml
 
 VALID_POOL_SELECTION_POLICIES = {"fifo", "priority_first", "dependency_aware"}
 VALID_ENGINE_NAMES = frozenset({"codex", "opencode", "gemini", "copilot", "claude", "goz"})
-VALID_AGENT_STARTUP_GUIDANCE_KEYS = frozenset({"all", "planner", "swe", "qa", "reviewer", "recovery"})
+VALID_AGENT_STARTUP_GUIDANCE_KEYS = frozenset(
+    {"all", "planner", "swe", "qa", "reviewer", "recovery"}
+)
 VALID_EXECUTION_RETRY_SELECTORS = frozenset({*VALID_ENGINE_NAMES, "external_cli"})
 VALID_EXECUTION_RETRY_CLASSIFICATIONS = frozenset({"timeout", "network", "service"})
 VALID_SANDBOX_NETWORK_MODES = frozenset({"none", "bridge", "host"})
@@ -142,9 +143,7 @@ class ExecutionRetryPolicy:
     max_retries: int = 0
     backoff_seconds: float = 0.0
     backoff_multiplier: float = 1.0
-    retry_on: list[str] = field(
-        default_factory=lambda: ["timeout", "network", "service"]
-    )
+    retry_on: list[str] = field(default_factory=lambda: ["timeout", "network", "service"])
 
 
 @dataclass(slots=True)
@@ -199,7 +198,9 @@ def _normalize_runner_hook_config(
     *,
     field_name: str,
 ) -> RunnerHookConfig:
-    hook = raw_hook if isinstance(raw_hook, RunnerHookConfig) else RunnerHookConfig(**dict(raw_hook))
+    hook = (
+        raw_hook if isinstance(raw_hook, RunnerHookConfig) else RunnerHookConfig(**dict(raw_hook))
+    )
     hook.command = hook.command.strip()
     if not hook.command:
         raise ValueError(f"{field_name}.command must not be empty")
@@ -263,7 +264,9 @@ def _normalize_subagent_resource_limits(
                 None if raw_limits.get("cpu_count") is None else float(raw_limits.get("cpu_count"))
             ),
             process_limit=(
-                None if raw_limits.get("process_limit") is None else int(raw_limits.get("process_limit"))
+                None
+                if raw_limits.get("process_limit") is None
+                else int(raw_limits.get("process_limit"))
             ),
         )
 
@@ -315,10 +318,14 @@ def _normalize_external_engine_sandbox_policy(
         policy = ExternalEngineSandboxPolicy(
             enabled=bool(raw_policy.get("enabled", False)),
             network_mode=(
-                None if raw_policy.get("network_mode") is None else str(raw_policy.get("network_mode"))
+                None
+                if raw_policy.get("network_mode") is None
+                else str(raw_policy.get("network_mode"))
             ),
             workspace_mode=(
-                None if raw_policy.get("workspace_mode") is None else str(raw_policy.get("workspace_mode"))
+                None
+                if raw_policy.get("workspace_mode") is None
+                else str(raw_policy.get("workspace_mode"))
             ),
             environment=[str(item) for item in raw_policy.get("environment", [])],
             credential_inputs=[
@@ -337,7 +344,10 @@ def _normalize_external_engine_sandbox_policy(
     if policy.network_mode is not None and policy.network_mode not in VALID_SANDBOX_NETWORK_MODES:
         allowed = ", ".join(sorted(VALID_SANDBOX_NETWORK_MODES))
         raise ValueError(f"{field_name}.network_mode must be one of: {allowed}")
-    if policy.workspace_mode is not None and policy.workspace_mode not in VALID_SANDBOX_WORKSPACE_MODES:
+    if (
+        policy.workspace_mode is not None
+        and policy.workspace_mode not in VALID_SANDBOX_WORKSPACE_MODES
+    ):
         allowed = ", ".join(sorted(VALID_SANDBOX_WORKSPACE_MODES))
         raise ValueError(f"{field_name}.workspace_mode must be one of: {allowed}")
     return policy
@@ -355,7 +365,9 @@ def _normalize_external_engine_sandbox_config(
         config = ExternalEngineSandboxConfig(
             enabled=bool(raw_config.get("enabled", False)),
             backend=backend,
-            runtime_binary=str(raw_config.get("runtime_binary", "bwrap" if backend == "bubblewrap" else "docker")),
+            runtime_binary=str(
+                raw_config.get("runtime_binary", "bwrap" if backend == "bubblewrap" else "docker")
+            ),
             image=str(raw_config.get("image", "litehive-external-engine:latest")),
             workspace_mount_path=str(raw_config.get("workspace_mount_path", "/workspace")),
             binary_mount_root=str(raw_config.get("binary_mount_root", "/litehive/bin")),
@@ -382,7 +394,9 @@ def _normalize_external_engine_sandbox_config(
         raise ValueError(f"external_engine_sandbox.default_network_mode must be one of: {allowed}")
     if config.default_workspace_mode not in VALID_SANDBOX_WORKSPACE_MODES:
         allowed = ", ".join(sorted(VALID_SANDBOX_WORKSPACE_MODES))
-        raise ValueError(f"external_engine_sandbox.default_workspace_mode must be one of: {allowed}")
+        raise ValueError(
+            f"external_engine_sandbox.default_workspace_mode must be one of: {allowed}"
+        )
     if not config.workspace_mount_path.startswith("/"):
         raise ValueError("external_engine_sandbox.workspace_mount_path must be an absolute path")
     if not config.binary_mount_root.startswith("/"):
@@ -489,10 +503,6 @@ def _default_execution_retry_policies() -> dict[str, ExecutionRetryPolicy]:
 
 def _shared_stage_sequence() -> list[str]:
     return ["grooming", "implementing", "testing", "accepting", "commit_to_git"]
-
-
-def _shared_stage_text(stages: list[str]) -> str:
-    return " -> ".join(stages) + "."
 
 
 SHARED_PROCESS_PROFILE: dict[str, Any] = {
@@ -873,9 +883,7 @@ class LitehiveConfig:
             )
             for engine_name, fallbacks in self.engine_fallbacks.items()
         }
-        self.agent_startup_guidance = _normalize_agent_startup_guidance(
-            self.agent_startup_guidance
-        )
+        self.agent_startup_guidance = _normalize_agent_startup_guidance(self.agent_startup_guidance)
         self.execution_retry_policies = _normalize_execution_retry_policies(
             self.execution_retry_policies
         )
@@ -967,85 +975,44 @@ def resolve_process_profile(name: str | None) -> dict[str, Any]:
     return profile
 
 
-def _render_process_overlay(profile: dict[str, Any]) -> list[str]:
-    return [
-        "## Process overlay",
-        f"- Source of truth: {profile['source_of_truth']}",
-        f"- Task source of truth: {profile['task_source_of_truth']}",
-        f"- Orchestrator model: {profile['orchestrator_model']}",
-        f"- Routing model: {profile['routing_model']}",
-        f"- Shared stages: {_shared_stage_text(profile['shared_stages'])}",
-        f"- Role model: {profile['role_model']}",
-        f"- TDD expectations: {profile['tdd_expectations']}",
-        f"- Verification discipline: {profile['verification_discipline']}",
-        f"- Acceptance flow: {profile['acceptance_flow']}",
-        f"- Commit and recovery: {profile['commit_recovery']}",
-    ]
-
-
-def _render_project_overlay(profile: dict[str, Any]) -> list[str]:
-    return [
-        "## Project overlay",
-        f"- {profile['summary']}",
-        *profile["workspace_overlay"],
-    ]
-
-
-def _render_scaffold_sections(profile: dict[str, Any]) -> list[str]:
-    return [
-        "## Init scaffold",
-        *profile["init_scaffold"],
-        "",
-        "## Prompt scaffold",
-        *profile["prompt_scaffold"],
-        "",
-    ]
-
-
-def _render_stage_prompt_scaffolding(profile: dict[str, Any]) -> list[str]:
-    lines = ["## Stage prompt scaffolding"]
-    for stage in profile["shared_stages"]:
-        stage_instructions = profile.get("stage_instructions", {}).get(stage, [])
-        stage_overlay = profile.get("stage_overlay", {}).get(stage, [])
-        if not stage_instructions and not stage_overlay:
-            continue
-        lines.extend(["", f"### {stage}"])
-        lines.extend(stage_instructions)
-        lines.extend(stage_overlay)
-    lines.append("")
-    return lines
-
-
 def render_context_template(profile_name: str) -> str:
     profile = resolve_process_profile(profile_name)
     lines = [
-        "# Litehive Workspace Context",
-        "",
-        f"Process profile: {profile['label']}",
-        "",
-        "Describe this repository and how subagents should work in it.",
+        "# Workspace Context",
         "",
         "## Project",
         "- Purpose:",
         "- Main package/module locations:",
+        "- Main tests:",
         "- Commands to know:",
+        "  - `<test command>`",
+        "  - `<build command>`",
         "",
     ]
-    lines.extend(_render_process_overlay(profile))
-    lines.append("")
-    lines.extend(_render_project_overlay(profile))
-    lines.append("")
-    lines.extend(_render_scaffold_sections(profile))
-    lines.extend(_render_stage_prompt_scaffolding(profile))
+    workspace_overlay = profile.get("workspace_overlay", [])
+    if workspace_overlay:
+        lines.extend(
+            [
+                "## Working rules",
+                *profile["development_rules"],
+                *workspace_overlay,
+                "",
+            ]
+        )
+    else:
+        lines.extend(
+            [
+                "## Working rules",
+                *profile["development_rules"],
+                "",
+            ]
+        )
     if profile.get("specifics_heading"):
         lines.append(profile["specifics_heading"])
         lines.extend(profile.get("specifics", []))
         lines.append("")
     lines.extend(
         [
-            "## Development rules",
-            *profile["development_rules"],
-            "",
             "## Tool usage",
             *profile["tool_usage"],
             "",

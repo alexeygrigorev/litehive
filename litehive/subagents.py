@@ -1,6 +1,5 @@
 """Subagent execution and folder persistence."""
 
-
 from dataclasses import dataclass, replace
 import inspect
 import os
@@ -1029,7 +1028,6 @@ def stage_prompt(
 ) -> str:
     """Build the prompt for a stage subagent."""
     profile = resolve_process_profile(process_profile)
-    workspace_overlay = profile.get("workspace_overlay", [])
     stage_overlay = profile.get("stage_overlay", {}).get(step, [])
     stage_instructions = profile.get("stage_instructions", {}).get(
         step, ["Complete the requested stage."]
@@ -1043,38 +1041,14 @@ def stage_prompt(
         f"Task: {task.id} {task.title}",
         f"Stage: {step}",
         f"Stage owner: {stage_owner}",
-        f"Process profile: {profile['label']}",
         f"Task type: {task.task_type or '-'}",
         "",
         "Workspace context:",
         workspace_context.strip() or "No workspace context provided.",
         "",
-        "Shared process:",
-        f"- Orchestrator model: {profile['orchestrator_model']}",
-        f"- Routing model: {profile['routing_model']}",
-        f"- Shared stages: {' -> '.join(profile['shared_stages'])}.",
-        f"- Role model: {profile['role_model']}",
-        f"- Source of truth: {profile['source_of_truth']}",
-        f"- Task source of truth: {profile['task_source_of_truth']}",
-        f"- TDD expectations: {profile['tdd_expectations']}",
-        f"- Verification discipline: {profile['verification_discipline']}",
-        f"- Acceptance flow: {profile['acceptance_flow']}",
-        f"- Commit and recovery: {profile['commit_recovery']}",
-        "",
-        "Project overlay:",
-        f"- {profile['summary']}",
+        "Role focus:",
+        *stage_role,
     ]
-    lines.extend(workspace_overlay or ["- No project-specific overlay provided."])
-    lines.extend(
-        [
-            "",
-            "Prompt scaffold:",
-            *profile.get("prompt_scaffold", []),
-            "",
-            "Role focus:",
-            *stage_role,
-        ]
-    )
     if startup_guidance:
         lines.extend(
             [
@@ -1315,8 +1289,8 @@ def stage_prompt(
             "- On BLOCKED: explain what dependency or resource is missing.",
             "",
             "A vague rejection like 'tests fail' or 'missing evidence' is useless and causes infinite loops.",
-            "A good rejection looks like: 'Expected: `litehive engine gemini` switches the default engine and prints confirmation. "
-            "Observed: command exits 0 but config.yaml still shows the old engine. Reproduce: run `litehive engine gemini` then `cat .litehive/config.yaml`. "
+            "A good rejection looks like: 'Expected: `set-config key val` updates the config and prints confirmation. "
+            "Observed: command exits 0 but config.json still shows the old value. Reproduce: run `set-config key val` then `cat config.json`. "
             "Criteria 1-3 are met, criterion 4 (persistence) is not.'",
             "",
             "The text-based VERDICT/SUMMARY format is accepted as fallback but litehive report is strongly preferred.",
@@ -1351,7 +1325,6 @@ def _stage_role_prompt(step: str, owner: str | None = None) -> list[str]:
         return [
             "- You are the planner, a PM-style role representing the user's and product's point of view.",
             "- Frame the real user problem, clarify scope, sharpen acceptance criteria, decompose the work, identify follow-up tasks, and estimate PM sizing.",
-            "- Treat the Litehive CLI as the source of truth for task shaping: use the task record fields directly, and when documenting operator guidance prefer concrete `litehive add`, `litehive update`, and `litehive intake` flows over vague prose.",
             "- Do not pass grooming with a blank task record; make sure the task has a clear goal and explicit acceptance criteria, or return a blocked outcome that names what is missing.",
             "- Do not implement code in this stage.",
         ]
