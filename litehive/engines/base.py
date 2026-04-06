@@ -515,6 +515,11 @@ def parse_stage_report_text(
     # Prefer schema-validated structured submission when present.
     submission = _extract_stage_result_submission(transcript)
     if isinstance(submission, StageResultSubmission):
+        task_update_dict: dict[str, object] = (
+            submission.task_update.model_dump(exclude_unset=True) if submission.task_update else {}
+        )
+        if submission.acceptance_criteria and "acceptance_criteria" not in task_update_dict:
+            task_update_dict["acceptance_criteria"] = submission.acceptance_criteria
         return StageReport(
             task_id=task_id,
             step=step,
@@ -523,9 +528,8 @@ def parse_stage_report_text(
             feedback=cap_feedback(transcript),
             files_changed=submission.files_changed,
             follow_up_tasks=submission.follow_up_tasks,
-            task_update=submission.task_update.model_dump(exclude_unset=True) if submission.task_update else {},
+            task_update=task_update_dict,
             tests={"added": submission.tests.added, "passing": submission.tests.passing},
-
             warnings=submission.warnings,
         )
 
