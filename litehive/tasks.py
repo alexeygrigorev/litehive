@@ -3394,6 +3394,7 @@ def _recover_stale_runner_state(
                 )
                 if summary is not None and task.id not in summary.requeued_task_ids:
                     summary.requeued_task_ids.append(task.id)
+                prioritized_ids.append(task.id)
                 if (
                     stale_pid
                     and summary is not None

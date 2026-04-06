@@ -851,8 +851,8 @@ def test_cmd_run_dry_run_shows_planned_tasks_and_stop_conditions_without_executi
     def fail_drain(*args, **kwargs):  # type: ignore[no-untyped-def]
         raise AssertionError("drain_task_pool should not be called for dry-run")
 
-    monkeypatch.setattr("litehive.cli.run_single_task", fail_run_single)
-    monkeypatch.setattr("litehive.cli.drain_task_pool", fail_drain)
+    monkeypatch.setattr("litehive.cli.run.run_single_task", fail_run_single)
+    monkeypatch.setattr("litehive.cli.run.drain_task_pool", fail_drain)
 
     exit_code = _cmd_run(argparse.Namespace(workspace=tmp_path, dry_run=True, drain=False))
     output = capsys.readouterr().out
@@ -882,8 +882,8 @@ def test_cmd_run_dry_run_prefers_run_engine_override(
     def fail_drain(*args, **kwargs):  # type: ignore[no-untyped-def]
         raise AssertionError("drain_task_pool should not be called for dry-run")
 
-    monkeypatch.setattr("litehive.cli.run_single_task", fail_run_single)
-    monkeypatch.setattr("litehive.cli.drain_task_pool", fail_drain)
+    monkeypatch.setattr("litehive.cli.run.run_single_task", fail_run_single)
+    monkeypatch.setattr("litehive.cli.run.drain_task_pool", fail_drain)
 
     exit_code = _cmd_run(
         argparse.Namespace(workspace=tmp_path, dry_run=True, engine="gemini", drain=False)
@@ -956,7 +956,7 @@ def test_cmd_run_drain_dry_run_reports_queue_exhausted_without_execution(
     def fail_drain_task_pool(*args, **kwargs):  # type: ignore[no-untyped-def]
         raise AssertionError("drain_task_pool should not be called for dry-run")
 
-    monkeypatch.setattr("litehive.cli.drain_task_pool", fail_drain_task_pool)
+    monkeypatch.setattr("litehive.cli.run.drain_task_pool", fail_drain_task_pool)
 
     state_before = load_state(tmp_path).model_dump()
     task_before = require_task(tmp_path, "T-0001").model_dump()

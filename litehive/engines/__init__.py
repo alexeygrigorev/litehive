@@ -1307,13 +1307,67 @@ def _decode_json_string_literal(value: str) -> str:
     return json.loads(f'"{value}"')
 
 
+def _format_goz_tool_block(part: dict[str, object]) -> str | None:
+    name = part.get("name", "")
+    id_ = part.get("id", "")
+    input_ = part.get("input")
+    output = part.get("output")
+    is_error = bool(part.get("is_error", False))
+
+    lines = ["```tool"]
+    if name:
+        lines.append(f"name: {name}")
+    if id_:
+        lines.append(f"id: {id_}")
+    if input_ is not None:
+        lines.append("input:")
+        lines.append(json.dumps(input_, indent=2))
+    if output is not None:
+        key = "error" if is_error else "output"
+        lines.append(f"{key}:")
+        lines.append(str(output))
+    lines.append("```")
+    return "\n".join(lines)
+
+
 def _extract_goz_transcript(stdout: str) -> str:
-    messages: list[str] = []
+    sections: list[str] = []
+    current_text: list[str] = []
+
+    def flush_text() -> None:
+        if current_text:
+            joined = "".join(current_text).strip()
+            if joined:
+                sections.append(joined)
+            current_text.clear()
+
     for payload in iter_jsonl_payloads(stdout):
+        event_type = str(payload.get("type", "")).lower()
+
+        if event_type == "text":
+            part = payload.get("part")
+            if isinstance(part, dict):
+                text = part.get("text")
+                if isinstance(text, str):
+                    current_text.append(text)
+                    continue
+
+        if event_type == "tool_use":
+            flush_text()
+            part = payload.get("part")
+            if isinstance(part, dict):
+                tool_block = _format_goz_tool_block(part)
+                if tool_block:
+                    sections.append(tool_block)
+            continue
+
+        flush_text()
         text = _goz_message_text(payload)
         if text:
-            messages.append(text)
-    return "\n".join(part.rstrip() for part in messages if part.strip()).strip()
+            sections.append(text)
+
+    flush_text()
+    return "\n\n".join(sections).strip()
 
 
 def _extract_goz_errors(stdout: str) -> list[str]:
@@ -2130,7 +2184,7 @@ ENGINE_REGISTRY: dict[str, ExternalCLIAdapter] = {
         name="goz",
         binary="goz",
         capabilities=AdapterCapabilities(
-            supports_model_override=True,
+            supports_model_override=False,
             strips_environment=False,
             transcript_format="jsonl",
         ),
