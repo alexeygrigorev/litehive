@@ -6,10 +6,10 @@ from pathlib import Path
 from typing import Any
 
 from litehive.models import TaskRecord, utcnow
-from litehive.tasks import task_dir
 
 
 def _events_path(root: Path, task: TaskRecord) -> Path:
+    from litehive.tasks import task_dir
     return task_dir(root, task) / "events.jsonl"
 
 

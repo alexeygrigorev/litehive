@@ -1,0 +1,50 @@
+- role: recovery
+  step: grooming
+  verdict: comment
+  message: 'Recovery trigger `stale_runner_recovery`: Recovered stale runner state
+    and returned the task to `grooming`.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0083-add-reliable-runner-status-model-with-heartbeat-and-reconciliation/recovery/recovery-001.yaml'
+  files_changed: []
+  created_at: '2026-04-06T09:04:00+00:00'
+- role: recovery
+  step: grooming
+  verdict: comment
+  message: 'Recovery trigger `stale_runner_recovery`: Recovered stale runner state
+    and returned the task to `grooming`.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0083-add-reliable-runner-status-model-with-heartbeat-and-reconciliation/recovery/recovery-002.yaml'
+  files_changed: []
+  created_at: '2026-04-06T09:05:07+00:00'
+- role: planner
+  step: grooming
+  verdict: pass
+  message: 'Grooming PASS for T-0083. The implementation was already merged to main
+    in commit 919315b (with follow-up bug fix in ef5159a). The task was stuck in grooming
+    because: (1) the workflow verification gate caused infinite testing rejections
+    (now fixed in ef5159a), and (2) multiple planner subagents (SA-0018/19/20) were
+    killed by stale runner detection before completing. The task record had no goal/acceptance_criteria/plan
+    set.
+
+
+    What was verified: RunnerStatusState model (models.py), runner_heartbeat() context
+    manager with 1s background thread writes, runner_status() returning running/late/stale/idle,
+    _reconcile_stale_runner_tasks() handling both orphaned non-active tasks AND active
+    tasks, dequeue_next_task_selection() calling reconciliation before picking work,
+    repair_workspace_state() recovering stale runners, and litehive status surfacing
+    runner health.
+
+
+    Note: There is a circular import between tasks.py (imports last_event_timestamp
+    from events.py) and events.py (imports task_dir from tasks.py), introduced in
+    T-0090. This prevents tests from running in the worktree. The implementing agent
+    should fix this circular import or work around it before running targeted tests.
+
+
+    The task_update in STAGE_RESULT sets goal, acceptance_criteria, plan, and PM sizing.'
+  files_changed: []
+  created_at: '2026-04-06T09:13:31+00:00'
