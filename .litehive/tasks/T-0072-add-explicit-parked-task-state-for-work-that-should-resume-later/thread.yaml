@@ -388,3 +388,17 @@
     report: .litehive/tasks/T-0072-add-explicit-parked-task-state-for-work-that-should-resume-later/recovery/recovery-001.yaml'
   files_changed: []
   created_at: '2026-04-05T14:34:20+00:00'
+- role: recovery
+  step: testing
+  verdict: pass
+  message: 'Validated the explicit parked-state implementation on retry attempt 3.
+    All 22 focused parked-state tests pass: stop writes parked status, parked tasks
+    are excluded from automatic repair/recovery while system-interrupted tasks remain
+    eligible, resume preserves the current stage, requeue restarts from implementation
+    entry, queue/status output shows parked distinctly, and dirty-worktree gating
+    correctly distinguishes parked from interrupted ownership. Three pre-existing
+    failures (drain concurrency race, switch command, editor mock import) are unrelated
+    to T-0072 and fail identically on the base commit. The implementation satisfies
+    all 5 acceptance criteria.'
+  files_changed: []
+  created_at: '2026-04-06T14:34:52+00:00'
