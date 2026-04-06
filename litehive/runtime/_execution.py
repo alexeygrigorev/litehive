@@ -244,7 +244,9 @@ def drain_task_pool(
         set_pool_stop_reason(root, None)
 
         while True:
-            stop_reason = _pool_stop_reason(root, executions, conditions, budget_ledger=budget_ledger)
+            stop_reason = _pool_stop_reason(
+                root, executions, conditions, budget_ledger=budget_ledger
+            )
             if stop_reason is not None:
                 blocked: list[BlockedTask] = []
                 if stop_reason == "blocked_tasks_remaining":
@@ -328,7 +330,11 @@ def _pool_stop_reason(
         return "continue_or_rollback_required"
     latest_limit_kind = _execution_limit_kind(latest)
     final_status = latest.result.final_status if latest.result is not None else None
-    if conditions.stop_on_failure and final_status is not None and final_status not in {"done", "paused"}:
+    if (
+        conditions.stop_on_failure
+        and final_status is not None
+        and final_status not in {"done", "paused"}
+    ):
         return "failure_detected"
     if conditions.stop_on_execution_limit and _execution_hit_limit(latest):
         return "execution_limit_reached"
@@ -400,7 +406,9 @@ def _dirty_worktree_owner_task(root: Path) -> TaskRecord | None:
     task_ids = [
         finding.task_id
         for finding in report.findings
-        if finding.location_kind == "main-checkout" and finding.ownership == "task-owned" and finding.task_id
+        if finding.location_kind == "main-checkout"
+        and finding.ownership == "task-owned"
+        and finding.task_id
     ]
     if len(task_ids) != 1:
         return None
@@ -542,10 +550,7 @@ def _unexpected_dirty_paths(
             continue
         # Ignore all .litehive/ workspace-internal churn
         if raw.startswith(".litehive/"):
-            if not any(
-                raw == str(p) or raw.startswith(str(p) + "/")
-                for p in allowed_paths
-            ):
+            if not any(raw == str(p) or raw.startswith(str(p) + "/") for p in allowed_paths):
                 continue
         path = PurePosixPath(raw)
         if any(raw == str(p) or raw.startswith(str(p) + "/") for p in allowed_paths):
@@ -616,7 +621,11 @@ def _finalize_pool_run(
         latest = executions[-1]
         if latest.task is not None:
             checkpoint = stop_reason.removeprefix("human_checkpoint_").replace("_", " ")
-            append_journal(root, latest.task, f"Pool stopped: {stop_reason}. Awaiting human review at {checkpoint}.")
+            append_journal(
+                root,
+                latest.task,
+                f"Pool stopped: {stop_reason}. Awaiting human review at {checkpoint}.",
+            )
     if stop_reason == "continue_or_rollback_required" and executions:
         latest = executions[-1]
         if latest.task is not None and latest.commit_sha is not None:
@@ -719,7 +728,9 @@ def build_executor(
                 return report
 
             budget_ledger.record(engine_name)
-            model_name = resolve_model(task, config, engine_name=engine_name, model_override=model_override)
+            model_name = resolve_model(
+                task, config, engine_name=engine_name, model_override=model_override
+            )
             retry_policy = resolve_execution_retry_policy(
                 config,
                 engine_name=engine_name,
@@ -814,9 +825,13 @@ def build_executor(
                 and result.failure is not None
                 and result.failure.kind == "engine_error"
             )
-            if (is_limit_failure or is_unavailable_fallback or is_retry_exhausted_failure) and index + 1 < len(engines):
+            if (
+                is_limit_failure or is_unavailable_fallback or is_retry_exhausted_failure
+            ) and index + 1 < len(engines):
                 next_engine = engines[index + 1]
-                failure_reason = result.failure.reason if result.failure is not None else retry_exhausted_reason
+                failure_reason = (
+                    result.failure.reason if result.failure is not None else retry_exhausted_reason
+                )
                 event = (
                     f"Stage `{step}` switched from `{engine_name}` to `{next_engine}` "
                     f"after {failure_reason}."
@@ -856,7 +871,8 @@ def build_executor(
             from litehive.tasks import load_task_thread
 
             thread_comments = [
-                c for c in load_task_thread(root, current_task)
+                c
+                for c in load_task_thread(root, current_task)
                 if c.step == step and c.verdict != "comment"
             ]
             if (
@@ -871,7 +887,7 @@ def build_executor(
                         f"You finished the {step} stage but did not submit your verdict. "
                         f"Please run this command now:\n\n"
                         f"  litehive report --verdict <pass|fail|reject> --role {role_name} "
-                        f"--step {step} --message \"<your detailed report>\"\n\n"
+                        f'--step {step} --message "<your detailed report>"\n\n'
                         f"Your report is the ONLY thing the next agent will read. Include:\n"
                         f"- What you did and what the outcome was\n"
                         f"- If rejecting: exact failures, which files to fix, step-by-step instructions\n"
@@ -895,7 +911,9 @@ def build_executor(
             from litehive.tasks import task_dir as _task_dir
 
             _reports_dir = _task_dir(root, current_task) / "reports"
-            prior_attempts = len(list(_reports_dir.glob(f"{step}-*.yaml"))) if _reports_dir.exists() else 0
+            prior_attempts = (
+                len(list(_reports_dir.glob(f"{step}-*.yaml"))) if _reports_dir.exists() else 0
+            )
             is_engine_break = (
                 result.failure is not None
                 and result.failure.kind in ("retryable_execution_error", "engine_error")
@@ -904,20 +922,30 @@ def build_executor(
             is_stuck_loop = (
                 report.verdict in ("fail", "reject")
                 and step in ("implementing", "testing")
-                and prior_attempts >= 3  # 3+ prior attempts = stuck
+                and prior_attempts >= 3
             )
-            if is_engine_break or is_stuck_loop:
+            is_blocked_stage = report.verdict == "blocked" and step != "commit_to_git"
+            if is_engine_break or is_stuck_loop or is_blocked_stage:
                 recovered_report = _attempt_stage_recovery(
-                    root, execution_root, current_task, step, report,
-                    subagents=subagents, config=config,
-                    role_name=role_name, engine_name=engine_name, model_name=model_name,
+                    root,
+                    execution_root,
+                    current_task,
+                    step,
+                    report,
+                    subagents=subagents,
+                    config=config,
+                    role_name=role_name,
+                    engine_name=engine_name,
+                    model_name=model_name,
                 )
                 if recovered_report is not None:
                     report = recovered_report
 
             if execution_events:
                 report.warnings = [*execution_events, *report.warnings]
-                report.feedback = cap_feedback("\n\n".join([*execution_events, report.feedback]).strip())
+                report.feedback = cap_feedback(
+                    "\n\n".join([*execution_events, report.feedback]).strip()
+                )
             _attach_runner_hook_results(report, pre_stage_hook_results)
             if limit_trigger_reason is not None and (is_limit_failure or is_unavailable_fallback):
                 if (
@@ -933,7 +961,9 @@ def build_executor(
                     report.summary = (
                         f"{step} blocked after exhausting engine fallbacks: {result.failure.reason}"
                     )
-                report.feedback = cap_feedback("\n\n".join([*execution_events, result.transcript]).strip())
+                report.feedback = cap_feedback(
+                    "\n\n".join([*execution_events, result.transcript]).strip()
+                )
                 if not report.warnings or report.warnings[-1] != result.failure.reason:
                     report.warnings.append(result.failure.reason)
                 return report
@@ -1048,12 +1078,14 @@ def _attach_runner_hook_results(
         *_flatten_runner_hook_warnings(hook_results),
         *report.warnings,
     ]
-    report.feedback = cap_feedback("\n\n".join(
-        [
-            *_flatten_runner_hook_feedback(hook_results),
-            report.feedback,
-        ]
-    ).strip())
+    report.feedback = cap_feedback(
+        "\n\n".join(
+            [
+                *_flatten_runner_hook_feedback(hook_results),
+                report.feedback,
+            ]
+        ).strip()
+    )
 
 
 def _runner_hook_point(
@@ -1152,7 +1184,7 @@ def _runner_hook_feedback(hook_result: dict[str, str | int | bool | None]) -> st
 
 
 def _flatten_runner_hook_warnings(
-    hook_results: list[dict[str, str | int | bool | None]]
+    hook_results: list[dict[str, str | int | bool | None]],
 ) -> list[str]:
     warnings: list[str] = []
     for hook_result in hook_results:
@@ -1161,6 +1193,6 @@ def _flatten_runner_hook_warnings(
 
 
 def _flatten_runner_hook_feedback(
-    hook_results: list[dict[str, str | int | bool | None]]
+    hook_results: list[dict[str, str | int | bool | None]],
 ) -> list[str]:
     return [_runner_hook_feedback(hook_result) for hook_result in hook_results]

@@ -335,7 +335,7 @@ class TaskExecutionRunner:
                     if report.verdict == "blocked"
                     else "unsupported_verdict"
                 )
-                report = self._terminal_report(
+                terminal = self._terminal_report(
                     task,
                     step=report.step,
                     verdict=report.verdict,
@@ -351,6 +351,15 @@ class TaskExecutionRunner:
                     resource_limit_event=report.resource_limit_event,
                     hook_results=report.hook_results,
                 )
+                recovered = self._launch_recovery_agent(task, current, terminal)
+                if recovered is not None:
+                    result = self._apply_recovery_result(
+                        task, current, recovered, rejections, steps
+                    )
+                    if result is not None:
+                        return result
+                    report.warnings = [*report.warnings, *recovered.warnings]
+                report = terminal
                 self._write_report(task, report, steps)
                 task.status = "flagged"
                 _apply_task_outcome(
@@ -505,7 +514,7 @@ class TaskExecutionRunner:
                         f"Retry limit exhausted after {rejections} rejection(s) "
                         f"(limit: {self.max_retries})"
                     )
-                    report = self._terminal_report(
+                    exhausted_report = self._terminal_report(
                         task,
                         step=current,
                         verdict=report.verdict,
@@ -521,6 +530,14 @@ class TaskExecutionRunner:
                         resource_limit_event=report.resource_limit_event,
                         hook_results=report.hook_results,
                     )
+                    recovered = self._launch_recovery_agent(task, current, exhausted_report)
+                    if recovered is not None:
+                        result = self._apply_recovery_result(
+                            task, current, recovered, rejections, steps
+                        )
+                        if result is not None:
+                            return result
+                    report = exhausted_report
                     task.status = "flagged"
                     _apply_task_outcome(
                         task,
@@ -590,7 +607,7 @@ class TaskExecutionRunner:
             if target == "flagged":
                 outcome = "blocked" if report.verdict == "blocked" else "flagged"
                 reason = report.summary or f"{current} ended with `{report.verdict}`"
-                report = self._terminal_report(
+                terminal = self._terminal_report(
                     task,
                     step=report.step,
                     verdict=report.verdict,
@@ -608,6 +625,15 @@ class TaskExecutionRunner:
                     failure_classification=report.failure_classification,
                     failure_diagnostics=report.failure_diagnostics,
                 )
+                recovered = self._launch_recovery_agent(task, current, terminal)
+                if recovered is not None:
+                    result = self._apply_recovery_result(
+                        task, current, recovered, rejections, steps
+                    )
+                    if result is not None:
+                        return result
+                    report.warnings = [*report.warnings, *recovered.warnings]
+                report = terminal
                 task.status = "flagged"
                 _apply_task_outcome(
                     task,
@@ -636,6 +662,68 @@ class TaskExecutionRunner:
             mark_stage_finished(self.root, task, report)
             task.pipeline_status = target  # type: ignore[assignment]
             save_task(self.root, task)
+
+    def _launch_recovery_agent(
+        self,
+        task: TaskRecord,
+        step: str,
+        failed_report: StageReport,
+    ) -> StageReport | None:
+        if self.subagents is None:
+            return None
+        from litehive.runtime._recovery import _attempt_stage_recovery
+
+        engine_name = task.engine or (self.config.default_engine if self.config else "codex")
+        try:
+            return _attempt_stage_recovery(
+                self.root,
+                self.root,
+                task,
+                step,
+                failed_report,
+                subagents=self.subagents,
+                config=self.config,
+                engine_name=engine_name,
+            )
+        except Exception:
+            return None
+
+    def _apply_recovery_result(
+        self,
+        task: TaskRecord,
+        step: str,
+        recovered: StageReport,
+        rejections: int,
+        steps: int,
+    ) -> RunResult | None:
+        recovered.retry_count = rejections
+        recovered.retry_limit = self.max_retries
+        recovered.retry_source = self.retry_source
+        self._write_report(task, recovered, steps)
+        _apply_stage_finished(task, recovered)
+        if recovered.verdict in ("pass", "accept"):
+            next_target = _ROUTES.get((step, recovered.verdict))
+            if next_target is not None:
+                task.pipeline_status = next_target
+                task.status = "queued"
+                save_task(self.root, task)
+                return self._finish_run(
+                    task,
+                    final_status="queued",
+                    steps=steps,
+                    last_verdict=recovered.verdict,
+                )
+        if recovered.retry_decision == "retry":
+            task.pipeline_status = step
+            task.status = "queued"
+            save_task(self.root, task)
+            return self._finish_run(
+                task,
+                final_status="queued",
+                steps=steps,
+                last_verdict=recovered.verdict,
+            )
+        return None
 
     def _finish_run(
         self,
