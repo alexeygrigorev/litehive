@@ -1,0 +1,40 @@
+id: T-0201
+slug: log-engine-output-parse-failures-instead-of
+title: Log engine output parse failures instead of silently skipping
+depends_on: []
+task_type: null
+engine: null
+model: null
+mode: implementation
+status: queued
+pipeline_status: backlog
+priority: medium
+pm_complexity: null
+planned_effort: null
+created_at: '2026-04-06T20:34:17+00:00'
+updated_at: '2026-04-06T20:34:17+00:00'
+goal: 'Engine adapters silently skip unparseable output items (claude delta fallback,
+  goz multi-key guessing, codex/opencode silent filtering). Log warnings for skipped
+  items so we can diagnose issues. Covers: engines/__init__.py lines 1290-1303, 1423-1442,
+  1455-1458, 1470-1481.'
+acceptance_criteria:
+- Unparseable engine output items produce a warning log
+- goz adapter uses explicit key path, not trial-and-error across 5 keys
+- No items silently dropped without logging
+constraints: []
+plan: []
+human_checkpoints: []
+subagents: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0201 log-engine-output-parse-failures-instead-of'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+  worktree_path: null
+retry_policy:
+  max_retries: null
+  stage_retry_limit: null
+created_from: null
+upstream_origin: null

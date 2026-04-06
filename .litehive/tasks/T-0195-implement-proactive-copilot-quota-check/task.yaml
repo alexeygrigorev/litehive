@@ -1,0 +1,44 @@
+id: T-0195
+slug: implement-proactive-copilot-quota-check
+title: Investigate copilot quota API and produce implementation task
+depends_on: []
+task_type: null
+engine: null
+model: null
+mode: implementation
+status: queued
+pipeline_status: backlog
+priority: medium
+pm_complexity: null
+planned_effort: null
+created_at: '2026-04-06T20:17:35+00:00'
+updated_at: '2026-04-06T20:17:35+00:00'
+goal: 'Add proactive quota checking for GitHub Copilot. The AgentLimits project shows
+  the endpoint is GET https://github.com/github-copilot/chat/entitlement with GitHub
+  session cookies (credentials: include). Returns monthly premium interaction quota
+  percentage. Need to figure out how to get auth tokens from the copilot CLI or GitHub
+  CLI (gh) rather than browser cookies. Check if gh auth token or copilot CLI stores
+  credentials we can reuse.'
+acceptance_criteria:
+- Find the exact API endpoint for copilot quota (try gh auth token with github.com/github-copilot/chat/entitlement or alternatives)
+- Verify it works from CLI without browser cookies
+- Document the response format (fields, quota percentage, reset time)
+- Produce a follow-up implementation task with exact endpoint, auth method, response fields, and code to write
+- This is research only - no code changes
+constraints: []
+plan: []
+human_checkpoints: []
+subagents: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0195 implement-proactive-copilot-quota-check'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+  worktree_path: null
+retry_policy:
+  max_retries: null
+  stage_retry_limit: null
+created_from: null
+upstream_origin: null

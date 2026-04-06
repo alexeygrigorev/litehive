@@ -1,0 +1,43 @@
+id: T-0197
+slug: remove-verdict-text-parsing-fallback-require
+title: Remove verdict text parsing fallback - require litehive report CLI
+depends_on: []
+task_type: null
+engine: null
+model: null
+mode: implementation
+status: queued
+pipeline_status: backlog
+priority: medium
+pm_complexity: null
+planned_effort: null
+created_at: '2026-04-06T20:27:27+00:00'
+updated_at: '2026-04-06T20:27:27+00:00'
+goal: 'Agents must submit verdicts via litehive report CLI. If they don''t, continue
+  the session and explicitly ask them to run litehive report instead of parsing VERDICT:
+  lines from transcript text. Remove _parse_verdict fallback and all text-based verdict
+  extraction. This ensures consistent structured reporting and makes agents learn
+  to use the CLI.'
+acceptance_criteria:
+- Agents that do not run litehive report get their session continued with explicit
+  instruction to submit via CLI
+- _parse_verdict text fallback is removed
+- No verdict is inferred from transcript text
+- If agent still does not submit after being asked, stage fails with clear error
+constraints: []
+plan: []
+human_checkpoints: []
+subagents: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0197 remove-verdict-text-parsing-fallback-require'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+  worktree_path: null
+retry_policy:
+  max_retries: null
+  stage_retry_limit: null
+created_from: null
+upstream_origin: null

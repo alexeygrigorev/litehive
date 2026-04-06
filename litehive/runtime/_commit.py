@@ -92,8 +92,16 @@ def _commit_to_git_report(
                         subagents.run(
                             task, role="merge-resolver", engine_name=engine_name, model=model,
                             prompt=(
-                                f"Git merge conflict. Conflicting files: {', '.join(conflicts)}\n"
-                                f"Resolve the conflicts, git add the files, and git commit --no-edit.\n"
+                                f"Git merge conflict while merging task {task.id} worktree into main.\n"
+                                f"Conflicting files: {', '.join(conflicts)}\n\n"
+                                f"Resolution rules:\n"
+                                f"- You must preserve BOTH sides' intent — combine the changes, don't just pick one side.\n"
+                                f"- The main branch has the latest infrastructure state (config, gitignore, imports). Prefer main for infrastructure files.\n"
+                                f"- The worktree has the task's feature changes. Preserve the feature code.\n"
+                                f"- For code conflicts (e.g. both sides added parameters to the same function), include ALL additions.\n"
+                                f"- For .gitignore or config conflicts, merge all entries from both sides.\n"
+                                f"- Never silently drop changes from either side.\n\n"
+                                f"After resolving, run: git add the resolved files, then git commit --no-edit.\n"
                             ),
                         )
                         # Check if agent resolved it

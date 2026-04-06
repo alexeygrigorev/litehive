@@ -1,0 +1,53 @@
+id: T-0204
+slug: split-tasks-py-4672-lines-into-tasks-submodules
+title: Split tasks.py (4672 lines) into tasks/ submodules
+depends_on: []
+task_type: null
+engine: null
+model: null
+mode: implementation
+status: queued
+pipeline_status: backlog
+priority: medium
+pm_complexity: null
+planned_effort: null
+created_at: '2026-04-06T20:36:24+00:00'
+updated_at: '2026-04-06T20:36:24+00:00'
+goal: Pure mechanical split, no logic changes. Move related functions into submodules
+  under tasks/ package. __init__.py re-exports everything.
+acceptance_criteria:
+- tasks.py split into tasks/ package with focused submodules
+- All imports from litehive.tasks continue to work
+- No logic changes, pure file reorganization
+- All tests pass
+constraints: []
+plan:
+- 'tasks/models.py: BlockedTask, TaskSelection, TaskPlan, WorkspaceRepairSummary, WorkspaceConflictError, StopTaskSummary, SwitchTaskSummary, _RunnerLockState'
+- 'tasks/paths.py: tasks_root, runner_lock_path, slugify, task_dir, task_file, task_runtime_file, task_thread_file, task_recovery_dir, _latest_path, _artifact_candidates'
+- 'tasks/persistence.py: load_state, save_state, set_pool_stop_reason, _atomic_write_text, _serialize_state'
+- 'tasks/locking.py: _workspace_lock, workspace_runner_guard, workspace_mutation_guard, runner_status, runner_heartbeat, _runner_lock_is_active'
+- 'tasks/crud.py: create_task, list_tasks, list_tasks_state_first, get_task, require_task, save_task, save_task_runtime, discard_created_task, set_task_commit_sha, get/set/clear_task_worktree_path'
+- 'tasks/normalization.py: normalize_acceptance_criteria, normalize_task_text_list, task_requires_acceptance_criteria, missing_acceptance_criteria_reason, infer_acceptance_criteria'
+- 'tasks/workflow.py: apply_task_updates_from_report, persist_task_and_state, _workspace_transition_writes'
+- 'tasks/runtime_tracking.py: mark_task_run_started/finished, mark_stage_started/finished, mark_subagent_started/finished, mark_engine_switch, set_task_continuation_handoff'
+- 'tasks/queue_ops.py: set_active_task, peek_next_task, dequeue_next_task, _is_task_eligible_for_execution, _task_blockers, _validate_task_dependencies'
+- 'tasks/queue_management.py: enqueue_task, move_queued_task, prioritize_queued_tasks, prepare_completed_task_for_recovery'
+- 'tasks/task_status.py: requeue_task, resume_task, abandon_task, close_task, park_task, update_task'
+- 'tasks/recovery.py: recover_stale_runner_state, repair_workspace_state, _prepare_interrupted_task, _recover_stranded_commit_tasks'
+- 'tasks/reports.py: collect_recovery_evidence, write_recovery_report, record_recovery_report, append_thread_comment, load_task_thread, render_task_thread'
+- 'tasks/journal.py: append_journal'
+human_checkpoints: []
+subagents: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0204 split-tasks-py-4672-lines-into-tasks-submodules'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+  worktree_path: null
+retry_policy:
+  max_retries: null
+  stage_retry_limit: null
+created_from: null
+upstream_origin: null

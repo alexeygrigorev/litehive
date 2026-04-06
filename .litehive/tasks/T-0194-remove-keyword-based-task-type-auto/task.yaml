@@ -1,0 +1,43 @@
+id: T-0194
+slug: remove-keyword-based-task-type-auto
+title: Remove keyword-based task_type auto-classification and task_engine_routing
+depends_on: []
+task_type: null
+engine: null
+model: null
+mode: implementation
+status: queued
+pipeline_status: backlog
+priority: medium
+pm_complexity: null
+planned_effort: null
+created_at: '2026-04-06T20:15:51+00:00'
+updated_at: '2026-04-06T20:15:51+00:00'
+goal: 'Remove _task_routing_key which guesses task_type from title keywords (refactor,
+  bugfix, research, etc.) and overrides default_engine. Remove task_engine_routing
+  from config entirely. Engine selection should only come from: default_engine, task-level
+  engine override, or CLI --engine override. Remove VALID_TASK_ROUTING_KEYS, _default_task_engine_routing,
+  and the routing_patterns tuple.'
+acceptance_criteria:
+- No more keyword-based auto-classification of tasks from title text
+- task_engine_routing removed from LitehiveConfig
+- _default_task_engine_routing and VALID_TASK_ROUTING_KEYS removed from constants
+- Engine selection uses only default_engine, task.engine, or CLI override
+- All tests pass after removal
+constraints: []
+plan: []
+human_checkpoints: []
+subagents: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0194 remove-keyword-based-task-type-auto'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+  worktree_path: null
+retry_policy:
+  max_retries: null
+  stage_retry_limit: null
+created_from: null
+upstream_origin: null

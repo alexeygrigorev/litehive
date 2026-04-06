@@ -1,0 +1,48 @@
+id: T-0198
+slug: remove-silent-fallbacks-fail-explicitly-instead
+title: Remove silent fallbacks - fail explicitly instead of guessing
+depends_on: []
+task_type: null
+engine: null
+model: null
+mode: implementation
+status: duplicate
+pipeline_status: backlog
+priority: medium
+pm_complexity: null
+planned_effort: null
+created_at: '2026-04-06T20:30:57+00:00'
+updated_at: '2026-04-06T20:35:01+00:00'
+goal: 'The codebase has ~40 places where errors are silently swallowed, values are
+  guessed from context, or legacy compatibility code masks problems. Instead of guessing,
+  we should fail explicitly and tell the agent what to do. Key areas: (1) text parsing
+  fallbacks in engines/base.py that guess verdicts, summaries, follow-up tasks from
+  transcript text, (2) silent error swallowing with ignore_errors=True on rmtree and
+  continue on parse failures, (3) legacy config compat like pre_acceptance_command
+  silent conversion, (4) engine output parsing that skips unparseable items without
+  logging. See the full list in thread.'
+acceptance_criteria:
+- No silent verdict guessing - require litehive report CLI (covered by T-0197)
+- No summary fabrication from transcript text - require structured submission
+- Invalid JSON in stage results fails with clear error instead of falling back to
+  text parsing
+- rmtree calls log what they are deleting and raise on unexpected failures
+- Legacy pre_acceptance_command compat removed - use hooks directly
+- Engine output parse failures are logged, not silently skipped
+constraints: []
+plan: []
+human_checkpoints: []
+subagents: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0198 remove-silent-fallbacks-fail-explicitly-instead'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+  worktree_path: null
+retry_policy:
+  max_retries: null
+  stage_retry_limit: null
+created_from: null
+upstream_origin: null

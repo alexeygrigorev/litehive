@@ -1,0 +1,43 @@
+id: T-0200
+slug: remove-text-based-stage-report-parsing-require
+title: Remove text-based stage report parsing - require structured JSON submission
+depends_on: []
+task_type: null
+engine: null
+model: null
+mode: implementation
+status: queued
+pipeline_status: backlog
+priority: medium
+pm_complexity: null
+planned_effort: null
+created_at: '2026-04-06T20:34:07+00:00'
+updated_at: '2026-04-06T20:34:07+00:00'
+goal: 'Remove all text-based report parsing fallbacks in engines/base.py. When an
+  agent submits a stage result, it must be valid JSON via STAGE_RESULT: block or via
+  litehive report CLI. Remove _extract_line, _extract_int, _extract_list, _extract_section_block,
+  and the text-to-report fallback path in parse_stage_report_text. If JSON is invalid,
+  fail with clear error asking the agent to resubmit. Covers: base.py lines 536-602,
+  670-687, 700-714.'
+acceptance_criteria:
+- parse_stage_report_text only accepts structured JSON or litehive report CLI submissions
+- _extract_line, _extract_int, _extract_list, _extract_section_block removed
+- Invalid JSON fails with clear error, not silent fallback to text
+- Agent gets session continued with instruction to resubmit properly
+constraints: []
+plan: []
+human_checkpoints: []
+subagents: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0200 remove-text-based-stage-report-parsing-require'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+  worktree_path: null
+retry_policy:
+  max_retries: null
+  stage_retry_limit: null
+created_from: null
+upstream_origin: null

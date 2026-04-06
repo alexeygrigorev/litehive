@@ -1,0 +1,52 @@
+id: T-0191
+slug: implement-proactive-codex-quota-check-using
+title: Implement proactive codex quota check using chatgpt.com API
+depends_on: []
+task_type: null
+engine: null
+model: null
+mode: implementation
+status: queued
+pipeline_status: backlog
+priority: medium
+pm_complexity: null
+planned_effort: null
+created_at: '2026-04-06T19:59:10+00:00'
+updated_at: '2026-04-06T19:59:10+00:00'
+goal: 'Add proactive quota checking for codex by calling the undocumented chatgpt.com
+  API. Read the bearer token from ~/.codex/auth.json (tokens.access_token). Call GET
+  https://chatgpt.com/backend-api/wham/usage with Authorization: Bearer header. Parse
+  the response to get rate_limit.limit_reached, primary_window (5h) and secondary_window
+  (weekly) used_percent and reset_at timestamps. When limit_reached is true, auto-freeze
+  codex until reset_at and skip it in engine selection. Check quota before each codex
+  invocation, not after failure. This replaces the current reactive approach of waiting
+  for codex to fail with a usage limit error.'
+acceptance_criteria:
+- Quota is checked before each codex invocation by calling GET https://chatgpt.com/backend-api/wham/usage
+- Bearer token is read from ~/.codex/auth.json at tokens.access_token
+- When rate_limit.limit_reached is true, codex is skipped and fallback engine is used
+- reset_at timestamp from the response is used to know when codex becomes available
+  again
+- Both primary_window (5h) and secondary_window (weekly) are checked
+- Engine monitoring shows current quota percentage and reset time for codex
+- No codex invocations are wasted on a known-exhausted quota
+- Quota check is cached for a reasonable period (e.g. 60s) to avoid hammering the API
+- 'Note: Claude and Copilot usage APIs are blocked by Cloudflare - only codex is implemented
+  in this task'
+constraints: []
+plan: []
+human_checkpoints: []
+subagents: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0191 implement-proactive-codex-quota-check-using'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+  worktree_path: null
+retry_policy:
+  max_retries: null
+  stage_retry_limit: null
+created_from: null
+upstream_origin: null

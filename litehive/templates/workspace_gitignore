@@ -12,7 +12,6 @@ worktrees/
 # Task runtime artifacts (not durable project state)
 tasks/*/runtime.yaml
 tasks/*/journal.md
-tasks/*/thread.yaml
 tasks/*/brief.md
 tasks/*/events.jsonl
 tasks/*/reports/

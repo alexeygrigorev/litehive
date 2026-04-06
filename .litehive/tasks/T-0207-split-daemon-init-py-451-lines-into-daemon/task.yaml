@@ -1,0 +1,41 @@
+id: T-0207
+slug: split-daemon-init-py-451-lines-into-daemon
+title: Split daemon/__init__.py (451 lines) into daemon/ submodules
+depends_on: []
+task_type: null
+engine: null
+model: null
+mode: implementation
+status: queued
+pipeline_status: backlog
+priority: medium
+pm_complexity: null
+planned_effort: null
+created_at: '2026-04-06T20:36:30+00:00'
+updated_at: '2026-04-06T20:36:30+00:00'
+goal: Pure mechanical split, no logic changes. Move code out of __init__.py into focused
+  submodules.
+acceptance_criteria:
+- daemon/__init__.py is only re-exports
+- No logic changes, pure file reorganization
+- All tests pass
+constraints: []
+plan:
+- 'daemon/_registry.py: list_daemon_instances, get_workspace_daemon, register_daemon, unregister_daemon, _prune_registry_in_place'
+- 'daemon/_logs.py: latest_run_all_log_dir, _prune_run_all_log_dirs'
+- 'daemon/_execution.py: run_daemon_loop, start_background_daemon, stop_workspace_daemon, daemon_status_lines'
+human_checkpoints: []
+subagents: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0207 split-daemon-init-py-451-lines-into-daemon'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+  worktree_path: null
+retry_policy:
+  max_retries: null
+  stage_retry_limit: null
+created_from: null
+upstream_origin: null

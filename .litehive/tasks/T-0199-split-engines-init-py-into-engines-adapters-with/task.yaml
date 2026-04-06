@@ -1,0 +1,43 @@
+id: T-0199
+slug: split-engines-init-py-into-engines-adapters-with
+title: Split engines/__init__.py into engines/adapters/ with one file per adapter
+depends_on: []
+task_type: null
+engine: null
+model: null
+mode: implementation
+status: queued
+pipeline_status: backlog
+priority: medium
+pm_complexity: null
+planned_effort: null
+created_at: '2026-04-06T20:31:53+00:00'
+updated_at: '2026-04-06T20:31:53+00:00'
+goal: 'litehive/engines/__init__.py is 2390 lines with 6 adapter classes and all parsing
+  code mixed together. Split into litehive/engines/adapters/ with one file per adapter:
+  codex.py, claude.py, opencode.py, gemini.py, copilot.py, goz.py. Shared parsing
+  helpers go in adapters/common.py. engines/__init__.py re-exports everything.'
+acceptance_criteria:
+- litehive/engines/adapters/ package exists with one file per adapter
+- Each adapter file is self-contained with its class and engine-specific parsing
+- Shared helpers (iter_jsonl_payloads, parse_stage_report_text, etc.) in common.py
+- engines/__init__.py re-exports all adapter classes
+- All tests pass
+- No behavior changes, pure refactor
+constraints: []
+plan: []
+human_checkpoints: []
+subagents: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0199 split-engines-init-py-into-engines-adapters-with'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+  worktree_path: null
+retry_policy:
+  max_retries: null
+  stage_retry_limit: null
+created_from: null
+upstream_origin: null

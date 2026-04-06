@@ -1,0 +1,44 @@
+id: T-0192
+slug: investigate-claude-code-usage-tracking-for
+title: Investigate Claude Code usage tracking for proactive quota detection
+depends_on: []
+task_type: research
+engine: null
+model: null
+mode: implementation
+status: queued
+pipeline_status: backlog
+priority: medium
+pm_complexity: null
+planned_effort: null
+created_at: '2026-04-06T20:07:50+00:00'
+updated_at: '2026-04-06T20:07:50+00:00'
+goal: 'Claude Code CLI tracks usage somehow but there is no obvious quota API endpoint.
+  api.anthropic.com/api/claude_code/metrics exists but rejects OAuth tokens. The claude.ai/api/organizations/usage
+  endpoint is behind Cloudflare. The CLI likely tracks usage locally against known
+  tier limits (rateLimitTier field in credentials). Investigate the CLI source (minified
+  JS at node_modules/@anthropic-ai/claude-code/cli.js) to find how it calculates and
+  reports usage. Key functions: getCurrentUsage, generateUsageReport, getRateLimitTier,
+  getOauthAccountInfo.'
+acceptance_criteria:
+- Produce a follow-up implementation task with exact API endpoint, auth method, and response fields for Claude quota checking
+- If no API exists, document the local tracking approach with exact tier limits per subscription
+- Check deobfuscated Claude Code source at github.com/yasasbanukaofficial/claude-code - specifically src/commands/usage/index.ts and usage.tsx, also src/commands/cost.ts and cost-tracker.ts
+- This is a research-only task - no code changes, just produce a concrete implementation spec
+constraints: []
+plan: []
+human_checkpoints: []
+subagents: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0192 investigate-claude-code-usage-tracking-for'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+  worktree_path: null
+retry_policy:
+  max_retries: null
+  stage_retry_limit: null
+created_from: null
+upstream_origin: null

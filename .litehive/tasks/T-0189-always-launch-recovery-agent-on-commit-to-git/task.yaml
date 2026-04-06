@@ -6,29 +6,79 @@ task_type: null
 engine: null
 model: null
 mode: implementation
-status: queued
-pipeline_status: backlog
+status: in_progress
+pipeline_status: commit_to_git
 priority: medium
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-06T15:32:05+00:00'
-updated_at: '2026-04-06T15:32:05+00:00'
+updated_at: '2026-04-06T21:28:10+00:00'
 goal: Whenever a task fails to complete cleanly at any stage (implementing, testing,
-  accepting, commit_to_git, or any other), the state machine should always launch a
-  recovery agent to investigate and try to fix the issue before flagging the task. The
-  recovery agent is the last step before giving up, not an optional path. The pool
-  should never stop on failure - it should recover or flag and move on.
+  accepting, commit_to_git, or any other), the state machine should always launch
+  a recovery agent to investigate and try to fix the issue before flagging the task.
+  The recovery agent is the last step before giving up, not an optional path. The
+  pool should never stop on failure - it should recover or flag and move on.
 acceptance_criteria:
 - Recovery agent fires on any unclean task completion, not just specific stages
 - Recovery agent gets the failure reason, stage, task context, and any relevant artifacts
 - If recovery agent fixes the issue, the stage retries and succeeds
 - If recovery agent cannot fix it, task is flagged with detailed diagnostics
 - Pool continues in both cases - never stops on task failure
-- Works for all failure types including commit_to_git merge failures, test failures, and agent crashes
+- Works for all failure types including commit_to_git merge failures, test failures,
+  and agent crashes
 constraints: []
 plan: []
 human_checkpoints: []
-subagents: []
+subagents:
+- id: SA-0001
+  role: planner
+  engine: codex
+  status: failed
+  path: subagents/SA-0001-planner
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0002
+  role: planner
+  engine: opencode
+  status: completed
+  path: subagents/SA-0002-planner
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0003
+  role: swe
+  engine: opencode
+  status: failed
+  path: subagents/SA-0003-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0004
+  role: recovery
+  engine: opencode
+  status: completed
+  path: subagents/SA-0004-recovery
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0005
+  role: qa
+  engine: opencode
+  status: failed
+  path: subagents/SA-0005-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0006
+  role: recovery
+  engine: opencode
+  status: completed
+  path: subagents/SA-0006-recovery
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0007
+  role: reviewer
+  engine: opencode
+  status: completed
+  path: subagents/SA-0007-reviewer
+  sandboxed: false
+  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0189 always-launch-recovery-agent-on-commit-to-git'
