@@ -18,3 +18,64 @@
     comment; (3) run pytest. PM_COMPLEXITY: simple. PLANNED_EFFORT: xs.'
   files_changed: []
   created_at: '2026-04-06T06:40:48+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: "Implemented scope contamination guidance in litehive/subagents/_prompts.py.\
+    \ Changes: (1) Added 4-line scope contamination block to the grooming branch of\
+    \ _stage_role_prompt() explicitly instructing the planner to identify out-of-scope\
+    \ work, emit FOLLOW_UP_TASKS per extracted item, pair with TASK_UPDATE removing\
+    \ contaminated work from goal/AC/plan, and set blocking=true only when extracted\
+    \ work must complete first. (2) Added a 'Primary use case at grooming: scope contamination'\
+    \ line to the FOLLOW_UP_TASKS format hint so agents see scope contamination as\
+    \ the canonical trigger for follow-up task creation. Verification: ran uv run\
+    \ pytest -q -k 'prompt or grooming or follow_up or stage_role' \u2014 46 passed,\
+    \ 1 pre-existing failure unrelated to this change. All 4 ACs satisfied: (1) grooming\
+    \ role prompt explicitly instructs scope contamination detection; (2) prompt covers\
+    \ identify out-of-scope work + emit FOLLOW_UP_TASKS + emit TASK_UPDATE narrowing\
+    \ scope + set blocking=true when needed; (3) FOLLOW_UP_TASKS format hint references\
+    \ scope contamination as primary use case; (4) no regressions introduced."
+  files_changed:
+  - litehive/subagents/_prompts.py
+  created_at: '2026-04-06T06:49:38+00:00'
+- role: qa
+  step: testing
+  verdict: pass
+  message: "Verified T-0079 implementation in litehive/subagents/_prompts.py. Two\
+    \ targeted additions: (1) FOLLOW_UP_TASKS format block: added primary use case\
+    \ line for scope contamination referencing TASK_UPDATE (AC3). (2) _stage_role_prompt\
+    \ grooming branch: 4-line scope contamination section instructing the planner\
+    \ to detect out-of-scope work, emit FOLLOW_UP_TASKS per item, pair with TASK_UPDATE\
+    \ removing contaminated work from goal/AC/plan, and set blocking:true when extracted\
+    \ work must complete first (AC1+AC2). Test run: uv run pytest -q \u2014 518 passed,\
+    \ 82 failed. All 82 failures are pre-existing on HEAD before T-0079 changes (confirmed\
+    \ by stashing diff and re-running: identical failure set). No regressions introduced\
+    \ (AC4). All 4 acceptance criteria are satisfied."
+  files_changed: []
+  created_at: '2026-04-06T06:57:19+00:00'
+- role: reviewer
+  step: accepting
+  verdict: pass
+  message: "PASS. Verified all 4 acceptance criteria for T-0079.\n\nAC1 (grooming\
+    \ prompt instructs scope contamination detection): SATISFIED \u2014 _stage_role_prompt()\
+    \ grooming branch in litehive/subagents/_prompts.py contains a '**Scope contamination**'\
+    \ section (4 lines) explicitly instructing the planner to identify out-of-scope\
+    \ work mixed into a task.\n\nAC2 (prompt covers full workflow): SATISFIED \u2014\
+    \ The section instructs: (a) identify out-of-scope work, (b) emit FOLLOW_UP_TASKS\
+    \ per extracted item with title and rationale, (c) pair every FOLLOW_UP_TASKS\
+    \ emission with a TASK_UPDATE removing contaminated work from goal/AC/plan, (d)\
+    \ set blocking:true only when extracted work must complete before the current\
+    \ task.\n\nAC3 (FOLLOW_UP_TASKS format hint references scope contamination as\
+    \ primary use case): SATISFIED \u2014 The format hint block in _prompts.py now\
+    \ includes 'Primary use case at grooming: scope contamination \u2014 when a task\
+    \ mixes in work that belongs to a separate concern, extract each out-of-scope\
+    \ item as a follow-up and narrow the current task via TASK_UPDATE.'\n\nAC4 (uv\
+    \ run pytest -q passes with no regressions): SATISFIED \u2014 Targeted test run\
+    \ (pytest -q -k 'prompt or grooming or follow_up') yields 46 passed, 1 failure\
+    \ which is a pre-existing issue (test_stage_prompt_includes_task_type_and_plan\
+    \ fails due to review not in VALID_TASK_TYPES \u2014 unrelated to this change,\
+    \ confirmed by QA who saw 82 identical pre-existing failures before and after\
+    \ the T-0079 diff).\n\nImplementation is minimal and targeted: 7 lines added to\
+    \ litehive/subagents/_prompts.py, no regressions."
+  files_changed: []
+  created_at: '2026-04-06T07:03:09+00:00'
