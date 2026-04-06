@@ -585,6 +585,8 @@ def missing_acceptance_criteria_cli_warning(task: TaskRecord) -> str | None:
 
 
 def implementation_entry_stage(task: TaskRecord) -> str:
+    if getattr(task, "pipeline_mode", "full") == "single":
+        return "implementing"
     if missing_acceptance_criteria_reason(task) is not None:
         return "grooming"
     return "implementing"
@@ -596,7 +598,11 @@ def needs_normalization(task: TaskRecord) -> str | None:
     Tasks already at backlog or grooming will naturally go through planner,
     so normalization only applies to tasks past grooming that lack meaningful
     acceptance criteria.
+
+    Single-mode tasks skip normalization entirely since they have no grooming stage.
     """
+    if getattr(task, "pipeline_mode", "full") == "single":
+        return None
     if task.pipeline_status in {"backlog", "grooming"}:
         return None
     if task.acceptance_criteria:
@@ -608,6 +614,8 @@ def needs_normalization(task: TaskRecord) -> str | None:
 
 
 def reroute_stage_for_acceptance_criteria(task: TaskRecord) -> str:
+    if getattr(task, "pipeline_mode", "full") == "single":
+        return task.pipeline_status
     if task.pipeline_status in {"implementing", "testing", "accepting", "commit_to_git"}:
         if missing_acceptance_criteria_reason(task) is not None:
             return "grooming"
@@ -1578,6 +1586,7 @@ def create_task(
     title: str,
     depends_on: list[str] | None = None,
     mode: str = "implementation",
+    pipeline_mode: str = "full",
     task_type: str | None = None,
     engine: str | None = None,
     model: str | None = None,
@@ -1593,6 +1602,8 @@ def create_task(
     ensure_workspace(root)
     if retry_limit is not None and retry_limit < 0:
         raise ValueError("Retry limit must be 0 or greater")
+    if pipeline_mode not in {"single", "full"}:
+        raise ValueError(f"Unsupported pipeline_mode '{pipeline_mode}'")
     if task_type is not None and task_type not in VALID_TASK_TYPES:
         raise ValueError(f"Unsupported task type '{task_type}'")
     if pm_complexity is not None and pm_complexity not in VALID_PM_COMPLEXITIES:
@@ -1613,6 +1624,7 @@ def create_task(
             engine=engine,
             model=model,
             mode=mode,  # type: ignore[arg-type]
+            pipeline_mode=pipeline_mode,  # type: ignore[arg-type]
             goal=goal,
             acceptance_criteria=normalize_acceptance_criteria(acceptance_criteria),
             pm_complexity=pm_complexity,  # type: ignore[arg-type]

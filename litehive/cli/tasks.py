@@ -43,11 +43,13 @@ def _cmd_add(args):
         requested_task_type = getattr(args, "task_type", None)
         requested_mode = getattr(args, "mode", None)
         mode = requested_mode or ("tasks" if requested_task_type is not None else "implementation")
+        pipeline_mode = "single" if getattr(args, "single", False) else "full"
         task = create_task(
             args.workspace,
             title=args.title,
             depends_on=None if depends_on is ... else depends_on,
             mode=mode,
+            pipeline_mode=pipeline_mode,
             goal=args.goal,
             acceptance_criteria=None if acceptance_criteria is ... else acceptance_criteria,
             pm_complexity=getattr(args, "pm_complexity", None),
@@ -69,6 +71,7 @@ def _cmd_add(args):
         f"retry_limit: {task.retry_policy.max_retries if task.retry_policy.max_retries is not None else 'default'}"
     )
     print(f"mode: {task.mode}")
+    print(f"pipeline_mode: {task.pipeline_mode}")
     print(f"engine: {_task_engine_label(task.engine, load_config(args.workspace).default_engine)}")
     print(f"model: {_task_model_label(task.model)}")
     print(
