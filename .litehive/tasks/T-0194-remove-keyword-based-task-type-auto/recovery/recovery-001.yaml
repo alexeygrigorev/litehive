@@ -1,0 +1,115 @@
+task_id: T-0194
+stage: commit_to_git
+trigger: stage_failure
+summary: 'Recovery: commit_to_git merge completed successfully.'
+failure_classification: fail
+runnable_state: runnable
+blocker: null
+evidence:
+- kind: task
+  label: task.yaml
+  path: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/task.yaml
+  exists: true
+  summary: status=in_progress pipeline_status=commit_to_git priority=medium
+  metadata: {}
+- kind: runtime
+  label: runtime.yaml
+  path: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/runtime.yaml
+  exists: true
+  summary: execution_status=running current_stage=commit_to_git last_outcome=none
+  metadata: {}
+- kind: thread
+  label: thread.yaml
+  path: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/thread.yaml
+  exists: true
+  summary: discussion entries=3
+  metadata: {}
+- kind: events
+  label: events.jsonl
+  path: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/events.jsonl
+  exists: true
+  summary: task lifecycle and subagent event stream
+  metadata: {}
+- kind: stage_report
+  label: latest stage report
+  path: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/reports/testing-003.yaml
+  exists: true
+  summary: latest report for T-0194
+  metadata: {}
+- kind: subagent_artifact
+  label: latest subagent session
+  path: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/subagents/SA-0008-recovery/session.yaml
+  exists: true
+  summary: artifact from SA-0008-recovery
+  metadata: {}
+- kind: subagent_artifact
+  label: latest subagent report
+  path: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/subagents/SA-0008-recovery/report.yaml
+  exists: true
+  summary: artifact from SA-0008-recovery
+  metadata: {}
+- kind: subagent_artifact
+  label: latest subagent transcript
+  path: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/subagents/SA-0008-recovery/transcript.md
+  exists: true
+  summary: artifact from SA-0008-recovery
+  metadata: {}
+- kind: subagent_artifact
+  label: latest subagent stdout
+  path: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/subagents/SA-0008-recovery/stdout.txt.gz
+  exists: true
+  summary: artifact from SA-0008-recovery
+  metadata: {}
+- kind: subagent_artifact
+  label: latest subagent stderr
+  path: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/subagents/SA-0008-recovery/stderr.txt
+  exists: false
+  summary: artifact from SA-0008-recovery
+  metadata: {}
+- kind: subagent_artifact
+  label: latest subagent events timeline
+  path: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/subagents/SA-0008-recovery/timeline.yaml.gz
+  exists: true
+  summary: artifact from SA-0008-recovery
+  metadata: {}
+- kind: wrapper_log
+  label: latest run-all log
+  path: .litehive/logs/run-all/daemon.log
+  exists: true
+  summary: latest daemon/run-all wrapper log
+  metadata: {}
+- kind: engine_monitoring
+  label: engine-monitoring.yaml
+  path: .litehive/engine-monitoring.yaml
+  exists: true
+  summary: no engine record
+  metadata: {}
+- kind: git
+  label: main checkout git state
+  path: null
+  exists: true
+  summary: head=23f194a2c07bc2bba78484a10e9e7057b7f78741 dirty=3
+  metadata:
+    dirty_paths:
+    - litehive/tasks/T-0194-remove-keyword-based-task-type-auto/journal.md
+    - litehive/tasks/T-0194-remove-keyword-based-task-type-auto/task.yaml
+    - litehive/tasks/T-0194-remove-keyword-based-task-type-auto/thread.yaml
+- kind: worktree
+  label: task worktree state
+  path: .litehive/worktrees/T-0194-remove-keyword-based-task-type-auto
+  exists: true
+  summary: dirty=0
+  metadata:
+    dirty_paths: []
+    stage: commit_to_git
+actions:
+- action: resume_current_stage
+  applied: true
+  summary: Recovery agent repaired the task and returned `commit_to_git` to a runnable
+    state.
+  metadata:
+    verdict: pass
+warnings: []
+recovery_subagent_id: SA-0008
+recovery_subagent_path: subagents/SA-0008-recovery
+created_at: '2026-04-06T22:29:41+00:00'

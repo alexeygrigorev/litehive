@@ -36,3 +36,39 @@
     test_configure_persists_process_profile are unrelated to this task.'
   files_changed: []
   created_at: '2026-04-06T22:24:34+00:00'
+- role: swe
+  step: commit_to_git
+  verdict: pass
+  message: 'Recovery: commit_to_git merge completed successfully.
+
+
+    Root cause: The merge-resolver (SA-0007) found no merge conflicts in the worktree
+    but did not actually perform the merge of the worktree branch into main. Main
+    had diverged with a `chore: sync workspace state` commit (24dfe95), creating a
+    fork from the task commit (ee0932e). The merge-resolver exited without merging.
+
+
+    Fix applied: Merged commit ee0932e into main, resolving a trivial conflict in
+    thread.yaml (both QA and recovery entries kept). Merge commit 23f194a now on main.
+
+
+    Verification: All 99 relevant tests pass (test_config_and_run_cli.py + test_engine_variants_and_timeline.py).
+    The 1 excluded test (test_configure_persists_process_profile) is a pre-existing
+    failure unrelated to this task.
+
+
+    All acceptance criteria verified by prior QA and recovery stages remain satisfied
+    on main.'
+  files_changed: []
+  created_at: '2026-04-06T22:29:36+00:00'
+- role: recovery
+  step: commit_to_git
+  verdict: comment
+  message: 'Recovery trigger `stage_failure`: Recovery: commit_to_git merge completed
+    successfully.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-001.yaml'
+  files_changed: []
+  created_at: '2026-04-06T22:29:41+00:00'

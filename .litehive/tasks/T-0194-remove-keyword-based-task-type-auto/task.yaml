@@ -6,13 +6,13 @@ task_type: null
 engine: null
 model: null
 mode: implementation
-status: in_progress
-pipeline_status: commit_to_git
+status: queued
+pipeline_status: done
 priority: medium
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-06T20:15:51+00:00'
-updated_at: '2026-04-06T22:27:19+00:00'
+updated_at: '2026-04-06T22:29:42+00:00'
 goal: 'Remove _task_routing_key which guesses task_type from title keywords (refactor,
   bugfix, research, etc.) and overrides default_engine. Remove task_engine_routing
   from config entirely. Engine selection should only come from: default_engine, task-level
@@ -68,6 +68,20 @@ subagents:
   engine: opencode
   status: completed
   path: subagents/SA-0006-reviewer
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0007
+  role: merge-resolver
+  engine: claude
+  status: completed
+  path: subagents/SA-0007-merge-resolver
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0008
+  role: recovery
+  engine: claude
+  status: completed
+  path: subagents/SA-0008-recovery
   sandboxed: false
   sandbox_summary: host
 git:
