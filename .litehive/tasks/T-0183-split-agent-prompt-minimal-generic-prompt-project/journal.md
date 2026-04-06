@@ -74,3 +74,18 @@ Recovered flagged accepted task back to `queued/commit_to_git` for final checkpo
 
 ## 2026-04-06T19:23:50+00:00
 Execution started with engine `codex`.
+
+## 2026-04-06T19:23:50+00:00
+Merge conflict on 3 file(s). Launching merge agent.
+
+## 2026-04-06T19:25:36+00:00
+CommitToGit failed: merge did not produce new commits on main.
+
+## 2026-04-06T19:25:36+00:00
+Execution finished with status `flagged`.
+
+## 2026-04-06T19:25:40+00:00
+Recovered flagged accepted task back to `queued/commit_to_git` for final checkpoint commit.
+
+## 2026-04-06T19:25:53+00:00
+Execution started with engine `codex`.
