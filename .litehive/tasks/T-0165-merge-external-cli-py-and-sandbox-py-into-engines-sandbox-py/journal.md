@@ -32,3 +32,9 @@ Stage `testing` retrying `opencode` after attempt 1/3 due to transient timeout (
 
 ## 2026-04-06T01:46:11+00:00
 Stage `accepting` retrying `opencode` after attempt 1/3 due to transient timeout (classification: timeout, policy: opencode, backoff: 0.25s).
+
+## 2026-04-06T01:47:18+00:00
+CommitToGit complete. Commit: 59fc69a652cdec26fbe7490a4e47ebc72c025d47
+
+## 2026-04-06T01:47:23+00:00
+Pool stopped: continue_or_rollback_required. This task finished with checkpoint commit `59fc69a652cdec26fbe7490a4e47ebc72c025d47` and unrelated queued work remains. Either continue with a new `litehive run`/pool run or roll back the checkpoint first.

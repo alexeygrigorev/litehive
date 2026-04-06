@@ -6,13 +6,13 @@ task_type: null
 engine: null
 model: null
 mode: implementation
-status: in_progress
-pipeline_status: commit_to_git
+status: done
+pipeline_status: done
 priority: medium
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-04T20:46:47+00:00'
-updated_at: '2026-04-06T01:47:18+00:00'
+updated_at: '2026-04-06T01:47:20+00:00'
 goal: external_cli.py is the base adapter class and sandbox.py wraps it. Merge them
   into the engines module as engines/base.py and engines/sandbox.py.
 acceptance_criteria:
@@ -105,7 +105,7 @@ subagents:
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0165 merge-external-cli-py-and-sandbox-py-into-engines-sandbox-py'
-  commit_sha: null
+  commit_sha: 59fc69a652cdec26fbe7490a4e47ebc72c025d47
   checkpoint_base_sha: null
   checkpoint_attempts: 0
   rolled_back_checkpoint_attempt: null
