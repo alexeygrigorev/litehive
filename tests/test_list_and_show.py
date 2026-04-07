@@ -2,15 +2,6 @@
 
 from tests.workspace_helpers import *  # noqa: F401,F403
 
-import argparse
-from pathlib import Path
-
-import pytest
-
-from litehive.config import ensure_workspace
-from litehive.cli.status import _cmd_list, _cmd_show
-from litehive.tasks import create_task, save_task
-
 
 def test_list_excludes_done_tasks_by_default(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
@@ -73,6 +64,7 @@ def test_list_filter_by_status(
 
     assert exit_code == 0
     assert interrupted.id in output
+    assert "Interrupted task" in output
     assert queued.id not in output
 
 
@@ -93,6 +85,7 @@ def test_list_filter_by_pipeline_status(
 
     assert exit_code == 0
     assert implementing.id in output
+    assert "Implementing task" in output
     assert backlog.id not in output
 
 
@@ -111,6 +104,7 @@ def test_list_filter_by_engine(
 
     assert exit_code == 0
     assert gemini.id in output
+    assert "Gemini task" in output
     assert default_engine.id not in output
 
 
@@ -132,6 +126,7 @@ def test_list_composed_filters(
 
     assert exit_code == 0
     assert match.id in output
+    assert "Match task" in output
     assert no_match_engine.id not in output
     assert no_match_status.id not in output
 
@@ -141,27 +136,29 @@ def test_list_compact_format(
 ) -> None:
     """Each task prints as one line: ID [status/pipeline_status] title."""
     ensure_workspace(tmp_path)
-    task = create_task(tmp_path, title="My task", auto_commit=False)
+    task = create_task(tmp_path, title="My test task", auto_commit=False)
 
-    _cmd_list(argparse.Namespace(
+    exit_code = _cmd_list(argparse.Namespace(
         workspace=tmp_path, show_all=False,
         filter_status=None, filter_pipeline_status=None, filter_engine=None,
     ))
     output = capsys.readouterr().out
 
-    assert f"{task.id} [queued/backlog] My task" in output
+    assert exit_code == 0
+    assert f"{task.id} [queued/backlog] My test task" in output
 
 
 def test_show_prints_task_details(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     ensure_workspace(tmp_path)
-    task = create_task(
-        tmp_path, title="Detail task", engine="gemini",
-        goal="Build the thing",
-        acceptance_criteria=["It works", "It's fast"],
-        auto_commit=False,
-    )
+    task = create_task(tmp_path, title="Detail task", engine="gemini", auto_commit=False)
+    task.goal = "Test the show command"
+    task.acceptance_criteria = ["criterion one", "criterion two"]
+    task.constraints = ["keep it simple"]
+    task.plan = ["step one", "step two"]
+    task.priority = "high"
+    save_task(tmp_path, task)
 
     exit_code = _cmd_show(argparse.Namespace(workspace=tmp_path, task_id=task.id))
     output = capsys.readouterr().out
@@ -169,12 +166,16 @@ def test_show_prints_task_details(
     assert exit_code == 0
     assert f"id: {task.id}" in output
     assert "title: Detail task" in output
-    assert "engine: gemini" in output
-    assert "goal: Build the thing" in output
-    assert "  - It works" in output
-    assert "  - It's fast" in output
     assert "status: queued" in output
     assert "pipeline_status: backlog" in output
+    assert "priority: high" in output
+    assert "engine: gemini" in output
+    assert "goal: Test the show command" in output
+    assert "  - criterion one" in output
+    assert "  - criterion two" in output
+    assert "  - keep it simple" in output
+    assert "  - step one" in output
+    assert "  - step two" in output
 
 
 def test_show_nonexistent_task_exits_nonzero(
@@ -186,5 +187,4 @@ def test_show_nonexistent_task_exits_nonzero(
     output = capsys.readouterr().out
 
     assert exit_code == 1
-    assert "T-9999" in output
-    assert "not found" in output
+    assert "task not found: T-9999" in output

@@ -159,13 +159,11 @@ def _cmd_list(args):
 
 def _cmd_show(args):
     ensure_workspace(args.workspace)
-    from litehive.tasks import get_task
-
-    task = get_task(args.workspace, args.task_id)
-    if task is None:
-        print(f"error: task {args.task_id} not found")
+    try:
+        task = require_task(args.workspace, args.task_id)
+    except ValueError:
+        print(f"task not found: {args.task_id}")
         return 1
-
     print(f"id: {task.id}")
     print(f"slug: {task.slug}")
     print(f"title: {task.title}")
@@ -177,25 +175,22 @@ def _cmd_show(args):
     print(f"task_type: {task.task_type or '-'}")
     print(f"mode: {task.mode}")
     print(f"pipeline_mode: {task.pipeline_mode}")
+    print(f"depends_on: {', '.join(task.depends_on) if task.depends_on else '-'}")
     print(f"pm_complexity: {task.pm_complexity or '-'}")
     print(f"planned_effort: {task.planned_effort or '-'}")
     print(f"created_at: {task.created_at}")
     print(f"updated_at: {task.updated_at}")
-    if task.depends_on:
-        print(f"depends_on: {', '.join(task.depends_on)}")
-    else:
-        print("depends_on: -")
     print(f"goal: {task.goal or '-'}")
     if task.acceptance_criteria:
         print("acceptance_criteria:")
-        for ac in task.acceptance_criteria:
-            print(f"  - {ac}")
+        for criterion in task.acceptance_criteria:
+            print(f"  - {criterion}")
     else:
         print("acceptance_criteria: -")
     if task.constraints:
         print("constraints:")
-        for c in task.constraints:
-            print(f"  - {c}")
+        for constraint in task.constraints:
+            print(f"  - {constraint}")
     else:
         print("constraints: -")
     if task.plan:
@@ -204,6 +199,10 @@ def _cmd_show(args):
             print(f"  - {step}")
     else:
         print("plan: -")
+    if task.human_checkpoints:
+        print(f"human_checkpoints: {', '.join(task.human_checkpoints)}")
+    else:
+        print("human_checkpoints: -")
     # Runtime info
     rt = task.runtime
     print(f"execution_status: {rt.execution_status or '-'}")

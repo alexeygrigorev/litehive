@@ -101,6 +101,10 @@ def main():
         return _cmd_switch_task(args)
     if args.command == "close":
         return _cmd_close_task(args)
+    if args.command == "list":
+        return _cmd_list(args)
+    if args.command == "show":
+        return _cmd_show(args)
     if args.command == "update":
         return _cmd_update(args)
     if args.command == "report":
