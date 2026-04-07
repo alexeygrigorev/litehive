@@ -6,6 +6,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from datetime import UTC, datetime
+from typing import Any
 
 import yaml
 
@@ -324,7 +325,6 @@ def render_active_task_section(task: TaskRecord | None, default_engine: str) -> 
         lines.append("  (none)")
         return lines
 
-    # Determine engine
     engine = (
         task.runtime.active_subagent.engine
         if task.runtime.active_subagent is not None
@@ -353,7 +353,7 @@ def render_active_task_section(task: TaskRecord | None, default_engine: str) -> 
 
 
 def find_last_completed_task(tasks: list[TaskRecord]) -> TaskRecord | None:
-    """Find the most recently completed (done) task by updated_at timestamp."""
+    """Return the most recently completed (done) task by updated_at."""
     done_tasks = [t for t in tasks if t.status == "done"]
     if not done_tasks:
         return None
@@ -368,15 +368,14 @@ def render_last_completed_section(task: TaskRecord | None) -> list[str]:
         return lines
 
     outcome = task.runtime.last_outcome
-    verdict = outcome.kind or "pass"
+    verdict = outcome.kind or task.runtime.last_stage.verdict or "-"
     when = outcome.recorded_at or task.updated_at or "-"
-    lines.append(f"  {task.id} {verdict} at {when}")
-    lines.append(f"  title: {task.title}")
+    lines.append(f"  {task.id} {task.title} verdict={verdict} at {when}")
     return lines
 
 
 def render_queue_section(queue: list[str], tasks: list[TaskRecord]) -> list[str]:
-    """Render the Queue Summary dashboard section."""
+    """Render the Queue dashboard section."""
     lines: list[str] = ["=== Queue ==="]
     count = len(queue)
     if count == 0:
@@ -400,7 +399,6 @@ def render_engine_health_section(monitoring: WorkspaceEngineMonitoring) -> list[
 
     for engine_name in sorted(monitoring.engines):
         record = monitoring.engines[engine_name]
-        # Determine if engine is quota-limited
         if record.last_limit_kind in ("quota", "rate", "budget"):
             reset_label = ""
             if record.usage is not None and record.usage.reset_at:
@@ -417,66 +415,72 @@ def render_engine_health_section(monitoring: WorkspaceEngineMonitoring) -> list[
     return lines
 
 
-def collect_recent_activity(root: Path, limit: int = 5) -> list[dict]:
-    """Scan events.jsonl across all tasks and return the most recent events."""
+def collect_recent_activity(root: Path, *, limit: int = 5) -> list[dict[str, Any]]:
+    """Scan events.jsonl across all task dirs, return most recent events."""
     tasks_dir = root / ".litehive" / "tasks"
     if not tasks_dir.exists():
         return []
-    events: list[dict] = []
+    all_events: list[dict[str, Any]] = []
     for events_path in tasks_dir.glob("*/events.jsonl"):
         try:
-            raw = events_path.read_text(encoding="utf-8")
+            text = events_path.read_text(encoding="utf-8")
         except OSError:
             continue
-        for line in raw.splitlines():
+        for line in text.splitlines():
             line = line.strip()
             if not line:
                 continue
             try:
-                event = json.loads(line)
-                events.append(event)
+                all_events.append(json.loads(line))
             except json.JSONDecodeError:
                 continue
-
-    # Sort by timestamp descending, take latest
-    events.sort(key=lambda e: e.get("ts", ""), reverse=True)
-    return events[:limit]
+    all_events.sort(key=lambda e: e.get("ts", ""), reverse=True)
+    return all_events[:limit]
 
 
-_EVENT_LABELS = {
-    "subagent_started": "started",
+_EVENT_LABELS: dict[str, str] = {
+    "stage_completed": "stage completed",
+    "stage_started": "stage started",
+    "subagent_started": "subagent started",
+    "subagent_completed": "subagent completed",
     "subagent_finished": "finished",
     "subagent_pid": "running",
     "subagent_progress": "progress",
+    "engine_switch": "engine switched",
+    "engine_fallback": "engine fallback",
+    "task_queued": "task queued",
+    "task_completed": "task completed",
+    "task_flagged": "task flagged",
+    "task_interrupted": "task interrupted",
+    "execution_error": "error",
+    "retry": "retry",
 }
 
 
-def render_recent_activity_section(root: Path) -> list[str]:
+def render_recent_activity_section(events: list[dict[str, Any]]) -> list[str]:
     """Render the Recent Activity dashboard section."""
     lines: list[str] = ["=== Recent Activity ==="]
-    events = collect_recent_activity(root)
     if not events:
         lines.append("  (no recent activity)")
         return lines
-
     for event in events:
-        ts = event.get("ts", "-")
-        # Shorten timestamp to just time if today
-        kind = event.get("kind", "event")
-        task_id = event.get("task_id", "-")
+        kind = event.get("kind", "unknown")
         label = _EVENT_LABELS.get(kind, kind)
+        ts = event.get("ts", "-")
+        task_id = event.get("task_id", "-")
         data = event.get("data", {})
-
-        detail_parts: list[str] = []
+        detail_parts = [f"{task_id} {label}"]
+        if kind in ("stage_completed", "stage_started") and data.get("step"):
+            detail_parts.append(data["step"])
+        if kind == "engine_switch" and data.get("to_engine"):
+            detail_parts.append(f"-> {data['to_engine']}")
         if "role" in data:
             detail_parts.append(data["role"])
         if "engine" in data:
             detail_parts.append(data["engine"])
         if "exit_code" in data:
             detail_parts.append(f"exit={data['exit_code']}")
-        detail = " ".join(detail_parts)
-        if detail:
-            lines.append(f"  {ts} {task_id} {label} {detail}")
-        else:
-            lines.append(f"  {ts} {task_id} {label}")
+        if data.get("verdict"):
+            detail_parts.append(f"verdict={data['verdict']}")
+        lines.append(f"  [{ts}] {' '.join(detail_parts)}")
     return lines

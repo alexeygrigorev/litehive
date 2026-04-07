@@ -1912,6 +1912,74 @@ def test_status_output_includes_budget_control_settings(
     assert config.engine_costs["claude"] == 3
     assert config.engine_costs["codex"] == 1
 
+def test_status_default_dashboard_shows_sections_without_config_noise(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    ensure_workspace(tmp_path, LitehiveConfig(
+        default_retry_limit=2,
+        pool_stop_on_failure=True,
+        pool_max_tasks=4,
+    ))
+    active = create_task(tmp_path, title="Active feature")
+    active.status = "in_progress"
+    active.pipeline_status = "implementing"
+    active.runtime.execution_status = "running"
+    active.runtime.run_started_at = "2026-04-07T10:00:00+00:00"
+    active.runtime.current_stage = RuntimeStageState(
+        step="implementing",
+        status="running",
+        started_at="2026-04-07T10:05:00+00:00",
+        updated_at="2026-04-07T10:05:01+00:00",
+    )
+    save_task(tmp_path, active)
+
+    done_task = create_task(tmp_path, title="Completed feature")
+    done_task.status = "done"
+    done_task.pipeline_status = "done"
+    done_task.updated_at = "2026-04-07T09:00:00+00:00"
+    done_task.runtime.last_stage = RuntimeStageState(
+        step="commit_to_git",
+        verdict="pass",
+        status="completed",
+    )
+    save_task(tmp_path, done_task)
+
+    queued = create_task(tmp_path, title="Next feature")
+    save_task(tmp_path, queued)
+
+    state = load_state(tmp_path)
+    state.active_task_id = active.id
+    state.queue = [queued.id]
+    save_state(tmp_path, state)
+
+    exit_code = _cmd_status(argparse.Namespace(workspace=tmp_path))
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    # Dashboard sections present
+    assert "=== Active Task ===" in output
+    assert "implementing with" in output
+    assert "running for" in output
+    assert "stage: implementing elapsed" in output
+    assert "=== Last Completed ===" in output
+    assert "Completed feature" in output
+    assert "verdict=pass" in output
+    assert "=== Queue ===" in output
+    assert "1 queued" in output
+    assert "Next feature" in output
+    assert "=== Engine Health ===" in output
+    assert "=== Recent Activity ===" in output
+    # Config noise absent from default output
+    assert "default_retry_limit:" not in output
+    assert "execution_retry_policies:" not in output
+    assert "pool_stop_on_failure:" not in output
+    assert "pool_max_tasks:" not in output
+    assert "pool_selection_policy:" not in output
+    assert "process_profile:" not in output
+    # No per-task dump
+    assert "retry_policy=configured:" not in output
+    assert "auto_commit=" not in output
+
 def test_queue_command_shows_active_and_queued_order(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:

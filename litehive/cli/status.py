@@ -1,5 +1,6 @@
 from litehive.config import ensure_workspace, load_config
 from litehive.observability import (
+    collect_recent_activity,
     find_last_completed_task,
     load_engine_monitoring,
     render_active_task_section,
@@ -52,36 +53,39 @@ def _cmd_status(args):
         print(line)
 
     # Last Completed section
-    tasks = (
+    all_tasks = (
         list_tasks_state_first(args.workspace, state=state)
         if fast_mode
         else list_tasks(args.workspace)
     )
-    last_done = find_last_completed_task(tasks)
+    last_done = find_last_completed_task(all_tasks)
     print()
     for line in render_last_completed_section(last_done):
         print(line)
 
     # Queue section
     print()
-    for line in render_queue_section(state.queue, tasks):
+    for line in render_queue_section(state.queue, all_tasks):
         print(line)
 
     # Engine Health section
     print()
     for line in render_engine_health_section(monitoring):
         print(line)
+    for line_text in render_engine_monitoring_lines(monitoring):
+        print(line_text)
 
     # Recent Activity section
     print()
-    for line in render_recent_activity_section(root):
+    events = collect_recent_activity(root)
+    for line in render_recent_activity_section(events):
         print(line)
 
     return 0
 
 
 def _cmd_status_full(args, root, config, state, monitoring, fast_mode):
-    """Full verbose status output (legacy --full mode)."""
+    """Full verbose status output (--full flag)."""
     print(f"workspace: {args.workspace}")
     print(f"status_read_mode: {'fast' if fast_mode else 'full'}")
     print(f"default_engine: {config.default_engine}")
