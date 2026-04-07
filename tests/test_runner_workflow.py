@@ -1994,6 +1994,128 @@ def test_codex_renders_jsonl_error_payloads_and_extracts_limit_observation(tmp_p
     assert observation.metadata["purchase_more_credits"] is True
 
 
+def test_classify_codex_usage_limit_matches_exact_message() -> None:
+    from litehive.engines.adapters.codex import _classify_codex_usage_limit
+
+    result = _classify_codex_usage_limit(
+        "You've hit your usage limit. Visit https://chatgpt.com/codex/settings/usage "
+        "to purchase more credits or try again at 5:26 PM."
+    )
+
+    assert result is not None
+    assert result.limit_reason == "usage limit reached"
+    assert result.retry_at == "5:26 PM"
+    assert result.purchase_more_credits is True
+
+
+def test_classify_codex_usage_limit_extracts_date_with_timezone() -> None:
+    from litehive.engines.adapters.codex import _classify_codex_usage_limit
+
+    result = _classify_codex_usage_limit(
+        "You've hit your usage limit. Visit https://chatgpt.com/codex/settings/usage "
+        "to purchase more credits or try again at 2026-04-09 10:00 UTC."
+    )
+
+    assert result is not None
+    assert result.retry_at == "2026-04-09 10:00 UTC"
+
+
+def test_classify_codex_usage_limit_without_date() -> None:
+    from litehive.engines.adapters.codex import _classify_codex_usage_limit
+
+    result = _classify_codex_usage_limit(
+        "You've hit your usage limit. Visit https://chatgpt.com/codex/settings/usage "
+        "to purchase more credits."
+    )
+
+    assert result is not None
+    assert result.limit_reason == "usage limit reached"
+    assert result.retry_at is None
+    assert result.purchase_more_credits is True
+
+
+def test_classify_codex_usage_limit_returns_none_for_unrelated_error() -> None:
+    from litehive.engines.adapters.codex import _classify_codex_usage_limit
+
+    assert _classify_codex_usage_limit("Connection refused") is None
+    assert _classify_codex_usage_limit("") is None
+    assert _classify_codex_usage_limit(None) is None
+
+
+def test_classify_codex_usage_limit_with_smart_apostrophe() -> None:
+    from litehive.engines.adapters.codex import _classify_codex_usage_limit
+
+    result = _classify_codex_usage_limit(
+        "You\u2019ve hit your usage limit. Purchase more credits."
+    )
+
+    assert result is not None
+    assert result.limit_reason == "usage limit reached"
+
+
+def test_codex_extract_usage_observation_uses_specific_detector_over_generic(tmp_path: Path) -> None:
+    """The codex-specific detector should fire and populate metadata from the exact message."""
+    execution = CLIExecutionResult(
+        adapter="codex",
+        argv=("codex", "exec", "--json"),
+        cwd=tmp_path,
+        exit_code=1,
+        stdout="\n".join(
+            [
+                '{"type":"thread.started","thread_id":"test-thread"}',
+                '{"type":"error","message":"You\'ve hit your usage limit. Visit https://chatgpt.com/codex/settings/usage to purchase more credits or try again at 5:26 PM."}',
+            ]
+        ),
+        stderr="",
+    )
+
+    adapter = get_engine("codex")
+    observation = adapter.extract_usage_observation(execution)
+
+    assert observation is not None
+    assert observation.limit_reason == "usage limit reached"
+    assert observation.metadata["retry_at_hint"] == "5:26 PM"
+    assert observation.metadata["purchase_more_credits"] is True
+
+
+def test_codex_extract_usage_observation_falls_back_to_generic_for_unknown_errors(tmp_path: Path) -> None:
+    """Unknown limit patterns should still be caught by the generic classifier."""
+    execution = CLIExecutionResult(
+        adapter="codex",
+        argv=("codex", "exec", "--json"),
+        cwd=tmp_path,
+        exit_code=1,
+        stdout='{"type":"error","message":"quota exceeded for this account"}',
+        stderr="",
+    )
+
+    adapter = get_engine("codex")
+    observation = adapter.extract_usage_observation(execution)
+
+    assert observation is not None
+    assert observation.limit_reason == "quota exceeded"
+
+
+def test_codex_extract_usage_observation_stderr_uses_specific_detector(tmp_path: Path) -> None:
+    """Codex-specific detector also works on stderr fallback path."""
+    execution = CLIExecutionResult(
+        adapter="codex",
+        argv=("codex", "exec", "--json"),
+        cwd=tmp_path,
+        exit_code=1,
+        stdout='{"type":"thread.started","thread_id":"test-thread"}',
+        stderr="ERROR: You've hit your usage limit. Visit https://chatgpt.com/codex/settings/usage to purchase more credits or try again at 3:00 AM.",
+    )
+
+    adapter = get_engine("codex")
+    observation = adapter.extract_usage_observation(execution)
+
+    assert observation is not None
+    assert observation.limit_reason == "usage limit reached"
+    assert observation.metadata["retry_at_hint"] == "3:00 AM"
+    assert observation.metadata["purchase_more_credits"] is True
+
+
 def test_opencode_build_invocation_includes_dir_model_and_prompt(tmp_path: Path) -> None:
     invocation = get_engine("opencode").build_invocation(
         "ship it",
