@@ -7,13 +7,13 @@ engine: null
 model: null
 mode: implementation
 pipeline_mode: full
-status: in_progress
-pipeline_status: commit_to_git
+status: done
+pipeline_status: done
 priority: medium
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-06T20:31:53+00:00'
-updated_at: '2026-04-07T22:31:34+00:00'
+updated_at: '2026-04-07T22:31:36+00:00'
 goal: 'litehive/engines/__init__.py is 2390 lines with 6 adapter classes and all parsing
   code mixed together. Split into litehive/engines/adapters/ with one file per adapter:
   codex.py, claude.py, opencode.py, gemini.py, copilot.py, goz.py. Shared parsing
@@ -60,9 +60,9 @@ subagents:
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0199 split-engines-init-py-into-engines-adapters-with'
-  commit_sha: null
-  checkpoint_base_sha: null
-  checkpoint_attempts: 0
+  commit_sha: 17d17a8719620b62a4b02edf4632bce413e8c219
+  checkpoint_base_sha: e8cff3d1c1e461e5d7255daca73dba7f97bcce4b
+  checkpoint_attempts: 1
   rolled_back_checkpoint_attempt: null
   worktree_path: null
   merge_agent_attempts: 0

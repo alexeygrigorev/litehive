@@ -1,0 +1,56 @@
+task_id: T-0187
+step: implementing
+verdict: pass
+summary: '## Implementation'
+feedback: "## Implementation\n\nAdded a codex-specific usage limit detector `_classify_codex_usage_limit()`\
+  \ in `litehive/engines/adapters/codex.py` that:\n\n1. **Matches the exact Codex\
+  \ error pattern** \"You've hit your usage limit\" using a compiled regex that handles\
+  \ both ASCII apostrophes and Unicode smart quotes\n2. **Extracts the reset date**\
+  \ via the existing `_codex_retry_at_hint()` helper and logs it at INFO level\n3.\
+  \ **Returns a structured result** (`_CodexUsageLimitResult`) with `limit_reason`,\
+  \ `retry_at`, and `purchase_more_credits` fields\n\nWired the detector into `extract_usage_observation()`\
+  \ as the primary detector for both JSONL payload errors and stderr fallback. The\
+  \ generic `classify_execution_limit()` remains as fallback for unrecognized error\
+  \ formats.\n\n## Acceptance Criteria Verification\n\n- **Codex adapter detects the\
+  \ exact 'hit your usage limit' message**: YES \u2014 `_classify_codex_usage_limit()`\
+  \ uses `re.compile(r\"you['\\u2019]ve hit your usage limit\", re.IGNORECASE)` to\
+  \ match the exact pattern\n- **Reset date is extracted and logged when available**:\
+  \ YES \u2014 uses `_codex_retry_at_hint()` to extract and `logger.info()` to log\
+  \ the reset date\n- **Engine fallback triggers immediately on detection**: YES \u2014\
+  \ returns \"usage limit reached\" as `limit_reason`, same as generic path, so existing\
+  \ fallback machinery fires\n- **Generic pattern matching still works as fallback**:\
+  \ YES \u2014 if the codex-specific detector returns None, falls through to `classify_execution_limit()`\n\
+  \n## Tests\n\nAdded 9 new tests in `tests/test_runner_workflow.py`:\n- `test_classify_codex_usage_limit_matches_exact_message`\
+  \ \u2014 exact message with date\n- `test_classify_codex_usage_limit_extracts_date_with_timezone`\
+  \ \u2014 date with timezone\n- `test_classify_codex_usage_limit_without_date` \u2014\
+  \ message without retry date\n- `test_classify_codex_usage_limit_returns_none_for_unrelated_error`\
+  \ \u2014 unrelated errors return None\n- `test_classify_codex_usage_limit_with_smart_apostrophe`\
+  \ \u2014 Unicode apostrophe variant\n- `test_codex_extract_usage_observation_uses_specific_detector_over_generic`\
+  \ \u2014 end-to-end payload detection\n- `test_codex_extract_usage_observation_falls_back_to_generic_for_unknown_errors`\
+  \ \u2014 generic fallback works\n- `test_codex_extract_usage_observation_stderr_uses_specific_detector`\
+  \ \u2014 stderr path uses specific detector\n\nAll 16 codex-related tests pass.\
+  \ All 3 existing codex usage limit tests in test_retry_commit_and_recovery.py still\
+  \ pass.\n\n## Files Changed\n\n- `litehive/engines/adapters/codex.py` \u2014 added\
+  \ `_CodexUsageLimitResult`, `_classify_codex_usage_limit()`, wired into `extract_usage_observation()`\n\
+  - `tests/test_runner_workflow.py` \u2014 added 9 tests for the new detector"
+files_changed:
+- litehive/engines/adapters/codex.py
+- tests/test_runner_workflow.py
+follow_up_tasks: []
+created_follow_up_task_ids: []
+task_update: {}
+tests: {}
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 206
+hook_results: []
+created_at: '2026-04-07T22:37:29+00:00'
