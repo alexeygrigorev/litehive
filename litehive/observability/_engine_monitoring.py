@@ -200,6 +200,55 @@ def render_engine_monitoring_lines(monitoring: WorkspaceEngineMonitoring) -> lis
     return lines
 
 
+def record_codex_quota_check(
+    root: Path,
+    *,
+    status: object,
+) -> None:
+    """Record proactive codex quota status into engine monitoring."""
+    from litehive.engines._codex_quota import CodexQuotaStatus
+
+    if not isinstance(status, CodexQuotaStatus):
+        return
+    if status.error is not None:
+        return  # Don't overwrite good data with error state
+
+    monitoring = load_engine_monitoring(root)
+    record = monitoring.engines.get("codex")
+    if record is None:
+        record = EngineUsageRecord(engine="codex")
+
+    record.source = "provider"
+    record.provider = "openai"
+    record.observed_at = utcnow()
+
+    used_pct = int(status.max_used_percent)
+    reset_at = status.earliest_reset_at
+    record.usage = EngineUsageWindow(
+        used=used_pct,
+        limit=100,
+        remaining=max(0, 100 - used_pct),
+        unit="percent",
+        reset_at=reset_at,
+    )
+    if status.limit_reached:
+        record.last_limit_reason = "codex quota exhausted"
+        record.last_limit_kind = "quota"
+    record.metadata = {
+        **record.metadata,
+        "primary_used_percent": int(status.primary_window.used_percent),
+        "secondary_used_percent": int(status.secondary_window.used_percent),
+        "quota_limit_reached": status.limit_reached,
+    }
+    if status.primary_window.reset_at:
+        record.metadata["primary_reset_at"] = status.primary_window.reset_at
+    if status.secondary_window.reset_at:
+        record.metadata["secondary_reset_at"] = status.secondary_window.reset_at
+
+    monitoring.engines["codex"] = record
+    save_engine_monitoring(root, monitoring)
+
+
 def _limit_kind(reason: str | None) -> str | None:
     if not reason:
         return None

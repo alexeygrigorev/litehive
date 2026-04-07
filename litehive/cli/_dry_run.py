@@ -1,3 +1,4 @@
+from litehive.engines._codex_quota import codex_quota_block_reason
 from litehive.runtime import (
     EngineBudgetLedger,
     TaskPoolStopConditions,
@@ -66,6 +67,11 @@ def _plan_pool_dry_run(
         blocked_reasons = []
         selected_engine = None
         for engine_name in engine_attempts:
+            if engine_name == "codex":
+                quota_reason = codex_quota_block_reason()
+                if quota_reason is not None:
+                    blocked_reasons.append(quota_reason)
+                    continue
             blocked_reason = budget_ledger.block_reason(engine_name)
             if blocked_reason is None:
                 selected_engine = engine_name
