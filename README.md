@@ -280,3 +280,13 @@ Currently supported:
 - gemini - Google Gemini CLI
 - opencode - OpenCode CLI
 - goz - Goz CLI
+
+## Best Practices for Tests
+
+- **Never run the full test suite** — run only the specific test file for your change (e.g. `pytest tests/test_specific.py -q`)
+- **Each unit test should finish within 1 minute** — longer tests will cause the agent process to be killed by the inactivity timeout
+- **Each test file should finish within 1 minute** — if a test file takes longer, the tests need to be optimized or split
+- **Integration tests** (in `tests_integration/`) may take up to 3 minutes — if they exceed 3 minutes, split or optimize them
+- The agent process is killed after **6 minutes of no output** — if a test takes longer than that, split it into smaller tests
+- **Mock external calls** — always mock `SubagentManager.run`, engine adapters, and other subprocess calls in unit tests. Never call real engines from tests.
+- **Fake adapters must return files** — when mocking implementing stage passes, include at least one file in `FILES_CHANGED` and set `TESTS_ADDED: 1`. An empty implementing pass triggers the guard and causes infinite retry loops.

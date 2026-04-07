@@ -72,22 +72,19 @@ If a task does not have an explicit `task_type`, Litehive can infer one from the
 task text using keywords such as `review`, `investigate`, `refactor`, `docs`,
 and `fix`.
 
-## Engine Fallbacks
+## Engine Preference
 
 When an engine reaches quota or another execution limit, Litehive can retry the
-stage on a fallback adapter:
+stage on the next available engine in the global preference list:
 
 ```yaml
-engine_fallbacks:
-  codex: [opencode, gemini, copilot]
-  opencode: [codex, gemini, copilot]
-  gemini: [codex, opencode, copilot]
-  copilot: [codex, opencode, gemini]
-  goz: [opencode, codex, gemini, copilot]
+engine_preference: [codex, opencode, gemini, copilot, goz]
 ```
 
-This is separate from task retry policy. Fallbacks happen inside an attempt to
-keep work moving when the current engine is unavailable.
+When the primary engine fails, Litehive walks this list in order, skipping the
+failed engine and any frozen engines. This is separate from task retry policy.
+Fallbacks happen inside an attempt to keep work moving when the current engine
+is unavailable.
 
 ## Recovery Engine
 

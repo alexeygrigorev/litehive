@@ -99,7 +99,7 @@ def test_run_next_task_passes_configured_claude_max_turns(
     create_task(tmp_path, title="Claude max turns task", engine="claude", auto_commit=False)
     calls: list[int | None] = []
 
-    def fake_run(self, prompt, cwd, model=None, max_turns=None, resume_session_id=None):  # type: ignore[no-untyped-def]
+    def fake_run(self, prompt, cwd, model=None, max_turns=None, resume_session_id=None, on_started=None):  # type: ignore[no-untyped-def]
         calls.append(max_turns)
         return CLIExecutionResult(
             adapter="claude",
@@ -111,8 +111,9 @@ def test_run_next_task_passes_configured_claude_max_turns(
                     "VERDICT: PASS",
                     "SUMMARY: ok",
                     "FILES_CHANGED:",
-                    "TESTS_ADDED: 0",
-                    "TESTS_PASSING: 0",
+                    "- app.txt",
+                    "TESTS_ADDED: 1",
+                    "TESTS_PASSING: 1",
                     "WARNINGS:",
                 ]
             ),
@@ -357,10 +358,9 @@ def test_claude_config_defaults_to_sonnet() -> None:
     assert config.claude_max_turns == 100
 
 
-def test_claude_not_in_engine_fallbacks() -> None:
+def test_claude_not_in_engine_preference() -> None:
     config = LitehiveConfig()
-    for engine, fallbacks in config.engine_fallbacks.items():
-        assert "claude" not in fallbacks, f"claude should not be a fallback for {engine}"
+    assert "claude" not in config.engine_preference, "claude should not be in default engine_preference"
 
 
 def test_claude_engine_in_registry() -> None:
@@ -1004,7 +1004,7 @@ def test_runner_persists_duration_seconds_in_report_yaml(tmp_path: Path) -> None
     task = create_task(tmp_path, title="Duration tracking task")
 
     def executor(task, step):  # type: ignore[no-untyped-def]
-        return StageReport(task_id=task.id, step=step, verdict="pass", summary=f"{step} ok")
+        return StageReport(task_id=task.id, step=step, verdict="pass", summary=f"{step} ok", files_changed=["app.txt"], tests={"added": 1, "passing": 1})
 
     runner = TaskExecutionRunner(tmp_path, executor)
     runner.run(task)

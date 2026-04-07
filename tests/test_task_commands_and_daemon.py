@@ -431,7 +431,7 @@ def test_update_command_supports_rich_task_shaping_via_editor(
         )
         return subprocess.CompletedProcess(argv, 0)
 
-    monkeypatch.setattr("litehive.cli.subprocess.run", fake_editor)
+    monkeypatch.setattr("litehive.cli._parse.subprocess.run", fake_editor)
 
     exit_code = _cmd_update(
         argparse.Namespace(
@@ -2210,7 +2210,7 @@ def test_runner_flags_task_when_retry_limit_exhausted(tmp_path: Path) -> None:
             verdict = "fail"
         else:
             verdict = "pass"
-        return StageReport(task_id=task.id, step=step, verdict=verdict, summary=f"{step} {verdict}")
+        return StageReport(task_id=task.id, step=step, verdict=verdict, summary=f"{step} {verdict}", files_changed=["app.txt"], tests={"added": 1, "passing": 1})
 
     runner = TaskExecutionRunner(tmp_path, executor, max_retries=1)
     # First run: testing fails → requeued (1 rejection allowed)
@@ -2555,9 +2555,20 @@ def test_save_task_migrates_legacy_worktree_path_into_runtime_state(tmp_path: Pa
     assert get_task_worktree_path(refreshed) == ".litehive/worktrees/legacy-task"
 
 def test_pool_summary_reports_closed_tasks_with_reason_and_follow_up(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     ensure_workspace(tmp_path)
+
+    def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None):  # type: ignore[no-untyped-def]
+        return SubagentResult(
+            ref=SubagentRef(id="SA-stub", role=role, engine=engine_name, status="completed", path="subagents/stub"),
+            execution=CLIExecutionResult(adapter=engine_name, argv=(engine_name, "exec"), cwd=tmp_path, exit_code=0,
+                stdout="VERDICT: PASS\nSUMMARY: ok\nFILES_CHANGED:\n- app.txt\nTESTS_ADDED: 1\nTESTS_PASSING: 1\nWARNINGS:\n", stderr=""),
+            transcript="", exit_code=0,
+        )
+
+    monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_run)
+
     closed = create_task(tmp_path, title="Not now")
     follow_up = create_task(tmp_path, title="Revisit later")
     state = load_state(tmp_path)
@@ -3425,6 +3436,8 @@ def test_run_task_blocks_before_accepting_when_pre_acceptance_hook_fails(
     calls: list[str] = []
 
     def fake_subagent_run(self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None):  # type: ignore[no-untyped-def]
+        if role == "recovery":
+            return _failed_subagent_result(tmp_path, task.pipeline_status)
         calls.append(task.pipeline_status)
         return _completed_subagent_result(tmp_path, task.pipeline_status)
 
@@ -3520,6 +3533,8 @@ def test_run_task_blocks_when_post_implementation_runner_hook_fails(
     calls: list[str] = []
 
     def fake_subagent_run(self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None):  # type: ignore[no-untyped-def]
+        if role == "recovery":
+            return _failed_subagent_result(tmp_path, task.pipeline_status)
         calls.append(task.pipeline_status)
         return _completed_subagent_result(tmp_path, task.pipeline_status)
 

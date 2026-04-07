@@ -124,13 +124,10 @@ task_engine_routing:
 ```
 
 If an engine hits a limit or fails in a retryable way, Litehive can fall back to
-another adapter:
+the next engine in the global preference list:
 
 ```yaml
-engine_fallbacks:
-  codex: [opencode, gemini, copilot]
-  gemini: [codex, opencode, copilot]
-  goz: [opencode, codex, gemini, copilot]
+engine_preference: [codex, opencode, gemini, copilot, goz]
 ```
 
 ## Retry Policies

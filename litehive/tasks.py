@@ -1642,7 +1642,6 @@ def create_task(
                 "commit_message": default_commit_message(task_id, slug),
             },
             upstream_origin=upstream_origin,
-            **({"priority": priority} if priority is not None else {}),
         )
         task = apply_task_template_defaults(task)
 
@@ -4100,7 +4099,7 @@ def switch_task_engine(root: Path, task_id: str, *, engine: str, reason: str) ->
     if task.status == "queued":
         move_queued_task(root, task.id, 1)
         task = require_task(root, task.id)
-    elif task.status in {"interrupted", "flagged", *CLOSED_TASK_STATUSES}:
+    elif task.status in {"interrupted", "parked", "flagged", *CLOSED_TASK_STATUSES}:
         task = resume_task(root, task.id, front=True)
     else:
         raise ValueError(
@@ -4473,7 +4472,14 @@ def update_task(
     with _workspace_lock(root):
         state = load_state(root)
         task = require_task(root, task_id)
-        _ensure_future_task_mutation_allowed(root, [task.id], state=state)
+        # Skip the conflict guard when the current thread is the runner
+        # (e.g., apply_task_updates_from_report during grooming).
+        owner_thread_id = threading.get_ident()
+        with _RUNNER_LOCKS_MUTEX:
+            runner_state = _RUNNER_LOCKS.get(root.resolve())
+        is_runner_thread = runner_state is not None and runner_state.owner_thread_id == owner_thread_id
+        if not is_runner_thread:
+            _ensure_future_task_mutation_allowed(root, [task.id], state=state)
 
         if outcome is not ... and outcome is not None:
             outcome_str = str(outcome)

@@ -444,10 +444,10 @@ def test_ensure_workspace_scaffolds_profile_specific_context(tmp_path: Path) -> 
 
     context = (django_path / ".litehive" / "context.md").read_text(encoding="utf-8")
 
-    assert "# Workspace Context" in context
+    assert "# Litehive Workspace Context" in context
     assert "## Django specifics" in context
     assert "migrations" in context
-    assert "## Working rules" in context
+    assert "## Development rules" in context
 
 
 def test_load_config_round_trips_external_engine_sandbox(tmp_path: Path) -> None:
@@ -557,8 +557,8 @@ def test_resolve_process_profile_merges_shared_process_with_overlay() -> None:
 def test_render_context_template_shows_base_and_project_stage_scaffolding() -> None:
     context = render_context_template("rust")
 
-    assert "# Workspace Context" in context
-    assert "## Working rules" in context
+    assert "# Litehive Workspace Context" in context
+    assert "## Development rules" in context
     assert "## Rust specifics" in context
     assert "## Tool usage" in context
     assert "Favor small, compile-safe changes with clear module ownership." in context

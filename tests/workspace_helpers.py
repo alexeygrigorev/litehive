@@ -220,7 +220,7 @@ def _run(cmd: list[str], cwd: Path) -> str:
 
 def _git_status_without_litehive(cwd: Path) -> list[str]:
     status = _run(["git", "status", "--short"], cwd)
-    return [line for line in status.splitlines() if line and not line.endswith(".litehive/")]
+    return [line for line in status.splitlines() if line and ".litehive/" not in line and not line.endswith(".litehive")]
 
 
 def _repo_root() -> Path:
@@ -301,6 +301,33 @@ def _completed_subagent_result(
         ),
         transcript="",
         exit_code=0,
+    )
+
+
+def _failed_subagent_result(
+    tmp_path: Path, step: str, *, engine_name: str = "codex"
+) -> SubagentResult:
+    return SubagentResult(
+        ref=SubagentRef(
+            id=f"SA-{step}-recovery",
+            role="recovery",
+            engine=engine_name,
+            status="failed",
+            path=f"subagents/{step}-recovery",
+        ),
+        execution=CLIExecutionResult(
+            adapter=engine_name,
+            argv=(engine_name, "exec"),
+            cwd=tmp_path,
+            exit_code=1,
+            stdout=(
+                "VERDICT: FAIL\n"
+                f"SUMMARY: recovery failed for {step}\n"
+            ),
+            stderr="",
+        ),
+        transcript="",
+        exit_code=1,
     )
 
 

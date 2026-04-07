@@ -234,9 +234,14 @@ def rollback_task(root: Path, task: TaskRecord) -> RollbackCheckpoint:
     if checkpoint_sha is None:
         raise GitError(f"Unable to locate checkpoint commit for task {task.id}")
 
+    # Try plain revert first; if the commit is a merge, retry with -m 1
     revert_proc = _run_git(root, "revert", "--no-commit", checkpoint_sha)
     if revert_proc.returncode != 0:
-        raise GitError(revert_proc.stderr.strip() or "git revert failed")
+        if "is a merge" in (revert_proc.stderr or ""):
+            _run_git(root, "reset", "--hard", "HEAD")  # clean up failed revert
+            revert_proc = _run_git(root, "revert", "--no-commit", "-m", "1", checkpoint_sha)
+        if revert_proc.returncode != 0:
+            raise GitError(revert_proc.stderr.strip() or "git revert failed")
     return RollbackCheckpoint(rolled_back_sha=checkpoint_sha)
 
 

@@ -164,7 +164,7 @@ def run_task(
         workspace_context = load_context(root)
         engine_plan = resolve_engine_plan(task, config, engine_override=engine_override)
         engine_name = engine_plan[0]
-        execution_root = _resolve_task_execution_root(root, task)
+        execution_root = _resolve_task_execution_root(root, task, config=config)
         subagents = SubagentManager(root, execution_root=execution_root)
 
         append_journal(root, task, f"Execution started with engine `{engine_name}`.")
@@ -585,7 +585,60 @@ def _task_worktree_path(root: Path, task: TaskRecord) -> Path:
     return root / ".litehive" / "worktrees" / f"{task.id}-{task.slug}"
 
 
-def _resolve_task_execution_root(root: Path, task: TaskRecord) -> Path:
+def _run_worktree_merge_agent(
+    root: Path, worktree_path: Path, task: TaskRecord, main_head: str,
+    *, config: "LitehiveConfig | None" = None,
+) -> None:
+    """Merge main into worktree, launching a merge agent on conflict."""
+    merge = subprocess.run(
+        ["git", "merge", main_head, "--no-edit"],
+        cwd=worktree_path, capture_output=True, text=True,
+    )
+    if merge.returncode == 0:
+        append_journal(root, task, "[worktree] Merged main into worktree.")
+        return
+
+    # Merge conflict — find conflicting files and launch agent
+    conflict_proc = subprocess.run(
+        ["git", "diff", "--name-only", "--diff-filter=U"],
+        cwd=worktree_path, capture_output=True, text=True,
+    )
+    conflicts = [f.strip() for f in conflict_proc.stdout.splitlines() if f.strip()]
+    if not conflicts:
+        subprocess.run(["git", "merge", "--abort"], cwd=worktree_path, capture_output=True)
+        append_journal(root, task, f"[worktree] Merge failed (no conflict files detected): {merge.stderr.strip()}")
+        return
+
+    append_journal(root, task, f"[worktree] Merge conflict on {len(conflicts)} file(s). Launching merge agent.")
+    cfg = config or load_config(root)
+    engine_name = cfg.recovery_engine or task.engine or cfg.default_engine
+    model = resolve_model(task, cfg, engine_name=engine_name)
+    subagents = SubagentManager(root, execution_root=worktree_path)
+    subagents.run(
+        task, role="merge-resolver", engine_name=engine_name, model=model,
+        prompt=(
+            f"Git merge conflict while updating task {task.id} worktree to latest main.\n"
+            f"Conflicting files: {', '.join(conflicts)}\n\n"
+            f"Resolution rules:\n"
+            f"- Preserve BOTH sides' intent — combine changes, don't pick one side.\n"
+            f"- Main branch has latest infrastructure. Worktree has task's feature code.\n"
+            f"- Never silently drop changes from either side.\n\n"
+            f"After resolving: git add the files, then git commit --no-edit.\n"
+        ),
+    )
+    # Check if resolved
+    remaining = subprocess.run(
+        ["git", "diff", "--name-only", "--diff-filter=U"],
+        cwd=worktree_path, capture_output=True, text=True,
+    )
+    if not remaining.stdout.strip():
+        append_journal(root, task, "[worktree] Merge agent resolved conflicts.")
+    else:
+        subprocess.run(["git", "merge", "--abort"], cwd=worktree_path, capture_output=True)
+        append_journal(root, task, "[worktree] Merge agent could not resolve. Worktree kept as-is.")
+
+
+def _resolve_task_execution_root(root: Path, task: TaskRecord, *, config: "LitehiveConfig | None" = None) -> Path:
     if not is_git_repo(root):
         return root
 
@@ -599,10 +652,14 @@ def _resolve_task_execution_root(root: Path, task: TaskRecord) -> Path:
         else:
             main_head = current_head(root)
             if main_head:
-                rebase_worktree_onto(worktree_path, main_head)
+                rebased = rebase_worktree_onto(worktree_path, main_head)
+                if not rebased:
+                    # Rebase failed — launch merge agent to resolve
+                    append_journal(root, task, f"[worktree] Rebase onto {main_head[:8]} failed. Launching merge agent.")
+                    _run_worktree_merge_agent(root, worktree_path, task, main_head, config=config)
             return worktree_path
 
-    worktree_path = _task_worktree_path(root, task)
+    worktree_path = _task_worktree_path(root, task)  # noqa: E305
     worktree_path.parent.mkdir(parents=True, exist_ok=True)
     if worktree_path.exists():
         shutil.rmtree(worktree_path)
@@ -704,7 +761,7 @@ def build_executor(
             return pre_stage_hook_report
 
         execution_events: list[str] = []
-        engines = _engine_attempt_order(next_stage_engine_names, config.engine_fallbacks)
+        engines = _engine_attempt_order(next_stage_engine_names, config.engine_preference)
         limit_trigger_reason: str | None = None
 
         for index, engine_name in enumerate(engines):

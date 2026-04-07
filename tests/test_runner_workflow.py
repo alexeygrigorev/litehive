@@ -6,7 +6,7 @@ def test_runner_advances_task_to_done(tmp_path: Path) -> None:
     task = create_task(tmp_path, title="Implement feature", auto_commit=False)
 
     def executor(task, step):  # type: ignore[no-untyped-def]
-        return StageReport(task_id=task.id, step=step, verdict="pass", summary=f"{step} ok")
+        return StageReport(task_id=task.id, step=step, verdict="pass", summary=f"{step} ok", files_changed=["app.txt"], tests={"added": 1, "passing": 1})
 
     runner = TaskExecutionRunner(tmp_path, executor)
     result = runner.run(task)
@@ -103,7 +103,7 @@ def test_runner_requeues_task_after_testing_rejection(tmp_path: Path) -> None:
 
     def executor(task, step):  # type: ignore[no-untyped-def]
         verdict = "fail" if step == "testing" else "pass"
-        return StageReport(task_id=task.id, step=step, verdict=verdict, summary=f"{step} {verdict}")
+        return StageReport(task_id=task.id, step=step, verdict=verdict, summary=f"{step} {verdict}", files_changed=["app.txt"], tests={"added": 1, "passing": 1})
 
     runner = TaskExecutionRunner(tmp_path, executor, max_retries=3)
     result = runner.run(task)
@@ -370,7 +370,7 @@ def test_runner_persists_non_blocking_follow_up_and_completes_current_task(tmp_p
                     }
                 ],
             )
-        return StageReport(task_id=task.id, step=step, verdict="pass", summary=f"{step} ok")
+        return StageReport(task_id=task.id, step=step, verdict="pass", summary=f"{step} ok", files_changed=["app.txt"], tests={"added": 1, "passing": 1})
 
     runner = TaskExecutionRunner(tmp_path, executor)
     result = runner.run(task)
@@ -426,7 +426,7 @@ def test_runner_persists_blocking_follow_up_and_blocks_current_task(tmp_path: Pa
                     }
                 ],
             )
-        return StageReport(task_id=task.id, step=step, verdict="pass", summary=f"{step} ok")
+        return StageReport(task_id=task.id, step=step, verdict="pass", summary=f"{step} ok", files_changed=["app.txt"], tests={"added": 1, "passing": 1})
 
     runner = TaskExecutionRunner(tmp_path, executor)
     result = runner.run(task)
@@ -692,7 +692,7 @@ def test_runner_preserves_retry_count_when_requeued_task_is_rejected_again(tmp_p
 
     def executor(task, step):  # type: ignore[no-untyped-def]
         verdict = "reject" if step == "accepting" else "pass"
-        return StageReport(task_id=task.id, step=step, verdict=verdict, summary=f"{step} {verdict}")
+        return StageReport(task_id=task.id, step=step, verdict=verdict, summary=f"{step} {verdict}", files_changed=["app.txt"], tests={"added": 1, "passing": 1})
 
     runner = TaskExecutionRunner(tmp_path, executor, max_retries=3)
     result = runner.run(task)
@@ -733,7 +733,7 @@ def test_runner_requeues_implementing_rejection_without_sink_state(tmp_path: Pat
 
     def executor(task, step):  # type: ignore[no-untyped-def]
         verdict = "reject" if step == "implementing" else "pass"
-        return StageReport(task_id=task.id, step=step, verdict=verdict, summary=f"{step} {verdict}")
+        return StageReport(task_id=task.id, step=step, verdict=verdict, summary=f"{step} {verdict}", files_changed=["app.txt"], tests={"added": 1, "passing": 1})
 
     runner = TaskExecutionRunner(tmp_path, executor, max_retries=3)
     result = runner.run(task)
@@ -774,7 +774,7 @@ def test_runner_infers_acceptance_criteria_from_task_context_after_grooming(
     )
 
     def executor(task, step):  # type: ignore[no-untyped-def]
-        return StageReport(task_id=task.id, step=step, verdict="pass", summary=f"{step} ok")
+        return StageReport(task_id=task.id, step=step, verdict="pass", summary=f"{step} ok", files_changed=["app.txt"], tests={"added": 1, "passing": 1})
 
     runner = TaskExecutionRunner(tmp_path, executor)
     result = runner.run(task)
@@ -799,7 +799,7 @@ def test_runner_blocks_large_task_without_inferable_acceptance_criteria_during_g
     task = create_task(tmp_path, title="Implement feature", depends_on=[prerequisite.id])
 
     def executor(task, step):  # type: ignore[no-untyped-def]
-        return StageReport(task_id=task.id, step=step, verdict="pass", summary=f"{step} ok")
+        return StageReport(task_id=task.id, step=step, verdict="pass", summary=f"{step} ok", files_changed=["app.txt"], tests={"added": 1, "passing": 1})
 
     runner = TaskExecutionRunner(tmp_path, executor)
     result = runner.run(task)
@@ -852,7 +852,7 @@ def test_runner_persists_grooming_generated_acceptance_criteria(tmp_path: Path) 
                 transcript=transcript,
                 subagent_status="completed",
             )
-        return StageReport(task_id=task.id, step=step, verdict="pass", summary=f"{step} ok")
+        return StageReport(task_id=task.id, step=step, verdict="pass", summary=f"{step} ok", files_changed=["app.txt"], tests={"added": 1, "passing": 1})
 
     runner = TaskExecutionRunner(tmp_path, executor)
     result = runner.run(task)
@@ -891,7 +891,7 @@ def test_runner_persists_grooming_generated_pm_sizing(tmp_path: Path) -> None:
                 transcript=transcript,
                 subagent_status="completed",
             )
-        return StageReport(task_id=task.id, step=step, verdict="pass", summary=f"{step} ok")
+        return StageReport(task_id=task.id, step=step, verdict="pass", summary=f"{step} ok", files_changed=["app.txt"], tests={"added": 1, "passing": 1})
 
     runner = TaskExecutionRunner(tmp_path, executor)
     result = runner.run(task)
@@ -982,7 +982,7 @@ def test_runner_normalizes_implementing_stage_without_acceptance_criteria_to_gro
 
     def executor(task, step):  # type: ignore[no-untyped-def]
         stages_executed.append(step)
-        return StageReport(task_id=task.id, step=step, verdict="pass", summary=f"{step} ok")
+        return StageReport(task_id=task.id, step=step, verdict="pass", summary=f"{step} ok", files_changed=["app.txt"], tests={"added": 1, "passing": 1})
 
     runner = TaskExecutionRunner(tmp_path, executor)
     result = runner.run(task)
@@ -1010,7 +1010,7 @@ def test_runner_normalizes_later_stage_without_acceptance_criteria_to_grooming(
 
     def executor(task, step):  # type: ignore[no-untyped-def]
         stages_executed.append(step)
-        return StageReport(task_id=task.id, step=step, verdict="pass", summary=f"{step} ok")
+        return StageReport(task_id=task.id, step=step, verdict="pass", summary=f"{step} ok", files_changed=["app.txt"], tests={"added": 1, "passing": 1})
 
     runner = TaskExecutionRunner(tmp_path, executor)
     result = runner.run(task)
@@ -1037,7 +1037,7 @@ def test_runner_normalizes_underspecified_queued_task_through_grooming(
 
     def executor(task, step):  # type: ignore[no-untyped-def]
         stages_executed.append(step)
-        return StageReport(task_id=task.id, step=step, verdict="pass", summary=f"{step} ok")
+        return StageReport(task_id=task.id, step=step, verdict="pass", summary=f"{step} ok", files_changed=["app.txt"], tests={"added": 1, "passing": 1})
 
     runner = TaskExecutionRunner(tmp_path, executor)
     result = runner.run(task)
@@ -1069,7 +1069,7 @@ def test_runner_normalizes_interrupted_task_without_criteria_through_grooming(
 
     def executor(task, step):  # type: ignore[no-untyped-def]
         stages_executed.append(step)
-        return StageReport(task_id=task.id, step=step, verdict="pass", summary=f"{step} ok")
+        return StageReport(task_id=task.id, step=step, verdict="pass", summary=f"{step} ok", files_changed=["app.txt"], tests={"added": 1, "passing": 1})
 
     runner = TaskExecutionRunner(tmp_path, executor)
     result = runner.run(task)
@@ -1100,7 +1100,7 @@ def test_runner_skips_normalization_for_well_specified_task(tmp_path: Path) -> N
 
     def executor(task, step):  # type: ignore[no-untyped-def]
         stages_executed.append(step)
-        return StageReport(task_id=task.id, step=step, verdict="pass", summary=f"{step} ok")
+        return StageReport(task_id=task.id, step=step, verdict="pass", summary=f"{step} ok", files_changed=["app.txt"], tests={"added": 1, "passing": 1})
 
     runner = TaskExecutionRunner(tmp_path, executor)
     result = runner.run(task)
@@ -1154,7 +1154,7 @@ def test_runner_cancels_task_with_explicit_reason(tmp_path: Path) -> None:
     def executor(task, step):  # type: ignore[no-untyped-def]
         if step == "testing":
             raise KeyboardInterrupt()
-        return StageReport(task_id=task.id, step=step, verdict="pass", summary=f"{step} ok")
+        return StageReport(task_id=task.id, step=step, verdict="pass", summary=f"{step} ok", files_changed=["app.txt"], tests={"added": 1, "passing": 1})
 
     runner = TaskExecutionRunner(tmp_path, executor)
     result = runner.run(task)
@@ -1205,7 +1205,7 @@ def test_runner_fails_task_when_stage_executor_crashes(tmp_path: Path) -> None:
     def executor(task, step):  # type: ignore[no-untyped-def]
         if step == "testing":
             raise RuntimeError("boom")
-        return StageReport(task_id=task.id, step=step, verdict="pass", summary=f"{step} ok")
+        return StageReport(task_id=task.id, step=step, verdict="pass", summary=f"{step} ok", files_changed=["app.txt"], tests={"added": 1, "passing": 1})
 
     runner = TaskExecutionRunner(tmp_path, executor)
     result = runner.run(task)
@@ -2985,7 +2985,7 @@ def test_runner_normal_retry_within_stage_limit(tmp_path: Path) -> None:
         call_count[step] = call_count.get(step, 0) + 1
         if step == "testing" and call_count.get("testing", 0) == 1:
             return StageReport(task_id=task.id, step=step, verdict="fail", summary="test failed")
-        return StageReport(task_id=task.id, step=step, verdict="pass", summary=f"{step} ok")
+        return StageReport(task_id=task.id, step=step, verdict="pass", summary=f"{step} ok", files_changed=["app.txt"], tests={"added": 1, "passing": 1})
 
     runner = TaskExecutionRunner(tmp_path, executor, max_retries=3, stage_retry_limit=2)
 
@@ -3016,7 +3016,7 @@ def test_runner_escalates_to_grooming_after_testing_stage_limit_exhausted(tmp_pa
             testing_calls[0] += 1
         if step == "testing":
             return StageReport(task_id=task.id, step=step, verdict="fail", summary="tests fail")
-        return StageReport(task_id=task.id, step=step, verdict="pass", summary=f"{step} ok")
+        return StageReport(task_id=task.id, step=step, verdict="pass", summary=f"{step} ok", files_changed=["app.txt"], tests={"added": 1, "passing": 1})
 
     # Run 3 times to accumulate 3 testing rejections:
     # Run 1: implementing pass → testing fail (stage_count=1) → requeue at implementing
@@ -3074,7 +3074,7 @@ def test_runner_escalates_to_grooming_after_accepting_stage_limit_exhausted(tmp_
     def executor(task, step):  # type: ignore[no-untyped-def]
         if step == "accepting":
             return StageReport(task_id=task.id, step=step, verdict="reject", summary="rejected")
-        return StageReport(task_id=task.id, step=step, verdict="pass", summary=f"{step} ok")
+        return StageReport(task_id=task.id, step=step, verdict="pass", summary=f"{step} ok", files_changed=["app.txt"], tests={"added": 1, "passing": 1})
 
     runner = TaskExecutionRunner(tmp_path, executor, max_retries=10, stage_retry_limit=2)
 
@@ -3125,7 +3125,7 @@ def test_runner_task_level_stage_retry_limit_overrides_global(tmp_path: Path) ->
     def executor(task, step):  # type: ignore[no-untyped-def]
         if step == "testing":
             return StageReport(task_id=task.id, step=step, verdict="fail", summary="fail")
-        return StageReport(task_id=task.id, step=step, verdict="pass", summary=f"{step} ok")
+        return StageReport(task_id=task.id, step=step, verdict="pass", summary=f"{step} ok", files_changed=["app.txt"], tests={"added": 1, "passing": 1})
 
     runner = TaskExecutionRunner(tmp_path, executor, max_retries=10, stage_retry_limit=5)
 
@@ -3152,7 +3152,8 @@ def test_runner_stage_counts_persist_across_requeued_runs(tmp_path: Path) -> Non
     runner = TaskExecutionRunner(
         tmp_path,
         lambda t, s: StageReport(
-            task_id=t.id, step=s, verdict="fail" if s == "testing" else "pass", summary=f"{s} done"
+            task_id=t.id, step=s, verdict="fail" if s == "testing" else "pass", summary=f"{s} done",
+            files_changed=["app.txt"], tests={"added": 1, "passing": 1},
         ),
         max_retries=10,
         stage_retry_limit=3,
@@ -3251,7 +3252,7 @@ def test_single_mode_task_skips_normalization(tmp_path: Path) -> None:
 
     def executor(t, step):  # type: ignore[no-untyped-def]
         stages_executed.append(step)
-        return StageReport(task_id=t.id, step=step, verdict="pass", summary=f"{step} ok")
+        return StageReport(task_id=t.id, step=step, verdict="pass", summary=f"{step} ok", files_changed=["app.txt"], tests={"added": 1, "passing": 1})
 
     runner = TaskExecutionRunner(tmp_path, executor)
     result = runner.run(task)
@@ -3283,7 +3284,7 @@ def test_full_mode_is_default_pipeline_mode(tmp_path: Path) -> None:
 
     def executor(t, step):  # type: ignore[no-untyped-def]
         stages_executed.append(step)
-        return StageReport(task_id=t.id, step=step, verdict="pass", summary=f"{step} ok")
+        return StageReport(task_id=t.id, step=step, verdict="pass", summary=f"{step} ok", files_changed=["app.txt"], tests={"added": 1, "passing": 1})
 
     runner = TaskExecutionRunner(tmp_path, executor)
     result = runner.run(task)

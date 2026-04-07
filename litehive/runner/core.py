@@ -402,6 +402,28 @@ class TaskExecutionRunner:
                     target = "implementing"
                     rejections += 1
                     report.retry_count = rejections
+                    if rejections > self.max_retries:
+                        report.outcome_reason_code = "retry_limit_exhausted"
+                        report.outcome_reason = f"Empty SWE pass rejected {rejections} time(s) (limit: {self.max_retries})"
+                        task.status = "flagged"
+                        _apply_task_outcome(
+                            task,
+                            kind="flagged",
+                            stage=current,
+                            reason_code="retry_limit_exhausted",
+                            reason=report.outcome_reason,
+                            retry_count=rejections,
+                            retry_limit=self.max_retries,
+                            retry_source=self.retry_source,
+                        )
+                        self._write_report(task, report, steps)
+                        _apply_stage_finished(task, report)
+                        return self._finish_run(
+                            task,
+                            final_status="flagged",
+                            steps=steps,
+                            last_verdict="reject",
+                        )
 
             if current == "grooming" and target == "implementing":
                 from litehive.tasks import apply_task_updates_from_report

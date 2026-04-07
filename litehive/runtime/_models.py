@@ -88,7 +88,7 @@ def resolve_engine_attempt_order(
 ) -> list[str]:
     order = _engine_attempt_order(
         resolve_engine_plan(task, config, engine_override=engine_override),
-        config.engine_fallbacks,
+        config.engine_preference,
     )
     if config.engine_freeze:
         order = [e for e in order if not is_engine_frozen(config, e)]

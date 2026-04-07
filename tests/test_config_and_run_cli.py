@@ -108,7 +108,7 @@ def test_configure_persists_process_profile(tmp_path: Path) -> None:
     context = (tmp_path / ".litehive" / "context.md").read_text(encoding="utf-8")
 
     assert config.process_profile == "rust"
-    assert "# Workspace Context" in context
+    assert "# Litehive Workspace Context" in context
     assert "## Rust specifics" in context
 
 
@@ -321,7 +321,7 @@ def test_litehive_config_normalizes_external_cli_engine_category_alias() -> None
 def test_litehive_config_defaults_include_claude_retry_policy() -> None:
     config = LitehiveConfig()
 
-    assert config.subagent_inactivity_timeout_seconds == 300.0
+    assert config.subagent_inactivity_timeout_seconds == 360.0
     assert config.execution_retry_policies["claude"].max_retries == 2
     assert config.execution_retry_policies["claude"].backoff_seconds == 0.25
     assert config.execution_retry_policies["claude"].backoff_multiplier == 2.0
@@ -1152,6 +1152,7 @@ def test_cmd_run_dry_run_predicts_claude_budget_block_without_fallback(
             claude_enabled=True,
             engine_budget_caps={"claude": 2},
             engine_costs={"claude": 3},
+            engine_preference=[],
         ),
     )
     create_task(tmp_path, title="Claude task", engine="claude", auto_commit=False)

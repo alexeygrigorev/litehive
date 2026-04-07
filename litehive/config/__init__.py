@@ -139,9 +139,9 @@ class LitehiveConfig:
         engine_freeze: Maps engine names to UTC ISO-8601 datetime
             strings. A frozen engine is skipped during selection and
             fallback until the freeze expires.
-        engine_fallbacks: Ordered fallback engines when the primary
-            engine for a task is unavailable due to quota, budget, or
-            transient failures.
+        engine_preference: Global engine priority order. When the
+            primary engine fails, fallback walks this list in order,
+            skipping the failed engine.
         agent_startup_guidance: Per-role startup guidance text injected
             into subagent prompts at the beginning of a session.
         auto_commit: Whether accepted tasks automatically proceed to
@@ -192,7 +192,7 @@ class LitehiveConfig:
     pool_selection_policy: str = "dependency_aware"
     pre_acceptance_command: str | None = None
     runner_hooks: dict[str, list[RunnerHookConfig]] = field(default_factory=dict)
-    subagent_inactivity_timeout_seconds: float = 300.0
+    subagent_inactivity_timeout_seconds: float = 360.0
     inactivity_timeout_seconds: float | None = None
     subagent_resource_limits: SubagentResourceLimitsConfig = field(
         default_factory=SubagentResourceLimitsConfig
@@ -201,14 +201,8 @@ class LitehiveConfig:
         default_factory=ExternalEngineSandboxConfig
     )
     engine_freeze: dict[str, str] = field(default_factory=dict)
-    engine_fallbacks: dict[str, list[str]] = field(
-        default_factory=lambda: {
-            "codex": ["opencode", "gemini", "copilot"],
-            "opencode": ["codex", "gemini", "copilot"],
-            "gemini": ["codex", "opencode", "copilot"],
-            "copilot": ["codex", "opencode", "gemini"],
-            "goz": ["copilot", "codex", "opencode", "gemini"],
-        }
+    engine_preference: list[str] = field(
+        default_factory=lambda: ["codex", "opencode", "gemini", "copilot", "goz"]
     )
     agent_startup_guidance: dict[str, list[str]] = field(default_factory=dict)
     auto_commit: bool = True
@@ -231,13 +225,10 @@ class LitehiveConfig:
         self.engine_freeze = {
             str(k): str(v) for k, v in self.engine_freeze.items()
         }
-        self.engine_fallbacks = {
-            engine_name: _normalize_engine_sequence(
-                list(fallbacks),
-                field_name=f"engine_fallbacks[{engine_name}]",
-            )
-            for engine_name, fallbacks in self.engine_fallbacks.items()
-        }
+        self.engine_preference = _normalize_engine_sequence(
+            list(self.engine_preference),
+            field_name="engine_preference",
+        )
         self.agent_startup_guidance = _normalize_agent_startup_guidance(self.agent_startup_guidance)
         self.execution_retry_policies = _normalize_execution_retry_policies(
             self.execution_retry_policies
@@ -408,6 +399,7 @@ def load_config(root: Path) -> LitehiveConfig:
         data["process_profile"] = "generic"
     if data.get("pool_selection_policy") not in VALID_POOL_SELECTION_POLICIES:
         data["pool_selection_policy"] = "dependency_aware"
+    data.pop("engine_fallbacks", None)
     return LitehiveConfig(**data)
 
 

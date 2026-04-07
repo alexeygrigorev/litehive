@@ -341,7 +341,7 @@ def test_intake_command_creates_linked_task_from_freeform_dump(
         def render_transcript(self, execution: CLIExecutionResult) -> str:
             return execution.transcript
 
-    monkeypatch.setattr("litehive.cli.get_engine", lambda _: FakeEngine())
+    monkeypatch.setattr("litehive.cli.tasks.get_engine", lambda _: FakeEngine())
 
     dump = "We need better queue visibility.\nShow stage, transcript, and last progress in the task view.\n"
     intake_file = tmp_path / "brain-dump.md"
@@ -413,9 +413,9 @@ def test_intake_command_rolls_back_created_task_when_post_create_write_fails(
         def render_transcript(self, execution: CLIExecutionResult) -> str:
             return execution.transcript
 
-    monkeypatch.setattr("litehive.cli.get_engine", lambda _: FakeEngine())
+    monkeypatch.setattr("litehive.cli.tasks.get_engine", lambda _: FakeEngine())
     monkeypatch.setattr(
-        "litehive.cli._link_intake_brief_to_source",
+        "litehive.cli.tasks._link_intake_brief_to_source",
         lambda _: (_ for _ in ()).throw(OSError("disk full")),
     )
 
@@ -641,6 +641,7 @@ def test_subagent_artifacts_update_live_during_streaming_execution(
             *,
             max_turns: int | None = None,
             on_update=None,
+            inactivity_timeout_seconds=None,
         ) -> CLIExecutionResult:
             first = CLIExecutionResult(
                 adapter="codex",
@@ -730,6 +731,7 @@ def test_subagent_manager_records_copilot_quota_monitoring_during_live_updates(
         max_turns: int | None = None,
         on_started=None,
         on_update=None,
+        inactivity_timeout_seconds=None,
     ) -> CLIExecutionResult:
         del prompt, model, max_turns
         if on_started is not None:
@@ -911,6 +913,7 @@ def test_subagent_manager_kills_stale_live_process_using_stdout_mtime(
             max_turns: int | None = None,
             on_started=None,
             on_update=None,
+            inactivity_timeout_seconds=None,
         ) -> CLIExecutionResult:
             del prompt, model, max_turns
             assert on_started is not None
@@ -1053,6 +1056,7 @@ def test_subagent_streaming_pid_persists_before_first_live_output(
             max_turns: int | None = None,
             on_started=None,
             on_update=None,
+            inactivity_timeout_seconds=None,
         ) -> CLIExecutionResult:
             assert max_turns is None
             assert on_started is not None
@@ -1342,6 +1346,7 @@ def test_subagent_manager_uses_inherited_run_live_when_available(
         max_turns: int | None = None,
         on_started=None,
         on_update=None,
+        inactivity_timeout_seconds=None,
     ) -> CLIExecutionResult:
         assert max_turns is None
         calls.append("run_live")

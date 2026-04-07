@@ -1519,6 +1519,7 @@ def test_run_next_task_blocks_when_claude_budget_is_exhausted_before_invocation(
         tmp_path,
         LitehiveConfig(
             claude_enabled=True,
+            engine_preference=["claude"],
             engine_budget_caps={"claude": 2},
             engine_costs={"claude": 3},
         ),
@@ -1886,7 +1887,7 @@ def test_runner_requeues_commit_stage_after_keyboard_interrupt(tmp_path: Path) -
             task.status = "done"
             task.pipeline_status = "done"
             raise KeyboardInterrupt()
-        return StageReport(task_id=task.id, step=step, verdict="pass", summary=f"{step} ok")
+        return StageReport(task_id=task.id, step=step, verdict="pass", summary=f"{step} ok", files_changed=["app.txt"], tests={"added": 1, "passing": 1})
 
     runner = TaskExecutionRunner(tmp_path, executor)
     result = runner.run(task)
@@ -1951,8 +1952,9 @@ def test_drain_task_pool_continues_after_requeueing_review_rejection_when_other_
                 "VERDICT: PASS",
                 f"SUMMARY: {task.pipeline_status} passed",
                 "FILES_CHANGED:",
-                "TESTS_ADDED: 0",
-                "TESTS_PASSING: 0",
+                "- app.txt",
+                "TESTS_ADDED: 1",
+                "TESTS_PASSING: 1",
                 "WARNINGS:",
             ]
         )
@@ -2032,8 +2034,9 @@ def test_drain_task_pool_stops_after_requeueing_review_rejection_when_only_block
                 "VERDICT: PASS",
                 f"SUMMARY: {task.pipeline_status} passed",
                 "FILES_CHANGED:",
-                "TESTS_ADDED: 0",
-                "TESTS_PASSING: 0",
+                "- app.txt",
+                "TESTS_ADDED: 1",
+                "TESTS_PASSING: 1",
                 "WARNINGS:",
             ]
         )

@@ -80,16 +80,16 @@ def _budget_ledger_from_conditions(conditions: TaskPoolStopConditions) -> Engine
 
 
 def _engine_attempt_order(
-    initial_engine_names: list[str], engine_fallbacks: dict[str, list[str]]
+    initial_engine_names: list[str], engine_preference: list[str]
 ) -> list[str]:
     seen: set[str] = set()
     ordered: list[str] = []
-    queue: list[str] = list(initial_engine_names)
-    while queue:
-        engine_name = queue.pop(0)
-        if engine_name in seen:
-            continue
-        seen.add(engine_name)
-        ordered.append(engine_name)
-        queue.extend(engine_fallbacks.get(engine_name, []))
+    for engine_name in initial_engine_names:
+        if engine_name not in seen:
+            seen.add(engine_name)
+            ordered.append(engine_name)
+    for engine_name in engine_preference:
+        if engine_name not in seen:
+            seen.add(engine_name)
+            ordered.append(engine_name)
     return ordered

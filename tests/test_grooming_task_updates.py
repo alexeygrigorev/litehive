@@ -181,7 +181,7 @@ def test_runner_exits_cleanly_when_grooming_report_closes_task(tmp_path):
                     "outcome_reason": "Duplicate of T-0001",
                 },
             )
-        return StageReport(task_id=task.id, step=step, verdict="pass", summary=f"{step} ok")
+        return StageReport(task_id=task.id, step=step, verdict="pass", summary=f"{step} ok", files_changed=["app.txt"], tests={"added": 1, "passing": 1})
 
     runner = TaskExecutionRunner(root, executor)
     result = runner.run(task)
@@ -214,7 +214,7 @@ def test_runner_exits_cleanly_when_grooming_report_parks_task(tmp_path):
                     "action": "park",
                 },
             )
-        return StageReport(task_id=task.id, step=step, verdict="pass", summary=f"{step} ok")
+        return StageReport(task_id=task.id, step=step, verdict="pass", summary=f"{step} ok", files_changed=["app.txt"], tests={"added": 1, "passing": 1})
 
     runner = TaskExecutionRunner(root, executor)
     result = runner.run(task)

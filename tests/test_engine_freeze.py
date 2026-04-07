@@ -265,9 +265,7 @@ def test_frozen_engine_in_fallback_chain_skipped(tmp_path: Path) -> None:
     config = LitehiveConfig(
         default_engine="codex",
         engine_freeze={"opencode": future},
-        engine_fallbacks={
-            "codex": ["opencode", "gemini", "copilot"],
-        },
+        engine_preference=["codex", "opencode", "gemini", "copilot"],
     )
     task = TaskRecord(id="T-0001", slug="test", title="test", status="queued", pipeline_status="implementing")
 

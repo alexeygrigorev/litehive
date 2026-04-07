@@ -497,8 +497,9 @@ def test_cmd_run_drain_reports_no_useful_progress_after_requeue_when_only_blocke
                 "VERDICT: PASS",
                 f"SUMMARY: {task.pipeline_status} passed",
                 "FILES_CHANGED:",
-                "TESTS_ADDED: 0",
-                "TESTS_PASSING: 0",
+                "- app.txt",
+                "TESTS_ADDED: 1",
+                "TESTS_PASSING: 1",
                 "WARNINGS:",
             ]
         )
@@ -614,8 +615,9 @@ def test_cmd_run_reports_requeued_task_even_when_other_tasks_are_blocked(
                 "VERDICT: PASS",
                 f"SUMMARY: {task.pipeline_status} passed",
                 "FILES_CHANGED:",
-                "TESTS_ADDED: 0",
-                "TESTS_PASSING: 0",
+                "- app.txt",
+                "TESTS_ADDED: 1",
+                "TESTS_PASSING: 1",
                 "WARNINGS:",
             ]
         )
@@ -749,12 +751,23 @@ def test_cmd_run_reports_stage_outcomes_for_remaining_task_with_prior_reports(
 def test_cmd_run_reports_failed_task_summary_with_stage_outcomes(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Needs acceptance criteria", auto_commit=False)
     task.pipeline_status = "implementing"
     task.priority = "high"
     save_task(tmp_path, task)
+
+    def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None):  # type: ignore[no-untyped-def]
+        return SubagentResult(
+            ref=SubagentRef(id="SA-grooming", role=role, engine=engine_name, status="completed", path="subagents/grooming"),
+            execution=CLIExecutionResult(adapter=engine_name, argv=(engine_name, "exec"), cwd=tmp_path, exit_code=0,
+                stdout="VERDICT: BLOCKED\nSUMMARY: missing acceptance criteria\nFILES_CHANGED:\nTESTS_ADDED: 0\nTESTS_PASSING: 0\nWARNINGS:\n", stderr=""),
+            transcript="", exit_code=0,
+        )
+
+    monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_run)
 
     exit_code = _cmd_run(argparse.Namespace(workspace=tmp_path, dry_run=False, drain=False))
     output = capsys.readouterr().out
