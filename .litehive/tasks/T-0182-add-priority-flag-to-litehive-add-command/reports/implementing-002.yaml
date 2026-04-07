@@ -1,0 +1,49 @@
+task_id: T-0182
+step: implementing
+verdict: pass
+summary: 'STAGE_RESULT:'
+feedback: "Stage `implementing` retrying `claude` after attempt 1/3 due to transient\
+  \ timeout (classification: timeout, policy: claude, backoff: 0.25s).\n\nSTAGE_RESULT:\n\
+  {\"verdict\":\"pass\",\"summary\":\"Added --priority flag to litehive add with choices\
+  \ critical/high/medium/low; default remains medium when omitted; invalid values\
+  \ show clear argparse error.\",\"files_changed\":[\"litehive/tasks.py\",\"litehive/cli/parser.py\"\
+  ,\"litehive/cli/tasks.py\",\"tests/test_task_commands_and_daemon.py\"],\"tests\"\
+  :{\"added\":3,\"passing\":3},\"warnings\":[],\"follow_up_tasks\":[],\"acceptance_criteria\"\
+  :[\"litehive add 'title' --priority high creates a task with priority=high \u2014\
+  \ VERIFIED via test and task.yaml check\",\"litehive add 'title' without --priority\
+  \ creates a task with priority=medium \u2014 VERIFIED via test\",\"Invalid priority\
+  \ values show clear argparse error listing valid choices \u2014 VERIFIED via CLI\
+  \ invocation with --priority invalid\",\"critical added to VALID_TASK_PRIORITIES\
+  \ and TASK_PRIORITY_ORDER \u2014 VERIFIED, sort order updated to critical=0,high=1,medium=2,low=3\"\
+  ],\"task_update\":{}}\n\nChanges:\n1. litehive/tasks.py: Added 'critical' to VALID_TASK_PRIORITIES,\
+  \ updated TASK_PRIORITY_ORDER (critical=0, high=1, medium=2, low=3), added priority\
+  \ parameter to create_task() with validation, updated sort fallback default from\
+  \ 1 to 2.\n2. litehive/cli/parser.py: Added --priority argument with choices=sorted(VALID_TASK_PRIORITIES)\
+  \ to the add subparser.\n3. litehive/cli/tasks.py: Wired args.priority through _cmd_add()\
+  \ to create_task(priority=...) and added priority to the CLI output.\n4. tests/test_task_commands_and_daemon.py:\
+  \ Added 3 tests \u2014 priority high, default medium, and priority critical. All\
+  \ pass.\n\nPre-existing test failures (4 tests in workspace_bootstrap and subagents)\
+  \ are unrelated to this change."
+files_changed: []
+follow_up_tasks: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings:
+- 'Stage `implementing` retrying `claude` after attempt 1/3 due to transient timeout
+  (classification: timeout, policy: claude, backoff: 0.25s).'
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 1870
+hook_results: []
+created_at: '2026-04-07T05:50:11+00:00'

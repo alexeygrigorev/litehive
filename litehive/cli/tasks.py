@@ -60,6 +60,7 @@ def _cmd_add(args):
             model=getattr(args, "model", None),
             retry_limit=getattr(args, "retry_limit", None),
             auto_commit=not args.no_auto_commit,
+            priority=getattr(args, "priority", None),
         )
     except (ValueError, WorkspaceConflictError) as exc:
         print(f"add failed: {exc}")
@@ -67,6 +68,7 @@ def _cmd_add(args):
     print(
         f"Created task {task.id} in {args.workspace / '.litehive' / 'tasks' / (task.id + '-' + task.slug)}"
     )
+    print(f"priority: {task.priority}")
     print(
         f"retry_limit: {task.retry_policy.max_retries if task.retry_policy.max_retries is not None else 'default'}"
     )

@@ -61,13 +61,13 @@ from litehive.models import (
     utcnow,
 )
 
-VALID_TASK_PRIORITIES = {"low", "medium", "high"}
+VALID_TASK_PRIORITIES = {"low", "medium", "high", "critical"}
 VALID_TASK_ENGINES = {"codex", "opencode", "gemini", "copilot", "claude", "goz"}
 VALID_HUMAN_CHECKPOINTS = {"before_acceptance", "before_commit"}
 VALID_PM_COMPLEXITIES = set(get_args(TaskComplexity))
 VALID_PLANNED_EFFORTS = set(get_args(PlannedEffort))
 VALID_TASK_TYPES = {"adapter", "bugfix", "docs", "intake", "refactor", "research", "review"}
-TASK_PRIORITY_ORDER = {"high": 0, "medium": 1, "low": 2}
+TASK_PRIORITY_ORDER = {"critical": 0, "high": 1, "medium": 2, "low": 3}
 
 
 @dataclass(slots=True)
@@ -1598,6 +1598,7 @@ def create_task(
     human_checkpoints: list[str] | None = None,
     auto_commit: bool = True,
     upstream_origin: UpstreamContributionOrigin | None = None,
+    priority: str | None = None,
 ) -> TaskRecord:
     ensure_workspace(root)
     if retry_limit is not None and retry_limit < 0:
@@ -1610,6 +1611,8 @@ def create_task(
         raise ValueError(f"Unsupported PM complexity '{pm_complexity}'")
     if planned_effort is not None and planned_effort not in VALID_PLANNED_EFFORTS:
         raise ValueError(f"Unsupported planned effort '{planned_effort}'")
+    if priority is not None and priority not in VALID_TASK_PRIORITIES:
+        raise ValueError(f"Unsupported priority '{priority}'")
     with _workspace_lock(root):
         state = load_state(root)
         task_id = f"T-{_reserve_next_task_numbers(root, state)[0]:04d}"
@@ -1636,6 +1639,7 @@ def create_task(
                 "commit_message": default_commit_message(task_id, slug),
             },
             upstream_origin=upstream_origin,
+            **({"priority": priority} if priority is not None else {}),
         )
         task = apply_task_template_defaults(task)
 
@@ -2717,7 +2721,7 @@ def _task_selection_key(
     if policy == "fifo":
         return (interrupted_rank, queue_index, task.id)
     if policy == "priority_first":
-        return (TASK_PRIORITY_ORDER.get(task.priority, 1), queue_index, interrupted_rank, task.id)
+        return (TASK_PRIORITY_ORDER.get(task.priority, 2), queue_index, interrupted_rank, task.id)
     if policy == "dependency_aware":
         return (
             queue_index,

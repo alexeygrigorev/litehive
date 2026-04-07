@@ -386,6 +386,23 @@ class TaskExecutionRunner:
                     last_verdict=last_verdict,
                 )
 
+            # Guard: SWE must produce actual changes. If implementing "passes"
+            # with zero files changed and zero tests, reject it back to implementing.
+            if current == "implementing" and target == "testing":
+                if not report.files_changed and (not report.tests or report.tests.get("added", 0) == 0):
+                    reason = (
+                        "SWE reported pass but produced no file changes and no tests. "
+                        "This usually means the agent did not actually write code. "
+                        f"Worktree: {getattr(self, '_execution_root', 'unknown')}. "
+                        f"Report summary: {report.summary}"
+                    )
+                    append_journal(self.root, task, f"[guard] Rejected empty SWE pass: {reason}")
+                    report.verdict = "reject"
+                    report.summary = reason
+                    target = "implementing"
+                    rejections += 1
+                    report.retry_count = rejections
+
             if current == "grooming" and target == "implementing":
                 from litehive.tasks import apply_task_updates_from_report
 

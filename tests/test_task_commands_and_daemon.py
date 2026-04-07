@@ -3494,3 +3494,95 @@ def test_run_task_runs_after_acceptance_runner_hook_on_accept(
         ).read_text(encoding="utf-8")
     )
     assert accepting_report["hook_results"][0]["point"] == "after_pm_acceptance"
+
+
+def test_add_command_with_priority_high(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    ensure_workspace(tmp_path)
+
+    exit_code = _cmd_add(
+        argparse.Namespace(
+            workspace=tmp_path,
+            title="High priority task",
+            goal="",
+            pm_complexity=None,
+            planned_effort=None,
+            acceptance_criteria=None,
+            depends_on=None,
+            human_checkpoint=None,
+            task_type=None,
+            mode=None,
+            engine=None,
+            model=None,
+            retry_limit=None,
+            no_auto_commit=False,
+            priority="high",
+        )
+    )
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    task = get_task(tmp_path, "T-0001")
+    assert task is not None
+    assert task.priority == "high"
+    assert "priority: high" in output
+
+
+def test_add_command_default_priority_is_medium(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    ensure_workspace(tmp_path)
+
+    exit_code = _cmd_add(
+        argparse.Namespace(
+            workspace=tmp_path,
+            title="Default priority task",
+            goal="",
+            pm_complexity=None,
+            planned_effort=None,
+            acceptance_criteria=None,
+            depends_on=None,
+            human_checkpoint=None,
+            task_type=None,
+            mode=None,
+            engine=None,
+            model=None,
+            retry_limit=None,
+            no_auto_commit=False,
+        )
+    )
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    task = get_task(tmp_path, "T-0001")
+    assert task is not None
+    assert task.priority == "medium"
+    assert "priority: medium" in output
+
+
+def test_add_command_with_priority_critical(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    ensure_workspace(tmp_path)
+
+    exit_code = _cmd_add(
+        argparse.Namespace(
+            workspace=tmp_path,
+            title="Critical priority task",
+            goal="",
+            pm_complexity=None,
+            planned_effort=None,
+            acceptance_criteria=None,
+            depends_on=None,
+            human_checkpoint=None,
+            task_type=None,
+            mode=None,
+            engine=None,
+            model=None,
+            retry_limit=None,
+            no_auto_commit=False,
+            priority="critical",
+        )
+    )
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    task = get_task(tmp_path, "T-0001")
+    assert task is not None
+    assert task.priority == "critical"
+    assert "priority: critical" in output

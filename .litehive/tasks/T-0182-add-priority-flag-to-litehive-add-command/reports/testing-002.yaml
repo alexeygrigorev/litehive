@@ -1,0 +1,50 @@
+task_id: T-0182
+step: testing
+verdict: pass
+summary: 'All three acceptance criteria verified:'
+feedback: "All three acceptance criteria verified:\n\n1. `litehive add 'title' --priority\
+  \ high` creates task with priority=high \u2014 VERIFIED: unit test test_add_command_persists_priority_high\
+  \ passes, task.priority == \"high\", CLI output includes \"priority: high\".\n\n\
+  2. Default priority remains medium when --priority omitted \u2014 VERIFIED: unit\
+  \ test test_add_command_defaults_priority_to_medium passes, task.priority == \"\
+  medium\", CLI output includes \"priority: medium\".\n\n3. Invalid priority values\
+  \ show clear error \u2014 VERIFIED: `litehive add \"test\" --priority invalid` exits\
+  \ 2 with \"invalid choice: 'invalid' (choose from critical, high, low, medium)\"\
+  .\n\nAdditional verification:\n- `critical` added to VALID_TASK_PRIORITIES and TASK_PRIORITY_ORDER\
+  \ (critical=0, high=1, medium=2, low=3) \u2014 confirmed by code diff.\n- Sort fallback\
+  \ default updated from 1 to 2 to match new medium position \u2014 correct.\n- `--priority`\
+  \ flag visible in `litehive add --help` with choices {critical, high, low, medium}.\n\
+  - 3 new tests added, 3 passing (uv run pytest -q -k priority \u2192 3 passed in\
+  \ 0.47s).\n- create_task() validates priority against VALID_TASK_PRIORITIES and\
+  \ defaults to \"medium\" when None.\n\nFiles changed: litehive/tasks.py, litehive/cli/parser.py,\
+  \ litehive/cli/tasks.py, tests/test_task_commands_and_daemon.py.\n\nSTAGE_RESULT:\n\
+  {\"verdict\":\"pass\",\"summary\":\"All three acceptance criteria verified via unit\
+  \ tests (3 pass) and end-to-end CLI validation.\",\"files_changed\":[\"litehive/tasks.py\"\
+  ,\"litehive/cli/parser.py\",\"litehive/cli/tasks.py\",\"tests/test_task_commands_and_daemon.py\"\
+  ],\"tests\":{\"added\":3,\"passing\":3},\"warnings\":[],\"follow_up_tasks\":[],\"\
+  acceptance_criteria\":[\"litehive add title --priority high creates task with priority=high\
+  \ \u2014 VERIFIED\",\"litehive add title without --priority defaults to priority=medium\
+  \ \u2014 VERIFIED\",\"Invalid priority values show clear argparse error \u2014 VERIFIED\"\
+  ,\"critical added to VALID_TASK_PRIORITIES and TASK_PRIORITY_ORDER \u2014 VERIFIED\"\
+  ],\"task_update\":{}}"
+files_changed: []
+follow_up_tasks: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 50
+hook_results: []
+created_at: '2026-04-07T06:06:35+00:00'

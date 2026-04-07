@@ -391,6 +391,11 @@ def build_parser():
         choices=["implementation", "tasks"],
         help="Task creation mode; defaults to `tasks` when `--task-type` is set, otherwise `implementation`",
     )
+    add.add_argument(
+        "--priority",
+        choices=sorted(VALID_TASK_PRIORITIES),
+        help="Task priority; defaults to medium when omitted",
+    )
     add.add_argument("--engine", choices=ENGINE_CHOICES, help="Preferred engine for the task")
     add.add_argument(
         "--model",
