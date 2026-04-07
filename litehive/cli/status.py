@@ -132,6 +132,79 @@ def _cmd_queue(args):
     return 0
 
 
+def _cmd_list(args):
+    ensure_workspace(args.workspace)
+    tasks = list_tasks(args.workspace)
+    show_all = getattr(args, "all", False)
+    status_filter = getattr(args, "status", None)
+    pipeline_filter = getattr(args, "pipeline_status", None)
+    engine_filter = getattr(args, "engine", None)
+
+    filtered = []
+    for task in tasks:
+        if not show_all and task.status == "done":
+            continue
+        if status_filter and task.status != status_filter:
+            continue
+        if pipeline_filter and task.pipeline_status != pipeline_filter:
+            continue
+        if engine_filter and task.engine != engine_filter:
+            continue
+        filtered.append(task)
+
+    for task in filtered:
+        print(f"{task.id} [{task.status}/{task.pipeline_status}] {task.title}")
+    return 0
+
+
+def _cmd_show(args):
+    ensure_workspace(args.workspace)
+    try:
+        task = require_task(args.workspace, args.task_id)
+    except ValueError:
+        print(f"task not found: {args.task_id}")
+        return 1
+    print(f"id: {task.id}")
+    print(f"title: {task.title}")
+    print(f"status: {task.status}")
+    print(f"pipeline_status: {task.pipeline_status}")
+    print(f"priority: {task.priority}")
+    print(f"engine: {task.engine or '-'}")
+    print(f"model: {task.model or '-'}")
+    print(f"task_type: {task.task_type or '-'}")
+    print(f"mode: {task.mode}")
+    print(f"pipeline_mode: {task.pipeline_mode}")
+    print(f"depends_on: {', '.join(task.depends_on) if task.depends_on else '-'}")
+    print(f"created_at: {task.created_at}")
+    print(f"updated_at: {task.updated_at}")
+    print(f"goal: {task.goal or '-'}")
+    if task.acceptance_criteria:
+        print("acceptance_criteria:")
+        for criterion in task.acceptance_criteria:
+            print(f"  - {criterion}")
+    else:
+        print("acceptance_criteria: -")
+    if task.constraints:
+        print("constraints:")
+        for constraint in task.constraints:
+            print(f"  - {constraint}")
+    else:
+        print("constraints: -")
+    if task.plan:
+        print("plan:")
+        for step in task.plan:
+            print(f"  - {step}")
+    else:
+        print("plan: -")
+    print(f"pm_complexity: {task.pm_complexity or '-'}")
+    print(f"planned_effort: {task.planned_effort or '-'}")
+    if task.human_checkpoints:
+        print(f"human_checkpoints: {', '.join(task.human_checkpoints)}")
+    else:
+        print("human_checkpoints: -")
+    return 0
+
+
 def _cmd_repair(args):
     ensure_workspace(args.workspace)
     try:

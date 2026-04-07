@@ -871,6 +871,40 @@ def build_parser():
         help="Repository root containing .litehive/",
     )
 
+    list_cmd = subparsers.add_parser("list", help="List tasks in compact format")
+    list_cmd.add_argument(
+        "--all",
+        action="store_true",
+        help="Include done tasks in the output",
+    )
+    list_cmd.add_argument(
+        "--status",
+        help="Filter tasks by status value",
+    )
+    list_cmd.add_argument(
+        "--pipeline-status",
+        help="Filter tasks by pipeline stage",
+    )
+    list_cmd.add_argument(
+        "--engine",
+        help="Filter tasks by engine",
+    )
+    list_cmd.add_argument(
+        "--workspace",
+        type=Path,
+        default=Path.cwd(),
+        help="Repository root containing .litehive/",
+    )
+
+    show = subparsers.add_parser("show", help="Show full details for a single task")
+    show.add_argument("task_id", help="Task id to display")
+    show.add_argument(
+        "--workspace",
+        type=Path,
+        default=Path.cwd(),
+        help="Repository root containing .litehive/",
+    )
+
     report = subparsers.add_parser("report", help="Submit a stage verdict for the active task")
     report.add_argument(
         "--verdict", required=True, choices=["pass", "fail", "reject", "blocked", "comment"]
