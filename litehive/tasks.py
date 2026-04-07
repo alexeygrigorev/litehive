@@ -4258,13 +4258,13 @@ def requeue_task(root: Path, task_id: str, *, front: bool = False) -> TaskRecord
         task = require_task(root, task_id)
         state = load_state(root)
         _ensure_future_task_mutation_allowed(root, [task.id], state=state)
-        if task.status not in {"flagged", "parked", *CLOSED_TASK_STATUSES}:
-            raise ValueError(f"Task {task.id} is not flagged, parked, or closed")
+        if task.status not in {"flagged", "merge_failed", "parked", *CLOSED_TASK_STATUSES}:
+            raise ValueError(f"Task {task.id} is not flagged, merge_failed, parked, or closed")
         _reset_task_for_recovery(
             task,
             status="queued",
             pipeline_status=implementation_entry_stage(task),
-            clear_last_outcome=task.status not in {"flagged", "parked"},
+            clear_last_outcome=task.status not in {"flagged", "merge_failed", "parked"},
         )
         state.queue = [item for item in state.queue if item != task.id]
         if front:
@@ -4285,18 +4285,20 @@ def resume_task(root: Path, task_id: str, *, front: bool = False) -> TaskRecord:
         task = require_task(root, task_id)
         state = load_state(root)
         _ensure_future_task_mutation_allowed(root, [task.id], state=state)
-        if task.status not in {"flagged", *CLOSED_TASK_STATUSES, *RESUMABLE_TASK_STATUSES}:
-            raise ValueError(f"Task {task.id} is not interrupted, parked, flagged, or closed")
+        if task.status not in {"flagged", "merge_failed", *CLOSED_TASK_STATUSES, *RESUMABLE_TASK_STATUSES}:
+            raise ValueError(f"Task {task.id} is not interrupted, parked, flagged, merge_failed, or closed")
         if task.pipeline_status in {"backlog", "done"}:
             raise ValueError(f"Task {task.id} has no resumable stage")
         resumed_stage = task.pipeline_status
+        if resumed_stage == "merge_failed":
+            resumed_stage = "commit_to_git"
         if resumed_stage in {"implementing", "testing", "accepting"}:
             resumed_stage = reroute_stage_for_acceptance_criteria(task)
         _reset_task_for_recovery(
             task,
             status="queued",
             pipeline_status=resumed_stage,
-            clear_last_outcome=task.status not in {"interrupted", "parked", "flagged"},
+            clear_last_outcome=task.status not in {"interrupted", "parked", "flagged", "merge_failed"},
             preserve_continuation_handoff=task.status in {"interrupted", "parked"},
         )
         state.queue = [item for item in state.queue if item != task.id]
@@ -4318,8 +4320,8 @@ def abandon_task(root: Path, task_id: str) -> TaskRecord:
         task = require_task(root, task_id)
         state = load_state(root)
         _ensure_future_task_mutation_allowed(root, [task.id], state=state)
-        if task.status not in {"flagged", *CLOSED_TASK_STATUSES, *RESUMABLE_TASK_STATUSES}:
-            raise ValueError(f"Task {task.id} is not interrupted, parked, flagged, or closed")
+        if task.status not in {"flagged", "merge_failed", *CLOSED_TASK_STATUSES, *RESUMABLE_TASK_STATUSES}:
+            raise ValueError(f"Task {task.id} is not interrupted, parked, flagged, merge_failed, or closed")
         task.status = "cancelled"
         task.runtime.execution_status = "cancelled"
         task.runtime.run_started_at = None

@@ -697,6 +697,51 @@ class TaskExecutionRunner:
                     last_verdict=last_verdict,
                 )
 
+            if target == "merge_failed":
+                reason = report.summary or f"{current} merge failed"
+                terminal = self._terminal_report(
+                    task,
+                    step=report.step,
+                    verdict=report.verdict,
+                    summary=report.summary,
+                    outcome="flagged",
+                    outcome_reason_code="merge_conflict",
+                    reason=reason,
+                    retry_count=report.retry_count,
+                    warnings=report.warnings,
+                    feedback=report.feedback,
+                    files_changed=report.files_changed,
+                    tests=report.tests,
+                    resource_limit_event=report.resource_limit_event,
+                    hook_results=report.hook_results,
+                    failure_classification=report.failure_classification or "merge_conflict",
+                    failure_diagnostics=report.failure_diagnostics,
+                )
+                report = terminal
+                task.status = "merge_failed"
+                task.pipeline_status = "merge_failed"
+                _apply_task_outcome(
+                    task,
+                    kind="flagged",
+                    stage=current,
+                    reason_code="merge_conflict",
+                    reason=reason,
+                    retry_count=report.retry_count,
+                    retry_limit=self.max_retries,
+                    retry_source=self.retry_source,
+                    failure_classification=report.failure_classification,
+                    failure_diagnostics=report.failure_diagnostics,
+                )
+                _record_unmerged_worktree(self.root, task)
+                self._write_report(task, report, steps)
+                _apply_stage_finished(task, report)
+                return self._finish_run(
+                    task,
+                    final_status="merge_failed",
+                    steps=steps,
+                    last_verdict=last_verdict,
+                )
+
             if target == "flagged":
                 outcome = "blocked" if report.verdict == "blocked" else "flagged"
                 reason = report.summary or f"{current} ended with `{report.verdict}`"
@@ -905,3 +950,21 @@ def _human_checkpoint_reason(task: TaskRecord, target: str) -> str | None:
     if target == "commit_to_git" and "before_commit" in task.human_checkpoints:
         return "before_commit"
     return None
+
+
+def _record_unmerged_worktree(root: Path, task: TaskRecord) -> None:
+    """Record an unmerged worktree in state.yaml for later resolution."""
+    from litehive.models import UnmergedWorktree
+    from litehive.tasks import get_task_worktree_path, load_state, save_state
+
+    worktree_path = get_task_worktree_path(task)
+    if not worktree_path:
+        return
+    state = load_state(root)
+    for entry in state.unmerged_worktrees:
+        if entry.task_id == task.id:
+            return  # already tracked
+    state.unmerged_worktrees.append(
+        UnmergedWorktree(task_id=task.id, worktree_path=worktree_path)
+    )
+    save_state(root, state)

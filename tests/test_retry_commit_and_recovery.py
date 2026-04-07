@@ -1822,7 +1822,7 @@ def test_run_next_task_preserves_future_task_added_during_commit_failure(
     assert summary.result is not None
     # The runner may launch a recovery agent after the commit failure,
     # which can succeed and re-queue the task.
-    assert summary.result.final_status in ("flagged", "queued")
+    assert summary.result.final_status in ("flagged", "merge_failed", "queued")
     state = load_state(tmp_path)
     assert state.active_task_id is None
     assert "T-0002" in state.queue
@@ -2031,7 +2031,7 @@ def test_run_next_task_preserves_git_commit_failure_diagnostics(
     # The runner may launch a recovery agent after the commit failure.
     # The fake SubagentManager.run returns a pass, which may cause the
     # runner to re-queue instead of flagging.
-    assert summary.result.final_status in ("flagged", "queued")
+    assert summary.result.final_status in ("flagged", "merge_failed", "queued")
 
 
 def test_attempt_stage_recovery_launches_agent_for_litehive_traceback_with_no_source_repo(

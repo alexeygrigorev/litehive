@@ -126,6 +126,7 @@ def _commit_to_git_report(
             step="commit_to_git",
             verdict="fail",
             summary="CommitToGit failed: merge did not produce new commits on main",
+            failure_classification="merge_conflict",
         )
 
     # Step 4: delete worktree (merge confirmed)

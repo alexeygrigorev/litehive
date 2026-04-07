@@ -1566,7 +1566,7 @@ def test_requeue_command_requires_flagged_or_cancelled(
     output = capsys.readouterr().out
 
     assert exit_code == 1
-    assert "is not flagged, parked, or closed" in output
+    assert "is not flagged, merge_failed, parked, or closed" in output
 
 def test_requeue_task_rolls_back_when_atomic_state_persist_fails(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
