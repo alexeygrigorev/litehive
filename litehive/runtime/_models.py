@@ -1,6 +1,7 @@
 """Model and engine resolution, retry policy, and continuation handoff."""
 
 import re
+from datetime import datetime, timezone
 from pathlib import Path
 
 from litehive.config import ExecutionRetryPolicy, LitehiveConfig
@@ -10,6 +11,32 @@ from litehive.tasks import mark_engine_switch, set_task_continuation_handoff
 
 from ._budget import _engine_attempt_order
 from ._types import ResolvedExecutionRetryPolicy
+
+
+def is_engine_frozen(config: LitehiveConfig, engine_name: str) -> bool:
+    """Return True if the engine is currently frozen (freeze datetime in the future)."""
+    freeze_str = config.engine_freeze.get(engine_name)
+    if not freeze_str:
+        return False
+    try:
+        freeze_dt = datetime.fromisoformat(freeze_str.replace("Z", "+00:00"))
+    except (ValueError, AttributeError):
+        return False
+    return datetime.now(timezone.utc) < freeze_dt
+
+
+def active_engine_freezes(config: LitehiveConfig) -> dict[str, datetime]:
+    """Return currently active freezes as {engine: freeze_utc_datetime}."""
+    now = datetime.now(timezone.utc)
+    result: dict[str, datetime] = {}
+    for engine_name, freeze_str in config.engine_freeze.items():
+        try:
+            freeze_dt = datetime.fromisoformat(freeze_str.replace("Z", "+00:00"))
+        except (ValueError, AttributeError):
+            continue
+        if now < freeze_dt:
+            result[engine_name] = freeze_dt
+    return result
 
 
 def workspace_model_for_engine(config: LitehiveConfig, engine_name: str) -> str | None:
@@ -59,10 +86,13 @@ def resolve_engine_attempt_order(
     *,
     engine_override: str | None = None,
 ) -> list[str]:
-    return _engine_attempt_order(
+    order = _engine_attempt_order(
         resolve_engine_plan(task, config, engine_override=engine_override),
         config.engine_fallbacks,
     )
+    if config.engine_freeze:
+        order = [e for e in order if not is_engine_frozen(config, e)]
+    return order
 
 
 def resolve_engine_plan(

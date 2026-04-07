@@ -36,6 +36,8 @@ from ._models import (
     _retry_backoff_seconds,
     _role_for_step,
     _set_continuation_handoff,
+    active_engine_freezes,
+    is_engine_frozen,
     resolve_engine_attempt_order,
     resolve_engine_name,
     resolve_engine_plan,
@@ -110,6 +112,8 @@ __all__ = [
     # budget
     "workspace_model_for_engine",
     # models
+    "active_engine_freezes",
+    "is_engine_frozen",
     "resolve_engine_attempt_order",
     "resolve_engine_name",
     "resolve_engine_plan",

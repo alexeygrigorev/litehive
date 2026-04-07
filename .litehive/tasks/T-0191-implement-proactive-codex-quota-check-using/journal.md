@@ -71,3 +71,12 @@ Stage `testing` retrying `claude` after attempt 1/3 due to transient timeout (cl
 
 ## 2026-04-07T03:47:00+00:00
 Stage `testing` retrying `claude` after attempt 2/3 due to transient timeout (classification: timeout, policy: claude, backoff: 0.50s).
+
+## 2026-04-07T03:48:04+00:00
+Merge conflict on 1 file(s). Launching merge agent.
+
+## 2026-04-07T03:48:56+00:00
+CommitToGit complete. Commit: 4c2cf4c13778c7ef34bc7c6c354fc89123a37001
+
+## 2026-04-07T03:49:01+00:00
+Pool stopped: continue_or_rollback_required. This task finished with checkpoint commit `4c2cf4c13778c7ef34bc7c6c354fc89123a37001` and unrelated queued work remains. Either continue with a new `litehive run`/pool run or roll back the checkpoint first.

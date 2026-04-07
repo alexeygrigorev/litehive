@@ -1,5 +1,6 @@
 from litehive.config import ensure_workspace, load_config
 from litehive.observability import load_engine_monitoring, render_engine_monitoring_lines, render_task_summary
+from litehive.runtime._models import active_engine_freezes
 from litehive.tasks import (
     WorkspaceConflictError,
     list_tasks,
@@ -29,6 +30,11 @@ def _cmd_status(args):
     print(f"workspace: {args.workspace}")
     print(f"status_read_mode: {'fast' if fast_mode else 'full'}")
     print(f"default_engine: {config.default_engine}")
+    freezes = active_engine_freezes(config)
+    if freezes:
+        for engine_name, until_dt in sorted(freezes.items()):
+            local_until = until_dt.astimezone().strftime("%Y-%m-%d %H:%M %Z")
+            print(f"engine_frozen: {engine_name} until {local_until}")
     print(f"litehive_source_path: {config.litehive_source_path or '-'}")
     print(f"mode: {state.mode}")
     print(f"active_task_id: {state.active_task_id}")

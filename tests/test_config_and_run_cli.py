@@ -32,7 +32,7 @@ def test_engine_command_parser_accepts_workspace_switch_args() -> None:
     args = parser.parse_args(["engine", "opencode", "--workspace", "/tmp/demo"])
 
     assert args.command == "engine"
-    assert args.engine == "opencode"
+    assert args.engine_action == "opencode"
     assert args.workspace == Path("/tmp/demo")
 
 

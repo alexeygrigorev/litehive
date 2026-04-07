@@ -221,12 +221,23 @@ def build_parser():
 
     engine = subparsers.add_parser(
         "engine",
-        help="Switch the workspace default engine",
+        help="Manage the workspace default engine",
     )
     engine.add_argument(
-        "engine",
-        choices=ENGINE_CHOICES,
-        help="Workspace default engine to persist",
+        "engine_action",
+        choices=[*ENGINE_CHOICES, "set", "freeze", "unfreeze"],
+        help="Engine name (shorthand for 'set') or subcommand: set, freeze, unfreeze",
+    )
+    engine.add_argument(
+        "engine_name",
+        nargs="?",
+        default=None,
+        help="Engine name (required for set/freeze/unfreeze subcommands)",
+    )
+    engine.add_argument(
+        "--until",
+        default=None,
+        help="Freeze until this date/datetime (local timezone, e.g. 2026-04-08 or '2026-04-08 09:47')",
     )
     engine.add_argument(
         "--workspace",

@@ -136,6 +136,9 @@ class LitehiveConfig:
             process count) applied to subagent execution sandboxes.
         external_engine_sandbox: Container-based sandbox configuration
             for external engine isolation.
+        engine_freeze: Maps engine names to UTC ISO-8601 datetime
+            strings. A frozen engine is skipped during selection and
+            fallback until the freeze expires.
         engine_fallbacks: Ordered fallback engines when the primary
             engine for a task is unavailable due to quota, budget, or
             transient failures.
@@ -197,6 +200,7 @@ class LitehiveConfig:
     external_engine_sandbox: ExternalEngineSandboxConfig = field(
         default_factory=ExternalEngineSandboxConfig
     )
+    engine_freeze: dict[str, str] = field(default_factory=dict)
     engine_fallbacks: dict[str, list[str]] = field(
         default_factory=lambda: {
             "codex": ["opencode", "gemini", "copilot"],
@@ -224,6 +228,9 @@ class LitehiveConfig:
             self.engine_costs,
             field_name="engine_costs",
         )
+        self.engine_freeze = {
+            str(k): str(v) for k, v in self.engine_freeze.items()
+        }
         self.engine_fallbacks = {
             engine_name: _normalize_engine_sequence(
                 list(fallbacks),
