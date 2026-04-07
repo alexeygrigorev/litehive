@@ -7,13 +7,13 @@ engine: null
 model: null
 mode: implementation
 pipeline_mode: full
-status: in_progress
-pipeline_status: commit_to_git
+status: done
+pipeline_status: done
 priority: medium
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-06T19:35:26+00:00'
-updated_at: '2026-04-07T04:33:04+00:00'
+updated_at: '2026-04-07T04:33:06+00:00'
 goal: 'Add ''litehive engine freeze codex --until 2026-04-08'' to temporarily disable
   an engine. Frozen engines are skipped during engine selection and fallback. This
   is a manual step toward automatic quota-based engine switching. Store frozen state
@@ -62,7 +62,7 @@ subagents:
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0190 add-engine-freeze-cli-temporarily-disable-an'
-  commit_sha: null
+  commit_sha: 453b3ab5942c87d9366d03dedd8f9822594c0333
   checkpoint_base_sha: null
   checkpoint_attempts: 0
   rolled_back_checkpoint_attempt: null
