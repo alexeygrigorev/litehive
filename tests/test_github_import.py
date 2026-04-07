@@ -5,7 +5,7 @@ import json
 import subprocess
 import sys
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 
 import pytest
 import yaml
@@ -14,171 +14,182 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from litehive.config import ensure_workspace
 from litehive.models import GitHubOrigin
-from litehive.tasks import create_task, list_tasks, get_task
-
+from litehive.tasks import create_task, list_tasks
 from litehive.cli.github_import import (
     GhAuthError,
     GhNotFoundError,
-    _check_gh_auth,
+    LABEL_TO_PRIORITY,
+    LABEL_TO_TASK_TYPE,
     _cmd_import_issue,
     _cmd_import_issues,
-    _detect_repo,
-    _fetch_issue,
-    _fetch_open_issues,
-    _find_existing_task_for_issue,
-    _import_single_issue,
-    _map_labels,
-    _parse_issue_ref,
-    _run_gh,
+    check_gh_auth,
+    detect_repo_from_remote,
+    fetch_issue,
+    fetch_open_issues,
+    find_existing_task_for_issue,
+    import_single_issue,
+    map_labels,
+    parse_issue_ref,
+    run_gh,
 )
+from tests.workspace_helpers import _init_git_repo
 
 
-# ── Unit tests for helpers ───────────────────────────────────────────
+@pytest.fixture
+def workspace(tmp_path):
+    _init_git_repo(tmp_path)
+    ensure_workspace(tmp_path)
+    return tmp_path
+
+
+# ── parse_issue_ref ──────────────────────────────────────────────────────
 
 
 def test_parse_issue_ref_url():
-    repo, num = _parse_issue_ref("https://github.com/owner/repo/issues/42")
+    repo, num = parse_issue_ref("https://github.com/owner/repo/issues/42")
     assert repo == "owner/repo"
     assert num == 42
 
 
 def test_parse_issue_ref_number():
-    repo, num = _parse_issue_ref("7")
+    repo, num = parse_issue_ref("7")
     assert repo is None
     assert num == 7
 
 
 def test_parse_issue_ref_invalid():
-    with pytest.raises(ValueError, match="Cannot parse issue reference"):
-        _parse_issue_ref("not-a-ref")
+    with pytest.raises(ValueError, match="Cannot parse"):
+        parse_issue_ref("not-a-ref")
+
+
+# ── map_labels ───────────────────────────────────────────────────────────
 
 
 def test_map_labels_bug():
-    task_type, priority = _map_labels([{"name": "bug"}])
+    task_type, priority = map_labels(["bug"])
     assert task_type == "bugfix"
     assert priority is None
 
 
-def test_map_labels_priority():
-    task_type, priority = _map_labels([{"name": "priority: high"}])
+def test_map_labels_documentation():
+    task_type, priority = map_labels(["documentation"])
+    assert task_type == "docs"
+
+
+def test_map_labels_enhancement():
+    task_type, priority = map_labels(["enhancement"])
+    assert task_type == "refactor"
+
+
+def test_map_labels_question():
+    task_type, priority = map_labels(["question"])
+    assert task_type == "research"
+
+
+def test_map_labels_priority_high():
+    task_type, priority = map_labels(["priority: high"])
     assert task_type is None
     assert priority == "high"
 
 
+def test_map_labels_priority_critical():
+    _, priority = map_labels(["priority: critical"])
+    assert priority == "critical"
+
+
+def test_map_labels_priority_low():
+    _, priority = map_labels(["priority: low"])
+    assert priority == "low"
+
+
 def test_map_labels_combined():
-    task_type, priority = _map_labels([
-        {"name": "documentation"},
-        {"name": "priority: critical"},
-        {"name": "enhancement"},  # should not override docs
-    ])
+    task_type, priority = map_labels(["bug", "priority: high"])
+    assert task_type == "bugfix"
+    assert priority == "high"
+
+
+def test_map_labels_combined_first_wins():
+    task_type, priority = map_labels(["documentation", "priority: critical", "enhancement"])
     assert task_type == "docs"
     assert priority == "critical"
 
 
 def test_map_labels_empty():
-    task_type, priority = _map_labels([])
+    task_type, priority = map_labels([])
     assert task_type is None
     assert priority is None
 
 
-# ── gh CLI wrapper tests ─────────────────────────────────────────────
+def test_map_labels_unknown():
+    task_type, priority = map_labels(["wontfix", "good first issue"])
+    assert task_type is None
+    assert priority is None
 
 
-def test_run_gh_missing(monkeypatch):
-    def fake_run(*args, **kwargs):
-        raise FileNotFoundError()
-    monkeypatch.setattr(subprocess, "run", fake_run)
-    with pytest.raises(GhNotFoundError, match="gh CLI not found"):
-        _run_gh("auth", "status")
+# ── detect_repo_from_remote ──────────────────────────────────────────────
 
 
-def test_check_gh_auth_failure(monkeypatch):
-    def fake_run(*args, **kwargs):
-        return subprocess.CompletedProcess(args=args, returncode=1, stdout="", stderr="not logged in")
-    monkeypatch.setattr(subprocess, "run", fake_run)
-    with pytest.raises(GhAuthError, match="not authenticated"):
-        _check_gh_auth()
+def test_detect_repo_ssh():
+    mock_result = MagicMock(returncode=0, stdout="git@github.com:owner/repo.git\n")
+    with patch("litehive.cli.github_import.subprocess.run", return_value=mock_result):
+        assert detect_repo_from_remote() == "owner/repo"
 
 
-def test_detect_repo_ssh(monkeypatch):
-    def fake_run(cmd, **kwargs):
-        return subprocess.CompletedProcess(
-            args=cmd, returncode=0,
-            stdout="git@github.com:alexeygrigorev/litehive.git\n", stderr="",
-        )
-    monkeypatch.setattr(subprocess, "run", fake_run)
-    assert _detect_repo(Path("/tmp")) == "alexeygrigorev/litehive"
+def test_detect_repo_https():
+    mock_result = MagicMock(returncode=0, stdout="https://github.com/owner/repo.git\n")
+    with patch("litehive.cli.github_import.subprocess.run", return_value=mock_result):
+        assert detect_repo_from_remote() == "owner/repo"
 
 
-def test_detect_repo_https(monkeypatch):
-    def fake_run(cmd, **kwargs):
-        return subprocess.CompletedProcess(
-            args=cmd, returncode=0,
-            stdout="https://github.com/owner/repo.git\n", stderr="",
-        )
-    monkeypatch.setattr(subprocess, "run", fake_run)
-    assert _detect_repo(Path("/tmp")) == "owner/repo"
+def test_detect_repo_https_no_git_suffix():
+    mock_result = MagicMock(returncode=0, stdout="https://github.com/owner/repo\n")
+    with patch("litehive.cli.github_import.subprocess.run", return_value=mock_result):
+        assert detect_repo_from_remote() == "owner/repo"
 
 
-def test_detect_repo_no_remote(monkeypatch):
-    def fake_run(cmd, **kwargs):
-        return subprocess.CompletedProcess(
-            args=cmd, returncode=1, stdout="", stderr="fatal: no remote",
-        )
-    monkeypatch.setattr(subprocess, "run", fake_run)
-    with pytest.raises(ValueError, match="Could not detect"):
-        _detect_repo(Path("/tmp"))
+def test_detect_repo_no_remote():
+    mock_result = MagicMock(returncode=1, stdout="", stderr="fatal: No such remote")
+    with patch("litehive.cli.github_import.subprocess.run", return_value=mock_result):
+        with pytest.raises(RuntimeError, match="No git remote"):
+            detect_repo_from_remote()
 
 
-# ── Integration tests with workspace ─────────────────────────────────
+# ── run_gh / check_gh_auth ──────────────────────────────────────────────
 
 
-@pytest.fixture
-def ws(tmp_path):
-    """Create an initialized litehive workspace."""
-    ensure_workspace(tmp_path)
-    return tmp_path
+def test_run_gh_missing():
+    with patch(
+        "litehive.cli.github_import.subprocess.run",
+        side_effect=FileNotFoundError("No such file"),
+    ):
+        with pytest.raises(GhNotFoundError, match="gh CLI not found"):
+            run_gh(["auth", "status"])
 
 
-SAMPLE_ISSUE = {
-    "number": 42,
-    "title": "Fix login timeout",
-    "body": "The login page times out after 10 seconds.",
-    "labels": [{"name": "bug"}, {"name": "priority: high"}],
-    "url": "https://github.com/owner/repo/issues/42",
-}
+def test_run_gh_failure():
+    mock_result = MagicMock(returncode=1, stderr="some error")
+    with patch("litehive.cli.github_import.subprocess.run", return_value=mock_result):
+        with pytest.raises(RuntimeError, match="gh command failed"):
+            run_gh(["issue", "view", "1"])
 
 
-def test_import_single_issue_creates_task(ws):
-    action, task_id = _import_single_issue(ws, "owner/repo", SAMPLE_ISSUE)
-    assert action == "created"
-    assert task_id is not None
-
-    task = get_task(ws, task_id)
-    assert task.title == "Fix login timeout"
-    assert "login page times out" in task.goal
-    assert task.task_type == "bugfix"
-    assert task.priority == "high"
-    assert task.github_origin is not None
-    assert task.github_origin.repo == "owner/repo"
-    assert task.github_origin.issue_number == 42
-    assert task.github_origin.issue_url == "https://github.com/owner/repo/issues/42"
+def test_check_gh_auth_failure():
+    mock_result = MagicMock(returncode=1, stderr="not logged in")
+    with patch("litehive.cli.github_import.subprocess.run", return_value=mock_result):
+        with pytest.raises(GhAuthError, match="not authenticated"):
+            check_gh_auth()
 
 
-def test_import_duplicate_skipped(ws):
-    action1, tid1 = _import_single_issue(ws, "owner/repo", SAMPLE_ISSUE)
-    assert action1 == "created"
-
-    action2, tid2 = _import_single_issue(ws, "owner/repo", SAMPLE_ISSUE)
-    assert action2 == "skipped"
-    assert tid2 == tid1
+# ── duplicate detection ──────────────────────────────────────────────────
 
 
-def test_find_existing_task_for_issue(ws):
-    assert _find_existing_task_for_issue(ws, "owner/repo", 42) is None
+def test_find_existing_task_none(workspace):
+    assert find_existing_task_for_issue(workspace, "owner/repo", 1) is None
 
-    create_task(
-        ws,
+
+def test_find_existing_task_found(workspace):
+    task = create_task(
+        workspace,
         title="Test task",
         github_origin=GitHubOrigin(
             repo="owner/repo",
@@ -187,28 +198,26 @@ def test_find_existing_task_for_issue(ws):
         ),
         auto_commit=False,
     )
-    result = _find_existing_task_for_issue(ws, "owner/repo", 42)
-    assert result is not None
-    assert result.startswith("T-")
+    assert find_existing_task_for_issue(workspace, "owner/repo", 42) == task.id
 
 
-def test_find_existing_task_different_repo(ws):
+def test_find_existing_task_different_repo(workspace):
     create_task(
-        ws,
+        workspace,
         title="Test task",
         github_origin=GitHubOrigin(
-            repo="other/repo",
+            repo="owner/repo",
             issue_number=42,
-            issue_url="https://github.com/other/repo/issues/42",
+            issue_url="https://github.com/owner/repo/issues/42",
         ),
         auto_commit=False,
     )
-    assert _find_existing_task_for_issue(ws, "owner/repo", 42) is None
+    assert find_existing_task_for_issue(workspace, "other/repo", 42) is None
 
 
-def test_github_origin_persisted_in_yaml(ws):
+def test_github_origin_persisted_in_yaml(workspace):
     task = create_task(
-        ws,
+        workspace,
         title="Test persistence",
         github_origin=GitHubOrigin(
             repo="owner/repo",
@@ -217,150 +226,215 @@ def test_github_origin_persisted_in_yaml(ws):
         ),
         auto_commit=False,
     )
-    task_dir = ws / ".litehive" / "tasks" / f"{task.id}-{task.slug}"
+    task_dir = workspace / ".litehive" / "tasks" / f"{task.id}-{task.slug}"
     data = yaml.safe_load((task_dir / "task.yaml").read_text())
     assert data["github_origin"]["repo"] == "owner/repo"
     assert data["github_origin"]["issue_number"] == 99
 
 
-# ── CLI command tests ────────────────────────────────────────────────
+# ── import_single_issue ─────────────────────────────────────────────────
 
 
-def _make_gh_mock(monkeypatch, issues=None, single_issue=None, auth_ok=True):
-    """Set up subprocess.run mock for gh CLI calls."""
-    def fake_run(cmd, **kwargs):
-        if not isinstance(cmd, list):
-            cmd = list(cmd)
-        prog = cmd[0] if cmd else ""
-        if prog == "gh":
-            subcmd = cmd[1] if len(cmd) > 1 else ""
-            if subcmd == "auth":
-                rc = 0 if auth_ok else 1
-                return subprocess.CompletedProcess(
-                    args=cmd, returncode=rc, stdout="", stderr="" if auth_ok else "not logged in",
-                )
-            if subcmd == "issue":
-                action = cmd[2] if len(cmd) > 2 else ""
-                if action == "view" and single_issue is not None:
-                    return subprocess.CompletedProcess(
-                        args=cmd, returncode=0, stdout=json.dumps(single_issue), stderr="",
-                    )
-                if action == "list" and issues is not None:
-                    return subprocess.CompletedProcess(
-                        args=cmd, returncode=0, stdout=json.dumps(issues), stderr="",
-                    )
-            return subprocess.CompletedProcess(
-                args=cmd, returncode=1, stdout="", stderr="unknown gh command",
+def _mock_gh_issue_view(issue_data):
+    """Create a mock for subprocess.run that returns issue JSON for gh issue view."""
+    auth_result = MagicMock(returncode=0, stdout="Logged in\n")
+    view_result = MagicMock(returncode=0, stdout=json.dumps(issue_data))
+
+    def side_effect(cmd, **kwargs):
+        if cmd[0] == "gh":
+            if "auth" in cmd:
+                return auth_result
+            return view_result
+        # git commands pass through
+        raise FileNotFoundError("not mocked")
+
+    return side_effect
+
+
+def test_import_single_issue_creates_task(workspace):
+    issue_data = {
+        "number": 10,
+        "title": "Fix the login page",
+        "body": "The login page is broken when...",
+        "labels": [{"name": "bug"}],
+        "url": "https://github.com/owner/repo/issues/10",
+    }
+    with patch("litehive.cli.github_import.run_gh", return_value=json.dumps(issue_data)):
+        with patch("litehive.cli.github_import.fetch_issue", return_value=issue_data):
+            task_id, status = import_single_issue(workspace, "owner/repo", 10)
+
+    assert status == "created"
+    tasks = list_tasks(workspace, include_runtime=False)
+    task = next(t for t in tasks if t.id == task_id)
+    assert task.title == "Fix the login page"
+    assert task.goal == "The login page is broken when..."
+    assert task.task_type == "bugfix"
+    assert task.github_origin is not None
+    assert task.github_origin.repo == "owner/repo"
+    assert task.github_origin.issue_number == 10
+
+
+def test_import_duplicate_skipped(workspace):
+    create_task(
+        workspace,
+        title="Existing task",
+        github_origin=GitHubOrigin(
+            repo="owner/repo",
+            issue_number=10,
+            issue_url="https://github.com/owner/repo/issues/10",
+        ),
+        auto_commit=False,
+    )
+    task_id, status = import_single_issue(workspace, "owner/repo", 10)
+    assert status == "skipped"
+
+
+# ── CLI command: import-issue ────────────────────────────────────────────
+
+
+def _make_import_issue_args(workspace, issue_ref, repo=None):
+    args = argparse.Namespace()
+    args.workspace = workspace
+    args.issue_ref = issue_ref
+    args.repo = repo
+    return args
+
+
+def test_cmd_import_issue_from_url(workspace, capsys):
+    issue_data = {
+        "number": 5,
+        "title": "Add dark mode",
+        "body": "We need dark mode support",
+        "labels": [{"name": "enhancement"}],
+        "url": "https://github.com/owner/repo/issues/5",
+    }
+    with patch("litehive.cli.github_import.check_gh_auth"):
+        with patch("litehive.cli.github_import.fetch_issue", return_value=issue_data):
+            args = _make_import_issue_args(
+                workspace, "https://github.com/owner/repo/issues/5"
             )
-        if prog == "git":
-            return subprocess.CompletedProcess(
-                args=cmd, returncode=0,
-                stdout="https://github.com/owner/repo.git\n", stderr="",
+            ret = _cmd_import_issue(args)
+
+    assert ret == 0
+    out = capsys.readouterr().out
+    assert "Created task" in out
+    assert "owner/repo#5" in out
+
+
+def test_cmd_import_issue_from_number(workspace, capsys):
+    issue_data = {
+        "number": 3,
+        "title": "Fix typo",
+        "body": "There is a typo in the README",
+        "labels": [],
+        "url": "https://github.com/owner/repo/issues/3",
+    }
+    with patch("litehive.cli.github_import.check_gh_auth"):
+        with patch("litehive.cli.github_import.fetch_issue", return_value=issue_data):
+            args = _make_import_issue_args(workspace, "3", repo="owner/repo")
+            ret = _cmd_import_issue(args)
+
+    assert ret == 0
+    out = capsys.readouterr().out
+    assert "Created task" in out
+
+
+def test_cmd_import_issue_duplicate(workspace, capsys):
+    create_task(
+        workspace,
+        title="Already here",
+        github_origin=GitHubOrigin(
+            repo="owner/repo",
+            issue_number=5,
+            issue_url="https://github.com/owner/repo/issues/5",
+        ),
+        auto_commit=False,
+    )
+    with patch("litehive.cli.github_import.check_gh_auth"):
+        with patch("litehive.cli.github_import.fetch_issue") as mock_fetch:
+            args = _make_import_issue_args(
+                workspace, "https://github.com/owner/repo/issues/5"
             )
-        return subprocess.CompletedProcess(args=cmd, returncode=1, stdout="", stderr="")
+            ret = _cmd_import_issue(args)
 
-    monkeypatch.setattr(subprocess, "run", fake_run)
-
-
-def test_cmd_import_issue_from_url(ws, monkeypatch):
-    _make_gh_mock(monkeypatch, single_issue=SAMPLE_ISSUE)
-    args = argparse.Namespace(
-        workspace=ws,
-        issue_ref="https://github.com/owner/repo/issues/42",
-        repo=None,
-    )
-    rc = _cmd_import_issue(args)
-    assert rc == 0
-
-    tasks = list_tasks(ws, include_runtime=False)
-    assert len(tasks) == 1
-    assert tasks[0].title == "Fix login timeout"
-    assert tasks[0].github_origin.issue_number == 42
+    assert ret == 0
+    out = capsys.readouterr().out
+    assert "already imported" in out
+    assert "skipping" in out
+    mock_fetch.assert_not_called()  # should skip before fetching
 
 
-def test_cmd_import_issue_from_number(ws, monkeypatch):
-    _make_gh_mock(monkeypatch, single_issue=SAMPLE_ISSUE)
-    args = argparse.Namespace(
-        workspace=ws,
-        issue_ref="42",
-        repo="owner/repo",
-    )
-    rc = _cmd_import_issue(args)
-    assert rc == 0
+def test_cmd_import_issue_gh_missing(workspace, capsys):
+    with patch(
+        "litehive.cli.github_import.check_gh_auth",
+        side_effect=GhNotFoundError("gh CLI not found. Install it from https://cli.github.com/"),
+    ):
+        args = _make_import_issue_args(workspace, "1", repo="owner/repo")
+        ret = _cmd_import_issue(args)
+
+    assert ret == 1
+    out = capsys.readouterr().out
+    assert "gh CLI not found" in out
 
 
-def test_cmd_import_issue_duplicate(ws, monkeypatch):
-    _make_gh_mock(monkeypatch, single_issue=SAMPLE_ISSUE)
-    args = argparse.Namespace(
-        workspace=ws,
-        issue_ref="https://github.com/owner/repo/issues/42",
-        repo=None,
-    )
-    assert _cmd_import_issue(args) == 0
-    assert _cmd_import_issue(args) == 0  # duplicate is skipped, still rc=0
-
-    tasks = list_tasks(ws, include_runtime=False)
-    assert len(tasks) == 1
+# ── CLI command: import-issues ───────────────────────────────────────────
 
 
-def test_cmd_import_issue_gh_missing(ws, monkeypatch):
-    def fake_run(cmd, **kwargs):
-        raise FileNotFoundError()
-    monkeypatch.setattr(subprocess, "run", fake_run)
-    args = argparse.Namespace(
-        workspace=ws,
-        issue_ref="42",
-        repo="owner/repo",
-    )
-    rc = _cmd_import_issue(args)
-    assert rc == 1
+def _make_import_issues_args(workspace, repo=None):
+    args = argparse.Namespace()
+    args.workspace = workspace
+    args.repo = repo
+    return args
 
 
-def test_cmd_import_issues_bulk(ws, monkeypatch):
+def test_cmd_import_issues_bulk(workspace, capsys):
     issues = [
         {
             "number": 1,
-            "title": "First issue",
-            "body": "Body one",
-            "labels": [{"name": "documentation"}],
+            "title": "Bug report",
+            "body": "Something is wrong",
+            "labels": [{"name": "bug"}],
             "url": "https://github.com/owner/repo/issues/1",
         },
         {
             "number": 2,
-            "title": "Second issue",
-            "body": "Body two",
-            "labels": [{"name": "enhancement"}, {"name": "priority: low"}],
+            "title": "Feature request",
+            "body": "Add this feature",
+            "labels": [{"name": "enhancement"}, {"name": "priority: high"}],
             "url": "https://github.com/owner/repo/issues/2",
         },
         {
             "number": 3,
-            "title": "Third issue",
-            "body": "",
-            "labels": [],
+            "title": "Docs update",
+            "body": "Update the docs",
+            "labels": [{"name": "documentation"}],
             "url": "https://github.com/owner/repo/issues/3",
         },
     ]
-    _make_gh_mock(monkeypatch, issues=issues)
-    args = argparse.Namespace(workspace=ws, repo="owner/repo")
-    rc = _cmd_import_issues(args)
-    assert rc == 0
+    with patch("litehive.cli.github_import.check_gh_auth"):
+        with patch("litehive.cli.github_import.fetch_open_issues", return_value=issues):
+            args = _make_import_issues_args(workspace, repo="owner/repo")
+            ret = _cmd_import_issues(args)
 
-    tasks = list_tasks(ws, include_runtime=False)
+    assert ret == 0
+    out = capsys.readouterr().out
+    assert "Imported 3 issue(s)" in out
+
+    tasks = list_tasks(workspace, include_runtime=False)
     assert len(tasks) == 3
+    bug_task = next(t for t in tasks if t.title == "Bug report")
+    assert bug_task.task_type == "bugfix"
+    feature_task = next(t for t in tasks if t.title == "Feature request")
+    assert feature_task.task_type == "refactor"
+    assert feature_task.priority == "high"
+    docs_task = next(t for t in tasks if t.title == "Docs update")
+    assert docs_task.task_type == "docs"
 
-    by_title = {t.title: t for t in tasks}
-    assert by_title["First issue"].task_type == "docs"
-    assert by_title["Second issue"].task_type == "refactor"
-    assert by_title["Second issue"].priority == "low"
-    assert by_title["Third issue"].task_type is None
-    assert by_title["Third issue"].goal == ""
 
-
-def test_cmd_import_issues_skips_existing(ws, monkeypatch):
-    # Pre-import one issue
+def test_cmd_import_issues_skips_existing(workspace, capsys):
     create_task(
-        ws,
-        title="Already here",
+        workspace,
+        title="Existing",
         github_origin=GitHubOrigin(
             repo="owner/repo",
             issue_number=1,
@@ -371,30 +445,38 @@ def test_cmd_import_issues_skips_existing(ws, monkeypatch):
     issues = [
         {
             "number": 1,
-            "title": "Already here",
-            "body": "Body",
-            "labels": [],
+            "title": "Bug report",
+            "body": "Something is wrong",
+            "labels": [{"name": "bug"}],
             "url": "https://github.com/owner/repo/issues/1",
         },
         {
             "number": 2,
             "title": "New issue",
-            "body": "New body",
+            "body": "New",
             "labels": [],
             "url": "https://github.com/owner/repo/issues/2",
         },
     ]
-    _make_gh_mock(monkeypatch, issues=issues)
-    args = argparse.Namespace(workspace=ws, repo="owner/repo")
-    rc = _cmd_import_issues(args)
-    assert rc == 0
+    with patch("litehive.cli.github_import.check_gh_auth"):
+        with patch("litehive.cli.github_import.fetch_open_issues", return_value=issues):
+            args = _make_import_issues_args(workspace, repo="owner/repo")
+            ret = _cmd_import_issues(args)
 
-    tasks = list_tasks(ws, include_runtime=False)
-    assert len(tasks) == 2  # 1 pre-existing + 1 new
+    assert ret == 0
+    out = capsys.readouterr().out
+    assert "Imported 1 issue(s)" in out
+    assert "skipped 1" in out
 
 
-def test_cmd_import_issues_gh_not_authenticated(ws, monkeypatch):
-    _make_gh_mock(monkeypatch, auth_ok=False)
-    args = argparse.Namespace(workspace=ws, repo="owner/repo")
-    rc = _cmd_import_issues(args)
-    assert rc == 1
+def test_cmd_import_issues_gh_not_authenticated(workspace, capsys):
+    with patch(
+        "litehive.cli.github_import.check_gh_auth",
+        side_effect=GhAuthError("gh CLI is not authenticated. Run 'gh auth login' first."),
+    ):
+        args = _make_import_issues_args(workspace, repo="owner/repo")
+        ret = _cmd_import_issues(args)
+
+    assert ret == 1
+    out = capsys.readouterr().out
+    assert "not authenticated" in out

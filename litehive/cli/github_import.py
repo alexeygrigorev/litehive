@@ -1,4 +1,4 @@
-"""Import GitHub issues as litehive tasks."""
+"""Import GitHub issues as litehive tasks via the gh CLI."""
 
 from __future__ import annotations
 
@@ -15,16 +15,16 @@ from litehive.tasks import (
     list_tasks,
 )
 
-# Label → task_type mapping
-LABEL_TASK_TYPE_MAP: dict[str, str] = {
+# ── Label mapping ────────────────────────────────────────────────────────
+
+LABEL_TO_TASK_TYPE: dict[str, str] = {
     "bug": "bugfix",
     "documentation": "docs",
     "enhancement": "refactor",
     "question": "research",
 }
 
-# Label → priority mapping
-LABEL_PRIORITY_MAP: dict[str, str] = {
+LABEL_TO_PRIORITY: dict[str, str] = {
     "priority: critical": "critical",
     "priority: high": "high",
     "priority: low": "low",
@@ -34,19 +34,20 @@ LABEL_PRIORITY_MAP: dict[str, str] = {
 }
 
 
-def _run_gh(*args: str) -> subprocess.CompletedProcess[str]:
-    """Run a gh CLI command and return the result."""
-    try:
-        return subprocess.run(
-            ["gh", *args],
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-    except FileNotFoundError:
-        raise GhNotFoundError(
-            "gh CLI not found. Install it from https://cli.github.com/ and run 'gh auth login'."
-        )
+def map_labels(labels: list[str]) -> tuple[str | None, str | None]:
+    """Map GitHub issue labels to task_type and priority."""
+    task_type = None
+    priority = None
+    for label in labels:
+        low = label.lower()
+        if low in LABEL_TO_TASK_TYPE and task_type is None:
+            task_type = LABEL_TO_TASK_TYPE[low]
+        if low in LABEL_TO_PRIORITY and priority is None:
+            priority = LABEL_TO_PRIORITY[low]
+    return task_type, priority
+
+
+# ── gh CLI helpers ───────────────────────────────────────────────────────
 
 
 class GhNotFoundError(RuntimeError):
@@ -57,209 +58,228 @@ class GhAuthError(RuntimeError):
     pass
 
 
-def _check_gh_auth() -> None:
-    """Verify gh CLI is installed and authenticated."""
-    result = _run_gh("auth", "status")
-    if result.returncode != 0:
+def run_gh(args: list[str], cwd: Path | None = None) -> str:
+    """Run a gh CLI command and return stdout. Raises on missing gh or failure."""
+    try:
+        proc = subprocess.run(
+            ["gh", *args],
+            capture_output=True,
+            text=True,
+            cwd=cwd,
+            timeout=30,
+        )
+    except FileNotFoundError:
+        raise GhNotFoundError(
+            "gh CLI not found. Install it from https://cli.github.com/ and run 'gh auth login'."
+        )
+    if proc.returncode != 0:
+        raise RuntimeError(f"gh command failed (exit {proc.returncode}): {proc.stderr.strip()}")
+    return proc.stdout
+
+
+def check_gh_auth(cwd: Path | None = None) -> None:
+    """Verify gh is installed and authenticated."""
+    try:
+        run_gh(["auth", "status"], cwd=cwd)
+    except GhNotFoundError:
+        raise
+    except RuntimeError:
         raise GhAuthError(
-            "gh CLI is not authenticated. Run 'gh auth login' first.\n"
-            + result.stderr.strip()
+            "gh CLI is not authenticated. Run 'gh auth login' first."
         )
 
 
-def _detect_repo(workspace: Path) -> str:
+def detect_repo_from_remote(cwd: Path | None = None) -> str:
     """Infer owner/repo from git remote origin."""
-    result = subprocess.run(
-        ["git", "-C", str(workspace), "remote", "get-url", "origin"],
-        capture_output=True,
-        text=True,
-    )
-    if result.returncode != 0:
-        raise ValueError(
-            "Could not detect GitHub repo from git remote. Use --repo owner/repo."
+    try:
+        proc = subprocess.run(
+            ["git", "remote", "get-url", "origin"],
+            capture_output=True,
+            text=True,
+            cwd=cwd,
+            timeout=10,
         )
-    url = result.stdout.strip()
-    # Handle SSH: git@github.com:owner/repo.git
+    except FileNotFoundError:
+        raise RuntimeError("git not found")
+    if proc.returncode != 0:
+        raise RuntimeError("No git remote 'origin' found. Use --repo owner/repo.")
+    url = proc.stdout.strip()
+    # SSH: git@github.com:owner/repo.git
     m = re.match(r"git@github\.com:(.+?)(?:\.git)?$", url)
     if m:
         return m.group(1)
-    # Handle HTTPS: https://github.com/owner/repo.git
+    # HTTPS: https://github.com/owner/repo.git
     m = re.match(r"https?://github\.com/(.+?)(?:\.git)?$", url)
     if m:
         return m.group(1)
-    raise ValueError(f"Could not parse GitHub repo from remote URL: {url}")
+    raise RuntimeError(f"Cannot parse owner/repo from remote URL: {url}. Use --repo owner/repo.")
 
 
-def _parse_issue_ref(ref: str) -> tuple[str | None, int]:
+def parse_issue_ref(ref: str) -> tuple[str | None, int]:
     """Parse a GitHub issue URL or number into (repo_or_none, issue_number)."""
     # Full URL: https://github.com/owner/repo/issues/42
     m = re.match(r"https?://github\.com/([^/]+/[^/]+)/issues/(\d+)", ref)
     if m:
         return m.group(1), int(m.group(2))
     # Just a number
-    if ref.isdigit():
+    try:
         return None, int(ref)
-    raise ValueError(
-        f"Cannot parse issue reference '{ref}'. "
-        "Use a GitHub URL (https://github.com/owner/repo/issues/42) or an issue number."
-    )
+    except ValueError:
+        raise ValueError(f"Cannot parse issue reference: {ref!r}. Use a URL or issue number.")
 
 
-def _fetch_issue(repo: str, number: int) -> dict:
-    """Fetch a single issue via gh CLI."""
-    result = _run_gh(
-        "issue", "view", str(number),
-        "--repo", repo,
-        "--json", "number,title,body,labels,url",
-    )
-    if result.returncode != 0:
-        raise ValueError(f"Failed to fetch issue #{number} from {repo}: {result.stderr.strip()}")
-    return json.loads(result.stdout)
+# ── Duplicate detection ──────────────────────────────────────────────────
 
 
-def _fetch_open_issues(repo: str) -> list[dict]:
-    """Fetch all open issues via gh CLI."""
-    result = _run_gh(
-        "issue", "list",
-        "--repo", repo,
-        "--state", "open",
-        "--json", "number,title,body,labels,url",
-        "--limit", "500",
-    )
-    if result.returncode != 0:
-        raise ValueError(f"Failed to list issues from {repo}: {result.stderr.strip()}")
-    return json.loads(result.stdout)
-
-
-def _map_labels(labels: list[dict]) -> tuple[str | None, str | None]:
-    """Map GitHub labels to task_type and priority."""
-    task_type = None
-    priority = None
-    for label in labels:
-        name = label.get("name", "").lower()
-        if name in LABEL_TASK_TYPE_MAP and task_type is None:
-            task_type = LABEL_TASK_TYPE_MAP[name]
-        if name in LABEL_PRIORITY_MAP and priority is None:
-            priority = LABEL_PRIORITY_MAP[name]
-    return task_type, priority
-
-
-def _find_existing_task_for_issue(
-    workspace: Path, repo: str, issue_number: int
-) -> str | None:
-    """Return existing task ID if this issue was already imported, else None."""
-    for task in list_tasks(workspace, include_runtime=False):
-        origin = task.github_origin
-        if origin is not None and origin.repo == repo and origin.issue_number == issue_number:
+def find_existing_task_for_issue(root: Path, repo: str, issue_number: int) -> str | None:
+    """Return the task ID if an issue has already been imported, else None."""
+    for task in list_tasks(root, include_runtime=False):
+        if (
+            task.github_origin is not None
+            and task.github_origin.repo == repo
+            and task.github_origin.issue_number == issue_number
+        ):
             return task.id
     return None
 
 
-def _import_single_issue(
-    workspace: Path, repo: str, issue: dict
-) -> tuple[str, str | None]:
-    """Import one issue. Returns (action, task_id_or_none).
+# ── Core import logic ────────────────────────────────────────────────────
 
-    action is "created", "skipped", or "error".
-    """
-    number = issue["number"]
-    existing = _find_existing_task_for_issue(workspace, repo, number)
-    if existing is not None:
-        return "skipped", existing
 
-    labels = issue.get("labels", [])
-    task_type, priority = _map_labels(labels)
-    body = issue.get("body") or ""
-
-    origin = GitHubOrigin(
-        repo=repo,
-        issue_number=number,
-        issue_url=issue.get("url", f"https://github.com/{repo}/issues/{number}"),
+def fetch_issue(repo: str, issue_number: int, cwd: Path | None = None) -> dict:
+    """Fetch a single issue via gh."""
+    raw = run_gh(
+        ["issue", "view", str(issue_number), "--repo", repo, "--json",
+         "number,title,body,labels,url"],
+        cwd=cwd,
     )
-
-    try:
-        task = create_task(
-            workspace,
-            title=issue["title"],
-            goal=body,
-            task_type=task_type,
-            priority=priority,
-            github_origin=origin,
-            auto_commit=True,
-        )
-    except (ValueError, WorkspaceConflictError) as exc:
-        print(f"  error importing #{number}: {exc}")
-        return "error", None
-
-    return "created", task.id
+    return json.loads(raw)
 
 
-# ── CLI command handlers ─────────────────────────────────────────────
+def fetch_open_issues(repo: str, cwd: Path | None = None) -> list[dict]:
+    """Fetch all open issues via gh."""
+    raw = run_gh(
+        ["issue", "list", "--repo", repo, "--state", "open", "--json",
+         "number,title,body,labels,url", "--limit", "1000"],
+        cwd=cwd,
+    )
+    return json.loads(raw)
+
+
+def import_single_issue(root: Path, repo: str, issue_number: int, cwd: Path | None = None) -> tuple[str, str]:
+    """Import one issue. Returns (task_id, status) where status is 'created' or 'skipped'."""
+    existing = find_existing_task_for_issue(root, repo, issue_number)
+    if existing is not None:
+        return existing, "skipped"
+
+    data = fetch_issue(repo, issue_number, cwd=cwd)
+    labels = [lbl["name"] for lbl in data.get("labels", [])]
+    task_type, priority = map_labels(labels)
+
+    task = create_task(
+        root,
+        title=data["title"],
+        goal=data.get("body") or "",
+        task_type=task_type,
+        priority=priority,
+        github_origin=GitHubOrigin(
+            repo=repo,
+            issue_number=data["number"],
+            issue_url=data["url"],
+        ),
+        auto_commit=True,
+    )
+    return task.id, "created"
+
+
+# ── CLI command handlers ─────────────────────────────────────────────────
 
 
 def _cmd_import_issue(args) -> int:
-    """Import a single GitHub issue as a litehive task."""
     ensure_workspace(args.workspace)
     try:
-        _check_gh_auth()
+        check_gh_auth(cwd=args.workspace)
     except (GhNotFoundError, GhAuthError) as exc:
         print(f"import-issue failed: {exc}")
         return 1
 
-    try:
-        parsed_repo, number = _parse_issue_ref(args.issue_ref)
-        repo = args.repo or parsed_repo
-        if repo is None:
-            repo = _detect_repo(args.workspace)
-
-        issue = _fetch_issue(repo, number)
-        action, task_id = _import_single_issue(args.workspace, repo, issue)
-
-        if action == "skipped":
-            print(f"Issue #{number} already imported as {task_id} — skipped.")
-            return 0
-        if action == "error":
+    ref = args.issue_ref
+    repo_from_ref, issue_number = parse_issue_ref(ref)
+    repo = getattr(args, "repo", None) or repo_from_ref
+    if repo is None:
+        try:
+            repo = detect_repo_from_remote(cwd=args.workspace)
+        except RuntimeError as exc:
+            print(f"import-issue failed: {exc}")
             return 1
-        print(f"Created task {task_id} from {repo}#{number}")
-        return 0
-    except (ValueError, RuntimeError) as exc:
+
+    try:
+        task_id, status = import_single_issue(args.workspace, repo, issue_number, cwd=args.workspace)
+    except (RuntimeError, ValueError, WorkspaceConflictError) as exc:
         print(f"import-issue failed: {exc}")
         return 1
+
+    if status == "skipped":
+        print(f"Issue #{issue_number} already imported as {task_id}, skipping.")
+        return 0
+    print(f"Created task {task_id} from {repo}#{issue_number}")
+    return 0
 
 
 def _cmd_import_issues(args) -> int:
-    """Import all open GitHub issues as litehive tasks."""
     ensure_workspace(args.workspace)
     try:
-        _check_gh_auth()
+        check_gh_auth(cwd=args.workspace)
     except (GhNotFoundError, GhAuthError) as exc:
         print(f"import-issues failed: {exc}")
         return 1
 
+    repo = getattr(args, "repo", None)
+    if repo is None:
+        try:
+            repo = detect_repo_from_remote(cwd=args.workspace)
+        except RuntimeError as exc:
+            print(f"import-issues failed: {exc}")
+            return 1
+
     try:
-        repo = args.repo
-        if repo is None:
-            repo = _detect_repo(args.workspace)
-
-        issues = _fetch_open_issues(repo)
-        created = 0
-        skipped = 0
-        errors = 0
-
-        for issue in issues:
-            action, task_id = _import_single_issue(args.workspace, repo, issue)
-            number = issue["number"]
-            if action == "created":
-                print(f"  created {task_id} from #{number}: {issue['title']}")
-                created += 1
-            elif action == "skipped":
-                print(f"  skipped #{number} (already {task_id})")
-                skipped += 1
-            else:
-                errors += 1
-
-        print(f"\nImported {created} issue(s), skipped {skipped}, errors {errors}.")
-        return 0 if errors == 0 else 1
-    except (ValueError, RuntimeError) as exc:
+        issues = fetch_open_issues(repo, cwd=args.workspace)
+    except RuntimeError as exc:
         print(f"import-issues failed: {exc}")
         return 1
+
+    created = 0
+    skipped = 0
+    errors = 0
+    for issue_data in issues:
+        issue_number = issue_data["number"]
+        existing = find_existing_task_for_issue(args.workspace, repo, issue_number)
+        if existing is not None:
+            skipped += 1
+            continue
+
+        labels = [lbl["name"] for lbl in issue_data.get("labels", [])]
+        task_type, priority = map_labels(labels)
+
+        try:
+            task = create_task(
+                args.workspace,
+                title=issue_data["title"],
+                goal=issue_data.get("body") or "",
+                task_type=task_type,
+                priority=priority,
+                github_origin=GitHubOrigin(
+                    repo=repo,
+                    issue_number=issue_number,
+                    issue_url=issue_data["url"],
+                ),
+                auto_commit=True,
+            )
+            print(f"Created task {task.id} from {repo}#{issue_number}: {task.title}")
+            created += 1
+        except (ValueError, WorkspaceConflictError) as exc:
+            print(f"  error importing #{issue_number}: {exc}")
+            errors += 1
+
+    print(f"\nImported {created} issue(s), skipped {skipped} already-tracked issue(s).")
+    return 0 if errors == 0 else 1
