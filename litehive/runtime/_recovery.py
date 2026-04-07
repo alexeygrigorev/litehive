@@ -14,7 +14,7 @@ from litehive.git_ops import (
     rollback_task,
     current_head,
 )
-from litehive.models import RecoveryAction, StageReport, TaskRecord
+from litehive.models import RecoveryAction, StageReport, TaskRecord, TaskRuntime
 from litehive.subagents import SubagentManager, stage_report_from_subagent
 from litehive.tasks import (
     _atomic_write_text,
@@ -27,6 +27,7 @@ from litehive.tasks import (
     prepare_completed_task_for_recovery,
     record_recovery_report,
     save_task,
+    save_task_runtime,
     state_path,
     task_dir,
     task_file,
@@ -111,6 +112,33 @@ def _attempt_stage_recovery(
         failed_report,
         config=config,
     )
+
+    # --- Litehive self-heal path ---
+    is_self_heal = failure_owner == "litehive" and source_root is not None and source_root.is_dir()
+    if is_self_heal:
+        fingerprint = _traceback_fingerprint(traceback_text, failed_report.summary)
+        if fingerprint in task.runtime.self_heal_traceback_fingerprints:
+            append_journal(
+                root, task,
+                f"Stage `{step}` {failed_report.verdict}: skipping duplicate self-heal (fingerprint {fingerprint}).",
+            )
+            return None
+        self_heal_subagents = SubagentManager(root, execution_root=source_root)
+        return _run_litehive_self_heal(
+            root=root,
+            source_root=source_root,
+            task=task,
+            step=step,
+            failed_report=failed_report,
+            traceback_text=traceback_text,
+            fingerprint=fingerprint,
+            evidence_lines=evidence_lines,
+            subagents=self_heal_subagents,
+            engine_name=engine_name,
+            model_name=model_name,
+        )
+
+    # --- Standard project recovery path ---
     append_journal(
         root, task,
         f"Stage `{step}` {failed_report.verdict}: {failed_report.summary}. Launching recovery agent.",
@@ -227,6 +255,144 @@ def _attempt_stage_recovery(
         recovery_subagent_path=recovery_result.ref.path,
     )
     append_journal(root, task, f"Recovery agent could not resolve {step}.")
+    return None
+
+
+def _run_litehive_self_heal(
+    root: Path,
+    source_root: Path,
+    task: TaskRecord,
+    step: str,
+    failed_report: StageReport,
+    traceback_text: str,
+    fingerprint: str,
+    evidence_lines: str,
+    *,
+    subagents: SubagentManager,
+    engine_name: str,
+    model_name: str | None,
+) -> StageReport | None:
+    """Launch a recovery agent against litehive source to fix a litehive bug."""
+    append_journal(
+        root, task,
+        f"Stage `{step}` {failed_report.verdict}: litehive-owned failure. "
+        f"Launching self-heal agent against {source_root} (fingerprint {fingerprint}).",
+    )
+
+    prompt = (
+        f"You are running as Litehive's SELF-HEAL recovery agent.\n\n"
+        f"A litehive bug caused task {task.id} ({task.title}) to fail during stage `{step}`.\n\n"
+        f"Failure summary: {failed_report.summary}\n\n"
+        f"Traceback:\n{traceback_text}\n\n"
+        f"Previous report feedback:\n{failed_report.feedback or '(none)'}\n\n"
+        f"Recovery evidence:\n{evidence_lines}\n\n"
+        f"IMPORTANT: This failure is in litehive's own code, NOT in the external project.\n"
+        f"Your working directory is the litehive source tree: {source_root}\n\n"
+        f"Instructions:\n"
+        f"- Read the traceback and identify the bug in litehive source code\n"
+        f"- Fix the bug with the smallest safe change\n"
+        f"- Run `uv run pytest -q` to verify the fix does not break existing tests\n"
+        f"- Report pass only if pytest passes and the fix addresses the traceback\n"
+        f"- Report blocked or fail if you cannot fix the bug\n"
+    )
+
+    recovery_result = subagents.run(
+        task,
+        role="recovery",
+        engine_name=engine_name,
+        prompt=prompt,
+        model=model_name,
+    )
+
+    # Record fingerprint regardless of outcome to prevent retry loops
+    task.runtime.self_heal_traceback_fingerprints.append(fingerprint)
+    save_task_runtime(root, task)
+
+    from litehive.tasks import load_task_thread
+
+    thread = load_task_thread(root, task)
+    recovery_comments = [
+        c for c in thread
+        if c.step == step and c.verdict in ("pass", "accept")
+    ]
+    if recovery_comments:
+        latest = recovery_comments[-1]
+        record_recovery_report(
+            root,
+            task,
+            trigger="litehive_self_heal",
+            stage=step,
+            summary=latest.message.splitlines()[0] if latest.message else f"self-heal recovered {step}",
+            runnable_state="runnable",
+            failure_classification="litehive",
+            actions=[
+                RecoveryAction(
+                    action="litehive_self_heal",
+                    summary=f"Self-heal agent fixed litehive source and returned `{step}` to a runnable state.",
+                    metadata={"verdict": latest.verdict, "fingerprint": fingerprint},
+                )
+            ],
+            warnings=list(failed_report.warnings),
+            recovery_subagent_id=recovery_result.ref.id,
+            recovery_subagent_path=recovery_result.ref.path,
+        )
+        append_journal(root, task, f"Self-heal agent resolved {step}: {latest.verdict}")
+        return StageReport(
+            task_id=task.id,
+            step=step,  # type: ignore[arg-type]
+            verdict=latest.verdict,  # type: ignore[arg-type]
+            summary=latest.message.splitlines()[0] if latest.message else f"self-heal recovered {step}",
+            feedback=latest.message,
+            files_changed=latest.files_changed,
+        )
+
+    recovery_report = stage_report_from_subagent(task, step, recovery_result, root=root)
+    if recovery_report.verdict in ("pass", "accept"):
+        record_recovery_report(
+            root,
+            task,
+            trigger="litehive_self_heal",
+            stage=step,
+            summary=recovery_report.summary,
+            runnable_state="runnable",
+            failure_classification="litehive",
+            actions=[
+                RecoveryAction(
+                    action="litehive_self_heal",
+                    summary=f"Self-heal agent fixed litehive source and returned `{step}` to a runnable state.",
+                    metadata={"verdict": recovery_report.verdict, "fingerprint": fingerprint},
+                )
+            ],
+            warnings=[*failed_report.warnings, *recovery_report.warnings],
+            recovery_subagent_id=recovery_result.ref.id,
+            recovery_subagent_path=recovery_result.ref.path,
+        )
+        append_journal(root, task, f"Self-heal agent resolved {step}: {recovery_report.verdict}")
+        return recovery_report
+
+    blocker = recovery_report.summary or failed_report.summary
+    record_recovery_report(
+        root,
+        task,
+        trigger="litehive_self_heal",
+        stage=step,
+        summary=f"Self-heal agent could not fix litehive bug for `{step}`.",
+        runnable_state="blocked",
+        failure_classification="litehive",
+        blocker=blocker,
+        actions=[
+            RecoveryAction(
+                action="litehive_self_heal_failed",
+                applied=False,
+                summary="Self-heal agent could not fix the litehive bug.",
+                metadata={"fingerprint": fingerprint},
+            )
+        ],
+        warnings=[*failed_report.warnings, *recovery_report.warnings],
+        recovery_subagent_id=recovery_result.ref.id,
+        recovery_subagent_path=recovery_result.ref.path,
+    )
+    append_journal(root, task, f"Self-heal agent could not fix litehive bug for {step}.")
     return None
 
 
