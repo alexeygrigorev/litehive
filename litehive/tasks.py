@@ -38,6 +38,7 @@ from litehive.git_ops import (
 )
 from litehive.models import (
     FollowUpTaskSpec,
+    GitHubOrigin,
     PlannedEffort,
     RecoveryAction,
     RecoveryEvidenceItem,
@@ -1598,6 +1599,7 @@ def create_task(
     human_checkpoints: list[str] | None = None,
     auto_commit: bool = True,
     upstream_origin: UpstreamContributionOrigin | None = None,
+    github_origin: GitHubOrigin | None = None,
     priority: str | None = None,
 ) -> TaskRecord:
     ensure_workspace(root)
@@ -1642,6 +1644,7 @@ def create_task(
                 "commit_message": default_commit_message(task_id, slug),
             },
             upstream_origin=upstream_origin,
+            github_origin=github_origin,
         )
         task = apply_task_template_defaults(task)
 

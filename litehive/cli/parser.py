@@ -903,6 +903,43 @@ def build_parser():
         "--workspace", type=Path, default=Path.cwd(), help="Repository root containing .litehive/"
     )
 
+    # ── import-issue / import-issues ───────────────────────────────────
+    import_issue = subparsers.add_parser(
+        "import-issue",
+        help="Import a single GitHub issue as a litehive task",
+    )
+    import_issue.add_argument(
+        "issue_ref",
+        help="GitHub issue URL (https://github.com/owner/repo/issues/N) or issue number",
+    )
+    import_issue.add_argument(
+        "--repo",
+        default=None,
+        help="GitHub repo as owner/repo; auto-detected from git remote if omitted",
+    )
+    import_issue.add_argument(
+        "--workspace",
+        type=Path,
+        default=Path.cwd(),
+        help="Repository root containing .litehive/",
+    )
+
+    import_issues = subparsers.add_parser(
+        "import-issues",
+        help="Import all open GitHub issues that don't already have litehive tasks",
+    )
+    import_issues.add_argument(
+        "--repo",
+        default=None,
+        help="GitHub repo as owner/repo; auto-detected from git remote if omitted",
+    )
+    import_issues.add_argument(
+        "--workspace",
+        type=Path,
+        default=Path.cwd(),
+        help="Repository root containing .litehive/",
+    )
+
     # ── list ──────────────────────────────────────────────────────────
     list_cmd = subparsers.add_parser(
         "list", help="Compact task listing with optional filters"
