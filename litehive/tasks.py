@@ -1605,6 +1605,8 @@ def create_task(
         raise ValueError("Retry limit must be 0 or greater")
     if pipeline_mode not in {"single", "full"}:
         raise ValueError(f"Unsupported pipeline_mode '{pipeline_mode}'")
+    if priority is not None and priority not in VALID_TASK_PRIORITIES:
+        raise ValueError(f"Unsupported priority '{priority}'; choose from {sorted(VALID_TASK_PRIORITIES)}")
     if task_type is not None and task_type not in VALID_TASK_TYPES:
         raise ValueError(f"Unsupported task type '{task_type}'")
     if pm_complexity is not None and pm_complexity not in VALID_PM_COMPLEXITIES:
@@ -1628,6 +1630,7 @@ def create_task(
             model=model,
             mode=mode,  # type: ignore[arg-type]
             pipeline_mode=pipeline_mode,  # type: ignore[arg-type]
+            priority=priority or "medium",
             goal=goal,
             acceptance_criteria=normalize_acceptance_criteria(acceptance_criteria),
             pm_complexity=pm_complexity,  # type: ignore[arg-type]
