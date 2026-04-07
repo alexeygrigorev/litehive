@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 from pathlib import Path
+import subprocess
 import traceback
 from typing import Protocol
 
@@ -365,7 +366,15 @@ class TaskExecutionRunner:
                     report.warnings = [*report.warnings, *recovered.warnings]
                 report = terminal
                 self._write_report(task, report, steps)
-                task.status = "flagged"
+                if current == "commit_to_git":
+                    task.status = "recovery_failed"
+                    append_journal(
+                        self.root, task,
+                        "commit_to_git failed and recovery did not resolve it. "
+                        "Status set to recovery_failed for manual resolution.",
+                    )
+                else:
+                    task.status = "flagged"
                 _apply_task_outcome(
                     task,
                     kind=outcome,
@@ -388,8 +397,44 @@ class TaskExecutionRunner:
 
             # Guard: SWE must produce actual changes. If implementing "passes"
             # with zero files changed and zero tests, reject it back to implementing.
+            # But first check the actual worktree — agents using `litehive report` CLI
+            # may not populate files_changed in their report even though they made changes.
             if current == "implementing" and target == "testing":
-                if not report.files_changed and (not report.tests or report.tests.get("added", 0) == 0):
+                worktree_has_changes = False
+                if not report.files_changed:
+                    from litehive.tasks import get_task_worktree_path
+                    wt_path = get_task_worktree_path(task)
+                    if wt_path:
+                        wt_full = (self.root / wt_path).resolve()
+                        if wt_full.exists():
+                            try:
+                                diff = subprocess.run(
+                                    ["git", "diff", "--name-only", "HEAD"],
+                                    cwd=wt_full, capture_output=True, text=True, timeout=10,
+                                )
+                                staged = subprocess.run(
+                                    ["git", "diff", "--name-only", "--cached"],
+                                    cwd=wt_full, capture_output=True, text=True, timeout=10,
+                                )
+                                untracked = subprocess.run(
+                                    ["git", "ls-files", "--others", "--exclude-standard"],
+                                    cwd=wt_full, capture_output=True, text=True, timeout=10,
+                                )
+                                all_changed = set(
+                                    f.strip() for f in
+                                    (diff.stdout + staged.stdout + untracked.stdout).splitlines()
+                                    if f.strip() and not f.strip().startswith(".litehive/")
+                                )
+                                if all_changed:
+                                    worktree_has_changes = True
+                                    report.files_changed = sorted(all_changed)
+                                    append_journal(
+                                        self.root, task,
+                                        f"[guard] Report had no files_changed but worktree has {len(all_changed)} changed file(s). Accepting.",
+                                    )
+                            except (subprocess.TimeoutExpired, OSError):
+                                pass
+                if not worktree_has_changes and not report.files_changed and (not report.tests or report.tests.get("added", 0) == 0):
                     reason = (
                         "SWE reported pass but produced no file changes and no tests. "
                         "This usually means the agent did not actually write code. "
