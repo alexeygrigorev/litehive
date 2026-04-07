@@ -13,7 +13,7 @@ priority: medium
 pm_complexity: moderate
 planned_effort: m
 created_at: '2026-04-07T08:25:25+00:00'
-updated_at: '2026-04-07T16:45:49+00:00'
+updated_at: '2026-04-07T17:46:39+00:00'
 goal: "The only way an agent produces a verdict is by invoking litehive report CLI.\
   \ Remove ALL text-based verdict parsing. The flow is: (1) agent runs and invokes\
   \ litehive report --verdict at the end, (2) if agent finishes without invoking CLI,\
@@ -75,6 +75,41 @@ subagents:
   engine: claude
   status: completed
   path: subagents/SA-0006-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0007
+  role: merge-resolver
+  engine: claude
+  status: completed
+  path: subagents/SA-0007-merge-resolver
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0008
+  role: swe
+  engine: claude
+  status: completed
+  path: subagents/SA-0008-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0009
+  role: swe
+  engine: claude
+  status: completed
+  path: subagents/SA-0009-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0010
+  role: swe
+  engine: claude
+  status: completed
+  path: subagents/SA-0010-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0011
+  role: swe
+  engine: claude
+  status: completed
+  path: subagents/SA-0011-swe
   sandboxed: false
   sandbox_summary: host
 git:

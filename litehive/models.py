@@ -234,6 +234,13 @@ class UpstreamContributionOrigin(BaseModel):
     patch: UpstreamPatchProposal | None = None
 
 
+class GitHubOrigin(BaseModel):
+    repo: str
+    issue_number: int
+    issue_url: str
+    imported_at: str = Field(default_factory=utcnow)
+
+
 class FollowUpTaskSpec(BaseModel):
     title: str
     rationale: str
@@ -441,6 +448,7 @@ class TaskRecord(BaseModel):
     retry_policy: TaskRetryPolicy = Field(default_factory=TaskRetryPolicy)
     created_from: TaskCreationSource | None = None
     upstream_origin: UpstreamContributionOrigin | None = None
+    github_origin: GitHubOrigin | None = None
     runtime: TaskRuntime = Field(default_factory=TaskRuntime, exclude=True)
 
 

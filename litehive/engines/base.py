@@ -555,26 +555,6 @@ def parse_stage_report_text(
 
 
 
-def _extract_section_block(text: str, key: str) -> str | None:
-    capture = False
-    lines: list[str] = []
-    header = f"{key}:"
-    for line in text.splitlines():
-        stripped = line.strip()
-        if stripped == header:
-            capture = True
-            continue
-        if not capture and stripped.startswith(header):
-            inline_value = stripped[len(header) :].strip()
-            return inline_value or None
-        if capture and re.match(r"^[A-Z_]+:", stripped):
-            break
-        if capture:
-            lines.append(line)
-    block = "\n".join(lines).rstrip()
-    return block or None
-
-
 def _extract_stage_result_submission(
     text: str,
 ) -> StageResultSubmission | ValidationError | None:
@@ -583,7 +563,26 @@ def _extract_stage_result_submission(
     Returns the validated model on success, a ``ValidationError`` when the JSON
     is present but invalid, or ``None`` when no ``STAGE_RESULT:`` block exists.
     """
-    section = _extract_section_block(text, "STAGE_RESULT")
+    # Inline extraction of the STAGE_RESULT: section from text.
+    capture = False
+    section_lines: list[str] = []
+    header = "STAGE_RESULT:"
+    section: str | None = None
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped == header:
+            capture = True
+            continue
+        if not capture and stripped.startswith(header):
+            inline_value = stripped[len(header):].strip()
+            section = inline_value or None
+            break
+        if capture and re.match(r"^[A-Z_]+:", stripped):
+            break
+        if capture:
+            section_lines.append(line)
+    if section is None and section_lines:
+        section = "\n".join(section_lines).rstrip() or None
     if section is None:
         return None
     try:

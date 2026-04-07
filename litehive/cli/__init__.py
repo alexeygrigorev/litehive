@@ -33,6 +33,7 @@ from litehive.cli.queue import (
 from litehive.cli.report import _cmd_report
 from litehive.cli.run import _cmd_run
 from litehive.cli.status import _cmd_list, _cmd_queue, _cmd_repair, _cmd_show, _cmd_status
+from litehive.cli.github_import import _cmd_import_issue, _cmd_import_issues
 from litehive.cli.tasks import _cmd_add, _cmd_intake, _cmd_issue, _cmd_update
 from litehive.cli.parser import build_parser
 
@@ -105,6 +106,10 @@ def main():
         return _cmd_list(args)
     if args.command == "show":
         return _cmd_show(args)
+    if args.command == "import-issue":
+        return _cmd_import_issue(args)
+    if args.command == "import-issues":
+        return _cmd_import_issues(args)
     if args.command == "update":
         return _cmd_update(args)
     if args.command == "report":
