@@ -1,0 +1,119 @@
+task_id: T-0185
+step: grooming
+verdict: pass
+summary: "GROOMING PASS \u2014 Import GitHub Issues as Litehive Tasks"
+feedback: "GROOMING PASS \u2014 Import GitHub Issues as Litehive Tasks\n\n## Scope\
+  \ Clarification\n\nThis task adds two CLI commands:\n1. `litehive import-issue <url-or-number>`\
+  \ \u2014 imports a single GitHub issue as a litehive task\n2. `litehive import-issues`\
+  \ \u2014 bulk-imports all open issues that don't already have tasks\n\n## Key Design\
+  \ Decisions\n\n### GitHub API client\nUse `gh` CLI (already available, handles auth)\
+  \ via subprocess. No new Python dependency needed. Require `gh` to be installed\
+  \ and authenticated; fail with a clear error if missing.\n\n### External origin\
+  \ tracking\n`upstream_origin` is the wrong model \u2014 it tracks outbound contributions\
+  \ (litehive \u2192 upstream). Instead, add a new lightweight `github_origin` field\
+  \ to the task record:\n```yaml\ngithub_origin:\n  repo: owner/repo          # e.g.\
+  \ alexeygrigorev/litehive\n  issue_number: 42\n  issue_url: https://github.com/owner/repo/issues/42\n\
+  \  imported_at: 2026-04-07T...\n```\n\n### Repo inference\nInfer `owner/repo` from\
+  \ `git remote origin` by default. Allow override via `--repo owner/repo` flag.\n\
+  \n### Label mapping\nHardcoded sensible defaults: `bug`\u2192`bugfix`, `documentation`\u2192\
+  `docs`, `enhancement`\u2192`refactor`, `question`\u2192`research`. Priority labels:\
+  \ `priority: high`/`critical`/`low` map directly. Configurable mapping in `config.yaml`\
+  \ is a follow-up, not in scope.\n\n### Duplicate detection\nBefore creating a task,\
+  \ scan all existing tasks for matching `github_origin.repo` + `github_origin.issue_number`.\
+  \ Print skip message with existing task ID if found.\n\n### Field mapping\n- Issue\
+  \ title \u2192 task title\n- Issue body \u2192 task goal (truncated if extremely\
+  \ long)\n- Issue labels \u2192 task_type and priority via label mapping\n- Issue\
+  \ number \u2192 stored in github_origin\n- Acceptance criteria are NOT auto-extracted\
+  \ (left empty for grooming stage to fill)\n\n## Refined Acceptance Criteria\n1.\
+  \ `litehive import-issue <github-url>` creates a task from a GitHub issue with title,\
+  \ goal, and github_origin populated\n2. `litehive import-issue <number> --repo owner/repo`\
+  \ works with just an issue number\n3. Repo is auto-detected from git remote when\
+  \ `--repo` is not provided\n4. Issue labels are mapped to task_type and priority\
+  \ using hardcoded defaults\n5. Re-importing the same issue prints a skip message\
+  \ with the existing task ID\n6. `litehive import-issues` imports all open issues\
+  \ that don't already have tasks, printing a summary\n7. Missing or unauthenticated\
+  \ `gh` CLI produces a clear error message\n8. Tests cover: single import, duplicate\
+  \ skip, bulk import, label mapping, missing gh error\n\n## Plan\n1. Add `github_origin`\
+  \ field to the task model in `litehive/models.py` and `litehive/tasks.py`\n2. Add\
+  \ `gh` CLI wrapper helpers (run gh command, parse JSON output, detect missing gh)\n\
+  3. Implement `import-issue` command: parse URL or number, fetch issue via `gh issue\
+  \ view`, map fields, call `create_task()`\n4. Implement duplicate detection: scan\
+  \ tasks for matching github_origin\n5. Implement `import-issues` command: `gh issue\
+  \ list --json`, filter already-imported, create tasks in loop\n6. Implement label\
+  \ mapping logic (hardcoded defaults)\n7. Register both commands in CLI parser\n\
+  8. Write tests with mocked `gh` subprocess calls\n\nPM_COMPLEXITY: moderate\nPLANNED_EFFORT:\
+  \ m\n\nTASK_UPDATE:\n  acceptance_criteria:\n    - \"`litehive import-issue <github-url>`\
+  \ creates a task with title, goal, and github_origin populated from the issue\"\n\
+  \    - \"`litehive import-issue <number> --repo owner/repo` works with just an issue\
+  \ number\"\n    - \"Repo is auto-detected from git remote when --repo is not provided\"\
+  \n    - \"Issue labels are mapped to task_type and priority using hardcoded defaults\"\
+  \n    - \"Re-importing the same issue prints a skip message with the existing task\
+  \ ID\"\n    - \"`litehive import-issues` imports all open issues not already tracked,\
+  \ printing a summary\"\n    - \"Missing or unauthenticated gh CLI produces a clear\
+  \ error message\"\n    - \"Tests cover single import, duplicate skip, bulk import,\
+  \ label mapping, and missing gh error\"\n  plan:\n    - \"Add github_origin field\
+  \ to task model in litehive/models.py and litehive/tasks.py\"\n    - \"Add gh CLI\
+  \ wrapper helpers (run command, parse JSON, detect missing gh)\"\n    - \"Implement\
+  \ import-issue command: parse URL or number, fetch via gh, map fields, create_task()\"\
+  \n    - \"Implement duplicate detection: scan existing tasks for matching github_origin\"\
+  \n    - \"Implement import-issues command: gh issue list, filter already-imported,\
+  \ create in loop\"\n    - \"Implement label mapping logic with hardcoded defaults\"\
+  \n    - \"Register both commands in CLI parser\"\n    - \"Write tests with mocked\
+  \ gh subprocess calls\"\n  pm_complexity: moderate\n  planned_effort: m\n  constraints:\n\
+  \    - \"Keep changes scoped to the task\"\n    - \"Use gh CLI for GitHub API access\
+  \ \u2014 no new Python dependencies\"\n    - \"Do not auto-extract acceptance criteria\
+  \ from issue body; leave for grooming\"\n\nSTAGE_RESULT:\n{\"verdict\":\"pass\"\
+  ,\"summary\":\"Groomed import-issue commands with concrete plan, github_origin model,\
+  \ gh CLI approach, and 8 acceptance criteria\",\"files_changed\":[],\"tests\":{\"\
+  added\":0,\"passing\":0},\"warnings\":[],\"follow_up_tasks\":[{\"title\":\"Add configurable\
+  \ GitHub label-to-task-type mapping in config.yaml\",\"rationale\":\"Hardcoded label\
+  \ mapping covers common cases but users with custom label schemes need config-driven\
+  \ overrides. Separate concern from core import functionality.\",\"blocking\":false}],\"\
+  acceptance_criteria\":[\"`litehive import-issue <github-url>` creates a task with\
+  \ title, goal, and github_origin populated from the issue\",\"`litehive import-issue\
+  \ <number> --repo owner/repo` works with just an issue number\",\"Repo is auto-detected\
+  \ from git remote when --repo is not provided\",\"Issue labels are mapped to task_type\
+  \ and priority using hardcoded defaults\",\"Re-importing the same issue prints a\
+  \ skip message with the existing task ID\",\"`litehive import-issues` imports all\
+  \ open issues not already tracked, printing a summary\",\"Missing or unauthenticated\
+  \ gh CLI produces a clear error message\",\"Tests cover single import, duplicate\
+  \ skip, bulk import, label mapping, and missing gh error\"],\"task_update\":{\"\
+  acceptance_criteria\":[\"`litehive import-issue <github-url>` creates a task with\
+  \ title, goal, and github_origin populated from the issue\",\"`litehive import-issue\
+  \ <number> --repo owner/repo` works with just an issue number\",\"Repo is auto-detected\
+  \ from git remote when --repo is not provided\",\"Issue labels are mapped to task_type\
+  \ and priority using hardcoded defaults\",\"Re-importing the same issue prints a\
+  \ skip message with the existing task ID\",\"`litehive import-issues` imports all\
+  \ open issues not already tracked, printing a summary\",\"Missing or unauthenticated\
+  \ gh CLI produces a clear error message\",\"Tests cover single import, duplicate\
+  \ skip, bulk import, label mapping, and missing gh error\"],\"plan\":[\"Add github_origin\
+  \ field to task model in litehive/models.py and litehive/tasks.py\",\"Add gh CLI\
+  \ wrapper helpers (run command, parse JSON, detect missing gh)\",\"Implement import-issue\
+  \ command: parse URL or number, fetch via gh, map fields, create_task()\",\"Implement\
+  \ duplicate detection: scan existing tasks for matching github_origin\",\"Implement\
+  \ import-issues command: gh issue list, filter already-imported, create in loop\"\
+  ,\"Implement label mapping logic with hardcoded defaults\",\"Register both commands\
+  \ in CLI parser\",\"Write tests with mocked gh subprocess calls\"],\"pm_complexity\"\
+  :\"moderate\",\"planned_effort\":\"m\",\"constraints\":[\"Keep changes scoped to\
+  \ the task\",\"Use gh CLI for GitHub API access \u2014 no new Python dependencies\"\
+  ,\"Do not auto-extract acceptance criteria from issue body; leave for grooming\"\
+  ]}}"
+files_changed: []
+follow_up_tasks: []
+created_follow_up_task_ids: []
+task_update: {}
+tests: {}
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 171
+hook_results: []
+created_at: '2026-04-07T17:48:00+00:00'

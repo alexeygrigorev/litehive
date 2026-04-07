@@ -7,13 +7,13 @@ engine: null
 model: null
 mode: implementation
 pipeline_mode: full
-status: in_progress
-pipeline_status: commit_to_git
+status: done
+pipeline_status: done
 priority: medium
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-07T07:32:48+00:00'
-updated_at: '2026-04-07T17:23:19+00:00'
+updated_at: '2026-04-07T17:25:55+00:00'
 goal: 'Cover the worktree rebase/merge flow with tests and add proper tracking for
   failed merges. Three parts: (1) Tests mocking the merge agent for all scenarios:
   rebase succeeds, rebase fails but merge succeeds, rebase fails and merge has conflict
@@ -82,15 +82,22 @@ subagents:
   path: subagents/SA-0007-reviewer
   sandboxed: false
   sandbox_summary: host
+- id: SA-0008
+  role: merge-resolver
+  engine: claude
+  status: completed
+  path: subagents/SA-0008-merge-resolver
+  sandboxed: false
+  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0208 add-worktree-merge-agent-tests-and-merge-failed'
-  commit_sha: null
-  checkpoint_base_sha: null
-  checkpoint_attempts: 0
+  commit_sha: 66dfd08444d6850d9d95abf2270a85dd68cf9abf
+  checkpoint_base_sha: a6fdc6d725d99154ca04d856f2d88ae13f2a7be2
+  checkpoint_attempts: 1
   rolled_back_checkpoint_attempt: null
   worktree_path: null
-  merge_agent_attempts: 0
+  merge_agent_attempts: 1
 retry_policy:
   max_retries: null
   stage_retry_limit: null

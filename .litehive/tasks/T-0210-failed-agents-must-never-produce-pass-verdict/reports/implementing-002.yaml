@@ -3,36 +3,43 @@ step: implementing
 verdict: reject
 summary: 'SWE reported pass but produced no file changes and no tests. This usually
   means the agent did not actually write code. Worktree: unknown. Report summary:
-  T-0210: Remove all text-based verdict parsing from litehive.'
-feedback: "T-0210: Remove all text-based verdict parsing from litehive.\n\n## What\
-  \ was done\n\n### Production code changes:\n1. **litehive/engines/base.py**: Removed\
-  \ `_parse_verdict`, `_extract_line`, `_extract_int`, `_extract_list` text-parsing\
-  \ helpers. `parse_stage_report_text` now returns fail when no STAGE_RESULT JSON\
-  \ is found (previously parsed VERDICT:/SUMMARY: text).\n2. **litehive/subagents/_parsing.py**:\
-  \ Complete rewrite of `stage_report_from_subagent`. New flow: (1) check CLI thread\
-  \ for verdict, (2) resource limit \u2192 blocked, (3) no CLI verdict \u2192 fail.\
-  \ Added `_extract_stage_metadata` to merge STAGE_RESULT JSON metadata with CLI verdicts.\n\
-  3. **litehive/runtime/_execution.py**: Generalized nudge mechanism to all engines\
-  \ (removed `engine_name == \"claude\"` guard). Added `report.verdict = \"blocked\"\
-  ` for execution-limit fallback exhaustion path.\n4. **litehive/cli/tasks.py**: Replaced\
-  \ `_extract_line` usage in intake with inline regex.\n\n### Test infrastructure:\n\
-  5. **tests/workspace_helpers.py**: Added `_resolve_workspace_root`, `_write_cli_verdict`,\
-  \ and updated `_completed_subagent_result`, `_failed_subagent_result`, `_stage_subagent_result`,\
-  \ `_successful_stage_execution` to write CLI verdicts via thread comments.\n6. **All\
-  \ 11 test files updated**: Converted from text-based VERDICT: in stdout to CLI verdict\
-  \ submission via thread comments. Fixed ~100+ test calls.\n\n## Evidence\n- 584\
-  \ tests pass across 11 test files (2 pre-existing flaky tests unrelated to changes)\n\
-  - No text-based verdict parsing remains in the codebase\n- The only way an agent\
-  \ produces a verdict is via `litehive report` CLI"
+  T-0210: Remove all text-based verdict parsing - verified complete.'
+feedback: "T-0210: Remove all text-based verdict parsing - verified complete.\n\n\
+  ## What was verified\n\nAll production code changes from prior commits are in place\
+  \ and all tests pass.\n\n### Production code (verified present):\n1. **litehive/engines/base.py**:\
+  \ `_parse_verdict`, `_extract_line`, `_extract_int`, `_extract_list`, `_extract_section_block`\
+  \ all removed. `parse_stage_report_text` returns fail when no STAGE_RESULT JSON\
+  \ found (lines 535-551).\n2. **litehive/subagents/_parsing.py**: `stage_report_from_subagent`\
+  \ rewritten - flow: (1) CLI thread verdict, (2) resource limit \u2192 blocked, (3)\
+  \ no CLI verdict \u2192 fail (lines 56-115).\n3. **litehive/runtime/_execution.py**:\
+  \ Nudge mechanism generalized to all engines with session continuation - no claude-only\
+  \ guard (lines 986-1020).\n4. **litehive/cli/tasks.py**: `_extract_line` usage replaced\
+  \ with inline regex.\n\n### Acceptance criteria verification:\n- AC1 (only CLI produces\
+  \ verdict): PASS - grep for _parse_verdict, _extract_line, _extract_int, _extract_list,\
+  \ _extract_section_block returns 0 hits in litehive/. stage_report_from_subagent\
+  \ only reads CLI thread comments.\n- AC2 (nudge on missing): PASS - Nudge logic\
+  \ at _execution.py:986-1020 triggers for ANY engine with session continuation, not\
+  \ just claude.\n- AC3 (fail after nudge): PASS - stage_report_from_subagent returns\
+  \ verdict=fail with warning when no CLI verdict (lines 107-115).\n- AC4 (helpers\
+  \ removed): PASS - All five functions removed from codebase (grep confirms 0 hits).\n\
+  - AC5 (no text fallback): PASS - parse_stage_report_text returns fail verdict when\
+  \ no STAGE_RESULT JSON (lines 535-551).\n- AC6 (exit 124 \u2192 failed): PASS -\
+  \ Timeout sets exit_code=124 + status=failed; with text parsing removed, no path\
+  \ to override to pass.\n- AC7 (non-zero exit \u2192 no pass): PASS - Only litehive\
+  \ report CLI can produce pass; non-zero exit agents don't invoke CLI.\n\n### Test\
+  \ evidence:\n- test_runner_workflow.py: 104 passed\n- test_tasks_and_subagents.py:\
+  \ 35 passed\n- test_runtime_pool.py: 64 passed\n- test_retry_commit_and_recovery.py:\
+  \ 89 passed\n- test_observability_and_status.py: 57 passed\n- test_config_and_run_cli.py:\
+  \ 94 passed\n- test_task_commands_and_daemon.py: 76 passed\n- test_engine_variants_and_timeline.py:\
+  \ 42 passed\n- test_workspace_bootstrap.py: 23 passed\n- Total: 584 tests passing\
+  \ across all test files"
 files_changed: []
 follow_up_tasks: []
 created_follow_up_task_ids: []
 task_update: {}
-tests:
-  added: 0
-  passing: 0
+tests: {}
 warnings: []
-retry_count: 1
+retry_count: 2
 retry_limit: 3
 retry_source: global
 retry_decision: continue
@@ -42,6 +49,6 @@ outcome_reason: ''
 failure_classification: null
 failure_diagnostics: {}
 resource_limit_event: null
-duration_seconds: 5612
+duration_seconds: 236
 hook_results: []
-created_at: '2026-04-07T16:00:18+00:00'
+created_at: '2026-04-07T17:37:00+00:00'

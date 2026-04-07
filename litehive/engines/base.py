@@ -563,24 +563,27 @@ def _extract_stage_result_submission(
     Returns the validated model on success, a ``ValidationError`` when the JSON
     is present but invalid, or ``None`` when no ``STAGE_RESULT:`` block exists.
     """
-    # Find "STAGE_RESULT:" header and capture the JSON that follows it.
+    # Inline extraction of the STAGE_RESULT: section from text.
     capture = False
-    lines: list[str] = []
+    section_lines: list[str] = []
+    header = "STAGE_RESULT:"
+    section: str | None = None
     for line in text.splitlines():
         stripped = line.strip()
-        if not capture:
-            if stripped == "STAGE_RESULT:":
-                capture = True
-                continue
-            if stripped.startswith("STAGE_RESULT:"):
-                lines.append(stripped[len("STAGE_RESULT:"):].strip())
-                break
-        else:
-            if re.match(r"^[A-Z_]+:", stripped):
-                break
-            lines.append(line)
-    section = "\n".join(lines).rstrip()
-    if not section:
+        if stripped == header:
+            capture = True
+            continue
+        if not capture and stripped.startswith(header):
+            inline_value = stripped[len(header):].strip()
+            section = inline_value or None
+            break
+        if capture and re.match(r"^[A-Z_]+:", stripped):
+            break
+        if capture:
+            section_lines.append(line)
+    if section is None and section_lines:
+        section = "\n".join(section_lines).rstrip() or None
+    if section is None:
         return None
     try:
         payload = json.loads(section)

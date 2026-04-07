@@ -412,6 +412,7 @@ class TaskExecutionRunner:
                         wt_full = (self.root / wt_path).resolve()
                         if wt_full.exists():
                             try:
+                                # Check uncommitted changes
                                 diff = subprocess.run(
                                     ["git", "diff", "--name-only", "HEAD"],
                                     cwd=wt_full, capture_output=True, text=True, timeout=10,
@@ -424,9 +425,16 @@ class TaskExecutionRunner:
                                     ["git", "ls-files", "--others", "--exclude-standard"],
                                     cwd=wt_full, capture_output=True, text=True, timeout=10,
                                 )
+                                # Also check committed changes ahead of main
+                                from litehive.git_ops import current_head
+                                main_head = current_head(self.root)
+                                committed = subprocess.run(
+                                    ["git", "diff", "--name-only", main_head or "HEAD", "HEAD"],
+                                    cwd=wt_full, capture_output=True, text=True, timeout=10,
+                                ) if main_head else subprocess.CompletedProcess(args=[], returncode=0, stdout="")
                                 all_changed = set(
                                     f.strip() for f in
-                                    (diff.stdout + staged.stdout + untracked.stdout).splitlines()
+                                    (diff.stdout + staged.stdout + untracked.stdout + committed.stdout).splitlines()
                                     if f.strip() and not f.strip().startswith(".litehive/")
                                 )
                                 if all_changed:
