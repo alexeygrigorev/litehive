@@ -3127,6 +3127,8 @@ def _should_recover_flagged_commit_stage_task(root: Path, task: TaskRecord) -> b
         return False
     if task.git.commit_sha is not None:
         return False
+    if task.git.merge_agent_attempts >= 1:
+        return False
     if _latest_stage_report_verdict_for_step(root, task, "accepting") in {"pass", "accept"}:
         return True
     if _latest_stage_report_verdict(root, task) in {"pass", "accept"}:

@@ -45,6 +45,9 @@ class PipelineState(str, Enum):
     INTERRUPTED = "interrupted"
     """Task was stopped mid-execution; resumable after inspection."""
 
+    RECOVERY_FAILED = "recovery_failed"
+    """Both merge agent and recovery agent failed; left for manual resolution."""
+
     # ── Transient scheduler states ────────────────────────────────────────────
     QUEUED = "queued"
     """Task is waiting in the pool for its next execution slot."""

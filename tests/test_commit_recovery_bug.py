@@ -203,3 +203,102 @@ def test_merge_conflict_agent_fails_to_resolve(tmp_path: Path) -> None:
     assert task.status != "done"
     assert worktree_path.exists(), "Worktree deleted despite failed merge!"
     assert (worktree_path / "feature.py").read_text() == "def feature(): return 'worktree'\n"
+
+
+def _setup_conflict(tmp_path: Path):
+    """Helper: create a repo with a worktree that conflicts with main."""
+    _init_git_repo(tmp_path)
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Retry limit test")
+
+    worktree_path = tmp_path / ".litehive" / "worktrees" / f"{task.id}-{task.slug}"
+    worktree_path.parent.mkdir(parents=True, exist_ok=True)
+    _run(["git", "worktree", "add", "--detach", str(worktree_path), "HEAD"], tmp_path)
+    (worktree_path / "feature.py").write_text("def feature(): return 'worktree'\n")
+    _run(["git", "add", "feature.py"], worktree_path)
+    _run(["git", "commit", "-m", "add feature in worktree"], worktree_path)
+
+    task.git.worktree_path = str(worktree_path.relative_to(tmp_path))
+    task.pipeline_status = "commit_to_git"
+    save_task(tmp_path, task)
+
+    (tmp_path / "feature.py").write_text("def feature(): return 'main'\n")
+    _run(["git", "add", "feature.py"], tmp_path)
+    _run(["git", "commit", "-m", "conflicting change"], tmp_path)
+
+    return task, worktree_path
+
+
+class _CountingSubagents:
+    """Fake subagent manager that counts launches and never resolves conflicts."""
+    def __init__(self, worktree_path):
+        self.execution_root = worktree_path
+        self.launch_count = 0
+
+    def run(self, task, *, role, engine_name, prompt, model=None):
+        from litehive.subagents import SubagentResult
+        from litehive.models import SubagentRef
+        self.launch_count += 1
+        return SubagentResult(
+            ref=SubagentRef(id=f"SA-merge-{self.launch_count}", role=role,
+                            engine=engine_name, status="completed",
+                            path=f"subagents/SA-merge-{self.launch_count}"),
+            execution=None, transcript="Could not resolve", exit_code=1,
+        )
+
+
+def test_merge_agent_launches_exactly_once(tmp_path: Path) -> None:
+    """Merge agent must launch at most once per conflict, even across multiple attempts."""
+    task, worktree_path = _setup_conflict(tmp_path)
+    fake = _CountingSubagents(worktree_path)
+
+    # First attempt: merge agent should launch
+    report1 = _commit_to_git_report(
+        tmp_path, worktree_path, task, auto_commit_enabled=True,
+        subagents=fake, config=LitehiveConfig(),
+    )
+    assert report1.verdict == "fail"
+    assert fake.launch_count == 1
+    assert task.git.merge_agent_attempts == 1
+
+    # Reset git state for second attempt (re-create the conflict)
+    (tmp_path / "feature.py").write_text("def feature(): return 'main'\n")
+    _run(["git", "add", "feature.py"], tmp_path)
+    _run(["git", "commit", "-m", "re-create conflict"], tmp_path)
+
+    # Second attempt: merge agent must NOT launch again
+    report2 = _commit_to_git_report(
+        tmp_path, worktree_path, task, auto_commit_enabled=True,
+        subagents=fake, config=LitehiveConfig(),
+    )
+    assert report2.verdict == "fail"
+    assert fake.launch_count == 1, "Merge agent launched more than once!"
+    assert task.git.merge_agent_attempts == 1
+
+
+def test_recovery_failed_blocks_repair_requeue(tmp_path: Path) -> None:
+    """Tasks with status=recovery_failed must not be requeued by repair."""
+    from litehive.tasks import _should_recover_flagged_commit_stage_task
+    _init_git_repo(tmp_path)
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Recovery failed task")
+    task.pipeline_status = "commit_to_git"
+    task.status = "recovery_failed"
+    task.git.merge_agent_attempts = 1
+    save_task(tmp_path, task)
+
+    assert not _should_recover_flagged_commit_stage_task(tmp_path, task)
+
+
+def test_merge_attempts_blocks_repair_requeue(tmp_path: Path) -> None:
+    """Tasks with merge_agent_attempts >= 1 must not be requeued by repair, even if flagged."""
+    from litehive.tasks import _should_recover_flagged_commit_stage_task
+    _init_git_repo(tmp_path)
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Already attempted task")
+    task.pipeline_status = "commit_to_git"
+    task.status = "flagged"
+    task.git.merge_agent_attempts = 1
+    save_task(tmp_path, task)
+
+    assert not _should_recover_flagged_commit_stage_task(tmp_path, task)
