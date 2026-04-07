@@ -1,0 +1,17 @@
+- role: swe
+  step: implementing
+  verdict: pass
+  message: "Verified T-0213 implementation. All four acceptance criteria are met:\n\
+    \n1. Agent prompt templates no longer ask for FILES_CHANGED: Confirmed \u2014\
+    \ grep for FILES_CHANGED in litehive/subagents/_prompts.py returns zero matches.\n\
+    \n2. StageReport.files_changed is populated from git diff at commit stage: Confirmed\
+    \ \u2014 litehive/runtime/_commit.py:162-183 runs git diff --name-only head_before\
+    \ head_after after merge.\n\n3. Empty SWE guard uses only git status, never report.files_changed:\
+    \ Confirmed \u2014 litehive/runner/core.py:402-450 runs git diff/status/ls-files\
+    \ directly on the worktree.\n\n4. Existing tests updated to not require FILES_CHANGED\
+    \ in fake agent output: Confirmed \u2014 test helpers no longer pass files_changed.\n\
+    \nTests run: 291 passed (test_runner_workflow: 104, test_stage_result_submission:\
+    \ 8, test_retry_commit_and_recovery: 89, test_tasks_and_subagents: 35, test_config_and_run_cli:\
+    \ 55)."
+  files_changed: []
+  created_at: '2026-04-07T19:51:06+00:00'

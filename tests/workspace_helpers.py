@@ -279,7 +279,11 @@ def _write_cli_verdict(
     message: str | None = None,
     files_changed: list[str] | None = None,
 ) -> None:
-    """Simulate a litehive report CLI invocation by writing a thread comment."""
+    """Simulate a litehive report CLI invocation by writing a thread comment.
+
+    The ``files_changed`` parameter is accepted for backward compatibility but
+    ignored — git is the source of truth for changed files.
+    """
     from litehive.models import TaskThreadComment
 
     # Write to the main workspace root, not the worktree.
@@ -295,7 +299,6 @@ def _write_cli_verdict(
             step=step,
             verdict=verdict,
             message=message or f"{step} {verdict}",
-            files_changed=files_changed or [],
         ),
     )
 
@@ -305,6 +308,7 @@ def _completed_subagent_result(
 ) -> SubagentResult:
     worktrees_root = tmp_path / ".litehive" / "worktrees"
     if step == "implementing" and worktrees_root.exists():
+        wrote_to_worktree = False
         main_app = tmp_path / "app.txt"
         for worktree in sorted(worktrees_root.iterdir()):
             if not worktree.is_dir():
@@ -313,7 +317,16 @@ def _completed_subagent_result(
             if main_app.exists() and worktree_app.exists():
                 worktree_app.write_text(main_app.read_text(encoding="utf-8"), encoding="utf-8")
                 subprocess.run(["git", "checkout", "--", "app.txt"], cwd=tmp_path, check=True)
+                wrote_to_worktree = True
                 break
+        if not wrote_to_worktree:
+            # No worktree — write a change in the main repo so the git-based guard detects it.
+            app_file = tmp_path / "app.txt"
+            app_file.write_text("implemented\n", encoding="utf-8")
+    elif step == "implementing":
+        # No worktrees dir — write a change in the main repo so the git-based guard detects it.
+        app_file = tmp_path / "app.txt"
+        app_file.write_text("implemented\n", encoding="utf-8")
 
     # Simulate CLI verdict submission via thread comment.
     if task is not None:
@@ -323,7 +336,6 @@ def _completed_subagent_result(
             step,
             verdict="pass",
             message=f"{step} complete via {engine_name}",
-            files_changed=["app.txt"],
         )
 
     return SubagentResult(
@@ -389,7 +401,7 @@ def _stage_subagent_result(
     engine_name: str = "codex",
     verdict: str = "PASS",
     summary: str | None = None,
-    files_changed: list[str] | None = None,
+    files_changed: list[str] | None = None,  # ignored — git is source of truth
     tests_added: int = 1,
     tests_passing: int = 1,
     warnings: list[str] | None = None,
@@ -406,7 +418,6 @@ def _stage_subagent_result(
             step,
             verdict=effective_verdict,
             message=effective_summary,
-            files_changed=files_changed or [],
         )
 
     transcript = f"{effective_summary}\n"
@@ -519,7 +530,6 @@ def _successful_stage_execution(tmp_path: Path, adapter: str, step: str) -> CLIE
                 active_task.pipeline_status,
                 verdict="pass",
                 message=f"{step} complete via {adapter}",
-                files_changed=["app.txt"],
             )
     return CLIExecutionResult(
         adapter=adapter,

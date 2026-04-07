@@ -35,8 +35,7 @@ def _extract_stage_metadata(result: SubagentResult) -> dict:
         return {}
 
     metadata: dict = {}
-    if submission.files_changed:
-        metadata["files_changed"] = submission.files_changed
+    # files_changed is not extracted from agent output — git is the source of truth.
     if submission.follow_up_tasks:
         metadata["follow_up_tasks"] = submission.follow_up_tasks
     if submission.warnings:
@@ -71,7 +70,6 @@ def stage_report_from_subagent(
             # Verdict comes from CLI; merge non-verdict metadata from STAGE_RESULT
             # JSON in transcript if available.
             metadata = _extract_stage_metadata(result)
-            files_changed = latest.files_changed or metadata.get("files_changed", [])
             return StageReport(
                 task_id=task.id,
                 step=step,  # type: ignore[arg-type]
@@ -80,7 +78,6 @@ def stage_report_from_subagent(
                 if latest.message
                 else f"{step} {latest.verdict}",
                 feedback=latest.message,
-                files_changed=files_changed,
                 follow_up_tasks=metadata.get("follow_up_tasks", []),
                 task_update=metadata.get("task_update", {}),
                 tests=metadata.get("tests", {}),

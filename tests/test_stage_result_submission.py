@@ -33,7 +33,7 @@ def test_valid_submission_produces_structured_report() -> None:
     )
     assert report.verdict == "pass"
     assert report.summary == "All checks green"
-    assert report.files_changed == ["src/foo.py", "tests/test_foo.py"]
+    assert report.files_changed == []  # files_changed no longer extracted from agent output
     assert report.tests == {"added": 3, "passing": 10}
     assert report.warnings == ["minor lint issue"]
 

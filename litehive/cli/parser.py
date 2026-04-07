@@ -892,12 +892,6 @@ def build_parser():
         "--step",
         help="Stage (grooming, implementing, testing, accepting). Defaults to the task's current pipeline_status.",
     )
-    report.add_argument(
-        "--files-changed",
-        action="append",
-        default=[],
-        help="Files that were changed (repeat for multiple)",
-    )
     report.add_argument("--task-id", help="Task ID. Defaults to the active task.")
     report.add_argument(
         "--workspace", type=Path, default=Path.cwd(), help="Repository root containing .litehive/"
