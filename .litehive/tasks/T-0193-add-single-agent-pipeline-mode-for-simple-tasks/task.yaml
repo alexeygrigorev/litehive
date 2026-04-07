@@ -6,13 +6,13 @@ task_type: null
 engine: null
 model: null
 mode: implementation
-status: in_progress
-pipeline_status: commit_to_git
+status: done
+pipeline_status: done
 priority: medium
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-06T20:14:34+00:00'
-updated_at: '2026-04-06T23:23:53+00:00'
+updated_at: '2026-04-06T23:25:41+00:00'
 goal: Add single-agent pipeline mode. Single mode is work -> done. One agent gets
   the task, does whatever is needed, and submits a verdict. No grooming, QA, or reviewer
   stages. Goes to commit_to_git if there are code changes, otherwise straight to done.
@@ -58,14 +58,14 @@ subagents:
 - id: SA-0005
   role: merge-resolver
   engine: claude
-  status: running
+  status: completed
   path: subagents/SA-0005-merge-resolver
   sandboxed: false
   sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0193 add-single-agent-pipeline-mode-for-simple-tasks'
-  commit_sha: null
+  commit_sha: e1ad980a9e5faf5b0ff343e935d7d52729fc56a0
   checkpoint_base_sha: null
   checkpoint_attempts: 0
   rolled_back_checkpoint_attempt: null

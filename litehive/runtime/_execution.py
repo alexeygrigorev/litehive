@@ -10,6 +10,7 @@ import yaml
 
 from litehive.config import LitehiveConfig, load_config, load_context
 from litehive.engines import extract_engine_continuation, get_engine
+from litehive.engines._codex_quota import check_codex_quota, codex_quota_block_reason
 from litehive.git_ops import (
     GitError,
     add_worktree,
@@ -93,6 +94,15 @@ _POST_STAGE_HOOK_POINTS = {
     "implementing": "after_swe_implementation",
 }
 _POST_ACCEPT_VERDICTS = {"pass", "accept"}
+
+
+def _record_codex_monitoring(root: Path, status: object) -> None:
+    try:
+        from litehive.observability._engine_monitoring import record_codex_quota_check
+
+        record_codex_quota_check(root, status=status)
+    except Exception:  # noqa: BLE001
+        pass  # best-effort monitoring
 
 
 def resolve_next_task(root: Path) -> TaskRecord | None:
@@ -698,6 +708,38 @@ def build_executor(
         limit_trigger_reason: str | None = None
 
         for index, engine_name in enumerate(engines):
+            if engine_name == "codex":
+                quota_status = check_codex_quota()
+                _record_codex_monitoring(root, quota_status)
+                quota_reason = codex_quota_block_reason()
+                if quota_reason is not None:
+                    if index + 1 < len(engines):
+                        next_engine = engines[index + 1]
+                        event = (
+                            f"Stage `{step}` switched from `{engine_name}` to `{next_engine}` "
+                            f"after {quota_reason}."
+                        )
+                        execution_events.append(event)
+                        append_journal(root, current_task, event)
+                        mark_engine_switch(
+                            root,
+                            current_task,
+                            step=step,
+                            from_engine=engine_name,
+                            to_engine=next_engine,
+                            reason=quota_reason,
+                        )
+                        continue
+                    report = StageReport(
+                        task_id=current_task.id,
+                        step=step,  # type: ignore[arg-type]
+                        verdict="blocked",
+                        summary=f"{step} blocked: {quota_reason}",
+                        feedback="\n\n".join(execution_events).strip(),
+                        warnings=[*execution_events, quota_reason],
+                    )
+                    return report
+
             budget_reason = budget_ledger.block_reason(engine_name)
             if budget_reason is not None:
                 if index + 1 < len(engines):
