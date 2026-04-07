@@ -71,6 +71,8 @@
   Shows the registered daemon PID plus the latest workspace-local run-all logs.
 - `uv run litehive daemon stop --workspace .`
   Stops the workspace daemon cleanly.
+- `uv run litehive daemon restart --workspace .`
+  Restarts the workspace daemon.
 - `uv run litehive daemon instances`
   Lists live daemons across workspaces from the global registry at `~/.config/litehive/daemons.yaml`.
 
