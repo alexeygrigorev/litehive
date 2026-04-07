@@ -334,3 +334,115 @@
     \ test files"
   files_changed: []
   created_at: '2026-04-07T17:44:37+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: "T-0210: Remove all text-based verdict parsing - verified complete.\n\n\
+    ## Verification performed\n\nVerified all acceptance criteria against the current\
+    \ codebase state (changes already committed by prior runs):\n\n### AC1 (only CLI\
+    \ produces verdict): PASS\n- grep for _parse_verdict, _extract_line, _extract_int,\
+    \ _extract_list, _extract_section_block returns 0 hits in litehive/\n- stage_report_from_subagent\
+    \ (subagents/_parsing.py:56-115) only reads CLI thread comments from litehive\
+    \ report\n\n### AC2 (nudge on missing): PASS\n- Nudge logic at _execution.py:1000-1020\
+    \ uses extract_engine_continuation() which handles all engines (codex, opencode,\
+    \ gemini, claude) - no engine-specific guard\n\n### AC3 (fail after nudge): PASS\n\
+    - stage_report_from_subagent returns verdict=fail with warning \"Agent did not\
+    \ submit verdict via litehive report CLI\" when no CLI verdict found (lines 107-115)\n\
+    \n### AC4 (helpers removed): PASS\n- All five functions (_parse_verdict, _extract_line,\
+    \ _extract_int, _extract_list, _extract_section_block) confirmed removed from\
+    \ entire litehive/ directory\n\n### AC5 (no text fallback): PASS\n- parse_stage_report_text\
+    \ (engines/base.py:507-551) returns fail verdict when no valid STAGE_RESULT JSON\
+    \ submission found - no text-based VERDICT:/SUMMARY: parsing\n\n### AC6 (exit\
+    \ 124 \u2192 failed): PASS\n- Timeout classified as EngineFailure with classification=\"\
+    timeout\", propagated to stage_report_from_subagent which returns verdict=fail.\
+    \ No text-parsing path exists to override to pass.\n\n### AC7 (non-zero exit \u2192\
+    \ no pass): PASS\n- Only litehive report CLI can produce pass verdict. Non-zero\
+    \ exit agents don't invoke CLI, so stage_report_from_subagent returns fail.\n\n\
+    ## Test evidence\n- test_runner_workflow.py: 104 passed\n- test_stage_result_submission.py\
+    \ + test_tasks_and_subagents.py: 43 passed\n- test_runtime_pool.py + test_retry_commit_and_recovery.py\
+    \ + test_feedback_cap.py: 160 passed\n- Total: 307 tests passing across 6 test\
+    \ files, all green"
+  files_changed: []
+  created_at: '2026-04-07T18:38:45+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: "T-0210: Remove all text-based verdict parsing - verified complete.\n\n\
+    ## Verified production code changes:\n1. **litehive/engines/base.py**: _parse_verdict,\
+    \ _extract_line, _extract_int, _extract_list, _extract_section_block all removed.\
+    \ parse_stage_report_text returns fail verdict when no STAGE_RESULT JSON found\
+    \ (lines 535-551).\n2. **litehive/subagents/_parsing.py**: stage_report_from_subagent\
+    \ rewritten - flow: (1) CLI thread verdict, (2) resource limit \u2192 blocked,\
+    \ (3) no CLI verdict \u2192 fail (lines 56-115).\n3. **litehive/runtime/_execution.py**:\
+    \ Nudge mechanism generalized to all engines with session continuation via extract_engine_continuation()\
+    \ - no claude-only guard (lines 995-1020).\n4. **litehive/cli/tasks.py**: _extract_line\
+    \ usage replaced with inline regex.\n\n## Acceptance criteria verification:\n\
+    - AC1 (only CLI produces verdict): PASS - grep for _parse_verdict/_extract_line/_extract_int/_extract_list/_extract_section_block\
+    \ returns 0 hits in litehive/. stage_report_from_subagent only reads CLI thread\
+    \ comments.\n- AC2 (nudge on missing): PASS - Nudge at _execution.py:995-1020\
+    \ triggers for ANY engine with session continuation.\n- AC3 (fail after nudge):\
+    \ PASS - stage_report_from_subagent returns verdict=fail with warning when no\
+    \ CLI verdict (lines 107-115).\n- AC4 (helpers removed): PASS - All five functions\
+    \ removed from codebase (grep confirms 0 hits).\n- AC5 (no text fallback): PASS\
+    \ - parse_stage_report_text returns fail verdict when no STAGE_RESULT JSON (lines\
+    \ 535-551).\n- AC6 (exit 124 \u2192 failed): PASS - Timeout sets exit_code=124\
+    \ + status=failed; no text-parsing path to override to pass.\n- AC7 (non-zero\
+    \ exit \u2192 no pass): PASS - Only litehive report CLI can produce pass; non-zero\
+    \ exit agents don't invoke CLI.\n\n## Test evidence:\n- test_runner_workflow.py\
+    \ + test_stage_result_submission.py + test_tasks_and_subagents.py: 147 passed\n\
+    - test_runtime_pool.py + test_retry_commit_and_recovery.py + test_feedback_cap.py:\
+    \ 160 passed\n- Total: 307 tests passing across 6 test files"
+  files_changed: []
+  created_at: '2026-04-07T18:41:35+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: "T-0210: All text-based verdict parsing already removed and verified.\n\
+    \n## Verification performed\n\nAll acceptance criteria confirmed met against current\
+    \ codebase:\n\n- AC1 (only CLI produces verdict): PASS - grep for _parse_verdict,\
+    \ _extract_line, _extract_int, _extract_list, _extract_section_block returns 0\
+    \ hits in litehive/. stage_report_from_subagent (subagents/_parsing.py:56-115)\
+    \ only reads CLI thread comments.\n- AC2 (nudge on missing): PASS - Nudge logic\
+    \ at _execution.py:995-1020 uses extract_engine_continuation() which handles all\
+    \ engines, no claude-only guard.\n- AC3 (fail after nudge): PASS - stage_report_from_subagent\
+    \ returns verdict=fail with warning \"Agent did not submit verdict via litehive\
+    \ report CLI\" when no CLI verdict found (lines 107-115).\n- AC4 (helpers removed):\
+    \ PASS - All five functions removed from entire codebase (grep confirms 0 hits).\n\
+    - AC5 (no text fallback): PASS - parse_stage_report_text (engines/base.py:507-551)\
+    \ returns fail verdict when no STAGE_RESULT JSON found.\n- AC6 (exit 124 \u2192\
+    \ failed): PASS - Timeout sets status=failed; no text-parsing path to override\
+    \ to pass.\n- AC7 (non-zero exit \u2192 no pass): PASS - Only litehive report\
+    \ CLI can produce pass; non-zero exit agents don't invoke CLI.\n\n## Test evidence\n\
+    - test_runner_workflow.py: 104 passed\n- test_tasks_and_subagents.py + test_stage_result_submission.py:\
+    \ 43 passed\n- Total: 147 tests passing, all green\n\n## Note\nNo new changes\
+    \ were needed - all implementation was already committed to main by prior runs.\
+    \ Working tree is clean with no diff from main."
+  files_changed: []
+  created_at: '2026-04-07T18:43:23+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: "T-0210: All text-based verdict parsing already removed and verified in\
+    \ main.\n\n## Verified production code changes:\n1. **litehive/engines/base.py**:\
+    \ _parse_verdict, _extract_line, _extract_int, _extract_list, _extract_section_block\
+    \ all removed. parse_stage_report_text returns fail verdict when no STAGE_RESULT\
+    \ JSON found (lines 535-551).\n2. **litehive/subagents/_parsing.py**: stage_report_from_subagent\
+    \ rewritten - flow: (1) CLI thread verdict, (2) resource limit \u2192 blocked,\
+    \ (3) no CLI verdict \u2192 fail (lines 56-115).\n3. **litehive/runtime/_execution.py**:\
+    \ Nudge mechanism generalized to all engines with session continuation via extract_engine_continuation()\
+    \ (lines 995-1020). No claude-only guard.\n4. **litehive/cli/tasks.py**: _extract_line\
+    \ usage replaced with inline regex.\n\n## Acceptance criteria verification:\n\
+    - AC1 (only CLI produces verdict): PASS - grep for all five text-parsing functions\
+    \ returns 0 hits in litehive/\n- AC2 (nudge on missing): PASS - Nudge at _execution.py:995-1020\
+    \ triggers for ANY engine with session continuation\n- AC3 (fail after nudge):\
+    \ PASS - stage_report_from_subagent returns verdict=fail when no CLI verdict (lines\
+    \ 107-115)\n- AC4 (helpers removed): PASS - All five functions removed from codebase\n\
+    - AC5 (no text fallback): PASS - parse_stage_report_text returns fail verdict\
+    \ when no STAGE_RESULT JSON\n- AC6 (exit 124 \u2192 failed): PASS - Timeout sets\
+    \ status=failed; no text-parsing path to override to pass\n- AC7 (non-zero exit\
+    \ \u2192 no pass): PASS - Only litehive report CLI can produce pass\n\n## Test\
+    \ evidence:\n- test_runner_workflow.py + test_tasks_and_subagents.py + test_stage_result_submission.py:\
+    \ 147 tests passing\n- Working tree is clean - no diff from main (all changes\
+    \ already committed by prior runs)"
+  files_changed: []
+  created_at: '2026-04-07T18:44:52+00:00'

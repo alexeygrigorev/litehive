@@ -1,0 +1,46 @@
+id: T-0213
+slug: remove-files-changed-from-agent-report-format-use
+title: Remove files_changed from agent report format - use git as source of truth
+depends_on: []
+task_type: null
+engine: null
+model: null
+mode: implementation
+pipeline_mode: full
+status: queued
+pipeline_status: backlog
+priority: medium
+pm_complexity: null
+planned_effort: null
+created_at: '2026-04-07T18:58:14+00:00'
+updated_at: '2026-04-07T18:58:14+00:00'
+goal: Agents should not have to list files they changed in their report. Git already
+  knows. Remove files_changed from the report format that agents produce. Instead,
+  populate it automatically from git diff in the worktree at commit time. The guard
+  already checks git directly. The field can stay in StageReport as internal metadata
+  but agents should never be asked to produce it.
+acceptance_criteria:
+- Agent prompt templates no longer ask for FILES_CHANGED
+- StageReport.files_changed is populated from git diff at commit stage, not from agent
+  output
+- Empty SWE guard uses only git status, never report.files_changed
+- Existing tests updated to not require FILES_CHANGED in fake agent output
+constraints: []
+plan: []
+human_checkpoints: []
+subagents: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0213 remove-files-changed-from-agent-report-format-use'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+  worktree_path: null
+  merge_agent_attempts: 0
+retry_policy:
+  max_retries: null
+  stage_retry_limit: null
+created_from: null
+upstream_origin: null
+github_origin: null
