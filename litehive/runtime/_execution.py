@@ -977,7 +977,6 @@ def build_executor(
             if (
                 not thread_comments
                 and result.failure is None
-                and engine_name == "claude"
                 and result.execution is not None
             ):
                 continuation = extract_engine_continuation(engine_name, result.execution)
@@ -1047,6 +1046,10 @@ def build_executor(
                 )
             _attach_runner_hook_results(report, pre_stage_hook_results)
             if limit_trigger_reason is not None and (is_limit_failure or is_unavailable_fallback):
+                # Execution-limit fallback exhaustion is an infrastructure
+                # issue, not a task-quality issue — verdict must be "blocked"
+                # so the pool stop-condition can detect it.
+                report.verdict = "blocked"
                 if (
                     is_unavailable_fallback
                     and result.failure is not None

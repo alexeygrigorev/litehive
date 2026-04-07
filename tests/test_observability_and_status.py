@@ -38,7 +38,7 @@ def test_cmd_run_default_executes_single_task_and_reports_summary(
     monkeypatch.setattr(
         "litehive.runtime.SubagentManager.run",
         lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
-            _completed_subagent_result(tmp_path, task.pipeline_status)
+            _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
         ),
     )
 
@@ -121,7 +121,7 @@ def test_cmd_run_drains_task_pool_and_reports_summary(
     monkeypatch.setattr(
         "litehive.runtime.SubagentManager.run",
         lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
-            _completed_subagent_result(tmp_path, task.pipeline_status)
+            _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
         ),
     )
 
@@ -347,7 +347,7 @@ def test_cmd_run_reports_resumable_interrupted_tasks(
     def fake_run(self, current_task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None):  # type: ignore[no-untyped-def]
         if current_task.pipeline_status == "testing":
             raise KeyboardInterrupt()
-        return _completed_subagent_result(tmp_path, current_task.pipeline_status)
+        return _completed_subagent_result(tmp_path, current_task.pipeline_status, task=current_task)
 
     monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_run)
 
@@ -379,7 +379,7 @@ def test_run_next_task_marks_subagent_termination_as_interrupted(tmp_path: Path)
                 tmp_path, current_task.pipeline_status, engine_name=engine_name
             )
         return _completed_subagent_result(
-            tmp_path, current_task.pipeline_status, engine_name=engine_name
+            tmp_path, current_task.pipeline_status, engine_name=engine_name, task=current_task
         )
 
     monkeypatch = pytest.MonkeyPatch()
@@ -418,7 +418,7 @@ def test_cmd_run_reports_remaining_tasks_when_pool_stops_early(
     monkeypatch.setattr(
         "litehive.runtime.SubagentManager.run",
         lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
-            _completed_subagent_result(tmp_path, task.pipeline_status)
+            _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
         ),
     )
 
@@ -492,49 +492,15 @@ def test_cmd_run_drain_reports_no_useful_progress_after_requeue_when_only_blocke
     save_state(tmp_path, state)
 
     def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None):  # type: ignore[no-untyped-def]
-        transcript = "\n".join(
-            [
-                "VERDICT: PASS",
-                f"SUMMARY: {task.pipeline_status} passed",
-                "FILES_CHANGED:",
-                "- app.txt",
-                "TESTS_ADDED: 1",
-                "TESTS_PASSING: 1",
-                "WARNINGS:",
-            ]
-        )
         if task.id == active.id and task.pipeline_status == "testing":
             task.depends_on = ["T-9998"]
             save_task(tmp_path, task)
-            transcript = "\n".join(
-                [
-                    "VERDICT: FAIL",
-                    "SUMMARY: qa wants another implementation pass",
-                    "FILES_CHANGED:",
-                    "TESTS_ADDED: 0",
-                    "TESTS_PASSING: 0",
-                    "WARNINGS:",
-                ]
+            return _stage_subagent_result(
+                tmp_path, task.pipeline_status, engine_name=engine_name,
+                verdict="FAIL", summary="qa wants another implementation pass",
+                files_changed=[], tests_added=0, tests_passing=0, task=task,
             )
-        return SubagentResult(
-            ref=SubagentRef(
-                id=f"SA-{task.id}-{task.pipeline_status}-codex",
-                role=role,
-                engine=engine_name,
-                status="completed",
-                path=f"subagents/{task.id}-{task.pipeline_status}-codex",
-            ),
-            execution=CLIExecutionResult(
-                adapter=engine_name,
-                argv=(engine_name, "exec"),
-                cwd=tmp_path,
-                exit_code=0,
-                stdout=transcript,
-                stderr="",
-            ),
-            transcript=transcript,
-            exit_code=0,
-        )
+        return _completed_subagent_result(tmp_path, task.pipeline_status, engine_name=engine_name, task=task)
 
     monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_run)
 
@@ -572,7 +538,7 @@ def test_cmd_run_reports_human_checkpoint_stop_without_marking_failure(
     monkeypatch.setattr(
         "litehive.runtime.SubagentManager.run",
         lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
-            _completed_subagent_result(tmp_path, task.pipeline_status)
+            _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
         ),
     )
 
@@ -610,47 +576,13 @@ def test_cmd_run_reports_requeued_task_even_when_other_tasks_are_blocked(
     save_state(tmp_path, state)
 
     def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None):  # type: ignore[no-untyped-def]
-        transcript = "\n".join(
-            [
-                "VERDICT: PASS",
-                f"SUMMARY: {task.pipeline_status} passed",
-                "FILES_CHANGED:",
-                "- app.txt",
-                "TESTS_ADDED: 1",
-                "TESTS_PASSING: 1",
-                "WARNINGS:",
-            ]
-        )
         if task.id == active.id and task.pipeline_status == "testing":
-            transcript = "\n".join(
-                [
-                    "VERDICT: FAIL",
-                    "SUMMARY: qa wants another implementation pass",
-                    "FILES_CHANGED:",
-                    "TESTS_ADDED: 0",
-                    "TESTS_PASSING: 0",
-                    "WARNINGS:",
-                ]
+            return _stage_subagent_result(
+                tmp_path, task.pipeline_status, engine_name=engine_name,
+                verdict="FAIL", summary="qa wants another implementation pass",
+                files_changed=[], tests_added=0, tests_passing=0, task=task,
             )
-        return SubagentResult(
-            ref=SubagentRef(
-                id=f"SA-{task.id}-{task.pipeline_status}-codex",
-                role=role,
-                engine=engine_name,
-                status="completed",
-                path=f"subagents/{task.id}-{task.pipeline_status}-codex",
-            ),
-            execution=CLIExecutionResult(
-                adapter=engine_name,
-                argv=(engine_name, "exec"),
-                cwd=tmp_path,
-                exit_code=0,
-                stdout=transcript,
-                stderr="",
-            ),
-            transcript=transcript,
-            exit_code=0,
-        )
+        return _completed_subagent_result(tmp_path, task.pipeline_status, engine_name=engine_name, task=task)
 
     monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_run)
 
@@ -713,7 +645,7 @@ def test_cmd_run_reports_stage_outcomes_for_remaining_task_with_prior_reports(
     monkeypatch.setattr(
         "litehive.runtime.SubagentManager.run",
         lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
-            _completed_subagent_result(tmp_path, task.pipeline_status)
+            _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
         ),
     )
 
@@ -760,11 +692,10 @@ def test_cmd_run_reports_failed_task_summary_with_stage_outcomes(
     save_task(tmp_path, task)
 
     def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None):  # type: ignore[no-untyped-def]
-        return SubagentResult(
-            ref=SubagentRef(id="SA-grooming", role=role, engine=engine_name, status="completed", path="subagents/grooming"),
-            execution=CLIExecutionResult(adapter=engine_name, argv=(engine_name, "exec"), cwd=tmp_path, exit_code=0,
-                stdout="VERDICT: BLOCKED\nSUMMARY: missing acceptance criteria\nFILES_CHANGED:\nTESTS_ADDED: 0\nTESTS_PASSING: 0\nWARNINGS:\n", stderr=""),
-            transcript="", exit_code=0,
+        return _stage_subagent_result(
+            tmp_path, task.pipeline_status, engine_name=engine_name,
+            verdict="BLOCKED", summary="missing acceptance criteria",
+            files_changed=[], tests_added=0, tests_passing=0, task=task,
         )
 
     monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_run)
@@ -2746,7 +2677,7 @@ def test_pool_summary_flow_stats_in_durable_report(
     monkeypatch.setattr(
         "litehive.runtime.SubagentManager.run",
         lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
-            _completed_subagent_result(tmp_path, task.pipeline_status)
+            _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
         ),
     )
 

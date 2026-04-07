@@ -1208,7 +1208,7 @@ def test_drain_task_pool_uses_run_engine_override_for_execution(
         self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None
     ):  # type: ignore[no-untyped-def]
         seen_engines.append(engine_name)
-        return _completed_subagent_result(tmp_path, task.pipeline_status)
+        return _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
 
     monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_run)
 
@@ -1229,7 +1229,7 @@ def test_run_single_task_uses_run_engine_override_for_execution(
         self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None
     ):  # type: ignore[no-untyped-def]
         seen_engines.append(engine_name)
-        return _completed_subagent_result(tmp_path, task.pipeline_status)
+        return _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
 
     monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_run)
 
@@ -1259,7 +1259,7 @@ def test_run_single_task_model_precedence_uses_run_override_then_task_then_works
         self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None
     ):  # type: ignore[no-untyped-def]
         seen_models.append(model)
-        return _completed_subagent_result(tmp_path, task.pipeline_status)
+        return _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
 
     monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_run)
 
@@ -1297,7 +1297,7 @@ def test_run_single_task_does_not_pass_model_override_to_codex(
         self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None
     ):  # type: ignore[no-untyped-def]
         seen_models.append(model)
-        return _completed_subagent_result(tmp_path, task.pipeline_status)
+        return _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
 
     monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_run)
 
@@ -1364,7 +1364,7 @@ def test_drain_task_pool_wraps_pool_execution_behavior(
     monkeypatch.setattr(
         "litehive.runtime.SubagentManager.run",
         lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
-            _completed_subagent_result(tmp_path, task.pipeline_status)
+            _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
         ),
     )
 
@@ -1460,7 +1460,7 @@ def test_run_task_recovers_stale_active_task_before_conflict_check(
     monkeypatch.setattr(
         "litehive.runtime.SubagentManager.run",
         lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
-            _completed_subagent_result(tmp_path, task.pipeline_status)
+            _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
         ),
     )
 

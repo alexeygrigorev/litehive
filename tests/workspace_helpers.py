@@ -260,8 +260,48 @@ def _commit_repo_state(cwd: Path, message: str = "baseline") -> str:
     return _run(["git", "rev-parse", "HEAD"], cwd)
 
 
+def _resolve_workspace_root(path: Path) -> Path:
+    """Resolve back to the main workspace root if path is inside a worktree."""
+    # Check if path is inside a .litehive/worktrees/<task>/ directory.
+    parts = path.parts
+    for i, part in enumerate(parts):
+        if part == ".litehive" and i + 2 < len(parts) and parts[i + 1] == "worktrees":
+            # Main workspace root is the parent of .litehive/
+            return Path(*parts[:i])
+    return path
+
+
+def _write_cli_verdict(
+    root: Path,
+    task: "TaskRecord",
+    step: str,
+    verdict: str = "pass",
+    message: str | None = None,
+    files_changed: list[str] | None = None,
+) -> None:
+    """Simulate a litehive report CLI invocation by writing a thread comment."""
+    from litehive.models import TaskThreadComment
+
+    # Write to the main workspace root, not the worktree.
+    ws_root = _resolve_workspace_root(root)
+    task_dir = tasks_module.task_dir(ws_root, task)
+    task_dir.mkdir(parents=True, exist_ok=True)
+
+    tasks_module.append_thread_comment(
+        ws_root,
+        task,
+        TaskThreadComment(
+            role="swe",
+            step=step,
+            verdict=verdict,
+            message=message or f"{step} {verdict}",
+            files_changed=files_changed or [],
+        ),
+    )
+
+
 def _completed_subagent_result(
-    tmp_path: Path, step: str, *, engine_name: str = "codex"
+    tmp_path: Path, step: str, *, engine_name: str = "codex", task: "TaskRecord | None" = None
 ) -> SubagentResult:
     worktrees_root = tmp_path / ".litehive" / "worktrees"
     if step == "implementing" and worktrees_root.exists():
@@ -274,6 +314,17 @@ def _completed_subagent_result(
                 worktree_app.write_text(main_app.read_text(encoding="utf-8"), encoding="utf-8")
                 subprocess.run(["git", "checkout", "--", "app.txt"], cwd=tmp_path, check=True)
                 break
+
+    # Simulate CLI verdict submission via thread comment.
+    if task is not None:
+        _write_cli_verdict(
+            tmp_path,
+            task,
+            step,
+            verdict="pass",
+            message=f"{step} complete via {engine_name}",
+            files_changed=["app.txt"],
+        )
 
     return SubagentResult(
         ref=SubagentRef(
@@ -288,15 +339,7 @@ def _completed_subagent_result(
             argv=(engine_name, "exec"),
             cwd=tmp_path,
             exit_code=0,
-            stdout=(
-                "VERDICT: PASS\n"
-                f"SUMMARY: {step} complete via {engine_name}\n"
-                "FILES_CHANGED:\n"
-                "- app.txt\n"
-                "TESTS_ADDED: 1\n"
-                "TESTS_PASSING: 1\n"
-                "WARNINGS:\n"
-            ),
+            stdout=f"{step} complete via {engine_name}\n",
             stderr="",
         ),
         transcript="",
@@ -305,8 +348,18 @@ def _completed_subagent_result(
 
 
 def _failed_subagent_result(
-    tmp_path: Path, step: str, *, engine_name: str = "codex"
+    tmp_path: Path, step: str, *, engine_name: str = "codex", task: "TaskRecord | None" = None
 ) -> SubagentResult:
+    # Simulate CLI verdict submission via thread comment.
+    if task is not None:
+        _write_cli_verdict(
+            tmp_path,
+            task,
+            step,
+            verdict="fail",
+            message=f"recovery failed for {step}",
+        )
+
     return SubagentResult(
         ref=SubagentRef(
             id=f"SA-{step}-recovery",
@@ -320,10 +373,7 @@ def _failed_subagent_result(
             argv=(engine_name, "exec"),
             cwd=tmp_path,
             exit_code=1,
-            stdout=(
-                "VERDICT: FAIL\n"
-                f"SUMMARY: recovery failed for {step}\n"
-            ),
+            stdout=f"recovery failed for {step}\n",
             stderr="",
         ),
         transcript="",
@@ -343,24 +393,23 @@ def _stage_subagent_result(
     tests_added: int = 1,
     tests_passing: int = 1,
     warnings: list[str] | None = None,
+    task: "TaskRecord | None" = None,
 ) -> SubagentResult:
-    transcript_lines = [
-        f"VERDICT: {verdict}",
-        f"SUMMARY: {summary or f'{step} complete via {engine_name}'}",
-        "FILES_CHANGED:",
-    ]
-    for path in files_changed or []:
-        transcript_lines.append(f"- {path}")
-    transcript_lines.extend(
-        [
-            f"TESTS_ADDED: {tests_added}",
-            f"TESTS_PASSING: {tests_passing}",
-            "WARNINGS:",
-        ]
-    )
-    for warning in warnings or []:
-        transcript_lines.append(f"- {warning}")
-    transcript = "\n".join(transcript_lines)
+    effective_summary = summary or f"{step} complete via {engine_name}"
+    effective_verdict = verdict.lower()
+
+    # Simulate CLI verdict submission via thread comment.
+    if task is not None:
+        _write_cli_verdict(
+            cwd,
+            task,
+            step,
+            verdict=effective_verdict,
+            message=effective_summary,
+            files_changed=files_changed or [],
+        )
+
+    transcript = f"{effective_summary}\n"
     return SubagentResult(
         ref=SubagentRef(
             id=f"SA-{step}-{engine_name}",
@@ -455,20 +504,29 @@ def _interrupted_subagent_result(
 
 
 def _successful_stage_execution(tmp_path: Path, adapter: str, step: str) -> CLIExecutionResult:
+    # Auto-write a CLI verdict for the active task in the workspace.
+    ws_root = _resolve_workspace_root(tmp_path)
+    from litehive.tasks import load_state as _load_state, get_task as _get_task
+
+    state = _load_state(ws_root)
+    active_id = state.active_task_id
+    if active_id:
+        active_task = _get_task(ws_root, active_id)
+        if active_task is not None:
+            _write_cli_verdict(
+                ws_root,
+                active_task,
+                active_task.pipeline_status,
+                verdict="pass",
+                message=f"{step} complete via {adapter}",
+                files_changed=["app.txt"],
+            )
     return CLIExecutionResult(
         adapter=adapter,
         argv=(adapter, "exec"),
         cwd=tmp_path,
         exit_code=0,
-        stdout=(
-            "VERDICT: PASS\n"
-            f"SUMMARY: {step} complete via {adapter}\n"
-            "FILES_CHANGED:\n"
-            "- app.txt\n"
-            "TESTS_ADDED: 1\n"
-            "TESTS_PASSING: 1\n"
-            "WARNINGS:\n"
-        ),
+        stdout=f"{step} complete via {adapter}\n",
         stderr="",
     )
 

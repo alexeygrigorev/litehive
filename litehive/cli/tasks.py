@@ -239,10 +239,12 @@ def _cmd_intake(args):
         execution = engine.run(prompt, cwd=args.workspace, model=model)
         if execution.exit_code == 0:
             transcript = engine.render_transcript(execution)
-            from litehive.engines.base import _extract_line
+            import re as _re
 
-            extracted_title = _extract_line(transcript, "TITLE")
-            extracted_goal = _extract_line(transcript, "GOAL")
+            _title_m = _re.search(r"^TITLE:\s*(.+)$", transcript, _re.MULTILINE)
+            extracted_title = _title_m.group(1).strip() if _title_m else None
+            _goal_m = _re.search(r"^GOAL:\s*(.+)$", transcript, _re.MULTILINE)
+            extracted_goal = _goal_m.group(1).strip() if _goal_m else None
 
             if extracted_title:
                 raw_title = extracted_title

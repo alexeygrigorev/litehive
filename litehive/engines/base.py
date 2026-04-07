@@ -17,7 +17,6 @@ from pydantic import ValidationError
 
 from litehive.models import (
     EngineUsageObservation,
-    FollowUpTaskSpec,
     LiveEvent,
     LiveTimeline,
     StageReport,
@@ -533,158 +532,27 @@ def parse_stage_report_text(
             warnings=submission.warnings,
         )
 
-    # Structured submission present but invalid — fall back to text parsing
-    # and attach validation warnings.
-    validation_warnings: list[str] = []
+    # No valid structured submission and no CLI verdict — verdict is fail.
+    # Attach validation warnings if the structured block was present but invalid.
+    warnings: list[str] = ["Agent did not submit verdict via litehive report CLI."]
     if isinstance(submission, ValidationError):
-        validation_warnings = _format_stage_result_validation_errors(submission)
+        warnings.extend(_format_stage_result_validation_errors(submission))
 
-    follow_up_tasks, follow_up_warnings = _extract_follow_up_tasks(transcript)
-    task_update_section = _extract_section_block(transcript, "TASK_UPDATE")
-    task_update: dict[str, object] = {}
-    if task_update_section:
-        try:
-            import yaml
-            parsed = yaml.safe_load(task_update_section)
-            if isinstance(parsed, dict):
-                task_update = parsed
-            else:
-                follow_up_warnings.append("Ignoring invalid TASK_UPDATE section: expected YAML mapping.")
-        except Exception as exc:
-            follow_up_warnings.append(f"Ignoring invalid TASK_UPDATE section: {exc}")
-
-    summary = _extract_line(transcript, "SUMMARY") or (
-        transcript.splitlines()[0] if transcript else f"{step} completed"
+    summary = (
+        transcript.splitlines()[0] if transcript else f"{step} completed without verdict"
     )
     return StageReport(
         task_id=task_id,
         step=step,
-        verdict=_parse_verdict(transcript, subagent_status),  # type: ignore[arg-type]
+        verdict="fail",
         summary=summary,
         feedback=cap_feedback(transcript),
-        files_changed=_extract_list(transcript, "FILES_CHANGED"),
-        follow_up_tasks=follow_up_tasks,
-        task_update=task_update,
-        tests={
-            "added": _extract_int(transcript, "TESTS_ADDED"),
-            "passing": _extract_int(transcript, "TESTS_PASSING"),
-        },
-        warnings=[*validation_warnings, *_extract_list(transcript, "WARNINGS"), *follow_up_warnings],
+        warnings=warnings,
     )
 
 
-def _extract_line(text: str, key: str) -> str | None:
-    match = re.search(rf"^{key}:\s*(.+)$", text, re.MULTILINE)
-    return match.group(1).strip() if match else None
 
 
-def _extract_int(text: str, key: str) -> int:
-    value = _extract_line(text, key)
-    if value is None:
-        return 0
-    try:
-        return int(value)
-    except ValueError:
-        return 0
-
-
-def _extract_list(text: str, key: str) -> list[str]:
-    items: list[str] = []
-    capture = False
-    for line in text.splitlines():
-        if line.strip() == f"{key}:":
-            capture = True
-            continue
-        if capture and re.match(r"^[A-Z_]+:", line):
-            break
-        if capture and line.lstrip().startswith("- "):
-            items.append(line.split("- ", 1)[1].strip())
-    return items
-
-
-def _extract_follow_up_tasks(text: str) -> tuple[list[FollowUpTaskSpec], list[str]]:
-    section = _extract_section_block(text, "FOLLOW_UP_TASKS")
-    if section is None:
-        return [], []
-    try:
-        payload = json.loads(section)
-    except json.JSONDecodeError:
-        return [], ["Ignoring invalid FOLLOW_UP_TASKS section: expected JSON array."]
-    if not isinstance(payload, list):
-        return [], ["Ignoring invalid FOLLOW_UP_TASKS section: expected JSON array."]
-
-    follow_up_tasks: list[FollowUpTaskSpec] = []
-    warnings: list[str] = []
-    for index, item in enumerate(payload, start=1):
-        if not isinstance(item, dict):
-            warnings.append(f"Ignoring invalid follow-up task #{index}: expected object.")
-            continue
-        title = item.get("title")
-        rationale = item.get("rationale")
-        if not isinstance(title, str) or not title.strip():
-            warnings.append(f"Ignoring invalid follow-up task #{index}: missing title.")
-            continue
-        if not isinstance(rationale, str) or not rationale.strip():
-            warnings.append(f"Ignoring invalid follow-up task #{index}: missing rationale.")
-            continue
-        acceptance_criteria = item.get("acceptance_criteria", [])
-        if not isinstance(acceptance_criteria, list):
-            warnings.append(
-                f"Ignoring invalid follow-up task #{index}: acceptance_criteria must be a list."
-            )
-            continue
-        task_type = item.get("task_type")
-        if task_type is not None and not isinstance(task_type, str):
-            warnings.append(
-                f"Ignoring invalid follow-up task #{index}: task_type must be a string."
-            )
-            continue
-        goal = item.get("goal", "")
-        if not isinstance(goal, str):
-            warnings.append(f"Ignoring invalid follow-up task #{index}: goal must be a string.")
-            continue
-        blocking = item.get("blocking", False)
-        if not isinstance(blocking, bool):
-            warnings.append(
-                f"Ignoring invalid follow-up task #{index}: blocking must be true/false."
-            )
-            continue
-        criteria = [
-            entry.strip()
-            for entry in acceptance_criteria
-            if isinstance(entry, str) and entry.strip()
-        ]
-        follow_up_tasks.append(
-            FollowUpTaskSpec(
-                title=title.strip(),
-                rationale=rationale.strip(),
-                blocking=blocking,
-                goal=goal.strip(),
-                acceptance_criteria=criteria,
-                task_type=task_type.strip() if isinstance(task_type, str) else None,
-            )
-        )
-    return follow_up_tasks, warnings
-
-
-def _extract_section_block(text: str, key: str) -> str | None:
-    capture = False
-    lines: list[str] = []
-    header = f"{key}:"
-    for line in text.splitlines():
-        stripped = line.strip()
-        if stripped == header:
-            capture = True
-            continue
-        if not capture and stripped.startswith(header):
-            inline_value = stripped[len(header) :].strip()
-            return inline_value or None
-        if capture and re.match(r"^[A-Z_]+:", stripped):
-            break
-        if capture:
-            lines.append(line)
-    block = "\n".join(lines).rstrip()
-    return block or None
 
 
 def _extract_stage_result_submission(
@@ -695,8 +563,24 @@ def _extract_stage_result_submission(
     Returns the validated model on success, a ``ValidationError`` when the JSON
     is present but invalid, or ``None`` when no ``STAGE_RESULT:`` block exists.
     """
-    section = _extract_section_block(text, "STAGE_RESULT")
-    if section is None:
+    # Find "STAGE_RESULT:" header and capture the JSON that follows it.
+    capture = False
+    lines: list[str] = []
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not capture:
+            if stripped == "STAGE_RESULT:":
+                capture = True
+                continue
+            if stripped.startswith("STAGE_RESULT:"):
+                lines.append(stripped[len("STAGE_RESULT:"):].strip())
+                break
+        else:
+            if re.match(r"^[A-Z_]+:", stripped):
+                break
+            lines.append(line)
+    section = "\n".join(lines).rstrip()
+    if not section:
         return None
     try:
         payload = json.loads(section)
@@ -723,18 +607,6 @@ def _format_stage_result_validation_errors(exc: ValidationError) -> list[str]:
     return warnings
 
 
-def _parse_verdict(text: str, subagent_status: SubagentStatus) -> str:
-    verdict = (_extract_line(text, "VERDICT") or "").strip().lower()
-    mapping = {
-        "pass": "pass",
-        "accept": "accept",
-        "fail": "fail",
-        "reject": "reject",
-        "blocked": "blocked",
-    }
-    if verdict in mapping:
-        return mapping[verdict]
-    return "pass" if subagent_status == "completed" else "blocked"
 
 
 def extract_live_timeline(
