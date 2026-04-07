@@ -1,0 +1,56 @@
+task_id: T-0212
+step: grooming
+verdict: pass
+summary: 'STAGE_RESULT:'
+feedback: "STAGE_RESULT:\n{\"verdict\":\"pass\",\"summary\":\"Task is well-scoped\
+  \ with clear gap, existing infrastructure, and observable acceptance criteria\"\
+  ,\"files_changed\":[],\"tests\":{\"added\":0,\"passing\":0},\"warnings\":[],\"follow_up_tasks\"\
+  :[],\"acceptance_criteria\":[\"Agent crash with exit 1 and no failure classification\
+  \ triggers a resume attempt with the same session ID\",\"Resume prompt says 'continue\
+  \ where you left off'\",\"Only one resume attempt per crash - if the resumed session\
+  \ also crashes, proceed normally\",\"Only applies to engines that support session\
+  \ resume (claude)\",\"Journal logs the resume attempt clearly\"],\"task_update\"\
+  :{\"plan\":[\"In executor loop (runtime/_execution.py ~line 866-875), after failure=result.failure,\
+  \ detect unclassified crash: failure is None AND result.exit_code != 0 AND engine_name\
+  \ == 'claude' AND no prior crash-resume attempted\",\"Extract session ID via extract_engine_continuation(engine_name,\
+  \ result.execution) or from _set_continuation_handoff\",\"If session ID available,\
+  \ set resume_session_id, log resume attempt to journal via append_journal, and continue\
+  \ the loop\",\"Track crash-resume with a boolean flag (e.g. crash_resume_attempted)\
+  \ so second crash breaks normally\",\"Add targeted tests: (a) unclassified crash\
+  \ triggers resume with session ID, (b) second crash breaks normally, (c) non-claude\
+  \ engines skip resume, (d) journal entry is written\"],\"pm_complexity\":\"simple\"\
+  ,\"planned_effort\":\"s\"}}\n\nGROOMING ANALYSIS:\n\n## Gap\n- subagents/_execution.py:312-348\
+  \ \u2014 exit_code != 0 with no classifier match leaves failure=None\n- runtime/_execution.py:870-875\
+  \ \u2014 failure is None causes immediate break, no retry/resume\n\n## Existing\
+  \ infrastructure (no new plumbing needed)\n- resume_session_id variable already\
+  \ in executor loop (line 841)\n- Resume prompt override already at line 845-846\n\
+  - resume_session_id kwarg already passed to subagents.run() (line 864)\n- extract_engine_continuation\
+  \ already extracts claude session IDs\n- _set_continuation_handoff already builds\
+  \ handoff with continuation\n\n## Implementation plan\n1. Add a `crash_resume_attempted\
+  \ = False` flag before the while loop\n2. In the break condition block (lines 870-875),\
+  \ before breaking when failure is None, check: if exit_code != 0 AND engine is claude\
+  \ AND not crash_resume_attempted, extract session ID, set resume_session_id, log\
+  \ to journal, set crash_resume_attempted = True, continue\n3. If no session ID available\
+  \ or not claude, break as before\n4. Add tests covering all four acceptance criteria\n\
+  \n## Sizing\n- PM_COMPLEXITY: simple \u2014 single code path change in one file,\
+  \ leveraging existing infrastructure\n- PLANNED_EFFORT: s \u2014 ~20-40 lines of\
+  \ production code, plus targeted tests"
+files_changed: []
+follow_up_tasks: []
+created_follow_up_task_ids: []
+task_update: {}
+tests: {}
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 180
+hook_results: []
+created_at: '2026-04-07T16:29:12+00:00'

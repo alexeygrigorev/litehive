@@ -1,0 +1,40 @@
+id: T-0209
+slug: classify-exit-code-124-timeout-as-failure-not
+title: Classify exit code 124 (timeout) as failure, not completed
+depends_on: []
+task_type: null
+engine: null
+model: null
+mode: implementation
+pipeline_mode: full
+status: duplicate
+pipeline_status: backlog
+priority: medium
+pm_complexity: null
+planned_effort: null
+created_at: '2026-04-07T08:25:13+00:00'
+updated_at: '2026-04-07T08:25:56+00:00'
+goal: When a subagent process exits with code 124 (killed by timeout), litehive classifies
+  it as completed. It should be classified as failed/interrupted. This causes the
+  text verdict fallback to generate a fake pass verdict from partial transcript.
+acceptance_criteria:
+- Exit code 124 is classified as failed, not completed
+- Any non-zero exit code is not classified as completed
+- Timeout-killed agents do not produce pass verdicts
+constraints: []
+plan: []
+human_checkpoints: []
+subagents: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0209 classify-exit-code-124-timeout-as-failure-not'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+  worktree_path: null
+retry_policy:
+  max_retries: null
+  stage_retry_limit: null
+created_from: null
+upstream_origin: null

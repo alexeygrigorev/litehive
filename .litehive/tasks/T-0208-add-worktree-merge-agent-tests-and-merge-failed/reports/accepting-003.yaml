@@ -1,0 +1,41 @@
+task_id: T-0208
+step: accepting
+verdict: pass
+summary: '## Acceptance: PASS'
+feedback: "## Acceptance: PASS\n\n### Verified\n\n1. **Four merge scenarios tested**\
+  \ (tests/test_worktree_merge_agent.py): rebase success (line 92), merge success\
+  \ after rebase fail (line 110), agent resolves conflict (line 133), agent fails\
+  \ to resolve (line 158). All 10 tests pass in 1.42s.\n\n2. **SubagentManager.run\
+  \ mocked** via _ResolvingSubagents and _FailingSubagents fake classes \u2014 no\
+  \ real subprocess calls.\n\n3. **merge_failed pipeline status**: PipelineState.MERGE_FAILED\
+  \ added (states.py:45), \"merge_failed\" in TaskStatus/PipelineStatus Literals (models.py),\
+  \ \"merge_conflict\" in OutcomeReasonCode, _ROUTES and _SINGLE_ROUTES route (commit_to_git,\
+  \ fail/reject/blocked) to merge_failed, dedicated handler in core.py:700-743.\n\n\
+  4. **Unmerged worktree tracking**: UnmergedWorktree model (models.py:446), unmerged_worktrees\
+  \ on WorkspaceState (models.py:457), _record_unmerged_worktree helper (core.py:955)\
+  \ with deduplication. Tests verify recording, dedup, and raw YAML persistence.\n\
+  \n5. **Status display**: render_task_summary shows unmerged_worktree path for merge_failed\
+  \ tasks (_status.py:97-98).\n\n6. **Full suite**: 677 passed, 2 flaky pre-existing\
+  \ failures (test_subagent_manager_uses_inherited_run_live_when_available, test_subagent_manager_prefers_instance_run_override_over_inherited_run_live\
+  \ \u2014 pass in isolation on main, confirmed unrelated).\n\n### Evidence\n- `uv\
+  \ run pytest tests/test_worktree_merge_agent.py -v`: 10/10 passed\n- `uv run pytest\
+  \ -q`: 677 passed, 2 pre-existing flaky"
+files_changed: []
+follow_up_tasks: []
+created_follow_up_task_ids: []
+task_update: {}
+tests: {}
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 378
+hook_results: []
+created_at: '2026-04-07T17:23:19+00:00'

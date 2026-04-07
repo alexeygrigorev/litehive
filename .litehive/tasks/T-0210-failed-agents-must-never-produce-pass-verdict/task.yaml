@@ -1,0 +1,93 @@
+id: T-0210
+slug: failed-agents-must-never-produce-pass-verdict
+title: Remove all text verdict parsing - require litehive report CLI, nudge on missing
+depends_on: []
+task_type: null
+engine: null
+model: null
+mode: implementation
+pipeline_mode: full
+status: queued
+pipeline_status: implementing
+priority: medium
+pm_complexity: moderate
+planned_effort: m
+created_at: '2026-04-07T08:25:25+00:00'
+updated_at: '2026-04-07T16:45:49+00:00'
+goal: "The only way an agent produces a verdict is by invoking litehive report CLI.\
+  \ Remove ALL text-based verdict parsing. The flow is: (1) agent runs and invokes\
+  \ litehive report --verdict at the end, (2) if agent finishes without invoking CLI,\
+  \ continue the session with a nudge prompt saying you forgot to submit your verdict\
+  \ please run litehive report, (3) if after nudge still no report, verdict is fail.\
+  \ Remove _parse_verdict, parse_stage_report_text text fallback, _extract_line, _extract_int,\
+  \ _extract_list, _extract_section_block \u2014 all text parsing code. Exit code\
+  \ 124 (timeout) must be classified as failed not completed. Subsumes T-0197, T-0200,\
+  \ T-0209."
+acceptance_criteria:
+- Only litehive report CLI invocation produces a verdict - no text parsing at all
+- If agent finishes without CLI report, session is continued with nudge prompt
+- If nudge also fails, verdict is fail
+- _parse_verdict, _extract_line, _extract_int, _extract_list removed from codebase
+- parse_stage_report_text only reads CLI-submitted verdicts, no text fallback
+- Exit code 124 (timeout) classified as failed, not completed
+- Non-zero exit code agents never produce pass verdict
+constraints: []
+plan: []
+human_checkpoints: []
+subagents:
+- id: SA-0001
+  role: planner
+  engine: claude
+  status: completed
+  path: subagents/SA-0001-planner
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0002
+  role: swe
+  engine: claude
+  status: failed
+  path: subagents/SA-0002-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0003
+  role: swe
+  engine: claude
+  status: completed
+  path: subagents/SA-0003-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0004
+  role: swe
+  engine: claude
+  status: completed
+  path: subagents/SA-0004-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0005
+  role: swe
+  engine: claude
+  status: completed
+  path: subagents/SA-0005-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0006
+  role: swe
+  engine: claude
+  status: completed
+  path: subagents/SA-0006-swe
+  sandboxed: false
+  sandbox_summary: host
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0210 failed-agents-must-never-produce-pass-verdict'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+  worktree_path: null
+  merge_agent_attempts: 0
+retry_policy:
+  max_retries: null
+  stage_retry_limit: null
+created_from: null
+upstream_origin: null

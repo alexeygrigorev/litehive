@@ -203,3 +203,94 @@ def test_merge_conflict_agent_fails_to_resolve(tmp_path: Path) -> None:
     assert task.status != "done"
     assert worktree_path.exists(), "Worktree deleted despite failed merge!"
     assert (worktree_path / "feature.py").read_text() == "def feature(): return 'worktree'\n"
+
+
+def test_merge_agent_launches_exactly_once(tmp_path: Path) -> None:
+    """Merge agent must not be launched twice for the same conflict."""
+    _init_git_repo(tmp_path)
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Merge agent once only")
+
+    worktree_path = tmp_path / ".litehive" / "worktrees" / f"{task.id}-{task.slug}"
+    worktree_path.parent.mkdir(parents=True, exist_ok=True)
+    _run(["git", "worktree", "add", "--detach", str(worktree_path), "HEAD"], tmp_path)
+    (worktree_path / "feature.py").write_text("def feature(): return 'worktree'\n")
+    _run(["git", "add", "feature.py"], worktree_path)
+    _run(["git", "commit", "-m", "add feature in worktree"], worktree_path)
+
+    task.git.worktree_path = str(worktree_path.relative_to(tmp_path))
+    task.pipeline_status = "commit_to_git"
+    save_task(tmp_path, task)
+
+    # Create conflict on main
+    (tmp_path / "feature.py").write_text("def feature(): return 'main'\n")
+    _run(["git", "add", "feature.py"], tmp_path)
+    _run(["git", "commit", "-m", "conflicting change"], tmp_path)
+
+    launch_count = 0
+
+    class CountingSubagents:
+        def __init__(self):
+            self.execution_root = worktree_path
+
+        def run(self, task, *, role, engine_name, prompt, model=None):
+            nonlocal launch_count
+            launch_count += 1
+            from litehive.subagents import SubagentResult
+            from litehive.models import SubagentRef
+            return SubagentResult(
+                ref=SubagentRef(id="SA-merge", role=role, engine=engine_name,
+                                status="completed", path="subagents/SA-merge"),
+                execution=None, transcript="Could not resolve", exit_code=1,
+            )
+
+    subagents = CountingSubagents()
+
+    # First attempt — merge agent should launch
+    report1 = _commit_to_git_report(
+        tmp_path, worktree_path, task, auto_commit_enabled=True,
+        subagents=subagents, config=LitehiveConfig(),
+    )
+    assert report1.verdict == "fail"
+    assert launch_count == 1
+    assert task.git.merge_agent_attempts == 1
+
+    # Abort the merge so we can retry
+    subprocess.run(["git", "merge", "--abort"], cwd=tmp_path, capture_output=True)
+
+    # Second attempt — merge agent must NOT launch again
+    report2 = _commit_to_git_report(
+        tmp_path, worktree_path, task, auto_commit_enabled=True,
+        subagents=subagents, config=LitehiveConfig(),
+    )
+    assert report2.verdict == "fail"
+    assert launch_count == 1, f"Merge agent launched {launch_count} times, expected exactly 1"
+    assert task.git.merge_agent_attempts == 1
+
+
+def test_recovery_failed_blocks_repair_requeue(tmp_path: Path) -> None:
+    """Tasks with recovery_failed status must not be requeued by repair."""
+    _init_git_repo(tmp_path)
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Recovery failed task")
+    task.pipeline_status = "commit_to_git"
+    task.status = "recovery_failed"
+    task.git.merge_agent_attempts = 1
+    save_task(tmp_path, task)
+
+    from litehive.tasks import _should_recover_flagged_commit_stage_task
+    assert not _should_recover_flagged_commit_stage_task(tmp_path, task)
+
+
+def test_merge_attempts_blocks_repair_requeue(tmp_path: Path) -> None:
+    """Tasks with merge_agent_attempts >= 1 must not be requeued by repair."""
+    _init_git_repo(tmp_path)
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Already attempted merge")
+    task.pipeline_status = "commit_to_git"
+    task.status = "flagged"
+    task.git.merge_agent_attempts = 1
+    save_task(tmp_path, task)
+
+    from litehive.tasks import _should_recover_flagged_commit_stage_task
+    assert not _should_recover_flagged_commit_stage_task(tmp_path, task)

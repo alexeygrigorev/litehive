@@ -1,0 +1,74 @@
+task_id: T-0211
+step: grooming
+verdict: pass
+summary: "GROOMING PASS \u2014 T-0211: Add retry limit for merge agent in commit_to_git"
+feedback: "GROOMING PASS \u2014 T-0211: Add retry limit for merge agent in commit_to_git\n\
+  \n## Root Cause Analysis\n\nThe merge agent in `_commit_to_git_report()` (runtime/_commit.py:93-107)\
+  \ already runs exactly once per stage execution \u2014 there is no inner loop. The\
+  \ infinite loop that caused T-0141's 90 launches is an **outer loop** between the\
+  \ daemon's repair cycle and the runner:\n\n1. commit_to_git \u2192 merge conflict\
+  \ \u2192 merge agent (once) \u2192 fails \u2192 verdict=fail\n2. Runner routes (commit_to_git,\
+  \ fail) \u2192 flagged\n3. Recovery agent runs \u2192 fails \u2192 task stays flagged\n\
+  4. Daemon calls `repair_workspace_state()` before next iteration\n5. `_should_recover_flagged_commit_stage_task()`\
+  \ (tasks.py:3125) sees: flagged + commit_to_git + acceptance passed \u2192 requeues\
+  \ task at commit_to_git\n6. Task re-enters commit_to_git \u2192 goto 1 (infinite\
+  \ loop)\n\n## Acceptance Criteria (verified as clear and testable)\n\n1. Merge agent\
+  \ is launched exactly once per merge conflict \u2713 (already true per-execution;\
+  \ needs enforcement across repair cycles)\n2. If merge agent fails, task is declared\
+  \ failed \u2713 (already true)\n3. Recovery agent is launched once after merge failure\
+  \ \u2713 (already true per-execution)\n4. If recovery also fails, task status is\
+  \ recovery_failed \u2713 (new terminal state needed)\n5. recovery_failed tasks are\
+  \ left for manual resolution \u2713 (repair must not requeue them)\n6. No loops\
+  \ \u2014 at most 1 merge agent + 1 recovery agent per conflict \u2713 (needs counter\
+  \ + repair guard)\n7. Journal logs each step clearly \u2713 (partially exists, needs\
+  \ completion)\n\n## Implementation Plan\n\n1. **Add merge attempt tracking to task\
+  \ model** \u2014 Add `merge_agent_attempts: int = 0` field to the task git state\
+  \ (models.py). Increment in `_commit_to_git_report()` before launching merge agent.\n\
+  \n2. **Guard merge agent launch** \u2014 In `_commit_to_git_report()` (runtime/_commit.py:87-107),\
+  \ only launch the merge agent if `task.git.merge_agent_attempts == 0`. If already\
+  \ attempted, skip directly to fail with a clear journal entry.\n\n3. **Add `recovery_failed`\
+  \ terminal state** \u2014 Add `RECOVERY_FAILED = \"recovery_failed\"` to `PipelineState`\
+  \ enum (runner/states.py). This is a new terminal state that repair won't touch.\n\
+  \n4. **Route commit_to_git recovery failure to recovery_failed** \u2014 In runner/core.py\
+  \ (~line 676-705), when `_launch_recovery_agent` returns None (recovery failed)\
+  \ for commit_to_git specifically, set `task.status = \"recovery_failed\"` instead\
+  \ of plain \"flagged\".\n\n5. **Guard repair from requeuing recovery_failed tasks**\
+  \ \u2014 In `_should_recover_flagged_commit_stage_task()` (tasks.py:3125), add early\
+  \ return False when `task.status == \"recovery_failed\"` or `task.git.merge_agent_attempts\
+  \ >= 1`.\n\n6. **Journal logging** \u2014 Ensure journal entries at: merge agent\
+  \ launch, merge agent outcome, recovery launch, recovery outcome, and final recovery_failed\
+  \ declaration.\n\n7. **Tests** \u2014 Add targeted tests covering:\n   - Merge agent\
+  \ launches exactly once per conflict\n   - Failed merge \u2192 recovery \u2192 failed\
+  \ recovery \u2192 recovery_failed status\n   - repair_workspace_state skips recovery_failed\
+  \ tasks\n   - No re-entry into commit_to_git after recovery_failed\n\n## PM Sizing\n\
+  \nPM_COMPLEXITY: simple\nPLANNED_EFFORT: s\n\nThe fix is surgically scoped: a counter\
+  \ field, two guards, one new terminal state, and repair exclusion. All changes are\
+  \ in well-understood code paths.\n\nTASK_UPDATE:\nplan:\n  - \"Add merge_agent_attempts\
+  \ counter to task git state model\"\n  - \"Guard merge agent launch in _commit_to_git_report\
+  \ to run only if attempts == 0\"\n  - \"Add recovery_failed terminal state to PipelineState\
+  \ enum and route table\"\n  - \"Route commit_to_git recovery failure to recovery_failed\
+  \ instead of flagged\"\n  - \"Guard _should_recover_flagged_commit_stage_task from\
+  \ requeuing recovery_failed or already-attempted tasks\"\n  - \"Add journal logging\
+  \ at each decision point\"\n  - \"Add targeted tests for the no-loop guarantee\"\
+  \npm_complexity: simple\nplanned_effort: s"
+files_changed: []
+follow_up_tasks: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 248
+hook_results: []
+created_at: '2026-04-07T14:02:51+00:00'

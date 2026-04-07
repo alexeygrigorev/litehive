@@ -1,0 +1,169 @@
+task_id: T-0184
+stage: implementing
+trigger: stale_runner_recovery
+summary: Recovered stale runner state and returned the task to `implementing`.
+failure_classification: stale_runner
+runnable_state: runnable
+blocker: null
+evidence:
+- kind: task
+  label: task.yaml
+  path: .litehive/tasks/T-0184-replace-per-engine-fallbacks-with-single-engine/task.yaml
+  exists: true
+  summary: status=interrupted pipeline_status=implementing priority=medium
+  metadata: {}
+- kind: runtime
+  label: runtime.yaml
+  path: .litehive/tasks/T-0184-replace-per-engine-fallbacks-with-single-engine/runtime.yaml
+  exists: true
+  summary: execution_status=interrupted current_stage=implementing last_outcome=interrupted
+  metadata: {}
+- kind: thread
+  label: thread.yaml
+  path: .litehive/tasks/T-0184-replace-per-engine-fallbacks-with-single-engine/thread.yaml
+  exists: true
+  summary: discussion entries=8
+  metadata: {}
+- kind: events
+  label: events.jsonl
+  path: .litehive/tasks/T-0184-replace-per-engine-fallbacks-with-single-engine/events.jsonl
+  exists: true
+  summary: task lifecycle and subagent event stream
+  metadata: {}
+- kind: stage_report
+  label: latest stage report
+  path: .litehive/tasks/T-0184-replace-per-engine-fallbacks-with-single-engine/reports/implementing-008.yaml
+  exists: true
+  summary: latest report for T-0184
+  metadata: {}
+- kind: subagent_artifact
+  label: latest subagent session
+  path: .litehive/tasks/T-0184-replace-per-engine-fallbacks-with-single-engine/subagents/SA-0017-swe/session.yaml
+  exists: true
+  summary: artifact from SA-0017-swe
+  metadata: {}
+- kind: subagent_artifact
+  label: latest subagent report
+  path: .litehive/tasks/T-0184-replace-per-engine-fallbacks-with-single-engine/subagents/SA-0017-swe/report.yaml
+  exists: true
+  summary: artifact from SA-0017-swe
+  metadata: {}
+- kind: subagent_artifact
+  label: latest subagent transcript
+  path: .litehive/tasks/T-0184-replace-per-engine-fallbacks-with-single-engine/subagents/SA-0017-swe/transcript.md
+  exists: true
+  summary: artifact from SA-0017-swe
+  metadata: {}
+- kind: subagent_artifact
+  label: latest subagent stdout
+  path: .litehive/tasks/T-0184-replace-per-engine-fallbacks-with-single-engine/subagents/SA-0017-swe/stdout.txt
+  exists: true
+  summary: artifact from SA-0017-swe
+  metadata: {}
+- kind: subagent_artifact
+  label: latest subagent stderr
+  path: .litehive/tasks/T-0184-replace-per-engine-fallbacks-with-single-engine/subagents/SA-0017-swe/stderr.txt
+  exists: true
+  summary: artifact from SA-0017-swe
+  metadata: {}
+- kind: subagent_artifact
+  label: latest subagent events timeline
+  path: .litehive/tasks/T-0184-replace-per-engine-fallbacks-with-single-engine/subagents/SA-0017-swe/timeline.yaml
+  exists: true
+  summary: artifact from SA-0017-swe
+  metadata: {}
+- kind: wrapper_log
+  label: latest run-all log
+  path: .litehive/logs/run-all/daemon.log
+  exists: true
+  summary: latest daemon/run-all wrapper log
+  metadata: {}
+- kind: engine_monitoring
+  label: engine-monitoring.yaml
+  path: .litehive/engine-monitoring.yaml
+  exists: true
+  summary: no engine record
+  metadata: {}
+- kind: git
+  label: main checkout git state
+  path: null
+  exists: true
+  summary: head=9ccf6ee43d382c9d6e978ae507d888dad470e8d4 dirty=38
+  metadata:
+    dirty_paths:
+    - litehive/config.yaml
+    - litehive/state.yaml
+    - litehive/tasks/T-0182-add-priority-flag-to-litehive-add-command/journal.md
+    - litehive/tasks/T-0182-add-priority-flag-to-litehive-add-command/task.yaml
+    - litehive/tasks/T-0184-replace-per-engine-fallbacks-with-single-engine/journal.md
+    - litehive/tasks/T-0184-replace-per-engine-fallbacks-with-single-engine/task.yaml
+    - litehive/tasks/T-0197-remove-verdict-text-parsing-fallback-require/journal.md
+    - litehive/tasks/T-0197-remove-verdict-text-parsing-fallback-require/task.yaml
+    - litehive/tasks/T-0200-remove-text-based-stage-report-parsing-require/journal.md
+    - litehive/tasks/T-0200-remove-text-based-stage-report-parsing-require/task.yaml
+    - EADME.md
+    - ocs/configuration.md
+    - ocs/engines.md
+    - itehive/config/__init__.py
+    - itehive/runtime/_budget.py
+    - itehive/runtime/_execution.py
+    - itehive/runtime/_models.py
+    - ests/test_engine_freeze.py
+    - ests/test_engine_variants_and_timeline.py
+    - ests/test_retry_commit_and_recovery.py
+    - .litehive/tasks/T-0184-replace-per-engine-fallbacks-with-single-engine/recovery/recovery-001.yaml
+    - .litehive/tasks/T-0184-replace-per-engine-fallbacks-with-single-engine/reports/grooming-001.yaml
+    - .litehive/tasks/T-0184-replace-per-engine-fallbacks-with-single-engine/reports/implementing-002.yaml
+    - .litehive/tasks/T-0184-replace-per-engine-fallbacks-with-single-engine/reports/implementing-003.yaml
+    - .litehive/tasks/T-0184-replace-per-engine-fallbacks-with-single-engine/reports/implementing-004.yaml
+    - .litehive/tasks/T-0184-replace-per-engine-fallbacks-with-single-engine/reports/implementing-005.yaml
+    - .litehive/tasks/T-0184-replace-per-engine-fallbacks-with-single-engine/reports/implementing-006.yaml
+    - .litehive/tasks/T-0184-replace-per-engine-fallbacks-with-single-engine/reports/implementing-007.yaml
+    - .litehive/tasks/T-0184-replace-per-engine-fallbacks-with-single-engine/reports/implementing-008.yaml
+    - .litehive/tasks/T-0184-replace-per-engine-fallbacks-with-single-engine/thread.yaml
+    - .litehive/tasks/T-0208-add-worktree-merge-agent-tests-and-merge-failed/journal.md
+    - .litehive/tasks/T-0208-add-worktree-merge-agent-tests-and-merge-failed/task.yaml
+    - .litehive/tasks/T-0209-classify-exit-code-124-timeout-as-failure-not/journal.md
+    - .litehive/tasks/T-0209-classify-exit-code-124-timeout-as-failure-not/task.yaml
+    - .litehive/tasks/T-0210-failed-agents-must-never-produce-pass-verdict/journal.md
+    - .litehive/tasks/T-0210-failed-agents-must-never-produce-pass-verdict/task.yaml
+    - .litehive/tasks/T-0211-add-retry-limit-for-merge-agent-in-commit-to-git/journal.md
+    - .litehive/tasks/T-0211-add-retry-limit-for-merge-agent-in-commit-to-git/task.yaml
+- kind: worktree
+  label: task worktree state
+  path: .litehive/worktrees/T-0184-replace-per-engine-fallbacks-with-single-engine
+  exists: true
+  summary: dirty=16
+  metadata:
+    dirty_paths:
+    - litehive/state.yaml
+    - litehive/tasks/T-0182-add-priority-flag-to-litehive-add-command/thread.yaml
+    - ocs/configuration.md
+    - ocs/engines.md
+    - itehive/config/__init__.py
+    - itehive/runtime/_budget.py
+    - itehive/runtime/_execution.py
+    - itehive/runtime/_models.py
+    - ests/test_engine_freeze.py
+    - ests/test_engine_variants_and_timeline.py
+    - ests/test_retry_commit_and_recovery.py
+    - .litehive/tasks/T-0184-replace-per-engine-fallbacks-with-single-engine/thread.yaml
+    - .litehive/tasks/T-0208-classify-exit-code-124-timeout-as-failure-not/journal.md
+    - .litehive/tasks/T-0208-classify-exit-code-124-timeout-as-failure-not/task.yaml
+    - .litehive/tasks/T-0209-remove-text-verdict-fallback-failed-agents-must/journal.md
+    - .litehive/tasks/T-0209-remove-text-verdict-fallback-failed-agents-must/task.yaml
+    stage: implementing
+actions:
+- action: clear_stale_active_state
+  applied: true
+  summary: Cleared stale active runner state for the task.
+  metadata: {}
+- action: requeue_stage
+  applied: true
+  summary: Requeued the task at implementing.
+  metadata:
+    stage: implementing
+warnings: []
+recovery_subagent_id: null
+recovery_subagent_path: null
+created_at: '2026-04-07T10:03:36+00:00'
