@@ -26,3 +26,12 @@ Execution finished with status `queued`.
 
 ## 2026-04-07T06:04:58+00:00
 Execution started with engine `claude`.
+
+## 2026-04-07T06:07:20+00:00
+Merge conflict on 2 file(s). Launching merge agent.
+
+## 2026-04-07T06:08:19+00:00
+CommitToGit complete. Commit: 32aa8c9bd57ae8e848039701bcac4dbddb1393ae
+
+## 2026-04-07T06:08:24+00:00
+Pool stopped: continue_or_rollback_required. This task finished with checkpoint commit `32aa8c9bd57ae8e848039701bcac4dbddb1393ae` and unrelated queued work remains. Either continue with a new `litehive run`/pool run or roll back the checkpoint first.

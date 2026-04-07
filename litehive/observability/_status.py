@@ -251,6 +251,10 @@ def render_task_summary(task: TaskRecord, *, active: bool, root: Path | None = N
                 )
             )
 
+    if task.status == "merge_failed":
+        wt_path = task.runtime.git.worktree_path or task.git.worktree_path
+        if wt_path:
+            lines.append(f"  unmerged_worktree={wt_path}")
     if task.git.commit_sha:
         lines.append(f"  commit={task.git.commit_sha}")
     if task.git.checkpoint_base_sha:

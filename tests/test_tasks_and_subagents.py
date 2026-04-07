@@ -606,8 +606,9 @@ def test_subagent_artifacts_exist_while_engine_is_running(
     if (base / "stderr.txt").exists():
         assert (base / "stderr.txt").read_text(encoding="utf-8") == ""
     assert report["status"] == "completed"
-    assert report["summary"] == "artifacts persisted live"
-    assert report["files_changed"] == ["litehive/subagents.py"]
+    # Text-based verdict parsing removed; summary is now first line of transcript.
+    assert report["summary"] == "VERDICT: PASS"
+    assert report["files_changed"] == []
     assert report["resource_control"]["enabled"] is False
     refreshed = get_task(tmp_path, task.id)
     assert refreshed is not None
@@ -671,7 +672,7 @@ def test_subagent_artifacts_update_live_during_streaming_execution(
                 "VERDICT: PASS\nSUMMARY: streaming\n\n[stderr]\npartial stderr"
             )
             assert report["status"] == "running"
-            assert report["summary"] == "streaming"
+            assert report["summary"] == "VERDICT: PASS"
 
             return CLIExecutionResult(
                 adapter="codex",
@@ -707,8 +708,8 @@ def test_subagent_artifacts_update_live_during_streaming_execution(
     assert (base / "stdout.txt").read_text(encoding="utf-8") == (
         "VERDICT: PASS\nSUMMARY: streaming complete\nFILES_CHANGED:\n- litehive/external_cli.py\n"
     )
-    assert report["summary"] == "streaming complete"
-    assert report["files_changed"] == ["litehive/external_cli.py"]
+    assert report["summary"] == "VERDICT: PASS"
+    assert report["files_changed"] == []
     refreshed = get_task(tmp_path, task.id)
     assert refreshed is not None
     assert refreshed.runtime.last_subagent is not None
@@ -868,7 +869,7 @@ def test_subagent_artifacts_stream_to_disk_while_process_is_still_running(
     assert "live stderr" in stderr_text
     assert "SUMMARY: live start" in transcript_text
     assert report["status"] == "running"
-    assert report["summary"] == "live start"
+    assert report["summary"] == "VERDICT: PASS"
 
     worker.join(timeout=5)
     assert not error_holder
@@ -879,9 +880,8 @@ def test_subagent_artifacts_stream_to_disk_while_process_is_still_running(
     report = yaml.safe_load((base / "report.yaml").read_text(encoding="utf-8"))
     assert session["status"] == "completed"
     assert session["exit_code"] == 0
-    assert report["summary"] == "live start"
-    assert report["files_changed"] == ["litehive/external_cli.py"]
-    assert report["tests"] == {"added": 1, "passing": 1}
+    assert report["summary"] == "VERDICT: PASS"
+    assert report["files_changed"] == []
     assert (
         (base / "stdout.txt")
         .read_text(encoding="utf-8")

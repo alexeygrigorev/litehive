@@ -839,6 +839,7 @@ def build_executor(
             attempt_count = 0
             retry_exhausted_reason: str | None = None
             resume_session_id: str | None = None
+            crash_resume_attempted = False
             while True:
                 attempt_count += 1
                 role_name = _role_for_step(step, current_task)
@@ -867,6 +868,23 @@ def build_executor(
                 failure = result.failure
                 if failure is not None and failure.kind == "execution_interrupted":
                     raise KeyboardInterrupt(failure.reason)
+                if failure is None and result.exit_code != 0 and not crash_resume_attempted:
+                    continuation = extract_engine_continuation(engine_name, result.execution)
+                    if (
+                        engine_name == "claude"
+                        and continuation is not None
+                        and continuation.session_id
+                    ):
+                        crash_resume_attempted = True
+                        resume_session_id = continuation.session_id
+                        resume_event = (
+                            f"Stage `{step}` agent crashed (exit {result.exit_code}) with no "
+                            f"failure classification — resuming claude session "
+                            f"{continuation.session_id}."
+                        )
+                        execution_events.append(resume_event)
+                        append_journal(root, current_task, resume_event)
+                        continue
                 if (
                     failure is None
                     or failure.kind != "retryable_execution_error"
@@ -977,7 +995,6 @@ def build_executor(
             if (
                 not thread_comments
                 and result.failure is None
-                and engine_name == "claude"
                 and result.execution is not None
             ):
                 continuation = extract_engine_continuation(engine_name, result.execution)
@@ -1047,6 +1064,10 @@ def build_executor(
                 )
             _attach_runner_hook_results(report, pre_stage_hook_results)
             if limit_trigger_reason is not None and (is_limit_failure or is_unavailable_fallback):
+                # Execution-limit fallback exhaustion is an infrastructure
+                # issue, not a task-quality issue — verdict must be "blocked"
+                # so the pool stop-condition can detect it.
+                report.verdict = "blocked"
                 if (
                     is_unavailable_fallback
                     and result.failure is not None

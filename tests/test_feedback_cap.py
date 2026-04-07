@@ -47,8 +47,8 @@ def test_parse_stage_report_text_caps_feedback_structured() -> None:
     assert report.verdict == "pass"
 
 
-def test_parse_stage_report_text_caps_feedback_text_fallback() -> None:
-    """Text-based VERDICT/SUMMARY path caps feedback from transcript."""
+def test_parse_stage_report_text_caps_feedback_no_cli_verdict() -> None:
+    """Without CLI verdict, feedback is still capped and verdict is fail."""
     long_preamble = "z" * 5000
     transcript = (
         long_preamble + "\n"
@@ -66,7 +66,8 @@ def test_parse_stage_report_text_caps_feedback_text_fallback() -> None:
         subagent_status="completed",
     )
     assert len(report.feedback) <= FEEDBACK_CAP
-    assert report.verdict == "pass"
+    # Text VERDICT: PASS is no longer parsed — verdict is fail
+    assert report.verdict == "fail"
 
 
 def test_cli_report_message_stored_as_is() -> None:

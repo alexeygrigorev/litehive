@@ -25,7 +25,7 @@ def test_drain_task_pool_drains_dynamic_queue(
     def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None):  # type: ignore[no-untyped-def]
         if task.id == first.id and get_task(tmp_path, "T-0002") is None:
             create_task(tmp_path, title="Second task", auto_commit=False)
-        return _completed_subagent_result(tmp_path, task.pipeline_status)
+        return _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
 
     monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_run)
 
@@ -72,7 +72,7 @@ def test_run_next_task_falls_back_to_next_engine_on_execution_limit(
                 exit_code=1,
                 failure=EngineFailure(kind="execution_limit", reason="rate limit reached"),
             )
-        return _completed_subagent_result(tmp_path, task.pipeline_status)
+        return _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
 
     monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_run)
 
@@ -181,7 +181,7 @@ def test_drain_task_pool_stops_by_default_when_limit_fallbacks_are_exhausted(
                 exit_code=1,
                 failure=EngineFailure(kind="execution_limit", reason="quota exceeded"),
             )
-        return _completed_subagent_result(tmp_path, task.pipeline_status)
+        return _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
 
     monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_run)
 
@@ -211,7 +211,7 @@ def test_drain_task_pool_rereads_queue_order_between_tasks(
     def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None):  # type: ignore[no-untyped-def]
         if task.id == first.id:
             move_queued_task(tmp_path, third.id, 1)
-        return _completed_subagent_result(tmp_path, task.pipeline_status)
+        return _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
 
     monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_run)
 
@@ -244,7 +244,7 @@ def test_drain_task_pool_allows_future_queue_mutation_during_active_run(
         if task.id == first.id:
             started.set()
             assert resume.wait(timeout=5)
-        return _completed_subagent_result(tmp_path, task.pipeline_status)
+        return _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
 
     monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_run)
 
@@ -324,7 +324,7 @@ def test_drain_task_pool_picks_up_requeued_task_between_iterations(
         if task.id == first.id and not requeued_once:
             requeue_task(tmp_path, requeued.id)
             requeued_once = True
-        return _completed_subagent_result(tmp_path, task.pipeline_status)
+        return _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
 
     monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_run)
 
@@ -355,7 +355,7 @@ def test_drain_task_pool_honors_stop_condition(
     monkeypatch.setattr(
         "litehive.runtime.SubagentManager.run",
         lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
-            _completed_subagent_result(tmp_path, task.pipeline_status)
+            _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
         ),
     )
 
@@ -411,7 +411,7 @@ def test_drain_task_pool_pauses_for_human_checkpoint_before_acceptance(
     monkeypatch.setattr(
         "litehive.runtime.SubagentManager.run",
         lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
-            _completed_subagent_result(tmp_path, task.pipeline_status)
+            _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
         ),
     )
 
@@ -460,7 +460,7 @@ def test_drain_task_pool_pauses_for_human_checkpoint_before_commit(
     monkeypatch.setattr(
         "litehive.runtime.SubagentManager.run",
         lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
-            _completed_subagent_result(tmp_path, task.pipeline_status)
+            _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
         ),
     )
 
@@ -1092,7 +1092,7 @@ def test_drain_task_pool_stops_after_max_tasks(
     monkeypatch.setattr(
         "litehive.runtime.SubagentManager.run",
         lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
-            _completed_subagent_result(tmp_path, task.pipeline_status)
+            _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
         ),
     )
 
@@ -1135,7 +1135,7 @@ def test_drain_task_pool_stops_on_first_failure(
                 exit_code=1,
                 failure=EngineFailure(kind="execution_limit", reason="quota exceeded"),
             )
-        return _completed_subagent_result(tmp_path, task.pipeline_status)
+        return _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
 
     monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_run)
 
@@ -1180,7 +1180,7 @@ def test_drain_task_pool_stops_on_execution_limit(
                 exit_code=1,
                 failure=EngineFailure(kind="execution_limit", reason="budget limit reached"),
             )
-        return _completed_subagent_result(tmp_path, task.pipeline_status)
+        return _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
 
     monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_run)
 
@@ -1226,7 +1226,7 @@ def test_drain_task_pool_stops_on_quota_threshold(
                 exit_code=1,
                 failure=EngineFailure(kind="execution_limit", reason="quota exceeded"),
             )
-        return _completed_subagent_result(tmp_path, task.pipeline_status)
+        return _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
 
     monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_run)
 
@@ -1269,7 +1269,7 @@ def test_drain_task_pool_stops_on_budget_threshold(
                 exit_code=1,
                 failure=EngineFailure(kind="execution_limit", reason="budget limit reached"),
             )
-        return _completed_subagent_result(tmp_path, task.pipeline_status)
+        return _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
 
     monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_run)
 
@@ -1348,7 +1348,7 @@ def test_run_single_task_allows_dirty_git_owned_by_interrupted_task(
     monkeypatch.setattr(
         "litehive.runtime.SubagentManager.run",
         lambda self, current_task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
-            _completed_subagent_result(tmp_path, current_task.pipeline_status)
+            _completed_subagent_result(tmp_path, current_task.pipeline_status, task=current_task)
         ),
     )
 
@@ -1438,7 +1438,7 @@ def test_drain_task_pool_stops_on_pool_usage_cap(
     monkeypatch.setattr(
         "litehive.runtime.SubagentManager.run",
         lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
-            _completed_subagent_result(tmp_path, task.pipeline_status)
+            _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
         ),
     )
 
@@ -1461,7 +1461,7 @@ def test_drain_task_pool_stops_on_pool_cost_cap(
     monkeypatch.setattr(
         "litehive.runtime.SubagentManager.run",
         lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
-            _completed_subagent_result(tmp_path, task.pipeline_status)
+            _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
         ),
     )
 
@@ -1489,7 +1489,7 @@ def test_run_next_task_skips_engine_when_usage_cap_is_exhausted(
 
     def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None):  # type: ignore[no-untyped-def]
         calls.append(engine_name)
-        return _completed_subagent_result(tmp_path, task.pipeline_status)
+        return _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
 
     monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_run)
 
@@ -1765,7 +1765,7 @@ def test_drain_task_pool_skips_stale_queue_entries(
     monkeypatch.setattr(
         "litehive.runtime.SubagentManager.run",
         lambda self, current_task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
-            _completed_subagent_result(tmp_path, current_task.pipeline_status)
+            _completed_subagent_result(tmp_path, current_task.pipeline_status, task=current_task)
         ),
     )
 
@@ -1801,7 +1801,7 @@ def test_drain_task_pool_skips_ineligible_active_and_queue_entries(
     monkeypatch.setattr(
         "litehive.runtime.SubagentManager.run",
         lambda self, current_task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
-            _completed_subagent_result(tmp_path, current_task.pipeline_status)
+            _completed_subagent_result(tmp_path, current_task.pipeline_status, task=current_task)
         ),
     )
 
@@ -1860,7 +1860,7 @@ def test_drain_task_pool_stops_after_requeueing_interrupted_task(
     def fake_run(self, current_task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None):  # type: ignore[no-untyped-def]
         if current_task.pipeline_status == "testing":
             raise KeyboardInterrupt()
-        return _completed_subagent_result(tmp_path, current_task.pipeline_status)
+        return _completed_subagent_result(tmp_path, current_task.pipeline_status, task=current_task)
 
     monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_run)
     summary = drain_task_pool(tmp_path)
@@ -1914,7 +1914,7 @@ def test_drain_task_pool_drains_active_task_without_queued_entries(
     monkeypatch.setattr(
         "litehive.runtime.SubagentManager.run",
         lambda self, current_task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
-            _completed_subagent_result(tmp_path, current_task.pipeline_status)
+            _completed_subagent_result(tmp_path, current_task.pipeline_status, task=current_task)
         ),
     )
 
@@ -1947,48 +1947,14 @@ def test_drain_task_pool_continues_after_requeueing_review_rejection_when_other_
 
     def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None):  # type: ignore[no-untyped-def]
         nonlocal failed_once
-        transcript = "\n".join(
-            [
-                "VERDICT: PASS",
-                f"SUMMARY: {task.pipeline_status} passed",
-                "FILES_CHANGED:",
-                "- app.txt",
-                "TESTS_ADDED: 1",
-                "TESTS_PASSING: 1",
-                "WARNINGS:",
-            ]
-        )
         if task.id == active.id and task.pipeline_status == "testing" and not failed_once:
             failed_once = True
-            transcript = "\n".join(
-                [
-                    "VERDICT: FAIL",
-                    "SUMMARY: qa wants another implementation pass",
-                    "FILES_CHANGED:",
-                    "TESTS_ADDED: 0",
-                    "TESTS_PASSING: 0",
-                    "WARNINGS:",
-                ]
+            return _stage_subagent_result(
+                tmp_path, task.pipeline_status, engine_name=engine_name,
+                verdict="FAIL", summary="qa wants another implementation pass",
+                files_changed=[], tests_added=0, tests_passing=0, task=task,
             )
-        return SubagentResult(
-            ref=SubagentRef(
-                id=f"SA-{task.id}-{task.pipeline_status}-codex",
-                role=role,
-                engine=engine_name,
-                status="completed",
-                path=f"subagents/{task.id}-{task.pipeline_status}-codex",
-            ),
-            execution=CLIExecutionResult(
-                adapter=engine_name,
-                argv=(engine_name, "exec"),
-                cwd=tmp_path,
-                exit_code=0,
-                stdout=transcript,
-                stderr="",
-            ),
-            transcript=transcript,
-            exit_code=0,
-        )
+        return _completed_subagent_result(tmp_path, task.pipeline_status, engine_name=engine_name, task=task)
 
     monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_run)
 
@@ -2029,49 +1995,15 @@ def test_drain_task_pool_stops_after_requeueing_review_rejection_when_only_block
     save_state(tmp_path, state)
 
     def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None):  # type: ignore[no-untyped-def]
-        transcript = "\n".join(
-            [
-                "VERDICT: PASS",
-                f"SUMMARY: {task.pipeline_status} passed",
-                "FILES_CHANGED:",
-                "- app.txt",
-                "TESTS_ADDED: 1",
-                "TESTS_PASSING: 1",
-                "WARNINGS:",
-            ]
-        )
         if task.id == active.id and task.pipeline_status == "testing":
             task.depends_on = ["T-9998"]
             save_task(tmp_path, task)
-            transcript = "\n".join(
-                [
-                    "VERDICT: FAIL",
-                    "SUMMARY: qa wants another implementation pass",
-                    "FILES_CHANGED:",
-                    "TESTS_ADDED: 0",
-                    "TESTS_PASSING: 0",
-                    "WARNINGS:",
-                ]
+            return _stage_subagent_result(
+                tmp_path, task.pipeline_status, engine_name=engine_name,
+                verdict="FAIL", summary="qa wants another implementation pass",
+                files_changed=[], tests_added=0, tests_passing=0, task=task,
             )
-        return SubagentResult(
-            ref=SubagentRef(
-                id=f"SA-{task.id}-{task.pipeline_status}-codex",
-                role=role,
-                engine=engine_name,
-                status="completed",
-                path=f"subagents/{task.id}-{task.pipeline_status}-codex",
-            ),
-            execution=CLIExecutionResult(
-                adapter=engine_name,
-                argv=(engine_name, "exec"),
-                cwd=tmp_path,
-                exit_code=0,
-                stdout=transcript,
-                stderr="",
-            ),
-            transcript=transcript,
-            exit_code=0,
-        )
+        return _completed_subagent_result(tmp_path, task.pipeline_status, engine_name=engine_name, task=task)
 
     monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_run)
 
@@ -2112,8 +2044,9 @@ def test_run_single_task_persists_task_requeued_stop_reason(
                 files_changed=[],
                 tests_added=0,
                 tests_passing=0,
+                task=current_task,
             )
-        return _completed_subagent_result(tmp_path, current_task.pipeline_status)
+        return _completed_subagent_result(tmp_path, current_task.pipeline_status, task=current_task)
 
     monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_run)
 
@@ -2153,8 +2086,9 @@ def test_drain_task_pool_continues_when_only_task_is_requeued_for_another_pass(
                     files_changed=[],
                     tests_added=0,
                     tests_passing=0,
+                    task=current_task,
                 )
-        return _completed_subagent_result(tmp_path, current_task.pipeline_status)
+        return _completed_subagent_result(tmp_path, current_task.pipeline_status, task=current_task)
 
     monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_run)
 
