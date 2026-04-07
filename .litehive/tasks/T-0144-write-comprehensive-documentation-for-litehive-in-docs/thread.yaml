@@ -157,3 +157,24 @@
     report: .litehive/tasks/T-0144-write-comprehensive-documentation-for-litehive-in-docs/recovery/recovery-001.yaml'
   files_changed: []
   created_at: '2026-04-05T15:33:47+00:00'
+- role: recovery
+  step: accepting
+  verdict: pass
+  message: "Acceptance verified after stale-runner recovery. All 7 required documentation\
+    \ files exist and cover the acceptance criteria:\n\n1. docs/README.md \u2014 overview,\
+    \ installation, quick start, documentation map. \u2713\n2. docs/configuration.md\
+    \ \u2014 config.yaml, global config, engine setup, hooks, retry policies (337\
+    \ lines). \u2713\n3. docs/cli.md \u2014 all CLI commands with examples (483 lines).\
+    \ \u2713\n4. docs/pipeline.md \u2014 single-task vs drain mode, stages, roles,\
+    \ state machine (245 lines). \u2713\n5. docs/engines.md \u2014 all 6 shipped adapters\
+    \ (codex, opencode, gemini, copilot, claude, goz), routing, fallbacks, and how\
+    \ to add new engines (191 lines). \u2713\n6. docs/recovery.md \u2014 repair, recovery\
+    \ agents, merge resolution, self-healing (185 lines). \u2713\n7. docs/workspace-layout.md\
+    \ \u2014 tracked vs untracked .litehive state (211 lines). \u2713\n\nTwo bonus\
+    \ files also present: docs/contributing-back.md and docs/state-machine.md.\n\n\
+    Prior QA and reviewer both passed with cross-checks against CLI help output and\
+    \ .gitignore. The one pre-existing test failure (test_gemini_extract_usage_observation_reads_provider_limit_payload)\
+    \ is unrelated to documentation.\n\nTotal: ~2029 lines of user-facing documentation\
+    \ written for a first-time litehive user."
+  files_changed: []
+  created_at: '2026-04-07T23:28:50+00:00'

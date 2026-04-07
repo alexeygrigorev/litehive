@@ -9,17 +9,17 @@ feedback: 'Verified the explicit parked task state implementation is complete an
   all acceptance criteria are satisfied.
 
 
-  What was verified:
+  Implementation verified:
 
-  1. TaskStatus enum includes `parked` (models.py:18). `park_task()` sets status=parked
-  with execution_status=paused and preserves stage context. `_is_parked_task()` helper
+  1. TaskStatus enum includes parked (models.py:18). park_task() sets status=parked
+  with execution_status=paused and preserves stage context. _is_parked_task() helper
   replaces magic-string detection.
 
   2. RESUMABLE_TASK_STATUSES includes both interrupted and parked (tasks.py:89). Repair/recovery
   only auto-requeues interrupted tasks; parked tasks stay out of automatic queue reinsertion.
 
   3. Resume preserves parked task''s current stage; requeue restarts from implementation
-  entry. Queue/status output shows parked distinctly as `[parked/<stage>]`.
+  entry. Queue/status output shows parked distinctly as [parked/<stage>].
 
   4. Dirty-worktree gating correctly distinguishes parked from interrupted ownership:
   interrupted task-owned dirt keeps gate open; parked blocks until explicit operator
@@ -29,7 +29,7 @@ feedback: 'Verified the explicit parked task state implementation is complete an
   from interrupted.
 
 
-  Tests run:
+  Tests run (17 passed):
 
   - tests/test_task_commands_and_daemon.py -k "parked or stop_current_task or requeue_command
   or resume_command" -> 13 passed
@@ -37,8 +37,6 @@ feedback: 'Verified the explicit parked task state implementation is complete an
   - tests/test_runtime_pool.py -k "cli_stopped or parked" -> 2 passed
 
   - tests/test_observability_and_status.py -k "parked or queue_command" -> 2 passed
-
-  Total: 17 focused tests passing.
 
 
   Files implementing the change: litehive/models.py, litehive/tasks.py, litehive/runtime.py,
@@ -50,7 +48,7 @@ created_follow_up_task_ids: []
 task_update: {}
 tests: {}
 warnings: []
-retry_count: 1
+retry_count: 2
 retry_limit: 3
 retry_source: global
 retry_decision: continue
@@ -60,6 +58,6 @@ outcome_reason: ''
 failure_classification: null
 failure_diagnostics: {}
 resource_limit_event: null
-duration_seconds: 165
+duration_seconds: 56
 hook_results: []
-created_at: '2026-04-07T23:23:49+00:00'
+created_at: '2026-04-07T23:24:45+00:00'
