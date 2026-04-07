@@ -1,0 +1,147 @@
+- role: swe
+  step: implementing
+  verdict: pass
+  message: "Implemented proactive codex quota checking via chatgpt.com API. All files\
+    \ created and integration points wired up.\n\n## Files Changed\n- litehive/engines/_codex_quota.py\
+    \ (NEW): Core quota check module with bearer token reading from ~/.codex/auth.json\
+    \ (tokens.access_token), API call to GET chatgpt.com/backend-api/wham/usage with\
+    \ Authorization: Bearer header, response parsing for rate_limit.limit_reached\
+    \ + primary_window (5h) and secondary_window (weekly) used_percent and reset_at,\
+    \ 60s TTL module-level cache, and fail-open error handling.\n- litehive/runtime/_execution.py:\
+    \ Added import of check_codex_quota/codex_quota_block_reason. Added _record_codex_monitoring()\
+    \ helper. Inserted proactive codex quota check before each codex invocation in\
+    \ the engine selection loop \u2014 when limit_reached=true, codex is skipped and\
+    \ fallback engine is used via the existing engine switch path.\n- litehive/cli/_dry_run.py:\
+    \ Added import and proactive quota check in dry-run engine selection so quota-blocked\
+    \ codex is surfaced in --dry-run output.\n- litehive/observability/_engine_monitoring.py:\
+    \ Added record_codex_quota_check() that surfaces quota used_percent (as usage\
+    \ percent with limit=100), reset_at, and per-window metadata in engine-monitoring.yaml.\n\
+    - tests/test_codex_quota.py (NEW): 17 targeted tests covering token reading (success,\
+    \ missing file, bad JSON, missing field), response parsing (limit reached/not\
+    \ reached, empty response), quota check with caching (cache hit, cache expiry,\
+    \ no auth), block reason (limit reached, not reached, fail-open), and monitoring\
+    \ integration (records quota, skips error status).\n- tests/conftest.py (NEW):\
+    \ Autouse fixture that neutralizes real codex quota API calls during tests (except\
+    \ test_codex_quota.py which uses explicit fake fetchers).\n\n## Acceptance Criteria\
+    \ Verification\n1. Quota checked before each codex invocation: YES - check_codex_quota()\
+    \ called in _execution.py engine loop before invocation\n2. Bearer token from\
+    \ ~/.codex/auth.json: YES - _read_bearer_token() reads tokens.access_token\n3.\
+    \ limit_reached=true skips codex: YES - codex_quota_block_reason() returns blocking\
+    \ reason, engine fallback path executes\n4. reset_at from response used: YES -\
+    \ parsed from API response, stored in monitoring\n5. Both primary and secondary\
+    \ windows checked: YES - _parse_quota_response() extracts both\n6. Engine monitoring\
+    \ shows quota: YES - record_codex_quota_check() writes used_percent, reset_at,\
+    \ per-window metadata\n7. No wasted invocations: YES - check happens BEFORE invocation,\
+    \ not after failure\n8. Cache with 60s TTL: YES - module-level cache with configurable\
+    \ TTL\n9. Claude/Copilot out of scope: YES - only codex is checked\n\n## Tests\n\
+    - 17 tests added in test_codex_quota.py, all passing\n- 169 tests passing across\
+    \ test_codex_quota.py, test_runner_workflow.py, and test_engine_variants_and_timeline.py\n\
+    \n## Design Notes\n- Fail-open: if auth.json is missing, API call fails, or response\
+    \ is unexpected, codex is NOT blocked\n- Cache is module-level with monotonic\
+    \ clock for TTL\n- Monitoring recording is best-effort (wrapped in try/except)\n\
+    - conftest.py neutralizes quota API calls in all other test modules to prevent\
+    \ flaky tests"
+  files_changed: []
+  created_at: '2026-04-07T00:24:37+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: "## Recovery: Implementation committed (was uncommitted)\n\n### Root cause\n\
+    The previous SWE agent wrote all implementation files correctly but never staged\
+    \ or committed them. The worktree had all 6 files as unstaged/untracked changes,\
+    \ so QA (which checks committed state) correctly reported \"no implementation\
+    \ exists.\"\n\n### What was done\nVerified the existing implementation, ran all\
+    \ 17 codex quota tests (all pass), confirmed no regressions in the existing test\
+    \ suite (46 pre-existing failures unrelated to this task), then committed all\
+    \ files on branch T-0191-implement-proactive-codex-quota-check-using.\n\n### Commit:\
+    \ ba9ae20\n6 files changed, 564 insertions:\n- **litehive/engines/_codex_quota.py**\
+    \ (NEW): Core quota check module\n  - `check_codex_quota()` \u2014 calls GET https://chatgpt.com/backend-api/wham/usage\
+    \ with Bearer token from ~/.codex/auth.json (tokens.access_token)\n  - `codex_quota_block_reason()`\
+    \ \u2014 returns blocking reason or None\n  - Parses both primary (5h) and secondary\
+    \ (weekly) windows\n  - Blocks when rate_limit.limit_reached is true\n  - Uses\
+    \ reset_at timestamp from response\n  - 60s cache TTL to avoid hammering the API\n\
+    \  - Fails open on missing auth or API errors\n- **litehive/runtime/_execution.py**\
+    \ (MODIFIED): Proactive quota check before each codex invocation; falls back to\
+    \ next engine or returns blocked report\n- **litehive/cli/_dry_run.py** (MODIFIED):\
+    \ Quota check in dry-run engine planning\n- **litehive/observability/_engine_monitoring.py**\
+    \ (MODIFIED): `record_codex_quota_check()` records quota percentage, reset time,\
+    \ and metadata\n- **tests/test_codex_quota.py** (NEW): 17 tests covering token\
+    \ reading, response parsing, caching, fail-open, block reasons, and monitoring\
+    \ integration\n- **tests/conftest.py** (NEW): Autouse fixture neutralizing quota\
+    \ API calls in unrelated tests\n\n### Acceptance criteria\n1. \u2705 Quota checked\
+    \ before each codex invocation via GET chatgpt.com/backend-api/wham/usage\n2.\
+    \ \u2705 Bearer token read from ~/.codex/auth.json at tokens.access_token\n3.\
+    \ \u2705 When rate_limit.limit_reached is true, codex skipped and fallback engine\
+    \ used\n4. \u2705 reset_at timestamp used to know when codex becomes available\n\
+    5. \u2705 Both primary_window (5h) and secondary_window (weekly) checked\n6. \u2705\
+    \ Engine monitoring shows quota percentage and reset time\n7. \u2705 No codex\
+    \ invocations wasted on exhausted quota\n8. \u2705 Quota check cached for 60s\n\
+    9. \u2705 Only codex implemented (Claude/Copilot blocked by Cloudflare)"
+  files_changed:
+  - litehive/engines/_codex_quota.py
+  - litehive/runtime/_execution.py
+  - litehive/cli/_dry_run.py
+  - litehive/observability/_engine_monitoring.py
+  - tests/test_codex_quota.py
+  - tests/conftest.py
+  created_at: '2026-04-07T01:27:46+00:00'
+- role: qa
+  step: testing
+  verdict: pass
+  message: "RECOVERY: Previous testing rejection was a false negative. Implementation\
+    \ exists and is correct.\n\n## Evidence\n- All 6 files exist and were committed\
+    \ in ba9ae20 and f3f5961\n- All 17 tests pass (pytest tests/test_codex_quota.py:\
+    \ 17 passed in 0.10s)\n- grep confirms codex_quota integration across 4 modules\n\
+    \n## Files changed (verified present)\n- litehive/engines/_codex_quota.py (NEW,\
+    \ 161 lines) \u2014 core quota check module\n- litehive/runtime/_execution.py\
+    \ \u2014 proactive check before codex invocation (line 712)\n- litehive/cli/_dry_run.py\
+    \ \u2014 quota check in both pool and single-task dry-run paths\n- litehive/observability/_engine_monitoring.py\
+    \ \u2014 record_codex_quota_check() (line 203)\n- tests/test_codex_quota.py (NEW,\
+    \ 266 lines) \u2014 17 tests covering all paths\n- tests/conftest.py (NEW) \u2014\
+    \ autouse fixture for cache clearing\n\n## Acceptance criteria verification\n\
+    1. \u2705 Quota checked before each codex invocation \u2014 _execution.py:712\
+    \ calls check_codex_quota() in the engine loop before invoking codex\n2. \u2705\
+    \ Bearer token from ~/.codex/auth.json tokens.access_token \u2014 _codex_quota.py:50-64\
+    \ _read_bearer_token()\n3. \u2705 When limit_reached=true, codex skipped and fallback\
+    \ used \u2014 _execution.py:716-732 falls back to next engine or blocks\n4. \u2705\
+    \ reset_at used for availability tracking \u2014 CodexQuotaStatus.earliest_reset_at\
+    \ property, displayed in block reason and monitoring\n5. \u2705 Both primary_window\
+    \ (5h) and secondary_window (weekly) checked \u2014 _parse_quota_response handles\
+    \ both, tests verify both\n6. \u2705 Engine monitoring shows quota percentage\
+    \ and reset time \u2014 record_codex_quota_check() writes used%, remaining%, reset_at,\
+    \ per-window metadata\n7. \u2705 No codex invocations wasted on exhausted quota\
+    \ \u2014 proactive check at line 712 with continue/block before engine.run()\n\
+    8. \u2705 Quota cached for 60s \u2014 module-level _cached_status with _CACHE_TTL_SECONDS=60,\
+    \ test_check_quota_cache verifies\n9. \u2705 Only codex implemented (not Claude/Copilot)\
+    \ \u2014 only codex engine triggers quota check\n\n## Root cause of false rejection\n\
+    The previous QA agent likely ran its verification commands from the wrong working\
+    \ directory (main checkout instead of the T-0191 worktree), causing all file lookups\
+    \ and greps to return empty results. The worktree at .litehive/worktrees/T-0191-implement-proactive-codex-quota-check-using/\
+    \ contains the correct branch with both implementation commits."
+  files_changed: []
+  created_at: '2026-04-07T02:30:50+00:00'
+- role: planner
+  step: grooming
+  verdict: pass
+  message: "PASS \u2014 Task grooming is valid and implementation exists. Re-grooming\
+    \ was triggered by recovery escalation after repeated QA rejections, but the rejections\
+    \ were caused by a worktree checkout issue, NOT missing code.\n\n## Verified Implementation\
+    \ State\n- litehive/engines/_codex_quota.py EXISTS \u2014 core quota check module\
+    \ with bearer token reading, API call, response parsing, 60s TTL cache, fail-open\
+    \ error handling\n- litehive/runtime/_execution.py \u2014 proactive quota check\
+    \ integrated before codex invocation (line ~712)\n- litehive/cli/_dry_run.py \u2014\
+    \ quota check in both pool and single-task dry-run paths\n- litehive/observability/_engine_monitoring.py\
+    \ \u2014 record_codex_quota_check() surfaces quota data\n- tests/test_codex_quota.py\
+    \ \u2014 17 tests, ALL PASSING\n- tests/conftest.py \u2014 autouse fixture neutralizes\
+    \ API calls in other test modules\n- Commits: ba9ae20 (main implementation) +\
+    \ f3f5961 (dry-run fix) \u2014 both present on this branch\n\n## Root Cause of\
+    \ QA Rejections\nQA agent ran in a worktree that was checked out at an older commit\
+    \ (e1ad980) which predates the implementation commits. The code was committed\
+    \ and is real. The QA agent needs to run against the correct branch HEAD (f3f5961).\n\
+    \n## Acceptance Criteria Status\nAll 9 acceptance criteria are addressed by the\
+    \ implementation. No task changes needed \u2014 goal, criteria, plan, and sizing\
+    \ are all correct from the previous grooming pass.\n\n## Action for Next Stage\n\
+    Testing should proceed. Ensure the QA worktree is checked out at the branch HEAD\
+    \ (f3f5961) or later so the implementation files are visible."
+  files_changed: []
+  created_at: '2026-04-07T02:32:11+00:00'
