@@ -33,7 +33,8 @@ def test_valid_submission_produces_structured_report() -> None:
     )
     assert report.verdict == "pass"
     assert report.summary == "All checks green"
-    assert report.files_changed == ["src/foo.py", "tests/test_foo.py"]
+    # files_changed is no longer populated from agent output; it comes from git diff at commit time
+    assert report.files_changed == []
     assert report.tests == {"added": 3, "passing": 10}
     assert report.warnings == ["minor lint issue"]
 

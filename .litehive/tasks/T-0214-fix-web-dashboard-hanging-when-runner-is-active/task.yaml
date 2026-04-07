@@ -1,0 +1,45 @@
+id: T-0214
+slug: fix-web-dashboard-hanging-when-runner-is-active
+title: Fix web dashboard hanging when runner is active
+depends_on: []
+task_type: null
+engine: null
+model: null
+mode: implementation
+pipeline_mode: full
+status: queued
+pipeline_status: backlog
+priority: medium
+pm_complexity: null
+planned_effort: null
+created_at: '2026-04-07T20:44:31+00:00'
+updated_at: '2026-04-07T20:46:12+00:00'
+goal: The web dashboard API endpoint /api/snapshot hangs indefinitely when the runner
+  holds the workspace lock. build_workspace_snapshot calls load_state and list_tasks
+  which try to acquire the lock. The web server should read state files directly without
+  locking. The dashboard is read-only - it should never need to wait for the runner
+  lock.
+acceptance_criteria:
+- Web dashboard loads and shows data while the runner is actively executing a task
+- The /api/snapshot endpoint responds within 2 seconds even when the runner holds
+  the lock
+- No data corruption risk from lock-free reads
+constraints: []
+plan: []
+human_checkpoints: []
+subagents: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0214 fix-web-dashboard-hanging-when-runner-is-active'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+  worktree_path: null
+  merge_agent_attempts: 0
+retry_policy:
+  max_retries: null
+  stage_retry_limit: null
+created_from: null
+upstream_origin: null
+github_origin: null

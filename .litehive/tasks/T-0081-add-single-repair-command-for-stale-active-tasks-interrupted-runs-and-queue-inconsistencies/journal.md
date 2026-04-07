@@ -34,3 +34,6 @@ Interrupted subagent execution while `grooming` was running. Reason: Execution i
 
 ## 2026-04-06T14:59:18+00:00
 Execution finished with status `interrupted`.
+
+## 2026-04-07T20:53:29+00:00
+Task closed: deferred. Stale interrupted task, superseded by newer tasks

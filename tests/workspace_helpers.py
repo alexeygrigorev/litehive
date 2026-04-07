@@ -287,6 +287,8 @@ def _write_cli_verdict(
     task_dir = tasks_module.task_dir(ws_root, task)
     task_dir.mkdir(parents=True, exist_ok=True)
 
+    # files_changed is no longer passed by agents; it is populated from git diff
+    # at commit time. The parameter is kept for backward compatibility but ignored.
     tasks_module.append_thread_comment(
         ws_root,
         task,
@@ -295,7 +297,6 @@ def _write_cli_verdict(
             step=step,
             verdict=verdict,
             message=message or f"{step} {verdict}",
-            files_changed=files_changed or [],
         ),
     )
 
@@ -311,8 +312,21 @@ def _completed_subagent_result(
                 continue
             worktree_app = worktree / "app.txt"
             if main_app.exists() and worktree_app.exists():
-                worktree_app.write_text(main_app.read_text(encoding="utf-8"), encoding="utf-8")
-                subprocess.run(["git", "checkout", "--", "app.txt"], cwd=tmp_path, check=True)
+                # Move main's dirty content (if any) to the worktree to avoid
+                # merge conflicts, then reset main.  If main is clean, append
+                # a line so the empty SWE guard still detects a change via git.
+                main_content = main_app.read_text(encoding="utf-8")
+                head_content = subprocess.run(
+                    ["git", "show", "HEAD:app.txt"],
+                    cwd=tmp_path, capture_output=True, text=True,
+                ).stdout
+                if main_content != head_content:
+                    # Main has uncommitted changes — transfer them to worktree
+                    worktree_app.write_text(main_content, encoding="utf-8")
+                    subprocess.run(["git", "checkout", "--", "app.txt"], cwd=tmp_path, check=True)
+                else:
+                    # Main is clean — write a synthetic change
+                    worktree_app.write_text(main_content + "implemented\n", encoding="utf-8")
                 break
 
     # Simulate CLI verdict submission via thread comment.
@@ -323,7 +337,6 @@ def _completed_subagent_result(
             step,
             verdict="pass",
             message=f"{step} complete via {engine_name}",
-            files_changed=["app.txt"],
         )
 
     return SubagentResult(
@@ -519,7 +532,6 @@ def _successful_stage_execution(tmp_path: Path, adapter: str, step: str) -> CLIE
                 active_task.pipeline_status,
                 verdict="pass",
                 message=f"{step} complete via {adapter}",
-                files_changed=["app.txt"],
             )
     return CLIExecutionResult(
         adapter=adapter,

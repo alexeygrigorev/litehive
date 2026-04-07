@@ -6,13 +6,14 @@ task_type: null
 engine: null
 model: null
 mode: implementation
-status: interrupted
+pipeline_mode: full
+status: deferred
 pipeline_status: grooming
 priority: medium
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-04T20:46:37+00:00'
-updated_at: '2026-04-05T19:44:25+00:00'
+updated_at: '2026-04-07T20:54:06+00:00'
 goal: Split engines.py into engines/__init__.py with one file per engine adapter (codex.py,
   claude.py, opencode.py, gemini.py, copilot.py, goz.py). Shared helpers in engines/common.py.
 acceptance_criteria:
@@ -45,8 +46,10 @@ git:
   checkpoint_attempts: 0
   rolled_back_checkpoint_attempt: null
   worktree_path: null
+  merge_agent_attempts: 0
 retry_policy:
   max_retries: null
   stage_retry_limit: null
 created_from: null
 upstream_origin: null
+github_origin: null

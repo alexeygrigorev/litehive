@@ -401,52 +401,54 @@ class TaskExecutionRunner:
 
             # Guard: SWE must produce actual changes. If implementing "passes"
             # with zero files changed and zero tests, reject it back to implementing.
-            # But first check the actual worktree — agents using `litehive report` CLI
-            # may not populate files_changed in their report even though they made changes.
+            # Always check the actual worktree via git — files_changed is populated
+            # from git diff, not from agent output.
             if current == "implementing" and target == "testing":
                 worktree_has_changes = False
-                if not report.files_changed:
-                    from litehive.tasks import get_task_worktree_path
-                    wt_path = get_task_worktree_path(task)
-                    if wt_path:
-                        wt_full = (self.root / wt_path).resolve()
-                        if wt_full.exists():
-                            try:
-                                # Check uncommitted changes
-                                diff = subprocess.run(
-                                    ["git", "diff", "--name-only", "HEAD"],
-                                    cwd=wt_full, capture_output=True, text=True, timeout=10,
-                                )
-                                staged = subprocess.run(
-                                    ["git", "diff", "--name-only", "--cached"],
-                                    cwd=wt_full, capture_output=True, text=True, timeout=10,
-                                )
-                                untracked = subprocess.run(
-                                    ["git", "ls-files", "--others", "--exclude-standard"],
-                                    cwd=wt_full, capture_output=True, text=True, timeout=10,
-                                )
-                                # Also check committed changes ahead of main
-                                from litehive.git_ops import current_head
-                                main_head = current_head(self.root)
-                                committed = subprocess.run(
-                                    ["git", "diff", "--name-only", main_head or "HEAD", "HEAD"],
-                                    cwd=wt_full, capture_output=True, text=True, timeout=10,
-                                ) if main_head else subprocess.CompletedProcess(args=[], returncode=0, stdout="")
-                                all_changed = set(
-                                    f.strip() for f in
-                                    (diff.stdout + staged.stdout + untracked.stdout + committed.stdout).splitlines()
-                                    if f.strip() and not f.strip().startswith(".litehive/")
-                                )
-                                if all_changed:
-                                    worktree_has_changes = True
-                                    report.files_changed = sorted(all_changed)
-                                    append_journal(
-                                        self.root, task,
-                                        f"[guard] Report had no files_changed but worktree has {len(all_changed)} changed file(s). Accepting.",
-                                    )
-                            except (subprocess.TimeoutExpired, OSError):
-                                pass
-                if not worktree_has_changes and not report.files_changed and (not report.tests or report.tests.get("added", 0) == 0):
+                from litehive.tasks import get_task_worktree_path
+                from litehive.git_ops import current_head, is_git_repo
+                wt_path = get_task_worktree_path(task)
+                # Determine which directory to check for git changes:
+                # prefer the task worktree, fall back to the main repo root.
+                check_dir = None
+                if wt_path:
+                    wt_full = (self.root / wt_path).resolve()
+                    if wt_full.exists():
+                        check_dir = wt_full
+                if check_dir is None and is_git_repo(self.root):
+                    check_dir = self.root
+                if check_dir is not None:
+                    try:
+                        # Check uncommitted changes
+                        diff = subprocess.run(
+                            ["git", "diff", "--name-only", "HEAD"],
+                            cwd=check_dir, capture_output=True, text=True, timeout=10,
+                        )
+                        staged = subprocess.run(
+                            ["git", "diff", "--name-only", "--cached"],
+                            cwd=check_dir, capture_output=True, text=True, timeout=10,
+                        )
+                        untracked = subprocess.run(
+                            ["git", "ls-files", "--others", "--exclude-standard"],
+                            cwd=check_dir, capture_output=True, text=True, timeout=10,
+                        )
+                        # Also check committed changes ahead of main
+                        main_head = current_head(self.root) if wt_path else None
+                        committed = subprocess.run(
+                            ["git", "diff", "--name-only", main_head or "HEAD", "HEAD"],
+                            cwd=check_dir, capture_output=True, text=True, timeout=10,
+                        ) if main_head else subprocess.CompletedProcess(args=[], returncode=0, stdout="")
+                        all_changed = set(
+                            f.strip() for f in
+                            (diff.stdout + staged.stdout + untracked.stdout + committed.stdout).splitlines()
+                            if f.strip() and not f.strip().startswith(".litehive/")
+                        )
+                        if all_changed:
+                            worktree_has_changes = True
+                            report.files_changed = sorted(all_changed)
+                    except (subprocess.TimeoutExpired, OSError):
+                        pass
+                if not worktree_has_changes and check_dir is not None and (not report.tests or report.tests.get("added", 0) == 0):
                     reason = (
                         "SWE reported pass but produced no file changes and no tests. "
                         "This usually means the agent did not actually write code. "

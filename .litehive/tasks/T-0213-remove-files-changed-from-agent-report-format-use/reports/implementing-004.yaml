@@ -1,0 +1,42 @@
+task_id: T-0213
+step: implementing
+verdict: reject
+summary: 'SWE reported pass but produced no file changes and no tests. This usually
+  means the agent did not actually write code. Worktree: unknown. Report summary:
+  Verified that T-0213 (remove files_changed from agent report format) is fully implemented.'
+feedback: "Verified that T-0213 (remove files_changed from agent report format) is\
+  \ fully implemented.\n\n## Verification of acceptance criteria\n\n1. **Agent prompt\
+  \ templates no longer ask for FILES_CHANGED**: Confirmed \u2014 grep for FILES_CHANGED\
+  \ in litehive/subagents/_prompts.py returns zero matches. The JSON schema shown\
+  \ to agents does not include files_changed.\n\n2. **StageReport.files_changed is\
+  \ populated from git diff at commit stage**: Confirmed \u2014 litehive/runtime/_commit.py:162-183\
+  \ runs `git diff --name-only head_before head_after` after merge and populates the\
+  \ StageReport.files_changed field.\n\n3. **Empty SWE guard uses only git status,\
+  \ never report.files_changed**: Confirmed \u2014 litehive/runner/core.py:402-450\
+  \ runs git diff/status/ls-files commands directly on the worktree. The guard populates\
+  \ report.files_changed FROM git output (line 448), not the other way around.\n\n\
+  4. **Existing tests updated to not require FILES_CHANGED in fake agent output**:\
+  \ Confirmed \u2014 litehive/subagents/_parsing.py:38 explicitly documents that files_changed\
+  \ is not extracted from agent output. Test helpers document files_changed parameter\
+  \ as ignored.\n\n## Tests run\n- tests/test_runner_workflow.py: 104 passed\n- tests/test_stage_result_submission.py:\
+  \ 8 passed  \n- tests/test_retry_commit_and_recovery.py: 89 passed\n- tests/test_tasks_and_subagents.py\
+  \ + tests/test_config_and_run_cli.py: 90 passed\n- Total: 291 tests, all passing"
+files_changed: []
+follow_up_tasks: []
+created_follow_up_task_ids: []
+task_update: {}
+tests: {}
+warnings: []
+retry_count: 3
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 137
+hook_results: []
+created_at: '2026-04-07T19:51:10+00:00'

@@ -7,13 +7,13 @@ engine: null
 model: null
 mode: implementation
 pipeline_mode: full
-status: flagged
+status: queued
 pipeline_status: implementing
 priority: medium
 pm_complexity: simple
 planned_effort: s
 created_at: '2026-04-07T08:27:25+00:00'
-updated_at: '2026-04-07T14:21:41+00:00'
+updated_at: '2026-04-07T20:53:00+00:00'
 goal: 'Simplify merge conflict handling in commit_to_git. The flow is: (1) try git
   merge, (2) if conflict, launch merge agent ONCE, (3) if merge agent resolves it,
   done, (4) if merge agent fails, declare task failed, (5) launch recovery agent once,
@@ -75,8 +75,10 @@ git:
   checkpoint_attempts: 0
   rolled_back_checkpoint_attempt: null
   worktree_path: null
+  merge_agent_attempts: 0
 retry_policy:
   max_retries: null
   stage_retry_limit: null
 created_from: null
 upstream_origin: null
+github_origin: null
