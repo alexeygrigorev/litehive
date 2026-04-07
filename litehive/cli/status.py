@@ -1,5 +1,16 @@
 from litehive.config import ensure_workspace, load_config
-from litehive.observability import load_engine_monitoring, render_engine_monitoring_lines, render_task_summary
+from litehive.observability import (
+    collect_recent_activity,
+    find_last_completed_task,
+    load_engine_monitoring,
+    render_active_task_section,
+    render_engine_health_section,
+    render_engine_monitoring_lines,
+    render_last_completed_section,
+    render_queue_section,
+    render_recent_activity_section,
+    render_task_summary,
+)
 from litehive.runtime._models import active_engine_freezes
 from litehive.tasks import (
     WorkspaceConflictError,
@@ -27,6 +38,72 @@ def _cmd_status(args):
     state = load_state(args.workspace)
     monitoring = load_engine_monitoring(args.workspace)
     fast_mode = bool(getattr(args, "fast", False))
+
+    if getattr(args, "full", False):
+        return _cmd_status_full(args, root, config, state, monitoring, fast_mode)
+
+    # --- Dashboard mode (default) ---
+    print(f"workspace: {args.workspace}")
+    print(f"default_engine: {config.default_engine}")
+    freezes = active_engine_freezes(config)
+    if freezes:
+        for engine_name, until_dt in sorted(freezes.items()):
+            local_until = until_dt.astimezone().strftime("%Y-%m-%d %H:%M %Z")
+            print(f"engine_frozen: {engine_name} until {local_until}")
+    print(f"mode: {state.mode}")
+    current_runner = runner_status(root)
+    print(
+        "runner_status: "
+        f"{current_runner.status} pid={current_runner.pid or '-'} "
+        f"started_at={current_runner.started_at or '-'} "
+        f"heartbeat_at={current_runner.heartbeat_at or '-'} "
+        f"active_task_id={current_runner.active_task_id or '-'}"
+    )
+    if state.pool_stop_reason:
+        print(f"pool_stop_reason: {state.pool_stop_reason}")
+    print()
+
+    # Active Task
+    active_task = (
+        require_task(args.workspace, state.active_task_id) if state.active_task_id else None
+    )
+    for line in render_active_task_section(active_task, default_engine=config.default_engine):
+        print(line)
+    print()
+
+    # Last Completed
+    all_tasks = (
+        list_tasks_state_first(args.workspace, state=state)
+        if fast_mode
+        else list_tasks(args.workspace)
+    )
+    last_done = find_last_completed_task(all_tasks)
+    for line in render_last_completed_section(last_done):
+        print(line)
+    print()
+
+    # Queue
+    for line in render_queue_section(state.queue, all_tasks):
+        print(line)
+    print()
+
+    # Engine Health
+    for line in render_engine_health_section(monitoring):
+        print(line)
+    for line_text in render_engine_monitoring_lines(monitoring):
+        print(line_text)
+    print()
+
+    # Recent Activity
+    events = collect_recent_activity(root)
+    for line in render_recent_activity_section(events):
+        print(line)
+
+    return 0
+
+
+def _cmd_status_full(args, root, config, state, monitoring, fast_mode):
+    """Full verbose status output (--full flag)."""
     print(f"workspace: {args.workspace}")
     print(f"status_read_mode: {'fast' if fast_mode else 'full'}")
     print(f"default_engine: {config.default_engine}")
@@ -68,29 +145,28 @@ def _cmd_status(args):
         print(f"active_engine: {active_engine}")
     for line in render_engine_monitoring_lines(monitoring):
         print(line)
-    if getattr(args, "full", True):
-        print(f"default_retry_limit: {config.default_retry_limit}")
-        print(f"execution_retry_policies: {_format_execution_retry_policies(config)}")
-        print(f"pool_stop_on_failure: {config.pool_stop_on_failure}")
-        print(f"pool_max_tasks: {config.pool_max_tasks}")
-        print(f"pool_stop_on_execution_limit: {config.pool_stop_on_execution_limit}")
-        print(f"pool_quota_threshold: {config.pool_quota_threshold}")
-        print(f"pool_budget_threshold: {config.pool_budget_threshold}")
-        print(f"pool_stop_on_dirty_git: {config.pool_stop_on_dirty_git}")
-        print(f"pool_selection_policy: {config.pool_selection_policy}")
-        print(f"process_profile: {config.process_profile}")
-        tasks = (
-            list_tasks_state_first(args.workspace, state=state)
-            if fast_mode
-            else list_tasks(args.workspace)
-        )
-        if tasks:
-            print()
-            for task in tasks:
-                for line in render_task_summary(
-                    task, active=task.id == state.active_task_id, root=root
-                ):
-                    print(line)
+    print(f"default_retry_limit: {config.default_retry_limit}")
+    print(f"execution_retry_policies: {_format_execution_retry_policies(config)}")
+    print(f"pool_stop_on_failure: {config.pool_stop_on_failure}")
+    print(f"pool_max_tasks: {config.pool_max_tasks}")
+    print(f"pool_stop_on_execution_limit: {config.pool_stop_on_execution_limit}")
+    print(f"pool_quota_threshold: {config.pool_quota_threshold}")
+    print(f"pool_budget_threshold: {config.pool_budget_threshold}")
+    print(f"pool_stop_on_dirty_git: {config.pool_stop_on_dirty_git}")
+    print(f"pool_selection_policy: {config.pool_selection_policy}")
+    print(f"process_profile: {config.process_profile}")
+    tasks = (
+        list_tasks_state_first(args.workspace, state=state)
+        if fast_mode
+        else list_tasks(args.workspace)
+    )
+    if tasks:
+        print()
+        for task in tasks:
+            for line in render_task_summary(
+                task, active=task.id == state.active_task_id, root=root
+            ):
+                print(line)
     return 0
 
 

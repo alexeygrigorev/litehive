@@ -1,12 +1,18 @@
 """Shared task observability formatting helpers."""
 
 
+import json
 from pathlib import Path
 from datetime import UTC, datetime
+from typing import Any
 
 import yaml
 
-from litehive.models import ExecutionEstimate, TaskRecord
+from litehive.models import (
+    ExecutionEstimate,
+    TaskRecord,
+    WorkspaceEngineMonitoring,
+)
 
 # Ordered pipeline stages for remaining-time estimation.
 _PIPELINE_STAGES = ["grooming", "implementing", "testing", "accepting", "commit_to_git"]
@@ -304,3 +310,153 @@ def _pid_label(pid: int | None) -> str:
 
 def _sandbox_label(sandboxed: bool, sandbox_summary: str) -> str:
     return f"sandbox={sandbox_summary or 'enabled'}" if sandboxed else "sandbox=host"
+
+
+# ---------------------------------------------------------------------------
+# Dashboard rendering helpers
+# ---------------------------------------------------------------------------
+
+
+def render_active_task_section(
+    task: TaskRecord | None,
+    *,
+    default_engine: str,
+) -> list[str]:
+    """Render the Active Task dashboard section."""
+    lines = ["=== Active Task ==="]
+    if task is None:
+        lines.append("  (none)")
+        return lines
+
+    engine = (
+        task.runtime.active_subagent.engine
+        if task.runtime.active_subagent is not None
+        else task.runtime.last_subagent.engine
+        if task.runtime.last_subagent is not None
+        else task.engine or default_engine
+    )
+    stage = task.runtime.current_stage.step or task.pipeline_status or "-"
+    run_elapsed = _duration_label(task.runtime.run_started_at, 0)
+    lines.append(f"  {task.id} {stage} with {engine}, running for {run_elapsed}")
+
+    stage_elapsed = _duration_label(task.runtime.current_stage.started_at, task.runtime.current_stage.duration_seconds)
+    lines.append(f"  stage: {stage} elapsed {stage_elapsed}")
+    return lines
+
+
+def find_last_completed_task(tasks: list[TaskRecord]) -> TaskRecord | None:
+    """Return the most recently completed (done) task by updated_at."""
+    done_tasks = [t for t in tasks if t.status == "done"]
+    if not done_tasks:
+        return None
+    return max(done_tasks, key=lambda t: t.updated_at or "")
+
+
+def render_last_completed_section(task: TaskRecord | None) -> list[str]:
+    """Render the Last Completed dashboard section."""
+    lines = ["=== Last Completed ==="]
+    if task is None:
+        lines.append("  (none)")
+        return lines
+
+    verdict = task.runtime.last_outcome.kind or task.runtime.last_stage.verdict or "-"
+    when = task.runtime.last_outcome.recorded_at or task.updated_at or "-"
+    lines.append(f"  {task.id} {task.title} verdict={verdict} at {when}")
+    return lines
+
+
+def render_queue_section(queue: list[str], tasks: list[TaskRecord]) -> list[str]:
+    """Render the Queue dashboard section."""
+    lines = ["=== Queue ==="]
+    count = len(queue)
+    if count == 0:
+        lines.append("  (empty)")
+        return lines
+    task_map = {t.id: t for t in tasks}
+    next_task = task_map.get(queue[0])
+    next_label = f", next: {next_task.id} {next_task.title}" if next_task else ""
+    lines.append(f"  {count} queued{next_label}")
+    return lines
+
+
+def render_engine_health_section(monitoring: WorkspaceEngineMonitoring) -> list[str]:
+    """Render the Engine Health dashboard section."""
+    lines = ["=== Engine Health ==="]
+    if not monitoring.engines:
+        lines.append("  (no engine data)")
+        return lines
+    for name in sorted(monitoring.engines):
+        record = monitoring.engines[name]
+        if record.last_limit_kind:
+            reset = ""
+            if record.usage and record.usage.reset_at:
+                reset = f" resets {record.usage.reset_at}"
+            lines.append(f"  {name}: {record.last_limit_kind} limited{reset}")
+        else:
+            usage_label = ""
+            if record.usage and record.usage.used is not None:
+                usage_label = f" ({record.usage.used}/{record.usage.limit or '?'} {record.usage.unit or 'units'})"
+            lines.append(f"  {name}: ok{usage_label}")
+    return lines
+
+
+def collect_recent_activity(root: Path, *, limit: int = 5) -> list[dict[str, Any]]:
+    """Scan events.jsonl across all task dirs, return most recent events."""
+    tasks_dir = root / ".litehive" / "tasks"
+    if not tasks_dir.exists():
+        return []
+    all_events: list[dict[str, Any]] = []
+    for events_path in tasks_dir.glob("*/events.jsonl"):
+        try:
+            text = events_path.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        for line in text.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                all_events.append(json.loads(line))
+            except json.JSONDecodeError:
+                continue
+    all_events.sort(key=lambda e: e.get("ts", ""), reverse=True)
+    return all_events[:limit]
+
+
+_EVENT_LABELS: dict[str, str] = {
+    "stage_completed": "stage completed",
+    "stage_started": "stage started",
+    "subagent_started": "subagent started",
+    "subagent_completed": "subagent completed",
+    "engine_switch": "engine switched",
+    "engine_fallback": "engine fallback",
+    "task_queued": "task queued",
+    "task_completed": "task completed",
+    "task_flagged": "task flagged",
+    "task_interrupted": "task interrupted",
+    "execution_error": "error",
+    "retry": "retry",
+}
+
+
+def render_recent_activity_section(events: list[dict[str, Any]]) -> list[str]:
+    """Render the Recent Activity dashboard section."""
+    lines = ["=== Recent Activity ==="]
+    if not events:
+        lines.append("  (no recent activity)")
+        return lines
+    for event in events:
+        kind = event.get("kind", "unknown")
+        label = _EVENT_LABELS.get(kind, kind)
+        ts = event.get("ts", "-")
+        task_id = event.get("task_id", "-")
+        data = event.get("data", {})
+        detail_parts = [f"{task_id} {label}"]
+        if kind in ("stage_completed", "stage_started") and data.get("step"):
+            detail_parts.append(data["step"])
+        if kind == "engine_switch" and data.get("to_engine"):
+            detail_parts.append(f"-> {data['to_engine']}")
+        if data.get("verdict"):
+            detail_parts.append(f"verdict={data['verdict']}")
+        lines.append(f"  [{ts}] {' '.join(detail_parts)}")
+    return lines

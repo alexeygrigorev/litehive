@@ -2381,7 +2381,7 @@ def test_status_command_shows_explicit_close_outcome(
         follow_up_task_id=follow_up.id,
     )
 
-    _cmd_status(argparse.Namespace(workspace=tmp_path))
+    _cmd_status(argparse.Namespace(workspace=tmp_path, full=True))
     output = capsys.readouterr().out
 
     assert f"{task.id} [deferred/backlog]" in output
