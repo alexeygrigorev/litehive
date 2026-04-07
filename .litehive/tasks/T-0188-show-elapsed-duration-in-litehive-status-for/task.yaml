@@ -7,13 +7,13 @@ engine: null
 model: null
 mode: implementation
 pipeline_mode: full
-status: in_progress
-pipeline_status: commit_to_git
+status: done
+pipeline_status: done
 priority: medium
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-05T20:14:54+00:00'
-updated_at: '2026-04-07T23:10:26+00:00'
+updated_at: '2026-04-07T23:14:49+00:00'
 goal: Redesign litehive status to be a useful operator dashboard instead of a config
   dump. Show what matters at a glance - active task with duration, engine health,
   recent activity, queue summary. Remove noise like pool policies and retry config
@@ -75,15 +75,22 @@ subagents:
   path: subagents/SA-0006-reviewer
   sandboxed: false
   sandbox_summary: host
+- id: SA-0007
+  role: merge-resolver
+  engine: claude
+  status: completed
+  path: subagents/SA-0007-merge-resolver
+  sandboxed: false
+  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0188 show-elapsed-duration-in-litehive-status-for'
-  commit_sha: null
-  checkpoint_base_sha: null
-  checkpoint_attempts: 0
+  commit_sha: 43d5205e04522614909db3c6e38d8ad0ee672561
+  checkpoint_base_sha: e48686dcb576dd8ab697367cd551557c74f13823
+  checkpoint_attempts: 1
   rolled_back_checkpoint_attempt: null
   worktree_path: null
-  merge_agent_attempts: 0
+  merge_agent_attempts: 1
 retry_policy:
   max_retries: null
   stage_retry_limit: null
