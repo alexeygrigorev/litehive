@@ -93,6 +93,9 @@ def render_task_summary(task: TaskRecord, *, active: bool, root: Path | None = N
                     f"prepared={upstream.patch.prepared}"
                 )
             )
+    _wt_path = task.runtime.git.worktree_path or task.git.worktree_path
+    if task.status == "merge_failed" and _wt_path:
+        lines.append(f"  unmerged_worktree={_wt_path}")
     lines.append(f"  auto_commit={task.git.auto_commit}")
     if task.git.commit_message:
         lines.append(f"  commit_message={task.git.commit_message}")

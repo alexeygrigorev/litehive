@@ -718,7 +718,7 @@ class TaskExecutionRunner:
                     tests=report.tests,
                     resource_limit_event=report.resource_limit_event,
                     hook_results=report.hook_results,
-                    failure_classification=report.failure_classification,
+                    failure_classification=report.failure_classification or "merge_conflict",
                     failure_diagnostics=report.failure_diagnostics,
                 )
                 report = terminal
@@ -736,9 +736,9 @@ class TaskExecutionRunner:
                     failure_classification=report.failure_classification,
                     failure_diagnostics=report.failure_diagnostics,
                 )
+                _record_unmerged_worktree(self.root, task)
                 self._write_report(task, report, steps)
                 _apply_stage_finished(task, report)
-                _record_unmerged_worktree(self.root, task)
                 return self._finish_run(
                     task,
                     final_status="merge_failed",
@@ -957,7 +957,10 @@ def _human_checkpoint_reason(task: TaskRecord, target: str) -> str | None:
 
 
 def _record_unmerged_worktree(root: Path, task: TaskRecord) -> None:
-    """Record a task's worktree as unmerged in state.yaml."""
+    """Record a task's worktree as unmerged in state.yaml for later resolution."""
+    from litehive.models import UnmergedWorktree
+    from litehive.tasks import get_task_worktree_path, load_state, save_state
+
     worktree_path = get_task_worktree_path(task)
     if not worktree_path:
         return
