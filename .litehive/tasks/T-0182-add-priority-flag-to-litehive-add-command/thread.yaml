@@ -1,0 +1,23 @@
+- role: reviewer
+  step: accepting
+  verdict: pass
+  message: "All three acceptance criteria verified:\n\n1. `litehive add 'title' --priority\
+    \ high` creates task with priority=high \u2014 VERIFIED: unit test test_add_command_persists_priority_high\
+    \ passes, CLI output includes \"priority: high\".\n\n2. Default priority remains\
+    \ medium when --priority omitted \u2014 VERIFIED: unit test test_add_command_defaults_priority_to_medium\
+    \ passes, task.priority == \"medium\".\n\n3. Invalid priority values show clear\
+    \ argparse error \u2014 VERIFIED: `litehive add \"test\" --priority invalid` exits\
+    \ 2 with \"invalid choice: 'invalid' (choose from critical, high, low, medium)\"\
+    .\n\nAdditional verification:\n- `critical` added to VALID_TASK_PRIORITIES and\
+    \ TASK_PRIORITY_ORDER (critical=0, high=1, medium=2, low=3) in litehive/tasks.py.\n\
+    - `--priority` flag visible in `litehive add --help` with choices {critical, high,\
+    \ low, medium}.\n- create_task() accepts priority parameter with validation against\
+    \ VALID_TASK_PRIORITIES.\n- _cmd_add() wires args.priority to create_task() and\
+    \ prints priority in output.\n- 3 new tests added, all 3 passing.\n\nFiles changed:\
+    \ litehive/tasks.py, litehive/cli/parser.py, litehive/cli/tasks.py, tests/test_task_commands_and_daemon.py."
+  files_changed:
+  - litehive/tasks.py
+  - litehive/cli/parser.py
+  - litehive/cli/tasks.py
+  - tests/test_task_commands_and_daemon.py
+  created_at: '2026-04-07T06:04:24+00:00'

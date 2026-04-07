@@ -61,13 +61,13 @@ from litehive.models import (
     utcnow,
 )
 
-VALID_TASK_PRIORITIES = {"low", "medium", "high"}
+VALID_TASK_PRIORITIES = {"low", "medium", "high", "critical"}
 VALID_TASK_ENGINES = {"codex", "opencode", "gemini", "copilot", "claude", "goz"}
 VALID_HUMAN_CHECKPOINTS = {"before_acceptance", "before_commit"}
 VALID_PM_COMPLEXITIES = set(get_args(TaskComplexity))
 VALID_PLANNED_EFFORTS = set(get_args(PlannedEffort))
 VALID_TASK_TYPES = {"adapter", "bugfix", "docs", "intake", "refactor", "research", "review"}
-TASK_PRIORITY_ORDER = {"high": 0, "medium": 1, "low": 2}
+TASK_PRIORITY_ORDER = {"critical": 0, "high": 1, "medium": 2, "low": 3}
 
 
 @dataclass(slots=True)
@@ -1598,12 +1598,15 @@ def create_task(
     human_checkpoints: list[str] | None = None,
     auto_commit: bool = True,
     upstream_origin: UpstreamContributionOrigin | None = None,
+    priority: str | None = None,
 ) -> TaskRecord:
     ensure_workspace(root)
     if retry_limit is not None and retry_limit < 0:
         raise ValueError("Retry limit must be 0 or greater")
     if pipeline_mode not in {"single", "full"}:
         raise ValueError(f"Unsupported pipeline_mode '{pipeline_mode}'")
+    if priority is not None and priority not in VALID_TASK_PRIORITIES:
+        raise ValueError(f"Unsupported priority '{priority}'; choose from {sorted(VALID_TASK_PRIORITIES)}")
     if task_type is not None and task_type not in VALID_TASK_TYPES:
         raise ValueError(f"Unsupported task type '{task_type}'")
     if pm_complexity is not None and pm_complexity not in VALID_PM_COMPLEXITIES:
@@ -1625,6 +1628,7 @@ def create_task(
             model=model,
             mode=mode,  # type: ignore[arg-type]
             pipeline_mode=pipeline_mode,  # type: ignore[arg-type]
+            priority=priority or "medium",
             goal=goal,
             acceptance_criteria=normalize_acceptance_criteria(acceptance_criteria),
             pm_complexity=pm_complexity,  # type: ignore[arg-type]
@@ -2717,7 +2721,7 @@ def _task_selection_key(
     if policy == "fifo":
         return (interrupted_rank, queue_index, task.id)
     if policy == "priority_first":
-        return (TASK_PRIORITY_ORDER.get(task.priority, 1), queue_index, interrupted_rank, task.id)
+        return (TASK_PRIORITY_ORDER.get(task.priority, 2), queue_index, interrupted_rank, task.id)
     if policy == "dependency_aware":
         return (
             queue_index,

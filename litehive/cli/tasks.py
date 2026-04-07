@@ -60,6 +60,7 @@ def _cmd_add(args):
             model=getattr(args, "model", None),
             retry_limit=getattr(args, "retry_limit", None),
             auto_commit=not args.no_auto_commit,
+            priority=getattr(args, "priority", None),
         )
     except (ValueError, WorkspaceConflictError) as exc:
         print(f"add failed: {exc}")
@@ -70,6 +71,7 @@ def _cmd_add(args):
     print(
         f"retry_limit: {task.retry_policy.max_retries if task.retry_policy.max_retries is not None else 'default'}"
     )
+    print(f"priority: {task.priority}")
     print(f"mode: {task.mode}")
     print(f"pipeline_mode: {task.pipeline_mode}")
     print(f"engine: {_task_engine_label(task.engine, load_config(args.workspace).default_engine)}")
