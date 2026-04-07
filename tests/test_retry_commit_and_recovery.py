@@ -2109,9 +2109,8 @@ def test_classify_recovery_failure_owner_prefers_project_paths_over_name_overlap
 def test_attempt_stage_recovery_launches_recovery_agent_for_litehive_traceback(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """The new recovery flow launches a recovery agent instead of doing
-    self-heal with pytest/merge. Verify the agent is launched and a
-    recovery report is recorded."""
+    """When failure_owner is litehive and litehive_source_path exists, the
+    self-heal path launches a recovery agent against the litehive source tree."""
     litehive_root = tmp_path / "litehive-src"
     litehive_root.mkdir()
     _init_git_repo(litehive_root)
@@ -2148,6 +2147,7 @@ def test_attempt_stage_recovery_launches_recovery_agent_for_litehive_traceback(
     ):  # type: ignore[no-untyped-def]
         observed["role"] = role
         observed["engine"] = engine_name
+        observed["prompt"] = prompt
         _write_cli_verdict(
             tmp_path,
             task_arg,
@@ -2185,10 +2185,13 @@ def test_attempt_stage_recovery_launches_recovery_agent_for_litehive_traceback(
 
     assert report is not None
     assert observed["role"] == "recovery"
+    assert "SELF-HEAL" in observed["prompt"]
+    assert "uv run pytest" in observed["prompt"]
     recovery_report = yaml.safe_load(
         (task_dir(tmp_path, task) / "recovery" / "recovery-001.yaml").read_text(encoding="utf-8")
     )
-    assert recovery_report["trigger"] == "stage_failure"
+    assert recovery_report["trigger"] == "litehive_self_heal"
+    assert recovery_report["failure_classification"] == "litehive"
 
 
 def test_attempt_stage_recovery_returns_none_when_recovery_agent_fails(
