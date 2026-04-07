@@ -7,13 +7,13 @@ engine: null
 model: null
 mode: implementation
 pipeline_mode: full
-status: in_progress
-pipeline_status: commit_to_git
+status: done
+pipeline_status: done
 priority: medium
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-07T18:58:14+00:00'
-updated_at: '2026-04-07T21:55:11+00:00'
+updated_at: '2026-04-07T21:57:04+00:00'
 goal: Agents should not have to list files they changed in their report. Git already
   knows. Remove files_changed from the report format that agents produce. Instead,
   populate it automatically from git diff in the worktree at commit time. The guard
@@ -106,15 +106,22 @@ subagents:
   path: subagents/SA-0011-reviewer
   sandboxed: false
   sandbox_summary: host
+- id: SA-0012
+  role: merge-resolver
+  engine: claude
+  status: completed
+  path: subagents/SA-0012-merge-resolver
+  sandboxed: false
+  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0213 remove-files-changed-from-agent-report-format-use'
-  commit_sha: null
-  checkpoint_base_sha: null
-  checkpoint_attempts: 0
+  commit_sha: e8cff3d1c1e461e5d7255daca73dba7f97bcce4b
+  checkpoint_base_sha: 04d644d081556dbbdc7040737890abbfe86c126b
+  checkpoint_attempts: 1
   rolled_back_checkpoint_attempt: null
   worktree_path: null
-  merge_agent_attempts: 0
+  merge_agent_attempts: 1
 retry_policy:
   max_retries: null
   stage_retry_limit: null
