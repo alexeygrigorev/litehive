@@ -898,4 +898,48 @@ def build_parser():
         "--workspace", type=Path, default=Path.cwd(), help="Repository root containing .litehive/"
     )
 
+    # ── list ──────────────────────────────────────────────────────────
+    list_cmd = subparsers.add_parser(
+        "list", help="Compact task listing with optional filters"
+    )
+    list_cmd.add_argument(
+        "--all",
+        action="store_true",
+        dest="show_all",
+        help="Include done tasks (excluded by default)",
+    )
+    list_cmd.add_argument(
+        "--status",
+        dest="filter_status",
+        help="Filter by task status (queued, in_progress, done, …)",
+    )
+    list_cmd.add_argument(
+        "--pipeline-status",
+        dest="filter_pipeline_status",
+        help="Filter by pipeline stage (backlog, implementing, …)",
+    )
+    list_cmd.add_argument(
+        "--engine",
+        dest="filter_engine",
+        help="Filter by engine name",
+    )
+    list_cmd.add_argument(
+        "--workspace",
+        type=Path,
+        default=Path.cwd(),
+        help="Repository root containing .litehive/",
+    )
+
+    # ── show ──────────────────────────────────────────────────────────
+    show_cmd = subparsers.add_parser(
+        "show", help="Print full details for a single task"
+    )
+    show_cmd.add_argument("task_id", help="Task ID (e.g. T-0001)")
+    show_cmd.add_argument(
+        "--workspace",
+        type=Path,
+        default=Path.cwd(),
+        help="Repository root containing .litehive/",
+    )
+
     return parser

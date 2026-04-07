@@ -132,6 +132,87 @@ def _cmd_queue(args):
     return 0
 
 
+def _cmd_list(args):
+    ensure_workspace(args.workspace)
+    tasks = list_tasks(args.workspace)
+    show_all = getattr(args, "show_all", False)
+    filter_status = getattr(args, "filter_status", None)
+    filter_pipeline = getattr(args, "filter_pipeline_status", None)
+    filter_engine = getattr(args, "filter_engine", None)
+
+    filtered = []
+    for task in tasks:
+        if not show_all and task.status == "done":
+            continue
+        if filter_status and task.status != filter_status:
+            continue
+        if filter_pipeline and task.pipeline_status != filter_pipeline:
+            continue
+        if filter_engine and (task.engine or "") != filter_engine:
+            continue
+        filtered.append(task)
+
+    for task in filtered:
+        print(f"{task.id} [{task.status}/{task.pipeline_status}] {task.title}")
+    return 0
+
+
+def _cmd_show(args):
+    ensure_workspace(args.workspace)
+    from litehive.tasks import get_task
+
+    task = get_task(args.workspace, args.task_id)
+    if task is None:
+        print(f"error: task {args.task_id} not found")
+        return 1
+
+    print(f"id: {task.id}")
+    print(f"slug: {task.slug}")
+    print(f"title: {task.title}")
+    print(f"status: {task.status}")
+    print(f"pipeline_status: {task.pipeline_status}")
+    print(f"priority: {task.priority}")
+    print(f"engine: {task.engine or '-'}")
+    print(f"model: {task.model or '-'}")
+    print(f"task_type: {task.task_type or '-'}")
+    print(f"mode: {task.mode}")
+    print(f"pipeline_mode: {task.pipeline_mode}")
+    print(f"pm_complexity: {task.pm_complexity or '-'}")
+    print(f"planned_effort: {task.planned_effort or '-'}")
+    print(f"created_at: {task.created_at}")
+    print(f"updated_at: {task.updated_at}")
+    if task.depends_on:
+        print(f"depends_on: {', '.join(task.depends_on)}")
+    else:
+        print("depends_on: -")
+    print(f"goal: {task.goal or '-'}")
+    if task.acceptance_criteria:
+        print("acceptance_criteria:")
+        for ac in task.acceptance_criteria:
+            print(f"  - {ac}")
+    else:
+        print("acceptance_criteria: -")
+    if task.constraints:
+        print("constraints:")
+        for c in task.constraints:
+            print(f"  - {c}")
+    else:
+        print("constraints: -")
+    if task.plan:
+        print("plan:")
+        for step in task.plan:
+            print(f"  - {step}")
+    else:
+        print("plan: -")
+    # Runtime info
+    rt = task.runtime
+    print(f"execution_status: {rt.execution_status or '-'}")
+    print(f"current_stage: {rt.current_stage.step if rt.current_stage and rt.current_stage.step else '-'}")
+    print(f"retry_count: {rt.retry_count}")
+    print(f"last_outcome: {rt.last_outcome or '-'}")
+    return 0
+
+
 def _cmd_repair(args):
     ensure_workspace(args.workspace)
     try:

@@ -29,3 +29,9 @@ Created task worktree at `.litehive/worktrees/T-0148-update-context-md-with-curr
 
 ## 2026-04-07T04:33:37+00:00
 Execution started with engine `claude`.
+
+## 2026-04-07T04:36:45+00:00
+CommitToGit complete. Commit: 8f60cfcc3e4057d4e1bd665c8669bcd5c744e89f
+
+## 2026-04-07T04:36:50+00:00
+Pool stopped: continue_or_rollback_required. This task finished with checkpoint commit `8f60cfcc3e4057d4e1bd665c8669bcd5c744e89f` and unrelated queued work remains. Either continue with a new `litehive run`/pool run or roll back the checkpoint first.

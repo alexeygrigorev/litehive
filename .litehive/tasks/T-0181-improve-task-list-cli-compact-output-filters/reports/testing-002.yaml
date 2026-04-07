@@ -1,0 +1,44 @@
+task_id: T-0181
+step: testing
+verdict: pass
+summary: 'PASS: All acceptance criteria verified.'
+feedback: "PASS: All acceptance criteria verified.\n\n## Verification\n\n1. **Code\
+  \ present in worktree**: All 4 modified files (litehive/cli/__init__.py, litehive/cli/parser.py,\
+  \ litehive/cli/status.py, tests/workspace_helpers.py) and 1 new file (tests/test_list_and_show.py)\
+  \ confirmed present via git status.\n\n2. **Tests**: 9 new tests, all 9 passing.\
+  \ Existing queue-related tests (16 tests) also pass.\n\n3. **Acceptance criteria\
+  \ status**:\n   - Default output excludes done tasks: PASS (test_list_excludes_done_tasks_by_default)\n\
+  \   - Compact mode shows one line per task (ID [status/pipeline_status] title):\
+  \ PASS (test_list_compact_format)\n   - --status filter: PASS (test_list_filter_by_status)\n\
+  \   - --pipeline-status filter: PASS (test_list_filter_by_pipeline_status)\n   -\
+  \ --engine filter: PASS (test_list_filter_by_engine)\n   - Filters compose: PASS\
+  \ (test_list_composed_filters)\n   - --all flag shows done tasks: PASS (test_list_all_includes_done_tasks)\n\
+  \   - litehive show T-XXXX prints full task details: PASS (test_show_prints_task_details)\n\
+  \   - litehive show T-9999 exits non-zero: PASS (test_show_nonexistent_task_exits_nonzero)\n\
+  \   - Both commands accept --workspace: PASS (verified via argparse Namespace in\
+  \ all tests and --help output)\n   - Existing tests pass: PASS (16 queue tests verified)\n\
+  \n4. **CLI integration**: `litehive list --help` and `litehive show --help` both\
+  \ work correctly with expected arguments.\n\n5. **Code quality**: Implementation\
+  \ is clean - _cmd_list applies filters sequentially, _cmd_show displays all TaskRecord\
+  \ fields. Both are properly wired in __init__.py dispatch and parser.py subcommands."
+files_changed: []
+follow_up_tasks: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 52
+hook_results: []
+created_at: '2026-04-07T05:13:13+00:00'
