@@ -1,395 +1,159 @@
 # Litehive Task State Machine
 
-> **Change gate**: Any change to `_ROUTES`, `TaskStatus`, `PipelineStatus`, or
-> `OutcomeReasonCode` in the codebase **must** be accompanied by a corresponding
-> update to this document in the same commit.
+This is the desired state machine design. Tasks should reference this document.
 
----
+## Pipeline Modes
 
-## Overview
+### Full Pipeline (default)
+```
+grooming → implementing → testing → accepting → commit_to_git → done
+```
 
-A litehive task has two orthogonal state fields:
+### Single Pipeline (`--single`)
+```
+implementing → commit_to_git → done
+```
+If implementing produces no file changes, skip commit_to_git and go straight to done.
 
-| Field | Type | Purpose |
-|-------|------|---------|
-| `status` | `TaskStatus` | Queue / execution lifecycle |
-| `pipeline_status` | `PipelineStatus` | Which stage the task is at |
+## Stage Owners
 
-Together they give the full picture: a task is `in_progress` at `implementing`,
-or `queued` at `testing` because a previous run was interrupted and it is waiting
-for another pass.
+| Stage | Owner | Purpose |
+|-------|-------|---------|
+| grooming | planner | Clarify scope, shape acceptance criteria |
+| implementing | swe | Write code |
+| testing | qa | Verify the implementation |
+| accepting | reviewer | Final done/not-done judgment |
+| commit_to_git | system | Merge worktree into main |
 
-Queue-affecting transitions are persisted atomically. When Litehive claims a task,
-finishes a run, requeues or resumes work, abandons or closes a task, or recovers a
-completed/interrupted task, it writes the task record, task runtime, and workspace
-queue state as one transition under the workspace lock. If one of those writes
-fails, Litehive restores the pre-transition files instead of leaving
-`active_task_id`, queue membership, and task status out of sync.
+## Stage Transitions
 
----
+### Grooming
+- pass → implementing
+- blocked → flagged (missing info, can't proceed)
 
-## TaskStatus — queue and execution lifecycle
+### Implementing
+- pass (with file changes) → testing
+- pass (no files, no tests) → REJECT back to implementing (guard)
+- no CLI report submitted → continue session with nudge
+- timeout/crash → see "Failure Handling"
 
-| Value | Meaning |
+### Testing
+- pass → accepting
+- reject → implementing (retry)
+- retry limit hit → see "Failure Handling"
+
+### Accepting
+- pass → commit_to_git
+- reject → implementing (retry)
+- retry limit hit → see "Failure Handling"
+
+### Commit to Git
+- merge succeeds → done
+- merge conflict → merge agent (once)
+  - resolved → done
+  - failed → recovery agent (once)
+    - resolved → done
+    - failed → recovery_failed
+- no new commits → fail → recovery agent (once)
+
+## Verdict Submission
+
+Agents MUST submit verdicts via `litehive report` CLI. No text parsing.
+
+1. Agent runs and invokes `litehive report --verdict <pass|fail|reject|blocked>`
+2. If agent finishes without invoking CLI → continue session, nudge with prompt
+3. If after nudge still no report → verdict is fail
+
+## Failure Handling
+
+When an agent fails, classify the failure by exit code:
+
+### Exit Code Classification
+| Exit Code | Meaning | Action |
+|-----------|---------|--------|
+| 0 (no CLI report) | Agent forgot to report | Continue session, nudge |
+| 0 (with CLI report) | Normal completion | Use the reported verdict |
+| 1 (error) | Could be task bug or engine bug | Try recovery agent |
+| 124 (timeout) | Engine problem | Retry with fallback engine |
+| Signal (killed) | Infrastructure problem | Retry same engine |
+| Quota/limit message | Engine exhausted | Switch to next engine in preference list |
+
+### Engine Failure Flow
+```
+engine fails (timeout, quota, crash)
+  → try next engine in engine_preference list
+    → next engine also fails → try next
+      → all engines exhausted → recovery_failed
+```
+
+### Task Failure Flow
+```
+agent ran but couldn't complete the task
+  → launch recovery agent (once, prefer different engine)
+    → recovery solves it → continue pipeline
+    → recovery fails → recovery_failed
+```
+
+### Merge Conflict Flow
+```
+git merge → conflict
+  → merge agent (once)
+    → resolved → done
+    → failed → recovery agent (once)
+      → resolved → done
+      → failed → recovery_failed
+```
+
+## Task States
+
+### Active States
+| State | Meaning |
 |-------|---------|
-| `queued` | Waiting in the pool to be picked up, including resumable interrupted, flagged, or rejected work |
-| `in_progress` | Currently running under the pool runner |
-| `interrupted` | Execution stopped by runner or subagent termination; resumable from the preserved stage and eligible for automatic recovery/requeue |
-| `parked` | Execution intentionally stopped by an operator; resumable from the preserved stage but excluded from automatic recovery/requeue |
-| `done` | Completed successfully; git checkpoint recorded |
-| `flagged` | Blocked, unresolvable, or interrupted by an unhandled error — needs human attention |
-| `cancelled` | Explicitly abandoned or execution-cancelled without a PM close outcome |
-| `wont_do` | Explicit PM close: the task will not be implemented |
-| `deferred` | Explicit PM close: the task is intentionally parked for later reconsideration |
-| `duplicate` | Explicit PM close: the task is covered elsewhere |
-
-Terminal states (no automatic forward progress): `done`, `cancelled`, `wont_do`, `deferred`, `duplicate`.
-
-`interrupted`, `parked`, `flagged`, and explicitly closed tasks can be resumed via `litehive resume`.
-`parked`, `flagged`, and explicitly closed tasks can be requeued via `litehive requeue` if they should re-enter execution from the implementation entry stage.
-`interrupted`, `parked`, `flagged`, and explicitly closed tasks can be permanently abandoned via `litehive abandon`.
-Any non-done task can be explicitly closed via `litehive close --outcome <code>`.
-System-interrupted and flagged tasks are also returned to the runnable queue automatically. User-stopped tasks persist as `parked` until resumed or requeued manually.
-
----
-
-## PipelineStatus — stage position
-
-Stages run in fixed order depending on the task's `pipeline_mode`.
-
-**Full mode** (default):
-
-```
-backlog → grooming → implementing → testing → accepting → commit_to_git → done
-```
-
-**Single mode** (`pipeline_mode: single`):
-
-```
-backlog → implementing → commit_to_git → done
-                      ↘ done  (when no files changed)
-```
-
-Single mode runs one agent that completes the entire task. There is no grooming,
-QA, or reviewer stage. After the implementing stage succeeds:
-- If the agent produced code changes (`files_changed` is non-empty), the task
-  proceeds to `commit_to_git` and then `done`.
-- If no files were changed, the task goes directly to `done`.
-
-Use `litehive add --single` to create a task in single pipeline mode.
-
-| Stage | Role | Description |
-|-------|------|-------------|
-| `backlog` | — | Task created but not yet started |
-| `grooming` | Planner | PM-style planning: clarify the user problem, define acceptance criteria, decompose scope, and produce a plan *(full mode only)* |
-| `implementing` | SWE | Write the code change (or complete the entire task in single mode) |
-| `testing` | QA | Verify the change passes tests and review *(full mode only)* |
-| `accepting` | Reviewer | PM-style final review: validate the end-user outcome and decide done versus not-done *(full mode only)* |
-| `commit_to_git` | Runner | Record git checkpoint commit |
-| `done` | — | Task complete |
-
-When a task re-enters a stage after a flagged or system-interrupted run, litehive uses a dedicated `recovery` role for stage execution in `implementing`, `testing`, and `accepting`.
-The recovery agent inspects the recorded failure context, artifacts, and continuation handoff, then makes whatever code or task-state changes are needed to restore a runnable path and finish the task.
-
----
-
-## Verdicts
-
-Each stage execution produces one verdict:
-
-| Verdict | Meaning |
-|---------|---------|
-| `pass` | Stage succeeded; advance to next stage |
-| `accept` | Synonym for `pass` (used by accepting role) |
-| `fail` | Stage failed; see transition table for routing |
-| `reject` | Reviewer explicitly rejected; see transition table |
-| `blocked` | Stage cannot proceed (missing criteria, dependency, quota) |
-
----
-
-## Transition table
-
-Source: `_ROUTES` and `_SINGLE_ROUTES` dicts in `litehive/runner/states.py`.
-
-### Full mode
-
-| Stage | Verdict | Next stage | Notes |
-|-------|---------|------------|-------|
-| grooming | pass / accept | implementing | |
-| grooming | blocked | — (flagged) | Missing acceptance criteria |
-| implementing | pass / accept | testing | |
-| testing | pass / accept | accepting | |
-| testing | fail / reject | implementing | Task is requeued at `implementing` for another runnable pass; counts against retry limit |
-| accepting | pass / accept | commit_to_git | |
-| accepting | fail / reject | implementing | Task is requeued at `implementing` for another runnable pass; counts against retry limit |
-| commit_to_git | pass / accept | done | |
-| commit_to_git | fail / reject / blocked | — (flagged) | Commit failed |
-
-### Single mode
-
-| Stage | Verdict | Next stage | Notes |
-|-------|---------|------------|-------|
-| implementing | pass / accept + files changed | commit_to_git | |
-| implementing | pass / accept + no files changed | done | Skips commit when no code was produced |
-| commit_to_git | pass / accept | done | |
-| commit_to_git | fail / reject / blocked | — (flagged) | Commit failed |
-
-### Rejection requeue and retry limit
-
-When `testing` or `accepting` returns `fail` or `reject`, the task routes back to
-`implementing`, persists `status = queued`, and returns control to the pool with
-`final_status = queued`. The task remains runnable and is picked up on a later pass.
-Each such rejection increments the rejection counter, and that counter persists across
-requeued runs.
-
-The retry limit is resolved in order: task-level override → workspace default.
-`max_retries=N` allows exactly N rejections before the limit is enforced.
-
-When the rejection counter exceeds `max_retries` (i.e. `rejections > max_retries`),
-the runner terminates the task as `flagged` with
-`reason_code = "retry_limit_exhausted"` instead of requeuing it again.
-
-### Per-stage retry escalation
-
-In addition to the global retry limit, the runner tracks a per-stage rejection counter
-stored in `task.runtime.stage_retry_counts`. When the same review stage (`testing` or
-`accepting`) rejects too many times, the runner escalates the task to `grooming` instead
-of requeuing it at `implementing`. This stops implementation churn without flagging the
-task as terminal.
-
-The per-stage limit is resolved in order: task-level override
-(`task.retry_policy.stage_retry_limit`) → workspace default
-(`config.default_stage_retry_limit`, default: `2`).
-
-When `stage_retry_counts[stage] > effective_stage_limit`:
-
-- `testing` exhausted → rerouted to `grooming` with **recovery escalation** context so
-  the planner can investigate why the implementation keeps failing verification.
-- `accepting` exhausted → rerouted to `grooming` with **planner escalation** context so
-  the planner can clarify requirements, acceptance criteria, or task scope.
-
-In both cases the task remains `queued` at `grooming` — it is still runnable and visible
-in the queue. The escalation reason is recorded in:
-
-- The stage report (`outcome_reason_code = "stage_retry_limit_exhausted"`,
-  `outcome_reason` with the stage name and count).
-- `task.runtime.continuation_handoff` with `kind = "restart"`, `reason`, and `summary`
-  describing the escalation type so the next grooming run has context.
-- The task journal.
-
-The global `max_retries` check still applies after the per-stage check; a task that
-exhausts the global limit before any single stage hits its per-stage limit is still
-flagged as `retry_limit_exhausted`.
-
-Escalated `OutcomeReasonCode`: `stage_retry_limit_exhausted`
-
----
-
-## Terminal outcomes
-
-When a task exits the pipeline without reaching `done`, it records an `OutcomeKind`
-and an `OutcomeReasonCode`.
-
-### OutcomeKind
-
-| Kind | Meaning |
-|------|---------|
-| `flagged` | Blocked, unresolvable, or interrupted by an unhandled error — requires human action |
-| `blocked` | A specific dependency or criteria check prevented execution |
-| `interrupted` | Execution stopped externally but kept enough runtime context to resume deterministically |
-| `cancelled` | Deliberately stopped |
-| `wont_do` | Explicit PM close: the task will not be implemented |
-| `deferred` | Explicit PM close: the task is intentionally parked for later reconsideration |
-| `duplicate` | Explicit PM close: the task is covered elsewhere |
-
-### OutcomeReasonCode
-
-| Code | Kind | Trigger |
-|------|------|---------|
-| `verdict_fail` | flagged | Stage produced `fail` and no retry route was available |
-| `verdict_reject` | flagged | Stage produced `reject` and no retry route was available |
-| `verdict_blocked` | blocked | Stage produced `blocked` |
-| `missing_acceptance_criteria` | blocked | Grooming passed but criteria were missing when entering implementing |
-| `execution_interrupted` | interrupted | Runner `KeyboardInterrupt`, stale-runner recovery, or subagent termination interrupted the current stage and preserved resumable context |
-| `execution_cancelled` | cancelled | Runner interrupted mid-stage and requeued the task, or `litehive abandon` closed it |
-| `stage_exception` | flagged | Unhandled Python exception during stage execution; the task stays queued with failure context recorded |
-| `unsupported_verdict` | flagged | Stage returned a verdict not in the transition table |
-| `retry_limit_exhausted` | flagged | Global rejection counter exceeded `max_retries`; task is flagged as terminal |
-| `stage_retry_limit_exhausted` | — (queued) | Per-stage rejection counter exceeded `stage_retry_limit`; task is rerouted to `grooming` and stays runnable |
-| `wont_do` | wont_do | Task explicitly closed with `status = wont_do` |
-| `deferred` | deferred | Task explicitly closed with `status = deferred` |
-| `duplicate` | duplicate | Task explicitly closed with `status = duplicate` |
-
----
-
-## Intentional non-implementation outcomes
-
-Tasks that will not be implemented through the normal pipeline should be closed
-explicitly rather than left in `flagged` or silently abandoned:
-
-```
-litehive close T-0042 --outcome wont_do  --reason "Superseded by T-0039" --follow-up-task T-0039
-litehive close T-0043 --outcome deferred --reason "Revisit after v2 release"
-litehive close T-0044 --outcome duplicate
-```
-
-This records the decision in the task journal, persists the rationale and outcome code
-and optional follow-up task link on the task record, sets `task.status` to the chosen
-close outcome, and removes the task from the queue while keeping it visible in
-status/reporting and pool summaries.
-
----
-
-## Acceptance-Criteria Gate
-
-Litehive treats some tasks as "larger tasks" that must carry structured acceptance
-criteria before implementation starts. The current requirement signals are:
-
-- dependencies
-- an explicit goal
-- high priority
-- a multi-step plan
-
-When one of those signals is present and `acceptance_criteria` is empty, the task
-cannot proceed into `implementing`. The runner blocks the transition, and task
-metadata changes or recovery paths that would otherwise place the task back at an
-implementation-entry stage reroute it to `grooming` until at least one structured
-criterion is persisted. During `grooming`, the planner can provide explicit
-`ACCEPTANCE_CRITERIA` bullets, or the runner can infer and persist them from the
-current task context when that context is already specific enough.
-
----
-
-## Parking / pausing
-
-A task is "parked" by the human-checkpoint mechanism. When a task opt into
-`before_acceptance` or `before_commit`, the runner sets `status = queued` and
-`pipeline_status = <next stage>` before returning `paused`. The task stays in the
-queue at the boundary stage and will not advance until the pool is restarted and
-a human confirms the run.
-
-Runner interruptions and stale-runner/subagent termination recovery move the task
-to `status = interrupted`. Litehive preserves the current `pipeline_status`,
-records `runtime.last_outcome.kind = interrupted`, keeps the interrupted stage in
-`runtime.current_stage`, snapshots the last known subagent context when available,
-and stops the pool with `task_interrupted`. The task is visible as resumable until
-`litehive resume <id>` returns it to `status = queued` at the preserved stage
-subject only to normal reroutes such as missing acceptance criteria.
-System-triggered interruptions are also reinserted into the runnable queue automatically so the pool can pick them up again without manual repair.
-
-Explicit `litehive stop` transitions the task to `status = parked` while preserving
-the same interruption metadata and stage context. Parked tasks are listed as resumable
-but are not auto-requeued by repair or stale-runner recovery. `litehive resume <id>`
-returns parked work to the queue at the preserved stage; `litehive requeue <id>`
-returns it to the implementation entry stage.
-
-QA or reviewer rejection also parks the task in the runnable pool. In that case the task
-switches back to `pipeline_status = implementing`, keeps `status = queued`, records
-the rejection report with `retry_decision = retry`, and re-enters the pool for the
-next implementation pass instead of moving to a sink state.
-
-Flagged tasks likewise return to the runnable queue automatically. When they are claimed again,
-`commit_to_git` failures resume at `commit_to_git`, while other flagged tasks restart from the
-appropriate implementation-entry stage with their failure context preserved so the recovery agent
-can continue from the real problem instead of starting from a blank slate.
-
-For `commit_to_git`, recoverability is anchored to the last successful pre-commit review stage,
-not to the latest report overall. That means a task remains resumable at `commit_to_git` even after
-the most recent `commit_to_git-*.yaml` report recorded a failed integration attempt such as a
-cherry-pick or merge conflict. Litehive treats that as "review passed, integration still pending",
-so the pool can retry or repair the final integration step instead of dropping the task back into
-an earlier stage.
-
----
-
-## Cancellation
-
-| Trigger | Status | Reason code |
-|---------|--------|-------------|
-| KeyboardInterrupt during run | `interrupted` | `execution_interrupted` |
-| `litehive abandon <id>` | `cancelled` | `execution_cancelled` |
-| `litehive close <id> --outcome wont_do` | `wont_do` | `wont_do` |
-| `litehive close <id> --outcome deferred` | `deferred` | `deferred` |
-| `litehive close <id> --outcome duplicate` | `duplicate` | `duplicate` |
-
----
-
-## Done
-
-A task is `done` when:
-
-1. `commit_to_git` returns `pass` or `accept`, **and**
-2. `task.status = "done"` and `task.pipeline_status = "done"` are persisted, **and**
-3. A git checkpoint commit is recorded (unless `auto_commit = false`).
-
-Checkpoint policy:
-
-- Default checkpoint subject: `litehive: complete <task-id> <task-slug>`
-- Checkpoints are created at `commit_to_git`
-- Generated checkpoint subjects keep the default base subject and append ` (attempt N)` on reruns after `rollback` or `recover`
-- Task-level or workspace-level auto-commit can disable checkpoint creation explicitly; otherwise `done` requires a recorded checkpoint commit
-- `rollback` records which attempt was reverted, then requeues the task at the implementation entry stage
-- `recover` clears the recorded checkpoint pointer without reverting code, then requeues the task at the implementation entry stage
-- If structured acceptance criteria are still required, recovery reroutes to `grooming` as the implementation entry stage instead of `implementing`
-
----
-
-## Runner Status Model
-
-Litehive tracks runner health through a durable `RunnerStatusState` record written
-to `.litehive/.runner.lock` whenever a pool run is active.
-
-| Field | Type | Purpose |
-|-------|------|---------|
-| `status` | `RunnerExecutionStatus` | Current health classification |
-| `pid` | `int \| None` | OS PID of the runner process |
-| `workspace` | `str` | Resolved workspace path |
-| `command` | `str` | Command-line invocation |
-| `started_at` | `str \| None` | ISO-8601 timestamp when the runner acquired the lock |
-| `heartbeat_at` | `str \| None` | ISO-8601 timestamp of the last heartbeat refresh |
-| `active_task_id` | `str \| None` | Task ID currently being executed |
-
-### RunnerExecutionStatus
-
-| Value | Meaning |
+| queued | Waiting in pool for execution |
+| in_progress | Currently being worked on |
+
+### Terminal States (success)
+| State | Meaning |
 |-------|---------|
-| `idle` | No runner is active and no workspace reconciliation is needed |
-| `running` | Runner holds the OS lock and heartbeat is current |
-| `late` | Runner holds the OS lock but heartbeat has not been refreshed within the threshold (default: 60 seconds); runner may be hung |
-| `stale` | Lock is not held but workspace state still shows a running task; pending reconciliation |
+| done | Completed and merged to main |
 
-### Heartbeat
+### Terminal States (failure)
+| State | Meaning |
+|-------|---------|
+| flagged | Needs operator attention |
+| recovery_failed | Recovery agent tried and failed, manual only |
 
-While a task is executing, `runner_heartbeat` starts a background thread that
-refreshes `heartbeat_at` in the lock file every second. The heartbeat is written
-atomically under a per-lock `metadata_lock`.
+### Resumable States
+| State | Meaning |
+|-------|---------|
+| interrupted | Stopped mid-execution, can resume |
+| parked | Deliberately paused by operator |
 
-When the heartbeat context exits (normally or via exception), it clears
-`active_task_id` from the metadata so status reads after task completion
-correctly show `idle` once the runner guard releases the lock.
+### Closed States
+| State | Meaning |
+|-------|---------|
+| wont_do | Explicitly decided not to do |
+| deferred | Postponed to later |
+| duplicate | Duplicate of another task |
 
-### Reconciliation
+## Pool Behavior
 
-`_reconcile_stale_runner_tasks` is called before every task selection
-(`peek_next_task_selection`, `dequeue_next_task_selection`, `plan_task_selections`,
-`restore_untouched_active_task`). It:
+- Pool NEVER stops on task failure
+- Failed tasks are flagged/recovery_failed and pool moves to next task
+- Pool stops only for: queue exhausted, operator checkpoint, dirty git, quota threshold
 
-1. Requeues tasks whose `execution_status = running` but which are not the current
-   `active_task_id` (orphaned running tasks that the lock holder is not tracking).
-2. Requeues the active task itself when its `execution_status = running` but the
-   runner lock is no longer held (crash or SIGKILL recovery).
-3. Stranded `commit_to_git` tasks are recovered via the existing commit-recovery
-   path rather than plain requeue.
+## Engine Selection
 
-Reconciliation writes to task YAML and the journal but does not mutate the
-runner lock file directly; that cleanup happens in `runner_status()` when
-conditions allow.
+1. CLI `--engine` override (highest priority)
+2. Task-level `engine` override (if set)
+3. Workspace `default_engine` from config
 
+When engine fails, walk the `engine_preference` list skipping the failed engine.
 
+## Recovery Philosophy
 
-| Command | Effect |
-|---------|--------|
-| `litehive requeue <id>` | Re-adds a `parked`, `flagged`, or explicitly closed task to the queue at the implementation entry stage |
-| `litehive resume <id>` | Re-adds an `interrupted`, `parked`, `flagged`, or explicitly closed task to the queue at its preserved stage, subject to normal reroutes |
-| `litehive rollback <id>` | Reverts the checkpoint commit and requeues the task at `implementing` |
-| `litehive recover <id>` | Requeues a completed task at `implementing` without reverting code |
+- Be conservative with recovery_failed — most things are recoverable
+- Engine failures → switch engine, not recovery agent
+- Task failures → recovery agent with different engine
+- Only declare recovery_failed when genuinely exhausted all options
+- recovery_failed tasks are left for manual resolution
