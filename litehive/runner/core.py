@@ -401,8 +401,7 @@ class TaskExecutionRunner:
 
             # Guard: SWE must produce actual changes. If implementing "passes"
             # with zero files changed and zero tests, reject it back to implementing.
-            # Always check the actual worktree via git — files_changed is populated
-            # from git diff, not from agent output.
+            # Always check the actual worktree via git — git is the source of truth.
             if current == "implementing" and target == "testing":
                 worktree_has_changes = False
                 from litehive.tasks import get_task_worktree_path
@@ -419,7 +418,6 @@ class TaskExecutionRunner:
                     check_dir = self.root
                 if check_dir is not None:
                     try:
-                        # Check uncommitted changes
                         diff = subprocess.run(
                             ["git", "diff", "--name-only", "HEAD"],
                             cwd=check_dir, capture_output=True, text=True, timeout=10,
@@ -448,7 +446,10 @@ class TaskExecutionRunner:
                             report.files_changed = sorted(all_changed)
                     except (subprocess.TimeoutExpired, OSError):
                         pass
-                if not worktree_has_changes and check_dir is not None and (not report.tests or report.tests.get("added", 0) == 0):
+                if check_dir is None:
+                    # Non-git workspace — cannot verify changes, skip the guard.
+                    pass
+                elif not worktree_has_changes and (not report.tests or report.tests.get("added", 0) == 0):
                     reason = (
                         "SWE reported pass but produced no file changes and no tests. "
                         "This usually means the agent did not actually write code. "
