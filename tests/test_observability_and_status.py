@@ -859,7 +859,7 @@ def test_status_output_includes_runtime_observability(
 
     save_task(tmp_path, task)
 
-    exit_code = _cmd_status(argparse.Namespace(workspace=tmp_path))
+    exit_code = _cmd_status(argparse.Namespace(workspace=tmp_path, full=True))
     output = capsys.readouterr().out
 
     assert exit_code == 0
@@ -893,6 +893,88 @@ def test_status_output_includes_runtime_observability(
         in output
     )
 
+def test_status_default_dashboard_shows_sections_without_config_noise(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    ensure_workspace(
+        tmp_path,
+        LitehiveConfig(
+            default_retry_limit=2,
+            pool_stop_on_failure=True,
+            pool_max_tasks=4,
+        ),
+    )
+    # Create an active task
+    active = create_task(tmp_path, title="Implement dashboard")
+    active.status = "in_progress"
+    active.pipeline_status = "implementing"
+    active.engine = "copilot"
+    active.runtime.execution_status = "running"
+    active.runtime.run_started_at = "2026-03-31T10:00:00+00:00"
+    active.runtime.current_stage = RuntimeStageState(
+        step="implementing",
+        status="running",
+        started_at="2026-03-31T10:01:00+00:00",
+        updated_at="2026-03-31T10:01:01+00:00",
+    )
+    save_task(tmp_path, active)
+
+    # Create a completed task
+    done = create_task(tmp_path, title="Previous feature")
+    done.status = "done"
+    done.pipeline_status = "done"
+    done.updated_at = "2026-03-31T09:50:00+00:00"
+    save_task(tmp_path, done)
+
+    # Create a queued task
+    queued = create_task(tmp_path, title="Next feature")
+    save_task(tmp_path, queued)
+
+    state = load_state(tmp_path)
+    state.active_task_id = active.id
+    state.queue = [queued.id]
+    save_state(tmp_path, state)
+
+    # Write some events
+    import json
+    events_dir = tmp_path / ".litehive" / "tasks" / f"{active.id}-{active.slug}"
+    events_dir.mkdir(parents=True, exist_ok=True)
+    (events_dir / "events.jsonl").write_text(
+        json.dumps({"ts": "2026-03-31T10:01:00+00:00", "task_id": active.id, "kind": "subagent_started", "data": {"role": "swe", "engine": "copilot"}}) + "\n",
+        encoding="utf-8",
+    )
+
+    exit_code = _cmd_status(argparse.Namespace(workspace=tmp_path))
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    # Dashboard sections present
+    assert "=== Active Task ===" in output
+    assert active.id in output
+    assert "implementing with copilot" in output
+    assert "running for" in output
+    assert "stage: implementing elapsed" in output
+    assert "title: Implement dashboard" in output
+    assert "=== Last Completed ===" in output
+    assert done.id in output
+    assert "pass" in output
+    assert "title: Previous feature" in output
+    assert "=== Queue ===" in output
+    assert "1 queued" in output
+    assert "Next feature" in output
+    assert "=== Engine Health ===" in output
+    assert "=== Recent Activity ===" in output
+    assert "subagent_started" not in output  # label is "started"
+    assert "started swe copilot" in output
+
+    # Config noise NOT present in default output
+    assert "default_retry_limit" not in output
+    assert "pool_stop_on_failure" not in output
+    assert "pool_max_tasks" not in output
+    assert "execution_retry_policies" not in output
+    assert "retry_limit=" not in output
+    assert "auto_commit=" not in output
+
 def test_status_fast_mode_uses_state_first_reads_and_skips_runtime_hydration(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -915,7 +997,7 @@ def test_status_fast_mode_uses_state_first_reads_and_skips_runtime_hydration(
     state.queue = [second.id, first.id]
     save_state(tmp_path, state)
 
-    exit_code = _cmd_status(argparse.Namespace(workspace=tmp_path, fast=True))
+    exit_code = _cmd_status(argparse.Namespace(workspace=tmp_path, fast=True, full=True))
     output = capsys.readouterr().out
 
     assert exit_code == 0
@@ -950,7 +1032,7 @@ def test_status_output_includes_execution_estimate_fields(
         encoding="utf-8",
     )
 
-    exit_code = _cmd_status(argparse.Namespace(workspace=tmp_path))
+    exit_code = _cmd_status(argparse.Namespace(workspace=tmp_path, full=True))
     output = capsys.readouterr().out
 
     assert exit_code == 0
@@ -1313,7 +1395,7 @@ def test_cmd_status_includes_engine_monitoring_lines(
         failure_reason="usage limit reached",
     )
 
-    exit_code = _cmd_status(argparse.Namespace(workspace=tmp_path, full=False))
+    exit_code = _cmd_status(argparse.Namespace(workspace=tmp_path, full=True))
     output = capsys.readouterr().out
 
     assert exit_code == 0
@@ -1344,7 +1426,7 @@ def test_cmd_status_includes_codex_provider_limit_monitoring(
         failure_reason="usage limit reached",
     )
 
-    exit_code = _cmd_status(argparse.Namespace(workspace=tmp_path, full=False))
+    exit_code = _cmd_status(argparse.Namespace(workspace=tmp_path, full=True))
     output = capsys.readouterr().out
 
     assert exit_code == 0
@@ -1379,7 +1461,7 @@ def test_cmd_status_includes_claude_provider_limit_monitoring(
         failure_reason="rate limit reached",
     )
 
-    exit_code = _cmd_status(argparse.Namespace(workspace=tmp_path, full=False))
+    exit_code = _cmd_status(argparse.Namespace(workspace=tmp_path, full=True))
     output = capsys.readouterr().out
 
     assert exit_code == 0
@@ -1420,7 +1502,7 @@ def test_cmd_status_includes_gemini_provider_limit_monitoring(
         failure_reason="quota limit reached",
     )
 
-    exit_code = _cmd_status(argparse.Namespace(workspace=tmp_path, full=False))
+    exit_code = _cmd_status(argparse.Namespace(workspace=tmp_path, full=True))
     output = capsys.readouterr().out
 
     assert exit_code == 0
@@ -1482,7 +1564,7 @@ def test_cmd_status_includes_engine_usage_window(
         failure_reason=None,
     )
 
-    exit_code = _cmd_status(argparse.Namespace(workspace=tmp_path, full=False))
+    exit_code = _cmd_status(argparse.Namespace(workspace=tmp_path, full=True))
     output = capsys.readouterr().out
 
     assert exit_code == 0
@@ -1712,7 +1794,7 @@ def test_status_output_includes_default_execution_retry_policies(
 ) -> None:
     ensure_workspace(tmp_path, LitehiveConfig())
 
-    exit_code = _cmd_status(argparse.Namespace(workspace=tmp_path))
+    exit_code = _cmd_status(argparse.Namespace(workspace=tmp_path, full=True))
     output = capsys.readouterr().out
 
     assert exit_code == 0

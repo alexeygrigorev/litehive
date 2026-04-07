@@ -267,7 +267,7 @@ def test_run_next_task_falls_back_from_codex_to_opencode_on_usage_limit(
         "Stage `grooming` switched from `codex` to `opencode` after usage limit reached."
     )
     assert "grooming complete via opencode" in report["feedback"]
-    _cmd_status(argparse.Namespace(workspace=tmp_path))
+    _cmd_status(argparse.Namespace(workspace=tmp_path, full=True))
     output = capsys.readouterr().out
     assert "engine_switch=grooming codex->opencode reason=usage limit reached" in output
 

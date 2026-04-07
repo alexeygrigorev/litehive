@@ -204,7 +204,7 @@ def test_status_shows_frozen_engines(tmp_path: Path, capsys) -> None:
     )
 
     exit_code = _cmd_status(
-        argparse.Namespace(workspace=tmp_path, full=False, fast=False)
+        argparse.Namespace(workspace=tmp_path, full=True, fast=False)
     )
     assert exit_code == 0
     output = capsys.readouterr().out
@@ -216,7 +216,7 @@ def test_status_no_frozen_engines(tmp_path: Path, capsys) -> None:
     ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
 
     exit_code = _cmd_status(
-        argparse.Namespace(workspace=tmp_path, full=False, fast=False)
+        argparse.Namespace(workspace=tmp_path, full=True, fast=False)
     )
     assert exit_code == 0
     output = capsys.readouterr().out

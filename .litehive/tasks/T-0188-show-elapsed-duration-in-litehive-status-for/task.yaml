@@ -6,30 +6,75 @@ task_type: null
 engine: null
 model: null
 mode: implementation
-status: queued
-pipeline_status: backlog
+pipeline_mode: full
+status: in_progress
+pipeline_status: commit_to_git
 priority: medium
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-05T20:14:54+00:00'
-updated_at: '2026-04-05T20:14:54+00:00'
+updated_at: '2026-04-07T23:10:26+00:00'
 goal: Redesign litehive status to be a useful operator dashboard instead of a config
-  dump. Show what matters at a glance - active task with duration, engine health, recent
-  activity, queue summary. Remove noise like pool policies and retry config from default
-  output.
+  dump. Show what matters at a glance - active task with duration, engine health,
+  recent activity, queue summary. Remove noise like pool policies and retry config
+  from default output.
 acceptance_criteria:
-- Active task shows title, stage, engine, and elapsed duration (e.g. "T-0161 implementing with copilot, running for 3m")
+- Active task shows title, stage, engine, and elapsed duration (e.g. "T-0161 implementing
+  with copilot, running for 3m")
 - Current stage shows elapsed duration
 - Last completed task shown with outcome (pass/fail) and when
 - Queue summary shows count and next task title
 - Engine health shows which engines are available and which hit quota with reset time
 - Recent activity shows last 3-5 events (task completed, engine switched, error)
-- Config details (retry limits, pool policies, etc.) only shown with --full flag, not by default
+- Config details (retry limits, pool policies, etc.) only shown with --full flag,
+  not by default
 - No full task dump in default output
 constraints: []
 plan: []
 human_checkpoints: []
-subagents: []
+subagents:
+- id: SA-0001
+  role: planner
+  engine: claude
+  status: completed
+  path: subagents/SA-0001-planner
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0002
+  role: swe
+  engine: claude
+  status: completed
+  path: subagents/SA-0002-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0003
+  role: swe
+  engine: claude
+  status: completed
+  path: subagents/SA-0003-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0004
+  role: swe
+  engine: claude
+  status: completed
+  path: subagents/SA-0004-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0005
+  role: qa
+  engine: claude
+  status: completed
+  path: subagents/SA-0005-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0006
+  role: reviewer
+  engine: claude
+  status: completed
+  path: subagents/SA-0006-reviewer
+  sandboxed: false
+  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0188 show-elapsed-duration-in-litehive-status-for'
@@ -38,8 +83,10 @@ git:
   checkpoint_attempts: 0
   rolled_back_checkpoint_attempt: null
   worktree_path: null
+  merge_agent_attempts: 0
 retry_policy:
   max_retries: null
   stage_retry_limit: null
 created_from: null
 upstream_origin: null
+github_origin: null

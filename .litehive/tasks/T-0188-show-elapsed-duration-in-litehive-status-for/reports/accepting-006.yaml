@@ -1,0 +1,44 @@
+task_id: T-0188
+step: accepting
+verdict: pass
+summary: "PASS \u2014 All 8 acceptance criteria verified against code and tests."
+feedback: "PASS \u2014 All 8 acceptance criteria verified against code and tests.\n\
+  \nVerified:\n1. Active task shows title, stage, engine, and elapsed duration: render_active_task_section\
+  \ outputs e.g. \"T-0001 implementing with codex, running for 3m\" (observability/_status.py:340)\n\
+  2. Current stage shows elapsed duration: \"stage: implementing elapsed 2m30s\" using\
+  \ _duration_label (line 342-343)\n3. Last completed task shown with outcome and\
+  \ when: find_last_completed_task + render_last_completed_section shows verdict and\
+  \ timestamp (lines 347-365)\n4. Queue summary shows count and next task title: render_queue_section\
+  \ outputs \"1 queued, next: T-0002 Next feature\" (lines 368-379)\n5. Engine health\
+  \ shows available vs quota-limited with reset time: render_engine_health_section\
+  \ shows \"ok\" or \"quota limited resets <time>\" (lines 382-400)\n6. Recent activity\
+  \ shows last 3-5 events: collect_recent_activity scans events.jsonl, render_recent_activity_section\
+  \ maps to human-readable labels (lines 403-462)\n7. Config details only shown with\
+  \ --full flag: _cmd_status checks getattr(args, \"full\", False) at line 42 of status.py\n\
+  8. No full task dump in default output: render_task_summary only called in _cmd_status_full\
+  \ (line 166-169)\n\nTests run: 262 passed (72 in test_observability_and_status.py,\
+  \ 190 in test_retry_commit_and_recovery.py + test_task_commands_and_daemon.py).\
+  \ New test test_status_default_dashboard_shows_sections_without_config_noise validates\
+  \ all dashboard sections present and config noise absent from default output.\n\n\
+  Implementation spans: cli/status.py (dashboard default + full split), observability/_status.py\
+  \ (7 new rendering functions), observability/__init__.py (exports), and test updates\
+  \ across 3 test files."
+files_changed: []
+follow_up_tasks: []
+created_follow_up_task_ids: []
+task_update: {}
+tests: {}
+warnings: []
+retry_count: 2
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 164
+hook_results: []
+created_at: '2026-04-07T23:10:26+00:00'

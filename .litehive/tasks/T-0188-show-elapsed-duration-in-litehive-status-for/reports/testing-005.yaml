@@ -1,0 +1,74 @@
+task_id: T-0188
+step: testing
+verdict: pass
+summary: 'VERDICT: PASS'
+feedback: 'VERDICT: PASS
+
+
+  All acceptance criteria verified against code and tests:
+
+
+  1. Active task shows title, stage, engine, and elapsed duration: YES - render_active_task_section()
+  outputs e.g. "T-0001 implementing with codex, running for 3m" (line 340 of _status.py)
+
+  2. Current stage shows elapsed duration: YES - "stage: implementing elapsed 2m30s"
+  using _duration_label on current_stage.started_at (line 342-343)
+
+  3. Last completed task shown with outcome and when: YES - find_last_completed_task()
+  finds most recent done task, render_last_completed_section() shows verdict and timestamp
+  (lines 347-365)
+
+  4. Queue summary shows count and next task title: YES - render_queue_section() outputs
+  "1 queued, next: T-0002 Next feature" (lines 368-379)
+
+  5. Engine health shows available vs quota-limited with reset time: YES - render_engine_health_section()
+  shows "ok" or "quota limited resets <time>" (lines 382-400)
+
+  6. Recent activity shows last 3-5 events: YES - collect_recent_activity() scans
+  events.jsonl across task dirs, render_recent_activity_section() maps kinds to human-readable
+  labels (lines 403-462)
+
+  7. Config details only shown with --full: YES - _cmd_status checks getattr(args,
+  "full", False) and delegates to _cmd_status_full for verbose output (line 42 of
+  status.py)
+
+  8. No full task dump in default output: YES - render_task_summary only called in
+  _cmd_status_full (line 166-169)
+
+
+  Tests run and all passing:
+
+  - tests/test_observability_and_status.py: 72 passed (includes test_status_default_dashboard_shows_sections_without_config_noise
+  which validates dashboard sections present and config noise absent)
+
+  - tests/test_retry_commit_and_recovery.py: 89 passed (1 test updated to use full=True)
+
+  - tests/test_task_commands_and_daemon.py: 101 passed (1 test updated to use full=True)
+
+  Total: 262 passed, 0 failed
+
+
+  STAGE_RESULT:
+
+  {"verdict":"pass","summary":"All 8 acceptance criteria verified; 262 tests pass
+  across 3 test files; dashboard sections render correctly with config noise absent
+  from default output","tests":{"added":1,"passing":1},"warnings":[],"follow_up_tasks":[],"acceptance_criteria":[],"task_update":{}}'
+files_changed: []
+follow_up_tasks: []
+created_follow_up_task_ids: []
+task_update: {}
+tests: {}
+warnings: []
+retry_count: 2
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 171
+hook_results: []
+created_at: '2026-04-07T23:07:42+00:00'
