@@ -1,7 +1,9 @@
 """Codex CLI engine adapter."""
 
 import json
+import logging
 import re
+from dataclasses import dataclass
 from pathlib import Path
 
 from litehive.engines.adapters.common import (
@@ -21,6 +23,36 @@ from litehive.models import (
     EngineUsageWindow,
     LiveEvent,
 )
+
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True, slots=True)
+class _CodexUsageLimitResult:
+    limit_reason: str
+    retry_at: str | None = None
+    purchase_more_credits: bool = False
+
+
+_CODEX_USAGE_LIMIT_RE = re.compile(
+    r"you['\u2019]ve hit your usage limit", re.IGNORECASE
+)
+
+
+def _classify_codex_usage_limit(text: str | None) -> _CodexUsageLimitResult | None:
+    if not text or not _CODEX_USAGE_LIMIT_RE.search(text):
+        return None
+    retry_at = _codex_retry_at_hint(text)
+    if retry_at:
+        logger.info("Codex usage limit hit; engine available again at %s", retry_at)
+    else:
+        logger.info("Codex usage limit hit; no reset date available")
+    return _CodexUsageLimitResult(
+        limit_reason="usage limit reached",
+        retry_at=retry_at,
+        purchase_more_credits="purchase more credits" in text.lower(),
+    )
 
 
 class CodexCLIAdapter(ExternalCLIAdapter):
@@ -102,15 +134,31 @@ class CodexCLIAdapter(ExternalCLIAdapter):
                     metadata.update(error_metadata)
                 if error_message:
                     metadata.setdefault("error_message", error_message)
-                    limit_reason = classify_execution_limit(error_message)
+                    codex_limit = _classify_codex_usage_limit(error_message)
+                    if codex_limit:
+                        limit_reason = codex_limit.limit_reason
+                        if codex_limit.retry_at:
+                            metadata.setdefault("retry_at_hint", codex_limit.retry_at)
+                        if codex_limit.purchase_more_credits:
+                            metadata.setdefault("purchase_more_credits", True)
+                    else:
+                        limit_reason = classify_execution_limit(error_message)
         payload_had_signal = usage is not None or bool(metadata)
         if limit_reason is None and execution.stderr.strip():
-            limit_reason = classify_execution_limit(execution.stderr)
-            retry_at_hint = _codex_retry_at_hint(execution.stderr)
-            if retry_at_hint:
-                metadata["retry_at_hint"] = retry_at_hint
-            if "purchase more credits" in execution.stderr.lower():
-                metadata["purchase_more_credits"] = True
+            codex_limit = _classify_codex_usage_limit(execution.stderr)
+            if codex_limit:
+                limit_reason = codex_limit.limit_reason
+                if codex_limit.retry_at:
+                    metadata.setdefault("retry_at_hint", codex_limit.retry_at)
+                if codex_limit.purchase_more_credits:
+                    metadata.setdefault("purchase_more_credits", True)
+            else:
+                limit_reason = classify_execution_limit(execution.stderr)
+                retry_at_hint = _codex_retry_at_hint(execution.stderr)
+                if retry_at_hint:
+                    metadata["retry_at_hint"] = retry_at_hint
+                if "purchase more credits" in execution.stderr.lower():
+                    metadata["purchase_more_credits"] = True
         if not saw_payloads and not payload_had_signal:
             return None
         if usage is None and limit_reason is None and not metadata:
