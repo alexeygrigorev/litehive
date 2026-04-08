@@ -17,6 +17,8 @@ from typing import TextIO, get_args
 
 import yaml
 
+logger = logging.getLogger(__name__)
+
 from litehive.config import (
     VALID_POOL_SELECTION_POLICIES,
     ensure_workspace,

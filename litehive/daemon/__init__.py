@@ -17,6 +17,8 @@ from typing import TextIO
 
 import yaml
 
+logger = logging.getLogger(__name__)
+
 from litehive.config import (
     daemon_config_dir,
     daemon_registry_path,
