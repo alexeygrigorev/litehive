@@ -75,16 +75,16 @@ and `fix`.
 ## Engine Preference
 
 When an engine reaches quota or another execution limit, Litehive can retry the
-stage on the next available engine in the global preference list:
+stage on the next available engine from the global preference list:
 
 ```yaml
 engine_preference: [codex, opencode, gemini, copilot, goz]
 ```
 
-When the primary engine fails, Litehive walks this list in order, skipping the
-failed engine and any frozen engines. This is separate from task retry policy.
-Fallbacks happen inside an attempt to keep work moving when the current engine
-is unavailable.
+The primary engine is tried first, then the remaining engines from
+`engine_preference` in order, skipping the failed engine and any frozen engines.
+This is separate from task retry policy. Fallbacks happen inside an attempt to
+keep work moving when the current engine is unavailable.
 
 ## Recovery Engine
 
