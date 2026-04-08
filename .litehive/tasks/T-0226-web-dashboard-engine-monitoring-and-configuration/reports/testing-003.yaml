@@ -1,0 +1,53 @@
+task_id: T-0226
+step: testing
+verdict: pass
+summary: 'Verified the engine monitoring/configuration web changes with the focused
+  slice uv run pytest tests/test_web_snapshot_lockfree.py -q, which passed in 3.55s
+  with 17 tests passing. Evidence from that slice confirms: GET /api/engines returns
+  engine config, routing precedence and default fallback order, task-type routing
+  entries, active freeze data, and monitoring payload including token/cost-related
+  metadata fields via read_engine_dashboard. The engine dashboard UI renders labels
+  and fetch paths for the current default engine, routing table, freeze status, and
+  usage metrics. POST /api/engines/default persists the workspace default engine to
+  .litehive/config.yaml. POST /api/task/engine reuses switch_task_engine semantics
+  with required reason handling and updates task/thread state. I also spot-checked
+  litehive/web/__init__.py and litehive/web/templates/index.html: the new endpoints
+  are wired, config.yaml and engine-monitoring.yaml are in the SSE watch set, the
+  task detail view includes the engine switch form, and the dashboard renders routing
+  rules, task-type routing, freeze state, and per-engine usage cards. Acceptance criteria
+  satisfied.'
+feedback: 'Verified the engine monitoring/configuration web changes with the focused
+  slice uv run pytest tests/test_web_snapshot_lockfree.py -q, which passed in 3.55s
+  with 17 tests passing. Evidence from that slice confirms: GET /api/engines returns
+  engine config, routing precedence and default fallback order, task-type routing
+  entries, active freeze data, and monitoring payload including token/cost-related
+  metadata fields via read_engine_dashboard. The engine dashboard UI renders labels
+  and fetch paths for the current default engine, routing table, freeze status, and
+  usage metrics. POST /api/engines/default persists the workspace default engine to
+  .litehive/config.yaml. POST /api/task/engine reuses switch_task_engine semantics
+  with required reason handling and updates task/thread state. I also spot-checked
+  litehive/web/__init__.py and litehive/web/templates/index.html: the new endpoints
+  are wired, config.yaml and engine-monitoring.yaml are in the SSE watch set, the
+  task detail view includes the engine switch form, and the dashboard renders routing
+  rules, task-type routing, freeze state, and per-engine usage cards. Acceptance criteria
+  satisfied.'
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 97
+hook_results: []
+created_at: '2026-04-08T18:59:53+00:00'

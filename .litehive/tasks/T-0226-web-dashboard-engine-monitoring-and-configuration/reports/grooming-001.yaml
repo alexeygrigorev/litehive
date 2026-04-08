@@ -1,0 +1,55 @@
+task_id: T-0226
+step: grooming
+verdict: pass
+summary: 'Grooming pass. I verified the current implementation surface before shaping
+  the task:  currently serves , , , , and ;  already supports workspace default-engine
+  set/freeze/unfreeze;  already implements task-level engine switching with required
+  reason and thread/runtime updates;  plus  define the monitoring payload available
+  from ;  is the closest existing test surface for the web monitor. Important normalization:
+  the repo no longer has persisted  config (), so I narrowed the dashboard requirement
+  to the current routing model: task override, workspace default engine, then fallback
+  preference order, with active engine freezes shown separately. I also narrowed the
+  metrics requirement to values actually present in engine-monitoring records: usage
+  window fields plus token-related metadata when present, rather than inventing synthetic
+  cost numbers. I updated the durable task record with a concrete goal, 5 observable
+  acceptance criteria, 2 constraints, a 4-step implementation plan, , and . No code
+  changes or tests were run in grooming; this was repo inspection and task shaping
+  only. Implementation should add , , a task-engine switch action in task detail,
+  dashboard UI rendering for engine config/monitoring/freeze state, and focused web
+  endpoint/template tests.'
+feedback: 'Grooming pass. I verified the current implementation surface before shaping
+  the task:  currently serves , , , , and ;  already supports workspace default-engine
+  set/freeze/unfreeze;  already implements task-level engine switching with required
+  reason and thread/runtime updates;  plus  define the monitoring payload available
+  from ;  is the closest existing test surface for the web monitor. Important normalization:
+  the repo no longer has persisted  config (), so I narrowed the dashboard requirement
+  to the current routing model: task override, workspace default engine, then fallback
+  preference order, with active engine freezes shown separately. I also narrowed the
+  metrics requirement to values actually present in engine-monitoring records: usage
+  window fields plus token-related metadata when present, rather than inventing synthetic
+  cost numbers. I updated the durable task record with a concrete goal, 5 observable
+  acceptance criteria, 2 constraints, a 4-step implementation plan, , and . No code
+  changes or tests were run in grooming; this was repo inspection and task shaping
+  only. Implementation should add , , a task-engine switch action in task detail,
+  dashboard UI rendering for engine config/monitoring/freeze state, and focused web
+  endpoint/template tests.'
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 232
+hook_results: []
+created_at: '2026-04-08T18:52:37+00:00'

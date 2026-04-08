@@ -1,0 +1,60 @@
+task_id: T-0226
+step: implementing
+verdict: pass
+summary: 'Implemented engine monitoring/configuration support in the web dashboard.
+  Added GET /api/engines returning workspace engine config (default/recovery engine,
+  preference order, freeze state), routing rules/precedence, task-type routing table,
+  and engine-monitoring metrics including token/cost-related metadata fields from
+  engine-monitoring.yaml. Added POST /api/engines/default to persist a new workspace
+  default engine in .litehive/config.yaml. Added POST /api/task/engine to mirror litehive
+  switch behavior from the task detail view, including required reason handling and
+  returning updated task payload plus switch summary. Updated the web UI to render
+  an Engine Dashboard with current default engine, fallback/routing info, task-type
+  routing table, active freeze status, usage metrics cards, a default-engine switch
+  control, and a task-level engine switch form in task detail. Also updated the SSE
+  watch set so config.yaml and engine-monitoring.yaml changes refresh the dashboard.
+  Verified with: uv run pytest tests/test_web_snapshot_lockfree.py -q (17 passed).
+  Evidence in that slice covers read_engine_dashboard payload shape, local default-engine
+  persistence, task-engine switching via the web helper, full HTTP coverage for GET
+  /api/engines + POST /api/engines/default + POST /api/task/engine, and template rendering
+  markers for the new dashboard/actions.'
+feedback: 'Implemented engine monitoring/configuration support in the web dashboard.
+  Added GET /api/engines returning workspace engine config (default/recovery engine,
+  preference order, freeze state), routing rules/precedence, task-type routing table,
+  and engine-monitoring metrics including token/cost-related metadata fields from
+  engine-monitoring.yaml. Added POST /api/engines/default to persist a new workspace
+  default engine in .litehive/config.yaml. Added POST /api/task/engine to mirror litehive
+  switch behavior from the task detail view, including required reason handling and
+  returning updated task payload plus switch summary. Updated the web UI to render
+  an Engine Dashboard with current default engine, fallback/routing info, task-type
+  routing table, active freeze status, usage metrics cards, a default-engine switch
+  control, and a task-level engine switch form in task detail. Also updated the SSE
+  watch set so config.yaml and engine-monitoring.yaml changes refresh the dashboard.
+  Verified with: uv run pytest tests/test_web_snapshot_lockfree.py -q (17 passed).
+  Evidence in that slice covers read_engine_dashboard payload shape, local default-engine
+  persistence, task-engine switching via the web helper, full HTTP coverage for GET
+  /api/engines + POST /api/engines/default + POST /api/task/engine, and template rendering
+  markers for the new dashboard/actions.'
+files_changed:
+- litehive/web/__init__.py
+- litehive/web/templates/index.html
+- tests/test_web_snapshot_lockfree.py
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 339
+hook_results: []
+created_at: '2026-04-08T18:58:16+00:00'
