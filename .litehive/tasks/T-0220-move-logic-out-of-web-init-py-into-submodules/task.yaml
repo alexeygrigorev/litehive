@@ -8,12 +8,13 @@ model: null
 mode: implementation
 pipeline_mode: full
 status: queued
+flag_reason: null
 pipeline_status: grooming
 priority: medium
-pm_complexity: null
-planned_effort: null
+pm_complexity: moderate
+planned_effort: s
 created_at: '2026-04-07T21:05:49+00:00'
-updated_at: '2026-04-08T13:29:34+00:00'
+updated_at: '2026-04-08T21:15:45+00:00'
 goal: web/__init__.py (401 lines) should only contain imports and re-exports. Move
   all logic into dedicated submodules under litehive/web/.
 acceptance_criteria:
@@ -25,7 +26,13 @@ acceptance_criteria:
   and the build_workspace_snapshot and read_session_view tests in tests/test_observability_and_status.py
   remains passing after the refactor.
 constraints: []
-plan: []
+plan:
+- Split web monitor logic out of litehive/web/__init__.py into focused submodules
+  under litehive/web/ while preserving current behavior.
+- Keep litehive.web import compatibility by re-exporting serve_monitor, build_workspace_snapshot,
+  and read_session_view from litehive/web/__init__.py.
+- Verify the refactor with tests/test_web_snapshot_lockfree.py and the build_workspace_snapshot/read_session_view
+  coverage in tests/test_observability_and_status.py.
 human_checkpoints: []
 subagents:
 - id: SA-0001
