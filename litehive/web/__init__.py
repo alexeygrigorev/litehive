@@ -4,10 +4,13 @@
 from dataclasses import asdict, dataclass
 from functools import partial
 import gzip
+import hashlib
 import json
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+import threading
+import time
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
@@ -33,6 +36,9 @@ _MAX_ARTIFACT_BYTES = 64 * 1024
 _RUN_ALL_PREVIEW_BYTES = 32 * 1024
 _RUN_ALL_LOG_LIMIT = 8
 _SESSION_LIMIT = 12
+_STREAM_KEEPALIVE_SECONDS = 15.0
+_STREAM_RETRY_MS = 2000
+_STREAM_SCAN_INTERVAL_SECONDS = 0.25
 
 _TEMPLATES_DIR = Path(__file__).parent / "templates"
 _jinja_env = Environment(loader=FileSystemLoader(str(_TEMPLATES_DIR)), autoescape=False)
@@ -149,6 +155,7 @@ def read_session_view(root: Path, task_id: str, subagent_id: str) -> dict[str, A
 def serve_monitor(root: Path, *, host: str = "127.0.0.1", port: int = 8765) -> int:
     root = root.resolve()
     server = ThreadingHTTPServer((host, port), partial(LitehiveWebHandler, workspace_root=root))
+    server.workspace_stream_monitor = WorkspaceStreamMonitor(root)
     bound_host, bound_port = server.server_address[:2]
     print(f"Litehive web monitor serving {root}")
     print(f"URL: http://{bound_host}:{bound_port}")
@@ -189,6 +196,11 @@ class LitehiveWebHandler(BaseHTTPRequestHandler):
             except FileNotFoundError as exc:
                 return self._send_error_json(HTTPStatus.NOT_FOUND, str(exc))
             return self._send_json(payload)
+        if parsed.path == "/api/stream":
+            params = parse_qs(parsed.query)
+            task_id = params.get("task_id", [None])[0]
+            subagent_id = params.get("subagent_id", [None])[0]
+            return self._stream_events(task_id=task_id, subagent_id=subagent_id)
         return self._send_error_json(HTTPStatus.NOT_FOUND, "Not found")
 
     def do_POST(self) -> None:  # noqa: N802
@@ -257,6 +269,177 @@ class LitehiveWebHandler(BaseHTTPRequestHandler):
         if not isinstance(payload, dict):
             raise ValueError("JSON body must be an object")
         return payload
+
+    def _stream_events(self, *, task_id: str | None, subagent_id: str | None) -> None:
+        monitor = self.server.workspace_stream_monitor
+        selection = StreamSelection(task_id=task_id, subagent_id=subagent_id)
+        try:
+            self.send_response(HTTPStatus.OK)
+            self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Connection", "keep-alive")
+            self.end_headers()
+            self.close_connection = True
+            self.wfile.write(f"retry: {_STREAM_RETRY_MS}\n\n".encode("utf-8"))
+            self.wfile.flush()
+
+            state = monitor.build_initial_state(selection)
+            self._write_sse("snapshot", {"kind": "initial", **state.snapshot_event}, event_id=str(state.revision))
+            if state.session_event is not None:
+                self._write_sse("session", {"kind": "initial", **state.session_event}, event_id=str(state.revision))
+
+            last_revision = state.revision
+            last_emit = time.monotonic()
+            while True:
+                revision = monitor.wait_for_change(last_revision, timeout=_STREAM_KEEPALIVE_SECONDS)
+                if revision == last_revision:
+                    self._write_sse_comment("keepalive")
+                    last_emit = time.monotonic()
+                    continue
+
+                state = monitor.build_state(selection, revision=revision)
+                if state.snapshot_event is not None:
+                    self._write_sse("snapshot", {"kind": "update", **state.snapshot_event}, event_id=str(state.revision))
+                    last_emit = time.monotonic()
+                if state.session_event is not None:
+                    self._write_sse("session", {"kind": "update", **state.session_event}, event_id=str(state.revision))
+                    last_emit = time.monotonic()
+                if time.monotonic() - last_emit >= _STREAM_KEEPALIVE_SECONDS:
+                    self._write_sse_comment("keepalive")
+                    last_emit = time.monotonic()
+                last_revision = state.revision
+        except (BrokenPipeError, ConnectionResetError, TimeoutError):
+            return
+
+    def _write_sse(self, event: str, payload: dict[str, Any], *, event_id: str) -> None:
+        encoded = json.dumps(payload, separators=(",", ":"))
+        message = f"id: {event_id}\nevent: {event}\ndata: {encoded}\n\n".encode("utf-8")
+        self.wfile.write(message)
+        self.wfile.flush()
+
+    def _write_sse_comment(self, comment: str) -> None:
+        self.wfile.write(f": {comment}\n\n".encode("utf-8"))
+        self.wfile.flush()
+
+
+@dataclass(slots=True)
+class StreamSelection:
+    task_id: str | None
+    subagent_id: str | None
+
+
+@dataclass(slots=True)
+class StreamState:
+    revision: int
+    snapshot_signature: str
+    session_signature: str | None
+    snapshot_event: dict[str, Any] | None
+    session_event: dict[str, Any] | None
+
+
+class WorkspaceStreamMonitor:
+    """Shared fingerprint scanner that lets SSE clients wait for workspace changes."""
+
+    def __init__(self, root: Path) -> None:
+        self.root = root.resolve()
+        self._condition = threading.Condition()
+        self._revision = 0
+        self._workspace_signature = self._compute_workspace_signature()
+        self._states: dict[tuple[str | None, str | None], StreamState] = {}
+        self._thread = threading.Thread(target=self._watch_loop, name="litehive-web-stream", daemon=True)
+        self._thread.start()
+
+    def wait_for_change(self, revision: int, *, timeout: float) -> int:
+        with self._condition:
+            self._condition.wait_for(lambda: self._revision != revision, timeout=timeout)
+            return self._revision
+
+    def build_initial_state(self, selection: StreamSelection) -> StreamState:
+        return self._build_state(selection, revision=self._revision, force_snapshot=True, force_session=True)
+
+    def build_state(self, selection: StreamSelection, *, revision: int) -> StreamState:
+        return self._build_state(selection, revision=revision, force_snapshot=False, force_session=False)
+
+    def _watch_loop(self) -> None:
+        while True:
+            signature = self._compute_workspace_signature()
+            with self._condition:
+                if signature != self._workspace_signature:
+                    self._workspace_signature = signature
+                    self._revision += 1
+                    self._condition.notify_all()
+            time.sleep(_STREAM_SCAN_INTERVAL_SECONDS)
+
+    def _build_state(
+        self,
+        selection: StreamSelection,
+        *,
+        revision: int,
+        force_snapshot: bool,
+        force_session: bool,
+    ) -> StreamState:
+        key = (selection.task_id, selection.subagent_id)
+        previous = self._states.get(key)
+        snapshot = build_workspace_snapshot(self.root)
+        snapshot_signature = _stable_signature(snapshot)
+        snapshot_event: dict[str, Any] | None = None
+        if force_snapshot or previous is None or previous.snapshot_signature != snapshot_signature:
+            snapshot_event = {
+                "snapshot": snapshot,
+                "diff": _workspace_snapshot_diff(
+                    None if previous is None else previous.snapshot_event["snapshot"],
+                    snapshot,
+                ),
+            }
+
+        session_payload: dict[str, Any] | None = None
+        session_signature: str | None = None
+        session_event: dict[str, Any] | None = None
+        if selection.task_id and selection.subagent_id:
+            try:
+                session_payload = read_session_view(self.root, selection.task_id, selection.subagent_id)
+            except FileNotFoundError:
+                session_payload = None
+            session_signature = _stable_signature(session_payload)
+            if force_session or previous is None or previous.session_signature != session_signature:
+                session_event = {
+                    "task_id": selection.task_id,
+                    "subagent_id": selection.subagent_id,
+                    "session": session_payload,
+                    "diff": _session_payload_diff(
+                        None if previous is None else None if previous.session_event is None else previous.session_event["session"],
+                        session_payload,
+                    ),
+                }
+
+        state = StreamState(
+            revision=revision,
+            snapshot_signature=snapshot_signature,
+            session_signature=session_signature,
+            snapshot_event=snapshot_event if snapshot_event is not None else None if previous is None else previous.snapshot_event,
+            session_event=session_event if session_event is not None else None if previous is None else previous.session_event,
+        )
+        self._states[key] = state
+        return StreamState(
+            revision=revision,
+            snapshot_signature=snapshot_signature,
+            session_signature=session_signature,
+            snapshot_event=snapshot_event,
+            session_event=session_event,
+        )
+
+    def _compute_workspace_signature(self) -> str:
+        digest = hashlib.sha256()
+        for path in _iter_stream_paths(self.root):
+            digest.update(str(_relative_to_root(self.root, path)).encode("utf-8"))
+            try:
+                stat = path.stat()
+            except FileNotFoundError:
+                digest.update(b"missing")
+                continue
+            digest.update(str(stat.st_mtime_ns).encode("utf-8"))
+            digest.update(str(stat.st_size).encode("utf-8"))
+        return digest.hexdigest()
 
 
 def update_task_detail(root: Path, task_id: str, updates: dict[str, Any]) -> dict[str, Any]:
@@ -543,3 +726,81 @@ def _read_iso_now(timestamp: float | None = None) -> str:
     if timestamp is None:
         return datetime.now(UTC).replace(microsecond=0).isoformat()
     return datetime.fromtimestamp(timestamp, UTC).replace(microsecond=0).isoformat()
+
+
+def _stable_signature(payload: Any) -> str:
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str)
+    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+
+
+def _workspace_snapshot_diff(previous: dict[str, Any] | None, current: dict[str, Any]) -> dict[str, Any]:
+    previous_task_ids = {item["id"] for item in previous["tasks"]} if previous else set()
+    current_task_ids = {item["id"] for item in current["tasks"]}
+    previous_by_id = {item["id"]: item for item in previous["tasks"]} if previous else {}
+    changed_tasks = sorted(
+        task_id
+        for task_id, task in {item["id"]: item for item in current["tasks"]}.items()
+        if previous_by_id.get(task_id) != task
+    )
+    return {
+        "active_task_id": current.get("active_task_id"),
+        "runner_changed": None if previous is None else previous.get("runner") != current.get("runner"),
+        "queue_changed": None if previous is None else previous.get("queue") != current.get("queue"),
+        "added_task_ids": sorted(current_task_ids - previous_task_ids),
+        "removed_task_ids": sorted(previous_task_ids - current_task_ids),
+        "changed_task_ids": changed_tasks,
+    }
+
+
+def _session_payload_diff(previous: dict[str, Any] | None, current: dict[str, Any] | None) -> dict[str, Any]:
+    if previous is None and current is None:
+        return {"status": "missing", "changed_artifacts": []}
+    if previous is None:
+        return {
+            "status": "created",
+            "changed_artifacts": [artifact["kind"] for artifact in current.get("artifacts", [])],
+        }
+    if current is None:
+        return {"status": "removed", "changed_artifacts": []}
+    previous_artifacts = {artifact["kind"]: artifact for artifact in previous.get("artifacts", [])}
+    changed_artifacts = [
+        artifact["kind"]
+        for artifact in current.get("artifacts", [])
+        if previous_artifacts.get(artifact["kind"]) != artifact
+    ]
+    status = "changed" if previous != current else "unchanged"
+    return {"status": status, "changed_artifacts": changed_artifacts}
+
+
+def _iter_stream_paths(root: Path) -> list[Path]:
+    candidates: list[Path] = []
+    state_path = root / ".litehive" / "state.yaml"
+    if state_path.exists():
+        candidates.append(state_path)
+    task_root = root / ".litehive" / "tasks"
+    if task_root.exists():
+        for task_path in sorted(path for path in task_root.iterdir() if path.is_dir()):
+            for name in ("task.yaml", "runtime.yaml", "thread.yaml", "events.jsonl"):
+                candidate = task_path / name
+                if candidate.exists():
+                    candidates.append(candidate)
+            candidates.extend(sorted((task_path / "reports").glob("*.yaml")))
+            candidates.extend(sorted((task_path / "recovery").glob("*.yaml")))
+            candidates.extend(sorted((task_path / "subagents").glob("*/session.yaml")))
+            for artifact in (
+                "transcript.md",
+                "transcript.md.gz",
+                "stdout.log",
+                "stdout.txt",
+                "stdout.txt.gz",
+                "stderr.log",
+                "stderr.txt",
+                "stderr.txt.gz",
+            ):
+                candidates.extend(sorted((task_path / "subagents").glob(f"*/{artifact}")))
+    run_all_root = root / ".litehive" / "logs" / "run-all"
+    if run_all_root.exists():
+        for directory in sorted(path for path in run_all_root.iterdir() if path.is_dir()):
+            candidates.append(directory)
+            candidates.extend(sorted(path for path in directory.iterdir() if path.is_file()))
+    return candidates

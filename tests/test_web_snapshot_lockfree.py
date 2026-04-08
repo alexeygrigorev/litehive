@@ -1,8 +1,11 @@
 """Tests for lock-free web dashboard snapshot reads."""
 
+from functools import partial
+import http.client
 import json
 import os
 import time
+import threading
 from pathlib import Path
 
 import yaml
@@ -13,13 +16,48 @@ from litehive.models import GitHubOrigin, TaskThreadComment, TaskCreationSource,
 from litehive.tasks import append_thread_comment, require_task
 from litehive.tasks import runner_status_readonly
 from litehive.tasks.paths import runner_lock_path
-from litehive.web import _render_index, update_task_detail
+from litehive.web import (
+    LitehiveWebHandler,
+    WorkspaceStreamMonitor,
+    _render_index,
+    update_task_detail,
+)
+from http.server import ThreadingHTTPServer
 
 
 def _write_runner_lock_metadata(root: Path, data: dict) -> None:
     lock_path = runner_lock_path(root)
     lock_path.parent.mkdir(parents=True, exist_ok=True)
     lock_path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+
+
+def _start_web_server(root: Path) -> tuple[ThreadingHTTPServer, threading.Thread]:
+    server = ThreadingHTTPServer(("127.0.0.1", 0), partial(LitehiveWebHandler, workspace_root=root))
+    server.workspace_stream_monitor = WorkspaceStreamMonitor(root)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    return server, thread
+
+
+def _read_sse_event(response: http.client.HTTPResponse) -> tuple[str, dict[str, object]]:
+    event_name = ""
+    data: dict[str, object] | None = None
+    while True:
+        line = response.readline().decode("utf-8")
+        assert line, "SSE stream closed unexpectedly"
+        stripped = line.rstrip("\n")
+        if not stripped:
+            if event_name:
+                return event_name, data or {}
+            continue
+        if stripped.startswith(":") or stripped.startswith("retry:"):
+            continue
+        if stripped.startswith("event: "):
+            event_name = stripped.removeprefix("event: ")
+            continue
+        if stripped.startswith("data: "):
+            data = json.loads(stripped.removeprefix("data: "))
+            continue
 
 
 def test_runner_status_readonly_returns_idle_when_no_metadata(tmp_path: Path) -> None:
@@ -309,3 +347,145 @@ def test_update_task_detail_persists_editable_fields(tmp_path: Path) -> None:
     assert reloaded.plan == ["edit", "verify"]
     assert reloaded.priority == "high"
     assert reloaded.engine == "gemini"
+
+
+def test_render_index_prefers_sse_with_polling_fallback() -> None:
+    html = _render_index()
+
+    assert "EventSource" in html
+    assert "/api/stream" in html
+    assert "startPolling" in html
+
+
+def test_sse_stream_emits_initial_and_changed_snapshot_only(tmp_path: Path) -> None:
+    _init_git_repo(tmp_path)
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Streamed task")
+    server, thread = _start_web_server(tmp_path)
+    conn = http.client.HTTPConnection(*server.server_address, timeout=5)
+    try:
+        conn.request("GET", "/api/stream")
+        response = conn.getresponse()
+        assert response.status == 200
+        assert response.getheader("Content-Type") == "text/event-stream; charset=utf-8"
+
+        event_name, payload = _read_sse_event(response)
+        assert event_name == "snapshot"
+        assert payload["kind"] == "initial"
+        assert payload["snapshot"]["tasks"][0]["id"] == task.id
+
+        update_task_detail(tmp_path, task.id, {"goal": "updated via sse"})
+
+        event_name, payload = _read_sse_event(response)
+        assert event_name == "snapshot"
+        assert payload["kind"] == "update"
+        assert payload["diff"]["changed_task_ids"] == [task.id]
+        changed = next(item for item in payload["snapshot"]["tasks"] if item["id"] == task.id)
+        assert changed["record"]["goal"] == "updated via sse"
+    finally:
+        conn.close()
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+
+def test_sse_stream_pushes_live_session_artifact_updates(tmp_path: Path) -> None:
+    _init_git_repo(tmp_path)
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Session stream")
+    task.subagents = [
+        SubagentRef(
+            id="SA-0001-swe",
+            role="swe",
+            engine="codex",
+            status="running",
+            path="subagents/SA-0001-swe",
+        )
+    ]
+    task.runtime.active_subagent = RuntimeSubagentState(
+        id="SA-0001-swe",
+        role="swe",
+        engine="codex",
+        status="running",
+        path="subagents/SA-0001-swe",
+        started_at="2026-04-08T18:45:00+00:00",
+        updated_at="2026-04-08T18:45:00+00:00",
+        pid=1234,
+    )
+    save_task(tmp_path, task)
+    save_task_runtime(tmp_path, task)
+
+    base = task_dir(tmp_path, task) / "subagents" / "SA-0001-swe"
+    base.mkdir(parents=True, exist_ok=True)
+    (base / "session.yaml").write_text(
+        yaml.safe_dump({"status": "running", "pid": 1234, "updated_at": "2026-04-08T18:45:00+00:00"}, sort_keys=False),
+        encoding="utf-8",
+    )
+    (base / "transcript.md").write_text("initial transcript\n", encoding="utf-8")
+    (base / "stdout.log").write_text("initial stdout\n", encoding="utf-8")
+    (base / "stderr.log").write_text("", encoding="utf-8")
+
+    server, thread = _start_web_server(tmp_path)
+    conn = http.client.HTTPConnection(*server.server_address, timeout=5)
+    try:
+        path = f"/api/stream?task_id={task.id}&subagent_id=SA-0001-swe"
+        conn.request("GET", path)
+        response = conn.getresponse()
+        assert response.status == 200
+
+        event_name, payload = _read_sse_event(response)
+        assert event_name == "snapshot"
+        event_name, payload = _read_sse_event(response)
+        assert event_name == "session"
+        assert payload["session"]["artifacts"][1]["content"] == "initial stdout\n"
+
+        (base / "stdout.log").write_text("initial stdout\nsecond line\n", encoding="utf-8")
+        (base / "stderr.log").write_text("stderr line\n", encoding="utf-8")
+
+        event_name, payload = _read_sse_event(response)
+        if event_name == "snapshot":
+            event_name, payload = _read_sse_event(response)
+        assert event_name == "session"
+        assert sorted(payload["diff"]["changed_artifacts"]) == ["stderr", "stdout"]
+        assert "second line" in payload["session"]["artifacts"][1]["content"]
+        assert payload["session"]["artifacts"][2]["content"] == "stderr line\n"
+    finally:
+        conn.close()
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+
+def test_sse_idle_client_waits_without_rebuilding_snapshots(tmp_path: Path, monkeypatch) -> None:
+    _init_git_repo(tmp_path)
+    ensure_workspace(tmp_path)
+    create_task(tmp_path, title="Idle stream")
+
+    import litehive.web as web_module
+
+    calls = 0
+    original = web_module.build_workspace_snapshot
+
+    def counting_snapshot(root: Path) -> dict[str, object]:
+        nonlocal calls
+        calls += 1
+        return original(root)
+
+    monkeypatch.setattr(web_module, "build_workspace_snapshot", counting_snapshot)
+
+    server, thread = _start_web_server(tmp_path)
+    conn = http.client.HTTPConnection(*server.server_address, timeout=5)
+    try:
+        conn.request("GET", "/api/stream")
+        response = conn.getresponse()
+        assert response.status == 200
+        event_name, _payload = _read_sse_event(response)
+        assert event_name == "snapshot"
+        first_count = calls
+        time.sleep(0.8)
+        assert calls == first_count == 1
+    finally:
+        conn.close()
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)

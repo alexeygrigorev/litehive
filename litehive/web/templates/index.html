@@ -235,7 +235,7 @@
     <div class="meta">
       <span id="runner-badge-slot"><span class="badge" id="runner-badge">loading</span></span>
       <span class="badge mono" id="workspace-path">...</span>
-      <span class="badge mono">poll {{ poll_seconds }}s</span>
+      <span class="badge mono" id="transport-badge">starting</span>
     </div>
   </header>
   <main>
@@ -269,7 +269,14 @@
       editTaskId: null,
       saveState: "idle",
       saveMessage: "",
+      transport: "starting",
     };
+    const POLL_INTERVAL_MS = {{ poll_interval_ms }};
+    const STREAM_ERROR_FALLBACK_MS = 8000;
+    let pollTimer = null;
+    let stream = null;
+    let streamOpenedAtLeastOnce = false;
+    let streamErrorStartedAt = null;
 
     function esc(value) {
       return String(value ?? "")
@@ -338,6 +345,8 @@
     }
 
     function chooseDefaults(snapshot) {
+      const previousTaskId = state.selectedTaskId;
+      const previousSubagentId = state.selectedSubagentId;
       if (!state.selectedTaskId) {
         state.selectedTaskId = snapshot.active_task_id || snapshot.queue[0] || snapshot.tasks[0]?.id || null;
       }
@@ -354,6 +363,9 @@
         state.selectedTaskId = null;
         state.selectedSubagentId = null;
       }
+      if (previousTaskId !== state.selectedTaskId || previousSubagentId !== state.selectedSubagentId) {
+        restartStream();
+      }
     }
 
     function renderQueue(snapshot) {
@@ -361,6 +373,7 @@
       document.getElementById("queue-summary").textContent = `${snapshot.state.queue.length} queued`;
       document.getElementById("workspace-path").textContent = snapshot.workspace;
       document.getElementById("runner-badge-slot").innerHTML = badge(`runner:${snapshot.runner.status}`, snapshot.runner.status);
+      document.getElementById("transport-badge").textContent = state.transport;
 
       if (!snapshot.tasks.length) {
         list.innerHTML = `<div class="muted">No tasks in this workspace.</div>`;
@@ -385,6 +398,7 @@
           const selected = snapshot.tasks.find((item) => item.id === state.selectedTaskId);
           state.selectedSubagentId = selected?.subagents.find((item) => item.is_active)?.id || selected?.subagents[0]?.id || null;
           render(snapshot);
+          restartStream();
           refreshSession();
         });
       });
@@ -651,6 +665,7 @@
         button.addEventListener("click", () => {
           state.selectedSubagentId = button.dataset.subagentId;
           render(snapshot);
+          restartStream();
           refreshSession();
         });
       });
@@ -810,8 +825,92 @@
       renderTask(snapshot);
     }
 
-    refreshSnapshot();
-    setInterval(refreshSnapshot, {{ poll_interval_ms }});
+    function buildStreamUrl() {
+      const params = new URLSearchParams();
+      if (state.selectedTaskId) params.set("task_id", state.selectedTaskId);
+      if (state.selectedSubagentId) params.set("subagent_id", state.selectedSubagentId);
+      const query = params.toString();
+      return query ? `/api/stream?${query}` : "/api/stream";
+    }
+
+    function stopPolling() {
+      if (pollTimer) {
+        clearInterval(pollTimer);
+        pollTimer = null;
+      }
+    }
+
+    function startPolling(reason = "polling fallback") {
+      closeStream();
+      state.transport = reason;
+      stopPolling();
+      refreshSnapshot().catch(() => {});
+      pollTimer = setInterval(() => {
+        refreshSnapshot().catch(() => {});
+      }, POLL_INTERVAL_MS);
+    }
+
+    function closeStream() {
+      if (stream) {
+        stream.close();
+        stream = null;
+      }
+    }
+
+    function restartStream() {
+      if (!window.EventSource) return;
+      if (!state.snapshot && !state.selectedTaskId) return;
+      startStream();
+    }
+
+    function startStream() {
+      stopPolling();
+      closeStream();
+      streamOpenedAtLeastOnce = false;
+      streamErrorStartedAt = null;
+      state.transport = "connecting sse";
+      stream = new EventSource(buildStreamUrl());
+      stream.addEventListener("open", () => {
+        streamOpenedAtLeastOnce = true;
+        streamErrorStartedAt = null;
+        state.transport = "live via sse";
+        if (state.snapshot) render(state.snapshot);
+      });
+      stream.addEventListener("snapshot", (event) => {
+        const payload = JSON.parse(event.data);
+        state.snapshot = payload.snapshot;
+        chooseDefaults(state.snapshot);
+        render(state.snapshot);
+      });
+      stream.addEventListener("session", (event) => {
+        const payload = JSON.parse(event.data);
+        renderSessionPayload(payload.session, state.snapshot);
+      });
+      stream.addEventListener("error", () => {
+        if (stream?.readyState === EventSource.CLOSED) {
+          state.transport = "sse reconnecting";
+        } else {
+          state.transport = "sse degraded";
+        }
+        if (state.snapshot) render(state.snapshot);
+        if (!streamErrorStartedAt) streamErrorStartedAt = Date.now();
+        if (!streamOpenedAtLeastOnce || Date.now() - streamErrorStartedAt >= STREAM_ERROR_FALLBACK_MS) {
+          startPolling("polling fallback");
+        }
+      });
+    }
+
+    refreshSnapshot()
+      .then(() => {
+        if (window.EventSource) {
+          startStream();
+        } else {
+          startPolling("poll {{ poll_seconds }}s");
+        }
+      })
+      .catch(() => {
+        startPolling("poll {{ poll_seconds }}s");
+      });
   </script>
 </body>
 </html>
