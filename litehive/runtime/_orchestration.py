@@ -1,4 +1,4 @@
-"""Top-level task orchestration — resolve, run, drain."""
+"""Top-level task orchestration (resolve/run/drain)."""
 
 from pathlib import Path
 from typing import Callable
@@ -25,7 +25,11 @@ from litehive.tasks import (
 
 from ._budget import _budget_ledger_from_conditions, _budget_ledger_from_config
 from ._builder import build_executor
-from ._models import _resolve_stage_retry_limit, resolve_engine_plan, resolve_task_retry_policy
+from ._models import (
+    _resolve_stage_retry_limit,
+    resolve_engine_plan,
+    resolve_task_retry_policy,
+)
 from ._pool_control import (
     _finalize_pool_run,
     _human_checkpoint_stop_reason,

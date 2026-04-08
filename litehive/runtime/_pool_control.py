@@ -1,7 +1,8 @@
-"""Pool stop-reason logic and pool finalization."""
+"""Pool stop-reason logic and finalization."""
 
 from pathlib import Path
 
+from litehive.models import TaskRecord
 from litehive.tasks import (
     BlockedTask,
     append_journal,

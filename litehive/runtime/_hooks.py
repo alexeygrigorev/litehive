@@ -1,9 +1,11 @@
 """Runner hook execution for stage boundaries."""
 
 import subprocess
+from pathlib import Path
 
 import yaml
 
+from litehive.config import LitehiveConfig
 from litehive.models import StageReport, TaskRecord, cap_feedback
 from litehive.tasks import (
     _atomic_write_gzip_text,
@@ -11,8 +13,6 @@ from litehive.tasks import (
     append_journal,
     task_dir,
 )
-
-from litehive.config import LitehiveConfig
 
 _COMPRESS_HOOK_ARTIFACT_MIN_BYTES = 4096
 
@@ -27,8 +27,8 @@ _POST_ACCEPT_VERDICTS = {"pass", "accept"}
 
 
 def _run_runner_hooks_for_stage(
-    root,
-    execution_root,
+    root: Path,
+    execution_root: Path,
     task: TaskRecord,
     *,
     step: str,
@@ -128,8 +128,8 @@ def _runner_hook_point(
 
 
 def _execute_runner_hook(
-    root,
-    execution_root,
+    root: Path,
+    execution_root: Path,
     task: TaskRecord,
     *,
     step: str,
