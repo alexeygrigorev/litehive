@@ -1,6 +1,28 @@
 from tests.workspace_helpers import *  # noqa: F401,F403
 
 
+def test_config_package_facade_re_exports_public_helpers() -> None:
+    import litehive.config as config_module
+
+    exported = {
+        "LitehiveConfig": config_module.LitehiveConfig,
+        "ensure_workspace": config_module.ensure_workspace,
+        "load_config": config_module.load_config,
+        "workspace_dir": config_module.workspace_dir,
+        "config_path": config_module.config_path,
+        "state_path": config_module.state_path,
+        "render_workspace_gitignore": config_module.render_workspace_gitignore,
+        "format_runner_hooks": config_module.format_runner_hooks,
+    }
+
+    assert exported["LitehiveConfig"].__module__ == "litehive.config.model"
+    assert exported["ensure_workspace"].__module__ == "litehive.config.workspace"
+    assert exported["load_config"].__module__ == "litehive.config.loading"
+    assert exported["workspace_dir"].__module__ == "litehive.config.paths"
+    assert exported["format_runner_hooks"].__module__ == "litehive.config.formatting"
+    assert len((Path(config_module.__file__)).read_text(encoding="utf-8").splitlines()) < 50
+
+
 def test_ensure_workspace_creates_layout(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
 
