@@ -1,7 +1,5 @@
 """Public facade for Litehive configuration helpers."""
 
-from copy import deepcopy
-
 from litehive.config.constants import *
 from litehive.config.dataclasses import *
 from litehive.config.formatting import (
@@ -32,22 +30,11 @@ from litehive.config.profiles import *
 from litehive.config.retry import (
     _default_execution_retry_policies as _default_execution_retry_policies,
 )
+from litehive.config.startup_guidance import (
+    DEFAULT_AGENT_STARTUP_GUIDANCE as DEFAULT_AGENT_STARTUP_GUIDANCE,
+    default_agent_startup_guidance as default_agent_startup_guidance,
+)
 from litehive.config.workspace import (
     ensure_workspace as ensure_workspace,
     render_workspace_gitignore as render_workspace_gitignore,
 )
-
-
-DEFAULT_AGENT_STARTUP_GUIDANCE: dict[str, list[str]] = {
-    "recovery": [
-        "Your job is to diagnose why the previous agent failed and fix Litehive infrastructure bugs so the next stage retry can succeed.",
-        "Do not redo the failed stage's work, do not implement the task itself, and do not submit the failed stage's verdict on the prior agent's behalf.",
-        "Start with the failed subagent artifacts: stdout, stderr, transcript, session metadata, exit code, and any `litehive report` attempt or error.",
-        "Submit your own recovery verdict describing the Litehive root cause you found, the fix you made, and why the failed stage should be retried.",
-    ]
-}
-
-
-def default_agent_startup_guidance() -> dict[str, list[str]]:
-    """Return built-in startup guidance that supplements workspace config."""
-    return deepcopy(DEFAULT_AGENT_STARTUP_GUIDANCE)

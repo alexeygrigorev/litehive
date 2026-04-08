@@ -25,6 +25,7 @@ from litehive.models import (
 )
 from litehive.observability import record_engine_execution, record_engine_observation
 from litehive.subagents._artifacts import (
+    _prune_superseded_subagent_artifacts,
     _write_stream_artifact,
     _write_text_if_changed,
 )
