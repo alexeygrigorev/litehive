@@ -166,7 +166,7 @@ def record_codex_quota_check(
     status: object,
 ) -> None:
     """Record proactive codex quota status into engine monitoring."""
-    from litehive.engines._codex_quota import CodexQuotaStatus
+    from litehive.engines.quota import CodexQuotaStatus
 
     if not isinstance(status, CodexQuotaStatus):
         return
@@ -255,7 +255,7 @@ def record_codex_quota_check(
     status: object,
 ) -> None:
     """Record proactive codex quota status into engine monitoring."""
-    from litehive.engines._codex_quota import CodexQuotaStatus
+    from litehive.engines.quota import CodexQuotaStatus
 
     if not isinstance(status, CodexQuotaStatus):
         return

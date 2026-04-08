@@ -5,7 +5,7 @@ import time
 
 import pytest
 
-from litehive.engines._codex_quota import (
+from litehive.engines.quota.codex_quota import (
     CodexQuotaStatus,
     CodexQuotaWindow,
     _parse_quota_response,
