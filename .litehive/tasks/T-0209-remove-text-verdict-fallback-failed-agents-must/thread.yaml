@@ -1,0 +1,13 @@
+- role: recovery
+  step: grooming
+  verdict: comment
+  message: 'Recovery trigger `stage_failure`: Recovery agent could not restore `grooming`
+    to a runnable state.
+
+    runnable_state: blocked
+
+    report: .litehive/tasks/T-0209-remove-text-verdict-fallback-failed-agents-must/recovery/recovery-001.yaml
+
+    blocker: grooming failed: agent did not submit verdict via litehive report CLI'
+  files_changed: []
+  created_at: '2026-04-08T15:08:13+00:00'

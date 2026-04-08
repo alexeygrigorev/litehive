@@ -1,0 +1,76 @@
+task_id: T-0235
+step: accepting
+verdict: reject
+summary: 'Rejected in acceptance. Recovery-specific behavior looks substantially correct
+  by inspection of litehive/config/__init__.py, litehive/subagents/_prompts.py, and
+  litehive/runtime/_recovery.py. Independent verification: uv run pytest -q tests/test_self_heal_recovery.py
+  tests/test_recovery_agent.py passed with 10 passed in 0.97s, and uv run pytest -q
+  tests/test_runner_workflow.py -k recovery_prompt_includes_default_startup_guidance
+  passed with 1 passed. EXPECTED behavior: the recovery agent should diagnose Litehive
+  infrastructure failures, receive failed-subagent diagnostics, run from Litehive
+  source, submit its own recovery verdict, retry the failed stage after a successful
+  fix, and all existing tests must pass. OBSERVED behavior: the full suite is red
+  with at least three regressions. First, uv run pytest -q -x fails in tests/test_crash_resume.py::test_crash_resume_triggers_session_resume_for_claude
+  because the journal no longer contains the expected phrase resuming claude session;
+  the actual journal text includes Agent crash exited 1 with no failure classification
+  and resuming session ses-abc-789. Second, uv run pytest -q tests/test_retry_commit_and_recovery.py
+  fails in tests/test_retry_commit_and_recovery.py::test_run_next_task_skips_retries_for_non_retryable_failure
+  with AssertionError: assert 1 > 1 because only one attempt is recorded, [(''codex'',
+  ''grooming'')], while the test expects more than one. Third, uv run pytest -q tests/test_runner_workflow.py
+  fails in tests/test_runner_workflow.py::test_stage_prompt_uses_recovery_role_when_requested
+  because the prompt no longer contains the previously asserted recovery-agent sentence
+  about diagnosing why the task stopped making progress and restoring a runnable path.
+  Steps to reproduce: run uv run pytest -q for the full failure, or run uv run pytest
+  -q -x, uv run pytest -q tests/test_retry_commit_and_recovery.py, and uv run pytest
+  -q tests/test_runner_workflow.py for the isolated failures. Acceptance criteria
+  status: the recovery contract, diagnostics injection, Litehive-source execution,
+  recovery verdict/reporting, and retry-after-fix criteria appear satisfied by the
+  changed code and targeted recovery tests. The final acceptance criterion all existing
+  tests pass is not met, so the task is rejected.'
+feedback: 'Rejected in acceptance. Recovery-specific behavior looks substantially
+  correct by inspection of litehive/config/__init__.py, litehive/subagents/_prompts.py,
+  and litehive/runtime/_recovery.py. Independent verification: uv run pytest -q tests/test_self_heal_recovery.py
+  tests/test_recovery_agent.py passed with 10 passed in 0.97s, and uv run pytest -q
+  tests/test_runner_workflow.py -k recovery_prompt_includes_default_startup_guidance
+  passed with 1 passed. EXPECTED behavior: the recovery agent should diagnose Litehive
+  infrastructure failures, receive failed-subagent diagnostics, run from Litehive
+  source, submit its own recovery verdict, retry the failed stage after a successful
+  fix, and all existing tests must pass. OBSERVED behavior: the full suite is red
+  with at least three regressions. First, uv run pytest -q -x fails in tests/test_crash_resume.py::test_crash_resume_triggers_session_resume_for_claude
+  because the journal no longer contains the expected phrase resuming claude session;
+  the actual journal text includes Agent crash exited 1 with no failure classification
+  and resuming session ses-abc-789. Second, uv run pytest -q tests/test_retry_commit_and_recovery.py
+  fails in tests/test_retry_commit_and_recovery.py::test_run_next_task_skips_retries_for_non_retryable_failure
+  with AssertionError: assert 1 > 1 because only one attempt is recorded, [(''codex'',
+  ''grooming'')], while the test expects more than one. Third, uv run pytest -q tests/test_runner_workflow.py
+  fails in tests/test_runner_workflow.py::test_stage_prompt_uses_recovery_role_when_requested
+  because the prompt no longer contains the previously asserted recovery-agent sentence
+  about diagnosing why the task stopped making progress and restoring a runnable path.
+  Steps to reproduce: run uv run pytest -q for the full failure, or run uv run pytest
+  -q -x, uv run pytest -q tests/test_retry_commit_and_recovery.py, and uv run pytest
+  -q tests/test_runner_workflow.py for the isolated failures. Acceptance criteria
+  status: the recovery contract, diagnostics injection, Litehive-source execution,
+  recovery verdict/reporting, and retry-after-fix criteria appear satisfied by the
+  changed code and targeted recovery tests. The final acceptance criterion all existing
+  tests pass is not met, so the task is rejected.'
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 1
+retry_limit: 3
+retry_source: global
+retry_decision: retry
+outcome: null
+outcome_reason_code: stage_retry_limit_exhausted
+outcome_reason: 'Stage retry limit exhausted for `accepting` (3 rejection(s), limit:
+  2); escalating to grooming for planner escalation'
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 342
+hook_results: []
+created_at: '2026-04-08T16:57:39+00:00'

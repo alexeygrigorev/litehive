@@ -7,13 +7,13 @@ engine: null
 model: null
 mode: implementation
 pipeline_mode: full
-status: queued
+status: flagged
 pipeline_status: implementing
 priority: medium
 pm_complexity: moderate
 planned_effort: m
 created_at: '2026-04-01T06:36:00+00:00'
-updated_at: '2026-04-08T06:04:46+00:00'
+updated_at: '2026-04-08T17:40:28+00:00'
 goal: Replace the current magic-string handling for user-stopped work with an explicit
   parked task lifecycle state so Litehive can distinguish resumable system interruptions
   from intentionally parked tasks in durable state, CLI output, repair logic, and
@@ -226,6 +226,62 @@ subagents:
   path: subagents/SA-0039-swe
   sandboxed: false
   sandbox_summary: host
+- id: SA-0040
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0040-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0041
+  role: swe
+  engine: codex
+  status: failed
+  path: subagents/SA-0041-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0042
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0042-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0043
+  role: swe
+  engine: codex
+  status: failed
+  path: subagents/SA-0043-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0044
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0044-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0045
+  role: swe
+  engine: codex
+  status: failed
+  path: subagents/SA-0045-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0046
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0046-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0047
+  role: swe
+  engine: codex
+  status: failed
+  path: subagents/SA-0047-swe
+  sandboxed: false
+  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0072 add-explicit-parked-task-state-for-work-that-should-resume-later'
@@ -233,8 +289,8 @@ git:
   checkpoint_base_sha: null
   checkpoint_attempts: 0
   rolled_back_checkpoint_attempt: null
-  worktree_path: null
   merge_agent_attempts: 0
+  worktree_path: null
 retry_policy:
   max_retries: null
   stage_retry_limit: null

@@ -1,0 +1,35 @@
+- role: planner
+  step: grooming
+  verdict: pass
+  message: 'Recovery classified the failure as an engine continuation compatibility
+    issue, not a task-spec problem. The installed Codex CLI still accepts --skip-git-repo-check
+    for codex exec, but codex resume rejects it; the grooming planner failed before
+    it could submit a verdict for that reason. Repaired litehive/engines/adapters/codex.py
+    to stop passing --skip-git-repo-check on codex resume while preserving the flag
+    for codex exec, and updated the resume-contract test accordingly. Verified with:
+    pytest -q tests/test_engine_variants_and_timeline.py -k codex_build_invocation_uses_resume_contract_without_json_flag
+    and pytest -q tests/test_runner_workflow.py -k ''codex_build_invocation_includes_workspace_and_prompt
+    or codex_renders_jsonl_transcript_and_usage_observation''. Task T-0221 is runnable
+    again for grooming/continuation.'
+  files_changed: []
+  created_at: '2026-04-08T17:44:20+00:00'
+- role: recovery
+  step: grooming
+  verdict: comment
+  message: 'Recovery trigger `stage_failure`: Recovery classified the failure as an
+    engine continuation compatibility issue, not a task-spec problem. The installed
+    Codex CLI still accepts --skip-git-repo-check for codex exec, but codex resume
+    rejects it; the grooming planner failed before it could submit a verdict for that
+    reason. Repaired litehive/engines/adapters/codex.py to stop passing --skip-git-repo-check
+    on codex resume while preserving the flag for codex exec, and updated the resume-contract
+    test accordingly. Verified with: pytest -q tests/test_engine_variants_and_timeline.py
+    -k codex_build_invocation_uses_resume_contract_without_json_flag and pytest -q
+    tests/test_runner_workflow.py -k ''codex_build_invocation_includes_workspace_and_prompt
+    or codex_renders_jsonl_transcript_and_usage_observation''. Task T-0221 is runnable
+    again for grooming/continuation.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0221-web-dashboard-task-actions-api-create-update/recovery/recovery-001.yaml'
+  files_changed: []
+  created_at: '2026-04-08T17:44:31+00:00'

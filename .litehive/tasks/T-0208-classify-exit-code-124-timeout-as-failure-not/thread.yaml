@@ -1,0 +1,363 @@
+- role: planner
+  step: grooming
+  verdict: pass
+  message: 'Recovery repaired the runnable path for T-0208 by fixing structured stage-report
+    classification for non-completed subagents.
+
+
+    What changed:
+
+    - In litehive/engines/base.py, parse_stage_report_text now downgrades structured
+    `pass`/`accept` submissions to `fail` when the subagent status is not `completed`.
+    This prevents timeout-killed or otherwise non-zero exits from being treated as
+    successful based on partial STAGE_RESULT output.
+
+    - Added regression coverage in tests/test_stage_result_submission.py for a failed
+    subagent with structured `pass` output.
+
+    - Added regression coverage in tests/test_tasks_and_subagents.py for a stale-timeout
+    path that exits 124 after emitting partial structured output, verifying the persisted
+    session remains `failed` and the report does not preserve a passing verdict.
+
+
+    Verification:
+
+    - `pytest -q tests/test_stage_result_submission.py tests/test_tasks_and_subagents.py
+    tests/test_runner_workflow.py -q -k "failed_subagent_cannot_turn_structured_pass_into_passing_report
+    or timeout_cannot_preserve_structured_pass_verdict or kills_stale_live_process_using_stdout_mtime
+    or parse_stage_report_text_fails_on_text_only_transcript or stage_report_from_subagent_fails_without_cli_verdict"`
+
+
+    Result:
+
+    - Exit code 124 is no longer able to surface a passing structured verdict from
+    partial output.
+
+    - Non-completed subagents cannot turn structured `pass`/`accept` payloads into
+    passing stage reports.
+
+    - The task is runnable again for the normal pipeline.'
+  files_changed: []
+  created_at: '2026-04-08T13:46:16+00:00'
+- role: recovery
+  step: grooming
+  verdict: comment
+  message: 'Recovery trigger `stage_failure`: Recovery repaired the runnable path
+    for T-0208 by fixing structured stage-report classification for non-completed
+    subagents.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0208-classify-exit-code-124-timeout-as-failure-not/recovery/recovery-001.yaml'
+  files_changed: []
+  created_at: '2026-04-08T13:46:29+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Recovery verified and implementation is runnable. Confirmed in litehive/subagents/_manager.py
+    that non-zero exits are never marked completed: generic non-zero exits remain
+    failed, interruption reclassification only applies when classify_execution_interruption
+    matches, and the inactivity-timeout path rewrites the execution to exit_code 124
+    with status failed. Confirmed in litehive/engines/base.py that structured STAGE_RESULT
+    verdicts of pass/accept are downgraded to fail when subagent_status is not completed,
+    preventing timeout-killed or otherwise failed agents from yielding passing stage
+    reports. Verified with targeted tests: pytest -q tests/test_tasks_and_subagents.py
+    tests/test_stage_result_submission.py -k ''kills_stale_live_process_using_stdout_mtime
+    or failed_subagent_cannot_turn_structured_pass_into_passing_report or marks_generic_non_zero_exit_as_failed''
+    -> 3 passed, 67 deselected in 0.54s.'
+  files_changed: []
+  created_at: '2026-04-08T13:53:23+00:00'
+- role: recovery
+  step: implementing
+  verdict: comment
+  message: 'Recovery trigger `stage_failure`: Recovery verified and implementation
+    is runnable. Confirmed in litehive/subagents/_manager.py that non-zero exits are
+    never marked completed: generic non-zero exits remain failed, interruption reclassification
+    only applies when classify_execution_interruption matches, and the inactivity-timeout
+    path rewrites the execution to exit_code 124 with status failed. Confirmed in
+    litehive/engines/base.py that structured STAGE_RESULT verdicts of pass/accept
+    are downgraded to fail when subagent_status is not completed, preventing timeout-killed
+    or otherwise failed agents from yielding passing stage reports. Verified with
+    targeted tests: pytest -q tests/test_tasks_and_subagents.py tests/test_stage_result_submission.py
+    -k ''kills_stale_live_process_using_stdout_mtime or failed_subagent_cannot_turn_structured_pass_into_passing_report
+    or marks_generic_non_zero_exit_as_failed'' -> 3 passed, 67 deselected in 0.54s.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0208-classify-exit-code-124-timeout-as-failure-not/recovery/recovery-002.yaml'
+  files_changed: []
+  created_at: '2026-04-08T13:53:39+00:00'
+- role: recovery
+  step: testing
+  verdict: comment
+  message: 'Recovery trigger `same_stage_retry_churn`: Stage retry limit exhausted
+    for `testing` (3 rejection(s), limit: 2); escalating to grooming for recovery
+    escalation
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0208-classify-exit-code-124-timeout-as-failure-not/recovery/recovery-003.yaml'
+  files_changed: []
+  created_at: '2026-04-08T14:11:57+00:00'
+- role: recovery
+  step: testing
+  verdict: comment
+  message: 'Recovery trigger `same_stage_retry_churn`: Stage retry limit exhausted
+    for `testing` (4 rejection(s), limit: 2); escalating to grooming for recovery
+    escalation
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0208-classify-exit-code-124-timeout-as-failure-not/recovery/recovery-004.yaml'
+  files_changed: []
+  created_at: '2026-04-08T14:20:54+00:00'
+- role: recovery
+  step: testing
+  verdict: comment
+  message: 'Recovery trigger `stage_failure`: Recovery agent could not restore `testing`
+    to a runnable state.
+
+    runnable_state: blocked
+
+    report: .litehive/tasks/T-0208-classify-exit-code-124-timeout-as-failure-not/recovery/recovery-005.yaml
+
+    blocker: testing failed: agent did not submit verdict via litehive report CLI'
+  files_changed: []
+  created_at: '2026-04-08T14:34:46+00:00'
+- role: recovery
+  step: testing
+  verdict: comment
+  message: 'Recovery trigger `same_stage_retry_churn`: Stage retry limit exhausted
+    for `testing` (5 rejection(s), limit: 2); escalating to grooming for recovery
+    escalation
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0208-classify-exit-code-124-timeout-as-failure-not/recovery/recovery-006.yaml'
+  files_changed: []
+  created_at: '2026-04-08T14:34:46+00:00'
+- role: recovery
+  step: testing
+  verdict: comment
+  message: 'Recovery trigger `stage_failure`: Recovery agent could not restore `testing`
+    to a runnable state.
+
+    runnable_state: blocked
+
+    report: .litehive/tasks/T-0208-classify-exit-code-124-timeout-as-failure-not/recovery/recovery-007.yaml
+
+    blocker: testing failed: agent did not submit verdict via litehive report CLI'
+  files_changed: []
+  created_at: '2026-04-08T14:45:04+00:00'
+- role: recovery
+  step: testing
+  verdict: comment
+  message: 'Recovery trigger `same_stage_retry_churn`: Stage retry limit exhausted
+    for `testing` (6 rejection(s), limit: 2); escalating to grooming for recovery
+    escalation
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0208-classify-exit-code-124-timeout-as-failure-not/recovery/recovery-008.yaml'
+  files_changed: []
+  created_at: '2026-04-08T14:45:04+00:00'
+- role: recovery
+  step: testing
+  verdict: comment
+  message: 'Recovery trigger `stage_failure`: Recovery agent could not restore `testing`
+    to a runnable state.
+
+    runnable_state: blocked
+
+    report: .litehive/tasks/T-0208-classify-exit-code-124-timeout-as-failure-not/recovery/recovery-009.yaml
+
+    blocker: testing failed: agent did not submit verdict via litehive report CLI'
+  files_changed: []
+  created_at: '2026-04-08T14:55:53+00:00'
+- role: recovery
+  step: testing
+  verdict: comment
+  message: 'Recovery trigger `same_stage_retry_churn`: Stage retry limit exhausted
+    for `testing` (7 rejection(s), limit: 2); escalating to grooming for recovery
+    escalation
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0208-classify-exit-code-124-timeout-as-failure-not/recovery/recovery-010.yaml'
+  files_changed: []
+  created_at: '2026-04-08T14:55:53+00:00'
+- role: recovery
+  step: testing
+  verdict: comment
+  message: 'Recovery trigger `stage_failure`: Recovery agent could not restore `testing`
+    to a runnable state.
+
+    runnable_state: blocked
+
+    report: .litehive/tasks/T-0208-classify-exit-code-124-timeout-as-failure-not/recovery/recovery-011.yaml
+
+    blocker: testing failed: agent did not submit verdict via litehive report CLI'
+  files_changed: []
+  created_at: '2026-04-08T15:15:09+00:00'
+- role: recovery
+  step: testing
+  verdict: comment
+  message: 'Recovery trigger `same_stage_retry_churn`: Stage retry limit exhausted
+    for `testing` (8 rejection(s), limit: 2); escalating to grooming for recovery
+    escalation
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0208-classify-exit-code-124-timeout-as-failure-not/recovery/recovery-012.yaml'
+  files_changed: []
+  created_at: '2026-04-08T15:15:09+00:00'
+- role: recovery
+  step: testing
+  verdict: comment
+  message: 'Recovery trigger `stage_failure`: Recovery agent could not restore `testing`
+    to a runnable state.
+
+    runnable_state: blocked
+
+    report: .litehive/tasks/T-0208-classify-exit-code-124-timeout-as-failure-not/recovery/recovery-013.yaml
+
+    blocker: testing failed: agent did not submit verdict via litehive report CLI'
+  files_changed: []
+  created_at: '2026-04-08T15:22:15+00:00'
+- role: recovery
+  step: testing
+  verdict: comment
+  message: 'Recovery trigger `same_stage_retry_churn`: Stage retry limit exhausted
+    for `testing` (9 rejection(s), limit: 2); escalating to grooming for recovery
+    escalation
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0208-classify-exit-code-124-timeout-as-failure-not/recovery/recovery-014.yaml'
+  files_changed: []
+  created_at: '2026-04-08T15:22:15+00:00'
+- role: recovery
+  step: testing
+  verdict: comment
+  message: 'Recovery trigger `stage_failure`: Recovery agent could not restore `testing`
+    to a runnable state.
+
+    runnable_state: blocked
+
+    report: .litehive/tasks/T-0208-classify-exit-code-124-timeout-as-failure-not/recovery/recovery-015.yaml
+
+    blocker: testing failed: agent did not submit verdict via litehive report CLI'
+  files_changed: []
+  created_at: '2026-04-08T15:28:30+00:00'
+- role: recovery
+  step: testing
+  verdict: comment
+  message: 'Recovery trigger `same_stage_retry_churn`: Stage retry limit exhausted
+    for `testing` (10 rejection(s), limit: 2); escalating to grooming for recovery
+    escalation
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0208-classify-exit-code-124-timeout-as-failure-not/recovery/recovery-016.yaml'
+  files_changed: []
+  created_at: '2026-04-08T15:28:30+00:00'
+- role: recovery
+  step: testing
+  verdict: comment
+  message: 'Recovery trigger `stage_failure`: Recovery agent could not restore `testing`
+    to a runnable state.
+
+    runnable_state: blocked
+
+    report: .litehive/tasks/T-0208-classify-exit-code-124-timeout-as-failure-not/recovery/recovery-017.yaml
+
+    blocker: testing failed: agent did not submit verdict via litehive report CLI'
+  files_changed: []
+  created_at: '2026-04-08T15:41:34+00:00'
+- role: recovery
+  step: testing
+  verdict: comment
+  message: 'Recovery trigger `same_stage_retry_churn`: Stage retry limit exhausted
+    for `testing` (11 rejection(s), limit: 2); escalating to grooming for recovery
+    escalation
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0208-classify-exit-code-124-timeout-as-failure-not/recovery/recovery-018.yaml'
+  files_changed: []
+  created_at: '2026-04-08T15:41:34+00:00'
+- role: recovery
+  step: testing
+  verdict: comment
+  message: 'Recovery trigger `stage_failure`: Recovery agent could not restore `testing`
+    to a runnable state.
+
+    runnable_state: blocked
+
+    report: .litehive/tasks/T-0208-classify-exit-code-124-timeout-as-failure-not/recovery/recovery-019.yaml
+
+    blocker: testing failed: agent did not submit verdict via litehive report CLI'
+  files_changed: []
+  created_at: '2026-04-08T15:47:01+00:00'
+- role: recovery
+  step: testing
+  verdict: comment
+  message: 'Recovery trigger `same_stage_retry_churn`: Stage retry limit exhausted
+    for `testing` (12 rejection(s), limit: 2); escalating to grooming for recovery
+    escalation
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0208-classify-exit-code-124-timeout-as-failure-not/recovery/recovery-020.yaml'
+  files_changed: []
+  created_at: '2026-04-08T15:47:01+00:00'
+- role: recovery
+  step: testing
+  verdict: comment
+  message: 'Recovery trigger `stage_failure`: Recovery agent could not restore `testing`
+    to a runnable state.
+
+    runnable_state: blocked
+
+    report: .litehive/tasks/T-0208-classify-exit-code-124-timeout-as-failure-not/recovery/recovery-021.yaml
+
+    blocker: testing failed: agent did not submit verdict via litehive report CLI'
+  files_changed: []
+  created_at: '2026-04-08T15:53:18+00:00'
+- role: recovery
+  step: testing
+  verdict: comment
+  message: 'Recovery trigger `same_stage_retry_churn`: Stage retry limit exhausted
+    for `testing` (13 rejection(s), limit: 2); escalating to grooming for recovery
+    escalation
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0208-classify-exit-code-124-timeout-as-failure-not/recovery/recovery-022.yaml'
+  files_changed: []
+  created_at: '2026-04-08T15:53:18+00:00'
+- role: recovery
+  step: testing
+  verdict: comment
+  message: 'Recovery trigger `stage_failure`: Recovery agent could not restore `testing`
+    to a runnable state.
+
+    runnable_state: blocked
+
+    report: .litehive/tasks/T-0208-classify-exit-code-124-timeout-as-failure-not/recovery/recovery-023.yaml
+
+    blocker: testing failed: agent did not submit verdict via litehive report CLI'
+  files_changed: []
+  created_at: '2026-04-08T15:58:07+00:00'
+- role: recovery
+  step: testing
+  verdict: comment
+  message: 'Recovery trigger `same_stage_retry_churn`: Stage retry limit exhausted
+    for `testing` (14 rejection(s), limit: 2); escalating to grooming for recovery
+    escalation
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0208-classify-exit-code-124-timeout-as-failure-not/recovery/recovery-024.yaml'
+  files_changed: []
+  created_at: '2026-04-08T15:58:07+00:00'

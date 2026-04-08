@@ -7,13 +7,13 @@ engine: null
 model: null
 mode: implementation
 pipeline_mode: full
-status: in_progress
-pipeline_status: commit_to_git
+status: done
+pipeline_status: done
 priority: medium
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-06T20:34:51+00:00'
-updated_at: '2026-04-08T13:35:07+00:00'
+updated_at: '2026-04-08T13:35:10+00:00'
 goal: 'Remove backward compatibility code: (1) pre_acceptance_command silently converted
   to before_pm_acceptance hook in config/__init__.py:255-268, (2) legacy_artifact_name
   parameter threaded through runtime/_execution.py:998,1094. Users should use hooks
@@ -57,9 +57,9 @@ subagents:
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0203 remove-legacy-pre-acceptance-command-and-legacy'
-  commit_sha: cb53e9492961ffcc5fba61fbe78ceb8f90f09856
-  checkpoint_base_sha: null
-  checkpoint_attempts: 0
+  commit_sha: 334f54a5ae79d2b1071e04f4c1a29742a0a4f16d
+  checkpoint_base_sha: a2b3f5063322c1c8b86ef9715f376cfc6193e5ec
+  checkpoint_attempts: 1
   rolled_back_checkpoint_attempt: null
   merge_agent_attempts: 0
   worktree_path: null

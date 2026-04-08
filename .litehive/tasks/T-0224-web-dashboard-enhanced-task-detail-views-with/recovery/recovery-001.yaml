@@ -1,0 +1,215 @@
+task_id: T-0224
+stage: grooming
+trigger: stage_failure
+summary: 'Recovered grooming after confirming the prior planner wrote its verdict
+  only to the task-worktree-local .litehive/tasks/.../thread.yaml instead of the canonical
+  workspace task record. Root cause was litehive/cli/report.py resolving the main
+  workspace only after a local task lookup miss; because task metadata exists inside
+  worktrees too, the report landed in the wrong place and the runner concluded no
+  verdict had been submitted. Fixed by canonicalizing the workspace root at the start
+  of report submission so worktree invocations always append thread comments to the
+  main workspace task. Added a regression test covering report submission from a task
+  worktree and re-ran the nearby stage-result submission suite. Preserved the useful
+  grooming work by syncing the planner-shaped acceptance criteria, PM sizing, and
+  implementation plan back into the canonical task.yaml. Verification: uv run pytest
+  -q tests/test_task_commands_and_daemon.py -k report_command_from_task_worktree_writes_to_main_workspace;
+  uv run pytest -q tests/test_stage_result_submission.py. Task T-0224 is runnable
+  again and grooming is complete.'
+failure_classification: fail
+runnable_state: runnable
+blocker: null
+evidence:
+- kind: task
+  label: task.yaml
+  path: .litehive/tasks/T-0224-web-dashboard-enhanced-task-detail-views-with/task.yaml
+  exists: true
+  summary: status=in_progress pipeline_status=grooming priority=medium
+  metadata: {}
+- kind: runtime
+  label: runtime.yaml
+  path: .litehive/tasks/T-0224-web-dashboard-enhanced-task-detail-views-with/runtime.yaml
+  exists: true
+  summary: execution_status=running current_stage=grooming last_outcome=none
+  metadata: {}
+- kind: thread
+  label: thread.yaml
+  path: .litehive/tasks/T-0224-web-dashboard-enhanced-task-detail-views-with/thread.yaml
+  exists: true
+  summary: discussion entries=1
+  metadata: {}
+- kind: events
+  label: events.jsonl
+  path: .litehive/tasks/T-0224-web-dashboard-enhanced-task-detail-views-with/events.jsonl
+  exists: true
+  summary: task lifecycle and subagent event stream
+  metadata: {}
+- kind: subagent_artifact
+  label: latest subagent session
+  path: .litehive/tasks/T-0224-web-dashboard-enhanced-task-detail-views-with/subagents/SA-0003-recovery/session.yaml
+  exists: true
+  summary: artifact from SA-0003-recovery
+  metadata: {}
+- kind: subagent_artifact
+  label: latest subagent report
+  path: .litehive/tasks/T-0224-web-dashboard-enhanced-task-detail-views-with/subagents/SA-0003-recovery/report.yaml
+  exists: true
+  summary: artifact from SA-0003-recovery
+  metadata: {}
+- kind: subagent_artifact
+  label: latest subagent transcript
+  path: .litehive/tasks/T-0224-web-dashboard-enhanced-task-detail-views-with/subagents/SA-0003-recovery/transcript.md
+  exists: true
+  summary: artifact from SA-0003-recovery
+  metadata: {}
+- kind: subagent_artifact
+  label: latest subagent stdout
+  path: .litehive/tasks/T-0224-web-dashboard-enhanced-task-detail-views-with/subagents/SA-0003-recovery/stdout.txt.gz
+  exists: true
+  summary: artifact from SA-0003-recovery
+  metadata: {}
+- kind: subagent_artifact
+  label: latest subagent stderr
+  path: .litehive/tasks/T-0224-web-dashboard-enhanced-task-detail-views-with/subagents/SA-0003-recovery/stderr.txt
+  exists: true
+  summary: artifact from SA-0003-recovery
+  metadata: {}
+- kind: subagent_artifact
+  label: latest subagent events timeline
+  path: .litehive/tasks/T-0224-web-dashboard-enhanced-task-detail-views-with/subagents/SA-0003-recovery/timeline.yaml.gz
+  exists: true
+  summary: artifact from SA-0003-recovery
+  metadata: {}
+- kind: wrapper_log
+  label: latest run-all log
+  path: .litehive/logs/run-all/daemon.log
+  exists: true
+  summary: latest daemon/run-all wrapper log
+  metadata: {}
+- kind: engine_monitoring
+  label: engine-monitoring.yaml
+  path: .litehive/engine-monitoring.yaml
+  exists: true
+  summary: no engine record
+  metadata: {}
+- kind: git
+  label: main checkout git state
+  path: null
+  exists: true
+  summary: head=f50a933f58e54f18b3b8693016319be4e9e5ea5c dirty=93
+  metadata:
+    dirty_paths:
+    - litehive/state.yaml
+    - litehive/tasks/T-0072-add-explicit-parked-task-state-for-work-that-should-resume-later/journal.md
+    - litehive/tasks/T-0072-add-explicit-parked-task-state-for-work-that-should-resume-later/reports/implementing-001.yaml
+    - litehive/tasks/T-0072-add-explicit-parked-task-state-for-work-that-should-resume-later/reports/implementing-002.yaml
+    - litehive/tasks/T-0072-add-explicit-parked-task-state-for-work-that-should-resume-later/reports/implementing-003.yaml
+    - litehive/tasks/T-0072-add-explicit-parked-task-state-for-work-that-should-resume-later/reports/implementing-004.yaml
+    - litehive/tasks/T-0072-add-explicit-parked-task-state-for-work-that-should-resume-later/task.yaml
+    - litehive/tasks/T-0160-refactor-models-py-into-models-module/journal.md
+    - litehive/tasks/T-0160-refactor-models-py-into-models-module/task.yaml
+    - litehive/tasks/T-0164-refactor-tasks-py-into-tasks-module/journal.md
+    - litehive/tasks/T-0164-refactor-tasks-py-into-tasks-module/task.yaml
+    - litehive/tasks/T-0169-split-test-workspace-py-into-per-module-test-files-matching-source-structure/journal.md
+    - litehive/tasks/T-0169-split-test-workspace-py-into-per-module-test-files-matching-source-structure/task.yaml
+    - litehive/tasks/T-0203-remove-legacy-pre-acceptance-command-and-legacy/journal.md
+    - litehive/tasks/T-0203-remove-legacy-pre-acceptance-command-and-legacy/task.yaml
+    - litehive/tasks/T-0208-classify-exit-code-124-timeout-as-failure-not/journal.md
+    - litehive/tasks/T-0208-classify-exit-code-124-timeout-as-failure-not/task.yaml
+    - litehive/tasks/T-0209-classify-exit-code-124-timeout-as-failure-not/journal.md
+    - litehive/tasks/T-0209-classify-exit-code-124-timeout-as-failure-not/task.yaml
+    - litehive/tasks/T-0209-remove-text-verdict-fallback-failed-agents-must/journal.md
+    - litehive/tasks/T-0209-remove-text-verdict-fallback-failed-agents-must/task.yaml
+    - litehive/tasks/T-0221-web-dashboard-task-actions-api-create-update/journal.md
+    - litehive/tasks/T-0221-web-dashboard-task-actions-api-create-update/task.yaml
+    - litehive/tasks/T-0222-web-dashboard-queue-management-api-move-promote/journal.md
+    - litehive/tasks/T-0222-web-dashboard-queue-management-api-move-promote/task.yaml
+    - litehive/tasks/T-0223-web-dashboard-daemon-control-api-start-stop/journal.md
+    - litehive/tasks/T-0223-web-dashboard-daemon-control-api-start-stop/task.yaml
+    - litehive/tasks/T-0224-web-dashboard-enhanced-task-detail-views-with/journal.md
+    - litehive/tasks/T-0224-web-dashboard-enhanced-task-detail-views-with/task.yaml
+    - itehive/cli/report.py
+    - itehive/engines/base.py
+    - ests/test_engine_variants_and_timeline.py
+    - ests/test_stage_result_submission.py
+    - ests/test_task_commands_and_daemon.py
+    - ests/workspace_helpers.py
+    - .litehive/tasks/T-0208-classify-exit-code-124-timeout-as-failure-not/recovery/recovery-001.yaml
+    - .litehive/tasks/T-0208-classify-exit-code-124-timeout-as-failure-not/recovery/recovery-002.yaml
+    - .litehive/tasks/T-0208-classify-exit-code-124-timeout-as-failure-not/recovery/recovery-003.yaml
+    - .litehive/tasks/T-0208-classify-exit-code-124-timeout-as-failure-not/recovery/recovery-004.yaml
+    - .litehive/tasks/T-0208-classify-exit-code-124-timeout-as-failure-not/recovery/recovery-005.yaml
+    - .litehive/tasks/T-0208-classify-exit-code-124-timeout-as-failure-not/recovery/recovery-006.yaml
+    - .litehive/tasks/T-0208-classify-exit-code-124-timeout-as-failure-not/recovery/recovery-007.yaml
+    - .litehive/tasks/T-0208-classify-exit-code-124-timeout-as-failure-not/recovery/recovery-008.yaml
+    - .litehive/tasks/T-0208-classify-exit-code-124-timeout-as-failure-not/recovery/recovery-009.yaml
+    - .litehive/tasks/T-0208-classify-exit-code-124-timeout-as-failure-not/recovery/recovery-010.yaml
+    - .litehive/tasks/T-0208-classify-exit-code-124-timeout-as-failure-not/recovery/recovery-011.yaml
+    - .litehive/tasks/T-0208-classify-exit-code-124-timeout-as-failure-not/recovery/recovery-012.yaml
+    - .litehive/tasks/T-0208-classify-exit-code-124-timeout-as-failure-not/recovery/recovery-013.yaml
+    - .litehive/tasks/T-0208-classify-exit-code-124-timeout-as-failure-not/recovery/recovery-014.yaml
+    - .litehive/tasks/T-0208-classify-exit-code-124-timeout-as-failure-not/recovery/recovery-015.yaml
+    - .litehive/tasks/T-0208-classify-exit-code-124-timeout-as-failure-not/recovery/recovery-016.yaml
+    - .litehive/tasks/T-0208-classify-exit-code-124-timeout-as-failure-not/recovery/recovery-017.yaml
+    - .litehive/tasks/T-0208-classify-exit-code-124-timeout-as-failure-not/recovery/recovery-018.yaml
+    - .litehive/tasks/T-0208-classify-exit-code-124-timeout-as-failure-not/recovery/recovery-019.yaml
+    - .litehive/tasks/T-0208-classify-exit-code-124-timeout-as-failure-not/recovery/recovery-020.yaml
+    - .litehive/tasks/T-0208-classify-exit-code-124-timeout-as-failure-not/recovery/recovery-021.yaml
+    - .litehive/tasks/T-0208-classify-exit-code-124-timeout-as-failure-not/recovery/recovery-022.yaml
+    - .litehive/tasks/T-0208-classify-exit-code-124-timeout-as-failure-not/recovery/recovery-023.yaml
+    - .litehive/tasks/T-0208-classify-exit-code-124-timeout-as-failure-not/recovery/recovery-024.yaml
+    - .litehive/tasks/T-0208-classify-exit-code-124-timeout-as-failure-not/reports/grooming-001.yaml
+    - .litehive/tasks/T-0208-classify-exit-code-124-timeout-as-failure-not/reports/implementing-001.yaml
+    - .litehive/tasks/T-0208-classify-exit-code-124-timeout-as-failure-not/reports/implementing-002.yaml
+    - .litehive/tasks/T-0208-classify-exit-code-124-timeout-as-failure-not/reports/testing-001.yaml
+    - .litehive/tasks/T-0208-classify-exit-code-124-timeout-as-failure-not/reports/testing-002.yaml
+    - .litehive/tasks/T-0208-classify-exit-code-124-timeout-as-failure-not/reports/testing-003.yaml
+    - .litehive/tasks/T-0208-classify-exit-code-124-timeout-as-failure-not/thread.yaml
+    - .litehive/tasks/T-0209-remove-text-verdict-fallback-failed-agents-must/recovery/recovery-001.yaml
+    - .litehive/tasks/T-0209-remove-text-verdict-fallback-failed-agents-must/reports/grooming-001.yaml
+    - .litehive/tasks/T-0209-remove-text-verdict-fallback-failed-agents-must/thread.yaml
+    - .litehive/tasks/T-0221-web-dashboard-task-actions-api-create-update/recovery/recovery-001.yaml
+    - .litehive/tasks/T-0221-web-dashboard-task-actions-api-create-update/reports/grooming-001.yaml
+    - .litehive/tasks/T-0221-web-dashboard-task-actions-api-create-update/reports/implementing-001.yaml
+    - .litehive/tasks/T-0221-web-dashboard-task-actions-api-create-update/thread.yaml
+    - .litehive/tasks/T-0222-web-dashboard-queue-management-api-move-promote/recovery/recovery-001.yaml
+    - .litehive/tasks/T-0222-web-dashboard-queue-management-api-move-promote/reports/grooming-001.yaml
+    - .litehive/tasks/T-0222-web-dashboard-queue-management-api-move-promote/reports/implementing-001.yaml
+    - .litehive/tasks/T-0222-web-dashboard-queue-management-api-move-promote/thread.yaml
+    - .litehive/tasks/T-0223-web-dashboard-daemon-control-api-start-stop/recovery/recovery-001.yaml
+    - .litehive/tasks/T-0223-web-dashboard-daemon-control-api-start-stop/reports/grooming-001.yaml
+    - .litehive/tasks/T-0223-web-dashboard-daemon-control-api-start-stop/reports/implementing-001.yaml
+    - .litehive/tasks/T-0223-web-dashboard-daemon-control-api-start-stop/thread.yaml
+    - .litehive/tasks/T-0224-web-dashboard-enhanced-task-detail-views-with/thread.yaml
+    - .litehive/tasks/T-0235-recovery-agent-must-diagnose-and-fix-litehive/journal.md
+    - .litehive/tasks/T-0235-recovery-agent-must-diagnose-and-fix-litehive/recovery/recovery-001.yaml
+    - .litehive/tasks/T-0235-recovery-agent-must-diagnose-and-fix-litehive/reports/accepting-003.yaml
+    - .litehive/tasks/T-0235-recovery-agent-must-diagnose-and-fix-litehive/reports/accepting-004.yaml
+    - .litehive/tasks/T-0235-recovery-agent-must-diagnose-and-fix-litehive/reports/grooming-001.yaml
+    - .litehive/tasks/T-0235-recovery-agent-must-diagnose-and-fix-litehive/reports/implementing-001.yaml
+    - .litehive/tasks/T-0235-recovery-agent-must-diagnose-and-fix-litehive/reports/implementing-002.yaml
+    - .litehive/tasks/T-0235-recovery-agent-must-diagnose-and-fix-litehive/reports/testing-002.yaml
+    - .litehive/tasks/T-0235-recovery-agent-must-diagnose-and-fix-litehive/reports/testing-003.yaml
+    - .litehive/tasks/T-0235-recovery-agent-must-diagnose-and-fix-litehive/task.yaml
+    - .litehive/tasks/T-0235-recovery-agent-must-diagnose-and-fix-litehive/thread.yaml
+- kind: worktree
+  label: task worktree state
+  path: .litehive/worktrees/T-0224-web-dashboard-enhanced-task-detail-views-with
+  exists: true
+  summary: dirty=2
+  metadata:
+    dirty_paths:
+    - litehive/tasks/T-0224-web-dashboard-enhanced-task-detail-views-with/journal.md
+    - litehive/tasks/T-0224-web-dashboard-enhanced-task-detail-views-with/task.yaml
+    stage: grooming
+actions:
+- action: resume_current_stage
+  applied: true
+  summary: Recovery agent repaired the task and returned `grooming` to a runnable
+    state.
+  metadata:
+    verdict: pass
+warnings:
+- Agent did not submit verdict via litehive report CLI.
+recovery_subagent_id: SA-0003
+recovery_subagent_path: subagents/SA-0003-recovery
+created_at: '2026-04-08T18:18:46+00:00'

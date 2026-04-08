@@ -1,0 +1,69 @@
+task_id: T-0235
+step: testing
+verdict: pass
+summary: 'Verified T-0235 with focused recovery regressions. Confirmed recovery startup
+  guidance now explicitly says the recovery agent must diagnose the prior agent failure
+  and fix Litehive infrastructure, not redo the failed stage or submit that stage
+  verdict, via litehive/config/__init__.py:36-47, litehive/subagents/_prompts.py:301-308,
+  and tests/test_runner_workflow.py:2721-2729. Confirmed failed-subagent diagnostics
+  are loaded from session.yaml/stdout.txt/stderr.txt/transcript.md, exit code and
+  litehive-report clues are injected into the recovery/self-heal prompts, and the
+  prompt checklist asks for output/report/root-cause analysis via litehive/runtime/_recovery.py:76-143,
+  203-235, 269-302, 426-450. Confirmed recovery executes in the Litehive source repo
+  rather than the task worktree when source is available, blocks cleanly when no Litehive
+  repo is available, and successful recovery reports mark retry_decision=retry so
+  the failed stage is retried via litehive/runtime/_recovery.py:170-178, 211-235,
+  237-261, 342-356, 472-508; covered by tests/test_self_heal_recovery.py:99-204 and
+  247-314 plus tests/test_retry_commit_and_recovery.py:2013-2062 and 2095-2182. Ran:
+  uv run pytest -q tests/test_self_heal_recovery.py -> 6 passed in 0.60s; uv run pytest
+  -q tests/test_retry_commit_and_recovery.py -k ''attempt_stage_recovery_launches_agent_for_litehive_traceback_with_no_source_repo
+  or attempt_stage_recovery_launches_recovery_agent_for_litehive_traceback'' -> 2
+  passed, 89 deselected in 0.74s; uv run pytest -q tests/test_runner_workflow.py -k
+  recovery_prompt_includes_default_startup_guidance -> 1 passed, 109 deselected in
+  0.43s; uv run pytest -q tests/test_recovery_agent.py -k recovery -> 4 passed in
+  0.68s. I did not rerun the entire suite in QA; this pass is based on targeted independent
+  validation of the changed recovery paths and their existing recovery-specific regression
+  coverage.'
+feedback: 'Verified T-0235 with focused recovery regressions. Confirmed recovery startup
+  guidance now explicitly says the recovery agent must diagnose the prior agent failure
+  and fix Litehive infrastructure, not redo the failed stage or submit that stage
+  verdict, via litehive/config/__init__.py:36-47, litehive/subagents/_prompts.py:301-308,
+  and tests/test_runner_workflow.py:2721-2729. Confirmed failed-subagent diagnostics
+  are loaded from session.yaml/stdout.txt/stderr.txt/transcript.md, exit code and
+  litehive-report clues are injected into the recovery/self-heal prompts, and the
+  prompt checklist asks for output/report/root-cause analysis via litehive/runtime/_recovery.py:76-143,
+  203-235, 269-302, 426-450. Confirmed recovery executes in the Litehive source repo
+  rather than the task worktree when source is available, blocks cleanly when no Litehive
+  repo is available, and successful recovery reports mark retry_decision=retry so
+  the failed stage is retried via litehive/runtime/_recovery.py:170-178, 211-235,
+  237-261, 342-356, 472-508; covered by tests/test_self_heal_recovery.py:99-204 and
+  247-314 plus tests/test_retry_commit_and_recovery.py:2013-2062 and 2095-2182. Ran:
+  uv run pytest -q tests/test_self_heal_recovery.py -> 6 passed in 0.60s; uv run pytest
+  -q tests/test_retry_commit_and_recovery.py -k ''attempt_stage_recovery_launches_agent_for_litehive_traceback_with_no_source_repo
+  or attempt_stage_recovery_launches_recovery_agent_for_litehive_traceback'' -> 2
+  passed, 89 deselected in 0.74s; uv run pytest -q tests/test_runner_workflow.py -k
+  recovery_prompt_includes_default_startup_guidance -> 1 passed, 109 deselected in
+  0.43s; uv run pytest -q tests/test_recovery_agent.py -k recovery -> 4 passed in
+  0.68s. I did not rerun the entire suite in QA; this pass is based on targeted independent
+  validation of the changed recovery paths and their existing recovery-specific regression
+  coverage.'
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 124
+hook_results: []
+created_at: '2026-04-08T16:18:14+00:00'

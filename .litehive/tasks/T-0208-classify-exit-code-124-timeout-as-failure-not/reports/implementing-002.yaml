@@ -1,0 +1,48 @@
+task_id: T-0208
+step: implementing
+verdict: pass
+summary: 'Recovery verified and implementation is runnable. Confirmed in litehive/subagents/_manager.py
+  that non-zero exits are never marked completed: generic non-zero exits remain failed,
+  interruption reclassification only applies when classify_execution_interruption
+  matches, and the inactivity-timeout path rewrites the execution to exit_code 124
+  with status failed. Confirmed in litehive/engines/base.py that structured STAGE_RESULT
+  verdicts of pass/accept are downgraded to fail when subagent_status is not completed,
+  preventing timeout-killed or otherwise failed agents from yielding passing stage
+  reports. Verified with targeted tests: pytest -q tests/test_tasks_and_subagents.py
+  tests/test_stage_result_submission.py -k ''kills_stale_live_process_using_stdout_mtime
+  or failed_subagent_cannot_turn_structured_pass_into_passing_report or marks_generic_non_zero_exit_as_failed''
+  -> 3 passed, 67 deselected in 0.54s.'
+feedback: 'Recovery verified and implementation is runnable. Confirmed in litehive/subagents/_manager.py
+  that non-zero exits are never marked completed: generic non-zero exits remain failed,
+  interruption reclassification only applies when classify_execution_interruption
+  matches, and the inactivity-timeout path rewrites the execution to exit_code 124
+  with status failed. Confirmed in litehive/engines/base.py that structured STAGE_RESULT
+  verdicts of pass/accept are downgraded to fail when subagent_status is not completed,
+  preventing timeout-killed or otherwise failed agents from yielding passing stage
+  reports. Verified with targeted tests: pytest -q tests/test_tasks_and_subagents.py
+  tests/test_stage_result_submission.py -k ''kills_stale_live_process_using_stdout_mtime
+  or failed_subagent_cannot_turn_structured_pass_into_passing_report or marks_generic_non_zero_exit_as_failed''
+  -> 3 passed, 67 deselected in 0.54s.'
+files_changed:
+- litehive/engines/base.py
+- tests/test_stage_result_submission.py
+- tests/test_tasks_and_subagents.py
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 57
+hook_results: []
+created_at: '2026-04-08T16:00:09+00:00'

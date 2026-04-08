@@ -1,0 +1,118 @@
+task_id: T-0235
+step: implementing
+verdict: fail
+summary: 'Implemented and verified the recovery-agent infrastructure changes already
+  staged in this worktree, then fixed two follow-on regressions discovered during
+  finish-line verification: (1) restored live-engine detection so a rebound inherited
+  ExternalCLIAdapter.run does not wrongly outrank inherited run_live in litehive/subagents/_engine_detection.py,
+  and (2) re-enabled pruning of superseded raw subagent artifacts in litehive/subagents/_manager.py
+  so older prompt/stdout/stderr/transcript files are cleaned up again while the latest
+  subagent evidence remains available for recovery diagnostics. Focused verification
+  that is green: uv run pytest -q tests/test_tasks_and_subagents.py -> 60 passed in
+  5.85s; uv run pytest -q tests/test_self_heal_recovery.py tests/test_recovery_agent.py
+  tests/test_retry_commit_and_recovery.py -k ''attempt_stage_recovery or recovery
+  or self_heal'' -> 101 passed in 25.18s; uv run pytest -q tests/test_task_commands_and_daemon.py
+  tests/test_tasks_and_subagents.py -> 161 passed in 25.28s; uv run pytest -q tests/test_stage_result_submission.py
+  tests/test_task_commands_and_daemon.py tests/test_tasks_and_subagents.py -> 169
+  passed in 25.40s; uv run pytest -q tests/test_runtime_pool.py tests/test_self_heal_recovery.py
+  tests/test_slugify.py tests/test_stage_result_submission.py tests/test_task_commands_and_daemon.py
+  tests/test_tasks_and_subagents.py -> 244 passed in 54.99s; uv run pytest -q tests/test_runner_workflow.py
+  tests/test_runtime_pool.py tests/test_self_heal_recovery.py tests/test_slugify.py
+  tests/test_stage_result_submission.py tests/test_task_commands_and_daemon.py tests/test_tasks_and_subagents.py
+  -> 354 passed in 64.74s; uv run pytest --lf -x -vv -> 5 passed in 0.96s after the
+  remaining cached tasks-and-subagents failures were fixed. Remaining blocker: the
+  final acceptance criterion all existing tests pass is still not proven because repeated
+  clean full-suite runs with uv run pytest -q are still red late in the suite. The
+  latest clean log reached 90% and then showed one remaining failure (tail: ........F)
+  before I stopped to avoid another long unwind; a prior clean run before the second
+  regression fix showed ........FF. I also ran uv run pytest -x -vv to capture the
+  first remaining failure directly, but it had not yet reached the failing test before
+  I stopped it. This looks fixable and likely order-dependent, probably another late-suite
+  state leak in the same live-execution/subagent area, but I do not yet have the exact
+  remaining failing test name from a post-fix full-suite run. Next step should be
+  to continue the stopped uv run pytest -x -vv full-suite isolation until the first
+  failing test is printed, then patch that last order-dependent regression and rerun
+  uv run pytest -q for the explicit green proof required by acceptance.'
+feedback: 'Implemented and verified the recovery-agent infrastructure changes already
+  staged in this worktree, then fixed two follow-on regressions discovered during
+  finish-line verification: (1) restored live-engine detection so a rebound inherited
+  ExternalCLIAdapter.run does not wrongly outrank inherited run_live in litehive/subagents/_engine_detection.py,
+  and (2) re-enabled pruning of superseded raw subagent artifacts in litehive/subagents/_manager.py
+  so older prompt/stdout/stderr/transcript files are cleaned up again while the latest
+  subagent evidence remains available for recovery diagnostics. Focused verification
+  that is green: uv run pytest -q tests/test_tasks_and_subagents.py -> 60 passed in
+  5.85s; uv run pytest -q tests/test_self_heal_recovery.py tests/test_recovery_agent.py
+  tests/test_retry_commit_and_recovery.py -k ''attempt_stage_recovery or recovery
+  or self_heal'' -> 101 passed in 25.18s; uv run pytest -q tests/test_task_commands_and_daemon.py
+  tests/test_tasks_and_subagents.py -> 161 passed in 25.28s; uv run pytest -q tests/test_stage_result_submission.py
+  tests/test_task_commands_and_daemon.py tests/test_tasks_and_subagents.py -> 169
+  passed in 25.40s; uv run pytest -q tests/test_runtime_pool.py tests/test_self_heal_recovery.py
+  tests/test_slugify.py tests/test_stage_result_submission.py tests/test_task_commands_and_daemon.py
+  tests/test_tasks_and_subagents.py -> 244 passed in 54.99s; uv run pytest -q tests/test_runner_workflow.py
+  tests/test_runtime_pool.py tests/test_self_heal_recovery.py tests/test_slugify.py
+  tests/test_stage_result_submission.py tests/test_task_commands_and_daemon.py tests/test_tasks_and_subagents.py
+  -> 354 passed in 64.74s; uv run pytest --lf -x -vv -> 5 passed in 0.96s after the
+  remaining cached tasks-and-subagents failures were fixed. Remaining blocker: the
+  final acceptance criterion all existing tests pass is still not proven because repeated
+  clean full-suite runs with uv run pytest -q are still red late in the suite. The
+  latest clean log reached 90% and then showed one remaining failure (tail: ........F)
+  before I stopped to avoid another long unwind; a prior clean run before the second
+  regression fix showed ........FF. I also ran uv run pytest -x -vv to capture the
+  first remaining failure directly, but it had not yet reached the failing test before
+  I stopped it. This looks fixable and likely order-dependent, probably another late-suite
+  state leak in the same live-execution/subagent area, but I do not yet have the exact
+  remaining failing test name from a post-fix full-suite run. Next step should be
+  to continue the stopped uv run pytest -x -vv full-suite isolation until the first
+  failing test is printed, then patch that last order-dependent regression and rerun
+  uv run pytest -q for the explicit green proof required by acceptance.'
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: final
+outcome: flagged
+outcome_reason_code: unsupported_verdict
+outcome_reason: 'Implemented and verified the recovery-agent infrastructure changes
+  already staged in this worktree, then fixed two follow-on regressions discovered
+  during finish-line verification: (1) restored live-engine detection so a rebound
+  inherited ExternalCLIAdapter.run does not wrongly outrank inherited run_live in
+  litehive/subagents/_engine_detection.py, and (2) re-enabled pruning of superseded
+  raw subagent artifacts in litehive/subagents/_manager.py so older prompt/stdout/stderr/transcript
+  files are cleaned up again while the latest subagent evidence remains available
+  for recovery diagnostics. Focused verification that is green: uv run pytest -q tests/test_tasks_and_subagents.py
+  -> 60 passed in 5.85s; uv run pytest -q tests/test_self_heal_recovery.py tests/test_recovery_agent.py
+  tests/test_retry_commit_and_recovery.py -k ''attempt_stage_recovery or recovery
+  or self_heal'' -> 101 passed in 25.18s; uv run pytest -q tests/test_task_commands_and_daemon.py
+  tests/test_tasks_and_subagents.py -> 161 passed in 25.28s; uv run pytest -q tests/test_stage_result_submission.py
+  tests/test_task_commands_and_daemon.py tests/test_tasks_and_subagents.py -> 169
+  passed in 25.40s; uv run pytest -q tests/test_runtime_pool.py tests/test_self_heal_recovery.py
+  tests/test_slugify.py tests/test_stage_result_submission.py tests/test_task_commands_and_daemon.py
+  tests/test_tasks_and_subagents.py -> 244 passed in 54.99s; uv run pytest -q tests/test_runner_workflow.py
+  tests/test_runtime_pool.py tests/test_self_heal_recovery.py tests/test_slugify.py
+  tests/test_stage_result_submission.py tests/test_task_commands_and_daemon.py tests/test_tasks_and_subagents.py
+  -> 354 passed in 64.74s; uv run pytest --lf -x -vv -> 5 passed in 0.96s after the
+  remaining cached tasks-and-subagents failures were fixed. Remaining blocker: the
+  final acceptance criterion all existing tests pass is still not proven because repeated
+  clean full-suite runs with uv run pytest -q are still red late in the suite. The
+  latest clean log reached 90% and then showed one remaining failure (tail: ........F)
+  before I stopped to avoid another long unwind; a prior clean run before the second
+  regression fix showed ........FF. I also ran uv run pytest -x -vv to capture the
+  first remaining failure directly, but it had not yet reached the failing test before
+  I stopped it. This looks fixable and likely order-dependent, probably another late-suite
+  state leak in the same live-execution/subagent area, but I do not yet have the exact
+  remaining failing test name from a post-fix full-suite run. Next step should be
+  to continue the stopped uv run pytest -x -vv full-suite isolation until the first
+  failing test is printed, then patch that last order-dependent regression and rerun
+  uv run pytest -q for the explicit green proof required by acceptance.'
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 2210
+hook_results: []
+created_at: '2026-04-08T17:36:13+00:00'

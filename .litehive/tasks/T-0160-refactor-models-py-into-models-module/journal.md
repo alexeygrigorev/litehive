@@ -35,3 +35,6 @@ Recovery agent could not resolve implementing.
 
 ## 2026-04-08T08:07:23+00:00
 Execution finished with status `flagged`.
+
+## 2026-04-08T15:27:09+00:00
+Task closed: wont_do. Completed manually - models/ package merged

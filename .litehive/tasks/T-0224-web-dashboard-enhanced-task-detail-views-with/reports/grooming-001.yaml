@@ -1,0 +1,51 @@
+task_id: T-0224
+step: grooming
+verdict: pass
+summary: 'Recovered grooming after confirming the prior planner wrote its verdict
+  only to the task-worktree-local .litehive/tasks/.../thread.yaml instead of the canonical
+  workspace task record. Root cause was litehive/cli/report.py resolving the main
+  workspace only after a local task lookup miss; because task metadata exists inside
+  worktrees too, the report landed in the wrong place and the runner concluded no
+  verdict had been submitted. Fixed by canonicalizing the workspace root at the start
+  of report submission so worktree invocations always append thread comments to the
+  main workspace task. Added a regression test covering report submission from a task
+  worktree and re-ran the nearby stage-result submission suite. Preserved the useful
+  grooming work by syncing the planner-shaped acceptance criteria, PM sizing, and
+  implementation plan back into the canonical task.yaml. Verification: uv run pytest
+  -q tests/test_task_commands_and_daemon.py -k report_command_from_task_worktree_writes_to_main_workspace;
+  uv run pytest -q tests/test_stage_result_submission.py. Task T-0224 is runnable
+  again and grooming is complete.'
+feedback: 'Recovered grooming after confirming the prior planner wrote its verdict
+  only to the task-worktree-local .litehive/tasks/.../thread.yaml instead of the canonical
+  workspace task record. Root cause was litehive/cli/report.py resolving the main
+  workspace only after a local task lookup miss; because task metadata exists inside
+  worktrees too, the report landed in the wrong place and the runner concluded no
+  verdict had been submitted. Fixed by canonicalizing the workspace root at the start
+  of report submission so worktree invocations always append thread comments to the
+  main workspace task. Added a regression test covering report submission from a task
+  worktree and re-ran the nearby stage-result submission suite. Preserved the useful
+  grooming work by syncing the planner-shaped acceptance criteria, PM sizing, and
+  implementation plan back into the canonical task.yaml. Verification: uv run pytest
+  -q tests/test_task_commands_and_daemon.py -k report_command_from_task_worktree_writes_to_main_workspace;
+  uv run pytest -q tests/test_stage_result_submission.py. Task T-0224 is runnable
+  again and grooming is complete.'
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 397
+hook_results: []
+created_at: '2026-04-08T18:18:46+00:00'

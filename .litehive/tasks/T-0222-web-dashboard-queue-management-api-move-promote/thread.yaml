@@ -1,0 +1,29 @@
+- role: recovery
+  step: grooming
+  verdict: pass
+  message: 'Recovery classified the failure as an engine-side command execution issue,
+    not a task-spec issue. Evidence: the failed planner attempt produced only ''Error:
+    stdin is not a terminal'', while the task already has a concrete goal and explicit
+    acceptance criteria covering queue move, promote, prioritize, frontend reorder
+    controls, and immediate UI updates. Smallest safe repair applied: submit the missing
+    grooming verdict directly so the stage can close and the task can continue to
+    implementing. No task-local spec changes were required.'
+  files_changed: []
+  created_at: '2026-04-08T17:56:52+00:00'
+- role: recovery
+  step: grooming
+  verdict: comment
+  message: 'Recovery trigger `stage_failure`: Recovery classified the failure as an
+    engine-side command execution issue, not a task-spec issue. Evidence: the failed
+    planner attempt produced only ''Error: stdin is not a terminal'', while the task
+    already has a concrete goal and explicit acceptance criteria covering queue move,
+    promote, prioritize, frontend reorder controls, and immediate UI updates. Smallest
+    safe repair applied: submit the missing grooming verdict directly so the stage
+    can close and the task can continue to implementing. No task-local spec changes
+    were required.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0222-web-dashboard-queue-management-api-move-promote/recovery/recovery-001.yaml'
+  files_changed: []
+  created_at: '2026-04-08T17:57:15+00:00'

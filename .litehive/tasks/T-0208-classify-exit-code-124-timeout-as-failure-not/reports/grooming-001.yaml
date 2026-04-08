@@ -1,0 +1,61 @@
+task_id: T-0208
+step: grooming
+verdict: pass
+summary: Recovery repaired the runnable path for T-0208 by fixing structured stage-report
+  classification for non-completed subagents.
+feedback: 'Recovery repaired the runnable path for T-0208 by fixing structured stage-report
+  classification for non-completed subagents.
+
+
+  What changed:
+
+  - In litehive/engines/base.py, parse_stage_report_text now downgrades structured
+  `pass`/`accept` submissions to `fail` when the subagent status is not `completed`.
+  This prevents timeout-killed or otherwise non-zero exits from being treated as successful
+  based on partial STAGE_RESULT output.
+
+  - Added regression coverage in tests/test_stage_result_submission.py for a failed
+  subagent with structured `pass` output.
+
+  - Added regression coverage in tests/test_tasks_and_subagents.py for a stale-timeout
+  path that exits 124 after emitting partial structured output, verifying the persisted
+  session remains `failed` and the report does not preserve a passing verdict.
+
+
+  Verification:
+
+  - `pytest -q tests/test_stage_result_submission.py tests/test_tasks_and_subagents.py
+  tests/test_runner_workflow.py -q -k "failed_subagent_cannot_turn_structured_pass_into_passing_report
+  or timeout_cannot_preserve_structured_pass_verdict or kills_stale_live_process_using_stdout_mtime
+  or parse_stage_report_text_fails_on_text_only_transcript or stage_report_from_subagent_fails_without_cli_verdict"`
+
+
+  Result:
+
+  - Exit code 124 is no longer able to surface a passing structured verdict from partial
+  output.
+
+  - Non-completed subagents cannot turn structured `pass`/`accept` payloads into passing
+  stage reports.
+
+  - The task is runnable again for the normal pipeline.'
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 51
+hook_results: []
+created_at: '2026-04-08T15:59:12+00:00'

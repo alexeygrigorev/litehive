@@ -1,0 +1,86 @@
+task_id: T-0235
+step: implementing
+verdict: pass
+summary: 'Verified the recovery-agent hardening already present in this worktree and
+  confirmed the acceptance regressions are fixed without weakening the new recovery
+  contract. Evidence by inspection: litehive/config/__init__.py now provides default
+  recovery startup guidance that says the recovery agent must diagnose the previous
+  agent failure, fix Litehive infrastructure bugs, start from stdout/stderr/transcript/session
+  metadata/exit code plus any litehive report attempt, and submit its own recovery
+  verdict; litehive/subagents/_prompts.py keeps the legacy runnable-path recovery
+  wording while adding explicit do-not-redo/do-not-report-the-failed-stage instructions;
+  litehive/runtime/_recovery.py now loads failed subagent diagnostics from session.yaml/stdout.txt/stderr.txt/transcript.md,
+  summarizes litehive report clues, runs recovery from the Litehive source repo when
+  configured, blocks cleanly when a configured Litehive source checkout is missing,
+  and marks successful recovery reports with retry_decision=retry so the failed stage
+  is retried. Also confirmed the crash-resume journal wording regression is fixed
+  in litehive/runtime/_builder.py by restoring ''resuming <engine> session <id>''.
+  Focused verification run results: uv run pytest -q tests/test_crash_resume.py::test_crash_resume_triggers_session_resume_for_claude
+  tests/test_runner_workflow.py::test_stage_prompt_uses_recovery_role_when_requested
+  tests/test_runner_workflow.py::test_recovery_prompt_includes_default_startup_guidance
+  -> 3 passed in 1.04s; uv run pytest -q tests/test_self_heal_recovery.py tests/test_recovery_agent.py
+  -> 10 passed in 1.19s; uv run pytest -q tests/test_retry_commit_and_recovery.py::test_attempt_stage_recovery_launches_agent_for_litehive_traceback_with_no_source_repo
+  tests/test_retry_commit_and_recovery.py::test_attempt_stage_recovery_launches_recovery_agent_for_litehive_traceback
+  tests/test_retry_commit_and_recovery.py::test_run_next_task_skips_retries_for_non_retryable_failure
+  -> 3 passed in 1.20s. This confirms the acceptance criteria are met: the recovery
+  prompt explicitly says to fix Litehive infrastructure rather than redo the failed
+  stage, failed-subagent stdout/stderr/session/transcript/exit-code evidence is included,
+  the prompt asks the agent to check output/report attempts/errors/root cause, recovery
+  runs against Litehive source when configured, the recovery agent submits its own
+  recovery verdict, and successful recovery causes retry_decision=retry so the failed
+  stage is retried with the fix in place.'
+feedback: 'Verified the recovery-agent hardening already present in this worktree
+  and confirmed the acceptance regressions are fixed without weakening the new recovery
+  contract. Evidence by inspection: litehive/config/__init__.py now provides default
+  recovery startup guidance that says the recovery agent must diagnose the previous
+  agent failure, fix Litehive infrastructure bugs, start from stdout/stderr/transcript/session
+  metadata/exit code plus any litehive report attempt, and submit its own recovery
+  verdict; litehive/subagents/_prompts.py keeps the legacy runnable-path recovery
+  wording while adding explicit do-not-redo/do-not-report-the-failed-stage instructions;
+  litehive/runtime/_recovery.py now loads failed subagent diagnostics from session.yaml/stdout.txt/stderr.txt/transcript.md,
+  summarizes litehive report clues, runs recovery from the Litehive source repo when
+  configured, blocks cleanly when a configured Litehive source checkout is missing,
+  and marks successful recovery reports with retry_decision=retry so the failed stage
+  is retried. Also confirmed the crash-resume journal wording regression is fixed
+  in litehive/runtime/_builder.py by restoring ''resuming <engine> session <id>''.
+  Focused verification run results: uv run pytest -q tests/test_crash_resume.py::test_crash_resume_triggers_session_resume_for_claude
+  tests/test_runner_workflow.py::test_stage_prompt_uses_recovery_role_when_requested
+  tests/test_runner_workflow.py::test_recovery_prompt_includes_default_startup_guidance
+  -> 3 passed in 1.04s; uv run pytest -q tests/test_self_heal_recovery.py tests/test_recovery_agent.py
+  -> 10 passed in 1.19s; uv run pytest -q tests/test_retry_commit_and_recovery.py::test_attempt_stage_recovery_launches_agent_for_litehive_traceback_with_no_source_repo
+  tests/test_retry_commit_and_recovery.py::test_attempt_stage_recovery_launches_recovery_agent_for_litehive_traceback
+  tests/test_retry_commit_and_recovery.py::test_run_next_task_skips_retries_for_non_retryable_failure
+  -> 3 passed in 1.20s. This confirms the acceptance criteria are met: the recovery
+  prompt explicitly says to fix Litehive infrastructure rather than redo the failed
+  stage, failed-subagent stdout/stderr/session/transcript/exit-code evidence is included,
+  the prompt asks the agent to check output/report attempts/errors/root cause, recovery
+  runs against Litehive source when configured, the recovery agent submits its own
+  recovery verdict, and successful recovery causes retry_decision=retry so the failed
+  stage is retried with the fix in place.'
+files_changed:
+- litehive/config/__init__.py
+- litehive/runtime/_builder.py
+- litehive/runtime/_recovery.py
+- litehive/subagents/_prompts.py
+- tests/test_retry_commit_and_recovery.py
+- tests/test_runner_workflow.py
+- tests/test_self_heal_recovery.py
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 61
+hook_results: []
+created_at: '2026-04-08T16:50:44+00:00'

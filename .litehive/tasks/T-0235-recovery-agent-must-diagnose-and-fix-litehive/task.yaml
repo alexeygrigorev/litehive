@@ -1,0 +1,169 @@
+id: T-0235
+slug: recovery-agent-must-diagnose-and-fix-litehive
+title: Recovery agent must diagnose and fix litehive infrastructure bugs, not redo
+  failed agent work
+depends_on: []
+task_type: null
+engine: null
+model: null
+mode: implementation
+pipeline_mode: full
+status: queued
+pipeline_status: implementing
+priority: high
+pm_complexity: null
+planned_effort: null
+created_at: '2026-04-08T15:16:20+00:00'
+updated_at: '2026-04-08T17:39:11+00:00'
+goal: 'The recovery agent''s job is to analyze WHY an agent failed (check logs, stdout,
+  stderr, session.yaml, exit codes), identify the bug in litehive''s own code, fix
+  it, and submit a recovery verdict so the next run succeeds. It should NOT re-run
+  tests or try to submit the failed stage''s verdict itself. Example: when agents
+  consistently fail to submit verdicts, the recovery agent should check the subagent
+  logs, discover that codex resume was broken or litehive report was targeting the
+  wrong task, fix the litehive code, and report what it fixed.'
+acceptance_criteria:
+- 'Recovery agent prompt clearly states: your job is to fix litehive infrastructure,
+  not redo the failed agent''s work'
+- Recovery agent is given the failed subagent's stdout, stderr, session.yaml, and
+  exit code in its prompt
+- 'Recovery agent is told to check: did the agent produce output? did it try to call
+  litehive report? what error did it get? what is the root cause in litehive''s code?'
+- Recovery agent runs in the litehive source repo (not the task worktree) so it can
+  fix litehive code
+- Recovery agent submits its own verdict describing what it found and fixed, not the
+  failed stage's verdict
+- After recovery fixes litehive code, the failed stage is retried automatically with
+  the fix in place
+- All existing tests pass
+constraints:
+- The recovery agent must NEVER try to do the failed agent's job (run tests, submit
+  the stage verdict, implement the task)
+- The recovery agent works on litehive source code, not on the task's code
+- "Recovery should be fast \u2014 diagnose from logs, fix one thing, verify, report"
+plan:
+- Rewrite the recovery agent prompt in litehive/subagents/_prompts.py and litehive/config/__init__.py
+  (agent_startup_guidance.recovery)
+- Include failed subagent artifacts (stdout, stderr, session.yaml, exit code, transcript)
+  in the recovery prompt
+- Make recovery agent run against litehive source, not the task worktree
+- Update _attempt_stage_recovery in litehive/runtime/_recovery.py to pass diagnostic
+  artifacts
+- Add clear examples in the prompt of what recovery should do vs what it should NOT
+  do
+- Test with a mock failure scenario
+human_checkpoints: []
+subagents:
+- id: SA-0001
+  role: planner
+  engine: codex
+  status: completed
+  path: subagents/SA-0001-planner
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0002
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0002-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0003
+  role: qa
+  engine: codex
+  status: completed
+  path: subagents/SA-0003-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0004
+  role: reviewer
+  engine: codex
+  status: completed
+  path: subagents/SA-0004-reviewer
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0005
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0005-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0006
+  role: qa
+  engine: codex
+  status: completed
+  path: subagents/SA-0006-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0007
+  role: reviewer
+  engine: codex
+  status: completed
+  path: subagents/SA-0007-reviewer
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0008
+  role: reviewer
+  engine: codex
+  status: failed
+  path: subagents/SA-0008-reviewer
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0009
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0009-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0010
+  role: qa
+  engine: codex
+  status: completed
+  path: subagents/SA-0010-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0011
+  role: reviewer
+  engine: codex
+  status: completed
+  path: subagents/SA-0011-reviewer
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0012
+  role: reviewer
+  engine: codex
+  status: failed
+  path: subagents/SA-0012-reviewer
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0013
+  role: planner
+  engine: codex
+  status: completed
+  path: subagents/SA-0013-planner
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0014
+  role: recovery
+  engine: codex
+  status: completed
+  path: subagents/SA-0014-recovery
+  sandboxed: false
+  sandbox_summary: host
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0235 recovery-agent-must-diagnose-and-fix-litehive'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+  merge_agent_attempts: 0
+  worktree_path: null
+retry_policy:
+  max_retries: null
+  stage_retry_limit: null
+created_from: null
+upstream_origin: null
+github_origin: null

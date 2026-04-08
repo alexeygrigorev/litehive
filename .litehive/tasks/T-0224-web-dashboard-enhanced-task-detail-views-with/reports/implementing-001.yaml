@@ -1,0 +1,58 @@
+task_id: T-0224
+step: implementing
+verdict: pass
+summary: 'Addressed QA''s UI gap in the web dashboard task detail view by rendering
+  the remaining durable task.yaml origin metadata fields: Created From, Upstream Origin,
+  and GitHub Origin. The snapshot/backend path already serialized these fields; the
+  fix is scoped to litehive/web/templates/index.html, where nested origin objects
+  now render as dedicated sections with explicit empty states alongside the existing
+  full task record, thread, events, report history, and recovery views. Added focused
+  regression coverage in tests/test_web_snapshot_lockfree.py to assert the snapshot
+  includes created_from/upstream_origin/github_origin payloads and that _render_index()
+  contains the Created From, Upstream Origin, and GitHub Origin UI labels so the template
+  omission does not regress. Verification: uv run pytest -q tests/test_web_snapshot_lockfree.py
+  (9 passed in 0.63s); uv run pytest -q tests/test_observability_and_status.py -k
+  ''build_workspace_snapshot or read_session_view'' (4 passed, 68 deselected in 0.50s).
+  Evidence: the task detail renderer now exposes all durable task.yaml fields requested
+  by QA, including origin metadata, while the previously implemented inline editing,
+  chronological events timeline, full report history, recovery artifacts, and discussion
+  thread behavior remain covered by the passing web snapshot tests.'
+feedback: 'Addressed QA''s UI gap in the web dashboard task detail view by rendering
+  the remaining durable task.yaml origin metadata fields: Created From, Upstream Origin,
+  and GitHub Origin. The snapshot/backend path already serialized these fields; the
+  fix is scoped to litehive/web/templates/index.html, where nested origin objects
+  now render as dedicated sections with explicit empty states alongside the existing
+  full task record, thread, events, report history, and recovery views. Added focused
+  regression coverage in tests/test_web_snapshot_lockfree.py to assert the snapshot
+  includes created_from/upstream_origin/github_origin payloads and that _render_index()
+  contains the Created From, Upstream Origin, and GitHub Origin UI labels so the template
+  omission does not regress. Verification: uv run pytest -q tests/test_web_snapshot_lockfree.py
+  (9 passed in 0.63s); uv run pytest -q tests/test_observability_and_status.py -k
+  ''build_workspace_snapshot or read_session_view'' (4 passed, 68 deselected in 0.50s).
+  Evidence: the task detail renderer now exposes all durable task.yaml fields requested
+  by QA, including origin metadata, while the previously implemented inline editing,
+  chronological events timeline, full report history, recovery artifacts, and discussion
+  thread behavior remain covered by the passing web snapshot tests.'
+files_changed:
+- litehive/web/__init__.py
+- litehive/web/templates/index.html
+- tests/test_web_snapshot_lockfree.py
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 110
+hook_results: []
+created_at: '2026-04-08T18:33:24+00:00'

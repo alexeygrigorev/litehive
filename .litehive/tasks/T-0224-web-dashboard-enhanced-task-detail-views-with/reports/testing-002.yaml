@@ -1,0 +1,59 @@
+task_id: T-0224
+step: testing
+verdict: pass
+summary: 'Validated the T-0224 web dashboard task detail enhancements with focused
+  QA checks. Verified the task detail payload and UI cover the full durable task record
+  from task.yaml, including goal, acceptance criteria, constraints, plan, dependencies,
+  git metadata, and the previously missing origin metadata fields created_from, upstream_origin,
+  and github_origin. Verified inline edit persistence for goal, acceptance criteria,
+  constraints, plan, priority, and engine through the task detail update path. Verified
+  the task events timeline is chronological, report history is not truncated to five
+  entries, recovery artifacts are exposed when present, and the discussion thread
+  is returned in recorded order. Tests run: uv run pytest -q tests/test_web_snapshot_lockfree.py
+  (9 passed in 0.55s); uv run pytest -q tests/test_observability_and_status.py -k
+  ''build_workspace_snapshot or read_session_view'' (4 passed, 68 deselected in 0.52s).
+  Additional probe: uv run python temporary-workspace check confirmed build_workspace_snapshot
+  returned created_from/upstream_origin/github_origin payloads and update_task_detail
+  persisted goal/priority/engine edits. Evidence from code path inspection: litehive/web/__init__.py
+  serializes the full task record plus events, reports, recovery artifacts, and thread;
+  litehive/web/templates/index.html renders Task Record, Acceptance Criteria, Constraints,
+  Plan, Created From, Upstream Origin, GitHub Origin, Discussion Thread, Task Events
+  Timeline, Report History, Recovery Artifacts, and the inline edit section.'
+feedback: 'Validated the T-0224 web dashboard task detail enhancements with focused
+  QA checks. Verified the task detail payload and UI cover the full durable task record
+  from task.yaml, including goal, acceptance criteria, constraints, plan, dependencies,
+  git metadata, and the previously missing origin metadata fields created_from, upstream_origin,
+  and github_origin. Verified inline edit persistence for goal, acceptance criteria,
+  constraints, plan, priority, and engine through the task detail update path. Verified
+  the task events timeline is chronological, report history is not truncated to five
+  entries, recovery artifacts are exposed when present, and the discussion thread
+  is returned in recorded order. Tests run: uv run pytest -q tests/test_web_snapshot_lockfree.py
+  (9 passed in 0.55s); uv run pytest -q tests/test_observability_and_status.py -k
+  ''build_workspace_snapshot or read_session_view'' (4 passed, 68 deselected in 0.52s).
+  Additional probe: uv run python temporary-workspace check confirmed build_workspace_snapshot
+  returned created_from/upstream_origin/github_origin payloads and update_task_detail
+  persisted goal/priority/engine edits. Evidence from code path inspection: litehive/web/__init__.py
+  serializes the full task record plus events, reports, recovery artifacts, and thread;
+  litehive/web/templates/index.html renders Task Record, Acceptance Criteria, Constraints,
+  Plan, Created From, Upstream Origin, GitHub Origin, Discussion Thread, Task Events
+  Timeline, Report History, Recovery Artifacts, and the inline edit section.'
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 87
+hook_results: []
+created_at: '2026-04-08T18:34:51+00:00'

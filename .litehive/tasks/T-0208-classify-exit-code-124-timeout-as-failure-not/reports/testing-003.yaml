@@ -1,0 +1,25 @@
+task_id: T-0208
+step: testing
+verdict: blocked
+summary: Execution interrupted during testing
+feedback: ''
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: final
+outcome: interrupted
+outcome_reason_code: execution_interrupted
+outcome_reason: Execution interrupted during testing
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 221
+hook_results: []
+created_at: '2026-04-08T16:03:50+00:00'

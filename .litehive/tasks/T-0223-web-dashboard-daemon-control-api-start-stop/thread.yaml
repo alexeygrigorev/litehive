@@ -1,0 +1,45 @@
+- role: recovery
+  step: grooming
+  verdict: pass
+  message: 'Recovered grooming after the planner verdict was written against task-worktree-local
+    Litehive state instead of the main workspace, leaving the real task stuck in grooming
+    without a durable report. Evidence: the task worktree copy at .litehive/worktrees/T-0223-web-dashboard-daemon-control-api-start-stop/.litehive/tasks/T-0223-web-dashboard-daemon-control-api-start-stop/task.yaml
+    contained the shaped goal, acceptance criteria, constraints, plan, pm_complexity=moderate,
+    and planned_effort=m, while the main task record still had the original unshaped
+    fields and no reports/thread. The follow-up planner retry then failed immediately
+    with stderr ''Error: stdin is not a terminal''. Repair applied: copied the groomed
+    task-shaping fields from the worktree-local task record into the main task record,
+    removed the accidental nested .litehive/.litehive workspace artifact, and submitted
+    this verdict from the main workspace root so the stage has durable state. No implementation
+    code or tests were run in recovery; this was a task-state repair only. T-0223
+    is runnable again for implementing with a concrete execution contract: reuse existing
+    daemon lifecycle helpers and run-all log readers, add /api/daemon/{start,stop,restart,status},
+    update the dashboard with daemon controls/status/log polling, and add focused
+    web/daemon tests.'
+  files_changed: []
+  created_at: '2026-04-08T18:07:00+00:00'
+- role: recovery
+  step: grooming
+  verdict: comment
+  message: 'Recovery trigger `stage_failure`: Recovered grooming after the planner
+    verdict was written against task-worktree-local Litehive state instead of the
+    main workspace, leaving the real task stuck in grooming without a durable report.
+    Evidence: the task worktree copy at .litehive/worktrees/T-0223-web-dashboard-daemon-control-api-start-stop/.litehive/tasks/T-0223-web-dashboard-daemon-control-api-start-stop/task.yaml
+    contained the shaped goal, acceptance criteria, constraints, plan, pm_complexity=moderate,
+    and planned_effort=m, while the main task record still had the original unshaped
+    fields and no reports/thread. The follow-up planner retry then failed immediately
+    with stderr ''Error: stdin is not a terminal''. Repair applied: copied the groomed
+    task-shaping fields from the worktree-local task record into the main task record,
+    removed the accidental nested .litehive/.litehive workspace artifact, and submitted
+    this verdict from the main workspace root so the stage has durable state. No implementation
+    code or tests were run in recovery; this was a task-state repair only. T-0223
+    is runnable again for implementing with a concrete execution contract: reuse existing
+    daemon lifecycle helpers and run-all log readers, add /api/daemon/{start,stop,restart,status},
+    update the dashboard with daemon controls/status/log polling, and add focused
+    web/daemon tests.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0223-web-dashboard-daemon-control-api-start-stop/recovery/recovery-001.yaml'
+  files_changed: []
+  created_at: '2026-04-08T18:07:19+00:00'

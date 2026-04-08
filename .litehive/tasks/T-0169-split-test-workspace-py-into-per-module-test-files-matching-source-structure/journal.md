@@ -74,3 +74,6 @@ Recovery agent could not resolve grooming.
 
 ## 2026-04-08T07:55:37+00:00
 Execution finished with status `flagged`.
+
+## 2026-04-08T15:27:06+00:00
+Task closed: wont_do. Completed manually - tests moved to test_retry_commit_and_recovery.py
