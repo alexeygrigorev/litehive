@@ -7,13 +7,13 @@ engine: null
 model: null
 mode: implementation
 pipeline_mode: full
-status: in_progress
-pipeline_status: commit_to_git
+status: done
+pipeline_status: done
 priority: medium
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-06T20:34:17+00:00'
-updated_at: '2026-04-08T00:37:39+00:00'
+updated_at: '2026-04-08T00:40:01+00:00'
 goal: 'Engine adapters silently skip unparseable output items (claude delta fallback,
   goz multi-key guessing, codex/opencode silent filtering). Log warnings for skipped
   items so we can diagnose issues. Covers: engines/__init__.py lines 1290-1303, 1423-1442,
@@ -61,15 +61,22 @@ subagents:
   path: subagents/SA-0005-reviewer
   sandboxed: false
   sandbox_summary: host
+- id: SA-0006
+  role: merge-resolver
+  engine: claude
+  status: completed
+  path: subagents/SA-0006-merge-resolver
+  sandboxed: false
+  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0201 log-engine-output-parse-failures-instead-of'
-  commit_sha: null
-  checkpoint_base_sha: null
-  checkpoint_attempts: 0
+  commit_sha: 67adfde8ff572ed00f71b21a3d2431619da36e43
+  checkpoint_base_sha: 98c1150a5be74caf11e9d555699894536cecf724
+  checkpoint_attempts: 1
   rolled_back_checkpoint_attempt: null
   worktree_path: null
-  merge_agent_attempts: 0
+  merge_agent_attempts: 1
 retry_policy:
   max_retries: null
   stage_retry_limit: null

@@ -1,6 +1,7 @@
 """Git integration helpers."""
 
 
+import logging
 import re
 import shutil
 import subprocess
@@ -8,6 +9,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from litehive.models import TaskRecord
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_CHECKPOINT_SUBJECT_TEMPLATE = "litehive: complete {task_id} {slug}"
 CHECKPOINT_ATTEMPT_SUFFIX_TEMPLATE = "{base} (attempt {attempt})"
@@ -260,7 +263,10 @@ def abort_revert(root: Path) -> None:
         for relative_path in conflict_paths:
             conflict_path = root / relative_path
             if conflict_path.is_dir():
-                shutil.rmtree(conflict_path, ignore_errors=True)
+                try:
+                    shutil.rmtree(conflict_path)
+                except OSError as exc:
+                    logger.warning("Failed to remove conflict path %s: %s", conflict_path, exc)
             elif conflict_path.exists():
                 conflict_path.unlink()
         proc = _run_git(root, "revert", "--abort")

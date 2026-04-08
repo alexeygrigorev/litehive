@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass, field
 import fcntl
+import logging
 import gzip
 import re
 from contextlib import contextmanager
@@ -61,6 +62,8 @@ from litehive.models import (
     WorkspaceState,
     utcnow,
 )
+
+logger = logging.getLogger(__name__)
 
 VALID_TASK_PRIORITIES = {"low", "medium", "high", "critical"}
 VALID_TASK_ENGINES = {"codex", "opencode", "gemini", "copilot", "claude", "goz"}
@@ -1671,7 +1674,10 @@ def create_task(
                 writes[task_brief_file(root, task)] = render_task_brief(task)
             _write_atomic_files(writes)
         except Exception:
-            shutil.rmtree(base, ignore_errors=True)
+            try:
+                shutil.rmtree(base)
+            except OSError as cleanup_err:
+                logger.warning("Failed to clean up %s: %s", base, cleanup_err)
             raise
         _ensure_runtime_ignored(root)
         return task
@@ -1753,7 +1759,10 @@ def create_follow_up_tasks(
             _write_atomic_files(writes)
         except Exception:
             for base in reversed(created_dirs):
-                shutil.rmtree(base, ignore_errors=True)
+                try:
+                    shutil.rmtree(base)
+                except OSError as cleanup_err:
+                    logger.warning("Failed to clean up %s: %s", base, cleanup_err)
             raise
         _ensure_runtime_ignored(root)
     return created_tasks
@@ -1768,7 +1777,9 @@ def discard_created_task(root: Path, task_id: str) -> None:
         state.queue = [queued_id for queued_id in state.queue if queued_id != task_id]
         _save_state_without_runner_guard(root, state)
         if task is not None:
-            shutil.rmtree(task_dir(root, task), ignore_errors=True)
+            td = task_dir(root, task)
+            if td.exists():
+                shutil.rmtree(td)
 
 
 def list_tasks(root: Path, *, include_runtime: bool = True) -> list[TaskRecord]:
