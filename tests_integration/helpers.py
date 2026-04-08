@@ -26,19 +26,9 @@ def enabled_integration_engines() -> set[str]:
 
 
 def require_real_engine(engine_name: str) -> None:
-    enabled = enabled_integration_engines()
-    if not enabled:
-        pytest.skip(
-            f"real engine integration tests are opt-in; set {INTEGRATION_ENV}="
-            + ",".join(ENGINE_MATRIX)
-        )
-    if engine_name not in enabled:
-        pytest.skip(
-            f"{engine_name} integration test not selected; set {INTEGRATION_ENV} to include it"
-        )
-    capabilities = get_engine(engine_name).detect_capabilities()
-    if not capabilities.available:
-        pytest.skip(f"{engine_name} binary is not available on PATH")
+    engine = get_engine(engine_name)
+    if not engine.is_available():
+        pytest.skip(f"{engine_name} binary not available on PATH")
 
 
 def integration_workspace(root: Path) -> Path:
