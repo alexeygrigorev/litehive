@@ -5,6 +5,7 @@ from pathlib import Path
 
 from litehive.config import LitehiveConfig
 from litehive.engines import extract_engine_continuation
+from litehive.engines._claude_quota import claude_quota_block_reason
 from litehive.engines._codex_quota import check_codex_quota, codex_quota_block_reason
 from litehive.models import StageReport, TaskRecord, cap_feedback
 from litehive.runner import StageExecutor
@@ -82,10 +83,13 @@ def build_executor(
         limit_trigger_reason: str | None = None
 
         for index, engine_name in enumerate(engines):
+            quota_reason = None
             if engine_name == "codex":
                 quota_status = check_codex_quota()
                 _record_codex_monitoring(root, quota_status)
                 quota_reason = codex_quota_block_reason()
+            elif engine_name == "claude":
+                quota_reason = claude_quota_block_reason()
                 if quota_reason is not None:
                     if index + 1 < len(engines):
                         next_engine = engines[index + 1]
