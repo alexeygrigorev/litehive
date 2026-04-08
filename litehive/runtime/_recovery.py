@@ -101,6 +101,16 @@ def _attempt_stage_recovery(
     if subagents is None:
         return None
 
+    # Hard cap: stop launching recovery agents after 5 attempts per task.
+    MAX_RECOVERY_ATTEMPTS = 5
+    recovery_count = sum(1 for sa in task.subagents if sa.role == "recovery")
+    if recovery_count >= MAX_RECOVERY_ATTEMPTS:
+        append_journal(
+            root, task,
+            f"[recovery] Skipping recovery for `{step}`: {recovery_count} recovery attempts exhausted (limit: {MAX_RECOVERY_ATTEMPTS}).",
+        )
+        return None
+
     evidence = collect_recovery_evidence(root, task, stage=step)
     evidence_lines = "\n".join(
         f"- {item.label}: {item.path or 'n/a'} ({'present' if item.exists else 'missing'}) :: {item.summary}"
