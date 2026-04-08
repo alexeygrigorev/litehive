@@ -8,4 +8,4 @@ worktrees/
 tasks/*/runtime.yaml
 tasks/*/reports/commit_to_git-*.yaml
 tasks/archive/*
-!tasks/archive/INDEX.md
+!tasks/archive/INDEX.csv

@@ -18,6 +18,28 @@ def archive_root(root: Path) -> Path:
     return tasks_root(root) / "archive"
 
 
+def _archive_index_path(root: Path) -> Path:
+    return archive_root(root) / "INDEX.csv"
+
+
+def _update_archive_index(root: Path, tasks: list[TaskRecord]) -> None:
+    """Append newly archived tasks to INDEX.csv (or create it)."""
+    index_path = _archive_index_path(root)
+    if index_path.exists():
+        existing = index_path.read_text(encoding="utf-8")
+    else:
+        index_path.parent.mkdir(parents=True, exist_ok=True)
+        existing = "id,title,status,created"
+
+    lines = existing.rstrip("\n").splitlines()
+    for task in tasks:
+        created = str(task.created_at)[:10] if task.created_at else ""
+        title = (task.title or "").replace('"', '""')
+        lines.append(f'{task.id},"{title}",{task.status},{created}')
+
+    _atomic_write_text(index_path, "\n".join(lines) + "\n")
+
+
 def archive_task(root: Path, task_id: str) -> TaskRecord:
     """Move a single done task to the archive directory."""
     with _workspace_lock(root):
@@ -40,6 +62,7 @@ def archive_task(root: Path, task_id: str) -> TaskRecord:
         _atomic_write_text(task_yaml_path, yaml.safe_dump(data, sort_keys=False))
         dst.parent.mkdir(parents=True, exist_ok=True)
         shutil.move(str(src), str(dst))
+        _update_archive_index(root, [task])
         return task
 
 
@@ -49,7 +72,10 @@ def archive_done_tasks(root: Path) -> list[TaskRecord]:
     archived: list[TaskRecord] = []
     for task in tasks:
         if task.status == "done" and task.pipeline_status == "done":
-            archive_task(root, task.id)
+            try:
+                archive_task(root, task.id)
+            except (ValueError, FileNotFoundError):
+                continue
             archived.append(task)
     return archived
 
