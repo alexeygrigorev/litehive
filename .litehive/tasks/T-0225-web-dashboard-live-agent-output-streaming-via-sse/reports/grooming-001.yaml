@@ -1,0 +1,55 @@
+task_id: T-0225
+step: grooming
+verdict: pass
+summary: 'Grooming passed after tightening the task record in .litehive/tasks/T-0225-web-dashboard-live-agent-output-streaming-via-sse/task.yaml.
+  I set pm_complexity=moderate and planned_effort=m, rewrote the goal to explicitly
+  preserve polling as a fallback path, replaced the original acceptance criteria with
+  5 observable outcomes, added 3 constraints, and added a 4-step implementation plan.
+  Repo evidence reviewed: litehive/web/__init__.py currently exposes only GET /api/snapshot
+  and GET /api/session; litehive/web/templates/index.html currently drives the dashboard
+  with refreshSnapshot() plus setInterval(..., 1500), so there is not yet any SSE/EventSource
+  path to reuse. Existing test coverage relevant to this work is concentrated in tests/test_observability_and_status.py
+  for build_workspace_snapshot/read_session_view and tests/test_web_snapshot_lockfree.py
+  for lock-free snapshot behavior and web payload shape. No product ambiguity remains
+  for implementation: next stage should add a new /api/stream SSE endpoint, push workspace/session
+  updates on change instead of unconditional polling while idle, keep JSON polling
+  endpoints working as compatibility fallback, preserve selected task/subagent state
+  across reconnects, and add focused tests for SSE streaming, fallback, reconnect,
+  and idle-load behavior. Tests run during grooming: none beyond targeted code inspection;
+  this stage did not implement or verify runtime behavior.'
+feedback: 'Grooming passed after tightening the task record in .litehive/tasks/T-0225-web-dashboard-live-agent-output-streaming-via-sse/task.yaml.
+  I set pm_complexity=moderate and planned_effort=m, rewrote the goal to explicitly
+  preserve polling as a fallback path, replaced the original acceptance criteria with
+  5 observable outcomes, added 3 constraints, and added a 4-step implementation plan.
+  Repo evidence reviewed: litehive/web/__init__.py currently exposes only GET /api/snapshot
+  and GET /api/session; litehive/web/templates/index.html currently drives the dashboard
+  with refreshSnapshot() plus setInterval(..., 1500), so there is not yet any SSE/EventSource
+  path to reuse. Existing test coverage relevant to this work is concentrated in tests/test_observability_and_status.py
+  for build_workspace_snapshot/read_session_view and tests/test_web_snapshot_lockfree.py
+  for lock-free snapshot behavior and web payload shape. No product ambiguity remains
+  for implementation: next stage should add a new /api/stream SSE endpoint, push workspace/session
+  updates on change instead of unconditional polling while idle, keep JSON polling
+  endpoints working as compatibility fallback, preserve selected task/subagent state
+  across reconnects, and add focused tests for SSE streaming, fallback, reconnect,
+  and idle-load behavior. Tests run during grooming: none beyond targeted code inspection;
+  this stage did not implement or verify runtime behavior.'
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 113
+hook_results: []
+created_at: '2026-04-08T18:39:35+00:00'

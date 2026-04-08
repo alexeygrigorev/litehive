@@ -7,13 +7,13 @@ engine: null
 model: null
 mode: implementation
 pipeline_mode: full
-status: queued
-pipeline_status: backlog
+status: in_progress
+pipeline_status: commit_to_git
 priority: medium
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-08T06:05:09+00:00'
-updated_at: '2026-04-08T06:05:09+00:00'
+updated_at: '2026-04-08T18:47:28+00:00'
 goal: Replace the 1.5-second polling mechanism with Server-Sent Events (SSE) for real-time
   updates. Add an SSE endpoint that streams workspace state changes and agent output
   as they happen. Keep polling as fallback for browsers that don't support SSE.
@@ -27,7 +27,35 @@ acceptance_criteria:
 constraints: []
 plan: []
 human_checkpoints: []
-subagents: []
+subagents:
+- id: SA-0001
+  role: planner
+  engine: codex
+  status: completed
+  path: subagents/SA-0001-planner
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0002
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0002-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0003
+  role: qa
+  engine: codex
+  status: completed
+  path: subagents/SA-0003-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0004
+  role: reviewer
+  engine: codex
+  status: completed
+  path: subagents/SA-0004-reviewer
+  sandboxed: false
+  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0225 web-dashboard-live-agent-output-streaming-via-sse'
@@ -35,8 +63,8 @@ git:
   checkpoint_base_sha: null
   checkpoint_attempts: 0
   rolled_back_checkpoint_attempt: null
-  worktree_path: null
   merge_agent_attempts: 0
+  worktree_path: null
 retry_policy:
   max_retries: null
   stage_retry_limit: null

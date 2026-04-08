@@ -1,0 +1,97 @@
+- role: planner
+  step: grooming
+  verdict: pass
+  message: 'Grooming passed after tightening the task record in .litehive/tasks/T-0225-web-dashboard-live-agent-output-streaming-via-sse/task.yaml.
+    I set pm_complexity=moderate and planned_effort=m, rewrote the goal to explicitly
+    preserve polling as a fallback path, replaced the original acceptance criteria
+    with 5 observable outcomes, added 3 constraints, and added a 4-step implementation
+    plan. Repo evidence reviewed: litehive/web/__init__.py currently exposes only
+    GET /api/snapshot and GET /api/session; litehive/web/templates/index.html currently
+    drives the dashboard with refreshSnapshot() plus setInterval(..., 1500), so there
+    is not yet any SSE/EventSource path to reuse. Existing test coverage relevant
+    to this work is concentrated in tests/test_observability_and_status.py for build_workspace_snapshot/read_session_view
+    and tests/test_web_snapshot_lockfree.py for lock-free snapshot behavior and web
+    payload shape. No product ambiguity remains for implementation: next stage should
+    add a new /api/stream SSE endpoint, push workspace/session updates on change instead
+    of unconditional polling while idle, keep JSON polling endpoints working as compatibility
+    fallback, preserve selected task/subagent state across reconnects, and add focused
+    tests for SSE streaming, fallback, reconnect, and idle-load behavior. Tests run
+    during grooming: none beyond targeted code inspection; this stage did not implement
+    or verify runtime behavior.'
+  files_changed: []
+  created_at: '2026-04-08T18:39:24+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Implemented SSE-based web dashboard live updates in litehive/web with
+    a new GET /api/stream endpoint and shared WorkspaceStreamMonitor fingerprint scanner.
+    The stream sends an initial snapshot event, emits snapshot update events only
+    when the workspace fingerprint changes, and emits session events when selected
+    transcript/stdout/stderr artifacts change. The existing /api/snapshot and /api/session
+    polling endpoints were preserved unchanged as compatibility fallback paths. Updated
+    the dashboard frontend template to prefer EventSource, reconnect using the current
+    task_id/subagent_id selection, render streamed snapshot/session payloads in place,
+    and fall back to polling when EventSource is unavailable or the SSE channel cannot
+    be established for a sustained period. Verified with focused tests: uv run pytest
+    tests/test_web_snapshot_lockfree.py -q (13 passed). Added endpoint-level coverage
+    for initial/update snapshot SSE events, live session artifact SSE updates, idle-client
+    behavior proving snapshots are not rebuilt repeatedly while no changes occur,
+    and a frontend template assertion confirming EventSource plus polling fallback
+    wiring. Also ran uv run python -m py_compile litehive/web/__init__.py successfully.'
+  files_changed: []
+  created_at: '2026-04-08T18:44:44+00:00'
+- role: qa
+  step: testing
+  verdict: pass
+  message: 'Verified the SSE dashboard implementation against the task acceptance
+    criteria. Ran focused checks only: uv run pytest tests/test_web_snapshot_lockfree.py
+    -q (13 passed in 2.62s) and uv run python -m py_compile litehive/web/__init__.py
+    (passed). Evidence: GET /api/stream now returns text/event-stream and emits an
+    initial snapshot plus later snapshot update events only when the workspace fingerprint
+    changes; this is covered by test_sse_stream_emits_initial_and_changed_snapshot_only
+    and by WorkspaceStreamMonitor in litehive/web/__init__.py. Live transcript/stdout/stderr
+    streaming is covered by test_sse_stream_pushes_live_session_artifact_updates,
+    which updates stdout/stderr artifacts after the stream is open and observes a
+    pushed session event with changed_artifacts=[stderr, stdout] without polling.
+    Fallback remains intact because /api/snapshot and /api/session are unchanged server
+    paths and the frontend template still contains startPolling with EventSource-gated
+    startup; test_render_index_prefers_sse_with_polling_fallback confirms the SSE
+    path and polling fallback wiring are both present. Reconnection behavior is supported
+    by native EventSource reconnect plus server-sent retry: 2000 and frontend logic
+    that keeps the current task_id/subagent_id in buildStreamUrl(), marks transport
+    as reconnecting/degraded on errors, and falls back to polling only after sustained
+    SSE failure while preserving current selection. Idle-load reduction is covered
+    by test_sse_idle_client_waits_without_rebuilding_snapshots, which monkeypatches
+    build_workspace_snapshot and confirms an idle connected client does not trigger
+    repeated snapshot rebuilds. No blocking issues found.'
+  files_changed: []
+  created_at: '2026-04-08T18:46:09+00:00'
+- role: reviewer
+  step: accepting
+  verdict: pass
+  message: 'Accepted after reviewer verification. I inspected the implementation in
+    litehive/web/__init__.py and litehive/web/templates/index.html and reran the focused
+    checks: uv run pytest tests/test_web_snapshot_lockfree.py -q (13 passed in 2.60s)
+    and uv run python -m py_compile litehive/web/__init__.py (passed). Evidence for
+    criterion 1: GET /api/stream is implemented as an SSE endpoint with Content-Type
+    text/event-stream, emits retry: 2000, sends an initial snapshot event, and later
+    snapshot update events only when WorkspaceStreamMonitor detects a workspace signature
+    change; test_sse_stream_emits_initial_and_changed_snapshot_only covers the initial
+    and changed-only behavior. Evidence for criterion 2: the stream can be scoped
+    by task_id/subagent_id and read_session_view-backed transcript/stdout/stderr artifacts
+    are pushed as session events when files change; test_sse_stream_pushes_live_session_artifact_updates
+    confirms stdout/stderr updates arrive over SSE without waiting for polling. Evidence
+    for criterion 3: the existing /api/snapshot and /api/session endpoints remain
+    in place, and the frontend prefers EventSource but retains startPolling fallback
+    when EventSource is unavailable or SSE establishment fails; test_render_index_prefers_sse_with_polling_fallback
+    covers this wiring. Evidence for criterion 4: the frontend rebuilds the stream
+    URL from the current task/subagent selection, restarts the stream when selection
+    changes, relies on native EventSource reconnect, marks reconnecting/degraded transport
+    states on errors, and only falls back to polling after sustained failure, preserving
+    current selection context across reconnect attempts. Evidence for criterion 5:
+    idle clients no longer force repeated snapshot rebuilds; WorkspaceStreamMonitor
+    waits on change notifications, and test_sse_idle_client_waits_without_rebuilding_snapshots
+    confirms an idle open stream does not repeatedly call build_workspace_snapshot.
+    No acceptance blockers found.'
+  files_changed: []
+  created_at: '2026-04-08T18:47:18+00:00'

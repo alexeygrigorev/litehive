@@ -7,13 +7,13 @@ engine: null
 model: null
 mode: implementation
 pipeline_mode: full
-status: in_progress
-pipeline_status: commit_to_git
+status: done
+pipeline_status: done
 priority: medium
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-08T06:05:04+00:00'
-updated_at: '2026-04-08T18:35:43+00:00'
+updated_at: '2026-04-08T18:37:26+00:00'
 goal: Enhance the task detail panel in the web dashboard to show all task information
   (matching litehive show output) and allow inline editing of task properties. Add
   views for task events timeline, full report history, and recovery artifacts.
@@ -110,16 +110,16 @@ subagents:
 - id: SA-0012
   role: merge-resolver
   engine: claude
-  status: running
+  status: completed
   path: subagents/SA-0012-merge-resolver
   sandboxed: false
   sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0224 web-dashboard-enhanced-task-detail-views-with'
-  commit_sha: null
-  checkpoint_base_sha: null
-  checkpoint_attempts: 0
+  commit_sha: f8091eb3de57cb63bcb85dafc173d1732c7d89cb
+  checkpoint_base_sha: 352db2a52b39b37b24cfc0502bf5e5cfe7f1b179
+  checkpoint_attempts: 1
   rolled_back_checkpoint_attempt: null
   merge_agent_attempts: 1
   worktree_path: null

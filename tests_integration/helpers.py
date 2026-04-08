@@ -146,6 +146,45 @@ def assert_successful_stage_result(engine_name: str, *, cwd: Path) -> None:
     assert report.tests == {"added": 0, "passing": 0}
 
 
+def assert_nudge_verdict_submission(engine_name: str, *, cwd: Path) -> None:
+    """Verify the nudge flow: run engine, then nudge to submit verdict via CLI."""
+    from litehive.engines import extract_engine_continuation
+    from litehive.tasks import create_task, load_task_thread, require_task, set_active_task
+
+    require_real_engine(engine_name)
+
+    task = create_task(cwd, title=f"{engine_name} nudge task", auto_commit=False)
+    set_active_task(cwd, task.id)
+
+    # Step 1: initial run
+    engine, first_run = execute_engine_prompt(
+        engine_name,
+        prompt="Reply with: I am done. Do not call any tools.",
+        cwd=cwd,
+    )
+    assert first_run.exit_code == 0, first_run.stderr
+
+    # Step 2: nudge — submit verdict via litehive report CLI
+    _, nudge_run = execute_engine_prompt(
+        engine_name,
+        prompt=(
+            f"Run this command exactly once:\n\n"
+            f"  litehive report --task-id {task.id} --verdict pass --role swe "
+            f"--step implementing --workspace {cwd} "
+            f'--message "{engine_name} nudge verdict submitted"'
+        ),
+        cwd=cwd,
+    )
+    assert nudge_run.exit_code == 0, nudge_run.stderr
+
+    # Step 3: verify verdict persisted
+    thread = load_task_thread(cwd, require_task(cwd, task.id))
+    verdicts = [c for c in thread if c.verdict != "comment"]
+    assert len(verdicts) >= 1, f"Expected verdict from {engine_name}, got: {thread}"
+    assert verdicts[-1].verdict == "pass"
+    assert verdicts[-1].role == "swe"
+
+
 def cli_command(*args: str, cwd: Path) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         [sys.executable, "-m", "litehive.main", *args],

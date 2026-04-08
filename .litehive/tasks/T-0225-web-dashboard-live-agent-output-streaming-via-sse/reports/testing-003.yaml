@@ -1,0 +1,63 @@
+task_id: T-0225
+step: testing
+verdict: pass
+summary: 'Verified the SSE dashboard implementation against the task acceptance criteria.
+  Ran focused checks only: uv run pytest tests/test_web_snapshot_lockfree.py -q (13
+  passed in 2.62s) and uv run python -m py_compile litehive/web/__init__.py (passed).
+  Evidence: GET /api/stream now returns text/event-stream and emits an initial snapshot
+  plus later snapshot update events only when the workspace fingerprint changes; this
+  is covered by test_sse_stream_emits_initial_and_changed_snapshot_only and by WorkspaceStreamMonitor
+  in litehive/web/__init__.py. Live transcript/stdout/stderr streaming is covered
+  by test_sse_stream_pushes_live_session_artifact_updates, which updates stdout/stderr
+  artifacts after the stream is open and observes a pushed session event with changed_artifacts=[stderr,
+  stdout] without polling. Fallback remains intact because /api/snapshot and /api/session
+  are unchanged server paths and the frontend template still contains startPolling
+  with EventSource-gated startup; test_render_index_prefers_sse_with_polling_fallback
+  confirms the SSE path and polling fallback wiring are both present. Reconnection
+  behavior is supported by native EventSource reconnect plus server-sent retry: 2000
+  and frontend logic that keeps the current task_id/subagent_id in buildStreamUrl(),
+  marks transport as reconnecting/degraded on errors, and falls back to polling only
+  after sustained SSE failure while preserving current selection. Idle-load reduction
+  is covered by test_sse_idle_client_waits_without_rebuilding_snapshots, which monkeypatches
+  build_workspace_snapshot and confirms an idle connected client does not trigger
+  repeated snapshot rebuilds. No blocking issues found.'
+feedback: 'Verified the SSE dashboard implementation against the task acceptance criteria.
+  Ran focused checks only: uv run pytest tests/test_web_snapshot_lockfree.py -q (13
+  passed in 2.62s) and uv run python -m py_compile litehive/web/__init__.py (passed).
+  Evidence: GET /api/stream now returns text/event-stream and emits an initial snapshot
+  plus later snapshot update events only when the workspace fingerprint changes; this
+  is covered by test_sse_stream_emits_initial_and_changed_snapshot_only and by WorkspaceStreamMonitor
+  in litehive/web/__init__.py. Live transcript/stdout/stderr streaming is covered
+  by test_sse_stream_pushes_live_session_artifact_updates, which updates stdout/stderr
+  artifacts after the stream is open and observes a pushed session event with changed_artifacts=[stderr,
+  stdout] without polling. Fallback remains intact because /api/snapshot and /api/session
+  are unchanged server paths and the frontend template still contains startPolling
+  with EventSource-gated startup; test_render_index_prefers_sse_with_polling_fallback
+  confirms the SSE path and polling fallback wiring are both present. Reconnection
+  behavior is supported by native EventSource reconnect plus server-sent retry: 2000
+  and frontend logic that keeps the current task_id/subagent_id in buildStreamUrl(),
+  marks transport as reconnecting/degraded on errors, and falls back to polling only
+  after sustained SSE failure while preserving current selection. Idle-load reduction
+  is covered by test_sse_idle_client_waits_without_rebuilding_snapshots, which monkeypatches
+  build_workspace_snapshot and confirms an idle connected client does not trigger
+  repeated snapshot rebuilds. No blocking issues found.'
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 72
+hook_results: []
+created_at: '2026-04-08T18:46:16+00:00'
