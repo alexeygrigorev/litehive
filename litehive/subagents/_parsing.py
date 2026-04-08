@@ -2,55 +2,9 @@
 
 from pathlib import Path
 
-from litehive.engines.base import _extract_stage_result_submission
-from litehive.models import StageReport, StageResultSubmission, TaskRecord, cap_feedback
+from litehive.models import StageReport, TaskRecord, cap_feedback
 
 from litehive.subagents._models import SubagentResult
-
-
-def _extract_stage_metadata(result: SubagentResult) -> dict:
-    """Extract non-verdict metadata from STAGE_RESULT JSON in transcript."""
-    # Try rendered transcript first, then raw transcript, then raw stdout.
-    candidates: list[str] = []
-    if result.execution is not None:
-        from litehive.engines import get_engine
-
-        engine = get_engine(result.ref.engine)
-        rendered = engine.render_transcript(result.execution)
-        if rendered:
-            candidates.append(rendered)
-    if result.transcript:
-        candidates.append(result.transcript)
-    if result.execution is not None and result.execution.stdout:
-        candidates.append(result.execution.stdout)
-    if not candidates:
-        return {}
-
-    submission = None
-    for text in candidates:
-        submission = _extract_stage_result_submission(text)
-        if isinstance(submission, StageResultSubmission):
-            break
-    if not isinstance(submission, StageResultSubmission):
-        return {}
-
-    metadata: dict = {}
-    # files_changed is intentionally not extracted from agent output;
-    # it is populated from git diff at commit time.
-    if submission.follow_up_tasks:
-        metadata["follow_up_tasks"] = submission.follow_up_tasks
-    if submission.warnings:
-        metadata["warnings"] = submission.warnings
-    task_update_dict = (
-        submission.task_update.model_dump(exclude_unset=True) if submission.task_update else {}
-    )
-    if submission.acceptance_criteria and "acceptance_criteria" not in task_update_dict:
-        task_update_dict["acceptance_criteria"] = submission.acceptance_criteria
-    if task_update_dict:
-        metadata["task_update"] = task_update_dict
-    if submission.tests:
-        metadata["tests"] = {"added": submission.tests.added, "passing": submission.tests.passing}
-    return metadata
 
 
 def stage_report_from_subagent(
@@ -68,9 +22,6 @@ def stage_report_from_subagent(
         step_comments = [c for c in thread if c.step == step and c.verdict != "comment"]
         if step_comments:
             latest = step_comments[-1]
-            # Verdict comes from CLI; merge non-verdict metadata from STAGE_RESULT
-            # JSON in transcript if available.
-            metadata = _extract_stage_metadata(result)
             return StageReport(
                 task_id=task.id,
                 step=step,  # type: ignore[arg-type]
@@ -79,10 +30,6 @@ def stage_report_from_subagent(
                 if latest.message
                 else f"{step} {latest.verdict}",
                 feedback=latest.message,
-                follow_up_tasks=metadata.get("follow_up_tasks", []),
-                task_update=metadata.get("task_update", {}),
-                tests=metadata.get("tests", {}),
-                warnings=metadata.get("warnings", []),
             )
 
     # Step 2: Resource limit events produce a blocked verdict.

@@ -45,7 +45,7 @@ def test_codex_can_invoke_litehive_report_and_persist_thread_comment(integration
         "After it succeeds, reply with exactly this and nothing else:\n"
         "SUMMARY: report invoked\n"
         "STAGE_RESULT:\n"
-        '{"verdict":"pass","summary":"report invoked","files_changed":[],"tests":{"added":0,"passing":0},"warnings":[],"follow_up_tasks":[],"acceptance_criteria":[]}'
+        '{"verdict":"pass","summary":"report invoked","files_changed":[],"tests":{"added":0,"passing":0},"warnings":[],"acceptance_criteria":[]}'
     )
     engine, execution = execute_engine_prompt("codex", prompt=prompt, cwd=integration_root)
     assert execution.exit_code == 0, execution.transcript

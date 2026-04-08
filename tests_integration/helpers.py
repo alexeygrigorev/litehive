@@ -60,7 +60,6 @@ def smoke_prompt(engine_name: str) -> str:
                 "files_changed": [],
                 "tests": {"added": 0, "passing": 0},
                 "warnings": [],
-                "follow_up_tasks": [],
                 "acceptance_criteria": [],
             }
         )

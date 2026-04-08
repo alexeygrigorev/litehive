@@ -21,7 +21,6 @@ def test_valid_submission_produces_structured_report() -> None:
         "files_changed": ["src/foo.py", "tests/test_foo.py"],
         "tests": {"added": 3, "passing": 10},
         "warnings": ["minor lint issue"],
-        "follow_up_tasks": [],
         "acceptance_criteria": [],
     }
     report = parse_stage_report_text(

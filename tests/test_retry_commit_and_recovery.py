@@ -870,7 +870,7 @@ def test_run_next_task_passes_structured_continuation_handoff_across_engine_swit
     assert "- Kind: engine_switch" in opencode_prompt
     assert "- Reason: usage limit reached" in opencode_prompt
     assert "- Engine path: codex -> opencode" in opencode_prompt
-    assert "- Engine thread id: thread_codex_123" in opencode_prompt
+    assert "- Engine resume id: thread_codex_123" in opencode_prompt
     task = get_task(tmp_path, "T-0001")
     assert task is not None
     assert task.runtime.continuation_handoff is None

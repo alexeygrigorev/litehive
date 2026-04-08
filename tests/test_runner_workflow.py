@@ -350,184 +350,6 @@ def test_runner_does_not_override_acceptance_verdict(tmp_path: Path) -> None:
     assert result.final_status == "done"
 
 
-def test_runner_persists_non_blocking_follow_up_and_completes_current_task(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
-    task = create_task(tmp_path, title="Ship feature behavior", auto_commit=False)
-
-    def executor(task, step):  # type: ignore[no-untyped-def]
-        if step == "accepting":
-            return StageReport(
-                task_id=task.id,
-                step=step,
-                verdict="pass",
-                summary="acceptance passed with separate follow-up",
-                follow_up_tasks=[
-                    {
-                        "title": "Document follow-up feature behavior",
-                        "rationale": "Acceptance found documentation work that does not block shipment.",
-                        "blocking": False,
-                        "task_type": "research",
-                    }
-                ],
-            )
-        return StageReport(task_id=task.id, step=step, verdict="pass", summary=f"{step} ok", files_changed=["app.txt"], tests={"added": 1, "passing": 1})
-
-    runner = TaskExecutionRunner(tmp_path, executor)
-    result = runner.run(task)
-
-    assert result.final_status == "done"
-    updated = get_task(tmp_path, task.id)
-    assert updated is not None
-    assert updated.runtime.execution_status == "done"
-    follow_up = get_task(tmp_path, "T-0002")
-    assert follow_up is not None
-    assert follow_up.status == "queued"
-    assert follow_up.pipeline_status == "backlog"
-    assert follow_up.created_from is not None
-    assert follow_up.created_from.task_id == task.id
-    assert follow_up.created_from.stage == "accepting"
-    assert follow_up.created_from.blocking is False
-    assert (
-        follow_up.created_from.rationale
-        == "Acceptance found documentation work that does not block shipment."
-    )
-    assert load_state(tmp_path).queue == [follow_up.id]
-
-    accepting_report = yaml.safe_load(
-        (
-            tmp_path
-            / ".litehive"
-            / "tasks"
-            / f"{task.id}-{task.slug}"
-            / "reports"
-            / "accepting-004.yaml"
-        ).read_text(encoding="utf-8")
-    )
-    assert accepting_report["created_follow_up_task_ids"] == [follow_up.id]
-
-
-def test_runner_persists_blocking_follow_up_and_blocks_current_task(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
-    task = create_task(tmp_path, title="Ship queue behavior")
-
-    def executor(task, step):  # type: ignore[no-untyped-def]
-        if step == "grooming":
-            return StageReport(
-                task_id=task.id,
-                step=step,
-                verdict="blocked",
-                summary="blocked by separate prerequisite work",
-                follow_up_tasks=[
-                    {
-                        "title": "Add missing prerequisite contract",
-                        "rationale": "PM identified prerequisite contract work that must land first.",
-                        "blocking": True,
-                        "task_type": "bugfix",
-                    }
-                ],
-            )
-        return StageReport(task_id=task.id, step=step, verdict="pass", summary=f"{step} ok", files_changed=["app.txt"], tests={"added": 1, "passing": 1})
-
-    runner = TaskExecutionRunner(tmp_path, executor)
-    result = runner.run(task)
-
-    assert result.final_status == "flagged"
-    updated = get_task(tmp_path, task.id)
-    assert updated is not None
-    assert updated.status == "flagged"
-    assert updated.runtime.last_outcome.kind == "blocked"
-    follow_up = get_task(tmp_path, "T-0002")
-    assert follow_up is not None
-    assert follow_up.status == "queued"
-    assert follow_up.created_from is not None
-    assert follow_up.created_from.stage == "grooming"
-    assert follow_up.created_from.blocking is True
-    assert load_state(tmp_path).queue == [follow_up.id]
-
-
-def test_run_next_task_executes_follow_up_created_by_acceptance_on_later_iteration(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    ensure_workspace(tmp_path)
-    original = create_task(tmp_path, title="Ship feature behavior", auto_commit=False)
-
-    def fake_run(
-        self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None
-    ):  # type: ignore[no-untyped-def]
-        if task.id == original.id and task.pipeline_status == "accepting":
-            import json
-
-            # Submit CLI verdict for acceptance.
-            _write_cli_verdict(
-                tmp_path,
-                task,
-                "accepting",
-                verdict="pass",
-                message="acceptance passed with separate follow-up",
-                files_changed=["litehive/runner.py"],
-            )
-            # STAGE_RESULT JSON carries follow-up metadata.
-            stage_result = json.dumps({
-                "verdict": "pass",
-                "summary": "acceptance passed with separate follow-up",
-                "files_changed": ["litehive/runner.py"],
-                "follow_up_tasks": [
-                    {
-                        "title": "Document follow-up feature behavior",
-                        "rationale": "Acceptance found documentation work that should run next.",
-                        "blocking": False,
-                    }
-                ],
-            })
-            return SubagentResult(
-                ref=SubagentRef(
-                    id="SA-accepting",
-                    role=role,
-                    engine="codex",
-                    status="completed",
-                    path="subagents/accepting",
-                ),
-                execution=CLIExecutionResult(
-                    adapter="codex",
-                    argv=("codex", "exec"),
-                    cwd=tmp_path,
-                    exit_code=0,
-                    stdout=f"STAGE_RESULT:\n{stage_result}\n",
-                    stderr="",
-                ),
-                transcript="",
-                exit_code=0,
-            )
-        return _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
-
-    monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_run)
-
-    first = run_next_task(tmp_path)
-
-    assert first.task is not None
-    assert first.task.id == original.id
-    assert first.result is not None
-    assert first.result.final_status == "done"
-    follow_up = require_task(tmp_path, "T-0002")
-    assert load_state(tmp_path).queue == [follow_up.id]
-
-    # Keep the follow-up on the focused non-commit path for this test.
-    follow_up.git.auto_commit = False
-    save_task(tmp_path, follow_up)
-
-    second = run_next_task(tmp_path)
-
-    assert second.task is not None
-    assert second.task.id == follow_up.id
-    assert second.result is not None
-    assert second.result.final_status == "done"
-    assert load_state(tmp_path).queue == []
-    refreshed_follow_up = require_task(tmp_path, follow_up.id)
-    assert refreshed_follow_up.status == "done"
-    assert refreshed_follow_up.created_from is not None
-    assert refreshed_follow_up.created_from.task_id == original.id
-
-
 def test_unexpected_dirty_paths_computes_allowed_set_once(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Optimize commit dirty-path scan")
@@ -2612,7 +2434,7 @@ def test_parse_stage_report_text_fails_on_text_only_transcript() -> None:
 
 
 def test_parse_stage_report_text_no_text_follow_up_extraction() -> None:
-    """Text-only FOLLOW_UP_TASKS section is no longer parsed."""
+    """Text-only transcript without structured STAGE_RESULT produces a fail verdict."""
     report = parse_stage_report_text(
         task_id="T-0003",
         step="accepting",
@@ -2626,8 +2448,6 @@ def test_parse_stage_report_text_no_text_follow_up_extraction() -> None:
     )
 
     assert report.verdict == "fail"
-    # follow_up_tasks are not extracted from text format
-    assert report.follow_up_tasks == []
 
 
 def test_stage_report_from_subagent_fails_without_cli_verdict(tmp_path: Path) -> None:
@@ -2675,7 +2495,6 @@ def test_stage_prompt_includes_shared_process_and_profile_overlay(tmp_path: Path
     assert "Task: T-" in prompt
     assert "Stage: testing" in prompt
     assert "Role focus:" in prompt
-    assert "VERDICT:" in prompt
     assert "litehive report" in prompt
 
 

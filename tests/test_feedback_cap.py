@@ -34,7 +34,7 @@ def test_parse_stage_report_text_caps_feedback_structured() -> None:
         long_preamble + "\n"
         "STAGE_RESULT:\n"
         '{"verdict":"pass","summary":"done","files_changed":["foo.py"],'
-        '"tests":{"added":1,"passing":1},"warnings":[],"follow_up_tasks":[],'
+        '"tests":{"added":1,"passing":1},"warnings":[],'
         '"acceptance_criteria":[]}\n'
     )
     report = parse_stage_report_text(
