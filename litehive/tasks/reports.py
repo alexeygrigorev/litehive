@@ -1,18 +1,17 @@
-"""Recovery evidence collection, recovery reports, and task thread operations."""
+"""Recovery evidence, thread comments, and report helpers."""
 
 from pathlib import Path
 
 import yaml
 
+from litehive.git_ops import GitError, current_head, is_git_repo, status_porcelain
 from litehive.models import (
     RecoveryAction,
     RecoveryEvidenceItem,
     RecoveryReport,
     TaskRecord,
-    utcnow,
 )
 
-from .crud import get_task_worktree_path
 from .paths import (
     _latest_path,
     _latest_run_all_log_path,
@@ -22,9 +21,9 @@ from .paths import (
     _status_entry_paths,
     task_dir,
     task_file,
-    task_recovery_dir,
     task_runtime_file,
     task_thread_file,
+    task_recovery_dir,
 )
 from .persistence import _atomic_write_text
 
@@ -35,8 +34,9 @@ def collect_recovery_evidence(
     *,
     stage: str | None = None,
 ) -> list[RecoveryEvidenceItem]:
-    from litehive.git_ops import GitError, current_head, is_git_repo, status_porcelain
     from litehive.observability import engine_monitoring_file, load_engine_monitoring
+
+    from .crud import get_task_worktree_path
 
     evidence: list[RecoveryEvidenceItem] = []
     task_path = task_file(root, task)
@@ -246,7 +246,7 @@ def record_recovery_report(
     return path
 
 
-def append_thread_comment(root: Path, task: TaskRecord, comment: "object") -> None:
+def append_thread_comment(root: Path, task: TaskRecord, comment: "TaskThreadComment") -> None:
     from litehive.models import TaskThreadComment  # noqa: F811
 
     path = task_thread_file(root, task)
@@ -259,7 +259,7 @@ def append_thread_comment(root: Path, task: TaskRecord, comment: "object") -> No
     path.write_text(yaml.safe_dump(existing, sort_keys=False), encoding="utf-8")
 
 
-def load_task_thread(root: Path, task: TaskRecord) -> list:
+def load_task_thread(root: Path, task: TaskRecord) -> list["TaskThreadComment"]:
     from litehive.models import TaskThreadComment
 
     path = task_thread_file(root, task)
@@ -283,3 +283,4 @@ def render_task_thread(root: Path, task: TaskRecord) -> str:
         if c.files_changed:
             lines.append(f"Files: {', '.join(c.files_changed)}")
     return "\n".join(lines)
+

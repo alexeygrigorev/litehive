@@ -21,6 +21,7 @@ from litehive.models import (
     TaskRecord,
     TaskRuntime,
     UpstreamContributionOrigin,
+    WorkspaceState,
     utcnow,
 )
 
@@ -42,6 +43,27 @@ from .persistence import (
 from .templates import apply_task_template_defaults, render_task_brief, task_brief_file
 
 logger = logging.getLogger(__name__)
+
+
+def _highest_task_number_on_disk(root: Path) -> int:
+    existing = []
+    for child in tasks_root(root).iterdir():
+        if not child.is_dir():
+            continue
+        match = re.match(r"^T-(\d{4})-", child.name)
+        if match:
+            existing.append(int(match.group(1)))
+    return max(existing, default=0)
+
+
+def _reserve_next_task_numbers(root, state, *, count: int = 1) -> list[int]:
+    if count < 1:
+        raise ValueError("count must be 1 or greater")
+    if state.next_task_number <= 0:
+        state.next_task_number = _highest_task_number_on_disk(root)
+    start = state.next_task_number + 1
+    state.next_task_number += count
+    return list(range(start, start + count))
 
 
 def _ensure_runtime_ignored(root: Path) -> None:
@@ -125,27 +147,6 @@ def _load_task_record_file(path: Path) -> TaskRecord:
     return TaskRecord(**data)
 
 
-def _highest_task_number_on_disk(root: Path) -> int:
-    existing = []
-    for child in tasks_root(root).iterdir():
-        if not child.is_dir():
-            continue
-        match = re.match(r"^T-(\d{4})-", child.name)
-        if match:
-            existing.append(int(match.group(1)))
-    return max(existing, default=0)
-
-
-def _reserve_next_task_numbers(root, state, *, count: int = 1) -> list[int]:
-    if count < 1:
-        raise ValueError("count must be 1 or greater")
-    if state.next_task_number <= 0:
-        state.next_task_number = _highest_task_number_on_disk(root)
-    start = state.next_task_number + 1
-    state.next_task_number += count
-    return list(range(start, start + count))
-
-
 def create_task(
     root: Path,
     *,
@@ -167,8 +168,6 @@ def create_task(
     github_origin: GitHubOrigin | None = None,
     priority: str | None = None,
 ) -> TaskRecord:
-    from .queue_ops import _validate_task_dependencies
-
     ensure_workspace(root)
     if retry_limit is not None and retry_limit < 0:
         raise ValueError("Retry limit must be 0 or greater")
@@ -184,6 +183,8 @@ def create_task(
         raise ValueError(f"Unsupported planned effort '{planned_effort}'")
     if priority is not None and priority not in VALID_TASK_PRIORITIES:
         raise ValueError(f"Unsupported priority '{priority}'")
+    from .queue_ops import _validate_task_dependencies
+
     with _workspace_lock(root):
         state = load_state(root)
         task_id = f"T-{_reserve_next_task_numbers(root, state)[0]:04d}"
@@ -372,7 +373,7 @@ def list_tasks(root: Path, *, include_runtime: bool = True) -> list[TaskRecord]:
 def list_tasks_state_first(
     root: Path,
     *,
-    state=None,
+    state: WorkspaceState | None = None,
     include_runtime: bool = False,
 ) -> list[TaskRecord]:
     task_by_id: dict[str, TaskRecord] = {}

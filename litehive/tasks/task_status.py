@@ -1,5 +1,6 @@
-"""Task lifecycle commands: requeue, resume, abandon, close, park, update, stop, switch."""
+"""Task status transitions: requeue, resume, abandon, close, park, update, stop, switch."""
 
+import os
 import signal
 import threading
 import time
@@ -19,52 +20,262 @@ from .constants import (
     _RUNNER_LOCKS,
     _RUNNER_LOCKS_MUTEX,
 )
-from .crud import get_task, list_tasks, require_task, save_task
-from .locking import (
-    _ensure_future_task_mutation_allowed,
-    _persist_future_task_update,
-    _read_runner_lock_metadata,
-    _runner_lock_is_held,
-    _runner_pid_is_alive,
-    _workspace_lock,
-    workspace_mutation_guard,
-)
+from .locking import _workspace_lock
 from .models import StopTaskSummary, SwitchTaskSummary, WorkspaceConflictError
 from .normalization import (
-    implementation_entry_stage,
     missing_acceptance_criteria_reason,
     normalize_acceptance_criteria,
     normalize_human_checkpoints,
     normalize_task_text_list,
     reroute_stage_for_acceptance_criteria,
+    implementation_entry_stage,
 )
 from .paths import _latest_subagent_base, task_dir
-from .persistence import load_state, save_state
-from .queue_management import _enqueue_recovered_task, _reset_task_for_recovery, move_queued_task
-from .queue_ops import (
-    _is_task_eligible_for_execution,
-    _validate_single_active_task,
-    active_task_markers,
-)
-from .reports import append_thread_comment, record_recovery_report
-from .runtime_tracking import mark_engine_switch
-from .templates import apply_task_template_defaults
-from .workflow import (
-    _persist_task_and_state_without_runner_guard,
-    persist_task_and_state,
-)
 
-_CLOSE_OUTCOME_REASON_CODES = {"wont_do", "deferred", "duplicate", "execution_cancelled"}
 
-_CLOSE_REASON_CODE_LABELS: dict[str, str] = {
-    "wont_do": "Task closed as won't do.",
-    "deferred": "Task deferred.",
-    "duplicate": "Task closed as duplicate.",
-    "execution_cancelled": "Task abandoned via CLI.",
-}
+def _active_task_id_for_stop(root: Path, state: WorkspaceState) -> str:
+    from .queue_ops import _validate_single_active_task, active_task_markers
+
+    markers = active_task_markers(root, state)
+    if not markers:
+        raise ValueError("No active task to stop")
+    if len(markers) > 1:
+        _validate_single_active_task(root, state)
+    return next(iter(sorted(markers)))
+
+
+def _stop_active_task_without_runner_guard(root: Path, task_id: str) -> TaskRecord:
+    from .crud import require_task
+    from .persistence import load_state
+    from .recovery import _prepare_interrupted_task, interruption_journal_message
+    from .workflow import _persist_task_and_state_without_runner_guard
+
+    with _workspace_lock(root):
+        state = load_state(root)
+        active_task_id = _active_task_id_for_stop(root, state)
+        if active_task_id != task_id:
+            raise WorkspaceConflictError(
+                f"task {task_id} is no longer the active task in this workspace"
+            )
+        task = require_task(root, task_id)
+        if task.pipeline_status == "done":
+            raise ValueError(f"Task {task.id} is already done")
+        stage = task.runtime.current_stage.step or task.pipeline_status
+        _prepare_interrupted_task(
+            root,
+            task,
+            stage=stage,
+            summary=f"Execution interrupted via `litehive stop`. Resume from `{stage}`.",
+            reason="Task stopped via CLI",
+        )
+        task.status = "parked"
+        if stage == "commit_to_git":
+            task.status = "queued"
+        state.active_task_id = None
+        state.queue = [item for item in state.queue if item != task.id]
+        if task.status == "queued" and task.pipeline_status != "done":
+            state.queue.insert(0, task.id)
+        _persist_task_and_state_without_runner_guard(
+            root,
+            task=task,
+            state=state,
+            journal_message=interruption_journal_message(task),
+        )
+        return task
+
+
+def stop_current_task(
+    root: Path,
+    *,
+    wait_timeout_seconds: float = 5.0,
+    poll_interval_seconds: float = 0.1,
+) -> StopTaskSummary:
+    import sys
+
+    _tasks = sys.modules["litehive.tasks"]
+    from .crud import require_task
+    from .persistence import load_state
+    from .queue_ops import active_task_markers
+
+    state = load_state(root)
+    active_task_id = _active_task_id_for_stop(root, state)
+    runner_pid: int | None = None
+    if _tasks._runner_lock_is_held(root):
+        metadata = _tasks._read_runner_lock_metadata(root)
+        pid = metadata.pid
+        if _tasks._runner_pid_is_alive(pid):
+            runner_pid = int(pid)
+            _tasks.os.kill(runner_pid, signal.SIGINT)
+            deadline = time.monotonic() + max(wait_timeout_seconds, 0.0)
+            sleep_interval = max(poll_interval_seconds, 0.01)
+            while _tasks._runner_lock_is_held(root) and time.monotonic() < deadline:
+                time.sleep(sleep_interval)
+            if _tasks._runner_lock_is_held(root):
+                raise WorkspaceConflictError(
+                    f"runner for task {active_task_id} did not stop cleanly after SIGINT (pid={runner_pid})"
+                )
+            _tasks.recover_stale_runner_state(root)
+            state = load_state(root)
+            markers = active_task_markers(root, state)
+            if active_task_id not in markers:
+                return StopTaskSummary(
+                    task=require_task(root, active_task_id),
+                    runner_pid=runner_pid,
+                    signal_sent=True,
+                )
+        else:
+            raise WorkspaceConflictError(
+                f"runner for task {active_task_id} is active but has no live PID to signal cleanly"
+            )
+
+    task = _stop_active_task_without_runner_guard(root, active_task_id)
+    return StopTaskSummary(task=task, runner_pid=runner_pid, signal_sent=runner_pid is not None)
+
+
+def _effective_task_engine(root: Path, task: TaskRecord) -> str:
+    if task.runtime.active_subagent is not None:
+        return task.runtime.active_subagent.engine
+    if task.runtime.last_subagent is not None:
+        return task.runtime.last_subagent.engine
+    return task.engine or load_config(root).default_engine
+
+
+def _switch_prior_work_paths(root: Path, task: TaskRecord) -> list[str]:
+    paths: list[str] = []
+    handoff = task.runtime.continuation_handoff
+    for candidate in (
+        None if handoff is None else handoff.subagent_path,
+        None if handoff is None else handoff.transcript_path,
+        None if handoff is None else handoff.report_path,
+        None if handoff is None else handoff.session_path,
+        None if task.runtime.last_subagent is None else task.runtime.last_subagent.path,
+    ):
+        if candidate and candidate not in paths:
+            paths.append(candidate)
+    base = _latest_subagent_base(root, task)
+    if base is not None:
+        rel_path = str(base.relative_to(task_dir(root, task)))
+        if rel_path not in paths:
+            paths.append(rel_path)
+    return paths
+
+
+def _switch_thread_comment_message(
+    task: TaskRecord,
+    *,
+    reason: str,
+    previous_engine: str,
+    new_engine: str,
+    prior_work_paths: list[str],
+) -> str:
+    lines = [
+        f"Engine switch requested: {reason}",
+        f"engine: {previous_engine} -> {new_engine}",
+        f"resume_from: {task.pipeline_status}",
+    ]
+    if prior_work_paths:
+        lines.append("prior_work:")
+        lines.extend(f"- {path}" for path in prior_work_paths)
+    else:
+        lines.append("prior_work: no prior subagent artifacts recorded")
+    return "\n".join(lines)
+
+
+def switch_task_engine(root: Path, task_id: str, *, engine: str, reason: str) -> SwitchTaskSummary:
+    from .crud import require_task
+    from .persistence import load_state
+    from .queue_management import move_queued_task
+    from .reports import append_thread_comment
+    from .runtime_tracking import mark_engine_switch
+
+    if engine not in VALID_TASK_ENGINES:
+        raise ValueError(f"Unsupported engine '{engine}'")
+    if not reason.strip():
+        raise ValueError("Switch reason must not be empty")
+
+    task = require_task(root, task_id)
+    if task.pipeline_status == "done":
+        raise ValueError(f"Task {task.id} is already done")
+    if task.pipeline_status == "backlog":
+        raise ValueError(f"Task {task.id} is still in backlog and has no runnable stage to resume")
+
+    state = load_state(root)
+    was_active = state.active_task_id == task_id
+    runner_pid: int | None = None
+    signal_sent = False
+    if was_active:
+        stop_summary = stop_current_task(root)
+        task = stop_summary.task
+        runner_pid = stop_summary.runner_pid
+        signal_sent = stop_summary.signal_sent
+    else:
+        task = require_task(root, task_id)
+
+    previous_engine = _effective_task_engine(root, task)
+    update_task(
+        root,
+        task.id,
+        engine=engine,
+    )
+    task = require_task(root, task.id)
+    mark_engine_switch(
+        root,
+        task,
+        step=task.pipeline_status,
+        from_engine=previous_engine,
+        to_engine=engine,
+        reason=reason.strip(),
+    )
+    task = require_task(root, task.id)
+
+    if task.status == "queued":
+        move_queued_task(root, task.id, 1)
+        task = require_task(root, task.id)
+    elif task.status in {"interrupted", "parked", "flagged", "merge_failed", *CLOSED_TASK_STATUSES}:
+        task = resume_task(root, task.id, front=True)
+    else:
+        raise ValueError(
+            f"Task {task.id} is {task.status} and cannot be switched into a queued runnable state"
+        )
+
+    prior_work_paths = _switch_prior_work_paths(root, task)
+    from litehive.models import TaskThreadComment
+
+    append_thread_comment(
+        root,
+        task,
+        TaskThreadComment(
+            role="operator",
+            step=task.pipeline_status,
+            verdict="comment",
+            message=_switch_thread_comment_message(
+                task,
+                reason=reason.strip(),
+                previous_engine=previous_engine,
+                new_engine=engine,
+                prior_work_paths=prior_work_paths,
+            ),
+        ),
+    )
+    return SwitchTaskSummary(
+        task=task,
+        previous_engine=previous_engine,
+        new_engine=engine,
+        was_active=was_active,
+        runner_pid=runner_pid,
+        signal_sent=signal_sent,
+        prior_work_paths=prior_work_paths,
+    )
+
 
 
 def requeue_task(root: Path, task_id: str, *, front: bool = False) -> TaskRecord:
+    from .crud import require_task
+    from .locking import _ensure_future_task_mutation_allowed, _workspace_lock
+    from .persistence import load_state
+    from .queue_management import _reset_task_for_recovery
+    from .workflow import _persist_task_and_state_without_runner_guard
+
     with _workspace_lock(root):
         task = require_task(root, task_id)
         state = load_state(root)
@@ -92,6 +303,12 @@ def requeue_task(root: Path, task_id: str, *, front: bool = False) -> TaskRecord
 
 
 def resume_task(root: Path, task_id: str, *, front: bool = False) -> TaskRecord:
+    from .crud import require_task
+    from .locking import _ensure_future_task_mutation_allowed, _workspace_lock
+    from .persistence import load_state
+    from .queue_management import _reset_task_for_recovery
+    from .workflow import _persist_task_and_state_without_runner_guard
+
     with _workspace_lock(root):
         task = require_task(root, task_id)
         state = load_state(root)
@@ -127,6 +344,11 @@ def resume_task(root: Path, task_id: str, *, front: bool = False) -> TaskRecord:
 
 
 def abandon_task(root: Path, task_id: str) -> TaskRecord:
+    from .crud import require_task
+    from .locking import _ensure_future_task_mutation_allowed, _workspace_lock
+    from .persistence import load_state
+    from .workflow import _persist_task_and_state_without_runner_guard
+
     with _workspace_lock(root):
         task = require_task(root, task_id)
         state = load_state(root)
@@ -158,6 +380,16 @@ def abandon_task(root: Path, task_id: str) -> TaskRecord:
         return task
 
 
+_CLOSE_OUTCOME_REASON_CODES = {"wont_do", "deferred", "duplicate", "execution_cancelled"}
+
+_CLOSE_REASON_CODE_LABELS: dict[str, str] = {
+    "wont_do": "Task closed as won't do.",
+    "deferred": "Task deferred.",
+    "duplicate": "Task closed as duplicate.",
+    "execution_cancelled": "Task abandoned via CLI.",
+}
+
+
 def close_task(
     root: Path,
     task_id: str,
@@ -166,6 +398,11 @@ def close_task(
     reason: str | None = None,
     follow_up_task_id: str | None = None,
 ) -> TaskRecord:
+    from .crud import require_task
+    from .locking import _ensure_future_task_mutation_allowed, _workspace_lock
+    from .persistence import load_state
+    from .workflow import _persist_task_and_state_without_runner_guard
+
     """Mark a task as explicitly closed with a non-implementation outcome.
 
     Valid outcomes: ``wont_do``, ``deferred``, ``duplicate``, ``execution_cancelled``.
@@ -220,6 +457,11 @@ def close_task(
 
 
 def park_task(root: Path, task_id: str) -> TaskRecord:
+    from .crud import require_task
+    from .locking import _ensure_future_task_mutation_allowed, _workspace_lock
+    from .persistence import load_state
+    from .workflow import _persist_task_and_state_without_runner_guard
+
     """Mark a task as parked.
 
     The task is removed from the queue and set to status 'parked'.
@@ -272,6 +514,14 @@ def update_task(
     action: str | None | object = ...,
     journal_message: str | None = None,
 ) -> TaskRecord:
+    from .crud import require_task
+    from .locking import _ensure_future_task_mutation_allowed, _persist_future_task_update, _workspace_lock
+    from .persistence import load_state
+    from .queue_management import _reset_task_for_recovery
+    from .queue_ops import _validate_task_dependencies
+    from .templates import apply_task_template_defaults
+    from .workflow import _persist_task_and_state_without_runner_guard
+
     with _workspace_lock(root):
         state = load_state(root)
         task = require_task(root, task_id)
@@ -475,227 +725,4 @@ def update_task(
 update_task_metadata = update_task
 
 
-def _active_task_id_for_stop(root: Path, state: WorkspaceState) -> str:
-    markers = active_task_markers(root, state)
-    if not markers:
-        raise ValueError("No active task to stop")
-    if len(markers) > 1:
-        _validate_single_active_task(root, state)
-    return next(iter(sorted(markers)))
-
-
-def _stop_active_task_without_runner_guard(root: Path, task_id: str) -> TaskRecord:
-    from .recovery import _prepare_interrupted_task, interruption_journal_message
-
-    with _workspace_lock(root):
-        state = load_state(root)
-        active_task_id = _active_task_id_for_stop(root, state)
-        if active_task_id != task_id:
-            raise WorkspaceConflictError(
-                f"task {task_id} is no longer the active task in this workspace"
-            )
-        task = require_task(root, task_id)
-        if task.pipeline_status == "done":
-            raise ValueError(f"Task {task.id} is already done")
-        stage = task.runtime.current_stage.step or task.pipeline_status
-        _prepare_interrupted_task(
-            root,
-            task,
-            stage=stage,
-            summary=f"Execution interrupted via `litehive stop`. Resume from `{stage}`.",
-            reason="Task stopped via CLI",
-        )
-        task.status = "parked"
-        if stage == "commit_to_git":
-            task.status = "queued"
-        state.active_task_id = None
-        state.queue = [item for item in state.queue if item != task.id]
-        if task.status == "queued" and task.pipeline_status != "done":
-            state.queue.insert(0, task.id)
-        _persist_task_and_state_without_runner_guard(
-            root,
-            task=task,
-            state=state,
-            journal_message=interruption_journal_message(task),
-        )
-        return task
-
-
-def stop_current_task(
-    root: Path,
-    *,
-    wait_timeout_seconds: float = 5.0,
-    poll_interval_seconds: float = 0.1,
-) -> StopTaskSummary:
-    from .recovery import recover_stale_runner_state
-
-    state = load_state(root)
-    active_task_id = _active_task_id_for_stop(root, state)
-    runner_pid: int | None = None
-    if _runner_lock_is_held(root):
-        metadata = _read_runner_lock_metadata(root)
-        pid = metadata.pid
-        if _runner_pid_is_alive(pid):
-            import os
-
-            runner_pid = int(pid)
-            os.kill(runner_pid, signal.SIGINT)
-            deadline = time.monotonic() + max(wait_timeout_seconds, 0.0)
-            sleep_interval = max(poll_interval_seconds, 0.01)
-            while _runner_lock_is_held(root) and time.monotonic() < deadline:
-                time.sleep(sleep_interval)
-            if _runner_lock_is_held(root):
-                raise WorkspaceConflictError(
-                    f"runner for task {active_task_id} did not stop cleanly after SIGINT (pid={runner_pid})"
-                )
-            recover_stale_runner_state(root)
-            state = load_state(root)
-            markers = active_task_markers(root, state)
-            if active_task_id not in markers:
-                return StopTaskSummary(
-                    task=require_task(root, active_task_id),
-                    runner_pid=runner_pid,
-                    signal_sent=True,
-                )
-        else:
-            raise WorkspaceConflictError(
-                f"runner for task {active_task_id} is active but has no live PID to signal cleanly"
-            )
-
-    task = _stop_active_task_without_runner_guard(root, active_task_id)
-    return StopTaskSummary(task=task, runner_pid=runner_pid, signal_sent=runner_pid is not None)
-
-
-def _effective_task_engine(root: Path, task: TaskRecord) -> str:
-    if task.runtime.active_subagent is not None:
-        return task.runtime.active_subagent.engine
-    if task.runtime.last_subagent is not None:
-        return task.runtime.last_subagent.engine
-    return task.engine or load_config(root).default_engine
-
-
-def _switch_prior_work_paths(root: Path, task: TaskRecord) -> list[str]:
-    paths: list[str] = []
-    handoff = task.runtime.continuation_handoff
-    for candidate in (
-        None if handoff is None else handoff.subagent_path,
-        None if handoff is None else handoff.transcript_path,
-        None if handoff is None else handoff.report_path,
-        None if handoff is None else handoff.session_path,
-        None if task.runtime.last_subagent is None else task.runtime.last_subagent.path,
-    ):
-        if candidate and candidate not in paths:
-            paths.append(candidate)
-    base = _latest_subagent_base(root, task)
-    if base is not None:
-        rel_path = str(base.relative_to(task_dir(root, task)))
-        if rel_path not in paths:
-            paths.append(rel_path)
-    return paths
-
-
-def _switch_thread_comment_message(
-    task: TaskRecord,
-    *,
-    reason: str,
-    previous_engine: str,
-    new_engine: str,
-    prior_work_paths: list[str],
-) -> str:
-    lines = [
-        f"Engine switch requested: {reason}",
-        f"engine: {previous_engine} -> {new_engine}",
-        f"resume_from: {task.pipeline_status}",
-    ]
-    if prior_work_paths:
-        lines.append("prior_work:")
-        lines.extend(f"- {path}" for path in prior_work_paths)
-    else:
-        lines.append("prior_work: no prior subagent artifacts recorded")
-    return "\n".join(lines)
-
-
-def switch_task_engine(root: Path, task_id: str, *, engine: str, reason: str) -> SwitchTaskSummary:
-    if engine not in VALID_TASK_ENGINES:
-        raise ValueError(f"Unsupported engine '{engine}'")
-    if not reason.strip():
-        raise ValueError("Switch reason must not be empty")
-
-    task = require_task(root, task_id)
-    if task.pipeline_status == "done":
-        raise ValueError(f"Task {task.id} is already done")
-    if task.pipeline_status == "backlog":
-        raise ValueError(f"Task {task.id} is still in backlog and has no runnable stage to resume")
-
-    state = load_state(root)
-    was_active = state.active_task_id == task_id
-    runner_pid: int | None = None
-    signal_sent = False
-    if was_active:
-        stop_summary = stop_current_task(root)
-        task = stop_summary.task
-        runner_pid = stop_summary.runner_pid
-        signal_sent = stop_summary.signal_sent
-    else:
-        task = require_task(root, task_id)
-
-    previous_engine = _effective_task_engine(root, task)
-    update_task(
-        root,
-        task.id,
-        engine=engine,
-    )
-    task = require_task(root, task.id)
-    mark_engine_switch(
-        root,
-        task,
-        step=task.pipeline_status,
-        from_engine=previous_engine,
-        to_engine=engine,
-        reason=reason.strip(),
-    )
-    task = require_task(root, task.id)
-
-    if task.status == "queued":
-        move_queued_task(root, task.id, 1)
-        task = require_task(root, task.id)
-    elif task.status in {"interrupted", "parked", "flagged", "merge_failed", *CLOSED_TASK_STATUSES}:
-        task = resume_task(root, task.id, front=True)
-    else:
-        raise ValueError(
-            f"Task {task.id} is {task.status} and cannot be switched into a queued runnable state"
-        )
-
-    prior_work_paths = _switch_prior_work_paths(root, task)
-    from litehive.models import TaskThreadComment
-
-    append_thread_comment(
-        root,
-        task,
-        TaskThreadComment(
-            role="operator",
-            step=task.pipeline_status,
-            verdict="comment",
-            message=_switch_thread_comment_message(
-                task,
-                reason=reason.strip(),
-                previous_engine=previous_engine,
-                new_engine=engine,
-                prior_work_paths=prior_work_paths,
-            ),
-        ),
-    )
-    return SwitchTaskSummary(
-        task=task,
-        previous_engine=previous_engine,
-        new_engine=engine,
-        was_active=was_active,
-        runner_pid=runner_pid,
-        signal_sent=signal_sent,
-        prior_work_paths=prior_work_paths,
-    )
-
-
-def _validate_task_dependencies(root, *, task_id, depends_on):
-    from .queue_ops import _validate_task_dependencies as _validate
-    _validate(root, task_id=task_id, depends_on=depends_on)
+update_task_metadata = update_task

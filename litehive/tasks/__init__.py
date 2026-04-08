@@ -7,6 +7,8 @@
 
 import fcntl  # noqa: F401 — tests monkeypatch litehive.tasks.fcntl
 import logging
+import os  # noqa: F401 — tests monkeypatch litehive.tasks.os.kill
+import signal  # noqa: F401 — tests access litehive.tasks.signal
 
 from litehive.config import state_path  # noqa: F401 — used via tasks_module.state_path
 

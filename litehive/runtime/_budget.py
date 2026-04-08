@@ -84,12 +84,9 @@ def _engine_attempt_order(
 ) -> list[str]:
     seen: set[str] = set()
     ordered: list[str] = []
-    for engine_name in initial_engine_names:
-        if engine_name not in seen:
-            seen.add(engine_name)
-            ordered.append(engine_name)
-    for engine_name in engine_preference:
-        if engine_name not in seen:
-            seen.add(engine_name)
-            ordered.append(engine_name)
+    for engine_name in list(initial_engine_names) + engine_preference:
+        if engine_name in seen:
+            continue
+        seen.add(engine_name)
+        ordered.append(engine_name)
     return ordered

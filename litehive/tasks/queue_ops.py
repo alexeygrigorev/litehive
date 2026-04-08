@@ -1,21 +1,24 @@
-"""Queue operations: set/clear active task, peek, dequeue, task eligibility."""
+"""Queue operations: selection, blocking, dependency validation."""
 
+import logging
 from pathlib import Path
 
 from litehive.config import VALID_POOL_SELECTION_POLICIES, load_config
-from litehive.models import RecoveryAction, TaskRecord, WorkspaceState
+from litehive.models import RecoveryAction, TaskRecord, WorkspaceState, utcnow
 
 from .constants import TASK_PRIORITY_ORDER
-from .crud import get_task, list_tasks, require_task, save_task
-from .locking import _workspace_lock, workspace_mutation_guard
 from .models import BlockedTask, TaskPlan, TaskSelection, WorkspaceConflictError
-from .normalization import implementation_entry_stage
-from .persistence import load_state, save_state
-from .reports import record_recovery_report
-from .workflow import persist_task_and_state
+from .paths import tasks_root
+
+logger = logging.getLogger(__name__)
 
 
 def set_active_task(root: Path, task_id: str | None) -> WorkspaceState:
+    from .crud import require_task
+    from .locking import _workspace_lock, workspace_mutation_guard
+    from .persistence import load_state, save_state
+    from .workflow import persist_task_and_state
+
     with workspace_mutation_guard(root), _workspace_lock(root):
         state = load_state(root)
         state.active_task_id = task_id
@@ -32,16 +35,14 @@ def set_active_task(root: Path, task_id: str | None) -> WorkspaceState:
         return state
 
 
-def clear_active_task(root: Path) -> WorkspaceState:
-    return set_active_task(root, None)
-
-
 def peek_next_task(root: Path) -> TaskRecord | None:
     return peek_next_task_selection(root).task
 
 
 def peek_next_task_selection(root: Path) -> TaskSelection:
-    from .recovery import recover_stale_runner_state, _reconcile_stale_runner_tasks
+    from .locking import _workspace_lock, workspace_mutation_guard
+    from .persistence import load_state, save_state
+    from .recovery import _reconcile_stale_runner_tasks, recover_stale_runner_state
 
     recover_stale_runner_state(root)
     with workspace_mutation_guard(root), _workspace_lock(root):
@@ -55,7 +56,10 @@ def peek_next_task_selection(root: Path) -> TaskSelection:
 
 
 def plan_task_selections(root: Path) -> TaskPlan:
-    from .recovery import recover_stale_runner_state, _reconcile_stale_runner_tasks
+    from .crud import list_tasks
+    from .locking import _workspace_lock, workspace_mutation_guard
+    from .persistence import load_state
+    from .recovery import _reconcile_stale_runner_tasks, recover_stale_runner_state
 
     recover_stale_runner_state(root)
     with workspace_mutation_guard(root), _workspace_lock(root):
@@ -91,8 +95,12 @@ def dequeue_next_task(root: Path) -> TaskRecord | None:
 
 
 def dequeue_next_task_selection(root: Path) -> TaskSelection:
-    from .recovery import recover_stale_runner_state, _reconcile_stale_runner_tasks
+    from .locking import _workspace_lock, workspace_mutation_guard
+    from .persistence import load_state, save_state
     from .queue_management import _reset_task_for_recovery
+    from .recovery import _reconcile_stale_runner_tasks, recover_stale_runner_state
+    from .reports import record_recovery_report
+    from .workflow import persist_task_and_state
 
     recover_stale_runner_state(root)
     with workspace_mutation_guard(root), _workspace_lock(root):
@@ -159,6 +167,8 @@ def _is_task_eligible_for_execution(task: TaskRecord) -> bool:
 
 
 def _auto_recovery_stage_for_flagged_task(task: TaskRecord) -> str:
+    from .normalization import implementation_entry_stage
+
     if task.pipeline_status == "commit_to_git":
         return "commit_to_git"
     return implementation_entry_stage(task)
@@ -185,6 +195,8 @@ def _task_blockers(task: TaskRecord, tasks_by_id: dict[str, TaskRecord]) -> list
 
 
 def _validate_task_dependencies(root: Path, *, task_id: str, depends_on: list[str]) -> None:
+    from .crud import list_tasks
+
     tasks_by_id = {task.id: task for task in list_tasks(root)}
     seen: set[str] = set()
     for dependency_id in depends_on:
@@ -283,6 +295,7 @@ def _task_selection_key(
 def _resolve_next_task_from_state(
     root: Path, state: WorkspaceState
 ) -> tuple[TaskRecord | None, list[BlockedTask], bool]:
+    from .crud import list_tasks
     from .recovery import _recover_stranded_commit_tasks
 
     mutated = _recover_stranded_commit_tasks(root, state)
@@ -294,6 +307,29 @@ def _resolve_next_task_from_state(
         state, tasks_by_id, policy=policy
     )
     return next_task, blocked, mutated or snapshot_mutated
+
+
+def _restore_missing_queued_tasks(
+    state: WorkspaceState,
+    tasks_by_id: dict[str, TaskRecord],
+) -> list[str]:
+    restored: list[str] = []
+    queued_ids = set(state.queue)
+    for task_id, task in tasks_by_id.items():
+        if task.status not in {"queued", "interrupted", "flagged"}:
+            continue
+        if task.pipeline_status == "done":
+            continue
+        if _is_parked_task(task):
+            continue
+        if task_id == state.active_task_id or task_id in queued_ids:
+            continue
+        state.queue.append(task_id)
+        queued_ids.add(task_id)
+        restored.append(task_id)
+    return restored
+
+
 
 
 def _resolve_next_task_from_snapshot(
@@ -367,18 +403,26 @@ def _resolve_next_task_from_snapshot(
     return None, blocked, mutated
 
 
+def clear_active_task(root: Path) -> WorkspaceState:
+    return set_active_task(root, None)
+
+
 def restore_untouched_active_task(root: Path) -> WorkspaceState:
+    from .crud import get_task
+    from .locking import _workspace_lock, workspace_mutation_guard
+    from .persistence import load_state, save_state
+    from .queue_management import _enqueue_recovered_task
     from .recovery import (
-        _recover_existing_checkpoint_commit,
-        _recover_stranded_commit_tasks,
         _is_stranded_commit_task,
-        _should_requeue_commit_stage_task,
         _prepare_interrupted_task,
+        _prepare_recovered_commit_task,
+        _recover_existing_checkpoint_commit,
+        _reconcile_stale_runner_tasks,
+        _should_requeue_commit_stage_task,
         _stale_interruption_reason,
         interruption_journal_message,
-        _reconcile_stale_runner_tasks,
     )
-    from .queue_management import _enqueue_recovered_task
+    from .workflow import persist_task_and_state
 
     with workspace_mutation_guard(root), _workspace_lock(root):
         state = load_state(root)
@@ -489,7 +533,11 @@ def restore_untouched_active_task(root: Path) -> WorkspaceState:
         return state
 
 
+
 def active_task_markers(root: Path, state: WorkspaceState | None = None) -> dict[str, list[str]]:
+    from .crud import list_tasks
+    from .persistence import load_state
+
     markers: dict[str, list[str]] = {}
     current_state = state or load_state(root)
     if current_state.active_task_id is not None:
@@ -512,23 +560,3 @@ def _validate_single_active_task(root: Path, state: WorkspaceState | None = None
         f"workspace has multiple active tasks: {details}. Clear the stale active task state before running again."
     )
 
-
-def _restore_missing_queued_tasks(
-    state: WorkspaceState,
-    tasks_by_id: dict[str, TaskRecord],
-) -> bool:
-    restored: list[str] = []
-    queued_ids = set(state.queue)
-    for task_id, task in tasks_by_id.items():
-        if task.status not in {"queued", "interrupted", "flagged"}:
-            continue
-        if task.pipeline_status == "done":
-            continue
-        if _is_parked_task(task):
-            continue
-        if task_id == state.active_task_id or task_id in queued_ids:
-            continue
-        state.queue.append(task_id)
-        queued_ids.add(task_id)
-        restored.append(task_id)
-    return bool(restored)

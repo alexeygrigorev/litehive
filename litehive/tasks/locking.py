@@ -1,16 +1,19 @@
-"""Runner lock, workspace guard, and heartbeat helpers."""
+"""Workspace locking, runner guards, and mutation helpers."""
 
 import fcntl
 import logging
 import os
 import sys
 import threading
+import time
 from contextlib import contextmanager
 from pathlib import Path
+from typing import TextIO
 
 import yaml
 
-from litehive.models import RunnerStatusState, utcnow
+from litehive.config import workspace_dir
+from litehive.models import RunnerStatusState, TaskRecord, WorkspaceState, utcnow
 
 from .constants import (
     HEARTBEAT_LATE_THRESHOLD_SECONDS,
@@ -19,15 +22,13 @@ from .constants import (
     _RUNNER_LOCKS_MUTEX,
 )
 from .models import WorkspaceConflictError, _RunnerLockState
-from .paths import runner_lock_path
+from .paths import runner_lock_path, task_dir, task_file, task_runtime_file
 
 logger = logging.getLogger(__name__)
 
 
 @contextmanager
 def _workspace_lock(root: Path):
-    from litehive.config import workspace_dir
-
     lock_path = workspace_dir(root) / ".lock"
     lock_path.parent.mkdir(parents=True, exist_ok=True)
     with lock_path.open("w", encoding="utf-8") as handle:
@@ -38,7 +39,7 @@ def _workspace_lock(root: Path):
             fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
 
 
-def _write_runner_lock_metadata(handle, status: RunnerStatusState) -> None:
+def _write_runner_lock_metadata(handle: TextIO, status: RunnerStatusState) -> None:
     handle.seek(0)
     handle.truncate()
     handle.write(yaml.safe_dump(status.model_dump(mode="python"), sort_keys=False))
@@ -84,8 +85,8 @@ def _runner_lock_is_active(root: Path) -> bool:
 
 
 def _runner_status_needs_reconciliation(root: Path) -> bool:
-    from .persistence import load_state
     from .crud import list_tasks
+    from .persistence import load_state
 
     state = load_state(root)
     if state.active_task_id is not None:
@@ -125,17 +126,20 @@ def _heartbeat_is_late(heartbeat_at: str | None) -> bool:
 
 
 def runner_status(root: Path) -> RunnerStatusState:
+    import sys
+
+    _tasks = sys.modules["litehive.tasks"]
     root = root.resolve()
-    status = _read_runner_lock_metadata(root)
-    if _runner_lock_is_active(root):
-        if _heartbeat_is_late(status.heartbeat_at):
+    status = _tasks._read_runner_lock_metadata(root)
+    if _tasks._runner_lock_is_active(root):
+        if _tasks._heartbeat_is_late(status.heartbeat_at):
             return status.model_copy(update={"status": "late"})
         return status.model_copy(update={"status": "running"})
-    if not _runner_metadata_present(status):
+    if not _tasks._runner_metadata_present(status):
         return RunnerStatusState()
-    if _runner_status_needs_reconciliation(root):
+    if _tasks._runner_status_needs_reconciliation(root):
         return status.model_copy(update={"status": "stale"})
-    _clear_runner_lock_metadata(root)
+    _tasks._clear_runner_lock_metadata(root)
     return RunnerStatusState()
 
 
@@ -204,7 +208,7 @@ def _runner_pid_is_alive(pid: object) -> bool:
     return True
 
 
-def _subagent_process_is_stale(task: "object") -> bool:
+def _subagent_process_is_stale(task: "TaskRecord") -> bool:
     """Return True if the task has a recorded subagent PID that is no longer alive."""
     if task.runtime.execution_status != "running":
         return False
@@ -345,10 +349,10 @@ def _ensure_future_task_mutation_allowed(
     root: Path,
     task_ids: list[str],
     *,
-    state=None,
+    state: WorkspaceState | None = None,
 ) -> None:
-    from .queue_ops import active_task_markers, _is_task_eligible_for_execution
     from .crud import get_task
+    from .queue_ops import _is_task_eligible_for_execution, active_task_markers
 
     markers = active_task_markers(root, state)
     conflicts: list[str] = []
@@ -374,14 +378,11 @@ def _ensure_future_task_mutation_allowed(
 
 def _persist_future_task_update(
     root: Path,
-    task,
+    task: TaskRecord,
     *,
     journal_message: str | None = None,
 ) -> None:
-    from litehive.models import utcnow
-
     from .crud import _ensure_runtime_ignored, _serialize_task_record, _serialize_task_runtime
-    from .paths import task_dir, task_file, task_runtime_file
     from .persistence import _write_atomic_files
     from .templates import render_task_brief, task_brief_file
 
@@ -398,3 +399,4 @@ def _persist_future_task_update(
         writes[task_brief_file(root, task)] = render_task_brief(task)
     _write_atomic_files(writes)
     _ensure_runtime_ignored(root)
+

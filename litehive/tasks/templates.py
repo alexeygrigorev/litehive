@@ -6,6 +6,7 @@ from litehive.models import TaskRecord
 
 from .paths import task_dir
 
+
 TASK_TEMPLATES: dict[str, dict[str, object]] = {
     "adapter": {
         "goal": "Define the adapter change clearly and land the required integration behavior.",

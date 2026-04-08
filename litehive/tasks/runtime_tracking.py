@@ -1,11 +1,13 @@
-"""Runtime state tracking: mark task/stage/subagent start/finish, engine switch, etc."""
+"""Runtime state tracking: runs, stages, subagents, engine switches."""
+
+from pathlib import Path
 
 from litehive.models import (
+    ResourceLimitEvent,
     RuntimeContinuationHandoff,
     RuntimeEngineContinuation,
     RuntimeEngineSwitch,
     RuntimeSubagentState,
-    ResourceLimitEvent,
     StageReport,
     SubagentRef,
     TaskOutcomeState,
@@ -13,10 +15,13 @@ from litehive.models import (
     utcnow,
 )
 
-from .crud import save_task_runtime
+from .crud import _write_task_runtime, save_task_runtime
+from .locking import _workspace_lock, workspace_mutation_guard
+from .persistence import load_state
+from .workflow import persist_task_and_state
 
 
-def mark_task_run_started(root, task: TaskRecord) -> None:
+def mark_task_run_started(root: Path, task: TaskRecord) -> None:
     now = utcnow()
     task.runtime.execution_status = "running"
     task.runtime.run_started_at = now
@@ -41,7 +46,7 @@ def mark_task_run_started(root, task: TaskRecord) -> None:
     save_task_runtime(root, task)
 
 
-def mark_task_run_finished(root, task: TaskRecord, final_status: str) -> None:
+def mark_task_run_finished(root: Path, task: TaskRecord, final_status: str) -> None:
     now = utcnow()
     task.runtime.execution_status = final_status
     task.runtime.updated_at = now
@@ -49,12 +54,7 @@ def mark_task_run_finished(root, task: TaskRecord, final_status: str) -> None:
     save_task_runtime(root, task)
 
 
-def finish_task_run_transition(root, task: TaskRecord, final_status: str) -> TaskRecord:
-    from .crud import _write_task_runtime
-    from .locking import _workspace_lock, workspace_mutation_guard
-    from .persistence import load_state
-    from .workflow import persist_task_and_state
-
+def finish_task_run_transition(root: Path, task: TaskRecord, final_status: str) -> TaskRecord:
     with workspace_mutation_guard(root), _workspace_lock(root):
         now = utcnow()
         task.runtime.execution_status = final_status
@@ -89,7 +89,7 @@ def finish_task_run_transition(root, task: TaskRecord, final_status: str) -> Tas
 
 
 def set_task_retry_state(
-    root,
+    root: Path,
     task: TaskRecord,
     *,
     retry_count: int,
@@ -105,13 +105,13 @@ def set_task_retry_state(
     save_task_runtime(root, task)
 
 
-def clear_task_outcome(root, task: TaskRecord) -> None:
+def clear_task_outcome(root: Path, task: TaskRecord) -> None:
     _clear_task_outcome(task)
     save_task_runtime(root, task)
 
 
 def set_task_continuation_handoff(
-    root,
+    root: Path,
     task: TaskRecord,
     handoff: RuntimeContinuationHandoff | None,
 ) -> None:
@@ -120,7 +120,7 @@ def set_task_continuation_handoff(
     save_task_runtime(root, task)
 
 
-def clear_task_continuation_handoff(root, task: TaskRecord) -> None:
+def clear_task_continuation_handoff(root: Path, task: TaskRecord) -> None:
     if task.runtime.continuation_handoff is None:
         return
     set_task_continuation_handoff(root, task, None)
@@ -145,7 +145,7 @@ def _clear_task_outcome(task: TaskRecord) -> None:
 
 
 def mark_task_outcome(
-    root,
+    root: Path,
     task: TaskRecord,
     *,
     kind: str,
@@ -202,7 +202,7 @@ def _apply_task_outcome(
     )
 
 
-def mark_stage_started(root, task: TaskRecord, step: str) -> None:
+def mark_stage_started(root: Path, task: TaskRecord, step: str) -> None:
     now = utcnow()
     task.runtime.updated_at = now
     task.runtime.current_stage = task.runtime.current_stage.model_copy(
@@ -220,7 +220,7 @@ def mark_stage_started(root, task: TaskRecord, step: str) -> None:
     save_task_runtime(root, task)
 
 
-def mark_stage_finished(root, task: TaskRecord, report: StageReport) -> None:
+def mark_stage_finished(root: Path, task: TaskRecord, report: StageReport) -> None:
     _apply_stage_finished(task, report)
     save_task_runtime(root, task)
 
@@ -260,7 +260,7 @@ def _apply_stage_finished(task: TaskRecord, report: StageReport) -> None:
         task.runtime.continuation_handoff = None
 
 
-def mark_subagent_started(root, task: TaskRecord, ref: SubagentRef) -> None:
+def mark_subagent_started(root: Path, task: TaskRecord, ref: SubagentRef) -> None:
     now = utcnow()
     task.runtime.updated_at = now
     task.runtime.active_subagent = RuntimeSubagentState(
@@ -278,7 +278,7 @@ def mark_subagent_started(root, task: TaskRecord, ref: SubagentRef) -> None:
     save_task_runtime(root, task)
 
 
-def mark_subagent_pid(root, task: TaskRecord, pid: int | None) -> None:
+def mark_subagent_pid(root: Path, task: TaskRecord, pid: int | None) -> None:
     if (
         pid is None
         or task.runtime.active_subagent is None
@@ -294,7 +294,7 @@ def mark_subagent_pid(root, task: TaskRecord, pid: int | None) -> None:
 
 
 def mark_subagent_progress(
-    root,
+    root: Path,
     task: TaskRecord,
     *,
     pid: int | None = None,
@@ -321,7 +321,7 @@ def mark_subagent_progress(
 
 
 def mark_subagent_finished(
-    root,
+    root: Path,
     task: TaskRecord,
     ref: SubagentRef,
     transcript: str,
@@ -366,7 +366,7 @@ def mark_subagent_finished(
 
 
 def mark_engine_switch(
-    root,
+    root: Path,
     task: TaskRecord,
     *,
     step: str,
@@ -408,3 +408,4 @@ def _duration_seconds(started_at: str | None, ended_at: str | None) -> int:
     except ValueError:
         return 0
     return max(0, int((ended - started).total_seconds()))
+

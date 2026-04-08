@@ -1,13 +1,10 @@
-"""Dataclass models for the tasks package."""
+"""Dataclasses and error types for the tasks package."""
 
 from dataclasses import dataclass, field
 import threading
 from typing import TextIO
 
-from litehive.models import (
-    RunnerStatusState,
-    TaskRecord,
-)
+from litehive.models import RunnerStatusState, TaskRecord
 
 
 @dataclass(slots=True)

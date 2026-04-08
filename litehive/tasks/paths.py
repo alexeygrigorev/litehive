@@ -1,4 +1,4 @@
-"""Task directory and artifact path helpers."""
+"""Path helpers for task directories and artifacts."""
 
 import gzip
 import re

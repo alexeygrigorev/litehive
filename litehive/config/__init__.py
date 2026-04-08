@@ -137,8 +137,8 @@ class LitehiveConfig:
             strings. A frozen engine is skipped during selection and
             fallback until the freeze expires.
         engine_preference: Global engine priority order. When the
-            primary engine fails, fallback walks this list in order,
-            skipping the failed engine.
+            primary engine fails (quota, budget, transient), the
+            runner walks this list in order, skipping the failed engine.
         agent_startup_guidance: Per-role startup guidance text injected
             into subagent prompts at the beginning of a session.
         auto_commit: Whether accepted tasks automatically proceed to
@@ -378,6 +378,7 @@ def load_effective_config_data(root: Path) -> dict[str, Any]:
 def load_config(root: Path) -> LitehiveConfig:
     ensure_workspace(root)
     data = load_effective_config_data(root)
+    data.pop("engine_fallbacks", None)
     if data.get("process_profile") not in PROCESS_PROFILES:
         data["process_profile"] = "generic"
     if data.get("pool_selection_policy") not in VALID_POOL_SELECTION_POLICIES:

@@ -1,4 +1,4 @@
-"""Recovery: stale runner recovery, workspace repair, interrupted task handling."""
+"""Recovery: stale runner detection, interrupted task handling, workspace repair."""
 
 import logging
 from pathlib import Path
@@ -17,58 +17,19 @@ from litehive.models import (
     RuntimeContinuationHandoff,
     RuntimeInterruptionState,
     RuntimeSubagentState,
+    TaskOutcomeState,
     TaskRecord,
     WorkspaceState,
     utcnow,
 )
 
-from .crud import (
-    _write_task_runtime,
-    get_task,
-    list_tasks,
-    require_task,
-    set_task_commit_sha,
-)
-from .locking import (
-    _current_thread_owns_runner_guard,
-    _read_runner_lock_metadata,
-    _runner_lock_is_held,
-    _runner_lock_pid_is_stale,
-    _runner_metadata_present,
-    _subagent_process_is_stale,
-    _workspace_lock,
-    workspace_mutation_guard,
-)
 from .models import WorkspaceRepairSummary
-from .normalization import implementation_entry_stage
 from .paths import (
     _read_text_artifact,
     _resolve_artifact_path,
     task_dir,
 )
-from .persistence import (
-    _save_state_without_runner_guard,
-    _write_atomic_files,
-    load_state,
-)
-from .queue_management import (
-    _enqueue_recovered_task,
-    _reset_task_for_recovery,
-)
-from .queue_ops import _is_task_eligible_for_execution, _is_parked_task
-from .reports import record_recovery_report
-from .runtime_tracking import (
-    _apply_task_outcome,
-    _duration_seconds,
-    summarize_transcript,
-)
-from .workflow import (
-    _persist_task_and_state_without_runner_guard,
-    _persist_tasks_and_state_without_runner_guard,
-    persist_task_and_state,
-)
-
-logger = logging.getLogger(__name__)
+from .runtime_tracking import _apply_task_outcome, _duration_seconds, summarize_transcript
 
 
 def _is_stranded_commit_task(task: TaskRecord) -> bool:
@@ -189,6 +150,8 @@ def _write_interrupted_subagent_artifacts(
     *,
     resume_stage: str,
 ) -> None:
+    from .persistence import _write_atomic_files
+
     now = utcnow()
     base = task_dir(root, task) / subagent.path
     session_path = base / "session.yaml"
@@ -476,6 +439,8 @@ def _recover_flagged_commit_task(task: TaskRecord) -> str:
 
 
 def _finalize_recovered_commit_task(task: TaskRecord, *, commit_sha: str) -> str:
+    from .crud import set_task_commit_sha
+
     now = utcnow()
     started_at = task.runtime.current_stage.started_at
     task.status = "done"
@@ -535,6 +500,9 @@ def _recover_existing_checkpoint_commit(root: Path, task: TaskRecord) -> str | N
 
 
 def _recover_stranded_commit_tasks(root: Path, state: WorkspaceState) -> bool:
+    from .crud import list_tasks, set_task_commit_sha
+    from .workflow import _persist_tasks_and_state_without_runner_guard
+
     tasks = list_tasks(root)
     stranded = [task for task in tasks if _is_stranded_commit_task(task)]
     accepted_without_commit = {
@@ -627,6 +595,21 @@ def _recover_stale_runner_state(
     *,
     summary: WorkspaceRepairSummary | None = None,
 ) -> bool:
+    from .crud import list_tasks, set_task_commit_sha
+    from .locking import (
+        _current_thread_owns_runner_guard,
+        _read_runner_lock_metadata,
+        _runner_lock_is_held,
+        _runner_lock_pid_is_stale,
+        _runner_metadata_present,
+        _subagent_process_is_stale,
+        _workspace_lock,
+    )
+    from .persistence import _save_state_without_runner_guard, load_state
+    from .queue_ops import _is_task_eligible_for_execution
+    from .reports import record_recovery_report
+    from .workflow import _persist_tasks_and_state_without_runner_guard
+
     root = root.resolve()
     with _workspace_lock(root):
         state = load_state(root)
@@ -847,11 +830,19 @@ def _recover_stale_runner_state(
         return mutated or commit_mutated
 
 
+
 def recover_stale_runner_state(root: Path) -> bool:
     return _recover_stale_runner_state(root)
 
 
 def repair_workspace_state(root: Path) -> WorkspaceRepairSummary:
+    from .crud import list_tasks
+    from .locking import _workspace_lock, workspace_mutation_guard
+    from .persistence import _save_state_without_runner_guard, load_state
+    from .queue_management import _enqueue_recovered_task
+    from .queue_ops import _is_task_eligible_for_execution, _restore_missing_queued_tasks
+    from .workflow import _persist_tasks_and_state_without_runner_guard
+
     summary = WorkspaceRepairSummary()
     summary.stale_runner_recovered = _recover_stale_runner_state(root, summary=summary)
     summary.mutated = summary.stale_runner_recovered
@@ -958,28 +949,14 @@ def repair_workspace_state(root: Path) -> WorkspaceRepairSummary:
     return summary
 
 
-def _restore_missing_queued_tasks(
-    state: WorkspaceState,
-    tasks_by_id: dict[str, TaskRecord],
-) -> list[str]:
-    restored: list[str] = []
-    queued_ids = set(state.queue)
-    for task_id, task in tasks_by_id.items():
-        if task.status not in {"queued", "interrupted", "flagged"}:
-            continue
-        if task.pipeline_status == "done":
-            continue
-        if _is_parked_task(task):
-            continue
-        if task_id == state.active_task_id or task_id in queued_ids:
-            continue
-        state.queue.append(task_id)
-        queued_ids.add(task_id)
-        restored.append(task_id)
-    return restored
 
 
 def _reconcile_stale_runner_tasks(root: Path, state: WorkspaceState) -> bool:
+    from .crud import list_tasks
+    from .locking import _runner_lock_is_held
+    from .queue_ops import _is_task_eligible_for_execution
+    from .workflow import _persist_tasks_and_state_without_runner_guard
+
     tasks = list_tasks(root)
     tasks_by_id = {task.id: task for task in tasks}
     transitioned: list[TaskRecord] = []
@@ -1059,3 +1036,4 @@ def _reconcile_stale_runner_tasks(root: Path, state: WorkspaceState) -> bool:
         )
 
     return bool(transitioned)
+

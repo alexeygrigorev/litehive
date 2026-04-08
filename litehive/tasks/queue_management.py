@@ -1,11 +1,11 @@
-"""Queue management: enqueue, move, prioritize, and recovery preparation."""
+"""Queue management: enqueue, move, prioritize, recovery helpers."""
 
 from pathlib import Path
 
-from litehive.models import TaskOutcomeState, TaskRecord, WorkspaceState, utcnow
+from litehive.models import TaskRecord, TaskOutcomeState, WorkspaceState, utcnow
 
-from .crud import require_task, set_task_commit_sha
-from .locking import _ensure_future_task_mutation_allowed, _workspace_lock
+from .crud import set_task_commit_sha
+from .locking import _workspace_lock, _ensure_future_task_mutation_allowed
 from .normalization import implementation_entry_stage
 from .persistence import _save_state_without_runner_guard, load_state
 

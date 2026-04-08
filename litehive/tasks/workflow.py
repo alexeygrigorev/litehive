@@ -222,6 +222,8 @@ def persist_tasks_and_state(
     state: WorkspaceState,
     journal_messages: dict[str, str] | None = None,
 ) -> None:
+    from .crud import _ensure_runtime_ignored
+
     for task in tasks:
         task.updated_at = utcnow()
     writes = _workspace_transition_writes(
@@ -230,8 +232,6 @@ def persist_tasks_and_state(
         state=state,
         journal_messages=journal_messages,
     )
-    from .crud import _ensure_runtime_ignored
-
     with workspace_mutation_guard(root):
         _write_atomic_files(writes)
         _ensure_runtime_ignored(root)

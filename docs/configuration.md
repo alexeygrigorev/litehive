@@ -123,8 +123,8 @@ task_engine_routing:
   refactor: [opencode, codex]
 ```
 
-If an engine hits a limit or fails in a retryable way, Litehive can fall back to
-the next engine in the global preference list:
+If an engine hits a limit or fails in a retryable way, Litehive walks the global
+engine preference list to find the next available adapter:
 
 ```yaml
 engine_preference: [codex, opencode, gemini, copilot, goz]

@@ -1,4 +1,4 @@
-"""Task normalization, acceptance criteria, and report parsing helpers."""
+"""Normalization and validation helpers for task fields."""
 
 import re
 
@@ -65,7 +65,6 @@ def normalize_human_checkpoints(items: list[str] | None) -> list[str]:
         seen.add(checkpoint)
         normalized.append(checkpoint)
     return normalized
-
 
 def task_requires_acceptance_criteria(task: TaskRecord) -> bool:
     return bool(_acceptance_criteria_requirement_signals(task))
@@ -176,3 +175,4 @@ def infer_acceptance_criteria(task: TaskRecord) -> list[str]:
 
     inferred.append("Focused verification demonstrates the targeted behavior works as intended.")
     return normalize_acceptance_criteria(inferred)
+
