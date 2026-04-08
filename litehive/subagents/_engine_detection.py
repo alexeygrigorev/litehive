@@ -203,6 +203,17 @@ def _callable_resolution_rank(engine: object, name: str) -> int | None:
 def _prefers_non_live_run(engine: object) -> bool:
     if not _has_callable_override(engine, "run", _ORIGINAL_EXTERNAL_ADAPTER_RUN):
         return False
+    run_method = getattr(engine, "run", None)
+    run_live_method = getattr(engine, "run_live", None)
+    resolved_run = _unwrap_bound_callable(run_method)
+    current_external_run = _current_external_adapter_callable_for("run")
+    if callable(run_live_method) and resolved_run in {
+        current_external_run,
+        _ORIGINAL_EXTERNAL_ADAPTER_RUN,
+    }:
+        resolved_run_live = _unwrap_bound_callable(run_live_method)
+        if _resolve_inherited_callable_rank(engine, "run_live", resolved_run_live) is not None:
+            return False
     run_rank = _callable_resolution_rank(engine, "run")
     run_live_rank = _callable_resolution_rank(engine, "run_live")
     if run_rank is None:

@@ -2068,9 +2068,7 @@ def test_run_next_task_preserves_git_commit_failure_diagnostics(
 def test_attempt_stage_recovery_launches_agent_for_litehive_traceback_with_no_source_repo(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """The new recovery flow launches a recovery agent even when
-    litehive_source_path is missing/invalid. The recovery agent will
-    determine if the failure can be repaired."""
+    """Recovery now requires a Litehive source repo and records a blocker when unavailable."""
     ensure_workspace(tmp_path, LitehiveConfig(litehive_source_path="/missing/litehive"))
     task = create_task(tmp_path, title="External project task", auto_commit=False)
     save_task(tmp_path, task)
@@ -2090,24 +2088,12 @@ def test_attempt_stage_recovery_launches_agent_for_litehive_traceback_with_no_so
         },
     )
 
-    def fake_run(
-        self, task_arg, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None
-    ):  # type: ignore[no-untyped-def]
-        return SubagentResult(
-            ref=SubagentRef(
-                id="SA-recovery-1",
-                role=role,
-                engine=engine_name,
-                status="failed",
-                path="subagents/recovery-1",
-                sandboxed=False,
-                sandbox_summary="host",
-            ),
-            execution=None,
-            transcript="VERDICT: FAIL\nSUMMARY: cannot fix without source repo",
-            exit_code=1,
-            failure=None,
-        )
+    run_called = False
+
+    def fake_run(*args, **kwargs):  # type: ignore[no-untyped-def]
+        nonlocal run_called
+        run_called = True
+        raise AssertionError("recovery agent should not start without a Litehive source repo")
 
     monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_run)
 
@@ -2121,13 +2107,14 @@ def test_attempt_stage_recovery_launches_agent_for_litehive_traceback_with_no_so
         config=load_config(tmp_path),
     )
 
-    # Recovery agent could not fix it, so returns None
     assert report is None
+    assert run_called is False
     recovery_report = yaml.safe_load(
         (task_dir(tmp_path, task) / "recovery" / "recovery-001.yaml").read_text(encoding="utf-8")
     )
     assert recovery_report["trigger"] == "stage_failure"
     assert recovery_report["runnable_state"] == "blocked"
+    assert "no Litehive source repo was available" in recovery_report["summary"]
 
 
 def test_classify_recovery_failure_owner_prefers_project_paths_over_name_overlap(
@@ -2240,7 +2227,9 @@ def test_attempt_stage_recovery_launches_recovery_agent_for_litehive_traceback(
     assert report is not None
     assert observed["role"] == "recovery"
     assert "SELF-HEAL" in observed["prompt"]
-    assert "uv run pytest" in observed["prompt"]
+    assert "Failed subagent diagnostics:" in observed["prompt"]
+    assert "submit your own detailed recovery report" in observed["prompt"]
+    assert report.retry_decision == "retry"
     recovery_report = yaml.safe_load(
         (task_dir(tmp_path, task) / "recovery" / "recovery-001.yaml").read_text(encoding="utf-8")
     )

@@ -4,6 +4,8 @@ import hashlib
 import re
 from pathlib import Path
 
+import yaml
+
 from litehive.config import LitehiveConfig
 from litehive.git_ops import (
     GitError,
@@ -33,9 +35,13 @@ from litehive.tasks import (
     task_runtime_file,
     workspace_mutation_guard,
 )
+from litehive.tasks.paths import _latest_subagent_base, _read_text_artifact, _resolve_artifact_path
 
 from ._models import resolve_model
 from ._types import RollbackSummary, _path_within
+
+_RECOVERY_ARTIFACT_TEXT_LIMIT = 4000
+_RECOVERY_REPORT_ATTEMPT_LINE_LIMIT = 8
 
 
 def _traceback_text(failed_report: StageReport) -> str:
@@ -60,6 +66,83 @@ def _traceback_fingerprint(traceback_text: str, summary: str) -> str:
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
 
 
+def _truncate_recovery_text(text: str, *, limit: int = _RECOVERY_ARTIFACT_TEXT_LIMIT) -> str:
+    normalized = text.strip()
+    if len(normalized) <= limit:
+        return normalized
+    return f"{normalized[:limit].rstrip()}\n...[truncated]..."
+
+
+def _load_failed_subagent_diagnostics(root: Path, task: TaskRecord) -> tuple[str, str]:
+    base = _latest_subagent_base(root, task)
+    if base is None:
+        missing = "No failed subagent artifact directory was found for this task."
+        return missing, missing
+
+    session_path = _resolve_artifact_path(base, "session.yaml")
+    stdout_path = _resolve_artifact_path(base, "stdout.txt")
+    stderr_path = _resolve_artifact_path(base, "stderr.txt")
+    transcript_path = _resolve_artifact_path(base, "transcript.md")
+    prompt_path = _resolve_artifact_path(base, "prompt.txt")
+
+    session_text = _read_text_artifact(session_path) if session_path is not None else ""
+    stdout_text = _read_text_artifact(stdout_path) if stdout_path is not None else ""
+    stderr_text = _read_text_artifact(stderr_path) if stderr_path is not None else ""
+    transcript_text = _read_text_artifact(transcript_path) if transcript_path is not None else ""
+    prompt_text = _read_text_artifact(prompt_path) if prompt_path is not None else ""
+
+    exit_code: str | int | None = None
+    if session_text:
+        try:
+            session_payload = yaml.safe_load(session_text) or {}
+        except yaml.YAMLError:
+            session_payload = {}
+        if isinstance(session_payload, dict):
+            exit_code = session_payload.get("exit_code")
+
+    report_attempt_lines: list[str] = []
+    for label, text in (
+        ("prompt", prompt_text),
+        ("stdout", stdout_text),
+        ("stderr", stderr_text),
+        ("transcript", transcript_text),
+        ("session", session_text),
+    ):
+        for raw_line in text.splitlines():
+            if "litehive report" not in raw_line:
+                continue
+            report_attempt_lines.append(f"{label}: {raw_line.strip()}")
+            if len(report_attempt_lines) >= _RECOVERY_REPORT_ATTEMPT_LINE_LIMIT:
+                break
+        if len(report_attempt_lines) >= _RECOVERY_REPORT_ATTEMPT_LINE_LIMIT:
+            break
+
+    report_attempt_summary = (
+        "No explicit `litehive report` command was found in the captured artifacts."
+        if not report_attempt_lines
+        else "Found `litehive report` clues:\n" + "\n".join(f"- {line}" for line in report_attempt_lines)
+    )
+
+    diagnostic_sections = [
+        f"Failed subagent artifact base: {base.relative_to(root)}",
+        f"Failed subagent exit code: {exit_code if exit_code is not None else 'unknown'}",
+        report_attempt_summary,
+        "",
+        "Failed subagent session.yaml:",
+        _truncate_recovery_text(session_text or "(missing)"),
+        "",
+        "Failed subagent stdout:",
+        _truncate_recovery_text(stdout_text or "(missing)"),
+        "",
+        "Failed subagent stderr:",
+        _truncate_recovery_text(stderr_text or "(missing)"),
+        "",
+        "Failed subagent transcript:",
+        _truncate_recovery_text(transcript_text or "(missing)"),
+    ]
+    return "\n".join(diagnostic_sections), report_attempt_summary
+
+
 def _classify_recovery_failure_owner(
     root: Path,
     failed_report: StageReport,
@@ -82,6 +165,19 @@ def _classify_recovery_failure_owner(
         if "/site-packages/litehive/" in normalized or normalized.endswith("/litehive/__init__.py") or "/litehive/" in normalized:
             return "litehive", traceback_text, source_root
     return "unknown", traceback_text, source_root
+
+
+def _resolve_recovery_execution_root(
+    root: Path,
+    source_root: Path | None,
+) -> Path | None:
+    if source_root is not None and source_root.is_dir():
+        return source_root
+    if source_root is None:
+        return root
+    if (root / "litehive").is_dir():
+        return root
+    return None
 
 
 def _attempt_stage_recovery(
@@ -116,14 +212,42 @@ def _attempt_stage_recovery(
         f"- {item.label}: {item.path or 'n/a'} ({'present' if item.exists else 'missing'}) :: {item.summary}"
         for item in evidence
     )
+    diagnostics_text, report_attempt_summary = _load_failed_subagent_diagnostics(root, task)
     failure_owner, traceback_text, source_root = _classify_recovery_failure_owner(
         root,
         failed_report,
         config=config,
     )
+    recovery_root = _resolve_recovery_execution_root(root, source_root)
+
+    if recovery_root is None:
+        blocker = (
+            "Recovery requires a Litehive source checkout, but neither `litehive_source_path` nor the "
+            "current workspace root points to a Litehive repo."
+        )
+        record_recovery_report(
+            root,
+            task,
+            trigger="stage_failure",
+            stage=step,
+            summary="Recovery could not start because no Litehive source repo was available.",
+            runnable_state="blocked",
+            failure_classification=failure_owner,
+            blocker=blocker,
+            actions=[
+                RecoveryAction(
+                    action="missing_litehive_source_repo",
+                    applied=False,
+                    summary=blocker,
+                )
+            ],
+            warnings=[*failed_report.warnings, report_attempt_summary],
+        )
+        append_journal(root, task, blocker)
+        return None
 
     # --- Litehive self-heal path ---
-    is_self_heal = failure_owner == "litehive" and source_root is not None and source_root.is_dir()
+    is_self_heal = failure_owner == "litehive" and recovery_root == source_root
     if is_self_heal:
         fingerprint = _traceback_fingerprint(traceback_text, failed_report.summary)
         if fingerprint in task.runtime.self_heal_traceback_fingerprints:
@@ -132,16 +256,17 @@ def _attempt_stage_recovery(
                 f"Stage `{step}` {failed_report.verdict}: skipping duplicate self-heal (fingerprint {fingerprint}).",
             )
             return None
-        self_heal_subagents = SubagentManager(root, execution_root=source_root)
+        self_heal_subagents = SubagentManager(root, execution_root=recovery_root)
         return _run_litehive_self_heal(
             root=root,
-            source_root=source_root,
+            source_root=recovery_root,
             task=task,
             step=step,
             failed_report=failed_report,
             traceback_text=traceback_text,
             fingerprint=fingerprint,
             evidence_lines=evidence_lines,
+            diagnostics_text=diagnostics_text,
             subagents=self_heal_subagents,
             engine_name=engine_name,
             model_name=model_name,
@@ -152,27 +277,44 @@ def _attempt_stage_recovery(
         root, task,
         f"Stage `{step}` {failed_report.verdict}: {failed_report.summary}. Launching recovery agent.",
     )
+    recovery_subagents = SubagentManager(root, execution_root=recovery_root)
     prompt = (
         f"You are running as Litehive's recovery agent for task {task.id} ({task.title}).\n\n"
+        f"Your job is to diagnose why the previous agent failed and fix Litehive infrastructure if that is the root cause.\n"
+        f"Do NOT redo the failed `{step}` work, do NOT run the task's normal verification loop, and do NOT submit `{step}`'s verdict for the prior agent.\n\n"
         f"Failure trigger: stage `{step}` ended with verdict `{failed_report.verdict}`.\n"
         f"Failure summary: {failed_report.summary}\n\n"
         f"Failure ownership classification: {failure_owner}\n\n"
         f"Previous report feedback:\n{failed_report.feedback or '(none)'}\n\n"
-        f"Working directory: {execution_root}\n\n"
+        f"Recovery working directory: {recovery_root}\n"
+        f"This is the Litehive source repo. Fix Litehive here if the failure came from Litehive infrastructure.\n\n"
         f"Recovery evidence gathered automatically:\n{evidence_lines}\n\n"
+        f"Failed subagent diagnostics:\n{diagnostics_text}\n\n"
+        f"Diagnosis checklist:\n"
+        f"- Did the failed agent produce output in stdout/stderr/transcript?\n"
+        f"- Did it try to call `litehive report`? What exact error did that attempt get?\n"
+        f"- What does session metadata say about exit code, interruption, and state?\n"
+        f"- What is the Litehive root cause in prompts, resume/report wiring, runtime, or adapter code?\n"
+        f"- What is the smallest safe Litehive fix that lets `{step}` be retried cleanly?\n\n"
         f"Bounded recovery policy:\n"
         f"- gather enough evidence to classify the failure\n"
-        f"- apply only the smallest safe repair needed to restore a runnable path\n"
-        f"- prefer fixing continuation state, engine bindings, prompts, or task-local state over broad refactors\n"
-        f"- if the task is underspecified, leave explicit notes and keep it runnable for planner/grooming\n\n"
+        f"- apply only the smallest safe Litehive repair needed to restore a runnable path\n"
+        f"- prefer fixing report wiring, continuation state, engine bindings, prompts, and runtime bugs over broad refactors\n"
+        f"- If the failure is a task/project bug rather than a Litehive bug, do not implement the task; explain that in your recovery verdict\n\n"
+        f"Examples:\n"
+        f"- DO: inspect stdout/stderr/session, find that `litehive report` targeted the wrong task id, fix Litehive, and report the recovery fix.\n"
+        f"- DO: inspect resume/session artifacts, find that Codex resume handling is broken, patch Litehive, and report the recovery fix.\n"
+        f"- DO NOT: re-run the failed stage's tests just to finish the task.\n"
+        f"- DO NOT: edit project/task code to make the original implementation pass.\n"
+        f"- DO NOT: submit the failed stage verdict as if you were the previous agent.\n\n"
         f"Acceptance criteria:\n"
         + "\n".join(f"- {c}" for c in task.acceptance_criteria)
-        + f"\n\nWhen you finish, submit a detailed report with `litehive report`.\n"
-        f"Use verdict `pass` only if the task is runnable again or the current stage is now complete.\n"
-        f"Use verdict `blocked` or `fail` if a blocker remains.\n"
+        + f"\n\nWhen you finish, submit your own detailed recovery report with `litehive report`.\n"
+        f"Use verdict `pass` only if you fixed a Litehive issue and `{step}` should now be retried with the fix in place.\n"
+        f"Use verdict `blocked` or `fail` if a blocker remains or no Litehive fix was possible.\n"
     )
 
-    recovery_result = subagents.run(
+    recovery_result = recovery_subagents.run(
         task,
         role="recovery",
         engine_name=engine_name,
@@ -216,10 +358,14 @@ def _attempt_stage_recovery(
             summary=latest.message.splitlines()[0] if latest.message else f"{step} recovered",
             feedback=latest.message,
             files_changed=latest.files_changed,
+            retry_decision="retry" if latest.verdict in ("pass", "accept") else "continue",
+            failure_classification=failure_owner,
         )
 
     recovery_report = stage_report_from_subagent(task, step, recovery_result, root=root)
     if recovery_report.verdict in ("pass", "accept"):
+        recovery_report.retry_decision = "retry"
+        recovery_report.failure_classification = failure_owner
         record_recovery_report(
             root,
             task,
@@ -276,6 +422,7 @@ def _run_litehive_self_heal(
     traceback_text: str,
     fingerprint: str,
     evidence_lines: str,
+    diagnostics_text: str,
     *,
     subagents: SubagentManager,
     engine_name: str,
@@ -291,18 +438,28 @@ def _run_litehive_self_heal(
     prompt = (
         f"You are running as Litehive's SELF-HEAL recovery agent.\n\n"
         f"A litehive bug caused task {task.id} ({task.title}) to fail during stage `{step}`.\n\n"
+        f"Your job is to diagnose why the previous agent failed, fix the Litehive bug, and report the recovery fix.\n"
+        f"Do NOT redo the failed `{step}` work, do NOT run the task's normal verification stage for it, and do NOT submit `{step}`'s verdict on the prior agent's behalf.\n\n"
         f"Failure summary: {failed_report.summary}\n\n"
         f"Traceback:\n{traceback_text}\n\n"
         f"Previous report feedback:\n{failed_report.feedback or '(none)'}\n\n"
         f"Recovery evidence:\n{evidence_lines}\n\n"
+        f"Failed subagent diagnostics:\n{diagnostics_text}\n\n"
         f"IMPORTANT: This failure is in litehive's own code, NOT in the external project.\n"
         f"Your working directory is the litehive source tree: {source_root}\n\n"
+        f"Diagnosis checklist:\n"
+        f"- Did the failed agent produce stdout/stderr/transcript output?\n"
+        f"- Did it try to call `litehive report`? What exact error did it hit?\n"
+        f"- What does session metadata say about exit code and interruption state?\n"
+        f"- What Litehive code path caused the failure?\n\n"
         f"Instructions:\n"
-        f"- Read the traceback and identify the bug in litehive source code\n"
-        f"- Fix the bug with the smallest safe change\n"
-        f"- Run `uv run pytest -q` to verify the fix does not break existing tests\n"
-        f"- Report pass only if pytest passes and the fix addresses the traceback\n"
-        f"- Report blocked or fail if you cannot fix the bug\n"
+        f"- Read the traceback plus stdout/stderr/session/transcript artifacts and identify the Litehive bug\n"
+        f"- Fix the bug with the smallest safe change in Litehive source code\n"
+        f"- Run targeted verification for the Litehive fix; do not redo the failed stage's task work\n"
+        f"- Submit your own detailed recovery report describing the root cause and Litehive fix\n"
+        f"- When finished, submit your own detailed recovery report with `litehive report`\n"
+        f"- Use `pass` only if the Litehive fix is in place and `{step}` should be retried\n"
+        f"- Use `blocked` or `fail` if you cannot fix the Litehive bug\n"
     )
 
     recovery_result = subagents.run(
@@ -353,10 +510,14 @@ def _run_litehive_self_heal(
             summary=latest.message.splitlines()[0] if latest.message else f"self-heal recovered {step}",
             feedback=latest.message,
             files_changed=latest.files_changed,
+            retry_decision="retry" if latest.verdict in ("pass", "accept") else "continue",
+            failure_classification="litehive",
         )
 
     recovery_report = stage_report_from_subagent(task, step, recovery_result, root=root)
     if recovery_report.verdict in ("pass", "accept"):
+        recovery_report.retry_decision = "retry"
+        recovery_report.failure_classification = "litehive"
         record_recovery_report(
             root,
             task,

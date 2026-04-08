@@ -2818,6 +2818,17 @@ def test_agent_md_absent_falls_back_to_config(tmp_path: Path) -> None:
     assert "Config SWE fallback." in prompt
 
 
+def test_recovery_prompt_includes_default_startup_guidance(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Recovery guidance test")
+
+    prompt = stage_prompt(task, "implementing", workspace_context="", config=LitehiveConfig(), root=tmp_path, role_name="recovery")
+
+    assert "fix Litehive infrastructure bugs" in prompt
+    assert "Do not redo the failed stage's work" in prompt
+    assert "stdout, stderr, transcript, session metadata, exit code" in prompt
+
+
 def test_agent_md_all_and_role_combine(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Combine test")
