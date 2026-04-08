@@ -15,7 +15,18 @@ import yaml
 from jinja2 import Environment, FileSystemLoader
 
 from litehive.models import TaskRecord
-from litehive.tasks import list_tasks_state_first, load_state, runner_status_readonly, task_dir
+from litehive.events import read_events
+from litehive.tasks import (
+    VALID_TASK_ENGINES,
+    VALID_TASK_PRIORITIES,
+    list_tasks_state_first,
+    load_state,
+    load_task_thread,
+    require_task,
+    runner_status_readonly,
+    task_dir,
+    update_task,
+)
 
 _POLL_INTERVAL_MS = 1500
 _MAX_ARTIFACT_BYTES = 64 * 1024
@@ -60,6 +71,10 @@ def build_workspace_snapshot(root: Path) -> dict[str, Any]:
         "generated_at": _read_iso_now(),
         "runner": runner.model_dump(mode="python"),
         "state": state.model_dump(mode="python"),
+        "editable_fields": {
+            "priority_options": sorted(VALID_TASK_PRIORITIES),
+            "engine_options": sorted(VALID_TASK_ENGINES),
+        },
         "queue": list(state.queue),
         "active_task_id": state.active_task_id,
         "active_task": None if active_task is None else _serialize_task(root, active_task, state.active_task_id),
@@ -176,6 +191,28 @@ class LitehiveWebHandler(BaseHTTPRequestHandler):
             return self._send_json(payload)
         return self._send_error_json(HTTPStatus.NOT_FOUND, "Not found")
 
+    def do_POST(self) -> None:  # noqa: N802
+        parsed = urlparse(self.path)
+        if parsed.path != "/api/task":
+            return self._send_error_json(HTTPStatus.NOT_FOUND, "Not found")
+        try:
+            payload = self._read_json_body()
+        except ValueError as exc:
+            return self._send_error_json(HTTPStatus.BAD_REQUEST, str(exc))
+        task_id = payload.get("task_id")
+        updates = payload.get("updates")
+        if not isinstance(task_id, str) or not task_id:
+            return self._send_error_json(HTTPStatus.BAD_REQUEST, "task_id is required")
+        if not isinstance(updates, dict):
+            return self._send_error_json(HTTPStatus.BAD_REQUEST, "updates must be an object")
+        try:
+            response = update_task_detail(self.workspace_root, task_id, updates)
+        except FileNotFoundError as exc:
+            return self._send_error_json(HTTPStatus.NOT_FOUND, str(exc))
+        except ValueError as exc:
+            return self._send_error_json(HTTPStatus.BAD_REQUEST, str(exc))
+        return self._send_json(response)
+
     def log_message(self, format: str, *args: Any) -> None:  # noqa: A003
         return
 
@@ -204,6 +241,46 @@ class LitehiveWebHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(payload)))
         self.end_headers()
         self.wfile.write(payload)
+
+    def _read_json_body(self) -> dict[str, Any]:
+        content_length = self.headers.get("Content-Length")
+        if content_length is None:
+            raise ValueError("missing request body")
+        try:
+            raw = self.rfile.read(int(content_length))
+        except ValueError as exc:
+            raise ValueError("invalid Content-Length") from exc
+        try:
+            payload = json.loads(raw.decode("utf-8") or "{}")
+        except json.JSONDecodeError as exc:
+            raise ValueError("invalid JSON body") from exc
+        if not isinstance(payload, dict):
+            raise ValueError("JSON body must be an object")
+        return payload
+
+
+def update_task_detail(root: Path, task_id: str, updates: dict[str, Any]) -> dict[str, Any]:
+    root = root.resolve()
+    task = _require_task_for_web(root, task_id)
+    payload: dict[str, Any] = {}
+    for field in ("goal", "priority", "engine"):
+        if field in updates:
+            value = updates[field]
+            if value is not None and not isinstance(value, str):
+                raise ValueError(f"{field} must be a string or null")
+            payload[field] = value
+    for field in ("acceptance_criteria", "constraints", "plan"):
+        if field in updates:
+            payload[field] = _coerce_text_list(field, updates[field])
+    if not payload:
+        raise ValueError("No supported fields to update")
+    updated = update_task(
+        root,
+        task.id,
+        journal_message="Task metadata updated via web dashboard.",
+        **payload,
+    )
+    return {"task": _serialize_task(root, updated, load_state(root).active_task_id)}
 
 
 def _serialize_task(root: Path, task: TaskRecord, active_task_id: str | None) -> dict[str, Any]:
@@ -236,20 +313,14 @@ def _serialize_task(root: Path, task: TaskRecord, active_task_id: str | None) ->
             }
         )
 
-    reports = []
-    reports_dir = base / "reports"
-    if reports_dir.exists():
-        for report_path in sorted(reports_dir.glob("*.yaml"), reverse=True)[:5]:
-            payload = _load_yaml_file(report_path)
-            reports.append(
-                {
-                    "name": report_path.name,
-                    "path": _relative_to_root(root, report_path),
-                    "step": payload.get("step"),
-                    "verdict": payload.get("verdict"),
-                    "summary": payload.get("summary"),
-                }
-            )
+    reports = _load_stage_reports(root, base)
+    recovery_reports = _load_recovery_reports(root, base)
+    thread = [
+        comment.model_dump(mode="python")
+        for comment in load_task_thread(root, task)
+    ]
+    events = _load_task_events(root, task)
+    record = task.model_dump(mode="python", exclude={"runtime"})
 
     return {
         "id": task.id,
@@ -271,9 +342,82 @@ def _serialize_task(root: Path, task: TaskRecord, active_task_id: str | None) ->
         "task_path": _relative_to_root(root, base),
         "task_file": _relative_to_root(root, base / "task.yaml"),
         "runtime_file": _relative_to_root(root, base / "runtime.yaml"),
+        "thread_file": _relative_to_root(root, base / "thread.yaml"),
+        "events_file": _relative_to_root(root, base / "events.jsonl"),
+        "reports_dir": _relative_to_root(root, base / "reports"),
+        "recovery_dir": _relative_to_root(root, base / "recovery"),
+        "record": record,
         "reports": reports,
+        "events": events,
+        "thread": thread,
+        "recovery_reports": recovery_reports,
         "subagents": session_entries,
     }
+
+
+def _require_task_for_web(root: Path, task_id: str) -> TaskRecord:
+    try:
+        return require_task(root, task_id)
+    except ValueError as exc:
+        raise FileNotFoundError(str(exc)) from exc
+
+
+def _coerce_text_list(field: str, value: Any) -> list[str]:
+    if not isinstance(value, list) or any(not isinstance(item, str) for item in value):
+        raise ValueError(f"{field} must be a list of strings")
+    return list(value)
+
+
+def _load_stage_reports(root: Path, base: Path) -> list[dict[str, Any]]:
+    reports: list[dict[str, Any]] = []
+    reports_dir = base / "reports"
+    if not reports_dir.exists():
+        return reports
+    for report_path in sorted(reports_dir.glob("*.yaml")):
+        payload = _load_yaml_file(report_path)
+        reports.append(
+            {
+                "name": report_path.name,
+                "path": _relative_to_root(root, report_path),
+                "step": payload.get("step"),
+                "verdict": payload.get("verdict"),
+                "summary": payload.get("summary"),
+                "created_at": payload.get("created_at"),
+                "report": payload,
+            }
+        )
+    return reports
+
+
+def _load_recovery_reports(root: Path, base: Path) -> list[dict[str, Any]]:
+    reports: list[dict[str, Any]] = []
+    recovery_dir = base / "recovery"
+    if not recovery_dir.exists():
+        return reports
+    for report_path in sorted(recovery_dir.glob("*.yaml")):
+        payload = _load_yaml_file(report_path)
+        reports.append(
+            {
+                "name": report_path.name,
+                "path": _relative_to_root(root, report_path),
+                "summary": payload.get("summary"),
+                "trigger": payload.get("trigger"),
+                "stage": payload.get("stage"),
+                "runnable_state": payload.get("runnable_state"),
+                "created_at": payload.get("created_at"),
+                "report": payload,
+            }
+        )
+    return reports
+
+
+def _load_task_events(root: Path, task: TaskRecord) -> list[dict[str, Any]]:
+    events = read_events(root, task)
+    events.sort(key=lambda item: (
+        str(item.get("ts") or ""),
+        int(item.get("sequence", 0)) if isinstance(item.get("sequence", 0), int) else 0,
+    ))
+    return events
 
 
 def _read_session_artifact(root: Path, base: Path, kind: str, *, active: bool) -> SessionArtifact:
