@@ -1,0 +1,57 @@
+task_id: T-0228
+step: accepting
+verdict: pass
+summary: 'Accepted after code inspection and focused verification. I verified that
+  TaskRecord now includes an optional durable flag_reason field, and save_task normalizes
+  it so any persisted task with status=flagged writes flag_reason from runtime.last_outcome.reason_code
+  with an unknown fallback for legacy/manual flagged tasks. The same normalization
+  clears stale flag_reason values when a task is later saved in a non-flagged status,
+  so operators do not see outdated reasons. I inspected the flagged runner paths in
+  litehive/runner/core.py plus the web verdict handler in litehive/web/__init__.py
+  and confirmed they all route flagged persistence through the shared save path after
+  setting structured outcome reason_code values such as missing_acceptance_criteria,
+  retry_limit_exhausted, stage_exception, verdict_blocked, and unsupported_verdict.
+  I also verified litehive list appends flag_reason for flagged tasks and litehive
+  show prints flag_reason with unknown fallback for existing flagged tasks missing
+  the new field. Tests run: uv run pytest tests/test_runner_workflow.py -q -k ''blocks_large_task_without_inferable_acceptance_criteria_during_grooming''
+  -> 1 passed; uv run pytest tests/test_task_commands_and_daemon.py -q -k ''flag_reason
+  or retry_limit_exhausted'' -> 2 passed. This evidence covers the acceptance criteria
+  for durable persistence in task.yaml, meaningful reasons on flagged code paths,
+  CLI display in list/show, and unknown fallback for legacy flagged tasks.'
+feedback: 'Accepted after code inspection and focused verification. I verified that
+  TaskRecord now includes an optional durable flag_reason field, and save_task normalizes
+  it so any persisted task with status=flagged writes flag_reason from runtime.last_outcome.reason_code
+  with an unknown fallback for legacy/manual flagged tasks. The same normalization
+  clears stale flag_reason values when a task is later saved in a non-flagged status,
+  so operators do not see outdated reasons. I inspected the flagged runner paths in
+  litehive/runner/core.py plus the web verdict handler in litehive/web/__init__.py
+  and confirmed they all route flagged persistence through the shared save path after
+  setting structured outcome reason_code values such as missing_acceptance_criteria,
+  retry_limit_exhausted, stage_exception, verdict_blocked, and unsupported_verdict.
+  I also verified litehive list appends flag_reason for flagged tasks and litehive
+  show prints flag_reason with unknown fallback for existing flagged tasks missing
+  the new field. Tests run: uv run pytest tests/test_runner_workflow.py -q -k ''blocks_large_task_without_inferable_acceptance_criteria_during_grooming''
+  -> 1 passed; uv run pytest tests/test_task_commands_and_daemon.py -q -k ''flag_reason
+  or retry_limit_exhausted'' -> 2 passed. This evidence covers the acceptance criteria
+  for durable persistence in task.yaml, meaningful reasons on flagged code paths,
+  CLI display in list/show, and unknown fallback for legacy flagged tasks.'
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 84
+hook_results: []
+created_at: '2026-04-08T20:40:29+00:00'

@@ -1,0 +1,67 @@
+task_id: T-0228
+step: grooming
+verdict: pass
+summary: Grooming pass complete. I inspected the current task record plus the relevant
+  flagging and display code paths. No code changes or verification runs were performed
+  because this is the planner/grooming stage.
+feedback: "Grooming pass complete. I inspected the current task record plus the relevant\
+  \ flagging and display code paths. No code changes or verification runs were performed\
+  \ because this is the planner/grooming stage.\n\nWhat I verified:\n- `TaskRecord`\
+  \ currently has no durable `flag_reason` field; only `runtime.last_outcome.reason_code`\
+  \ exists (`litehive/models/task_models.py`, `litehive/tasks/runtime_tracking.py`).\n\
+  - The runner has multiple distinct paths that end with `task.status = \"flagged\"\
+  `, primarily in `litehive/runner/core.py`, and those paths already compute or pass\
+  \ a structured reason code such as `missing_acceptance_criteria`, `stage_exception`,\
+  \ `retry_limit_exhausted`, `resource_limit`, `verdict_blocked`, `verdict_fail`,\
+  \ `verdict_reject`, or `unsupported_verdict`.\n- `litehive list` and `litehive show`\
+  \ currently do not render any durable flag reason (`litehive/cli/status.py`), while\
+  \ some other summaries already expose runtime `reason_code` (`litehive/cli/_display.py`,\
+  \ `litehive/cli/_pool.py`, `litehive/cli/queue.py`).\n- Existing flagged tasks without\
+  \ the new field will load from YAML successfully once the model adds an optional\
+  \ field, so backward compatibility can be handled at display time with an `unknown`\
+  \ fallback.\n\nScope guidance for implementation:\n- Keep this task scoped to tasks\
+  \ whose persisted `status` becomes `flagged`. Do not broaden it into a full outcome/reason\
+  \ refactor for `merge_failed`, `recovery_failed`, or non-flag terminal statuses\
+  \ unless a shared helper makes that fall out naturally.\n- Reuse the existing outcome-reason\
+  \ vocabulary already emitted by the runner instead of inventing parallel synonyms.\
+  \ Example: prefer `retry_limit_exhausted` over introducing `retry_limit_exceeded`\
+  \ unless the implementer also normalizes every existing producer and consumer.\n\
+  - The durable field should live on `TaskRecord` in `task.yaml`, while runtime `last_outcome.reason_code`\
+  \ remains the richer execution record.\n\nRecommended execution plan:\n1. Add an\
+  \ optional durable `flag_reason` field to `TaskRecord` and ensure it serializes\
+  \ into `task.yaml`.\n2. Centralize the rule that when a task is persisted with `status\
+  \ == flagged`, `flag_reason` is set from the same structured reason code already\
+  \ being written to `runtime.last_outcome`.\n3. Clear or leave `flag_reason` untouched\
+  \ consistently when tasks are requeued/resumed so stale flagged reasons do not mislead\
+  \ operators.\n4. Update `litehive list` and `litehive show` to render `flag_reason`,\
+  \ with `unknown` for legacy flagged tasks missing the field.\n5. Add focused tests\
+  \ for the model/persistence path, each flagging path that explicitly sets `status\
+  \ = flagged`, and the `list`/`show` fallback behavior.\n\nTests run: none. Evidence\
+  \ is from source inspection only.\n\nPM_COMPLEXITY: moderate\nPLANNED_EFFORT: s\n\
+  \nTASK_UPDATE:\n  pm_complexity: moderate\n  planned_effort: s\n  plan:\n    - Add\
+  \ a durable `flag_reason` field to `TaskRecord` so `task.yaml` records why a task\
+  \ is flagged.\n    - Wire every `status = flagged` path to persist the same structured\
+  \ reason code already carried in stage reports/runtime outcome state.\n    - Show\
+  \ `flag_reason` in `litehive list` and `litehive show`, using `unknown` for legacy\
+  \ flagged tasks without the field.\n    - Add targeted regression tests for flag\
+  \ persistence, legacy fallback behavior, and CLI rendering."
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 125
+hook_results: []
+created_at: '2026-04-08T20:34:15+00:00'

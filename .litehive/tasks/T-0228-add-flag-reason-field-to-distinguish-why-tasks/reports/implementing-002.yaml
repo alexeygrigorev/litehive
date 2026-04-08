@@ -1,0 +1,48 @@
+task_id: T-0228
+step: implementing
+verdict: pass
+summary: 'Implemented durable task-level flag reasons. Added optional TaskRecord.flag_reason
+  persisted in task.yaml, normalized during task serialization so any persisted flagged
+  task gets flag_reason from runtime.last_outcome.reason_code and legacy/manual flagged
+  tasks without one fall back to unknown; non-flagged tasks clear the field so stale
+  reasons do not linger. Updated litehive list to append flag_reason for flagged tasks
+  and litehive show to print flag_reason with unknown fallback. Verified real runner
+  flagging paths persist the durable field for missing_acceptance_criteria and retry_limit_exhausted
+  via focused tests, and verified CLI rendering plus legacy fallback and stale-clear
+  behavior. Tests run: uv run pytest tests/test_runner_workflow.py -q -k ''blocks_large_task_without_inferable_acceptance_criteria''
+  ; uv run pytest tests/test_task_commands_and_daemon.py -q -k ''flag_reason or retry_limit_exhausted'''
+feedback: 'Implemented durable task-level flag reasons. Added optional TaskRecord.flag_reason
+  persisted in task.yaml, normalized during task serialization so any persisted flagged
+  task gets flag_reason from runtime.last_outcome.reason_code and legacy/manual flagged
+  tasks without one fall back to unknown; non-flagged tasks clear the field so stale
+  reasons do not linger. Updated litehive list to append flag_reason for flagged tasks
+  and litehive show to print flag_reason with unknown fallback. Verified real runner
+  flagging paths persist the durable field for missing_acceptance_criteria and retry_limit_exhausted
+  via focused tests, and verified CLI rendering plus legacy fallback and stale-clear
+  behavior. Tests run: uv run pytest tests/test_runner_workflow.py -q -k ''blocks_large_task_without_inferable_acceptance_criteria''
+  ; uv run pytest tests/test_task_commands_and_daemon.py -q -k ''flag_reason or retry_limit_exhausted'''
+files_changed:
+- litehive/cli/status.py
+- litehive/models/task_models.py
+- litehive/tasks/crud.py
+- tests/test_runner_workflow.py
+- tests/test_task_commands_and_daemon.py
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 182
+hook_results: []
+created_at: '2026-04-08T20:37:18+00:00'

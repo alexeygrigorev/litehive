@@ -1,0 +1,67 @@
+task_id: T-0228
+step: testing
+verdict: pass
+summary: 'Verified the durable flag_reason behavior end-to-end in the touched paths.
+  I inspected the implementation in litehive/models/task_models.py, litehive/tasks/crud.py,
+  and litehive/cli/status.py and confirmed TaskRecord now persists an optional flag_reason,
+  save_task normalizes it whenever status=flagged from runtime.last_outcome.reason_code
+  with an unknown fallback for legacy flagged tasks, and non-flagged saves clear the
+  field so stale reasons do not linger. I also checked the non-runner flagged write
+  paths (including the web verdict handler) and they persist through the same save
+  path, so flagged tasks written there also receive the durable field.\n\nTests run:\n-
+  uv run pytest tests/test_runner_workflow.py -q -k ''blocks_large_task_without_inferable_acceptance_criteria_during_grooming''\n  Result:
+  1 passed in 0.42s. Evidence: a real runner flagging path persists status=flagged
+  with flag_reason=missing_acceptance_criteria in the saved task record.\n- uv run
+  pytest tests/test_task_commands_and_daemon.py -q -k ''flag_reason or retry_limit_exhausted''\n  Result:
+  2 passed in 0.67s. Evidence: retry-limit flagging persists flag_reason=retry_limit_exhausted;
+  litehive list/show render the field; legacy flagged tasks without the new field
+  display unknown; and saving the task after moving it back to queued clears stale
+  flag_reason.\n\nAcceptance criteria status:\n- task.yaml gets a flag_reason field
+  set whenever status becomes flagged: verified through save_task normalization and
+  runner/web flagging paths.\n- All code paths that set status=flagged also set a
+  meaningful flag_reason: verified by code inspection of flagging paths plus centralized
+  persistence normalization from structured reason_code.\n- litehive list and litehive
+  show display the flag_reason: verified by targeted CLI test.\n- Existing flagged
+  tasks without flag_reason show as unknown or similar: verified by targeted CLI test.'
+feedback: 'Verified the durable flag_reason behavior end-to-end in the touched paths.
+  I inspected the implementation in litehive/models/task_models.py, litehive/tasks/crud.py,
+  and litehive/cli/status.py and confirmed TaskRecord now persists an optional flag_reason,
+  save_task normalizes it whenever status=flagged from runtime.last_outcome.reason_code
+  with an unknown fallback for legacy flagged tasks, and non-flagged saves clear the
+  field so stale reasons do not linger. I also checked the non-runner flagged write
+  paths (including the web verdict handler) and they persist through the same save
+  path, so flagged tasks written there also receive the durable field.\n\nTests run:\n-
+  uv run pytest tests/test_runner_workflow.py -q -k ''blocks_large_task_without_inferable_acceptance_criteria_during_grooming''\n  Result:
+  1 passed in 0.42s. Evidence: a real runner flagging path persists status=flagged
+  with flag_reason=missing_acceptance_criteria in the saved task record.\n- uv run
+  pytest tests/test_task_commands_and_daemon.py -q -k ''flag_reason or retry_limit_exhausted''\n  Result:
+  2 passed in 0.67s. Evidence: retry-limit flagging persists flag_reason=retry_limit_exhausted;
+  litehive list/show render the field; legacy flagged tasks without the new field
+  display unknown; and saving the task after moving it back to queued clears stale
+  flag_reason.\n\nAcceptance criteria status:\n- task.yaml gets a flag_reason field
+  set whenever status becomes flagged: verified through save_task normalization and
+  runner/web flagging paths.\n- All code paths that set status=flagged also set a
+  meaningful flag_reason: verified by code inspection of flagging paths plus centralized
+  persistence normalization from structured reason_code.\n- litehive list and litehive
+  show display the flag_reason: verified by targeted CLI test.\n- Existing flagged
+  tasks without flag_reason show as unknown or similar: verified by targeted CLI test.'
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 107
+hook_results: []
+created_at: '2026-04-08T20:39:05+00:00'
