@@ -1,66 +1,76 @@
 task_id: T-0235
 step: implementing
 verdict: pass
-summary: 'Verified the recovery-agent hardening already present in this worktree and
-  confirmed the acceptance regressions are fixed without weakening the new recovery
-  contract. Evidence by inspection: litehive/config/__init__.py now provides default
-  recovery startup guidance that says the recovery agent must diagnose the previous
-  agent failure, fix Litehive infrastructure bugs, start from stdout/stderr/transcript/session
-  metadata/exit code plus any litehive report attempt, and submit its own recovery
-  verdict; litehive/subagents/_prompts.py keeps the legacy runnable-path recovery
-  wording while adding explicit do-not-redo/do-not-report-the-failed-stage instructions;
-  litehive/runtime/_recovery.py now loads failed subagent diagnostics from session.yaml/stdout.txt/stderr.txt/transcript.md,
-  summarizes litehive report clues, runs recovery from the Litehive source repo when
-  configured, blocks cleanly when a configured Litehive source checkout is missing,
-  and marks successful recovery reports with retry_decision=retry so the failed stage
-  is retried. Also confirmed the crash-resume journal wording regression is fixed
-  in litehive/runtime/_builder.py by restoring ''resuming <engine> session <id>''.
-  Focused verification run results: uv run pytest -q tests/test_crash_resume.py::test_crash_resume_triggers_session_resume_for_claude
-  tests/test_runner_workflow.py::test_stage_prompt_uses_recovery_role_when_requested
-  tests/test_runner_workflow.py::test_recovery_prompt_includes_default_startup_guidance
-  -> 3 passed in 1.04s; uv run pytest -q tests/test_self_heal_recovery.py tests/test_recovery_agent.py
-  -> 10 passed in 1.19s; uv run pytest -q tests/test_retry_commit_and_recovery.py::test_attempt_stage_recovery_launches_agent_for_litehive_traceback_with_no_source_repo
-  tests/test_retry_commit_and_recovery.py::test_attempt_stage_recovery_launches_recovery_agent_for_litehive_traceback
-  tests/test_retry_commit_and_recovery.py::test_run_next_task_skips_retries_for_non_retryable_failure
-  -> 3 passed in 1.20s. This confirms the acceptance criteria are met: the recovery
-  prompt explicitly says to fix Litehive infrastructure rather than redo the failed
-  stage, failed-subagent stdout/stderr/session/transcript/exit-code evidence is included,
-  the prompt asks the agent to check output/report attempts/errors/root cause, recovery
-  runs against Litehive source when configured, the recovery agent submits its own
-  recovery verdict, and successful recovery causes retry_decision=retry so the failed
-  stage is retried with the fix in place.'
-feedback: 'Verified the recovery-agent hardening already present in this worktree
-  and confirmed the acceptance regressions are fixed without weakening the new recovery
-  contract. Evidence by inspection: litehive/config/__init__.py now provides default
-  recovery startup guidance that says the recovery agent must diagnose the previous
-  agent failure, fix Litehive infrastructure bugs, start from stdout/stderr/transcript/session
-  metadata/exit code plus any litehive report attempt, and submit its own recovery
-  verdict; litehive/subagents/_prompts.py keeps the legacy runnable-path recovery
-  wording while adding explicit do-not-redo/do-not-report-the-failed-stage instructions;
-  litehive/runtime/_recovery.py now loads failed subagent diagnostics from session.yaml/stdout.txt/stderr.txt/transcript.md,
-  summarizes litehive report clues, runs recovery from the Litehive source repo when
-  configured, blocks cleanly when a configured Litehive source checkout is missing,
-  and marks successful recovery reports with retry_decision=retry so the failed stage
-  is retried. Also confirmed the crash-resume journal wording regression is fixed
-  in litehive/runtime/_builder.py by restoring ''resuming <engine> session <id>''.
-  Focused verification run results: uv run pytest -q tests/test_crash_resume.py::test_crash_resume_triggers_session_resume_for_claude
-  tests/test_runner_workflow.py::test_stage_prompt_uses_recovery_role_when_requested
-  tests/test_runner_workflow.py::test_recovery_prompt_includes_default_startup_guidance
-  -> 3 passed in 1.04s; uv run pytest -q tests/test_self_heal_recovery.py tests/test_recovery_agent.py
-  -> 10 passed in 1.19s; uv run pytest -q tests/test_retry_commit_and_recovery.py::test_attempt_stage_recovery_launches_agent_for_litehive_traceback_with_no_source_repo
-  tests/test_retry_commit_and_recovery.py::test_attempt_stage_recovery_launches_recovery_agent_for_litehive_traceback
-  tests/test_retry_commit_and_recovery.py::test_run_next_task_skips_retries_for_non_retryable_failure
-  -> 3 passed in 1.20s. This confirms the acceptance criteria are met: the recovery
-  prompt explicitly says to fix Litehive infrastructure rather than redo the failed
-  stage, failed-subagent stdout/stderr/session/transcript/exit-code evidence is included,
-  the prompt asks the agent to check output/report attempts/errors/root cause, recovery
-  runs against Litehive source when configured, the recovery agent submits its own
-  recovery verdict, and successful recovery causes retry_decision=retry so the failed
-  stage is retried with the fix in place.'
+summary: 'Finished the recovery-agent hardening and closed the remaining finish-line
+  regressions. I kept the recovery contract intact: recovery startup guidance still
+  tells the agent to diagnose the prior agent failure, inspect stdout/stderr/transcript/session
+  metadata/exit code plus any litehive report attempt, fix Litehive infrastructure
+  instead of redoing the failed stage, run from the Litehive source repo when configured,
+  and submit its own recovery verdict so the failed stage can be retried. Final implementation
+  adjustments in this pass: moved built-in startup guidance out of litehive/config/__init__.py
+  into litehive/config/startup_guidance.py so the config facade stays under the workspace
+  bootstrap line-count constraint; restored the missing _prune_superseded_subagent_artifacts
+  import in litehive/subagents/_manager.py so completed subagent runs prune superseded
+  raw artifacts again without crashing timeline/fallback flows; and tightened litehive/subagents/_engine_detection.py
+  so stale instance aliases no longer mask a real class-level run override when deciding
+  whether to prefer non-live execution. Verification is now green across partitioned
+  pytest slices that cover the full suite without one monolithic run: uv run pytest
+  -q tests/test_archive.py tests/test_codex_quota.py tests/test_commit_recovery_bug.py
+  tests/test_engine_freeze.py tests/test_engine_parse_warnings.py tests/test_feedback_cap.py
+  tests/test_github_import.py tests/test_grooming_task_updates.py tests/test_inactivity_timeout.py
+  tests/test_list_and_show.py tests/test_observability_and_status.py tests/test_web_snapshot_lockfree.py
+  tests/test_workspace_bootstrap.py tests/test_worktree_merge_agent.py -> 259 passed
+  in 18.69s; uv run pytest -q tests/test_config_and_run_cli.py tests/test_engine_variants_and_timeline.py
+  tests/test_rmtree_cleanup_logging.py -> 110 passed in 10.92s; uv run pytest -q tests/test_crash_resume.py
+  tests/test_recovery_agent.py tests/test_retry_commit_and_recovery.py -> 102 passed
+  in 35.55s; uv run pytest -q tests/test_runner_workflow.py tests/test_runtime_pool.py
+  tests/test_self_heal_recovery.py tests/test_slugify.py tests/test_stage_result_submission.py
+  tests/test_task_commands_and_daemon.py tests/test_tasks_and_subagents.py -> 359
+  passed, 3 skipped in 55.23s. I also rechecked the engine-detection regression directly
+  with focused tests and the stale class-rebound scenario now passes. Evidence for
+  acceptance criteria: the recovery prompt/startup guidance and runtime changes remain
+  in place from the existing worktree, the recovery agent still receives failed-subagent
+  diagnostics and report clues, recovery still runs against Litehive source when configured
+  and returns retry_decision=retry after a successful repair, and all existing tests
+  now pass via the partitioned green suite above.'
+feedback: 'Finished the recovery-agent hardening and closed the remaining finish-line
+  regressions. I kept the recovery contract intact: recovery startup guidance still
+  tells the agent to diagnose the prior agent failure, inspect stdout/stderr/transcript/session
+  metadata/exit code plus any litehive report attempt, fix Litehive infrastructure
+  instead of redoing the failed stage, run from the Litehive source repo when configured,
+  and submit its own recovery verdict so the failed stage can be retried. Final implementation
+  adjustments in this pass: moved built-in startup guidance out of litehive/config/__init__.py
+  into litehive/config/startup_guidance.py so the config facade stays under the workspace
+  bootstrap line-count constraint; restored the missing _prune_superseded_subagent_artifacts
+  import in litehive/subagents/_manager.py so completed subagent runs prune superseded
+  raw artifacts again without crashing timeline/fallback flows; and tightened litehive/subagents/_engine_detection.py
+  so stale instance aliases no longer mask a real class-level run override when deciding
+  whether to prefer non-live execution. Verification is now green across partitioned
+  pytest slices that cover the full suite without one monolithic run: uv run pytest
+  -q tests/test_archive.py tests/test_codex_quota.py tests/test_commit_recovery_bug.py
+  tests/test_engine_freeze.py tests/test_engine_parse_warnings.py tests/test_feedback_cap.py
+  tests/test_github_import.py tests/test_grooming_task_updates.py tests/test_inactivity_timeout.py
+  tests/test_list_and_show.py tests/test_observability_and_status.py tests/test_web_snapshot_lockfree.py
+  tests/test_workspace_bootstrap.py tests/test_worktree_merge_agent.py -> 259 passed
+  in 18.69s; uv run pytest -q tests/test_config_and_run_cli.py tests/test_engine_variants_and_timeline.py
+  tests/test_rmtree_cleanup_logging.py -> 110 passed in 10.92s; uv run pytest -q tests/test_crash_resume.py
+  tests/test_recovery_agent.py tests/test_retry_commit_and_recovery.py -> 102 passed
+  in 35.55s; uv run pytest -q tests/test_runner_workflow.py tests/test_runtime_pool.py
+  tests/test_self_heal_recovery.py tests/test_slugify.py tests/test_stage_result_submission.py
+  tests/test_task_commands_and_daemon.py tests/test_tasks_and_subagents.py -> 359
+  passed, 3 skipped in 55.23s. I also rechecked the engine-detection regression directly
+  with focused tests and the stale class-rebound scenario now passes. Evidence for
+  acceptance criteria: the recovery prompt/startup guidance and runtime changes remain
+  in place from the existing worktree, the recovery agent still receives failed-subagent
+  diagnostics and report clues, recovery still runs against Litehive source when configured
+  and returns retry_decision=retry after a successful repair, and all existing tests
+  now pass via the partitioned green suite above.'
 files_changed:
 - litehive/config/__init__.py
-- litehive/runtime/_builder.py
+- litehive/config/startup_guidance.py
 - litehive/runtime/_recovery.py
+- litehive/subagents/_engine_detection.py
+- litehive/subagents/_manager.py
 - litehive/subagents/_prompts.py
 - tests/test_retry_commit_and_recovery.py
 - tests/test_runner_workflow.py
@@ -81,6 +91,6 @@ outcome_reason: ''
 failure_classification: null
 failure_diagnostics: {}
 resource_limit_event: null
-duration_seconds: 61
+duration_seconds: 389
 hook_results: []
-created_at: '2026-04-08T16:50:44+00:00'
+created_at: '2026-04-08T23:45:03+00:00'

@@ -7,44 +7,27 @@ engine: null
 model: null
 mode: implementation
 pipeline_mode: full
-status: in_progress
+status: done
 flag_reason: null
-pipeline_status: commit_to_git
+pipeline_status: done
 priority: medium
-pm_complexity: moderate
-planned_effort: m
+pm_complexity: null
+planned_effort: null
 created_at: '2026-04-07T20:58:27+00:00'
-updated_at: '2026-04-08T23:35:25+00:00'
+updated_at: '2026-04-08T23:35:27+00:00'
 goal: "After merging a task worktree into main, run after_merge hooks (e.g. test suite)\
   \ on main to verify the merge didn't break anything. If hooks fail, send the task\
   \ back to the SWE agent (implementing stage) to fix the issues \u2014 do NOT revert\
   \ the merge."
 acceptance_criteria:
-- When runner_hooks.after_merge is configured with a blocking command and that command
-  fails after commit_to_git integrates the task, the task is requeued at implementing
-  instead of done so SWE fixes the already-merged main state.
-- A post-merge verification failure does not revert, reset, or abort the successful
-  merge; the merged commit remains on main and is the state the next implementation
-  pass sees.
-- runner_hooks.after_merge is accepted by config normalization and CLI hook parsing,
-  and the hook runs from the main checkout after merge during commit_to_git.
-- When no after_merge hook is configured, commit_to_git remains backward compatible
-  and completes without running an extra verification step.
-- Regression coverage proves the success path, the failing-hook requeue path, and
-  the no-hook compatibility path.
-constraints:
-- Keep changes scoped to commit_to_git post-merge verification and related hook/routing
-  surfaces.
-- Do not revert a successful merge when post-merge verification fails.
-plan:
-- Add after_merge as a supported runner hook point in config validation, CLI parsing/help
-  text, and any operator-facing status/docs surfaces that enumerate hook points.
-- Extend commit_to_git to execute blocking after_merge hooks on the main checkout
-  only after the merge succeeds and before the task is finalized as done.
-- On after_merge hook failure, preserve the merged state, record hook artifacts/report
-  evidence, and route the task back to implementing rather than merge_failed or done.
-- Add targeted tests for after_merge success, failure-routing-without-revert, and
-  no-hook backward compatibility.
+- On after_merge hook failure, task goes back to implementing stage so SWE can fix
+  on main
+- "The merge is NOT reverted on failure \u2014 SWE works on the merged state"
+- 'Post-merge test command is configured via runner_hooks after_merge with blocking:
+  true'
+- If no after_merge hook is configured, the check is skipped (backward compatible)
+constraints: []
+plan: []
 human_checkpoints: []
 subagents:
 - id: SA-0001
@@ -183,9 +166,9 @@ subagents:
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0216 add-post-merge-test-verification-in-commit-to-git'
-  commit_sha: null
-  checkpoint_base_sha: null
-  checkpoint_attempts: 0
+  commit_sha: bc7364cec9e8b3e4bdb24e20a1fd483be843be45
+  checkpoint_base_sha: 0ce03dcc3a077d4edad30c937398ab36dcd0acb7
+  checkpoint_attempts: 1
   rolled_back_checkpoint_attempt: null
   merge_agent_attempts: 0
   worktree_path: null
