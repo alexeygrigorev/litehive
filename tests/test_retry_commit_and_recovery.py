@@ -1791,7 +1791,7 @@ def test_run_next_task_preserves_future_task_added_during_commit_failure(
         )
 
     monkeypatch.setattr(
-        "litehive.runtime._execution._commit_to_git_report", fail_commit_with_concurrent_add
+        "litehive.runtime._builder._commit_to_git_report", fail_commit_with_concurrent_add
     )
 
     summary = run_next_task(tmp_path)
@@ -1998,7 +1998,7 @@ def test_run_next_task_preserves_git_commit_failure_diagnostics(
         )
 
     monkeypatch.setattr(
-        "litehive.runtime._execution._commit_to_git_report", fail_commit
+        "litehive.runtime._builder._commit_to_git_report", fail_commit
     )
 
     summary = run_next_task(tmp_path)

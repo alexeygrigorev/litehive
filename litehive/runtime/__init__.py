@@ -64,38 +64,48 @@ from ._recovery import (
 
 from ._commit import _commit_to_git_report
 
-from ._execution import (
-    _allowed_commit_paths,
+from ._builder import build_executor
+
+from ._hooks import (
     _attach_runner_hook_results,
-    _dirty_entry_paths,
-    _dirty_worktree_owner_task,
     _execute_runner_hook,
-    _finalize_pool_run,
     _flatten_runner_hook_feedback,
     _flatten_runner_hook_warnings,
-    _git_worktree_blocks_pool,
-    _git_worktree_is_dirty,
-    _human_checkpoint_stop_reason,
-    _pool_stop_reason,
-    _requires_continue_or_rollback,
-    _resolve_task_execution_root,
     _run_runner_hooks_for_stage,
     _runner_hook_feedback,
     _runner_hook_point,
     _runner_hook_warnings,
-    _single_task_pre_stop_reason,
-    _single_task_stop_reason,
-    _task_can_resume_with_owned_dirty_paths,
-    _task_worktree_path,
-    _unexpected_dirty_paths,
-    build_executor,
+)
+
+from ._orchestration import (
     drain_task_pool,
-    inspect_dirty_worktree_gate,
     resolve_next_task,
     run_next_task,
     run_next_task_with_override,
     run_single_task,
     run_task,
+)
+
+from ._pool_control import (
+    _finalize_pool_run,
+    _human_checkpoint_stop_reason,
+    _pool_stop_reason,
+    _requires_continue_or_rollback,
+    _single_task_pre_stop_reason,
+    _single_task_stop_reason,
+)
+
+from ._worktree import (
+    _allowed_commit_paths,
+    _dirty_entry_paths,
+    _dirty_worktree_owner_task,
+    _git_worktree_blocks_pool,
+    _git_worktree_is_dirty,
+    _resolve_task_execution_root,
+    _task_can_resume_with_owned_dirty_paths,
+    _task_worktree_path,
+    _unexpected_dirty_paths,
+    inspect_dirty_worktree_gate,
 )
 
 __all__ = [
