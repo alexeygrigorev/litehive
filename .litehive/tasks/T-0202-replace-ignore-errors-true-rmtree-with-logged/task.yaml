@@ -7,13 +7,13 @@ engine: null
 model: null
 mode: implementation
 pipeline_mode: full
-status: in_progress
-pipeline_status: commit_to_git
+status: done
+pipeline_status: done
 priority: medium
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-06T20:34:27+00:00'
-updated_at: '2026-04-08T00:54:39+00:00'
+updated_at: '2026-04-08T00:57:12+00:00'
 goal: 'Multiple places use shutil.rmtree(path, ignore_errors=True) which silently
   swallows permission errors, lock issues, and missing paths. Replace with explicit
   error handling that logs what failed. Covers: tasks.py:1654,1736,1751, daemon/__init__.py:169,
@@ -75,15 +75,22 @@ subagents:
   path: subagents/SA-0007-reviewer
   sandboxed: false
   sandbox_summary: host
+- id: SA-0008
+  role: merge-resolver
+  engine: claude
+  status: completed
+  path: subagents/SA-0008-merge-resolver
+  sandboxed: false
+  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0202 replace-ignore-errors-true-rmtree-with-logged'
-  commit_sha: null
-  checkpoint_base_sha: null
-  checkpoint_attempts: 0
+  commit_sha: ca2d3317e896ad67583e7ae2863fa67ada11dcb4
+  checkpoint_base_sha: 67adfde8ff572ed00f71b21a3d2431619da36e43
+  checkpoint_attempts: 1
   rolled_back_checkpoint_attempt: null
   worktree_path: null
-  merge_agent_attempts: 0
+  merge_agent_attempts: 1
 retry_policy:
   max_retries: null
   stage_retry_limit: null

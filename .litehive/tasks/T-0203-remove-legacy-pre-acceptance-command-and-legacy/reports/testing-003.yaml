@@ -1,0 +1,42 @@
+task_id: T-0203
+step: testing
+verdict: pass
+summary: 'STAGE_RESULT:'
+feedback: "STAGE_RESULT:\n{\"verdict\":\"pass\",\"summary\":\"All 8 acceptance criteria\
+  \ verified: legacy pre_acceptance_command and legacy_artifact_name removed, migration\
+  \ error works, tests pass\",\"tests\":{\"added\":1,\"passing\":200},\"warnings\"\
+  :[\"Two test Namespace fixtures (test_config_and_run_cli.py:564,611) still carry\
+  \ pre_acceptance_command=None \u2014 dead but harmless since CLI/configure no longer\
+  \ read it\"],\"follow_up_tasks\":[],\"acceptance_criteria\":[\"PASS: Loading config\
+  \ with pre_acceptance_command raises ValueError with migration instructions \u2014\
+  \ verified by test_load_config_rejects_legacy_pre_acceptance_command and reading\
+  \ config/__init__.py:386-394\",\"PASS: pre_acceptance_command field removed from\
+  \ WorkspaceConfig dataclass \u2014 confirmed not present in dataclass fields (config/__init__.py:180-206)\"\
+  ,\"PASS: --pre-acceptance-command CLI argument removed from cli/parser.py \u2014\
+  \ confirmed absent from parser definitions\",\"PASS: legacy_artifact_name parameter\
+  \ removed from _execute_runner_hook \u2014 grep returns zero matches in litehive/\"\
+  ,\"PASS: Legacy conversion logic in __post_init__ removed \u2014 only migration\
+  \ error check remains in load_config\",\"PASS: docs/configuration.md no longer references\
+  \ pre_acceptance_command\",\"PASS: Legacy tests replaced/updated \u2014 1 new migration-error\
+  \ test added, old legacy tests removed\",\"PASS: All 200 tests pass (54 config_and_run_cli\
+  \ + 101 task_commands_and_daemon + 45 engine_variants_and_timeline) in 48s\"],\"\
+  task_update\":{}}"
+files_changed: []
+follow_up_tasks: []
+created_follow_up_task_ids: []
+task_update: {}
+tests: {}
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 132
+hook_results: []
+created_at: '2026-04-08T01:08:19+00:00'
