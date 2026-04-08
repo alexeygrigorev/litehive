@@ -1,0 +1,61 @@
+task_id: T-0215
+step: grooming
+verdict: pass
+summary: 'Grooming complete. Analysis of web dashboard gap:'
+feedback: 'Grooming complete. Analysis of web dashboard gap:
+
+
+  CURRENT STATE: litehive/web/__init__.py is a read-only monitor (402 lines) with
+  3 GET endpoints (/, /api/snapshot, /api/session). Single-file SPA (Jinja2 template)
+  with 1.5s polling. Shows task queue, task details with subagent sessions, run-all
+  logs. No write/mutation operations.
+
+
+  GAP: ~35 CLI commands have no web equivalent. All mutation operations missing: task
+  CRUD (add, update, close, requeue, abandon), queue management (move, promote, prioritize),
+  lifecycle transitions (run, stop, switch, resume), daemon control (run, stop, restart,
+  status), reporting (report verdicts), and import operations (import-issue, import-issues,
+  intake).
+
+
+  FOLLOW-UP TASK AREAS (to be created as implementation tasks):
+
+  1. Task Actions API - POST endpoints for create, update, close, requeue, abandon,
+  stop
+
+  2. Queue Management API - POST endpoints for move, promote, prioritize
+
+  3. Daemon Control API - POST endpoints for daemon start/stop/restart, GET for status
+
+  4. Task Detail Views - Enhanced task view with edit capabilities
+
+  5. Live Agent Streaming - WebSocket or SSE for real-time agent output (replace polling)
+
+  6. Engine Monitoring - Dashboard for engine status and configuration
+
+  7. Report/Verdict Submission - Web form for submitting stage verdicts
+
+
+  Acceptance criteria met: dashboard code analyzed and documented, feature areas identified
+  with clear scope.'
+files_changed: []
+follow_up_tasks: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 358
+hook_results: []
+created_at: '2026-04-08T06:01:39+00:00'

@@ -1,0 +1,47 @@
+id: T-0226
+slug: web-dashboard-engine-monitoring-and-configuration
+title: 'Web dashboard: engine monitoring and configuration'
+depends_on: []
+task_type: null
+engine: null
+model: null
+mode: implementation
+pipeline_mode: full
+status: queued
+pipeline_status: backlog
+priority: low
+pm_complexity: null
+planned_effort: null
+created_at: '2026-04-08T06:05:14+00:00'
+updated_at: '2026-04-08T06:05:14+00:00'
+goal: Add an engine monitoring dashboard to the web UI showing engine status, usage
+  metrics from engine-monitoring.yaml, and configuration. Allow switching the default
+  engine and viewing engine routing rules.
+acceptance_criteria:
+- GET /api/engines endpoint returns engine configuration, routing rules, and usage
+  metrics
+- Engine dashboard page shows current default engine, task-type routing table, and
+  engine freeze status
+- Usage metrics display shows per-engine token/cost usage from engine-monitoring.yaml
+- POST /api/engines/default endpoint allows switching the default engine
+- Engine switch action for individual tasks available from task detail view (mirrors
+  litehive switch)
+constraints: []
+plan: []
+human_checkpoints: []
+subagents: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0226 web-dashboard-engine-monitoring-and-configuration'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+  worktree_path: null
+  merge_agent_attempts: 0
+retry_policy:
+  max_retries: null
+  stage_retry_limit: null
+created_from: null
+upstream_origin: null
+github_origin: null

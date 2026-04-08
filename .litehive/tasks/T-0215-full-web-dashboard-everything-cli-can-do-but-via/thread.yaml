@@ -1,0 +1,154 @@
+- role: planner
+  step: grooming
+  verdict: pass
+  message: 'Grooming complete. Analysis of web dashboard gap:
+
+
+    CURRENT STATE: litehive/web/__init__.py is a read-only monitor (402 lines) with
+    3 GET endpoints (/, /api/snapshot, /api/session). Single-file SPA (Jinja2 template)
+    with 1.5s polling. Shows task queue, task details with subagent sessions, run-all
+    logs. No write/mutation operations.
+
+
+    GAP: ~35 CLI commands have no web equivalent. All mutation operations missing:
+    task CRUD (add, update, close, requeue, abandon), queue management (move, promote,
+    prioritize), lifecycle transitions (run, stop, switch, resume), daemon control
+    (run, stop, restart, status), reporting (report verdicts), and import operations
+    (import-issue, import-issues, intake).
+
+
+    FOLLOW-UP TASK AREAS (to be created as implementation tasks):
+
+    1. Task Actions API - POST endpoints for create, update, close, requeue, abandon,
+    stop
+
+    2. Queue Management API - POST endpoints for move, promote, prioritize
+
+    3. Daemon Control API - POST endpoints for daemon start/stop/restart, GET for
+    status
+
+    4. Task Detail Views - Enhanced task view with edit capabilities
+
+    5. Live Agent Streaming - WebSocket or SSE for real-time agent output (replace
+    polling)
+
+    6. Engine Monitoring - Dashboard for engine status and configuration
+
+    7. Report/Verdict Submission - Web form for submitting stage verdicts
+
+
+    Acceptance criteria met: dashboard code analyzed and documented, feature areas
+    identified with clear scope.'
+  files_changed: []
+  created_at: '2026-04-08T06:01:30+00:00'
+- role: recovery
+  step: grooming
+  verdict: comment
+  message: 'Recovery trigger `stage_failure`: Grooming complete. Analysis of web dashboard
+    gap:
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0215-full-web-dashboard-everything-cli-can-do-but-via/recovery/recovery-001.yaml'
+  files_changed: []
+  created_at: '2026-04-08T06:01:39+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: "Analysis complete and follow-up tasks created.\n\n## Current Web Dashboard\
+    \ Analysis\n\nThe web dashboard (litehive/web/__init__.py, 402 lines) is a read-only\
+    \ monitor with 3 GET endpoints:\n- GET / \u2014 HTML SPA dashboard (Jinja2 template\
+    \ with 1.5s JS polling)\n- GET /api/snapshot \u2014 Full workspace state JSON\
+    \ (tasks, queue, runner status, run-all logs)\n- GET /api/session \u2014 Individual\
+    \ subagent session details with artifact content (64KB tail)\n\nThe frontend is\
+    \ a 3-column layout: queue list, task details, and session/logs viewer. No mutation\
+    \ operations exist \u2014 all 37+ CLI commands are read-only or missing from the\
+    \ web interface.\n\n## Follow-Up Tasks Created\n\n7 implementation tasks created\
+    \ covering all feature areas:\n\n1. **T-0221** [high] Task Actions API \u2014\
+    \ POST endpoints for create, update, close, requeue, abandon, stop (8 acceptance\
+    \ criteria)\n2. **T-0222** [high] Queue Management API \u2014 POST endpoints for\
+    \ move, promote, prioritize with frontend reorder controls (5 criteria)\n3. **T-0223**\
+    \ [medium] Daemon Control API \u2014 Start/stop/restart/status endpoints with\
+    \ frontend controls (6 criteria)\n4. **T-0224** [medium] Enhanced Task Detail\
+    \ Views \u2014 Full task info display, inline editing, events timeline, report\
+    \ history (6 criteria)\n5. **T-0225** [medium] Live Agent Streaming via SSE \u2014\
+    \ Replace polling with Server-Sent Events for real-time updates (5 criteria)\n\
+    6. **T-0226** [low] Engine Monitoring \u2014 Engine dashboard with usage metrics,\
+    \ routing config, and engine switching (5 criteria)\n7. **T-0227** [medium] Report/Verdict\
+    \ Submission \u2014 Web form for submitting stage verdicts to drive pipeline from\
+    \ browser (4 criteria)\n\n## Acceptance Criteria Verification\n\n- \u2705 Current\
+    \ web dashboard code analyzed and documented: Full endpoint inventory, template\
+    \ structure, and data flow documented\n- \u2705 Follow-up tasks created for each\
+    \ feature area with clear scope and acceptance criteria: 7 tasks with 39 total\
+    \ acceptance criteria covering task actions, queue management, daemon control,\
+    \ task details, live streaming, engine monitoring, and verdict submission"
+  files_changed: []
+  created_at: '2026-04-08T06:05:47+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: "Analysis and follow-up task creation complete. Both acceptance criteria\
+    \ verified:\n\n1. **Current web dashboard code analyzed and documented**: The\
+    \ existing web dashboard (litehive/web/__init__.py, 402 lines) is a read-only\
+    \ monitor with 3 GET endpoints (/, /api/snapshot, /api/session). Single-file SPA\
+    \ with Jinja2 template and 1.5s JS polling. Shows task queue, task details with\
+    \ subagent sessions, and run-all logs. No mutation/write operations exist \u2014\
+    \ all 37+ CLI commands are either read-only or missing from the web interface.\n\
+    \n2. **Follow-up tasks created for each feature area with clear scope and acceptance\
+    \ criteria**: 7 implementation tasks created (T-0221 through T-0227) covering\
+    \ all identified feature gaps:\n   - T-0221 [high]: Task Actions API (8 acceptance\
+    \ criteria) \u2014 create, update, close, requeue, abandon, stop\n   - T-0222\
+    \ [high]: Queue Management API (5 criteria) \u2014 move, promote, prioritize with\
+    \ frontend controls\n   - T-0223 [medium]: Daemon Control API (6 criteria) \u2014\
+    \ start/stop/restart/status with UI controls\n   - T-0224 [medium]: Enhanced Task\
+    \ Detail Views (6 criteria) \u2014 full task info, inline editing, events timeline\n\
+    \   - T-0225 [medium]: Live Agent Streaming via SSE (5 criteria) \u2014 replace\
+    \ polling with real-time updates\n   - T-0226 [low]: Engine Monitoring (5 criteria)\
+    \ \u2014 engine dashboard, routing config, usage metrics\n   - T-0227 [medium]:\
+    \ Report/Verdict Submission (4 criteria) \u2014 web form for stage verdicts\n\n\
+    All 7 task directories confirmed present under .litehive/tasks/ with complete\
+    \ task.yaml files containing goal, acceptance criteria, priority, and proper metadata.\
+    \ Total of 39 acceptance criteria across all follow-up tasks.\n\nNo code changes\
+    \ or tests were needed \u2014 this was an analysis and planning task."
+  files_changed: []
+  created_at: '2026-04-08T06:06:36+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: "Analysis and planning task complete. Both acceptance criteria verified:\n\
+    \n1. Current web dashboard code analyzed and documented: litehive/web/__init__.py\
+    \ (401 lines) is a read-only monitor with 3 GET endpoints (/, /api/snapshot, /api/session).\
+    \ Single-file SPA with Jinja2 template and 1.5s JS polling. No mutation operations\
+    \ exist.\n\n2. Follow-up tasks created for each feature area with clear scope\
+    \ and acceptance criteria: 7 tasks (T-0221 through T-0227) confirmed present under\
+    \ .litehive/tasks/ with complete task.yaml files:\n   - T-0221 [high]: Task Actions\
+    \ API (create, update, close, requeue, abandon, stop)\n   - T-0222 [high]: Queue\
+    \ Management API (move, promote, prioritize)\n   - T-0223 [medium]: Daemon Control\
+    \ API (start/stop/restart/status)\n   - T-0224 [medium]: Enhanced Task Detail\
+    \ Views (full info, inline editing, events timeline)\n   - T-0225 [medium]: Live\
+    \ Agent Streaming via SSE\n   - T-0226 [low]: Engine Monitoring and Configuration\n\
+    \   - T-0227 [medium]: Report/Verdict Submission\n\nNo code changes or tests needed\
+    \ \u2014 this was an analysis and planning task."
+  files_changed: []
+  created_at: '2026-04-08T06:07:11+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: "Analysis and planning task complete. Both acceptance criteria verified:\n\
+    \n1. Current web dashboard code analyzed and documented: litehive/web/__init__.py\
+    \ (401 lines) is a read-only monitor with 3 GET endpoints (/, /api/snapshot, /api/session).\
+    \ Single-file SPA with Jinja2 template and 1.5s JS polling. No mutation operations\
+    \ exist \u2014 all 37+ CLI commands are read-only or missing from the web interface.\n\
+    \n2. Follow-up tasks created for each feature area with clear scope and acceptance\
+    \ criteria: 7 tasks confirmed present under .litehive/tasks/:\n   - T-0221 [high]:\
+    \ Task Actions API (create, update, close, requeue, abandon, stop)\n   - T-0222\
+    \ [high]: Queue Management API (move, promote, prioritize)\n   - T-0223 [medium]:\
+    \ Daemon Control API (start/stop/restart/status)\n   - T-0224 [medium]: Enhanced\
+    \ Task Detail Views (full info, inline editing, events timeline)\n   - T-0225\
+    \ [medium]: Live Agent Streaming via SSE\n   - T-0226 [low]: Engine Monitoring\
+    \ and Configuration\n   - T-0227 [medium]: Report/Verdict Submission\n\nNo code\
+    \ changes or tests needed \u2014 this was an analysis and planning task. Evidence:\
+    \ all 7 task directories verified present with ls, web module confirmed at 401\
+    \ lines matching documented analysis."
+  files_changed: []
+  created_at: '2026-04-08T06:07:41+00:00'

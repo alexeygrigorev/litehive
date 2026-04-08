@@ -7,13 +7,13 @@ engine: null
 model: null
 mode: implementation
 pipeline_mode: full
-status: queued
-pipeline_status: implementing
+status: in_progress
+pipeline_status: commit_to_git
 priority: medium
 pm_complexity: simple
 planned_effort: s
 created_at: '2026-04-07T08:27:25+00:00'
-updated_at: '2026-04-07T20:53:00+00:00'
+updated_at: '2026-04-08T06:18:04+00:00'
 goal: 'Simplify merge conflict handling in commit_to_git. The flow is: (1) try git
   merge, (2) if conflict, launch merge agent ONCE, (3) if merge agent resolves it,
   done, (4) if merge agent fails, declare task failed, (5) launch recovery agent once,
@@ -65,6 +65,34 @@ subagents:
   engine: claude
   status: completed
   path: subagents/SA-0005-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0006
+  role: merge-resolver
+  engine: claude
+  status: completed
+  path: subagents/SA-0006-merge-resolver
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0007
+  role: swe
+  engine: claude
+  status: completed
+  path: subagents/SA-0007-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0008
+  role: qa
+  engine: claude
+  status: completed
+  path: subagents/SA-0008-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0009
+  role: reviewer
+  engine: claude
+  status: completed
+  path: subagents/SA-0009-reviewer
   sandboxed: false
   sandbox_summary: host
 git:

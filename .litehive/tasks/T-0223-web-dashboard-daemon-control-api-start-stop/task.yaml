@@ -1,0 +1,46 @@
+id: T-0223
+slug: web-dashboard-daemon-control-api-start-stop
+title: 'Web dashboard: daemon control API (start, stop, restart, status)'
+depends_on: []
+task_type: null
+engine: null
+model: null
+mode: implementation
+pipeline_mode: full
+status: queued
+pipeline_status: backlog
+priority: medium
+pm_complexity: null
+planned_effort: null
+created_at: '2026-04-08T06:04:59+00:00'
+updated_at: '2026-04-08T06:04:59+00:00'
+goal: 'Add endpoints to the web dashboard for daemon lifecycle management: start daemon,
+  stop daemon, restart daemon, and show daemon status including PID and recent logs.
+  The frontend should show daemon state and provide control buttons.'
+acceptance_criteria:
+- POST /api/daemon/start endpoint starts the workspace daemon
+- POST /api/daemon/stop endpoint stops the workspace daemon
+- POST /api/daemon/restart endpoint restarts the workspace daemon
+- GET /api/daemon/status endpoint returns daemon PID, uptime, and recent log entries
+- Frontend shows daemon status indicator (running/stopped) with start/stop/restart
+  buttons
+- Daemon log viewer in the frontend shows recent run-all logs with auto-refresh
+constraints: []
+plan: []
+human_checkpoints: []
+subagents: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0223 web-dashboard-daemon-control-api-start-stop'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+  worktree_path: null
+  merge_agent_attempts: 0
+retry_policy:
+  max_retries: null
+  stage_retry_limit: null
+created_from: null
+upstream_origin: null
+github_origin: null

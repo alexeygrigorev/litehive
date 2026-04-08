@@ -7,13 +7,13 @@ engine: null
 model: null
 mode: implementation
 pipeline_mode: full
-status: in_progress
-pipeline_status: commit_to_git
+status: done
+pipeline_status: done
 priority: medium
 pm_complexity: simple
 planned_effort: s
 created_at: '2026-04-07T20:44:31+00:00'
-updated_at: '2026-04-08T05:53:51+00:00'
+updated_at: '2026-04-08T05:54:44+00:00'
 goal: The web dashboard API endpoint /api/snapshot hangs indefinitely when the runner
   holds the workspace lock. build_workspace_snapshot calls load_state and list_tasks
   which try to acquire the lock. The web server should read state files directly without
@@ -63,15 +63,22 @@ subagents:
   path: subagents/SA-0005-reviewer
   sandboxed: false
   sandbox_summary: host
+- id: SA-0006
+  role: merge-resolver
+  engine: claude
+  status: completed
+  path: subagents/SA-0006-merge-resolver
+  sandboxed: false
+  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0214 fix-web-dashboard-hanging-when-runner-is-active'
-  commit_sha: null
-  checkpoint_base_sha: null
-  checkpoint_attempts: 0
+  commit_sha: e18abd2892d8a2c8e61afc7ed3d40dc75a8ce093
+  checkpoint_base_sha: eabafd9f7e450fa70ab5a15494997e7d9768b35c
+  checkpoint_attempts: 1
   rolled_back_checkpoint_attempt: null
   worktree_path: null
-  merge_agent_attempts: 0
+  merge_agent_attempts: 1
 retry_policy:
   max_retries: null
   stage_retry_limit: null

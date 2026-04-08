@@ -220,3 +220,136 @@
     \ 4 passed (no regressions)"
   files_changed: []
   created_at: '2026-04-07T14:21:29+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: "## Implementation Verified: Merge agent retry limit for commit_to_git\n\
+    \nAll changes from prior SWE passes are present and tested in the current worktree\
+    \ merge.\n\n### Changes in place:\n1. **litehive/models.py:420** \u2014 `merge_agent_attempts:\
+    \ int = 0` in GitSettings tracks merge agent launches per task\n2. **litehive/runner/states.py:51**\
+    \ \u2014 `RECOVERY_FAILED = \"recovery_failed\"` terminal state in PipelineState\n\
+    3. **litehive/runtime/_commit.py:88-96** \u2014 Merge agent guarded: if `merge_agent_attempts\
+    \ >= 1`, skip and journal; otherwise increment counter, persist, and launch exactly\
+    \ once\n4. **litehive/runner/core.py:374** \u2014 commit_to_git recovery failure\
+    \ routes to `recovery_failed` instead of `flagged`\n5. **litehive/tasks/recovery.py:416**\
+    \ \u2014 `_should_recover_flagged_commit_stage_task()` returns False when `merge_agent_attempts\
+    \ >= 1`, blocking daemon repair loop requeue\n6. **tests/test_commit_recovery_bug.py**\
+    \ \u2014 3 new tests: merge agent launches exactly once, recovery_failed blocks\
+    \ repair, merge_agent_attempts blocks repair\n\n### Test results:\n- test_commit_recovery_bug.py:\
+    \ 8 passed (including 3 new)\n- test_retry_commit_and_recovery.py: 89 passed (no\
+    \ regressions)\n- test_recovery_agent.py: 4 passed (no regressions)\n- test_worktree_merge_agent.py:\
+    \ 10 passed (no regressions)\n\n### Acceptance criteria met:\n- Merge agent launched\
+    \ exactly once per conflict (counter guard + test)\n- Failed merge declares task\
+    \ failed (existing behavior preserved)\n- Recovery agent launched once after merge\
+    \ failure (existing routing)\n- Failed recovery sets status to recovery_failed\
+    \ (new terminal state)\n- recovery_failed tasks left for manual resolution (repair\
+    \ skips them)\n- No loops: at most 1 merge + 1 recovery per conflict (counter\
+    \ + repair guard + terminal state)\n- Journal logs each step (entries at merge\
+    \ skip, merge launch, recovery_failed)"
+  files_changed: []
+  created_at: '2026-04-08T06:13:15+00:00'
+- role: qa
+  step: testing
+  verdict: pass
+  message: "## QA Verification: T-0211 Merge Agent Retry Limit\n\n### What was verified\n\
+    \nAll 6 changed files were reviewed and all acceptance criteria validated:\n\n\
+    1. **Merge agent launched exactly once per conflict**: `_commit.py:88` guards\
+    \ on `merge_agent_attempts >= 1`. Counter incremented and persisted before agent\
+    \ launch. Verified by `test_merge_agent_launches_exactly_once` \u2014 agent launches\
+    \ on first attempt, skipped on second.\n\n2. **Failed merge declares task failed**:\
+    \ Existing behavior preserved, verified by `test_merge_conflict_agent_fails_to_resolve`.\n\
+    \n3. **Recovery agent launched once after merge failure**: Existing routing in\
+    \ `core.py`, unchanged and covered by existing tests.\n\n4. **Failed recovery\
+    \ sets status to recovery_failed**: `core.py:373-374` \u2014 when commit_to_git\
+    \ recovery fails, status is set to `recovery_failed` instead of `flagged`. Journal\
+    \ entry logged.\n\n5. **recovery_failed tasks left for manual resolution**: `_is_task_eligible_for_execution`\
+    \ (queue_ops.py:162) only allows `queued`, `in_progress`, `flagged`, `interrupted`\
+    \ \u2014 `recovery_failed` is excluded. Repair guard at `recovery.py:416` returns\
+    \ False when `merge_agent_attempts >= 1`. Verified by `test_recovery_failed_blocks_repair_requeue`\
+    \ and `test_merge_attempts_blocks_repair_requeue`.\n\n6. **No loops**: The combination\
+    \ of counter guard + repair exclusion + terminal state ensures at most 1 merge\
+    \ agent + 1 recovery agent per conflict. The T-0141 scenario (90 launches) is\
+    \ impossible with these guards.\n\n7. **Journal logs each step**: Entries at merge\
+    \ skip, merge launch, and recovery_failed declaration.\n\n### Tests run\n- test_commit_recovery_bug.py:\
+    \ 8 passed (3 new + 5 existing)\n- test_retry_commit_and_recovery.py: 89 passed\
+    \ (no regressions)\n- test_recovery_agent.py: 4 passed (no regressions)\n- test_worktree_merge_agent.py:\
+    \ 10 passed (no regressions)\n\n### Minor observation\n`merge_agent_attempts`\
+    \ field is declared twice in `models.py` (lines 420 and 422). Pydantic handles\
+    \ this gracefully (last wins), so it's cosmetic only and does not affect behavior.\n\
+    \nSTAGE_RESULT:\n{\"verdict\":\"pass\",\"summary\":\"All acceptance criteria verified:\
+    \ merge agent launches exactly once, recovery_failed terminal state works, repair\
+    \ guards prevent requeue loops\",\"tests\":{\"added\":3,\"passing\":111},\"warnings\"\
+    :[\"Duplicate merge_agent_attempts field declaration in models.py:420,422 \u2014\
+    \ cosmetic only\"]}"
+  files_changed: []
+  created_at: '2026-04-08T06:15:57+00:00'
+- role: reviewer
+  step: accepting
+  verdict: pass
+  message: '## Acceptance Review: T-0211 Merge Agent Retry Limit
+
+
+    ### Verified
+
+
+    All 6 changed files reviewed. All acceptance criteria met:
+
+
+    1. **Merge agent launched exactly once per conflict**: `_commit.py:88` guards
+    on `merge_agent_attempts >= 1`. Counter incremented and persisted before agent
+    launch. Verified by `test_merge_agent_launches_exactly_once`.
+
+
+    2. **Failed merge declares task failed**: Existing behavior preserved, covered
+    by existing tests.
+
+
+    3. **Recovery agent launched once after merge failure**: Existing routing in `core.py`,
+    unchanged.
+
+
+    4. **Failed recovery sets status to recovery_failed**: `core.py:373-374` sets
+    terminal state instead of flagged, with journal entry.
+
+
+    5. **recovery_failed tasks left for manual resolution**: Not in any runnable status
+    set. Repair guard at `recovery.py:416` returns False when `merge_agent_attempts
+    >= 1`. Verified by `test_recovery_failed_blocks_repair_requeue` and `test_merge_attempts_blocks_repair_requeue`.
+
+
+    6. **No loops**: Counter guard + repair exclusion + terminal state = at most 1
+    merge agent + 1 recovery agent per conflict. The T-0141 scenario (90 launches)
+    is impossible.
+
+
+    7. **Journal logs each step**: Entries at merge skip, merge launch, and recovery_failed
+    declaration.
+
+
+    ### Tests
+
+
+    - test_commit_recovery_bug.py: 8 passed (3 new + 5 existing)
+
+    - test_retry_commit_and_recovery.py: 89 passed (no regressions)
+
+    - test_recovery_agent.py: 4 passed (no regressions)
+
+    - test_worktree_merge_agent.py: 10 passed (no regressions)
+
+
+    ### Minor note
+
+
+    Duplicate `merge_agent_attempts` field in models.py (lines 420 and 422). Pydantic
+    handles this gracefully (last wins), so behavior is correct. Cosmetic only.
+
+
+    STAGE_RESULT:
+
+    {"verdict":"pass","summary":"All acceptance criteria verified: merge agent launches
+    exactly once, recovery_failed terminal state prevents requeue loops, 111 tests
+    passing with 0 regressions","tests":{"added":3,"passing":111},"warnings":["Duplicate
+    merge_agent_attempts field declaration in models.py:420,422 - cosmetic only"]}'
+  files_changed: []
+  created_at: '2026-04-08T06:17:59+00:00'

@@ -1,0 +1,87 @@
+task_id: T-0211
+step: accepting
+verdict: pass
+summary: '## Acceptance Review: T-0211 Merge Agent Retry Limit'
+feedback: '## Acceptance Review: T-0211 Merge Agent Retry Limit
+
+
+  ### Verified
+
+
+  All 6 changed files reviewed. All acceptance criteria met:
+
+
+  1. **Merge agent launched exactly once per conflict**: `_commit.py:88` guards on
+  `merge_agent_attempts >= 1`. Counter incremented and persisted before agent launch.
+  Verified by `test_merge_agent_launches_exactly_once`.
+
+
+  2. **Failed merge declares task failed**: Existing behavior preserved, covered by
+  existing tests.
+
+
+  3. **Recovery agent launched once after merge failure**: Existing routing in `core.py`,
+  unchanged.
+
+
+  4. **Failed recovery sets status to recovery_failed**: `core.py:373-374` sets terminal
+  state instead of flagged, with journal entry.
+
+
+  5. **recovery_failed tasks left for manual resolution**: Not in any runnable status
+  set. Repair guard at `recovery.py:416` returns False when `merge_agent_attempts
+  >= 1`. Verified by `test_recovery_failed_blocks_repair_requeue` and `test_merge_attempts_blocks_repair_requeue`.
+
+
+  6. **No loops**: Counter guard + repair exclusion + terminal state = at most 1 merge
+  agent + 1 recovery agent per conflict. The T-0141 scenario (90 launches) is impossible.
+
+
+  7. **Journal logs each step**: Entries at merge skip, merge launch, and recovery_failed
+  declaration.
+
+
+  ### Tests
+
+
+  - test_commit_recovery_bug.py: 8 passed (3 new + 5 existing)
+
+  - test_retry_commit_and_recovery.py: 89 passed (no regressions)
+
+  - test_recovery_agent.py: 4 passed (no regressions)
+
+  - test_worktree_merge_agent.py: 10 passed (no regressions)
+
+
+  ### Minor note
+
+
+  Duplicate `merge_agent_attempts` field in models.py (lines 420 and 422). Pydantic
+  handles this gracefully (last wins), so behavior is correct. Cosmetic only.
+
+
+  STAGE_RESULT:
+
+  {"verdict":"pass","summary":"All acceptance criteria verified: merge agent launches
+  exactly once, recovery_failed terminal state prevents requeue loops, 111 tests passing
+  with 0 regressions","tests":{"added":3,"passing":111},"warnings":["Duplicate merge_agent_attempts
+  field declaration in models.py:420,422 - cosmetic only"]}'
+files_changed: []
+follow_up_tasks: []
+created_follow_up_task_ids: []
+task_update: {}
+tests: {}
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 121
+hook_results: []
+created_at: '2026-04-08T06:18:04+00:00'
