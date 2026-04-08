@@ -3123,6 +3123,114 @@ def test_commit_to_git_integrates_agent_precommit_in_task_worktree(tmp_path: Pat
     assert (tmp_path / "app.txt").read_text(encoding="utf-8") == "agent-commit\n"
 
 
+def test_commit_to_git_runs_after_merge_hook_on_main_and_finishes(tmp_path: Path) -> None:
+    _init_git_repo(tmp_path)
+    ensure_workspace(
+        tmp_path,
+        LitehiveConfig(
+            runner_hooks={
+                "after_merge": [
+                    {"command": "grep -q '^from worktree$' app.txt", "blocking": True}
+                ]
+            }
+        ),
+    )
+    task = create_task(tmp_path, title="Post-merge verification passes")
+
+    worktree_path = tmp_path / ".litehive" / "worktrees" / f"{task.id}-{task.slug}"
+    worktree_path.parent.mkdir(parents=True, exist_ok=True)
+    _run(["git", "worktree", "add", "--detach", str(worktree_path), "HEAD"], tmp_path)
+    (worktree_path / "app.txt").write_text("from worktree\n", encoding="utf-8")
+
+    task.git.worktree_path = str(worktree_path.relative_to(tmp_path))
+    save_task(tmp_path, task)
+
+    report = _commit_to_git_report(
+        tmp_path,
+        worktree_path,
+        task,
+        auto_commit_enabled=True,
+        config=load_config(tmp_path),
+    )
+
+    assert report.verdict == "pass"
+    assert task.status == "done"
+    assert task.pipeline_status == "done"
+    assert report.hook_results[0]["point"] == "after_merge"
+    assert report.hook_results[0]["status"] == "passed"
+    assert (tmp_path / "app.txt").read_text(encoding="utf-8") == "from worktree\n"
+
+
+def test_commit_to_git_requeues_implementing_when_after_merge_hook_fails(tmp_path: Path) -> None:
+    initial_sha = _init_git_repo(tmp_path)
+    ensure_workspace(
+        tmp_path,
+        LitehiveConfig(
+            runner_hooks={
+                "after_merge": [
+                    {"command": "echo post-merge failed >&2; exit 7", "blocking": True}
+                ]
+            }
+        ),
+    )
+    task = create_task(tmp_path, title="Post-merge verification fails")
+
+    worktree_path = tmp_path / ".litehive" / "worktrees" / f"{task.id}-{task.slug}"
+    worktree_path.parent.mkdir(parents=True, exist_ok=True)
+    _run(["git", "worktree", "add", "--detach", str(worktree_path), "HEAD"], tmp_path)
+    (worktree_path / "app.txt").write_text("merged before failure\n", encoding="utf-8")
+
+    task.git.worktree_path = str(worktree_path.relative_to(tmp_path))
+    save_task(tmp_path, task)
+
+    report = _commit_to_git_report(
+        tmp_path,
+        worktree_path,
+        task,
+        auto_commit_enabled=True,
+        config=load_config(tmp_path),
+    )
+
+    assert report.verdict == "blocked"
+    assert report.retry_decision == "retry"
+    assert task.status == "queued"
+    assert task.pipeline_status == "implementing"
+    assert task.git.commit_sha == _run(["git", "rev-parse", "HEAD"], tmp_path)
+    assert task.git.commit_sha != initial_sha
+    assert (tmp_path / "app.txt").read_text(encoding="utf-8") == "merged before failure\n"
+    assert not worktree_path.exists()
+    assert report.hook_results[0]["point"] == "after_merge"
+    assert report.hook_results[0]["status"] == "failed"
+    assert "without reverting the merge" in report.summary
+
+
+def test_commit_to_git_skips_after_merge_when_hook_not_configured(tmp_path: Path) -> None:
+    _init_git_repo(tmp_path)
+    ensure_workspace(tmp_path, LitehiveConfig())
+    task = create_task(tmp_path, title="No post-merge verification configured")
+
+    worktree_path = tmp_path / ".litehive" / "worktrees" / f"{task.id}-{task.slug}"
+    worktree_path.parent.mkdir(parents=True, exist_ok=True)
+    _run(["git", "worktree", "add", "--detach", str(worktree_path), "HEAD"], tmp_path)
+    (worktree_path / "app.txt").write_text("no hook configured\n", encoding="utf-8")
+
+    task.git.worktree_path = str(worktree_path.relative_to(tmp_path))
+    save_task(tmp_path, task)
+
+    report = _commit_to_git_report(
+        tmp_path,
+        worktree_path,
+        task,
+        auto_commit_enabled=True,
+        config=load_config(tmp_path),
+    )
+
+    assert report.verdict == "pass"
+    assert report.hook_results == []
+    assert task.status == "done"
+    assert task.pipeline_status == "done"
+
+
 def test_commit_to_git_handles_metadata_only_worktree_conflict(tmp_path: Path) -> None:
     """When a worktree has only metadata changes that conflict with main's
     state files, the merge will fail. Without a subagent to resolve the

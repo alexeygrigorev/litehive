@@ -15,6 +15,9 @@ Created task worktree at `.litehive/worktrees/T-0216-add-post-merge-test-verific
 ## 2026-04-08T08:07:34+00:00
 Execution started with engine `codex`.
 
+## 2026-04-08T08:09:30+00:00
+Task metadata updated via CLI.
+
 ## 2026-04-08T08:11:49+00:00
 Stage `grooming` fail: grooming failed: agent did not submit verdict via litehive report CLI. Launching recovery agent.
 
