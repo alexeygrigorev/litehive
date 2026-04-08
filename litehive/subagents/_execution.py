@@ -171,21 +171,30 @@ def _unwrap_bound_callable(method: object) -> object:
 
 
 def _callable_resolution_rank(engine: object, name: str) -> int | None:
+    target = getattr(engine, name, None)
+    if not callable(target):
+        return None
+    target_impl = _unwrap_bound_callable(target)
     instance_dict = getattr(engine, "__dict__", None)
     if isinstance(instance_dict, dict) and name in instance_dict:
         value = instance_dict[name]
         if callable(value):
+            value_impl = _unwrap_bound_callable(value)
+            if value_impl is target_impl:
+                for index, cls in enumerate(type(engine).__mro__):
+                    class_value = cls.__dict__.get(name)
+                    if callable(class_value) and _unwrap_bound_callable(class_value) is target_impl:
+                        return index
             return -1
     for index, cls in enumerate(type(engine).__mro__):
         value = cls.__dict__.get(name)
-        if callable(value):
+        if callable(value) and _unwrap_bound_callable(value) is target_impl:
             return index
     return None
 
 
 def _prefers_non_live_run(engine: object) -> bool:
     run_impl = _unwrap_bound_callable(getattr(engine, "run", None))
-    run_live_impl = _unwrap_bound_callable(getattr(engine, "run_live", None))
     if run_impl is ExternalCLIAdapter.run:
         return False
     run_rank = _callable_resolution_rank(engine, "run")

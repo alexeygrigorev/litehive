@@ -8,6 +8,9 @@ from litehive.runtime import (
 from litehive.tasks import (
     WorkspaceConflictError,
     abandon_task,
+    archive_done_tasks,
+    archive_task,
+    cleanup_archived_tasks,
     close_task,
     load_state,
     missing_acceptance_criteria_reason,
@@ -246,6 +249,37 @@ def _cmd_close_task(args):
     print(f"reason: {task.runtime.last_outcome.reason}")
     print(f"follow_up_task: {task.runtime.last_outcome.follow_up_task_id or '-'}")
     print(f"pipeline_status: {task.pipeline_status}")
+    return 0
+
+
+def _cmd_archive(args):
+    ensure_workspace(args.workspace)
+    try:
+        if args.task_id is not None:
+            task = archive_task(args.workspace, args.task_id)
+            print(f"archived: {task.id} {task.title}")
+            print("archived_count: 1")
+        else:
+            tasks = archive_done_tasks(args.workspace)
+            for task in tasks:
+                print(f"archived: {task.id} {task.title}")
+            print(f"archived_count: {len(tasks)}")
+    except ValueError as exc:
+        print(f"archive failed: {exc}")
+        return 1
+    return 0
+
+
+def _cmd_cleanup(args):
+    ensure_workspace(args.workspace)
+    try:
+        deleted = cleanup_archived_tasks(args.workspace, args.older_than)
+    except ValueError as exc:
+        print(f"cleanup failed: {exc}")
+        return 1
+    for task in deleted:
+        print(f"deleted: {task.id} {task.title}")
+    print(f"deleted_count: {len(deleted)}")
     return 0
 
 
