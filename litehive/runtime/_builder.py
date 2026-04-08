@@ -174,6 +174,12 @@ def build_executor(
                         config=config,
                         root=root,
                     )
+                # Snapshot thread verdict count so we can detect new verdicts after execution
+                from litehive.tasks import load_task_thread as _load_thread
+                thread_verdict_count_before = len([
+                    c for c in _load_thread(root, current_task)
+                    if c.step == step and c.verdict != "comment"
+                ])
                 result = subagents.run(
                     current_task,
                     role=role_name,
@@ -303,18 +309,28 @@ def build_executor(
                 continue
 
             # If the agent didn't submit a verdict via `litehive report` and we
-            # have a session to resume, ask it to submit one.
+            # have a session to resume, ask it to submit one.  Compare thread
+            # comment count before/after execution to detect new verdicts.
             from litehive.tasks import load_task_thread
 
-            thread_comments = [
+            thread_comments_after = [
                 c
                 for c in load_task_thread(root, current_task)
                 if c.step == step and c.verdict != "comment"
             ]
+            new_verdicts = len(thread_comments_after) - thread_verdict_count_before
+
+            # Nudge on: no new verdict submitted AND (clean exit OR timeout).
+            # Timeouts are the most common case where agents run out of time
+            # before submitting — we should still try to get a verdict.
+            is_timeout = (
+                result.failure is not None
+                and getattr(result.failure, "classification", None) == "timeout"
+            )
             if (
-                not thread_comments
-                and result.failure is None
+                new_verdicts == 0
                 and result.execution is not None
+                and (result.failure is None or is_timeout)
             ):
                 continuation = extract_engine_continuation(engine_name, result.execution)
                 if continuation and continuation.session_id:
