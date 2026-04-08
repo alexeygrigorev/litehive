@@ -1,0 +1,43 @@
+task_id: T-0234
+step: implementing
+verdict: pass
+summary: 'Implemented explicit archive bulk mode. Added the archive --all-done flag
+  and updated archive help text so bare archive now prints command help and exits
+  non-success instead of bulk archiving. Updated bulk archive flow to continue archiving
+  done tasks while logging each skipped missing or broken task reference as archive
+  skipped: <task_id> (<reason>). Single-task archive behavior remains unchanged. Verified
+  with uv run pytest tests/test_archive.py -q; result: 21 passed in 1.21s. Coverage
+  includes single-task archive, explicit bulk archive, no-arg help behavior, and logged
+  skip handling for a broken bulk archive reference.'
+feedback: 'Implemented explicit archive bulk mode. Added the archive --all-done flag
+  and updated archive help text so bare archive now prints command help and exits
+  non-success instead of bulk archiving. Updated bulk archive flow to continue archiving
+  done tasks while logging each skipped missing or broken task reference as archive
+  skipped: <task_id> (<reason>). Single-task archive behavior remains unchanged. Verified
+  with uv run pytest tests/test_archive.py -q; result: 21 passed in 1.21s. Coverage
+  includes single-task archive, explicit bulk archive, no-arg help behavior, and logged
+  skip handling for a broken bulk archive reference.'
+files_changed:
+- litehive/cli/parser.py
+- litehive/cli/queue.py
+- litehive/tasks/archive.py
+- tests/test_archive.py
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 210
+hook_results: []
+created_at: '2026-04-08T23:27:16+00:00'

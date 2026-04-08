@@ -1,0 +1,41 @@
+task_id: T-0234
+step: testing
+verdict: pass
+summary: 'Validated the archive CLI change with focused QA checks. Ran: uv run pytest
+  tests/test_archive.py -q -> 21 passed in 1.03s. Verified evidence in tests/test_archive.py
+  covers: single-task archive remains functional via task_id, explicit bulk archive
+  now requires --all-done, archive with no args prints archive help and exits with
+  code 2 instead of bulk archiving, and bulk archive logs broken/missing done-task
+  references as archive skipped: <task_id> (<reason>) while continuing and reporting
+  the successful archived_count. Code inspection also matches the expected control
+  flow in litehive/cli/parser.py, litehive/cli/queue.py, and litehive/tasks/archive.py.
+  Acceptance criteria are met.'
+feedback: 'Validated the archive CLI change with focused QA checks. Ran: uv run pytest
+  tests/test_archive.py -q -> 21 passed in 1.03s. Verified evidence in tests/test_archive.py
+  covers: single-task archive remains functional via task_id, explicit bulk archive
+  now requires --all-done, archive with no args prints archive help and exits with
+  code 2 instead of bulk archiving, and bulk archive logs broken/missing done-task
+  references as archive skipped: <task_id> (<reason>) while continuing and reporting
+  the successful archived_count. Code inspection also matches the expected control
+  flow in litehive/cli/parser.py, litehive/cli/queue.py, and litehive/tasks/archive.py.
+  Acceptance criteria are met.'
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 52
+hook_results: []
+created_at: '2026-04-08T23:28:08+00:00'

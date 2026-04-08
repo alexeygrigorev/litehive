@@ -2,19 +2,19 @@ id: T-0233
 slug: move-process-profiles-from-python-dicts-to-yaml
 title: Move process profiles from Python dicts to YAML files
 depends_on: []
-task_type: refactor
+task_type: null
 engine: null
 model: null
 mode: implementation
 pipeline_mode: full
-status: in_progress
+status: done
 flag_reason: null
-pipeline_status: commit_to_git
+pipeline_status: done
 priority: medium
-pm_complexity: moderate
-planned_effort: m
+pm_complexity: null
+planned_effort: null
 created_at: '2026-04-08T07:13:06+00:00'
-updated_at: '2026-04-08T23:20:47+00:00'
+updated_at: '2026-04-08T23:22:11+00:00'
 goal: "profiles.py is 425 lines of hardcoded Python dicts with no logic \u2014 pure\
   \ data. Move each profile to a YAML file under litehive/config/profiles/ (e.g. _shared.yaml,\
   \ generic.yaml, python.yaml, django.yaml, rust.yaml). Replace profiles.py with a\
@@ -25,26 +25,8 @@ acceptance_criteria:
 - profiles.py replaced with a loader under 50 lines
 - All existing tests pass
 - litehive configure --process-profile still works as before
-constraints:
-- Preserve the public profile API and current profile names so configure, context
-  rendering, and prompt generation remain behaviorally compatible.
-- Keep subagent resource-limit defaults in config normalization out of scope unless
-  a failing test proves the profile loader change requires coordinated updates.
-plan:
-- Inventory the current shared and per-profile fields in litehive/config/profiles.py
-  and map them to a YAML schema that preserves list-vs-override merge behavior.
-- Add YAML profile files under litehive/config/profiles/, including a shared base
-  and one overlay per existing process profile name, with content matching the current
-  rendered outputs.
-- Replace the dict-only portion of litehive/config/profiles.py with a small loader
-  that reads YAML files, merges the shared base with the selected overlay, and keeps
-  available_process_profiles, resolve_process_profile, and render_context_template
-  behavior stable.
-- Update config/profile validation call sites as needed so process_profile choices
-  and fallback-to-generic behavior still work when profiles are file-backed.
-- Run focused profile/configure/bootstrap tests, then the existing suite required
-  by the task, to confirm litehive configure --process-profile behaves the same and
-  all acceptance criteria are met.
+constraints: []
+plan: []
 human_checkpoints: []
 subagents:
 - id: SA-0001
@@ -78,16 +60,16 @@ subagents:
 - id: SA-0005
   role: merge-resolver
   engine: claude
-  status: running
+  status: completed
   path: subagents/SA-0005-merge-resolver
   sandboxed: false
   sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0233 move-process-profiles-from-python-dicts-to-yaml'
-  commit_sha: null
-  checkpoint_base_sha: null
-  checkpoint_attempts: 0
+  commit_sha: 7fe5b455347d1e4091afd68ecc9bc326a83ee7bc
+  checkpoint_base_sha: 2e01d35489e458a6a74f80174902ffe62f39b2f8
+  checkpoint_attempts: 1
   rolled_back_checkpoint_attempt: null
   merge_agent_attempts: 1
   worktree_path: null
