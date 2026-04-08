@@ -1,0 +1,67 @@
+id: T-0154
+slug: delete-workflow-verification-py-dead-code
+title: Delete workflow_verification.py dead code
+depends_on: []
+task_type: null
+engine: null
+model: null
+mode: implementation
+status: done
+pipeline_status: done
+priority: medium
+pm_complexity: null
+planned_effort: null
+created_at: '2026-04-04T20:45:52+00:00'
+updated_at: '2026-04-08T07:45:50+00:00'
+goal: workflow_verification.py is disabled and unused since we removed the enforcement
+  gate. Delete it and clean up imports.
+acceptance_criteria:
+- workflow_verification.py is deleted
+- all imports of it are removed
+- all tests pass
+constraints: []
+plan: []
+human_checkpoints: []
+subagents:
+- id: SA-0001
+  role: planner
+  engine: opencode
+  status: completed
+  path: subagents/SA-0001-planner
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0002
+  role: swe
+  engine: opencode
+  status: completed
+  path: subagents/SA-0002-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0003
+  role: qa
+  engine: opencode
+  status: completed
+  path: subagents/SA-0003-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0004
+  role: reviewer
+  engine: opencode
+  status: completed
+  path: subagents/SA-0004-reviewer
+  sandboxed: false
+  sandbox_summary: host
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0154 delete-workflow-verification-py-dead-code'
+  commit_sha: daafc313b9dd925e261291067d64b4f0218e13ea
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+  worktree_path: null
+retry_policy:
+  max_retries: null
+  stage_retry_limit: null
+created_from: null
+upstream_origin: null
+archived_at: '2026-04-08T07:45:50+00:00'

@@ -1,0 +1,141 @@
+id: T-0127
+slug: separate-tracked-config-state-from-untracked-runtime-logs-and-sessions
+title: Separate tracked config/state from untracked runtime logs and sessions
+depends_on: []
+task_type: null
+engine: null
+model: null
+mode: implementation
+status: done
+pipeline_status: done
+priority: medium
+pm_complexity: null
+planned_effort: null
+created_at: '2026-04-03T06:45:41+00:00'
+updated_at: '2026-04-08T07:44:52+00:00'
+goal: Separate durable tracked litehive config/state from untracked runtime residue
+  so logs, sessions, prompts, stdout/stderr, and live coordination files no longer
+  pollute git history or task checkpoint commits. The end state should make it obvious
+  which files are human-authored/project-state versus operational execution residue,
+  while keeping litehive deterministic and recoverable.
+acceptance_criteria:
+- litehive defines and documents a clear storage boundary between tracked durable
+  state and untracked runtime/log artifacts, including exact paths or path classes
+  for each category.
+- Logs, sessions, prompts, stdout/stderr, and live runtime coordination files are
+  moved out of the normal tracked task-state surface and excluded from git via the
+  appropriate ignore rules.
+- Durable tracked state remains sufficient for queue management, task lifecycle state,
+  acceptance criteria, final outcomes, commit metadata, and canonical reports that
+  must survive cleanup.
+- 'The target layout explicitly separates at least these categories: config, durable
+  state, runtime coordination, and logs/artifacts. A minimally disruptive first version
+  is acceptable, but the final boundaries must be clear in code and docs.'
+- The tracked surface explicitly keeps human-authored or source-of-truth files such
+  as workspace config, workspace context, queue state, task metadata, durable outcome
+  metadata, commit metadata, and any canonical per-task reports that litehive treats
+  as project state.
+- The untracked surface explicitly includes raw execution residue such as run-all
+  logs, subagent session files, prompts, stdout/stderr, transcripts, ephemeral artifact
+  dumps, and live runtime/heartbeat/active-subagent coordination files.
+- Normal task checkpoint commits no longer include raw logs or session data, and commit_to_git
+  logic does not treat those untracked runtime paths as task dirt that blocks completion.
+- commit_to_git, rollback, recover, repair, status, and queue behavior continue to
+  work correctly when untracked runtime/log directories are present, missing, or cleaned
+  between runs.
+- Status, repair, and recovery continue to work when runtime/log files are deleted
+  between runs because durable task/state files remain the only required source of
+  truth.
+- If task-local canonical reports remain tracked while raw artifacts become untracked,
+  the implementation clearly distinguishes those two classes and tests that distinction.
+- The migration does not silently strand existing workspaces. Existing tracked data
+  either continues to load, is migrated explicitly, or is handled through documented
+  compatibility logic.
+- The implementation includes focused tests for the new path boundaries and documents
+  what is tracked versus untracked in the workspace layout.
+constraints:
+- Keep config and durable state as the source of truth; do not make runtime/log artifacts
+  required for normal task selection or status reconstruction.
+- Preserve deterministic task execution and recovery behavior while reducing git noise
+  from execution residue.
+- Prefer a minimally disruptive directory migration that preserves backwards compatibility
+  or provides an explicit migration path.
+- Do not require operators to keep logs or subagent sessions in git to preserve normal
+  litehive functionality.
+- 'Do not blur config with execution residue: human-authored config should stay small
+  and intentional, while machine-written runtime/log data should be kept separate.'
+- If journals remain tracked, justify that choice explicitly; otherwise prefer treating
+  them as logs or replacing them with smaller durable summaries.
+- Keep the design compatible with future worktree execution, recovery-agent flows,
+  and queue repair, so those systems do not depend on raw runtime files being committed.
+plan:
+- Define the target storage model for config, durable state, runtime coordination,
+  and logs/artifacts, including which paths remain git-tracked.
+- Decide and document the first-step directory layout, for example whether the repo
+  keeps top-level durable files like `.litehive/config.yaml`, `.litehive/context.md`,
+  `.litehive/state.yaml`, and `.litehive/tasks/` while adding separate `.litehive/runtime/`
+  and `.litehive/logs/` areas for untracked execution residue.
+- 'Enumerate the tracked durable files explicitly: workspace config/context, queue
+  state, task records, acceptance criteria, final outcomes, commit metadata, and any
+  canonical reports that represent project state rather than diagnostics.'
+- 'Enumerate the untracked execution residue explicitly: run-all logs, subagent sessions,
+  prompts, stdout/stderr, transcripts, live heartbeat/runtime state, and temporary
+  artifacts from retries or debugging.'
+- Update path helpers, git ignore rules, and commit selection so untracked runtime/log
+  files are outside normal checkpoint commits.
+- Update commit, rollback, recover, repair, status, and queue code paths so they continue
+  to operate correctly with the new separation and do not require raw execution artifacts
+  to reconstruct durable task state.
+- Adjust lifecycle commands and tests to prove durable state still works when runtime/log
+  artifacts are absent or cleaned.
+- Document the final tracked versus untracked workspace layout and operator expectations.
+human_checkpoints: []
+subagents:
+- id: SA-0001
+  role: planner
+  engine: opencode
+  status: completed
+  path: subagents/SA-0001-planner
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0002
+  role: swe
+  engine: opencode
+  status: interrupted
+  path: subagents/SA-0002-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0003
+  role: recovery
+  engine: opencode
+  status: completed
+  path: subagents/SA-0003-recovery
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0004
+  role: qa
+  engine: opencode
+  status: completed
+  path: subagents/SA-0004-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0005
+  role: reviewer
+  engine: opencode
+  status: completed
+  path: subagents/SA-0005-reviewer
+  sandboxed: false
+  sandbox_summary: host
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0127 separate-tracked-config-state-from-untracked-runtime-logs-and-sessions'
+  commit_sha: cc6b86bcb0576d7ef0f25aa58d4dcf03daef8f89
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+  worktree_path: null
+retry_policy:
+  max_retries: null
+created_from: null
+upstream_origin: null
+archived_at: '2026-04-08T07:44:52+00:00'

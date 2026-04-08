@@ -1,0 +1,71 @@
+task_id: T-0206
+step: implementing
+verdict: pass
+summary: 'Split subagents/_execution.py (1088 lines) into 6 smaller files, deleted
+  the original:'
+feedback: "Split subagents/_execution.py (1088 lines) into 6 smaller files, deleted\
+  \ the original:\n\n1. _models.py (38 lines): EngineFailure, SubagentResult, SubagentInactivityTimeout\n\
+  2. _artifacts.py (84 lines): _write_stream_artifact, _write_text_if_changed, _write_text_artifact,\
+  \ _prune_superseded_subagent_artifacts, plus MIN_BYTES constants\n3. _engine_detection.py\
+  \ (139 lines): _supports_live_execution, _prefers_non_live_run, _supports_on_started,\
+  \ _supports_live_on_started, _has_callable_override, _callable_resolution_rank,\
+  \ _unwrap_bound_callable, _is_instance_alias_to_inherited_callable, plus sentinels\
+  \ and _SEEN_INHERITED_CALLABLES\n4. _session.py (258 lines): _SessionMixin class\
+  \ with session I/O methods that do not use get_engine (_write_session_start, _write_session_snapshot,\
+  \ _write_session_metadata, _record_subagent_pid, _write_timeline, _append_stream_delta,\
+  \ _check_stdout_inactivity, _terminate_stale_pid)\n5. _manager.py (494 lines): SubagentManager(_SessionMixin)\
+  \ with __init__, run, _next_subagent_id, plus get_engine-using methods (_write_session_finish,\
+  \ _write_session_progress, _parse_execution_report)\n6. _sandbox.py (133 lines):\
+  \ _SandboxedAdapter class\n\nAll files under 500 lines (largest: _manager.py at\
+  \ 494).\n\nImport updates:\n- subagents/__init__.py: imports from _manager and _models\
+  \ instead of _execution\n- subagents/_parsing.py: imports SubagentResult from _models\
+  \ instead of _execution\n- tests/test_tasks_and_subagents.py: import from _engine_detection\
+  \ instead of _execution\n- Monkeypatch targets updated in 4 test files: _execution.get_engine\
+  \ -> _manager.get_engine, _execution._supports_live_execution -> _manager._supports_live_execution,\
+  \ _execution._supports_live_on_started -> _manager._supports_live_on_started, _execution.os.kill\
+  \ -> _session.os.kill, _execution._COMPRESS_* -> _artifacts._COMPRESS_*\n\nVerification:\n\
+  - test_tasks_and_subagents.py: 40 passed, 2 failed (pre-existing failures confirmed\
+  \ on main before changes)\n- test_runner_workflow.py + test_engine_variants_and_timeline.py\
+  \ + test_retry_commit_and_recovery.py: 246 passed\n- Total: 286 passed, 2 pre-existing\
+  \ failures\n\nAcceptance criteria met:\n- No file in subagents/ exceeds 500 lines\
+  \ (largest is _manager.py at 494)\n- No logic changes \u2014 pure file reorganization\
+  \ with identical public API\n- All existing tests pass (2 failures are pre-existing\
+  \ on main)\n\nSTAGE_RESULT:\n{\"verdict\":\"pass\",\"summary\":\"Split subagents/_execution.py\
+  \ into 6 files, all under 500 lines, no logic changes\",\"tests\":{\"added\":0,\"\
+  passing\":286},\"warnings\":[\"2 pre-existing test failures in test_tasks_and_subagents.py\
+  \ (confirmed failing on main before this change)\"],\"follow_up_tasks\":[],\"acceptance_criteria\"\
+  :[\"No file in subagents/ exceeds 500 lines \u2014 largest is _manager.py at 494\"\
+  ,\"No logic changes \u2014 pure file reorganization with identical public API\"\
+  ,\"All existing tests pass (2 failures are pre-existing on main)\"]}"
+files_changed:
+- litehive/subagents/__init__.py
+- litehive/subagents/_artifacts.py
+- litehive/subagents/_engine_detection.py
+- litehive/subagents/_execution.py
+- litehive/subagents/_manager.py
+- litehive/subagents/_models.py
+- litehive/subagents/_parsing.py
+- litehive/subagents/_sandbox.py
+- litehive/subagents/_session.py
+- tests/test_engine_variants_and_timeline.py
+- tests/test_retry_commit_and_recovery.py
+- tests/test_runner_workflow.py
+- tests/test_tasks_and_subagents.py
+follow_up_tasks: []
+created_follow_up_task_ids: []
+task_update: {}
+tests: {}
+warnings: []
+retry_count: 1
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 697
+hook_results: []
+created_at: '2026-04-08T05:21:02+00:00'

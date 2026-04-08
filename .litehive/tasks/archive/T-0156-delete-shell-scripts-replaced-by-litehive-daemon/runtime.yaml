@@ -1,0 +1,71 @@
+git:
+  commit_sha: 79b1b9209fb44a994cfd581527eb02c5acdf7717
+  worktree_path: .litehive/worktrees/T-0156-delete-shell-scripts-replaced-by-litehive-daemon
+execution_status: done
+run_started_at: '2026-04-05T18:03:01+00:00'
+updated_at: '2026-04-05T18:10:42+00:00'
+retry_count: 0
+retry_limit: 3
+retry_source: global
+stage_retry_counts: {}
+current_stage:
+  step: null
+  status: idle
+  started_at: null
+  completed_at: null
+  updated_at: '2026-04-05T18:10:42+00:00'
+  duration_seconds: 0
+  verdict: null
+  summary: ''
+last_stage:
+  step: commit_to_git
+  status: completed
+  started_at: '2026-04-05T18:10:40+00:00'
+  completed_at: '2026-04-05T18:10:42+00:00'
+  updated_at: '2026-04-05T18:10:42+00:00'
+  duration_seconds: 2
+  verdict: pass
+  summary: 'CommitToGit complete. Commit: 79b1b920'
+active_subagent: null
+last_subagent:
+  id: SA-0006
+  role: reviewer
+  engine: opencode
+  status: completed
+  path: subagents/SA-0006-reviewer
+  pid: 3456585
+  sandboxed: false
+  sandbox_summary: host
+  started_at: '2026-04-05T18:10:18+00:00'
+  updated_at: '2026-04-05T18:10:39+00:00'
+  completed_at: '2026-04-05T18:10:39+00:00'
+  exit_code: 0
+  transcript_snippet: '{"type":"step_start","timestamp":1775412627034,"sessionID":"ses_2a129536cffeV4DngGe1yRG0Uo","part":{"id":"prt_d5ed6c6...'
+  interruption_reason: ''
+  resource_limit_event: null
+  continuation:
+    session_id: ses_2a129536cffeV4DngGe1yRG0Uo
+    thread_id: null
+    metadata: {}
+    updated_at: '2026-04-05T18:10:39+00:00'
+interruption: null
+continuation_handoff: null
+last_engine_switch:
+  step: grooming
+  from_engine: gemini
+  to_engine: opencode
+  reason: usage limit reached
+  happened_at: '2026-04-05T18:03:23+00:00'
+last_outcome:
+  kind: null
+  stage: null
+  reason_code: null
+  reason: ''
+  failure_classification: null
+  failure_diagnostics: {}
+  follow_up_task_id: null
+  retry_count: 0
+  retry_limit: 0
+  retry_source: global
+  recorded_at: null
+self_heal_traceback_fingerprints: []

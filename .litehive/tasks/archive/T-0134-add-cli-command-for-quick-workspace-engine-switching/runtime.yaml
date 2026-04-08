@@ -1,0 +1,65 @@
+git:
+  commit_sha: 337e59a35e0f1193d9023594baba6ab3492bfa10
+  worktree_path: null
+execution_status: done
+run_started_at: '2026-04-05T04:07:13+00:00'
+updated_at: '2026-04-05T04:12:50+00:00'
+retry_count: 0
+retry_limit: 3
+retry_source: global
+current_stage:
+  step: null
+  status: idle
+  started_at: null
+  completed_at: null
+  updated_at: '2026-04-05T04:12:50+00:00'
+  duration_seconds: 0
+  verdict: null
+  summary: ''
+last_stage:
+  step: commit_to_git
+  status: completed
+  started_at: '2026-04-05T04:12:48+00:00'
+  completed_at: '2026-04-05T04:12:50+00:00'
+  updated_at: '2026-04-05T04:12:50+00:00'
+  duration_seconds: 2
+  verdict: pass
+  summary: CommitToGit created and integrated the final completion commit
+active_subagent: null
+last_subagent:
+  id: SA-0025
+  role: reviewer
+  engine: codex
+  status: completed
+  path: subagents/SA-0025-reviewer
+  pid: 1780134
+  sandboxed: false
+  sandbox_summary: host
+  started_at: '2026-04-05T04:11:23+00:00'
+  updated_at: '2026-04-05T04:12:48+00:00'
+  completed_at: '2026-04-05T04:12:48+00:00'
+  exit_code: 0
+  transcript_snippet: "Reviewing the task as the acceptance-stage reviewer. I\u2019\
+    m starting from the task-local artifacts and focused verificat..."
+  interruption_reason: ''
+  resource_limit_event: null
+  continuation:
+    session_id: null
+    thread_id: 019d5bd6-973c-7c03-8a4f-d4024e9b096e
+    metadata: {}
+    updated_at: '2026-04-05T04:12:48+00:00'
+interruption: null
+continuation_handoff: null
+last_engine_switch: null
+last_outcome:
+  kind: null
+  stage: null
+  reason_code: null
+  reason: ''
+  failure_classification: null
+  failure_diagnostics: {}
+  follow_up_task_id: null
+  retry_count: 0
+  retry_limit: 0
+  retry_source: global
+  recorded_at: null

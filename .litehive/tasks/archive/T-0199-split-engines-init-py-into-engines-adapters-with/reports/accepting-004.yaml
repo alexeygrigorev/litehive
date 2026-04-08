@@ -1,0 +1,54 @@
+task_id: T-0199
+step: accepting
+verdict: pass
+summary: '## Reviewer Acceptance: PASS'
+feedback: "## Reviewer Acceptance: PASS\n\n### Verification performed\n\n1. **File\
+  \ structure**: Confirmed litehive/engines/adapters/ contains all 8 expected files:\
+  \ __init__.py, common.py, codex.py, opencode.py, goz.py, gemini.py, claude.py, copilot.py.\n\
+  \n2. **Re-exports**: Verified all public imports from litehive.engines work: get_engine,\
+  \ ENGINE_CHOICES, ENGINE_REGISTRY, all 6 adapter classes, EngineError, RetryableExecutionFailure,\
+  \ classify_* functions, ENGINE_STREAM_EVENT_ADAPTERS, get_stream_event_adapter,\
+  \ extract_engine_timeline, extract_engine_continuation, iter_jsonl_payloads, parse_stage_report_text.\n\
+  \n3. **Slim hub**: engines/__init__.py is now 208 lines (down from 2391), containing\
+  \ only ENGINE_REGISTRY, ENGINE_CHOICES, get_engine, ENGINE_STREAM_EVENT_ADAPTERS,\
+  \ get_stream_event_adapter, extract_engine_timeline, and extract_engine_continuation.\
+  \ All adapter code properly lives in per-adapter files.\n\n4. **Tests**: Full suite\
+  \ run: 721 passed, 2 failed. The 2 failures (test_subagent_manager_uses_inherited_run_live_when_available,\
+  \ test_subagent_manager_prefers_instance_run_override_over_inherited_run_live) are\
+  \ **pre-existing** \u2014 verified by running the exact same full suite on main\
+  \ branch, which produces the identical 2 failures. These are a test-ordering issue\
+  \ unrelated to this refactor.\n\n### Acceptance criteria status\n- litehive/engines/adapters/\
+  \ package exists with one file per adapter: **MET**\n- Each adapter file is self-contained\
+  \ with its class and engine-specific parsing: **MET**\n- Shared helpers in common.py:\
+  \ **MET** (EngineError, RetryableExecutionFailure, classify_*, pattern tuples)\n\
+  - engines/__init__.py re-exports all adapter classes: **MET**\n- All tests pass:\
+  \ **MET** (2 failures are pre-existing on main, not caused by this refactor)\n-\
+  \ No behavior changes, pure refactor: **MET**\n\nSTAGE_RESULT:\n{\"verdict\":\"\
+  pass\",\"summary\":\"Pure refactor verified: 8 adapter files created, all imports\
+  \ working, 721/723 tests pass (2 failures pre-existing on main)\",\"tests\":{\"\
+  added\":0,\"passing\":721},\"warnings\":[\"2 pre-existing test failures in test_tasks_and_subagents.py\
+  \ due to test ordering \u2014 not caused by this refactor\"],\"follow_up_tasks\"\
+  :[{\"title\":\"Fix test ordering issue in test_subagent_manager run/run_live monkeypatch\
+  \ tests\",\"rationale\":\"test_subagent_manager_uses_inherited_run_live_when_available\
+  \ and test_subagent_manager_prefers_instance_run_override_over_inherited_run_live\
+  \ fail when run in full suite due to leaked monkeypatch state \u2014 pre-existing\
+  \ on main\",\"blocking\":false}],\"acceptance_criteria\":[]}"
+files_changed: []
+follow_up_tasks: []
+created_follow_up_task_ids: []
+task_update: {}
+tests: {}
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 871
+hook_results: []
+created_at: '2026-04-07T22:31:34+00:00'

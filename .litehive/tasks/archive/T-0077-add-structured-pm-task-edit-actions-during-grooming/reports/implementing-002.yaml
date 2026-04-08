@@ -1,0 +1,49 @@
+task_id: T-0077
+step: implementing
+verdict: pass
+summary: "Completed T-0077: added structured PM task-edit actions during grooming.\
+  \ Fixed two critical bugs in the prior implementation: (1) deadlock when apply_task_updates_from_report\
+  \ called update_task with outcome/action fields \u2014 update_task already held\
+  \ _workspace_lock and then tried to call close_task/park_task which also acquire\
+  \ _workspace_lock. Fixed by inlining the close/park/requeue/abandon logic inside\
+  \ update_task. (2) _parse_rich_task_update_document in cli/_parse.py did not recognize\
+  \ outcome, outcome_reason, or action fields \u2014 added them to _RICH_TASK_UPDATE_KEYS\
+  \ and parsing logic. Added runner check in runner/core.py to detect when grooming\
+  \ closes/parks a task mid-run and exit cleanly. Added 4 new tests: test_apply_task_updates_with_outcome_duplicate_closes_task,\
+  \ test_apply_task_updates_with_action_park, test_runner_exits_cleanly_when_grooming_report_closes_task,\
+  \ test_runner_exits_cleanly_when_grooming_report_parks_task. All 7 grooming task\
+  \ update tests pass, all 22 related runner tests pass. All observed test failures\
+  \ in broader suites are pre-existing."
+feedback: "Completed T-0077: added structured PM task-edit actions during grooming.\
+  \ Fixed two critical bugs in the prior implementation: (1) deadlock when apply_task_updates_from_report\
+  \ called update_task with outcome/action fields \u2014 update_task already held\
+  \ _workspace_lock and then tried to call close_task/park_task which also acquire\
+  \ _workspace_lock. Fixed by inlining the close/park/requeue/abandon logic inside\
+  \ update_task. (2) _parse_rich_task_update_document in cli/_parse.py did not recognize\
+  \ outcome, outcome_reason, or action fields \u2014 added them to _RICH_TASK_UPDATE_KEYS\
+  \ and parsing logic. Added runner check in runner/core.py to detect when grooming\
+  \ closes/parks a task mid-run and exit cleanly. Added 4 new tests: test_apply_task_updates_with_outcome_duplicate_closes_task,\
+  \ test_apply_task_updates_with_action_park, test_runner_exits_cleanly_when_grooming_report_closes_task,\
+  \ test_runner_exits_cleanly_when_grooming_report_parks_task. All 7 grooming task\
+  \ update tests pass, all 22 related runner tests pass. All observed test failures\
+  \ in broader suites are pre-existing."
+files_changed: []
+follow_up_tasks: []
+created_follow_up_task_ids: []
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 432
+hook_results: []
+created_at: '2026-04-06T06:14:32+00:00'

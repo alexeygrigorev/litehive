@@ -1,0 +1,43 @@
+task_id: T-0148
+step: testing
+verdict: pass
+summary: 'Verified .litehive/context.md against the live CLI and docs. All three acceptance
+  criteria are met:'
+feedback: "Verified .litehive/context.md against the live CLI and docs. All three\
+  \ acceptance criteria are met:\n\n1. **Command/workflow coverage (criterion 1):**\
+  \ All 26 top-level CLI commands from `uv run litehive --help` are documented in\
+  \ context.md. All 5 public daemon subcommands (run, status, stop, restart, instances)\
+  \ are present \u2014 the prior QA gap (missing `daemon restart`) is now fixed. The\
+  \ suppressed `worker` subcommand is correctly omitted.\n\n2. **Engine inventory\
+  \ and routing (criterion 2):** All six supported adapters (codex, opencode, gemini,\
+  \ copilot, claude, goz) are listed. Recovery engine routing, task-type routing,\
+  \ engine resolution precedence, and continuation metadata are documented.\n\n3.\
+  \ **Workspace/execution model (criterion 3):** Hook points (before/after swe_implementation,\
+  \ before/after pm_acceptance), recovery agents, merge-resolution agents, durable\
+  \ vs runtime artifact split, and workspace layout paths are all documented.\n\n\
+  Evidence: `uv run litehive --help` confirms 26 commands; `uv run litehive daemon\
+  \ --help` confirms subcommands run,status,stop,restart,instances,worker; `uv run\
+  \ litehive daemon restart --help` confirms the command exists; `docs/cli.md` line\
+  \ 431 documents `litehive daemon restart`; grep of context.md confirms all commands\
+  \ and engines are present."
+files_changed: []
+follow_up_tasks: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 60
+hook_results: []
+created_at: '2026-04-07T04:36:10+00:00'

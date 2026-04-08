@@ -1,0 +1,68 @@
+git:
+  commit_sha: 73a978001c1070b8c35d63b5a95d2af8dc22dd5c
+  worktree_path: .litehive/worktrees/T-0104-add-schema-validated-stage-result-submission-api-for-agents
+execution_status: done
+run_started_at: '2026-04-06T11:38:21+00:00'
+updated_at: '2026-04-06T12:20:22+00:00'
+retry_count: 0
+retry_limit: 3
+retry_source: global
+stage_retry_counts: {}
+current_stage:
+  step: null
+  status: idle
+  started_at: null
+  completed_at: null
+  updated_at: '2026-04-06T12:20:22+00:00'
+  duration_seconds: 0
+  verdict: null
+  summary: ''
+last_stage:
+  step: commit_to_git
+  status: completed
+  started_at: '2026-04-06T12:20:20+00:00'
+  completed_at: '2026-04-06T12:20:22+00:00'
+  updated_at: '2026-04-06T12:20:22+00:00'
+  duration_seconds: 2
+  verdict: pass
+  summary: 'CommitToGit complete. Commit: 73a97800'
+active_subagent: null
+last_subagent:
+  id: SA-0012
+  role: reviewer
+  engine: copilot
+  status: completed
+  path: subagents/SA-0012-reviewer
+  pid: 1267103
+  sandboxed: false
+  sandbox_summary: host
+  started_at: '2026-04-06T12:08:39+00:00'
+  updated_at: '2026-04-06T12:20:20+00:00'
+  completed_at: '2026-04-06T12:20:20+00:00'
+  exit_code: 0
+  transcript_snippet: 'Now let me review what the full implementation looks like,
+    including the existing schema code:'
+  interruption_reason: ''
+  resource_limit_event: null
+  continuation: null
+interruption: null
+continuation_handoff: null
+last_engine_switch:
+  step: grooming
+  from_engine: goz
+  to_engine: copilot
+  reason: transient network failure
+  happened_at: '2026-04-06T11:38:24+00:00'
+last_outcome:
+  kind: null
+  stage: null
+  reason_code: null
+  reason: ''
+  failure_classification: null
+  failure_diagnostics: {}
+  follow_up_task_id: null
+  retry_count: 0
+  retry_limit: 0
+  retry_source: global
+  recorded_at: null
+self_heal_traceback_fingerprints: []

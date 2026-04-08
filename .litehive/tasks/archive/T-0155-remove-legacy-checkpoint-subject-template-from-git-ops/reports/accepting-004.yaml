@@ -1,0 +1,41 @@
+task_id: T-0155
+step: accepting
+verdict: pass
+summary: 'STAGE_RESULT:'
+feedback: "STAGE_RESULT:\n{\"verdict\":\"pass\",\"summary\":\"LEGACY_CHECKPOINT_SUBJECT_TEMPLATE\
+  \ and _legacy_default_commit_message cleanly removed; _uses_generated_commit_message\
+  \ simplified to equality check; no stale references remain outside task metadata\"\
+  ,\"files_changed\":[\"litehive/git_ops.py\"],\"tests\":{\"added\":0,\"passing\"\
+  :0},\"warnings\":[\"All 10 test files have pre-existing ImportError for _allowed_commit_paths\
+  \ \u2014 unrelated to this change, same on main\"],\"follow_up_tasks\":[],\"acceptance_criteria\"\
+  :[\"LEGACY_CHECKPOINT_SUBJECT_TEMPLATE constant deleted \u2014 VERIFIED via git\
+  \ diff and grep\",\"_legacy_default_commit_message function deleted \u2014 VERIFIED\
+  \ via git diff\",\"_uses_generated_commit_message no longer references legacy helper,\
+  \ uses equality check \u2014 VERIFIED via git diff\",\"No references remain in codebase\
+  \ outside task metadata \u2014 VERIFIED via grep\"]}\n\nVerification performed:\n\
+  1. Reviewed git diff main -- litehive/git_ops.py: constant removed (line 13), function\
+  \ removed (lines 161-162), set membership replaced with equality check (line 171).\n\
+  2. Grepped entire worktree for LEGACY_CHECKPOINT_SUBJECT_TEMPLATE and _legacy_default_commit_message\
+  \ \u2014 only hit is the task.yaml metadata file, which is expected.\n3. Test suite\
+  \ has same pre-existing import errors on main and worktree (unrelated _allowed_commit_paths\
+  \ issue) \u2014 no regressions introduced."
+files_changed: []
+follow_up_tasks: []
+created_follow_up_task_ids: []
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 41
+hook_results: []
+created_at: '2026-04-05T17:36:37+00:00'

@@ -1,0 +1,44 @@
+task_id: T-0186
+step: accepting
+verdict: pass
+summary: 'ACCEPTED: All 6 acceptance criteria verified.'
+feedback: "ACCEPTED: All 6 acceptance criteria verified.\n\n## Verified\n\n1. **Litehive-owned\
+  \ failures route to self-heal**: When failure_owner is \"litehive\" and litehive_source_path\
+  \ exists on disk, _attempt_stage_recovery creates a new SubagentManager with execution_root=source_root\
+  \ and calls _run_litehive_self_heal() (_recovery.py:117-139). Test: test_self_heal_launches_agent_against_litehive_source.\n\
+  \n2. **Enriched prompt**: The self-heal prompt includes \"SELF-HEAL\", the traceback\
+  \ text, litehive source tree path, and \"uv run pytest -q\" verification instruction\
+  \ (_recovery.py:282-297). Verified by assertion on captured prompt content.\n\n\
+  3. **Fingerprint dedup**: self_heal_traceback_fingerprints is checked before launching\
+  \ and populated after (regardless of success/failure), preventing retry loops (_recovery.py:119-125,\
+  \ 307-309). Test: test_self_heal_skips_duplicate_fingerprint.\n\n4. **Standard path\
+  \ unchanged**: Project/unknown failures skip the self-heal branch entirely \u2014\
+  \ no SELF-HEAL in prompt, no fingerprints recorded. Test: test_project_failure_uses_standard_recovery_path.\n\
+  \n5. **Failed self-heal records blocker**: When agent fails, recovery report has\
+  \ trigger=litehive_self_heal, runnable_state=blocked, action=litehive_self_heal_failed,\
+  \ and fingerprint is still recorded. Test: test_self_heal_failed_records_blocker_and_fingerprint.\n\
+  \n6. **Tests passing**: 6 new tests in test_self_heal_recovery.py + 95 total tests\
+  \ passing across self-heal and recovery suites (49.75s).\n\n## Evidence\n- `uv run\
+  \ pytest tests/test_self_heal_recovery.py -v` \u2192 6 passed (0.68s)\n- `uv run\
+  \ pytest tests/test_self_heal_recovery.py tests/test_retry_commit_and_recovery.py\
+  \ -q` \u2192 95 passed (49.75s)\n\nNo regressions, no scope creep, no merge machinery\
+  \ reintroduced. Implementation is minimal and correct."
+files_changed: []
+follow_up_tasks: []
+created_follow_up_task_ids: []
+task_update: {}
+tests: {}
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 93
+hook_results: []
+created_at: '2026-04-07T19:02:23+00:00'

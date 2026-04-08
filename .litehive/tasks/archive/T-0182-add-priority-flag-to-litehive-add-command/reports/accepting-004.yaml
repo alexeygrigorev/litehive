@@ -1,0 +1,45 @@
+task_id: T-0182
+step: accepting
+verdict: reject
+summary: 'REJECT: No implementation found in the worktree.'
+feedback: "REJECT: No implementation found in the worktree.\n\nEXPECTED: Per the acceptance\
+  \ criteria, `litehive add 'title' --priority high` should create a task with priority=high,\
+  \ omitting --priority should default to medium, and invalid values should show a\
+  \ clear error. The SWE report claimed changes to litehive/tasks.py, litehive/cli/parser.py,\
+  \ litehive/cli/tasks.py, and tests/test_task_commands_and_daemon.py with 3 new passing\
+  \ tests.\n\nOBSERVED: The worktree is at the same HEAD as main (de5dcc2) with zero\
+  \ uncommitted or staged changes. None of the claimed modifications exist:\n1. VALID_TASK_PRIORITIES\
+  \ = {\"low\", \"medium\", \"high\"} \u2014 no 'critical' added\n2. TASK_PRIORITY_ORDER\
+  \ = {\"high\": 0, \"medium\": 1, \"low\": 2} \u2014 no 'critical' added\n3. create_task()\
+  \ has no 'priority' parameter\n4. _cmd_add() does not pass priority to create_task()\n\
+  5. The 'add' subparser has no --priority argument (only 'update' has it)\n6. No\
+  \ new tests exist in test_task_commands_and_daemon.py\n7. `litehive add --help`\
+  \ shows no --priority flag\n\nSTEPS TO REPRODUCE:\n- `git diff main` in the worktree\
+  \ \u2192 empty output\n- `git log --oneline -1` \u2192 de5dcc2 (same as main HEAD)\n\
+  - `uv run litehive add --help | grep priority` \u2192 no output\n\nCRITERIA STATUS:\n\
+  - litehive add 'title' --priority high creates task with priority=high \u2014 NOT\
+  \ MET (flag does not exist)\n- Default priority remains medium when flag omitted\
+  \ \u2014 NOT MET (no flag to omit)\n- Invalid priority values show clear error \u2014\
+  \ NOT MET (no validation added)\n\nThe implementation must be re-done from scratch\
+  \ following the grooming plan."
+files_changed: []
+follow_up_tasks: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 1
+retry_limit: 3
+retry_source: global
+retry_decision: retry
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 67
+hook_results: []
+created_at: '2026-04-07T06:00:11+00:00'

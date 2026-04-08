@@ -1,0 +1,45 @@
+git:
+  commit_sha: 9ca220c7f70ff107e0c7a8f9cfd1a7a5d5cb3110
+execution_status: done
+run_started_at: '2026-03-31T15:09:15+00:00'
+updated_at: '2026-03-31T15:14:13+00:00'
+retry_count: 0
+retry_limit: 3
+retry_source: global
+current_stage:
+  step: null
+  status: idle
+  started_at: null
+  completed_at: null
+  updated_at: '2026-03-31T15:14:13+00:00'
+  duration_seconds: 0
+  verdict: null
+  summary: ''
+last_stage:
+  step: commit_to_git
+  status: completed
+  started_at: '2026-03-31T15:14:13+00:00'
+  completed_at: '2026-03-31T15:14:13+00:00'
+  updated_at: '2026-03-31T15:14:13+00:00'
+  duration_seconds: 0
+  verdict: pass
+  summary: CommitToGit created the final checkpoint commit
+active_subagent: null
+last_subagent:
+  id: SA-0004
+  role: pm
+  engine: codex
+  status: completed
+  path: subagents/SA-0004-pm
+  started_at: '2026-03-31T15:13:31+00:00'
+  updated_at: '2026-03-31T15:14:13+00:00'
+  completed_at: '2026-03-31T15:14:13+00:00'
+  exit_code: 0
+  transcript_snippet: Untouched preselected tasks are restored to `queued` on pool
+    stop, while the active executed task still owns any bloc...
+last_engine_switch: null
+last_outcome:
+  kind: null
+  stage: null
+  reason: ''
+  recorded_at: null

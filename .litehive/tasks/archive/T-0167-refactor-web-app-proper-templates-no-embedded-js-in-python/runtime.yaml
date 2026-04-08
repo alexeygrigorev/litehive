@@ -1,0 +1,68 @@
+git:
+  commit_sha: e09318a1eaab5daf2e3f50e1304322dce340c36a
+  worktree_path: .litehive/worktrees/T-0167-refactor-web-app-proper-templates-no-embedded-js-in-python
+execution_status: done
+run_started_at: '2026-04-06T02:45:11+00:00'
+updated_at: '2026-04-06T03:17:48+00:00'
+retry_count: 0
+retry_limit: 3
+retry_source: global
+stage_retry_counts: {}
+current_stage:
+  step: null
+  status: idle
+  started_at: null
+  completed_at: null
+  updated_at: '2026-04-06T03:17:48+00:00'
+  duration_seconds: 0
+  verdict: null
+  summary: ''
+last_stage:
+  step: commit_to_git
+  status: completed
+  started_at: '2026-04-06T03:17:47+00:00'
+  completed_at: '2026-04-06T03:17:48+00:00'
+  updated_at: '2026-04-06T03:17:48+00:00'
+  duration_seconds: 1
+  verdict: pass
+  summary: 'CommitToGit complete. Commit: e09318a1'
+active_subagent: null
+last_subagent:
+  id: SA-0007
+  role: reviewer
+  engine: copilot
+  status: completed
+  path: subagents/SA-0007-reviewer
+  pid: 204603
+  sandboxed: false
+  sandbox_summary: host
+  started_at: '2026-04-06T03:12:20+00:00'
+  updated_at: '2026-04-06T03:17:46+00:00'
+  completed_at: '2026-04-06T03:17:46+00:00'
+  exit_code: 0
+  transcript_snippet: 'The refactoring is clean and complete. All three acceptance
+    criteria are satisfied:'
+  interruption_reason: ''
+  resource_limit_event: null
+  continuation: null
+interruption: null
+continuation_handoff: null
+last_engine_switch:
+  step: grooming
+  from_engine: goz
+  to_engine: copilot
+  reason: transient network failure
+  happened_at: '2026-04-06T02:45:13+00:00'
+last_outcome:
+  kind: null
+  stage: null
+  reason_code: null
+  reason: ''
+  failure_classification: null
+  failure_diagnostics: {}
+  follow_up_task_id: null
+  retry_count: 0
+  retry_limit: 0
+  retry_source: global
+  recorded_at: null
+self_heal_traceback_fingerprints: []

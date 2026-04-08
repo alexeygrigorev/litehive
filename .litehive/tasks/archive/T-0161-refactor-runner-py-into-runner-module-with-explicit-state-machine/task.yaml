@@ -1,0 +1,103 @@
+id: T-0161
+slug: refactor-runner-py-into-runner-module-with-explicit-state-machine
+title: Refactor runner.py into runner/ module with explicit state machine
+depends_on: []
+task_type: null
+engine: null
+model: null
+mode: implementation
+status: done
+pipeline_status: done
+priority: medium
+pm_complexity: null
+planned_effort: null
+created_at: '2026-04-04T20:46:40+00:00'
+updated_at: '2026-04-08T07:46:00+00:00'
+goal: Split runner.py into runner/__init__.py with a clear state machine implementation.
+  States and transitions should be explicit, possibly OOP with State classes.
+acceptance_criteria:
+- litehive/runner/ is a package
+- state machine has explicit State classes or an enum with a transition table
+- state transitions are documented and easy to follow
+- all tests pass
+constraints: []
+plan: []
+human_checkpoints: []
+subagents:
+- id: SA-0001
+  role: planner
+  engine: goz
+  status: failed
+  path: subagents/SA-0001-planner
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0002
+  role: planner
+  engine: goz
+  status: failed
+  path: subagents/SA-0002-planner
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0003
+  role: planner
+  engine: goz
+  status: failed
+  path: subagents/SA-0003-planner
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0004
+  role: planner
+  engine: copilot
+  status: completed
+  path: subagents/SA-0004-planner
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0005
+  role: swe
+  engine: copilot
+  status: completed
+  path: subagents/SA-0005-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0006
+  role: qa
+  engine: copilot
+  status: completed
+  path: subagents/SA-0006-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0007
+  role: reviewer
+  engine: copilot
+  status: completed
+  path: subagents/SA-0007-reviewer
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0008
+  role: merge-resolver
+  engine: claude
+  status: completed
+  path: subagents/SA-0008-merge-resolver
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0009
+  role: merge-resolver
+  engine: claude
+  status: completed
+  path: subagents/SA-0009-merge-resolver
+  sandboxed: false
+  sandbox_summary: host
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0161 refactor-runner-py-into-runner-module-with-explicit-state-machine'
+  commit_sha: 315204d6bbfe8f36bf9ef94ef7b894bfc9bc078c
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+  worktree_path: null
+retry_policy:
+  max_retries: null
+  stage_retry_limit: null
+created_from: null
+upstream_origin: null
+archived_at: '2026-04-08T07:46:00+00:00'

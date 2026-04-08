@@ -1,0 +1,252 @@
+id: T-0077
+slug: add-structured-pm-task-edit-actions-during-grooming
+title: Add structured PM task-edit actions during grooming
+depends_on: []
+task_type: null
+engine: gemini
+model: null
+mode: implementation
+status: done
+pipeline_status: done
+priority: medium
+pm_complexity: null
+planned_effort: null
+created_at: '2026-04-01T06:36:23+00:00'
+updated_at: '2026-04-08T07:42:02+00:00'
+goal: ''
+acceptance_criteria: []
+constraints: []
+plan: []
+human_checkpoints: []
+subagents:
+- id: SA-0001
+  role: pm
+  engine: codex
+  status: completed
+  path: subagents/SA-0001-pm
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0002
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0002-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0003
+  role: qa
+  engine: codex
+  status: completed
+  path: subagents/SA-0003-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0004
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0004-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0005
+  role: qa
+  engine: codex
+  status: completed
+  path: subagents/SA-0005-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0006
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0006-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0007
+  role: swe
+  engine: claude
+  status: failed
+  path: subagents/SA-0007-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0008
+  role: planner
+  engine: gemini
+  status: failed
+  path: subagents/SA-0008-planner
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0009
+  role: planner
+  engine: codex
+  status: completed
+  path: subagents/SA-0009-planner
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0010
+  role: planner
+  engine: gemini
+  status: failed
+  path: subagents/SA-0010-planner
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0011
+  role: planner
+  engine: gemini
+  status: completed
+  path: subagents/SA-0011-planner
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0012
+  role: swe
+  engine: gemini
+  status: failed
+  path: subagents/SA-0012-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0013
+  role: recovery
+  engine: codex
+  status: failed
+  path: subagents/SA-0013-recovery
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0014
+  role: recovery
+  engine: opencode
+  status: completed
+  path: subagents/SA-0014-recovery
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0015
+  role: qa
+  engine: opencode
+  status: completed
+  path: subagents/SA-0015-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0016
+  role: reviewer
+  engine: opencode
+  status: completed
+  path: subagents/SA-0016-reviewer
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0017
+  role: merge-resolver
+  engine: claude
+  status: completed
+  path: subagents/SA-0017-merge-resolver
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0018
+  role: planner
+  engine: gemini
+  status: failed
+  path: subagents/SA-0018-planner
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0019
+  role: planner
+  engine: codex
+  status: failed
+  path: subagents/SA-0019-planner
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0020
+  role: planner
+  engine: opencode
+  status: completed
+  path: subagents/SA-0020-planner
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0021
+  role: swe
+  engine: opencode
+  status: completed
+  path: subagents/SA-0021-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0022
+  role: qa
+  engine: opencode
+  status: completed
+  path: subagents/SA-0022-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0023
+  role: reviewer
+  engine: opencode
+  status: completed
+  path: subagents/SA-0023-reviewer
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0024
+  role: merge-resolver
+  engine: claude
+  status: completed
+  path: subagents/SA-0024-merge-resolver
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0025
+  role: planner
+  engine: gemini
+  status: failed
+  path: subagents/SA-0025-planner
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0026
+  role: planner
+  engine: codex
+  status: failed
+  path: subagents/SA-0026-planner
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0027
+  role: planner
+  engine: opencode
+  status: completed
+  path: subagents/SA-0027-planner
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0028
+  role: swe
+  engine: opencode
+  status: completed
+  path: subagents/SA-0028-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0029
+  role: qa
+  engine: opencode
+  status: completed
+  path: subagents/SA-0029-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0030
+  role: reviewer
+  engine: opencode
+  status: completed
+  path: subagents/SA-0030-reviewer
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0031
+  role: merge-resolver
+  engine: claude
+  status: completed
+  path: subagents/SA-0031-merge-resolver
+  sandboxed: false
+  sandbox_summary: host
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0077 add-structured-pm-task-edit-actions-during-grooming'
+  commit_sha: 5a3f7d58523f004481fe5cd5a427cb31b77c7ec8
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+  worktree_path: null
+retry_policy:
+  max_retries: null
+  stage_retry_limit: null
+created_from: null
+upstream_origin: null
+archived_at: '2026-04-08T07:42:02+00:00'

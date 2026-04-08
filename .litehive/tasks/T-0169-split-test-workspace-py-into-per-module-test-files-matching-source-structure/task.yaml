@@ -7,13 +7,13 @@ engine: null
 model: null
 mode: implementation
 pipeline_mode: full
-status: queued
-pipeline_status: implementing
+status: flagged
+pipeline_status: grooming
 priority: medium
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-04T20:46:54+00:00'
-updated_at: '2026-04-07T20:53:57+00:00'
+updated_at: '2026-04-08T07:55:37+00:00'
 goal: 'test_workspace.py is one giant file. Split into test files matching the module
   structure: test_cli.py, test_config.py, test_engines.py, test_runner.py, test_runtime.py,
   test_subagents.py, test_tasks.py, etc.'
@@ -60,6 +60,69 @@ subagents:
   path: subagents/SA-0005-swe
   sandboxed: false
   sandbox_summary: host
+- id: SA-0006
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0006-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0007
+  role: recovery
+  engine: codex
+  status: completed
+  path: subagents/SA-0007-recovery
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0008
+  role: qa
+  engine: codex
+  status: completed
+  path: subagents/SA-0008-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0009
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0009-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0010
+  role: qa
+  engine: codex
+  status: completed
+  path: subagents/SA-0010-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0011
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0011-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0012
+  role: qa
+  engine: codex
+  status: completed
+  path: subagents/SA-0012-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0013
+  role: planner
+  engine: codex
+  status: completed
+  path: subagents/SA-0013-planner
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0014
+  role: recovery
+  engine: codex
+  status: completed
+  path: subagents/SA-0014-recovery
+  sandboxed: false
+  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0169 split-test-workspace-py-into-per-module-test-files-matching-source-structure'
@@ -67,8 +130,8 @@ git:
   checkpoint_base_sha: null
   checkpoint_attempts: 0
   rolled_back_checkpoint_attempt: null
-  worktree_path: null
   merge_agent_attempts: 0
+  worktree_path: null
 retry_policy:
   max_retries: null
   stage_retry_limit: null

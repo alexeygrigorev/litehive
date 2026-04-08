@@ -1,0 +1,61 @@
+id: T-0120
+slug: add-z-ai-opencode-quota-monitoring-integration
+title: Add Z.AI/OpenCode quota monitoring integration
+depends_on: []
+task_type: null
+engine: null
+model: null
+mode: implementation
+status: done
+pipeline_status: done
+priority: medium
+pm_complexity: null
+planned_effort: null
+created_at: '2026-04-02T10:37:23+00:00'
+updated_at: '2026-04-08T07:44:34+00:00'
+goal: ''
+acceptance_criteria: []
+constraints: []
+plan: []
+human_checkpoints: []
+subagents:
+- id: SA-0001
+  role: planner
+  engine: codex
+  status: completed
+  path: subagents/SA-0001-planner
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0002
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0002-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0003
+  role: qa
+  engine: codex
+  status: completed
+  path: subagents/SA-0003-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0004
+  role: reviewer
+  engine: codex
+  status: completed
+  path: subagents/SA-0004-reviewer
+  sandboxed: false
+  sandbox_summary: host
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0120 add-z-ai-opencode-quota-monitoring-integration'
+  commit_sha: a5aef4f029ee92ccd7dbc76890acc99b861db1af
+  checkpoint_base_sha: c52ad577e4bc67679aabbe612c3620d0be2f2052
+  checkpoint_attempts: 1
+  rolled_back_checkpoint_attempt: null
+  worktree_path: null
+retry_policy:
+  max_retries: null
+created_from: null
+archived_at: '2026-04-08T07:44:34+00:00'

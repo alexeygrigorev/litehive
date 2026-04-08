@@ -1,0 +1,66 @@
+git:
+  commit_sha: e18abd2892d8a2c8e61afc7ed3d40dc75a8ce093
+  worktree_path: null
+execution_status: done
+run_started_at: '2026-04-08T05:43:31+00:00'
+updated_at: '2026-04-08T05:54:44+00:00'
+retry_count: 0
+retry_limit: 3
+retry_source: global
+stage_retry_counts: {}
+current_stage:
+  step: null
+  status: idle
+  started_at: null
+  completed_at: null
+  updated_at: '2026-04-08T05:54:44+00:00'
+  duration_seconds: 0
+  verdict: null
+  summary: ''
+last_stage:
+  step: commit_to_git
+  status: completed
+  started_at: '2026-04-08T05:53:51+00:00'
+  completed_at: '2026-04-08T05:54:44+00:00'
+  updated_at: '2026-04-08T05:54:44+00:00'
+  duration_seconds: 53
+  verdict: pass
+  summary: 'CommitToGit complete. Commit: e18abd28'
+active_subagent: null
+last_subagent:
+  id: SA-0006
+  role: merge-resolver
+  engine: claude
+  status: completed
+  path: subagents/SA-0006-merge-resolver
+  pid: 2922273
+  sandboxed: false
+  sandbox_summary: host
+  started_at: '2026-04-08T05:53:51+00:00'
+  updated_at: '2026-04-08T05:54:42+00:00'
+  completed_at: '2026-04-08T05:54:42+00:00'
+  exit_code: 0
+  transcript_snippet: Let me look at the conflict.
+  interruption_reason: ''
+  resource_limit_event: null
+  continuation:
+    session_id: 0ebb647e-6628-4ab1-83f9-cde1877aef75
+    thread_id: null
+    metadata: {}
+    updated_at: '2026-04-08T05:54:42+00:00'
+interruption: null
+continuation_handoff: null
+last_engine_switch: null
+last_outcome:
+  kind: null
+  stage: null
+  reason_code: null
+  reason: ''
+  failure_classification: null
+  failure_diagnostics: {}
+  follow_up_task_id: null
+  retry_count: 0
+  retry_limit: 0
+  retry_source: global
+  recorded_at: null
+self_heal_traceback_fingerprints: []

@@ -1,0 +1,49 @@
+git:
+  commit_sha: null
+execution_status: done
+run_started_at: '2026-04-01T12:20:13+00:00'
+updated_at: '2026-04-01T12:26:26+00:00'
+retry_count: 0
+retry_limit: 3
+retry_source: global
+current_stage:
+  step: null
+  status: idle
+  started_at: null
+  completed_at: null
+  updated_at: '2026-04-01T12:26:26+00:00'
+  duration_seconds: 0
+  verdict: null
+  summary: ''
+last_stage:
+  step: commit_to_git
+  status: completed
+  started_at: '2026-04-01T12:26:26+00:00'
+  completed_at: '2026-04-01T12:26:26+00:00'
+  updated_at: '2026-04-01T12:26:26+00:00'
+  duration_seconds: 0
+  verdict: pass
+  summary: CommitToGit skipped because auto-commit is disabled
+active_subagent: null
+last_subagent:
+  id: SA-0032
+  role: pm
+  engine: codex
+  status: completed
+  path: subagents/SA-0032-pm
+  started_at: '2026-04-01T12:24:12+00:00'
+  updated_at: '2026-04-01T12:26:26+00:00'
+  completed_at: '2026-04-01T12:26:26+00:00'
+  exit_code: 0
+  transcript_snippet: Atomic queue/state transitions now persist task, runtime, and
+    workspace state together across claim, finish, requeue/...
+last_engine_switch: null
+last_outcome:
+  kind: null
+  stage: null
+  reason_code: null
+  reason: ''
+  retry_count: 0
+  retry_limit: 0
+  retry_source: global
+  recorded_at: null

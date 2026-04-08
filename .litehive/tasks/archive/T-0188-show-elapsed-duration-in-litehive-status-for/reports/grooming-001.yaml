@@ -1,0 +1,44 @@
+task_id: T-0188
+step: grooming
+verdict: pass
+summary: 'STAGE_RESULT:'
+feedback: "STAGE_RESULT:\n{\"verdict\":\"pass\",\"summary\":\"Task is well-scoped\
+  \ with concrete, observable acceptance criteria. All required data sources exist\
+  \ in the codebase. Plan provided.\",\"tests\":{\"added\":0,\"passing\":0},\"warnings\"\
+  :[\"AC-6 (recent activity) requires a new workspace-wide event aggregator scanning\
+  \ events.jsonl across tasks \u2014 bounded but the largest new piece\"],\"follow_up_tasks\"\
+  :[],\"acceptance_criteria\":[],\"task_update\":{\"plan\":[\"Flip --full default\
+  \ from True to False in _cmd_status so config details (retry limits, pool policies,\
+  \ per-task dump) are hidden by default\",\"Restructure default status output into\
+  \ dashboard sections: (1) Active Task, (2) Queue Summary, (3) Engine Health, (4)\
+  \ Recent Activity, (5) Last Completed\",\"Add elapsed duration to active task line\
+  \ using runtime.run_started_at and current_stage.started_at \u2014 format as human-readable\
+  \ e.g. 3m, 1h12m\",\"Add last-completed-task section: scan tasks for most recent\
+  \ done status, show outcome (pass/fail), task title, and completion timestamp\"\
+  ,\"Refactor engine monitoring rendering to show available vs quota-limited engines\
+  \ with reset time\",\"Build workspace-wide recent-activity reader: scan events.jsonl\
+  \ across task dirs, merge by timestamp, return last 3-5 events with human-readable\
+  \ labels\",\"Move config dump (retry limits, pool policies, selection policy, process\
+  \ profile) and per-task dump into --full-only branch\",\"Update tests in test_observability_and_status.py:\
+  \ verify default output has dashboard sections and no config noise, verify --full\
+  \ still includes config details\"],\"pm_complexity\":\"moderate\",\"planned_effort\"\
+  :\"m\"}}"
+files_changed: []
+follow_up_tasks: []
+created_follow_up_task_ids: []
+task_update: {}
+tests: {}
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 124
+hook_results: []
+created_at: '2026-04-07T22:42:26+00:00'

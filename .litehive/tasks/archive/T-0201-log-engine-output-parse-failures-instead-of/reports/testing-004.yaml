@@ -1,0 +1,41 @@
+task_id: T-0201
+step: testing
+verdict: pass
+summary: 'STAGE_RESULT:'
+feedback: "STAGE_RESULT:\n{\"verdict\":\"pass\",\"summary\":\"All 12 new warning-log\
+  \ tests pass, 45 existing engine tests pass with no regressions\",\"tests\":{\"\
+  added\":12,\"passing\":12},\"warnings\":[],\"follow_up_tasks\":[],\"acceptance_criteria\"\
+  :[\"AC1 MET: Unparseable engine output items produce warning logs \u2014 verified\
+  \ in base.py (JSONDecodeError + non-dict), claude.py (delta decode failure), goz.py\
+  \ (unrecognized dict keys), codex.py (non-dict item + missing text), opencode.py\
+  \ (non-dict part + missing text)\",\"AC2 MET: No items silently dropped without\
+  \ logging \u2014 every continue/skip at a parse-failure point now has a preceding\
+  \ logger.warning(), confirmed by diff review\",\"AC3 MET: Warning logs include enough\
+  \ context \u2014 all messages include adapter name, error details or key list, and\
+  \ truncated raw content (%.200s)\",\"AC4 MET: Existing tests still pass \u2014 45/45\
+  \ engine tests pass, 0 regressions\"],\"task_update\":{}}\n\nVerification details:\n\
+  - Ran tests/test_engine_parse_warnings.py: 12/12 passed in 0.30s\n- Ran tests/test_engine_variants_and_timeline.py:\
+  \ 45/45 passed in 3.90s (regression check)\n- Reviewed diffs across 5 files: base.py,\
+  \ claude.py, goz.py, codex.py, opencode.py\n- Each skip point now has a logger.warning()\
+  \ with adapter context and truncated content\n- Tests cover both positive (warning\
+  \ emitted) and negative (no spurious warning) cases\n- goz key-path refactor correctly\
+  \ deferred to follow-up task"
+files_changed: []
+follow_up_tasks: []
+created_follow_up_task_ids: []
+task_update: {}
+tests: {}
+warnings: []
+retry_count: 1
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 63
+hook_results: []
+created_at: '2026-04-08T00:36:49+00:00'

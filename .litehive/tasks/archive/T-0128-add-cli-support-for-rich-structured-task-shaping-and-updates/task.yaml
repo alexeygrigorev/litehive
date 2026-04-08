@@ -1,0 +1,95 @@
+id: T-0128
+slug: add-cli-support-for-rich-structured-task-shaping-and-updates
+title: Add CLI support for rich structured task shaping and updates
+depends_on: []
+task_type: null
+engine: null
+model: null
+mode: implementation
+status: done
+pipeline_status: done
+priority: medium
+pm_complexity: null
+planned_effort: null
+created_at: '2026-04-03T06:47:30+00:00'
+updated_at: '2026-04-08T07:44:56+00:00'
+goal: Add first-class CLI support for rich structured task shaping and updates so
+  humans can refine tasks through litehive itself instead of editing YAML directly.
+  The CLI should support the same kinds of structured task updates that the planner
+  can already persist during grooming.
+acceptance_criteria:
+- litehive exposes a supported CLI path for shaping an existing task's rich fields,
+  including goal, acceptance criteria, constraints, plan, PM complexity, planned effort,
+  and other durable task metadata that humans may need to refine after creation.
+- The CLI supports adding or replacing multi-line structured content without forcing
+  direct YAML edits, and the UX is practical for large task updates.
+- At minimum, the design explicitly considers flags, file input, and editor flows,
+  and implements one or more approaches that make rich updates ergonomic for real
+  use.
+- The resulting task updates use the same durable task record fields that the planner
+  already shapes during grooming, so human shaping and planner shaping do not diverge
+  into different storage models.
+- The CLI can be used to add more details to a task later, not only during task creation,
+  so operators can progressively refine backlog items over time.
+- Validation and error messages are clear when structured values are malformed, incomplete,
+  or inconsistent with the task state.
+- Focused tests cover at least one real rich-update flow for an existing task, including
+  persistence of the updated structured fields.
+constraints:
+- Keep the CLI as the supported operator path for task shaping; direct YAML editing
+  should not be required for normal use.
+- Reuse existing task record fields and validation rules where possible instead of
+  inventing a parallel task-shaping format.
+- Preserve deterministic task state and avoid ambiguous partial writes when a rich
+  update fails.
+plan:
+- Define the supported rich-update UX for humans, including whether shaping happens
+  through repeated flags, file input, editor-based updates, or a combination.
+- Map that UX onto the existing durable task fields that planner grooming already
+  persists today.
+- Implement structured validation and atomic persistence for rich task updates.
+- Add focused tests and document how operators should create and refine detailed tasks
+  through the CLI over time.
+human_checkpoints: []
+subagents:
+- id: SA-0001
+  role: planner
+  engine: codex
+  status: failed
+  path: subagents/SA-0001-planner
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0002
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0002-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0003
+  role: qa
+  engine: codex
+  status: completed
+  path: subagents/SA-0003-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0004
+  role: reviewer
+  engine: codex
+  status: completed
+  path: subagents/SA-0004-reviewer
+  sandboxed: false
+  sandbox_summary: host
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0128 add-cli-support-for-rich-structured-task-shaping-and-updates'
+  commit_sha: 1cd8cb57b6d52fe921ed1ca6819ecbba3f064f62
+  checkpoint_base_sha: cc6b86bcb0576d7ef0f25aa58d4dcf03daef8f89
+  checkpoint_attempts: 1
+  rolled_back_checkpoint_attempt: null
+  worktree_path: null
+retry_policy:
+  max_retries: null
+created_from: null
+upstream_origin: null
+archived_at: '2026-04-08T07:44:56+00:00'

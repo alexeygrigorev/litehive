@@ -1,0 +1,115 @@
+id: T-0114
+slug: enforce-qa-and-acceptance-verification-that-final-task-commit-exists-and-clean-completion-was-recorded
+title: Enforce QA and acceptance verification that final task commit exists and clean
+  completion was recorded
+depends_on: []
+task_type: null
+engine: null
+model: null
+mode: implementation
+status: done
+pipeline_status: done
+priority: medium
+pm_complexity: null
+planned_effort: null
+created_at: '2026-04-02T05:20:35+00:00'
+updated_at: '2026-04-08T07:44:16+00:00'
+goal: Enforce QA and acceptance verification that workflow/control-plane features
+  are only considered done when the real end-to-end lifecycle works, including final
+  checkpoint commit, resumability, and actual CLI behavior.
+acceptance_criteria:
+- QA rejects workflow features unless they are validated through the real litehive
+  CLI/task lifecycle, not only isolated unit tests.
+- A task that claims completion or commit reliability must prove that commit_to_git
+  succeeds and records a final checkpoint commit.
+- A task that claims resume or recovery behavior must prove that an interrupted task
+  resumes from the correct stage in a real workspace run.
+- A task that claims run-all or pool behavior must prove the behavior through the
+  wrapper or real CLI execution, not only direct helper-function tests.
+- Acceptance rejects features whose promise is broader than what QA actually demonstrated.
+constraints: []
+plan: []
+human_checkpoints: []
+subagents:
+- id: SA-0001
+  role: pm
+  engine: codex
+  status: completed
+  path: subagents/SA-0001-pm
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0002
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0002-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0003
+  role: qa
+  engine: codex
+  status: completed
+  path: subagents/SA-0003-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0004
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0004-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0005
+  role: qa
+  engine: codex
+  status: completed
+  path: subagents/SA-0005-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0006
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0006-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0007
+  role: qa
+  engine: codex
+  status: completed
+  path: subagents/SA-0007-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0008
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0008-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0009
+  role: qa
+  engine: codex
+  status: completed
+  path: subagents/SA-0009-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0010
+  role: pm
+  engine: codex
+  status: completed
+  path: subagents/SA-0010-pm
+  sandboxed: false
+  sandbox_summary: host
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0114 enforce-qa-and-acceptance-verification-that-final-task-commit-exists-and-clean-completion-was-recorded'
+  commit_sha: f2a338e6e877d25459f06456a39711e3360180ee
+  checkpoint_base_sha: 214f81343d0821f1cca5dc696a32025592700b6c
+  checkpoint_attempts: 1
+  rolled_back_checkpoint_attempt: null
+  worktree_path: null
+retry_policy:
+  max_retries: null
+created_from: null
+archived_at: '2026-04-08T07:44:16+00:00'

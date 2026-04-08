@@ -1,0 +1,45 @@
+id: T-0229
+slug: add-litehive-engine-status-cli-to-show-engine
+title: Add litehive engine status CLI to show engine usage and quota
+depends_on: []
+task_type: null
+engine: null
+model: null
+mode: implementation
+pipeline_mode: full
+status: queued
+pipeline_status: backlog
+priority: medium
+pm_complexity: null
+planned_effort: null
+created_at: '2026-04-08T06:40:02+00:00'
+updated_at: '2026-04-08T06:40:02+00:00'
+goal: Add a CLI command (e.g. litehive engine status or litehive engine status codex)
+  that shows current usage stats, quota status, and whether the engine is available.
+  Should work for all engines that have monitoring data and for codex show proactive
+  quota check results.
+acceptance_criteria:
+- litehive engine status shows a summary for all engines (invocations, successes,
+  failures, limits, last used)
+- litehive engine status codex shows codex-specific quota (used percent, limit_reached,
+  reset time) from the proactive quota API
+- Works without arguments (all engines) and with a specific engine name
+constraints: []
+plan: []
+human_checkpoints: []
+subagents: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0229 add-litehive-engine-status-cli-to-show-engine'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+  merge_agent_attempts: 0
+  worktree_path: null
+retry_policy:
+  max_retries: null
+  stage_retry_limit: null
+created_from: null
+upstream_origin: null
+github_origin: null

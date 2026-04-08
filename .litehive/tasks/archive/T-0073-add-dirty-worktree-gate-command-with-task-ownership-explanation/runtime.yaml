@@ -1,0 +1,62 @@
+git:
+  commit_sha: 6eb8e225f22f611cc824b6a2a5f21e270073e721
+execution_status: done
+run_started_at: '2026-04-04T12:37:06+00:00'
+updated_at: '2026-04-04T12:56:28+00:00'
+retry_count: 0
+retry_limit: 3
+retry_source: global
+current_stage:
+  step: null
+  status: idle
+  started_at: null
+  completed_at: null
+  updated_at: '2026-04-04T12:56:28+00:00'
+  duration_seconds: 0
+  verdict: null
+  summary: ''
+last_stage:
+  step: commit_to_git
+  status: completed
+  started_at: '2026-04-04T12:53:24+00:00'
+  completed_at: '2026-04-04T12:56:28+00:00'
+  updated_at: '2026-04-04T12:56:28+00:00'
+  duration_seconds: 184
+  verdict: pass
+  summary: CommitToGit recovered by agent after initial failure
+active_subagent: null
+last_subagent:
+  id: SA-0008
+  role: recovery
+  engine: codex
+  status: completed
+  path: subagents/SA-0008-recovery
+  pid: 234499
+  sandboxed: false
+  sandbox_summary: host
+  started_at: '2026-04-04T12:53:25+00:00'
+  updated_at: '2026-04-04T12:56:28+00:00'
+  completed_at: '2026-04-04T12:56:28+00:00'
+  exit_code: 0
+  transcript_snippet: "I\u2019m checking the worktree and main-repo git state first\
+    \ so I can identify whether this is just an uncommitted dirty t..."
+  interruption_reason: ''
+  resource_limit_event: null
+  continuation:
+    session_id: null
+    thread_id: 019d588e-2a75-70c1-93fc-fa4a98f3b5ea
+    metadata: {}
+    updated_at: '2026-04-04T12:56:28+00:00'
+interruption: null
+continuation_handoff: null
+last_engine_switch: null
+last_outcome:
+  kind: null
+  stage: null
+  reason_code: null
+  reason: ''
+  follow_up_task_id: null
+  retry_count: 0
+  retry_limit: 0
+  retry_source: global
+  recorded_at: null

@@ -1,0 +1,35 @@
+task_id: T-0213
+step: commit_to_git
+verdict: pass
+summary: 'CommitToGit complete. Commit: e8cff3d1'
+feedback: ''
+files_changed:
+- litehive/cli/parser.py
+- litehive/cli/report.py
+- litehive/engines/base.py
+- litehive/runner/core.py
+- litehive/runtime/_commit.py
+- litehive/subagents/_parsing.py
+- litehive/subagents/_prompts.py
+- tests/test_stage_result_submission.py
+- tests/workspace_helpers.py
+follow_up_tasks: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 113
+hook_results: []
+created_at: '2026-04-07T21:57:04+00:00'

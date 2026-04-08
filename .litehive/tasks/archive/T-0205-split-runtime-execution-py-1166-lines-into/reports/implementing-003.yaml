@@ -1,0 +1,49 @@
+task_id: T-0205
+step: implementing
+verdict: pass
+summary: 'Split runtime/_execution.py (1311 lines) into 5 focused submodules:'
+feedback: "Split runtime/_execution.py (1311 lines) into 5 focused submodules:\n\n\
+  - _hooks.py (220 lines): runner hook execution for stage boundaries\n- _worktree.py\
+  \ (298 lines): git worktree management and dirty-worktree inspection\n- _pool_control.py\
+  \ (175 lines): pool stop-reason logic and finalization\n- _builder.py (436 lines):\
+  \ stage executor builder (build_executor + _record_codex_monitoring)\n- _orchestration.py\
+  \ (248 lines): top-level task orchestration (resolve/run/drain)\n\nAll files under\
+  \ 500 lines (max is _builder.py at 436).\n\nChanges made:\n1. Created 5 new modules\
+  \ with appropriate imports\n2. Updated runtime/__init__.py to import from new modules\
+  \ instead of _execution\n3. Deleted _execution.py\n4. Updated tests/conftest.py\
+  \ monkeypatch target from _execution to _builder\n5. Updated tests/test_retry_commit_and_recovery.py\
+  \ monkeypatch targets from _execution to _builder\n\nPure mechanical split \u2014\
+  \ no logic changes.\n\nTests run: test_runtime_pool.py (64), test_runner_workflow.py\
+  \ (112), test_retry_commit_and_recovery.py (89), test_engine_variants_and_timeline.py\
+  \ (33+16 from recovery_agent) \u2014 all 314 passed.\n\nAcceptance criteria met:\n\
+  - No file over 500 lines in runtime/ (pre-existing _recovery.py at 561 is out of\
+  \ scope per grooming)\n- No logic changes, pure file reorganization\n- All tests\
+  \ pass"
+files_changed:
+- litehive/runtime/__init__.py
+- litehive/runtime/_builder.py
+- litehive/runtime/_execution.py
+- litehive/runtime/_hooks.py
+- litehive/runtime/_orchestration.py
+- litehive/runtime/_pool_control.py
+- litehive/runtime/_worktree.py
+- tests/conftest.py
+- tests/test_retry_commit_and_recovery.py
+follow_up_tasks: []
+created_follow_up_task_ids: []
+task_update: {}
+tests: {}
+warnings: []
+retry_count: 1
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 585
+hook_results: []
+created_at: '2026-04-08T04:46:11+00:00'

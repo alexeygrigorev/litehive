@@ -1,0 +1,47 @@
+task_id: T-0182
+step: grooming
+verdict: pass
+summary: 'STAGE_RESULT:'
+feedback: "STAGE_RESULT:\n{\"verdict\":\"pass\",\"summary\":\"Task is well-scoped\
+  \ and ready for implementation. Add --priority flag to litehive add, wire through\
+  \ create_task(), and extend valid priorities to include critical.\",\"files_changed\"\
+  :[\"litehive/tasks.py\",\"litehive/cli/parser.py\",\"litehive/cli/tasks.py\",\"\
+  tests/test_task_commands_and_daemon.py\"],\"tests\":{\"added\":3,\"passing\":0},\"\
+  warnings\":[\"Adding critical as a new priority level also affects update --priority\
+  \ choices and TASK_PRIORITY_ORDER sorting \u2014 this is expected cross-cutting\
+  \ impact, not scope contamination.\"],\"follow_up_tasks\":[],\"acceptance_criteria\"\
+  :[\"litehive add 'title' --priority high creates a task with priority=high in task.yaml\"\
+  ,\"litehive add 'title' without --priority creates a task with priority=medium (default)\"\
+  ,\"litehive add 'title' --priority invalid shows a clear argparse error listing\
+  \ valid choices\",\"critical is added to VALID_TASK_PRIORITIES and TASK_PRIORITY_ORDER\
+  \ so it works in both add and update commands\"],\"task_update\":{\"priority\":\"\
+  medium\",\"pm_complexity\":\"simple\",\"planned_effort\":\"xs\",\"plan\":[\"Add\
+  \ critical to VALID_TASK_PRIORITIES set and TASK_PRIORITY_ORDER dict in litehive/tasks.py\"\
+  ,\"Add priority: str | None = None parameter to create_task() in litehive/tasks.py;\
+  \ validate against VALID_TASK_PRIORITIES and set on TaskRecord before save\",\"\
+  Add --priority argument with choices=sorted(VALID_TASK_PRIORITIES) to the add subparser\
+  \ in litehive/cli/parser.py\",\"Wire args.priority through _cmd_add() to create_task(priority=...)\
+  \ in litehive/cli/tasks.py\",\"Add tests: (1) add with --priority high persists\
+  \ priority=high, (2) add without --priority persists priority=medium, (3) add with\
+  \ --priority critical persists priority=critical\"]}}\n\nFOLLOW_UP_TASKS:\n[]"
+files_changed: []
+follow_up_tasks: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 97
+hook_results: []
+created_at: '2026-04-07T05:19:01+00:00'

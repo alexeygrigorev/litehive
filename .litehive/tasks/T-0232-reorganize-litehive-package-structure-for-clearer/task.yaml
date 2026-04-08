@@ -1,0 +1,56 @@
+id: T-0232
+slug: reorganize-litehive-package-structure-for-clearer
+title: Reorganize litehive package structure for clearer boundaries
+depends_on:
+- T-0160
+- T-0219
+- T-0220
+- T-0231
+task_type: null
+engine: null
+model: null
+mode: implementation
+pipeline_mode: full
+status: queued
+pipeline_status: backlog
+priority: medium
+pm_complexity: null
+planned_effort: null
+created_at: '2026-04-08T07:09:18+00:00'
+updated_at: '2026-04-08T07:10:37+00:00'
+goal: 'Restructure the litehive package to have clearer domain boundaries. Key changes:
+  (1) Merge engines/ + subagents/ into agents/ (adapters/ for CLI adapters, manager/prompts/parsing/session
+  at top level). (2) Merge runner/ + runtime/ into pipeline/ (runner state machine
+  + orchestration + commit + recovery + hooks + budget). (3) Slim down tasks/ to data
+  + queue only, extract workspace state management (locking, status transitions, recovery,
+  runtime tracking) into workspace/. (4) Move git_ops.py into git/ package. (5) Move
+  events.py into observability/. All existing imports must keep working via re-exports
+  during transition.'
+acceptance_criteria:
+- engines/ and subagents/ merged into agents/ with adapters/ subdirectory
+- runner/ and runtime/ merged into pipeline/
+- "tasks/ contains only data, CRUD, queue, paths, persistence \u2014 workflow/locking/recovery/status\
+  \ transitions moved to workspace/"
+- git_ops.py moved to git/ package
+- events.py moved to observability/
+- All existing tests pass without modification
+- Old import paths work via re-exports (backward compat)
+constraints: []
+plan: []
+human_checkpoints: []
+subagents: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0232 reorganize-litehive-package-structure-for-clearer'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+  merge_agent_attempts: 0
+  worktree_path: null
+retry_policy:
+  max_retries: null
+  stage_retry_limit: null
+created_from: null
+upstream_origin: null
+github_origin: null

@@ -1,0 +1,71 @@
+task_id: T-0191
+step: grooming
+verdict: pass
+summary: 'STAGE_RESULT:'
+feedback: "STAGE_RESULT:\n{\"verdict\":\"pass\",\"summary\":\"Task is well-scoped\
+  \ with clear integration points in the existing engine monitoring and fallback infrastructure\"\
+  ,\"files_changed\":[],\"tests\":{\"added\":0,\"passing\":0},\"warnings\":[\"The\
+  \ chatgpt.com API is undocumented and may change without notice; implementation\
+  \ should degrade gracefully if the endpoint returns unexpected responses or becomes\
+  \ unavailable\"],\"follow_up_tasks\":[],\"acceptance_criteria\":[],\"task_update\"\
+  :{\"pm_complexity\":\"moderate\",\"planned_effort\":\"m\",\"plan\":[\"Read bearer\
+  \ token from ~/.codex/auth.json (tokens.access_token) with graceful handling if\
+  \ file is missing or token is expired\",\"Add a codex quota check module (e.g. litehive/engines/_codex_quota.py)\
+  \ that calls GET https://chatgpt.com/backend-api/wham/usage with Authorization:\
+  \ Bearer header\",\"Parse the response for rate_limit.limit_reached, primary_window\
+  \ and secondary_window used_percent and reset_at fields\",\"Implement a time-based\
+  \ cache (default 60s TTL) so repeated checks within the same pool drain don't hammer\
+  \ the API\",\"Integrate the proactive check into the engine selection path in runtime/_execution.py\
+  \ build_executor() alongside the existing budget_ledger.block_reason() check (around\
+  \ line 701) \u2014 when quota is exhausted, return a block reason that triggers\
+  \ the normal fallback path\",\"Update engine monitoring (observability/_engine_monitoring.py)\
+  \ to surface quota percentage and reset_at from the proactive check, not just from\
+  \ post-failure observation\",\"Add targeted tests: mock the API response for limit_reached=true\
+  \ and verify codex is skipped with fallback used; mock limit_reached=false and verify\
+  \ codex proceeds; test cache expiry; test graceful degradation when auth.json is\
+  \ missing or API returns error\",\"Ensure the quota check degrades gracefully: if\
+  \ the API call fails (network error, auth expired, unexpected response), log a warning\
+  \ and allow codex to proceed (fail-open) rather than blocking it\"]}}\n\n## Grooming\
+  \ Assessment\n\n### Scope\nThe task replaces the current reactive quota detection\
+  \ (wait for codex to fail, then classify the failure and fall back) with a proactive\
+  \ check before each codex invocation. This is cleanly scoped to the codex engine\
+  \ only, as noted in the acceptance criteria.\n\n### Integration Points Identified\n\
+  1. **Auth token**: `~/.codex/auth.json` \u2192 `tokens.access_token` (structure\
+  \ confirmed)\n2. **Pre-invocation check**: `runtime/_execution.py:build_executor()`\
+  \ line ~701 already checks `budget_ledger.block_reason(engine_name)` before invocation\
+  \ \u2014 the proactive quota check slots in alongside this\n3. **Engine fallback**:\
+  \ existing fallback loop in `build_executor()` lines 697-867 handles engine switching\
+  \ when an engine is blocked \u2014 returning a block reason from quota check will\
+  \ naturally trigger fallback to the next engine\n4. **Monitoring**: `observability/_engine_monitoring.py`\
+  \ already tracks `reset_at`, `used_percent` fields \u2014 these can be populated\
+  \ from the proactive API response instead of only from post-failure parsing\n5.\
+  \ **Dry-run**: `cli/_dry_run.py` line ~69 also checks `block_reason()` \u2014 proactive\
+  \ quota should surface there too\n\n### Acceptance Criteria Review\nAll 9 criteria\
+  \ are observable and verifiable. The note about Claude/Copilot being out of scope\
+  \ is clear.\n\n### Risk\nThe chatgpt.com API is undocumented. Implementation must\
+  \ fail-open: if the quota check itself fails (network, auth, unexpected schema),\
+  \ codex should still be attempted rather than blocked.\n\n### PM Sizing\n- **Complexity**:\
+  \ moderate \u2014 clear integration points but involves external API, caching, and\
+  \ graceful degradation\n- **Effort**: M \u2014 new module + integration into two\
+  \ existing paths + tests + monitoring update"
+files_changed: []
+follow_up_tasks: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 48
+hook_results: []
+created_at: '2026-04-07T02:32:16+00:00'

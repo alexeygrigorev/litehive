@@ -1,0 +1,246 @@
+- role: swe
+  step: implementing
+  verdict: pass
+  message: Implemented flow statistics and bottleneck reporting for pool runs. Added
+    _compute_pool_flow_statistics() to litehive/cli/_pool.py which aggregates per-stage
+    durations, pass/fail counts, and bottleneck identification across all tasks in
+    a pool run. Updated _pool_summary_report_data to include flow_stats and _pool_summary_report_lines
+    to render flow_stats/stage_durations/stage_failures lines. Flow stats also persisted
+    in durable YAML reports. Added 7 new tests (70/70 pass in test_observability_and_status.py).
+    40 pre-existing failures in the broader suite are unrelated to this change.
+  files_changed: []
+  created_at: '2026-04-06T10:11:44+00:00'
+- role: qa
+  step: testing
+  verdict: reject
+  message: "REJECT: Implementation has substantive gaps vs acceptance criteria.\n\n\
+    TESTS RUN: 7 new tests in test_observability_and_status.py all pass. 40 pre-existing\
+    \ failures on HEAD are unrelated to this task.\n\nEXPECTED (from task.yaml acceptance\
+    \ criteria):\n1. pool-summary.txt includes a 'flow_statistics' section with per-stage\
+    \ counts (pass, fail, retry) AND duration metrics (avg_seconds, min_seconds, max_seconds).\n\
+    2. Bottleneck tie-breaking uses retry count when average durations are equal.\n\
+    3. Durable YAML contains 'flow_statistics' and 'bottleneck' as fields.\n4. Tests\
+    \ verify bottleneck tie-breaking by retry count.\n\nOBSERVED:\n1. Output key is\
+    \ 'flow_stats:' not 'flow_statistics:' in both pool-summary.txt and durable YAML.\
+    \ Only avg duration is tracked \u2014 min_seconds and max_seconds are never computed\
+    \ or stored. Stage pass counts are not shown in the text summary. No 'retry' count\
+    \ per stage (fails shown in stage_failures: line only).\n2. Bottleneck is selected\
+    \ with Python max() on avg_seconds only \u2014 no retry-count tie-breaking: 'bottleneck_stage\
+    \ = max(stage_avg_durations, key=lambda s: stage_avg_durations[s])' (litehive/cli/_pool.py:107).\
+    \ When two stages have identical avg, the one that appears first in dict iteration\
+    \ order wins \u2014 not the one with more retries.\n3. Durable YAML stores nested\
+    \ 'flow_stats' dict with 'bottleneck_stage' key inside it, not top-level 'flow_statistics'\
+    \ or 'bottleneck' field.\n4. No test for bottleneck tie-breaking by retry count\
+    \ exists in the test suite.\n\nREPRODUCE GAP 1 (naming/metrics):\n  grep 'flow_stats\\\
+    |flow_statistics\\|min_seconds\\|max_seconds' litehive/cli/_pool.py\n  Only 'flow_stats'\
+    \ found; min/max never computed from stage_durations list.\n\nREPRODUCE GAP 2\
+    \ (tie-breaking):\n  grep -n 'tiebreak\\|retry_count\\|tie' litehive/cli/_pool.py\
+    \ \u2192 nothing found\n  _compute_pool_flow_statistics builds stage_avg_durations\
+    \ but bottleneck = max(stage_avg_durations, ...) with no secondary sort key.\n\
+    \nREPRODUCE GAP 4 (missing test):\n  uv run pytest tests/test_observability_and_status.py\
+    \ -k 'tie' \u2192 no tests collected.\n\nCRITERIA MET: criteria 4 (scope to current\
+    \ run), 5 (omit empty stages), 6 (pre-existing failures unchanged). Core mechanism\
+    \ (flow aggregation, bottleneck identification, durable YAML inclusion, stage-scoped\
+    \ collection) is correctly structured.\n\nFIXES NEEDED:\n- Rename 'flow_stats'\
+    \ -> 'flow_statistics' in report data keys and text output (both pool-summary.txt\
+    \ and durable YAML).\n- Add min_seconds and max_seconds: keep raw durations list\
+    \ and compute min/max at emit time.\n- Add retry_count tie-breaking: secondary\
+    \ sort key = sum of fail_counts for the stage.\n- Add test: two stages with equal\
+    \ avg_seconds, verify bottleneck = the one with more retries (fail_counts)."
+  files_changed: []
+  created_at: '2026-04-06T10:22:57+00:00'
+- role: qa
+  step: testing
+  verdict: pass
+  message: "PASS: All acceptance criteria met after minimal QA fixes applied during\
+    \ testing.\n\nTESTS RUN: 71 passed in tests/test_observability_and_status.py (8\
+    \ new flow-statistics tests, all passing). 40 pre-existing failures in other test\
+    \ files are unrelated to this task (confirmed on HEAD before changes).\n\nWHAT\
+    \ WAS VERIFIED:\n1. flow_statistics section in pool-summary.txt \u2014 key renamed\
+    \ from flow_stats to flow_statistics, text output emits 'flow_statistics: stages_executed=N\
+    \ bottleneck=STAGE (avg=Xm00s)'.\n2. Per-stage duration metrics include avg_seconds,\
+    \ min_seconds, max_seconds \u2014 stage_metrics dict computed from raw duration\
+    \ list.\n3. Bottleneck tie-breaking by retry count \u2014 implemented via secondary\
+    \ sort key (stage_fail_counts) in max() call.\n4. Durable YAML under .litehive/logs/pool-runs/\
+    \ contains flow_statistics key (verified by test_pool_summary_flow_stats_in_durable_report).\n\
+    5. Statistics scoped to current pool run (completed + flagged entries only).\n\
+    6. Stages with no report data are omitted (returns None when no duration data).\n\
+    7. Tie-breaking test added: two stages with equal avg_seconds=30, testing wins\
+    \ because it has 2 fail_counts vs grooming's 0.\n\nFILES CHANGED: litehive/cli/_pool.py,\
+    \ tests/test_observability_and_status.py"
+  files_changed: []
+  created_at: '2026-04-06T10:28:02+00:00'
+- role: reviewer
+  step: accepting
+  verdict: pass
+  message: 'PASS: All acceptance criteria verified.
+
+
+    WHAT WAS VERIFIED:
+
+    1. flow_statistics key (correctly named) appears in both pool-summary.txt text
+    output and durable YAML under .litehive/logs/pool-runs/. QA caught and fixed the
+    original flow_stats naming issue.
+
+    2. stage_metrics per stage includes avg_seconds, min_seconds, max_seconds. QA
+    caught and fixed the original missing min/max issue.
+
+    3. Bottleneck tie-breaking by retry (fail) count implemented via secondary sort
+    key: max(stage_metrics, key=lambda s: (avg_seconds[s], fail_counts.get(s, 0))).
+    QA caught and fixed the original missing tie-breaking.
+
+    4. stage_fail_counts and stage_pass_counts persisted in flow_statistics dict;
+    stage_failures text line emitted for non-zero fail counts.
+
+    5. Statistics scoped to current pool run (completed + flagged entries only).
+
+    6. Stages with no report data return None and are omitted from output.
+
+    7. All 71 tests pass in tests/test_observability_and_status.py including 8 new
+    focused tests covering: flow stats returns None when no durations, bottleneck
+    identification, averaging across multiple tasks, failure tracking, tie-breaking
+    by retry count, pool summary text lines, omission when no data, and durable YAML
+    inclusion.
+
+
+    FILES CHANGED: litehive/cli/_pool.py, tests/test_observability_and_status.py
+
+
+    STAGE_RESULT:
+
+    {"verdict":"pass","summary":"Flow statistics and bottleneck reporting implemented
+    and verified; 71/71 tests pass","files_changed":["litehive/cli/_pool.py","tests/test_observability_and_status.py"],"tests":{"added":8,"passing":71},"warnings":[]}'
+  files_changed: []
+  created_at: '2026-04-06T10:32:08+00:00'
+- role: planner
+  step: grooming
+  verdict: pass
+  message: "## Grooming: T-0101 \u2014 run-all continue after task requeue\n\n###\
+    \ What I found\n\nCode analysis reveals two separate execution paths:\n\n**1.\
+    \ daemon run (run-all loop):**\nThe daemon calls `litehive run` (single-task mode)\
+    \ as a subprocess each iteration, then reads `pool_stop_reason` from state.yaml.\
+    \ After a task is requeued, `run_single_task` currently:\n- Clears `pool_stop_reason`\
+    \ to `null` at the start (line 203)\n- Computes `stop_reason = \"task_requeued\"\
+    ` via `_single_task_stop_reason`\n- Does NOT persist `task_requeued` back to state.yaml\
+    \ (only human_checkpoint reasons are persisted, line 226-227)\n\nSo the daemon\
+    \ reads `pool_stop_reason: null` and continues \u2014 but only because `null`\
+    \ is in the daemon's allow-list at line 361. The explicit `if stop_reason == \"\
+    task_requeued\": continue` guard at line 359 is never actually exercised in production.\n\
+    \n**2. run --drain (drain_task_pool):**\n`drain_task_pool` handles requeue correctly\
+    \ via `_pool_stop_reason` \u2192 `peek_next_task_selection` \u2192 returns `None`\
+    \ (continue) when the requeued task is back in state.queue. However, there is\
+    \ no test for the single-task requeue scenario (one task, no other tasks in queue).\n\
+    \n**3. The gap:**\n- `run_single_task` should persist `pool_stop_reason: task_requeued`\
+    \ to state.yaml so the daemon's explicit continuation logic (line 359) is exercised\
+    \ in production, not just the null-passthrough at line 361.\n- Missing test: `drain_task_pool`\
+    \ with exactly one task that gets requeued and must run again.\n- Missing test:\
+    \ `run_single_task` persisting `task_requeued` to state.yaml.\n\n### Acceptance\
+    \ criteria\n\n1. After `litehive run` requeues a task (any stage), state.yaml\
+    \ shows `pool_stop_reason: task_requeued` (not null), making the outcome observable\
+    \ via `litehive status`.\n2. `litehive daemon run` continues to the next iteration\
+    \ when `pool_stop_reason` is `task_requeued` (daemon line 359 is exercised, not\
+    \ just the null-passthrough).\n3. `litehive run --drain` continues running when\
+    \ the only task in the pool is requeued for another pass (no infinite stop on\
+    \ single-task requeue with no other tasks present).\n4. All existing tests continue\
+    \ to pass after the change.\n\n### Plan\n\n1. **litehive/runtime/_execution.py**\
+    \ \u2014 In `run_single_task`, add `elif stop_reason == \"task_requeued\": set_pool_stop_reason(root,\
+    \ stop_reason)` alongside the existing human_checkpoint persistence (one-line\
+    \ change).\n2. **tests/test_task_commands_and_daemon.py** \u2014 Update the `test_daemon_foreground_continues_after_task_requeued`\
+    \ mock so the first iteration sets `pool_stop_reason: task_requeued` in state.yaml\
+    \ (not null), confirming the daemon line-359 path is actually exercised.\n3. **tests/test_runtime_pool.py**\
+    \ \u2014 Add a test for `drain_task_pool` with a single task that fails and is\
+    \ requeued, verifying the drain continues and eventually exhausts the queue.\n\
+    4. **tests/test_runtime_pool.py or test_config_and_run_cli.py** \u2014 Add a test\
+    \ asserting `run_single_task` persists `pool_stop_reason: task_requeued` to state.yaml\
+    \ when a task is requeued.\n\n### Sizing\n\nPM_COMPLEXITY: simple \u2014 one-line\
+    \ code change plus 2-3 targeted tests.\nPLANNED_EFFORT: xs"
+  files_changed: []
+  created_at: '2026-04-06T10:54:59+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: "## Implementation: T-0101 \u2014 run-all continues after task requeue\n\
+    \n### What was done\n\nIdentified and fixed a gap where run_single_task did not\
+    \ persist pool_stop_reason=task_requeued to state.yaml. The daemon continued anyway\
+    \ (via the null-passthrough at line 361), but the explicit task_requeued guard\
+    \ at line 359 was never exercised in production.\n\n### Change (one-line fix)\n\
+    \nlitehive/runtime/_execution.py \u2014 extended the set_pool_stop_reason call\
+    \ in run_single_task to include task_requeued alongside human_checkpoint_* reasons:\n\
+    \  Before: if stop_reason.startswith('human_checkpoint_'):\n  After:  if stop_reason.startswith('human_checkpoint_')\
+    \ or stop_reason == 'task_requeued':\n\n### Tests added (2 new + 1 updated)\n\n\
+    1. test_run_single_task_persists_task_requeued_stop_reason \u2014 asserts run_single_task\
+    \ writes pool_stop_reason=task_requeued to state.yaml when a testing rejection\
+    \ requeues the task.\n2. test_drain_task_pool_continues_when_only_task_is_requeued_for_another_pass\
+    \ \u2014 asserts drain_task_pool continues past a task_requeued result and eventually\
+    \ completes the task.\n3. test_daemon_foreground_continues_after_task_requeued\
+    \ (updated) \u2014 mock now writes pool_stop_reason=task_requeued (not null) to\
+    \ state, confirming the daemon's explicit line-359 path is exercised.\n\n### Verification\n\
+    \nAll 3 new/modified tests pass. The 3 pre-existing failures (test_drain_task_pool_allows_future_queue_mutation_during_active_run,\
+    \ test_update_command_supports_rich_task_shaping_via_editor, test_switch_command_interrupts_active_task_persists_engine_and_records_thread_comment)\
+    \ were already failing before this change and are unrelated."
+  files_changed: []
+  created_at: '2026-04-06T11:20:39+00:00'
+- role: qa
+  step: testing
+  verdict: pass
+  message: "VERDICT: PASS\n\nVerified implementation commit b98b4d7: 'fix: persist\
+    \ task_requeued stop reason to state so daemon continues explicitly'.\n\nCHANGE:\
+    \ In litehive/runtime/_execution.py, run_single_task now calls set_pool_stop_reason(root,\
+    \ 'task_requeued') when a task is requeued, alongside the existing human_checkpoint_*\
+    \ cases. Previously pool_stop_reason stayed null after a requeue.\n\nDAEMON BEHAVIOR:\
+    \ The daemon loop at daemon/__init__.py:359 has an explicit 'if stop_reason ==\
+    \ \"task_requeued\": continue' guard. This guard now fires reliably. Before the\
+    \ fix, the daemon continued only via the null-passthrough path (line 361), which\
+    \ also worked but was implicit and less robust.\n\nTESTS RUN:\n- tests/test_runtime_pool.py\
+    \ -k requeue: 12 passed (includes 2 new tests)\n- New test test_run_single_task_persists_task_requeued_stop_reason:\
+    \ PASS \u2014 asserts run_single_task writes pool_stop_reason=task_requeued to\
+    \ state and task is requeued to implementing\n- New test test_drain_task_pool_continues_when_only_task_is_requeued_for_another_pass:\
+    \ PASS \u2014 asserts drain_task_pool completes (queue_exhausted) when task fails\
+    \ testing once, gets requeued, then passes on the second pass\n- tests/test_task_commands_and_daemon.py\
+    \ + test_runtime_pool.py full run: 156 passed, 3 failed\n- The 3 failures (test_drain_task_pool_allows_future_queue_mutation_during_active_run,\
+    \ test_update_command_supports_rich_task_shaping_via_editor, test_switch_command_interrupts_active_task_persists_engine_and_records_thread_comment)\
+    \ are pre-existing on the base branch and unrelated to this change.\n\nACCEPTANCE\
+    \ CRITERIA: No explicit criteria defined. Goal met: run-all (daemon) continues\
+    \ after task_requeued rather than relying on implicit null passthrough. State\
+    \ is now explicit and correct."
+  files_changed: []
+  created_at: '2026-04-06T11:29:20+00:00'
+- role: reviewer
+  step: accepting
+  verdict: pass
+  message: 'PASS. The implementation correctly makes run-all continue automatically
+    after a task is requeued for another pass.
+
+
+    WHAT WAS VERIFIED:
+
+    1. Core fix in litehive/runtime/_execution.py: run_single_task now persists pool_stop_reason=task_requeued
+    to state.yaml when a task is requeued (testing/accepting rejection routes back
+    to implementing). Previously pool_stop_reason stayed null, relying on the null-passthrough
+    path in the daemon. The fix activates the explicit task_requeued guard at daemon/__init__.py:359
+    (continue vs return 0).
+
+
+    2. New test test_run_single_task_persists_task_requeued_stop_reason: confirms
+    that run_single_task writes pool_stop_reason=task_requeued to state and leaves
+    the task queued at implementing. PASSES.
+
+
+    3. New test test_drain_task_pool_continues_when_only_task_is_requeued_for_another_pass:
+    simulates a testing FAIL on first pass, drain_task_pool continues to a second
+    testing pass, task reaches done, stop_reason=queue_exhausted. PASSES.
+
+
+    4. Updated test_task_commands_and_daemon.py mock to write pool_stop_reason=task_requeued
+    (previously null), exercising the explicit guard path.
+
+
+    REGRESSIONS: None. 3 pre-existing test failures (test_drain_task_pool_allows_future_queue_mutation_during_active_run,
+    test_update_command_supports_rich_task_shaping_via_editor, test_switch_command_interrupts_active_task_persists_engine_and_records_thread_comment)
+    are confirmed pre-existing on main/origin, not introduced by this change.
+
+
+    The one-line code change is minimal, targeted, and correctly addresses the stated
+    goal.'
+  files_changed: []
+  created_at: '2026-04-06T11:36:37+00:00'

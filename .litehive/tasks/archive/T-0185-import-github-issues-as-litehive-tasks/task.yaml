@@ -1,0 +1,94 @@
+id: T-0185
+slug: import-github-issues-as-litehive-tasks
+title: Import GitHub issues as litehive tasks
+depends_on: []
+task_type: null
+engine: null
+model: null
+mode: implementation
+pipeline_mode: full
+status: done
+pipeline_status: done
+priority: medium
+pm_complexity: moderate
+planned_effort: m
+created_at: '2026-04-05T17:44:24+00:00'
+updated_at: '2026-04-08T07:46:18+00:00'
+goal: Add a command like 'litehive import-issue <github-url>' or 'litehive import-issues'
+  that fetches GitHub issues and creates litehive tasks from them. Map issue title
+  to task title, issue body to goal, and labels to task_type or priority. Support
+  both single issue import and bulk import of open issues.
+acceptance_criteria:
+- litehive import-issue <url-or-number> creates a task from a GitHub issue
+- Task title, goal, and acceptance criteria are populated from the issue
+- Issue labels are mapped to task_type or priority where possible
+- Duplicate import of the same issue is detected and skipped
+- litehive import-issues imports all open issues that don't already have tasks
+constraints: []
+plan: []
+human_checkpoints: []
+subagents:
+- id: SA-0001
+  role: planner
+  engine: claude
+  status: completed
+  path: subagents/SA-0001-planner
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0002
+  role: swe
+  engine: claude
+  status: completed
+  path: subagents/SA-0002-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0003
+  role: swe
+  engine: claude
+  status: failed
+  path: subagents/SA-0003-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0004
+  role: recovery
+  engine: claude
+  status: completed
+  path: subagents/SA-0004-recovery
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0005
+  role: qa
+  engine: claude
+  status: completed
+  path: subagents/SA-0005-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0006
+  role: reviewer
+  engine: claude
+  status: completed
+  path: subagents/SA-0006-reviewer
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0007
+  role: merge-resolver
+  engine: claude
+  status: completed
+  path: subagents/SA-0007-merge-resolver
+  sandboxed: false
+  sandbox_summary: host
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0185 import-github-issues-as-litehive-tasks'
+  commit_sha: ecc56056730d0b9d5591ba6005f1978ac1c8c5b1
+  checkpoint_base_sha: 848913f1703e9312f79f37aa57dd91e7004a936f
+  checkpoint_attempts: 1
+  rolled_back_checkpoint_attempt: null
+  worktree_path: null
+  merge_agent_attempts: 1
+retry_policy:
+  max_retries: null
+  stage_retry_limit: null
+created_from: null
+upstream_origin: null
+archived_at: '2026-04-08T07:46:18+00:00'

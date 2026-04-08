@@ -1,0 +1,71 @@
+git:
+  commit_sha: a6a52507ba09fed3e78f92fcd527f9fad99ef0bb
+  worktree_path: .litehive/worktrees/T-0099-add-flow-statistics-and-bottleneck-reporting-for-pool-runs
+execution_status: done
+run_started_at: '2026-04-06T09:45:01+00:00'
+updated_at: '2026-04-06T10:33:27+00:00'
+retry_count: 0
+retry_limit: 3
+retry_source: global
+stage_retry_counts: {}
+current_stage:
+  step: null
+  status: idle
+  started_at: null
+  completed_at: null
+  updated_at: '2026-04-06T10:33:27+00:00'
+  duration_seconds: 0
+  verdict: null
+  summary: ''
+last_stage:
+  step: commit_to_git
+  status: completed
+  started_at: '2026-04-06T10:32:16+00:00'
+  completed_at: '2026-04-06T10:33:27+00:00'
+  updated_at: '2026-04-06T10:33:27+00:00'
+  duration_seconds: 71
+  verdict: pass
+  summary: 'CommitToGit complete. Commit: a6a52507'
+active_subagent: null
+last_subagent:
+  id: SA-0012
+  role: merge-resolver
+  engine: claude
+  status: completed
+  path: subagents/SA-0012-merge-resolver
+  pid: 1082446
+  sandboxed: false
+  sandbox_summary: host
+  started_at: '2026-04-06T10:32:16+00:00'
+  updated_at: '2026-04-06T10:33:25+00:00'
+  completed_at: '2026-04-06T10:33:25+00:00'
+  exit_code: 0
+  transcript_snippet: Let me read the conflicting files to understand the conflicts.
+  interruption_reason: ''
+  resource_limit_event: null
+  continuation:
+    session_id: e275b2d3-ff04-4ac4-841a-940f0cc99eea
+    thread_id: null
+    metadata: {}
+    updated_at: '2026-04-06T10:33:25+00:00'
+interruption: null
+continuation_handoff: null
+last_engine_switch:
+  step: grooming
+  from_engine: goz
+  to_engine: copilot
+  reason: transient network failure
+  happened_at: '2026-04-06T09:45:03+00:00'
+last_outcome:
+  kind: null
+  stage: null
+  reason_code: null
+  reason: ''
+  failure_classification: null
+  failure_diagnostics: {}
+  follow_up_task_id: null
+  retry_count: 0
+  retry_limit: 0
+  retry_source: global
+  recorded_at: null
+self_heal_traceback_fingerprints: []

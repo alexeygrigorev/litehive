@@ -1,0 +1,84 @@
+task_id: T-0145
+step: grooming
+verdict: pass
+summary: Created the missing T-0145 task record, narrowed it into a local-first upstream
+  contribution protocol, and recorded the planner handoff with explicit acceptance
+  criteria, dependency on T-0140, plan, and PM sizing.
+feedback: "I\u2019m reviewing the current task record and task-local artifacts first\
+  \ so I can tighten scope, acceptance criteria, and the execution plan without drifting\
+  \ into implementation.\nI found adjacent prior work around external-project recovery\
+  \ and upstream self-heal. Next I\u2019m reading the current `T-0145` task record\
+  \ plus the closest related task so I can decide whether this task is a protocol-only\
+  \ slice or an umbrella that needs narrowing.\nThe `T-0145` task directory is missing\
+  \ from `.litehive/tasks`, so part of grooming here is deciding whether to materialize\
+  \ the record locally or mark the task blocked. I\u2019m checking workspace state\
+  \ and existing task-shaping commands next so I can pick the least surprising path.\n\
+  The local workspace state is inconsistent with the task prompt: `litehive status`\
+  \ shows active task `T-0081`, not `T-0145`. I\u2019m inspecting the task-shaping\
+  \ commands and workspace state files now so I can either repair the task record\
+  \ locally or give a precise blocked verdict instead of guessing.\nThe remaining\
+  \ question is operational: `litehive report` normally targets the active task, and\
+  \ this workspace still points at `T-0081`. I\u2019m checking whether report can\
+  \ target a specific task or whether this mismatch itself is the blocker I need to\
+  \ record.\nI have enough context to shape the task itself now. The main product\
+  \ question is overlap: `T-0140` already covers \u201Cself-heal litehive from an\
+  \ external project,\u201D so `T-0145` should be framed as the broader contribution\
+  \ protocol and explicitly treat self-heal patch intake as one protocol path rather\
+  \ than a duplicate implementation-only task.\nI\u2019m materializing the missing\
+  \ `T-0145` task record locally and writing the groomed scope directly into it so\
+  \ the next stage has an explicit execution contract instead of relying on this transcript.\n\
+  The task contract is written. I\u2019m submitting the planner report against `T-0145`\
+  \ with the exact handoff the implementing agent will need, including the overlap\
+  \ note with `T-0140` and the remaining workspace warning about `active_task_id`.\n\
+  The task record hit a YAML parse error during report submission. I\u2019m fixing\
+  \ the scalar quoting now and then I\u2019ll resubmit the planner report against\
+  \ `T-0145`.\nSTAGE_RESULT:\n{\"verdict\":\"pass\",\"summary\":\"Created the missing\
+  \ T-0145 task record, narrowed it into a local-first upstream contribution protocol,\
+  \ and recorded the planner handoff with explicit acceptance criteria, dependency\
+  \ on T-0140, plan, and PM sizing.\",\"files_changed\":[\".litehive/tasks/T-0145-design-and-implement-cross-project-contribution-protocol-for-litehive/task.yaml\"\
+  ],\"tests\":{\"added\":0,\"passing\":0},\"warnings\":[\"Workspace state still shows\
+  \ active_task_id T-0081; the planner report was submitted explicitly with --task-id\
+  \ T-0145, so active-task state should be reconciled separately if this checkout\
+  \ is expected to execute T-0145 next.\"],\"follow_up_tasks\":[],\"acceptance_criteria\"\
+  :[\"litehive exposes a supported CLI workflow for filing an upstream litehive issue/task\
+  \ from another project, such as `litehive issue --upstream ...`, and the resulting\
+  \ litehive task record preserves source-project metadata.\",\"External-project recovery\
+  \ flows can classify a failure as a likely litehive bug and create an upstream litehive\
+  \ task automatically instead of only leaving a local log entry.\",\"The protocol\
+  \ defines and implements a local-first patch handoff path using `litehive_source_path`\
+  \ so an external project can propose a litehive fix branch/worktree and file the\
+  \ corresponding upstream task or PR context for review.\",\"The implementation covers\
+  \ the four required contribution classes: runtime bug discovered during task execution,\
+  \ missing feature request, config or prompt improvement based on real usage, and\
+  \ engine adapter fix.\",\"Litehive durable state and operator-visible views show\
+  \ which upstream contribution tasks came from which project and include enough metadata\
+  \ to navigate back to the originating workspace/task.\",\"`litehive_source_path`\
+  \ is documented and used as the locator for upstream contributions into the litehive\
+  \ source repo.\",\"Operator documentation in `docs/contributing-back.md` explains\
+  \ how to file an upstream issue, how recovery agents escalate automatically, and\
+  \ how to hand off a candidate patch without leaving the current project context.\"\
+  ]}\nFOLLOW_UP_TASKS:\n[]\n\n[stderr]\nReading additional input from stdin..."
+files_changed:
+- .litehive/tasks/T-0145-design-and-implement-cross-project-contribution-protocol-for-litehive/task.yaml
+follow_up_tasks: []
+created_follow_up_task_ids: []
+tests:
+  added: 0
+  passing: 0
+warnings:
+- Workspace state still shows active_task_id T-0081; the planner report was submitted
+  explicitly with --task-id T-0145, so active-task state should be reconciled separately
+  if this checkout is expected to execute T-0145 next.
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 276
+hook_results: []
+created_at: '2026-04-04T19:08:36+00:00'

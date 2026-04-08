@@ -1,0 +1,54 @@
+task_id: T-0190
+step: grooming
+verdict: pass
+summary: 'Grooming PASS for T-0190: Engine freeze CLI.'
+feedback: "Grooming PASS for T-0190: Engine freeze CLI.\n\n## Acceptance Criteria\
+  \ (confirmed well-scoped, all observable):\n1. `litehive engine freeze <engine>\
+  \ --until <datetime>` disables engine (date + datetime, local TZ input, UTC storage)\n\
+  2. Frozen engines skipped in resolve_engine_plan and fallback chains\n3. `litehive\
+  \ engine unfreeze <engine>` removes freeze manually\n4. `litehive status` shows\
+  \ frozen engines with unfreeze date\n5. Auto-unfreeze when date passes\n\n## Implementation\
+  \ Plan (6 steps):\n1. **Restructure engine CLI parser**: Convert `engine` from flat\
+  \ positional to subparser group with `set`, `freeze`, `unfreeze` subcommands (litehive/cli/parser.py:222-236)\n\
+  2. **Add config field**: `engine_freeze: dict[str, str]` on LitehiveConfig (litehive/config/__init__.py),\
+  \ maps engine name to UTC ISO datetime\n3. **Implement freeze/unfreeze handlers**:\
+  \ Extend litehive/cli/engine.py \u2014 parse --until (local TZ -> UTC), read/write\
+  \ config.yaml engine_freeze dict\n4. **Filter frozen engines**: In resolve_engine_plan()\
+  \ (litehive/runtime/_models.py:68-78) and _engine_attempt_order() (litehive/runtime/_budget.py:82-95),\
+  \ skip engines whose freeze datetime > utcnow; expired freezes are auto-removed\n\
+  5. **Status display**: Show frozen engines in litehive status (litehive/cli/status.py)\
+  \ with unfreeze datetime in local TZ\n6. **Tests**: CLI round-trip, datetime parsing,\
+  \ frozen engine skipping, auto-unfreeze, status display\n\n## Sizing:\n- PM_COMPLEXITY:\
+  \ simple\n- PLANNED_EFFORT: s\n\n## Warning:\nParser restructuring changes `litehive\
+  \ engine codex` to `litehive engine set codex`. Consider backward compat shim or\
+  \ accept the breaking change.\n\nTASK_UPDATE:\npm_complexity: simple\nplanned_effort:\
+  \ s\nplan:\n  - \"Restructure engine CLI parser: convert engine from flat positional\
+  \ to subparser group with set, freeze, unfreeze subcommands (litehive/cli/parser.py:222-236)\"\
+  \n  - \"Add engine_freeze dict[str, str] to LitehiveConfig (litehive/config/__init__.py).\
+  \ Maps engine name to UTC ISO datetime.\"\n  - \"Implement freeze/unfreeze CLI handlers\
+  \ in litehive/cli/engine.py. Parse --until local TZ, store UTC, write config.yaml.\"\
+  \n  - \"Filter frozen engines in resolve_engine_plan and _engine_attempt_order.\
+  \ Compare against utcnow, auto-skip expired.\"\n  - \"Show frozen engines in litehive\
+  \ status with local TZ display.\"\n  - \"Write targeted tests for all acceptance\
+  \ criteria.\""
+files_changed: []
+follow_up_tasks: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 186
+hook_results: []
+created_at: '2026-04-07T03:52:35+00:00'

@@ -1,0 +1,56 @@
+git:
+  commit_sha: 6087b7ce1c73f28b87bd049404e8d882ad3dd271
+execution_status: done
+run_started_at: '2026-04-02T19:42:55+00:00'
+updated_at: '2026-04-02T19:42:56+00:00'
+retry_count: 0
+retry_limit: 3
+retry_source: global
+current_stage:
+  step: null
+  status: idle
+  started_at: null
+  completed_at: null
+  updated_at: '2026-04-02T19:42:56+00:00'
+  duration_seconds: 0
+  verdict: null
+  summary: ''
+last_stage:
+  step: commit_to_git
+  status: completed
+  started_at: '2026-04-02T19:42:55+00:00'
+  completed_at: '2026-04-02T19:42:56+00:00'
+  updated_at: '2026-04-02T19:42:56+00:00'
+  duration_seconds: 1
+  verdict: pass
+  summary: CommitToGit skipped because task worktree was already clean
+active_subagent: null
+last_subagent:
+  id: SA-0005
+  role: pm
+  engine: codex
+  status: completed
+  path: subagents/SA-0005-pm
+  pid: 345294
+  sandboxed: false
+  sandbox_summary: ''
+  started_at: '2026-04-01T17:35:58+00:00'
+  updated_at: '2026-04-01T17:37:48+00:00'
+  completed_at: '2026-04-01T17:37:48+00:00'
+  exit_code: 0
+  transcript_snippet: Shared external CLI invocations are now sandbox-wrapped with
+    workspace-configurable Docker policy, per-engine env/cre...
+  interruption_reason: ''
+  resource_limit_event: null
+interruption: null
+last_engine_switch: null
+last_outcome:
+  kind: null
+  stage: null
+  reason_code: null
+  reason: ''
+  follow_up_task_id: null
+  retry_count: 0
+  retry_limit: 0
+  retry_source: global
+  recorded_at: null

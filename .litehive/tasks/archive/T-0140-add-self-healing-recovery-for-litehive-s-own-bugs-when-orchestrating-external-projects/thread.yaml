@@ -1,0 +1,385 @@
+- role: planner
+  step: grooming
+  verdict: pass
+  message: 'Verified the current recovery and upstream-contribution seams before reshaping
+    the task. Existing code already provides a generic recovery trigger in `litehive/runtime.py`,
+    recovery evidence and thread logging in `litehive/tasks.py`, and a configured
+    `litehive_source_path` field in `litehive/config.py`. Current recovery guidance
+    still assumes the agent stays in the external project and files or logs an upstream
+    Litehive issue; it does not yet provide a first-class self-heal path that classifies
+    Litehive-owned tracebacks, switches into the Litehive repo, runs `uv run pytest`,
+    merges to Litehive main, and requeues the originating external-project task. I
+    updated `T-0140` to make that delta explicit.
+
+
+    What changed in the task record:
+
+    - set `task_type: bugfix`
+
+    - set `PM_COMPLEXITY: moderate`
+
+    - set `PLANNED_EFFORT: m`
+
+    - tightened the goal around bounded self-heal for Litehive control-plane bugs
+    triggered from external projects
+
+    - rewrote the acceptance criteria to require traceback-based classification, `litehive_source_path`
+    validation, Litehive-worktree execution context, `uv run pytest` gating before
+    merge, merge-to-main plus same-stage requeue, one-attempt-per-fingerprint loop
+    prevention, and thread/recovery audit logging
+
+    - added implementation constraints to keep this scoped to self-heal and to preserve
+    the existing project-bug path
+
+    - added a five-step implementation plan covering classification, routing, Litehive
+    worktree execution, audit trail plus attempt tracking, and focused regression
+    coverage
+
+
+    Tests run: none. This is a grooming-only pass; I verified repository context by
+    targeted code inspection and `uv run litehive status --workspace . --fast` only.
+
+
+    Implementation guidance for the next agent:
+
+    1. Start from `_attempt_stage_recovery` and the recovery prompt in `litehive/runtime.py`
+    plus the recovery role guidance in `litehive/subagents.py`; that is the current
+    seam that must branch into self-heal instead of only issue filing.
+
+    2. Reuse `litehive_source_path`, existing worktree and merge helpers, and existing
+    recovery report or thread plumbing instead of creating a separate control path.
+
+    3. Add a durable failure fingerprint so self-heal is bounded to one attempt per
+    unique Litehive-owned traceback.
+
+    4. Prove both success and failure paths with focused tests: at minimum classification,
+    capped retry, successful self-heal with merge and requeue, and blocked or failed
+    paths when `litehive_source_path` is unavailable or `uv run pytest` fails.
+
+
+    STAGE_RESULT:
+
+    {"verdict":"pass","summary":"Clarified T-0140 into a bounded self-heal bugfix
+    slice with explicit acceptance criteria, plan, constraints, and PM sizing based
+    on the existing recovery and upstream-contribution seams already present in the
+    repo.","files_changed":[".litehive/tasks/T-0140-add-self-healing-recovery-for-litehive-s-own-bugs-when-orchestrating-external-projects/task.yaml"],"tests":{"added":0,"passing":0},"warnings":[],"follow_up_tasks":[],"acceptance_criteria":["Recovery
+    classifies a failure as a Litehive bug versus a project bug by inspecting traceback
+    paths and only routes into self-heal when the failing frames resolve to Litehive-owned
+    code rather than the external project.","litehive_source_path is the configured
+    locator for the Litehive source repo used by self-heal, and recovery records an
+    explicit blocker instead of guessing when that repo is unavailable.","For Litehive
+    bugs discovered while working in an external project, recovery performs the repair
+    in a Litehive worktree rooted at litehive_source_path with Litehive-specific context,
+    not inside the target project checkout.","The self-heal flow runs uv run pytest
+    in the Litehive repo before any merge, and a failing Litehive test run prevents
+    merge while leaving explicit recovery evidence on the originating task.","A successful
+    self-heal merges the Litehive fix onto Litehive main and requeues the original
+    external-project task at the same stage so the next wrapper iteration runs with
+    the repaired Litehive code.","Self-heal is capped at one attempt per unique failure
+    fingerprint or traceback signature so the runner cannot loop indefinitely on the
+    same Litehive bug.","The originating task thread and recovery artifacts log the
+    classification decision, Litehive worktree or branch used, test command and result,
+    merge outcome, and requeue decision for auditability."]}
+
+    FOLLOW_UP_TASKS:
+
+    []'
+  files_changed: []
+  created_at: '2026-04-05T07:09:06+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Implemented bounded Litehive self-heal for external-project stage failures.
+    The runner now captures the Python traceback on unhandled stage exceptions, recovery
+    classifies failure ownership from traceback frame paths, and Litehive-owned failures
+    route into a Litehive worktree under configured litehive_source_path instead of
+    repairing the target project. Self-heal persists one traceback fingerprint per
+    task to cap retries at one attempt per unique Litehive bug. The self-heal flow
+    logs launch and completion details to the originating task thread, writes structured
+    recovery actions to the recovery artifact, runs `uv run pytest` in the Litehive
+    worktree before merge, blocks merge if pytest fails or litehive_source_path is
+    unavailable, merges successful fixes onto Litehive main, and returns a retry-style
+    pass so the runner requeues the original task at the same stage for the next wrapper
+    iteration rather than continuing in the old process.
+
+
+    Files changed: litehive/runtime.py, litehive/runner.py, litehive/subagents.py,
+    litehive/models.py, tests/test_retry_commit_and_recovery.py, tests/test_runner_workflow.py.
+
+
+    Verification run: `uv run pytest -q tests/test_runner_workflow.py::test_stage_prompt_uses_recovery_role_when_requested
+    tests/test_retry_commit_and_recovery.py::test_attempt_stage_recovery_blocks_when_litehive_traceback_has_no_source_repo
+    tests/test_retry_commit_and_recovery.py::test_classify_recovery_failure_owner_prefers_project_paths_over_name_overlap
+    tests/test_retry_commit_and_recovery.py::test_attempt_stage_recovery_caps_litehive_self_heal_by_traceback_fingerprint
+    tests/test_retry_commit_and_recovery.py::test_attempt_stage_recovery_self_heal_runs_pytest_merges_and_requeues
+    tests/test_retry_commit_and_recovery.py::test_attempt_stage_recovery_self_heal_stops_before_merge_when_pytest_fails
+    tests/test_retry_commit_and_recovery.py::test_runner_requeues_same_stage_after_successful_litehive_self_heal`
+    -> 7 passed. Also ran `python -m py_compile litehive/runtime.py litehive/runner.py
+    litehive/subagents.py litehive/models.py`.
+
+
+    Acceptance evidence: traceback-based classification is covered for Litehive and
+    project paths; missing or invalid litehive_source_path produces an explicit blocker;
+    successful self-heal runs in a Litehive worktree, records thread plus recovery
+    audit details, gates merge on `uv run pytest`, merges to Litehive main, and requeues
+    the original task at the same stage; repeated fingerprints are blocked after one
+    attempt to prevent loops.'
+  files_changed: []
+  created_at: '2026-04-05T07:18:27+00:00'
+- role: qa
+  step: testing
+  verdict: reject
+  message: 'Expected: the originating task thread and recovery artifacts must log
+    the self-heal classification decision, Litehive worktree or branch used, test
+    command and result, merge outcome, and requeue decision for auditability across
+    Litehive self-heal outcomes.
+
+
+    Observed: the success path writes explicit thread fields, but blocked self-heal
+    paths only append a generic recovery summary comment. In the missing-source path
+    the thread comment contains only the summary and blocker, with no classification
+    field, traceback fingerprint, worktree or branch, test command or result, merge
+    outcome, or requeue decision. In the pytest-failure path the thread shows the
+    launch comment plus a generic recovery summary, but it still does not record an
+    explicit test_command field or a requeue decision on the completion comment.
+
+
+    Steps to reproduce:
+
+    1. Run a small Python snippet that calls _attempt_stage_recovery(...) with a Litehive
+    traceback and LitehiveConfig(litehive_source_path=''/missing/litehive''); inspect
+    thread.yaml and compare it with recovery/recovery-001.yaml.
+
+    2. Run a small Python snippet that calls _attempt_stage_recovery(...), monkeypatches
+    SubagentManager.run to return a recovery result, monkeypatches _run_repo_pytest
+    to return exit code 1, then inspect thread.yaml; the thread lacks an explicit
+    test_command field on the completion comment and no requeue decision is logged
+    after the blocked result.
+
+    3. Existing regression tests still pass: uv run pytest -q tests/test_runner_workflow.py::test_stage_prompt_uses_recovery_role_when_requested
+    tests/test_retry_commit_and_recovery.py::test_attempt_stage_recovery_blocks_when_litehive_traceback_has_no_source_repo
+    tests/test_retry_commit_and_recovery.py::test_classify_recovery_failure_owner_prefers_project_paths_over_name_overlap
+    tests/test_retry_commit_and_recovery.py::test_attempt_stage_recovery_caps_litehive_self_heal_by_traceback_fingerprint
+    tests/test_retry_commit_and_recovery.py::test_attempt_stage_recovery_self_heal_runs_pytest_merges_and_requeues
+    tests/test_retry_commit_and_recovery.py::test_attempt_stage_recovery_self_heal_stops_before_merge_when_pytest_fails
+    tests/test_retry_commit_and_recovery.py::test_runner_requeues_same_stage_after_successful_litehive_self_heal
+    -> 7 passed.
+
+
+    Acceptance criteria status:
+
+    - Satisfied: traceback-based classification; configured litehive_source_path blocking;
+    Litehive worktree execution; pytest gating before merge; merge-to-main plus same-stage
+    requeue on success; one-attempt-per-fingerprint capping.
+
+    - Not met: the criterion requiring the originating task thread and recovery artifacts
+    to log the classification decision, Litehive worktree or branch used, test command
+    and result, merge outcome, and requeue decision for auditability across the self-heal
+    flow. Blocked paths do not emit that full audit detail to the task thread.'
+  files_changed: []
+  created_at: '2026-04-05T07:21:12+00:00'
+- role: reviewer
+  step: accepting
+  verdict: reject
+  message: 'EXPECTED behavior: the originating task thread and recovery artifacts
+    must log the self-heal classification decision, Litehive worktree or branch used,
+    test command and result, merge outcome, and requeue decision for every Litehive
+    self-heal outcome.
+
+
+    OBSERVED behavior: blocked self-heal paths still rely on the generic thread comment
+    emitted by record_recovery_report() in litehive/tasks.py, while only the success
+    path appends an explicit structured self-heal completion comment in litehive/runtime.py.
+    In litehive/runtime.py, the missing-source block returns after record_recovery_report()
+    without any append_thread_comment() carrying classification, traceback fingerprint,
+    worktree or branch, test command or result, merge outcome, or requeue decision.
+    The pytest-failure block does the same: it records recovery actions in recovery-001.yaml,
+    but thread.yaml only contains the launch comment plus the generic recovery summary,
+    so the thread still lacks explicit test_command/test_result, merge outcome, and
+    requeue decision fields required by the acceptance criteria.
+
+
+    Steps to reproduce:
+
+    1. Run: uv run pytest -q tests/test_retry_commit_and_recovery.py::test_attempt_stage_recovery_blocks_when_litehive_traceback_has_no_source_repo
+    tests/test_retry_commit_and_recovery.py::test_attempt_stage_recovery_self_heal_stops_before_merge_when_pytest_fails
+    tests/test_retry_commit_and_recovery.py::test_attempt_stage_recovery_self_heal_runs_pytest_merges_and_requeues
+    tests/test_runner_workflow.py::test_stage_prompt_uses_recovery_role_when_requested
+
+    2. Inspect litehive/runtime.py around the blocked self-heal returns: the missing-source
+    path and pytest-failure path call record_recovery_report(...) and return without
+    a matching append_thread_comment(...), while the success path later appends "Litehive
+    self-heal completed" with explicit audit fields.
+
+    3. Inspect litehive/tasks.py::record_recovery_report(): its thread comment only
+    writes "Recovery trigger ...", runnable_state, report path, and optional blocker,
+    which does not satisfy the required self-heal audit fields.
+
+
+    Acceptance criteria status:
+
+    - Satisfied: traceback-based classification of Litehive vs project failures; litehive_source_path
+    is used as the configured locator and blocks when unavailable; Litehive-owned
+    failures run in a Litehive worktree; uv run pytest gates merge; successful self-heal
+    merges to Litehive main and requeues the original task at the same stage; self-heal
+    is capped at one attempt per traceback fingerprint.
+
+    - Not met: the originating task thread does not log the full self-heal audit details
+    for blocked outcomes. The thread is missing explicit classification decision,
+    Litehive worktree or branch, test command/result, merge outcome, and requeue decision
+    for at least the missing-source and pytest-failure paths, so the auditability
+    criterion is still incomplete.
+
+
+    Evidence verified: uv run pytest -q tests/test_retry_commit_and_recovery.py::test_attempt_stage_recovery_blocks_when_litehive_traceback_has_no_source_repo
+    tests/test_retry_commit_and_recovery.py::test_attempt_stage_recovery_self_heal_stops_before_merge_when_pytest_fails
+    tests/test_retry_commit_and_recovery.py::test_attempt_stage_recovery_self_heal_runs_pytest_merges_and_requeues
+    tests/test_runner_workflow.py::test_stage_prompt_uses_recovery_role_when_requested
+    -> 4 passed.'
+  files_changed: []
+  created_at: '2026-04-05T07:22:41+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Closed the remaining T-0140 acceptance gap by mirroring self-heal audit
+    fields into the originating task thread for blocked outcomes, not just successful
+    merges. `litehive/runtime.py` now uses a shared self-heal thread-comment helper
+    so missing-source, repeated-fingerprint, pytest-failure, no-committable-fix, launch,
+    and success paths all record classification, traceback fingerprint, Litehive source/worktree
+    location, merge outcome, blocker where relevant, and requeue decision directly
+    in `thread.yaml` alongside the structured recovery artifact.
+
+
+    Verification run:
+
+    - `uv run pytest -q tests/test_retry_commit_and_recovery.py::test_attempt_stage_recovery_blocks_when_litehive_traceback_has_no_source_repo
+    tests/test_retry_commit_and_recovery.py::test_attempt_stage_recovery_self_heal_stops_before_merge_when_pytest_fails
+    tests/test_retry_commit_and_recovery.py::test_attempt_stage_recovery_self_heal_runs_pytest_merges_and_requeues
+    tests/test_runner_workflow.py::test_stage_prompt_uses_recovery_role_when_requested`
+    -> 4 passed
+
+    - `python -m py_compile litehive/runtime.py tests/test_retry_commit_and_recovery.py`
+
+
+    Acceptance evidence:
+
+    - Traceback-based Litehive vs project classification, `litehive_source_path` use,
+    Litehive worktree execution, pytest gating, merge-to-main plus same-stage requeue,
+    and one-attempt-per-fingerprint were already implemented and remain covered by
+    the focused recovery tests.
+
+    - The previously missing auditability criterion is now satisfied in the task thread
+    itself: blocked self-heal outcomes append explicit comments with `classification`,
+    `traceback_fingerprint`, `litehive_source_path`, `litehive_worktree`, `test_command`/`test_result`
+    when applicable, `merge_outcome`, and `requeue_decision`.
+
+    - Added regression assertions in `tests/test_retry_commit_and_recovery.py` for
+    the missing-source blocked path, pytest-failure blocked path, and successful self-heal
+    path so future regressions in thread-level audit logging fail fast.
+
+
+    STAGE_RESULT:
+
+    {"verdict":"pass","summary":"Added explicit thread-level self-heal audit logging
+    for blocked and successful Litehive self-heal outcomes and verified it with focused
+    recovery tests.","files_changed":["litehive/runtime.py","tests/test_retry_commit_and_recovery.py"],"tests":{"added":0,"passing":4},"warnings":[],"follow_up_tasks":[],"acceptance_criteria":["Recovery
+    classifies a failure as a Litehive bug versus a project bug by inspecting traceback
+    paths and only routes into self-heal when the failing frames resolve to Litehive-owned
+    code rather than the external project.","litehive_source_path is the configured
+    locator for the Litehive source repo used by self-heal, and recovery records an
+    explicit blocker instead of guessing when that repo is unavailable.","For Litehive
+    bugs discovered while working in an external project, recovery performs the repair
+    in a Litehive worktree rooted at litehive_source_path with Litehive-specific context,
+    not inside the target project checkout.","The self-heal flow runs uv run pytest
+    in the Litehive repo before any merge, and a failing Litehive test run prevents
+    merge while leaving explicit recovery evidence on the originating task.","A successful
+    self-heal merges the Litehive fix onto Litehive main and requeues the original
+    external-project task at the same stage so the next wrapper iteration runs with
+    the repaired Litehive code.","Self-heal is capped at one attempt per unique failure
+    fingerprint or traceback signature so the runner cannot loop indefinitely on the
+    same Litehive bug.","The originating task thread and recovery artifacts log the
+    classification decision, Litehive worktree or branch used, test command and result,
+    merge outcome, and requeue decision for auditability."]}'
+  files_changed: []
+  created_at: '2026-04-05T07:36:11+00:00'
+- role: qa
+  step: testing
+  verdict: pass
+  message: 'Validated T-0140 self-heal behavior with focused recovery regressions
+    and compile checks. Verified traceback-based Litehive vs project classification,
+    configured litehive_source_path blocking, Litehive worktree execution, uv run
+    pytest gating before merge, merge-to-main plus same-stage requeue on success,
+    one-attempt-per-traceback fingerprint capping, and thread plus recovery-artifact
+    audit logging for blocked and successful self-heal outcomes. Tests run: uv run
+    pytest -q tests/test_runner_workflow.py::test_stage_prompt_uses_recovery_role_when_requested
+    tests/test_retry_commit_and_recovery.py::test_attempt_stage_recovery_blocks_when_litehive_traceback_has_no_source_repo
+    tests/test_retry_commit_and_recovery.py::test_classify_recovery_failure_owner_prefers_project_paths_over_name_overlap
+    tests/test_retry_commit_and_recovery.py::test_attempt_stage_recovery_caps_litehive_self_heal_by_traceback_fingerprint
+    tests/test_retry_commit_and_recovery.py::test_attempt_stage_recovery_self_heal_runs_pytest_merges_and_requeues
+    tests/test_retry_commit_and_recovery.py::test_attempt_stage_recovery_self_heal_stops_before_merge_when_pytest_fails
+    tests/test_retry_commit_and_recovery.py::test_runner_requeues_same_stage_after_successful_litehive_self_heal
+    -> 7 passed in 1.32s. Also ran: python -m py_compile litehive/runtime.py litehive/runner.py
+    litehive/subagents.py litehive/models.py. Evidence confirms the recovery path
+    logs classification, traceback fingerprint, Litehive source/worktree location,
+    test command/result when applicable, merge outcome, and requeue decision in the
+    task thread and recovery report.'
+  files_changed: []
+  created_at: '2026-04-05T07:37:43+00:00'
+- role: reviewer
+  step: accepting
+  verdict: pass
+  message: 'Verified the self-heal path against all acceptance criteria by inspecting
+    the updated recovery flow and rerunning the focused regression suite. Evidence
+    confirmed that traceback inspection classifies Litehive-owned failures vs project
+    failures, `litehive_source_path` is the configured source repo locator and blocks
+    explicitly when unusable, Litehive-owned recovery runs in a Litehive worktree
+    rather than the target project, `uv run pytest` gates merge, successful self-heal
+    merges to Litehive main and requeues the original task at the same stage, traceback
+    fingerprints cap self-heal at one attempt per unique failure, and both the recovery
+    artifact and originating task thread now log classification, fingerprint, Litehive
+    source/worktree, test command/result when applicable, merge outcome, and requeue
+    decision for blocked and successful outcomes.
+
+
+    Tests run:
+
+    - `uv run pytest -q tests/test_retry_commit_and_recovery.py::test_attempt_stage_recovery_blocks_when_litehive_traceback_has_no_source_repo
+    tests/test_retry_commit_and_recovery.py::test_attempt_stage_recovery_caps_litehive_self_heal_by_traceback_fingerprint
+    tests/test_retry_commit_and_recovery.py::test_attempt_stage_recovery_self_heal_runs_pytest_merges_and_requeues
+    tests/test_retry_commit_and_recovery.py::test_attempt_stage_recovery_self_heal_stops_before_merge_when_pytest_fails
+    tests/test_retry_commit_and_recovery.py::test_runner_requeues_same_stage_after_successful_litehive_self_heal
+    tests/test_retry_commit_and_recovery.py::test_classify_recovery_failure_owner_prefers_project_paths_over_name_overlap
+    tests/test_runner_workflow.py::test_stage_prompt_uses_recovery_role_when_requested`
+    -> 7 passed in 1.16s.
+
+
+    STAGE_RESULT:
+
+    {"verdict":"pass","summary":"Verified bounded Litehive self-heal for external-project
+    failures, including traceback-based routing, Litehive-worktree repair, pytest-gated
+    merge, same-stage requeue, one-attempt fingerprint capping, and thread plus recovery-artifact
+    audit logging.","files_changed":["litehive/models.py","litehive/runner.py","litehive/runtime.py","litehive/subagents.py","tests/test_retry_commit_and_recovery.py","tests/test_runner_workflow.py"],"tests":{"added":6,"passing":7},"warnings":[],"follow_up_tasks":[],"acceptance_criteria":["Recovery
+    classifies a failure as a Litehive bug versus a project bug by inspecting traceback
+    paths and only routes into self-heal when the failing frames resolve to Litehive-owned
+    code rather than the external project.","litehive_source_path is the configured
+    locator for the Litehive source repo used by self-heal, and recovery records an
+    explicit blocker instead of guessing when that repo is unavailable.","For Litehive
+    bugs discovered while working in an external project, recovery performs the repair
+    in a Litehive worktree rooted at litehive_source_path with Litehive-specific context,
+    not inside the target project checkout.","The self-heal flow runs uv run pytest
+    in the Litehive repo before any merge, and a failing Litehive test run prevents
+    merge while leaving explicit recovery evidence on the originating task.","A successful
+    self-heal merges the Litehive fix onto Litehive main and requeues the original
+    external-project task at the same stage so the next wrapper iteration runs with
+    the repaired Litehive code.","Self-heal is capped at one attempt per unique failure
+    fingerprint or traceback signature so the runner cannot loop indefinitely on the
+    same Litehive bug.","The originating task thread and recovery artifacts log the
+    classification decision, Litehive worktree or branch used, test command and result,
+    merge outcome, and requeue decision for auditability."]}
+
+
+    FOLLOW_UP_TASKS:
+
+    []'
+  files_changed: []
+  created_at: '2026-04-05T07:39:20+00:00'

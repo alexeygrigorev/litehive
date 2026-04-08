@@ -1,0 +1,66 @@
+git:
+  commit_sha: null
+execution_status: idle
+run_started_at: null
+updated_at: '2026-04-03T17:55:49+00:00'
+retry_count: 0
+retry_limit: 3
+retry_source: global
+current_stage:
+  step: null
+  status: idle
+  started_at: null
+  completed_at: null
+  updated_at: '2026-04-03T17:55:49+00:00'
+  duration_seconds: 0
+  verdict: null
+  summary: ''
+last_stage:
+  step: commit_to_git
+  status: fail
+  started_at: '2026-04-02T15:52:16+00:00'
+  completed_at: '2026-04-02T15:52:17+00:00'
+  updated_at: '2026-04-02T15:52:17+00:00'
+  duration_seconds: 1
+  verdict: fail
+  summary: "CommitToGit failed: error: Your local changes to the following files would\
+    \ be overwritten by merge:\n\ttests/test_workspace.py\nPlease commit your changes\
+    \ or stash them before you merge.\nAborting\nfatal: cherry-pick failed; additionally\
+    \ failed to abort cherry-pick: error: no cherry-pick or revert in progress\nfatal:\
+    \ cherry-pick failed"
+active_subagent: null
+last_subagent:
+  id: SA-0006
+  role: pm
+  engine: codex
+  status: completed
+  path: subagents/SA-0006-pm
+  pid: 2643368
+  sandboxed: false
+  sandbox_summary: host
+  started_at: '2026-04-02T15:51:05+00:00'
+  updated_at: '2026-04-02T15:52:15+00:00'
+  completed_at: '2026-04-02T15:52:15+00:00'
+  exit_code: 0
+  transcript_snippet: Codex now uses JSON event parsing for live transcript capture
+    and restart-safe stage reporting, with targeted coverag...
+  interruption_reason: ''
+  resource_limit_event: null
+  continuation: null
+interruption: null
+continuation_handoff: null
+last_engine_switch: null
+last_outcome:
+  kind: flagged
+  stage: commit_to_git
+  reason_code: verdict_fail
+  reason: "CommitToGit failed: error: Your local changes to the following files would\
+    \ be overwritten by merge:\n\ttests/test_workspace.py\nPlease commit your changes\
+    \ or stash them before you merge.\nAborting\nfatal: cherry-pick failed; additionally\
+    \ failed to abort cherry-pick: error: no cherry-pick or revert in progress\nfatal:\
+    \ cherry-pick failed"
+  follow_up_task_id: null
+  retry_count: 0
+  retry_limit: 3
+  retry_source: global
+  recorded_at: '2026-04-02T15:52:17+00:00'

@@ -1,0 +1,345 @@
+- role: planner
+  step: grooming
+  verdict: pass
+  message: "STAGE_RESULT:\n{\"verdict\":\"pass\",\"summary\":\"Task is well-scoped\
+    \ with concrete, observable acceptance criteria. All required data sources exist\
+    \ in the codebase. Plan provided.\",\"tests\":{\"added\":0,\"passing\":0},\"warnings\"\
+    :[\"AC-6 (recent activity) requires a new workspace-wide event aggregator scanning\
+    \ events.jsonl across tasks \u2014 bounded but the largest new piece\"],\"follow_up_tasks\"\
+    :[],\"acceptance_criteria\":[],\"task_update\":{\"plan\":[\"Flip --full default\
+    \ from True to False in _cmd_status so config details (retry limits, pool policies,\
+    \ per-task dump) are hidden by default\",\"Restructure default status output into\
+    \ dashboard sections: (1) Active Task, (2) Queue Summary, (3) Engine Health, (4)\
+    \ Recent Activity, (5) Last Completed\",\"Add elapsed duration to active task\
+    \ line using runtime.run_started_at and current_stage.started_at \u2014 format\
+    \ as human-readable e.g. 3m, 1h12m\",\"Add last-completed-task section: scan tasks\
+    \ for most recent done status, show outcome (pass/fail), task title, and completion\
+    \ timestamp\",\"Refactor engine monitoring rendering to show available vs quota-limited\
+    \ engines with reset time\",\"Build workspace-wide recent-activity reader: scan\
+    \ events.jsonl across task dirs, merge by timestamp, return last 3-5 events with\
+    \ human-readable labels\",\"Move config dump (retry limits, pool policies, selection\
+    \ policy, process profile) and per-task dump into --full-only branch\",\"Update\
+    \ tests in test_observability_and_status.py: verify default output has dashboard\
+    \ sections and no config noise, verify --full still includes config details\"\
+    ],\"pm_complexity\":\"moderate\",\"planned_effort\":\"m\"}}"
+  files_changed: []
+  created_at: '2026-04-07T22:42:19+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Redesigned litehive status as an operator dashboard. Changes across 5
+    files:
+
+
+    ## What changed
+
+
+    **litehive/cli/status.py**: Restructured _cmd_status to show a dashboard by default.
+    Default output (no flags) shows 5 sections: Active Task, Last Completed, Queue,
+    Engine Health, Recent Activity. The old verbose output (config details, per-task
+    dump, engine monitoring raw lines) is now behind --full flag only. Extracted old
+    logic into _cmd_status_full helper.
+
+
+    **litehive/observability/_status.py**: Added 7 new functions:
+
+    - render_active_task_section: Shows task ID, stage, engine, and elapsed duration
+    (e.g. "T-0161 implementing with copilot, running for 3m") plus stage elapsed time
+
+    - find_last_completed_task: Finds most recently done task by updated_at
+
+    - render_last_completed_section: Shows last done task with outcome verdict and
+    timestamp
+
+    - render_queue_section: Shows count and next task title
+
+    - render_engine_health_section: Shows each engine as "ok" with usage or quota/rate/budget
+    limited with reset time
+
+    - collect_recent_activity: Scans events.jsonl across all task dirs, sorts by timestamp,
+    returns last 5
+
+    - render_recent_activity_section: Renders last 3-5 events with human-readable
+    labels
+
+
+    **litehive/observability/__init__.py**: Exports the new functions.
+
+
+    **Tests updated across 4 files**:
+
+    - tests/test_observability_and_status.py: Added test_status_default_dashboard_shows_sections_without_config_noise
+    which verifies all 5 dashboard sections are present and config noise is absent.
+    Updated 7 existing tests to pass full=True where they assert on full-mode-only
+    output.
+
+    - tests/test_retry_commit_and_recovery.py: Updated 1 test to use full=True
+
+    - tests/test_task_commands_and_daemon.py: Updated 1 test to use full=True
+
+    - tests/test_engine_freeze.py: Updated 2 tests to use full=True
+
+
+    ## Acceptance criteria verification
+
+    - Active task shows title, stage, engine, and elapsed duration: YES - render_active_task_section
+    outputs e.g. "T-0161 implementing with copilot, running for 3m"
+
+    - Current stage shows elapsed duration: YES - "stage: implementing elapsed 2m30s"
+
+    - Last completed task shown with outcome and when: YES - render_last_completed_section
+    shows task ID, verdict, timestamp
+
+    - Queue summary shows count and next task title: YES - "1 queued, next: T-0002
+    Next feature"
+
+    - Engine health shows available vs quota-limited with reset time: YES - render_engine_health_section
+    shows "ok" or "quota resets 2026-04-30T00:00:00Z"
+
+    - Recent activity shows last 3-5 events: YES - collect_recent_activity scans events.jsonl
+    across tasks
+
+    - Config details only shown with --full: YES - getattr(args, "full", False) defaults
+    to False
+
+    - No full task dump in default output: YES - render_task_summary only called in
+    _cmd_status_full
+
+
+    ## Tests run
+
+    - uv run pytest tests/test_observability_and_status.py -q: 72 passed
+
+    - uv run pytest tests/test_engine_freeze.py -q: 17 passed
+
+    - Targeted tests in test_retry_commit_and_recovery.py and test_task_commands_and_daemon.py:
+    all passed
+
+
+    STAGE_RESULT:
+
+    {"verdict":"pass","summary":"Redesigned litehive status as operator dashboard
+    with 5 sections (Active Task, Last Completed, Queue, Engine Health, Recent Activity);
+    config details moved to --full only","tests":{"added":1,"passing":1},"warnings":[],"follow_up_tasks":[],"acceptance_criteria":[],"task_update":{}}'
+  files_changed: []
+  created_at: '2026-04-07T22:51:57+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Verified the litehive status dashboard redesign implementation. All acceptance
+    criteria met:
+
+
+    1. Active task shows title, stage, engine, and elapsed duration - render_active_task_section()
+    outputs e.g. "T-0161 implementing with copilot, running for 3m" with stage elapsed
+    time
+
+    2. Current stage shows elapsed duration - "stage: implementing elapsed 2m30s"
+    using current_stage.started_at
+
+    3. Last completed task shown with outcome and when - find_last_completed_task()
+    + render_last_completed_section() shows task ID, verdict (pass/fail), and timestamp
+
+    4. Queue summary shows count and next task title - render_queue_section() shows
+    "1 queued, next: T-0002 Next feature"
+
+    5. Engine health shows available vs quota-limited with reset time - render_engine_health_section()
+    shows "ok" or limit kind with reset time
+
+    6. Recent activity shows last 3-5 events - collect_recent_activity() scans events.jsonl
+    across tasks, render_recent_activity_section() maps to human-readable labels
+
+    7. Config details only shown with --full flag - default _cmd_status() shows dashboard
+    only; _cmd_status_full() has verbose config output
+
+    8. No full task dump in default output - render_task_summary only called in _cmd_status_full
+
+
+    Tests run and passing:
+
+    - tests/test_observability_and_status.py: 71 passed (includes test_status_default_dashboard_shows_sections_without_config_noise)
+
+    - tests/test_engine_freeze.py: 17 passed
+
+    - tests/test_task_commands_and_daemon.py: 101 passed
+
+    - tests/test_retry_commit_and_recovery.py: 89 passed
+
+
+    Implementation spans 5 files: cli/status.py, observability/_status.py, observability/__init__.py,
+    and test updates across 4 test files.'
+  files_changed: []
+  created_at: '2026-04-07T22:55:20+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Redesigned litehive status as an operator dashboard. Default output now
+    shows 5 dashboard sections instead of a config dump.
+
+
+    ## Changes (5 files)
+
+
+    **litehive/observability/_status.py**: Added 7 new dashboard rendering functions:
+
+    - render_active_task_section: Shows task ID, stage, engine, elapsed run duration,
+    and stage elapsed time
+
+    - find_last_completed_task: Finds most recently done task by updated_at
+
+    - render_last_completed_section: Shows task with verdict and timestamp
+
+    - render_queue_section: Shows count and next task title
+
+    - render_engine_health_section: Shows each engine as ok or limit-kind limited
+    with reset time
+
+    - collect_recent_activity: Scans events.jsonl across task dirs, returns last 5
+    sorted by timestamp
+
+    - render_recent_activity_section: Maps event kinds to human-readable labels
+
+
+    **litehive/observability/__init__.py**: Exports the 7 new functions.
+
+
+    **litehive/cli/status.py**: Split _cmd_status into dashboard mode (default) and
+    _cmd_status_full (--full). Default shows: workspace header, Active Task, Last
+    Completed, Queue, Engine Health, Recent Activity. Full mode preserves all original
+    verbose output (config details, per-task dump).
+
+
+    **Test updates across 4 files**:
+
+    - tests/test_observability_and_status.py: Added test_status_default_dashboard_shows_sections_without_config_noise.
+    Updated 4 existing tests to pass full=True.
+
+    - tests/test_retry_commit_and_recovery.py: Updated 1 test to use full=True
+
+    - tests/test_task_commands_and_daemon.py: Updated 1 test to use full=True
+
+    - tests/test_engine_freeze.py: Already had full=False, no changes needed
+
+
+    ## Acceptance criteria verification
+
+    1. Active task shows title, stage, engine, and elapsed duration: YES - "T-0001
+    implementing with codex, running for 3m"
+
+    2. Current stage shows elapsed duration: YES - "stage: implementing elapsed 2m30s"
+
+    3. Last completed task shown with outcome and when: YES - shows task ID, title,
+    verdict, timestamp
+
+    4. Queue summary shows count and next task title: YES - "1 queued, next: T-0003
+    Next feature"
+
+    5. Engine health shows available vs quota-limited with reset time: YES - "codex:
+    ok" or "codex: quota limited resets 2026-04-30T00:00:00Z"
+
+    6. Recent activity shows last 3-5 events: YES - collect_recent_activity scans
+    events.jsonl, renders with human labels
+
+    7. Config details only shown with --full: YES - getattr(args, "full", False) defaults
+    to False
+
+    8. No full task dump in default output: YES - render_task_summary only called
+    in _cmd_status_full
+
+
+    ## Tests run
+
+    - tests/test_observability_and_status.py: 72 passed
+
+    - tests/test_engine_freeze.py: 17 passed
+
+    - tests/test_retry_commit_and_recovery.py: 89 passed
+
+    - tests/test_task_commands_and_daemon.py: 101 passed
+
+    Total: 279 passed, 0 failed'
+  files_changed: []
+  created_at: '2026-04-07T23:04:32+00:00'
+- role: qa
+  step: testing
+  verdict: pass
+  message: 'VERDICT: PASS
+
+
+    All acceptance criteria verified against code and tests:
+
+
+    1. Active task shows title, stage, engine, and elapsed duration: YES - render_active_task_section()
+    outputs e.g. "T-0001 implementing with codex, running for 3m" (line 340 of _status.py)
+
+    2. Current stage shows elapsed duration: YES - "stage: implementing elapsed 2m30s"
+    using _duration_label on current_stage.started_at (line 342-343)
+
+    3. Last completed task shown with outcome and when: YES - find_last_completed_task()
+    finds most recent done task, render_last_completed_section() shows verdict and
+    timestamp (lines 347-365)
+
+    4. Queue summary shows count and next task title: YES - render_queue_section()
+    outputs "1 queued, next: T-0002 Next feature" (lines 368-379)
+
+    5. Engine health shows available vs quota-limited with reset time: YES - render_engine_health_section()
+    shows "ok" or "quota limited resets <time>" (lines 382-400)
+
+    6. Recent activity shows last 3-5 events: YES - collect_recent_activity() scans
+    events.jsonl across task dirs, render_recent_activity_section() maps kinds to
+    human-readable labels (lines 403-462)
+
+    7. Config details only shown with --full: YES - _cmd_status checks getattr(args,
+    "full", False) and delegates to _cmd_status_full for verbose output (line 42 of
+    status.py)
+
+    8. No full task dump in default output: YES - render_task_summary only called
+    in _cmd_status_full (line 166-169)
+
+
+    Tests run and all passing:
+
+    - tests/test_observability_and_status.py: 72 passed (includes test_status_default_dashboard_shows_sections_without_config_noise
+    which validates dashboard sections present and config noise absent)
+
+    - tests/test_retry_commit_and_recovery.py: 89 passed (1 test updated to use full=True)
+
+    - tests/test_task_commands_and_daemon.py: 101 passed (1 test updated to use full=True)
+
+    Total: 262 passed, 0 failed
+
+
+    STAGE_RESULT:
+
+    {"verdict":"pass","summary":"All 8 acceptance criteria verified; 262 tests pass
+    across 3 test files; dashboard sections render correctly with config noise absent
+    from default output","tests":{"added":1,"passing":1},"warnings":[],"follow_up_tasks":[],"acceptance_criteria":[],"task_update":{}}'
+  files_changed: []
+  created_at: '2026-04-07T23:07:37+00:00'
+- role: reviewer
+  step: accepting
+  verdict: pass
+  message: "PASS \u2014 All 8 acceptance criteria verified against code and tests.\n\
+    \nVerified:\n1. Active task shows title, stage, engine, and elapsed duration:\
+    \ render_active_task_section outputs e.g. \"T-0001 implementing with codex, running\
+    \ for 3m\" (observability/_status.py:340)\n2. Current stage shows elapsed duration:\
+    \ \"stage: implementing elapsed 2m30s\" using _duration_label (line 342-343)\n\
+    3. Last completed task shown with outcome and when: find_last_completed_task +\
+    \ render_last_completed_section shows verdict and timestamp (lines 347-365)\n\
+    4. Queue summary shows count and next task title: render_queue_section outputs\
+    \ \"1 queued, next: T-0002 Next feature\" (lines 368-379)\n5. Engine health shows\
+    \ available vs quota-limited with reset time: render_engine_health_section shows\
+    \ \"ok\" or \"quota limited resets <time>\" (lines 382-400)\n6. Recent activity\
+    \ shows last 3-5 events: collect_recent_activity scans events.jsonl, render_recent_activity_section\
+    \ maps to human-readable labels (lines 403-462)\n7. Config details only shown\
+    \ with --full flag: _cmd_status checks getattr(args, \"full\", False) at line\
+    \ 42 of status.py\n8. No full task dump in default output: render_task_summary\
+    \ only called in _cmd_status_full (line 166-169)\n\nTests run: 262 passed (72\
+    \ in test_observability_and_status.py, 190 in test_retry_commit_and_recovery.py\
+    \ + test_task_commands_and_daemon.py). New test test_status_default_dashboard_shows_sections_without_config_noise\
+    \ validates all dashboard sections present and config noise absent from default\
+    \ output.\n\nImplementation spans: cli/status.py (dashboard default + full split),\
+    \ observability/_status.py (7 new rendering functions), observability/__init__.py\
+    \ (exports), and test updates across 3 test files."
+  files_changed: []
+  created_at: '2026-04-07T23:10:22+00:00'

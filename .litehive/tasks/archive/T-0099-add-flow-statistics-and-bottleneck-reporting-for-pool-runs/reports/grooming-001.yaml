@@ -1,0 +1,85 @@
+task_id: T-0099
+step: grooming
+verdict: pass
+summary: Now I have a thorough understanding of the codebase. Let me run the baseline
+  tests before grooming the task.
+feedback: 'Stage `grooming` retrying `goz` after attempt 1/3 due to transient network
+  failure (classification: network, policy: goz, backoff: 0.25s).
+
+
+  Stage `grooming` retrying `goz` after attempt 2/3 due to transient network failure
+  (classification: network, policy: goz, backoff: 0.50s).
+
+
+  Stage `grooming` stopped retrying `goz` after attempt 3/3: transient network failure.
+
+
+  Stage `grooming` switched from `goz` to `copilot` after transient network failure.
+
+
+  Now I have a thorough understanding of the codebase. Let me run the baseline tests
+  before grooming the task.
+
+  All 63 baseline tests pass. Now I''ll groom the task with proper goal, acceptance
+  criteria, and plan.
+
+  STAGE_RESULT:
+
+  ```json
+
+  {"verdict":"pass","summary":"Groomed T-0099: defined goal, 7 acceptance criteria,
+  5-step plan, and PM sizing (moderate/s). Baseline: 63 tests passing.","files_changed":[],"tests":{"added":0,"passing":63},"warnings":[],"follow_up_tasks":[],"task_update":{"goal":"Extend
+  pool run summary with per-stage flow statistics and bottleneck identification","acceptance_criteria":7,"plan":5,"pm_complexity":"moderate","planned_effort":"s"}}
+
+  ```
+
+
+  **Grooming complete.** Here''s what was shaped:
+
+
+  **Goal:** Extend `pool-summary.txt` and the durable pool-run YAML with per-stage
+  flow statistics (pass/fail/retry counts, avg/min/max duration in seconds) derived
+  from completed-task report YAMLs in the current run, plus a `bottleneck` field naming
+  the slowest stage.
+
+
+  **Key design decisions:**
+
+  - Statistics scoped to the **current pool run** (completed + flagged tasks), not
+  full workspace history
+
+  - Stages with no data are **omitted** rather than shown as zeros
+
+  - Bottleneck = highest `avg_seconds`, tiebroken by retry count
+
+
+  **Implementation surface:** `litehive/cli/_pool.py` (two new helpers + extend 2
+  existing functions) + new tests in `tests/test_observability_and_status.py`. PM
+  sizing: moderate/s.'
+files_changed: []
+follow_up_tasks: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings:
+- 'Stage `grooming` retrying `goz` after attempt 1/3 due to transient network failure
+  (classification: network, policy: goz, backoff: 0.25s).'
+- 'Stage `grooming` retrying `goz` after attempt 2/3 due to transient network failure
+  (classification: network, policy: goz, backoff: 0.50s).'
+- 'Stage `grooming` stopped retrying `goz` after attempt 3/3: transient network failure.'
+- Stage `grooming` switched from `goz` to `copilot` after transient network failure.
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 352
+hook_results: []
+created_at: '2026-04-06T09:50:53+00:00'

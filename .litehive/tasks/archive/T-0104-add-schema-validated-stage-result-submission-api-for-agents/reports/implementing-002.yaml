@@ -1,0 +1,44 @@
+task_id: T-0104
+step: implementing
+verdict: pass
+summary: Now I understand the gap. Let me implement the fix and add the tests.
+feedback: 'Now I understand the gap. Let me implement the fix and add the tests.
+
+  Now let me fix the `parse_stage_report_text` function to merge `acceptance_criteria`
+  into `task_update`:
+
+  Now let me create the dedicated tests file:
+
+  Now I have a good understanding. Let me create the test file:
+
+  All 8 tests pass. Now let me run the full test suite to check for regressions:
+
+  The 40 failures are pre-existing (unrelated to my changes). Let me verify quickly:
+
+  All 115 related tests pass. The 40 failures are pre-existing and unrelated to my
+  changes. Now let me commit and submit the report:
+
+  The report submitted for T-0101 instead of T-0104. Let me investigate:
+
+  Report submitted for T-0104.'
+files_changed: []
+follow_up_tasks: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 594
+hook_results: []
+created_at: '2026-04-06T12:02:02+00:00'

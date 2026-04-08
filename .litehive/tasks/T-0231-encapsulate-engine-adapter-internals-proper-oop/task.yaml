@@ -1,0 +1,48 @@
+id: T-0231
+slug: encapsulate-engine-adapter-internals-proper-oop
+title: Encapsulate engine adapter internals - proper OOP design
+depends_on: []
+task_type: null
+engine: null
+model: null
+mode: implementation
+pipeline_mode: full
+status: queued
+pipeline_status: backlog
+priority: medium
+pm_complexity: null
+planned_effort: null
+created_at: '2026-04-08T06:51:09+00:00'
+updated_at: '2026-04-08T06:52:10+00:00'
+goal: Engine adapters expose private implementation details (like _OPENCODE_STRIPPED_ENV_VARS)
+  that leak into the registry in engines/__init__.py. Each adapter should encapsulate
+  its own defaults (binary name, capabilities, stripped env vars, etc.) so the registry
+  just instantiates adapters without knowing their internals. The registry should
+  be a simple list of adapter classes, not a manually constructed dict with adapter-specific
+  config.
+acceptance_criteria:
+- Each adapter class defines its own defaults (binary, capabilities, stripped_env_vars) internally
+- engines/__init__.py registry is a simple instantiation without adapter-specific kwargs
+- No private constants (_OPENCODE_STRIPPED_ENV_VARS etc) are exported from adapters/
+- Adapter-specific functions (_codex_live_events, _OPENCODE_STRIPPED_ENV_VARS, etc.) become methods/attributes on their respective adapter classes, not standalone module-level functions
+- All existing tests pass
+- Public API (get_engine, ENGINES dict) unchanged
+constraints: []
+plan: []
+human_checkpoints: []
+subagents: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0231 encapsulate-engine-adapter-internals-proper-oop'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+  merge_agent_attempts: 0
+  worktree_path: null
+retry_policy:
+  max_retries: null
+  stage_retry_limit: null
+created_from: null
+upstream_origin: null
+github_origin: null

@@ -1,0 +1,36 @@
+git:
+  commit_sha: bef16dd9f0cc90b6af9419f7848f0ee22e593d7d
+execution_status: done
+run_started_at: '2026-03-31T12:58:52+00:00'
+updated_at: '2026-03-31T13:02:59+00:00'
+current_stage:
+  step: null
+  status: idle
+  started_at: null
+  completed_at: null
+  updated_at: '2026-03-31T13:02:59+00:00'
+  duration_seconds: 0
+  verdict: null
+  summary: ''
+last_stage:
+  step: commit_to_git
+  status: completed
+  started_at: '2026-03-31T13:02:59+00:00'
+  completed_at: '2026-03-31T13:02:59+00:00'
+  updated_at: '2026-03-31T13:02:59+00:00'
+  duration_seconds: 0
+  verdict: pass
+  summary: CommitToGit created the final checkpoint commit
+active_subagent: null
+last_subagent:
+  id: SA-0004
+  role: pm
+  engine: codex
+  status: completed
+  path: subagents/SA-0004-pm
+  started_at: '2026-03-31T13:02:18+00:00'
+  updated_at: '2026-03-31T13:02:59+00:00'
+  completed_at: '2026-03-31T13:02:59+00:00'
+  exit_code: 0
+  transcript_snippet: Runtime engine override is implemented with the required precedence
+    and covered by targeted CLI/runtime tests.

@@ -1,0 +1,47 @@
+task_id: T-0185
+step: testing
+verdict: pass
+summary: 'VERDICT: PASS'
+feedback: "VERDICT: PASS\n\nAll 8 acceptance criteria verified:\n\n1. `litehive import-issue\
+  \ <github-url>` creates a task with title, goal, and github_origin populated \u2014\
+  \ verified by test_cmd_import_issue_from_url, test_import_single_issue_creates_task\n\
+  2. `litehive import-issue <number> --repo owner/repo` works with just an issue number\
+  \ \u2014 verified by test_cmd_import_issue_from_number\n3. Repo auto-detected from\
+  \ git remote when --repo omitted \u2014 verified by test_detect_repo_ssh, test_detect_repo_https,\
+  \ test_detect_repo_https_no_git_suffix\n4. Issue labels mapped to task_type and\
+  \ priority using hardcoded defaults (bug\u2192bugfix, documentation\u2192docs, enhancement\u2192\
+  refactor, question\u2192research, priority labels) \u2014 verified by 10 label mapping\
+  \ tests plus test_cmd_import_issues_bulk\n5. Re-importing same issue prints skip\
+  \ message with existing task ID \u2014 verified by test_import_duplicate_skipped,\
+  \ test_cmd_import_issue_duplicate\n6. `litehive import-issues` imports all open\
+  \ issues not already tracked, printing summary \u2014 verified by test_cmd_import_issues_bulk,\
+  \ test_cmd_import_issues_skips_existing\n7. Missing or unauthenticated gh CLI produces\
+  \ clear error \u2014 verified by test_run_gh_missing, test_check_gh_auth_failure,\
+  \ test_cmd_import_issue_gh_missing, test_cmd_import_issues_gh_not_authenticated\n\
+  8. Tests cover single import, duplicate skip, bulk import, label mapping, and missing\
+  \ gh error \u2014 32 tests total, all passing\n\nTest evidence: `uv run pytest tests/test_github_import.py\
+  \ -q` \u2192 32 passed in 1.40s\n\nCode quality: Clean implementation with proper\
+  \ separation of concerns. gh CLI wrapper with clear error messages, label mapping\
+  \ with sensible defaults, duplicate detection via github_origin field scan, proper\
+  \ CLI integration in parser and dispatch. No new dependencies added.\n\nFiles changed:\
+  \ litehive/models.py, litehive/tasks.py, litehive/cli/github_import.py, litehive/cli/parser.py,\
+  \ litehive/cli/__init__.py, tests/test_github_import.py"
+files_changed: []
+follow_up_tasks: []
+created_follow_up_task_ids: []
+task_update: {}
+tests: {}
+warnings: []
+retry_count: 1
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 58
+hook_results: []
+created_at: '2026-04-07T18:05:16+00:00'

@@ -1,0 +1,44 @@
+id: T-0230
+slug: enable-ruff-f401-and-e402-checks-and-fix-all
+title: Enable ruff F401 and E402 checks and fix all violations
+depends_on: []
+task_type: null
+engine: null
+model: null
+mode: implementation
+pipeline_mode: full
+status: queued
+pipeline_status: backlog
+priority: medium
+pm_complexity: null
+planned_effort: null
+created_at: '2026-04-08T06:46:37+00:00'
+updated_at: '2026-04-08T07:18:27+00:00'
+goal: Add F401 (unused imports) and E402 (module-level import not at top) to ruff
+  config, fix all existing violations, and ensure CI/hooks catch future ones.
+acceptance_criteria:
+- pyproject.toml ruff config includes F401 and E402 rules
+- ruff check --select E402,F401 passes with zero errors on litehive/ and tests/
+- All existing tests still pass
+- A runner_hook or pre-commit check runs ruff so violations are caught before merge
+- All wildcard imports (import *) in tests replaced with explicit imports — no noqa F401/F403 suppressions
+- Add a runner_hook that runs git grep for noqa F401/F403 suppressions and fails if any are found
+constraints: []
+plan: []
+human_checkpoints: []
+subagents: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0230 enable-ruff-f401-and-e402-checks-and-fix-all'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+  merge_agent_attempts: 0
+  worktree_path: null
+retry_policy:
+  max_retries: null
+  stage_retry_limit: null
+created_from: null
+upstream_origin: null
+github_origin: null

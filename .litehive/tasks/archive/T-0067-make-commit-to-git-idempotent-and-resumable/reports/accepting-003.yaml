@@ -1,0 +1,48 @@
+task_id: T-0067
+step: accepting
+verdict: pass
+summary: All three acceptance criteria are met.
+feedback: 'All three acceptance criteria are met.
+
+
+  1. PASS: commit_to_git reruns reconcile an existing checkpoint commit. tests/test_workspace.py::test_commit_to_git_rerun_reconciles_existing_checkpoint
+  proves that when the checkpoint commit already exists but task.git.commit_sha was
+  not persisted, rerunning commit_to_git records the existing SHA, marks the task
+  done, and does not create a duplicate commit (commit count and HEAD subject unchanged,
+  checkpoint_attempts stays at 1). Additional coverage in tests/test_retry_commit_and_recovery.py::test_commit_to_git_reconciles_existing_checkpoint_commit_without_duplicate_retry.
+
+
+  2. PASS: Recovery/resume path reconciles existing checkpoint before new work. tests/test_workspace.py::test_recovery_finalizes_stranded_commit_to_git_with_existing_checkpoint
+  proves that resolve_next_task finalizes a stranded commit_to_git task by recording
+  the existing checkpoint SHA without incrementing checkpoint_attempts or advancing
+  git history, then proceeds to the follow-up task. Additional coverage in tests/test_retry_commit_and_recovery.py::test_resolve_next_task_finalizes_running_commit_stage_with_existing_checkpoint_before_new_work
+  and tests/test_observability_and_status.py::test_repair_workspace_state_finalizes_existing_checkpoint_commit.
+
+
+  3. PASS: Focused tests in tests/test_workspace.py cover both rerun and recovery
+  paths and prove checkpoint_attempts and git history do not advance during reconciliation.
+  The file contains 2 focused tests that directly exercise the reconciliation logic.
+
+
+  Verification: uv run pytest -q tests/test_workspace.py -> 2 passed. Full focused
+  reconciliation suite (8 tests across test_workspace.py, test_retry_commit_and_recovery.py,
+  test_observability_and_status.py, test_runtime_pool.py) -> 8 passed.'
+files_changed: []
+follow_up_tasks: []
+created_follow_up_task_ids: []
+task_update: {}
+tests: {}
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 43
+hook_results: []
+created_at: '2026-04-07T23:20:06+00:00'

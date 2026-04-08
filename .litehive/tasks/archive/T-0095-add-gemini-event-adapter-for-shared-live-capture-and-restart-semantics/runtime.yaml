@@ -1,0 +1,56 @@
+git:
+  commit_sha: ca8188d5ad601f44ae4b8e1cf5bfdf1a30c64dfd
+execution_status: done
+run_started_at: '2026-04-02T20:57:26+00:00'
+updated_at: '2026-04-02T20:57:26+00:00'
+retry_count: 0
+retry_limit: 3
+retry_source: global
+current_stage:
+  step: null
+  status: idle
+  started_at: null
+  completed_at: null
+  updated_at: '2026-04-02T20:57:26+00:00'
+  duration_seconds: 0
+  verdict: null
+  summary: ''
+last_stage:
+  step: commit_to_git
+  status: completed
+  started_at: '2026-04-02T20:57:26+00:00'
+  completed_at: '2026-04-02T20:57:26+00:00'
+  updated_at: '2026-04-02T20:57:26+00:00'
+  duration_seconds: 0
+  verdict: pass
+  summary: CommitToGit skipped because task worktree was already clean
+active_subagent: null
+last_subagent:
+  id: SA-0004
+  role: pm
+  engine: codex
+  status: completed
+  path: subagents/SA-0004-pm
+  pid: 2783679
+  sandboxed: false
+  sandbox_summary: host
+  started_at: '2026-04-02T17:31:05+00:00'
+  updated_at: '2026-04-02T17:32:13+00:00'
+  completed_at: '2026-04-02T17:32:13+00:00'
+  exit_code: 0
+  transcript_snippet: Gemini now uses a shared stream-event adapter for live partial
+    transcript capture and interrupted-session restart sum...
+  interruption_reason: ''
+  resource_limit_event: null
+interruption: null
+last_engine_switch: null
+last_outcome:
+  kind: null
+  stage: null
+  reason_code: null
+  reason: ''
+  follow_up_task_id: null
+  retry_count: 0
+  retry_limit: 0
+  retry_source: global
+  recorded_at: null

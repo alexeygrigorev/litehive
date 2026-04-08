@@ -1,0 +1,71 @@
+git:
+  commit_sha: 59fc69a652cdec26fbe7490a4e47ebc72c025d47
+  worktree_path: .litehive/worktrees/T-0165-merge-external-cli-py-and-sandbox-py-into-engines-sandbox-py
+execution_status: done
+run_started_at: '2026-04-06T00:30:38+00:00'
+updated_at: '2026-04-06T01:47:20+00:00'
+retry_count: 0
+retry_limit: 3
+retry_source: global
+stage_retry_counts: {}
+current_stage:
+  step: null
+  status: idle
+  started_at: null
+  completed_at: null
+  updated_at: '2026-04-06T01:47:20+00:00'
+  duration_seconds: 0
+  verdict: null
+  summary: ''
+last_stage:
+  step: commit_to_git
+  status: completed
+  started_at: '2026-04-06T01:47:18+00:00'
+  completed_at: '2026-04-06T01:47:20+00:00'
+  updated_at: '2026-04-06T01:47:20+00:00'
+  duration_seconds: 2
+  verdict: pass
+  summary: 'CommitToGit complete. Commit: 59fc69a6'
+active_subagent: null
+last_subagent:
+  id: SA-0011
+  role: recovery
+  engine: opencode
+  status: completed
+  path: subagents/SA-0011-recovery
+  pid: 20085
+  sandboxed: false
+  sandbox_summary: host
+  started_at: '2026-04-06T01:46:11+00:00'
+  updated_at: '2026-04-06T01:47:18+00:00'
+  completed_at: '2026-04-06T01:47:18+00:00'
+  exit_code: 0
+  transcript_snippet: 'All structural checks pass. Now let me run the full test suite:'
+  interruption_reason: ''
+  resource_limit_event: null
+  continuation:
+    session_id: ses_29f87f53affekv9wpArAqKiody
+    thread_id: null
+    metadata: {}
+    updated_at: '2026-04-06T01:47:18+00:00'
+interruption: null
+continuation_handoff: null
+last_engine_switch:
+  step: grooming
+  from_engine: codex
+  to_engine: opencode
+  reason: usage limit reached
+  happened_at: '2026-04-06T00:42:43+00:00'
+last_outcome:
+  kind: null
+  stage: null
+  reason_code: null
+  reason: ''
+  failure_classification: null
+  failure_diagnostics: {}
+  follow_up_task_id: null
+  retry_count: 0
+  retry_limit: 0
+  retry_source: global
+  recorded_at: null
+self_heal_traceback_fingerprints: []

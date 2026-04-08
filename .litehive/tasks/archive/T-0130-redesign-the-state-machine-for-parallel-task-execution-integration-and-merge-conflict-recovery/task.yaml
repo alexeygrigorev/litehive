@@ -1,0 +1,72 @@
+id: T-0130
+slug: redesign-the-state-machine-for-parallel-task-execution-integration-and-merge-conflict-recovery
+title: Redesign the state machine for parallel task execution, integration, and merge-conflict
+  recovery
+depends_on: []
+task_type: null
+engine: null
+model: null
+mode: implementation
+status: done
+pipeline_status: done
+priority: medium
+pm_complexity: null
+planned_effort: null
+created_at: '2026-04-03T06:57:06+00:00'
+updated_at: '2026-04-08T07:44:57+00:00'
+goal: 'Complete the work described by: Redesign the state machine for parallel task
+  execution, integration, and merge-conflict recovery.'
+acceptance_criteria:
+- 'The delivered change satisfies the task goal: Complete the work described by: Redesign
+  the state machine for parallel task execution, integration, and merge-conflict recovery.'
+- The implementation remains scoped to the intended task surface without unrelated
+  changes.
+- Focused verification demonstrates the targeted behavior or workflow works as intended.
+constraints: []
+plan:
+- Inspect the current code path, workflow, or state relevant to 'Redesign the state
+  machine for parallel task execution, integration, and merge-conflict recovery'.
+- Implement the smallest scoped change that achieves the task goal.
+- Run focused verification and record the outcome.
+human_checkpoints: []
+subagents:
+- id: SA-0001
+  role: planner
+  engine: codex
+  status: completed
+  path: subagents/SA-0001-planner
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0002
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0002-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0003
+  role: qa
+  engine: codex
+  status: completed
+  path: subagents/SA-0003-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0004
+  role: reviewer
+  engine: codex
+  status: completed
+  path: subagents/SA-0004-reviewer
+  sandboxed: false
+  sandbox_summary: host
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0130 redesign-the-state-machine-for-parallel-task-execution-integration-and-merge-conflict-recovery'
+  commit_sha: 06f1ac2117e80a259a63fe7735c011d89b46e5f7
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+  worktree_path: null
+retry_policy:
+  max_retries: null
+created_from: null
+archived_at: '2026-04-08T07:44:57+00:00'

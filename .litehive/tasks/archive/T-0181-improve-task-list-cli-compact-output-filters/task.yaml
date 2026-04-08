@@ -1,0 +1,93 @@
+id: T-0181
+slug: improve-task-list-cli-compact-output-filters
+title: 'Improve task list CLI: compact output, filters, active-only default'
+depends_on: []
+task_type: null
+engine: null
+model: null
+mode: implementation
+pipeline_mode: full
+status: done
+pipeline_status: done
+priority: medium
+pm_complexity: null
+planned_effort: null
+created_at: '2026-04-05T17:03:20+00:00'
+updated_at: '2026-04-08T07:46:13+00:00'
+goal: Make litehive tasks/status/queue commands useful for both agents and humans.
+  Default to showing only active (not-done) tasks. Show compact output (ID + title)
+  by default. Add filters (--status, --stage, --engine). Add --all flag to show everything.
+  Add litehive show T-XXXX for detailed single-task view.
+acceptance_criteria:
+- Default output excludes done tasks
+- 'Compact mode shows one line per task: ID, status, title'
+- 'Filters: --status, --pipeline-status, --engine narrow the list'
+- --all flag shows all tasks including done
+- litehive show T-XXXX prints full task details
+constraints: []
+plan: []
+human_checkpoints: []
+subagents:
+- id: SA-0001
+  role: planner
+  engine: claude
+  status: completed
+  path: subagents/SA-0001-planner
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0002
+  role: swe
+  engine: claude
+  status: completed
+  path: subagents/SA-0002-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0003
+  role: qa
+  engine: claude
+  status: completed
+  path: subagents/SA-0003-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0004
+  role: swe
+  engine: claude
+  status: completed
+  path: subagents/SA-0004-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0005
+  role: qa
+  engine: claude
+  status: completed
+  path: subagents/SA-0005-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0006
+  role: reviewer
+  engine: claude
+  status: completed
+  path: subagents/SA-0006-reviewer
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0007
+  role: merge-resolver
+  engine: claude
+  status: completed
+  path: subagents/SA-0007-merge-resolver
+  sandboxed: false
+  sandbox_summary: host
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0181 improve-task-list-cli-compact-output-filters'
+  commit_sha: de5dcc2c794f94b32a084e18b1abe00b9cf1c780
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+  worktree_path: null
+retry_policy:
+  max_retries: null
+  stage_retry_limit: null
+created_from: null
+upstream_origin: null
+archived_at: '2026-04-08T07:46:13+00:00'

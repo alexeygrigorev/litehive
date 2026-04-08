@@ -1,0 +1,131 @@
+id: T-0213
+slug: remove-files-changed-from-agent-report-format-use
+title: Remove files_changed from agent report format - use git as source of truth
+depends_on: []
+task_type: null
+engine: null
+model: null
+mode: implementation
+pipeline_mode: full
+status: done
+pipeline_status: done
+priority: medium
+pm_complexity: null
+planned_effort: null
+created_at: '2026-04-07T18:58:14+00:00'
+updated_at: '2026-04-08T07:46:45+00:00'
+goal: Agents should not have to list files they changed in their report. Git already
+  knows. Remove files_changed from the report format that agents produce. Instead,
+  populate it automatically from git diff in the worktree at commit time. The guard
+  already checks git directly. The field can stay in StageReport as internal metadata
+  but agents should never be asked to produce it.
+acceptance_criteria:
+- Agent prompt templates no longer ask for FILES_CHANGED
+- StageReport.files_changed is populated from git diff at commit stage, not from agent
+  output
+- Empty SWE guard uses only git status, never report.files_changed
+- Existing tests updated to not require FILES_CHANGED in fake agent output
+constraints: []
+plan: []
+human_checkpoints: []
+subagents:
+- id: SA-0001
+  role: planner
+  engine: claude
+  status: completed
+  path: subagents/SA-0001-planner
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0002
+  role: swe
+  engine: claude
+  status: failed
+  path: subagents/SA-0002-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0003
+  role: recovery
+  engine: claude
+  status: failed
+  path: subagents/SA-0003-recovery
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0004
+  role: recovery
+  engine: claude
+  status: completed
+  path: subagents/SA-0004-recovery
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0005
+  role: swe
+  engine: claude
+  status: completed
+  path: subagents/SA-0005-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0006
+  role: swe
+  engine: claude
+  status: completed
+  path: subagents/SA-0006-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0007
+  role: swe
+  engine: claude
+  status: interrupted
+  path: subagents/SA-0007-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0008
+  role: recovery
+  engine: claude
+  status: completed
+  path: subagents/SA-0008-recovery
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0009
+  role: qa
+  engine: claude
+  status: failed
+  path: subagents/SA-0009-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0010
+  role: recovery
+  engine: claude
+  status: completed
+  path: subagents/SA-0010-recovery
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0011
+  role: reviewer
+  engine: claude
+  status: completed
+  path: subagents/SA-0011-reviewer
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0012
+  role: merge-resolver
+  engine: claude
+  status: completed
+  path: subagents/SA-0012-merge-resolver
+  sandboxed: false
+  sandbox_summary: host
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0213 remove-files-changed-from-agent-report-format-use'
+  commit_sha: e8cff3d1c1e461e5d7255daca73dba7f97bcce4b
+  checkpoint_base_sha: 04d644d081556dbbdc7040737890abbfe86c126b
+  checkpoint_attempts: 1
+  rolled_back_checkpoint_attempt: null
+  worktree_path: null
+  merge_agent_attempts: 1
+retry_policy:
+  max_retries: null
+  stage_retry_limit: null
+created_from: null
+upstream_origin: null
+github_origin: null
+archived_at: '2026-04-08T07:46:45+00:00'

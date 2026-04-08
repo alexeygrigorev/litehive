@@ -1,0 +1,43 @@
+task_id: T-0083
+step: testing
+verdict: pass
+summary: All 4 runner status tests pass. Let me run the full test suite to check for
+  regressions.
+feedback: "All 4 runner status tests pass. Let me run the full test suite to check\
+  \ for regressions.\nThe worktree only differs from main by the circular import fix.\
+  \ The 40 failures are pre-existing on main (unrelated to T-0083). All 4 runner-status\
+  \ specific tests pass. Now let me submit the verdict.\nSTAGE_RESULT:\n```json\n\
+  {\"verdict\":\"pass\",\"summary\":\"All runner status/heartbeat/reconciliation tests\
+  \ pass; 40 pre-existing failures on main unrelated to T-0083\",\"files_changed\"\
+  :[\"litehive/tasks.py\",\"litehive/models.py\",\"litehive/runtime/_execution.py\"\
+  ,\"litehive/cli/status.py\",\"litehive/web/__init__.py\",\"litehive/daemon/__init__.py\"\
+  ],\"tests\":{\"added\":4,\"passing\":4},\"warnings\":[\"40 pre-existing test failures\
+  \ exist on origin/main; not caused by T-0083\"],\"follow_up_tasks\":[],\"acceptance_criteria\"\
+  :[],\"task_update\":{}}\n```\n\n**Verified:**\n- `RunnerStatusState` model in `litehive/models.py`\
+  \  \n- `runner_heartbeat()` context manager with 1s background thread in `litehive/tasks.py`\n\
+  - `runner_status()` returning `running/late/stale/idle` states\n- `_reconcile_stale_runner_tasks()`\
+  \ handling orphaned non-active AND active tasks\n- `dequeue_next_task_selection()`\
+  \ calls reconciliation before picking work\n- Circular import fix (lazy `last_event_timestamp`\
+  \ import, only delta from main)\n\nAll 4 targeted tests + 14 runner-related tests\
+  \ pass. The 40 broader failures are pre-existing on `origin/main`."
+files_changed: []
+follow_up_tasks: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 526
+hook_results: []
+created_at: '2026-04-06T09:40:09+00:00'

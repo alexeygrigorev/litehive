@@ -1,0 +1,52 @@
+task_id: T-0079
+step: accepting
+verdict: pass
+summary: I'll explore the repository comprehensively. Let me make parallel calls to
+  gather all this information.
+feedback: "I'll explore the repository comprehensively. Let me make parallel calls\
+  \ to gather all this information.\nLet me get the specific sections from the prompts\
+  \ file and check the actual tasks directory location:\nNow let me read the task.yaml\
+  \ file and get more details from the _prompts.py file:\nNow let me get the full\
+  \ grooming/planner prompt section and check git diff:\nLet me get the full grooming\
+  \ prompt section and check for scope contamination tests:\nGreat! Now let me check\
+  \ for any test files specifically for scope contamination and get the full context\
+  \ from the test file:\nPerfect! Now let me get the actual test for follow-up tasks\
+  \ to show the complete feature test:\nLet me check if there's a thread.yaml with\
+  \ more context and try to get the actual git diff properly:\nPerfect! Now I have\
+  \ all the details. Let me get one more confirmation on the specific line numbers\
+  \ for the grooming prompt section:\nPerfect! Now let me compile all the findings:\n\
+  \n## Report: T-0079 Exploration Summary\n\n### 1. **Grooming/Planner Prompt Section**\
+  \ (`litehive/subagents/_prompts.py`, lines 346-359)\n\n**Exact text of the grooming\
+  \ branch:**\n```python\nif step == \"grooming\":\n    return [\n        \"- You\
+  \ are the planner, a PM-style role representing the user's and product's point of\
+  \ view.\",\n        \"- Frame the real user problem, clarify scope, sharpen acceptance\
+  \ criteria, decompose the work, identify follow-up tasks, and estimate PM sizing.\"\
+  ,\n        \"- Treat the Litehive CLI as the source of truth for task shaping: use\
+  \ the task record fields directly, and when documenting operator guidance prefer\
+  \ concrete `litehive add`, `litehive update`, and `litehive intake` flows over vague\
+  \ prose.\",\n        \"- Do not pass grooming with a blank task record; make sure\
+  \ the task has a clear goal and explicit acceptance criteria, or return a blocked\
+  \ outcome that names what is missing.\",\n        \"- During grooming, you can emit\
+  \ a structured `TASK_UPDATE:` YAML block to\n\n\u2026 [truncated \u2014 full transcript\
+  \ in subagent artifacts]"
+files_changed: []
+follow_up_tasks: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 351
+hook_results: []
+created_at: '2026-04-06T07:03:20+00:00'

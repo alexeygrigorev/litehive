@@ -1,0 +1,53 @@
+git:
+  commit_sha: 51f7c3cca6068f3551dd7beb231f089d40462fdf
+execution_status: done
+run_started_at: '2026-04-01T21:48:33+00:00'
+updated_at: '2026-04-01T21:54:14+00:00'
+retry_count: 0
+retry_limit: 3
+retry_source: global
+current_stage:
+  step: null
+  status: idle
+  started_at: null
+  completed_at: null
+  updated_at: '2026-04-01T21:54:14+00:00'
+  duration_seconds: 0
+  verdict: null
+  summary: ''
+last_stage:
+  step: commit_to_git
+  status: completed
+  started_at: '2026-04-01T21:54:10+00:00'
+  completed_at: '2026-04-01T21:54:14+00:00'
+  updated_at: '2026-04-01T21:54:14+00:00'
+  duration_seconds: 4
+  verdict: pass
+  summary: CommitToGit created the final completion commit
+active_subagent: null
+last_subagent:
+  id: SA-0016
+  role: pm
+  engine: codex
+  status: completed
+  path: subagents/SA-0016-pm
+  pid: 701759
+  sandboxed: false
+  sandbox_summary: host
+  started_at: '2026-04-01T21:52:47+00:00'
+  updated_at: '2026-04-01T21:54:10+00:00'
+  completed_at: '2026-04-01T21:54:10+00:00'
+  exit_code: 0
+  transcript_snippet: Resource limits for heavy native-code subagents are configurable,
+    applied at launch, and surfaced as structured persi...
+  resource_limit_event: null
+last_engine_switch: null
+last_outcome:
+  kind: null
+  stage: null
+  reason_code: null
+  reason: ''
+  retry_count: 0
+  retry_limit: 0
+  retry_source: global
+  recorded_at: null

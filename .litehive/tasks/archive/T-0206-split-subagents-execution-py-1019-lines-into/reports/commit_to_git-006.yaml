@@ -1,0 +1,39 @@
+task_id: T-0206
+step: commit_to_git
+verdict: pass
+summary: 'CommitToGit complete. Commit: 97f47164'
+feedback: ''
+files_changed:
+- litehive/subagents/__init__.py
+- litehive/subagents/_artifacts.py
+- litehive/subagents/_engine_detection.py
+- litehive/subagents/_execution.py
+- litehive/subagents/_manager.py
+- litehive/subagents/_models.py
+- litehive/subagents/_parsing.py
+- litehive/subagents/_sandbox.py
+- litehive/subagents/_session.py
+- tests/test_engine_variants_and_timeline.py
+- tests/test_retry_commit_and_recovery.py
+- tests/test_runner_workflow.py
+- tests/test_tasks_and_subagents.py
+follow_up_tasks: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 1
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 224
+hook_results: []
+created_at: '2026-04-08T05:29:49+00:00'

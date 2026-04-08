@@ -1,0 +1,74 @@
+task_id: T-0201
+step: grooming
+verdict: pass
+summary: 'STAGE_RESULT:'
+feedback: "STAGE_RESULT:\n{\"verdict\":\"pass\",\"summary\":\"Scoped to adding warning\
+  \ logs at silent-skip points across engine adapters; extracted goz key-path refactor\
+  \ as follow-up\",\"tests\":{\"added\":0,\"passing\":0},\"warnings\":[\"Goal references\
+  \ stale file path engines/__init__.py \u2014 actual code is in engines/adapters/claude.py,\
+  \ goz.py, codex.py, and engines/base.py\"],\"follow_up_tasks\":[{\"title\":\"Refactor\
+  \ goz adapter to use explicit key paths instead of trial-and-error across 5+ keys\"\
+  ,\"rationale\":\"AC2 asks for a behavioral refactor of goz key resolution, which\
+  \ is a separate concern from adding parse-failure logging. The multi-key pattern\
+  \ spans message text, tool calls, tool results, usage/metrics, and costs \u2014\
+  \ restructuring all of those is its own task.\",\"blocking\":false,\"goal\":\"Replace\
+  \ the goz adapter or-chain key guessing (text/delta/content/message/data/result/part)\
+  \ with explicit key paths based on documented goz API response structure\",\"acceptance_criteria\"\
+  :[\"goz adapter uses a single documented key path per extraction function, not trial-and-error\"\
+  ,\"Existing goz integration tests still pass\",\"Key path is configurable or documented\
+  \ if the goz API varies by model\"]}],\"acceptance_criteria\":[\"Unparseable engine\
+  \ output items produce a warning log (covers claude delta fallback, goz extraction,\
+  \ codex/opencode silent filtering, and base iter_jsonl_payloads)\",\"No items silently\
+  \ dropped without logging across any engine adapter\",\"Warning logs include enough\
+  \ context to diagnose the issue (adapter name, item index or line number, truncated\
+  \ raw content)\",\"Existing tests still pass \u2014 no functional behavior change\
+  \ beyond added logging\"],\"task_update\":{\"goal\":\"Engine adapters silently skip\
+  \ unparseable output items (claude delta fallback in claude.py, goz extraction in\
+  \ goz.py, codex/opencode silent filtering in codex.py, and base JSONL parsing in\
+  \ base.py). Add warning-level log messages at each silent-skip point so parse failures\
+  \ are diagnosable. No behavioral changes \u2014 items that were skipped before are\
+  \ still skipped, but now with a log trail.\",\"acceptance_criteria\":[\"Unparseable\
+  \ engine output items produce a warning log (covers claude delta fallback, goz extraction,\
+  \ codex/opencode silent filtering, and base iter_jsonl_payloads)\",\"No items silently\
+  \ dropped without logging across any engine adapter\",\"Warning logs include enough\
+  \ context to diagnose the issue (adapter name, item index or line number, truncated\
+  \ raw content)\",\"Existing tests still pass \u2014 no functional behavior change\
+  \ beyond added logging\"],\"pm_complexity\":\"simple\",\"planned_effort\":\"s\"\
+  ,\"plan\":[\"Add logger = logging.getLogger(__name__) to each adapter file that\
+  \ lacks it (claude.py, goz.py, base.py, common.py)\",\"In base.py iter_jsonl_payloads:\
+  \ log warning on JSONDecodeError with truncated line content\",\"In claude.py delta\
+  \ fallback: log warning when JSON string literal decode fails, with line index\"\
+  ,\"In goz.py _goz_extract_text and related functions: log warning when no key matches,\
+  \ with truncated payload\",\"In codex.py and opencode transcript extraction: log\
+  \ warning when items are skipped due to missing fields or wrong types\",\"Add targeted\
+  \ tests that verify warnings are emitted when adapters receive malformed input\"\
+  ,\"Run full test suite to confirm no regressions\"]}}\n\nFOLLOW_UP_TASKS:\n[{\"\
+  title\":\"Refactor goz adapter to use explicit key paths instead of trial-and-error\
+  \ across 5+ keys\",\"rationale\":\"AC2 asks for a behavioral refactor of goz key\
+  \ resolution, which is a separate concern from adding parse-failure logging. The\
+  \ multi-key pattern spans message text, tool calls, tool results, usage/metrics,\
+  \ and costs \u2014 restructuring all of those is its own task.\",\"blocking\":false,\"\
+  goal\":\"Replace the goz adapter or-chain key guessing (text/delta/content/message/data/result/part)\
+  \ with explicit key paths based on documented goz API response structure\",\"acceptance_criteria\"\
+  :[\"goz adapter uses a single documented key path per extraction function, not trial-and-error\"\
+  ,\"Existing goz integration tests still pass\",\"Key path is configurable or documented\
+  \ if the goz API varies by model\"]}]"
+files_changed: []
+follow_up_tasks: []
+created_follow_up_task_ids: []
+task_update: {}
+tests: {}
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 198
+hook_results: []
+created_at: '2026-04-08T00:25:48+00:00'

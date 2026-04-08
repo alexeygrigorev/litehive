@@ -1,0 +1,51 @@
+task_id: T-0211
+step: implementing
+verdict: pass
+summary: '## Implementation Verified: Merge agent retry limit for commit_to_git'
+feedback: "## Implementation Verified: Merge agent retry limit for commit_to_git\n\
+  \nAll changes from prior SWE passes are present and tested in the current worktree\
+  \ merge.\n\n### Changes in place:\n1. **litehive/models.py:420** \u2014 `merge_agent_attempts:\
+  \ int = 0` in GitSettings tracks merge agent launches per task\n2. **litehive/runner/states.py:51**\
+  \ \u2014 `RECOVERY_FAILED = \"recovery_failed\"` terminal state in PipelineState\n\
+  3. **litehive/runtime/_commit.py:88-96** \u2014 Merge agent guarded: if `merge_agent_attempts\
+  \ >= 1`, skip and journal; otherwise increment counter, persist, and launch exactly\
+  \ once\n4. **litehive/runner/core.py:374** \u2014 commit_to_git recovery failure\
+  \ routes to `recovery_failed` instead of `flagged`\n5. **litehive/tasks/recovery.py:416**\
+  \ \u2014 `_should_recover_flagged_commit_stage_task()` returns False when `merge_agent_attempts\
+  \ >= 1`, blocking daemon repair loop requeue\n6. **tests/test_commit_recovery_bug.py**\
+  \ \u2014 3 new tests: merge agent launches exactly once, recovery_failed blocks\
+  \ repair, merge_agent_attempts blocks repair\n\n### Test results:\n- test_commit_recovery_bug.py:\
+  \ 8 passed (including 3 new)\n- test_retry_commit_and_recovery.py: 89 passed (no\
+  \ regressions)\n- test_recovery_agent.py: 4 passed (no regressions)\n- test_worktree_merge_agent.py:\
+  \ 10 passed (no regressions)\n\n### Acceptance criteria met:\n- Merge agent launched\
+  \ exactly once per conflict (counter guard + test)\n- Failed merge declares task\
+  \ failed (existing behavior preserved)\n- Recovery agent launched once after merge\
+  \ failure (existing routing)\n- Failed recovery sets status to recovery_failed (new\
+  \ terminal state)\n- recovery_failed tasks left for manual resolution (repair skips\
+  \ them)\n- No loops: at most 1 merge + 1 recovery per conflict (counter + repair\
+  \ guard + terminal state)\n- Journal logs each step (entries at merge skip, merge\
+  \ launch, recovery_failed)"
+files_changed:
+- litehive/models.py
+- litehive/runner/core.py
+- litehive/runner/states.py
+- litehive/runtime/_commit.py
+- tests/test_commit_recovery_bug.py
+follow_up_tasks: []
+created_follow_up_task_ids: []
+task_update: {}
+tests: {}
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 117
+hook_results: []
+created_at: '2026-04-08T06:13:20+00:00'

@@ -1,0 +1,64 @@
+git:
+  commit_sha: null
+execution_status: idle
+run_started_at: null
+updated_at: '2026-04-03T17:55:44+00:00'
+retry_count: 0
+retry_limit: 3
+retry_source: global
+current_stage:
+  step: null
+  status: idle
+  started_at: null
+  completed_at: null
+  updated_at: '2026-04-03T17:55:44+00:00'
+  duration_seconds: 0
+  verdict: null
+  summary: ''
+last_stage:
+  step: commit_to_git
+  status: fail
+  started_at: '2026-04-03T17:55:35+00:00'
+  completed_at: '2026-04-03T17:55:35+00:00'
+  updated_at: '2026-04-03T17:55:35+00:00'
+  duration_seconds: 0
+  verdict: fail
+  summary: 'CommitToGit failed: task worktree already contains commits before `commit_to_git`;
+    only Litehive may create the final task commit'
+active_subagent: null
+last_subagent:
+  id: SA-0004
+  role: reviewer
+  engine: codex
+  status: completed
+  path: subagents/SA-0004-reviewer
+  pid: 121467
+  sandboxed: false
+  sandbox_summary: host
+  started_at: '2026-04-03T10:50:37+00:00'
+  updated_at: '2026-04-03T10:51:26+00:00'
+  completed_at: '2026-04-03T10:51:26+00:00'
+  exit_code: 0
+  transcript_snippet: "I\u2019m reviewing the current workspace changes against the\
+    \ task goal and checking whether the evidence is strong enough..."
+  interruption_reason: ''
+  resource_limit_event: null
+  continuation:
+    session_id: null
+    thread_id: 019d52f7-64cb-7553-9968-9914d3f7a816
+    metadata: {}
+    updated_at: '2026-04-03T10:51:26+00:00'
+interruption: null
+continuation_handoff: null
+last_engine_switch: null
+last_outcome:
+  kind: flagged
+  stage: commit_to_git
+  reason_code: verdict_fail
+  reason: 'CommitToGit failed: task worktree already contains commits before `commit_to_git`;
+    only Litehive may create the final task commit'
+  follow_up_task_id: null
+  retry_count: 0
+  retry_limit: 3
+  retry_source: global
+  recorded_at: '2026-04-03T17:55:35+00:00'

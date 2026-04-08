@@ -1,0 +1,49 @@
+git:
+  commit_sha: null
+execution_status: done
+run_started_at: '2026-04-01T09:03:06+00:00'
+updated_at: '2026-04-01T09:08:33+00:00'
+retry_count: 0
+retry_limit: 3
+retry_source: global
+current_stage:
+  step: null
+  status: idle
+  started_at: null
+  completed_at: null
+  updated_at: '2026-04-01T09:08:33+00:00'
+  duration_seconds: 0
+  verdict: null
+  summary: ''
+last_stage:
+  step: commit_to_git
+  status: completed
+  started_at: '2026-04-01T09:08:33+00:00'
+  completed_at: '2026-04-01T09:08:33+00:00'
+  updated_at: '2026-04-01T09:08:33+00:00'
+  duration_seconds: 0
+  verdict: pass
+  summary: CommitToGit skipped because auto-commit is disabled
+active_subagent: null
+last_subagent:
+  id: SA-0022
+  role: pm
+  engine: codex
+  status: completed
+  path: subagents/SA-0022-pm
+  started_at: '2026-04-01T09:07:11+00:00'
+  updated_at: '2026-04-01T09:08:32+00:00'
+  completed_at: '2026-04-01T09:08:32+00:00'
+  exit_code: 0
+  transcript_snippet: Pool and per-engine budget controls, including Claude-specific
+    protection and dry-run prediction/reporting, meet the...
+last_engine_switch: null
+last_outcome:
+  kind: null
+  stage: null
+  reason_code: null
+  reason: ''
+  retry_count: 0
+  retry_limit: 0
+  retry_source: global
+  recorded_at: null

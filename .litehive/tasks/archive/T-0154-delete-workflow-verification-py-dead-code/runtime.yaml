@@ -1,0 +1,66 @@
+git:
+  commit_sha: daafc313b9dd925e261291067d64b4f0218e13ea
+  worktree_path: .litehive/worktrees/T-0154-delete-workflow-verification-py-dead-code
+execution_status: done
+run_started_at: null
+updated_at: '2026-04-05T17:36:43+00:00'
+retry_count: 0
+retry_limit: 3
+retry_source: global
+stage_retry_counts: {}
+current_stage:
+  step: null
+  status: idle
+  started_at: null
+  completed_at: null
+  updated_at: '2026-04-05T17:36:43+00:00'
+  duration_seconds: 0
+  verdict: null
+  summary: ''
+last_stage:
+  step: commit_to_git
+  status: completed
+  started_at: null
+  completed_at: '2026-04-05T17:36:43+00:00'
+  updated_at: '2026-04-05T17:36:43+00:00'
+  duration_seconds: 0
+  verdict: pass
+  summary: Recovered existing checkpoint commit after interrupted `commit_to_git`.
+active_subagent: null
+last_subagent:
+  id: SA-0004
+  role: reviewer
+  engine: opencode
+  status: completed
+  path: subagents/SA-0004-reviewer
+  pid: 3387115
+  sandboxed: false
+  sandbox_summary: host
+  started_at: '2026-04-05T17:18:04+00:00'
+  updated_at: '2026-04-05T17:19:31+00:00'
+  completed_at: '2026-04-05T17:19:31+00:00'
+  exit_code: 0
+  transcript_snippet: '{"type":"step_start","timestamp":1775409492486,"sessionID":"ses_2a15926ebffeOJSPVSTlmzl6IX","part":{"id":"prt_d5ea6f2...'
+  interruption_reason: ''
+  resource_limit_event: null
+  continuation:
+    session_id: ses_2a15926ebffeOJSPVSTlmzl6IX
+    thread_id: null
+    metadata: {}
+    updated_at: '2026-04-05T17:19:31+00:00'
+interruption: null
+continuation_handoff: null
+last_engine_switch: null
+last_outcome:
+  kind: null
+  stage: null
+  reason_code: null
+  reason: ''
+  failure_classification: null
+  failure_diagnostics: {}
+  follow_up_task_id: null
+  retry_count: 0
+  retry_limit: 0
+  retry_source: global
+  recorded_at: null
+self_heal_traceback_fingerprints: []

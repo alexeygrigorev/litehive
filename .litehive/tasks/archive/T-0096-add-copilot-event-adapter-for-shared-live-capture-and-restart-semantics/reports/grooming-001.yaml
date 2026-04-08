@@ -1,0 +1,276 @@
+task_id: T-0096
+step: grooming
+verdict: pass
+summary: 'I''ll explore the litehive codebase systematically. Let me start with parallel
+  searches to find the key files and structure.Good! Now let me examine the key files
+  in parallel:Let me get specific sections of the large files with targeted grep searches:Now
+  let me look at the structure and existing adapters in detail:Perfect! Now let me
+  examine the CopilotCLIAdapter and the StreamEventAdapter pattern:Now let me see
+  the _copilot_live_events function and understand the StreamEventAdapter structure:Now
+  let me examine the external_cli.py file to understand the adapter architecture:Let
+  me check how the runtime captures live events and the subagent lifecycle:Let me
+  look at run_task and run_single_task functions:Let me look at subagents.py for the
+  SubagentManager class:Let me continue looking at the run_subagent implementation
+  and look for live capture handling:Now let me see the _write_session_progress method
+  which is key for understanding live capture:Now let me check the external_cli.py
+  for the run_live method and understand how live capture works:Excellent! Now let
+  me check the task record to understand what needs to be implemented:Let me check
+  what tests exist for the adapters:Let me check related task records to understand
+  the pattern (T-0092, T-0093, T-0094, T-0095 - similar tasks for other adapters):Now
+  let me check the ENGINE_STREAM_EVENT_ADAPTERS registry to understand what needs
+  to be in the copilot adapter:Perfect! Now let me look at how other adapters (Claude,
+  Codex, Gemini) handle the continuation extraction to identify what''s missing for
+  Copilot:Let me check if there are _goz_live_events for reference (as it''s also
+  in the registry but might not have full implementation):Perfect! Now let me create
+  a comprehensive summary document. Let me get one more key piece about the copilot
+  CLI adapter to confirm it already supports resume_session_id:Excellent! Now let
+  me check the PLAN.md file if it exists to understand the current state and what''s
+  needed:Perfect! Now I have enough information. Let me create a comprehensive analysis
+  document:'
+feedback: "I'll explore the litehive codebase systematically. Let me start with parallel\
+  \ searches to find the key files and structure.Good! Now let me examine the key\
+  \ files in parallel:Let me get specific sections of the large files with targeted\
+  \ grep searches:Now let me look at the structure and existing adapters in detail:Perfect!\
+  \ Now let me examine the CopilotCLIAdapter and the StreamEventAdapter pattern:Now\
+  \ let me see the _copilot_live_events function and understand the StreamEventAdapter\
+  \ structure:Now let me examine the external_cli.py file to understand the adapter\
+  \ architecture:Let me check how the runtime captures live events and the subagent\
+  \ lifecycle:Let me look at run_task and run_single_task functions:Let me look at\
+  \ subagents.py for the SubagentManager class:Let me continue looking at the run_subagent\
+  \ implementation and look for live capture handling:Now let me see the _write_session_progress\
+  \ method which is key for understanding live capture:Now let me check the external_cli.py\
+  \ for the run_live method and understand how live capture works:Excellent! Now let\
+  \ me check the task record to understand what needs to be implemented:Let me check\
+  \ what tests exist for the adapters:Let me check related task records to understand\
+  \ the pattern (T-0092, T-0093, T-0094, T-0095 - similar tasks for other adapters):Now\
+  \ let me check the ENGINE_STREAM_EVENT_ADAPTERS registry to understand what needs\
+  \ to be in the copilot adapter:Perfect! Now let me look at how other adapters (Claude,\
+  \ Codex, Gemini) handle the continuation extraction to identify what's missing for\
+  \ Copilot:Let me check if there are _goz_live_events for reference (as it's also\
+  \ in the registry but might not have full implementation):Perfect! Now let me create\
+  \ a comprehensive summary document. Let me get one more key piece about the copilot\
+  \ CLI adapter to confirm it already supports resume_session_id:Excellent! Now let\
+  \ me check the PLAN.md file if it exists to understand the current state and what's\
+  \ needed:Perfect! Now I have enough information. Let me create a comprehensive analysis\
+  \ document:\n\n## COMPREHENSIVE ANALYSIS: Litehive Copilot Event Adapter for Shared\
+  \ Live Capture and Restart Semantics\n\n### 1. EXISTING COPILOT ADAPTER STRUCTURE\n\
+  \n**Location:** `/home/alexey/git/litehive/.litehive/worktrees/T-0096-add-copilot-event-adapter-for-shared-live-capture-and-restart-semantics/litehive/engines.py`\
+  \ (Lines 618-730+)\n\n**CopilotCLIAdapter class (Lines 618-730+):**\n- Inherits\
+  \ from `ExternalCLIAdapter`\n- **build_command()** (Lines 619-642): Constructs CLI\
+  \ command with flags like `--output-format json`, `--autopilot`, `--no-auto-update`,\
+  \ `--add-dir`\n  - \u2713 Already accepts `resume_session_id` parameter but **does\
+  \ NOT use it** in the command\n- **render_transcript()** (Lines 644-650): Extracts\
+  \ text from assistant messages using `_extract_copilot_transcript()`\n- **parse_stage_report()**\
+  \ (Lines 652-670): Parses execution output into structured stage reports\n- **extract_usage_observation()**\
+  \ (Lines 672-730): Extracts token usage from `assistant.usage` JSONL payloads and\
+  \ quota snapshots\n\n---\n\n### 2. HOW OTHER ADAPTERS HANDLE LIVE CAPTURE AND RESTART\n\
+  \n#### **A. Live Output/Event Capture Pattern**\n\nAll adapters follow the same\
+  \ pattern via `StreamEventAdapter` (Lines 74-106 in external_cli.py):\n\n**Codex\
+  \ Adapter (Lines 947-991):**\n```python\ndef _codex_live_events(payload: dict) ->\
+  \ list[LiveEvent]:\n    # Extracts: item.completed events, thread.started events\n\
+  \    # Captures: messages, tool_calls, tool_results\n```\n- **ENGINE_STREAM_EVENT_ADAPTERS[\"\
+  codex\"]** = StreamEventAdapter(live_events=_codex_live_events, unwrap_event=_unwrap_claude_stream_event)\n\
+  \n**OpenCode Adapter (Lines 992-1027):**\n```python\ndef _opencode_live_events(payload:\
+  \ dict) -> list[LiveEvent]:\n    # Extracts: item.completed, execution.started,\
+  \ execution.completed\n    # Captures: messages, tool_calls, tool_results with status\n\
+  ```\n\n**Gemini Adapter (Lines 1085-1143):**\n```python\ndef _gemini_live_events(payload:\
+  \ dict) -> list[LiveEvent]:\n    # Extracts: content, tool_call, tool_result, finished,\
+  \ error events\n    # Captures: messages, tool calls, tool results, usage, errors\n\
+  ```\n\n**Claude Adapter (Lines 865-944):**\n```python\ndef _claude_live_events(payload:\
+  \ dict) -> list[LiveEvent]:\n    # Extracts: content_block_delta, content_block_start,\
+  \ tool_result, assistant, result, error\n    # Full stream event adapter with unwrap/text_deltas/final_messages/errors\
+  \ hooks\n```\n\n**Copilot Adapter (Lines 1146-1210):** \u2713 **ALREADY IMPLEMENTED**\n\
+  ```python\ndef _copilot_live_events(payload: dict) -> list[LiveEvent]:\n    # Extracts:\
+  \ assistant.message, assistant.message_delta, tool.execution_start, tool.execution_complete,\
+  \ assistant.usage, error\n    # Returns LiveEvents with kinds: message, tool_call,\
+  \ tool_result, usage, error\n```\n\n**Key insight:** Copilot's `_copilot_live_events()`\
+  \ is **already complete** (Lines 1146-1210). It handles:\n- Messages (full and delta\
+  \ content)\n- Tool calls and results\n- Usage/token tracking\n- Error events\n\n\
+  #### **B. Restart/Resume Semantics**\n\n**Extract Continuation Pattern** (engines.py\
+  \ Lines 2196-2239):\n\n```python\ndef extract_engine_continuation(engine_name, execution):\n\
+  \    # Returns RuntimeEngineContinuation with session_id, thread_id, or metadata\n\
+  \    \n    if engine_name == \"codex\":\n        # Look for: payload.type == \"\
+  thread.started\" \u2192 thread_id\n        return RuntimeEngineContinuation(thread_id=thread_id)\n\
+  \    \n    if engine_name == \"opencode\":\n        # Look for: payload.sessionID\n\
+  \        return RuntimeEngineContinuation(session_id=session_id)\n    \n    if engine_name\
+  \ == \"gemini\":\n        # Look for: payload.type == \"init\" \u2192 session_id\n\
+  \        return RuntimeEngineContinuation(session_id=session_id, metadata={\"model\"\
+  : model})\n    \n    if engine_name == \"claude\":\n        # Look for: payload.type\
+  \ == \"system\" and payload.subtype == \"init\" \u2192 session_id\n        return\
+  \ RuntimeEngineContinuation(session_id=session_id)\n    \n    # MISSING: if engine_name\
+  \ == \"copilot\": ...\n    return None\n```\n\n**\u26A0\uFE0F CRITICAL GAP:** The\
+  \ `extract_engine_continuation()` function has **NO case for \"copilot\"**. It must\
+  \ be added to extract session continuation info from Copilot's output.\n\n#### **C.\
+  \ Process Management and Lifecycle**\n\n**SubagentManager.run()** (subagents.py\
+  \ Lines 146-315):\n1. Creates subagent folder with ID tracking (SA-0001, SA-0002,\
+  \ etc.)\n2. Calls `engine.run_live()` with `on_update` callback if engine supports\
+  \ it\n3. **Resume pattern** (Lines 197-198, 211-212):\n   ```python\n   if resume_session_id:\n\
+  \       live_kwargs[\"resume_session_id\"] = resume_session_id  # Passed to engine\n\
+  \   ```\n4. Calls `extract_engine_continuation()` to capture session ID for next\
+  \ run\n5. Records continuation in task metadata for recovery\n\n**run_live() Implementation**\
+  \ (external_cli.py Lines 210-300):\n- Streams live output via selectors\n- Emits\
+  \ `on_update` callback every 0.5 seconds (LIVE_UPDATE_INTERVAL_SECONDS)\n- Captures\
+  \ stdout/stderr incrementally\n- Calls `emit_update()` with partial CLIExecutionResult\n\
+  \n**_write_session_progress()** (subagents.py Lines 478-580):\n- Handles live updates\
+  \ during execution\n- Calls `extract_engine_continuation()` to capture continuation\
+  \ info\n- Writes progress events to JSON event stream\n- Records in `.litehive/tasks/<task-id>/events.jsonl`\n\
+  \n---\n\n### 3. \"SHARED LIVE CAPTURE\" EXPLAINED\n\n**There is NO single shared\
+  \ event bus.** Instead, there's a **pull-based architecture:**\n\n1. **Live Update\
+  \ Mechanism:**\n   - `engine.run_live()` reads stdout/stderr via OS selectors\n\
+  \   - Emits partial CLIExecutionResult via `on_update` callback every 0.5 seconds\n\
+  \   - Subagent manager writes these to session logs\n\n2. **Session Logs** (events.py):\n\
+  \   - Append-only JSONL at `.litehive/tasks/<task-id>/events.jsonl`\n   - Each event:\
+  \ `{ts, task_id, kind, data}`\n   - Kinds: `subagent_progress`, `subagent_started`,\
+  \ `subagent_finished`, etc.\n\n3. **Stream Capture**:\n   - Each subagent gets live_events\
+  \ extracted via StreamEventAdapter\n   - Adapter's `extract_live_events(payload)`\
+  \ converts JSONL payloads to LiveEvent objects\n   - Used for TUI/web display of\
+  \ tool calls, messages, usage\n\n4. **Shared context across restarts:**\n   - Session\
+  \ continuation (session_id/thread_id) stored in RuntimeEngineContinuation\n   -\
+  \ Passed back as `resume_session_id` on next engine.run() call\n   - Allows multi-turn\
+  \ interactions to resume from interruption point\n\n---\n\n### 4. SUBAGENT LIFECYCLE\
+  \ (subagents.py, runtime.py)\n\n**SubagentManager.run()** lifecycle:\n\n| Phase\
+  \ | Code Location | Key Actions |\n|-------|---|---|\n| **Init** | Lines 146-176\
+  \ | Create subagent folder, generate ID (SA-XXXX), mark as \"running\" |\n| **Execution**\
+  \ | Lines 178-219 | Call `engine.run_live()` or `engine.run()` with live callback\
+  \ |\n| **Progress** | Lines 189-195 | `on_update` callback \u2192 `_write_session_progress()`\
+  \ |\n| **Continuation** | Line 221 | `extract_engine_continuation()` called to capture\
+  \ session ID |\n| **Status Update** | Line 222 | Set status: \"completed\", \"failed\"\
+  , or \"interrupted\" |\n| **Finish** | Lines 267-298 | Call `mark_subagent_finished()`,\
+  \ write session metadata |\n| **Observability** | Lines 300-308 | `record_engine_execution()`\
+  \ for monitoring |\n\n**Stream Offset Tracking** (subagents.py Lines 317-325):\n\
+  ```python\ndef _append_stream_delta(self, base, ref, stream, full_content):\n  \
+  \  key = f\"{ref.id}:{stream}\"\n    prev = self._stream_offsets.get(key, 0)\n \
+  \   if len(full_content) > prev:\n        append_session_log(base, stream, full_content[prev:])\
+  \  # Only append new delta\n        self._stream_offsets[key] = len(full_content)\n\
+  ```\nEnsures live logs capture only new output increments.\n\n---\n\n### 5. EXISTING\
+  \ COPILOT ADAPTER TEST COVERAGE\n\n**No dedicated adapter tests found.** Only `tests/test_workspace.py`\
+  \ exists (comprehensive integration tests).\n\n**Tests needed for Copilot Event\
+  \ Adapter:**\n- Extract continuation from Copilot JSONL payloads\n- Parse live events\
+  \ from stream\n- Handle resume_session_id in command building\n- Handle token usage\
+  \ and quota snapshots\n- Error event classification\n\n---\n\n### 6. TASK RECORD\
+  \ (T-0096)\n\n**Location:** `.litehive/tasks/T-0096-add-copilot-event-adapter-for-shared-live-capture-and-restart-semantics/task.yaml`\n\
+  \n**Status:** Queued for implementation (pipeline_status: implementing)\n**Engine:**\
+  \ Copilot\n**Dependencies:** None (depends_on: [])\n**Previous work:** 12 subagents\
+  \ completed (SA-0001 through SA-0012) - PM, SWE, QA rotation\n\n---\n\n### 7. FULL\
+  \ FILE STRUCTURE AND KEY SECTIONS\n\n#### **engines.py** (2316 lines)\n| Section\
+  \ | Lines | Purpose |\n|---------|-------|---------|\n| Imports & Error patterns\
+  \ | 1-158 | Engine error classification patterns |\n| CodexCLIAdapter | 160-261\
+  \ | Codex CLI adapter |\n| OpenCodeAdapter | 262-344 | OpenCode CLI adapter |\n\
+  | GozCLIAdapter | 345-427 | Goz CLI adapter |\n| GeminiCLIAdapter | 428-508 | Gemini\
+  \ CLI adapter |\n| ClaudeCLIAdapter | 509-617 | Claude CLI adapter |\n| **CopilotCLIAdapter**\
+  \ | **618-730** | **Copilot CLI adapter (needs resume_session_id implementation)**\
+  \ |\n| Claude stream helpers | 731-864 | Claude stream event unwrapping |\n| **_claude_live_events**\
+  \ | **865-944** | Full stream adapter pattern |\n| **_codex_live_events** | **947-991**\
+  \ | Codex JSONL events |\n| **_opencode_live_events** | **992-1027** | OpenCode\
+  \ events |\n| **_goz_live_events** | **1028-1083** | Goz events |\n| **_gemini_live_events**\
+  \ | **1085-1143** | Gemini events |\n| **_copilot_live_events** | **1146-1210**\
+  \ | \u2713 Copilot events (COMPLETE) |\n| Claude adapter registry | 1213-1219 |\
+  \ StreamEventAdapter with full hooks |\n| Claude text extraction | 1222-1240+ |\
+  \ Regex fallback parsing |\n| Other transcript/error extraction | 1329-1400+ | Codex,\
+  \ OpenCode extraction helpers |\n| **_copilot_transcript** | **2242-2260** | Extract\
+  \ final/delta messages |\n| **_copilot_errors** | **2263-2282** | Extract tool errors\
+  \ |\n| **_copilot_quota_usage_window** | **2285-2300** | Extract quota metrics |\n\
+  | **_select_copilot_quota_snapshot** | **2303-2316** | Select preferred quota snapshot\
+  \ |\n| **extract_engine_continuation** | **2196-2239** | \u26A0\uFE0F Missing copilot\
+  \ case |\n| **ENGINE_STREAM_EVENT_ADAPTERS** | **2115-2133** | Registry (copilot\
+  \ already listed) |\n| **ENGINE_REGISTRY** | **2050-2103** | Main engine registry\
+  \ |\n\n#### **subagents.py** (1281 lines)\n| Section | Lines | Purpose |\n|---------|-------|---------|\n\
+  | Imports | 1-35 | Dependencies including extract_engine_continuation |\n| Protocol\
+  \ definitions | 36-136 | StageExecutor protocol |\n| **SubagentManager class** |\
+  \ **136-1000+** | Core subagent lifecycle |\n| **SubagentManager.run()** | **146-315**\
+  \ | Main execution loop \u2713 |\n| **_write_session_progress()** | **478-580**\
+  \ | Live update handler \u2713 |\n| **_append_stream_delta()** | **317-325** | Incremental\
+  \ stream capture |\n| Other helpers | 600+ | Session metadata, reports, etc. |\n\
+  \n#### **runtime.py** (2347 lines)\n| Section | Lines | Purpose |\n|---------|-------|---------|\n\
+  | Task execution runner | 77-541 | TaskExecutionRunner main loop |\n| **run_task()**\
+  \ | **222-304** | Task execution entry point |\n| **run_single_task()** | **307-338**\
+  \ | Single task run wrapper |\n| Live update integration | Throughout | Captures\
+  \ progress events to JSONL |\n\n#### **external_cli.py** (766 lines)\n| Section\
+  \ | Lines | Purpose |\n|---------|-------|---------|\n| **StreamEventAdapter** |\
+  \ **74-106** | Live event extraction hooks \u2713 |\n| **ExternalCLIAdapter** |\
+  \ **109-600+** | Base adapter class |\n| **build_command()** | 133-142 | Command\
+  \ builder (abstract) |\n| **run()** | 171-208 | Fire-and-forget execution |\n| **run_live()**\
+  \ | 210-300 | Streaming execution with on_update \u2713 |\n\n#### **models.py**\
+  \ (relevant sections)\n| Section | Lines | Purpose |\n|---------|-------|---------|\n\
+  | **RuntimeEngineContinuation** | 123-127 | session_id, thread_id, metadata storage\
+  \ |\n| **LiveEvent** | (in models) | Event kinds: message, tool_call, tool_result,\
+  \ usage, error |\n| **LiveTimeline** | (in models) | Aggregated live events |\n\n\
+  #### **events.py** (87 lines)\n| Section | Lines | Purpose |\n|---------|-------|---------|\n\
+  | **append_event()** | 18-44 | Write event to JSONL stream \u2713 |\n| **read_events()**\
+  \ | 47-57 | Read all events \u2713 |\n| **append_session_log()** | 60-77 | Append-only\
+  \ stdout/stderr logs |\n| **ensure_session_log()** | 80-87 | Initialize empty log\
+  \ files |\n\n---\n\n### 8. WHAT'S MISSING: THE COPILOT EVENT ADAPTER GAPS\n\n####\
+  \ **Gap 1: Resume Session ID not used in build_command()** (engines.py:619-642)\n\
+  - CopilotCLIAdapter accepts `resume_session_id` parameter\n- **BUT** never adds\
+  \ it to the command list\n- Need to add flag like `--session-id {resume_session_id}`\
+  \ or equivalent\n\n#### **Gap 2: No continuation extraction case** (engines.py:2196-2239)\n\
+  - `extract_engine_continuation()` handles codex, opencode, gemini, claude\n- **Missing:**\
+  \ Case for \"copilot\" to extract session_id from payload\n- Must look for appropriate\
+  \ Copilot event type and field name\n\n#### **Gap 3: Verify Copilot JSONL payload\
+  \ structure**\n- `_copilot_live_events()` already handles extraction (Lines 1146-1210)\n\
+  - Already extracts from events like: `assistant.message`, `assistant.message_delta`,\
+  \ `tool.execution_*`, `assistant.usage`\n- Need to identify: **What event type contains\
+  \ the session_id for resumption?**\n\n---\n\n### 9. CODE PATTERNS TO FOLLOW\n\n\
+  **Pattern 1: Add resume_session_id to build_command()**\n```python\n# In CopilotCLIAdapter.build_command()\n\
+  if resume_session_id:\n    command.extend([\"--session-id\", resume_session_id])\n\
+  ```\n\n**Pattern 2: Add continuation extraction case**\n```python\n# In extract_engine_continuation()\n\
+  if engine_name == \"copilot\":\n    for payload in iter_jsonl_payloads(execution.stdout):\n\
+  \        if payload.get(\"type\") == \"COPILOT_SESSION_TYPE\":  # Need to verify\
+  \ actual type\n            session_id = payload.get(\"COPILOT_SESSION_FIELD\") \
+  \ # Need to verify actual field\n            if isinstance(session_id, str) and\
+  \ session_id:\n                return RuntimeEngineContinuation(session_id=session_id)\n\
+  \    return None\n```\n\n**Pattern 3: StreamEventAdapter registration (already done)**\n\
+  ```python\n# Already exists at line 2129-2131\n\"copilot\": StreamEventAdapter(\n\
+  \    live_events=_copilot_live_events,\n),\n```\n\n---\n\n### 10. RELATED SUCCESSFUL\
+  \ IMPLEMENTATIONS (Reference Tasks)\n\n- **T-0092:** Codex event adapter - Look\
+  \ at implementation for reference\n- **T-0093:** OpenCode event adapter - Look at\
+  \ implementation for reference  \n- **T-0094:** Claude event adapter - Most complete,\
+  \ full StreamEventAdapter\n- **T-0095:** Gemini event adapter - Look at implementation\
+  \ for reference\n\nAll follow same pattern: Add live_events extraction, add extract_engine_continuation\
+  \ case.\n\n---\n\n## SUMMARY\n\n**Current State:**\n- \u2705 `_copilot_live_events()`\
+  \ is **fully implemented** (Lines 1146-1210)\n- \u2705 StreamEventAdapter registration\
+  \ is **already done** (Lines 2129-2131)\n- \u2705 Copilot's usage extraction is\
+  \ **complete** (Lines 672-730)\n- \u2705 Copilot subagent execution lifecycle **works**\
+  \ (uses generic SubagentManager)\n- \u2705 Live capture infrastructure **works**\
+  \ (generic run_live() + on_update)\n\n**What's Missing (2 critical gaps):**\n1.\
+  \ **Add resume_session_id flag to CopilotCLIAdapter.build_command()** (engines.py:619-642)\n\
+  2. **Add copilot case to extract_engine_continuation()** (engines.py:2196-2239)\n\
+  \n**Key Implementation Question:**\n- What is the Copilot CLI's flag for resuming\
+  \ a session? (e.g., `--session-id`, `--resume`, `--thread-id`)\n- What event type/field\
+  \ contains the session ID in Copilot's output? (e.g., `payload.get(\"session_id\"\
+  )`)\n\nThis information is likely in Copilot CLI documentation or existing implementation/tests.Now\
+  \ I have a clear picture. Let me check the Copilot CLI's own session handling to\
+  \ understand what events expose continuation data:I now have a complete picture.\
+  \ Let me write the grooming report.Grooming complete. Here's a summary of the analysis\
+  \ and what was filed:\n\n## T-0096 Grooming \u2014 PASS\n\n**The work is well-scoped.**\
+  \ Two concrete gaps in `litehive/engines.py`:\n\n1. **Shared live capture** \u2014\
+  \ Copilot's `render_transcript` and `parse_stage_report` use ad-hoc `_extract_copilot_transcript`\
+  \ / `_extract_copilot_errors` helpers instead of the shared `extract_stream_transcript`\
+  \ / `extract_stream_errors` pattern that Claude uses. Fix: create `_COPILOT_STREAM_EVENT_ADAPTER`\
+  \ with `final_messages` and `errors` hooks, route both methods through it.\n\n2.\
+  \ **Restart semantics** \u2014 `build_command()` silently drops `resume_session_id`\
+  \ (should emit `--resume=<id>`), and `extract_engine_continuation()` has no copilot\
+  \ branch. Implementer needs to confirm which JSONL event/field carries the session\
+  \ ID (likely a top-level `sessionId` on all events or a `session.started` event).\n\
+  \n**Expected changes:** `litehive/engines.py` + new tests in `test_workspace.py`.\
+  \  \n**PM_COMPLEXITY: moderate / PLANNED_EFFORT: s**"
+files_changed: []
+follow_up_tasks: []
+created_follow_up_task_ids: []
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 421
+hook_results: []
+created_at: '2026-04-04T20:10:14+00:00'

@@ -1,0 +1,49 @@
+git:
+  commit_sha: 2ceaacdfbb451ad32bc5a0f6ec82c478bf471516
+execution_status: done
+run_started_at: '2026-04-01T07:57:37+00:00'
+updated_at: '2026-04-01T07:59:13+00:00'
+retry_count: 0
+retry_limit: 3
+retry_source: global
+current_stage:
+  step: null
+  status: idle
+  started_at: null
+  completed_at: null
+  updated_at: '2026-04-01T07:59:13+00:00'
+  duration_seconds: 0
+  verdict: null
+  summary: ''
+last_stage:
+  step: commit_to_git
+  status: completed
+  started_at: '2026-04-01T07:57:37+00:00'
+  completed_at: '2026-04-01T07:59:13+00:00'
+  updated_at: '2026-04-01T07:59:13+00:00'
+  duration_seconds: 96
+  verdict: pass
+  summary: CommitToGit created the final completion commit
+active_subagent: null
+last_subagent:
+  id: SA-0015
+  role: pm
+  engine: codex
+  status: completed
+  path: subagents/SA-0015-pm
+  started_at: '2026-04-01T07:48:41+00:00'
+  updated_at: '2026-04-01T07:49:49+00:00'
+  completed_at: '2026-04-01T07:49:49+00:00'
+  exit_code: 0
+  transcript_snippet: Interrupted active non-commit tasks are now recovered back into
+    the queued runnable pool instead of being silently dr...
+last_engine_switch: null
+last_outcome:
+  kind: null
+  stage: null
+  reason_code: null
+  reason: ''
+  retry_count: 0
+  retry_limit: 0
+  retry_source: global
+  recorded_at: null

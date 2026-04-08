@@ -1,0 +1,114 @@
+- role: planner
+  step: grooming
+  verdict: pass
+  message: "Groomed T-0193: Add single-agent pipeline mode for simple tasks.\n\nSCOPE:\
+    \ Add a pipeline_mode field (single|full) to TaskRecord. full = existing pipeline.\
+    \ single = backlog \u2192 implementing \u2192 commit_to_git \u2192 done, skipping\
+    \ grooming, testing, and accepting. commit_to_git always runs after implementing\
+    \ in single mode (handles the no-changes case gracefully). litehive add --single\
+    \ and --pipeline-mode single both create single-mode tasks.\n\nACCEPTANCE CRITERIA\
+    \ (8):\n1. task.yaml has a pipeline_mode field accepting 'full' or 'single'; tasks\
+    \ without the field default to 'full'\n2. pipeline_mode: single routes backlog\
+    \ \u2192 implementing \u2192 commit_to_git \u2192 done, skipping grooming, testing,\
+    \ and accepting\n3. pipeline_mode: full follows the existing pipeline: grooming\
+    \ \u2192 implementing \u2192 testing \u2192 accepting \u2192 commit_to_git \u2192\
+    \ done\n4. pipeline_mode defaults to 'full' when creating a task without an explicit\
+    \ flag\n5. litehive add --single <title> creates a task with pipeline_mode: single\n\
+    6. litehive add --pipeline-mode single <title> is the explicit form and produces\
+    \ the same result as --single\n7. litehive update T-XXXX --pipeline-mode single\
+    \ updates an existing task's pipeline_mode field in task.yaml\n8. commit_to_git\
+    \ in single mode completes without error when implementing makes no git changes,\
+    \ and the task moves to done\n\nPLAN (7 steps):\n1. Add pipeline_mode: Literal['full','single']\
+    \ = 'full' field to TaskRecord in litehive/models.py\n2. Add _STEPS_FROM_SINGLE\
+    \ and _ROUTES_SINGLE routing tables to litehive/runner/states.py\n3. Update TaskExecutionRunner.run()\
+    \ in litehive/runner/core.py to select routing tables based on pipeline_mode\n\
+    4. Add pipeline_mode parameter to create_task() and update_task_metadata() in\
+    \ litehive/tasks.py\n5. Add --single and --pipeline-mode flags to litehive add\
+    \ and litehive update in litehive/cli/parser.py\n6. Handle new flags in _cmd_add()\
+    \ and _cmd_update() in litehive/cli/tasks.py\n7. Write tests: single-mode routing,\
+    \ full-mode default, --single and --pipeline-mode CLI flags, update via litehive\
+    \ update\n\nKEY FILES:\n- litehive/models.py (TaskRecord field)\n- litehive/runner/states.py\
+    \ (_STEPS_FROM_SINGLE, _ROUTES_SINGLE)\n- litehive/runner/core.py (routing table\
+    \ selection)\n- litehive/tasks.py (create_task, update_task_metadata)\n- litehive/cli/parser.py\
+    \ (CLI flags)\n- litehive/cli/tasks.py (_cmd_add, _cmd_update)\n\nDESIGN NOTE:\
+    \ commit_to_git always runs after implementing in single mode. The existing commit_to_git\
+    \ stage handles 'nothing to commit' gracefully. No conditional routing needed.\n\
+    \nPM SIZING: moderate complexity, m effort."
+  files_changed: []
+  created_at: '2026-04-06T22:35:04+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: Implemented single-agent pipeline mode.
+  files_changed: []
+  created_at: '2026-04-06T23:07:08+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: "Implemented proactive codex quota checking via chatgpt.com API. All files\
+    \ created and integration points wired up.\n\n## Files Changed\n- litehive/engines/_codex_quota.py\
+    \ (NEW): Core quota check module with bearer token reading from ~/.codex/auth.json\
+    \ (tokens.access_token), API call to GET chatgpt.com/backend-api/wham/usage with\
+    \ Authorization: Bearer header, response parsing for rate_limit.limit_reached\
+    \ + primary_window (5h) and secondary_window (weekly) used_percent and reset_at,\
+    \ 60s TTL module-level cache, and fail-open error handling.\n- litehive/runtime/_execution.py:\
+    \ Added import of check_codex_quota/codex_quota_block_reason. Added _record_codex_monitoring()\
+    \ helper. Inserted proactive codex quota check before each codex invocation in\
+    \ the engine selection loop \u2014 when limit_reached=true, codex is skipped and\
+    \ fallback engine is used via the existing engine switch path.\n- litehive/cli/_dry_run.py:\
+    \ Added import and proactive quota check in dry-run engine selection so quota-blocked\
+    \ codex is surfaced in --dry-run output.\n- litehive/observability/_engine_monitoring.py:\
+    \ Added record_codex_quota_check() that surfaces quota used_percent (as usage\
+    \ percent with limit=100), reset_at, and per-window metadata in engine-monitoring.yaml.\n\
+    - tests/test_codex_quota.py (NEW): 17 targeted tests covering token reading (success,\
+    \ missing file, bad JSON, missing field), response parsing (limit reached/not\
+    \ reached, empty response), quota check with caching (cache hit, cache expiry,\
+    \ no auth), block reason (limit reached, not reached, fail-open), and monitoring\
+    \ integration (records quota, skips error status).\n- tests/conftest.py (NEW):\
+    \ Autouse fixture that neutralizes real codex quota API calls during tests (except\
+    \ test_codex_quota.py which uses explicit fake fetchers).\n\n## Acceptance Criteria\
+    \ Verification\n1. Quota checked before each codex invocation: YES - check_codex_quota()\
+    \ called in _execution.py engine loop before invocation\n2. Bearer token from\
+    \ ~/.codex/auth.json: YES - _read_bearer_token() reads tokens.access_token\n3.\
+    \ limit_reached=true skips codex: YES - codex_quota_block_reason() returns blocking\
+    \ reason, engine fallback path executes\n4. reset_at from response used: YES -\
+    \ parsed from API response, stored in monitoring\n5. Both primary and secondary\
+    \ windows checked: YES - _parse_quota_response() extracts both\n6. Engine monitoring\
+    \ shows quota: YES - record_codex_quota_check() writes used_percent, reset_at,\
+    \ per-window metadata\n7. No wasted invocations: YES - check happens BEFORE invocation,\
+    \ not after failure\n8. Cache with 60s TTL: YES - module-level cache with configurable\
+    \ TTL\n9. Claude/Copilot out of scope: YES - only codex is checked\n\n## Tests\n\
+    - 17 tests added in test_codex_quota.py, all passing\n- 169 tests passing across\
+    \ test_codex_quota.py, test_runner_workflow.py, and test_engine_variants_and_timeline.py\n\
+    \n## Design Notes\n- Fail-open: if auth.json is missing, API call fails, or response\
+    \ is unexpected, codex is NOT blocked\n- Cache is module-level with monotonic\
+    \ clock for TTL\n- Monitoring recording is best-effort (wrapped in try/except)\n\
+    - conftest.py neutralizes quota API calls in all other test modules to prevent\
+    \ flaky tests"
+  files_changed: []
+  created_at: '2026-04-07T00:24:05+00:00'
+- role: planner
+  step: grooming
+  verdict: pass
+  message: "PASS \u2014 Task grooming is valid and implementation exists. Re-grooming\
+    \ was triggered by recovery escalation after repeated QA rejections, but the rejections\
+    \ were caused by a worktree checkout issue, NOT missing code.\n\n## Verified Implementation\
+    \ State\n- litehive/engines/_codex_quota.py EXISTS \u2014 core quota check module\
+    \ with bearer token reading, API call, response parsing, 60s TTL cache, fail-open\
+    \ error handling\n- litehive/runtime/_execution.py \u2014 proactive quota check\
+    \ integrated before codex invocation (line ~712)\n- litehive/cli/_dry_run.py \u2014\
+    \ quota check in both pool and single-task dry-run paths\n- litehive/observability/_engine_monitoring.py\
+    \ \u2014 record_codex_quota_check() surfaces quota data\n- tests/test_codex_quota.py\
+    \ \u2014 17 tests, ALL PASSING\n- tests/conftest.py \u2014 autouse fixture neutralizes\
+    \ API calls in other test modules\n- Commits: ba9ae20 (main implementation) +\
+    \ f3f5961 (dry-run fix) \u2014 both present on this branch\n\n## Root Cause of\
+    \ QA Rejections\nQA agent ran in a worktree that was checked out at an older commit\
+    \ (e1ad980) which predates the implementation commits. The code was committed\
+    \ and is real. The QA agent needs to run against the correct branch HEAD (f3f5961).\n\
+    \n## Acceptance Criteria Status\nAll 9 acceptance criteria are addressed by the\
+    \ implementation. No task changes needed \u2014 goal, criteria, plan, and sizing\
+    \ are all correct from the previous grooming pass.\n\n## Action for Next Stage\n\
+    Testing should proceed. Ensure the QA worktree is checked out at the branch HEAD\
+    \ (f3f5961) or later so the implementation files are visible."
+  files_changed: []
+  created_at: '2026-04-07T02:32:02+00:00'

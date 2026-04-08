@@ -1,0 +1,85 @@
+id: T-0150
+slug: add-task-archival-move-done-tasks-to-tasks-archive-and-support-cleanup
+title: 'Add task archival: move done tasks to tasks/archive/ and support cleanup'
+depends_on: []
+task_type: null
+engine: null
+model: null
+mode: implementation
+pipeline_mode: full
+status: done
+pipeline_status: done
+priority: medium
+pm_complexity: null
+planned_effort: null
+created_at: '2026-04-04T20:45:45+00:00'
+updated_at: '2026-04-08T07:45:42+00:00'
+goal: Done tasks accumulate. Add litehive archive command that moves completed tasks
+  to .litehive/tasks/archive/ and litehive cleanup that deletes archived tasks older
+  than N days.
+acceptance_criteria:
+- litehive archive moves all done tasks to tasks/archive/
+- litehive cleanup --older-than 30d deletes archived tasks
+- archived tasks are not shown in queue or status
+constraints: []
+plan: []
+human_checkpoints: []
+subagents:
+- id: SA-0001
+  role: planner
+  engine: opencode
+  status: interrupted
+  path: subagents/SA-0001-planner
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0002
+  role: planner
+  engine: claude
+  status: completed
+  path: subagents/SA-0002-planner
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0003
+  role: swe
+  engine: claude
+  status: completed
+  path: subagents/SA-0003-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0004
+  role: qa
+  engine: claude
+  status: completed
+  path: subagents/SA-0004-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0005
+  role: reviewer
+  engine: claude
+  status: completed
+  path: subagents/SA-0005-reviewer
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0006
+  role: merge-resolver
+  engine: claude
+  status: completed
+  path: subagents/SA-0006-merge-resolver
+  sandboxed: false
+  sandbox_summary: host
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0150 add-task-archival-move-done-tasks-to-tasks-archive-and-support-cleanup'
+  commit_sha: 98c1150a5be74caf11e9d555699894536cecf724
+  checkpoint_base_sha: 77a0bb709bdcf0697400dc2103ec234ca38cb617
+  checkpoint_attempts: 1
+  rolled_back_checkpoint_attempt: null
+  worktree_path: null
+  merge_agent_attempts: 1
+retry_policy:
+  max_retries: null
+  stage_retry_limit: null
+created_from: null
+upstream_origin: null
+github_origin: null
+archived_at: '2026-04-08T07:45:42+00:00'

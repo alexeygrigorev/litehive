@@ -1,0 +1,67 @@
+git:
+  commit_sha: 7401ffefe67402f5337ccbd7368f175c08cd128e
+  worktree_path: .litehive/worktrees/T-0157-refactor-cli-py-into-cli-module-with-submodules
+execution_status: done
+run_started_at: '2026-04-05T18:11:09+00:00'
+updated_at: '2026-04-05T18:34:19+00:00'
+retry_count: 0
+retry_limit: 3
+retry_source: global
+stage_retry_counts: {}
+current_stage:
+  step: null
+  status: idle
+  started_at: null
+  completed_at: null
+  updated_at: '2026-04-05T18:34:19+00:00'
+  duration_seconds: 0
+  verdict: null
+  summary: ''
+last_stage:
+  step: commit_to_git
+  status: completed
+  started_at: '2026-04-05T18:33:24+00:00'
+  completed_at: '2026-04-05T18:34:19+00:00'
+  updated_at: '2026-04-05T18:34:19+00:00'
+  duration_seconds: 55
+  verdict: pass
+  summary: 'CommitToGit complete. Commit: 7401ffef'
+active_subagent: null
+last_subagent:
+  id: SA-0005
+  role: merge-resolver
+  engine: claude
+  status: completed
+  path: subagents/SA-0005-merge-resolver
+  pid: 3484909
+  sandboxed: false
+  sandbox_summary: host
+  started_at: '2026-04-05T18:33:24+00:00'
+  updated_at: '2026-04-05T18:34:18+00:00'
+  completed_at: '2026-04-05T18:34:18+00:00'
+  exit_code: 0
+  transcript_snippet: "Both sides should be kept \u2014 the planner entry from HEAD\
+    \ and the QA entry from the merging branch. I'll combine them."
+  interruption_reason: ''
+  resource_limit_event: null
+  continuation:
+    session_id: 8ed4f9aa-01fb-46a5-99b1-705267b0c340
+    thread_id: null
+    metadata: {}
+    updated_at: '2026-04-05T18:34:18+00:00'
+interruption: null
+continuation_handoff: null
+last_engine_switch: null
+last_outcome:
+  kind: null
+  stage: null
+  reason_code: null
+  reason: ''
+  failure_classification: null
+  failure_diagnostics: {}
+  follow_up_task_id: null
+  retry_count: 0
+  retry_limit: 0
+  retry_source: global
+  recorded_at: null
+self_heal_traceback_fingerprints: []

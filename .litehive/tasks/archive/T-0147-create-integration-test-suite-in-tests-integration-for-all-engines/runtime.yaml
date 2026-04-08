@@ -1,0 +1,72 @@
+git:
+  commit_sha: ff7fc0668f0bcadecd43a4dd37a7f3cf523f4984
+  worktree_path: .litehive/worktrees/T-0147-create-integration-test-suite-in-tests-integration-for-all-engines
+execution_status: done
+run_started_at: '2026-04-05T15:48:30+00:00'
+updated_at: '2026-04-05T16:01:46+00:00'
+retry_count: 0
+retry_limit: 3
+retry_source: global
+stage_retry_counts: {}
+current_stage:
+  step: null
+  status: idle
+  started_at: null
+  completed_at: null
+  updated_at: '2026-04-05T16:01:46+00:00'
+  duration_seconds: 0
+  verdict: null
+  summary: ''
+last_stage:
+  step: commit_to_git
+  status: completed
+  started_at: '2026-04-05T16:01:44+00:00'
+  completed_at: '2026-04-05T16:01:46+00:00'
+  updated_at: '2026-04-05T16:01:46+00:00'
+  duration_seconds: 2
+  verdict: pass
+  summary: 'CommitToGit complete. Commit: ff7fc066'
+active_subagent: null
+last_subagent:
+  id: SA-0010
+  role: reviewer
+  engine: opencode
+  status: completed
+  path: subagents/SA-0010-reviewer
+  pid: 3282235
+  sandboxed: false
+  sandbox_summary: host
+  started_at: '2026-04-05T15:57:07+00:00'
+  updated_at: '2026-04-05T16:01:44+00:00'
+  completed_at: '2026-04-05T16:01:44+00:00'
+  exit_code: 0
+  transcript_snippet: Let me verify the implementation independently by examining
+    the files and running the tests.
+  interruption_reason: ''
+  resource_limit_event: null
+  continuation:
+    session_id: ses_2a1a344fcffe1LN7MN6jKNMYUi
+    thread_id: null
+    metadata: {}
+    updated_at: '2026-04-05T16:01:44+00:00'
+interruption: null
+continuation_handoff: null
+last_engine_switch:
+  step: grooming
+  from_engine: codex
+  to_engine: opencode
+  reason: usage limit reached
+  happened_at: '2026-04-05T15:48:33+00:00'
+last_outcome:
+  kind: null
+  stage: null
+  reason_code: null
+  reason: ''
+  failure_classification: null
+  failure_diagnostics: {}
+  follow_up_task_id: null
+  retry_count: 0
+  retry_limit: 0
+  retry_source: global
+  recorded_at: null
+self_heal_traceback_fingerprints: []

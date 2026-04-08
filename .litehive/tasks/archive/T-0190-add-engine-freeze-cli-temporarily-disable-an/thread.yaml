@@ -1,0 +1,164 @@
+- role: planner
+  step: grooming
+  verdict: pass
+  message: "Grooming PASS for T-0190: Engine freeze CLI.\n\n## Acceptance Criteria\
+    \ (confirmed well-scoped, all observable):\n1. `litehive engine freeze <engine>\
+    \ --until <datetime>` disables engine (date + datetime, local TZ input, UTC storage)\n\
+    2. Frozen engines skipped in resolve_engine_plan and fallback chains\n3. `litehive\
+    \ engine unfreeze <engine>` removes freeze manually\n4. `litehive status` shows\
+    \ frozen engines with unfreeze date\n5. Auto-unfreeze when date passes\n\n## Implementation\
+    \ Plan (6 steps):\n1. **Restructure engine CLI parser**: Convert `engine` from\
+    \ flat positional to subparser group with `set`, `freeze`, `unfreeze` subcommands\
+    \ (litehive/cli/parser.py:222-236)\n2. **Add config field**: `engine_freeze: dict[str,\
+    \ str]` on LitehiveConfig (litehive/config/__init__.py), maps engine name to UTC\
+    \ ISO datetime\n3. **Implement freeze/unfreeze handlers**: Extend litehive/cli/engine.py\
+    \ \u2014 parse --until (local TZ -> UTC), read/write config.yaml engine_freeze\
+    \ dict\n4. **Filter frozen engines**: In resolve_engine_plan() (litehive/runtime/_models.py:68-78)\
+    \ and _engine_attempt_order() (litehive/runtime/_budget.py:82-95), skip engines\
+    \ whose freeze datetime > utcnow; expired freezes are auto-removed\n5. **Status\
+    \ display**: Show frozen engines in litehive status (litehive/cli/status.py) with\
+    \ unfreeze datetime in local TZ\n6. **Tests**: CLI round-trip, datetime parsing,\
+    \ frozen engine skipping, auto-unfreeze, status display\n\n## Sizing:\n- PM_COMPLEXITY:\
+    \ simple\n- PLANNED_EFFORT: s\n\n## Warning:\nParser restructuring changes `litehive\
+    \ engine codex` to `litehive engine set codex`. Consider backward compat shim\
+    \ or accept the breaking change.\n\nTASK_UPDATE:\npm_complexity: simple\nplanned_effort:\
+    \ s\nplan:\n  - \"Restructure engine CLI parser: convert engine from flat positional\
+    \ to subparser group with set, freeze, unfreeze subcommands (litehive/cli/parser.py:222-236)\"\
+    \n  - \"Add engine_freeze dict[str, str] to LitehiveConfig (litehive/config/__init__.py).\
+    \ Maps engine name to UTC ISO datetime.\"\n  - \"Implement freeze/unfreeze CLI\
+    \ handlers in litehive/cli/engine.py. Parse --until local TZ, store UTC, write\
+    \ config.yaml.\"\n  - \"Filter frozen engines in resolve_engine_plan and _engine_attempt_order.\
+    \ Compare against utcnow, auto-skip expired.\"\n  - \"Show frozen engines in litehive\
+    \ status with local TZ display.\"\n  - \"Write targeted tests for all acceptance\
+    \ criteria.\""
+  files_changed: []
+  created_at: '2026-04-07T03:52:27+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: "Implemented engine freeze/unfreeze CLI and runtime filtering.\n\n## Changes\
+    \ Made\n\n### Files Changed:\n- litehive/config/__init__.py: Added engine_freeze\
+    \ dict[str, str] field to LitehiveConfig with docstring and normalization in __post_init__\n\
+    - litehive/cli/parser.py: Restructured engine CLI to support subcommands (set,\
+    \ freeze, unfreeze) with backward compat for `litehive engine <name>`\n- litehive/cli/engine.py:\
+    \ Complete rewrite with freeze/unfreeze/set handlers, local timezone datetime\
+    \ parsing to UTC storage\n- litehive/runtime/_models.py: Added is_engine_frozen()\
+    \ and active_engine_freezes() helpers; frozen engines filtered out in resolve_engine_attempt_order()\n\
+    - litehive/runtime/__init__.py: Exported new helpers\n- litehive/cli/status.py:\
+    \ Shows frozen engines with local timezone unfreeze dates\n- tests/test_config_and_run_cli.py:\
+    \ Updated parser test for new arg name\n- tests/test_engine_freeze.py: 17 new\
+    \ tests covering all acceptance criteria\n\n## Acceptance Criteria Verification:\n\
+    \n1. **freeze CLI with date and datetime**: test_engine_freeze_cli_roundtrip,\
+    \ test_engine_freeze_with_datetime, test_parse_local_datetime_date_only, test_parse_local_datetime_with_time\
+    \ \u2014 all pass. Supports both \"2026-04-08\" and \"2026-04-08 09:47\" formats,\
+    \ local TZ -> UTC storage.\n\n2. **Frozen engines skipped in resolve_engine_plan\
+    \ and fallback**: test_frozen_engine_skipped_in_attempt_order, test_frozen_engine_in_fallback_chain_skipped\
+    \ \u2014 frozen engines removed from attempt order including fallback chains.\n\
+    \n3. **unfreeze CLI**: test_engine_freeze_cli_roundtrip (unfreeze part), test_unfreeze_not_frozen_engine_returns_error\
+    \ \u2014 removes freeze from config, errors on non-frozen engine.\n\n4. **status\
+    \ shows frozen engines**: test_status_shows_frozen_engines, test_status_no_frozen_engines\
+    \ \u2014 displays \"engine_frozen: codex until <local time>\" when frozen, nothing\
+    \ when not.\n\n5. **Auto-unfreeze when date passes**: test_expired_freeze_not_skipped,\
+    \ test_is_engine_frozen_and_active_freezes \u2014 expired freezes are not active,\
+    \ engine passes through normally.\n\n## Test Results:\n- 17 new tests in tests/test_engine_freeze.py:\
+    \ all pass\n- Existing test suite: no regressions (2 pre-existing failures confirmed\
+    \ unrelated)"
+  files_changed: []
+  created_at: '2026-04-07T04:09:11+00:00'
+- role: qa
+  step: testing
+  verdict: pass
+  message: "## QA Verification: Engine Freeze CLI (T-0190) \u2014 PASS\n\n### Tests\
+    \ Run\n- 17 dedicated tests in tests/test_engine_freeze.py: ALL PASS\n- Related\
+    \ test files (test_config_and_run_cli.py, test_engine_variants_and_timeline.py):\
+    \ no regressions (1 pre-existing failure in test_configure_persists_process_profile\
+    \ unrelated to this change)\n\n### Acceptance Criteria Verified\n\n1. **`litehive\
+    \ engine freeze <engine> --until <datetime>` disables engine** \u2014 VERIFIED\n\
+    \   - Date-only format (\"2026-04-08\") and datetime format (\"2026-04-08 09:47\"\
+    ) both parse correctly\n   - Local timezone input is converted to UTC for storage\
+    \ in config.yaml\n   - Tests: test_engine_freeze_cli_roundtrip, test_engine_freeze_with_datetime,\
+    \ test_parse_local_datetime_date_only, test_parse_local_datetime_with_time\n\n\
+    2. **Frozen engines skipped in resolve_engine_plan and fallback chains** \u2014\
+    \ VERIFIED\n   - resolve_engine_attempt_order() filters out frozen engines (litehive/runtime/_models.py:93-94)\n\
+    \   - Fallback chain engines are also filtered when frozen\n   - Tests: test_frozen_engine_skipped_in_attempt_order,\
+    \ test_frozen_engine_in_fallback_chain_skipped\n\n3. **`litehive engine unfreeze\
+    \ <engine>` removes freeze** \u2014 VERIFIED\n   - Removes engine from engine_freeze\
+    \ dict in config.yaml\n   - Cleans up empty engine_freeze key\n   - Returns error\
+    \ for non-frozen engine\n   - Tests: test_engine_freeze_cli_roundtrip (unfreeze\
+    \ portion), test_unfreeze_not_frozen_engine_returns_error\n\n4. **`litehive status`\
+    \ shows frozen engines with unfreeze date** \u2014 VERIFIED\n   - Displays \"\
+    engine_frozen: <name> until <local time>\" when frozen\n   - No output when no\
+    \ engines frozen\n   - Tests: test_status_shows_frozen_engines, test_status_no_frozen_engines\n\
+    \n5. **Auto-unfreeze when date passes** \u2014 VERIFIED\n   - Expired freezes\
+    \ (past UTC datetime) are not treated as active\n   - Engine passes through attempt\
+    \ order normally when freeze has expired\n   - Tests: test_expired_freeze_not_skipped,\
+    \ test_is_engine_frozen_and_active_freezes\n\n### Code Review Notes\n- Backward\
+    \ compat maintained: `litehive engine codex` still works as `litehive engine set\
+    \ codex`\n- Config field engine_freeze: dict[str, str] properly added with normalization\
+    \ in __post_init__\n- Parser restructured cleanly with subcommand support (set,\
+    \ freeze, unfreeze)\n- Runtime helpers (is_engine_frozen, active_engine_freezes)\
+    \ properly exported from litehive.runtime\n\nSTAGE_RESULT:\n{\"verdict\":\"pass\"\
+    ,\"summary\":\"All 5 acceptance criteria verified with 17 passing tests and no\
+    \ regressions\",\"files_changed\":[\"litehive/config/__init__.py\",\"litehive/cli/parser.py\"\
+    ,\"litehive/cli/engine.py\",\"litehive/runtime/_models.py\",\"litehive/runtime/__init__.py\"\
+    ,\"litehive/cli/status.py\",\"tests/test_config_and_run_cli.py\",\"tests/test_engine_freeze.py\"\
+    ],\"tests\":{\"added\":17,\"passing\":17},\"warnings\":[\"1 pre-existing test\
+    \ failure in test_configure_persists_process_profile (unrelated to this change)\"\
+    ],\"follow_up_tasks\":[],\"acceptance_criteria\":[\"freeze CLI with date and datetime\
+    \ support - MET\",\"frozen engines skipped in resolve_engine_plan and fallback\
+    \ - MET\",\"unfreeze CLI removes freeze - MET\",\"status shows frozen engines\
+    \ - MET\",\"auto-unfreeze on date expiry - MET\"],\"task_update\":{}}"
+  files_changed: []
+  created_at: '2026-04-07T04:29:55+00:00'
+- role: reviewer
+  step: accepting
+  verdict: pass
+  message: "ACCEPT: All 5 acceptance criteria verified.\n\n## Verification\n\n1. **freeze\
+    \ CLI with date/datetime** \u2014 `litehive engine freeze <engine> --until <datetime>`\
+    \ correctly parses both date-only (2026-04-08) and datetime (2026-04-08 09:47)\
+    \ formats, converts local TZ to UTC, stores in config.yaml engine_freeze dict.\
+    \ Tests: test_engine_freeze_cli_roundtrip, test_engine_freeze_with_datetime, test_parse_local_datetime_*.\n\
+    \n2. **Frozen engines skipped in runtime** \u2014 resolve_engine_attempt_order()\
+    \ filters frozen engines from both primary and fallback chains. Tests: test_frozen_engine_skipped_in_attempt_order,\
+    \ test_frozen_engine_in_fallback_chain_skipped.\n\n3. **unfreeze CLI** \u2014\
+    \ Removes freeze from config, returns error for non-frozen engine. Tests: test_engine_freeze_cli_roundtrip\
+    \ (unfreeze portion), test_unfreeze_not_frozen_engine_returns_error.\n\n4. **status\
+    \ display** \u2014 Shows \"engine_frozen: <name> until <local time>\" when frozen,\
+    \ nothing when not. Tests: test_status_shows_frozen_engines, test_status_no_frozen_engines.\n\
+    \n5. **Auto-unfreeze** \u2014 Expired freezes are not treated as active; engine\
+    \ passes through normally. Tests: test_expired_freeze_not_skipped, test_is_engine_frozen_and_active_freezes.\n\
+    \n## Test Results\n- 17 new tests in tests/test_engine_freeze.py: ALL PASS\n-\
+    \ 99 tests in related test files: ALL PASS (1 pre-existing failure in test_configure_persists_process_profile\
+    \ unrelated)\n- Backward compat maintained: `litehive engine codex` still works\
+    \ as `litehive engine set codex`\n\n## Files Changed\nlitehive/config/__init__.py,\
+    \ litehive/cli/parser.py, litehive/cli/engine.py, litehive/runtime/_models.py,\
+    \ litehive/runtime/__init__.py, litehive/cli/status.py, tests/test_config_and_run_cli.py,\
+    \ tests/test_engine_freeze.py\n\nSTAGE_RESULT:\n{\"verdict\":\"pass\",\"summary\"\
+    :\"All 5 acceptance criteria met with 17 passing tests and no regressions\",\"\
+    files_changed\":[\"litehive/config/__init__.py\",\"litehive/cli/parser.py\",\"\
+    litehive/cli/engine.py\",\"litehive/runtime/_models.py\",\"litehive/runtime/__init__.py\"\
+    ,\"litehive/cli/status.py\",\"tests/test_config_and_run_cli.py\",\"tests/test_engine_freeze.py\"\
+    ],\"tests\":{\"added\":17,\"passing\":17},\"warnings\":[\"No validation that --until\
+    \ date is in the future (UX nicety, not criteria gap)\",\"1 pre-existing test\
+    \ failure in test_configure_persists_process_profile unrelated to this change\"\
+    ],\"follow_up_tasks\":[],\"acceptance_criteria\":[\"freeze CLI with date and datetime\
+    \ support - MET\",\"frozen engines skipped in resolve_engine_plan and fallback\
+    \ - MET\",\"unfreeze CLI removes freeze - MET\",\"status shows frozen engines\
+    \ - MET\",\"auto-unfreeze on date expiry - MET\"],\"task_update\":{}}"
+  files_changed: []
+  created_at: '2026-04-07T04:32:58+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Added the missing ''litehive daemon restart'' command to .litehive/context.md.
+    The daemon section now documents all five public subcommands: run, status, stop,
+    restart, and instances, matching the live CLI output from ''uv run litehive daemon
+    --help'' and docs/cli.md. The suppressed ''worker'' subcommand is internal and
+    intentionally omitted. All three acceptance criteria are met: (1) command/workflow
+    coverage now includes daemon restart, (2) engine inventory and routing were already
+    correct from the prior pass, (3) workspace/execution model, hooks, and recovery
+    coverage were already correct. Evidence: ''uv run litehive daemon --help'' confirms
+    subcommands run,status,stop,restart,instances,worker; context.md now lists all
+    non-internal ones.'
+  files_changed: []
+  created_at: '2026-04-07T04:34:52+00:00'

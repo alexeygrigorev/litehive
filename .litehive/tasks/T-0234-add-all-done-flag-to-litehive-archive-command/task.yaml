@@ -1,0 +1,44 @@
+id: T-0234
+slug: add-all-done-flag-to-litehive-archive-command
+title: Add --all-done flag to litehive archive command
+depends_on: []
+task_type: null
+engine: null
+model: null
+mode: implementation
+pipeline_mode: full
+status: queued
+pipeline_status: backlog
+priority: medium
+pm_complexity: null
+planned_effort: null
+created_at: '2026-04-08T07:48:05+00:00'
+updated_at: '2026-04-08T07:48:05+00:00'
+goal: litehive archive without args currently tries to archive all done tasks but
+  fails on missing references. Add explicit --all-done flag for bulk archival that
+  skips missing/broken tasks gracefully. Without --all-done or a task_id, show usage
+  help.
+acceptance_criteria:
+- litehive archive --all-done archives all done tasks, skipping any missing references
+- litehive archive T-XXXX archives a single task (existing behavior)
+- litehive archive with no args shows help instead of bulk archiving
+- Missing task references during bulk archive are logged and skipped, not fatal
+constraints: []
+plan: []
+human_checkpoints: []
+subagents: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0234 add-all-done-flag-to-litehive-archive-command'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+  merge_agent_attempts: 0
+  worktree_path: null
+retry_policy:
+  max_retries: null
+  stage_retry_limit: null
+created_from: null
+upstream_origin: null
+github_origin: null

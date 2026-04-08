@@ -1,0 +1,27 @@
+task_id: T-0058
+step: commit_to_git
+verdict: fail
+summary: 'CommitToGit failed: repository has unrelated changes: `README.md`, `docs/state-machine.md`,
+  `litehive/engines.py`, `litehive/models.py`, `litehive/observability.py`, `litehive/runner.py`,
+  `litehive/subagents.py`'
+feedback: ''
+files_changed: []
+follow_up_tasks: []
+created_follow_up_task_ids: []
+tests:
+  added: 0
+  passing: 0
+warnings:
+- repository contains unrelated uncommitted changes
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: final
+outcome: flagged
+outcome_reason_code: verdict_fail
+outcome_reason: 'CommitToGit failed: repository has unrelated changes: `README.md`,
+  `docs/state-machine.md`, `litehive/engines.py`, `litehive/models.py`, `litehive/observability.py`,
+  `litehive/runner.py`, `litehive/subagents.py`'
+resource_limit_event: null
+hook_results: []
+created_at: '2026-04-02T01:05:02+00:00'

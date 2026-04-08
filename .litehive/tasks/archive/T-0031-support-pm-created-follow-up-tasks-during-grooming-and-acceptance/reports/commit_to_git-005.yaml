@@ -1,0 +1,22 @@
+task_id: T-0031
+step: commit_to_git
+verdict: fail
+summary: 'CommitToGit failed: repository has unrelated changes: `README.md`, `docs/state-machine.md`,
+  `litehive/cli.py`, `litehive/config.py`, `litehive/git_ops.py`, `litehive/runtime.py`'
+feedback: ''
+files_changed: []
+tests:
+  added: 0
+  passing: 0
+warnings:
+- repository contains unrelated uncommitted changes
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: final
+outcome: flagged
+outcome_reason_code: verdict_fail
+outcome_reason: 'CommitToGit failed: repository has unrelated changes: `README.md`,
+  `docs/state-machine.md`, `litehive/cli.py`, `litehive/config.py`, `litehive/git_ops.py`,
+  `litehive/runtime.py`'
+created_at: '2026-04-01T14:54:09+00:00'

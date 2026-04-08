@@ -1,0 +1,45 @@
+git:
+  commit_sha: 1134dc173e54e245f1a14631d3423e07374aea4a
+execution_status: done
+run_started_at: '2026-03-31T15:14:13+00:00'
+updated_at: '2026-03-31T15:18:56+00:00'
+retry_count: 0
+retry_limit: 3
+retry_source: global
+current_stage:
+  step: null
+  status: idle
+  started_at: null
+  completed_at: null
+  updated_at: '2026-03-31T15:18:56+00:00'
+  duration_seconds: 0
+  verdict: null
+  summary: ''
+last_stage:
+  step: commit_to_git
+  status: completed
+  started_at: '2026-03-31T15:18:56+00:00'
+  completed_at: '2026-03-31T15:18:56+00:00'
+  updated_at: '2026-03-31T15:18:56+00:00'
+  duration_seconds: 0
+  verdict: pass
+  summary: CommitToGit created the final checkpoint commit
+active_subagent: null
+last_subagent:
+  id: SA-0004
+  role: pm
+  engine: codex
+  status: completed
+  path: subagents/SA-0004-pm
+  started_at: '2026-03-31T15:18:31+00:00'
+  updated_at: '2026-03-31T15:18:56+00:00'
+  completed_at: '2026-03-31T15:18:56+00:00'
+  exit_code: 0
+  transcript_snippet: '`scripts/run-all.sh` now restarts `uv run litehive run` in
+    fresh iterations, stops cleanly on explicit pool-stop cond...'
+last_engine_switch: null
+last_outcome:
+  kind: null
+  stage: null
+  reason: ''
+  recorded_at: null
