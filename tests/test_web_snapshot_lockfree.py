@@ -21,6 +21,7 @@ from litehive.web import (
     WorkspaceStreamMonitor,
     _render_index,
     read_engine_dashboard,
+    submit_stage_verdict_via_web,
     switch_task_engine_via_web,
     update_task_detail,
     update_default_engine,
@@ -280,6 +281,9 @@ def test_render_index_includes_origin_metadata_sections() -> None:
     assert "Engine Dashboard" in html
     assert "/api/engines" in html
     assert "/api/task/engine" in html
+    assert "/api/report" in html
+    assert "Submit Verdict" in html
+    assert "blocked" in html
 
 
 def test_build_workspace_snapshot_includes_origin_metadata_payload(tmp_path: Path) -> None:
@@ -320,6 +324,136 @@ def test_build_workspace_snapshot_includes_origin_metadata_payload(tmp_path: Pat
     assert payload["record"]["upstream_origin"]["source_task_id"] == "T-0008"
     assert payload["record"]["github_origin"]["repo"] == "owner/repo"
     assert payload["record"]["github_origin"]["issue_number"] == 12
+
+
+def test_build_workspace_snapshot_marks_reviewable_active_task_for_verdict_form(tmp_path: Path) -> None:
+    _init_git_repo(tmp_path)
+    ensure_workspace(tmp_path)
+    reviewable = create_task(tmp_path, title="Reviewable task")
+    reviewable.status = "in_progress"
+    reviewable.pipeline_status = "testing"
+    save_task(tmp_path, reviewable)
+
+    inactive = create_task(tmp_path, title="Inactive review stage")
+    inactive.status = "queued"
+    inactive.pipeline_status = "accepting"
+    save_task(tmp_path, inactive)
+
+    state = load_state(tmp_path)
+    state.active_task_id = reviewable.id
+    state.queue = [reviewable.id, inactive.id]
+    save_state(tmp_path, state)
+
+    snapshot = build_workspace_snapshot(tmp_path)
+    reviewable_payload = next(item for item in snapshot["tasks"] if item["id"] == reviewable.id)
+    inactive_payload = next(item for item in snapshot["tasks"] if item["id"] == inactive.id)
+
+    assert reviewable_payload["can_submit_verdict"] is True
+    assert inactive_payload["can_submit_verdict"] is False
+
+
+def test_submit_stage_verdict_via_web_advances_active_testing_task(tmp_path: Path) -> None:
+    _init_git_repo(tmp_path)
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="QA review")
+    task.status = "in_progress"
+    task.pipeline_status = "testing"
+    task.runtime.execution_status = "running"
+    task.runtime.current_stage = task.runtime.current_stage.model_copy(
+        update={"step": "testing", "status": "running", "started_at": "2026-04-08T10:00:00+00:00"}
+    )
+    save_task(tmp_path, task)
+    save_task_runtime(tmp_path, task)
+
+    state = load_state(tmp_path)
+    state.active_task_id = task.id
+    state.queue = [task.id]
+    save_state(tmp_path, state)
+
+    payload = submit_stage_verdict_via_web(
+        tmp_path,
+        task_id=task.id,
+        role="qa",
+        step="testing",
+        verdict="pass",
+        message="QA pass from the dashboard.",
+    )
+    reloaded = require_task(tmp_path, task.id)
+    thread = load_task_thread(tmp_path, reloaded)
+    refreshed_state = load_state(tmp_path)
+
+    assert payload["task"]["pipeline_status"] == "accepting"
+    assert payload["submitted"]["verdict"] == "pass"
+    assert reloaded.pipeline_status == "accepting"
+    assert reloaded.status == "in_progress"
+    assert refreshed_state.active_task_id == task.id
+    assert thread[-1].message == "QA pass from the dashboard."
+    assert thread[-1].verdict == "pass"
+    reports = sorted((task_dir(tmp_path, reloaded) / "reports").glob("testing-*.yaml"))
+    assert len(reports) == 1
+    report_payload = yaml.safe_load(reports[0].read_text(encoding="utf-8"))
+    assert report_payload["verdict"] == "pass"
+    assert report_payload["summary"] == "QA pass from the dashboard."
+
+
+def test_submit_stage_verdict_via_web_reject_requeues_task_for_implementation(tmp_path: Path) -> None:
+    _init_git_repo(tmp_path)
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Reviewer rejection")
+    task.status = "in_progress"
+    task.pipeline_status = "accepting"
+    task.runtime.execution_status = "running"
+    task.runtime.current_stage = task.runtime.current_stage.model_copy(
+        update={"step": "accepting", "status": "running", "started_at": "2026-04-08T11:00:00+00:00"}
+    )
+    save_task(tmp_path, task)
+    save_task_runtime(tmp_path, task)
+
+    state = load_state(tmp_path)
+    state.active_task_id = task.id
+    state.queue = [task.id]
+    save_state(tmp_path, state)
+
+    payload = submit_stage_verdict_via_web(
+        tmp_path,
+        task_id=task.id,
+        role="reviewer",
+        step="accepting",
+        verdict="reject",
+        message="Needs one more implementation pass.",
+    )
+    reloaded = require_task(tmp_path, task.id)
+    refreshed_state = load_state(tmp_path)
+
+    assert payload["task"]["pipeline_status"] == "implementing"
+    assert reloaded.pipeline_status == "implementing"
+    assert reloaded.status == "queued"
+    assert refreshed_state.active_task_id is None
+    assert refreshed_state.queue[0] == task.id
+
+
+def test_submit_stage_verdict_via_web_rejects_invalid_request(tmp_path: Path) -> None:
+    _init_git_repo(tmp_path)
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Wrong stage")
+    task.status = "in_progress"
+    task.pipeline_status = "implementing"
+    save_task(tmp_path, task)
+
+    state = load_state(tmp_path)
+    state.active_task_id = task.id
+    state.queue = [task.id]
+    save_state(tmp_path, state)
+
+    with pytest.raises(ValueError, match="only available for active tasks in testing or accepting"):
+        submit_stage_verdict_via_web(
+            tmp_path,
+            task_id=task.id,
+            role="qa",
+            step="implementing",
+            verdict="pass",
+            message="Should not be allowed.",
+        )
 
 
 def test_update_task_detail_persists_editable_fields(tmp_path: Path) -> None:
@@ -502,6 +636,73 @@ def test_http_engine_endpoints_and_task_switch(tmp_path: Path) -> None:
         assert payload["task"]["record"]["engine"] == "opencode"
         assert payload["switch"]["new_engine"] == "opencode"
         assert require_task(tmp_path, task.id).engine == "opencode"
+    finally:
+        conn.close()
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+
+def test_http_report_endpoint_updates_task_state_and_thread(tmp_path: Path) -> None:
+    _init_git_repo(tmp_path)
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="HTTP review")
+    task.status = "in_progress"
+    task.pipeline_status = "testing"
+    task.runtime.execution_status = "running"
+    task.runtime.current_stage = task.runtime.current_stage.model_copy(
+        update={"step": "testing", "status": "running", "started_at": "2026-04-08T12:00:00+00:00"}
+    )
+    save_task(tmp_path, task)
+    save_task_runtime(tmp_path, task)
+
+    state = load_state(tmp_path)
+    state.active_task_id = task.id
+    state.queue = [task.id]
+    save_state(tmp_path, state)
+
+    server, thread = _start_web_server(tmp_path)
+    conn = http.client.HTTPConnection(*server.server_address, timeout=5)
+    try:
+        conn.request(
+            "POST",
+            "/api/report",
+            body=json.dumps(
+                {
+                    "task_id": task.id,
+                    "role": "qa",
+                    "step": "testing",
+                    "verdict": "pass",
+                    "message": "Approved in browser.",
+                }
+            ),
+            headers={"Content-Type": "application/json"},
+        )
+        response = conn.getresponse()
+        assert response.status == 200
+        payload = json.loads(response.read().decode("utf-8"))
+        assert payload["task"]["pipeline_status"] == "accepting"
+        assert payload["task"]["thread"][-1]["message"] == "Approved in browser."
+        assert require_task(tmp_path, task.id).pipeline_status == "accepting"
+
+        conn.request(
+            "POST",
+            "/api/report",
+            body=json.dumps(
+                {
+                    "task_id": task.id,
+                    "role": "qa",
+                    "step": "accepting",
+                    "verdict": "comment",
+                    "message": "",
+                }
+            ),
+            headers={"Content-Type": "application/json"},
+        )
+        response = conn.getresponse()
+        assert response.status == 400
+        payload = json.loads(response.read().decode("utf-8"))
+        assert payload["error"] == "message is required"
     finally:
         conn.close()
         server.shutdown()
