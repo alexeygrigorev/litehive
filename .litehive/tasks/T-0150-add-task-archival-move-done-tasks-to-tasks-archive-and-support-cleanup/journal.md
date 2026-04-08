@@ -14,3 +14,9 @@ Interrupted subagent execution while `grooming` was running. Reason: Stale runne
 
 ## 2026-04-06T16:28:48+00:00
 Task resumed from `grooming`.
+
+## 2026-04-07T23:29:54+00:00
+Created task worktree at `.litehive/worktrees/T-0150-add-task-archival-move-done-tasks-to-tasks-archive-and-support-cleanup`.
+
+## 2026-04-07T23:29:54+00:00
+Execution started with engine `claude`.

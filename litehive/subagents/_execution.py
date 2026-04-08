@@ -81,6 +81,8 @@ class SubagentInactivityTimeout(RuntimeError):
 
 _COMPRESS_STREAM_ARTIFACT_MIN_BYTES = 4096
 _COMPRESS_TEXT_ARTIFACT_MIN_BYTES = 4096
+_ORIGINAL_EXTERNAL_ADAPTER_RUN = ExternalCLIAdapter.run
+_ORIGINAL_EXTERNAL_ADAPTER_RUN_LIVE = ExternalCLIAdapter.run_live
 
 
 def _write_stream_artifact(base: Path, name: str, content: str, *, compress: bool) -> None:
@@ -170,24 +172,46 @@ def _unwrap_bound_callable(method: object) -> object:
     return getattr(method, "__func__", method)
 
 
+def _has_callable_override(engine: object, name: str, default: object) -> bool:
+    method = getattr(engine, name, None)
+    if not callable(method):
+        return False
+    resolved = _unwrap_bound_callable(method)
+    if name == "run" and resolved is _ORIGINAL_EXTERNAL_ADAPTER_RUN:
+        return False
+    if name == "run_live" and resolved is _ORIGINAL_EXTERNAL_ADAPTER_RUN_LIVE:
+        return False
+    return resolved is not default
+
+
 def _callable_resolution_rank(engine: object, name: str) -> int | None:
     instance_dict = getattr(engine, "__dict__", None)
     if isinstance(instance_dict, dict) and name in instance_dict:
         value = instance_dict[name]
         if callable(value):
+            resolved = _unwrap_bound_callable(value)
+            for index, cls in enumerate(type(engine).__mro__):
+                inherited = cls.__dict__.get(name)
+                if callable(inherited) and _unwrap_bound_callable(inherited) is resolved:
+                    return index
             return -1
     for index, cls in enumerate(type(engine).__mro__):
         value = cls.__dict__.get(name)
         if callable(value):
+            resolved = _unwrap_bound_callable(value)
+            for parent_index, parent in enumerate(type(engine).__mro__[index + 1 :], start=index + 1):
+                inherited = parent.__dict__.get(name)
+                if callable(inherited) and _unwrap_bound_callable(inherited) is resolved:
+                    return parent_index
             return index
     return None
 
 
 def _prefers_non_live_run(engine: object) -> bool:
-    run_impl = _unwrap_bound_callable(getattr(engine, "run", None))
-    run_live_impl = _unwrap_bound_callable(getattr(engine, "run_live", None))
-    if run_impl is ExternalCLIAdapter.run:
+    if not _has_callable_override(engine, "run", _ORIGINAL_EXTERNAL_ADAPTER_RUN):
         return False
+    if not _has_callable_override(engine, "run_live", _ORIGINAL_EXTERNAL_ADAPTER_RUN_LIVE):
+        return True
     run_rank = _callable_resolution_rank(engine, "run")
     run_live_rank = _callable_resolution_rank(engine, "run_live")
     if run_rank is None:
@@ -944,7 +968,7 @@ class _SandboxedAdapter(ExternalCLIAdapter):
     ) -> CLIExecutionResult:
         if (
             _unwrap_bound_callable(getattr(self._adapter, "run", None))
-            is not ExternalCLIAdapter.run
+            is not _ORIGINAL_EXTERNAL_ADAPTER_RUN
         ):
             return self._adapter.run(
                 prompt,
@@ -977,7 +1001,7 @@ class _SandboxedAdapter(ExternalCLIAdapter):
     ) -> CLIExecutionResult:
         if (
             _unwrap_bound_callable(getattr(self._adapter, "run_live", None))
-            is not ExternalCLIAdapter.run_live
+            is not _ORIGINAL_EXTERNAL_ADAPTER_RUN_LIVE
         ):
             return self._adapter.run_live(
                 prompt,
