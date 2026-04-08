@@ -62,18 +62,32 @@ class CodexCLIAdapter(ExternalCLIAdapter):
         max_turns: int | None = None,
         resume_session_id: str | None = None,
     ) -> list[str]:
-        command = [
-            self.binary,
-            "exec",
-            "--json",
-            "--dangerously-bypass-approvals-and-sandbox",
-            "--cd",
-            str(cwd),
-            "--skip-git-repo-check",
-        ]
-        if model:
-            command.extend(["--model", model])
-        command.append(prompt)
+        if resume_session_id:
+            # codex uses `codex resume <thread_id> <prompt>` to continue a session
+            command = [
+                self.binary,
+                "resume",
+                "--json",
+                "--dangerously-bypass-approvals-and-sandbox",
+                "--cd",
+                str(cwd),
+                "--skip-git-repo-check",
+                resume_session_id,
+                prompt,
+            ]
+        else:
+            command = [
+                self.binary,
+                "exec",
+                "--json",
+                "--dangerously-bypass-approvals-and-sandbox",
+                "--cd",
+                str(cwd),
+                "--skip-git-repo-check",
+            ]
+            if model:
+                command.extend(["--model", model])
+            command.append(prompt)
         return command
 
     def render_transcript(self, execution: CLIExecutionResult) -> str:
