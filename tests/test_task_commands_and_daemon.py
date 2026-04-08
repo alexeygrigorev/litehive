@@ -2268,10 +2268,61 @@ def test_runner_flags_task_when_retry_limit_exhausted(tmp_path: Path) -> None:
     assert refreshed2 is not None
     assert refreshed2.runtime.execution_status == "flagged"
     assert refreshed2.status == "flagged"
+    assert refreshed2.flag_reason == "retry_limit_exhausted"
     assert refreshed2.runtime.retry_count == 2
     assert refreshed2.runtime.retry_limit == 1
     assert refreshed2.runtime.last_outcome.kind == "flagged"
     assert refreshed2.runtime.last_outcome.reason_code == "retry_limit_exhausted"
+
+def test_list_and_show_display_flag_reason_with_unknown_fallback(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    ensure_workspace(tmp_path)
+    explicit = create_task(tmp_path, title="Explicit flag reason")
+    explicit.status = "flagged"
+    explicit.pipeline_status = "testing"
+    explicit.runtime.execution_status = "flagged"
+    explicit.runtime.last_outcome.kind = "flagged"
+    explicit.runtime.last_outcome.stage = "testing"
+    explicit.runtime.last_outcome.reason_code = "retry_limit_exhausted"
+    explicit.runtime.last_outcome.reason = "Retry limit exhausted"
+    save_task(tmp_path, explicit)
+    save_task_runtime(tmp_path, explicit)
+
+    legacy = create_task(tmp_path, title="Legacy flagged task")
+    legacy.status = "flagged"
+    legacy.pipeline_status = "implementing"
+    legacy.runtime.execution_status = "flagged"
+    save_task(tmp_path, legacy)
+    save_task_runtime(tmp_path, legacy)
+
+    exit_code = _cmd_list(argparse.Namespace(workspace=tmp_path, show_all=True, filter_status=None, filter_pipeline_status=None, filter_engine=None))
+    list_output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert (
+        f"{explicit.id} [flagged/testing] Explicit flag reason flag_reason=retry_limit_exhausted"
+        in list_output
+    )
+    assert f"{legacy.id} [flagged/implementing] Legacy flagged task flag_reason=unknown" in list_output
+
+    exit_code = _cmd_show(argparse.Namespace(workspace=tmp_path, task_id=explicit.id))
+    show_output = capsys.readouterr().out
+    assert exit_code == 0
+    assert "status: flagged" in show_output
+    assert "flag_reason: retry_limit_exhausted" in show_output
+
+    exit_code = _cmd_show(argparse.Namespace(workspace=tmp_path, task_id=legacy.id))
+    legacy_show_output = capsys.readouterr().out
+    assert exit_code == 0
+    assert "status: flagged" in legacy_show_output
+    assert "flag_reason: unknown" in legacy_show_output
+
+    explicit.status = "queued"
+    save_task(tmp_path, explicit)
+    refreshed = get_task(tmp_path, explicit.id)
+    assert refreshed is not None
+    assert refreshed.flag_reason is None
 
 @pytest.mark.parametrize("outcome", ["wont_do", "deferred", "duplicate"])
 def test_close_task_non_implementation_outcomes(tmp_path: Path, outcome: str) -> None:
