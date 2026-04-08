@@ -1,0 +1,78 @@
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Recovery: Implementation complete and verified. Previous agents timed
+    out before report was accepted (files_changed was empty). All 9 files modified
+    in worktree (+33/-74 lines).
+
+
+    Core: Replaced engine_fallbacks dict with engine_preference list in config, simplified
+    _engine_attempt_order in _budget.py, updated call sites in _execution.py and _models.py.
+    Added data.pop("engine_fallbacks", None) for backward compat.
+
+
+    Tests: test_claude_not_in_engine_preference PASSED, test_frozen_engine_in_fallback_chain_skipped
+    PASSED (17/17 in file), test_run_next_task_walks_same_stage_fallback_graph_after_usage_limit
+    PASSED. No stale engine_fallbacks refs in source. All acceptance criteria met.'
+  files_changed:
+  - litehive/config/__init__.py
+  - litehive/runtime/_budget.py
+  - litehive/runtime/_execution.py
+  - litehive/runtime/_models.py
+  - tests/test_engine_freeze.py
+  - tests/test_engine_variants_and_timeline.py
+  - tests/test_retry_commit_and_recovery.py
+  - docs/engines.md
+  - docs/configuration.md
+  created_at: '2026-04-07T08:05:44+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: "Replaced per-engine engine_fallbacks dict with a single global engine_preference\
+    \ list.\n\n## Changes (9 files)\n- config/__init__.py: Replaced engine_fallbacks:\
+    \ dict[str, list[str]] with engine_preference: list[str] (default: [codex, opencode,\
+    \ gemini, copilot, goz] \u2014 claude excluded). Added data.pop(\"engine_fallbacks\"\
+    , None) in load_config() for silent migration of old configs.\n- runtime/_budget.py:\
+    \ Simplified _engine_attempt_order() to put primary engine first, then remaining\
+    \ preference-list engines in order.\n- runtime/_models.py & runtime/_execution.py:\
+    \ Updated call sites to pass config.engine_preference.\n- tests: Renamed test_claude_not_in_engine_fallbacks\
+    \ to test_claude_not_in_engine_preference; updated all engine_fallbacks refs to\
+    \ use engine_preference.\n- docs/engines.md & docs/configuration.md: Updated to\
+    \ document engine_preference.\n\n## Verification\n- test_claude_not_in_engine_preference\
+    \ \u2014 PASSED\n- test_frozen_engine_in_fallback_chain_skipped \u2014 PASSED\n\
+    - test_run_next_task_walks_same_stage_fallback_graph_after_usage_limit \u2014\
+    \ PASSED\n- test_engine_freeze.py: 17 passed\n- No engine_fallbacks references\
+    \ remain in source code except data.pop migration line\n\n## Acceptance Criteria\
+    \ \u2014 All Met\n1. config.engine_preference is list[str] with default [codex,\
+    \ opencode, gemini, copilot, goz] \u2014 claude excluded\n2. Fallback walks engine_preference\
+    \ in order, skipping failed engine\n3. Per-engine engine_fallbacks dict removed\
+    \ from LitehiveConfig\n4. Old engine_fallbacks silently ignored via data.pop in\
+    \ load_config\n5. _engine_attempt_order simplified to primary-first then preference\
+    \ order\n6. resolve_engine_attempt_order still filters frozen engines\n7. test_claude_not_in_engine_preference\
+    \ verifies claude excluded from defaults\n8. No new test failures introduced"
+  files_changed: []
+  created_at: '2026-04-07T09:03:18+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: "Verified the engine_preference implementation. All 8 acceptance criteria\
+    \ are met:\n\n1. config.engine_preference is list[str] with default [\"codex\"\
+    , \"opencode\", \"gemini\", \"copilot\", \"goz\"] \u2014 claude excluded (config/__init__.py:204)\n\
+    2. When primary engine fails, fallback walks engine_preference in order skipping\
+    \ the failed engine (_engine_attempt_order in runtime/_budget.py:82-92)\n3. Per-engine\
+    \ engine_fallbacks dict removed from LitehiveConfig \u2014 field no longer exists\n\
+    4. Old engine_fallbacks in config.yaml silently ignored via data.pop(\"engine_fallbacks\"\
+    , None) in load_config (config/__init__.py:398)\n5. _engine_attempt_order simplified:\
+    \ primary engine first, then remaining preference-list engines in order\n6. resolve_engine_attempt_order\
+    \ still filters frozen engines (runtime/_models.py:91-94)\n7. test_claude_not_in_engine_preference\
+    \ verifies claude excluded from defaults \u2014 PASSED\n8. No new test failures\
+    \ introduced\n\nTests verified:\n- test_claude_not_in_engine_preference \u2014\
+    \ PASSED\n- test_frozen_engine_in_fallback_chain_skipped \u2014 PASSED\n- test_run_next_task_walks_same_stage_fallback_graph_after_usage_limit\
+    \ \u2014 PASSED\n- test_engine_freeze.py: 17 passed\n\ngrep confirms only one\
+    \ engine_fallbacks reference remains in source: the data.pop migration line in\
+    \ load_config.\n\nFiles changed: litehive/config/__init__.py, litehive/runtime/_budget.py,\
+    \ litehive/runtime/_models.py, litehive/runtime/_execution.py, tests/test_engine_freeze.py,\
+    \ tests/test_engine_variants_and_timeline.py, tests/test_retry_commit_and_recovery.py,\
+    \ docs/engines.md, docs/configuration.md"
+  files_changed: []
+  created_at: '2026-04-07T10:27:23+00:00'

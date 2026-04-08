@@ -1,0 +1,42 @@
+id: T-0209
+slug: remove-text-verdict-fallback-failed-agents-must
+title: Remove text verdict fallback - failed agents must not produce pass
+depends_on: []
+task_type: null
+engine: null
+model: null
+mode: implementation
+pipeline_mode: full
+status: queued
+pipeline_status: backlog
+priority: medium
+pm_complexity: null
+planned_effort: null
+created_at: '2026-04-07T08:25:03+00:00'
+updated_at: '2026-04-07T08:25:03+00:00'
+goal: When an agent is killed or fails (non-zero exit), the text parsing fallback
+  in parse_stage_report_text still runs and _parse_verdict defaults to pass when no
+  VERDICT line is found. This is wrong - a failed agent should never produce a pass
+  verdict. If no CLI report was submitted and the agent failed, the verdict must be
+  fail. Remove the default-to-pass logic in _parse_verdict line 737 of engines/base.py.
+acceptance_criteria:
+- Failed agents (non-zero exit) always produce fail verdict
+- _parse_verdict does not default to pass for any failed subagent
+- Only agents that explicitly submit via litehive report CLI can produce pass
+constraints: []
+plan: []
+human_checkpoints: []
+subagents: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0209 remove-text-verdict-fallback-failed-agents-must'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+  worktree_path: null
+retry_policy:
+  max_retries: null
+  stage_retry_limit: null
+created_from: null
+upstream_origin: null
