@@ -4,8 +4,6 @@ from dataclasses import replace
 from pathlib import Path
 import re
 
-import yaml
-
 from litehive.config import load_config
 from litehive.engines import (
     EngineError,
@@ -32,6 +30,7 @@ from litehive.subagents._artifacts import (
     _write_text_if_changed,
 )
 from litehive.subagents._engine_detection import (
+    _filter_supported_kwargs,
     _supports_live_execution,
     _supports_live_on_started,
     _supports_on_started,
@@ -40,14 +39,11 @@ from litehive.subagents._models import EngineFailure, SubagentInactivityTimeout,
 from litehive.subagents._sandbox import _SandboxedAdapter
 from litehive.subagents._session import _SessionMixin
 from litehive.tasks import (
-    infer_acceptance_criteria,
     mark_subagent_finished,
     mark_subagent_progress,
     mark_subagent_started,
-    missing_acceptance_criteria_reason,
     save_task,
     task_dir,
-    task_template,
 )
 
 
@@ -101,10 +97,17 @@ class SubagentManager(_SessionMixin):
                 )
             if isinstance(engine, ExternalCLIAdapter) and sandbox_summary.enabled:
                 execution_engine = _SandboxedAdapter(engine, self.sandbox, engine_name)
-            if _supports_live_execution(execution_engine):
+            # Probe the wrapped adapter for capability preference. The sandbox wrapper
+            # exposes both run and run_live, so inspecting the wrapper would hide
+            # whether the underlying engine actually prefers a custom run override.
+            live_execution_probe = engine if execution_engine is not engine else execution_engine
+            callback_probe = live_execution_probe
+            task_env = {"LITEHIVE_TASK_ID": task.id}
+            if _supports_live_execution(live_execution_probe):
                 live_kwargs: dict[str, object] = {
                     "cwd": self.execution_root,
                     "model": model,
+                    "extra_env": task_env,
                     "on_update": lambda execution: self._write_session_progress(
                         task,
                         base,
@@ -115,7 +118,7 @@ class SubagentManager(_SessionMixin):
                 }
                 if resume_session_id:
                     live_kwargs["resume_session_id"] = resume_session_id
-                if _supports_live_on_started(execution_engine):
+                if _supports_live_on_started(callback_probe):
                     live_kwargs["on_started"] = lambda pid: self._record_subagent_pid(
                         task, base, ref, pid
                     )
@@ -125,21 +128,28 @@ class SubagentManager(_SessionMixin):
                     live_kwargs["inactivity_timeout_seconds"] = (
                         self.config.subagent_inactivity_timeout_seconds
                     )
-                proc = execution_engine.run_live(prompt, **live_kwargs)
+                proc = execution_engine.run_live(
+                    prompt,
+                    **_filter_supported_kwargs(execution_engine.run_live, live_kwargs),
+                )
             else:
                 run_kwargs: dict[str, object] = {
                     "cwd": self.execution_root,
                     "model": model,
+                    "extra_env": task_env,
                 }
                 if resume_session_id:
                     run_kwargs["resume_session_id"] = resume_session_id
                 if max_turns is not None:
                     run_kwargs["max_turns"] = max_turns
-                if _supports_on_started(execution_engine):
+                if _supports_on_started(callback_probe):
                     run_kwargs["on_started"] = lambda pid: self._record_subagent_pid(
                         task, base, ref, pid
                     )
-                proc = execution_engine.run(prompt, **run_kwargs)
+                proc = execution_engine.run(
+                    prompt,
+                    **_filter_supported_kwargs(execution_engine.run, run_kwargs),
+                )
             transcript = execution_engine.render_transcript(proc)
             continuation = extract_engine_continuation(ref.engine, proc)
             ref.status = "completed" if proc.exit_code == 0 else "failed"

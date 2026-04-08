@@ -401,14 +401,12 @@ class TaskExecutionRunner:
 
             # Guard: SWE must produce actual changes. If implementing "passes"
             # with zero files changed and zero tests, reject it back to implementing.
-            # Always check the actual worktree via git — git is the source of truth.
+            # Check via `git status` in the worktree — simple and reliable.
             if current == "implementing" and target == "testing":
                 worktree_has_changes = False
                 from litehive.tasks import get_task_worktree_path
                 from litehive.git_ops import current_head, is_git_repo
                 wt_path = get_task_worktree_path(task)
-                # Determine which directory to check for git changes:
-                # prefer the task worktree, fall back to the main repo root.
                 check_dir = None
                 if wt_path:
                     wt_full = (self.root / wt_path).resolve()
@@ -418,36 +416,42 @@ class TaskExecutionRunner:
                     check_dir = self.root
                 if check_dir is not None:
                     try:
-                        diff = subprocess.run(
-                            ["git", "diff", "--name-only", "HEAD"],
+                        # `git status --porcelain` shows all dirty state in one call:
+                        # modified, staged, untracked — everything.
+                        status_result = subprocess.run(
+                            ["git", "status", "--porcelain"],
                             cwd=check_dir, capture_output=True, text=True, timeout=10,
                         )
-                        staged = subprocess.run(
-                            ["git", "diff", "--name-only", "--cached"],
-                            cwd=check_dir, capture_output=True, text=True, timeout=10,
-                        )
-                        untracked = subprocess.run(
-                            ["git", "ls-files", "--others", "--exclude-standard"],
-                            cwd=check_dir, capture_output=True, text=True, timeout=10,
-                        )
-                        # Also check committed changes ahead of main
-                        main_head = current_head(self.root) if wt_path else None
-                        committed = subprocess.run(
-                            ["git", "diff", "--name-only", main_head or "HEAD", "HEAD"],
-                            cwd=check_dir, capture_output=True, text=True, timeout=10,
-                        ) if main_head else subprocess.CompletedProcess(args=[], returncode=0, stdout="")
-                        all_changed = set(
-                            f.strip() for f in
-                            (diff.stdout + staged.stdout + untracked.stdout + committed.stdout).splitlines()
-                            if f.strip() and not f.strip().startswith(".litehive/")
-                        )
+                        status_files = [
+                            line[3:].strip()
+                            for line in status_result.stdout.splitlines()
+                            if line.strip() and not line[3:].strip().startswith(".litehive/")
+                        ]
+                        # Also check commits ahead of the fork point (agent may have
+                        # committed its work already).
+                        if wt_path:
+                            main_head = current_head(self.root) or "HEAD"
+                            merge_base_result = subprocess.run(
+                                ["git", "merge-base", main_head, "HEAD"],
+                                cwd=check_dir, capture_output=True, text=True, timeout=10,
+                            )
+                            fork_point = merge_base_result.stdout.strip() if merge_base_result.returncode == 0 else None
+                            if fork_point:
+                                committed = subprocess.run(
+                                    ["git", "diff", "--name-only", fork_point, "HEAD"],
+                                    cwd=check_dir, capture_output=True, text=True, timeout=10,
+                                )
+                                status_files.extend(
+                                    f.strip() for f in committed.stdout.splitlines()
+                                    if f.strip() and not f.strip().startswith(".litehive/")
+                                )
+                        all_changed = set(f for f in status_files if f)
                         if all_changed:
                             worktree_has_changes = True
                             report.files_changed = sorted(all_changed)
                     except (subprocess.TimeoutExpired, OSError):
                         pass
                 if check_dir is None:
-                    # Non-git workspace — cannot verify changes, skip the guard.
                     pass
                 elif not worktree_has_changes and (not report.tests or report.tests.get("added", 0) == 0):
                     reason = (

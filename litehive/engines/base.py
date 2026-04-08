@@ -151,10 +151,13 @@ class ExternalCLIAdapter:
         *,
         max_turns: int | None = None,
         resume_session_id: str | None = None,
+        extra_env: dict[str, str] | None = None,
     ) -> CLIInvocation:
         env = os.environ.copy()
         for key in self.stripped_env_vars:
             env.pop(key, None)
+        if extra_env:
+            env.update(extra_env)
         return CLIInvocation(
             argv=tuple(self.build_command(
                 prompt, cwd, model=model, max_turns=max_turns,
@@ -179,10 +182,11 @@ class ExternalCLIAdapter:
         max_turns: int | None = None,
         resume_session_id: str | None = None,
         on_started: Callable[[int], None] | None = None,
+        extra_env: dict[str, str] | None = None,
     ) -> CLIExecutionResult:
         invocation = self.finalize_invocation(
             self.build_invocation(prompt, cwd, model=model, max_turns=max_turns,
-                                  resume_session_id=resume_session_id)
+                                  resume_session_id=resume_session_id, extra_env=extra_env)
         )
         sandboxed, sandbox_summary = self.sandbox_details()
         proc = subprocess.Popen(
@@ -220,10 +224,11 @@ class ExternalCLIAdapter:
         on_started: Callable[[int], None] | None = None,
         on_update: Callable[[CLIExecutionResult], None] | None = None,
         inactivity_timeout_seconds: float = 0,
+        extra_env: dict[str, str] | None = None,
     ) -> CLIExecutionResult:
         invocation = self.finalize_invocation(
             self.build_invocation(prompt, cwd, model=model, max_turns=max_turns,
-                                  resume_session_id=resume_session_id)
+                                  resume_session_id=resume_session_id, extra_env=extra_env)
         )
         sandboxed, sandbox_summary = self.sandbox_details()
         proc = subprocess.Popen(
