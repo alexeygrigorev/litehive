@@ -9,12 +9,11 @@ Key invariants:
 import subprocess
 from pathlib import Path
 
-import pytest
 
 from litehive.config import LitehiveConfig, ensure_workspace
 from litehive.git_ops import current_head
 from litehive.runtime import _commit_to_git_report
-from litehive.tasks import create_task, save_task, task_dir
+from litehive.tasks import create_task, save_task
 
 
 def _init_git_repo(path: Path) -> str:

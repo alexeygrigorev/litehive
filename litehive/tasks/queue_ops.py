@@ -4,11 +4,10 @@ import logging
 from pathlib import Path
 
 from litehive.config import VALID_POOL_SELECTION_POLICIES, load_config
-from litehive.models import RecoveryAction, TaskRecord, WorkspaceState, utcnow
+from litehive.models import RecoveryAction, TaskRecord, WorkspaceState
 
 from .constants import TASK_PRIORITY_ORDER
 from .models import BlockedTask, TaskPlan, TaskSelection, WorkspaceConflictError
-from .paths import tasks_root
 
 logger = logging.getLogger(__name__)
 
@@ -415,7 +414,6 @@ def restore_untouched_active_task(root: Path) -> WorkspaceState:
     from .recovery import (
         _is_stranded_commit_task,
         _prepare_interrupted_task,
-        _prepare_recovered_commit_task,
         _recover_existing_checkpoint_commit,
         _reconcile_stale_runner_tasks,
         _should_requeue_commit_stage_task,

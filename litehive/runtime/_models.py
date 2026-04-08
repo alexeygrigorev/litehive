@@ -6,8 +6,8 @@ from pathlib import Path
 
 from litehive.config import ExecutionRetryPolicy, LitehiveConfig
 from litehive.engines import extract_engine_continuation, get_engine
-from litehive.models import RuntimeContinuationHandoff, StageReport, TaskRecord
-from litehive.tasks import mark_engine_switch, set_task_continuation_handoff
+from litehive.models import RuntimeContinuationHandoff, TaskRecord
+from litehive.tasks import set_task_continuation_handoff
 
 from ._budget import _engine_attempt_order
 from ._types import ResolvedExecutionRetryPolicy

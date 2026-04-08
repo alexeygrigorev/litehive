@@ -9,7 +9,6 @@ from .common import (
     PipelineMode,
     PipelineStatus,
     PlannedEffort,
-    RetrySource,
     TaskComplexity,
     TaskMode,
     TaskStatus,

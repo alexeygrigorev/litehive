@@ -15,7 +15,6 @@ from litehive.models import (
     RuntimeContinuationHandoff,
     StageReport,
     TaskRecord,
-    UnmergedWorktree,
 )
 from litehive.tasks import (
     CLOSED_TASK_STATUSES,
@@ -28,15 +27,12 @@ from litehive.tasks import (
     clear_task_outcome,
     create_follow_up_tasks,
     finish_task_run_transition,
-    get_task_worktree_path,
     interruption_journal_message,
-    load_state,
     mark_stage_finished,
     mark_stage_started,
     missing_acceptance_criteria_reason,
     needs_normalization,
     record_recovery_report,
-    save_state,
     save_task,
     set_task_retry_state,
     task_dir,

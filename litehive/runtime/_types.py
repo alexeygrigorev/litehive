@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from litehive.config import ExecutionRetryPolicy
-from litehive.models import StageReport, TaskRecord
+from litehive.models import TaskRecord
 from litehive.runner import RunResult
 from litehive.tasks import BlockedTask
 

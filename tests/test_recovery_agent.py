@@ -17,7 +17,6 @@ from litehive.tasks import (
     save_task,
     save_task_runtime,
     set_active_task,
-    task_dir,
 )
 from tests.workspace_helpers import _init_git_repo
 

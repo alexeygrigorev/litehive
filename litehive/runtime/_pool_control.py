@@ -2,7 +2,6 @@
 
 from pathlib import Path
 
-from litehive.models import TaskRecord
 from litehive.tasks import (
     BlockedTask,
     append_journal,

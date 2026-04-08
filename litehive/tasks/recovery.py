@@ -1,6 +1,5 @@
 """Recovery: stale runner detection, interrupted task handling, workspace repair."""
 
-import logging
 from pathlib import Path
 
 import yaml
@@ -17,7 +16,6 @@ from litehive.models import (
     RuntimeContinuationHandoff,
     RuntimeInterruptionState,
     RuntimeSubagentState,
-    TaskOutcomeState,
     TaskRecord,
     WorkspaceState,
     utcnow,
@@ -500,7 +498,7 @@ def _recover_existing_checkpoint_commit(root: Path, task: TaskRecord) -> str | N
 
 
 def _recover_stranded_commit_tasks(root: Path, state: WorkspaceState) -> bool:
-    from .crud import list_tasks, set_task_commit_sha
+    from .crud import list_tasks
     from .workflow import _persist_tasks_and_state_without_runner_guard
 
     tasks = list_tasks(root)
@@ -595,7 +593,7 @@ def _recover_stale_runner_state(
     *,
     summary: WorkspaceRepairSummary | None = None,
 ) -> bool:
-    from .crud import list_tasks, set_task_commit_sha
+    from .crud import list_tasks
     from .locking import (
         _current_thread_owns_runner_guard,
         _read_runner_lock_metadata,

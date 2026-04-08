@@ -2,7 +2,6 @@
 
 import argparse
 import json
-import subprocess
 import sys
 from pathlib import Path
 from unittest.mock import patch, MagicMock
@@ -18,14 +17,10 @@ from litehive.tasks import create_task, list_tasks
 from litehive.cli.github_import import (
     GhAuthError,
     GhNotFoundError,
-    LABEL_TO_PRIORITY,
-    LABEL_TO_TASK_TYPE,
     _cmd_import_issue,
     _cmd_import_issues,
     check_gh_auth,
     detect_repo_from_remote,
-    fetch_issue,
-    fetch_open_issues,
     find_existing_task_for_issue,
     import_single_issue,
     map_labels,

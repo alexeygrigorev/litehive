@@ -16,7 +16,6 @@ from .paths import (
     _latest_path,
     _latest_run_all_log_path,
     _latest_subagent_base,
-    _read_text_artifact,
     _resolve_artifact_path,
     _status_entry_paths,
     task_dir,
@@ -25,7 +24,6 @@ from .paths import (
     task_thread_file,
     task_recovery_dir,
 )
-from .persistence import _atomic_write_text
 
 
 def collect_recovery_evidence(
@@ -247,7 +245,6 @@ def record_recovery_report(
 
 
 def append_thread_comment(root: Path, task: TaskRecord, comment: "TaskThreadComment") -> None:
-    from litehive.models import TaskThreadComment  # noqa: F811
 
     path = task_thread_file(root, task)
     existing: list[dict] = []

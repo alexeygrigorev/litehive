@@ -14,10 +14,9 @@ from litehive.models import ResourceLimitEvent, SubagentRef, TaskRecord, utcnow
 from litehive.subagents._artifacts import (
     _write_stream_artifact,
     _write_text_artifact,
-    _write_text_if_changed,
 )
 from litehive.subagents._models import SubagentInactivityTimeout
-from litehive.tasks import _write_atomic_files, mark_subagent_pid, task_dir
+from litehive.tasks import _write_atomic_files, mark_subagent_pid
 
 
 class _SessionMixin:

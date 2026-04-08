@@ -3,6 +3,8 @@
 import subprocess
 import time
 
+# ruff: noqa: F401
+
 from litehive.subagents import SubagentManager
 
 from ._types import (

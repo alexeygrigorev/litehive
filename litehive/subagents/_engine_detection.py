@@ -101,11 +101,20 @@ def _has_callable_override(engine: object, name: str, default: object) -> bool:
     inherited_rank = _resolve_inherited_callable_rank(engine, name, resolved)
     if inherited_rank is not None:
         return resolved is not default
+    current_external = _current_external_adapter_callable_for(name)
+    instance_dict = getattr(engine, "__dict__", None)
+    if (
+        current_external is not None
+        and current_external is not default
+        and resolved is default
+        and isinstance(instance_dict, dict)
+        and name in instance_dict
+    ):
+        return True
     if name == "run" and resolved is _ORIGINAL_EXTERNAL_ADAPTER_RUN:
         return False
     if name == "run_live" and resolved is _ORIGINAL_EXTERNAL_ADAPTER_RUN_LIVE:
         return False
-    instance_dict = getattr(engine, "__dict__", None)
     if isinstance(instance_dict, dict) and name in instance_dict:
         value = instance_dict[name]
         if callable(value):

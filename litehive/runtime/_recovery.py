@@ -14,7 +14,7 @@ from litehive.git_ops import (
     rollback_task,
     current_head,
 )
-from litehive.models import RecoveryAction, StageReport, TaskRecord, TaskRuntime
+from litehive.models import RecoveryAction, StageReport, TaskRecord
 from litehive.subagents import SubagentManager, stage_report_from_subagent
 from litehive.tasks import (
     _atomic_write_text,
@@ -26,7 +26,6 @@ from litehive.tasks import (
     persist_task_and_state,
     prepare_completed_task_for_recovery,
     record_recovery_report,
-    save_task,
     save_task_runtime,
     state_path,
     task_dir,

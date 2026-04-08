@@ -1,5 +1,7 @@
 """Task storage helpers for the local YAML workspace."""
 
+# ruff: noqa: F401
+
 # Re-export everything from submodules so that
 #   from litehive.tasks import X
 #   import litehive.tasks as tasks_module; tasks_module.X

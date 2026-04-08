@@ -1,64 +1,47 @@
+# ruff: noqa: F401
+
 import argparse
-
 import gzip
-
 import os
-
 from pathlib import Path, PurePosixPath
-
 import subprocess
-
 import sys
-
 import threading
-
 import time
 
 import pytest
-
 import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import litehive.tasks as tasks_module
-
 from litehive.cli import (
+    _cmd_abandon_task,
     _cmd_add,
     _cmd_archive,
     _cmd_cleanup,
-    _cmd_issue,
-    _cmd_intake,
-    _cmd_abandon_task,
     _cmd_close_task,
     _cmd_dirty_worktree_gate,
+    _cmd_intake,
+    _cmd_issue,
     _cmd_list,
     _cmd_move,
     _cmd_prioritize,
     _cmd_promote,
     _cmd_queue,
-    _cmd_repair,
     _cmd_recover,
+    _cmd_repair,
     _cmd_requeue_task,
     _cmd_resume_task,
     _cmd_rollback,
     _cmd_run,
     _cmd_show,
-    _cmd_stop_task,
     _cmd_status,
+    _cmd_stop_task,
     _cmd_switch_task,
     _cmd_update,
     build_parser,
 )
-
-from litehive.engines import (
-    classify_execution_interruption,
-    classify_execution_limit,
-    classify_retryable_execution_failure,
-    extract_engine_continuation,
-    extract_engine_timeline,
-    get_engine,
-)
-
 from litehive.config import (
     ExternalEngineSandboxConfig,
     ExternalEngineSandboxPolicy,
@@ -74,21 +57,22 @@ from litehive.config import (
     render_context_template,
     resolve_process_profile,
 )
-
-from litehive.observability import (
-    load_engine_monitoring,
-    record_engine_execution,
+from litehive.engines import (
+    classify_execution_interruption,
+    classify_execution_limit,
+    classify_retryable_execution_failure,
+    extract_engine_continuation,
+    extract_engine_timeline,
+    get_engine,
 )
-
 from litehive.engines.base import (
     AdapterCapabilities,
     CLIExecutionResult,
     ExternalCLIAdapter,
     parse_stage_report_text,
 )
-
+from litehive.engines.sandbox import SandboxLauncher
 from litehive.git_ops import GitError, checkpoint_message, commit_task
-
 from litehive.models import (
     EngineUsageObservation,
     EngineUsageWindow,
@@ -108,33 +92,31 @@ from litehive.models import (
     UpstreamContributionOrigin,
     UpstreamPatchProposal,
 )
-
-from litehive.observability import render_task_summary
-
-from litehive.engines.sandbox import SandboxLauncher
-
+from litehive.observability import (
+    load_engine_monitoring,
+    record_engine_execution,
+    render_task_summary,
+)
+from litehive.runner import TaskExecutionRunner
 from litehive.runtime import (
     EngineBudgetLedger,
     TaskPoolStopConditions,
+    _allowed_commit_paths,
     _commit_to_git_report,
     _role_for_step,
-    _allowed_commit_paths,
     _unexpected_dirty_paths,
     drain_task_pool,
-    rollback_completed_task,
-    resolve_engine_plan,
     recover_completed_task,
-    resolve_execution_retry_policy,
     resolve_engine_name,
+    resolve_engine_plan,
+    resolve_execution_retry_policy,
     resolve_model,
     resolve_next_task,
+    rollback_completed_task,
     run_next_task,
     run_single_task,
     run_task,
 )
-
-from litehive.runner import TaskExecutionRunner
-
 from litehive.subagents import (
     EngineFailure,
     SubagentManager,
@@ -143,7 +125,6 @@ from litehive.subagents import (
     stage_prompt,
     stage_report_from_subagent,
 )
-
 from litehive.tasks import (
     WorkspaceConflictError,
     abandon_task,
@@ -152,7 +133,6 @@ from litehive.tasks import (
     archive_task,
     cleanup_archived_tasks,
     close_task,
-    list_archived_tasks,
     create_follow_up_tasks,
     create_task,
     dequeue_next_task_selection,
@@ -160,34 +140,36 @@ from litehive.tasks import (
     get_task,
     get_task_worktree_path,
     implementation_entry_stage,
+    list_archived_tasks,
     list_tasks,
     load_state,
-    move_queued_task,
     mark_subagent_started,
-    peek_next_task_selection,
-    repair_workspace_state,
-    requeue_task,
-    recover_stale_runner_state,
-    resume_task,
+    move_queued_task,
     needs_normalization,
-    reroute_stage_for_acceptance_criteria,
+    peek_next_task_selection,
+    recover_stale_runner_state,
+    requeue_task,
+    repair_workspace_state,
     require_task,
+    reroute_stage_for_acceptance_criteria,
+    restore_untouched_active_task,
+    resume_task,
+    runner_status,
     save_state,
     save_task,
     save_task_runtime,
     set_active_task,
     stop_current_task,
     switch_task_engine,
-    restore_untouched_active_task,
-    runner_status,
     task_dir,
     task_file,
-    task_runtime_file,
     task_requires_acceptance_criteria,
+    task_runtime_file,
     update_task_metadata,
 )
-
 from litehive.web import build_workspace_snapshot, read_session_view
+
+
 
 
 def _block_runner_lock(monkeypatch: pytest.MonkeyPatch) -> None:

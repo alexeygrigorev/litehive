@@ -4,9 +4,8 @@ import sys
 import textwrap
 from pathlib import Path
 
-import pytest
 
-from litehive.engines.base import ExternalCLIAdapter, AdapterCapabilities, CLIInvocation
+from litehive.engines.base import ExternalCLIAdapter, AdapterCapabilities
 
 
 class _StubAdapter(ExternalCLIAdapter):

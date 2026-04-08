@@ -32,7 +32,6 @@ from ._models import (
 )
 from ._pool_control import (
     _finalize_pool_run,
-    _human_checkpoint_stop_reason,
     _pool_stop_reason,
     _single_task_pre_stop_reason,
     _single_task_stop_reason,

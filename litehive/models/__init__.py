@@ -107,6 +107,7 @@ __all__ = [
     "StageReport",
     "StageResultSubmission",
     "StageResultTests",
+    "SubagentStatus",
     "SubagentRef",
     "TaskComplexity",
     "TaskCreationSource",

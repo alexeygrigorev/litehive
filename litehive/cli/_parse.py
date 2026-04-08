@@ -7,7 +7,6 @@ import yaml
 
 from litehive.engines import ENGINE_CHOICES
 from litehive.tasks import (
-    VALID_HUMAN_CHECKPOINTS,
     VALID_PM_COMPLEXITIES,
     VALID_PLANNED_EFFORTS,
     VALID_TASK_PRIORITIES,

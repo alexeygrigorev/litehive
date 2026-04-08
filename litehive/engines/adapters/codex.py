@@ -1,6 +1,5 @@
 """Codex CLI engine adapter."""
 
-import json
 import logging
 import re
 from dataclasses import dataclass
@@ -11,10 +10,8 @@ from litehive.engines.adapters.common import (
     classify_execution_limit,
 )
 from litehive.engines.base import (
-    AdapterCapabilities,
     CLIExecutionResult,
     ExternalCLIAdapter,
-    StreamEventAdapter,
     iter_jsonl_payloads,
     parse_stage_report_text,
 )

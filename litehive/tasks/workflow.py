@@ -21,7 +21,7 @@ def _workspace_transition_writes(
     state: WorkspaceState | None = None,
     journal_messages: dict[str, str] | None = None,
 ) -> dict[Path, str]:
-    from .crud import _ensure_runtime_ignored, _serialize_task_record, _serialize_task_runtime
+    from .crud import _serialize_task_record, _serialize_task_runtime
 
     writes: dict[Path, str] = {}
     for task in tasks:
