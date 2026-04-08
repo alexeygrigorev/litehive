@@ -77,3 +77,9 @@ Stage `implementing` stopped retrying `codex` after attempt 3/3: transient timeo
 
 ## 2026-04-08T21:37:46+00:00
 Stage `implementing` switched from `codex` to `opencode` after transient timeout.
+
+## 2026-04-08T21:15:45+00:00
+Task metadata updated via CLI.
+
+## 2026-04-08T21:58:10+00:00
+Merge conflict on 2 file(s). Launching merge agent (attempt 1).
