@@ -1,3 +1,5 @@
+import os
+
 from litehive.models import TaskThreadComment
 from litehive.tasks import append_thread_comment, load_state, get_task
 
@@ -5,6 +7,8 @@ from litehive.tasks import append_thread_comment, load_state, get_task
 def _cmd_report(args):
     root = args.workspace
     task_id = args.task_id
+    if not task_id:
+        task_id = os.environ.get("LITEHIVE_TASK_ID")
     if not task_id:
         state = load_state(root)
         task_id = state.active_task_id

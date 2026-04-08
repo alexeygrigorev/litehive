@@ -321,8 +321,9 @@ def build_executor(
                     nudge_prompt = (
                         f"You finished the {step} stage but did not submit your verdict. "
                         f"Please run this command now:\n\n"
-                        f"  litehive report --verdict <pass|fail|reject> --role {role_name} "
+                        f"  litehive report --task-id {current_task.id} --verdict <pass|fail|reject> --role {role_name} "
                         f'--step {step} --message "<your detailed report>"\n\n'
+                        f"IMPORTANT: Always use --task-id {current_task.id} to ensure the report goes to the right task.\n\n"
                         f"Your report is the ONLY thing the next agent will read. Include:\n"
                         f"- What you did and what the outcome was\n"
                         f"- If rejecting: exact failures, which files to fix, step-by-step instructions\n"
