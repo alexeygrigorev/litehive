@@ -334,18 +334,12 @@ def build_executor(
                 resume_id = continuation.resume_id if continuation else None
                 if resume_id:
                     nudge_prompt = (
-                        f"You finished the {step} stage but did not submit your verdict. "
-                        f"Please run this command now:\n\n"
-                        f"  litehive report --task-id {current_task.id} --verdict <pass|fail|reject> --role {role_name} "
-                        f'--step {step} --message "<your detailed report>"\n\n'
-                        f"IMPORTANT: Always use --task-id {current_task.id} to ensure the report goes to the right task.\n\n"
-                        f"Your report is the ONLY thing the next agent will read. Include:\n"
-                        f"- What you did and what the outcome was\n"
-                        f"- If rejecting: exact failures, which files to fix, step-by-step instructions\n"
-                        f"- If passing: what evidence confirms the acceptance criteria are met\n"
-                        f"Do NOT write a vague summary. Be specific and actionable."
+                        f"You did not submit your verdict for the {step} stage. "
+                        f"Please submit it now by running:\n\n"
+                        f"  litehive report --task-id $LITEHIVE_TASK_ID --verdict <pass|fail|reject> --role {role_name} "
+                        f'--step {step} --message "<your detailed report>"'
                     )
-                    subagents.run(
+                    result = subagents.run(
                         current_task,
                         role=role_name,
                         engine_name=engine_name,
