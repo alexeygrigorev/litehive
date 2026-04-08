@@ -1,0 +1,178 @@
+# Archived Tasks
+
+Total: 172 tasks
+
+| ID | Title | Status | Created |
+|-----|-------|--------|---------|
+| T-0001 | Add dry-run mode to litehive run | done | 2026-03-31 |
+| T-0003 | Add shared adapter contract for external CLIs from codehive | done | 2026-03-31 |
+| T-0004 | Add Gemini CLI adapter based on codehive | done | 2026-03-31 |
+| T-0005 | Add Copilot CLI adapter based on codehive | done | 2026-03-31 |
+| T-0006 | Add Claude adapter with quota guardrails | done | 2026-03-31 |
+| T-0007 | Add task-pool loop runner | done | 2026-03-31 |
+| T-0008 | Add task retry and failure policy | done | 2026-03-31 |
+| T-0009 | Add pool stop conditions | done | 2026-03-31 |
+| T-0010 | Add task dependencies | done | 2026-03-31 |
+| T-0011 | Add task selection policies | done | 2026-03-31 |
+| T-0012 | Add engine budget controls | done | 2026-03-31 |
+| T-0013 | Add runner concurrency guardrails | done | 2026-03-31 |
+| T-0014 | Add task recovery commands | done | 2026-03-31 |
+| T-0015 | Add acceptance criteria enforcement | done | 2026-03-31 |
+| T-0016 | Add pool summary reporting | done | 2026-03-31 |
+| T-0017 | Add atomic queue state transitions | done | 2026-03-31 |
+| T-0018 | Add human checkpoint tasks | done | 2026-03-31 |
+| T-0019 | Add engine routing rules | done | 2026-03-31 |
+| T-0020 | Add live run observability | done | 2026-03-31 |
+| T-0021 | Add pool dry-run planning | done | 2026-03-31 |
+| T-0022 | Add task templates | done | 2026-03-31 |
+| T-0023 | Fix opencode adapter invocation | done | 2026-03-31 |
+| T-0024 | Enforce commit and rollback checkpoints | done | 2026-03-31 |
+| T-0025 | Add queue management CLI | done | 2026-03-31 |
+| T-0026 | Add CommitToGit terminal stage | done | 2026-03-31 |
+| T-0027 | Add quota and limit fallback routing | done | 2026-03-31 |
+| T-0028 | Add runtime engine override | done | 2026-03-31 |
+| T-0029 | Generalize multi-agent process profiles and init scaffolding | done | 2026-03-31 |
+| T-0030 | Add dependency-aware task execution planning | done | 2026-03-31 |
+| T-0031 | Support PM-created follow-up tasks during grooming and acceptance | done | 2026-03-31 |
+| T-0032 | Add model override support for engine runs | done | 2026-03-31 |
+| T-0033 | Add session PID visibility to live runs | done | 2026-03-31 |
+| T-0034 | Add model-family retry mechanism for engine execution | done | 2026-03-31 |
+| T-0035 | Add Codex retry policy | done | 2026-03-31 |
+| T-0036 | Add OpenCode retry policy | done | 2026-03-31 |
+| T-0037 | Add Gemini retry policy | done | 2026-03-31 |
+| T-0038 | Add Claude retry policy | done | 2026-03-31 |
+| T-0039 | Add freeform specification intake | done | 2026-03-31 |
+| T-0040 | Add proper sandboxing for engine execution | done | 2026-03-31 |
+| T-0041 | Stop pool on exhausted execution-limit fallbacks | done | 2026-03-31 |
+| T-0042 | Preserve remaining queued tasks after pool stop | done | 2026-03-31 |
+| T-0043 | Fix execution-limit fallback engine switching | done | 2026-03-31 |
+| T-0044 | Add run-all shell wrapper that restarts litehive each iteration | done | 2026-03-31 |
+| T-0045 | Add batch queue prioritization command | done | 2026-03-31 |
+| T-0046 | Add simple web UI for queue and task monitoring | done | 2026-03-31 |
+| T-0047 | Persist live subagent artifacts while running | done | 2026-03-31 |
+| T-0048 | Make QA and PM rejection loop until acceptance | done | 2026-03-31 |
+| T-0049 | Add cgroup resource limits for heavy native-code tasks | done | 2026-03-31 |
+| T-0050 | Add enforced pre/post stage hooks | done | 2026-03-31 |
+| T-0051 | Remove failed as a task lifecycle state | done | 2026-03-31 |
+| T-0052 | Add explicit wont-do and deferred task outcomes | done | 2026-03-31 |
+| T-0053 | Document and enforce the task state machine | done | 2026-03-31 |
+| T-0054 | Make workspace locking granular during execution | done | 2026-03-31 |
+| T-0055 | Add interrupted runner auto-recovery | done | 2026-03-31 |
+| T-0056 | Add interrupted task outcome and resume flow | done | 2026-03-31 |
+| T-0057 | Record runner and subagent interruption details | done | 2026-03-31 |
+| T-0058 | Add custom pre-acceptance hook support for ruff check | done | 2026-04-01 |
+| T-0059 | Make PM grooming auto-populate missing acceptance criteria when enough context e | done | 2026-04-01 |
+| T-0060 | Split single-task execution from pool execution and make pool drain explicit | done | 2026-04-01 |
+| T-0061 | Prevent PM grooming from blocking on missing acceptance criteria when criteria c | done | 2026-04-01 |
+| T-0062 | Keep rejected or interrupted tasks in the runnable pool instead of dropping them | done | 2026-04-01 |
+| T-0063 | Auto-requeue tasks stranded at commit_to_git after runner interruption | done | 2026-04-01 |
+| T-0064 | Allow adding and reprioritizing future tasks while a runner is active | done | 2026-04-01 |
+| T-0065 | Enforce continue-or-rollback before unrelated work can proceed | done | 2026-04-01 |
+| T-0066 | Auto-detect dirty worktree ownership for interrupted tasks | done | 2026-04-01 |
+| T-0067 | Make commit_to_git idempotent and resumable | done | 2026-04-01 |
+| T-0068 | Stop the pool when no remaining task can make useful progress | done | 2026-04-01 |
+| T-0069 | Add queue hygiene command for stale active tasks and stranded stages | done | 2026-04-01 |
+| T-0070 | Run task execution in git worktrees to keep the main repo clean | done | 2026-04-01 |
+| T-0071 | Investigate and fix slow or hanging queue/status commands on large workspaces | done | 2026-04-01 |
+| T-0073 | Add dirty-worktree gate command with task ownership explanation | done | 2026-04-01 |
+| T-0074 | Add detailed commit_to_git diagnostics and failure classification | done | 2026-04-01 |
+| T-0075 | Track task-to-worktree mapping as first-class execution state | done | 2026-04-01 |
+| T-0076 | Add fast status mode using state-first reads | done | 2026-04-01 |
+| T-0077 | Add structured PM task-edit actions during grooming | done | 2026-04-01 |
+| T-0078 | Write explicit no-useful-progress stop reports for pool runs | done | 2026-04-01 |
+| T-0079 | Create follow-up tasks automatically when PM finds scope contamination | done | 2026-04-01 |
+| T-0080 | Prune or compress noisy execution artifacts while keeping durable evidence | done | 2026-04-01 |
+| T-0082 | Make adding new tasks cheap and reliable during normal operation | done | 2026-04-01 |
+| T-0083 | Add reliable runner status model with heartbeat and reconciliation | done | 2026-04-01 |
+| T-0089 | Add shared live event schema for executor message capture and timelines | done | 2026-04-01 |
+| T-0090 | Add shared inactivity timeout and automatic restart based on last captured event | done | 2026-04-01 |
+| T-0091 | Add shared real-time event persistence and tail-friendly session logs | done | 2026-04-01 |
+| T-0092 | Add Codex event adapter for shared live capture and restart semantics | done | 2026-04-01 |
+| T-0093 | Add OpenCode event adapter for shared live capture and restart semantics | done | 2026-04-01 |
+| T-0094 | Add Claude event adapter for shared live capture and restart semantics | done | 2026-04-01 |
+| T-0095 | Add Gemini event adapter for shared live capture and restart semantics | done | 2026-04-01 |
+| T-0096 | Add Copilot event adapter for shared live capture and restart semantics | done | 2026-04-01 |
+| T-0097 | Add bubblewrap sandbox mode for lightweight local task execution | done | 2026-04-01 |
+| T-0098 | Add stage duration and velocity estimation for task execution | done | 2026-04-01 |
+| T-0099 | Add flow statistics and bottleneck reporting for pool runs | done | 2026-04-01 |
+| T-0100 | Add PM complexity estimation and planned effort sizing for tasks | done | 2026-04-01 |
+| T-0101 | Make run-all continue automatically after a task is requeued for another pass in | done | 2026-04-01 |
+| T-0102 | Fix commit_to_git failures caused by unrelated .litehive workspace state and que | done | 2026-04-01 |
+| T-0103 | Persist PM-generated acceptance criteria from grooming feedback even when not em | done | 2026-04-01 |
+| T-0104 | Add schema-validated stage result submission API for agents | done | 2026-04-01 |
+| T-0105 | Handle successful task completion without final commit by resuming the session a | done | 2026-04-01 |
+| T-0109 | Add agent-assisted merge conflict resolution for parallel worker integration | done | 2026-04-01 |
+| T-0110 | Refresh engine inventory docs for Claude support | done | 2026-04-01 |
+| T-0111 | Fix FOLLOW_UP_TASKS parsing for empty and valid JSON arrays in stage output | done | 2026-04-01 |
+| T-0112 | Fix tasks_run accounting for single-task run-all wrapper iterations | done | 2026-04-01 |
+| T-0113 | Add command to stop the current task cleanly | done | 2026-04-01 |
+| T-0114 | Enforce QA and acceptance verification that final task commit exists and clean c | done | 2026-04-02 |
+| T-0115 | Add end-to-end QA harness using a temporary git repo to validate the task state  | done | 2026-04-02 |
+| T-0116 | Split PM into planner and reviewer roles with distinct prompts and stage ownersh | done | 2026-04-02 |
+| T-0117 | Add quota and usage monitoring across engines with official provider integration | done | 2026-04-02 |
+| T-0118 | Add OpenAI/Codex quota monitoring integration | done | 2026-04-02 |
+| T-0119 | Add Anthropic/Claude quota monitoring integration | done | 2026-04-02 |
+| T-0120 | Add Z.AI/OpenCode quota monitoring integration | done | 2026-04-02 |
+| T-0121 | Add Gemini quota monitoring integration | done | 2026-04-02 |
+| T-0122 | Add Copilot quota monitoring integration | done | 2026-04-02 |
+| T-0123 | Add structured continuation handoff for engine switches, retries, and restarts | done | 2026-04-02 |
+| T-0124 | Add layered global and local config with local overrides over ~/.config/litehive | done | 2026-04-02 |
+| T-0125 | Detect stale subagent processes and recover tasks at the same stage automaticall | done | 2026-04-02 |
+| T-0126 | Split oversized tests into multiple focused test files | done | 2026-04-02 |
+| T-0127 | Separate tracked config/state from untracked runtime logs and sessions | done | 2026-04-03 |
+| T-0128 | Add CLI support for rich structured task shaping and updates | done | 2026-04-03 |
+| T-0130 | Redesign the state machine for parallel task execution, integration, and merge-c | done | 2026-04-03 |
+| T-0131 | Normalize legacy queued/interrupted/flagged tasks through planner before retry | done | 2026-04-03 |
+| T-0132 | Add bounded stage retry routing to recovery/planner to stop task churn | done | 2026-04-03 |
+| T-0133 | Add early commit/worktree preflight before late-stage completion | done | 2026-04-03 |
+| T-0134 | Add CLI command for quick workspace engine switching | done | 2026-04-03 |
+| T-0135 | Launch a diagnostic recovery agent that investigates failures and returns tasks  | done | 2026-04-03 |
+| T-0138 | Kill stale subagent processes after 5 minutes of no output and switch to fallbac | done | 2026-04-04 |
+| T-0139 | Add litehive switch command to kill running agent and switch task engine in one  | done | 2026-04-04 |
+| T-0140 | Add self-healing recovery for litehive's own bugs when orchestrating external pr | done | 2026-04-04 |
+| T-0141 | Move real engine binary tests to tests_integration folder | done | 2026-04-04 |
+| T-0142 | Replace bash run-all wrapper with litehive daemon command | done | 2026-04-04 |
+| T-0144 | Write comprehensive documentation for litehive in docs/ | done | 2026-04-04 |
+| T-0145 | Design and implement cross-project contribution protocol for litehive | done | 2026-04-04 |
+| T-0146 | Test goz engine integration | done | 2026-04-04 |
+| T-0147 | Create integration test suite in tests_integration/ for all engines | done | 2026-04-04 |
+| T-0148 | Update context.md with current project state and commands | done | 2026-04-04 |
+| T-0149 | Support agent prompts as markdown files in .litehive/agents/ | done | 2026-04-04 |
+| T-0150 | Add task archival: move done tasks to tasks/archive/ and support cleanup | done | 2026-04-04 |
+| T-0151 | Limit task slug to 50 characters | done | 2026-04-04 |
+| T-0152 | Add acceptance criteria best practices to PM grooming prompt | done | 2026-04-04 |
+| T-0153 | Remove from __future__ import annotations from all files | done | 2026-04-04 |
+| T-0154 | Delete workflow_verification.py dead code | done | 2026-04-04 |
+| T-0155 | Remove LEGACY_CHECKPOINT_SUBJECT_TEMPLATE from git_ops | done | 2026-04-04 |
+| T-0156 | Delete shell scripts replaced by litehive daemon | done | 2026-04-04 |
+| T-0157 | Refactor cli.py into cli/ module with submodules | done | 2026-04-04 |
+| T-0158 | Refactor config.py into config/ module | done | 2026-04-04 |
+| T-0161 | Refactor runner.py into runner/ module with explicit state machine | done | 2026-04-04 |
+| T-0162 | Refactor runtime.py into runtime/ module | done | 2026-04-04 |
+| T-0163 | Refactor subagents.py into subagents/ module | done | 2026-04-04 |
+| T-0165 | Merge external_cli.py and sandbox.py into engines/sandbox.py | done | 2026-04-04 |
+| T-0166 | Merge monitoring and observability into observability/ module | done | 2026-04-04 |
+| T-0167 | Refactor web app: proper templates, no embedded JS in Python | done | 2026-04-04 |
+| T-0168 | Refactor daemon.py into daemon/ module using config module for paths | done | 2026-04-04 |
+| T-0181 | Improve task list CLI: compact output, filters, active-only default | done | 2026-04-05 |
+| T-0182 | Add --priority flag to litehive add command | done | 2026-04-05 |
+| T-0183 | Split agent prompt: minimal generic prompt + project-specific context.md | done | 2026-04-05 |
+| T-0185 | Import GitHub issues as litehive tasks | done | 2026-04-05 |
+| T-0186 | Reimplement litehive self-heal for external project orchestration | done | 2026-04-05 |
+| T-0187 | Add specific codex usage limit detector from actual error message | done | 2026-04-05 |
+| T-0188 | Redesign litehive status as a useful operator dashboard | done | 2026-04-05 |
+| T-0189 | Always launch recovery agent when a task fails to complete cleanly | done | 2026-04-06 |
+| T-0190 | Add engine freeze CLI: temporarily disable an engine until a date | done | 2026-04-06 |
+| T-0191 | Implement proactive codex quota check using chatgpt.com API | done | 2026-04-06 |
+| T-0193 | Add single-agent pipeline mode for simple tasks | done | 2026-04-06 |
+| T-0199 | Split engines/__init__.py into engines/adapters/ with one file per adapter | done | 2026-04-06 |
+| T-0201 | Log engine output parse failures instead of silently skipping | done | 2026-04-06 |
+| T-0202 | Replace ignore_errors=True rmtree with logged cleanup | done | 2026-04-06 |
+| T-0204 | Split tasks.py (4672 lines) into tasks/ submodules | done | 2026-04-06 |
+| T-0205 | Split runtime/_execution.py (1166 lines) into smaller files | done | 2026-04-06 |
+| T-0206 | Split subagents/_execution.py (1019 lines) into smaller files | done | 2026-04-06 |
+| T-0207 | Split daemon/__init__.py (451 lines) into daemon/ submodules | done | 2026-04-06 |
+| T-0208 | Add worktree merge agent tests and merge_failed task status | done | 2026-04-07 |
+| T-0211 | Add retry limit for merge agent in commit_to_git | done | 2026-04-07 |
+| T-0213 | Remove files_changed from agent report format - use git as source of truth | done | 2026-04-07 |
+| T-0214 | Fix web dashboard hanging when runner is active | done | 2026-04-07 |
