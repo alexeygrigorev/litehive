@@ -7,14 +7,14 @@ engine: null
 model: null
 mode: implementation
 pipeline_mode: full
-status: in_progress
+status: done
 flag_reason: null
-pipeline_status: commit_to_git
+pipeline_status: done
 priority: medium
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-08T06:51:09+00:00'
-updated_at: '2026-04-08T21:14:37+00:00'
+updated_at: '2026-04-08T21:14:39+00:00'
 goal: Engine adapters expose private implementation details (like _OPENCODE_STRIPPED_ENV_VARS)
   that leak into the registry in engines/__init__.py. Each adapter should encapsulate
   its own defaults (binary name, capabilities, stripped env vars, etc.) so the registry
@@ -102,9 +102,9 @@ subagents:
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0231 encapsulate-engine-adapter-internals-proper-oop'
-  commit_sha: null
-  checkpoint_base_sha: null
-  checkpoint_attempts: 0
+  commit_sha: 5de8c5be158189594bfa1b24aa36d26863589f85
+  checkpoint_base_sha: 764b5713830b81349d2e84faa17033b7021a4446
+  checkpoint_attempts: 1
   rolled_back_checkpoint_attempt: null
   merge_agent_attempts: 0
   worktree_path: null

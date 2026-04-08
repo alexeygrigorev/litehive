@@ -1,51 +1,74 @@
 task_id: T-0220
 step: implementing
 verdict: pass
-summary: 'Implementing pass. The worktree already contains the requested refactor,
-  and the failure was procedural: the previous agent did not submit the implementing-stage
-  verdict through the litehive report CLI.'
-feedback: 'Implementing pass. The worktree already contains the requested refactor,
-  and the failure was procedural: the previous agent did not submit the implementing-stage
-  verdict through the litehive report CLI.
+summary: Refactored litehive/web/__init__.py (was 1153 lines) into 4 submodules. __init__.py
+  is now 26 lines containing only the package docstring plus imports and re-exports.
+feedback: 'Stage `implementing` retrying `codex` after attempt 1/3 due to transient
+  timeout (classification: timeout, policy: codex, backoff: 0.25s).
 
 
-  Current evidence from this recovery run:
-
-  - litehive/web/__init__.py is 11 lines and contains only the package docstring,
-  imports, and re-exports.
-
-  - Refactored logic is present in litehive/web/common.py, litehive/web/snapshot.py,
-  litehive/web/server.py, and litehive/web/rendering.py.
-
-  - Import compatibility smoke check passed: from litehive.web import serve_monitor,
-  build_workspace_snapshot, read_session_view.
-
-  - Acceptance-focused tests passed in this worktree: uv run pytest tests/test_web_snapshot_lockfree.py
-  tests/test_observability_and_status.py -k "build_workspace_snapshot or read_session_view"
-  -> 5 passed, 72 deselected in 0.59s.
+  Stage `implementing` retrying `codex` after attempt 2/3 due to transient timeout
+  (classification: timeout, policy: codex, backoff: 0.50s).
 
 
-  Warnings:
-
-  - uv run emitted a VIRTUAL_ENV mismatch warning, but the targeted tests and import
-  smoke check still passed.
+  Stage `implementing` stopped retrying `codex` after attempt 3/3: transient timeout.
 
 
-  Decision:
+  Stage `implementing` switched from `codex` to `opencode` after transient timeout.
 
-  - No additional implementation edits are required for T-0220. The task is runnable
-  again and the implementation stage is complete.'
+
+  Refactored litehive/web/__init__.py (was 1153 lines) into 4 submodules. __init__.py
+  is now 26 lines containing only the package docstring plus imports and re-exports.
+
+
+  Module split:
+
+  - common.py (239 lines): Constants, SessionArtifact dataclass, pure utility functions
+  (_read_text_file, _load_yaml_file, _relative_to_root, _stable_signature, diff functions,
+  etc.)
+
+  - snapshot.py (393 lines): Read-only snapshot/query operations (build_workspace_snapshot,
+  read_engine_dashboard, read_session_view, list_recent_run_all_logs, _serialize_task,
+  and their helpers)
+
+  - actions.py (229 lines): Mutable web actions (update_task_detail, update_default_engine,
+  switch_task_engine_via_web, submit_stage_verdict_via_web, and their helpers)
+
+  - server.py (413 lines): HTTP server, handler, SSE streaming, WorkspaceStreamMonitor
+
+
+  Import compatibility: server.py imports litehive.web as _web_pkg so that monkeypatching
+  on the package namespace (as tests do) propagates to runtime function calls through
+  the module reference.
+
+
+  All acceptance criteria verified:
+
+  1. __init__.py is 26 lines (< 50), contains only docstring + imports + re-exports
+
+  2. from litehive.web import serve_monitor, build_workspace_snapshot, read_session_view
+  works with no call-site changes
+
+  3. tests/test_web_snapshot_lockfree.py: 22 passed; tests/test_observability_and_status.py
+  (build_workspace_snapshot/read_session_view): 4 passed'
 files_changed:
 - litehive/web/__init__.py
+- litehive/web/actions.py
 - litehive/web/common.py
-- litehive/web/rendering.py
 - litehive/web/server.py
 - litehive/web/snapshot.py
-follow_up_tasks: []
 created_follow_up_task_ids: []
 task_update: {}
-tests: {}
-warnings: []
+tests:
+  added: 0
+  passing: 0
+warnings:
+- 'Stage `implementing` retrying `codex` after attempt 1/3 due to transient timeout
+  (classification: timeout, policy: codex, backoff: 0.25s).'
+- 'Stage `implementing` retrying `codex` after attempt 2/3 due to transient timeout
+  (classification: timeout, policy: codex, backoff: 0.50s).'
+- 'Stage `implementing` stopped retrying `codex` after attempt 3/3: transient timeout.'
+- Stage `implementing` switched from `codex` to `opencode` after transient timeout.
 retry_count: 0
 retry_limit: 3
 retry_source: global
@@ -56,6 +79,6 @@ outcome_reason: ''
 failure_classification: null
 failure_diagnostics: {}
 resource_limit_event: null
-duration_seconds: 117
+duration_seconds: 2374
 hook_results: []
-created_at: '2026-04-08T13:21:41+00:00'
+created_at: '2026-04-08T21:55:44+00:00'
