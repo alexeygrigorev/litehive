@@ -3244,7 +3244,7 @@ exit 1
 """,
     )
     monkeypatch.setattr(
-        "litehive.daemon._default_command_prefix",
+        "litehive.daemon._execution._default_command_prefix",
         lambda: [str(fake_uv), "run", "litehive"],
     )
 
