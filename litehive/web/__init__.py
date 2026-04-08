@@ -15,7 +15,7 @@ import yaml
 from jinja2 import Environment, FileSystemLoader
 
 from litehive.models import TaskRecord
-from litehive.tasks import list_tasks_state_first, load_state, runner_status, task_dir
+from litehive.tasks import list_tasks_state_first, load_state, runner_status_readonly, task_dir
 
 _POLL_INTERVAL_MS = 1500
 _MAX_ARTIFACT_BYTES = 64 * 1024
@@ -51,7 +51,7 @@ def build_workspace_snapshot(root: Path) -> dict[str, Any]:
     """Return a JSON-serializable monitor snapshot backed by on-disk workspace state."""
     root = root.resolve()
     state = load_state(root)
-    runner = runner_status(root)
+    runner = runner_status_readonly(root)
     tasks = list_tasks_state_first(root, state=state, include_runtime=True)
     tasks_payload = [_serialize_task(root, task, state.active_task_id) for task in tasks]
     active_task = next((task for task in tasks if task.id == state.active_task_id), None)

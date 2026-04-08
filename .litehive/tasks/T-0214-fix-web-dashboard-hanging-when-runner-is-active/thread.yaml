@@ -1,0 +1,174 @@
+- role: planner
+  step: grooming
+  verdict: pass
+  message: "GROOMING PASS \u2014 T-0214 Fix web dashboard hanging when runner is active\n\
+    \n## Problem Analysis\n\nThe `/api/snapshot` endpoint in `litehive/web/__init__.py:50-68`\
+    \ calls `runner_status()` (locking.py:128-143) which probes the runner lock file\
+    \ via `_runner_lock_is_active()` (locking.py:72-84). While this uses `LOCK_NB`\
+    \ (non-blocking), the web dashboard should never touch lock files at all \u2014\
+    \ it is read-only. Additionally, the fallback path `_runner_status_needs_reconciliation()`\
+    \ (locking.py:87-94) redundantly re-reads all task state. The snapshot should\
+    \ use a purely file-read approach.\n\nKey findings:\n- `load_state()` and `list_tasks_state_first()`\
+    \ are already lock-free (pure YAML reads)\n- `runner_status()` is the only function\
+    \ in the snapshot path that touches lock files\n- Writes use `_atomic_write_text`\
+    \ with `os.replace`, so lock-free reads are safe (no partial file risk)\n- The\
+    \ lock metadata file (`.runner.lock`) contains PID, status, heartbeat \u2014 enough\
+    \ to determine runner state without lock probing\n\n## Acceptance Criteria (refined)\n\
+    \n1. Web dashboard loads and shows data while the runner is actively executing\
+    \ a task\n2. The `/api/snapshot` endpoint responds within 2 seconds even when\
+    \ the runner holds the lock\n3. No data corruption risk from lock-free reads (already\
+    \ safe via atomic writes)\n4. The snapshot code path does not attempt any `fcntl.flock()`\
+    \ calls\n\n## Plan\n\n1. Add a `runner_status_readonly(root)` function in `litehive/tasks/locking.py`\
+    \ that reads `.runner.lock` metadata + checks PID liveness via `os.kill(pid, 0)`\
+    \ without touching any lock. Fall back to \"idle\" if metadata is missing/unparseable.\n\
+    2. Update `build_workspace_snapshot()` in `litehive/web/__init__.py` to call `runner_status_readonly()`\
+    \ instead of `runner_status()`.\n3. Add a test that: (a) acquires the runner lock\
+    \ in a subprocess, (b) calls `build_workspace_snapshot()` from the parent process,\
+    \ (c) asserts it returns within 2 seconds with valid data.\n4. Add a test that\
+    \ verifies `runner_status_readonly()` returns correct status when runner is active\
+    \ vs idle.\n\n## Sizing\n\nPM_COMPLEXITY: simple\nPLANNED_EFFORT: s\n\nSTAGE_RESULT:\n\
+    {\"verdict\":\"pass\",\"summary\":\"Grooming complete \u2014 snapshot needs lock-free\
+    \ runner_status_readonly using metadata + PID check\",\"tests\":{\"added\":0,\"\
+    passing\":0},\"warnings\":[],\"follow_up_tasks\":[],\"acceptance_criteria\":[\"\
+    Web dashboard loads and shows data while the runner is actively executing a task\"\
+    ,\"The /api/snapshot endpoint responds within 2 seconds even when the runner holds\
+    \ the lock\",\"No data corruption risk from lock-free reads\",\"The snapshot code\
+    \ path does not attempt any fcntl.flock() calls\"],\"task_update\":{\"pm_complexity\"\
+    :\"simple\",\"planned_effort\":\"s\",\"plan\":[\"Add runner_status_readonly()\
+    \ in litehive/tasks/locking.py \u2014 reads .runner.lock metadata + PID liveness\
+    \ check via os.kill(pid, 0), no fcntl.flock calls\",\"Update build_workspace_snapshot()\
+    \ in litehive/web/__init__.py to use runner_status_readonly() instead of runner_status()\"\
+    ,\"Add test: acquire runner lock in subprocess, call build_workspace_snapshot\
+    \ from parent, assert returns within 2s with valid data\",\"Add test: verify runner_status_readonly()\
+    \ returns correct status when runner is active vs idle\"]}}"
+  files_changed: []
+  created_at: '2026-04-08T05:47:12+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: "## Summary\nAdded `runner_status_readonly()` function that reads runner\
+    \ status using only file reads and PID liveness checks (os.kill(pid, 0)) \u2014\
+    \ no fcntl.flock calls. Updated `build_workspace_snapshot()` in `litehive/web/__init__.py`\
+    \ to use `runner_status_readonly()` instead of `runner_status()`.\n\n## Changes\n\
+    1. **litehive/tasks/locking.py**: Added `runner_status_readonly(root)` \u2014\
+    \ reads `.runner.lock` metadata, checks PID liveness via `_runner_pid_is_alive()`,\
+    \ and heartbeat staleness via `_heartbeat_is_late()`. Returns idle/running/late/stale\
+    \ without any lock acquisition.\n2. **litehive/tasks/__init__.py**: Exported `runner_status_readonly`.\n\
+    3. **litehive/web/__init__.py**: Changed `build_workspace_snapshot()` to import\
+    \ and call `runner_status_readonly` instead of `runner_status`.\n4. **tests/test_web_snapshot_lockfree.py**:\
+    \ 5 new tests covering all acceptance criteria.\n\n## Tests (5 added, 5 passing)\n\
+    - `test_runner_status_readonly_returns_idle_when_no_metadata` \u2014 no lock file\
+    \ \u2192 idle\n- `test_runner_status_readonly_returns_running_when_pid_alive`\
+    \ \u2014 live PID \u2192 running\n- `test_runner_status_readonly_returns_stale_when_pid_dead`\
+    \ \u2014 dead PID \u2192 stale\n- `test_runner_status_readonly_returns_late_when_heartbeat_expired`\
+    \ \u2014 old heartbeat + live PID \u2192 late\n- `test_build_workspace_snapshot_does_not_block_on_runner_lock`\
+    \ \u2014 monkeypatches fcntl.flock to always raise BlockingIOError, proves snapshot\
+    \ completes in <2s with correct data\n\n## Acceptance Criteria Verification\n\
+    1. \u2705 Web dashboard loads while runner is active \u2014 snapshot uses readonly\
+    \ path, no lock contention\n2. \u2705 /api/snapshot responds within 2s \u2014\
+    \ test proves <2s even with flock completely blocked\n3. \u2705 No data corruption\
+    \ risk \u2014 reads use already-atomic YAML files (os.replace writes)\n4. \u2705\
+    \ Snapshot code path does not call fcntl.flock \u2014 verified by monkeypatching\
+    \ flock to raise\n\nSTAGE_RESULT:\n{\"verdict\":\"pass\",\"summary\":\"Added runner_status_readonly()\
+    \ using PID+heartbeat checks instead of fcntl.flock; web snapshot no longer blocks\
+    \ on runner lock\",\"tests\":{\"added\":5,\"passing\":5},\"warnings\":[],\"follow_up_tasks\"\
+    :[],\"acceptance_criteria\":[\"Web dashboard loads and shows data while the runner\
+    \ is actively executing a task\",\"The /api/snapshot endpoint responds within\
+    \ 2 seconds even when the runner holds the lock\",\"No data corruption risk from\
+    \ lock-free reads\",\"The snapshot code path does not attempt any fcntl.flock()\
+    \ calls\"],\"task_update\":{}}"
+  files_changed: []
+  created_at: '2026-04-08T05:50:05+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: "## Summary\nAdded `runner_status_readonly()` function that reads runner\
+    \ status using only file reads and PID liveness checks (os.kill(pid, 0)) \u2014\
+    \ no fcntl.flock calls. Updated `build_workspace_snapshot()` in `litehive/web/__init__.py`\
+    \ to use `runner_status_readonly()` instead of `runner_status()`.\n\n## Changes\n\
+    1. **litehive/tasks/locking.py**: Added `runner_status_readonly(root)` \u2014\
+    \ reads `.runner.lock` metadata, checks PID liveness via `_runner_pid_is_alive()`,\
+    \ and heartbeat staleness via `_heartbeat_is_late()`. Returns idle/running/late/stale\
+    \ without any lock acquisition.\n2. **litehive/tasks/__init__.py**: Exported `runner_status_readonly`.\n\
+    3. **litehive/web/__init__.py**: Changed `build_workspace_snapshot()` to import\
+    \ and call `runner_status_readonly` instead of `runner_status`.\n4. **tests/test_web_snapshot_lockfree.py**:\
+    \ 5 new tests covering all acceptance criteria.\n\n## Tests (5 added, 5 passing)\n\
+    - `test_runner_status_readonly_returns_idle_when_no_metadata` \u2014 no lock file\
+    \ \u2192 idle\n- `test_runner_status_readonly_returns_running_when_pid_alive`\
+    \ \u2014 live PID \u2192 running\n- `test_runner_status_readonly_returns_stale_when_pid_dead`\
+    \ \u2014 dead PID \u2192 stale\n- `test_runner_status_readonly_returns_late_when_heartbeat_expired`\
+    \ \u2014 old heartbeat + live PID \u2192 late\n- `test_build_workspace_snapshot_does_not_block_on_runner_lock`\
+    \ \u2014 monkeypatches fcntl.flock to always raise BlockingIOError, proves snapshot\
+    \ completes in <2s with correct data\n\n## Acceptance Criteria Verification\n\
+    1. \u2705 Web dashboard loads while runner is active \u2014 snapshot uses readonly\
+    \ path, no lock contention\n2. \u2705 /api/snapshot responds within 2s \u2014\
+    \ test proves <2s even with flock completely blocked\n3. \u2705 No data corruption\
+    \ risk \u2014 reads use already-atomic YAML files (os.replace writes)\n4. \u2705\
+    \ Snapshot code path does not call fcntl.flock \u2014 verified by monkeypatching\
+    \ flock to raise\n\nSTAGE_RESULT:\n{\"verdict\":\"pass\",\"summary\":\"Added runner_status_readonly()\
+    \ using PID+heartbeat checks instead of fcntl.flock; web snapshot no longer blocks\
+    \ on runner lock\",\"tests\":{\"added\":5,\"passing\":5},\"warnings\":[],\"follow_up_tasks\"\
+    :[],\"acceptance_criteria\":[\"Web dashboard loads and shows data while the runner\
+    \ is actively executing a task\",\"The /api/snapshot endpoint responds within\
+    \ 2 seconds even when the runner holds the lock\",\"No data corruption risk from\
+    \ lock-free reads\",\"The snapshot code path does not attempt any fcntl.flock()\
+    \ calls\"],\"task_update\":{}}"
+  files_changed: []
+  created_at: '2026-04-08T05:52:16+00:00'
+- role: qa
+  step: testing
+  verdict: pass
+  message: "## QA Verification \u2014 T-0214 Fix web dashboard hanging when runner\
+    \ is active\n\n### What was verified\n\n1. **Code review**: `runner_status_readonly()`\
+    \ (locking.py:128-138) reads `.runner.lock` metadata via `_read_runner_lock_metadata()`\
+    \ (pure file read), checks PID liveness via `_runner_pid_is_alive()` (`os.kill(pid,\
+    \ 0)`), and heartbeat staleness via `_heartbeat_is_late()`. No `fcntl.flock` calls\
+    \ in this path.\n\n2. **Web endpoint**: `build_workspace_snapshot()` (web/__init__.py:54)\
+    \ imports and calls `runner_status_readonly` instead of `runner_status`. The import\
+    \ at line 18 confirms this.\n\n3. **Export**: `runner_status_readonly` is properly\
+    \ exported from `litehive/tasks/__init__.py:84`.\n\n### Tests run\n\nAll 5 tests\
+    \ in `tests/test_web_snapshot_lockfree.py` pass (0.35s):\n- `test_runner_status_readonly_returns_idle_when_no_metadata`\
+    \ \u2014 no lock file returns idle\n- `test_runner_status_readonly_returns_running_when_pid_alive`\
+    \ \u2014 live PID returns running\n- `test_runner_status_readonly_returns_stale_when_pid_dead`\
+    \ \u2014 dead PID returns stale\n- `test_runner_status_readonly_returns_late_when_heartbeat_expired`\
+    \ \u2014 old heartbeat + live PID returns late\n- `test_build_workspace_snapshot_does_not_block_on_runner_lock`\
+    \ \u2014 monkeypatches fcntl.flock to raise BlockingIOError, proves snapshot completes\
+    \ in <2s with correct data\n\n### Acceptance criteria status\n\n1. \u2705 Web\
+    \ dashboard loads while runner is active \u2014 snapshot uses readonly path, no\
+    \ lock contention possible\n2. \u2705 /api/snapshot responds within 2s even when\
+    \ runner holds lock \u2014 test proves <2s with flock completely blocked\n3. \u2705\
+    \ No data corruption risk \u2014 reads use already-atomic YAML files (written\
+    \ via os.replace)\n4. \u2705 Snapshot code path does not call fcntl.flock \u2014\
+    \ verified by code review and monkeypatch trap test"
+  files_changed: []
+  created_at: '2026-04-08T05:53:07+00:00'
+- role: reviewer
+  step: accepting
+  verdict: pass
+  message: "ACCEPT \u2014 T-0214 Fix web dashboard hanging when runner is active\n\
+    \n## Verified\n\n1. **runner_status_readonly()** (locking.py:128-138) reads .runner.lock\
+    \ metadata and checks PID liveness via os.kill(pid,0) \u2014 no fcntl.flock calls\
+    \ anywhere in this path.\n2. **build_workspace_snapshot()** (web/__init__.py:54)\
+    \ calls runner_status_readonly instead of runner_status. Import at line 18 confirms\
+    \ this.\n3. **Export** from litehive/tasks/__init__.py:84 is correct.\n\n## Tests\n\
+    \nAll 5 tests pass in 0.33s:\n- test_runner_status_readonly_returns_idle_when_no_metadata\
+    \ \u2014 idle when no lock file\n- test_runner_status_readonly_returns_running_when_pid_alive\
+    \ \u2014 running when PID alive\n- test_runner_status_readonly_returns_stale_when_pid_dead\
+    \ \u2014 stale when PID dead\n- test_runner_status_readonly_returns_late_when_heartbeat_expired\
+    \ \u2014 late when heartbeat old\n- test_build_workspace_snapshot_does_not_block_on_runner_lock\
+    \ \u2014 monkeypatches fcntl.flock to raise, proves snapshot completes <2s with\
+    \ correct data\n\n## Acceptance Criteria\n\n1. \u2705 Web dashboard loads while\
+    \ runner is active \u2014 readonly path, no lock contention\n2. \u2705 /api/snapshot\
+    \ responds within 2s \u2014 test proves <2s with flock blocked\n3. \u2705 No data\
+    \ corruption risk \u2014 reads use atomic YAML files (os.replace writes)\n4. \u2705\
+    \ Snapshot code path does not call fcntl.flock \u2014 verified by code review\
+    \ and monkeypatch trap\n\nSTAGE_RESULT:\n{\"verdict\":\"pass\",\"summary\":\"\
+    Lock-free runner_status_readonly correctly replaces runner_status in web snapshot;\
+    \ all 5 tests pass\",\"tests\":{\"added\":5,\"passing\":5},\"warnings\":[],\"\
+    follow_up_tasks\":[],\"acceptance_criteria\":[\"Web dashboard loads and shows\
+    \ data while the runner is actively executing a task\",\"The /api/snapshot endpoint\
+    \ responds within 2 seconds even when the runner holds the lock\",\"No data corruption\
+    \ risk from lock-free reads\",\"The snapshot code path does not attempt any fcntl.flock()\
+    \ calls\"],\"task_update\":{}}"
+  files_changed: []
+  created_at: '2026-04-08T05:53:47+00:00'

@@ -143,6 +143,25 @@ def runner_status(root: Path) -> RunnerStatusState:
     return RunnerStatusState()
 
 
+def runner_status_readonly(root: Path) -> RunnerStatusState:
+    """Return runner status using only file reads and PID checks — no fcntl.flock calls.
+
+    Suitable for read-only consumers like the web dashboard that must never block
+    on the runner lock.
+    """
+    root = root.resolve()
+    status = _read_runner_lock_metadata(root)
+    if not _runner_metadata_present(status):
+        return RunnerStatusState()
+    # If the recorded PID is alive, the runner is (or was recently) active.
+    if _runner_pid_is_alive(status.pid):
+        if _heartbeat_is_late(status.heartbeat_at):
+            return status.model_copy(update={"status": "late"})
+        return status.model_copy(update={"status": "running"})
+    # PID is gone — metadata is stale.
+    return status.model_copy(update={"status": "stale"})
+
+
 def _touch_runner_status(
     root: Path,
     *,

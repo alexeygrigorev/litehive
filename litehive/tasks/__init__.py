@@ -81,6 +81,7 @@ from .locking import (
     _write_runner_lock_metadata,
     runner_heartbeat,
     runner_status,
+    runner_status_readonly,
     workspace_mutation_guard,
     workspace_runner_guard,
 )
