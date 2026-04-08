@@ -66,8 +66,6 @@ def _has_callable_override(engine: object, name: str, default: object) -> bool:
         value = instance_dict[name]
         if callable(value):
             rebound = _unwrap_bound_callable(value)
-            if inspect.ismethod(value) and getattr(value, "__self__", None) is engine:
-                return False
             for cls in type(engine).__mro__:
                 inherited = cls.__dict__.get(name)
                 if callable(inherited) and _unwrap_bound_callable(inherited) is rebound:
