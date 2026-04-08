@@ -1,6 +1,12 @@
 from tests.workspace_helpers import *  # noqa: F401,F403
 
-from litehive.subagents._engine_detection import _prefers_non_live_run, _supports_live_execution
+from litehive.subagents._engine_detection import (
+    _ORIGINAL_EXTERNAL_ADAPTER_RUN,
+    _ORIGINAL_EXTERNAL_ADAPTER_RUN_LIVE,
+    _has_callable_override,
+    _prefers_non_live_run,
+    _supports_live_execution,
+)
 
 
 def test_create_task_persists_folder_and_queue(tmp_path: Path) -> None:
@@ -735,8 +741,9 @@ def test_subagent_manager_records_copilot_quota_monitoring_during_live_updates(
         on_started=None,
         on_update=None,
         inactivity_timeout_seconds=None,
+        **kwargs,
     ) -> CLIExecutionResult:
-        del prompt, model, max_turns
+        del prompt, model, max_turns, kwargs
         if on_started is not None:
             on_started(6262)
         update = CLIExecutionResult(
@@ -1226,8 +1233,9 @@ def test_subagent_manager_uses_inherited_run_live_when_sandboxed(
         on_started=None,
         on_update=None,
         inactivity_timeout_seconds=None,
+        **kwargs,
     ) -> CLIExecutionResult:
-        del self, prompt, model, max_turns, resume_session_id, inactivity_timeout_seconds
+        del self, prompt, model, max_turns, resume_session_id, inactivity_timeout_seconds, kwargs
         calls.append("run_live")
         assert on_started is not None
         on_started(4343)
@@ -1460,8 +1468,9 @@ def test_subagent_manager_prefers_instance_run_override_when_sandboxed(
         max_turns: int | None = None,
         resume_session_id: str | None = None,
         on_started=None,
+        **kwargs,
     ) -> CLIExecutionResult:
-        del prompt, model, max_turns, resume_session_id
+        del prompt, model, max_turns, resume_session_id, kwargs
         calls.append("run")
         assert on_started is not None
         on_started(4343)
@@ -2132,6 +2141,7 @@ def test_subagent_manager_uses_inherited_run_live_when_available(
         on_started=None,
         on_update=None,
         inactivity_timeout_seconds=None,
+        **kwargs,
     ) -> CLIExecutionResult:
         assert max_turns is None
         calls.append("run_live")
@@ -2204,8 +2214,9 @@ def test_subagent_manager_uses_inherited_run_live_when_sandboxed(
         on_started=None,
         on_update=None,
         inactivity_timeout_seconds=None,
+        **kwargs,
     ) -> CLIExecutionResult:
-        del prompt, model, max_turns, resume_session_id, inactivity_timeout_seconds
+        del prompt, model, max_turns, resume_session_id, inactivity_timeout_seconds, kwargs
         calls.append("run_live")
         assert on_started is not None
         on_started(4242)
@@ -2270,6 +2281,7 @@ def test_subagent_manager_ignores_rebound_inherited_run_when_run_live_is_availab
         on_started=None,
         on_update=None,
         inactivity_timeout_seconds=None,
+        **kwargs,
     ) -> CLIExecutionResult:
         assert max_turns is None
         calls.append("run_live")
@@ -2332,6 +2344,7 @@ def test_subagent_manager_prefers_instance_run_override_over_inherited_run_live(
         max_turns: int | None = None,
         resume_session_id: str | None = None,
         on_started=None,
+        **kwargs,
     ) -> CLIExecutionResult:
         calls.append("run")
         assert on_started is not None
@@ -2380,8 +2393,9 @@ def test_subagent_manager_prefers_bound_instance_run_override_over_inherited_run
         max_turns: int | None = None,
         resume_session_id: str | None = None,
         on_started=None,
+        **kwargs,
     ) -> CLIExecutionResult:
-        del self, prompt, model, max_turns, resume_session_id
+        del self, prompt, model, max_turns, resume_session_id, kwargs
         calls.append("run")
         assert on_started is not None
         on_started(4242)
@@ -2430,6 +2444,7 @@ def test_supports_live_execution_treats_bound_instance_run_override_as_override(
         max_turns: int | None = None,
         resume_session_id: str | None = None,
         on_started=None,
+        **kwargs,
     ) -> CLIExecutionResult:
         raise AssertionError("execution should not happen in this unit test")
 
@@ -2491,6 +2506,26 @@ def test_supports_live_execution_keeps_inherited_run_live_when_base_run_is_rebou
 
     monkeypatch.setattr("litehive.engines.base.ExternalCLIAdapter.run", fake_run)
 
+    assert _prefers_non_live_run(engine) is False
+    assert _supports_live_execution(engine) is True
+
+
+def test_has_callable_override_ignores_rebound_external_base_methods(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    engine = get_engine("codex")
+
+    def rebound_run(*args, **kwargs) -> CLIExecutionResult:  # type: ignore[no-untyped-def]
+        raise AssertionError("execution should not happen in this unit test")
+
+    def rebound_run_live(*args, **kwargs) -> CLIExecutionResult:  # type: ignore[no-untyped-def]
+        raise AssertionError("execution should not happen in this unit test")
+
+    monkeypatch.setattr("litehive.engines.base.ExternalCLIAdapter.run", rebound_run)
+    monkeypatch.setattr("litehive.engines.base.ExternalCLIAdapter.run_live", rebound_run_live)
+
+    assert _has_callable_override(engine, "run", _ORIGINAL_EXTERNAL_ADAPTER_RUN) is False
+    assert _has_callable_override(engine, "run_live", _ORIGINAL_EXTERNAL_ADAPTER_RUN_LIVE) is False
     assert _prefers_non_live_run(engine) is False
     assert _supports_live_execution(engine) is True
 
@@ -2844,8 +2879,9 @@ def test_subagent_manager_uses_inherited_run_live_when_base_run_is_rebound(
         on_started=None,
         on_update=None,
         inactivity_timeout_seconds=None,
+        **kwargs,
     ) -> CLIExecutionResult:
-        del self, prompt, model, max_turns, inactivity_timeout_seconds
+        del self, prompt, model, max_turns, inactivity_timeout_seconds, kwargs
         calls.append("run_live")
         assert on_started is not None
         on_started(4646)
