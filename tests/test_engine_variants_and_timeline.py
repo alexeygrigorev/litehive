@@ -56,7 +56,8 @@ def test_claude_build_invocation_includes_model_and_resume(tmp_path: Path) -> No
     ]
 
 
-def test_codex_build_invocation_uses_resume_contract_without_json_flag(tmp_path: Path) -> None:
+def test_codex_build_invocation_uses_exec_for_resume_with_session_context(tmp_path: Path) -> None:
+    """codex resume is TUI-only, so resume falls back to exec with session context in prompt."""
     engine = get_engine("codex")
 
     invocation = engine.build_invocation(
@@ -66,15 +67,12 @@ def test_codex_build_invocation_uses_resume_contract_without_json_flag(tmp_path:
     )
 
     assert invocation.cwd == tmp_path
-    assert list(invocation.argv) == [
-        "codex",
-        "resume",
-        "--dangerously-bypass-approvals-and-sandbox",
-        "--cd",
-        str(tmp_path),
-        "abc-123",
-        "continue please",
-    ]
+    argv = list(invocation.argv)
+    assert argv[0] == "codex"
+    assert argv[1] == "exec"
+    assert "--json" in argv
+    assert "[Resuming prior session abc-123]" in argv[-1]
+    assert "continue please" in argv[-1]
 
 
 def test_claude_no_max_turns_by_default(tmp_path: Path) -> None:

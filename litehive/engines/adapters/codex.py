@@ -62,30 +62,23 @@ class CodexCLIAdapter(ExternalCLIAdapter):
         max_turns: int | None = None,
         resume_session_id: str | None = None,
     ) -> list[str]:
+        # codex resume is TUI-only (no --json flag), so we always use exec.
+        # For nudge prompts (resume_session_id set), the agent starts fresh but
+        # the prompt tells it exactly what to do (submit a verdict).
         if resume_session_id:
-            # codex uses `codex resume <thread_id> <prompt>` to continue a session
-            command = [
-                self.binary,
-                "resume",
-                "--dangerously-bypass-approvals-and-sandbox",
-                "--cd",
-                str(cwd),
-                resume_session_id,
-                prompt,
-            ]
-        else:
-            command = [
-                self.binary,
-                "exec",
-                "--json",
-                "--dangerously-bypass-approvals-and-sandbox",
-                "--cd",
-                str(cwd),
-                "--skip-git-repo-check",
-            ]
-            if model:
-                command.extend(["--model", model])
-            command.append(prompt)
+            prompt = f"[Resuming prior session {resume_session_id}]\n\n{prompt}"
+        command = [
+            self.binary,
+            "exec",
+            "--json",
+            "--dangerously-bypass-approvals-and-sandbox",
+            "--cd",
+            str(cwd),
+            "--skip-git-repo-check",
+        ]
+        if model:
+            command.extend(["--model", model])
+        command.append(prompt)
         return command
 
     def render_transcript(self, execution: CLIExecutionResult) -> str:
