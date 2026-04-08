@@ -75,6 +75,7 @@ def _ensure_runtime_ignored(root: Path) -> None:
 
 def _serialize_task_record(task: TaskRecord) -> str:
     _normalize_task_worktree_state(task)
+    _normalize_task_flag_reason(task)
     payload = task.model_dump(mode="python")
     payload["git"]["worktree_path"] = None
     return yaml.safe_dump(payload, sort_keys=False)
@@ -123,6 +124,13 @@ def _normalize_task_worktree_state(task: TaskRecord) -> None:
         return
     if task.git.worktree_path:
         set_task_worktree_path(task, task.git.worktree_path)
+
+
+def _normalize_task_flag_reason(task: TaskRecord) -> None:
+    if task.status == "flagged":
+        task.flag_reason = task.flag_reason or task.runtime.last_outcome.reason_code or "unknown"
+        return
+    task.flag_reason = None
 
 
 def save_task_runtime(root: Path, task: TaskRecord) -> None:

@@ -645,6 +645,7 @@ def test_runner_blocks_large_task_without_inferable_acceptance_criteria_during_g
     flagged = get_task(tmp_path, task.id)
     assert flagged is not None
     assert flagged.status == "flagged"
+    assert flagged.flag_reason == "missing_acceptance_criteria"
     assert flagged.runtime.last_outcome.reason_code == "missing_acceptance_criteria"
     report = yaml.safe_load(
         (

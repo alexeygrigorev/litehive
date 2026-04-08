@@ -32,6 +32,12 @@ from litehive.cli._display import (
 )
 
 
+def _display_flag_reason(task) -> str:
+    if task.status != "flagged":
+        return "-"
+    return task.flag_reason or "unknown"
+
+
 def _cmd_status(args):
     root = args.workspace.resolve()
     config = load_config(args.workspace)
@@ -211,7 +217,10 @@ def _cmd_list(args):
         filtered.append(task)
 
     for task in filtered:
-        print(f"{task.id} [{task.status}/{task.pipeline_status}] {task.title}")
+        flag_reason = (
+            f" flag_reason={_display_flag_reason(task)}" if task.status == "flagged" else ""
+        )
+        print(f"{task.id} [{task.status}/{task.pipeline_status}] {task.title}{flag_reason}")
     return 0
 
 
@@ -226,6 +235,7 @@ def _cmd_show(args):
     print(f"slug: {task.slug}")
     print(f"title: {task.title}")
     print(f"status: {task.status}")
+    print(f"flag_reason: {_display_flag_reason(task)}")
     print(f"pipeline_status: {task.pipeline_status}")
     print(f"priority: {task.priority}")
     print(f"engine: {task.engine or '-'}")
