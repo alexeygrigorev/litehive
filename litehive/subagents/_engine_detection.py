@@ -64,6 +64,13 @@ def _current_external_adapter_callable_for(name: str) -> object | None:
     return _unwrap_bound_callable(value)
 
 
+def _current_class_callable_for(engine: object, name: str) -> object | None:
+    value = getattr(type(engine), name, None)
+    if not callable(value):
+        return None
+    return _unwrap_bound_callable(value)
+
+
 def _resolve_inherited_callable_rank(engine: object, name: str, resolved: object) -> int | None:
     for index, cls in enumerate(type(engine).__mro__):
         inherited = cls.__dict__.get(name)
@@ -83,6 +90,7 @@ def _has_callable_override(engine: object, name: str, default: object) -> bool:
     if not callable(method):
         return False
     resolved = _unwrap_bound_callable(method)
+    current_class = _current_class_callable_for(engine, name)
     instance_dict = getattr(engine, "__dict__", None)
     if isinstance(instance_dict, dict) and name in instance_dict:
         value = instance_dict[name]
@@ -91,21 +99,33 @@ def _has_callable_override(engine: object, name: str, default: object) -> bool:
             # cleanup can leave behind a rebound inherited method in __dict__, and
             # that should not outrank an available inherited run_live method.
             if _is_instance_alias_to_inherited_callable(engine, name, value):
+                rebound = _unwrap_bound_callable(value)
+                if (
+                    rebound is default
+                    and current_class is not None
+                    and current_class is not default
+                ):
+                    return True
                 inherited_rank = _resolve_inherited_callable_rank(engine, name, resolved)
                 return inherited_rank is not None and resolved is not default
             if getattr(value, "__self__", None) is engine and not _looks_like_bound_method_override(value):
                 return False
             rebound = _unwrap_bound_callable(value)
+            if (
+                rebound is default
+                and current_class is not None
+                and current_class is not default
+            ):
+                return True
             if _resolve_inherited_callable_rank(engine, name, rebound) is not None:
                 return False
     inherited_rank = _resolve_inherited_callable_rank(engine, name, resolved)
     if inherited_rank is not None:
         return resolved is not default
-    current_external = _current_external_adapter_callable_for(name)
     instance_dict = getattr(engine, "__dict__", None)
     if (
-        current_external is not None
-        and current_external is not default
+        current_class is not None
+        and current_class is not default
         and resolved is default
         and isinstance(instance_dict, dict)
         and name in instance_dict
@@ -129,16 +149,36 @@ def _callable_resolution_rank(engine: object, name: str) -> int | None:
     if not callable(target):
         return None
 
+    default = _default_callable_for(name)
+    current_class = _current_class_callable_for(engine, name)
     instance_dict = getattr(engine, "__dict__", None)
     if isinstance(instance_dict, dict) and name in instance_dict:
         value = instance_dict[name]
         if callable(value):
             if _is_instance_alias_to_inherited_callable(engine, name, value):
                 resolved = _unwrap_bound_callable(value)
+                if (
+                    current_class is not None
+                    and default is not None
+                    and resolved is default
+                    and current_class is not default
+                ):
+                    inherited_rank = _resolve_inherited_callable_rank(engine, name, current_class)
+                    if inherited_rank is not None:
+                        return inherited_rank
                 return _resolve_inherited_callable_rank(engine, name, resolved)
             if getattr(value, "__self__", None) is engine and not _looks_like_bound_method_override(value):
                 return None
             resolved = _unwrap_bound_callable(value)
+            if (
+                current_class is not None
+                and default is not None
+                and resolved is default
+                and current_class is not default
+            ):
+                inherited_rank = _resolve_inherited_callable_rank(engine, name, current_class)
+                if inherited_rank is not None:
+                    return inherited_rank
             if _resolve_inherited_callable_rank(engine, name, resolved) is not None:
                 return None
             return -1
@@ -146,7 +186,6 @@ def _callable_resolution_rank(engine: object, name: str) -> int | None:
         value = cls.__dict__.get(name)
         if callable(value):
             resolved = _unwrap_bound_callable(value)
-            default = _default_callable_for(name)
             if cls is not ExternalCLIAdapter and resolved is default:
                 return None
             if index == 0:
@@ -210,3 +249,31 @@ def _filter_supported_kwargs(method: object, kwargs: dict[str, object]) -> dict[
         return kwargs
     supported = set(signature.parameters)
     return {key: value for key, value in kwargs.items() if key in supported}
+
+
+def _effective_engine_callable(engine: object, name: str) -> object | None:
+    method = getattr(engine, name, None)
+    if not callable(method):
+        return None
+    instance_dict = getattr(engine, "__dict__", None)
+    if not isinstance(instance_dict, dict) or name not in instance_dict:
+        return method
+    value = instance_dict[name]
+    if not callable(value):
+        return method
+    default = _default_callable_for(name)
+    current_class = _current_class_callable_for(engine, name)
+    rebound = _unwrap_bound_callable(value)
+    if (
+        default is not None
+        and rebound is default
+        and current_class is not None
+        and current_class is not default
+    ):
+        descriptor = getattr(type(engine), name, None)
+        if descriptor is None:
+            return method
+        binder = getattr(descriptor, "__get__", None)
+        if callable(binder):
+            return binder(engine, type(engine))
+    return method

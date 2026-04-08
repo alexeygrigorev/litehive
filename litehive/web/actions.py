@@ -25,7 +25,6 @@ from litehive.web.common import (
     _WEB_VERDICT_OPTIONS,
     _coerce_text_list,
     _load_yaml_file,
-    _relative_to_root,
 )
 from litehive.web.snapshot import (
     _serialize_task,

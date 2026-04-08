@@ -5,8 +5,6 @@ import logging
 import re
 from pathlib import Path
 
-logger = logging.getLogger(__name__)
-
 from litehive.engines.adapters.common import _decode_json_object, classify_execution_limit
 from litehive.engines.base import (
     AdapterCapabilities,
@@ -25,6 +23,8 @@ from litehive.models import (
     LiveEvent,
     RuntimeEngineContinuation,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class ClaudeCLIAdapter(ExternalCLIAdapter):

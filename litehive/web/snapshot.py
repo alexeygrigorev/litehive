@@ -2,7 +2,7 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
-from litehive.config import config_path, load_config
+from litehive.config import load_config
 from litehive.models import TaskRecord
 from litehive.observability import load_engine_monitoring
 from litehive.runtime import active_engine_freezes

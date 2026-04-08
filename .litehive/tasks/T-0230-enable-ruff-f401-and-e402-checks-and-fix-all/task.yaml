@@ -8,12 +8,13 @@ model: null
 mode: implementation
 pipeline_mode: full
 status: queued
+flag_reason: null
 pipeline_status: backlog
 priority: medium
-pm_complexity: null
-planned_effort: null
+pm_complexity: moderate
+planned_effort: m
 created_at: '2026-04-08T06:46:37+00:00'
-updated_at: '2026-04-08T07:18:27+00:00'
+updated_at: '2026-04-08T22:11:01+00:00'
 goal: Add F401 (unused imports) and E402 (module-level import not at top) to ruff
   config, fix all existing violations, and ensure CI/hooks catch future ones.
 acceptance_criteria:
@@ -21,10 +22,24 @@ acceptance_criteria:
 - ruff check --select E402,F401 passes with zero errors on litehive/ and tests/
 - All existing tests still pass
 - A runner_hook or pre-commit check runs ruff so violations are caught before merge
-- All wildcard imports (import *) in tests replaced with explicit imports — no noqa F401/F403 suppressions
-- Add a runner_hook that runs git grep for noqa F401/F403 suppressions and fails if any are found
+- "All wildcard imports (import *) in tests replaced with explicit imports \u2014\
+  \ no noqa F401/F403 suppressions"
+- Add a runner_hook that runs git grep for noqa F401/F403 suppressions and fails if
+  any are found
 constraints: []
-plan: []
+plan:
+- Update pyproject Ruff configuration to enable F401 and E402 for the repository without
+  broadening scope beyond litehive/ and tests/.
+- Fix current F401 findings by converting package re-exports to explicit export patterns
+  or removing unused imports, and replace wildcard-import test usage with explicit
+  imports from tests.workspace_helpers.
+- Fix current E402 findings by moving module-level imports to the top of affected
+  files while preserving behavior and helper initialization.
+- Wire a blocking before_pm_acceptance runner hook that runs Ruff on litehive/ and
+  tests/ and add coverage for hook persistence and failure behavior, including a grep
+  guard that rejects noqa F401/F403 suppressions.
+- Verify with uv run ruff check --select E402,F401 litehive tests plus targeted and
+  full pytest coverage required by the touched workflow.
 human_checkpoints: []
 subagents: []
 git:

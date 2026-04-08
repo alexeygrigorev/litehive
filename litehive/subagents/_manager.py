@@ -25,11 +25,11 @@ from litehive.models import (
 )
 from litehive.observability import record_engine_execution, record_engine_observation
 from litehive.subagents._artifacts import (
-    _prune_superseded_subagent_artifacts,
     _write_stream_artifact,
     _write_text_if_changed,
 )
 from litehive.subagents._engine_detection import (
+    _effective_engine_callable,
     _filter_supported_kwargs,
     _supports_live_execution,
     _supports_live_on_started,
@@ -104,6 +104,9 @@ class SubagentManager(_SessionMixin):
             callback_probe = live_execution_probe
             task_env = {"LITEHIVE_TASK_ID": task.id}
             if _supports_live_execution(live_execution_probe):
+                run_live_callable = _effective_engine_callable(execution_engine, "run_live")
+                if not callable(run_live_callable):
+                    run_live_callable = execution_engine.run_live
                 live_kwargs: dict[str, object] = {
                     "cwd": self.execution_root,
                     "model": model,
@@ -128,11 +131,14 @@ class SubagentManager(_SessionMixin):
                     live_kwargs["inactivity_timeout_seconds"] = (
                         self.config.subagent_inactivity_timeout_seconds
                     )
-                proc = execution_engine.run_live(
+                proc = run_live_callable(
                     prompt,
-                    **_filter_supported_kwargs(execution_engine.run_live, live_kwargs),
+                    **_filter_supported_kwargs(run_live_callable, live_kwargs),
                 )
             else:
+                run_callable = _effective_engine_callable(execution_engine, "run")
+                if not callable(run_callable):
+                    run_callable = execution_engine.run
                 run_kwargs: dict[str, object] = {
                     "cwd": self.execution_root,
                     "model": model,
@@ -146,9 +152,9 @@ class SubagentManager(_SessionMixin):
                     run_kwargs["on_started"] = lambda pid: self._record_subagent_pid(
                         task, base, ref, pid
                     )
-                proc = execution_engine.run(
+                proc = run_callable(
                     prompt,
-                    **_filter_supported_kwargs(execution_engine.run, run_kwargs),
+                    **_filter_supported_kwargs(run_callable, run_kwargs),
                 )
             transcript = execution_engine.render_transcript(proc)
             continuation = extract_engine_continuation(ref.engine, proc)

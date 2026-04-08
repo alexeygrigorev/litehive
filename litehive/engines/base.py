@@ -1,20 +1,17 @@
 """Shared adapter contract for fire-and-forget external CLIs."""
 
-
-from dataclasses import dataclass, replace
 from collections import OrderedDict
+from dataclasses import dataclass, replace
+import json
 import logging
 import os
 from pathlib import Path
 import re
+import selectors
 import shutil
 import subprocess
-import json
-import selectors
 import time
 from typing import Callable, Literal
-
-logger = logging.getLogger(__name__)
 
 from pydantic import ValidationError
 
@@ -29,6 +26,8 @@ from litehive.models import (
     cap_feedback,
     utcnow,
 )
+
+logger = logging.getLogger(__name__)
 
 
 TranscriptFormat = Literal["text", "jsonl"]

@@ -1,7 +1,5 @@
 """External CLI engine adapters."""
 
-# ruff: noqa: F401
-
 from litehive.engines.adapters import (
     ClaudeCLIAdapter,
     CodexCLIAdapter,
@@ -99,3 +97,42 @@ def extract_engine_continuation(
     if adapter is None:
         return None
     return adapter.extract_continuation(execution)
+
+
+__all__ = [
+    "ClaudeCLIAdapter",
+    "CodexCLIAdapter",
+    "CopilotCLIAdapter",
+    "EngineError",
+    "GeminiCLIAdapter",
+    "GozCLIAdapter",
+    "OpenCodeAdapter",
+    "RetryableExecutionFailure",
+    "_ENGINE_LIMIT_PATTERNS",
+    "_EXECUTION_INTERRUPTION_PATTERNS",
+    "_RETRYABLE_EXECUTION_PATTERNS",
+    "classify_execution_interruption",
+    "classify_execution_limit",
+    "classify_retryable_execution_failure",
+    "AdapterCapabilities",
+    "CLIExecutionResult",
+    "ExternalCLIAdapter",
+    "StreamEventAdapter",
+    "extract_jsonl_errors",
+    "extract_jsonl_messages",
+    "extract_live_timeline",
+    "extract_stream_errors",
+    "extract_stream_transcript",
+    "iter_jsonl_payloads",
+    "parse_stage_report_text",
+    "EngineUsageObservation",
+    "EngineUsageWindow",
+    "LiveEvent",
+    "LiveTimeline",
+    "RuntimeEngineContinuation",
+    "ENGINE_CHOICES",
+    "get_engine",
+    "get_stream_event_adapter",
+    "extract_engine_timeline",
+    "extract_engine_continuation",
+]
