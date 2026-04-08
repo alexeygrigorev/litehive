@@ -3,6 +3,7 @@
 
 from dataclasses import dataclass, replace
 from collections import OrderedDict
+import logging
 import os
 from pathlib import Path
 import re
@@ -12,6 +13,8 @@ import json
 import selectors
 import time
 from typing import Callable, Literal
+
+logger = logging.getLogger(__name__)
 
 from pydantic import ValidationError
 
@@ -428,16 +431,29 @@ def extract_stream_errors(stdout: str, *, adapter: StreamEventAdapter) -> list[s
 
 def iter_jsonl_payloads(stdout: str) -> list[dict[str, object]]:
     payloads: list[dict[str, object]] = []
-    for raw_line in stdout.splitlines():
+    for line_number, raw_line in enumerate(stdout.splitlines(), 1):
         line = raw_line.strip()
         if not line:
             continue
         try:
             payload = json.loads(line)
-        except (json.JSONDecodeError, ValueError):
+        except (json.JSONDecodeError, ValueError) as exc:
+            logger.warning(
+                "iter_jsonl_payloads: skipping unparseable line %d: %s (content: %.200s)",
+                line_number,
+                exc,
+                line,
+            )
             continue
         if isinstance(payload, dict):
             payloads.append(payload)
+        else:
+            logger.warning(
+                "iter_jsonl_payloads: skipping non-object JSON at line %d (type=%s, content: %.200s)",
+                line_number,
+                type(payload).__name__,
+                line,
+            )
     return payloads
 
 

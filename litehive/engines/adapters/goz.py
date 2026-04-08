@@ -1,7 +1,10 @@
 """Goz CLI engine adapter."""
 
 import json
+import logging
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 from litehive.engines.adapters.common import classify_execution_limit
 from litehive.engines.base import (
@@ -289,6 +292,12 @@ def _goz_extract_text(value: object) -> str | None:
             extracted = _goz_extract_text(nested)
             if extracted:
                 return extracted
+        if value:
+            logger.warning(
+                "goz: _goz_extract_text could not extract text from dict with keys %s (content: %.200s)",
+                list(value.keys()),
+                json.dumps(value, default=str),
+            )
     return None
 
 

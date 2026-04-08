@@ -1,0 +1,176 @@
+- role: planner
+  step: grooming
+  verdict: pass
+  message: "STAGE_RESULT:\n{\"verdict\":\"pass\",\"summary\":\"Scoped to adding warning\
+    \ logs at silent-skip points across engine adapters; extracted goz key-path refactor\
+    \ as follow-up\",\"tests\":{\"added\":0,\"passing\":0},\"warnings\":[\"Goal references\
+    \ stale file path engines/__init__.py \u2014 actual code is in engines/adapters/claude.py,\
+    \ goz.py, codex.py, and engines/base.py\"],\"follow_up_tasks\":[{\"title\":\"\
+    Refactor goz adapter to use explicit key paths instead of trial-and-error across\
+    \ 5+ keys\",\"rationale\":\"AC2 asks for a behavioral refactor of goz key resolution,\
+    \ which is a separate concern from adding parse-failure logging. The multi-key\
+    \ pattern spans message text, tool calls, tool results, usage/metrics, and costs\
+    \ \u2014 restructuring all of those is its own task.\",\"blocking\":false,\"goal\"\
+    :\"Replace the goz adapter or-chain key guessing (text/delta/content/message/data/result/part)\
+    \ with explicit key paths based on documented goz API response structure\",\"\
+    acceptance_criteria\":[\"goz adapter uses a single documented key path per extraction\
+    \ function, not trial-and-error\",\"Existing goz integration tests still pass\"\
+    ,\"Key path is configurable or documented if the goz API varies by model\"]}],\"\
+    acceptance_criteria\":[\"Unparseable engine output items produce a warning log\
+    \ (covers claude delta fallback, goz extraction, codex/opencode silent filtering,\
+    \ and base iter_jsonl_payloads)\",\"No items silently dropped without logging\
+    \ across any engine adapter\",\"Warning logs include enough context to diagnose\
+    \ the issue (adapter name, item index or line number, truncated raw content)\"\
+    ,\"Existing tests still pass \u2014 no functional behavior change beyond added\
+    \ logging\"],\"task_update\":{\"goal\":\"Engine adapters silently skip unparseable\
+    \ output items (claude delta fallback in claude.py, goz extraction in goz.py,\
+    \ codex/opencode silent filtering in codex.py, and base JSONL parsing in base.py).\
+    \ Add warning-level log messages at each silent-skip point so parse failures are\
+    \ diagnosable. No behavioral changes \u2014 items that were skipped before are\
+    \ still skipped, but now with a log trail.\",\"acceptance_criteria\":[\"Unparseable\
+    \ engine output items produce a warning log (covers claude delta fallback, goz\
+    \ extraction, codex/opencode silent filtering, and base iter_jsonl_payloads)\"\
+    ,\"No items silently dropped without logging across any engine adapter\",\"Warning\
+    \ logs include enough context to diagnose the issue (adapter name, item index\
+    \ or line number, truncated raw content)\",\"Existing tests still pass \u2014\
+    \ no functional behavior change beyond added logging\"],\"pm_complexity\":\"simple\"\
+    ,\"planned_effort\":\"s\",\"plan\":[\"Add logger = logging.getLogger(__name__)\
+    \ to each adapter file that lacks it (claude.py, goz.py, base.py, common.py)\"\
+    ,\"In base.py iter_jsonl_payloads: log warning on JSONDecodeError with truncated\
+    \ line content\",\"In claude.py delta fallback: log warning when JSON string literal\
+    \ decode fails, with line index\",\"In goz.py _goz_extract_text and related functions:\
+    \ log warning when no key matches, with truncated payload\",\"In codex.py and\
+    \ opencode transcript extraction: log warning when items are skipped due to missing\
+    \ fields or wrong types\",\"Add targeted tests that verify warnings are emitted\
+    \ when adapters receive malformed input\",\"Run full test suite to confirm no\
+    \ regressions\"]}}\n\nFOLLOW_UP_TASKS:\n[{\"title\":\"Refactor goz adapter to\
+    \ use explicit key paths instead of trial-and-error across 5+ keys\",\"rationale\"\
+    :\"AC2 asks for a behavioral refactor of goz key resolution, which is a separate\
+    \ concern from adding parse-failure logging. The multi-key pattern spans message\
+    \ text, tool calls, tool results, usage/metrics, and costs \u2014 restructuring\
+    \ all of those is its own task.\",\"blocking\":false,\"goal\":\"Replace the goz\
+    \ adapter or-chain key guessing (text/delta/content/message/data/result/part)\
+    \ with explicit key paths based on documented goz API response structure\",\"\
+    acceptance_criteria\":[\"goz adapter uses a single documented key path per extraction\
+    \ function, not trial-and-error\",\"Existing goz integration tests still pass\"\
+    ,\"Key path is configurable or documented if the goz API varies by model\"]}]"
+  files_changed: []
+  created_at: '2026-04-08T00:25:39+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: "## Summary\nAdded warning-level log messages at all silent-skip points\
+    \ across engine adapters so parse failures are diagnosable.\n\n## Changes Made\n\
+    \n### base.py (iter_jsonl_payloads)\n- Added `logger = logging.getLogger(__name__)`\
+    \ \n- Log warning on JSONDecodeError with line number and truncated content\n\
+    - Log warning when parsed JSON is not a dict (e.g. array, string, number)\n\n\
+    ### claude.py (_extract_claude_text_delta_fallback)\n- Added `logger = logging.getLogger(__name__)`\n\
+    - Log warning when JSON string literal decode fails in delta regex match, with\
+    \ line number and content\n\n### goz.py (_goz_extract_text)\n- Added `logger =\
+    \ logging.getLogger(__name__)`\n- Log warning when a non-empty dict has no recognized\
+    \ keys (text, delta, content, message, data, result, part), with key list and\
+    \ truncated content\n\n### codex.py (_extract_codex_transcript)\n- Log warning\
+    \ when item.completed has non-dict item field\n- Log warning when agent_message\
+    \ has no text field\n\n### opencode.py (_extract_opencode_transcript)\n- Added\
+    \ `logger = logging.getLogger(__name__)`\n- Log warning when text event has non-dict\
+    \ part field\n- Log warning when text part dict has no text field\n\n## Acceptance\
+    \ Criteria Verification\n1. **Unparseable engine output items produce a warning\
+    \ log** \u2014 YES: all five adapter files now log warnings at skip points\n2.\
+    \ **No items silently dropped without logging** \u2014 YES: every `continue` or\
+    \ `return None` at a skip point now has a preceding logger.warning()\n3. **Warning\
+    \ logs include enough context** \u2014 YES: messages include adapter name, line\
+    \ number or item index, key list, and truncated raw content (%.200s)\n4. **Existing\
+    \ tests still pass** \u2014 YES: 45/45 engine tests pass, 112/112 runner tests\
+    \ pass, 0 regressions\n\n## Tests\n- 12 new tests in tests/test_engine_parse_warnings.py\
+    \ covering all warning paths:\n  - iter_jsonl_payloads: invalid JSON, non-dict\
+    \ JSON, blank lines (no spurious warnings)\n  - Claude delta fallback: decode\
+    \ failure, valid input (no spurious warnings)\n  - Goz extract_text: unrecognized\
+    \ dict keys, known keys (no warning), empty dict (no warning)\n  - Codex transcript:\
+    \ non-dict item, missing text field\n  - Opencode transcript: non-dict part, missing\
+    \ text field\n- All 12 pass\n\n## Note on goz refactor (AC2 from original goal)\n\
+    The grooming pass correctly split out the goz key-path refactor as a separate\
+    \ follow-up task. This implementation adds logging to the existing trial-and-error\
+    \ pattern but does not refactor it."
+  files_changed: []
+  created_at: '2026-04-08T00:30:37+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: "## Summary\nAdded warning-level log messages at all silent-skip points\
+    \ across 5 engine adapter files so parse failures are diagnosable.\n\n## Changes\
+    \ Made\n\n### base.py (iter_jsonl_payloads)\n- Added `logger = logging.getLogger(__name__)`\n\
+    - Log warning on JSONDecodeError with exception details and truncated line content\n\
+    - Log warning when parsed JSON is not a dict (e.g. array, string)\n\n### claude.py\
+    \ (_extract_claude_text_delta_fallback)\n- Added `logger = logging.getLogger(__name__)`\n\
+    - Log warning when JSON string literal decode fails, with line number and content\n\
+    \n### goz.py (_goz_extract_text)\n- Added `logger = logging.getLogger(__name__)`\n\
+    - Log warning when a non-empty dict has no recognized keys (text, delta, content,\
+    \ message, data, result, part)\n- Empty dicts do not trigger warning (intentional\
+    \ \u2014 no useful context)\n\n### codex.py (_extract_codex_transcript)\n- Log\
+    \ warning when item.completed has non-dict item field\n- Log warning when agent_message\
+    \ has no text field\n\n### opencode.py (_extract_opencode_transcript)\n- Added\
+    \ `logger = logging.getLogger(__name__)`\n- Log warning when text event has non-dict\
+    \ part field\n- Log warning when text event part has no text field\n\n## Acceptance\
+    \ Criteria Verification\n1. **Unparseable engine output items produce a warning\
+    \ log** \u2014 MET: all five adapter files now log warnings at skip points\n2.\
+    \ **No items silently dropped without logging** \u2014 MET: every `continue` or\
+    \ skip at a parse-failure point now has a preceding logger.warning()\n3. **Warning\
+    \ logs include enough context** \u2014 MET: messages include adapter name, line\
+    \ number or item index, key list, and truncated raw content (%.200s)\n4. **Existing\
+    \ tests still pass** \u2014 MET: 45/45 engine tests pass, 112/112 runner tests\
+    \ pass\n\n## Tests\n- 12 new tests in tests/test_engine_parse_warnings.py covering\
+    \ all warning paths\n- All 12 pass\n- 45 existing engine tests pass (no regressions)\n\
+    - 112 runner workflow tests pass (no regressions)\n\n## Note on goz refactor\n\
+    The grooming pass correctly split out the goz key-path refactor as a separate\
+    \ follow-up task. This implementation adds logging to the existing trial-and-error\
+    \ pattern but does not refactor it."
+  files_changed: []
+  created_at: '2026-04-08T00:35:39+00:00'
+- role: qa
+  step: testing
+  verdict: pass
+  message: "STAGE_RESULT:\n{\"verdict\":\"pass\",\"summary\":\"All 12 new warning-log\
+    \ tests pass, 45 existing engine tests pass with no regressions\",\"tests\":{\"\
+    added\":12,\"passing\":12},\"warnings\":[],\"follow_up_tasks\":[],\"acceptance_criteria\"\
+    :[\"AC1 MET: Unparseable engine output items produce warning logs \u2014 verified\
+    \ in base.py (JSONDecodeError + non-dict), claude.py (delta decode failure), goz.py\
+    \ (unrecognized dict keys), codex.py (non-dict item + missing text), opencode.py\
+    \ (non-dict part + missing text)\",\"AC2 MET: No items silently dropped without\
+    \ logging \u2014 every continue/skip at a parse-failure point now has a preceding\
+    \ logger.warning(), confirmed by diff review\",\"AC3 MET: Warning logs include\
+    \ enough context \u2014 all messages include adapter name, error details or key\
+    \ list, and truncated raw content (%.200s)\",\"AC4 MET: Existing tests still pass\
+    \ \u2014 45/45 engine tests pass, 0 regressions\"],\"task_update\":{}}\n\nVerification\
+    \ details:\n- Ran tests/test_engine_parse_warnings.py: 12/12 passed in 0.30s\n\
+    - Ran tests/test_engine_variants_and_timeline.py: 45/45 passed in 3.90s (regression\
+    \ check)\n- Reviewed diffs across 5 files: base.py, claude.py, goz.py, codex.py,\
+    \ opencode.py\n- Each skip point now has a logger.warning() with adapter context\
+    \ and truncated content\n- Tests cover both positive (warning emitted) and negative\
+    \ (no spurious warning) cases\n- goz key-path refactor correctly deferred to follow-up\
+    \ task"
+  files_changed: []
+  created_at: '2026-04-08T00:36:43+00:00'
+- role: reviewer
+  step: accepting
+  verdict: pass
+  message: "STAGE_RESULT:\n{\"verdict\":\"pass\",\"summary\":\"All 4 acceptance criteria\
+    \ met: warning logs added at every silent-skip point across 5 adapter files with\
+    \ 12 targeted tests\",\"tests\":{\"added\":12,\"passing\":12},\"warnings\":[],\"\
+    follow_up_tasks\":[],\"acceptance_criteria\":[\"AC1 MET: Unparseable engine output\
+    \ items produce warning logs \u2014 base.py (JSONDecodeError + non-dict), claude.py\
+    \ (delta decode failure), goz.py (unrecognized dict keys), codex.py (non-dict\
+    \ item + missing text), opencode.py (non-dict part + missing text)\",\"AC2 MET:\
+    \ No items silently dropped without logging \u2014 every continue/skip at a parse-failure\
+    \ point has a preceding logger.warning(); blank lines correctly excluded\",\"\
+    AC3 MET: Warning logs include enough context \u2014 all messages include adapter\
+    \ name, error details or key list, and truncated raw content (%.200s)\",\"AC4\
+    \ MET: Existing tests still pass \u2014 57/57 tests pass (12 new + 45 existing\
+    \ engine tests), 0 regressions\"],\"task_update\":{}}\n\nVerified by reading all\
+    \ 5 changed files (base.py, claude.py, goz.py, codex.py, opencode.py) and the\
+    \ new test file. Ran pytest on both test_engine_parse_warnings.py (12/12) and\
+    \ test_engine_variants_and_timeline.py (45/45) \u2014 all pass. Each skip point\
+    \ now logs adapter name, error context, and truncated content. Tests cover both\
+    \ positive (warning emitted on malformed input) and negative (no spurious warnings\
+    \ on valid input) cases."
+  files_changed: []
+  created_at: '2026-04-08T00:37:34+00:00'

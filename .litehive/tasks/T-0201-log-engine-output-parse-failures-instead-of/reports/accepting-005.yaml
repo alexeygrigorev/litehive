@@ -1,0 +1,41 @@
+task_id: T-0201
+step: accepting
+verdict: pass
+summary: 'STAGE_RESULT:'
+feedback: "STAGE_RESULT:\n{\"verdict\":\"pass\",\"summary\":\"All 4 acceptance criteria\
+  \ met: warning logs added at every silent-skip point across 5 adapter files with\
+  \ 12 targeted tests\",\"tests\":{\"added\":12,\"passing\":12},\"warnings\":[],\"\
+  follow_up_tasks\":[],\"acceptance_criteria\":[\"AC1 MET: Unparseable engine output\
+  \ items produce warning logs \u2014 base.py (JSONDecodeError + non-dict), claude.py\
+  \ (delta decode failure), goz.py (unrecognized dict keys), codex.py (non-dict item\
+  \ + missing text), opencode.py (non-dict part + missing text)\",\"AC2 MET: No items\
+  \ silently dropped without logging \u2014 every continue/skip at a parse-failure\
+  \ point has a preceding logger.warning(); blank lines correctly excluded\",\"AC3\
+  \ MET: Warning logs include enough context \u2014 all messages include adapter name,\
+  \ error details or key list, and truncated raw content (%.200s)\",\"AC4 MET: Existing\
+  \ tests still pass \u2014 57/57 tests pass (12 new + 45 existing engine tests),\
+  \ 0 regressions\"],\"task_update\":{}}\n\nVerified by reading all 5 changed files\
+  \ (base.py, claude.py, goz.py, codex.py, opencode.py) and the new test file. Ran\
+  \ pytest on both test_engine_parse_warnings.py (12/12) and test_engine_variants_and_timeline.py\
+  \ (45/45) \u2014 all pass. Each skip point now logs adapter name, error context,\
+  \ and truncated content. Tests cover both positive (warning emitted on malformed\
+  \ input) and negative (no spurious warnings on valid input) cases."
+files_changed: []
+follow_up_tasks: []
+created_follow_up_task_ids: []
+task_update: {}
+tests: {}
+warnings: []
+retry_count: 1
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 50
+hook_results: []
+created_at: '2026-04-08T00:37:39+00:00'
