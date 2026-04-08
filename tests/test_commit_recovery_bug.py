@@ -222,6 +222,7 @@ def _setup_conflict(tmp_path: Path):
     task.pipeline_status = "commit_to_git"
     save_task(tmp_path, task)
 
+    # Create conflict on main
     (tmp_path / "feature.py").write_text("def feature(): return 'main'\n")
     _run(["git", "add", "feature.py"], tmp_path)
     _run(["git", "commit", "-m", "conflicting change"], tmp_path)

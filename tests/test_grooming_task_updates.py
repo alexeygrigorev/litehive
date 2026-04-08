@@ -71,26 +71,28 @@ PLANNED_EFFORT: s
     assert updated.planned_effort == "s"
 
 
-def test_apply_task_updates_from_yaml_block(tmp_path):
+def test_apply_task_updates_from_stage_result_json(tmp_path):
     root = ensure_workspace(tmp_path)
     task = create_task(root, title="New Task", goal="Original goal")
 
     from litehive.engines.base import parse_stage_report_text
-    import textwrap
+    import json
 
-    transcript = textwrap.dedent("""
-        SUMMARY: Grooming done.
-        TASK_UPDATE:
-          goal: YAML updated goal
-          pm_complexity: complex
-          auto_commit: false
-        VERDICT: PASS
-    """).strip()
+    payload = {
+        "verdict": "pass",
+        "summary": "Grooming done.",
+        "task_update": {
+            "goal": "JSON updated goal",
+            "pm_complexity": "complex",
+            "auto_commit": False,
+        },
+    }
+    transcript = f"STAGE_RESULT:\n{json.dumps(payload)}\n"
     report = parse_stage_report_text(
         task_id=task.id, step="grooming", transcript=transcript, subagent_status="completed"
     )
     assert report.task_update == {
-        "goal": "YAML updated goal",
+        "goal": "JSON updated goal",
         "pm_complexity": "complex",
         "auto_commit": False,
     }
@@ -98,7 +100,7 @@ def test_apply_task_updates_from_yaml_block(tmp_path):
     apply_task_updates_from_report(root, task, report)
 
     updated = get_task(root, task.id)
-    assert updated.goal == "YAML updated goal"
+    assert updated.goal == "JSON updated goal"
     assert updated.pm_complexity == "complex"
     assert updated.git.auto_commit is False
 

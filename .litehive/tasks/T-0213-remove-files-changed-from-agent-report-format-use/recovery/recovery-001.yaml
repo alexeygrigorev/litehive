@@ -1,0 +1,145 @@
+task_id: T-0213
+stage: implementing
+trigger: stale_runner_recovery
+summary: Recovered stale runner state and returned the task to `implementing`.
+failure_classification: stale_runner
+runnable_state: runnable
+blocker: null
+evidence:
+- kind: task
+  label: task.yaml
+  path: .litehive/tasks/T-0213-remove-files-changed-from-agent-report-format-use/task.yaml
+  exists: true
+  summary: status=interrupted pipeline_status=implementing priority=medium
+  metadata: {}
+- kind: runtime
+  label: runtime.yaml
+  path: .litehive/tasks/T-0213-remove-files-changed-from-agent-report-format-use/runtime.yaml
+  exists: true
+  summary: execution_status=interrupted current_stage=implementing last_outcome=interrupted
+  metadata: {}
+- kind: thread
+  label: thread.yaml
+  path: .litehive/tasks/T-0213-remove-files-changed-from-agent-report-format-use/thread.yaml
+  exists: true
+  summary: discussion entries=3
+  metadata: {}
+- kind: events
+  label: events.jsonl
+  path: .litehive/tasks/T-0213-remove-files-changed-from-agent-report-format-use/events.jsonl
+  exists: true
+  summary: task lifecycle and subagent event stream
+  metadata: {}
+- kind: stage_report
+  label: latest stage report
+  path: .litehive/tasks/T-0213-remove-files-changed-from-agent-report-format-use/reports/implementing-004.yaml
+  exists: true
+  summary: latest report for T-0213
+  metadata: {}
+- kind: subagent_artifact
+  label: latest subagent session
+  path: .litehive/tasks/T-0213-remove-files-changed-from-agent-report-format-use/subagents/SA-0007-swe/session.yaml
+  exists: true
+  summary: artifact from SA-0007-swe
+  metadata: {}
+- kind: subagent_artifact
+  label: latest subagent report
+  path: .litehive/tasks/T-0213-remove-files-changed-from-agent-report-format-use/subagents/SA-0007-swe/report.yaml
+  exists: true
+  summary: artifact from SA-0007-swe
+  metadata: {}
+- kind: subagent_artifact
+  label: latest subagent transcript
+  path: .litehive/tasks/T-0213-remove-files-changed-from-agent-report-format-use/subagents/SA-0007-swe/transcript.md
+  exists: true
+  summary: artifact from SA-0007-swe
+  metadata: {}
+- kind: subagent_artifact
+  label: latest subagent stdout
+  path: .litehive/tasks/T-0213-remove-files-changed-from-agent-report-format-use/subagents/SA-0007-swe/stdout.txt
+  exists: true
+  summary: artifact from SA-0007-swe
+  metadata: {}
+- kind: subagent_artifact
+  label: latest subagent stderr
+  path: .litehive/tasks/T-0213-remove-files-changed-from-agent-report-format-use/subagents/SA-0007-swe/stderr.txt
+  exists: true
+  summary: artifact from SA-0007-swe
+  metadata: {}
+- kind: subagent_artifact
+  label: latest subagent events timeline
+  path: .litehive/tasks/T-0213-remove-files-changed-from-agent-report-format-use/subagents/SA-0007-swe/timeline.yaml
+  exists: true
+  summary: artifact from SA-0007-swe
+  metadata: {}
+- kind: wrapper_log
+  label: latest run-all log
+  path: .litehive/logs/run-all/daemon.log
+  exists: true
+  summary: latest daemon/run-all wrapper log
+  metadata: {}
+- kind: engine_monitoring
+  label: engine-monitoring.yaml
+  path: .litehive/engine-monitoring.yaml
+  exists: true
+  summary: no engine record
+  metadata: {}
+- kind: git
+  label: main checkout git state
+  path: null
+  exists: true
+  summary: head=04d644d081556dbbdc7040737890abbfe86c126b dirty=19
+  metadata:
+    dirty_paths:
+    - litehive/state.yaml
+    - litehive/tasks/T-0186-reimplement-litehive-self-heal-for-external/journal.md
+    - litehive/tasks/T-0186-reimplement-litehive-self-heal-for-external/task.yaml
+    - litehive/tasks/T-0213-remove-files-changed-from-agent-report-format-use/journal.md
+    - litehive/tasks/T-0213-remove-files-changed-from-agent-report-format-use/task.yaml
+    - itehive/cli/parser.py
+    - itehive/cli/report.py
+    - itehive/engines/base.py
+    - itehive/runner/core.py
+    - itehive/runtime/_commit.py
+    - itehive/subagents/_parsing.py
+    - itehive/subagents/_prompts.py
+    - ests/test_stage_result_submission.py
+    - ests/workspace_helpers.py
+    - .litehive/tasks/T-0213-remove-files-changed-from-agent-report-format-use/reports/grooming-001.yaml
+    - .litehive/tasks/T-0213-remove-files-changed-from-agent-report-format-use/reports/implementing-002.yaml
+    - .litehive/tasks/T-0213-remove-files-changed-from-agent-report-format-use/reports/implementing-003.yaml
+    - .litehive/tasks/T-0213-remove-files-changed-from-agent-report-format-use/reports/implementing-004.yaml
+    - .litehive/tasks/T-0213-remove-files-changed-from-agent-report-format-use/thread.yaml
+- kind: worktree
+  label: task worktree state
+  path: .litehive/worktrees/T-0213-remove-files-changed-from-agent-report-format-use
+  exists: true
+  summary: dirty=11
+  metadata:
+    dirty_paths:
+    - litehive/tasks/T-0186-reimplement-litehive-self-heal-for-external/thread.yaml
+    - itehive/cli/parser.py
+    - itehive/cli/report.py
+    - itehive/engines/base.py
+    - itehive/runner/core.py
+    - itehive/runtime/_commit.py
+    - itehive/subagents/_parsing.py
+    - itehive/subagents/_prompts.py
+    - ests/test_stage_result_submission.py
+    - ests/workspace_helpers.py
+    - .litehive/tasks/T-0213-remove-files-changed-from-agent-report-format-use/thread.yaml
+    stage: implementing
+actions:
+- action: clear_stale_active_state
+  applied: true
+  summary: Cleared stale active runner state for the task.
+  metadata: {}
+- action: requeue_stage
+  applied: true
+  summary: Requeued the task at implementing.
+  metadata:
+    stage: implementing
+warnings: []
+recovery_subagent_id: null
+recovery_subagent_path: null
+created_at: '2026-04-07T20:15:03+00:00'

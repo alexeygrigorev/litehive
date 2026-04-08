@@ -38,7 +38,7 @@ def test_cmd_run_default_executes_single_task_and_reports_summary(
     monkeypatch.setattr(
         "litehive.runtime.SubagentManager.run",
         lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
-            _completed_subagent_result(tmp_path, task.pipeline_status)
+            _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
         ),
     )
 
@@ -121,7 +121,7 @@ def test_cmd_run_drains_task_pool_and_reports_summary(
     monkeypatch.setattr(
         "litehive.runtime.SubagentManager.run",
         lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
-            _completed_subagent_result(tmp_path, task.pipeline_status)
+            _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
         ),
     )
 
@@ -347,7 +347,7 @@ def test_cmd_run_reports_resumable_interrupted_tasks(
     def fake_run(self, current_task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None):  # type: ignore[no-untyped-def]
         if current_task.pipeline_status == "testing":
             raise KeyboardInterrupt()
-        return _completed_subagent_result(tmp_path, current_task.pipeline_status)
+        return _completed_subagent_result(tmp_path, current_task.pipeline_status, task=current_task)
 
     monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_run)
 
@@ -379,7 +379,7 @@ def test_run_next_task_marks_subagent_termination_as_interrupted(tmp_path: Path)
                 tmp_path, current_task.pipeline_status, engine_name=engine_name
             )
         return _completed_subagent_result(
-            tmp_path, current_task.pipeline_status, engine_name=engine_name
+            tmp_path, current_task.pipeline_status, engine_name=engine_name, task=current_task
         )
 
     monkeypatch = pytest.MonkeyPatch()
@@ -418,7 +418,7 @@ def test_cmd_run_reports_remaining_tasks_when_pool_stops_early(
     monkeypatch.setattr(
         "litehive.runtime.SubagentManager.run",
         lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
-            _completed_subagent_result(tmp_path, task.pipeline_status)
+            _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
         ),
     )
 
@@ -492,49 +492,15 @@ def test_cmd_run_drain_reports_no_useful_progress_after_requeue_when_only_blocke
     save_state(tmp_path, state)
 
     def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None):  # type: ignore[no-untyped-def]
-        transcript = "\n".join(
-            [
-                "VERDICT: PASS",
-                f"SUMMARY: {task.pipeline_status} passed",
-                "FILES_CHANGED:",
-                "- app.txt",
-                "TESTS_ADDED: 1",
-                "TESTS_PASSING: 1",
-                "WARNINGS:",
-            ]
-        )
         if task.id == active.id and task.pipeline_status == "testing":
             task.depends_on = ["T-9998"]
             save_task(tmp_path, task)
-            transcript = "\n".join(
-                [
-                    "VERDICT: FAIL",
-                    "SUMMARY: qa wants another implementation pass",
-                    "FILES_CHANGED:",
-                    "TESTS_ADDED: 0",
-                    "TESTS_PASSING: 0",
-                    "WARNINGS:",
-                ]
+            return _stage_subagent_result(
+                tmp_path, task.pipeline_status, engine_name=engine_name,
+                verdict="FAIL", summary="qa wants another implementation pass",
+                files_changed=[], tests_added=0, tests_passing=0, task=task,
             )
-        return SubagentResult(
-            ref=SubagentRef(
-                id=f"SA-{task.id}-{task.pipeline_status}-codex",
-                role=role,
-                engine=engine_name,
-                status="completed",
-                path=f"subagents/{task.id}-{task.pipeline_status}-codex",
-            ),
-            execution=CLIExecutionResult(
-                adapter=engine_name,
-                argv=(engine_name, "exec"),
-                cwd=tmp_path,
-                exit_code=0,
-                stdout=transcript,
-                stderr="",
-            ),
-            transcript=transcript,
-            exit_code=0,
-        )
+        return _completed_subagent_result(tmp_path, task.pipeline_status, engine_name=engine_name, task=task)
 
     monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_run)
 
@@ -572,7 +538,7 @@ def test_cmd_run_reports_human_checkpoint_stop_without_marking_failure(
     monkeypatch.setattr(
         "litehive.runtime.SubagentManager.run",
         lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
-            _completed_subagent_result(tmp_path, task.pipeline_status)
+            _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
         ),
     )
 
@@ -610,47 +576,13 @@ def test_cmd_run_reports_requeued_task_even_when_other_tasks_are_blocked(
     save_state(tmp_path, state)
 
     def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None):  # type: ignore[no-untyped-def]
-        transcript = "\n".join(
-            [
-                "VERDICT: PASS",
-                f"SUMMARY: {task.pipeline_status} passed",
-                "FILES_CHANGED:",
-                "- app.txt",
-                "TESTS_ADDED: 1",
-                "TESTS_PASSING: 1",
-                "WARNINGS:",
-            ]
-        )
         if task.id == active.id and task.pipeline_status == "testing":
-            transcript = "\n".join(
-                [
-                    "VERDICT: FAIL",
-                    "SUMMARY: qa wants another implementation pass",
-                    "FILES_CHANGED:",
-                    "TESTS_ADDED: 0",
-                    "TESTS_PASSING: 0",
-                    "WARNINGS:",
-                ]
+            return _stage_subagent_result(
+                tmp_path, task.pipeline_status, engine_name=engine_name,
+                verdict="FAIL", summary="qa wants another implementation pass",
+                files_changed=[], tests_added=0, tests_passing=0, task=task,
             )
-        return SubagentResult(
-            ref=SubagentRef(
-                id=f"SA-{task.id}-{task.pipeline_status}-codex",
-                role=role,
-                engine=engine_name,
-                status="completed",
-                path=f"subagents/{task.id}-{task.pipeline_status}-codex",
-            ),
-            execution=CLIExecutionResult(
-                adapter=engine_name,
-                argv=(engine_name, "exec"),
-                cwd=tmp_path,
-                exit_code=0,
-                stdout=transcript,
-                stderr="",
-            ),
-            transcript=transcript,
-            exit_code=0,
-        )
+        return _completed_subagent_result(tmp_path, task.pipeline_status, engine_name=engine_name, task=task)
 
     monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_run)
 
@@ -713,7 +645,7 @@ def test_cmd_run_reports_stage_outcomes_for_remaining_task_with_prior_reports(
     monkeypatch.setattr(
         "litehive.runtime.SubagentManager.run",
         lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
-            _completed_subagent_result(tmp_path, task.pipeline_status)
+            _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
         ),
     )
 
@@ -760,11 +692,10 @@ def test_cmd_run_reports_failed_task_summary_with_stage_outcomes(
     save_task(tmp_path, task)
 
     def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None):  # type: ignore[no-untyped-def]
-        return SubagentResult(
-            ref=SubagentRef(id="SA-grooming", role=role, engine=engine_name, status="completed", path="subagents/grooming"),
-            execution=CLIExecutionResult(adapter=engine_name, argv=(engine_name, "exec"), cwd=tmp_path, exit_code=0,
-                stdout="VERDICT: BLOCKED\nSUMMARY: missing acceptance criteria\nFILES_CHANGED:\nTESTS_ADDED: 0\nTESTS_PASSING: 0\nWARNINGS:\n", stderr=""),
-            transcript="", exit_code=0,
+        return _stage_subagent_result(
+            tmp_path, task.pipeline_status, engine_name=engine_name,
+            verdict="BLOCKED", summary="missing acceptance criteria",
+            files_changed=[], tests_added=0, tests_passing=0, task=task,
         )
 
     monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_run)
@@ -928,7 +859,7 @@ def test_status_output_includes_runtime_observability(
 
     save_task(tmp_path, task)
 
-    exit_code = _cmd_status(argparse.Namespace(workspace=tmp_path))
+    exit_code = _cmd_status(argparse.Namespace(workspace=tmp_path, full=True))
     output = capsys.readouterr().out
 
     assert exit_code == 0
@@ -962,6 +893,88 @@ def test_status_output_includes_runtime_observability(
         in output
     )
 
+def test_status_default_dashboard_shows_sections_without_config_noise(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    ensure_workspace(
+        tmp_path,
+        LitehiveConfig(
+            default_retry_limit=2,
+            pool_stop_on_failure=True,
+            pool_max_tasks=4,
+        ),
+    )
+    # Create an active task
+    active = create_task(tmp_path, title="Implement dashboard")
+    active.status = "in_progress"
+    active.pipeline_status = "implementing"
+    active.engine = "copilot"
+    active.runtime.execution_status = "running"
+    active.runtime.run_started_at = "2026-03-31T10:00:00+00:00"
+    active.runtime.current_stage = RuntimeStageState(
+        step="implementing",
+        status="running",
+        started_at="2026-03-31T10:01:00+00:00",
+        updated_at="2026-03-31T10:01:01+00:00",
+    )
+    save_task(tmp_path, active)
+
+    # Create a completed task
+    done = create_task(tmp_path, title="Previous feature")
+    done.status = "done"
+    done.pipeline_status = "done"
+    done.updated_at = "2026-03-31T09:50:00+00:00"
+    save_task(tmp_path, done)
+
+    # Create a queued task
+    queued = create_task(tmp_path, title="Next feature")
+    save_task(tmp_path, queued)
+
+    state = load_state(tmp_path)
+    state.active_task_id = active.id
+    state.queue = [queued.id]
+    save_state(tmp_path, state)
+
+    # Write some events
+    import json
+    events_dir = tmp_path / ".litehive" / "tasks" / f"{active.id}-{active.slug}"
+    events_dir.mkdir(parents=True, exist_ok=True)
+    (events_dir / "events.jsonl").write_text(
+        json.dumps({"ts": "2026-03-31T10:01:00+00:00", "task_id": active.id, "kind": "subagent_started", "data": {"role": "swe", "engine": "copilot"}}) + "\n",
+        encoding="utf-8",
+    )
+
+    exit_code = _cmd_status(argparse.Namespace(workspace=tmp_path))
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    # Dashboard sections present
+    assert "=== Active Task ===" in output
+    assert active.id in output
+    assert "implementing with copilot" in output
+    assert "running for" in output
+    assert "stage: implementing elapsed" in output
+    assert "title: Implement dashboard" in output
+    assert "=== Last Completed ===" in output
+    assert done.id in output
+    assert "pass" in output
+    assert "title: Previous feature" in output
+    assert "=== Queue ===" in output
+    assert "1 queued" in output
+    assert "Next feature" in output
+    assert "=== Engine Health ===" in output
+    assert "=== Recent Activity ===" in output
+    assert "subagent_started" not in output  # label is "started"
+    assert "started swe copilot" in output
+
+    # Config noise NOT present in default output
+    assert "default_retry_limit" not in output
+    assert "pool_stop_on_failure" not in output
+    assert "pool_max_tasks" not in output
+    assert "execution_retry_policies" not in output
+    assert "retry_limit=" not in output
+    assert "auto_commit=" not in output
+
 def test_status_fast_mode_uses_state_first_reads_and_skips_runtime_hydration(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -984,7 +997,7 @@ def test_status_fast_mode_uses_state_first_reads_and_skips_runtime_hydration(
     state.queue = [second.id, first.id]
     save_state(tmp_path, state)
 
-    exit_code = _cmd_status(argparse.Namespace(workspace=tmp_path, fast=True))
+    exit_code = _cmd_status(argparse.Namespace(workspace=tmp_path, fast=True, full=True))
     output = capsys.readouterr().out
 
     assert exit_code == 0
@@ -1019,7 +1032,7 @@ def test_status_output_includes_execution_estimate_fields(
         encoding="utf-8",
     )
 
-    exit_code = _cmd_status(argparse.Namespace(workspace=tmp_path))
+    exit_code = _cmd_status(argparse.Namespace(workspace=tmp_path, full=True))
     output = capsys.readouterr().out
 
     assert exit_code == 0
@@ -1382,7 +1395,7 @@ def test_cmd_status_includes_engine_monitoring_lines(
         failure_reason="usage limit reached",
     )
 
-    exit_code = _cmd_status(argparse.Namespace(workspace=tmp_path, full=False))
+    exit_code = _cmd_status(argparse.Namespace(workspace=tmp_path, full=True))
     output = capsys.readouterr().out
 
     assert exit_code == 0
@@ -1413,7 +1426,7 @@ def test_cmd_status_includes_codex_provider_limit_monitoring(
         failure_reason="usage limit reached",
     )
 
-    exit_code = _cmd_status(argparse.Namespace(workspace=tmp_path, full=False))
+    exit_code = _cmd_status(argparse.Namespace(workspace=tmp_path, full=True))
     output = capsys.readouterr().out
 
     assert exit_code == 0
@@ -1448,7 +1461,7 @@ def test_cmd_status_includes_claude_provider_limit_monitoring(
         failure_reason="rate limit reached",
     )
 
-    exit_code = _cmd_status(argparse.Namespace(workspace=tmp_path, full=False))
+    exit_code = _cmd_status(argparse.Namespace(workspace=tmp_path, full=True))
     output = capsys.readouterr().out
 
     assert exit_code == 0
@@ -1489,7 +1502,7 @@ def test_cmd_status_includes_gemini_provider_limit_monitoring(
         failure_reason="quota limit reached",
     )
 
-    exit_code = _cmd_status(argparse.Namespace(workspace=tmp_path, full=False))
+    exit_code = _cmd_status(argparse.Namespace(workspace=tmp_path, full=True))
     output = capsys.readouterr().out
 
     assert exit_code == 0
@@ -1551,7 +1564,7 @@ def test_cmd_status_includes_engine_usage_window(
         failure_reason=None,
     )
 
-    exit_code = _cmd_status(argparse.Namespace(workspace=tmp_path, full=False))
+    exit_code = _cmd_status(argparse.Namespace(workspace=tmp_path, full=True))
     output = capsys.readouterr().out
 
     assert exit_code == 0
@@ -1781,7 +1794,7 @@ def test_status_output_includes_default_execution_retry_policies(
 ) -> None:
     ensure_workspace(tmp_path, LitehiveConfig())
 
-    exit_code = _cmd_status(argparse.Namespace(workspace=tmp_path))
+    exit_code = _cmd_status(argparse.Namespace(workspace=tmp_path, full=True))
     output = capsys.readouterr().out
 
     assert exit_code == 0
@@ -1898,6 +1911,74 @@ def test_status_output_includes_budget_control_settings(
     assert config.engine_budget_caps == {"claude": 6}
     assert config.engine_costs["claude"] == 3
     assert config.engine_costs["codex"] == 1
+
+def test_status_default_dashboard_shows_sections_without_config_noise(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    ensure_workspace(tmp_path, LitehiveConfig(
+        default_retry_limit=2,
+        pool_stop_on_failure=True,
+        pool_max_tasks=4,
+    ))
+    active = create_task(tmp_path, title="Active feature")
+    active.status = "in_progress"
+    active.pipeline_status = "implementing"
+    active.runtime.execution_status = "running"
+    active.runtime.run_started_at = "2026-04-07T10:00:00+00:00"
+    active.runtime.current_stage = RuntimeStageState(
+        step="implementing",
+        status="running",
+        started_at="2026-04-07T10:05:00+00:00",
+        updated_at="2026-04-07T10:05:01+00:00",
+    )
+    save_task(tmp_path, active)
+
+    done_task = create_task(tmp_path, title="Completed feature")
+    done_task.status = "done"
+    done_task.pipeline_status = "done"
+    done_task.updated_at = "2026-04-07T09:00:00+00:00"
+    done_task.runtime.last_stage = RuntimeStageState(
+        step="commit_to_git",
+        verdict="pass",
+        status="completed",
+    )
+    save_task(tmp_path, done_task)
+
+    queued = create_task(tmp_path, title="Next feature")
+    save_task(tmp_path, queued)
+
+    state = load_state(tmp_path)
+    state.active_task_id = active.id
+    state.queue = [queued.id]
+    save_state(tmp_path, state)
+
+    exit_code = _cmd_status(argparse.Namespace(workspace=tmp_path))
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    # Dashboard sections present
+    assert "=== Active Task ===" in output
+    assert "implementing with" in output
+    assert "running for" in output
+    assert "stage: implementing elapsed" in output
+    assert "=== Last Completed ===" in output
+    assert "Completed feature" in output
+    assert "verdict=pass" in output
+    assert "=== Queue ===" in output
+    assert "1 queued" in output
+    assert "Next feature" in output
+    assert "=== Engine Health ===" in output
+    assert "=== Recent Activity ===" in output
+    # Config noise absent from default output
+    assert "default_retry_limit:" not in output
+    assert "execution_retry_policies:" not in output
+    assert "pool_stop_on_failure:" not in output
+    assert "pool_max_tasks:" not in output
+    assert "pool_selection_policy:" not in output
+    assert "process_profile:" not in output
+    # No per-task dump
+    assert "retry_policy=configured:" not in output
+    assert "auto_commit=" not in output
 
 def test_queue_command_shows_active_and_queued_order(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
@@ -2746,7 +2827,7 @@ def test_pool_summary_flow_stats_in_durable_report(
     monkeypatch.setattr(
         "litehive.runtime.SubagentManager.run",
         lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
-            _completed_subagent_result(tmp_path, task.pipeline_status)
+            _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
         ),
     )
 

@@ -42,6 +42,9 @@ class PipelineState(str, Enum):
     FLAGGED = "flagged"
     """Task requires operator attention before it can continue."""
 
+    MERGE_FAILED = "merge_failed"
+    """Task completed implementation but worktree merge into main could not be resolved."""
+
     INTERRUPTED = "interrupted"
     """Task was stopped mid-execution; resumable after inspection."""
 
@@ -94,12 +97,12 @@ _ROUTES: dict[tuple[str, str], str] = {
     ("accepting", "accept"): "commit_to_git",
     ("accepting", "fail"): "implementing",
     ("accepting", "reject"): "implementing",
-    # commit_to_git ──► done (on success) or flagged (on any failure)
+    # commit_to_git ──► done (on success) or merge_failed (on any failure)
     ("commit_to_git", "pass"): "done",
     ("commit_to_git", "accept"): "done",
-    ("commit_to_git", "fail"): "flagged",
-    ("commit_to_git", "reject"): "flagged",
-    ("commit_to_git", "blocked"): "flagged",
+    ("commit_to_git", "fail"): "merge_failed",
+    ("commit_to_git", "reject"): "merge_failed",
+    ("commit_to_git", "blocked"): "merge_failed",
 }
 
 # Single-mode pipeline: backlog ──► implementing ──► commit_to_git ──► done
@@ -115,10 +118,10 @@ _SINGLE_ROUTES: dict[tuple[str, str], str] = {
     # implementing ──► commit_to_git (runner may redirect to done when no files changed)
     ("implementing", "pass"): "commit_to_git",
     ("implementing", "accept"): "commit_to_git",
-    # commit_to_git ──► done (on success) or flagged (on any failure)
+    # commit_to_git ──► done (on success) or merge_failed (on any failure)
     ("commit_to_git", "pass"): "done",
     ("commit_to_git", "accept"): "done",
-    ("commit_to_git", "fail"): "flagged",
-    ("commit_to_git", "reject"): "flagged",
-    ("commit_to_git", "blocked"): "flagged",
+    ("commit_to_git", "fail"): "merge_failed",
+    ("commit_to_git", "reject"): "merge_failed",
+    ("commit_to_git", "blocked"): "merge_failed",
 }

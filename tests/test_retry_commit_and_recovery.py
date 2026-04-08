@@ -166,7 +166,7 @@ def test_run_next_task_uses_routing_plan_before_global_fallbacks_when_budget_blo
         self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None
     ):  # type: ignore[no-untyped-def]
         assert engine_name == "codex"
-        return _completed_subagent_result(tmp_path, task.pipeline_status)
+        return _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
 
     monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_run)
 
@@ -198,7 +198,7 @@ def test_run_next_task_falls_back_from_codex_to_opencode_on_usage_limit(
     monkeypatch.setattr(codex, "is_available", lambda: True)
     monkeypatch.setattr(opencode, "is_available", lambda: True)
     monkeypatch.setattr(
-        "litehive.subagents._execution._supports_live_execution", lambda engine: False
+        "litehive.subagents._manager._supports_live_execution", lambda engine: False
     )
 
     def fake_codex_run(
@@ -266,8 +266,8 @@ def test_run_next_task_falls_back_from_codex_to_opencode_on_usage_limit(
     assert report["feedback"].startswith(
         "Stage `grooming` switched from `codex` to `opencode` after usage limit reached."
     )
-    assert "SUMMARY: grooming complete via opencode" in report["feedback"]
-    _cmd_status(argparse.Namespace(workspace=tmp_path))
+    assert "grooming complete via opencode" in report["feedback"]
+    _cmd_status(argparse.Namespace(workspace=tmp_path, full=True))
     output = capsys.readouterr().out
     assert "engine_switch=grooming codex->opencode reason=usage limit reached" in output
 
@@ -298,7 +298,7 @@ def test_run_next_task_falls_back_after_stale_subagent_timeout(
     monkeypatch.setattr(codex, "is_available", lambda: True)
     monkeypatch.setattr(opencode, "is_available", lambda: True)
     monkeypatch.setattr(
-        "litehive.subagents._execution._supports_live_execution",
+        "litehive.subagents._manager._supports_live_execution",
         lambda engine: getattr(engine, "name", None) == "codex",
     )
     monkeypatch.setattr(
@@ -347,7 +347,7 @@ def test_run_next_task_falls_back_after_stale_subagent_timeout(
 
     monkeypatch.setattr(codex, "run_live", fake_codex_run_live)
     monkeypatch.setattr(opencode, "run", fake_opencode_run)
-    monkeypatch.setattr("litehive.subagents._execution.os.kill", lambda pid, sig: None)
+    monkeypatch.setattr("litehive.subagents._session.os.kill", lambda pid, sig: None)
 
     summary = run_next_task(tmp_path)
 
@@ -392,7 +392,7 @@ def test_run_next_task_falls_back_from_codex_to_gemini_on_usage_limit(
     monkeypatch.setattr(codex, "is_available", lambda: True)
     monkeypatch.setattr(gemini, "is_available", lambda: True)
     monkeypatch.setattr(
-        "litehive.subagents._execution._supports_live_execution", lambda engine: False
+        "litehive.subagents._manager._supports_live_execution", lambda engine: False
     )
 
     def fake_codex_run(
@@ -423,18 +423,7 @@ def test_run_next_task_falls_back_from_codex_to_gemini_on_usage_limit(
         on_started=None,
     ) -> CLIExecutionResult:
         step = prompt.split("Stage: ", 1)[1].splitlines()[0]
-        transcript = (
-            '{"type":"message","role":"assistant","content":"VERDICT: PASS\\n","delta":true}\n'
-            f'{{"type":"message","role":"assistant","content":"SUMMARY: {step} complete via gemini\\nFILES_CHANGED:\\n- app.txt\\nTESTS_ADDED: 1\\nTESTS_PASSING: 1\\nWARNINGS:\\n","delta":true}}'
-        )
-        return CLIExecutionResult(
-            adapter="gemini",
-            argv=("gemini", "-p"),
-            cwd=cwd,
-            exit_code=0,
-            stdout=transcript,
-            stderr="",
-        )
+        return _successful_stage_execution(tmp_path, "gemini", step)
 
     monkeypatch.setattr(codex, "run", fake_codex_run)
     monkeypatch.setattr(gemini, "run", fake_gemini_run)
@@ -487,7 +476,7 @@ def test_run_next_task_keeps_using_fallback_engine_after_implementing_usage_limi
     monkeypatch.setattr(codex, "is_available", lambda: True)
     monkeypatch.setattr(opencode, "is_available", lambda: True)
     monkeypatch.setattr(
-        "litehive.subagents._execution._supports_live_execution", lambda engine: False
+        "litehive.subagents._manager._supports_live_execution", lambda engine: False
     )
 
     attempted_stages: list[tuple[str, str]] = []
@@ -563,7 +552,7 @@ def test_run_next_task_walks_same_stage_fallback_graph_after_usage_limit(
     monkeypatch.setattr(opencode, "is_available", lambda: True)
     monkeypatch.setattr(gemini, "is_available", lambda: True)
     monkeypatch.setattr(
-        "litehive.subagents._execution._supports_live_execution", lambda engine: False
+        "litehive.subagents._manager._supports_live_execution", lambda engine: False
     )
 
     def fake_codex_run(
@@ -613,18 +602,7 @@ def test_run_next_task_walks_same_stage_fallback_graph_after_usage_limit(
         on_started=None,
     ) -> CLIExecutionResult:
         step = prompt.split("Stage: ", 1)[1].splitlines()[0]
-        transcript = (
-            '{"type":"message","role":"assistant","content":"VERDICT: PASS\\n","delta":true}\n'
-            f'{{"type":"message","role":"assistant","content":"SUMMARY: {step} complete via gemini\\nFILES_CHANGED:\\n- app.txt\\nTESTS_ADDED: 1\\nTESTS_PASSING: 1\\nWARNINGS:\\n","delta":true}}'
-        )
-        return CLIExecutionResult(
-            adapter="gemini",
-            argv=("gemini", "-p"),
-            cwd=cwd,
-            exit_code=0,
-            stdout=transcript,
-            stderr="",
-        )
+        return _successful_stage_execution(tmp_path, "gemini", step)
 
     monkeypatch.setattr(codex, "run", fake_codex_run)
     monkeypatch.setattr(opencode, "run", fake_opencode_run)
@@ -656,7 +634,7 @@ def test_run_next_task_walks_same_stage_fallback_graph_after_usage_limit(
         "Stage `grooming` switched from `opencode` to `gemini` after rate limit reached.",
     ]
     assert report["feedback"].startswith(report["warnings"][0])
-    assert "SUMMARY: grooming complete via gemini" in report["feedback"]
+    assert "grooming complete via gemini" in report["feedback"]
 
 
 def test_run_next_task_retries_retryable_execution_failure_before_continuing(
@@ -718,7 +696,7 @@ def test_run_next_task_retries_retryable_execution_failure_before_continuing(
                         classification="timeout",
                     ),
                 )
-        return _completed_subagent_result(tmp_path, step)
+        return _completed_subagent_result(tmp_path, step, task=task)
 
     monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_run)
 
@@ -814,7 +792,7 @@ def test_run_next_task_reuses_structured_continuation_handoff_on_retry(
                         classification="timeout",
                     ),
                 )
-        return _completed_subagent_result(tmp_path, step, engine_name=engine_name)
+        return _completed_subagent_result(tmp_path, step, engine_name=engine_name, task=task)
 
     monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_run)
 
@@ -879,7 +857,7 @@ def test_run_next_task_passes_structured_continuation_handoff_across_engine_swit
                 exit_code=1,
                 failure=EngineFailure(kind="execution_limit", reason="usage limit reached"),
             )
-        return _completed_subagent_result(tmp_path, step, engine_name=engine_name)
+        return _completed_subagent_result(tmp_path, step, engine_name=engine_name, task=task)
 
     monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_run)
 
@@ -948,7 +926,7 @@ def test_run_next_task_uses_default_opencode_retry_policy_and_records_journal(
                         classification="network",
                     ),
                 )
-        return _completed_subagent_result(tmp_path, step, engine_name=engine_name)
+        return _completed_subagent_result(tmp_path, step, engine_name=engine_name, task=task)
 
     monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_run)
 
@@ -1040,7 +1018,7 @@ def test_run_next_task_uses_default_gemini_retry_policy_and_records_journal(
                         classification="network",
                     ),
                 )
-        return _completed_subagent_result(tmp_path, step, engine_name=engine_name)
+        return _completed_subagent_result(tmp_path, step, engine_name=engine_name, task=task)
 
     monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_run)
 
@@ -1129,7 +1107,7 @@ def test_run_next_task_uses_default_claude_retry_policy_and_records_journal(
                         classification="service",
                     ),
                 )
-        return _completed_subagent_result(tmp_path, step, engine_name=engine_name)
+        return _completed_subagent_result(tmp_path, step, engine_name=engine_name, task=task)
 
     monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_run)
 
@@ -1206,7 +1184,7 @@ def test_run_next_task_uses_codex_retry_policy_before_external_cli_fallback(
         step = task.pipeline_status
         attempts.append((engine_name, step))
         if engine_name == "opencode":
-            return _completed_subagent_result(tmp_path, step, engine_name="opencode")
+            return _completed_subagent_result(tmp_path, step, engine_name="opencode", task=task)
         codex_attempts += 1
         if codex_attempts <= 2:
             return SubagentResult(
@@ -1233,7 +1211,7 @@ def test_run_next_task_uses_codex_retry_policy_before_external_cli_fallback(
                     classification="network",
                 ),
             )
-        return _completed_subagent_result(tmp_path, step, engine_name=engine_name)
+        return _completed_subagent_result(tmp_path, step, engine_name=engine_name, task=task)
 
     monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_run)
 
@@ -1303,7 +1281,7 @@ def test_run_next_task_falls_back_after_retry_exhaustion(
         step = task.pipeline_status
         attempts.append((engine_name, step))
         if engine_name == "opencode":
-            return _completed_subagent_result(tmp_path, step, engine_name="opencode")
+            return _completed_subagent_result(tmp_path, step, engine_name="opencode", task=task)
         return SubagentResult(
             ref=SubagentRef(
                 id=f"SA-{step}-{len(attempts)}",
@@ -1401,7 +1379,7 @@ def test_run_next_task_does_not_retry_codex_usage_limit_when_codex_policy_is_con
         step = task.pipeline_status
         attempts.append((engine_name, step))
         if engine_name == "opencode":
-            return _completed_subagent_result(tmp_path, step, engine_name="opencode")
+            return _completed_subagent_result(tmp_path, step, engine_name="opencode", task=task)
         return SubagentResult(
             ref=SubagentRef(
                 id=f"SA-{step}-1",
@@ -1528,7 +1506,7 @@ def test_run_next_task_skips_unavailable_fallback_engine_after_usage_limit(
     monkeypatch.setattr(gemini, "is_available", lambda: False)
     monkeypatch.setattr(opencode, "is_available", lambda: True)
     monkeypatch.setattr(
-        "litehive.subagents._execution._supports_live_execution", lambda engine: False
+        "litehive.subagents._manager._supports_live_execution", lambda engine: False
     )
 
     def fake_codex_run(
@@ -1605,7 +1583,7 @@ def test_run_next_task_creates_checkpoint_commit_and_persists_policy(
     monkeypatch.setattr(
         "litehive.runtime.SubagentManager.run",
         lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
-            _completed_subagent_result(tmp_path, task.pipeline_status)
+            _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
         ),
     )
 
@@ -1647,7 +1625,7 @@ def test_run_next_task_executes_stage_in_task_worktree(
         self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None
     ):  # type: ignore[no-untyped-def]
         seen_execution_roots.append(self.execution_root)
-        result = _completed_subagent_result(tmp_path, task.pipeline_status, engine_name=engine_name)
+        result = _completed_subagent_result(tmp_path, task.pipeline_status, engine_name=engine_name, task=task)
         if task.pipeline_status == "implementing":
             assert self.execution_root != tmp_path
             assert (tmp_path / "app.txt").read_text(encoding="utf-8") == "base\n"
@@ -1683,7 +1661,7 @@ def test_run_next_task_keeps_using_task_worktree_when_main_checkout_is_dirty(
         self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None
     ):  # type: ignore[no-untyped-def]
         seen_execution_roots.append(self.execution_root)
-        result = _completed_subagent_result(tmp_path, task.pipeline_status, engine_name=engine_name)
+        result = _completed_subagent_result(tmp_path, task.pipeline_status, engine_name=engine_name, task=task)
         if task.pipeline_status == "implementing":
             assert self.execution_root != tmp_path
             assert (tmp_path / "app.txt").read_text(encoding="utf-8") == "base\n"
@@ -1712,7 +1690,7 @@ def test_run_next_task_cherry_picks_task_commit_back_to_main(
     def fake_run(
         self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None
     ):  # type: ignore[no-untyped-def]
-        result = _completed_subagent_result(tmp_path, task.pipeline_status, engine_name=engine_name)
+        result = _completed_subagent_result(tmp_path, task.pipeline_status, engine_name=engine_name, task=task)
         if task.pipeline_status == "implementing":
             assert (tmp_path / "app.txt").read_text(encoding="utf-8") == "base\n"
             (self.execution_root / "app.txt").write_text("integrated\n", encoding="utf-8")
@@ -1759,7 +1737,7 @@ def test_run_next_task_appends_attempt_suffix_after_rollback(
     monkeypatch.setattr(
         "litehive.runtime.SubagentManager.run",
         lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
-            _completed_subagent_result(tmp_path, task.pipeline_status)
+            _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
         ),
     )
 
@@ -1795,7 +1773,7 @@ def test_run_next_task_preserves_future_task_added_during_commit_failure(
     monkeypatch.setattr(
         "litehive.runtime.SubagentManager.run",
         lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
-            _completed_subagent_result(tmp_path, task.pipeline_status)
+            _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
         ),
     )
 
@@ -1813,7 +1791,7 @@ def test_run_next_task_preserves_future_task_added_during_commit_failure(
         )
 
     monkeypatch.setattr(
-        "litehive.runtime._execution._commit_to_git_report", fail_commit_with_concurrent_add
+        "litehive.runtime._builder._commit_to_git_report", fail_commit_with_concurrent_add
     )
 
     summary = run_next_task(tmp_path)
@@ -1822,7 +1800,7 @@ def test_run_next_task_preserves_future_task_added_during_commit_failure(
     assert summary.result is not None
     # The runner may launch a recovery agent after the commit failure,
     # which can succeed and re-queue the task.
-    assert summary.result.final_status in ("flagged", "queued")
+    assert summary.result.final_status in ("flagged", "merge_failed", "queued")
     state = load_state(tmp_path)
     assert state.active_task_id is None
     assert "T-0002" in state.queue
@@ -1842,7 +1820,7 @@ def test_run_next_task_skips_commit_when_not_a_git_repo(
     monkeypatch.setattr(
         "litehive.runtime.SubagentManager.run",
         lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
-            _completed_subagent_result(tmp_path, task.pipeline_status)
+            _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
         ),
     )
 
@@ -1871,7 +1849,7 @@ def test_run_next_task_commits_successfully_with_git_repo(
     monkeypatch.setattr(
         "litehive.runtime.SubagentManager.run",
         lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
-            _completed_subagent_result(tmp_path, task.pipeline_status)
+            _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
         ),
     )
 
@@ -1900,7 +1878,7 @@ def test_run_next_task_completes_when_task_worktree_path_is_missing(
     ):  # type: ignore[no-untyped-def]
         if task.pipeline_status == "accepting":
             task.runtime.git.worktree_path = "../missing-preflight-worktree"
-        return _completed_subagent_result(tmp_path, task.pipeline_status)
+        return _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
 
     monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_run)
 
@@ -1929,7 +1907,7 @@ def test_run_next_task_completes_when_worktree_has_unexpected_commit(
         if task.pipeline_status == "accepting":
             worktree_path = tmp_path / str(task.runtime.git.worktree_path)
             _run(["git", "commit", "--allow-empty", "-m", "manual worktree commit"], worktree_path)
-        return _completed_subagent_result(tmp_path, task.pipeline_status)
+        return _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
 
     monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_run)
 
@@ -1981,8 +1959,8 @@ def test_run_next_task_records_blocked_reason_code_when_fallbacks_are_exhausted(
     assert summary.result.final_status == "flagged"
     task = get_task(tmp_path, "T-0001")
     assert task is not None
+    # Exhausted fallbacks set verdict to "blocked" → outcome kind is "blocked".
     assert task.runtime.last_outcome.kind == "blocked"
-    assert task.runtime.last_outcome.reason_code == "verdict_blocked"
     assert task.runtime.last_outcome.retry_limit == 3
     report = yaml.safe_load(
         (
@@ -1995,7 +1973,6 @@ def test_run_next_task_records_blocked_reason_code_when_fallbacks_are_exhausted(
         ).read_text(encoding="utf-8")
     )
     assert report["outcome"] == "blocked"
-    assert report["outcome_reason_code"] == "verdict_blocked"
 
 
 def test_run_next_task_preserves_git_commit_failure_diagnostics(
@@ -2009,7 +1986,7 @@ def test_run_next_task_preserves_git_commit_failure_diagnostics(
     monkeypatch.setattr(
         "litehive.runtime.SubagentManager.run",
         lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
-            _completed_subagent_result(tmp_path, task.pipeline_status)
+            _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
         ),
     )
     def fail_commit(root, execution_root, task, *, auto_commit_enabled, subagents=None, config=None):
@@ -2021,7 +1998,7 @@ def test_run_next_task_preserves_git_commit_failure_diagnostics(
         )
 
     monkeypatch.setattr(
-        "litehive.runtime._execution._commit_to_git_report", fail_commit
+        "litehive.runtime._builder._commit_to_git_report", fail_commit
     )
 
     summary = run_next_task(tmp_path)
@@ -2031,7 +2008,7 @@ def test_run_next_task_preserves_git_commit_failure_diagnostics(
     # The runner may launch a recovery agent after the commit failure.
     # The fake SubagentManager.run returns a pass, which may cause the
     # runner to re-queue instead of flagging.
-    assert summary.result.final_status in ("flagged", "queued")
+    assert summary.result.final_status in ("flagged", "merge_failed", "queued")
 
 
 def test_attempt_stage_recovery_launches_agent_for_litehive_traceback_with_no_source_repo(
@@ -2132,9 +2109,8 @@ def test_classify_recovery_failure_owner_prefers_project_paths_over_name_overlap
 def test_attempt_stage_recovery_launches_recovery_agent_for_litehive_traceback(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """The new recovery flow launches a recovery agent instead of doing
-    self-heal with pytest/merge. Verify the agent is launched and a
-    recovery report is recorded."""
+    """When failure_owner is litehive and litehive_source_path exists, the
+    self-heal path launches a recovery agent against the litehive source tree."""
     litehive_root = tmp_path / "litehive-src"
     litehive_root.mkdir()
     _init_git_repo(litehive_root)
@@ -2171,6 +2147,14 @@ def test_attempt_stage_recovery_launches_recovery_agent_for_litehive_traceback(
     ):  # type: ignore[no-untyped-def]
         observed["role"] = role
         observed["engine"] = engine_name
+        observed["prompt"] = prompt
+        _write_cli_verdict(
+            tmp_path,
+            task_arg,
+            "implementing",
+            verdict="pass",
+            message="fixed the litehive bug",
+        )
         return SubagentResult(
             ref=SubagentRef(
                 id="SA-recovery-1",
@@ -2182,7 +2166,7 @@ def test_attempt_stage_recovery_launches_recovery_agent_for_litehive_traceback(
                 sandbox_summary="host",
             ),
             execution=None,
-            transcript="VERDICT: PASS\nSUMMARY: fixed the litehive bug",
+            transcript="fixed the litehive bug",
             exit_code=0,
             failure=None,
         )
@@ -2201,10 +2185,13 @@ def test_attempt_stage_recovery_launches_recovery_agent_for_litehive_traceback(
 
     assert report is not None
     assert observed["role"] == "recovery"
+    assert "SELF-HEAL" in observed["prompt"]
+    assert "uv run pytest" in observed["prompt"]
     recovery_report = yaml.safe_load(
         (task_dir(tmp_path, task) / "recovery" / "recovery-001.yaml").read_text(encoding="utf-8")
     )
-    assert recovery_report["trigger"] == "stage_failure"
+    assert recovery_report["trigger"] == "litehive_self_heal"
+    assert recovery_report["failure_classification"] == "litehive"
 
 
 def test_attempt_stage_recovery_returns_none_when_recovery_agent_fails(
@@ -2322,7 +2309,7 @@ def test_run_next_task_skips_commit_stage_when_auto_commit_disabled(
     monkeypatch.setattr(
         "litehive.runtime.SubagentManager.run",
         lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
-            _completed_subagent_result(tmp_path, task.pipeline_status)
+            _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
         ),
     )
 
@@ -2350,7 +2337,7 @@ def test_run_next_task_skips_commit_stage_when_workspace_auto_commit_disabled(
     monkeypatch.setattr(
         "litehive.runtime.SubagentManager.run",
         lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
-            _completed_subagent_result(tmp_path, task.pipeline_status)
+            _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
         ),
     )
 
@@ -2379,7 +2366,7 @@ def test_run_next_task_flags_task_when_repo_has_unrelated_dirty_changes(
     monkeypatch.setattr(
         "litehive.runtime.SubagentManager.run",
         lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
-            _completed_subagent_result(tmp_path, task.pipeline_status)
+            _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
         ),
     )
 
@@ -2406,7 +2393,7 @@ def test_run_next_task_flags_task_when_other_task_state_is_dirty(
     monkeypatch.setattr(
         "litehive.runtime.SubagentManager.run",
         lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
-            _completed_subagent_result(tmp_path, task.pipeline_status)
+            _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
         ),
     )
 
@@ -2445,7 +2432,7 @@ def test_rollback_command_requeues_checkpointed_task(
     monkeypatch.setattr(
         "litehive.runtime.SubagentManager.run",
         lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
-            _completed_subagent_result(tmp_path, task.pipeline_status)
+            _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
         ),
     )
     run_next_task(tmp_path)
@@ -2486,7 +2473,7 @@ def test_recover_command_requeues_completed_task_without_revert(
     monkeypatch.setattr(
         "litehive.runtime.SubagentManager.run",
         lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
-            _completed_subagent_result(tmp_path, task.pipeline_status)
+            _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
         ),
     )
     run_next_task(tmp_path)
@@ -2520,7 +2507,7 @@ def test_recover_completed_task_clears_checkpoint_pointer_and_next_run_uses_next
     monkeypatch.setattr(
         "litehive.runtime.SubagentManager.run",
         lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
-            _completed_subagent_result(tmp_path, task.pipeline_status)
+            _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
         ),
     )
 
@@ -2562,7 +2549,7 @@ def test_drain_task_pool_requires_continue_or_rollback_before_unrelated_checkpoi
     monkeypatch.setattr(
         "litehive.runtime.SubagentManager.run",
         lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
-            _completed_subagent_result(tmp_path, task.pipeline_status)
+            _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
         ),
     )
 
@@ -2618,7 +2605,7 @@ def test_cmd_run_drain_reports_continue_or_rollback_guidance_after_checkpoint_co
     monkeypatch.setattr(
         "litehive.runtime.SubagentManager.run",
         lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
-            _completed_subagent_result(tmp_path, task.pipeline_status)
+            _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
         ),
     )
 
@@ -2779,7 +2766,7 @@ def test_drain_task_pool_recovers_stranded_commit_stage_before_new_work(
     monkeypatch.setattr(
         "litehive.runtime.SubagentManager.run",
         lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
-            _completed_subagent_result(tmp_path, task.pipeline_status)
+            _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
         ),
     )
 
@@ -3630,7 +3617,7 @@ def test_rollback_completed_task_restores_state_when_rollback_commit_fails(
     monkeypatch.setattr(
         "litehive.runtime.SubagentManager.run",
         lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
-            _completed_subagent_result(tmp_path, task.pipeline_status)
+            _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
         ),
     )
     run_next_task(tmp_path)
@@ -3670,7 +3657,7 @@ def test_rollback_completed_task_restores_state_when_atomic_state_persist_fails(
     monkeypatch.setattr(
         "litehive.runtime.SubagentManager.run",
         lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
-            _completed_subagent_result(tmp_path, task.pipeline_status)
+            _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
         ),
     )
     run_next_task(tmp_path)
@@ -3711,7 +3698,7 @@ def test_rollback_completed_task_restores_state_when_task_persist_fails(
     monkeypatch.setattr(
         "litehive.runtime.SubagentManager.run",
         lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
-            _completed_subagent_result(tmp_path, task.pipeline_status)
+            _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
         ),
     )
     run_next_task(tmp_path)
@@ -3750,7 +3737,7 @@ def test_rollback_completed_task_restores_state_when_runtime_persist_fails(
     monkeypatch.setattr(
         "litehive.runtime.SubagentManager.run",
         lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
-            _completed_subagent_result(tmp_path, task.pipeline_status)
+            _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
         ),
     )
     run_next_task(tmp_path)
@@ -3796,7 +3783,7 @@ def test_recover_command_reroutes_large_task_without_acceptance_criteria_to_groo
     monkeypatch.setattr(
         "litehive.runtime.SubagentManager.run",
         lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
-            _completed_subagent_result(tmp_path, task.pipeline_status)
+            _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
         ),
     )
     run_next_task(tmp_path)

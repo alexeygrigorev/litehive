@@ -1,0 +1,52 @@
+task_id: T-0208
+step: testing
+verdict: pass
+summary: '## QA Verification: PASS'
+feedback: "## QA Verification: PASS\n\n### Tests Run\n- tests/test_worktree_merge_agent.py:\
+  \ **10/10 passed** (1.39s)\n- tests/test_retry_commit_and_recovery.py: **89/89 passed**\n\
+  - tests/test_task_commands_and_daemon.py: **101/101 passed**\n- tests/test_runner_workflow.py:\
+  \ **104/104 passed**\n- tests/test_commit_recovery_bug.py: **8/8 passed**\n\n###\
+  \ Acceptance Criteria Verified\n\n1. **Tests cover all four merge scenarios** \u2713\
+  \n   - test_rebase_succeeds_no_agent_needed: clean merge, no agent, task done\n\
+  \   - test_merge_succeeds_after_rebase_fail: divergent history, no conflict, done\n\
+  \   - test_merge_conflict_agent_resolves: conflict + agent fixes it, done, worktree\
+  \ cleaned\n   - test_merge_conflict_agent_fails: conflict + agent fails, fail verdict,\
+  \ merge_conflict classification, worktree preserved\n\n2. **Tests mock SubagentManager.run**\
+  \ \u2713 \u2014 _ResolvingSubagents and _FailingSubagents fake classes simulate\
+  \ agent behavior without real subprocess calls\n\n3. **merge_failed pipeline status\
+  \ exists and is set on merge failure** \u2713\n   - PipelineState.MERGE_FAILED added\
+  \ to enum (states.py:45)\n   - \"merge_failed\" added to TaskStatus and PipelineStatus\
+  \ Literals (models.py:21,34)\n   - \"merge_conflict\" added to OutcomeReasonCode\
+  \ (models.py:69)\n   - _ROUTES and _SINGLE_ROUTES: (commit_to_git, fail/reject/blocked)\
+  \ -> \"merge_failed\" (states.py:100-102,121-123)\n   - Dedicated merge_failed handler\
+  \ in runner/core.py:700-743 sets task.status and task.pipeline_status\n\n4. **state.yaml\
+  \ tracks unmerged worktrees** \u2713\n   - UnmergedWorktree model (models.py:446-448)\
+  \ with task_id and worktree_path\n   - unmerged_worktrees field on WorkspaceState\
+  \ (models.py:457)\n   - _record_unmerged_worktree helper (core.py:955-970) with\
+  \ deduplication\n   - Tests verify recording, dedup, and raw YAML persistence\n\n\
+  5. **litehive status shows merge_failed tasks** \u2713\n   - render_task_summary\
+  \ shows unmerged_worktree path for merge_failed tasks (_status.py:97-98)\n\n6. **All\
+  \ tests pass** \u2713 \u2014 312 tests across 5 test files, 0 failures\n\n### Code\
+  \ Quality\n- Tests are fast (1.39s for all 10 new tests)\n- Mocking approach is\
+  \ clean \u2014 fake classes rather than mock.patch\n- resume_task, requeue_task,\
+  \ abandon_task all updated to accept merge_failed status\n- resume_task correctly\
+  \ routes merge_failed -> commit_to_git for retry"
+files_changed: []
+follow_up_tasks: []
+created_follow_up_task_ids: []
+task_update: {}
+tests: {}
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 164
+hook_results: []
+created_at: '2026-04-07T17:17:01+00:00'

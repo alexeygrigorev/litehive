@@ -1,54 +1,29 @@
 task_id: T-0067
 step: testing
 verdict: pass
-summary: 'Verified commit_to_git rerun and stale-runner recovery against the acceptance
-  criteria. Evidence: 1) tests/test_retry_commit_and_recovery.py::test_commit_to_git_reconciles_existing_checkpoint_commit_without_duplicate_retry
-  proves a rerun with an already-existing checkpoint commit records the existing SHA,
-  leaves checkpoint_attempts at 1, and keeps git history/HEAD subject unchanged instead
-  of creating a duplicate commit. 2) tests/test_retry_commit_and_recovery.py::test_resolve_next_task_finalizes_existing_checkpoint_commit_without_retry
-  and ::test_resolve_next_task_finalizes_running_commit_stage_with_existing_checkpoint_before_new_work
-  prove the normal resolve/resume path finalizes stranded commit_to_git work by reconciling
-  the existing checkpoint before queued work advances, while preserving checkpoint_attempts
-  at 1 and leaving commit count unchanged. 3) tests/test_observability_and_status.py::test_repair_workspace_state_finalizes_existing_checkpoint_commit
-  proves manual recovery finalizes the same stranded state consistently. 4) tests/test_runtime_pool.py::test_restore_untouched_active_task_requeues_stranded_done_commit_without_checkpoint
-  is a control that confirms the no-existing-checkpoint path still requeues commit_to_git
-  for resume instead of falsely finalizing. Ran: uv run pytest -q tests/test_retry_commit_and_recovery.py::test_commit_to_git_reconciles_existing_checkpoint_commit_without_duplicate_retry
-  tests/test_retry_commit_and_recovery.py::test_resolve_next_task_finalizes_existing_checkpoint_commit_without_retry
-  tests/test_retry_commit_and_recovery.py::test_resolve_next_task_finalizes_running_commit_stage_with_existing_checkpoint_before_new_work
-  tests/test_observability_and_status.py::test_repair_workspace_state_finalizes_existing_checkpoint_commit
-  tests/test_runtime_pool.py::test_restore_untouched_active_task_requeues_stranded_done_commit_without_checkpoint
-  -> 5 passed in 1.75s. Warning: the task brief still mentions tests/test_workspace.py,
-  but the focused coverage now lives in tests/test_retry_commit_and_recovery.py, tests/test_observability_and_status.py,
-  and tests/test_runtime_pool.py.'
-feedback: 'Verified commit_to_git rerun and stale-runner recovery against the acceptance
-  criteria. Evidence: 1) tests/test_retry_commit_and_recovery.py::test_commit_to_git_reconciles_existing_checkpoint_commit_without_duplicate_retry
-  proves a rerun with an already-existing checkpoint commit records the existing SHA,
-  leaves checkpoint_attempts at 1, and keeps git history/HEAD subject unchanged instead
-  of creating a duplicate commit. 2) tests/test_retry_commit_and_recovery.py::test_resolve_next_task_finalizes_existing_checkpoint_commit_without_retry
-  and ::test_resolve_next_task_finalizes_running_commit_stage_with_existing_checkpoint_before_new_work
-  prove the normal resolve/resume path finalizes stranded commit_to_git work by reconciling
-  the existing checkpoint before queued work advances, while preserving checkpoint_attempts
-  at 1 and leaving commit count unchanged. 3) tests/test_observability_and_status.py::test_repair_workspace_state_finalizes_existing_checkpoint_commit
-  proves manual recovery finalizes the same stranded state consistently. 4) tests/test_runtime_pool.py::test_restore_untouched_active_task_requeues_stranded_done_commit_without_checkpoint
-  is a control that confirms the no-existing-checkpoint path still requeues commit_to_git
-  for resume instead of falsely finalizing. Ran: uv run pytest -q tests/test_retry_commit_and_recovery.py::test_commit_to_git_reconciles_existing_checkpoint_commit_without_duplicate_retry
-  tests/test_retry_commit_and_recovery.py::test_resolve_next_task_finalizes_existing_checkpoint_commit_without_retry
-  tests/test_retry_commit_and_recovery.py::test_resolve_next_task_finalizes_running_commit_stage_with_existing_checkpoint_before_new_work
-  tests/test_observability_and_status.py::test_repair_workspace_state_finalizes_existing_checkpoint_commit
-  tests/test_runtime_pool.py::test_restore_untouched_active_task_requeues_stranded_done_commit_without_checkpoint
-  -> 5 passed in 1.75s. Warning: the task brief still mentions tests/test_workspace.py,
-  but the focused coverage now lives in tests/test_retry_commit_and_recovery.py, tests/test_observability_and_status.py,
-  and tests/test_runtime_pool.py.'
-files_changed:
-- litehive/runtime.py
-- litehive/tasks.py
-- tests/test_retry_commit_and_recovery.py
+summary: Verified all three acceptance criteria for commit_to_git idempotency and
+  resumability.
+feedback: "Verified all three acceptance criteria for commit_to_git idempotency and\
+  \ resumability.\n\n1. PASS: Rerun reconciliation \u2014 tests/test_workspace.py::test_commit_to_git_rerun_reconciles_existing_checkpoint\
+  \ proves that rerunning commit_to_git when the checkpoint commit already exists\
+  \ records the existing SHA, marks the task done, and does not create a duplicate\
+  \ commit (commit count and HEAD subject unchanged, checkpoint_attempts stays at\
+  \ 1).\n\n2. PASS: Stale-runner recovery \u2014 tests/test_workspace.py::test_recovery_finalizes_stranded_commit_to_git_with_existing_checkpoint\
+  \ proves that resolve_next_task finalizes a stranded commit_to_git task by recording\
+  \ the existing checkpoint SHA without incrementing checkpoint_attempts or advancing\
+  \ git history, then proceeds to the follow-up task.\n\n3. PASS: Focused tests in\
+  \ tests/test_workspace.py \u2014 the file now exists with 2 focused tests covering\
+  \ both rerun and recovery paths, proving checkpoint_attempts and git history do\
+  \ not advance during reconciliation.\n\nRan: uv run pytest -q tests/test_workspace.py\
+  \ -> 2 passed in 0.96s\nRan: uv run pytest -q (6 additional focused reconciliation\
+  \ tests across test_retry_commit_and_recovery.py, test_observability_and_status.py,\
+  \ test_runtime_pool.py) -> 6 passed in 2.64s\nTotal: 8 focused reconciliation tests\
+  \ pass."
+files_changed: []
 follow_up_tasks: []
 created_follow_up_task_ids: []
 task_update: {}
-tests:
-  added: 0
-  passing: 0
+tests: {}
 warnings: []
 retry_count: 0
 retry_limit: 3
@@ -60,6 +35,6 @@ outcome_reason: ''
 failure_classification: null
 failure_diagnostics: {}
 resource_limit_event: null
-duration_seconds: 898
+duration_seconds: 41
 hook_results: []
-created_at: '2026-04-06T12:37:10+00:00'
+created_at: '2026-04-07T23:19:23+00:00'

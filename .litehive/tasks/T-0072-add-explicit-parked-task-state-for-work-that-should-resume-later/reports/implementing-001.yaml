@@ -1,65 +1,56 @@
 task_id: T-0072
 step: implementing
-verdict: pass
-summary: 'Implemented explicit parked task lifecycle support across the durable model,
-  task transition helpers, CLI/status surfaces, web badges, and state-machine docs.
-  Verified that litehive stop now persists parked tasks instead of relying on the
-  ''Task stopped via CLI'' magic-string contract, repair/recovery keeps parked tasks
-  out of automatic queue reinsertion while system-interrupted tasks still auto-recover,
-  resume preserves the current parked stage, requeue restarts parked work from the
-  implementation entry stage, queue output shows parked as a distinct resumable status,
-  and dirty-worktree gating still allows interrupted ownership while blocking parked
-  tasks until explicit operator action. Tests run: uv run pytest -q tests/test_runtime_pool.py
-  tests/test_task_commands_and_daemon.py (154 passed). Added focused regression coverage
-  in tests/test_runtime_pool.py for the parked dirty-worktree gate distinction, plus
-  command/repair/status coverage in tests/test_task_commands_and_daemon.py and tests/test_runtime_pool.py.\n\nSTAGE_RESULT:\n{"verdict":"pass","summary":"Added
-  explicit parked task state semantics across lifecycle logic, operator commands,
-  and docs with focused parked-vs-interrupted coverage.","files_changed":["docs/state-machine.md","litehive/cli.py","litehive/models.py","litehive/runtime.py","litehive/tasks.py","litehive/web.py","tests/test_runtime_pool.py","tests/test_task_commands_and_daemon.py"],"tests":{"added":4,"passing":154},"warnings":["Worktree
-  still contains unrelated unresolved files for T-0077 and local tmp-review directories
-  outside this task''s scope."],"follow_up_tasks":[],"acceptance_criteria":["Explicit
-  parked status replaces CLI-stop magic-string lifecycle detection.","Parked tasks
-  stay out of automatic recovery while interrupted tasks still auto-requeue through
-  repair/recovery.","Resume/requeue/queue surfaces distinguish parked from interrupted
-  semantics.","Focused pytest coverage covers stop, repair, dirty-worktree gating,
-  and resume/requeue semantics.","State-machine documentation matches the explicit
-  parked status contract."]}'
-feedback: "Stage `implementing` switched from `codex` to `gemini` after usage limit\
-  \ reached.\n\nStage `implementing` switched from `gemini` to `opencode` after usage\
-  \ limit reached.\n\nImplemented explicit parked task lifecycle support across the\
-  \ durable model, task transition helpers, CLI/status surfaces, web badges, and state-machine\
-  \ docs. Verified that litehive stop now persists parked tasks instead of relying\
-  \ on the 'Task stopped via CLI' magic-string contract, repair/recovery keeps parked\
-  \ tasks out of automatic queue reinsertion while system-interrupted tasks still\
-  \ auto-recover, resume preserves the current parked stage, requeue restarts parked\
-  \ work from the implementation entry stage, queue output shows parked as a distinct\
-  \ resumable status, and dirty-worktree gating still allows interrupted ownership\
-  \ while blocking parked tasks until explicit operator action. Tests run: uv run\
-  \ pytest -q tests/test_runtime_pool.py tests/test_task_commands_and_daemon.py (154\
-  \ passed). Added focused regression coverage in tests/test_runtime_pool.py for the\
-  \ parked dirty-worktree gate distinction, plus command/repair/status coverage in\
-  \ tests/test_task_commands_and_daemon.py and tests/test_runtime_pool.py.\\n\\nSTAGE_RESULT:\\\
-  n{\"verdict\":\"pass\",\"summary\":\"Added explicit parked task state semantics\
-  \ across lifecycle logic, operator commands, and docs with focused parked-vs-interrupted\
-  \ coverage.\",\"files_changed\":[\"docs/state-machine.md\",\"litehive/cli.py\",\"\
-  litehive/models.py\",\"litehive/runtime.py\",\"litehive/tasks.py\",\"litehive/web.py\"\
-  ,\"tests/test_runtime_pool.py\",\"tests/test_task_commands_and_daemon.py\"],\"tests\"\
-  :{\"added\":4,\"passing\":154},\"warnings\":[\"Worktree still contains unrelated\
-  \ unresolved files for T-0077 and local tmp-review directories outside this task's\
-  \ scope.\"],\"follow_up_tasks\":[],\"acceptance_criteria\":[\"Explicit parked status\
-  \ replaces CLI-stop magic-string lifecycle detection.\",\"Parked tasks stay out\
-  \ of automatic recovery while interrupte\n\n\u2026 [truncated \u2014 full transcript\
-  \ in subagent artifacts]"
+verdict: reject
+summary: 'SWE reported pass but produced no file changes and no tests. This usually
+  means the agent did not actually write code. Worktree: unknown. Report summary:
+  Verified the explicit parked task state implementation is complete and all acceptance
+  criteria are satisfied.'
+feedback: 'Verified the explicit parked task state implementation is complete and
+  all acceptance criteria are satisfied.
+
+
+  What was verified:
+
+  1. TaskStatus enum includes `parked` (models.py:18). `park_task()` sets status=parked
+  with execution_status=paused and preserves stage context. `_is_parked_task()` helper
+  replaces magic-string detection.
+
+  2. RESUMABLE_TASK_STATUSES includes both interrupted and parked (tasks.py:89). Repair/recovery
+  only auto-requeues interrupted tasks; parked tasks stay out of automatic queue reinsertion.
+
+  3. Resume preserves parked task''s current stage; requeue restarts from implementation
+  entry. Queue/status output shows parked distinctly as `[parked/<stage>]`.
+
+  4. Dirty-worktree gating correctly distinguishes parked from interrupted ownership:
+  interrupted task-owned dirt keeps gate open; parked blocks until explicit operator
+  action.
+
+  5. docs/state-machine.md documents parked as an explicit resumable state distinct
+  from interrupted.
+
+
+  Tests run:
+
+  - tests/test_task_commands_and_daemon.py -k "parked or stop_current_task or requeue_command
+  or resume_command" -> 13 passed
+
+  - tests/test_runtime_pool.py -k "cli_stopped or parked" -> 2 passed
+
+  - tests/test_observability_and_status.py -k "parked or queue_command" -> 2 passed
+
+  Total: 17 focused tests passing.
+
+
+  Files implementing the change: litehive/models.py, litehive/tasks.py, litehive/runtime.py,
+  litehive/cli.py, litehive/web.py, docs/state-machine.md, tests/test_task_commands_and_daemon.py,
+  tests/test_runtime_pool.py.'
 files_changed: []
 follow_up_tasks: []
 created_follow_up_task_ids: []
 task_update: {}
-tests:
-  added: 0
-  passing: 0
-warnings:
-- Stage `implementing` switched from `codex` to `gemini` after usage limit reached.
-- Stage `implementing` switched from `gemini` to `opencode` after usage limit reached.
-retry_count: 0
+tests: {}
+warnings: []
+retry_count: 1
 retry_limit: 3
 retry_source: global
 retry_decision: continue
@@ -69,6 +60,6 @@ outcome_reason: ''
 failure_classification: null
 failure_diagnostics: {}
 resource_limit_event: null
-duration_seconds: 1264
+duration_seconds: 165
 hook_results: []
-created_at: '2026-04-06T13:14:37+00:00'
+created_at: '2026-04-07T23:23:49+00:00'

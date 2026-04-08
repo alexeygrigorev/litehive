@@ -123,8 +123,8 @@ task_engine_routing:
   refactor: [opencode, codex]
 ```
 
-If an engine hits a limit or fails in a retryable way, Litehive can fall back to
-the next engine in the global preference list:
+If an engine hits a limit or fails in a retryable way, Litehive walks the global
+engine preference list to find the next available adapter:
 
 ```yaml
 engine_preference: [codex, opencode, gemini, copilot, goz]
@@ -233,9 +233,6 @@ litehive configure \
   --hook 'before_swe_implementation=blocking:uv run python scripts/preflight.py' \
   --hook 'after_pm_acceptance=nonblocking:uv run python scripts/notify.py'
 ```
-
-`pre_acceptance_command` is a legacy convenience field. Litehive folds it into
-`runner_hooks.before_pm_acceptance` as a blocking hook.
 
 ## Pool Controls
 

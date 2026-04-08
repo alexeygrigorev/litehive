@@ -18,6 +18,7 @@ TaskStatus = Literal[
     "parked",
     "done",
     "flagged",
+    "merge_failed",
     "cancelled",
     "wont_do",
     "deferred",
@@ -31,6 +32,7 @@ PipelineStatus = Literal[
     "accepting",
     "commit_to_git",
     "done",
+    "merge_failed",
 ]
 SubagentStatus = Literal["created", "running", "completed", "failed", "blocked", "interrupted"]
 RunnerExecutionStatus = Literal["idle", "running", "late", "stale"]
@@ -64,6 +66,7 @@ OutcomeReasonCode = Literal[
     "execution_cancelled",
     "stage_exception",
     "unsupported_verdict",
+    "merge_conflict",
     # intentional non-implementation outcomes set via `litehive close`
     "wont_do",
     "deferred",
@@ -229,6 +232,13 @@ class UpstreamContributionOrigin(BaseModel):
     details: str = ""
     litehive_source_path: str
     patch: UpstreamPatchProposal | None = None
+
+
+class GitHubOrigin(BaseModel):
+    repo: str
+    issue_number: int
+    issue_url: str
+    imported_at: str = Field(default_factory=utcnow)
 
 
 class FollowUpTaskSpec(BaseModel):
@@ -409,6 +419,7 @@ class GitSettings(BaseModel):
     rolled_back_checkpoint_attempt: int | None = None
     merge_agent_attempts: int = 0
     worktree_path: str | None = None
+    merge_agent_attempts: int = 0
 
 
 class TaskRecord(BaseModel):
@@ -438,7 +449,13 @@ class TaskRecord(BaseModel):
     retry_policy: TaskRetryPolicy = Field(default_factory=TaskRetryPolicy)
     created_from: TaskCreationSource | None = None
     upstream_origin: UpstreamContributionOrigin | None = None
+    github_origin: GitHubOrigin | None = None
     runtime: TaskRuntime = Field(default_factory=TaskRuntime, exclude=True)
+
+
+class UnmergedWorktree(BaseModel):
+    task_id: str
+    worktree_path: str
 
 
 class WorkspaceState(BaseModel):
@@ -447,6 +464,7 @@ class WorkspaceState(BaseModel):
     queue: list[str] = Field(default_factory=list)
     pool_stop_reason: str | None = None
     next_task_number: int = 0
+    unmerged_worktrees: list[UnmergedWorktree] = Field(default_factory=list)
 
 
 class LiveEvent(BaseModel):

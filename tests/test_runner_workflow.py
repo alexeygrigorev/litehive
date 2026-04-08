@@ -77,8 +77,8 @@ def test_subagent_manager_persists_planner_and_reviewer_artifacts(
         def render_transcript(self, execution: CLIExecutionResult) -> str:
             return execution.transcript
 
-    monkeypatch.setattr("litehive.subagents._execution._supports_live_execution", lambda engine: False)
-    monkeypatch.setattr("litehive.subagents._execution.get_engine", lambda _: FakeEngine())
+    monkeypatch.setattr("litehive.subagents._manager._supports_live_execution", lambda engine: False)
+    monkeypatch.setattr("litehive.subagents._manager.get_engine", lambda _: FakeEngine())
     manager = SubagentManager(tmp_path)
 
     planner_result = manager.run(
@@ -204,7 +204,7 @@ def test_runner_accepts_workflow_testing_with_real_lifecycle_evidence(
                 resume_once["seen"] = True
                 raise KeyboardInterrupt()
         return _completed_subagent_result(
-            self.execution_root, current_task.pipeline_status, engine_name=engine_name
+            self.execution_root, current_task.pipeline_status, engine_name=engine_name, task=current_task
         )
 
     monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_run)
@@ -455,6 +455,30 @@ def test_run_next_task_executes_follow_up_created_by_acceptance_on_later_iterati
         self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None
     ):  # type: ignore[no-untyped-def]
         if task.id == original.id and task.pipeline_status == "accepting":
+            import json
+
+            # Submit CLI verdict for acceptance.
+            _write_cli_verdict(
+                tmp_path,
+                task,
+                "accepting",
+                verdict="pass",
+                message="acceptance passed with separate follow-up",
+                files_changed=["litehive/runner.py"],
+            )
+            # STAGE_RESULT JSON carries follow-up metadata.
+            stage_result = json.dumps({
+                "verdict": "pass",
+                "summary": "acceptance passed with separate follow-up",
+                "files_changed": ["litehive/runner.py"],
+                "follow_up_tasks": [
+                    {
+                        "title": "Document follow-up feature behavior",
+                        "rationale": "Acceptance found documentation work that should run next.",
+                        "blocking": False,
+                    }
+                ],
+            })
             return SubagentResult(
                 ref=SubagentRef(
                     id="SA-accepting",
@@ -468,23 +492,13 @@ def test_run_next_task_executes_follow_up_created_by_acceptance_on_later_iterati
                     argv=("codex", "exec"),
                     cwd=tmp_path,
                     exit_code=0,
-                    stdout=(
-                        "VERDICT: PASS\n"
-                        "SUMMARY: acceptance passed with separate follow-up\n"
-                        "FILES_CHANGED:\n"
-                        "- litehive/runner.py\n"
-                        "TESTS_ADDED: 1\n"
-                        "TESTS_PASSING: 1\n"
-                        "WARNINGS:\n"
-                        "FOLLOW_UP_TASKS:\n"
-                        '[{"title":"Document follow-up feature behavior","rationale":"Acceptance found documentation work that should run next.","blocking":false}]'
-                    ),
+                    stdout=f"STAGE_RESULT:\n{stage_result}\n",
                     stderr="",
                 ),
                 transcript="",
                 exit_code=0,
             )
-        return _completed_subagent_result(tmp_path, task.pipeline_status)
+        return _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
 
     monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_run)
 
@@ -835,21 +849,20 @@ def test_runner_persists_grooming_generated_acceptance_criteria(tmp_path: Path) 
 
     def executor(task, step):  # type: ignore[no-untyped-def]
         if step == "grooming":
-            transcript = (
-                "VERDICT: PASS\n"
-                "SUMMARY: grooming complete\n"
-                "FILES_CHANGED:\n"
-                "TESTS_ADDED: 0\n"
-                "TESTS_PASSING: 0\n"
-                "WARNINGS:\n"
-                "ACCEPTANCE_CRITERIA:\n"
-                "- The system auto-populates missing acceptance criteria from successful grooming output.\n"
-                "- Tasks still block before implementation when grooming cannot define concrete criteria.\n"
-            )
+            import json
+
+            payload = {
+                "verdict": "pass",
+                "summary": "grooming complete",
+                "acceptance_criteria": [
+                    "The system auto-populates missing acceptance criteria from successful grooming output.",
+                    "Tasks still block before implementation when grooming cannot define concrete criteria.",
+                ],
+            }
             return parse_stage_report_text(
                 task_id=task.id,
                 step="grooming",
-                transcript=transcript,
+                transcript=f"STAGE_RESULT:\n{json.dumps(payload)}\n",
                 subagent_status="completed",
             )
         return StageReport(task_id=task.id, step=step, verdict="pass", summary=f"{step} ok", files_changed=["app.txt"], tests={"added": 1, "passing": 1})
@@ -875,20 +888,20 @@ def test_runner_persists_grooming_generated_pm_sizing(tmp_path: Path) -> None:
 
     def executor(task, step):  # type: ignore[no-untyped-def]
         if step == "grooming":
-            transcript = (
-                "VERDICT: PASS\n"
-                "SUMMARY: grooming complete\n"
-                "PM_COMPLEXITY: complex\n"
-                "PLANNED_EFFORT: l\n"
-                "FILES_CHANGED:\n"
-                "TESTS_ADDED: 0\n"
-                "TESTS_PASSING: 0\n"
-                "WARNINGS:\n"
-            )
+            import json
+
+            payload = {
+                "verdict": "pass",
+                "summary": "grooming complete",
+                "task_update": {
+                    "pm_complexity": "complex",
+                    "planned_effort": "l",
+                },
+            }
             return parse_stage_report_text(
                 task_id=task.id,
                 step="grooming",
-                transcript=transcript,
+                transcript=f"STAGE_RESULT:\n{json.dumps(payload)}\n",
                 subagent_status="completed",
             )
         return StageReport(task_id=task.id, step=step, verdict="pass", summary=f"{step} ok", files_changed=["app.txt"], tests={"added": 1, "passing": 1})
@@ -1252,36 +1265,19 @@ def test_run_next_task_uses_task_retry_override(
         if task.pipeline_status == "testing":
             attempts["testing"] += 1
             if attempts["testing"] == 1:
-                transcript = "\n".join(
-                    [
-                        "VERDICT: FAIL",
-                        "SUMMARY: tests failed once",
-                        "FILES_CHANGED:",
-                        "TESTS_ADDED: 0",
-                        "TESTS_PASSING: 0",
-                        "WARNINGS:",
-                    ]
+                return _stage_subagent_result(
+                    tmp_path,
+                    "testing",
+                    role=role,
+                    engine_name=engine_name,
+                    verdict="FAIL",
+                    summary="tests failed once",
+                    files_changed=[],
+                    tests_added=0,
+                    tests_passing=0,
+                    task=task,
                 )
-                return SubagentResult(
-                    ref=SubagentRef(
-                        id="SA-testing-codex",
-                        role=role,
-                        engine=engine_name,
-                        status="completed",
-                        path="subagents/testing-codex",
-                    ),
-                    execution=CLIExecutionResult(
-                        adapter=engine_name,
-                        argv=(engine_name, "exec"),
-                        cwd=tmp_path,
-                        exit_code=0,
-                        stdout=transcript,
-                        stderr="",
-                    ),
-                    transcript=transcript,
-                    exit_code=0,
-                )
-        return _completed_subagent_result(tmp_path, task.pipeline_status)
+        return _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
 
     monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_run)
 
@@ -1325,47 +1321,20 @@ def test_run_next_task_requeues_after_qa_rejection(
     def fake_run(
         self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None
     ):  # type: ignore[no-untyped-def]
-        transcript = "\n".join(
-            [
-                "VERDICT: PASS",
-                f"SUMMARY: {task.pipeline_status} passed",
-                "FILES_CHANGED:",
-                "- app.txt",
-                "TESTS_ADDED: 0",
-                "TESTS_PASSING: 0",
-                "WARNINGS:",
-            ]
-        )
         if task.pipeline_status == "testing":
-            transcript = "\n".join(
-                [
-                    "VERDICT: FAIL",
-                    "SUMMARY: testing needs another implementation pass",
-                    "FILES_CHANGED:",
-                    "TESTS_ADDED: 0",
-                    "TESTS_PASSING: 0",
-                    "WARNINGS:",
-                ]
-            )
-        return SubagentResult(
-            ref=SubagentRef(
-                id=f"SA-{task.pipeline_status}-codex",
+            return _stage_subagent_result(
+                tmp_path,
+                "testing",
                 role=role,
-                engine=engine_name,
-                status="completed",
-                path=f"subagents/{task.pipeline_status}-codex",
-            ),
-            execution=CLIExecutionResult(
-                adapter=engine_name,
-                argv=(engine_name, "exec"),
-                cwd=tmp_path,
-                exit_code=0,
-                stdout=transcript,
-                stderr="",
-            ),
-            transcript=transcript,
-            exit_code=0,
-        )
+                engine_name=engine_name,
+                verdict="FAIL",
+                summary="testing needs another implementation pass",
+                files_changed=[],
+                tests_added=0,
+                tests_passing=0,
+                task=task,
+            )
+        return _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
 
     monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_run)
 
@@ -1444,6 +1413,7 @@ def test_cli_run_end_to_end_requeues_after_qa_failure_then_commits_in_temp_git_r
                     files_changed=[],
                     tests_added=0,
                     tests_passing=0,
+                    task=current_task,
                 )
         return _stage_subagent_result(
             self.execution_root,
@@ -1451,6 +1421,7 @@ def test_cli_run_end_to_end_requeues_after_qa_failure_then_commits_in_temp_git_r
             role=role,
             engine_name=engine_name,
             files_changed=["app.txt"],
+            task=current_task,
         )
 
     monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_run)
@@ -2023,6 +1994,128 @@ def test_codex_renders_jsonl_error_payloads_and_extracts_limit_observation(tmp_p
     assert observation.metadata["purchase_more_credits"] is True
 
 
+def test_classify_codex_usage_limit_matches_exact_message() -> None:
+    from litehive.engines.adapters.codex import _classify_codex_usage_limit
+
+    result = _classify_codex_usage_limit(
+        "You've hit your usage limit. Visit https://chatgpt.com/codex/settings/usage "
+        "to purchase more credits or try again at 5:26 PM."
+    )
+
+    assert result is not None
+    assert result.limit_reason == "usage limit reached"
+    assert result.retry_at == "5:26 PM"
+    assert result.purchase_more_credits is True
+
+
+def test_classify_codex_usage_limit_extracts_date_with_timezone() -> None:
+    from litehive.engines.adapters.codex import _classify_codex_usage_limit
+
+    result = _classify_codex_usage_limit(
+        "You've hit your usage limit. Visit https://chatgpt.com/codex/settings/usage "
+        "to purchase more credits or try again at 2026-04-09 10:00 UTC."
+    )
+
+    assert result is not None
+    assert result.retry_at == "2026-04-09 10:00 UTC"
+
+
+def test_classify_codex_usage_limit_without_date() -> None:
+    from litehive.engines.adapters.codex import _classify_codex_usage_limit
+
+    result = _classify_codex_usage_limit(
+        "You've hit your usage limit. Visit https://chatgpt.com/codex/settings/usage "
+        "to purchase more credits."
+    )
+
+    assert result is not None
+    assert result.limit_reason == "usage limit reached"
+    assert result.retry_at is None
+    assert result.purchase_more_credits is True
+
+
+def test_classify_codex_usage_limit_returns_none_for_unrelated_error() -> None:
+    from litehive.engines.adapters.codex import _classify_codex_usage_limit
+
+    assert _classify_codex_usage_limit("Connection refused") is None
+    assert _classify_codex_usage_limit("") is None
+    assert _classify_codex_usage_limit(None) is None
+
+
+def test_classify_codex_usage_limit_with_smart_apostrophe() -> None:
+    from litehive.engines.adapters.codex import _classify_codex_usage_limit
+
+    result = _classify_codex_usage_limit(
+        "You\u2019ve hit your usage limit. Purchase more credits."
+    )
+
+    assert result is not None
+    assert result.limit_reason == "usage limit reached"
+
+
+def test_codex_extract_usage_observation_uses_specific_detector_over_generic(tmp_path: Path) -> None:
+    """The codex-specific detector should fire and populate metadata from the exact message."""
+    execution = CLIExecutionResult(
+        adapter="codex",
+        argv=("codex", "exec", "--json"),
+        cwd=tmp_path,
+        exit_code=1,
+        stdout="\n".join(
+            [
+                '{"type":"thread.started","thread_id":"test-thread"}',
+                '{"type":"error","message":"You\'ve hit your usage limit. Visit https://chatgpt.com/codex/settings/usage to purchase more credits or try again at 5:26 PM."}',
+            ]
+        ),
+        stderr="",
+    )
+
+    adapter = get_engine("codex")
+    observation = adapter.extract_usage_observation(execution)
+
+    assert observation is not None
+    assert observation.limit_reason == "usage limit reached"
+    assert observation.metadata["retry_at_hint"] == "5:26 PM"
+    assert observation.metadata["purchase_more_credits"] is True
+
+
+def test_codex_extract_usage_observation_falls_back_to_generic_for_unknown_errors(tmp_path: Path) -> None:
+    """Unknown limit patterns should still be caught by the generic classifier."""
+    execution = CLIExecutionResult(
+        adapter="codex",
+        argv=("codex", "exec", "--json"),
+        cwd=tmp_path,
+        exit_code=1,
+        stdout='{"type":"error","message":"quota exceeded for this account"}',
+        stderr="",
+    )
+
+    adapter = get_engine("codex")
+    observation = adapter.extract_usage_observation(execution)
+
+    assert observation is not None
+    assert observation.limit_reason == "quota exceeded"
+
+
+def test_codex_extract_usage_observation_stderr_uses_specific_detector(tmp_path: Path) -> None:
+    """Codex-specific detector also works on stderr fallback path."""
+    execution = CLIExecutionResult(
+        adapter="codex",
+        argv=("codex", "exec", "--json"),
+        cwd=tmp_path,
+        exit_code=1,
+        stdout='{"type":"thread.started","thread_id":"test-thread"}',
+        stderr="ERROR: You've hit your usage limit. Visit https://chatgpt.com/codex/settings/usage to purchase more credits or try again at 3:00 AM.",
+    )
+
+    adapter = get_engine("codex")
+    observation = adapter.extract_usage_observation(execution)
+
+    assert observation is not None
+    assert observation.limit_reason == "usage limit reached"
+    assert observation.metadata["retry_at_hint"] == "3:00 AM"
+    assert observation.metadata["purchase_more_credits"] is True
+
+
 def test_opencode_build_invocation_includes_dir_model_and_prompt(tmp_path: Path) -> None:
     invocation = get_engine("opencode").build_invocation(
         "ship it",
@@ -2139,10 +2232,9 @@ def test_gemini_renders_jsonl_transcript_and_stage_report(tmp_path: Path) -> Non
         subagent_status="completed",
     )
 
-    assert report.verdict == "pass"
-    assert report.summary == "implemented Gemini adapter"
-    assert report.files_changed == ["litehive/engines.py"]
-    assert report.tests == {"added": 4, "passing": 4}
+    # Without CLI verdict, text VERDICT: PASS is not parsed — verdict is fail.
+    assert report.verdict == "fail"
+    assert any("litehive report" in w for w in report.warnings)
 
 
 def test_codex_renders_jsonl_transcript_and_stage_report(tmp_path: Path) -> None:
@@ -2172,10 +2264,9 @@ def test_codex_renders_jsonl_transcript_and_stage_report(tmp_path: Path) -> None
         subagent_status="completed",
     )
 
-    assert report.verdict == "pass"
-    assert report.summary == "implemented Codex event adapter"
-    assert report.files_changed == ["litehive/engines.py"]
-    assert report.tests == {"added": 2, "passing": 2}
+    # Without CLI verdict, text VERDICT: PASS is not parsed — verdict is fail.
+    assert report.verdict == "fail"
+    assert any("litehive report" in w for w in report.warnings)
 
 
 def test_codex_render_transcript_ignores_non_message_events_until_text_arrives(
@@ -2245,7 +2336,8 @@ def test_codex_stage_report_uses_failed_command_output_when_no_agent_message(
     )
 
     assert report.summary == "tests failed"
-    assert report.verdict == "blocked"
+    # Without CLI verdict, failed agents produce fail (not blocked).
+    assert report.verdict == "fail"
 
 
 def test_codex_stage_report_ignores_stale_failed_command_output_after_restart(
@@ -2273,8 +2365,8 @@ def test_codex_stage_report_ignores_stale_failed_command_output_after_restart(
         subagent_status="completed",
     )
 
-    assert report.summary == "testing completed"
-    assert report.verdict == "pass"
+    # Without CLI verdict, verdict is fail regardless of exit code.
+    assert report.verdict == "fail"
 
 
 def test_gemini_stage_report_uses_tool_error_when_no_assistant_message(tmp_path: Path) -> None:
@@ -2295,7 +2387,8 @@ def test_gemini_stage_report_uses_tool_error_when_no_assistant_message(tmp_path:
     )
 
     assert report.summary == "permission denied"
-    assert report.verdict == "blocked"
+    # Without CLI verdict, failed agents produce fail (not blocked).
+    assert report.verdict == "fail"
 
 
 def test_copilot_renders_jsonl_transcript_and_stage_report(tmp_path: Path) -> None:
@@ -2325,10 +2418,9 @@ def test_copilot_renders_jsonl_transcript_and_stage_report(tmp_path: Path) -> No
         subagent_status="completed",
     )
 
-    assert report.verdict == "pass"
-    assert report.summary == "implemented Copilot adapter"
-    assert report.files_changed == ["litehive/engines.py"]
-    assert report.tests == {"added": 2, "passing": 2}
+    # Without CLI verdict, text VERDICT: PASS is not parsed — verdict is fail.
+    assert report.verdict == "fail"
+    assert any("litehive report" in w for w in report.warnings)
 
 
 def test_copilot_stage_report_uses_json_error_when_no_assistant_message(tmp_path: Path) -> None:
@@ -2349,7 +2441,8 @@ def test_copilot_stage_report_uses_json_error_when_no_assistant_message(tmp_path
     )
 
     assert report.summary == "authentication required"
-    assert report.verdict == "blocked"
+    # Without CLI verdict, failed agents produce fail (not blocked).
+    assert report.verdict == "fail"
 
 
 def test_copilot_render_transcript_falls_back_to_message_deltas(tmp_path: Path) -> None:
@@ -2395,7 +2488,7 @@ def test_copilot_stage_report_uses_failed_tool_result_when_no_message(tmp_path: 
     )
 
     assert report.summary == "disk full"
-    assert report.verdict == "blocked"
+    assert report.verdict == "fail"
 
 
 def test_copilot_stream_event_adapter_extracts_final_message(tmp_path: Path) -> None:
@@ -2462,7 +2555,7 @@ def test_copilot_stream_event_adapter_extracts_tool_error_without_message(
     )
 
     assert report.summary == "permission denied"
-    assert report.verdict == "blocked"
+    assert report.verdict == "fail"
 
 
 def test_copilot_engine_continuation_returns_none(tmp_path: Path) -> None:
@@ -2499,7 +2592,8 @@ def test_execution_result_transcript_combines_stdout_and_stderr(tmp_path: Path) 
     assert result.transcript == "SUMMARY: failed\n\n[stderr]\nmissing binary"
 
 
-def test_parse_stage_report_text_extracts_shared_report_fields() -> None:
+def test_parse_stage_report_text_fails_on_text_only_transcript() -> None:
+    """Text VERDICT:/SUMMARY: without STAGE_RESULT JSON produces fail."""
     report = parse_stage_report_text(
         task_id="T-0003",
         step="implementing",
@@ -2508,99 +2602,36 @@ def test_parse_stage_report_text_extracts_shared_report_fields() -> None:
             "SUMMARY: adapter contract added\n"
             "FILES_CHANGED:\n"
             "- litehive/engines.py\n"
-            "- litehive/external_cli.py\n"
-            "TESTS_ADDED: 3\n"
-            "TESTS_PASSING: 8\n"
-            "WARNINGS:\n"
-            "- kept claude deferred\n"
         ),
         subagent_status="completed",
     )
 
-    assert report.verdict == "pass"
-    assert report.summary == "adapter contract added"
-    assert report.files_changed == ["litehive/engines.py", "litehive/external_cli.py"]
-    assert report.tests == {"added": 3, "passing": 8}
-    assert report.warnings == ["kept claude deferred"]
+    # No CLI verdict and no valid STAGE_RESULT → fail
+    assert report.verdict == "fail"
+    assert any("litehive report" in w for w in report.warnings)
 
 
-def test_parse_stage_report_text_extracts_follow_up_tasks() -> None:
+def test_parse_stage_report_text_no_text_follow_up_extraction() -> None:
+    """Text-only FOLLOW_UP_TASKS section is no longer parsed."""
     report = parse_stage_report_text(
         task_id="T-0003",
         step="accepting",
         transcript=(
             "VERDICT: PASS\n"
             "SUMMARY: acceptance complete\n"
-            "FILES_CHANGED:\n"
-            "- litehive/runner.py\n"
-            "TESTS_ADDED: 2\n"
-            "TESTS_PASSING: 2\n"
-            "WARNINGS:\n"
             "FOLLOW_UP_TASKS:\n"
-            '[{"title":"Tighten queue recovery coverage","rationale":"Acceptance found an uncovered recovery path.","blocking":false,"task_type":"bugfix","acceptance_criteria":["Recovery keeps queued follow-ups durable."]}]'
+            '[{"title":"Fix","rationale":"Reason","blocking":false}]'
         ),
         subagent_status="completed",
     )
 
-    assert report.verdict == "pass"
-    assert len(report.follow_up_tasks) == 1
-    assert report.follow_up_tasks[0].title == "Tighten queue recovery coverage"
-    assert report.follow_up_tasks[0].rationale == "Acceptance found an uncovered recovery path."
-    assert report.follow_up_tasks[0].blocking is False
-    assert report.follow_up_tasks[0].task_type == "bugfix"
-    assert report.follow_up_tasks[0].acceptance_criteria == [
-        "Recovery keeps queued follow-ups durable."
-    ]
-
-
-def test_parse_stage_report_text_accepts_inline_empty_follow_up_tasks_array() -> None:
-    report = parse_stage_report_text(
-        task_id="T-0003",
-        step="accepting",
-        transcript=("VERDICT: PASS\nSUMMARY: acceptance complete\nFOLLOW_UP_TASKS: []"),
-        subagent_status="completed",
-    )
-
-    assert report.verdict == "pass"
+    assert report.verdict == "fail"
+    # follow_up_tasks are not extracted from text format
     assert report.follow_up_tasks == []
-    assert report.warnings == []
 
 
-def test_parse_stage_report_text_accepts_block_empty_follow_up_tasks_array() -> None:
-    report = parse_stage_report_text(
-        task_id="T-0003",
-        step="accepting",
-        transcript=(
-            "VERDICT: PASS\nSUMMARY: acceptance complete\nFOLLOW_UP_TASKS:\n[]\nWARNINGS:\n"
-        ),
-        subagent_status="completed",
-    )
-
-    assert report.verdict == "pass"
-    assert report.follow_up_tasks == []
-    assert report.warnings == []
-
-
-def test_parse_stage_report_text_extracts_inline_follow_up_tasks_array() -> None:
-    report = parse_stage_report_text(
-        task_id="T-0003",
-        step="accepting",
-        transcript=(
-            "VERDICT: PASS\n"
-            "SUMMARY: acceptance complete\n"
-            'FOLLOW_UP_TASKS: [{"title":"Tighten queue recovery coverage","rationale":"Acceptance found an uncovered recovery path.","blocking":false}]'
-        ),
-        subagent_status="completed",
-    )
-
-    assert report.verdict == "pass"
-    assert len(report.follow_up_tasks) == 1
-    assert report.follow_up_tasks[0].title == "Tighten queue recovery coverage"
-    assert report.follow_up_tasks[0].rationale == "Acceptance found an uncovered recovery path."
-    assert report.follow_up_tasks[0].blocking is False
-
-
-def test_stage_report_from_subagent_uses_adapter_execution_transcript(tmp_path: Path) -> None:
+def test_stage_report_from_subagent_fails_without_cli_verdict(tmp_path: Path) -> None:
+    """Without CLI verdict in thread, verdict is always fail."""
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Adapter task")
     result = SubagentResult(
@@ -2625,8 +2656,9 @@ def test_stage_report_from_subagent_uses_adapter_execution_transcript(tmp_path: 
 
     report = stage_report_from_subagent(task, "implementing", result)
 
-    assert report.summary == "execution transcript parsed"
-    assert report.verdict == "pass"
+    # No CLI verdict → fail, regardless of text VERDICT: PASS in transcript
+    assert report.verdict == "fail"
+    assert any("litehive report" in w for w in report.warnings)
 
 
 def test_stage_prompt_includes_shared_process_and_profile_overlay(tmp_path: Path) -> None:

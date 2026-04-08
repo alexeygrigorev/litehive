@@ -21,7 +21,6 @@ def _cmd_report(args):
         step=step,
         verdict=args.verdict,
         message=args.message,
-        files_changed=args.files_changed,
     )
     append_thread_comment(root, task, comment)
     print(f"task: {task.id}")

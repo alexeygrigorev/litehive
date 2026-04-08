@@ -24,6 +24,8 @@ import litehive.tasks as tasks_module
 
 from litehive.cli import (
     _cmd_add,
+    _cmd_archive,
+    _cmd_cleanup,
     _cmd_issue,
     _cmd_intake,
     _cmd_abandon_task,
@@ -145,7 +147,12 @@ from litehive.subagents import (
 from litehive.tasks import (
     WorkspaceConflictError,
     abandon_task,
+    archive_done_tasks,
+    archive_root,
+    archive_task,
+    cleanup_archived_tasks,
     close_task,
+    list_archived_tasks,
     create_follow_up_tasks,
     create_task,
     dequeue_next_task_selection,
@@ -260,20 +267,98 @@ def _commit_repo_state(cwd: Path, message: str = "baseline") -> str:
     return _run(["git", "rev-parse", "HEAD"], cwd)
 
 
+def _resolve_workspace_root(path: Path) -> Path:
+    """Resolve back to the main workspace root if path is inside a worktree."""
+    # Check if path is inside a .litehive/worktrees/<task>/ directory.
+    parts = path.parts
+    for i, part in enumerate(parts):
+        if part == ".litehive" and i + 2 < len(parts) and parts[i + 1] == "worktrees":
+            # Main workspace root is the parent of .litehive/
+            return Path(*parts[:i])
+    return path
+
+
+def _write_cli_verdict(
+    root: Path,
+    task: "TaskRecord",
+    step: str,
+    verdict: str = "pass",
+    message: str | None = None,
+    files_changed: list[str] | None = None,
+) -> None:
+    """Simulate a litehive report CLI invocation by writing a thread comment.
+
+    The ``files_changed`` parameter is accepted for backward compatibility but
+    ignored — git is the source of truth for changed files.
+    """
+    from litehive.models import TaskThreadComment
+
+    # Write to the main workspace root, not the worktree.
+    ws_root = _resolve_workspace_root(root)
+    task_dir = tasks_module.task_dir(ws_root, task)
+    task_dir.mkdir(parents=True, exist_ok=True)
+
+    # files_changed is no longer passed by agents; it is populated from git diff
+    # at commit time. The parameter is kept for backward compatibility but ignored.
+    tasks_module.append_thread_comment(
+        ws_root,
+        task,
+        TaskThreadComment(
+            role="swe",
+            step=step,
+            verdict=verdict,
+            message=message or f"{step} {verdict}",
+        ),
+    )
+
+
 def _completed_subagent_result(
-    tmp_path: Path, step: str, *, engine_name: str = "codex"
+    tmp_path: Path, step: str, *, engine_name: str = "codex", task: "TaskRecord | None" = None
 ) -> SubagentResult:
     worktrees_root = tmp_path / ".litehive" / "worktrees"
     if step == "implementing" and worktrees_root.exists():
+        wrote_to_worktree = False
         main_app = tmp_path / "app.txt"
         for worktree in sorted(worktrees_root.iterdir()):
             if not worktree.is_dir():
                 continue
             worktree_app = worktree / "app.txt"
             if main_app.exists() and worktree_app.exists():
-                worktree_app.write_text(main_app.read_text(encoding="utf-8"), encoding="utf-8")
-                subprocess.run(["git", "checkout", "--", "app.txt"], cwd=tmp_path, check=True)
+                # Move main's dirty content (if any) to the worktree to avoid
+                # merge conflicts, then reset main.  If main is clean, append
+                # a line so the empty SWE guard still detects a change via git.
+                main_content = main_app.read_text(encoding="utf-8")
+                head_content = subprocess.run(
+                    ["git", "show", "HEAD:app.txt"],
+                    cwd=tmp_path, capture_output=True, text=True,
+                ).stdout
+                if main_content != head_content:
+                    # Main has uncommitted changes — transfer them to worktree
+                    worktree_app.write_text(main_content, encoding="utf-8")
+                    subprocess.run(["git", "checkout", "--", "app.txt"], cwd=tmp_path, check=True)
+                else:
+                    # Main is clean — write a synthetic change
+                    worktree_app.write_text(main_content + "implemented\n", encoding="utf-8")
+                wrote_to_worktree = True
                 break
+        if not wrote_to_worktree:
+            # No worktree — write a change in the main repo so the git-based guard detects it.
+            app_file = tmp_path / "app.txt"
+            app_file.write_text("implemented\n", encoding="utf-8")
+    elif step == "implementing":
+        # No worktrees dir — write a change in the main repo so the git-based guard detects it.
+        app_file = tmp_path / "app.txt"
+        app_file.write_text("implemented\n", encoding="utf-8")
+
+    # Simulate CLI verdict submission via thread comment.
+    if task is not None:
+        _write_cli_verdict(
+            tmp_path,
+            task,
+            step,
+            verdict="pass",
+            message=f"{step} complete via {engine_name}",
+        )
 
     return SubagentResult(
         ref=SubagentRef(
@@ -288,15 +373,7 @@ def _completed_subagent_result(
             argv=(engine_name, "exec"),
             cwd=tmp_path,
             exit_code=0,
-            stdout=(
-                "VERDICT: PASS\n"
-                f"SUMMARY: {step} complete via {engine_name}\n"
-                "FILES_CHANGED:\n"
-                "- app.txt\n"
-                "TESTS_ADDED: 1\n"
-                "TESTS_PASSING: 1\n"
-                "WARNINGS:\n"
-            ),
+            stdout=f"{step} complete via {engine_name}\n",
             stderr="",
         ),
         transcript="",
@@ -305,8 +382,18 @@ def _completed_subagent_result(
 
 
 def _failed_subagent_result(
-    tmp_path: Path, step: str, *, engine_name: str = "codex"
+    tmp_path: Path, step: str, *, engine_name: str = "codex", task: "TaskRecord | None" = None
 ) -> SubagentResult:
+    # Simulate CLI verdict submission via thread comment.
+    if task is not None:
+        _write_cli_verdict(
+            tmp_path,
+            task,
+            step,
+            verdict="fail",
+            message=f"recovery failed for {step}",
+        )
+
     return SubagentResult(
         ref=SubagentRef(
             id=f"SA-{step}-recovery",
@@ -320,10 +407,7 @@ def _failed_subagent_result(
             argv=(engine_name, "exec"),
             cwd=tmp_path,
             exit_code=1,
-            stdout=(
-                "VERDICT: FAIL\n"
-                f"SUMMARY: recovery failed for {step}\n"
-            ),
+            stdout=f"recovery failed for {step}\n",
             stderr="",
         ),
         transcript="",
@@ -339,28 +423,26 @@ def _stage_subagent_result(
     engine_name: str = "codex",
     verdict: str = "PASS",
     summary: str | None = None,
-    files_changed: list[str] | None = None,
+    files_changed: list[str] | None = None,  # ignored — git is source of truth
     tests_added: int = 1,
     tests_passing: int = 1,
     warnings: list[str] | None = None,
+    task: "TaskRecord | None" = None,
 ) -> SubagentResult:
-    transcript_lines = [
-        f"VERDICT: {verdict}",
-        f"SUMMARY: {summary or f'{step} complete via {engine_name}'}",
-        "FILES_CHANGED:",
-    ]
-    for path in files_changed or []:
-        transcript_lines.append(f"- {path}")
-    transcript_lines.extend(
-        [
-            f"TESTS_ADDED: {tests_added}",
-            f"TESTS_PASSING: {tests_passing}",
-            "WARNINGS:",
-        ]
-    )
-    for warning in warnings or []:
-        transcript_lines.append(f"- {warning}")
-    transcript = "\n".join(transcript_lines)
+    effective_summary = summary or f"{step} complete via {engine_name}"
+    effective_verdict = verdict.lower()
+
+    # Simulate CLI verdict submission via thread comment.
+    if task is not None:
+        _write_cli_verdict(
+            cwd,
+            task,
+            step,
+            verdict=effective_verdict,
+            message=effective_summary,
+        )
+
+    transcript = f"{effective_summary}\n"
     return SubagentResult(
         ref=SubagentRef(
             id=f"SA-{step}-{engine_name}",
@@ -455,20 +537,28 @@ def _interrupted_subagent_result(
 
 
 def _successful_stage_execution(tmp_path: Path, adapter: str, step: str) -> CLIExecutionResult:
+    # Auto-write a CLI verdict for the active task in the workspace.
+    ws_root = _resolve_workspace_root(tmp_path)
+    from litehive.tasks import load_state as _load_state, get_task as _get_task
+
+    state = _load_state(ws_root)
+    active_id = state.active_task_id
+    if active_id:
+        active_task = _get_task(ws_root, active_id)
+        if active_task is not None:
+            _write_cli_verdict(
+                ws_root,
+                active_task,
+                active_task.pipeline_status,
+                verdict="pass",
+                message=f"{step} complete via {adapter}",
+            )
     return CLIExecutionResult(
         adapter=adapter,
         argv=(adapter, "exec"),
         cwd=tmp_path,
         exit_code=0,
-        stdout=(
-            "VERDICT: PASS\n"
-            f"SUMMARY: {step} complete via {adapter}\n"
-            "FILES_CHANGED:\n"
-            "- app.txt\n"
-            "TESTS_ADDED: 1\n"
-            "TESTS_PASSING: 1\n"
-            "WARNINGS:\n"
-        ),
+        stdout=f"{step} complete via {adapter}\n",
         stderr="",
     )
 

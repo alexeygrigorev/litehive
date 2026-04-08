@@ -155,11 +155,6 @@ def build_parser():
         help="Default pool task ordering policy",
     )
     configure.add_argument(
-        "--pre-acceptance-command",
-        default=None,
-        help="Run this shell command after testing passes and before the task enters accepting",
-    )
-    configure.add_argument(
         "--hook",
         action="append",
         default=None,
@@ -892,15 +887,46 @@ def build_parser():
         "--step",
         help="Stage (grooming, implementing, testing, accepting). Defaults to the task's current pipeline_status.",
     )
-    report.add_argument(
-        "--files-changed",
-        action="append",
-        default=[],
-        help="Files that were changed (repeat for multiple)",
-    )
     report.add_argument("--task-id", help="Task ID. Defaults to the active task.")
     report.add_argument(
         "--workspace", type=Path, default=Path.cwd(), help="Repository root containing .litehive/"
+    )
+
+    # ── import-issue / import-issues ───────────────────────────────────
+    import_issue = subparsers.add_parser(
+        "import-issue",
+        help="Import a single GitHub issue as a litehive task",
+    )
+    import_issue.add_argument(
+        "issue_ref",
+        help="GitHub issue URL (https://github.com/owner/repo/issues/N) or issue number",
+    )
+    import_issue.add_argument(
+        "--repo",
+        default=None,
+        help="GitHub repo as owner/repo; auto-detected from git remote if omitted",
+    )
+    import_issue.add_argument(
+        "--workspace",
+        type=Path,
+        default=Path.cwd(),
+        help="Repository root containing .litehive/",
+    )
+
+    import_issues = subparsers.add_parser(
+        "import-issues",
+        help="Import all open GitHub issues that don't already have litehive tasks",
+    )
+    import_issues.add_argument(
+        "--repo",
+        default=None,
+        help="GitHub repo as owner/repo; auto-detected from git remote if omitted",
+    )
+    import_issues.add_argument(
+        "--workspace",
+        type=Path,
+        default=Path.cwd(),
+        help="Repository root containing .litehive/",
     )
 
     # ── list ──────────────────────────────────────────────────────────
@@ -941,6 +967,40 @@ def build_parser():
     )
     show_cmd.add_argument("task_id", help="Task ID (e.g. T-0001)")
     show_cmd.add_argument(
+        "--workspace",
+        type=Path,
+        default=Path.cwd(),
+        help="Repository root containing .litehive/",
+    )
+
+    # ── archive ───────────────────────────────────────────────────────
+    archive_cmd = subparsers.add_parser(
+        "archive", help="Move done tasks to the archive directory"
+    )
+    archive_cmd.add_argument(
+        "task_id",
+        nargs="?",
+        default=None,
+        help="Optional task ID to archive (archives all done tasks if omitted)",
+    )
+    archive_cmd.add_argument(
+        "--workspace",
+        type=Path,
+        default=Path.cwd(),
+        help="Repository root containing .litehive/",
+    )
+
+    # ── cleanup ──────────────────────────────────────────────────────
+    cleanup_cmd = subparsers.add_parser(
+        "cleanup", help="Delete archived tasks older than a given duration"
+    )
+    cleanup_cmd.add_argument(
+        "--older-than",
+        required=True,
+        dest="older_than",
+        help="Duration threshold (e.g. 30d, 24h, 60m)",
+    )
+    cleanup_cmd.add_argument(
         "--workspace",
         type=Path,
         default=Path.cwd(),

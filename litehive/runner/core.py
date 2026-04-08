@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 from pathlib import Path
+import subprocess
 import traceback
 from typing import Protocol
 
@@ -14,6 +15,7 @@ from litehive.models import (
     RuntimeContinuationHandoff,
     StageReport,
     TaskRecord,
+    UnmergedWorktree,
 )
 from litehive.tasks import (
     CLOSED_TASK_STATUSES,
@@ -26,12 +28,15 @@ from litehive.tasks import (
     clear_task_outcome,
     create_follow_up_tasks,
     finish_task_run_transition,
+    get_task_worktree_path,
     interruption_journal_message,
+    load_state,
     mark_stage_finished,
     mark_stage_started,
     missing_acceptance_criteria_reason,
     needs_normalization,
     record_recovery_report,
+    save_state,
     save_task,
     set_task_retry_state,
     task_dir,
@@ -365,7 +370,15 @@ class TaskExecutionRunner:
                     report.warnings = [*report.warnings, *recovered.warnings]
                 report = terminal
                 self._write_report(task, report, steps)
-                task.status = "flagged"
+                if current == "commit_to_git":
+                    task.status = "recovery_failed"
+                    append_journal(
+                        self.root, task,
+                        "commit_to_git failed and recovery did not resolve it. "
+                        "Status set to recovery_failed for manual resolution.",
+                    )
+                else:
+                    task.status = "flagged"
                 _apply_task_outcome(
                     task,
                     kind=outcome,
@@ -388,8 +401,55 @@ class TaskExecutionRunner:
 
             # Guard: SWE must produce actual changes. If implementing "passes"
             # with zero files changed and zero tests, reject it back to implementing.
+            # Always check the actual worktree via git — git is the source of truth.
             if current == "implementing" and target == "testing":
-                if not report.files_changed and (not report.tests or report.tests.get("added", 0) == 0):
+                worktree_has_changes = False
+                from litehive.tasks import get_task_worktree_path
+                from litehive.git_ops import current_head, is_git_repo
+                wt_path = get_task_worktree_path(task)
+                # Determine which directory to check for git changes:
+                # prefer the task worktree, fall back to the main repo root.
+                check_dir = None
+                if wt_path:
+                    wt_full = (self.root / wt_path).resolve()
+                    if wt_full.exists():
+                        check_dir = wt_full
+                if check_dir is None and is_git_repo(self.root):
+                    check_dir = self.root
+                if check_dir is not None:
+                    try:
+                        diff = subprocess.run(
+                            ["git", "diff", "--name-only", "HEAD"],
+                            cwd=check_dir, capture_output=True, text=True, timeout=10,
+                        )
+                        staged = subprocess.run(
+                            ["git", "diff", "--name-only", "--cached"],
+                            cwd=check_dir, capture_output=True, text=True, timeout=10,
+                        )
+                        untracked = subprocess.run(
+                            ["git", "ls-files", "--others", "--exclude-standard"],
+                            cwd=check_dir, capture_output=True, text=True, timeout=10,
+                        )
+                        # Also check committed changes ahead of main
+                        main_head = current_head(self.root) if wt_path else None
+                        committed = subprocess.run(
+                            ["git", "diff", "--name-only", main_head or "HEAD", "HEAD"],
+                            cwd=check_dir, capture_output=True, text=True, timeout=10,
+                        ) if main_head else subprocess.CompletedProcess(args=[], returncode=0, stdout="")
+                        all_changed = set(
+                            f.strip() for f in
+                            (diff.stdout + staged.stdout + untracked.stdout + committed.stdout).splitlines()
+                            if f.strip() and not f.strip().startswith(".litehive/")
+                        )
+                        if all_changed:
+                            worktree_has_changes = True
+                            report.files_changed = sorted(all_changed)
+                    except (subprocess.TimeoutExpired, OSError):
+                        pass
+                if check_dir is None:
+                    # Non-git workspace — cannot verify changes, skip the guard.
+                    pass
+                elif not worktree_has_changes and (not report.tests or report.tests.get("added", 0) == 0):
                     reason = (
                         "SWE reported pass but produced no file changes and no tests. "
                         "This usually means the agent did not actually write code. "
@@ -652,6 +712,51 @@ class TaskExecutionRunner:
                     last_verdict=last_verdict,
                 )
 
+            if target == "merge_failed":
+                reason = report.summary or f"{current} merge failed"
+                terminal = self._terminal_report(
+                    task,
+                    step=report.step,
+                    verdict=report.verdict,
+                    summary=report.summary,
+                    outcome="flagged",
+                    outcome_reason_code="merge_conflict",
+                    reason=reason,
+                    retry_count=report.retry_count,
+                    warnings=report.warnings,
+                    feedback=report.feedback,
+                    files_changed=report.files_changed,
+                    tests=report.tests,
+                    resource_limit_event=report.resource_limit_event,
+                    hook_results=report.hook_results,
+                    failure_classification=report.failure_classification or "merge_conflict",
+                    failure_diagnostics=report.failure_diagnostics,
+                )
+                report = terminal
+                task.status = "merge_failed"
+                task.pipeline_status = "merge_failed"
+                _apply_task_outcome(
+                    task,
+                    kind="flagged",
+                    stage=current,
+                    reason_code="merge_conflict",
+                    reason=reason,
+                    retry_count=report.retry_count,
+                    retry_limit=self.max_retries,
+                    retry_source=self.retry_source,
+                    failure_classification=report.failure_classification,
+                    failure_diagnostics=report.failure_diagnostics,
+                )
+                _record_unmerged_worktree(self.root, task)
+                self._write_report(task, report, steps)
+                _apply_stage_finished(task, report)
+                return self._finish_run(
+                    task,
+                    final_status="merge_failed",
+                    steps=steps,
+                    last_verdict=last_verdict,
+                )
+
             if target == "flagged":
                 outcome = "blocked" if report.verdict == "blocked" else "flagged"
                 reason = report.summary or f"{current} ended with `{report.verdict}`"
@@ -871,3 +976,22 @@ def _human_checkpoint_reason(task: TaskRecord, target: str) -> str | None:
     if target == "commit_to_git" and "before_commit" in task.human_checkpoints:
         return "before_commit"
     return None
+
+
+def _record_unmerged_worktree(root: Path, task: TaskRecord) -> None:
+    """Record a task's worktree as unmerged in state.yaml for later resolution."""
+    from litehive.models import UnmergedWorktree
+    from litehive.tasks import get_task_worktree_path, load_state, save_state
+
+    worktree_path = get_task_worktree_path(task)
+    if not worktree_path:
+        return
+    state = load_state(root)
+    # Avoid duplicates
+    for entry in state.unmerged_worktrees:
+        if entry.task_id == task.id:
+            return
+    state.unmerged_worktrees.append(
+        UnmergedWorktree(task_id=task.id, worktree_path=worktree_path)
+    )
+    save_state(root, state)

@@ -6,13 +6,14 @@ task_type: bugfix
 engine: null
 model: null
 mode: implementation
-status: queued
-pipeline_status: implementing
+pipeline_mode: full
+status: done
+pipeline_status: done
 priority: medium
 pm_complexity: moderate
 planned_effort: m
 created_at: '2026-04-01T06:23:16+00:00'
-updated_at: '2026-04-06T16:28:37+00:00'
+updated_at: '2026-04-07T23:20:08+00:00'
 goal: Ensure the commit_to_git stage can be rerun or resumed after an interrupted
   checkpoint commit without failing, creating a duplicate checkpoint, or leaving task/runtime
   state inconsistent.
@@ -173,16 +174,39 @@ subagents:
   path: subagents/SA-0029-merge-resolver
   sandboxed: false
   sandbox_summary: host
+- id: SA-0030
+  role: swe
+  engine: claude
+  status: completed
+  path: subagents/SA-0030-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0031
+  role: qa
+  engine: claude
+  status: completed
+  path: subagents/SA-0031-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0032
+  role: reviewer
+  engine: claude
+  status: completed
+  path: subagents/SA-0032-reviewer
+  sandboxed: false
+  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0067 make-commit-to-git-idempotent-and-resumable'
-  commit_sha: 68f6f2519f513cc653eb62cc0d0f219d8749797b
-  checkpoint_base_sha: null
-  checkpoint_attempts: 0
+  commit_sha: 806f25a301716aa815b4d775228a1c8a86eff4a2
+  checkpoint_base_sha: 43d5205e04522614909db3c6e38d8ad0ee672561
+  checkpoint_attempts: 1
   rolled_back_checkpoint_attempt: null
   worktree_path: null
+  merge_agent_attempts: 0
 retry_policy:
   max_retries: null
   stage_retry_limit: null
 created_from: null
 upstream_origin: null
+github_origin: null

@@ -247,8 +247,6 @@ def stage_prompt(
             "Return exactly this structure:",
             "VERDICT: PASS|FAIL|REJECT|BLOCKED",
             "SUMMARY: one-line summary",
-            "FILES_CHANGED:",
-            "- path/to/file",
             "TESTS_ADDED: <integer>",
             "TESTS_PASSING: <integer>",
             "WARNINGS:",
@@ -257,7 +255,7 @@ def stage_prompt(
             "Preferred: emit a schema-validated JSON block instead of the text above.",
             "Place the JSON on the line(s) after `STAGE_RESULT:`.",
             "STAGE_RESULT:",
-            '{"verdict":"pass","summary":"one-line summary","files_changed":["path/to/file"],'
+            '{"verdict":"pass","summary":"one-line summary",'
             '"tests":{"added":0,"passing":0},"warnings":[],'
             '"follow_up_tasks":[],"acceptance_criteria":[],"task_update":{}}',
             "The text format above is still accepted as a fallback.",

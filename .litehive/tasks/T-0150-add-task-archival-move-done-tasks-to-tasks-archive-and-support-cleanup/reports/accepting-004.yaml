@@ -1,0 +1,61 @@
+task_id: T-0150
+step: accepting
+verdict: pass
+summary: "## Acceptance Review \u2014 PASS"
+feedback: "## Acceptance Review \u2014 PASS\n\n### Verification performed\n- Read\
+  \ all changed files: tasks.py (archive_root, archive_task, archive_done_tasks, list_archived_tasks,\
+  \ _parse_duration, cleanup_archived_tasks), cli/__init__.py (dispatch wiring), cli/parser.py\
+  \ (archive and cleanup subcommands), cli/queue.py (_cmd_archive, _cmd_cleanup),\
+  \ tests/test_archive.py (19 tests), tests/workspace_helpers.py (imports).\n- Ran\
+  \ `uv run pytest tests/test_archive.py -q` \u2014 19 passed.\n- Ran broader regression\
+  \ suite (test_archive + test_workspace_bootstrap + test_config_and_run_cli) \u2014\
+  \ 94 passed, 0 failures.\n\n### Acceptance criteria verification\n1. **litehive\
+  \ archive moves all done tasks to tasks/archive/** \u2014 Verified. `archive_done_tasks()`\
+  \ filters for status==done and pipeline_status==done, calls `archive_task()` for\
+  \ each. Tested in `test_archive_done_tasks_bulk` and `test_cmd_archive_all_done`.\n\
+  2. **litehive archive T-XXXX moves a specific done task to archive** \u2014 Verified.\
+  \ `archive_task()` validates status==done, stamps `archived_at` in task.yaml, moves\
+  \ dir via shutil.move. Tested in `test_archive_single_done_task` and `test_cmd_archive_single_task`.\
+  \ Non-done and unknown tasks are properly rejected.\n3. **litehive cleanup --older-than\
+  \ 30d deletes archived tasks older than 30 days from archive date** \u2014 Verified.\
+  \ `_parse_duration()` parses d/h/m/s units. `cleanup_archived_tasks()` compares\
+  \ `archived_at` against threshold and uses `shutil.rmtree`. Tested with backdated\
+  \ timestamps in `test_cleanup_deletes_old_archived_tasks` and `test_cmd_cleanup`.\
+  \ Recent tasks preserved in `test_cleanup_keeps_recent_archived_tasks`.\n4. **Archived\
+  \ tasks do not appear in litehive queue or litehive status** \u2014 Verified. Structural\
+  \ exclusion: `list_tasks()` iterates one level deep under `tasks/`, so `tasks/archive/`\
+  \ subdirectory contents are invisible. Tested in `test_archived_tasks_excluded_from_list_tasks`,\
+  \ `test_archived_tasks_excluded_from_queue`, `test_archived_tasks_excluded_from_status`.\n\
+  5. **Archive and cleanup print a summary of affected tasks** \u2014 Verified. CLI\
+  \ handlers print `archived: <id>`, `archived_count:`, `deleted: <id>`, `deleted_count:`\
+  \ lines. Tested in CLI tests.\n6. **All new commands have tests** \u2014 19 tests\
+  \ covering unit functions, CLI commands, edge cases, and error paths.\n\n### Code\
+  \ quality\n- Implementation follows existing patterns (workspace lock, ensure_workspace,\
+  \ error handling).\n- No regressions detected in broader test suite.\n\nSTAGE_RESULT:\n\
+  {\"verdict\":\"pass\",\"summary\":\"All 6 acceptance criteria verified with 19 passing\
+  \ tests and no regressions\",\"tests\":{\"added\":19,\"passing\":19},\"warnings\"\
+  :[],\"follow_up_tasks\":[],\"acceptance_criteria\":[\"litehive archive moves all\
+  \ done tasks to tasks/archive/\",\"litehive archive T-XXXX moves a specific done\
+  \ task to archive\",\"litehive cleanup --older-than 30d deletes archived tasks older\
+  \ than 30 days from archive date\",\"Archived tasks do not appear in litehive queue\
+  \ or litehive status\",\"Archive and cleanup print a summary of affected tasks\"\
+  ,\"All new commands have tests\"],\"task_update\":{}}"
+files_changed: []
+follow_up_tasks: []
+created_follow_up_task_ids: []
+task_update: {}
+tests: {}
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 1337
+hook_results: []
+created_at: '2026-04-08T00:03:26+00:00'

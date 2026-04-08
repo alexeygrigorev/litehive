@@ -1,0 +1,52 @@
+task_id: T-0187
+step: testing
+verdict: pass
+summary: '## Verification Summary'
+feedback: "## Verification Summary\n\nAll acceptance criteria verified and passing.\n\
+  \n### Criteria 1: Codex adapter detects the exact 'hit your usage limit' message\n\
+  VERIFIED \u2014 `_classify_codex_usage_limit()` uses compiled regex `r\"you['\\\
+  u2019]ve hit your usage limit\"` (case-insensitive) to match the exact pattern.\
+  \ Tested with exact message, smart apostrophe variant, and confirmed None return\
+  \ for unrelated errors.\n\n### Criteria 2: Reset date is extracted and logged when\
+  \ available\nVERIFIED \u2014 Uses existing `_codex_retry_at_hint()` to extract date\
+  \ from \"try again at <date>\" suffix. Logs at INFO level with message \"Codex usage\
+  \ limit hit; engine available again at <date>\" when date is present, or \"no reset\
+  \ date available\" when absent. Tests confirm extraction of \"5:26 PM\" and \"2026-04-09\
+  \ 10:00 UTC\" formats.\n\n### Criteria 3: Engine fallback triggers immediately on\
+  \ detection\nVERIFIED \u2014 Returns `limit_reason=\"usage limit reached\"`, same\
+  \ string as the generic path, so existing fallback machinery fires without changes.\n\
+  \n### Criteria 4: Generic pattern matching still works as fallback for unknown error\
+  \ formats\nVERIFIED \u2014 When `_classify_codex_usage_limit()` returns None, code\
+  \ falls through to `classify_execution_limit()`. Test `test_codex_extract_usage_observation_falls_back_to_generic_for_unknown_errors`\
+  \ confirms \"quota exceeded\" is caught by the generic classifier.\n\n### Tests\n\
+  - 8 new tests added in test_runner_workflow.py (unit + integration for the detector)\n\
+  - All 16 codex-related tests in test_runner_workflow.py pass (0.38s)\n- All 7 existing\
+  \ codex tests in test_retry_commit_and_recovery.py still pass (6.77s)\n- No regressions\n\
+  \nSTAGE_RESULT:\n{\"verdict\":\"pass\",\"summary\":\"Codex-specific usage limit\
+  \ detector correctly matches exact error pattern, extracts reset dates, triggers\
+  \ fallback, and preserves generic detection as fallback\",\"tests\":{\"added\":8,\"\
+  passing\":23},\"warnings\":[],\"follow_up_tasks\":[],\"acceptance_criteria\":[\"\
+  Codex adapter detects exact usage limit message via _classify_codex_usage_limit\
+  \ with regex\",\"Reset date extracted via _codex_retry_at_hint and logged at INFO\
+  \ level\",\"Engine fallback triggers on limit_reason='usage limit reached'\",\"\
+  Generic classify_execution_limit remains as fallback for unknown error formats\"\
+  ]}"
+files_changed: []
+follow_up_tasks: []
+created_follow_up_task_ids: []
+task_update: {}
+tests: {}
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 66
+hook_results: []
+created_at: '2026-04-07T22:38:35+00:00'

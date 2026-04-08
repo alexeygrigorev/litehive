@@ -6,13 +6,14 @@ task_type: null
 engine: null
 model: null
 mode: implementation
-status: flagged
+pipeline_mode: full
+status: queued
 pipeline_status: implementing
 priority: medium
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-04T20:46:45+00:00'
-updated_at: '2026-04-06T00:30:23+00:00'
+updated_at: '2026-04-07T20:53:37+00:00'
 goal: Split tasks.py into tasks/__init__.py with separate files for CRUD, state management,
   queue operations, thread, and repair.
 acceptance_criteria:
@@ -65,8 +66,10 @@ git:
   checkpoint_attempts: 0
   rolled_back_checkpoint_attempt: null
   worktree_path: null
+  merge_agent_attempts: 0
 retry_policy:
   max_retries: null
   stage_retry_limit: null
 created_from: null
 upstream_origin: null
+github_origin: null

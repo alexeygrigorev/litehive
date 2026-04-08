@@ -1,0 +1,84 @@
+id: T-0212
+slug: resume-crashed-agent-sessions-instead-of-starting
+title: Resume crashed agent sessions instead of starting from scratch
+depends_on: []
+task_type: null
+engine: null
+model: null
+mode: implementation
+pipeline_mode: full
+status: queued
+pipeline_status: implementing
+priority: medium
+pm_complexity: null
+planned_effort: null
+created_at: '2026-04-07T15:41:35+00:00'
+updated_at: '2026-04-07T20:53:10+00:00'
+goal: When an agent exits with code 1 and no specific failure classification (not
+  quota, not timeout, not interrupted), resume the same Claude session instead of
+  starting a new one. The session ID is already extracted via extract_engine_continuation.
+  Currently the executor loop breaks without retrying when failure is None but exit
+  code != 0. It should detect this case, extract the continuation session ID, and
+  retry once with resume_session_id.
+acceptance_criteria:
+- Agent crash with exit 1 and no failure classification triggers a resume attempt
+  with the same session ID
+- Resume prompt says 'continue where you left off'
+- Only one resume attempt per crash - if the resumed session also crashes, proceed
+  normally
+- Only applies to engines that support session resume (claude)
+- Journal logs the resume attempt clearly
+constraints: []
+plan: []
+human_checkpoints: []
+subagents:
+- id: SA-0001
+  role: planner
+  engine: claude
+  status: completed
+  path: subagents/SA-0001-planner
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0002
+  role: swe
+  engine: claude
+  status: completed
+  path: subagents/SA-0002-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0003
+  role: swe
+  engine: claude
+  status: completed
+  path: subagents/SA-0003-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0004
+  role: swe
+  engine: claude
+  status: completed
+  path: subagents/SA-0004-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0005
+  role: swe
+  engine: claude
+  status: completed
+  path: subagents/SA-0005-swe
+  sandboxed: false
+  sandbox_summary: host
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0212 resume-crashed-agent-sessions-instead-of-starting'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+  worktree_path: null
+  merge_agent_attempts: 0
+retry_policy:
+  max_retries: null
+  stage_retry_limit: null
+created_from: null
+upstream_origin: null
+github_origin: null

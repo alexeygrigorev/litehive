@@ -6,13 +6,14 @@ task_type: null
 engine: null
 model: null
 mode: implementation
-status: queued
-pipeline_status: backlog
+pipeline_mode: full
+status: done
+pipeline_status: done
 priority: medium
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-06T20:36:30+00:00'
-updated_at: '2026-04-06T20:36:30+00:00'
+updated_at: '2026-04-08T05:42:33+00:00'
 goal: Pure mechanical split, no logic changes. Move code out of __init__.py into focused
   submodules.
 acceptance_criteria:
@@ -21,21 +22,67 @@ acceptance_criteria:
 - All tests pass
 constraints: []
 plan:
-- 'daemon/_registry.py: list_daemon_instances, get_workspace_daemon, register_daemon, unregister_daemon, _prune_registry_in_place'
+- 'daemon/_registry.py: list_daemon_instances, get_workspace_daemon, register_daemon,
+  unregister_daemon, _prune_registry_in_place'
 - 'daemon/_logs.py: latest_run_all_log_dir, _prune_run_all_log_dirs'
-- 'daemon/_execution.py: run_daemon_loop, start_background_daemon, stop_workspace_daemon, daemon_status_lines'
+- 'daemon/_execution.py: run_daemon_loop, start_background_daemon, stop_workspace_daemon,
+  daemon_status_lines'
 human_checkpoints: []
-subagents: []
+subagents:
+- id: SA-0001
+  role: planner
+  engine: claude
+  status: completed
+  path: subagents/SA-0001-planner
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0002
+  role: swe
+  engine: claude
+  status: completed
+  path: subagents/SA-0002-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0003
+  role: swe
+  engine: claude
+  status: completed
+  path: subagents/SA-0003-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0004
+  role: qa
+  engine: claude
+  status: completed
+  path: subagents/SA-0004-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0005
+  role: reviewer
+  engine: claude
+  status: completed
+  path: subagents/SA-0005-reviewer
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0006
+  role: merge-resolver
+  engine: claude
+  status: completed
+  path: subagents/SA-0006-merge-resolver
+  sandboxed: false
+  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0207 split-daemon-init-py-451-lines-into-daemon'
-  commit_sha: null
-  checkpoint_base_sha: null
-  checkpoint_attempts: 0
+  commit_sha: eabafd9f7e450fa70ab5a15494997e7d9768b35c
+  checkpoint_base_sha: 97f471643c3255556a98e8d77694f3d541a4176f
+  checkpoint_attempts: 1
   rolled_back_checkpoint_attempt: null
   worktree_path: null
+  merge_agent_attempts: 1
 retry_policy:
   max_retries: null
   stage_retry_limit: null
 created_from: null
 upstream_origin: null
+github_origin: null

@@ -1440,7 +1440,7 @@ def test_resume_run_uses_structured_continuation_handoff_after_interruption(
         if current_task.pipeline_status == "testing":
             prompts.append(prompt)
         return _completed_subagent_result(
-            tmp_path, current_task.pipeline_status, engine_name=engine_name
+            tmp_path, current_task.pipeline_status, engine_name=engine_name, task=current_task
         )
 
     monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_run)
@@ -1566,7 +1566,7 @@ def test_requeue_command_requires_flagged_or_cancelled(
     output = capsys.readouterr().out
 
     assert exit_code == 1
-    assert "is not flagged, parked, or closed" in output
+    assert "is not flagged, merge_failed, parked, or closed" in output
 
 def test_requeue_task_rolls_back_when_atomic_state_persist_fails(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -2381,7 +2381,7 @@ def test_status_command_shows_explicit_close_outcome(
         follow_up_task_id=follow_up.id,
     )
 
-    _cmd_status(argparse.Namespace(workspace=tmp_path))
+    _cmd_status(argparse.Namespace(workspace=tmp_path, full=True))
     output = capsys.readouterr().out
 
     assert f"{task.id} [deferred/backlog]" in output
@@ -3244,7 +3244,7 @@ exit 1
 """,
     )
     monkeypatch.setattr(
-        "litehive.daemon._default_command_prefix",
+        "litehive.daemon._execution._default_command_prefix",
         lambda: [str(fake_uv), "run", "litehive"],
     )
 
@@ -3274,7 +3274,7 @@ def test_run_task_skips_pre_acceptance_hook_when_not_configured(
         "litehive.runtime.SubagentManager.run",
         lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
             _completed_subagent_result(  # type: ignore[no-untyped-def]
-                tmp_path, task.pipeline_status
+                tmp_path, task.pipeline_status, task=task
             )
         ),
     )
@@ -3375,7 +3375,9 @@ def test_run_task_runs_pre_acceptance_hook_after_testing_passes(
 ) -> None:
     ensure_workspace(
         tmp_path,
-        LitehiveConfig(pre_acceptance_command="uv run ruff check litehive tests"),
+        LitehiveConfig(runner_hooks={
+            "before_pm_acceptance": [{"command": "uv run ruff check litehive tests", "blocking": True}],
+        }),
     )
     create_task(tmp_path, title="Run ruff before acceptance", auto_commit=False)
     calls: list[str] = []
@@ -3383,7 +3385,7 @@ def test_run_task_runs_pre_acceptance_hook_after_testing_passes(
 
     def fake_subagent_run(self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None):  # type: ignore[no-untyped-def]
         calls.append(task.pipeline_status)
-        return _completed_subagent_result(tmp_path, task.pipeline_status)
+        return _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
 
     def fake_hook(argv, cwd, capture_output, text, check):  # type: ignore[no-untyped-def]
         if list(argv) != ["bash", "-lc", "uv run ruff check litehive tests"]:
@@ -3409,7 +3411,7 @@ def test_run_task_runs_pre_acceptance_hook_after_testing_passes(
         / "tasks"
         / "T-0001-run-ruff-before-acceptance"
         / "artifacts"
-        / "pre-acceptance-hook.txt"
+        / "before_pm_acceptance-001.yaml"
     )
     assert "command: uv run ruff check litehive tests" in artifact.read_text(encoding="utf-8")
     accepting_report = yaml.safe_load(
@@ -3430,16 +3432,18 @@ def test_run_task_blocks_before_accepting_when_pre_acceptance_hook_fails(
 ) -> None:
     ensure_workspace(
         tmp_path,
-        LitehiveConfig(pre_acceptance_command="uv run ruff check litehive tests"),
+        LitehiveConfig(runner_hooks={
+            "before_pm_acceptance": [{"command": "uv run ruff check litehive tests", "blocking": True}],
+        }),
     )
     create_task(tmp_path, title="Block on failing ruff", auto_commit=False)
     calls: list[str] = []
 
     def fake_subagent_run(self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None):  # type: ignore[no-untyped-def]
         if role == "recovery":
-            return _failed_subagent_result(tmp_path, task.pipeline_status)
+            return _failed_subagent_result(tmp_path, task.pipeline_status, task=task)
         calls.append(task.pipeline_status)
-        return _completed_subagent_result(tmp_path, task.pipeline_status)
+        return _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
 
     def fake_hook(argv, cwd, capture_output, text, check):  # type: ignore[no-untyped-def]
         return subprocess.CompletedProcess(argv, 1, stdout="", stderr="F401 unused import\n")
@@ -3488,7 +3492,7 @@ def test_run_task_records_non_blocking_runner_hook_failure_and_continues(
 
     def fake_subagent_run(self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None):  # type: ignore[no-untyped-def]
         calls.append(task.pipeline_status)
-        return _completed_subagent_result(tmp_path, task.pipeline_status)
+        return _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
 
     def fake_hook(argv, cwd, capture_output, text, check):  # type: ignore[no-untyped-def]
         if list(argv) == ["bash", "-lc", "echo pre && exit 7"]:
@@ -3534,9 +3538,14 @@ def test_run_task_blocks_when_post_implementation_runner_hook_fails(
 
     def fake_subagent_run(self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None):  # type: ignore[no-untyped-def]
         if role == "recovery":
-            return _failed_subagent_result(tmp_path, task.pipeline_status)
+            return _failed_subagent_result(tmp_path, task.pipeline_status, task=task)
         calls.append(task.pipeline_status)
-        return _completed_subagent_result(tmp_path, task.pipeline_status)
+        # Don't write CLI verdict for implementing — the blocking post-hook
+        # overrides the verdict to "blocked".  Writing a "pass" CLI verdict
+        # would leak into the recovery thread scan and mask the block.
+        if task.pipeline_status == "implementing":
+            return _completed_subagent_result(tmp_path, task.pipeline_status)
+        return _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
 
     def fake_hook(argv, cwd, capture_output, text, check):  # type: ignore[no-untyped-def]
         if list(argv) == ["bash", "-lc", "echo post && exit 9"]:
@@ -3580,7 +3589,7 @@ def test_run_task_runs_after_acceptance_runner_hook_on_accept(
     create_task(tmp_path, title="Run after acceptance hook", auto_commit=False)
 
     def fake_subagent_run(self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None):  # type: ignore[no-untyped-def]
-        return _completed_subagent_result(tmp_path, task.pipeline_status)
+        return _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
 
     def fake_hook(argv, cwd, capture_output, text, check):  # type: ignore[no-untyped-def]
         if list(argv) == ["bash", "-lc", "echo accepted"]:

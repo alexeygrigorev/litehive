@@ -33,16 +33,17 @@ def test_valid_submission_produces_structured_report() -> None:
     )
     assert report.verdict == "pass"
     assert report.summary == "All checks green"
-    assert report.files_changed == ["src/foo.py", "tests/test_foo.py"]
+    # files_changed is no longer populated from agent output; it comes from git diff at commit time
+    assert report.files_changed == []
     assert report.tests == {"added": 3, "passing": 10}
     assert report.warnings == ["minor lint issue"]
 
 
 # ---------------------------------------------------------------------------
-# AC-2: Extra unknown field → validation error, fallback to text path
+# AC-2: Extra unknown field → validation error, verdict is fail (no text fallback)
 # ---------------------------------------------------------------------------
 
-def test_extra_field_rejected_and_falls_back_to_text() -> None:
+def test_extra_field_rejected_produces_fail() -> None:
     payload = {
         "verdict": "pass",
         "summary": "done",
@@ -55,17 +56,19 @@ def test_extra_field_rejected_and_falls_back_to_text() -> None:
         transcript=transcript,
         subagent_status="completed",
     )
-    # Should fall back to text path → picks up the text-path VERDICT: FAIL
+    # No text fallback — verdict is always fail when STAGE_RESULT is invalid
     assert report.verdict == "fail"
     # A validation warning should be present
     assert any("STAGE_RESULT validation" in w for w in report.warnings)
+    # Also warns about missing CLI verdict
+    assert any("litehive report" in w for w in report.warnings)
 
 
 # ---------------------------------------------------------------------------
-# AC-3: Missing required verdict field → human-readable warning, text fallback
+# AC-3: Missing required verdict field → fail verdict, no text fallback
 # ---------------------------------------------------------------------------
 
-def test_missing_verdict_falls_back_with_warning() -> None:
+def test_missing_verdict_produces_fail_with_warning() -> None:
     payload = {
         "summary": "done",
         "files_changed": [],
@@ -77,7 +80,8 @@ def test_missing_verdict_falls_back_with_warning() -> None:
         transcript=transcript,
         subagent_status="completed",
     )
-    assert report.verdict == "pass"
+    # Text VERDICT: PASS is NOT parsed — no text fallback
+    assert report.verdict == "fail"
     assert any("STAGE_RESULT validation" in w for w in report.warnings)
     # Warning should mention the missing field
     assert any("verdict" in w for w in report.warnings)
@@ -163,6 +167,8 @@ def test_validation_warning_is_human_readable() -> None:
         transcript=transcript,
         subagent_status="completed",
     )
+    # Verdict is fail — text VERDICT: PASS is not parsed
+    assert report.verdict == "fail"
     validation_warnings = [w for w in report.warnings if "STAGE_RESULT validation" in w]
     assert validation_warnings, "Expected at least one STAGE_RESULT validation warning"
     # Each warning should be a non-empty human-readable string
@@ -183,4 +189,5 @@ def test_extra_field_validation_warning_mentions_field() -> None:
         transcript=transcript,
         subagent_status="completed",
     )
+    assert report.verdict == "fail"
     assert any("STAGE_RESULT validation" in w for w in report.warnings)

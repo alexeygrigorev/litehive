@@ -1,0 +1,54 @@
+task_id: T-0213
+step: implementing
+verdict: reject
+summary: 'SWE reported pass but produced no file changes and no tests. This usually
+  means the agent did not actually write code. Worktree: unknown. Report summary:
+  Removed files_changed from agent report format. Git is now the sole source of truth.'
+feedback: "Stage `implementing` retrying `claude` after attempt 1/3 due to transient\
+  \ timeout (classification: timeout, policy: claude, backoff: 0.25s).\n\nStage `implementing`\
+  \ retrying `claude` after attempt 2/3 due to transient timeout (classification:\
+  \ timeout, policy: claude, backoff: 0.50s).\n\nRemoved files_changed from agent\
+  \ report format. Git is now the sole source of truth.\n\n## Changes made\n\n1. **litehive/subagents/_prompts.py**:\
+  \ Removed FILES_CHANGED from both text and JSON report format templates that agents\
+  \ see. Agents no longer produce this field.\n\n2. **litehive/subagents/_parsing.py**:\
+  \ Stopped extracting files_changed from agent STAGE_RESULT JSON metadata and from\
+  \ CLI verdict thread comments. The field is no longer populated from agent output.\n\
+  \n3. **litehive/engines/base.py**: Stopped populating files_changed from StageResultSubmission\
+  \ in parse_stage_report_text.\n\n4. **litehive/runner/core.py**: Refactored the\
+  \ empty SWE guard to always check git status directly (worktree or main repo), never\
+  \ relying on report.files_changed. The guard now: (a) checks worktree if available,\
+  \ (b) falls back to main repo root if it's a git repo, (c) skips the guard entirely\
+  \ for non-git workspaces.\n\n5. **litehive/runtime/_commit.py**: Added git-diff-based\
+  \ population of files_changed at commit stage \u2014 after successful merge, the\
+  \ report's files_changed is populated from `git diff --name-only head_before head_after`.\n\
+  \n6. **litehive/cli/parser.py + litehive/cli/report.py**: Removed --files-changed\
+  \ CLI argument from the report command since agents no longer need to pass it.\n\
+  \n7. **tests/workspace_helpers.py**: Updated _write_cli_verdict, _completed_subagent_result,\
+  \ and _successful_stage_execution to stop passing files_changed. Updated _completed_subagent_result\
+  \ to write real file changes to the worktree so the git-based guard detects them.\n\
+  \n8. **tests/test_stage_result_submission.py**: Updated assertion to expect empty\
+  \ files_changed from parse\n\n\u2026 [truncated \u2014 full transcript in subagent\
+  \ artifacts]"
+files_changed: []
+follow_up_tasks: []
+created_follow_up_task_ids: []
+task_update: {}
+tests: {}
+warnings:
+- 'Stage `implementing` retrying `claude` after attempt 1/3 due to transient timeout
+  (classification: timeout, policy: claude, backoff: 0.25s).'
+- 'Stage `implementing` retrying `claude` after attempt 2/3 due to transient timeout
+  (classification: timeout, policy: claude, backoff: 0.50s).'
+retry_count: 1
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 2465
+hook_results: []
+created_at: '2026-04-07T19:45:43+00:00'

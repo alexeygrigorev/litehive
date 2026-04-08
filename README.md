@@ -283,10 +283,101 @@ Currently supported:
 
 ## Best Practices for Tests
 
+### Speed requirements
+
 - **Never run the full test suite** — run only the specific test file for your change (e.g. `pytest tests/test_specific.py -q`)
 - **Each unit test should finish within 1 minute** — longer tests will cause the agent process to be killed by the inactivity timeout
 - **Each test file should finish within 1 minute** — if a test file takes longer, the tests need to be optimized or split
 - **Integration tests** (in `tests_integration/`) may take up to 3 minutes — if they exceed 3 minutes, split or optimize them
 - The agent process is killed after **6 minutes of no output** — if a test takes longer than that, split it into smaller tests
-- **Mock external calls** — always mock `SubagentManager.run`, engine adapters, and other subprocess calls in unit tests. Never call real engines from tests.
-- **Fake adapters must return files** — when mocking implementing stage passes, include at least one file in `FILES_CHANGED` and set `TESTS_ADDED: 1`. An empty implementing pass triggers the guard and causes infinite retry loops.
+
+### Always mock the execution layer
+
+Any test that calls `run_next_task`, `run_task`, `drain_task_pool`, `_cmd_run`, or `TaskExecutionRunner.run` MUST mock the execution layer. Without mocks, tests will try to invoke real engine CLIs (claude, codex, etc.) and hang forever.
+
+Two levels of mocking, pick one:
+
+**Option A: Mock SubagentManager.run** (most common, tests the full runner pipeline):
+```python
+def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None):
+    return SubagentResult(
+        ref=SubagentRef(id="SA-stub", role=role, engine=engine_name, status="completed", path="subagents/stub"),
+        execution=CLIExecutionResult(adapter=engine_name, argv=(engine_name, "exec"), cwd=tmp_path, exit_code=0,
+            stdout="VERDICT: PASS\nSUMMARY: ok\nFILES_CHANGED:\n- app.txt\nTESTS_ADDED: 1\nTESTS_PASSING: 1\nWARNINGS:\n",
+            stderr=""),
+        transcript="", exit_code=0,
+    )
+monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_run)
+```
+
+**Option B: Custom executor** (bypasses SubagentManager, tests runner logic only):
+```python
+def executor(task, step):
+    return StageReport(
+        task_id=task.id, step=step, verdict="pass", summary=f"{step} ok",
+        files_changed=["app.txt"], tests={"added": 1, "passing": 1},
+    )
+runner = TaskExecutionRunner(tmp_path, executor)
+```
+
+### Fake implementing passes must include files
+
+The runner has an empty SWE guard: if implementing reports "pass" with zero files changed and zero tests added, it rejects and retries. If your fake always returns empty results, this creates an infinite loop.
+
+**Wrong** — causes infinite retry loop:
+```python
+StageReport(task_id=task.id, step=step, verdict="pass", summary="ok")
+# files_changed defaults to [], tests defaults to {"added": 0, "passing": 0}
+```
+
+```python
+stdout = "VERDICT: PASS\nSUMMARY: ok\nFILES_CHANGED:\nTESTS_ADDED: 0\nTESTS_PASSING: 0\nWARNINGS:\n"
+```
+
+**Right** — includes at least one file:
+```python
+StageReport(task_id=task.id, step=step, verdict="pass", summary="ok",
+    files_changed=["app.txt"], tests={"added": 1, "passing": 1})
+```
+
+```python
+stdout = "VERDICT: PASS\nSUMMARY: ok\nFILES_CHANGED:\n- app.txt\nTESTS_ADDED: 1\nTESTS_PASSING: 1\nWARNINGS:\n"
+```
+
+This only matters for implementing stage passes. FAIL/REJECT verdicts and non-implementing stages (grooming, testing, accepting) don't need files.
+
+### Match current function signatures in fakes
+
+When creating fake engine adapters or `run_live` functions, match the real function signature including all keyword arguments. If a new parameter is added to the real function, all fakes must accept it too (use `**kwargs` if unsure).
+
+Common parameters that get added over time:
+- `on_started` callback in `ClaudeCLIAdapter.run`
+- `inactivity_timeout_seconds` in `run_live`
+- `resume_session_id` in adapter run methods
+
+### Monkeypatch the right module path
+
+When a function is imported with `from module import func`, monkeypatch the import site, not the source module:
+```python
+# If runner/core.py does: from litehive.tasks import save_task
+# Patch at the import site:
+monkeypatch.setattr("litehive.runner.core.save_task", fake)
+# NOT at the source:
+monkeypatch.setattr("litehive.tasks.save_task", fake)  # won't work
+```
+
+### Use workspace helpers
+
+The `tests/workspace_helpers.py` module provides tested helper functions. Use them instead of writing inline fakes:
+- `_completed_subagent_result(tmp_path, step)` — SubagentResult with files for any stage
+- `_stage_subagent_result(cwd, step, verdict=..., files_changed=...)` — customizable SubagentResult
+- `_init_git_repo(tmp_path)` — creates a minimal git repo for commit tests
+- `_commit_repo_state(cwd, message)` — commits current state
+
+### Avoid real git operations when not needed
+
+Each `_init_git_repo()` call spawns 5+ git subprocesses (~100-150ms). Tests that don't need real git history should use `auto_commit=False` in `create_task()` to skip worktree creation.
+
+### No `time.sleep()` in tests
+
+Replace `time.sleep()` with polling loops or mock the clock. If you must sleep, keep it under 0.5s and document why.

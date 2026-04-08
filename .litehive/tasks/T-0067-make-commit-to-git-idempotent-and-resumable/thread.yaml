@@ -279,3 +279,96 @@
     do not advance during reconciliation. All 7 focused reconciliation tests pass.'
   files_changed: []
   created_at: '2026-04-06T12:52:17+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: "Created tests/test_workspace.py with 2 focused tests covering commit_to_git\
+    \ reconciliation, satisfying the third acceptance criterion that was previously\
+    \ rejected.\n\nImplementation summary: The commit_to_git reconciliation logic\
+    \ in litehive/runtime/_commit.py and litehive/tasks.py already correctly handles\
+    \ reruns and stale-runner recovery by detecting an existing checkpoint commit\
+    \ before creating a new one. This was verified in prior rounds. The only gap was\
+    \ the missing tests/test_workspace.py file explicitly required by the acceptance\
+    \ criteria.\n\nWhat was added:\n- tests/test_workspace.py with two focused tests:\n\
+    \  1. test_commit_to_git_rerun_reconciles_existing_checkpoint: proves rerunning\
+    \ commit_to_git when the checkpoint already exists records the existing SHA, marks\
+    \ the task done, and does not create a duplicate commit (commit count and HEAD\
+    \ subject unchanged).\n  2. test_recovery_finalizes_stranded_commit_to_git_with_existing_checkpoint:\
+    \ proves stale-runner recovery via resolve_next_task finalizes a stranded commit_to_git\
+    \ task by recording the existing checkpoint SHA without incrementing checkpoint_attempts\
+    \ or advancing git history, then proceeds to the follow-up task.\n\nVerification:\n\
+    - uv run pytest -q tests/test_workspace.py -> 2 passed in 1.47s\n- uv run pytest\
+    \ -q (all 8 focused reconciliation tests across test_workspace.py, test_retry_commit_and_recovery.py,\
+    \ test_observability_and_status.py, test_runtime_pool.py) -> 8 passed in 3.70s\n\
+    \nAcceptance criteria status:\n1. MET: commit_to_git reruns reconcile an existing\
+    \ checkpoint commit and record the SHA without creating a duplicate (verified\
+    \ by test_workspace.py::test_commit_to_git_rerun_reconciles_existing_checkpoint\
+    \ and test_retry_commit_and_recovery.py::test_commit_to_git_reconciles_existing_checkpoint_commit_without_duplicate_retry).\n\
+    2. MET: Recovery/resume path finalizes stranded commit_to_git by reconciling the\
+    \ existing checkpoint before new work proceeds (verified by test_workspace.py::test_recovery_finalizes_stranded_commit_to_git_with_existing_checkpoint\
+    \ and test_retry_commit_and_recovery.py::test_resolve_next_task_finalizes_running_commit_stage_with_existing_checkpoint_before_new_work).\n\
+    3. MET: Focused tests in tests/test_workspace.py now cover both rerun and recovery\
+    \ paths and prove checkpoint_attempts and git history do not advance during reconciliation.\n\
+    \nFiles changed: tests/test_workspace.py (new)\nSTAGE_RESULT:\n{\"verdict\":\"\
+    pass\",\"summary\":\"Added tests/test_workspace.py with focused commit_to_git\
+    \ reconciliation tests covering rerun and recovery paths, satisfying all three\
+    \ acceptance criteria.\",\"files_changed\":[\"tests/test_workspace.py\"],\"tests\"\
+    :{\"added\":2,\"passing\":8},\"warnings\":[],\"follow_up_tasks\":[],\"acceptance_criteria\"\
+    :[\"PASS: commit_to_git reruns reconcile an existing checkpoint without duplicate\
+    \ commit\",\"PASS: recovery finalizes stranded commit_to_git with existing checkpoint\
+    \ before new work\",\"PASS: focused tests in tests/test_workspace.py cover both\
+    \ rerun and recovery paths\"]}"
+  files_changed: []
+  created_at: '2026-04-07T23:18:37+00:00'
+- role: qa
+  step: testing
+  verdict: pass
+  message: "Verified all three acceptance criteria for commit_to_git idempotency and\
+    \ resumability.\n\n1. PASS: Rerun reconciliation \u2014 tests/test_workspace.py::test_commit_to_git_rerun_reconciles_existing_checkpoint\
+    \ proves that rerunning commit_to_git when the checkpoint commit already exists\
+    \ records the existing SHA, marks the task done, and does not create a duplicate\
+    \ commit (commit count and HEAD subject unchanged, checkpoint_attempts stays at\
+    \ 1).\n\n2. PASS: Stale-runner recovery \u2014 tests/test_workspace.py::test_recovery_finalizes_stranded_commit_to_git_with_existing_checkpoint\
+    \ proves that resolve_next_task finalizes a stranded commit_to_git task by recording\
+    \ the existing checkpoint SHA without incrementing checkpoint_attempts or advancing\
+    \ git history, then proceeds to the follow-up task.\n\n3. PASS: Focused tests\
+    \ in tests/test_workspace.py \u2014 the file now exists with 2 focused tests covering\
+    \ both rerun and recovery paths, proving checkpoint_attempts and git history do\
+    \ not advance during reconciliation.\n\nRan: uv run pytest -q tests/test_workspace.py\
+    \ -> 2 passed in 0.96s\nRan: uv run pytest -q (6 additional focused reconciliation\
+    \ tests across test_retry_commit_and_recovery.py, test_observability_and_status.py,\
+    \ test_runtime_pool.py) -> 6 passed in 2.64s\nTotal: 8 focused reconciliation\
+    \ tests pass."
+  files_changed: []
+  created_at: '2026-04-07T23:19:18+00:00'
+- role: reviewer
+  step: accepting
+  verdict: pass
+  message: 'All three acceptance criteria are met.
+
+
+    1. PASS: commit_to_git reruns reconcile an existing checkpoint commit. tests/test_workspace.py::test_commit_to_git_rerun_reconciles_existing_checkpoint
+    proves that when the checkpoint commit already exists but task.git.commit_sha
+    was not persisted, rerunning commit_to_git records the existing SHA, marks the
+    task done, and does not create a duplicate commit (commit count and HEAD subject
+    unchanged, checkpoint_attempts stays at 1). Additional coverage in tests/test_retry_commit_and_recovery.py::test_commit_to_git_reconciles_existing_checkpoint_commit_without_duplicate_retry.
+
+
+    2. PASS: Recovery/resume path reconciles existing checkpoint before new work.
+    tests/test_workspace.py::test_recovery_finalizes_stranded_commit_to_git_with_existing_checkpoint
+    proves that resolve_next_task finalizes a stranded commit_to_git task by recording
+    the existing checkpoint SHA without incrementing checkpoint_attempts or advancing
+    git history, then proceeds to the follow-up task. Additional coverage in tests/test_retry_commit_and_recovery.py::test_resolve_next_task_finalizes_running_commit_stage_with_existing_checkpoint_before_new_work
+    and tests/test_observability_and_status.py::test_repair_workspace_state_finalizes_existing_checkpoint_commit.
+
+
+    3. PASS: Focused tests in tests/test_workspace.py cover both rerun and recovery
+    paths and prove checkpoint_attempts and git history do not advance during reconciliation.
+    The file contains 2 focused tests that directly exercise the reconciliation logic.
+
+
+    Verification: uv run pytest -q tests/test_workspace.py -> 2 passed. Full focused
+    reconciliation suite (8 tests across test_workspace.py, test_retry_commit_and_recovery.py,
+    test_observability_and_status.py, test_runtime_pool.py) -> 8 passed.'
+  files_changed: []
+  created_at: '2026-04-07T23:20:01+00:00'

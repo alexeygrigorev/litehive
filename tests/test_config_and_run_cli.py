@@ -520,61 +520,18 @@ def test_configure_no_longer_has_task_engine_routing(tmp_path: Path) -> None:
     assert config.default_engine == "codex"
 
 
-def test_configure_persists_pre_acceptance_command(tmp_path: Path) -> None:
-    from litehive.cli import _cmd_configure
+def test_load_config_rejects_legacy_pre_acceptance_command(tmp_path: Path) -> None:
+    from litehive.config import ensure_workspace, config_path
 
-    parser = argparse.Namespace(
-        workspace=tmp_path,
-        default_engine="codex",
-        process_profile="generic",
-        default_retry_limit=3,
-        opencode_model="zai-coding-plan/glm-5.1",
-        gemini_model=None,
-        copilot_model=None,
-        claude_enabled=False,
-        claude_model="claude-sonnet-4-20250514",
-        claude_max_turns=30,
-        pool_usage_cap=None,
-        pool_cost_cap=None,
-        engine_usage_cap=None,
-        engine_budget_cap=None,
-        engine_cost=None,
-        task_engine_route=None,
-        pool_stop_on_failure=False,
-        pool_max_tasks=None,
-        pool_stop_on_limit=False,
-        pool_quota_threshold=None,
-        pool_budget_threshold=None,
-        pool_stop_on_dirty_git=False,
-        pool_selection_policy="dependency_aware",
-        pre_acceptance_command="uv run ruff check litehive tests",
-        hook=None,
-    )
+    ensure_workspace(tmp_path)
+    import yaml
 
-    assert _cmd_configure(parser) == 0
-    config = load_config(tmp_path)
+    cfg = yaml.safe_load(config_path(tmp_path).read_text(encoding="utf-8")) or {}
+    cfg["pre_acceptance_command"] = "uv run ruff check litehive tests"
+    config_path(tmp_path).write_text(yaml.safe_dump(cfg, sort_keys=False), encoding="utf-8")
 
-    assert config.pre_acceptance_command == "uv run ruff check litehive tests"
-    assert (
-        config.runner_hooks["before_pm_acceptance"][0].command == "uv run ruff check litehive tests"
-    )
-    assert config.runner_hooks["before_pm_acceptance"][0].blocking is True
-
-
-def test_pre_acceptance_command_forces_matching_runner_hook_to_blocking() -> None:
-    config = LitehiveConfig(
-        pre_acceptance_command="uv run ruff check litehive tests",
-        runner_hooks={
-            "before_pm_acceptance": [
-                {"command": "uv run ruff check litehive tests", "blocking": False}
-            ]
-        },
-    )
-
-    before_acceptance_hooks = config.runner_hooks["before_pm_acceptance"]
-    assert len(before_acceptance_hooks) == 1
-    assert before_acceptance_hooks[0].command == "uv run ruff check litehive tests"
-    assert before_acceptance_hooks[0].blocking is True
+    with pytest.raises(ValueError, match="pre_acceptance_command is no longer supported"):
+        load_config(tmp_path)
 
 
 def test_configure_persists_runner_hooks(tmp_path: Path) -> None:
@@ -1208,7 +1165,7 @@ def test_drain_task_pool_uses_run_engine_override_for_execution(
         self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None
     ):  # type: ignore[no-untyped-def]
         seen_engines.append(engine_name)
-        return _completed_subagent_result(tmp_path, task.pipeline_status)
+        return _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
 
     monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_run)
 
@@ -1229,7 +1186,7 @@ def test_run_single_task_uses_run_engine_override_for_execution(
         self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None
     ):  # type: ignore[no-untyped-def]
         seen_engines.append(engine_name)
-        return _completed_subagent_result(tmp_path, task.pipeline_status)
+        return _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
 
     monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_run)
 
@@ -1259,7 +1216,7 @@ def test_run_single_task_model_precedence_uses_run_override_then_task_then_works
         self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None
     ):  # type: ignore[no-untyped-def]
         seen_models.append(model)
-        return _completed_subagent_result(tmp_path, task.pipeline_status)
+        return _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
 
     monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_run)
 
@@ -1297,7 +1254,7 @@ def test_run_single_task_does_not_pass_model_override_to_codex(
         self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None
     ):  # type: ignore[no-untyped-def]
         seen_models.append(model)
-        return _completed_subagent_result(tmp_path, task.pipeline_status)
+        return _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
 
     monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_run)
 
@@ -1364,7 +1321,7 @@ def test_drain_task_pool_wraps_pool_execution_behavior(
     monkeypatch.setattr(
         "litehive.runtime.SubagentManager.run",
         lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
-            _completed_subagent_result(tmp_path, task.pipeline_status)
+            _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
         ),
     )
 
@@ -1460,7 +1417,7 @@ def test_run_task_recovers_stale_active_task_before_conflict_check(
     monkeypatch.setattr(
         "litehive.runtime.SubagentManager.run",
         lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
-            _completed_subagent_result(tmp_path, task.pipeline_status)
+            _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
         ),
     )
 

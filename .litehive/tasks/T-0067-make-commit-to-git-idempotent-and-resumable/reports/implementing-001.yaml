@@ -1,55 +1,50 @@
 task_id: T-0067
 step: implementing
 verdict: pass
-summary: 'Implemented shared checkpoint reconciliation so commit_to_git now finalizes
-  an already-created Litehive checkpoint instead of retrying it. In litehive/runtime.py,
-  commit_to_git now checks for an existing checkpoint commit before incrementing attempts
-  or creating a new commit, and the existing done-task recovery path reuses the same
-  helper. In litehive/tasks.py, stale-runner recovery now reconciles an existing checkpoint
-  for running commit_to_git tasks before requeueing, and the active-task recovery/finalization
-  path now reuses the shared recovered-commit finalizer instead of duplicating state
-  updates. Added focused tests in tests/test_retry_commit_and_recovery.py for: 1)
-  rerunning commit_to_git after the checkpoint commit already exists in the main checkout
-  with commit_sha missing, and 2) resolving a running commit_to_git task with an existing
-  checkpoint before selecting new work. Tightened the existing stranded-commit recovery
-  assertion to prove git history does not advance. Verified with: uv run pytest -q
-  tests/test_retry_commit_and_recovery.py -k ''integrates_existing_litehive_checkpoint_from_clean_worktree
-  or reconciles_existing_checkpoint_commit_without_duplicate_retry or finalizes_existing_checkpoint_commit_without_retry
-  or finalizes_running_commit_stage_with_existing_checkpoint_before_new_work or recovers_orphaned_commit_stage_before_new_work''
-  -> 5 passed, 85 deselected. Evidence: checkpoint_attempts stays at 1 in rerun/recovery
-  cases, HEAD commit count stays unchanged during reconciliation, and the recovered
-  task records the existing commit SHA instead of creating a duplicate checkpoint.'
-feedback: 'Stage `implementing` switched from `codex` to `opencode` after usage limit
-  reached.
-
-
-  Implemented shared checkpoint reconciliation so commit_to_git now finalizes an already-created
-  Litehive checkpoint instead of retrying it. In litehive/runtime.py, commit_to_git
-  now checks for an existing checkpoint commit before incrementing attempts or creating
-  a new commit, and the existing done-task recovery path reuses the same helper. In
-  litehive/tasks.py, stale-runner recovery now reconciles an existing checkpoint for
-  running commit_to_git tasks before requeueing, and the active-task recovery/finalization
-  path now reuses the shared recovered-commit finalizer instead of duplicating state
-  updates. Added focused tests in tests/test_retry_commit_and_recovery.py for: 1)
-  rerunning commit_to_git after the checkpoint commit already exists in the main checkout
-  with commit_sha missing, and 2) resolving a running commit_to_git task with an existing
-  checkpoint before selecting new work. Tightened the existing stranded-commit recovery
-  assertion to prove git history does not advance. Verified with: uv run pytest -q
-  tests/test_retry_commit_and_recovery.py -k ''integrates_existing_litehive_checkpoint_from_clean_worktree
-  or reconciles_existing_checkpoint_commit_without_duplicate_retry or finalizes_existing_checkpoint_commit_without_retry
-  or finalizes_running_commit_stage_with_existing_checkpoint_before_new_work or recovers_orphaned_commit_stage_before_new_work''
-  -> 5 passed, 85 deselected. Evidence: checkpoint_attempts stays at 1 in rerun/recovery
-  cases, HEAD commit count stays unchanged during reconciliation, and the recovered
-  task records the existing commit SHA instead of creating a duplicate checkpoint.'
-files_changed: []
+summary: Created tests/test_workspace.py with 2 focused tests covering commit_to_git
+  reconciliation, satisfying the third acceptance criterion that was previously rejected.
+feedback: "Created tests/test_workspace.py with 2 focused tests covering commit_to_git\
+  \ reconciliation, satisfying the third acceptance criterion that was previously\
+  \ rejected.\n\nImplementation summary: The commit_to_git reconciliation logic in\
+  \ litehive/runtime/_commit.py and litehive/tasks.py already correctly handles reruns\
+  \ and stale-runner recovery by detecting an existing checkpoint commit before creating\
+  \ a new one. This was verified in prior rounds. The only gap was the missing tests/test_workspace.py\
+  \ file explicitly required by the acceptance criteria.\n\nWhat was added:\n- tests/test_workspace.py\
+  \ with two focused tests:\n  1. test_commit_to_git_rerun_reconciles_existing_checkpoint:\
+  \ proves rerunning commit_to_git when the checkpoint already exists records the\
+  \ existing SHA, marks the task done, and does not create a duplicate commit (commit\
+  \ count and HEAD subject unchanged).\n  2. test_recovery_finalizes_stranded_commit_to_git_with_existing_checkpoint:\
+  \ proves stale-runner recovery via resolve_next_task finalizes a stranded commit_to_git\
+  \ task by recording the existing checkpoint SHA without incrementing checkpoint_attempts\
+  \ or advancing git history, then proceeds to the follow-up task.\n\nVerification:\n\
+  - uv run pytest -q tests/test_workspace.py -> 2 passed in 1.47s\n- uv run pytest\
+  \ -q (all 8 focused reconciliation tests across test_workspace.py, test_retry_commit_and_recovery.py,\
+  \ test_observability_and_status.py, test_runtime_pool.py) -> 8 passed in 3.70s\n\
+  \nAcceptance criteria status:\n1. MET: commit_to_git reruns reconcile an existing\
+  \ checkpoint commit and record the SHA without creating a duplicate (verified by\
+  \ test_workspace.py::test_commit_to_git_rerun_reconciles_existing_checkpoint and\
+  \ test_retry_commit_and_recovery.py::test_commit_to_git_reconciles_existing_checkpoint_commit_without_duplicate_retry).\n\
+  2. MET: Recovery/resume path finalizes stranded commit_to_git by reconciling the\
+  \ existing checkpoint before new work proceeds (verified by test_workspace.py::test_recovery_finalizes_stranded_commit_to_git_with_existing_checkpoint\
+  \ and test_retry_commit_and_recovery.py::test_resolve_next_task_finalizes_running_commit_stage_with_existing_checkpoint_before_new_work).\n\
+  3. MET: Focused tests in tests/test_workspace.py now cover both rerun and recovery\
+  \ paths and prove checkpoint_attempts and git history do not advance during reconciliation.\n\
+  \nFiles changed: tests/test_workspace.py (new)\nSTAGE_RESULT:\n{\"verdict\":\"pass\"\
+  ,\"summary\":\"Added tests/test_workspace.py with focused commit_to_git reconciliation\
+  \ tests covering rerun and recovery paths, satisfying all three acceptance criteria.\"\
+  ,\"files_changed\":[\"tests/test_workspace.py\"],\"tests\":{\"added\":2,\"passing\"\
+  :8},\"warnings\":[],\"follow_up_tasks\":[],\"acceptance_criteria\":[\"PASS: commit_to_git\
+  \ reruns reconcile an existing checkpoint without duplicate commit\",\"PASS: recovery\
+  \ finalizes stranded commit_to_git with existing checkpoint before new work\",\"\
+  PASS: focused tests in tests/test_workspace.py cover both rerun and recovery paths\"\
+  ]}"
+files_changed:
+- tests/test_workspace.py
 follow_up_tasks: []
 created_follow_up_task_ids: []
 task_update: {}
-tests:
-  added: 0
-  passing: 0
-warnings:
-- Stage `implementing` switched from `codex` to `opencode` after usage limit reached.
+tests: {}
+warnings: []
 retry_count: 0
 retry_limit: 3
 retry_source: global
@@ -60,6 +55,6 @@ outcome_reason: ''
 failure_classification: null
 failure_diagnostics: {}
 resource_limit_event: null
-duration_seconds: 80
+duration_seconds: 177
 hook_results: []
-created_at: '2026-04-06T12:22:12+00:00'
+created_at: '2026-04-07T23:18:42+00:00'

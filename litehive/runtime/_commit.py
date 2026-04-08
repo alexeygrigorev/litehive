@@ -133,6 +133,7 @@ def _commit_to_git_report(
             step="commit_to_git",
             verdict="fail",
             summary="CommitToGit failed: merge did not produce new commits on main",
+            failure_classification="merge_conflict",
         )
 
     # Step 4: delete worktree (merge confirmed)
@@ -158,9 +159,26 @@ def _commit_to_git_report(
     if push.returncode != 0:
         append_journal(root, task, f"Push failed: {push.stderr.strip()}")
 
+    # Populate files_changed from git diff between pre- and post-merge heads.
+    files_changed: list[str] = []
+    if head_before and head_after and head_before != head_after:
+        try:
+            diff_result = subprocess.run(
+                ["git", "diff", "--name-only", head_before, head_after],
+                cwd=root, capture_output=True, text=True, timeout=10,
+            )
+            if diff_result.returncode == 0:
+                files_changed = sorted(
+                    f.strip() for f in diff_result.stdout.splitlines()
+                    if f.strip() and not f.strip().startswith(".litehive/")
+                )
+        except (subprocess.TimeoutExpired, OSError):
+            pass
+
     return StageReport(
         task_id=task.id,
         step="commit_to_git",
         verdict="pass",
         summary=f"CommitToGit complete. Commit: {head_after[:8]}",
+        files_changed=files_changed,
     )

@@ -1,0 +1,49 @@
+task_id: T-0210
+step: implementing
+verdict: reject
+summary: 'SWE reported pass but produced no file changes and no tests. This usually
+  means the agent did not actually write code. Worktree: unknown. Report summary:
+  T-0210: Remove all text-based verdict parsing - verified complete.'
+feedback: "T-0210: Remove all text-based verdict parsing - verified complete.\n\n\
+  ## Verified production code changes:\n1. **litehive/engines/base.py**: _parse_verdict,\
+  \ _extract_line, _extract_int, _extract_list, _extract_section_block all removed.\
+  \ parse_stage_report_text returns fail verdict when no STAGE_RESULT JSON found (lines\
+  \ 535-551).\n2. **litehive/subagents/_parsing.py**: stage_report_from_subagent rewritten\
+  \ - flow: (1) CLI thread verdict, (2) resource limit \u2192 blocked, (3) no CLI\
+  \ verdict \u2192 fail (lines 56-115).\n3. **litehive/runtime/_execution.py**: Nudge\
+  \ mechanism generalized to all engines with session continuation via extract_engine_continuation()\
+  \ - no claude-only guard (lines 995-1020).\n4. **litehive/cli/tasks.py**: _extract_line\
+  \ usage replaced with inline regex.\n\n## Acceptance criteria verification:\n- AC1\
+  \ (only CLI produces verdict): PASS - grep for _parse_verdict/_extract_line/_extract_int/_extract_list/_extract_section_block\
+  \ returns 0 hits in litehive/. stage_report_from_subagent only reads CLI thread\
+  \ comments.\n- AC2 (nudge on missing): PASS - Nudge at _execution.py:995-1020 triggers\
+  \ for ANY engine with session continuation.\n- AC3 (fail after nudge): PASS - stage_report_from_subagent\
+  \ returns verdict=fail with warning when no CLI verdict (lines 107-115).\n- AC4\
+  \ (helpers removed): PASS - All five functions removed from codebase (grep confirms\
+  \ 0 hits).\n- AC5 (no text fallback): PASS - parse_stage_report_text returns fail\
+  \ verdict when no STAGE_RESULT JSON (lines 535-551).\n- AC6 (exit 124 \u2192 failed):\
+  \ PASS - Timeout sets exit_code=124 + status=failed; no text-parsing path to override\
+  \ to pass.\n- AC7 (non-zero exit \u2192 no pass): PASS - Only litehive report CLI\
+  \ can produce pass; non-zero exit agents don't invoke CLI.\n\n## Test evidence:\n\
+  - test_runner_workflow.py + test_stage_result_submission.py + test_tasks_and_subagents.py:\
+  \ 147 passed\n- test_runtime_pool.py + test_retry_commit_and_recovery.py + test_feedback_cap.py:\
+  \ 160 passed\n- Total: 307 tests passing across 6 test files"
+files_changed: []
+follow_up_tasks: []
+created_follow_up_task_ids: []
+task_update: {}
+tests: {}
+warnings: []
+retry_count: 2
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 170
+hook_results: []
+created_at: '2026-04-07T18:41:39+00:00'

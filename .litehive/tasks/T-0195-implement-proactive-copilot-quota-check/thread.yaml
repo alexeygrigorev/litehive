@@ -1,0 +1,160 @@
+- role: planner
+  step: grooming
+  verdict: pass
+  message: "RESEARCH COMPLETE: Copilot quota API is fully documented and verified\
+    \ working from CLI.\n\n## Findings\n\n### Endpoint\n`GET https://api.github.com/copilot_internal/user`\n\
+    \n### Auth\nStandard `gh auth token` (gho_* OAuth token) works via `Authorization:\
+    \ token <token>`. No browser cookies or special copilot-specific tokens needed.\
+    \ The copilot CLI itself uses this same endpoint internally.\n\n### Response Format\
+    \ (verified live)\nTop-level fields: `login`, `access_type_sku`, `copilot_plan`,\
+    \ `quota_reset_date`, `quota_reset_date_utc`.\n\n`quota_snapshots` dict with three\
+    \ sub-objects: `chat`, `completions`, `premium_interactions`.\n\nEach snapshot\
+    \ contains:\n- `entitlement` (int): total requests allowed (0 if unlimited)\n\
+    - `remaining` (int): requests remaining\n- `percent_remaining` (float): percentage\
+    \ remaining (0-100)\n- `unlimited` (bool): whether quota is unlimited\n- `overage_count`\
+    \ (int): requests over limit\n- `overage_permitted` (bool): whether overage is\
+    \ allowed\n- `quota_remaining` (float): remaining quota\n- `quota_id` (str): snapshot\
+    \ name\n- `timestamp_utc` (str): ISO-8601 timestamp\n- `has_quota` (bool)\n- `quota_reset_at`\
+    \ (int)\n\n### Primary quota to check\n`premium_interactions` \u2014 this is the\
+    \ limited quota for free/individual plans. `chat` and `completions` are typically\
+    \ unlimited.\n\n### Implementation pattern\nThe existing `litehive/engines/_codex_quota.py`\
+    \ is the exact template:\n- Read token via `gh auth token` subprocess (or reuse\
+    \ existing gh integration)\n- Fetch `https://api.github.com/copilot_internal/user`\n\
+    - Parse `quota_snapshots.premium_interactions`\n- Cache with TTL (60s default),\
+    \ fail-open on errors\n- Wire into `litehive/runtime/_execution.py:768-798` alongside\
+    \ the codex check\n- Wire into `litehive/cli/_dry_run.py:70-74` for dry-run reporting\n\
+    \n### Acceptance criteria verification\n1. \u2705 Found exact API endpoint: `GET\
+    \ https://api.github.com/copilot_internal/user`\n2. \u2705 Verified it works from\
+    \ CLI with `gh auth token` \u2014 no browser cookies needed\n3. \u2705 Documented\
+    \ complete response format with all fields\n4. \u2705 Follow-up implementation\
+    \ task produced (see FOLLOW_UP_TASKS)\n\nSTAGE_RESULT:\n{\"verdict\":\"pass\"\
+    ,\"summary\":\"Copilot quota API researched and documented: GET api.github.com/copilot_internal/user\
+    \ with gh auth token, returns quota_snapshots with premium_interactions as the\
+    \ key limited quota\",\"tests\":{\"added\":0,\"passing\":0},\"warnings\":[],\"\
+    follow_up_tasks\":[{\"title\":\"Implement proactive copilot quota check\",\"rationale\"\
+    :\"Research is complete; now implement the actual quota check module following\
+    \ the codex pattern\",\"blocking\":false,\"goal\":\"Add proactive quota checking\
+    \ for the copilot engine, mirroring the existing codex quota check pattern, so\
+    \ that litehive can skip or switch away from copilot before attempting execution\
+    \ when quota is exhausted\",\"acceptance_criteria\":[\"A new litehive/engines/_copilot_quota.py\
+    \ module exists that fetches GET https://api.github.com/copilot_internal/user\
+    \ with the gh auth token, parses quota_snapshots.premium_interactions, caches\
+    \ results with a 60s TTL, and fails open on auth or network errors\",\"copilot_quota_block_reason()\
+    \ returns a descriptive string when premium_interactions quota is exhausted (percent_remaining\
+    \ <= 0 or remaining <= 0 and unlimited is false) and None otherwise\",\"The proactive\
+    \ check is wired into litehive/runtime/_execution.py alongside the existing codex\
+    \ quota check, triggering engine fallback or blocked verdict\",\"The proactive\
+    \ check is wired into litehive/cli/_dry_run.py for dry-run reporting\",\"record_engine_observation\
+    \ is called after the proactive check to persist monitoring state\",\"Unit tests\
+    \ in tests/test_copilot_quota.py cover: successful quota fetch, exhausted quota\
+    \ detection, fail-open on missing token, fail-open on network error, cache TTL\
+    \ behavior, unlimited entitlement handling\"],\"task_type\":\"adapter\"}],\"acceptance_criteria\"\
+    :[],\"task_update\":{\"pm_complexity\":\"simple\",\"planned_effort\":\"xs\"}}\n\
+    \nFOLLOW_UP_TASKS:\n[{\"title\":\"Implement proactive copilot quota check\",\"\
+    rationale\":\"Research is complete; now implement the actual quota check module\
+    \ following the codex pattern\",\"blocking\":false,\"goal\":\"Add proactive quota\
+    \ checking for the copilot engine, mirroring the existing codex quota check pattern,\
+    \ so that litehive can skip or switch away from copilot before attempting execution\
+    \ when quota is exhausted\",\"acceptance_criteria\":[\"A new litehive/engines/_copilot_quota.py\
+    \ module exists that fetches GET https://api.github.com/copilot_internal/user\
+    \ with the gh auth token, parses quota_snapshots.premium_interactions, caches\
+    \ results with a 60s TTL, and fails open on auth or network errors\",\"copilot_quota_block_reason()\
+    \ returns a descriptive string when premium_interactions quota is exhausted (percent_remaining\
+    \ <= 0 or remaining <= 0 and unlimited is false) and None otherwise\",\"The proactive\
+    \ check is wired into litehive/runtime/_execution.py alongside the existing codex\
+    \ quota check, triggering engine fallback or blocked verdict\",\"The proactive\
+    \ check is wired into litehive/cli/_dry_run.py for dry-run reporting\",\"record_engine_observation\
+    \ is called after the proactive check to persist monitoring state\",\"Unit tests\
+    \ in tests/test_copilot_quota.py cover: successful quota fetch, exhausted quota\
+    \ detection, fail-open on missing token, fail-open on network error, cache TTL\
+    \ behavior, unlimited entitlement handling\"],\"task_type\":\"adapter\"}]\n\n\
+    TASK_UPDATE:\npm_complexity: simple\nplanned_effort: xs"
+  files_changed: []
+  created_at: '2026-04-08T00:19:15+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: "Research-only task \u2014 no code changes required. All acceptance criteria\
+    \ were met during grooming:\n\n1. **Exact API endpoint found**: `GET https://api.github.com/copilot_internal/user`\
+    \ \u2014 confirmed in grooming report.\n2. **CLI auth verified**: `gh auth token`\
+    \ provides the OAuth token; no browser cookies needed. Auth header: `Authorization:\
+    \ token <token>`.\n3. **Response format documented**: `quota_snapshots` dict with\
+    \ `chat`, `completions`, `premium_interactions` sub-objects. Each has `entitlement`,\
+    \ `remaining`, `percent_remaining`, `unlimited`, `overage_count`, `quota_remaining`,\
+    \ `quota_reset_at`, etc. `premium_interactions` is the key limited quota.\n4.\
+    \ **Follow-up implementation task produced**: Detailed task with endpoint, auth\
+    \ method, response fields, and exact code locations to modify \u2014 mirrors the\
+    \ existing `_codex_quota.py` pattern verified at `litehive/engines/_codex_quota.py`,\
+    \ wired into `litehive/runtime/_execution.py:768-798` and `litehive/cli/_dry_run.py:71,134`.\n\
+    \nVerified the codebase confirms:\n- `_codex_quota.py` exists as the template\
+    \ (dataclass + cache + fail-open + block_reason)\n- `_execution.py` integrates\
+    \ codex quota at line 768 with engine fallback logic\n- `_dry_run.py` integrates\
+    \ codex quota at lines 71 and 134\n- The follow-up task correctly references all\
+    \ integration points\n\nSTAGE_RESULT:\n{\"verdict\":\"pass\",\"summary\":\"Research\
+    \ complete: copilot quota API documented, follow-up implementation task produced\
+    \ with exact endpoint, auth, response format, and integration points\",\"tests\"\
+    :{\"added\":0,\"passing\":0},\"warnings\":[],\"follow_up_tasks\":[],\"acceptance_criteria\"\
+    :[],\"task_update\":{}}"
+  files_changed: []
+  created_at: '2026-04-08T00:20:04+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: "Research-only task \u2014 no code changes required. All four acceptance\
+    \ criteria verified:\n\n1. **Exact API endpoint**: `GET https://api.github.com/copilot_internal/user`\
+    \ (documented in grooming report).\n2. **CLI auth works**: `gh auth token` provides\
+    \ an OAuth token usable via `Authorization: token <token>` header \u2014 no browser\
+    \ cookies needed.\n3. **Response format documented**: `quota_snapshots` dict with\
+    \ `chat`, `completions`, `premium_interactions` sub-objects. Each contains `entitlement`,\
+    \ `remaining`, `percent_remaining`, `unlimited`, `overage_count`, `quota_remaining`,\
+    \ `quota_reset_at`, etc. `premium_interactions` is the key limited quota for free/individual\
+    \ plans.\n4. **Follow-up implementation task produced**: Detailed task specifying\
+    \ endpoint, auth method, response fields, and exact code locations \u2014 mirrors\
+    \ `_codex_quota.py` pattern. Integration points verified in codebase:\n   - `litehive/engines/_codex_quota.py`\
+    \ exists as the template\n   - `litehive/runtime/_execution.py:769` integrates\
+    \ codex quota with engine fallback\n   - `litehive/cli/_dry_run.py:71,134` integrates\
+    \ codex quota for dry-run reporting\n\nNo tests needed \u2014 this is pure research\
+    \ with a follow-up implementation task."
+  files_changed: []
+  created_at: '2026-04-08T00:20:32+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: "Research-only task \u2014 no code changes required. All four acceptance\
+    \ criteria verified:\n\n1. **Exact API endpoint found**: GET https://api.github.com/copilot_internal/user\n\
+    2. **CLI auth verified**: `gh auth token` provides OAuth token usable via `Authorization:\
+    \ token <token>` \u2014 no browser cookies needed.\n3. **Response format documented**:\
+    \ `quota_snapshots` dict with `chat`, `completions`, `premium_interactions` sub-objects.\
+    \ Each contains: entitlement, remaining, percent_remaining, unlimited, overage_count,\
+    \ overage_permitted, quota_remaining, quota_id, timestamp_utc, has_quota, quota_reset_at.\
+    \ `premium_interactions` is the key limited quota for free/individual plans.\n\
+    4. **Follow-up implementation task produced**: \"Implement proactive copilot quota\
+    \ check\" with exact endpoint, auth method, all response fields, and verified\
+    \ integration points:\n   - Template: litehive/engines/_codex_quota.py (confirmed\
+    \ exists)\n   - Runtime integration: litehive/runtime/_execution.py:769 (confirmed\
+    \ codex quota check + engine fallback)\n   - Dry-run integration: litehive/cli/_dry_run.py:71,134\
+    \ (confirmed codex quota reporting)\n\nNo tests needed \u2014 pure research task\
+    \ with documented follow-up."
+  files_changed: []
+  created_at: '2026-04-08T00:21:05+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: "Research-only task \u2014 no code changes required. All four acceptance\
+    \ criteria verified:\n\n1. **Exact API endpoint found**: GET https://api.github.com/copilot_internal/user\
+    \ (documented in grooming research).\n\n2. **CLI auth verified**: `gh auth token`\
+    \ provides an OAuth token usable via `Authorization: token <token>` header \u2014\
+    \ no browser cookies needed.\n\n3. **Response format documented**: `quota_snapshots`\
+    \ dict with `chat`, `completions`, `premium_interactions` sub-objects. Each contains:\
+    \ entitlement, remaining, percent_remaining, unlimited, overage_count, overage_permitted,\
+    \ quota_remaining, quota_id, timestamp_utc, has_quota, quota_reset_at. `premium_interactions`\
+    \ is the key limited quota for free/individual plans.\n\n4. **Follow-up implementation\
+    \ task produced**: \"Implement proactive copilot quota check\" with exact endpoint,\
+    \ auth method, all response fields, and verified integration points:\n   - Template:\
+    \ litehive/engines/_codex_quota.py (confirmed exists)\n   - Runtime integration:\
+    \ litehive/runtime/_execution.py:769 (confirmed codex quota check + engine fallback)\n\
+    \   - Dry-run integration: litehive/cli/_dry_run.py:71,134 (confirmed codex quota\
+    \ reporting)\n\nNo tests needed \u2014 pure research task. Follow-up task details\
+    \ are in the grooming FOLLOW_UP_TASKS block."
+  files_changed: []
+  created_at: '2026-04-08T00:21:30+00:00'

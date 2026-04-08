@@ -1,10 +1,10 @@
 """Subagent execution and folder persistence."""
 
 from litehive.subagents._continuation import extract_engine_continuation
-from litehive.subagents._execution import (
+from litehive.subagents._manager import SubagentManager
+from litehive.subagents._models import (
     EngineFailure,
     SubagentInactivityTimeout,
-    SubagentManager,
     SubagentResult,
 )
 from litehive.subagents._parsing import stage_report_from_subagent
