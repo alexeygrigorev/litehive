@@ -95,3 +95,20 @@ Execution finished with status `flagged`.
 
 ## 2026-04-07T20:53:19+00:00
 Task requeued for another implementation pass.
+
+## 2026-04-08T06:26:24+00:00
+[worktree] Rebase onto 3bfe1373 failed. Launching merge agent.
+
+## 2026-04-08T06:26:25+00:00
+[worktree] Merge failed (no conflict files detected): error: The following untracked working tree files would be overwritten by merge:
+	.litehive/tasks/T-0184-replace-per-engine-fallbacks-with-single-engine/thread.yaml
+	.litehive/tasks/T-0208-classify-exit-code-124-timeout-as-failure-not/journal.md
+	.litehive/tasks/T-0208-classify-exit-code-124-timeout-as-failure-not/task.yaml
+	.litehive/tasks/T-0209-remove-text-verdict-fallback-failed-agents-must/journal.md
+	.litehive/tasks/T-0209-remove-text-verdict-fallback-failed-agents-must/task.yaml
+Please move or remove them before you merge.
+Aborting
+Merge with strategy ort failed.
+
+## 2026-04-08T06:26:25+00:00
+Execution started with engine `claude`.
