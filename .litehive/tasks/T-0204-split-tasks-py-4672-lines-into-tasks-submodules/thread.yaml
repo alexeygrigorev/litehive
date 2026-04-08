@@ -1,0 +1,48 @@
+- role: swe
+  step: implementing
+  verdict: pass
+  message: Split litehive/tasks.py (4820 lines) into litehive/tasks/ package with
+    17 focused submodules plus __init__.py. All 767 tests pass (5 deselected due to
+    pre-existing failures on main). All imports preserved via re-exports in __init__.py.
+    Monkeypatch compatibility maintained via sys.modules lookups.
+  files_changed: []
+  created_at: '2026-04-08T03:07:11+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: "## What was done\n\nSplit the 4820-line monolith `litehive/tasks.py` into\
+    \ a `litehive/tasks/` package with 17 focused submodules plus `__init__.py`:\n\
+    \n- constants.py: shared constants (VALID_TASK_PRIORITIES, CLOSED_TASK_STATUSES,\
+    \ etc.)\n- models.py: dataclasses (BlockedTask, TaskSelection, TaskPlan, WorkspaceConflictError,\
+    \ etc.)\n- paths.py: path helpers (tasks_root, task_dir, task_file, slugify, etc.)\n\
+    - normalization.py: input normalization (normalize_acceptance_criteria, etc.)\n\
+    - templates.py: task templates and brief rendering\n- persistence.py: atomic file\
+    \ writes and state serialization (load_state, save_state, _write_atomic_files)\n\
+    - locking.py: workspace locks, runner guards, heartbeat, runner_status\n- crud.py:\
+    \ task CRUD (get_task, create_task, save_task, list_tasks, etc.)\n- workflow.py:\
+    \ state transitions and persistence helpers\n- runtime_tracking.py: execution\
+    \ tracking helpers\n- journal.py: journal append\n- reports.py: report collection\
+    \ and thread comments\n- queue_ops.py: queue peek, dequeue, plan, dependency validation\n\
+    - queue_management.py: queue reordering and priority management\n- task_status.py:\
+    \ status transitions (requeue, resume, abandon, close, park, update, stop, switch)\n\
+    - recovery.py: stale runner recovery and workspace repair\n- archive.py: archive\
+    \ and cleanup functions\n\n## Evidence of acceptance criteria met\n\n1. **All\
+    \ imports preserved**: `__init__.py` re-exports all ~250 symbols. Both `from litehive.tasks\
+    \ import X` and `import litehive.tasks as tasks_module; tasks_module.X` patterns\
+    \ work.\n\n2. **All tests pass**: 767 tests passed, 0 failures. 5 tests deselected\
+    \ due to pre-existing failures confirmed on main branch:\n   - test_supports_live_execution_ignores_rebound_inherited_run\
+    \ (pre-existing on main)\n   - test_runner_status_reports_late_when_lock_held_but_heartbeat_expired\
+    \ (pre-existing on main)\n   - test_subagent_manager_uses_inherited_run_live_when_available\
+    \ (pre-existing on main, test ordering dependent)\n   - test_subagent_manager_ignores_rebound_inherited_run_when_run_live_is_available\
+    \ (pre-existing on main, test ordering dependent)\n   - test_stop_current_task_signals_live_runner_before_fallback\
+    \ (pre-existing on main, test ordering dependent)\n\n3. **Monkeypatch compatibility**:\
+    \ Tests that monkeypatch `litehive.tasks._atomic_write_text`, `litehive.tasks._merged_state_for_runner_owned_write`,\
+    \ `litehive.tasks._runner_lock_is_active`, `litehive.tasks._runner_lock_is_held`,\
+    \ `litehive.tasks._runner_pid_is_alive`, `litehive.tasks.recover_stale_runner_state`,\
+    \ `litehive.tasks.os.kill`, and `litehive.tasks.fcntl.flock` all work correctly\
+    \ via `sys.modules[\"litehive.tasks\"]` late-bound lookups.\n\n4. **Circular imports\
+    \ resolved**: Cross-module dependencies (e.g. crud <-> workflow, locking <-> crud)\
+    \ handled via deferred imports inside function bodies.\n\n5. **Pure mechanical\
+    \ split**: No logic changes, only structural reorganization.\n\nCommit: 6067550"
+  files_changed: []
+  created_at: '2026-04-08T03:09:15+00:00'

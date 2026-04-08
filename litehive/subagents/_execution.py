@@ -181,6 +181,17 @@ def _has_callable_override(engine: object, name: str, default: object) -> bool:
         return False
     if name == "run_live" and resolved is _ORIGINAL_EXTERNAL_ADAPTER_RUN_LIVE:
         return False
+    instance_dict = getattr(engine, "__dict__", None)
+    if isinstance(instance_dict, dict) and name in instance_dict:
+        value = instance_dict[name]
+        if callable(value):
+            rebound = _unwrap_bound_callable(value)
+            if inspect.ismethod(value) and getattr(value, "__self__", None) is engine:
+                return False
+            for cls in type(engine).__mro__:
+                inherited = cls.__dict__.get(name)
+                if callable(inherited) and _unwrap_bound_callable(inherited) is rebound:
+                    return False
     return resolved is not default
 
 
@@ -295,7 +306,7 @@ class SubagentManager:
                 )
             if isinstance(engine, ExternalCLIAdapter) and sandbox_summary.enabled:
                 execution_engine = _SandboxedAdapter(engine, self.sandbox, engine_name)
-            if _supports_live_execution(engine):
+            if _supports_live_execution(execution_engine):
                 live_kwargs: dict[str, object] = {
                     "cwd": self.execution_root,
                     "model": model,
@@ -309,7 +320,7 @@ class SubagentManager:
                 }
                 if resume_session_id:
                     live_kwargs["resume_session_id"] = resume_session_id
-                if _supports_live_on_started(engine):
+                if _supports_live_on_started(execution_engine):
                     live_kwargs["on_started"] = lambda pid: self._record_subagent_pid(
                         task, base, ref, pid
                     )
@@ -329,7 +340,7 @@ class SubagentManager:
                     run_kwargs["resume_session_id"] = resume_session_id
                 if max_turns is not None:
                     run_kwargs["max_turns"] = max_turns
-                if _supports_on_started(engine):
+                if _supports_on_started(execution_engine):
                     run_kwargs["on_started"] = lambda pid: self._record_subagent_pid(
                         task, base, ref, pid
                     )
