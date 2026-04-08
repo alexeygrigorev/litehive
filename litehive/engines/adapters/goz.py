@@ -21,6 +21,14 @@ from litehive.models import (
 
 
 class GozCLIAdapter(ExternalCLIAdapter):
+    DEFAULT_NAME = "goz"
+    DEFAULT_BINARY = "goz"
+    DEFAULT_CAPABILITIES = ExternalCLIAdapter.DEFAULT_CAPABILITIES.__class__(
+        supports_model_override=False,
+        strips_environment=False,
+        transcript_format="jsonl",
+    )
+
     def build_command(
         self,
         prompt: str,
@@ -102,62 +110,67 @@ class GozCLIAdapter(ExternalCLIAdapter):
             metadata=metadata,
         )
 
+    def stream_event_adapter(self):
+        from litehive.engines.base import StreamEventAdapter
 
-def _goz_live_events(payload: dict[str, object]) -> list[LiveEvent]:
-    events: list[LiveEvent] = []
-    event_type = str(payload.get("type", "")).lower()
+        return StreamEventAdapter(live_events=self._live_events)
 
-    text = _goz_message_text(payload)
-    if text:
-        events.append(LiveEvent(kind="message", engine="goz", role="assistant", content=text))
+    @staticmethod
+    def _live_events(payload: dict[str, object]) -> list[LiveEvent]:
+        events: list[LiveEvent] = []
+        event_type = str(payload.get("type", "")).lower()
 
-    if event_type in {"tool_call", "tool.call"}:
-        tool_name = payload.get("name") or payload.get("tool_name") or payload.get("tool")
-        raw_input = payload.get("input") or payload.get("arguments") or payload.get("args")
-        events.append(
-            LiveEvent(
-                kind="tool_call",
-                engine="goz",
-                role="assistant",
-                tool_name=tool_name if isinstance(tool_name, str) else None,
-                tool_input=(
-                    json.dumps(raw_input)
-                    if isinstance(raw_input, (dict, list))
-                    else raw_input
-                    if isinstance(raw_input, str)
-                    else None
-                ),
+        text = _goz_message_text(payload)
+        if text:
+            events.append(LiveEvent(kind="message", engine="goz", role="assistant", content=text))
+
+        if event_type in {"tool_call", "tool.call"}:
+            tool_name = payload.get("name") or payload.get("tool_name") or payload.get("tool")
+            raw_input = payload.get("input") or payload.get("arguments") or payload.get("args")
+            events.append(
+                LiveEvent(
+                    kind="tool_call",
+                    engine="goz",
+                    role="assistant",
+                    tool_name=tool_name if isinstance(tool_name, str) else None,
+                    tool_input=(
+                        json.dumps(raw_input)
+                        if isinstance(raw_input, (dict, list))
+                        else raw_input
+                        if isinstance(raw_input, str)
+                        else None
+                    ),
+                )
             )
-        )
 
-    if event_type in {"tool_result", "tool.result"}:
-        tool_name = payload.get("name") or payload.get("tool_name") or payload.get("tool")
-        raw_output = payload.get("output") or payload.get("result")
-        events.append(
-            LiveEvent(
-                kind="tool_result",
-                engine="goz",
-                role="user",
-                tool_name=tool_name if isinstance(tool_name, str) else None,
-                tool_output=(
-                    json.dumps(raw_output)
-                    if isinstance(raw_output, (dict, list))
-                    else raw_output
-                    if isinstance(raw_output, str)
-                    else None
-                ),
+        if event_type in {"tool_result", "tool.result"}:
+            tool_name = payload.get("name") or payload.get("tool_name") or payload.get("tool")
+            raw_output = payload.get("output") or payload.get("result")
+            events.append(
+                LiveEvent(
+                    kind="tool_result",
+                    engine="goz",
+                    role="user",
+                    tool_name=tool_name if isinstance(tool_name, str) else None,
+                    tool_output=(
+                        json.dumps(raw_output)
+                        if isinstance(raw_output, (dict, list))
+                        else raw_output
+                        if isinstance(raw_output, str)
+                        else None
+                    ),
+                )
             )
-        )
 
-    meta: dict[str, str | int | bool | None] = {}
-    usage = _goz_usage_window(payload, meta)
-    if usage is not None:
-        events.append(LiveEvent(kind="usage", engine="goz", metadata=meta))
+        meta: dict[str, str | int | bool | None] = {}
+        usage = _goz_usage_window(payload, meta)
+        if usage is not None:
+            events.append(LiveEvent(kind="usage", engine="goz", metadata=meta))
 
-    error_message, _ = _goz_error_details(payload)
-    if error_message:
-        events.append(LiveEvent(kind="error", engine="goz", error=error_message))
-    return events
+        error_message, _ = _goz_error_details(payload)
+        if error_message:
+            events.append(LiveEvent(kind="error", engine="goz", error=error_message))
+        return events
 
 
 def _format_goz_tool_block(part: dict[str, object]) -> str | None:

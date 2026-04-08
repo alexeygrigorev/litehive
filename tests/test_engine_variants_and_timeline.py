@@ -1,6 +1,38 @@
 from tests.workspace_helpers import *  # noqa: F401,F403
 
 
+def test_engine_registry_uses_adapter_defaults_and_public_lookup_api() -> None:
+    from litehive.engines import ENGINE_REGISTRY, get_engine
+
+    assert list(ENGINE_REGISTRY) == ["codex", "opencode", "goz", "gemini", "copilot", "claude"]
+
+    codex = get_engine("codex")
+    opencode = get_engine("opencode")
+
+    assert codex.name == "codex"
+    assert codex.binary == "codex"
+    assert codex.capabilities.supports_model_override is False
+    assert codex.capabilities.transcript_format == "jsonl"
+    assert opencode.name == "opencode"
+    assert opencode.binary == "opencode"
+    assert opencode.capabilities.strips_environment is True
+    assert "OPENAI_API_KEY" in opencode.stripped_env_vars
+
+
+def test_adapters_package_does_not_export_private_adapter_internals() -> None:
+    import litehive.engines.adapters as adapters
+
+    assert not hasattr(adapters, "_OPENCODE_STRIPPED_ENV_VARS")
+    assert not hasattr(adapters, "_CLAUDE_STREAM_EVENT_ADAPTER")
+    assert not hasattr(adapters, "_COPILOT_STREAM_EVENT_ADAPTER")
+    assert not hasattr(adapters, "_codex_live_events")
+    assert not hasattr(adapters, "_opencode_live_events")
+    assert not hasattr(adapters, "_gemini_live_events")
+    assert not hasattr(adapters, "_claude_live_events")
+    assert not hasattr(adapters, "_copilot_live_events")
+    assert not hasattr(adapters, "_goz_live_events")
+
+
 def test_claude_build_invocation_includes_model_and_resume(tmp_path: Path) -> None:
     from litehive.engines import ClaudeCLIAdapter
 

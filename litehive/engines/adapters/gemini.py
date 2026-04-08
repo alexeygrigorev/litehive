@@ -17,10 +17,19 @@ from litehive.models import (
     EngineUsageObservation,
     EngineUsageWindow,
     LiveEvent,
+    RuntimeEngineContinuation,
 )
 
 
 class GeminiCLIAdapter(ExternalCLIAdapter):
+    DEFAULT_NAME = "gemini"
+    DEFAULT_BINARY = "gemini"
+    DEFAULT_CAPABILITIES = ExternalCLIAdapter.DEFAULT_CAPABILITIES.__class__(
+        supports_model_override=True,
+        strips_environment=False,
+        transcript_format="jsonl",
+    )
+
     def build_command(
         self,
         prompt: str,
@@ -102,66 +111,89 @@ class GeminiCLIAdapter(ExternalCLIAdapter):
             metadata=metadata,
         )
 
+    def stream_event_adapter(self):
+        from litehive.engines.base import StreamEventAdapter
 
-def _gemini_live_events(payload: dict[str, object]) -> list[LiveEvent]:
-    events: list[LiveEvent] = []
-    event_type = str(payload.get("type", "")).lower()
-    if event_type == "content":
-        text = payload.get("text")
-        if isinstance(text, str) and text:
+        return StreamEventAdapter(live_events=self._live_events)
+
+    def extract_continuation(
+        self,
+        execution: CLIExecutionResult | None,
+    ) -> RuntimeEngineContinuation | None:
+        if execution is None or not execution.stdout.strip():
+            return None
+        for payload in iter_jsonl_payloads(execution.stdout):
+            if payload.get("type") != "init":
+                continue
+            session_id = payload.get("session_id")
+            model = payload.get("model")
+            metadata: dict[str, str | int | bool | None] = {}
+            if isinstance(model, str) and model:
+                metadata["model"] = model
+            if isinstance(session_id, str) and session_id:
+                return RuntimeEngineContinuation(session_id=session_id, metadata=metadata)
+        return None
+
+    @staticmethod
+    def _live_events(payload: dict[str, object]) -> list[LiveEvent]:
+        events: list[LiveEvent] = []
+        event_type = str(payload.get("type", "")).lower()
+        if event_type == "content":
+            text = payload.get("text")
+            if isinstance(text, str) and text:
+                events.append(
+                    LiveEvent(kind="message", engine="gemini", role="assistant", content=text)
+                )
+        elif event_type == "tool_call":
+            tool_name = payload.get("name")
+            tool_input = payload.get("args")
             events.append(
-                LiveEvent(kind="message", engine="gemini", role="assistant", content=text)
+                LiveEvent(
+                    kind="tool_call",
+                    engine="gemini",
+                    role="assistant",
+                    tool_name=tool_name if isinstance(tool_name, str) else None,
+                    tool_input=json.dumps(tool_input) if isinstance(tool_input, (dict, list)) else None,
+                )
             )
-    elif event_type == "tool_call":
-        tool_name = payload.get("name")
-        tool_input = payload.get("args")
-        events.append(
-            LiveEvent(
-                kind="tool_call",
-                engine="gemini",
-                role="assistant",
-                tool_name=tool_name if isinstance(tool_name, str) else None,
-                tool_input=json.dumps(tool_input) if isinstance(tool_input, (dict, list)) else None,
+        elif event_type == "tool_result":
+            result = payload.get("result")
+            events.append(
+                LiveEvent(
+                    kind="tool_result",
+                    engine="gemini",
+                    role="user",
+                    tool_output=result
+                    if isinstance(result, str)
+                    else json.dumps(result)
+                    if result
+                    else None,
+                )
             )
-        )
-    elif event_type == "tool_result":
-        result = payload.get("result")
-        events.append(
-            LiveEvent(
-                kind="tool_result",
-                engine="gemini",
-                role="user",
-                tool_output=result
-                if isinstance(result, str)
-                else json.dumps(result)
-                if result
-                else None,
-            )
-        )
-    elif event_type == "finished":
-        value = payload.get("value")
-        if isinstance(value, dict):
-            usage_metadata = value.get("usageMetadata")
-            if isinstance(usage_metadata, dict):
-                meta: dict[str, str | int | bool | None] = {}
-                for field in ("promptTokenCount", "candidatesTokenCount", "totalTokenCount"):
-                    raw = usage_metadata.get(field)
-                    if isinstance(raw, int):
-                        meta[field] = raw
-                if meta:
-                    events.append(LiveEvent(kind="usage", engine="gemini", metadata=meta))
-    elif event_type == "error":
-        raw_error = payload.get("value") or payload.get("error") or payload.get("message")
-        message = None
-        if isinstance(raw_error, str):
-            message = raw_error.strip()
-        elif isinstance(raw_error, dict):
-            message = raw_error.get("message")
-            if not isinstance(message, str):
-                message = None
-        if message:
-            events.append(LiveEvent(kind="error", engine="gemini", error=message))
-    return events
+        elif event_type == "finished":
+            value = payload.get("value")
+            if isinstance(value, dict):
+                usage_metadata = value.get("usageMetadata")
+                if isinstance(usage_metadata, dict):
+                    meta: dict[str, str | int | bool | None] = {}
+                    for field in ("promptTokenCount", "candidatesTokenCount", "totalTokenCount"):
+                        raw = usage_metadata.get(field)
+                        if isinstance(raw, int):
+                            meta[field] = raw
+                    if meta:
+                        events.append(LiveEvent(kind="usage", engine="gemini", metadata=meta))
+        elif event_type == "error":
+            raw_error = payload.get("value") or payload.get("error") or payload.get("message")
+            message = None
+            if isinstance(raw_error, str):
+                message = raw_error.strip()
+            elif isinstance(raw_error, dict):
+                message = raw_error.get("message")
+                if not isinstance(message, str):
+                    message = None
+            if message:
+                events.append(LiveEvent(kind="error", engine="gemini", error=message))
+        return events
 
 
 def _gemini_usage_window(

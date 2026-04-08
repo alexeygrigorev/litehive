@@ -215,7 +215,7 @@ def build_executor(
                         resume_session_id = continuation.resume_id
                         resume_event = (
                             f"Stage `{step}` agent crashed (exit {result.exit_code}) with no "
-                            f"failure classification — resuming session "
+                            f"failure classification — resuming {engine_name} session "
                             f"{continuation.resume_id}."
                         )
                         execution_events.append(resume_event)

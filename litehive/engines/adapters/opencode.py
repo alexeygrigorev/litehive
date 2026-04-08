@@ -16,85 +16,92 @@ from litehive.models import (
     EngineUsageObservation,
     EngineUsageWindow,
     LiveEvent,
-)
-
-
-_OPENCODE_STRIPPED_ENV_VARS = (
-    "AWS_ACCESS_KEY_ID",
-    "AWS_SECRET_ACCESS_KEY",
-    "AWS_SESSION_TOKEN",
-    "AWS_PROFILE",
-    "AWS_REGION",
-    "AWS_BEARER_TOKEN_BEDROCK",
-    "AWS_WEB_IDENTITY_TOKEN_FILE",
-    "AWS_ROLE_ARN",
-    "OPENAI_API_KEY",
-    "OPENAI_BASE_URL",
-    "OPENAI_ORG_ID",
-    "OPENAI_PROJECT_ID",
-    "ANTHROPIC_API_KEY",
-    "ANTHROPIC_BASE_URL",
-    "ANTHROPIC_AUTH_TOKEN",
-    "GROQ_API_KEY",
-    "GOOGLE_APPLICATION_CREDENTIALS",
-    "GOOGLE_CLOUD_PROJECT",
-    "GOOGLE_API_KEY",
-    "VERTEX_LOCATION",
-    "VERTEX_AI_PROJECT",
-    "DEEPSEEK_API_KEY",
-    "XAI_API_KEY",
-    "FIREWORKS_API_KEY",
-    "CEREBRAS_API_KEY",
-    "OPENROUTER_API_KEY",
-    "TOGETHER_API_KEY",
-    "TOGETHER_AI_API_KEY",
-    "AZURE_API_KEY",
-    "AZURE_RESOURCE_NAME",
-    "AZURE_COGNITIVE_SERVICES_RESOURCE_NAME",
-    "AZURE_OPENAI_API_KEY",
-    "AZURE_OPENAI_ENDPOINT",
-    "CLOUDFLARE_API_TOKEN",
-    "CLOUDFLARE_ACCOUNT_ID",
-    "CLOUDFLARE_GATEWAY_ID",
-    "CLOUDFLARE_API_KEY",
-    "HUGGING_FACE_API_KEY",
-    "HF_TOKEN",
-    "HF_API_TOKEN",
-    "MOONSHOT_API_KEY",
-    "MOONSHOTAI_API_KEY",
-    "MINIMAX_API_KEY",
-    "NEBIUS_API_KEY",
-    "DEEPINFRA_API_KEY",
-    "BASETEN_API_KEY",
-    "VENICE_API_KEY",
-    "SCALEWAY_API_KEY",
-    "OVH_API_KEY",
-    "CORTECS_API_KEY",
-    "IONET_API_KEY",
-    "VERCEL_API_KEY",
-    "ZENMUX_API_KEY",
-    "ZAI_API_KEY",
-    "HELICONE_API_KEY",
-    "OPENCODE_API_KEY",
-    "OPENCODE_ZEN_API_KEY",
-    "GITLAB_TOKEN",
-    "GITLAB_INSTANCE_URL",
-    "GITLAB_AI_GATEWAY_URL",
-    "GITLAB_OAUTH_CLIENT_ID",
-    "AICORE_SERVICE_KEY",
-    "AICORE_DEPLOYMENT_ID",
-    "AICORE_RESOURCE_GROUP",
-    "OPENAI_COMPATIBLE_API_KEY",
-    "LMSTUDIO_API_KEY",
-    "OLLAMA_API_KEY",
-    "302AI_API_KEY",
-    "FIRMWARE_API_KEY",
-    "2AI_API_KEY",
-    "GEMINI_API_KEY",
+    RuntimeEngineContinuation,
 )
 
 
 class OpenCodeAdapter(ExternalCLIAdapter):
+    DEFAULT_NAME = "opencode"
+    DEFAULT_BINARY = "opencode"
+    DEFAULT_CAPABILITIES = ExternalCLIAdapter.DEFAULT_CAPABILITIES.__class__(
+        supports_model_override=True,
+        strips_environment=True,
+        transcript_format="jsonl",
+    )
+    DEFAULT_STRIPPED_ENV_VARS = (
+        "AWS_ACCESS_KEY_ID",
+        "AWS_SECRET_ACCESS_KEY",
+        "AWS_SESSION_TOKEN",
+        "AWS_PROFILE",
+        "AWS_REGION",
+        "AWS_BEARER_TOKEN_BEDROCK",
+        "AWS_WEB_IDENTITY_TOKEN_FILE",
+        "AWS_ROLE_ARN",
+        "OPENAI_API_KEY",
+        "OPENAI_BASE_URL",
+        "OPENAI_ORG_ID",
+        "OPENAI_PROJECT_ID",
+        "ANTHROPIC_API_KEY",
+        "ANTHROPIC_BASE_URL",
+        "ANTHROPIC_AUTH_TOKEN",
+        "GROQ_API_KEY",
+        "GOOGLE_APPLICATION_CREDENTIALS",
+        "GOOGLE_CLOUD_PROJECT",
+        "GOOGLE_API_KEY",
+        "VERTEX_LOCATION",
+        "VERTEX_AI_PROJECT",
+        "DEEPSEEK_API_KEY",
+        "XAI_API_KEY",
+        "FIREWORKS_API_KEY",
+        "CEREBRAS_API_KEY",
+        "OPENROUTER_API_KEY",
+        "TOGETHER_API_KEY",
+        "TOGETHER_AI_API_KEY",
+        "AZURE_API_KEY",
+        "AZURE_RESOURCE_NAME",
+        "AZURE_COGNITIVE_SERVICES_RESOURCE_NAME",
+        "AZURE_OPENAI_API_KEY",
+        "AZURE_OPENAI_ENDPOINT",
+        "CLOUDFLARE_API_TOKEN",
+        "CLOUDFLARE_ACCOUNT_ID",
+        "CLOUDFLARE_GATEWAY_ID",
+        "CLOUDFLARE_API_KEY",
+        "HUGGING_FACE_API_KEY",
+        "HF_TOKEN",
+        "HF_API_TOKEN",
+        "MOONSHOT_API_KEY",
+        "MOONSHOTAI_API_KEY",
+        "MINIMAX_API_KEY",
+        "NEBIUS_API_KEY",
+        "DEEPINFRA_API_KEY",
+        "BASETEN_API_KEY",
+        "VENICE_API_KEY",
+        "SCALEWAY_API_KEY",
+        "OVH_API_KEY",
+        "CORTECS_API_KEY",
+        "IONET_API_KEY",
+        "VERCEL_API_KEY",
+        "ZENMUX_API_KEY",
+        "ZAI_API_KEY",
+        "HELICONE_API_KEY",
+        "OPENCODE_API_KEY",
+        "OPENCODE_ZEN_API_KEY",
+        "GITLAB_TOKEN",
+        "GITLAB_INSTANCE_URL",
+        "GITLAB_AI_GATEWAY_URL",
+        "GITLAB_OAUTH_CLIENT_ID",
+        "AICORE_SERVICE_KEY",
+        "AICORE_DEPLOYMENT_ID",
+        "AICORE_RESOURCE_GROUP",
+        "OPENAI_COMPATIBLE_API_KEY",
+        "LMSTUDIO_API_KEY",
+        "OLLAMA_API_KEY",
+        "302AI_API_KEY",
+        "FIRMWARE_API_KEY",
+        "2AI_API_KEY",
+        "GEMINI_API_KEY",
+    )
+
     def build_command(
         self,
         prompt: str,
@@ -176,41 +183,58 @@ class OpenCodeAdapter(ExternalCLIAdapter):
             metadata=metadata,
         )
 
+    def stream_event_adapter(self):
+        from litehive.engines.base import StreamEventAdapter
 
-def _opencode_live_events(payload: dict[str, object]) -> list[LiveEvent]:
-    events: list[LiveEvent] = []
-    event_type = payload.get("type")
-    if event_type == "text":
-        part = payload.get("part")
-        if isinstance(part, dict):
-            text = part.get("text")
-            if isinstance(text, str) and text:
-                events.append(
-                    LiveEvent(kind="message", engine="opencode", role="assistant", content=text)
-                )
-    elif event_type == "step_finish":
-        part = payload.get("part")
-        if isinstance(part, dict):
-            tokens = part.get("tokens")
-            meta: dict[str, str | int | bool | None] = {}
-            if isinstance(tokens, dict):
-                for field in ("total", "input", "output", "reasoning"):
-                    raw = tokens.get(field)
-                    if isinstance(raw, int):
-                        meta[f"{field}_tokens"] = raw
-            cost = part.get("cost")
-            if isinstance(cost, (int, float)):
-                meta["cost"] = f"{cost:.6f}"
-            if meta:
-                events.append(LiveEvent(kind="usage", engine="opencode", metadata=meta))
-    elif event_type == "error":
-        raw_error = payload.get("error")
-        if isinstance(raw_error, dict):
-            data = raw_error.get("data")
-            message = data.get("message") if isinstance(data, dict) else raw_error.get("name")
-            if isinstance(message, str) and message.strip():
-                events.append(LiveEvent(kind="error", engine="opencode", error=message.strip()))
-    return events
+        return StreamEventAdapter(live_events=self._live_events)
+
+    def extract_continuation(
+        self,
+        execution: CLIExecutionResult | None,
+    ) -> RuntimeEngineContinuation | None:
+        if execution is None or not execution.stdout.strip():
+            return None
+        for payload in iter_jsonl_payloads(execution.stdout):
+            session_id = payload.get("sessionID")
+            if isinstance(session_id, str) and session_id:
+                return RuntimeEngineContinuation(session_id=session_id)
+        return None
+
+    @staticmethod
+    def _live_events(payload: dict[str, object]) -> list[LiveEvent]:
+        events: list[LiveEvent] = []
+        event_type = payload.get("type")
+        if event_type == "text":
+            part = payload.get("part")
+            if isinstance(part, dict):
+                text = part.get("text")
+                if isinstance(text, str) and text:
+                    events.append(
+                        LiveEvent(kind="message", engine="opencode", role="assistant", content=text)
+                    )
+        elif event_type == "step_finish":
+            part = payload.get("part")
+            if isinstance(part, dict):
+                tokens = part.get("tokens")
+                meta: dict[str, str | int | bool | None] = {}
+                if isinstance(tokens, dict):
+                    for field in ("total", "input", "output", "reasoning"):
+                        raw = tokens.get(field)
+                        if isinstance(raw, int):
+                            meta[f"{field}_tokens"] = raw
+                cost = part.get("cost")
+                if isinstance(cost, (int, float)):
+                    meta["cost"] = f"{cost:.6f}"
+                if meta:
+                    events.append(LiveEvent(kind="usage", engine="opencode", metadata=meta))
+        elif event_type == "error":
+            raw_error = payload.get("error")
+            if isinstance(raw_error, dict):
+                data = raw_error.get("data")
+                message = data.get("message") if isinstance(data, dict) else raw_error.get("name")
+                if isinstance(message, str) and message.strip():
+                    events.append(LiveEvent(kind="error", engine="opencode", error=message.strip()))
+        return events
 
 
 def _extract_opencode_transcript(stdout: str) -> str:

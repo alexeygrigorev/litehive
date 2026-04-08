@@ -11,19 +11,9 @@ from litehive.engines.adapters import (
     GozCLIAdapter,
     OpenCodeAdapter,
     RetryableExecutionFailure,
-    _CLAUDE_STREAM_EVENT_ADAPTER,
-    _COPILOT_STREAM_EVENT_ADAPTER,
     _ENGINE_LIMIT_PATTERNS,
     _EXECUTION_INTERRUPTION_PATTERNS,
-    _OPENCODE_STRIPPED_ENV_VARS,
     _RETRYABLE_EXECUTION_PATTERNS,
-    _claude_live_events,
-    _codex_live_events,
-    _copilot_live_events,
-    _gemini_live_events,
-    _goz_live_events,
-    _opencode_live_events,
-    _unwrap_claude_stream_event,
     classify_execution_interruption,
     classify_execution_limit,
     classify_retryable_execution_failure,
@@ -50,62 +40,17 @@ from litehive.models import (
 )
 
 
+ENGINE_ADAPTER_TYPES: tuple[type[ExternalCLIAdapter], ...] = (
+    CodexCLIAdapter,
+    OpenCodeAdapter,
+    GozCLIAdapter,
+    GeminiCLIAdapter,
+    CopilotCLIAdapter,
+    ClaudeCLIAdapter,
+)
+
 ENGINE_REGISTRY: dict[str, ExternalCLIAdapter] = {
-    "codex": CodexCLIAdapter(
-        name="codex",
-        binary="codex",
-        capabilities=AdapterCapabilities(
-            supports_model_override=False,
-            strips_environment=False,
-            transcript_format="jsonl",
-        ),
-    ),
-    "opencode": OpenCodeAdapter(
-        name="opencode",
-        binary="opencode",
-        capabilities=AdapterCapabilities(
-            supports_model_override=True,
-            strips_environment=True,
-            transcript_format="jsonl",
-        ),
-        stripped_env_vars=_OPENCODE_STRIPPED_ENV_VARS,
-    ),
-    "goz": GozCLIAdapter(
-        name="goz",
-        binary="goz",
-        capabilities=AdapterCapabilities(
-            supports_model_override=False,
-            strips_environment=False,
-            transcript_format="jsonl",
-        ),
-    ),
-    "gemini": GeminiCLIAdapter(
-        name="gemini",
-        binary="gemini",
-        capabilities=AdapterCapabilities(
-            supports_model_override=True,
-            strips_environment=False,
-            transcript_format="jsonl",
-        ),
-    ),
-    "copilot": CopilotCLIAdapter(
-        name="copilot",
-        binary="copilot",
-        capabilities=AdapterCapabilities(
-            supports_model_override=True,
-            strips_environment=False,
-            transcript_format="jsonl",
-        ),
-    ),
-    "claude": ClaudeCLIAdapter(
-        name="claude",
-        binary="claude",
-        capabilities=AdapterCapabilities(
-            supports_model_override=True,
-            strips_environment=False,
-            transcript_format="jsonl",
-        ),
-    ),
+    adapter.name: adapter for adapter in (adapter_type() for adapter_type in ENGINE_ADAPTER_TYPES)
 }
 
 ENGINE_CHOICES = sorted(ENGINE_REGISTRY.keys())
@@ -118,27 +63,11 @@ def get_engine(name: str) -> ExternalCLIAdapter:
         raise EngineError(f"Unknown engine '{name}'") from exc
 
 
-ENGINE_STREAM_EVENT_ADAPTERS: dict[str, StreamEventAdapter] = {
-    "codex": StreamEventAdapter(
-        live_events=_codex_live_events,
-        unwrap_event=_unwrap_claude_stream_event,
-    ),
-    "opencode": StreamEventAdapter(
-        live_events=_opencode_live_events,
-    ),
-    "goz": StreamEventAdapter(
-        live_events=_goz_live_events,
-    ),
-    "gemini": StreamEventAdapter(
-        live_events=_gemini_live_events,
-    ),
-    "copilot": _COPILOT_STREAM_EVENT_ADAPTER,
-    "claude": _CLAUDE_STREAM_EVENT_ADAPTER,
-}
-
-
 def get_stream_event_adapter(engine_name: str) -> StreamEventAdapter | None:
-    return ENGINE_STREAM_EVENT_ADAPTERS.get(engine_name)
+    adapter = ENGINE_REGISTRY.get(engine_name)
+    if adapter is None:
+        return None
+    return adapter.stream_event_adapter()
 
 
 def extract_engine_timeline(
@@ -166,45 +95,7 @@ def extract_engine_continuation(
 ) -> RuntimeEngineContinuation | None:
     if execution is None or not execution.stdout.strip():
         return None
-
-    if engine_name == "codex":
-        for payload in iter_jsonl_payloads(execution.stdout):
-            if payload.get("type") != "thread.started":
-                continue
-            thread_id = payload.get("thread_id")
-            if isinstance(thread_id, str) and thread_id:
-                return RuntimeEngineContinuation(thread_id=thread_id)
+    adapter = ENGINE_REGISTRY.get(engine_name)
+    if adapter is None:
         return None
-
-    if engine_name == "opencode":
-        for payload in iter_jsonl_payloads(execution.stdout):
-            session_id = payload.get("sessionID")
-            if isinstance(session_id, str) and session_id:
-                return RuntimeEngineContinuation(session_id=session_id)
-        return None
-
-    if engine_name == "gemini":
-        for payload in iter_jsonl_payloads(execution.stdout):
-            if payload.get("type") != "init":
-                continue
-            session_id = payload.get("session_id")
-            model = payload.get("model")
-            metadata: dict[str, str | int | bool | None] = {}
-            if isinstance(model, str) and model:
-                metadata["model"] = model
-            if isinstance(session_id, str) and session_id:
-                return RuntimeEngineContinuation(session_id=session_id, metadata=metadata)
-        return None
-
-    if engine_name == "claude":
-        for payload in iter_jsonl_payloads(execution.stdout):
-            if payload.get("type") == "system" and payload.get("subtype") == "init":
-                session_id = payload.get("session_id")
-                if isinstance(session_id, str) and session_id:
-                    return RuntimeEngineContinuation(session_id=session_id)
-        return None
-
-    if engine_name == "copilot":
-        return None
-
-    return None
+    return adapter.extract_continuation(execution)
