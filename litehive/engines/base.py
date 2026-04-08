@@ -3,6 +3,7 @@
 
 from dataclasses import dataclass, replace
 from collections import OrderedDict
+import logging
 import os
 from pathlib import Path
 import re
@@ -12,6 +13,8 @@ import json
 import selectors
 import time
 from typing import Callable, Literal
+
+logger = logging.getLogger(__name__)
 
 from pydantic import ValidationError
 
@@ -434,10 +437,13 @@ def iter_jsonl_payloads(stdout: str) -> list[dict[str, object]]:
             continue
         try:
             payload = json.loads(line)
-        except (json.JSONDecodeError, ValueError):
+        except (json.JSONDecodeError, ValueError) as exc:
+            logger.warning("iter_jsonl_payloads: unparseable JSON line: %s (%.200s)", exc, line)
             continue
         if isinstance(payload, dict):
             payloads.append(payload)
+        else:
+            logger.warning("iter_jsonl_payloads: expected dict, got %s (%.200s)", type(payload).__name__, line)
     return payloads
 
 

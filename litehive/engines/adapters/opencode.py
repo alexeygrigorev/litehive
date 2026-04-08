@@ -1,6 +1,9 @@
 """OpenCode CLI engine adapter."""
 
+import logging
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 from litehive.engines.adapters.common import classify_execution_limit
 from litehive.engines.base import (
@@ -217,10 +220,13 @@ def _extract_opencode_transcript(stdout: str) -> str:
             continue
         part = payload.get("part")
         if not isinstance(part, dict):
+            logger.warning("opencode transcript: text event has non-dict part field: %s (%.200s)", type(part).__name__, payload)
             continue
         text = part.get("text")
         if isinstance(text, str) and text:
             messages.append(text)
+        else:
+            logger.warning("opencode transcript: text event part missing text field (%.200s)", payload)
     return "\n".join(part.rstrip() for part in messages if part.strip()).strip()
 
 

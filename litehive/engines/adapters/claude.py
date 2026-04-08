@@ -1,8 +1,11 @@
 """Claude CLI engine adapter."""
 
 import json
+import logging
 import re
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 from litehive.engines.adapters.common import _decode_json_object, classify_execution_limit
 from litehive.engines.base import (
@@ -289,14 +292,15 @@ _CLAUDE_TEXT_DELTA_RE = re.compile(
 
 def _extract_claude_text_delta_fallback(stdout: str) -> list[str]:
     partial_blocks: dict[int, list[str]] = {}
-    for raw_line in stdout.splitlines():
+    for i, raw_line in enumerate(stdout.splitlines(), 1):
         match = _CLAUDE_TEXT_DELTA_RE.search(raw_line)
         if match is None:
             continue
         try:
             index = int(match.group(1))
             text = _decode_json_string_literal(match.group(2))
-        except (TypeError, ValueError, json.JSONDecodeError):
+        except (TypeError, ValueError, json.JSONDecodeError) as exc:
+            logger.warning("claude delta fallback: decode failed at line %d: %s (%.200s)", i, exc, raw_line)
             continue
         if text:
             partial_blocks.setdefault(index, []).append(text)

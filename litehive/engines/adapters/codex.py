@@ -225,12 +225,15 @@ def _extract_codex_transcript(stdout: str) -> str:
             continue
         item = payload.get("item")
         if not isinstance(item, dict):
+            logger.warning("codex transcript: item.completed has non-dict item field: %s (%.200s)", type(item).__name__, payload)
             continue
         if item.get("type") != "agent_message":
             continue
         text = item.get("text")
         if isinstance(text, str) and text:
             messages.append(text)
+        else:
+            logger.warning("codex transcript: agent_message missing text field (%.200s)", payload)
     return "\n".join(messages).strip()
 
 
