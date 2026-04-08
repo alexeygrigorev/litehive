@@ -7,14 +7,14 @@ engine: null
 model: null
 mode: implementation
 pipeline_mode: full
-status: in_progress
+status: done
 flag_reason: null
-pipeline_status: commit_to_git
+pipeline_status: done
 priority: medium
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-07T21:05:49+00:00'
-updated_at: '2026-04-08T21:58:10+00:00'
+updated_at: '2026-04-08T21:59:06+00:00'
 goal: web/__init__.py (401 lines) should only contain imports and re-exports. Move
   all logic into dedicated submodules under litehive/web/.
 acceptance_criteria:
@@ -529,16 +529,16 @@ subagents:
 - id: SA-0072
   role: merge-resolver
   engine: claude
-  status: running
+  status: completed
   path: subagents/SA-0072-merge-resolver
   sandboxed: false
   sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0220 move-logic-out-of-web-init-py-into-submodules'
-  commit_sha: null
-  checkpoint_base_sha: null
-  checkpoint_attempts: 0
+  commit_sha: e536ef177d9fa72bb303c11495f344c6e41a3441
+  checkpoint_base_sha: 5de8c5be158189594bfa1b24aa36d26863589f85
+  checkpoint_attempts: 1
   rolled_back_checkpoint_attempt: null
   merge_agent_attempts: 1
   worktree_path: null

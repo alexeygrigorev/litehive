@@ -1,0 +1,50 @@
+task_id: T-0229
+step: implementing
+verdict: pass
+summary: 'Added a new ''litehive engine status'' subcommand in litehive/cli/engine.py
+  and parser support in litehive/cli/parser.py. The command now prints per-engine
+  monitoring summaries from .litehive/engine-monitoring.yaml for all recorded engines,
+  including invocations, successes, failures, limit counts, inferred availability,
+  and last-used/observed timestamps. When scoped to codex, it also reuses the existing
+  proactive codex quota path via check_codex_quota/record_codex_quota_check to surface
+  used_percent, limit_reached, and reset timestamps. No-data handling was added for
+  missing monitoring records. Added focused tests in tests/test_config_and_run_cli.py
+  covering parser acceptance, all-engine summary output, codex-scoped quota output,
+  and no-data behavior. Updated operator-facing docs in docs/cli.md and docs/engines.md.
+  Verified with: uv run pytest tests/test_config_and_run_cli.py -q (58 passed).'
+feedback: 'Added a new ''litehive engine status'' subcommand in litehive/cli/engine.py
+  and parser support in litehive/cli/parser.py. The command now prints per-engine
+  monitoring summaries from .litehive/engine-monitoring.yaml for all recorded engines,
+  including invocations, successes, failures, limit counts, inferred availability,
+  and last-used/observed timestamps. When scoped to codex, it also reuses the existing
+  proactive codex quota path via check_codex_quota/record_codex_quota_check to surface
+  used_percent, limit_reached, and reset timestamps. No-data handling was added for
+  missing monitoring records. Added focused tests in tests/test_config_and_run_cli.py
+  covering parser acceptance, all-engine summary output, codex-scoped quota output,
+  and no-data behavior. Updated operator-facing docs in docs/cli.md and docs/engines.md.
+  Verified with: uv run pytest tests/test_config_and_run_cli.py -q (58 passed).'
+files_changed:
+- docs/cli.md
+- docs/engines.md
+- litehive/cli/engine.py
+- litehive/cli/parser.py
+- tests/test_config_and_run_cli.py
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 236
+hook_results: []
+created_at: '2026-04-08T22:05:23+00:00'

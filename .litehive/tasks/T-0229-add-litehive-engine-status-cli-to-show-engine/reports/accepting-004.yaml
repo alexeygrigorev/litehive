@@ -1,0 +1,55 @@
+task_id: T-0229
+step: accepting
+verdict: pass
+summary: 'Reviewed the new engine status CLI implementation and verified the acceptance
+  criteria against code, tests, and live command output. Confirmed parser support
+  for both forms: litehive engine status and litehive engine status <engine>, while
+  preserving existing engine shorthand, set, freeze, and unfreeze behavior. Confirmed
+  litehive/cli/engine.py reads workspace monitoring from .litehive/engine-monitoring.yaml,
+  prints per-engine summary fields including invocations, successes, failures, limits,
+  availability, and last_used or observed, and scopes correctly to a named engine.
+  Confirmed codex-scoped status reuses the proactive quota path via check_codex_quota
+  plus record_codex_quota_check and surfaces quota fields including used_percent,
+  limit_reached, and reset_at. Verification run: uv run pytest tests/test_config_and_run_cli.py
+  -q, which passed with 58 tests in 8.46s. Live smoke checks against temporary workspaces
+  also succeeded: uv run litehive engine status --workspace <tmp> printed summary
+  blocks for codex and gemini with the expected monitoring fields; uv run litehive
+  engine status gemini --workspace <tmp> correctly scoped output to one engine; and
+  uv run litehive engine status --workspace <empty-tmp> printed engine_status: no
+  monitoring data recorded instead of crashing. Acceptance criteria satisfied.'
+feedback: 'Reviewed the new engine status CLI implementation and verified the acceptance
+  criteria against code, tests, and live command output. Confirmed parser support
+  for both forms: litehive engine status and litehive engine status <engine>, while
+  preserving existing engine shorthand, set, freeze, and unfreeze behavior. Confirmed
+  litehive/cli/engine.py reads workspace monitoring from .litehive/engine-monitoring.yaml,
+  prints per-engine summary fields including invocations, successes, failures, limits,
+  availability, and last_used or observed, and scopes correctly to a named engine.
+  Confirmed codex-scoped status reuses the proactive quota path via check_codex_quota
+  plus record_codex_quota_check and surfaces quota fields including used_percent,
+  limit_reached, and reset_at. Verification run: uv run pytest tests/test_config_and_run_cli.py
+  -q, which passed with 58 tests in 8.46s. Live smoke checks against temporary workspaces
+  also succeeded: uv run litehive engine status --workspace <tmp> printed summary
+  blocks for codex and gemini with the expected monitoring fields; uv run litehive
+  engine status gemini --workspace <tmp> correctly scoped output to one engine; and
+  uv run litehive engine status --workspace <empty-tmp> printed engine_status: no
+  monitoring data recorded instead of crashing. Acceptance criteria satisfied.'
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 90
+hook_results: []
+created_at: '2026-04-08T22:08:16+00:00'

@@ -1,0 +1,90 @@
+- role: planner
+  step: grooming
+  verdict: pass
+  message: 'Grooming pass completed. I inspected the current engine CLI, parser, engine-monitoring
+    observability module, runtime codex quota integration, and the existing tests
+    around engine commands and quota monitoring. The task record is now updated with
+    a concrete goal, four observable acceptance criteria, five implementation plan
+    steps, PM_COMPLEXITY=moderate, and PLANNED_EFFORT=s. Key implementation guidance:
+    reuse litehive/cli/engine.py for the new subcommand, extend litehive/cli/parser.py
+    so engine status supports both all-engines and a single-engine filter, read existing
+    monitoring from .litehive/engine-monitoring.yaml via litehive.observability._engine_monitoring,
+    and reuse the existing proactive Codex quota path instead of adding new quota
+    logic. Existing evidence shows the data model and persistence already exist for
+    invocation counts, failures, limits, usage windows, and Codex quota metadata;
+    the missing scope is the operator-facing engine status command and its tests/docs.
+    Tests run in grooming: none; this stage was repo inspection and task shaping only.'
+  files_changed: []
+  created_at: '2026-04-08T22:01:19+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Added a new ''litehive engine status'' subcommand in litehive/cli/engine.py
+    and parser support in litehive/cli/parser.py. The command now prints per-engine
+    monitoring summaries from .litehive/engine-monitoring.yaml for all recorded engines,
+    including invocations, successes, failures, limit counts, inferred availability,
+    and last-used/observed timestamps. When scoped to codex, it also reuses the existing
+    proactive codex quota path via check_codex_quota/record_codex_quota_check to surface
+    used_percent, limit_reached, and reset timestamps. No-data handling was added
+    for missing monitoring records. Added focused tests in tests/test_config_and_run_cli.py
+    covering parser acceptance, all-engine summary output, codex-scoped quota output,
+    and no-data behavior. Updated operator-facing docs in docs/cli.md and docs/engines.md.
+    Verified with: uv run pytest tests/test_config_and_run_cli.py -q (58 passed).'
+  files_changed: []
+  created_at: '2026-04-08T22:05:08+00:00'
+- role: qa
+  step: testing
+  verdict: pass
+  message: 'Validated the new engine status CLI in code and with focused execution
+    checks. Ran uv run pytest tests/test_config_and_run_cli.py -q: 58 passed in 8.24s.
+    Verified parser support for both forms (litehive engine status and litehive engine
+    status codex), all-engine summary output, codex-scoped quota output, and scoped
+    no-data handling from the new tests. Also smoke-tested the real CLI against temporary
+    workspaces: seeded .litehive/engine-monitoring.yaml and confirmed litehive engine
+    status prints per-engine blocks with invocations, successes, failures, limits,
+    availability, and last_used; confirmed empty monitoring prints engine_status:
+    no monitoring data recorded instead of crashing. Code inspection shows codex-scoped
+    status reuses the existing proactive quota path via check_codex_quota plus record_codex_quota_check
+    and prints used_percent, limit_reached, and reset_at when quota data is available.
+    Acceptance criteria are satisfied.'
+  files_changed: []
+  created_at: '2026-04-08T22:06:40+00:00'
+- role: reviewer
+  step: accepting
+  verdict: pass
+  message: 'Reviewed the new engine status CLI implementation and verified the acceptance
+    criteria against code, tests, and live command output. Confirmed parser support
+    for both forms in litehive/cli/parser.py: \ and \, while preserving existing engine
+    shorthand/set/freeze/unfreeze behavior. Confirmed litehive/cli/engine.py reads
+    workspace monitoring from .litehive/engine-monitoring.yaml, prints per-engine
+    summary fields including invocations, successes, failures, limits, availability,
+    and last_used/observed, and scopes correctly to a named engine. Confirmed codex-scoped
+    status reuses the proactive quota path via check_codex_quota plus record_codex_quota_check
+    and surfaces quota fields including used_percent, limit_reached, and reset_at.
+    Verification run: \ -> 58 passed in 8.46s. Live smoke checks against temporary
+    workspaces also succeeded: \ printed summary blocks for codex and gemini with
+    the expected monitoring fields; \ correctly scoped output to one engine; and \
+    printed \ instead of crashing. Acceptance criteria satisfied.'
+  files_changed: []
+  created_at: '2026-04-08T22:07:50+00:00'
+- role: reviewer
+  step: accepting
+  verdict: pass
+  message: 'Reviewed the new engine status CLI implementation and verified the acceptance
+    criteria against code, tests, and live command output. Confirmed parser support
+    for both forms: litehive engine status and litehive engine status <engine>, while
+    preserving existing engine shorthand, set, freeze, and unfreeze behavior. Confirmed
+    litehive/cli/engine.py reads workspace monitoring from .litehive/engine-monitoring.yaml,
+    prints per-engine summary fields including invocations, successes, failures, limits,
+    availability, and last_used or observed, and scopes correctly to a named engine.
+    Confirmed codex-scoped status reuses the proactive quota path via check_codex_quota
+    plus record_codex_quota_check and surfaces quota fields including used_percent,
+    limit_reached, and reset_at. Verification run: uv run pytest tests/test_config_and_run_cli.py
+    -q, which passed with 58 tests in 8.46s. Live smoke checks against temporary workspaces
+    also succeeded: uv run litehive engine status --workspace <tmp> printed summary
+    blocks for codex and gemini with the expected monitoring fields; uv run litehive
+    engine status gemini --workspace <tmp> correctly scoped output to one engine;
+    and uv run litehive engine status --workspace <empty-tmp> printed engine_status:
+    no monitoring data recorded instead of crashing. Acceptance criteria satisfied.'
+  files_changed: []
+  created_at: '2026-04-08T22:08:06+00:00'

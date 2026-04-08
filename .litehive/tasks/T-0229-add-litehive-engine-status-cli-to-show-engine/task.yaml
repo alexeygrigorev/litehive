@@ -7,13 +7,14 @@ engine: null
 model: null
 mode: implementation
 pipeline_mode: full
-status: queued
-pipeline_status: backlog
+status: in_progress
+flag_reason: null
+pipeline_status: commit_to_git
 priority: medium
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-08T06:40:02+00:00'
-updated_at: '2026-04-08T06:40:02+00:00'
+updated_at: '2026-04-08T22:08:16+00:00'
 goal: Add a CLI command (e.g. litehive engine status or litehive engine status codex)
   that shows current usage stats, quota status, and whether the engine is available.
   Should work for all engines that have monitoring data and for codex show proactive
@@ -27,7 +28,35 @@ acceptance_criteria:
 constraints: []
 plan: []
 human_checkpoints: []
-subagents: []
+subagents:
+- id: SA-0001
+  role: planner
+  engine: codex
+  status: completed
+  path: subagents/SA-0001-planner
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0002
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0002-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0003
+  role: qa
+  engine: codex
+  status: completed
+  path: subagents/SA-0003-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0004
+  role: reviewer
+  engine: codex
+  status: completed
+  path: subagents/SA-0004-reviewer
+  sandboxed: false
+  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0229 add-litehive-engine-status-cli-to-show-engine'
