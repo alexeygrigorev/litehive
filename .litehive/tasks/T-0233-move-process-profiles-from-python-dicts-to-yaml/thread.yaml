@@ -1,0 +1,118 @@
+- role: planner
+  step: grooming
+  verdict: pass
+  message: 'Grooming complete. Verified the current task record, inspected litehive/config/profiles.py,
+    litehive/config/loading.py, litehive/cli/parser.py, litehive/cli/configure.py,
+    and the profile-related tests in tests/test_workspace_bootstrap.py and tests/test_config_and_run_cli.py.
+    Current state matches the task goal: profiles.py is largely static profile data
+    plus merge/render helpers, and the externally visible behavior to preserve is
+    available_process_profiles(), resolve_process_profile(), render_context_template(),
+    load_config() fallback-to-generic handling, and configure --process-profile CLI
+    choices/context rendering. Updated the task record: task_type=refactor, pm_complexity=moderate,
+    planned_effort=m, added 2 constraints, and added a 5-step execution plan. Key
+    implementation notes for the next agent: preserve the current list-extension semantics
+    for development_rules/tool_usage/workspace_overlay/specifics/prompt_scaffold/init_scaffold
+    and stage overlay merging; keep process profile names stable because parser choices
+    and config validation depend on them; keep subagent resource-limit defaults in
+    litehive/config/normalization.py out of scope unless failing tests prove coordination
+    is required. Tests run in grooming: none; this stage was repo inspection and task
+    shaping only. Evidence to collect in implementing/testing: focused profile/bootstrap/configure
+    tests first, then the existing suite required by the task, with explicit confirmation
+    that litehive configure --process-profile behaves the same after profiles become
+    file-backed YAML.'
+  files_changed: []
+  created_at: '2026-04-08T23:12:29+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Moved process profile data into YAML files under litehive/config/profiles/
+    and replaced litehive.config.profiles with a 42-line package loader plus rendering
+    helper module. Preserved public API and merge semantics: shared base is loaded
+    from _shared.yaml, project overlays still extend development_rules/tool_usage/workspace_overlay/specifics/prompt_scaffold/init_scaffold
+    lists and per-stage stage_overlay/stage_instructions entries, and unknown profiles
+    still fall back to generic. Added a focused test asserting the loader stays under
+    50 lines and that the YAML files are present. Verified behavior with uv run pytest
+    tests/test_workspace_bootstrap.py -q (22 passed) and uv run pytest tests/test_config_and_run_cli.py
+    -q (58 passed). Also smoke-checked CLI behavior with litehive configure --workspace
+    /tmp/litehive-t0233-smoke --default-engine codex --process-profile rust, then
+    confirmed .litehive/config.yaml contained process_profile: rust and .litehive/context.md
+    still contained ## Rust specifics and . Added wheel packaging include for litehive/config/profiles/*.yaml
+    so installed builds can load the new file-backed profiles.'
+  files_changed: []
+  created_at: '2026-04-08T23:17:10+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Moved process profile data into YAML files under litehive/config/profiles/
+    and replaced litehive.config.profiles with a 42-line package loader plus rendering
+    helper module. Preserved public API and merge semantics: shared base is loaded
+    from _shared.yaml, project overlays still extend development_rules/tool_usage/workspace_overlay/specifics/prompt_scaffold/init_scaffold
+    lists and per-stage stage_overlay/stage_instructions entries, and unknown profiles
+    still fall back to generic. Added a focused test asserting the loader stays under
+    50 lines and that the YAML files are present. Verified behavior with uv run pytest
+    tests/test_workspace_bootstrap.py -q (22 passed) and uv run pytest tests/test_config_and_run_cli.py
+    -q (58 passed). Also smoke-checked CLI behavior with litehive configure --workspace
+    /tmp/litehive-t0233-smoke --default-engine codex --process-profile rust, then
+    confirmed .litehive/config.yaml contained process_profile: rust and .litehive/context.md
+    still contained ## Rust specifics and . Added wheel packaging include for litehive/config/profiles/*.yaml
+    so installed builds can load the new file-backed profiles.'
+  files_changed: []
+  created_at: '2026-04-08T23:17:20+00:00'
+- role: qa
+  step: testing
+  verdict: pass
+  message: 'QA validation passed. Verified the process profiles now live as YAML files
+    under litehive/config/profiles/: _shared.yaml plus codehive.yaml, cpp.yaml, django.yaml,
+    generic.yaml, python.yaml, and rust.yaml. Confirmed the loader in litehive/config/profiles/__init__.py
+    is 42 lines and merges the shared base with profile overlays using the expected
+    list-extension and per-stage stage_overlay/stage_instructions semantics; also
+    confirmed unknown profiles still fall back to generic via resolve_process_profile(''does-not-exist'').
+    Ran focused tests: uv run pytest tests/test_workspace_bootstrap.py -q (22 passed
+    in 0.49s) and uv run pytest tests/test_config_and_run_cli.py -q (58 passed in
+    8.50s). Independently smoke-tested CLI compatibility with uv run litehive configure
+    --workspace <tmpdir> --default-engine codex --process-profile rust and confirmed
+    .litehive/config.yaml persisted process_profile: rust while .litehive/context.md
+    still rendered Process profile: Rust, ## Rust specifics, and the cargo test guidance.
+    Acceptance criteria satisfied: separate YAML profile files exist, shared base
+    is merged at load time, profiles.py has been replaced by a sub-50-line loader
+    package entrypoint, the existing focused profile/configure tests pass, and litehive
+    configure --process-profile behaves as before.'
+  files_changed: []
+  created_at: '2026-04-08T23:18:49+00:00'
+- role: reviewer
+  step: accepting
+  verdict: pass
+  message: 'Recovery classification: task-owned lint regression in the migrated profiles
+    package. Root cause: litehive/config/profiles/__init__.py re-exported render_context_template
+    without marking it as an intentional public re-export, so the acceptance hook
+    ''uv run ruff check --select E402,F401 litehive tests'' failed with F401. Repair:
+    changed the import to an explicit re-export alias in litehive/config/profiles/__init__.py
+    and left the loader/YAML migration intact. Verification: reran the exact blocked
+    hook successfully (''All checks passed'') and ran focused profile coverage with
+    ''uv run pytest -q tests/test_workspace_bootstrap.py -k process_profile or render_context_template''
+    -> 5 passed, 17 deselected. Remaining note: I did not rerun the full existing
+    test suite during recovery; this report marks pass because the blocked acceptance
+    path is runnable again per recovery policy.'
+  files_changed: []
+  created_at: '2026-04-08T23:20:21+00:00'
+- role: recovery
+  step: accepting
+  verdict: comment
+  message: 'Recovery trigger `stage_failure`: Recovery classification: task-owned
+    lint regression in the migrated profiles package. Root cause: litehive/config/profiles/__init__.py
+    re-exported render_context_template without marking it as an intentional public
+    re-export, so the acceptance hook ''uv run ruff check --select E402,F401 litehive
+    tests'' failed with F401. Repair: changed the import to an explicit re-export
+    alias in litehive/config/profiles/__init__.py and left the loader/YAML migration
+    intact. Verification: reran the exact blocked hook successfully (''All checks
+    passed'') and ran focused profile coverage with ''uv run pytest -q tests/test_workspace_bootstrap.py
+    -k process_profile or render_context_template'' -> 5 passed, 17 deselected. Remaining
+    note: I did not rerun the full existing test suite during recovery; this report
+    marks pass because the blocked acceptance path is runnable again per recovery
+    policy.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0233-move-process-profiles-from-python-dicts-to-yaml/recovery/recovery-001.yaml'
+  files_changed: []
+  created_at: '2026-04-08T23:20:30+00:00'

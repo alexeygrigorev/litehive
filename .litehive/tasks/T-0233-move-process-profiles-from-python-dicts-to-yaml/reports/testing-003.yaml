@@ -1,0 +1,55 @@
+task_id: T-0233
+step: testing
+verdict: pass
+summary: 'QA validation passed. Verified the process profiles now live as YAML files
+  under litehive/config/profiles/: _shared.yaml plus codehive.yaml, cpp.yaml, django.yaml,
+  generic.yaml, python.yaml, and rust.yaml. Confirmed the loader in litehive/config/profiles/__init__.py
+  is 42 lines and merges the shared base with profile overlays using the expected
+  list-extension and per-stage stage_overlay/stage_instructions semantics; also confirmed
+  unknown profiles still fall back to generic via resolve_process_profile(''does-not-exist'').
+  Ran focused tests: uv run pytest tests/test_workspace_bootstrap.py -q (22 passed
+  in 0.49s) and uv run pytest tests/test_config_and_run_cli.py -q (58 passed in 8.50s).
+  Independently smoke-tested CLI compatibility with uv run litehive configure --workspace
+  <tmpdir> --default-engine codex --process-profile rust and confirmed .litehive/config.yaml
+  persisted process_profile: rust while .litehive/context.md still rendered Process
+  profile: Rust, ## Rust specifics, and the cargo test guidance. Acceptance criteria
+  satisfied: separate YAML profile files exist, shared base is merged at load time,
+  profiles.py has been replaced by a sub-50-line loader package entrypoint, the existing
+  focused profile/configure tests pass, and litehive configure --process-profile behaves
+  as before.'
+feedback: 'QA validation passed. Verified the process profiles now live as YAML files
+  under litehive/config/profiles/: _shared.yaml plus codehive.yaml, cpp.yaml, django.yaml,
+  generic.yaml, python.yaml, and rust.yaml. Confirmed the loader in litehive/config/profiles/__init__.py
+  is 42 lines and merges the shared base with profile overlays using the expected
+  list-extension and per-stage stage_overlay/stage_instructions semantics; also confirmed
+  unknown profiles still fall back to generic via resolve_process_profile(''does-not-exist'').
+  Ran focused tests: uv run pytest tests/test_workspace_bootstrap.py -q (22 passed
+  in 0.49s) and uv run pytest tests/test_config_and_run_cli.py -q (58 passed in 8.50s).
+  Independently smoke-tested CLI compatibility with uv run litehive configure --workspace
+  <tmpdir> --default-engine codex --process-profile rust and confirmed .litehive/config.yaml
+  persisted process_profile: rust while .litehive/context.md still rendered Process
+  profile: Rust, ## Rust specifics, and the cargo test guidance. Acceptance criteria
+  satisfied: separate YAML profile files exist, shared base is merged at load time,
+  profiles.py has been replaced by a sub-50-line loader package entrypoint, the existing
+  focused profile/configure tests pass, and litehive configure --process-profile behaves
+  as before.'
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 85
+hook_results: []
+created_at: '2026-04-08T23:18:58+00:00'

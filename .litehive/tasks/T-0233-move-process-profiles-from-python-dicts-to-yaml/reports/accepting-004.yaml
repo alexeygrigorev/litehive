@@ -1,0 +1,45 @@
+task_id: T-0233
+step: accepting
+verdict: pass
+summary: 'Recovery classification: task-owned lint regression in the migrated profiles
+  package. Root cause: litehive/config/profiles/__init__.py re-exported render_context_template
+  without marking it as an intentional public re-export, so the acceptance hook ''uv
+  run ruff check --select E402,F401 litehive tests'' failed with F401. Repair: changed
+  the import to an explicit re-export alias in litehive/config/profiles/__init__.py
+  and left the loader/YAML migration intact. Verification: reran the exact blocked
+  hook successfully (''All checks passed'') and ran focused profile coverage with
+  ''uv run pytest -q tests/test_workspace_bootstrap.py -k process_profile or render_context_template''
+  -> 5 passed, 17 deselected. Remaining note: I did not rerun the full existing test
+  suite during recovery; this report marks pass because the blocked acceptance path
+  is runnable again per recovery policy.'
+feedback: 'Recovery classification: task-owned lint regression in the migrated profiles
+  package. Root cause: litehive/config/profiles/__init__.py re-exported render_context_template
+  without marking it as an intentional public re-export, so the acceptance hook ''uv
+  run ruff check --select E402,F401 litehive tests'' failed with F401. Repair: changed
+  the import to an explicit re-export alias in litehive/config/profiles/__init__.py
+  and left the loader/YAML migration intact. Verification: reran the exact blocked
+  hook successfully (''All checks passed'') and ran focused profile coverage with
+  ''uv run pytest -q tests/test_workspace_bootstrap.py -k process_profile or render_context_template''
+  -> 5 passed, 17 deselected. Remaining note: I did not rerun the full existing test
+  suite during recovery; this report marks pass because the blocked acceptance path
+  is runnable again per recovery policy.'
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 92
+hook_results: []
+created_at: '2026-04-08T23:20:30+00:00'
