@@ -17,16 +17,21 @@ from urllib.parse import parse_qs, urlparse
 import yaml
 from jinja2 import Environment, FileSystemLoader
 
+from litehive.config import config_path, load_config
 from litehive.models import TaskRecord
+from litehive.observability import load_engine_monitoring
+from litehive.runtime import active_engine_freezes
 from litehive.events import read_events
 from litehive.tasks import (
     VALID_TASK_ENGINES,
     VALID_TASK_PRIORITIES,
+    VALID_TASK_TYPES,
     list_tasks_state_first,
     load_state,
     load_task_thread,
     require_task,
     runner_status_readonly,
+    switch_task_engine,
     task_dir,
     update_task,
 )
@@ -86,6 +91,82 @@ def build_workspace_snapshot(root: Path) -> dict[str, Any]:
         "active_task": None if active_task is None else _serialize_task(root, active_task, state.active_task_id),
         "tasks": tasks_payload,
         "run_all_logs": list_recent_run_all_logs(root),
+    }
+
+
+def read_engine_dashboard(root: Path) -> dict[str, Any]:
+    root = root.resolve()
+    config = load_config(root)
+    monitoring = load_engine_monitoring(root)
+    active_freezes = active_engine_freezes(config)
+    default_fallback_order = _engine_attempt_order(config.default_engine, config.engine_preference)
+    return {
+        "config": {
+            "default_engine": config.default_engine,
+            "recovery_engine": config.recovery_engine,
+            "claude_enabled": config.claude_enabled,
+            "engine_preference": list(config.engine_preference),
+            "engine_freeze": dict(config.engine_freeze),
+            "active_engine_freezes": {
+                engine_name: freeze_dt.replace(microsecond=0).isoformat()
+                for engine_name, freeze_dt in sorted(active_freezes.items())
+            },
+            "models": {
+                "codex": config.codex_model,
+                "opencode": config.opencode_model,
+                "gemini": config.gemini_model,
+                "copilot": config.copilot_model,
+                "claude": config.claude_model if config.claude_enabled else None,
+                "goz": config.goz_model,
+            },
+            "engine_usage_caps": dict(config.engine_usage_caps),
+            "engine_budget_caps": dict(config.engine_budget_caps),
+            "engine_costs": dict(config.engine_costs),
+        },
+        "routing": {
+            "precedence": [
+                {
+                    "order": 1,
+                    "rule": "task_override",
+                    "description": "Task engine override wins when task.yaml sets engine.",
+                },
+                {
+                    "order": 2,
+                    "rule": "workspace_default",
+                    "description": "Otherwise Litehive uses the workspace default engine.",
+                },
+                {
+                    "order": 3,
+                    "rule": "fallback_preference",
+                    "description": "Retries and execution-limit fallbacks follow engine_preference after the selected primary engine.",
+                },
+                {
+                    "order": 4,
+                    "rule": "freeze_filter",
+                    "description": "Engines with an active freeze are skipped from the runnable attempt order.",
+                },
+            ],
+            "default_fallback_order": default_fallback_order,
+            "task_types": [
+                {
+                    "task_type": task_type,
+                    "configured_engine": None,
+                    "effective_engine": config.default_engine,
+                    "fallback_order": default_fallback_order,
+                    "source": "workspace default",
+                }
+                for task_type in sorted(VALID_TASK_TYPES)
+            ],
+        },
+        "monitoring": {
+            "engines": {
+                engine_name: _serialize_engine_record(record.model_dump(mode="python"))
+                for engine_name, record in sorted(monitoring.engines.items())
+            }
+        },
+        "editable_fields": {
+            "engine_options": sorted(VALID_TASK_ENGINES),
+        },
     }
 
 
@@ -183,6 +264,8 @@ class LitehiveWebHandler(BaseHTTPRequestHandler):
             return self._send_html(_render_index())
         if parsed.path == "/api/snapshot":
             return self._send_json(build_workspace_snapshot(self.workspace_root))
+        if parsed.path == "/api/engines":
+            return self._send_json(read_engine_dashboard(self.workspace_root))
         if parsed.path == "/api/session":
             params = parse_qs(parsed.query)
             task_id = params.get("task_id", [None])[0]
@@ -205,25 +288,56 @@ class LitehiveWebHandler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:  # noqa: N802
         parsed = urlparse(self.path)
-        if parsed.path != "/api/task":
-            return self._send_error_json(HTTPStatus.NOT_FOUND, "Not found")
         try:
             payload = self._read_json_body()
         except ValueError as exc:
             return self._send_error_json(HTTPStatus.BAD_REQUEST, str(exc))
-        task_id = payload.get("task_id")
-        updates = payload.get("updates")
-        if not isinstance(task_id, str) or not task_id:
-            return self._send_error_json(HTTPStatus.BAD_REQUEST, "task_id is required")
-        if not isinstance(updates, dict):
-            return self._send_error_json(HTTPStatus.BAD_REQUEST, "updates must be an object")
-        try:
-            response = update_task_detail(self.workspace_root, task_id, updates)
-        except FileNotFoundError as exc:
-            return self._send_error_json(HTTPStatus.NOT_FOUND, str(exc))
-        except ValueError as exc:
-            return self._send_error_json(HTTPStatus.BAD_REQUEST, str(exc))
-        return self._send_json(response)
+        if parsed.path == "/api/task":
+            task_id = payload.get("task_id")
+            updates = payload.get("updates")
+            if not isinstance(task_id, str) or not task_id:
+                return self._send_error_json(HTTPStatus.BAD_REQUEST, "task_id is required")
+            if not isinstance(updates, dict):
+                return self._send_error_json(HTTPStatus.BAD_REQUEST, "updates must be an object")
+            try:
+                response = update_task_detail(self.workspace_root, task_id, updates)
+            except FileNotFoundError as exc:
+                return self._send_error_json(HTTPStatus.NOT_FOUND, str(exc))
+            except ValueError as exc:
+                return self._send_error_json(HTTPStatus.BAD_REQUEST, str(exc))
+            return self._send_json(response)
+        if parsed.path == "/api/engines/default":
+            engine_name = payload.get("engine")
+            if not isinstance(engine_name, str) or not engine_name:
+                return self._send_error_json(HTTPStatus.BAD_REQUEST, "engine is required")
+            try:
+                response = update_default_engine(self.workspace_root, engine_name)
+            except ValueError as exc:
+                return self._send_error_json(HTTPStatus.BAD_REQUEST, str(exc))
+            return self._send_json(response)
+        if parsed.path == "/api/task/engine":
+            task_id = payload.get("task_id")
+            engine_name = payload.get("engine")
+            reason = payload.get("reason")
+            if not isinstance(task_id, str) or not task_id:
+                return self._send_error_json(HTTPStatus.BAD_REQUEST, "task_id is required")
+            if not isinstance(engine_name, str) or not engine_name:
+                return self._send_error_json(HTTPStatus.BAD_REQUEST, "engine is required")
+            if not isinstance(reason, str) or not reason.strip():
+                return self._send_error_json(HTTPStatus.BAD_REQUEST, "reason is required")
+            try:
+                response = switch_task_engine_via_web(
+                    self.workspace_root,
+                    task_id=task_id,
+                    engine=engine_name,
+                    reason=reason,
+                )
+            except FileNotFoundError as exc:
+                return self._send_error_json(HTTPStatus.NOT_FOUND, str(exc))
+            except ValueError as exc:
+                return self._send_error_json(HTTPStatus.BAD_REQUEST, str(exc))
+            return self._send_json(response)
+        return self._send_error_json(HTTPStatus.NOT_FOUND, "Not found")
 
     def log_message(self, format: str, *args: Any) -> None:  # noqa: A003
         return
@@ -466,6 +580,51 @@ def update_task_detail(root: Path, task_id: str, updates: dict[str, Any]) -> dic
     return {"task": _serialize_task(root, updated, load_state(root).active_task_id)}
 
 
+def update_default_engine(root: Path, engine_name: str) -> dict[str, Any]:
+    root = root.resolve()
+    if engine_name not in VALID_TASK_ENGINES:
+        raise ValueError(f"Unsupported engine '{engine_name}'")
+    path = config_path(root)
+    raw_data = _load_yaml_file(path)
+    config = load_config(root)
+    previous_engine = config.default_engine
+    raw_data["default_engine"] = engine_name
+    path.write_text(yaml.safe_dump(raw_data, sort_keys=False), encoding="utf-8")
+    return {
+        "default_engine": engine_name,
+        "previous_default_engine": previous_engine,
+        "engines": read_engine_dashboard(root),
+    }
+
+
+def switch_task_engine_via_web(
+    root: Path,
+    *,
+    task_id: str,
+    engine: str,
+    reason: str,
+) -> dict[str, Any]:
+    root = root.resolve()
+    try:
+        summary = switch_task_engine(root, task_id, engine=engine, reason=reason)
+    except ValueError as exc:
+        if str(exc).startswith("Task ") and str(exc).endswith("not found"):
+            raise FileNotFoundError(str(exc)) from exc
+        raise
+    task = require_task(root, task_id)
+    return {
+        "task": _serialize_task(root, task, load_state(root).active_task_id),
+        "switch": {
+            "previous_engine": summary.previous_engine,
+            "new_engine": summary.new_engine,
+            "was_active": summary.was_active,
+            "runner_pid": summary.runner_pid,
+            "signal_sent": summary.signal_sent,
+            "prior_work_paths": list(summary.prior_work_paths),
+        },
+    }
+
+
 def _serialize_task(root: Path, task: TaskRecord, active_task_id: str | None) -> dict[str, Any]:
     base = task_dir(root, task)
     session_entries: list[dict[str, Any]] = []
@@ -706,6 +865,33 @@ def _load_yaml_file(path: Path) -> dict[str, Any]:
     return loaded if isinstance(loaded, dict) else {}
 
 
+def _engine_attempt_order(default_engine: str, preference: list[str]) -> list[str]:
+    seen: set[str] = set()
+    order: list[str] = []
+    for engine_name in [default_engine, *preference]:
+        if engine_name in seen:
+            continue
+        seen.add(engine_name)
+        order.append(engine_name)
+    return order
+
+
+def _serialize_engine_record(record: dict[str, Any]) -> dict[str, Any]:
+    usage = record.get("usage")
+    metadata = record.get("metadata") or {}
+    token_cost_keys = [
+        key
+        for key in sorted(metadata)
+        if any(marker in key.lower() for marker in ("token", "cost", "credit", "budget"))
+    ]
+    return {
+        **record,
+        "usage": usage if isinstance(usage, dict) else None,
+        "metadata": metadata if isinstance(metadata, dict) else {},
+        "token_cost_fields": {key: metadata[key] for key in token_cost_keys},
+    }
+
+
 def _relative_to_root(root: Path, path: Path) -> str:
     try:
         return str(path.resolve().relative_to(root.resolve()))
@@ -777,6 +963,12 @@ def _iter_stream_paths(root: Path) -> list[Path]:
     state_path = root / ".litehive" / "state.yaml"
     if state_path.exists():
         candidates.append(state_path)
+    config_file = root / ".litehive" / "config.yaml"
+    if config_file.exists():
+        candidates.append(config_file)
+    engine_monitoring = root / ".litehive" / "engine-monitoring.yaml"
+    if engine_monitoring.exists():
+        candidates.append(engine_monitoring)
     task_root = root / ".litehive" / "tasks"
     if task_root.exists():
         for task_path in sorted(path for path in task_root.iterdir() if path.is_dir()):
