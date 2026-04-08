@@ -978,4 +978,38 @@ def build_parser():
         help="Repository root containing .litehive/",
     )
 
+    # ── archive ───────────────────────────────────────────────────────
+    archive_cmd = subparsers.add_parser(
+        "archive", help="Move done tasks to the archive directory"
+    )
+    archive_cmd.add_argument(
+        "task_id",
+        nargs="?",
+        default=None,
+        help="Optional task ID to archive (archives all done tasks if omitted)",
+    )
+    archive_cmd.add_argument(
+        "--workspace",
+        type=Path,
+        default=Path.cwd(),
+        help="Repository root containing .litehive/",
+    )
+
+    # ── cleanup ──────────────────────────────────────────────────────
+    cleanup_cmd = subparsers.add_parser(
+        "cleanup", help="Delete archived tasks older than a given duration"
+    )
+    cleanup_cmd.add_argument(
+        "--older-than",
+        required=True,
+        dest="older_than",
+        help="Duration threshold (e.g. 30d, 24h, 60m)",
+    )
+    cleanup_cmd.add_argument(
+        "--workspace",
+        type=Path,
+        default=Path.cwd(),
+        help="Repository root containing .litehive/",
+    )
+
     return parser

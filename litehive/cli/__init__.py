@@ -17,6 +17,8 @@ from litehive.cli.daemon import (
 from litehive.cli.engine import _cmd_engine
 from litehive.cli.queue import (
     _cmd_abandon_task,
+    _cmd_archive,
+    _cmd_cleanup,
     _cmd_close_task,
     _cmd_dirty_worktree_gate,
     _cmd_move,
@@ -103,6 +105,10 @@ def main():
         return _cmd_switch_task(args)
     if args.command == "close":
         return _cmd_close_task(args)
+    if args.command == "archive":
+        return _cmd_archive(args)
+    if args.command == "cleanup":
+        return _cmd_cleanup(args)
     if args.command == "list":
         return _cmd_list(args)
     if args.command == "show":

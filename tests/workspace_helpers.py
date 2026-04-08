@@ -24,6 +24,8 @@ import litehive.tasks as tasks_module
 
 from litehive.cli import (
     _cmd_add,
+    _cmd_archive,
+    _cmd_cleanup,
     _cmd_issue,
     _cmd_intake,
     _cmd_abandon_task,
@@ -145,7 +147,12 @@ from litehive.subagents import (
 from litehive.tasks import (
     WorkspaceConflictError,
     abandon_task,
+    archive_done_tasks,
+    archive_root,
+    archive_task,
+    cleanup_archived_tasks,
     close_task,
+    list_archived_tasks,
     create_follow_up_tasks,
     create_task,
     dequeue_next_task_selection,

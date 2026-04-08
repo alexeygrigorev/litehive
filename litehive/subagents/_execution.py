@@ -185,6 +185,10 @@ def _has_callable_override(engine: object, name: str, default: object) -> bool:
 
 
 def _callable_resolution_rank(engine: object, name: str) -> int | None:
+    target = getattr(engine, name, None)
+    if not callable(target):
+        return None
+    target_impl = _unwrap_bound_callable(target)
     instance_dict = getattr(engine, "__dict__", None)
     if isinstance(instance_dict, dict) and name in instance_dict:
         value = instance_dict[name]

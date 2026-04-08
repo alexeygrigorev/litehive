@@ -1,5 +1,7 @@
 from tests.workspace_helpers import *  # noqa: F401,F403
 
+from litehive.subagents._execution import _prefers_non_live_run, _supports_live_execution
+
 
 def test_create_task_persists_folder_and_queue(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
@@ -1495,6 +1497,15 @@ def test_subagent_manager_prefers_instance_run_override_over_inherited_run_live(
 
     assert calls == ["run"]
     assert result.failure == EngineFailure(kind="execution_limit", reason="usage limit reached")
+
+
+def test_supports_live_execution_ignores_rebound_inherited_run(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    engine = get_engine("codex")
+    monkeypatch.setattr(engine, "run", engine.run)
+    assert _prefers_non_live_run(engine) is False
+    assert _supports_live_execution(engine) is True
 
 
 def test_subagent_manager_prefers_class_run_override_over_inherited_run_live(
