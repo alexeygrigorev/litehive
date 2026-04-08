@@ -742,6 +742,7 @@ def test_configure_persists_runner_hooks(tmp_path: Path) -> None:
             "after_swe_implementation=blocking:echo post",
             "before_pm_acceptance=blocking:echo review",
             "after_pm_acceptance=nonblocking:echo accepted",
+            "after_merge=blocking:echo verify",
         ],
     )
 
@@ -752,6 +753,7 @@ def test_configure_persists_runner_hooks(tmp_path: Path) -> None:
     assert config.runner_hooks["after_swe_implementation"][0].command == "echo post"
     assert config.runner_hooks["before_pm_acceptance"][0].command == "echo review"
     assert config.runner_hooks["after_pm_acceptance"][0].blocking is False
+    assert config.runner_hooks["after_merge"][0].command == "echo verify"
 
 
 def test_configure_rejects_invalid_runner_hook_point(

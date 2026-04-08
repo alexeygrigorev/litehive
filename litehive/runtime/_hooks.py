@@ -24,6 +24,7 @@ _POST_STAGE_HOOK_POINTS = {
     "implementing": "after_swe_implementation",
 }
 _POST_ACCEPT_VERDICTS = {"pass", "accept"}
+_POST_MERGE_HOOK_POINT = "after_merge"
 
 
 def _run_runner_hooks_for_stage(
@@ -124,6 +125,9 @@ def _runner_hook_point(
     if phase == "after_accept" and step == "accepting" and report is not None:
         if report.verdict in _POST_ACCEPT_VERDICTS:
             return "after_pm_acceptance"
+    if phase == "after_merge" and step == "commit_to_git" and report is not None:
+        if report.verdict == "pass":
+            return _POST_MERGE_HOOK_POINT
     return None
 
 

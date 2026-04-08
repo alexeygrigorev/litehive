@@ -15,6 +15,7 @@ from litehive.tasks import (
 
 from litehive.config import LitehiveConfig
 
+from ._hooks import _run_runner_hooks_for_stage
 from ._models import resolve_model
 
 
@@ -146,19 +147,6 @@ def _commit_to_git_report(
             task.git.worktree_path = None
             task.runtime.git.worktree_path = None
 
-    task.status = "done"
-    task.pipeline_status = "done"
-    task.git.checkpoint_attempts += 1
-    task.git.checkpoint_base_sha = head_before
-    set_task_commit_sha(task, head_after)
-    save_task(root, task)
-    append_journal(root, task, f"CommitToGit complete. Commit: {head_after}")
-
-    # Push to remote
-    push = subprocess.run(["git", "push"], cwd=root, capture_output=True, text=True)
-    if push.returncode != 0:
-        append_journal(root, task, f"Push failed: {push.stderr.strip()}")
-
     # Populate files_changed from git diff between pre- and post-merge heads.
     files_changed: list[str] = []
     if head_before and head_after and head_before != head_after:
@@ -175,10 +163,55 @@ def _commit_to_git_report(
         except (subprocess.TimeoutExpired, OSError):
             pass
 
-    return StageReport(
+    report = StageReport(
         task_id=task.id,
         step="commit_to_git",
         verdict="pass",
         summary=f"CommitToGit complete. Commit: {head_after[:8]}",
         files_changed=files_changed,
     )
+
+    if config is not None:
+        post_merge_hook_report = _run_runner_hooks_for_stage(
+            root,
+            root,
+            task,
+            step="commit_to_git",
+            config=config,
+            phase="after_merge",
+            report=report,
+        )
+        if post_merge_hook_report is not None:
+            task.status = "queued"
+            task.pipeline_status = "implementing"
+            task.git.checkpoint_attempts += 1
+            task.git.checkpoint_base_sha = head_before
+            set_task_commit_sha(task, head_after)
+            save_task(root, task)
+            append_journal(
+                root,
+                task,
+                "CommitToGit preserved merged main state after failing `after_merge` hook. "
+                "Requeued task at `implementing` for follow-up fixes.",
+            )
+            post_merge_hook_report.retry_decision = "retry"
+            post_merge_hook_report.summary = (
+                "Post-merge verification failed after merging to main; "
+                "task requeued at implementing without reverting the merge"
+            )
+            return post_merge_hook_report
+
+    task.status = "done"
+    task.pipeline_status = "done"
+    task.git.checkpoint_attempts += 1
+    task.git.checkpoint_base_sha = head_before
+    set_task_commit_sha(task, head_after)
+    save_task(root, task)
+    append_journal(root, task, f"CommitToGit complete. Commit: {head_after}")
+
+    # Push to remote
+    push = subprocess.run(["git", "push"], cwd=root, capture_output=True, text=True)
+    if push.returncode != 0:
+        append_journal(root, task, f"Push failed: {push.stderr.strip()}")
+
+    return report

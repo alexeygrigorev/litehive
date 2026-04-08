@@ -16,6 +16,7 @@ VALID_RUNNER_HOOK_POINTS = frozenset(
         "after_swe_implementation",
         "before_pm_acceptance",
         "after_pm_acceptance",
+        "after_merge",
     }
 )
 MODEL_FAMILY_RETRY_SELECTOR_PREFIX = "model_family:"
