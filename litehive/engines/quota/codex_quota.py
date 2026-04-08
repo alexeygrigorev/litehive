@@ -68,18 +68,17 @@ def _parse_quota_response(data: dict) -> CodexQuotaStatus:
     rate_limit = data.get("rate_limit", {})
     limit_reached = bool(rate_limit.get("limit_reached", False))
 
-    primary = CodexQuotaWindow()
-    secondary = CodexQuotaWindow()
+    primary_data = rate_limit.get("primary_window", {})
+    secondary_data = rate_limit.get("secondary_window", {})
 
-    for window_data in rate_limit.get("windows", []):
-        window_type = window_data.get("type", "")
-        used_percent = float(window_data.get("used_percent", 0.0))
-        reset_at = window_data.get("reset_at")
-
-        if "primary" in window_type or "5h" in window_type:
-            primary = CodexQuotaWindow(used_percent=used_percent, reset_at=reset_at)
-        elif "secondary" in window_type or "week" in window_type:
-            secondary = CodexQuotaWindow(used_percent=used_percent, reset_at=reset_at)
+    primary = CodexQuotaWindow(
+        used_percent=float(primary_data.get("used_percent", 0)),
+        reset_at=str(primary_data["reset_at"]) if "reset_at" in primary_data else None,
+    )
+    secondary = CodexQuotaWindow(
+        used_percent=float(secondary_data.get("used_percent", 0)),
+        reset_at=str(secondary_data["reset_at"]) if "reset_at" in secondary_data else None,
+    )
 
     return CodexQuotaStatus(
         limit_reached=limit_reached,

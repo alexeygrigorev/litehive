@@ -61,18 +61,14 @@ def _make_api_response(
     return {
         "rate_limit": {
             "limit_reached": limit_reached,
-            "windows": [
-                {
-                    "type": "primary_5h",
-                    "used_percent": primary_pct,
-                    "reset_at": primary_reset,
-                },
-                {
-                    "type": "secondary_weekly",
-                    "used_percent": secondary_pct,
-                    "reset_at": secondary_reset,
-                },
-            ],
+            "primary_window": {
+                "used_percent": primary_pct,
+                "reset_at": primary_reset,
+            },
+            "secondary_window": {
+                "used_percent": secondary_pct,
+                "reset_at": secondary_reset,
+            },
         }
     }
 
