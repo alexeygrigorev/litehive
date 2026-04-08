@@ -1,0 +1,87 @@
+"""Process profile rendering helpers."""
+
+from typing import Any
+
+
+def _shared_stage_text(stages: list[str]) -> str:
+    return " -> ".join(stages) + "."
+
+
+def _render_process_overlay(profile: dict[str, Any]) -> list[str]:
+    return [
+        "## Process overlay",
+        f"- Source of truth: {profile['source_of_truth']}",
+        f"- Task source of truth: {profile['task_source_of_truth']}",
+        f"- Orchestrator model: {profile['orchestrator_model']}",
+        f"- Routing model: {profile['routing_model']}",
+        f"- Shared stages: {_shared_stage_text(profile['shared_stages'])}",
+        f"- Role model: {profile['role_model']}",
+        f"- TDD expectations: {profile['tdd_expectations']}",
+        f"- Verification discipline: {profile['verification_discipline']}",
+        f"- Acceptance flow: {profile['acceptance_flow']}",
+        f"- Commit and recovery: {profile['commit_recovery']}",
+    ]
+
+
+def _render_project_overlay(profile: dict[str, Any]) -> list[str]:
+    return [
+        "## Project overlay",
+        f"- {profile['summary']}",
+        *profile["workspace_overlay"],
+    ]
+
+
+def _render_scaffold_sections(profile: dict[str, Any]) -> list[str]:
+    return [
+        "## Init scaffold",
+        *profile["init_scaffold"],
+        "",
+        "## Prompt scaffold",
+        *profile["prompt_scaffold"],
+        "",
+    ]
+
+
+def _render_stage_prompt_scaffolding(profile: dict[str, Any]) -> list[str]:
+    lines = ["## Stage prompt scaffolding"]
+    for stage in profile["shared_stages"]:
+        stage_instructions = profile.get("stage_instructions", {}).get(stage, [])
+        stage_overlay = profile.get("stage_overlay", {}).get(stage, [])
+        if not stage_instructions and not stage_overlay:
+            continue
+        lines.extend(["", f"### {stage}"])
+        lines.extend(stage_instructions)
+        lines.extend(stage_overlay)
+    lines.append("")
+    return lines
+
+
+def render_context_template(profile_name: str) -> str:
+    from litehive.config.profiles import resolve_process_profile
+
+    profile = resolve_process_profile(profile_name)
+    lines = [
+        "# Litehive Workspace Context",
+        "",
+        f"Process profile: {profile['label']}",
+        "",
+        "Describe this repository and how subagents should work in it.",
+        "",
+        "## Project",
+        "- Purpose:",
+        "- Main package/module locations:",
+        "- Commands to know:",
+        "",
+    ]
+    lines.extend(_render_process_overlay(profile))
+    lines.append("")
+    lines.extend(_render_project_overlay(profile))
+    lines.append("")
+    lines.extend(_render_scaffold_sections(profile))
+    lines.extend(_render_stage_prompt_scaffolding(profile))
+    if profile.get("specifics_heading"):
+        lines.append(profile["specifics_heading"])
+        lines.extend(profile.get("specifics", []))
+        lines.append("")
+    lines.extend(["## Development rules", *profile["development_rules"], "", "## Tool usage", *profile["tool_usage"], ""])
+    return "\n".join(lines)

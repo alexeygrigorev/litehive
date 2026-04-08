@@ -5,6 +5,9 @@ Created task worktree at `.litehive/worktrees/T-0233-move-process-profiles-from-
 ## 2026-04-08T23:10:54+00:00
 Execution started with engine `codex`.
 
+## 2026-04-08T23:12:11+00:00
+Task metadata updated via CLI.
+
 ## 2026-04-08T23:18:58+00:00
 Runner hook `before_pm_acceptance` failed: `uv run ruff check --select E402,F401 litehive tests`.
 - step: `accepting`
@@ -23,3 +26,6 @@ Execution finished with status `queued`.
 
 ## 2026-04-08T23:20:46+00:00
 Execution started with engine `codex`.
+
+## 2026-04-08T23:20:47+00:00
+Merge conflict on 2 file(s). Launching merge agent (attempt 1).

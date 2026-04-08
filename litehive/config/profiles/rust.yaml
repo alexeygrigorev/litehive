@@ -1,0 +1,26 @@
+label: Rust
+summary: Rust crate or workspace workflow with compile-first discipline and tight tests.
+role_model: "`planner` scopes the task, `reviewer` performs final PM-style acceptance, `swe` edits crates/modules, and `qa` verifies compile and test results."
+tdd_expectations: prefer regression tests or unit tests close to the affected module before broader runs.
+verification_discipline: treat `cargo check`, focused tests, and compiler warnings as acceptance evidence.
+acceptance_flow: compile, run focused tests, and surface warnings or clippy debt explicitly.
+commit_recovery: keep checkpoints deterministic and avoid opaque generated churn.
+tool_usage:
+  - "- Use the repository's documented `cargo` commands for targeted verification."
+  - "- Update litehive task artifacts instead of inventing external state stores."
+  - "- If you add a new command or workflow, document it here for future runs."
+specifics_heading: "## Rust specifics"
+specifics:
+  - "- Prefer `cargo test` and targeted package/module verification."
+  - "- Keep ownership, error handling, and public API changes explicit."
+  - "- Note formatting, lint, and feature-flag expectations when relevant."
+workspace_overlay:
+  - "- Favor small, compile-safe changes with clear module ownership."
+  - "- Treat compiler errors, warnings, and feature flags as part of verification evidence."
+init_scaffold:
+  - "- Seed Rust workspaces with crate boundaries, toolchain expectations, and `cargo` verification commands."
+stage_overlay:
+  implementing:
+    - "- Add or adjust focused Rust tests close to the changed crate or module."
+  testing:
+    - "- Prefer targeted `cargo test`, `cargo check`, or package-scoped verification before workspace-wide runs."

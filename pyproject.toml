@@ -27,6 +27,7 @@ litehive = "litehive.main:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["litehive"]
+include = ["litehive/config/profiles/*.yaml"]
 
 [tool.hatch.version]
 path = "litehive/__version__.py"

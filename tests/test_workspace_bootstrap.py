@@ -573,6 +573,23 @@ def test_available_process_profiles_include_generic_and_project_templates() -> N
     ]
 
 
+def test_process_profiles_loader_is_small_and_file_backed() -> None:
+    import litehive.config.profiles as profiles_module
+
+    profile_dir = Path(profiles_module.__file__).resolve().parent
+
+    assert len(Path(profiles_module.__file__).read_text(encoding="utf-8").splitlines()) < 50
+    assert sorted(path.stem for path in profile_dir.glob("*.yaml")) == [
+        "_shared",
+        "codehive",
+        "cpp",
+        "django",
+        "generic",
+        "python",
+        "rust",
+    ]
+
+
 def test_resolve_process_profile_merges_shared_process_with_overlay() -> None:
     profile = resolve_process_profile("codehive")
 
