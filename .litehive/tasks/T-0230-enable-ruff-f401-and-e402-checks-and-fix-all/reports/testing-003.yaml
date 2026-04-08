@@ -1,0 +1,51 @@
+task_id: T-0230
+step: testing
+verdict: pass
+summary: 'Independently verified T-0230 in the task worktree. Confirmed pyproject.toml
+  enables Ruff rules via [tool.ruff.lint].extend-select = ["E402", "F401"]. Confirmed
+  .litehive/config.yaml wires blocking before_pm_acceptance hooks for (1) uv run ruff
+  check --select E402,F401 litehive tests and (2) a git grep guard that fails on noqa
+  F401/F403 suppressions. Ran uv run ruff check --select E402,F401 litehive tests:
+  passed with zero errors. Ran git grep -nE ''noqa:.*F401|noqa:.*F403|ruff:\s*noqa:\s*F401|ruff:\s*noqa:\s*F403''
+  -- litehive tests via the configured guard logic: clean. Verified wildcard imports
+  are gone with rg -n ''from tests\.workspace_helpers import \*|import \*'' tests:
+  no matches. Ran focused pytest slices covering the touched workflow and helper usage:
+  uv run pytest -q tests/test_workspace_bootstrap.py -x (21 passed), uv run pytest
+  -q tests/test_task_commands_and_daemon.py -x (103 passed), uv run pytest -q tests/test_tasks_and_subagents.py
+  -x (58 passed, 3 skipped). This provides independent evidence that the Ruff config,
+  import cleanup, and acceptance hooks are in place and working; no acceptance-criteria
+  gaps found.'
+feedback: 'Independently verified T-0230 in the task worktree. Confirmed pyproject.toml
+  enables Ruff rules via [tool.ruff.lint].extend-select = ["E402", "F401"]. Confirmed
+  .litehive/config.yaml wires blocking before_pm_acceptance hooks for (1) uv run ruff
+  check --select E402,F401 litehive tests and (2) a git grep guard that fails on noqa
+  F401/F403 suppressions. Ran uv run ruff check --select E402,F401 litehive tests:
+  passed with zero errors. Ran git grep -nE ''noqa:.*F401|noqa:.*F403|ruff:\s*noqa:\s*F401|ruff:\s*noqa:\s*F403''
+  -- litehive tests via the configured guard logic: clean. Verified wildcard imports
+  are gone with rg -n ''from tests\.workspace_helpers import \*|import \*'' tests:
+  no matches. Ran focused pytest slices covering the touched workflow and helper usage:
+  uv run pytest -q tests/test_workspace_bootstrap.py -x (21 passed), uv run pytest
+  -q tests/test_task_commands_and_daemon.py -x (103 passed), uv run pytest -q tests/test_tasks_and_subagents.py
+  -x (58 passed, 3 skipped). This provides independent evidence that the Ruff config,
+  import cleanup, and acceptance hooks are in place and working; no acceptance-criteria
+  gaps found.'
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 80
+hook_results: []
+created_at: '2026-04-08T22:24:48+00:00'

@@ -1,0 +1,84 @@
+task_id: T-0230
+step: implementing
+verdict: pass
+summary: 'Enabled Ruff E402/F401 in pyproject.toml, removed all existing violations
+  across litehive/ and tests/, replaced every tests.workspace_helpers wildcard import
+  with explicit imports, and removed all noqa F401/F403 suppressions. Added repo-level
+  before_pm_acceptance runner hooks in .litehive/config.yaml: (1) uv run ruff check
+  --select E402,F401 litehive tests and (2) a blocking git grep guard that fails on
+  noqa F401/F403 suppressions. Verified with: uv run ruff check --select E402,F401
+  litehive tests (passes); git grep -nE ''noqa:.*F401|noqa:.*F403|ruff:\s*noqa:\s*F401|ruff:\s*noqa:\s*F403''
+  -- litehive tests (clean); uv run pytest -q tests/test_workspace_bootstrap.py -x
+  (21 passed); uv run pytest -q tests/test_task_commands_and_daemon.py -x (103 passed);
+  uv run pytest -q tests/test_observability_and_status.py -x (72 passed); uv run pytest
+  -q tests/test_runtime_pool.py -x (64 passed); uv run pytest -q tests/test_tasks_and_subagents.py
+  -x (58 passed, 3 skipped). Evidence for acceptance criteria: pyproject Ruff lint
+  config now extends E402/F401, lint target passes zero errors on litehive/ and tests/,
+  hook coverage exists in tracked workspace config before acceptance, and the helper/test
+  import cleanup removed wildcard imports and F401/F403 suppressions.'
+feedback: 'Enabled Ruff E402/F401 in pyproject.toml, removed all existing violations
+  across litehive/ and tests/, replaced every tests.workspace_helpers wildcard import
+  with explicit imports, and removed all noqa F401/F403 suppressions. Added repo-level
+  before_pm_acceptance runner hooks in .litehive/config.yaml: (1) uv run ruff check
+  --select E402,F401 litehive tests and (2) a blocking git grep guard that fails on
+  noqa F401/F403 suppressions. Verified with: uv run ruff check --select E402,F401
+  litehive tests (passes); git grep -nE ''noqa:.*F401|noqa:.*F403|ruff:\s*noqa:\s*F401|ruff:\s*noqa:\s*F403''
+  -- litehive tests (clean); uv run pytest -q tests/test_workspace_bootstrap.py -x
+  (21 passed); uv run pytest -q tests/test_task_commands_and_daemon.py -x (103 passed);
+  uv run pytest -q tests/test_observability_and_status.py -x (72 passed); uv run pytest
+  -q tests/test_runtime_pool.py -x (64 passed); uv run pytest -q tests/test_tasks_and_subagents.py
+  -x (58 passed, 3 skipped). Evidence for acceptance criteria: pyproject Ruff lint
+  config now extends E402/F401, lint target passes zero errors on litehive/ and tests/,
+  hook coverage exists in tracked workspace config before acceptance, and the helper/test
+  import cleanup removed wildcard imports and F401/F403 suppressions.'
+files_changed:
+- litehive/config/__init__.py
+- litehive/engines/__init__.py
+- litehive/engines/adapters/claude.py
+- litehive/engines/adapters/goz.py
+- litehive/engines/adapters/opencode.py
+- litehive/engines/base.py
+- litehive/engines/quota/__init__.py
+- litehive/engines/quota/copilot_quota.py
+- litehive/runtime/__init__.py
+- litehive/subagents/_manager.py
+- litehive/tasks/__init__.py
+- litehive/web/__init__.py
+- litehive/web/actions.py
+- litehive/web/snapshot.py
+- pyproject.toml
+- tests/test_archive.py
+- tests/test_config_and_run_cli.py
+- tests/test_crash_resume.py
+- tests/test_engine_freeze.py
+- tests/test_engine_variants_and_timeline.py
+- tests/test_list_and_show.py
+- tests/test_observability_and_status.py
+- tests/test_retry_commit_and_recovery.py
+- tests/test_rmtree_cleanup_logging.py
+- tests/test_runner_workflow.py
+- tests/test_runtime_pool.py
+- tests/test_task_commands_and_daemon.py
+- tests/test_tasks_and_subagents.py
+- tests/test_web_snapshot_lockfree.py
+- tests/test_workspace_bootstrap.py
+- tests/workspace_helpers.py
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 719
+hook_results: []
+created_at: '2026-04-08T22:23:28+00:00'

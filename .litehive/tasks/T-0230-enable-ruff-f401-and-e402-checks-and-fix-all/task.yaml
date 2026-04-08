@@ -7,13 +7,14 @@ engine: null
 model: null
 mode: implementation
 pipeline_mode: full
-status: queued
-pipeline_status: backlog
+status: in_progress
+flag_reason: null
+pipeline_status: commit_to_git
 priority: medium
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-08T06:46:37+00:00'
-updated_at: '2026-04-08T07:18:27+00:00'
+updated_at: '2026-04-08T23:09:44+00:00'
 goal: Add F401 (unused imports) and E402 (module-level import not at top) to ruff
   config, fix all existing violations, and ensure CI/hooks catch future ones.
 acceptance_criteria:
@@ -21,12 +22,84 @@ acceptance_criteria:
 - ruff check --select E402,F401 passes with zero errors on litehive/ and tests/
 - All existing tests still pass
 - A runner_hook or pre-commit check runs ruff so violations are caught before merge
-- All wildcard imports (import *) in tests replaced with explicit imports — no noqa F401/F403 suppressions
-- Add a runner_hook that runs git grep for noqa F401/F403 suppressions and fails if any are found
+- "All wildcard imports (import *) in tests replaced with explicit imports \u2014\
+  \ no noqa F401/F403 suppressions"
+- Add a runner_hook that runs git grep for noqa F401/F403 suppressions and fails if
+  any are found
 constraints: []
 plan: []
 human_checkpoints: []
-subagents: []
+subagents:
+- id: SA-0001
+  role: planner
+  engine: codex
+  status: completed
+  path: subagents/SA-0001-planner
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0002
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0002-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0003
+  role: qa
+  engine: codex
+  status: completed
+  path: subagents/SA-0003-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0004
+  role: reviewer
+  engine: codex
+  status: completed
+  path: subagents/SA-0004-reviewer
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0005
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0005-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0006
+  role: qa
+  engine: codex
+  status: completed
+  path: subagents/SA-0006-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0007
+  role: reviewer
+  engine: codex
+  status: completed
+  path: subagents/SA-0007-reviewer
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0008
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0008-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0009
+  role: qa
+  engine: codex
+  status: completed
+  path: subagents/SA-0009-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0010
+  role: reviewer
+  engine: codex
+  status: completed
+  path: subagents/SA-0010-reviewer
+  sandboxed: false
+  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0230 enable-ruff-f401-and-e402-checks-and-fix-all'

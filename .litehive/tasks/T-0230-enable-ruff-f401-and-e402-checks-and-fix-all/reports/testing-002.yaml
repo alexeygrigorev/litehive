@@ -1,0 +1,61 @@
+task_id: T-0230
+step: testing
+verdict: pass
+summary: 'Independently verified T-0230 in the task worktree. Confirmed pyproject.toml
+  enables Ruff via [tool.ruff.lint].extend-select = ["E402", "F401"]. Confirmed .litehive/config.yaml
+  wires blocking before_pm_acceptance hooks for (1) uv run ruff check --select E402,F401
+  litehive tests and (2) a git grep guard that fails on noqa F401/F403 suppressions.
+  Ran uv run ruff check --select E402,F401 litehive tests: passed with zero errors.
+  Ran the suppression guard logic directly: clean, no matches. Verified wildcard imports
+  are gone with rg -n ''from tests\.workspace_helpers import \*|import \*'' tests:
+  no matches. Ran focused pytest coverage on the known regression-sensitive files
+  and hook workflow: tests/test_config_and_run_cli.py -> 58 passed in 9.17s; tests/test_engine_variants_and_timeline.py
+  -> 48 passed in 2.17s; tests/test_runner_workflow.py -> 109 passed in 9.83s; tests/test_tasks_and_subagents.py
+  -> 61 passed, 3 skipped in 6.13s; tests/test_task_commands_and_daemon.py -> 103
+  passed in 16.24s. This independently re-checks the prior explicit-import regressions
+  plus the added subagent engine-detection guard and hook execution path. Acceptance
+  criteria satisfied: Ruff config includes F401/E402, lint passes on litehive/ and
+  tests/, blocking hooks are configured to run Ruff and reject noqa F401/F403 suppressions,
+  wildcard imports in tests are removed, and the focused regression/workflow coverage
+  is green. Additional evidence from the latest implementing report records a suite-wide
+  gate of uv run pytest -q --maxfail=1 -> 824 passed, 3 skipped in 111.24s, which
+  remains consistent with the targeted independent checks above.'
+feedback: 'Independently verified T-0230 in the task worktree. Confirmed pyproject.toml
+  enables Ruff via [tool.ruff.lint].extend-select = ["E402", "F401"]. Confirmed .litehive/config.yaml
+  wires blocking before_pm_acceptance hooks for (1) uv run ruff check --select E402,F401
+  litehive tests and (2) a git grep guard that fails on noqa F401/F403 suppressions.
+  Ran uv run ruff check --select E402,F401 litehive tests: passed with zero errors.
+  Ran the suppression guard logic directly: clean, no matches. Verified wildcard imports
+  are gone with rg -n ''from tests\.workspace_helpers import \*|import \*'' tests:
+  no matches. Ran focused pytest coverage on the known regression-sensitive files
+  and hook workflow: tests/test_config_and_run_cli.py -> 58 passed in 9.17s; tests/test_engine_variants_and_timeline.py
+  -> 48 passed in 2.17s; tests/test_runner_workflow.py -> 109 passed in 9.83s; tests/test_tasks_and_subagents.py
+  -> 61 passed, 3 skipped in 6.13s; tests/test_task_commands_and_daemon.py -> 103
+  passed in 16.24s. This independently re-checks the prior explicit-import regressions
+  plus the added subagent engine-detection guard and hook execution path. Acceptance
+  criteria satisfied: Ruff config includes F401/E402, lint passes on litehive/ and
+  tests/, blocking hooks are configured to run Ruff and reject noqa F401/F403 suppressions,
+  wildcard imports in tests are removed, and the focused regression/workflow coverage
+  is green. Additional evidence from the latest implementing report records a suite-wide
+  gate of uv run pytest -q --maxfail=1 -> 824 passed, 3 skipped in 111.24s, which
+  remains consistent with the targeted independent checks above.'
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 105
+hook_results: []
+created_at: '2026-04-08T23:07:20+00:00'
