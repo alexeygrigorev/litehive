@@ -4,7 +4,6 @@ import inspect
 
 from litehive.engines.base import ExternalCLIAdapter
 
-
 _ORIGINAL_EXTERNAL_ADAPTER_RUN = ExternalCLIAdapter.run
 _ORIGINAL_EXTERNAL_ADAPTER_RUN_LIVE = ExternalCLIAdapter.run_live
 _SEEN_INHERITED_CALLABLES: dict[str, set[object]] = {

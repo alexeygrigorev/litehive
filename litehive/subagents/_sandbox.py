@@ -1,10 +1,9 @@
-"""Sandboxed adapter wrapper for subagent execution."""
+"""Sandboxed adapter wrapper for external CLI engines."""
 
 from pathlib import Path
 
 from litehive.engines.base import CLIExecutionResult, ExternalCLIAdapter
 from litehive.engines.sandbox import SandboxLauncher
-
 from litehive.subagents._engine_detection import (
     _ORIGINAL_EXTERNAL_ADAPTER_RUN,
     _ORIGINAL_EXTERNAL_ADAPTER_RUN_LIVE,
