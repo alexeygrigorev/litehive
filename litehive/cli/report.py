@@ -1,7 +1,17 @@
 import os
+from pathlib import Path
 
 from litehive.models import TaskThreadComment
 from litehive.tasks import append_thread_comment, load_state, get_task
+
+
+def _resolve_workspace_root(workspace: Path) -> Path:
+    """Resolve back to the main workspace root if running inside a worktree."""
+    parts = workspace.resolve().parts
+    for i, part in enumerate(parts):
+        if part == ".litehive" and i + 2 < len(parts) and parts[i + 1] == "worktrees":
+            return Path(*parts[:i])
+    return workspace
 
 
 def _cmd_report(args):
@@ -16,6 +26,13 @@ def _cmd_report(args):
         print("report failed: no active task and --task-id not provided")
         return 1
     task = get_task(root, task_id)
+    if task is None:
+        # Task not found locally — try the main repo (we might be in a worktree)
+        main_root = _resolve_workspace_root(root)
+        if main_root != root:
+            task = get_task(main_root, task_id)
+            if task is not None:
+                root = main_root
     if task is None:
         print(f"report failed: task {task_id} not found")
         return 1
