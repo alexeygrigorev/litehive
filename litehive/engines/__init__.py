@@ -1,5 +1,7 @@
 """External CLI engine adapters."""
 
+# ruff: noqa: F401
+
 from litehive.engines.adapters import (
     ClaudeCLIAdapter,
     CodexCLIAdapter,

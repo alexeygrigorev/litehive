@@ -2,7 +2,7 @@ id: T-0217
 slug: clean-up-unused-imports-across-the-codebase
 title: Clean up unused imports across the codebase
 depends_on: []
-task_type: null
+task_type: refactor
 engine: null
 model: null
 mode: implementation
@@ -10,16 +10,24 @@ pipeline_mode: full
 status: queued
 pipeline_status: backlog
 priority: medium
-pm_complexity: null
-planned_effort: null
+pm_complexity: moderate
+planned_effort: m
 created_at: '2026-04-07T21:01:44+00:00'
-updated_at: '2026-04-07T21:01:44+00:00'
-goal: Remove all unused imports from Python files in the litehive package and tests
+updated_at: '2026-04-08T11:34:55+00:00'
+goal: Remove unused imports from Python files under litehive/ and tests/ while preserving
+  current public module exports and test behavior.
 acceptance_criteria:
-- ruff check --select F401 passes with no warnings
-- All existing tests still pass
-constraints: []
-plan: []
+- ruff check --select F401 litehive tests passes with zero findings.
+- The existing test suite passes after the import cleanup changes.
+constraints:
+- Keep changes scoped to unused-import cleanup in litehive/ and tests/.
+plan:
+- Identify all current F401 violations under litehive/ and tests/, separating simple
+  removals from intentional package re-exports in __init__.py modules.
+- Remove or convert unused imports so ruff F401 is clean without changing intended
+  public API surface.
+- Run targeted verification for ruff F401 and the existing test suite, then capture
+  any remaining risk if full verification is limited by runtime.
 human_checkpoints: []
 subagents: []
 git:
@@ -29,8 +37,8 @@ git:
   checkpoint_base_sha: null
   checkpoint_attempts: 0
   rolled_back_checkpoint_attempt: null
-  worktree_path: null
   merge_agent_attempts: 0
+  worktree_path: null
 retry_policy:
   max_retries: null
   stage_retry_limit: null

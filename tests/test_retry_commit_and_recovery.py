@@ -1,5 +1,4 @@
 from tests.workspace_helpers import *  # noqa: F401,F403
-from litehive.observability import render_task_summary
 from litehive.runtime import _attempt_stage_recovery, _classify_recovery_failure_owner
 
 

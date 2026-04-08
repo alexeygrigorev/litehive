@@ -15,17 +15,16 @@ Also tests:
 import subprocess
 from pathlib import Path
 
-import pytest
 import yaml
 
 from litehive.config import LitehiveConfig, ensure_workspace
 from litehive.git_ops import current_head
-from litehive.models import StageReport, SubagentRef, UnmergedWorktree
+from litehive.models import SubagentRef
 from litehive.observability import render_task_summary
 from litehive.runner.states import PipelineState, _ROUTES, _SINGLE_ROUTES
 from litehive.runtime import _commit_to_git_report
 from litehive.subagents import SubagentResult
-from litehive.tasks import create_task, load_state, save_state, save_task, set_task_worktree_path
+from litehive.tasks import create_task, load_state, save_task, set_task_worktree_path
 
 
 def _init_git_repo(path: Path) -> str:

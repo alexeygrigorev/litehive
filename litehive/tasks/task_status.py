@@ -1,6 +1,5 @@
 """Task status transitions: requeue, resume, abandon, close, park, update, stop, switch."""
 
-import os
 import signal
 import threading
 import time

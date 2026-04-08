@@ -4,7 +4,7 @@ import time
 from pathlib import Path
 
 from litehive.config import LitehiveConfig
-from litehive.engines import extract_engine_continuation, get_engine
+from litehive.engines import extract_engine_continuation
 from litehive.engines._codex_quota import check_codex_quota, codex_quota_block_reason
 from litehive.models import StageReport, TaskRecord, cap_feedback
 from litehive.runner import StageExecutor
@@ -12,14 +12,12 @@ from litehive.subagents import SubagentManager, stage_prompt, stage_report_from_
 from litehive.tasks import (
     append_journal,
     mark_engine_switch,
-    task_dir,
 )
 
 from ._budget import _engine_attempt_order
 from ._commit import _commit_to_git_report
 from ._hooks import _attach_runner_hook_results, _run_runner_hooks_for_stage
 from ._models import (
-    _resolve_stage_retry_limit,
     _retry_backoff_seconds,
     _role_for_step,
     _set_continuation_handoff,

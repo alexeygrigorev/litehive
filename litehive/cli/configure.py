@@ -8,7 +8,6 @@ from litehive.config import (
     config_path,
     context_path,
     ensure_workspace,
-    load_config,
     render_context_template,
 )
 from litehive.cli._parse import (

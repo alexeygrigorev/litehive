@@ -2,7 +2,6 @@
 
 import json
 
-import pytest
 
 from litehive.engines.base import parse_stage_report_text
 

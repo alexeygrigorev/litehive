@@ -9,7 +9,7 @@ import pytest
 
 from tests.workspace_helpers import *  # noqa: F401,F403
 
-from litehive.config import ensure_workspace, workspace_dir
+from litehive.config import ensure_workspace
 from litehive.daemon import _prune_run_all_log_dirs
 from litehive.tasks import create_task, discard_created_task, task_dir
 
