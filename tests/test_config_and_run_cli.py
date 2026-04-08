@@ -36,6 +36,147 @@ def test_engine_command_parser_accepts_workspace_switch_args() -> None:
     assert args.workspace == Path("/tmp/demo")
 
 
+def test_engine_status_parser_accepts_optional_engine_name() -> None:
+    parser = build_parser()
+
+    args = parser.parse_args(["engine", "status", "codex", "--workspace", "/tmp/demo"])
+
+    assert args.command == "engine"
+    assert args.engine_action == "status"
+    assert args.engine_name == "codex"
+    assert args.workspace == Path("/tmp/demo")
+
+
+def test_engine_status_command_shows_all_monitored_engines(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
+
+    from litehive.models import EngineUsageRecord, EngineUsageWindow, WorkspaceEngineMonitoring
+    from litehive.observability._engine_monitoring import save_engine_monitoring
+    from litehive.cli import _cmd_engine
+
+    save_engine_monitoring(
+        tmp_path,
+        WorkspaceEngineMonitoring(
+            engines={
+                "codex": EngineUsageRecord(
+                    engine="codex",
+                    source="provider",
+                    provider="openai",
+                    observed_at="2026-04-08T22:10:00Z",
+                    invocation_count=7,
+                    success_count=6,
+                    failure_count=1,
+                    limit_event_count=1,
+                    last_limit_kind="quota",
+                    usage=EngineUsageWindow(
+                        used=82,
+                        limit=100,
+                        remaining=18,
+                        unit="percent",
+                        reset_at="2026-04-09T06:00:00Z",
+                    ),
+                ),
+                "gemini": EngineUsageRecord(
+                    engine="gemini",
+                    source="local",
+                    observed_at="2026-04-08T21:00:00Z",
+                    last_invoked_at="2026-04-08T21:00:00Z",
+                    invocation_count=3,
+                    success_count=2,
+                    failure_count=1,
+                    limit_event_count=0,
+                ),
+            }
+        ),
+    )
+
+    exit_code = _cmd_engine(
+        argparse.Namespace(
+            workspace=tmp_path,
+            engine_action="status",
+            engine_name=None,
+        )
+    )
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "workspace: " in output
+    assert "engine: codex" in output
+    assert "invocations: 7" in output
+    assert "successes: 6" in output
+    assert "failures: 1" in output
+    assert "limits: 1" in output
+    assert "last_used: 2026-04-08T22:10:00Z" in output
+    assert "engine: gemini" in output
+    assert "invocations: 3" in output
+    assert "last_used: 2026-04-08T21:00:00Z" in output
+
+
+def test_engine_status_command_scopes_to_single_engine_and_shows_codex_quota(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
+
+    from litehive.cli import _cmd_engine
+    from litehive.engines.quota.codex_quota import CodexQuotaStatus, CodexQuotaWindow
+
+    def fake_check_codex_quota():
+        return CodexQuotaStatus(
+            limit_reached=True,
+            primary_window=CodexQuotaWindow(
+                used_percent=100.0,
+                reset_at="2026-04-09T05:00:00Z",
+            ),
+            secondary_window=CodexQuotaWindow(
+                used_percent=34.0,
+                reset_at="2026-04-14T00:00:00Z",
+            ),
+            checked_at=1.0,
+        )
+
+    monkeypatch.setattr("litehive.cli.engine.check_codex_quota", fake_check_codex_quota)
+
+    exit_code = _cmd_engine(
+        argparse.Namespace(
+            workspace=tmp_path,
+            engine_action="status",
+            engine_name="codex",
+        )
+    )
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "engine: codex" in output
+    assert "available: no" in output
+    assert "usage_used: 100" in output
+    assert "usage_limit: 100" in output
+    assert "used_percent: 100.0" in output
+    assert "limit_reached: yes" in output
+    assert "reset_at: 2026-04-14T00:00:00Z" in output
+
+
+def test_engine_status_command_reports_no_data_for_requested_scope(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
+
+    from litehive.cli import _cmd_engine
+
+    exit_code = _cmd_engine(
+        argparse.Namespace(
+            workspace=tmp_path,
+            engine_action="status",
+            engine_name="gemini",
+        )
+    )
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "engine_status: no monitoring data for gemini" in output
+
+
 def test_switch_command_parser_accepts_task_engine_reason_and_workspace() -> None:
     parser = build_parser()
 

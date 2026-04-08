@@ -2,6 +2,9 @@ from datetime import datetime, timezone
 
 from litehive.config import load_config, ensure_workspace, config_path
 from litehive.engines import ENGINE_CHOICES
+from litehive.engines.quota import check_codex_quota
+from litehive.observability import load_engine_monitoring
+from litehive.observability._engine_monitoring import record_codex_quota_check
 
 import yaml
 
@@ -81,9 +84,118 @@ def _cmd_engine(args):
         return _cmd_engine_freeze(args.workspace, engine_name, until)
     if action == "unfreeze":
         return _cmd_engine_unfreeze(args.workspace, engine_name)
+    if action == "status":
+        return _cmd_engine_status(args.workspace, engine_name)
 
     print(f"engine: unknown subcommand '{action}'")
     return 1
+
+
+def _engine_last_seen(record) -> str:
+    return record.last_invoked_at or record.observed_at or "-"
+
+
+def _engine_available(record) -> bool | None:
+    usage = record.usage
+    if usage is not None and usage.remaining is not None:
+        return usage.remaining > 0
+    if record.last_limit_kind in ("quota", "rate", "budget", "capacity"):
+        return False
+    if record.observed_at or record.last_invoked_at or record.invocation_count:
+        return True
+    return None
+
+
+def _format_engine_record(engine_name, record) -> list[str]:
+    available = _engine_available(record)
+    available_label = (
+        "yes" if available is True else "no" if available is False else "unknown"
+    )
+    lines = [
+        f"engine: {engine_name}",
+        f"available: {available_label}",
+        f"source: {record.source}",
+        f"invocations: {record.invocation_count}",
+        f"successes: {record.success_count}",
+        f"failures: {record.failure_count}",
+        f"limits: {record.limit_event_count}",
+        f"last_used: {_engine_last_seen(record)}",
+    ]
+    if record.provider:
+        lines.append(f"provider: {record.provider}")
+    if record.last_limit_kind:
+        lines.append(f"last_limit_kind: {record.last_limit_kind}")
+    if record.last_limit_reason:
+        lines.append(f"last_limit_reason: {record.last_limit_reason}")
+    if record.last_task_id:
+        lines.append(f"last_task: {record.last_task_id}")
+    if record.usage is not None:
+        usage = record.usage
+        if usage.used is not None:
+            lines.append(f"usage_used: {usage.used}")
+        if usage.limit is not None:
+            lines.append(f"usage_limit: {usage.limit}")
+        if usage.remaining is not None:
+            lines.append(f"usage_remaining: {usage.remaining}")
+        if usage.unit:
+            lines.append(f"usage_unit: {usage.unit}")
+        if usage.reset_at:
+            lines.append(f"usage_reset_at: {usage.reset_at}")
+    return lines
+
+
+def _print_engine_records(records) -> None:
+    for index, (engine_name, record) in enumerate(records):
+        if index:
+            print()
+        for line in _format_engine_record(engine_name, record):
+            print(line)
+
+
+def _cmd_engine_status(workspace, engine_name):
+    ensure_workspace(workspace)
+    if engine_name is not None and engine_name not in ENGINE_CHOICES:
+        print(f"engine status: unknown engine '{engine_name}'")
+        return 1
+
+    monitoring = load_engine_monitoring(workspace)
+    print(f"workspace: {workspace}")
+
+    if engine_name is None:
+        if not monitoring.engines:
+            print("engine_status: no monitoring data recorded")
+            return 0
+        _print_engine_records(sorted(monitoring.engines.items()))
+        return 0
+
+    if engine_name == "codex":
+        quota_status = check_codex_quota()
+        if quota_status.error is None:
+            record_codex_quota_check(workspace, status=quota_status)
+            monitoring = load_engine_monitoring(workspace)
+
+    record = monitoring.engines.get(engine_name)
+    if record is None:
+        print(f"engine_status: no monitoring data for {engine_name}")
+        return 0
+
+    _print_engine_records([(engine_name, record)])
+
+    if engine_name == "codex":
+        quota_status = check_codex_quota()
+        if quota_status.error is not None:
+            print(f"codex_quota_status: unavailable ({quota_status.error})")
+        else:
+            print()
+            print("codex_quota: proactive")
+            print(f"used_percent: {quota_status.max_used_percent:.1f}")
+            print(f"limit_reached: {'yes' if quota_status.limit_reached else 'no'}")
+            print(f"reset_at: {quota_status.earliest_reset_at or '-'}")
+            print(f"primary_used_percent: {quota_status.primary_window.used_percent:.1f}")
+            print(f"secondary_used_percent: {quota_status.secondary_window.used_percent:.1f}")
+            print(f"primary_reset_at: {quota_status.primary_window.reset_at or '-'}")
+            print(f"secondary_reset_at: {quota_status.secondary_window.reset_at or '-'}")
+    return 0
 
 
 def _cmd_engine_set(workspace, engine_name):
