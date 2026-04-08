@@ -7,6 +7,7 @@ from litehive.config import LitehiveConfig
 from litehive.engines import extract_engine_continuation
 from litehive.engines._claude_quota import claude_quota_block_reason
 from litehive.engines._codex_quota import check_codex_quota, codex_quota_block_reason
+from litehive.engines._copilot_quota import copilot_quota_block_reason
 from litehive.engines._zai_quota import zai_quota_block_reason
 from litehive.models import StageReport, TaskRecord, cap_feedback
 from litehive.runner import StageExecutor
@@ -91,6 +92,8 @@ def build_executor(
                 quota_reason = codex_quota_block_reason()
             elif engine_name == "claude":
                 quota_reason = claude_quota_block_reason()
+            elif engine_name == "copilot":
+                quota_reason = copilot_quota_block_reason()
             elif engine_name in ("goz", "opencode"):
                 quota_reason = zai_quota_block_reason()
                 if quota_reason is not None:
