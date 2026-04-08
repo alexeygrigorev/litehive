@@ -7,13 +7,13 @@ engine: null
 model: null
 mode: implementation
 pipeline_mode: full
-status: in_progress
-pipeline_status: commit_to_git
+status: done
+pipeline_status: done
 priority: medium
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-06T20:36:28+00:00'
-updated_at: '2026-04-08T05:26:05+00:00'
+updated_at: '2026-04-08T05:29:49+00:00'
 goal: Pure mechanical split, no logic changes.
 acceptance_criteria:
 - No file over 500 lines in subagents/
@@ -64,15 +64,22 @@ subagents:
   path: subagents/SA-0005-reviewer
   sandboxed: false
   sandbox_summary: host
+- id: SA-0006
+  role: merge-resolver
+  engine: claude
+  status: completed
+  path: subagents/SA-0006-merge-resolver
+  sandboxed: false
+  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0206 split-subagents-execution-py-1019-lines-into'
-  commit_sha: null
-  checkpoint_base_sha: null
-  checkpoint_attempts: 0
+  commit_sha: 97f471643c3255556a98e8d77694f3d541a4176f
+  checkpoint_base_sha: 406ffd96d451df37220428bcb620a3b4a52d5773
+  checkpoint_attempts: 1
   rolled_back_checkpoint_attempt: null
   worktree_path: null
-  merge_agent_attempts: 0
+  merge_agent_attempts: 1
 retry_policy:
   max_retries: null
   stage_retry_limit: null
