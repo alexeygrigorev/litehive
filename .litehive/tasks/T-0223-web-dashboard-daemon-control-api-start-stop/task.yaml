@@ -7,13 +7,13 @@ engine: null
 model: null
 mode: implementation
 pipeline_mode: full
-status: flagged
+status: queued
 pipeline_status: implementing
 priority: medium
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-08T06:04:59+00:00'
-updated_at: '2026-04-08T18:11:54+00:00'
+updated_at: '2026-04-08T19:02:49+00:00'
 goal: 'Add endpoints to the web dashboard for daemon lifecycle management: start daemon,
   stop daemon, restart daemon, and show daemon status including PID and recent logs.
   The frontend should show daemon state and provide control buttons.'

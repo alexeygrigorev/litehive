@@ -7,13 +7,13 @@ engine: null
 model: null
 mode: implementation
 pipeline_mode: full
-status: in_progress
-pipeline_status: commit_to_git
+status: done
+pipeline_status: done
 priority: low
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-08T06:05:14+00:00'
-updated_at: '2026-04-08T19:01:42+00:00'
+updated_at: '2026-04-08T19:01:44+00:00'
 goal: Add an engine monitoring dashboard to the web UI showing engine status, usage
   metrics from engine-monitoring.yaml, and configuration. Allow switching the default
   engine and viewing engine routing rules.
@@ -61,9 +61,9 @@ subagents:
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0226 web-dashboard-engine-monitoring-and-configuration'
-  commit_sha: null
-  checkpoint_base_sha: null
-  checkpoint_attempts: 0
+  commit_sha: 211bef3090e83d7267284b941bb6ecd7325777c9
+  checkpoint_base_sha: 2e629f457d21a01610d153260b2fd51d817a3f30
+  checkpoint_attempts: 1
   rolled_back_checkpoint_attempt: null
   merge_agent_attempts: 0
   worktree_path: null
