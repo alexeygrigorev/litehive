@@ -30,6 +30,10 @@ from litehive.config.profiles import *
 from litehive.config.retry import (
     _default_execution_retry_policies as _default_execution_retry_policies,
 )
+from litehive.config.startup_guidance import (
+    DEFAULT_AGENT_STARTUP_GUIDANCE as DEFAULT_AGENT_STARTUP_GUIDANCE,
+    default_agent_startup_guidance as default_agent_startup_guidance,
+)
 from litehive.config.workspace import (
     ensure_workspace as ensure_workspace,
     render_workspace_gitignore as render_workspace_gitignore,
