@@ -34,7 +34,7 @@ LITEHIVE_INTEGRATION_ENGINES=gemini uv run pytest tests_integration/test_gemini.
 Optional timeout override:
 
 ```bash
-LITEHIVE_INTEGRATION_TIMEOUT_SECONDS=180 uv run pytest tests_integration/ -q
+LITEHIVE_INTEGRATION_TIMEOUT_SECONDS=30 uv run pytest tests_integration/ -q
 ```
 
 Skip rules:

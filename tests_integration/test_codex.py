@@ -4,35 +4,23 @@ from litehive.tasks import create_task, load_task_thread, require_task, set_acti
 
 from .helpers import (
     assert_nudge_verdict_submission,
+    assert_successful_smoke_session,
     execute_engine_prompt,
-    extract_stage_result_submission,
+    prepare_smoke_session,
     require_real_engine,
-    smoke_prompt,
 )
 
 
 pytestmark = pytest.mark.integration
 
 
-def test_codex_emits_structured_stage_result(integration_root) -> None:
-    require_real_engine("codex")
-    engine, execution = execute_engine_prompt(
-        "codex",
-        prompt=smoke_prompt("codex"),
-        cwd=integration_root,
-    )
-    assert execution.exit_code == 0, execution.transcript
-    transcript = engine.render_transcript(execution)
-    submission = extract_stage_result_submission(transcript)
-    assert submission.summary == "codex integration smoke"
-    report = engine.parse_stage_report(
-        task_id="T-INTEGRATION",
-        step="implementing",
-        execution=execution,
-        subagent_status="completed",
-    )
-    assert report.verdict == "pass"
-    assert report.summary == submission.summary
+@pytest.fixture(scope="module")
+def codex_smoke_session(module_integration_root):
+    return prepare_smoke_session("codex", cwd=module_integration_root)
+
+
+def test_codex_smoke_prompt_succeeds(codex_smoke_session) -> None:
+    assert_successful_smoke_session(codex_smoke_session)
 
 
 def test_codex_can_invoke_litehive_report_and_persist_thread_comment(integration_root) -> None:
@@ -40,18 +28,11 @@ def test_codex_can_invoke_litehive_report_and_persist_thread_comment(integration
     task = create_task(integration_root, title="Integration report task", auto_commit=False)
     set_active_task(integration_root, task.id)
     prompt = (
-        "Run this shell command exactly once and wait for it to succeed:\n"
-        f"`litehive report --verdict pass --role swe --step implementing --task-id {task.id} "
-        f'--workspace {integration_root} --message "integration report from codex"`\n'
-        "After it succeeds, reply with exactly this and nothing else:\n"
-        "SUMMARY: report invoked\n"
-        "STAGE_RESULT:\n"
-        '{"verdict":"pass","summary":"report invoked","files_changed":[],"tests":{"added":0,"passing":0},"warnings":[],"acceptance_criteria":[]}'
+        f'Run `litehive report --verdict pass --role swe --step implementing --task-id {task.id} '
+        '--workspace . --message "integration report from codex"` exactly once.'
     )
-    engine, execution = execute_engine_prompt("codex", prompt=prompt, cwd=integration_root)
+    _, execution = execute_engine_prompt("codex", prompt=prompt, cwd=integration_root)
     assert execution.exit_code == 0, execution.transcript
-    submission = extract_stage_result_submission(engine.render_transcript(execution))
-    assert submission.summary == "report invoked"
     thread = load_task_thread(integration_root, require_task(integration_root, task.id))
     assert thread[-1].role == "swe"
     assert thread[-1].step == "implementing"
@@ -59,5 +40,5 @@ def test_codex_can_invoke_litehive_report_and_persist_thread_comment(integration
     assert thread[-1].message == "integration report from codex"
 
 
-def test_codex_nudge_submits_verdict_via_cli(integration_root) -> None:
-    assert_nudge_verdict_submission("codex", cwd=integration_root)
+def test_codex_nudge_submits_verdict_via_cli(codex_smoke_session) -> None:
+    assert_nudge_verdict_submission("codex", smoke_session=codex_smoke_session)

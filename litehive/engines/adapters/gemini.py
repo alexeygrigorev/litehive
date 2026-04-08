@@ -31,6 +31,8 @@ class GeminiCLIAdapter(ExternalCLIAdapter):
         resume_session_id: str | None = None,
     ) -> list[str]:
         command = [self.binary, "-p", prompt, "--output-format", "stream-json", "--yolo"]
+        if resume_session_id:
+            command.extend(["--resume", resume_session_id])
         if model:
             command.extend(["-m", model])
         return command

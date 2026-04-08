@@ -40,6 +40,8 @@ class CopilotCLIAdapter(ExternalCLIAdapter):
             "--add-dir",
             str(cwd),
         ]
+        if resume_session_id:
+            command.append("--continue" if resume_session_id == "latest" else f"--resume={resume_session_id}")
         if model:
             command.extend(["--model", model])
         return command
