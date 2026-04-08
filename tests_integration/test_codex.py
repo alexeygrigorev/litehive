@@ -1,5 +1,8 @@
+import json
+
 import pytest
 
+from litehive.engines import extract_engine_continuation
 from litehive.tasks import create_task, load_task_thread, require_task, set_active_task
 
 from .helpers import (
@@ -56,3 +59,49 @@ def test_codex_can_invoke_litehive_report_and_persist_thread_comment(integration
     assert thread[-1].step == "implementing"
     assert thread[-1].verdict == "pass"
     assert thread[-1].message == "integration report from codex"
+
+
+def test_codex_session_resume_via_exec_with_thread_context(integration_root) -> None:
+    """Run codex exec, extract thread_id, then run again with session context.
+
+    This verifies the nudge flow: after an agent finishes without submitting
+    a verdict, we start a new codex exec with the session context prepended
+    to the prompt. The resumed session should complete successfully.
+    """
+    require_real_engine("codex")
+
+    # Step 1: initial run — get a thread_id
+    engine, first_run = execute_engine_prompt(
+        "codex",
+        prompt=smoke_prompt("codex"),
+        cwd=integration_root,
+    )
+    assert first_run.exit_code == 0, first_run.stderr
+
+    continuation = extract_engine_continuation("codex", first_run)
+    assert continuation is not None, "codex must produce a thread_id"
+    assert continuation.resume_id is not None, f"resume_id is None: {continuation}"
+    thread_id = continuation.resume_id
+
+    # Step 2: resume via exec with session context (simulates nudge)
+    resume_prompt = (
+        f"[Resuming prior session {thread_id}]\n\n"
+        "Reply with exactly this and nothing else. Do not call tools.\n"
+        "SUMMARY: resumed session\n"
+        "STAGE_RESULT:\n"
+        + json.dumps({
+            "verdict": "pass",
+            "summary": "resumed session",
+            "tests": {"added": 0, "passing": 0},
+            "warnings": [],
+            "acceptance_criteria": [],
+        })
+    )
+    _, resumed_run = execute_engine_prompt(
+        "codex",
+        prompt=resume_prompt,
+        cwd=integration_root,
+    )
+    assert resumed_run.exit_code == 0, resumed_run.stderr
+    transcript = engine.render_transcript(resumed_run)
+    assert "resumed session" in transcript
