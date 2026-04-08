@@ -13,14 +13,17 @@ import yaml
 from tests.workspace_helpers import *  # noqa: F401,F403
 
 from litehive.models import GitHubOrigin, TaskThreadComment, TaskCreationSource, UpstreamContributionOrigin
-from litehive.tasks import append_thread_comment, require_task
+from litehive.tasks import append_thread_comment, load_task_thread, require_task
 from litehive.tasks import runner_status_readonly
 from litehive.tasks.paths import runner_lock_path
 from litehive.web import (
     LitehiveWebHandler,
     WorkspaceStreamMonitor,
     _render_index,
+    read_engine_dashboard,
+    switch_task_engine_via_web,
     update_task_detail,
+    update_default_engine,
 )
 from http.server import ThreadingHTTPServer
 
@@ -274,6 +277,9 @@ def test_render_index_includes_origin_metadata_sections() -> None:
     assert "Created From" in html
     assert "Upstream Origin" in html
     assert "GitHub Origin" in html
+    assert "Engine Dashboard" in html
+    assert "/api/engines" in html
+    assert "/api/task/engine" in html
 
 
 def test_build_workspace_snapshot_includes_origin_metadata_payload(tmp_path: Path) -> None:
@@ -347,6 +353,160 @@ def test_update_task_detail_persists_editable_fields(tmp_path: Path) -> None:
     assert reloaded.plan == ["edit", "verify"]
     assert reloaded.priority == "high"
     assert reloaded.engine == "gemini"
+
+
+def test_read_engine_dashboard_includes_config_routing_and_monitoring(tmp_path: Path) -> None:
+    _init_git_repo(tmp_path)
+    ensure_workspace(
+        tmp_path,
+        LitehiveConfig(
+            default_engine="gemini",
+            recovery_engine="codex",
+            engine_preference=["gemini", "opencode", "codex"],
+            engine_freeze={"codex": "2099-01-01T00:00:00Z"},
+        ),
+    )
+    from litehive.models import EngineUsageRecord, WorkspaceEngineMonitoring
+    from litehive.observability import save_engine_monitoring
+
+    save_engine_monitoring(
+        tmp_path,
+        WorkspaceEngineMonitoring(
+            engines={
+                "gemini": EngineUsageRecord(
+                    engine="gemini",
+                    source="provider",
+                    provider="google",
+                    invocation_count=3,
+                    success_count=2,
+                    failure_count=1,
+                    usage=EngineUsageWindow(used=1234, limit=4000, remaining=2766, unit="tokens"),
+                    metadata={"prompt_tokens": 900, "completion_tokens": 334, "total_cost_usd": 12},
+                )
+            }
+        ),
+    )
+
+    payload = read_engine_dashboard(tmp_path)
+
+    assert payload["config"]["default_engine"] == "gemini"
+    assert payload["config"]["active_engine_freezes"]["codex"] == "2099-01-01T00:00:00+00:00"
+    assert payload["routing"]["default_fallback_order"] == ["gemini", "opencode", "codex"]
+    assert payload["routing"]["task_types"][0]["effective_engine"] == "gemini"
+    assert payload["monitoring"]["engines"]["gemini"]["usage"]["used"] == 1234
+    assert payload["monitoring"]["engines"]["gemini"]["token_cost_fields"] == {
+        "completion_tokens": 334,
+        "prompt_tokens": 900,
+        "total_cost_usd": 12,
+    }
+
+
+def test_update_default_engine_persists_local_config(tmp_path: Path) -> None:
+    _init_git_repo(tmp_path)
+    ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
+
+    payload = update_default_engine(tmp_path, "gemini")
+    config = load_config(tmp_path)
+
+    assert payload["previous_default_engine"] == "codex"
+    assert payload["default_engine"] == "gemini"
+    assert payload["engines"]["config"]["default_engine"] == "gemini"
+    assert config.default_engine == "gemini"
+
+
+def test_switch_task_engine_via_web_reuses_switch_logic(tmp_path: Path) -> None:
+    _init_git_repo(tmp_path)
+    ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
+    task = create_task(tmp_path, title="Switch me", engine="codex", auto_commit=False)
+    task.status = "parked"
+    task.pipeline_status = "implementing"
+    save_task(tmp_path, task)
+
+    payload = switch_task_engine_via_web(
+        tmp_path,
+        task_id=task.id,
+        engine="gemini",
+        reason="Need larger context window",
+    )
+    reloaded = require_task(tmp_path, task.id)
+    thread = load_task_thread(tmp_path, reloaded)
+
+    assert payload["switch"]["previous_engine"] == "codex"
+    assert payload["switch"]["new_engine"] == "gemini"
+    assert payload["task"]["record"]["engine"] == "gemini"
+    assert reloaded.engine == "gemini"
+    assert thread[-1].message.startswith("Engine switch requested: Need larger context window")
+
+
+def test_http_engine_endpoints_and_task_switch(tmp_path: Path) -> None:
+    _init_git_repo(tmp_path)
+    ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
+    task = create_task(tmp_path, title="HTTP switch", engine="codex", auto_commit=False)
+    task.status = "parked"
+    task.pipeline_status = "implementing"
+    save_task(tmp_path, task)
+    from litehive.models import EngineUsageRecord, WorkspaceEngineMonitoring
+    from litehive.observability import save_engine_monitoring
+
+    save_engine_monitoring(
+        tmp_path,
+        WorkspaceEngineMonitoring(
+            engines={
+                "codex": EngineUsageRecord(
+                    engine="codex",
+                    invocation_count=2,
+                    usage=EngineUsageWindow(used=50, limit=100, remaining=50, unit="percent"),
+                    metadata={"prompt_tokens": 2000, "total_cost_usd": 4},
+                )
+            }
+        ),
+    )
+
+    server, thread = _start_web_server(tmp_path)
+    conn = http.client.HTTPConnection(*server.server_address, timeout=5)
+    try:
+        conn.request("GET", "/api/engines")
+        response = conn.getresponse()
+        assert response.status == 200
+        payload = json.loads(response.read().decode("utf-8"))
+        assert payload["config"]["default_engine"] == "codex"
+        assert payload["monitoring"]["engines"]["codex"]["token_cost_fields"]["prompt_tokens"] == 2000
+
+        conn.request(
+            "POST",
+            "/api/engines/default",
+            body=json.dumps({"engine": "gemini"}),
+            headers={"Content-Type": "application/json"},
+        )
+        response = conn.getresponse()
+        assert response.status == 200
+        payload = json.loads(response.read().decode("utf-8"))
+        assert payload["default_engine"] == "gemini"
+        assert load_config(tmp_path).default_engine == "gemini"
+
+        conn.request(
+            "POST",
+            "/api/task/engine",
+            body=json.dumps(
+                {
+                    "task_id": task.id,
+                    "engine": "opencode",
+                    "reason": "codex quota exhausted",
+                }
+            ),
+            headers={"Content-Type": "application/json"},
+        )
+        response = conn.getresponse()
+        assert response.status == 200
+        payload = json.loads(response.read().decode("utf-8"))
+        assert payload["task"]["record"]["engine"] == "opencode"
+        assert payload["switch"]["new_engine"] == "opencode"
+        assert require_task(tmp_path, task.id).engine == "opencode"
+    finally:
+        conn.close()
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
 
 
 def test_render_index_prefers_sse_with_polling_fallback() -> None:

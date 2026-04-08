@@ -197,7 +197,7 @@
       letter-spacing: 0.05em;
       color: var(--muted);
     }
-    textarea, select {
+    textarea, select, input[type="text"] {
       width: 100%;
       border: 1px solid var(--line);
       border-radius: 12px;
@@ -269,6 +269,11 @@
       editTaskId: null,
       saveState: "idle",
       saveMessage: "",
+      engines: null,
+      defaultEngineSaveState: "idle",
+      defaultEngineSaveMessage: "",
+      taskSwitchState: "idle",
+      taskSwitchMessage: "",
       transport: "starting",
     };
     const POLL_INTERVAL_MS = {{ poll_interval_ms }};
@@ -309,6 +314,15 @@
     function formatRecordObject(value, emptyText) {
       return value
         ? `<div class="card"><pre>${esc(yamlPreview(value))}</pre></div>`
+        : `<div class="card empty">${esc(emptyText)}</div>`;
+    }
+
+    function formatKeyValueList(entries, emptyText) {
+      const rows = Array.isArray(entries) ? entries.filter(Boolean) : [];
+      return rows.length
+        ? `<div class="kv">${rows.map((entry) => `
+            <div>${esc(entry.label)}</div><div>${entry.valueHtml ?? esc(entry.value ?? "-")}</div>
+          `).join("")}</div>`
         : `<div class="card empty">${esc(emptyText)}</div>`;
     }
 
@@ -469,6 +483,109 @@
       `;
     }
 
+    function renderEngineDashboard(snapshot, engines) {
+      if (!engines) {
+        return `
+          <div class="section">
+            <h3>Engine Dashboard</h3>
+            <div class="card empty">Loading engine configuration.</div>
+          </div>
+        `;
+      }
+
+      const config = engines.config || {};
+      const routing = engines.routing || {};
+      const monitoring = engines.monitoring || {};
+      const engineOptions = (engines.editable_fields?.engine_options || []).map((value) => `
+        <option value="${escAttr(value)}" ${value === config.default_engine ? "selected" : ""}>${esc(value)}</option>
+      `).join("");
+      const freezeEntries = Object.entries(config.active_engine_freezes || {});
+      const monitoringCards = Object.entries(monitoring.engines || {}).map(([engineName, record]) => `
+        <li class="card">
+          <strong>${esc(engineName)}</strong>
+          <div class="meta">
+            ${badge(record.source || "local")}
+            ${record.provider ? badge(record.provider) : ""}
+            ${record.last_limit_kind ? badge(`limit:${record.last_limit_kind}`, "blocked") : ""}
+          </div>
+          ${formatKeyValueList([
+            { label: "Invocations", value: record.invocation_count ?? "-" },
+            { label: "Success", value: record.success_count ?? "-" },
+            { label: "Failure", value: record.failure_count ?? "-" },
+            { label: "Usage", value: record.usage ? yamlPreview(record.usage) : "-" },
+            { label: "Token/Cost", value: Object.keys(record.token_cost_fields || {}).length ? yamlPreview(record.token_cost_fields) : "-" },
+            { label: "Last task", value: record.last_task_id || "-" },
+            { label: "Observed", value: record.observed_at || "-" },
+          ], "No monitoring details.") }
+        </li>
+      `).join("");
+
+      return `
+        <div class="section">
+          <h3>Engine Dashboard</h3>
+          <div class="kv">
+            <div>Default engine</div><div>${esc(config.default_engine || "-")}</div>
+            <div>Recovery engine</div><div>${esc(config.recovery_engine || "-")}</div>
+            <div>Fallback order</div><div>${esc((routing.default_fallback_order || []).join(" -> ") || "-")}</div>
+            <div>Frozen engines</div><div>${freezeEntries.length ? freezeEntries.map(([engine, until]) => `${engine} until ${until}`).join(", ") : "none active"}</div>
+          </div>
+          <form id="default-engine-form" class="toolbar" style="margin-top:12px">
+            <select id="default-engine-select" name="engine">${engineOptions}</select>
+            <button class="primary" type="submit" ${state.defaultEngineSaveState === "saving" ? "disabled" : ""}>${state.defaultEngineSaveState === "saving" ? "Saving..." : "Set Default Engine"}</button>
+            <span class="status-line">${esc(state.defaultEngineSaveMessage)}</span>
+          </form>
+        </div>
+        <div class="section">
+          <h3>Routing Rules</h3>
+          <ul class="flat">${(routing.precedence || []).map((rule) => `
+            <li class="card"><strong>${esc(`${rule.order}. ${rule.rule}`)}</strong><br><span>${esc(rule.description || "")}</span></li>
+          `).join("")}</ul>
+        </div>
+        <div class="section">
+          <h3>Task-Type Routing Table</h3>
+          <ul class="flat">${(routing.task_types || []).map((row) => `
+            <li class="card">
+              <strong>${esc(row.task_type)}</strong><br>
+              <span class="muted">source: ${esc(row.source || "-")}</span><br>
+              <span>effective engine: ${esc(row.effective_engine || "-")}</span><br>
+              <span class="mono">fallback: ${esc((row.fallback_order || []).join(" -> ") || "-")}</span>
+            </li>
+          `).join("")}</ul>
+        </div>
+        <div class="section">
+          <h3>Usage Metrics</h3>
+          ${monitoringCards ? `<ul class="flat">${monitoringCards}</ul>` : `<div class="card empty">No engine-monitoring.yaml data recorded yet.</div>`}
+        </div>
+      `;
+    }
+
+    function renderTaskSwitchSection(task, snapshot) {
+      const options = (snapshot.editable_fields?.engine_options || []).map((value) => `
+        <option value="${escAttr(value)}" ${value === (task.record?.engine || "") ? "selected" : ""}>${esc(value)}</option>
+      `).join("");
+      return `
+        <div class="section">
+          <h3>Switch Engine</h3>
+          <form id="task-switch-form" class="stack">
+            <div class="grid-two">
+              <div class="field">
+                <label for="task-switch-engine">New engine</label>
+                <select id="task-switch-engine" name="engine">${options}</select>
+              </div>
+              <div class="field">
+                <label for="task-switch-reason">Reason</label>
+                <input id="task-switch-reason" name="reason" type="text" placeholder="quota exhausted" value="">
+              </div>
+            </div>
+            <div class="toolbar">
+              <button class="primary" type="submit" ${state.taskSwitchState === "saving" ? "disabled" : ""}>${state.taskSwitchState === "saving" ? "Switching..." : "Switch Task Engine"}</button>
+              <span class="status-line">${esc(state.taskSwitchMessage)}</span>
+            </div>
+          </form>
+        </div>
+      `;
+    }
+
     function renderEditSection(task, snapshot) {
       const record = task.record || {};
       const options = snapshot.editable_fields || { priority_options: [], engine_options: [] };
@@ -597,7 +714,7 @@
       const container = document.getElementById("task-detail");
       document.getElementById("task-summary").textContent = task ? `${task.status} / ${task.pipeline_status}` : "no task";
       if (!task) {
-        container.innerHTML = `<div class="muted">Select a task.</div>`;
+        container.innerHTML = `${renderEngineDashboard(snapshot, state.engines)}<div class="muted">Select a task.</div>`;
         return;
       }
 
@@ -619,6 +736,7 @@
       `).join("") : `<li class="card empty">No subagent sessions yet.</li>`;
 
       container.innerHTML = `
+        ${renderEngineDashboard(snapshot, state.engines)}
         <div class="section">
           <h3>${esc(task.id)} ${esc(task.title)}</h3>
           <div class="meta">
@@ -638,6 +756,7 @@
           <div>Current stage</div><div>${esc(task.current_stage.step || "-")} / ${esc(task.current_stage.status || "-")}</div>
           <div>Last stage</div><div>${esc(task.last_stage.step || "-")} / ${esc(task.last_stage.verdict || "-")}</div>
         </div>
+        ${renderTaskSwitchSection(task, snapshot)}
         ${renderEditSection(task, snapshot)}
         ${renderRecordSection(task)}
         <div class="section">
@@ -691,6 +810,20 @@
         editForm.addEventListener("submit", async (event) => {
           event.preventDefault();
           await saveTaskEdits(task.id);
+        });
+      }
+      const defaultEngineForm = document.getElementById("default-engine-form");
+      if (defaultEngineForm) {
+        defaultEngineForm.addEventListener("submit", async (event) => {
+          event.preventDefault();
+          await saveDefaultEngine();
+        });
+      }
+      const taskSwitchForm = document.getElementById("task-switch-form");
+      if (taskSwitchForm) {
+        taskSwitchForm.addEventListener("submit", async (event) => {
+          event.preventDefault();
+          await switchTaskEngine(task.id);
         });
       }
     }
@@ -798,8 +931,67 @@
       }
     }
 
+    async function refreshEngines() {
+      state.engines = await fetchJson("/api/engines", { headers: {} });
+    }
+
+    async function saveDefaultEngine() {
+      const form = document.getElementById("default-engine-form");
+      if (!form) return;
+      state.defaultEngineSaveState = "saving";
+      state.defaultEngineSaveMessage = "";
+      render(state.snapshot);
+      try {
+        const result = await fetchJson("/api/engines/default", {
+          method: "POST",
+          body: JSON.stringify({ engine: form.engine.value }),
+        });
+        state.engines = result.engines;
+        state.defaultEngineSaveState = "idle";
+        state.defaultEngineSaveMessage = `Default engine set to ${result.default_engine}.`;
+        await refreshSnapshot();
+      } catch (error) {
+        state.defaultEngineSaveState = "idle";
+        state.defaultEngineSaveMessage = error.message || "Default engine update failed.";
+        render(state.snapshot);
+      }
+    }
+
+    async function switchTaskEngine(taskId) {
+      const form = document.getElementById("task-switch-form");
+      if (!form) return;
+      state.taskSwitchState = "saving";
+      state.taskSwitchMessage = "";
+      render(state.snapshot);
+      try {
+        const result = await fetchJson("/api/task/engine", {
+          method: "POST",
+          body: JSON.stringify({
+            task_id: taskId,
+            engine: form.engine.value,
+            reason: form.reason.value,
+          }),
+        });
+        if (state.snapshot) {
+          const index = state.snapshot.tasks.findIndex((item) => item.id === taskId);
+          if (index >= 0) state.snapshot.tasks[index] = result.task;
+          if (state.snapshot.active_task_id === taskId) state.snapshot.active_task = result.task;
+        }
+        state.taskSwitchState = "idle";
+        state.taskSwitchMessage = `Switched ${result.switch.previous_engine} -> ${result.switch.new_engine}.`;
+        render(state.snapshot);
+      } catch (error) {
+        state.taskSwitchState = "idle";
+        state.taskSwitchMessage = error.message || "Task switch failed.";
+        render(state.snapshot);
+      }
+    }
+
     async function refreshSnapshot() {
       state.snapshot = await fetchJson("/api/snapshot", { headers: {} });
+      if (!state.engines) {
+        await refreshEngines();
+      }
       chooseDefaults(state.snapshot);
       render(state.snapshot);
       await refreshSession();
@@ -880,7 +1072,9 @@
         const payload = JSON.parse(event.data);
         state.snapshot = payload.snapshot;
         chooseDefaults(state.snapshot);
-        render(state.snapshot);
+        refreshEngines()
+          .catch(() => {})
+          .finally(() => render(state.snapshot));
       });
       stream.addEventListener("session", (event) => {
         const payload = JSON.parse(event.data);
