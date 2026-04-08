@@ -10,22 +10,34 @@ pipeline_mode: full
 status: queued
 pipeline_status: backlog
 priority: medium
-pm_complexity: null
-planned_effort: null
+pm_complexity: moderate
+planned_effort: s
 created_at: '2026-04-08T06:05:19+00:00'
-updated_at: '2026-04-08T06:05:19+00:00'
-goal: Add a web form for submitting stage verdicts (pass, fail, reject, blocked, comment)
-  for the active task, mirroring the litehive report CLI command. This enables operators
-  to drive the pipeline from the browser without needing the terminal.
+updated_at: '2026-04-08T19:03:39+00:00'
+goal: Add web dashboard support for submitting a stage verdict for the active task,
+  mirroring the litehive report CLI flow so operators can move review stages forward
+  from the browser.
 acceptance_criteria:
-- POST /api/report endpoint submits a stage verdict with role, step, and message
-- Frontend shows a verdict submission form when a task is in a reviewable stage (testing,
-  accepting)
-- Verdict options (pass, fail, reject, blocked, comment) are presented as buttons
-  with a message textarea
-- After submission, the task state updates and the UI reflects the new pipeline status
+- POST /api/report accepts the active task verdict payload with role, step, verdict,
+  and message, records it in the task thread, and returns an updated task payload
+  or a clear validation error.
+- When the selected task is the active task and its pipeline stage is testing or accepting,
+  the dashboard shows a verdict submission form with pass, fail, reject, blocked,
+  and comment actions plus a message textarea.
+- Submitting the form updates the task detail view without a manual page reload so
+  the new thread entry and resulting pipeline status are visible in the dashboard.
+- Tasks outside reviewable stages, or tasks that are not the active task, do not show
+  the verdict submission control.
 constraints: []
-plan: []
+plan:
+- Reuse the existing CLI report semantics in a web helper that appends a TaskThreadComment
+  for the active task and validates the required payload fields.
+- Expose the helper through POST /api/report and cover success plus invalid-input
+  cases with targeted web handler tests.
+- Extend the dashboard task detail panel to render a review-stage verdict form, submit
+  it via fetch, and refresh local snapshot state after success.
+- Add focused web snapshot/template tests that verify the form gating and the post-submit
+  UI/thread refresh behavior.
 human_checkpoints: []
 subagents: []
 git:
@@ -35,8 +47,8 @@ git:
   checkpoint_base_sha: null
   checkpoint_attempts: 0
   rolled_back_checkpoint_attempt: null
-  worktree_path: null
   merge_agent_attempts: 0
+  worktree_path: null
 retry_policy:
   max_retries: null
   stage_retry_limit: null

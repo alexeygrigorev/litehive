@@ -274,6 +274,8 @@
       defaultEngineSaveMessage: "",
       taskSwitchState: "idle",
       taskSwitchMessage: "",
+      reportSaveState: "idle",
+      reportSaveMessage: "",
       transport: "starting",
     };
     const POLL_INTERVAL_MS = {{ poll_interval_ms }};
@@ -652,6 +654,38 @@
       `;
     }
 
+    function renderVerdictSection(task) {
+      if (!task.can_submit_verdict) return "";
+      const buttons = ["pass", "fail", "reject", "blocked", "comment"].map((verdict) => `
+        <button
+          class="${verdict === "pass" ? "primary" : "secondary"}"
+          type="submit"
+          name="verdict"
+          value="${escAttr(verdict)}"
+          ${state.reportSaveState === "saving" ? "disabled" : ""}
+        >${esc(verdict)}</button>
+      `).join("");
+      return `
+        <div class="section">
+          <h3>Submit Verdict</h3>
+          <form id="task-report-form" class="stack">
+            <div class="field">
+              <label for="task-report-message">Message</label>
+              <textarea
+                id="task-report-message"
+                name="message"
+                placeholder="Record the review verdict and the evidence behind it."
+              ></textarea>
+            </div>
+            <div class="toolbar">
+              ${buttons}
+            </div>
+            <div class="status-line">${esc(state.reportSaveMessage)}</div>
+          </form>
+        </div>
+      `;
+    }
+
     function renderReports(task) {
       if (!task.reports.length) {
         return `<div class="card empty">No reports yet.</div>`;
@@ -757,6 +791,7 @@
           <div>Last stage</div><div>${esc(task.last_stage.step || "-")} / ${esc(task.last_stage.verdict || "-")}</div>
         </div>
         ${renderTaskSwitchSection(task, snapshot)}
+        ${renderVerdictSection(task)}
         ${renderEditSection(task, snapshot)}
         ${renderRecordSection(task)}
         <div class="section">
@@ -824,6 +859,15 @@
         taskSwitchForm.addEventListener("submit", async (event) => {
           event.preventDefault();
           await switchTaskEngine(task.id);
+        });
+      }
+      const reportForm = document.getElementById("task-report-form");
+      if (reportForm) {
+        reportForm.addEventListener("submit", async (event) => {
+          event.preventDefault();
+          const verdict = event.submitter?.value;
+          if (!verdict) return;
+          await submitTaskVerdict(task.id, task.pipeline_status, verdict);
         });
       }
     }
@@ -983,6 +1027,33 @@
       } catch (error) {
         state.taskSwitchState = "idle";
         state.taskSwitchMessage = error.message || "Task switch failed.";
+        render(state.snapshot);
+      }
+    }
+
+    async function submitTaskVerdict(taskId, step, verdict) {
+      const form = document.getElementById("task-report-form");
+      if (!form) return;
+      state.reportSaveState = "saving";
+      state.reportSaveMessage = "";
+      render(state.snapshot);
+      try {
+        await fetchJson("/api/report", {
+          method: "POST",
+          body: JSON.stringify({
+            task_id: taskId,
+            role: step === "testing" ? "qa" : "reviewer",
+            step,
+            verdict,
+            message: form.message.value,
+          }),
+        });
+        state.reportSaveState = "idle";
+        state.reportSaveMessage = `Submitted ${verdict}.`;
+        await refreshSnapshot();
+      } catch (error) {
+        state.reportSaveState = "idle";
+        state.reportSaveMessage = error.message || "Verdict submission failed.";
         render(state.snapshot);
       }
     }

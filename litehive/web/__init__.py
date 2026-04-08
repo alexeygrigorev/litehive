@@ -18,14 +18,20 @@ import yaml
 from jinja2 import Environment, FileSystemLoader
 
 from litehive.config import config_path, load_config
-from litehive.models import TaskRecord
+from litehive.models import StageReport, TaskRecord, TaskThreadComment
 from litehive.observability import load_engine_monitoring
+from litehive.runner.states import _ROUTES
 from litehive.runtime import active_engine_freezes
 from litehive.events import read_events
 from litehive.tasks import (
+    _apply_stage_finished,
+    _apply_task_outcome,
+    _persist_task_and_state_without_runner_guard,
+    _workspace_lock,
     VALID_TASK_ENGINES,
     VALID_TASK_PRIORITIES,
     VALID_TASK_TYPES,
+    append_thread_comment,
     list_tasks_state_first,
     load_state,
     load_task_thread,
@@ -44,6 +50,8 @@ _SESSION_LIMIT = 12
 _STREAM_KEEPALIVE_SECONDS = 15.0
 _STREAM_RETRY_MS = 2000
 _STREAM_SCAN_INTERVAL_SECONDS = 0.25
+_WEB_REVIEWABLE_STAGES = {"testing", "accepting"}
+_WEB_VERDICT_OPTIONS = ("pass", "fail", "reject", "blocked", "comment")
 
 _TEMPLATES_DIR = Path(__file__).parent / "templates"
 _jinja_env = Environment(loader=FileSystemLoader(str(_TEMPLATES_DIR)), autoescape=False)
@@ -331,6 +339,36 @@ class LitehiveWebHandler(BaseHTTPRequestHandler):
                     task_id=task_id,
                     engine=engine_name,
                     reason=reason,
+                )
+            except FileNotFoundError as exc:
+                return self._send_error_json(HTTPStatus.NOT_FOUND, str(exc))
+            except ValueError as exc:
+                return self._send_error_json(HTTPStatus.BAD_REQUEST, str(exc))
+            return self._send_json(response)
+        if parsed.path == "/api/report":
+            role = payload.get("role")
+            step = payload.get("step")
+            verdict = payload.get("verdict")
+            message = payload.get("message")
+            task_id = payload.get("task_id")
+            if task_id is not None and not isinstance(task_id, str):
+                return self._send_error_json(HTTPStatus.BAD_REQUEST, "task_id must be a string")
+            if not isinstance(role, str) or not role.strip():
+                return self._send_error_json(HTTPStatus.BAD_REQUEST, "role is required")
+            if not isinstance(step, str) or not step.strip():
+                return self._send_error_json(HTTPStatus.BAD_REQUEST, "step is required")
+            if not isinstance(verdict, str) or not verdict.strip():
+                return self._send_error_json(HTTPStatus.BAD_REQUEST, "verdict is required")
+            if not isinstance(message, str) or not message.strip():
+                return self._send_error_json(HTTPStatus.BAD_REQUEST, "message is required")
+            try:
+                response = submit_stage_verdict_via_web(
+                    self.workspace_root,
+                    task_id=task_id,
+                    role=role,
+                    step=step,
+                    verdict=verdict,
+                    message=message,
                 )
             except FileNotFoundError as exc:
                 return self._send_error_json(HTTPStatus.NOT_FOUND, str(exc))
@@ -625,6 +663,113 @@ def switch_task_engine_via_web(
     }
 
 
+def submit_stage_verdict_via_web(
+    root: Path,
+    *,
+    task_id: str | None,
+    role: str,
+    step: str,
+    verdict: str,
+    message: str,
+) -> dict[str, Any]:
+    root = root.resolve()
+    if verdict not in _WEB_VERDICT_OPTIONS:
+        allowed = ", ".join(_WEB_VERDICT_OPTIONS)
+        raise ValueError(f"Unsupported verdict '{verdict}'. Expected one of: {allowed}")
+
+    with _workspace_lock(root):
+        state = load_state(root)
+        active_task_id = state.active_task_id
+        if not active_task_id:
+            raise ValueError("No active task available for report submission")
+        if task_id is not None and task_id != active_task_id:
+            raise ValueError(f"Task {task_id} is not the active task")
+
+        task = _require_task_for_web(root, active_task_id)
+        if task.pipeline_status not in _WEB_REVIEWABLE_STAGES:
+            raise ValueError(
+                "Report submission is only available for active tasks in testing or accepting"
+            )
+        if step != task.pipeline_status:
+            raise ValueError(f"step must match the active task pipeline status '{task.pipeline_status}'")
+
+        cleaned_role = role.strip()
+        cleaned_message = message.strip()
+        comment = TaskThreadComment(
+            role=cleaned_role,
+            step=step,
+            verdict=verdict,  # type: ignore[arg-type]
+            message=cleaned_message,
+        )
+        append_thread_comment(root, task, comment)
+
+        if verdict == "comment":
+            return {
+                "task": _serialize_task(root, task, state.active_task_id),
+                "submitted": {
+                    "task_id": task.id,
+                    "step": step,
+                    "verdict": verdict,
+                    "role": cleaned_role,
+                },
+            }
+
+        report = StageReport(
+            task_id=task.id,
+            step=step,  # type: ignore[arg-type]
+            verdict=verdict,  # type: ignore[arg-type]
+            summary=cleaned_message,
+            feedback=cleaned_message,
+        )
+        _write_stage_report(root, task, report)
+        _apply_stage_finished(task, report)
+
+        target = _ROUTES.get((step, verdict))
+        if target == "accepting":
+            task.pipeline_status = "accepting"
+            task.status = "in_progress"
+            task.runtime.execution_status = "running"
+        elif target in {"implementing", "commit_to_git"}:
+            task.pipeline_status = target
+            task.status = "queued"
+            task.runtime.execution_status = "queued"
+            state.active_task_id = None
+            state.queue = [item for item in state.queue if item != task.id]
+            state.queue.insert(0, task.id)
+        elif target == "done":
+            task.pipeline_status = "done"
+            task.status = "done"
+            task.runtime.execution_status = "done"
+            state.active_task_id = None
+            state.queue = [item for item in state.queue if item != task.id]
+        else:
+            task.status = "flagged"
+            task.runtime.execution_status = "flagged"
+            state.active_task_id = None
+            state.queue = [item for item in state.queue if item != task.id]
+            _apply_task_outcome(
+                task,
+                kind="blocked" if verdict == "blocked" else "flagged",
+                stage=step,
+                reason_code="verdict_blocked" if verdict == "blocked" else "unsupported_verdict",
+                reason=cleaned_message,
+                retry_count=0,
+                retry_limit=0,
+                retry_source="global",
+            )
+
+        _persist_task_and_state_without_runner_guard(root, task=task, state=state)
+        return {
+            "task": _serialize_task(root, task, state.active_task_id),
+            "submitted": {
+                "task_id": task.id,
+                "step": step,
+                "verdict": verdict,
+                "role": cleaned_role,
+            },
+        }
+
+
 def _serialize_task(root: Path, task: TaskRecord, active_task_id: str | None) -> dict[str, Any]:
     base = task_dir(root, task)
     session_entries: list[dict[str, Any]] = []
@@ -675,6 +820,7 @@ def _serialize_task(root: Path, task: TaskRecord, active_task_id: str | None) ->
         "acceptance_criteria": list(task.acceptance_criteria),
         "plan": list(task.plan),
         "constraints": list(task.constraints),
+        "can_submit_verdict": task.id == active_task_id and task.pipeline_status in _WEB_REVIEWABLE_STAGES,
         "is_active_task": task.id == active_task_id,
         "runtime": task.runtime.model_dump(mode="python"),
         "current_stage": task.runtime.current_stage.model_dump(mode="python"),
@@ -729,6 +875,15 @@ def _load_stage_reports(root: Path, base: Path) -> list[dict[str, Any]]:
             }
         )
     return reports
+
+
+def _write_stage_report(root: Path, task: TaskRecord, report: StageReport) -> Path:
+    reports_dir = task_dir(root, task) / "reports"
+    reports_dir.mkdir(parents=True, exist_ok=True)
+    ordinal = len(list(reports_dir.glob(f"{report.step}-*.yaml"))) + 1
+    path = reports_dir / f"{report.step}-{ordinal:03d}.yaml"
+    path.write_text(yaml.safe_dump(report.model_dump(mode="python"), sort_keys=False), encoding="utf-8")
+    return path
 
 
 def _load_recovery_reports(root: Path, base: Path) -> list[dict[str, Any]]:
