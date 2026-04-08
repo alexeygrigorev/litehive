@@ -67,11 +67,9 @@ class CodexCLIAdapter(ExternalCLIAdapter):
             command = [
                 self.binary,
                 "resume",
-                "--json",
                 "--dangerously-bypass-approvals-and-sandbox",
                 "--cd",
                 str(cwd),
-                "--skip-git-repo-check",
                 resume_session_id,
                 prompt,
             ]
