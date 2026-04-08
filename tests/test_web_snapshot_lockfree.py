@@ -27,14 +27,16 @@ def test_runner_status_readonly_returns_idle_when_no_metadata(tmp_path: Path) ->
 
 def test_runner_status_readonly_returns_running_when_pid_alive(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc).isoformat()
     # Use our own PID — guaranteed alive.
     _write_runner_lock_metadata(tmp_path, {
         "status": "running",
         "pid": os.getpid(),
         "workspace": str(tmp_path),
         "command": "litehive run",
-        "started_at": "2026-04-08T10:00:00+00:00",
-        "heartbeat_at": "2026-04-08T10:00:05+00:00",
+        "started_at": now,
+        "heartbeat_at": now,
     })
     status = runner_status_readonly(tmp_path)
     assert status.status == "running"
@@ -73,6 +75,8 @@ def test_runner_status_readonly_returns_late_when_heartbeat_expired(tmp_path: Pa
 
 def test_build_workspace_snapshot_does_not_block_on_runner_lock(tmp_path: Path, monkeypatch) -> None:
     """Snapshot must complete even when fcntl.flock would block (simulated)."""
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc).isoformat()
     _init_git_repo(tmp_path)
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Running task")
@@ -90,8 +94,8 @@ def test_build_workspace_snapshot_does_not_block_on_runner_lock(tmp_path: Path, 
         "pid": os.getpid(),
         "workspace": str(tmp_path),
         "command": "litehive run --drain",
-        "started_at": "2026-04-08T10:00:00+00:00",
-        "heartbeat_at": "2026-04-08T10:00:05+00:00",
+        "started_at": now,
+        "heartbeat_at": now,
     })
 
     # Make fcntl.flock always raise BlockingIOError to prove the snapshot
