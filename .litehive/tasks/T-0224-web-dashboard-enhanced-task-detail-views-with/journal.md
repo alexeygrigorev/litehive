@@ -9,6 +9,9 @@ Created task worktree at `.litehive/worktrees/T-0224-web-dashboard-enhanced-task
 ## 2026-04-08T18:12:08+00:00
 Execution started with engine `codex`.
 
+## 2026-04-08T18:14:07+00:00
+Task metadata updated via CLI.
+
 ## 2026-04-08T18:14:39+00:00
 Stage `grooming` fail: grooming failed: agent did not submit verdict via litehive report CLI. Launching recovery agent.
 
@@ -32,3 +35,6 @@ Execution finished with status `queued`.
 
 ## 2026-04-08T18:31:34+00:00
 Execution started with engine `codex`.
+
+## 2026-04-08T18:35:43+00:00
+Merge conflict on 3 file(s). Launching merge agent (attempt 1).
