@@ -417,6 +417,7 @@ class GitSettings(BaseModel):
     checkpoint_base_sha: str | None = None
     checkpoint_attempts: int = 0
     rolled_back_checkpoint_attempt: int | None = None
+    merge_agent_attempts: int = 0
     worktree_path: str | None = None
     merge_agent_attempts: int = 0
 

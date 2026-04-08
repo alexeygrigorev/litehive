@@ -77,7 +77,7 @@ def _commit_to_git_report(
             if merge.returncode == 0:
                 merge_ok = True
             else:
-                # Merge failed - try agent resolution
+                # Merge failed - try agent resolution (exactly once)
                 if subagents is not None:
                     conflict_proc = subprocess.run(
                         ["git", "diff", "--name-only", "--diff-filter=U"],
@@ -88,12 +88,12 @@ def _commit_to_git_report(
                         if task.git.merge_agent_attempts >= 1:
                             append_journal(root, task,
                                 f"Merge conflict on {len(conflicts)} file(s). "
-                                f"Merge agent already attempted ({task.git.merge_agent_attempts}x) — skipping.")
+                                f"Merge agent already attempted ({task.git.merge_agent_attempts} time(s)) — skipping.")
                         else:
                             task.git.merge_agent_attempts += 1
                             save_task(root, task)
                             append_journal(root, task,
-                                f"Merge conflict on {len(conflicts)} file(s). Launching merge agent.")
+                                f"Merge conflict on {len(conflicts)} file(s). Launching merge agent (attempt {task.git.merge_agent_attempts}).")
                             engine_name = (config.recovery_engine if config and config.recovery_engine
                                            else task.engine or (config.default_engine if config else "codex"))
                             model = resolve_model(task, config, engine_name=engine_name) if config else None

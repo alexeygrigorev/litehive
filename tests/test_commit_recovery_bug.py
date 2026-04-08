@@ -205,11 +205,11 @@ def test_merge_conflict_agent_fails_to_resolve(tmp_path: Path) -> None:
     assert (worktree_path / "feature.py").read_text() == "def feature(): return 'worktree'\n"
 
 
-def test_merge_agent_launches_exactly_once(tmp_path: Path) -> None:
-    """Merge agent must not be launched twice for the same conflict."""
+def _setup_conflict(tmp_path: Path):
+    """Helper: create a repo with a worktree that conflicts with main."""
     _init_git_repo(tmp_path)
     ensure_workspace(tmp_path)
-    task = create_task(tmp_path, title="Merge agent once only")
+    task = create_task(tmp_path, title="Retry limit test")
 
     worktree_path = tmp_path / ".litehive" / "worktrees" / f"{task.id}-{task.slug}"
     worktree_path.parent.mkdir(parents=True, exist_ok=True)
@@ -227,49 +227,59 @@ def test_merge_agent_launches_exactly_once(tmp_path: Path) -> None:
     _run(["git", "add", "feature.py"], tmp_path)
     _run(["git", "commit", "-m", "conflicting change"], tmp_path)
 
-    launch_count = 0
+    return task, worktree_path
 
-    class CountingSubagents:
-        def __init__(self):
-            self.execution_root = worktree_path
 
-        def run(self, task, *, role, engine_name, prompt, model=None):
-            nonlocal launch_count
-            launch_count += 1
-            from litehive.subagents import SubagentResult
-            from litehive.models import SubagentRef
-            return SubagentResult(
-                ref=SubagentRef(id="SA-merge", role=role, engine=engine_name,
-                                status="completed", path="subagents/SA-merge"),
-                execution=None, transcript="Could not resolve", exit_code=1,
-            )
+class _CountingSubagents:
+    """Fake subagent manager that counts launches and never resolves conflicts."""
+    def __init__(self, worktree_path):
+        self.execution_root = worktree_path
+        self.launch_count = 0
 
-    subagents = CountingSubagents()
+    def run(self, task, *, role, engine_name, prompt, model=None):
+        from litehive.subagents import SubagentResult
+        from litehive.models import SubagentRef
+        self.launch_count += 1
+        return SubagentResult(
+            ref=SubagentRef(id=f"SA-merge-{self.launch_count}", role=role,
+                            engine=engine_name, status="completed",
+                            path=f"subagents/SA-merge-{self.launch_count}"),
+            execution=None, transcript="Could not resolve", exit_code=1,
+        )
 
-    # First attempt — merge agent should launch
+
+def test_merge_agent_launches_exactly_once(tmp_path: Path) -> None:
+    """Merge agent must launch at most once per conflict, even across multiple attempts."""
+    task, worktree_path = _setup_conflict(tmp_path)
+    fake = _CountingSubagents(worktree_path)
+
+    # First attempt: merge agent should launch
     report1 = _commit_to_git_report(
         tmp_path, worktree_path, task, auto_commit_enabled=True,
-        subagents=subagents, config=LitehiveConfig(),
+        subagents=fake, config=LitehiveConfig(),
     )
     assert report1.verdict == "fail"
-    assert launch_count == 1
+    assert fake.launch_count == 1
     assert task.git.merge_agent_attempts == 1
 
-    # Abort the merge so we can retry
-    subprocess.run(["git", "merge", "--abort"], cwd=tmp_path, capture_output=True)
+    # Reset git state for second attempt (re-create the conflict)
+    (tmp_path / "feature.py").write_text("def feature(): return 'main'\n")
+    _run(["git", "add", "feature.py"], tmp_path)
+    _run(["git", "commit", "-m", "re-create conflict"], tmp_path)
 
-    # Second attempt — merge agent must NOT launch again
+    # Second attempt: merge agent must NOT launch again
     report2 = _commit_to_git_report(
         tmp_path, worktree_path, task, auto_commit_enabled=True,
-        subagents=subagents, config=LitehiveConfig(),
+        subagents=fake, config=LitehiveConfig(),
     )
     assert report2.verdict == "fail"
-    assert launch_count == 1, f"Merge agent launched {launch_count} times, expected exactly 1"
+    assert fake.launch_count == 1, "Merge agent launched more than once!"
     assert task.git.merge_agent_attempts == 1
 
 
 def test_recovery_failed_blocks_repair_requeue(tmp_path: Path) -> None:
-    """Tasks with recovery_failed status must not be requeued by repair."""
+    """Tasks with status=recovery_failed must not be requeued by repair."""
+    from litehive.tasks import _should_recover_flagged_commit_stage_task
     _init_git_repo(tmp_path)
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Recovery failed task")
@@ -278,19 +288,18 @@ def test_recovery_failed_blocks_repair_requeue(tmp_path: Path) -> None:
     task.git.merge_agent_attempts = 1
     save_task(tmp_path, task)
 
-    from litehive.tasks import _should_recover_flagged_commit_stage_task
     assert not _should_recover_flagged_commit_stage_task(tmp_path, task)
 
 
 def test_merge_attempts_blocks_repair_requeue(tmp_path: Path) -> None:
-    """Tasks with merge_agent_attempts >= 1 must not be requeued by repair."""
+    """Tasks with merge_agent_attempts >= 1 must not be requeued by repair, even if flagged."""
+    from litehive.tasks import _should_recover_flagged_commit_stage_task
     _init_git_repo(tmp_path)
     ensure_workspace(tmp_path)
-    task = create_task(tmp_path, title="Already attempted merge")
+    task = create_task(tmp_path, title="Already attempted task")
     task.pipeline_status = "commit_to_git"
     task.status = "flagged"
     task.git.merge_agent_attempts = 1
     save_task(tmp_path, task)
 
-    from litehive.tasks import _should_recover_flagged_commit_stage_task
     assert not _should_recover_flagged_commit_stage_task(tmp_path, task)

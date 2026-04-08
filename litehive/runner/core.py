@@ -787,7 +787,18 @@ class TaskExecutionRunner:
                         return result
                     report.warnings = [*report.warnings, *recovered.warnings]
                 report = terminal
-                task.status = "flagged"
+                # commit_to_git: if both merge agent and recovery failed,
+                # use recovery_failed terminal state to prevent infinite requeue loops.
+                if current == "commit_to_git" and recovered is None:
+                    final_status = "recovery_failed"
+                    append_journal(
+                        self.root, task,
+                        "Both merge agent and recovery agent failed for commit_to_git. "
+                        "Setting status to recovery_failed — manual resolution required.",
+                    )
+                else:
+                    final_status = "flagged"
+                task.status = final_status
                 _apply_task_outcome(
                     task,
                     kind=outcome,
@@ -804,7 +815,7 @@ class TaskExecutionRunner:
                 _apply_stage_finished(task, report)
                 return self._finish_run(
                     task,
-                    final_status="flagged",
+                    final_status=final_status,
                     steps=steps,
                     last_verdict=last_verdict,
                 )
