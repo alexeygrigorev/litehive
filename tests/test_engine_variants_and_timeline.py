@@ -594,7 +594,6 @@ def test_configure_updates_existing_workspace_budget_settings(tmp_path: Path) ->
         pool_budget_threshold=None,
         pool_stop_on_dirty_git=False,
         pool_selection_policy="dependency_aware",
-        pre_acceptance_command=None,
     )
 
     assert _cmd_configure(parser) == 0

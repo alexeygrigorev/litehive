@@ -119,9 +119,6 @@ class LitehiveConfig:
         pool_selection_policy: Strategy for selecting the next task from
             the queue. One of ``fifo``, ``priority_first``,
             ``dependency_aware``.
-        pre_acceptance_command: Legacy shell command that runs before
-            PM acceptance. Automatically folded into
-            ``runner_hooks.before_pm_acceptance`` as a blocking hook.
         runner_hooks: Shell hooks that execute around implementation and
             acceptance boundaries. Keyed by hook point (e.g.
             ``before_swe_implementation``).
@@ -190,7 +187,6 @@ class LitehiveConfig:
     pool_budget_threshold: int | None = None
     pool_stop_on_dirty_git: bool = False
     pool_selection_policy: str = "dependency_aware"
-    pre_acceptance_command: str | None = None
     runner_hooks: dict[str, list[RunnerHookConfig]] = field(default_factory=dict)
     subagent_inactivity_timeout_seconds: float = 360.0
     inactivity_timeout_seconds: float | None = None
@@ -241,21 +237,8 @@ class LitehiveConfig:
             self.inactivity_timeout_seconds = float(self.inactivity_timeout_seconds)
             if self.inactivity_timeout_seconds <= 0:
                 raise ValueError("inactivity_timeout_seconds must be greater than 0 when set")
-        if self.pre_acceptance_command is not None:
-            self.pre_acceptance_command = self.pre_acceptance_command.strip() or None
         if self.litehive_source_path is not None:
             self.litehive_source_path = self.litehive_source_path.strip() or None
-        if self.pre_acceptance_command:
-            before_acceptance_hooks = self.runner_hooks.setdefault("before_pm_acceptance", [])
-            matched_legacy_hook = False
-            for hook in before_acceptance_hooks:
-                if hook.command == self.pre_acceptance_command:
-                    hook.blocking = True
-                    matched_legacy_hook = True
-            if not matched_legacy_hook:
-                before_acceptance_hooks.append(
-                    RunnerHookConfig(command=self.pre_acceptance_command, blocking=True)
-                )
         self.subagent_resource_limits = _normalize_subagent_resource_limits(
             self.subagent_resource_limits,
             process_profile=self.process_profile,
@@ -400,6 +383,15 @@ def load_config(root: Path) -> LitehiveConfig:
     if data.get("pool_selection_policy") not in VALID_POOL_SELECTION_POLICIES:
         data["pool_selection_policy"] = "dependency_aware"
     data.pop("engine_fallbacks", None)
+    if data.pop("pre_acceptance_command", None):
+        raise ValueError(
+            "pre_acceptance_command is no longer supported. "
+            "Migrate to runner_hooks.before_pm_acceptance in config.yaml. Example:\n"
+            "  runner_hooks:\n"
+            "    before_pm_acceptance:\n"
+            "      - command: '<your command>'\n"
+            "        blocking: true"
+        )
     return LitehiveConfig(**data)
 
 
