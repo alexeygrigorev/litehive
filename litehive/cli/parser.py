@@ -155,11 +155,6 @@ def build_parser():
         help="Default pool task ordering policy",
     )
     configure.add_argument(
-        "--pre-acceptance-command",
-        default=None,
-        help="Run this shell command after testing passes and before the task enters accepting",
-    )
-    configure.add_argument(
         "--hook",
         action="append",
         default=None,

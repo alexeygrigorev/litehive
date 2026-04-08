@@ -234,9 +234,6 @@ litehive configure \
   --hook 'after_pm_acceptance=nonblocking:uv run python scripts/notify.py'
 ```
 
-`pre_acceptance_command` is a legacy convenience field. Litehive folds it into
-`runner_hooks.before_pm_acceptance` as a blocking hook.
-
 ## Pool Controls
 
 Pool-level stop conditions can live in config so `litehive run --drain` and the

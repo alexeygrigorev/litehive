@@ -63,7 +63,6 @@ def _cmd_configure(args):
             pool_budget_threshold=getattr(args, "pool_budget_threshold", None),
             pool_stop_on_dirty_git=getattr(args, "pool_stop_on_dirty_git", False),
             pool_selection_policy=getattr(args, "pool_selection_policy", "dependency_aware"),
-            pre_acceptance_command=getattr(args, "pre_acceptance_command", None),
             runner_hooks=runner_hooks,
             subagent_resource_limits=SubagentResourceLimitsConfig(
                 enabled=getattr(args, "subagent_resource_limits_enabled", None),

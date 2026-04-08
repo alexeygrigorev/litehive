@@ -3375,7 +3375,9 @@ def test_run_task_runs_pre_acceptance_hook_after_testing_passes(
 ) -> None:
     ensure_workspace(
         tmp_path,
-        LitehiveConfig(pre_acceptance_command="uv run ruff check litehive tests"),
+        LitehiveConfig(runner_hooks={
+            "before_pm_acceptance": [{"command": "uv run ruff check litehive tests", "blocking": True}],
+        }),
     )
     create_task(tmp_path, title="Run ruff before acceptance", auto_commit=False)
     calls: list[str] = []
@@ -3409,7 +3411,7 @@ def test_run_task_runs_pre_acceptance_hook_after_testing_passes(
         / "tasks"
         / "T-0001-run-ruff-before-acceptance"
         / "artifacts"
-        / "pre-acceptance-hook.txt"
+        / "before_pm_acceptance-001.yaml"
     )
     assert "command: uv run ruff check litehive tests" in artifact.read_text(encoding="utf-8")
     accepting_report = yaml.safe_load(
@@ -3430,7 +3432,9 @@ def test_run_task_blocks_before_accepting_when_pre_acceptance_hook_fails(
 ) -> None:
     ensure_workspace(
         tmp_path,
-        LitehiveConfig(pre_acceptance_command="uv run ruff check litehive tests"),
+        LitehiveConfig(runner_hooks={
+            "before_pm_acceptance": [{"command": "uv run ruff check litehive tests", "blocking": True}],
+        }),
     )
     create_task(tmp_path, title="Block on failing ruff", auto_commit=False)
     calls: list[str] = []

@@ -1145,12 +1145,6 @@ def _run_runner_hooks_for_stage(
             command=hook.command,
             blocking=hook.blocking,
             ordinal=index,
-            legacy_artifact_name=(
-                "pre-acceptance-hook.txt"
-                if hook_point == "before_pm_acceptance"
-                and config.pre_acceptance_command == hook.command
-                else None
-            ),
         )
         if report is None:
             if collected_results is not None:
@@ -1234,7 +1228,6 @@ def _execute_runner_hook(
     command: str,
     blocking: bool,
     ordinal: int,
-    legacy_artifact_name: str | None,
 ) -> dict[str, str | int | bool | None]:
     completed = subprocess.run(
         ["bash", "-lc", command],
@@ -1243,7 +1236,7 @@ def _execute_runner_hook(
         text=True,
         check=False,
     )
-    artifact_name = legacy_artifact_name or f"{hook_point}-{ordinal:03d}.yaml"
+    artifact_name = f"{hook_point}-{ordinal:03d}.yaml"
     artifact_path = task_dir(root, task) / "artifacts" / artifact_name
     artifact_payload = {
         "step": step,
