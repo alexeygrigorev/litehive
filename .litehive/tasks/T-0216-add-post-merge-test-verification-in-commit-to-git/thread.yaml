@@ -1,0 +1,155 @@
+- role: planner
+  step: grooming
+  verdict: pass
+  message: 'Recovery classification: procedural failure in grooming.
+
+
+    Evidence:
+
+    - The planner subagent completed and persisted a scoped summary at `.litehive/tasks/T-0216-add-post-merge-test-verification-in-commit-to-git/subagents/SA-0001-planner/report.yaml`.
+
+    - `task.yaml` already contains the intended goal and acceptance criteria for adding
+    blocking `runner_hooks.after_merge` verification in `commit_to_git`.
+
+    - No grooming report existed under `.litehive/tasks/T-0216-add-post-merge-test-verification-in-commit-to-git/reports/`,
+    which matches the recorded failure: agent did not submit verdict via litehive
+    report CLI.
+
+
+    Grooming outcome:
+
+    - This task is implementation-ready.
+
+    - Scope includes adding an `after_merge` hook point to the runner hook surface
+    and invoking it from `commit_to_git` on main after a successful merge.
+
+    - On blocking `after_merge` failure, the merge must remain in place and the task
+    must return to the implementing stage so SWE can fix the merged main state.
+
+    - If no `after_merge` hook is configured, `commit_to_git` must skip the check
+    for backward compatibility.
+
+    - Coverage should target both the new hook configuration surface and `commit_to_git`
+    state transitions for success, hook failure, and no-hook paths.
+
+
+    Recovery action:
+
+    - Filed the missing grooming verdict against the correct task ID so pipeline state
+    can advance normally.
+
+    - No code changes were required for recovery; this was a task-state/reporting
+    repair.'
+  files_changed: []
+  created_at: '2026-04-08T08:13:01+00:00'
+- role: recovery
+  step: grooming
+  verdict: comment
+  message: 'Recovery trigger `stage_failure`: Recovery classification: procedural
+    failure in grooming.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0216-add-post-merge-test-verification-in-commit-to-git/recovery/recovery-001.yaml'
+  files_changed: []
+  created_at: '2026-04-08T08:14:32+00:00'
+- role: recovery
+  step: implementing
+  verdict: pass
+  message: 'Recovery classification: procedural failure in implementing. The prior
+    SWE attempt already left the intended code changes in the task worktree; the failure
+    was that no verdict was submitted via `litehive report`, so the stage ended as
+    fail despite runnable work.
+
+
+    Verified implementation present:
+
+    - `litehive/config/constants.py` accepts runner hook point `after_merge`.
+
+    - `litehive/cli/parser.py` exposes `after_merge` in configure help.
+
+    - `litehive/runtime/_hooks.py` maps `commit_to_git` post-merge success to the
+    `after_merge` hook point.
+
+    - `litehive/runtime/_commit.py` runs blocking `after_merge` hooks on main after
+    a successful merge, preserves merged state on hook failure, requeues the task
+    at `queued/implementing`, and does not revert the merge.
+
+    - `litehive/runner/core.py` now honors `commit_to_git` reports with `retry_decision=retry`
+    by finishing the run as queued instead of routing to `merge_failed`.
+
+    - Focused tests were added for config acceptance, successful post-merge verification,
+    failure-without-revert requeue, skip behavior when no hook is configured, and
+    runner requeue handling.
+
+
+    Verification run:
+
+    `pytest -q tests/test_retry_commit_and_recovery.py::test_commit_to_git_runs_after_merge_hook_on_main_and_finishes
+    tests/test_retry_commit_and_recovery.py::test_commit_to_git_requeues_implementing_when_after_merge_hook_fails
+    tests/test_retry_commit_and_recovery.py::test_commit_to_git_skips_after_merge_when_hook_not_configured
+    tests/test_config_and_run_cli.py::test_configure_persists_runner_hooks tests/test_runner_workflow.py::test_runner_requeues_commit_to_git_retry_request_back_to_implementing`
+
+    Result: 5 passed in 1.48s.
+
+
+    No additional repair was needed beyond validating the existing implementation
+    and submitting the missing verdict. Task is runnable again from implementing.'
+  files_changed: []
+  created_at: '2026-04-08T08:25:10+00:00'
+- role: recovery
+  step: implementing
+  verdict: comment
+  message: 'Recovery trigger `stage_failure`: Recovery classification: procedural
+    failure in implementing. The prior SWE attempt already left the intended code
+    changes in the task worktree; the failure was that no verdict was submitted via
+    `litehive report`, so the stage ended as fail despite runnable work.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0216-add-post-merge-test-verification-in-commit-to-git/recovery/recovery-002.yaml'
+  files_changed: []
+  created_at: '2026-04-08T08:25:35+00:00'
+- role: qa
+  step: testing
+  verdict: pass
+  message: 'Verified post-merge commit_to_git behavior for runner_hooks.after_merge
+    with focused regression tests. Evidence: tests/test_retry_commit_and_recovery.py::test_commit_to_git_runs_after_merge_hook_on_main_and_finishes
+    confirms the blocking after_merge hook executes on the main checkout after merge
+    and task finishes done when the hook passes; tests/test_retry_commit_and_recovery.py::test_commit_to_git_requeues_implementing_when_after_merge_hook_fails
+    confirms a failing blocking after_merge hook preserves the merged main commit,
+    removes the task worktree, leaves merged file content on main, and requeues the
+    task at queued/implementing with retry handoff instead of reverting; tests/test_retry_commit_and_recovery.py::test_commit_to_git_skips_after_merge_when_hook_not_configured
+    confirms backward-compatible skip behavior; tests/test_config_and_run_cli.py::test_configure_persists_runner_hooks
+    confirms after_merge is accepted and persisted in runner_hooks config; tests/test_runner_workflow.py::test_runner_requeues_commit_to_git_retry_request_back_to_implementing
+    confirms the runner honors commit_to_git retry_decision=retry by finishing queued
+    and preserving implementing as the next stage. Command run: uv run pytest -q tests/test_retry_commit_and_recovery.py::test_commit_to_git_runs_after_merge_hook_on_main_and_finishes
+    tests/test_retry_commit_and_recovery.py::test_commit_to_git_requeues_implementing_when_after_merge_hook_fails
+    tests/test_retry_commit_and_recovery.py::test_commit_to_git_skips_after_merge_when_hook_not_configured
+    tests/test_config_and_run_cli.py::test_configure_persists_runner_hooks tests/test_runner_workflow.py::test_runner_requeues_commit_to_git_retry_request_back_to_implementing.
+    Result: 5 passed in 2.74s.'
+  files_changed: []
+  created_at: '2026-04-08T08:27:15+00:00'
+- role: recovery
+  step: accepting
+  verdict: comment
+  message: 'Recovery trigger `same_stage_retry_churn`: Stage retry limit exhausted
+    for `accepting` (3 rejection(s), limit: 2); escalating to grooming for planner
+    escalation
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0216-add-post-merge-test-verification-in-commit-to-git/recovery/recovery-003.yaml'
+  files_changed: []
+  created_at: '2026-04-08T08:43:08+00:00'
+- role: recovery
+  step: grooming
+  verdict: comment
+  message: 'Recovery trigger `stale_runner_recovery`: Recovered stale runner state
+    and returned the task to `grooming`.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0216-add-post-merge-test-verification-in-commit-to-git/recovery/recovery-004.yaml'
+  files_changed: []
+  created_at: '2026-04-08T10:42:07+00:00'

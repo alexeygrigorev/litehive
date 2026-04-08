@@ -1,0 +1,52 @@
+task_id: T-0169
+step: testing
+verdict: fail
+summary: 'testing failed: agent did not submit verdict via litehive report CLI'
+feedback: "Validating the testing-stage evidence for T-0169. I\u2019m checking the\
+  \ task-local artifacts and the current test layout first, then I\u2019ll run only\
+  \ the focused test file(s) needed to confirm the split and deleted `tests/test_workspace.py`.\n\
+  The task artifacts confirm the implementation path was minimal, so I\u2019m checking\
+  \ the actual workspace diff and rerunning only the focused replacement tests that\
+  \ were cited as coverage evidence.\nI have the concrete change set now: `tests/test_workspace.py`\
+  \ is deleted and the only functional edit is the docs hook example pointing at an\
+  \ existing module-aligned suite. I\u2019m rerunning the two replacement tests and\
+  \ a narrow collection check to confirm the claimed coverage path still exists.\n\
+  The focused verification passed. I\u2019m recording the QA verdict now with the\
+  \ exact evidence the next stage needs: deleted legacy file, existing module-oriented\
+  \ suites present, and the replacement tests passing.\nThe report command bound to\
+  \ the wrong task because the workspace\u2019s active task is elsewhere. I\u2019\
+  m checking the CLI syntax and immediately resubmitting the same QA verdict explicitly\
+  \ for `T-0169`.\nSTAGE_RESULT:\n{\"verdict\":\"pass\",\"summary\":\"Focused QA verification\
+  \ passed: tests/test_workspace.py is removed, module-aligned suites already exist,\
+  \ and the cited replacement checkpoint-reconciliation tests pass.\",\"tests\":{\"\
+  added\":0,\"passing\":2},\"warnings\":[\"Did not run the full suite by design; verification\
+  \ was limited to the focused replacement tests and narrow collection checks.\",\"\
+  The first report submission bound to active task T-0184; the QA verdict was then\
+  \ resubmitted explicitly for T-0169 with --task-id T-0169.\"],\"follow_up_tasks\"\
+  :[],\"acceptance_criteria\":[{\"criterion\":\"tests/ has multiple test files matching\
+  \ source modules\",\"status\":\"met\",\"evidence\":\"tests/ already contains multiple\
+  \ module-oriented files including test_runtime_pool.py, test_runner_workflow.py,\
+  \ test_config_and_run_cli.py, test_tasks_an\n\n\u2026 [truncated \u2014 full transcript\
+  \ in subagent artifacts]"
+files_changed: []
+follow_up_tasks: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings:
+- Agent did not submit verdict via litehive report CLI.
+retry_count: 1
+retry_limit: 3
+retry_source: global
+retry_decision: retry
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 100
+hook_results: []
+created_at: '2026-04-08T07:41:59+00:00'

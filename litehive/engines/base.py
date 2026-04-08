@@ -546,7 +546,6 @@ def parse_stage_report_text(
             verdict=submission.verdict,  # type: ignore[arg-type]
             summary=submission.summary,
             feedback=cap_feedback(transcript),
-            follow_up_tasks=submission.follow_up_tasks,
             task_update=task_update_dict,
             tests={"added": submission.tests.added, "passing": submission.tests.passing},
             warnings=submission.warnings,

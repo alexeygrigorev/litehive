@@ -25,7 +25,6 @@ from litehive.tasks import (
     _prepare_interrupted_task,
     append_journal,
     clear_task_outcome,
-    create_follow_up_tasks,
     finish_task_run_transition,
     interruption_journal_message,
     mark_stage_finished,
@@ -297,24 +296,6 @@ class TaskExecutionRunner:
             report.retry_count = rejections
             report.retry_limit = self.max_retries
             report.retry_source = self.retry_source
-            if current in {"grooming", "accepting"} and report.follow_up_tasks:
-                created_follow_ups = create_follow_up_tasks(
-                    self.root,
-                    parent_task=task,
-                    stage=current,
-                    follow_ups=report.follow_up_tasks,
-                )
-                if created_follow_ups:
-                    report.created_follow_up_task_ids = [item.id for item in created_follow_ups]
-                    append_journal(
-                        self.root,
-                        task,
-                        (
-                            f"Created follow-up tasks during `{current}`: "
-                            f"{', '.join(item.id for item in created_follow_ups)}."
-                        ),
-                    )
-
             steps += 1
             last_verdict = report.verdict
             target = routes.get((current, report.verdict))

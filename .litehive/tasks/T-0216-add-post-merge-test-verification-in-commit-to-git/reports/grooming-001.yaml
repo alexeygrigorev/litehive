@@ -1,0 +1,63 @@
+task_id: T-0216
+step: grooming
+verdict: pass
+summary: 'Recovery classification: procedural failure in grooming.'
+feedback: 'Recovery classification: procedural failure in grooming.
+
+
+  Evidence:
+
+  - The planner subagent completed and persisted a scoped summary at `.litehive/tasks/T-0216-add-post-merge-test-verification-in-commit-to-git/subagents/SA-0001-planner/report.yaml`.
+
+  - `task.yaml` already contains the intended goal and acceptance criteria for adding
+  blocking `runner_hooks.after_merge` verification in `commit_to_git`.
+
+  - No grooming report existed under `.litehive/tasks/T-0216-add-post-merge-test-verification-in-commit-to-git/reports/`,
+  which matches the recorded failure: agent did not submit verdict via litehive report
+  CLI.
+
+
+  Grooming outcome:
+
+  - This task is implementation-ready.
+
+  - Scope includes adding an `after_merge` hook point to the runner hook surface and
+  invoking it from `commit_to_git` on main after a successful merge.
+
+  - On blocking `after_merge` failure, the merge must remain in place and the task
+  must return to the implementing stage so SWE can fix the merged main state.
+
+  - If no `after_merge` hook is configured, `commit_to_git` must skip the check for
+  backward compatibility.
+
+  - Coverage should target both the new hook configuration surface and `commit_to_git`
+  state transitions for success, hook failure, and no-hook paths.
+
+
+  Recovery action:
+
+  - Filed the missing grooming verdict against the correct task ID so pipeline state
+  can advance normally.
+
+  - No code changes were required for recovery; this was a task-state/reporting repair.'
+files_changed: []
+follow_up_tasks: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 418
+hook_results: []
+created_at: '2026-04-08T08:14:32+00:00'

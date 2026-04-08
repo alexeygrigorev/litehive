@@ -8,7 +8,7 @@ model: null
 mode: implementation
 pipeline_mode: full
 status: queued
-pipeline_status: backlog
+pipeline_status: done
 priority: medium
 pm_complexity: moderate
 planned_effort: m

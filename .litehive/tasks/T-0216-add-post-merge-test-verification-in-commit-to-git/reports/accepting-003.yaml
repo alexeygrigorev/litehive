@@ -1,0 +1,53 @@
+task_id: T-0216
+step: accepting
+verdict: fail
+summary: 'accepting failed: agent did not submit verdict via litehive report CLI'
+feedback: "Reviewing the acceptance evidence and the code paths touched by `commit_to_git`\
+  \ first, then I\u2019ll rerun the focused regression coverage to confirm the stage\
+  \ should pass or be sent back.\nThe task worktree is dirty only in the expected\
+  \ implementation files and task artifacts. I\u2019m checking the exact state-transition\
+  \ and hook behavior now, because acceptance hinges on \u201Cretry on merged main\u201D\
+  \ rather than just the test names.\nThe implementation added the hook surface and\
+  \ the `commit_to_git` retry path where it matters. I\u2019m validating the runner\
+  \ transition on a `retry_decision=retry` report next, since that is what keeps the\
+  \ task on merged `main` instead of dropping into `merge_failed`.\nThe test coverage\
+  \ matches the acceptance surface, but I still want a fresh local run in this worktree\
+  \ before passing it. Running the focused five-test set now.\nThe test process is\
+  \ still running. Once it returns, I\u2019ll submit the reviewer verdict into Litehive\
+  \ with the exact evidence the next stage needs.\nThe focused regression set passed\
+  \ cleanly. I\u2019m filing a `reviewer/accepting` pass report now with the specific\
+  \ merge-preservation and requeue evidence.\nThe first report command was quoted\
+  \ incorrectly because shell backticks expanded inside the message. I\u2019m resubmitting\
+  \ with safe quoting so the task gets the reviewer verdict recorded properly.\n`litehive\
+  \ report` inferred the wrong task ID from workspace state, so I\u2019m checking\
+  \ the CLI syntax and then filing the acceptance report explicitly for `T-0216` instead\
+  \ of relying on inference.\nSTAGE_RESULT:\n{\"verdict\":\"pass\",\"summary\":\"\
+  Accepted: post-merge after_merge verification runs on main, requeues to implementing\
+  \ without reverting on blocking failure, and skips cleanly when unconfigured.\"\
+  ,\"tests\":{\"added\":5,\"passing\":5},\"warnings\":[],\"follow_up_tasks\":[],\"\
+  acceptance_criteria\":[{\"criterion\":\"On after_merge hook failure, task goes back\
+  \ to implementing stage so SWE can fix on main\",\"status\":\"met\",\"\n\n\u2026\
+  \ [truncated \u2014 full transcript in subagent artifacts]"
+files_changed: []
+follow_up_tasks: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings:
+- Agent did not submit verdict via litehive report CLI.
+retry_count: 1
+retry_limit: 3
+retry_source: global
+retry_decision: retry
+outcome: null
+outcome_reason_code: stage_retry_limit_exhausted
+outcome_reason: 'Stage retry limit exhausted for `accepting` (3 rejection(s), limit:
+  2); escalating to grooming for planner escalation'
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 172
+hook_results: []
+created_at: '2026-04-08T08:43:06+00:00'

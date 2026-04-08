@@ -69,7 +69,6 @@ class StageResultSubmission(BaseModel):
     files_changed: list[str] = Field(default_factory=list)
     tests: StageResultTests = Field(default_factory=StageResultTests)
     warnings: list[str] = Field(default_factory=list)
-    follow_up_tasks: list[FollowUpTaskSpec] = Field(default_factory=list)
     acceptance_criteria: list[str] = Field(default_factory=list)
     task_update: TaskUpdateSubmission | None = None
 
@@ -113,7 +112,6 @@ class StageReport(BaseModel):
     summary: str
     feedback: str = ""
     files_changed: list[str] = Field(default_factory=list)
-    follow_up_tasks: list[FollowUpTaskSpec] = Field(default_factory=list)
     created_follow_up_task_ids: list[str] = Field(default_factory=list)
     task_update: dict[str, object] = Field(default_factory=dict)
     tests: dict[str, int] = Field(default_factory=lambda: {"added": 0, "passing": 0})

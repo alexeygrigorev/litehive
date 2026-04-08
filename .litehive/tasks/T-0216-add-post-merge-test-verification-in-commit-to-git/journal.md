@@ -65,3 +65,6 @@ grooming failed with unhandled error: name 'os' is not defined. Launching recove
 
 ## 2026-04-08T08:43:21+00:00
 Stage `grooming` fail: grooming failed with unhandled error: name 'os' is not defined. Launching recovery agent.
+
+## 2026-04-08T13:04:34+00:00
+Recovered interrupted run and requeued the task at `grooming`.

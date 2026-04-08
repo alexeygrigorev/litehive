@@ -1,0 +1,63 @@
+task_id: T-0217
+step: grooming
+verdict: pass
+summary: Grooming recovered and complete. Restored the missing planner verdict so
+  the stage can reconcile and proceed.
+feedback: 'Grooming recovered and complete. Restored the missing planner verdict so
+  the stage can reconcile and proceed.
+
+
+  PM_COMPLEXITY: moderate
+
+  PLANNED_EFFORT: m
+
+
+  CONSTRAINTS:
+
+  - Keep changes scoped to unused-import cleanup in litehive/ and tests/.
+
+
+  PLAN:
+
+  - Identify all current F401 violations under litehive/ and tests/, separating simple
+  removals from intentional package re-exports in __init__.py modules.
+
+  - Remove or convert unused imports so ruff F401 is clean without changing intended
+  public API surface.
+
+  - Run targeted verification for ruff F401 and the existing test suite, then capture
+  any remaining risk if full verification is limited by runtime.
+
+
+  ACCEPTANCE_CRITERIA:
+
+  - ruff check --select F401 litehive tests passes with zero findings.
+
+  - The existing test suite passes after the import cleanup changes.
+
+
+  Evidence: the planner artifact already established a baseline of 488 F401 findings
+  from uv run ruff check --select F401 litehive tests, including both straightforward
+  removals and intentional __init__.py re-export cases. No product code was changed
+  during recovery.'
+files_changed: []
+follow_up_tasks: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 280
+hook_results: []
+created_at: '2026-04-08T11:38:50+00:00'
