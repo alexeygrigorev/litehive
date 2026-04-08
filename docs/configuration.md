@@ -218,7 +218,7 @@ runner_hooks:
     - command: uv run python scripts/preflight.py
       blocking: true
   after_swe_implementation:
-    - command: uv run pytest -q tests/test_workspace.py
+    - command: uv run pytest -q tests/test_runtime_pool.py
       blocking: false
   before_pm_acceptance:
     - command: uv run ruff check .

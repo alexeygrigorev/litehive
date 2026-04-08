@@ -7,6 +7,7 @@ from litehive.engines.sandbox import SandboxLauncher
 from litehive.subagents._engine_detection import (
     _ORIGINAL_EXTERNAL_ADAPTER_RUN,
     _ORIGINAL_EXTERNAL_ADAPTER_RUN_LIVE,
+    _filter_supported_kwargs,
     _has_callable_override,
 )
 
@@ -63,13 +64,17 @@ class _SandboxedAdapter(ExternalCLIAdapter):
         on_started=None,
     ) -> CLIExecutionResult:
         if _has_callable_override(self._adapter, "run", _ORIGINAL_EXTERNAL_ADAPTER_RUN):
+            run_kwargs = {"model": model}
+            if max_turns is not None:
+                run_kwargs["max_turns"] = max_turns
+            if resume_session_id is not None:
+                run_kwargs["resume_session_id"] = resume_session_id
+            if on_started is not None:
+                run_kwargs["on_started"] = on_started
             return self._adapter.run(
                 prompt,
                 cwd,
-                model=model,
-                max_turns=max_turns,
-                resume_session_id=resume_session_id,
-                on_started=on_started,
+                **_filter_supported_kwargs(self._adapter.run, run_kwargs),
             )
         return super().run(
             prompt,
@@ -93,15 +98,21 @@ class _SandboxedAdapter(ExternalCLIAdapter):
         inactivity_timeout_seconds: float = 0,
     ) -> CLIExecutionResult:
         if _has_callable_override(self._adapter, "run_live", _ORIGINAL_EXTERNAL_ADAPTER_RUN_LIVE):
+            run_live_kwargs = {"model": model}
+            if max_turns is not None:
+                run_live_kwargs["max_turns"] = max_turns
+            if resume_session_id is not None:
+                run_live_kwargs["resume_session_id"] = resume_session_id
+            if on_started is not None:
+                run_live_kwargs["on_started"] = on_started
+            if on_update is not None:
+                run_live_kwargs["on_update"] = on_update
+            if inactivity_timeout_seconds > 0:
+                run_live_kwargs["inactivity_timeout_seconds"] = inactivity_timeout_seconds
             return self._adapter.run_live(
                 prompt,
                 cwd,
-                model=model,
-                max_turns=max_turns,
-                resume_session_id=resume_session_id,
-                on_started=on_started,
-                on_update=on_update,
-                inactivity_timeout_seconds=inactivity_timeout_seconds,
+                **_filter_supported_kwargs(self._adapter.run_live, run_live_kwargs),
             )
         return super().run_live(
             prompt,
