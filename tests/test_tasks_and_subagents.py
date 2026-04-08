@@ -1297,8 +1297,9 @@ def test_subagent_manager_uses_inherited_run_live_when_sandboxed_and_base_run_is
         on_started=None,
         on_update=None,
         inactivity_timeout_seconds=None,
+        **kwargs,
     ) -> CLIExecutionResult:
-        del self, prompt, model, max_turns, inactivity_timeout_seconds
+        del self, prompt, model, max_turns, inactivity_timeout_seconds, kwargs
         calls.append("run_live")
         assert on_started is not None
         on_started(4647)
