@@ -101,8 +101,8 @@ def _attempt_stage_recovery(
     if subagents is None:
         return None
 
-    # Hard cap: stop launching recovery agents after 5 attempts per task.
-    MAX_RECOVERY_ATTEMPTS = 5
+    # Only one recovery attempt per task. If it doesn't fix it, flag the task.
+    MAX_RECOVERY_ATTEMPTS = 1
     recovery_count = sum(1 for sa in task.subagents if sa.role == "recovery")
     if recovery_count >= MAX_RECOVERY_ATTEMPTS:
         append_journal(
