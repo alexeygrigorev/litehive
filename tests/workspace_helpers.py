@@ -251,14 +251,43 @@ def _write_fake_uv(tmp_path: Path, script: str) -> Path:
     return fake_uv
 
 
+import shutil as _shutil
+import tempfile as _tempfile
+
+_GIT_TEMPLATE_DIR: Path | None = None
+_GIT_TEMPLATE_SHA: str = ""
+
+
+def _get_git_template() -> tuple[Path, str]:
+    """Create a reusable template git repo (once per process)."""
+    global _GIT_TEMPLATE_DIR, _GIT_TEMPLATE_SHA
+    if _GIT_TEMPLATE_DIR is not None and _GIT_TEMPLATE_DIR.exists():
+        return _GIT_TEMPLATE_DIR, _GIT_TEMPLATE_SHA
+    tpl = Path(_tempfile.mkdtemp(prefix="litehive-git-tpl-"))
+    _run(["git", "init"], tpl)
+    _run(["git", "config", "user.name", "Litehive Tests"], tpl)
+    _run(["git", "config", "user.email", "tests@example.com"], tpl)
+    (tpl / "app.txt").write_text("base\n", encoding="utf-8")
+    _run(["git", "add", "app.txt"], tpl)
+    _run(["git", "commit", "-m", "initial"], tpl)
+    _GIT_TEMPLATE_SHA = _run(["git", "rev-parse", "HEAD"], tpl)
+    _GIT_TEMPLATE_DIR = tpl
+    return tpl, _GIT_TEMPLATE_SHA
+
+
 def _init_git_repo(tmp_path: Path) -> str:
-    _run(["git", "init"], tmp_path)
-    _run(["git", "config", "user.name", "Litehive Tests"], tmp_path)
-    _run(["git", "config", "user.email", "tests@example.com"], tmp_path)
-    (tmp_path / "app.txt").write_text("base\n", encoding="utf-8")
-    _run(["git", "add", "app.txt"], tmp_path)
-    _run(["git", "commit", "-m", "initial"], tmp_path)
-    return _run(["git", "rev-parse", "HEAD"], tmp_path)
+    """Initialize a git repo at tmp_path by copying a cached template."""
+    tpl, sha = _get_git_template()
+    # Copy the template .git and working tree into tmp_path
+    for item in tpl.iterdir():
+        dst = tmp_path / item.name
+        if dst.exists():
+            continue
+        if item.is_dir():
+            _shutil.copytree(item, dst, symlinks=True)
+        else:
+            _shutil.copy2(item, dst)
+    return sha
 
 
 def _commit_repo_state(cwd: Path, message: str = "baseline") -> str:

@@ -27,8 +27,9 @@ def _atomic_write_text(path: Path, content: str) -> None:
     try:
         with temp_path.open("w", encoding="utf-8") as handle:
             handle.write(content)
-            handle.flush()
-            os.fsync(handle.fileno())
+            if not os.environ.get("LITEHIVE_SKIP_FSYNC"):
+                handle.flush()
+                os.fsync(handle.fileno())
         os.replace(temp_path, path)
     finally:
         if temp_path.exists():

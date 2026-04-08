@@ -1,3 +1,5 @@
+import importlib
+
 from tests.workspace_helpers import *  # noqa: F401,F403
 
 from litehive.subagents._engine_detection import (
@@ -1461,6 +1463,7 @@ def test_subagent_manager_prefers_instance_run_override_when_sandboxed(
     calls: list[str] = []
 
     def fake_run(
+        self,
         prompt: str,
         cwd: Path,
         model: str | None = None,
@@ -1470,7 +1473,7 @@ def test_subagent_manager_prefers_instance_run_override_when_sandboxed(
         on_started=None,
         **kwargs,
     ) -> CLIExecutionResult:
-        del prompt, model, max_turns, resume_session_id, kwargs
+        del self, prompt, model, max_turns, resume_session_id, kwargs
         calls.append("run")
         assert on_started is not None
         on_started(4343)
@@ -1487,7 +1490,7 @@ def test_subagent_manager_prefers_instance_run_override_when_sandboxed(
     def fail_run_live(*args, **kwargs) -> CLIExecutionResult:  # type: ignore[no-untyped-def]
         raise AssertionError("run_live should not be used when sandboxed engine only overrides run")
 
-    monkeypatch.setattr(engine, "run", fake_run)
+    monkeypatch.setattr(type(engine), "run", fake_run)
     monkeypatch.setattr("litehive.engines.base.ExternalCLIAdapter.run_live", fail_run_live)
 
     result = manager.run(task, role="swe", engine_name="codex", prompt="implement it")
@@ -2178,6 +2181,56 @@ def test_subagent_manager_uses_inherited_run_live_when_available(
     assert result.failure == EngineFailure(kind="execution_limit", reason="usage limit reached")
 
 
+def test_legacy_subagent_execution_module_alias_preserves_monkeypatching(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Fallback usage-limit task")
+    legacy_execution = importlib.import_module("litehive.subagents._execution")
+    manager = legacy_execution.SubagentManager(tmp_path)
+    engine = get_engine("codex")
+
+    monkeypatch.setattr(legacy_execution, "get_engine", lambda _: engine)
+    monkeypatch.setattr(engine, "is_available", lambda: True)
+
+    calls: list[str] = []
+
+    def fake_run(
+        prompt: str,
+        cwd: Path,
+        model: str | None = None,
+        *,
+        max_turns: int | None = None,
+        resume_session_id: str | None = None,
+        on_started=None,
+        **kwargs,
+    ) -> CLIExecutionResult:
+        del prompt, model, max_turns, resume_session_id, kwargs
+        calls.append("run")
+        assert on_started is not None
+        on_started(4241)
+        return CLIExecutionResult(
+            adapter="codex",
+            argv=("codex", "exec"),
+            cwd=cwd,
+            exit_code=1,
+            stdout="",
+            stderr="ERROR: You've hit your usage limit. Try again later.",
+            pid=4241,
+        )
+
+    def fail_run_live(*args, **kwargs) -> CLIExecutionResult:  # type: ignore[no-untyped-def]
+        raise AssertionError("run_live should not be used when the legacy module is patched")
+
+    monkeypatch.setattr(engine, "run", fake_run)
+    monkeypatch.setattr("litehive.engines.base.ExternalCLIAdapter.run_live", fail_run_live)
+
+    result = manager.run(task, role="swe", engine_name="codex", prompt="implement it")
+
+    assert calls == ["run"]
+    assert result.failure == EngineFailure(kind="execution_limit", reason="usage limit reached")
+
+
 def test_subagent_manager_uses_inherited_run_live_when_sandboxed(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -2526,6 +2579,26 @@ def test_has_callable_override_ignores_rebound_external_base_methods(
 
     assert _has_callable_override(engine, "run", _ORIGINAL_EXTERNAL_ADAPTER_RUN) is False
     assert _has_callable_override(engine, "run_live", _ORIGINAL_EXTERNAL_ADAPTER_RUN_LIVE) is False
+    assert _prefers_non_live_run(engine) is False
+    assert _supports_live_execution(engine) is True
+
+
+def test_has_callable_override_ignores_bound_alias_to_rebound_external_base_run(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    engine = get_engine("codex")
+
+    def rebound_run(*args, **kwargs) -> CLIExecutionResult:  # type: ignore[no-untyped-def]
+        raise AssertionError("execution should not happen in this unit test")
+
+    monkeypatch.setattr("litehive.engines.base.ExternalCLIAdapter.run", rebound_run)
+    monkeypatch.setattr(
+        engine,
+        "run",
+        ExternalCLIAdapter.run.__get__(engine, type(engine)),
+    )
+
+    assert _has_callable_override(engine, "run", _ORIGINAL_EXTERNAL_ADAPTER_RUN) is False
     assert _prefers_non_live_run(engine) is False
     assert _supports_live_execution(engine) is True
 

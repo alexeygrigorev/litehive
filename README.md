@@ -285,11 +285,12 @@ Currently supported:
 
 ### Speed requirements
 
-- **Never run the full test suite** — run only the specific test file for your change (e.g. `pytest tests/test_specific.py -q`)
-- **Each unit test should finish within 1 minute** — longer tests will cause the agent process to be killed by the inactivity timeout
+- **Each unit test has a 60-second hard timeout** enforced by `pytest-timeout` in `pyproject.toml` — tests exceeding this are killed automatically
 - **Each test file should finish within 1 minute** — if a test file takes longer, the tests need to be optimized or split
-- **Integration tests** (in `tests_integration/`) may take up to 3 minutes — if they exceed 3 minutes, split or optimize them
-- The agent process is killed after **6 minutes of no output** — if a test takes longer than that, split it into smaller tests
+- **The full test suite must finish within 3 minutes** (`uv run pytest tests/ -q`) — if a change pushes it over 3 minutes, QA must reject
+- **Integration tests** (in `tests_integration/`) may take up to 3 minutes per file
+- The agent process is killed after **6 minutes of no output** — run only the specific test file for your change, not the full suite
+- `LITEHIVE_SKIP_FSYNC=1` is set automatically in tests via `conftest.py` to avoid slow disk flushes
 
 ### Always mock the execution layer
 

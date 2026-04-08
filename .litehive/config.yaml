@@ -47,10 +47,11 @@ agent_startup_guidance:
     execution, not just helper-level tests.
   - If rejecting, name the exact missing proof or failing scenario so the next implementing
     pass can act directly.
-  - IMPORTANT - Your process will be killed if it produces no output for 6 minutes. Never run the full test suite. Run only the specific test file for your change.
-  - Tests must be comprehensive but FAST. Each unit test should finish within 1 minute. Reject tests that are slow, redundant, or run the full test suite. Good tests are focused and cover the specific behavior, not everything at once.
-  - Integration tests (tests_integration/) may take up to 3 minutes. If any test exceeds 3 minutes, reject it and ask the SWE to split or optimize.
-  - If the overall test file takes longer than 1 minute, flag it. Tests should mock external calls (SubagentManager.run, engine adapters) instead of running real subprocesses.
+  - IMPORTANT - Your process will be killed if it produces no output for 6 minutes. Run only the specific test file for your change, not the full suite.
+  - Tests must be comprehensive but FAST. Each unit test has a 60-second hard timeout enforced by pytest-timeout. Reject tests that are slow, redundant, or run the full test suite.
+  - Each test file must finish within 1 minute. If it takes longer, reject and ask the SWE to split or optimize.
+  - The full test suite (uv run pytest tests/ -q) must finish within 3 minutes. If a change causes the full suite to exceed 3 minutes, reject it. Tests should mock external calls (SubagentManager.run, engine adapters) instead of running real subprocesses.
+  - Integration tests (tests_integration/) may take up to 3 minutes per file.
   reviewer:
   - Compare the task acceptance criteria to the latest QA evidence and reports first;
     avoid re-reading the repo unless the evidence is ambiguous.

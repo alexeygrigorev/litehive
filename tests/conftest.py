@@ -1,8 +1,13 @@
 """Shared test fixtures."""
 
+import os
+
 import pytest
 
 import litehive.engines._codex_quota as _codex_quota_mod
+
+# Skip fsync in tests — saves ~70% of file write time
+os.environ["LITEHIVE_SKIP_FSYNC"] = "1"
 
 
 def _noop_block_reason(**kw):
