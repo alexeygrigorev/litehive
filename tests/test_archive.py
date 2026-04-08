@@ -9,6 +9,7 @@ from tests.workspace_helpers import (
     archive_root,
     archive_task,
     argparse,
+    build_parser,
     cleanup_archived_tasks,
     create_task,
     ensure_workspace,
@@ -230,7 +231,7 @@ def test_cmd_archive_single_task(
     task = _make_done_task(tmp_path, "Archive via CLI")
 
     exit_code = _cmd_archive(
-        argparse.Namespace(workspace=tmp_path, task_id=task.id)
+        argparse.Namespace(workspace=tmp_path, task_id=task.id, all_done=False)
     )
     output = capsys.readouterr().out
 
@@ -248,12 +249,55 @@ def test_cmd_archive_all_done(
     create_task(tmp_path, title="Still queued")
 
     exit_code = _cmd_archive(
-        argparse.Namespace(workspace=tmp_path, task_id=None)
+        argparse.Namespace(workspace=tmp_path, task_id=None, all_done=True)
     )
     output = capsys.readouterr().out
 
     assert exit_code == 0
     assert "archived_count: 2" in output
+
+
+def test_cmd_archive_no_args_prints_help(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    ensure_workspace(tmp_path)
+    parser = build_parser()
+    args = parser.parse_args(["archive", "--workspace", str(tmp_path)])
+
+    exit_code = _cmd_archive(args)
+    captured = capsys.readouterr()
+
+    assert exit_code == 2
+    assert "usage: litehive archive" in captured.out
+    assert "--all-done" in captured.out
+
+
+def test_cmd_archive_all_done_logs_skipped_broken_task(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ensure_workspace(tmp_path)
+    first = _make_done_task(tmp_path, "Done A")
+    broken = _make_done_task(tmp_path, "Broken")
+
+    original_archive_task = archive_task
+
+    def fake_archive_task(root: Path, task_id: str) -> TaskRecord:
+        if task_id == broken.id:
+            raise FileNotFoundError("missing task directory")
+        return original_archive_task(root, task_id)
+
+    monkeypatch.setattr("litehive.cli.queue.archive_task", fake_archive_task)
+    monkeypatch.setattr("litehive.tasks.archive.archive_task", fake_archive_task)
+
+    exit_code = _cmd_archive(
+        argparse.Namespace(workspace=tmp_path, task_id=None, all_done=True)
+    )
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert f"archived: {first.id}" in output
+    assert f"archive skipped: {broken.id} (missing task directory)" in output
+    assert "archived_count: 1" in output
 
 
 def test_cmd_archive_non_done_fails(
@@ -263,7 +307,7 @@ def test_cmd_archive_non_done_fails(
     task = create_task(tmp_path, title="Not done")
 
     exit_code = _cmd_archive(
-        argparse.Namespace(workspace=tmp_path, task_id=task.id)
+        argparse.Namespace(workspace=tmp_path, task_id=task.id, all_done=False)
     )
     output = capsys.readouterr().out
 

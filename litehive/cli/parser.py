@@ -977,11 +977,17 @@ def build_parser():
     archive_cmd = subparsers.add_parser(
         "archive", help="Move done tasks to the archive directory"
     )
+    archive_cmd.set_defaults(command_parser=archive_cmd)
     archive_cmd.add_argument(
         "task_id",
         nargs="?",
         default=None,
-        help="Optional task ID to archive (archives all done tasks if omitted)",
+        help="Task ID to archive",
+    )
+    archive_cmd.add_argument(
+        "--all-done",
+        action="store_true",
+        help="Archive all done tasks and skip missing or broken task references",
     )
     archive_cmd.add_argument(
         "--workspace",
