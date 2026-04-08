@@ -5,7 +5,7 @@ from pathlib import Path
 from litehive.engines.base import _extract_stage_result_submission
 from litehive.models import StageReport, StageResultSubmission, TaskRecord, cap_feedback
 
-from litehive.subagents._execution import SubagentResult
+from litehive.subagents._models import SubagentResult
 
 
 def _extract_stage_metadata(result: SubagentResult) -> dict:

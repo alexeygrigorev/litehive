@@ -7,13 +7,13 @@ engine: null
 model: null
 mode: implementation
 pipeline_mode: full
-status: in_progress
-pipeline_status: commit_to_git
+status: done
+pipeline_status: done
 priority: medium
 pm_complexity: simple
 planned_effort: s
 created_at: '2026-04-06T20:36:26+00:00'
-updated_at: '2026-04-08T04:54:44+00:00'
+updated_at: '2026-04-08T04:57:00+00:00'
 goal: Pure mechanical split, no logic changes. Break _execution.py into focused submodules.
 acceptance_criteria:
 - No file over 500 lines in runtime/
@@ -66,15 +66,22 @@ subagents:
   path: subagents/SA-0005-reviewer
   sandboxed: false
   sandbox_summary: host
+- id: SA-0006
+  role: merge-resolver
+  engine: claude
+  status: completed
+  path: subagents/SA-0006-merge-resolver
+  sandboxed: false
+  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0205 split-runtime-execution-py-1166-lines-into'
-  commit_sha: null
-  checkpoint_base_sha: null
-  checkpoint_attempts: 0
+  commit_sha: 406ffd96d451df37220428bcb620a3b4a52d5773
+  checkpoint_base_sha: 3c3c344c129bd4fe96313cd229fbc6f20fbee090
+  checkpoint_attempts: 1
   rolled_back_checkpoint_attempt: null
   worktree_path: null
-  merge_agent_attempts: 0
+  merge_agent_attempts: 1
 retry_policy:
   max_retries: null
   stage_retry_limit: null

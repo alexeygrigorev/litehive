@@ -854,7 +854,7 @@ def test_subagent_writes_timeline_on_finish(
         def render_transcript(self, execution):
             return execution.stdout
 
-    monkeypatch.setattr("litehive.subagents._execution.get_engine", lambda _: FakeEngine())
+    monkeypatch.setattr("litehive.subagents._manager.get_engine", lambda _: FakeEngine())
 
     result = manager.run(task, role="swe", engine_name="opencode", prompt="do it")
 
@@ -930,7 +930,7 @@ def test_subagent_writes_timeline_during_live_progress(
         def render_transcript(self, execution):
             return execution.transcript
 
-    monkeypatch.setattr("litehive.subagents._execution.get_engine", lambda _: FakeStreamingEngine())
+    monkeypatch.setattr("litehive.subagents._manager.get_engine", lambda _: FakeStreamingEngine())
 
     result = manager.run(task, role="swe", engine_name="opencode", prompt="stream it")
     assert result.ref.status == "completed"
@@ -971,7 +971,7 @@ def test_subagent_skips_timeline_when_no_events(
         def render_transcript(self, execution):
             return execution.stdout
 
-    monkeypatch.setattr("litehive.subagents._execution.get_engine", lambda _: FakeEngine())
+    monkeypatch.setattr("litehive.subagents._manager.get_engine", lambda _: FakeEngine())
 
     result = manager.run(task, role="swe", engine_name="codex", prompt="no events")
     assert result.ref.status == "completed"
