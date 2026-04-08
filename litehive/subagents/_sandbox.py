@@ -7,6 +7,7 @@ from litehive.engines.sandbox import SandboxLauncher
 from litehive.subagents._engine_detection import (
     _ORIGINAL_EXTERNAL_ADAPTER_RUN,
     _ORIGINAL_EXTERNAL_ADAPTER_RUN_LIVE,
+    _effective_engine_callable,
     _filter_supported_kwargs,
     _has_callable_override,
 )
@@ -64,6 +65,9 @@ class _SandboxedAdapter(ExternalCLIAdapter):
         on_started=None,
     ) -> CLIExecutionResult:
         if _has_callable_override(self._adapter, "run", _ORIGINAL_EXTERNAL_ADAPTER_RUN):
+            run_callable = _effective_engine_callable(self._adapter, "run")
+            if not callable(run_callable):
+                run_callable = self._adapter.run
             run_kwargs = {"model": model}
             if max_turns is not None:
                 run_kwargs["max_turns"] = max_turns
@@ -71,10 +75,10 @@ class _SandboxedAdapter(ExternalCLIAdapter):
                 run_kwargs["resume_session_id"] = resume_session_id
             if on_started is not None:
                 run_kwargs["on_started"] = on_started
-            return self._adapter.run(
+            return run_callable(
                 prompt,
                 cwd,
-                **_filter_supported_kwargs(self._adapter.run, run_kwargs),
+                **_filter_supported_kwargs(run_callable, run_kwargs),
             )
         return super().run(
             prompt,
@@ -98,6 +102,9 @@ class _SandboxedAdapter(ExternalCLIAdapter):
         inactivity_timeout_seconds: float = 0,
     ) -> CLIExecutionResult:
         if _has_callable_override(self._adapter, "run_live", _ORIGINAL_EXTERNAL_ADAPTER_RUN_LIVE):
+            run_live_callable = _effective_engine_callable(self._adapter, "run_live")
+            if not callable(run_live_callable):
+                run_live_callable = self._adapter.run_live
             run_live_kwargs = {"model": model}
             if max_turns is not None:
                 run_live_kwargs["max_turns"] = max_turns
@@ -109,10 +116,10 @@ class _SandboxedAdapter(ExternalCLIAdapter):
                 run_live_kwargs["on_update"] = on_update
             if inactivity_timeout_seconds > 0:
                 run_live_kwargs["inactivity_timeout_seconds"] = inactivity_timeout_seconds
-            return self._adapter.run_live(
+            return run_live_callable(
                 prompt,
                 cwd,
-                **_filter_supported_kwargs(self._adapter.run_live, run_live_kwargs),
+                **_filter_supported_kwargs(run_live_callable, run_live_kwargs),
             )
         return super().run_live(
             prompt,

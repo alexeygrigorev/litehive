@@ -3,8 +3,6 @@
 import subprocess
 import time
 
-# ruff: noqa: F401
-
 from litehive.subagents import SubagentManager
 
 from ._types import (
@@ -111,6 +109,9 @@ from ._worktree import (
 )
 
 __all__ = [
+    "subprocess",
+    "time",
+    "SubagentManager",
     # types
     "DirtyWorktreeFinding",
     "DirtyWorktreeGateReport",
@@ -121,9 +122,24 @@ __all__ = [
     "SingleTaskRunSummary",
     "TaskPoolRunSummary",
     "TaskPoolStopConditions",
+    "_path_within",
+    "_budget_ledger_from_conditions",
+    "_budget_ledger_from_config",
+    "_count_execution_limits",
+    "_engine_attempt_order",
+    "_execution_exhausted_limit_fallbacks",
+    "_execution_hit_limit",
+    "_execution_limit_kind",
+    "_limit_stop_condition_is_configured",
     # budget
     "workspace_model_for_engine",
     # models
+    "_execution_retry_model_family",
+    "_is_recovery_run",
+    "_resolve_stage_retry_limit",
+    "_retry_backoff_seconds",
+    "_role_for_step",
+    "_set_continuation_handoff",
     "active_engine_freezes",
     "is_engine_frozen",
     "resolve_engine_attempt_order",
@@ -133,10 +149,29 @@ __all__ = [
     "resolve_model",
     "resolve_task_retry_policy",
     # recovery
+    "_attempt_commit_recovery",
+    "_attempt_stage_recovery",
+    "_capture_persisted_files",
+    "_classify_recovery_failure_owner",
+    "_require_completed_task",
+    "_resolve_recovery_engine",
+    "_restore_persisted_files",
+    "_traceback_fingerprint",
+    "_traceback_frame_paths",
+    "_traceback_text",
     "recover_completed_task",
     "rollback_completed_task",
     # execution
+    "_commit_to_git_report",
     "build_executor",
+    "_attach_runner_hook_results",
+    "_execute_runner_hook",
+    "_flatten_runner_hook_feedback",
+    "_flatten_runner_hook_warnings",
+    "_run_runner_hooks_for_stage",
+    "_runner_hook_feedback",
+    "_runner_hook_point",
+    "_runner_hook_warnings",
     "drain_task_pool",
     "inspect_dirty_worktree_gate",
     "resolve_next_task",
@@ -144,6 +179,19 @@ __all__ = [
     "run_next_task_with_override",
     "run_single_task",
     "run_task",
-    # re-exported for monkeypatching compatibility
-    "SubagentManager",
+    "_finalize_pool_run",
+    "_human_checkpoint_stop_reason",
+    "_pool_stop_reason",
+    "_requires_continue_or_rollback",
+    "_single_task_pre_stop_reason",
+    "_single_task_stop_reason",
+    "_allowed_commit_paths",
+    "_dirty_entry_paths",
+    "_dirty_worktree_owner_task",
+    "_git_worktree_blocks_pool",
+    "_git_worktree_is_dirty",
+    "_resolve_task_execution_root",
+    "_task_can_resume_with_owned_dirty_paths",
+    "_task_worktree_path",
+    "_unexpected_dirty_paths",
 ]

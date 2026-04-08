@@ -100,6 +100,13 @@ subagents:
   path: subagents/SA-0010-reviewer
   sandboxed: false
   sandbox_summary: host
+- id: SA-0011
+  role: merge-resolver
+  engine: claude
+  status: running
+  path: subagents/SA-0011-merge-resolver
+  sandboxed: false
+  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0230 enable-ruff-f401-and-e402-checks-and-fix-all'
@@ -107,7 +114,7 @@ git:
   checkpoint_base_sha: null
   checkpoint_attempts: 0
   rolled_back_checkpoint_attempt: null
-  merge_agent_attempts: 0
+  merge_agent_attempts: 1
   worktree_path: null
 retry_policy:
   max_retries: null

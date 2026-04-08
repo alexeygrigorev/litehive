@@ -1,6 +1,43 @@
 import importlib
 
-from tests.workspace_helpers import *  # noqa: F401,F403
+from tests.workspace_helpers import (
+    AdapterCapabilities,
+    CLIExecutionResult,
+    EngineFailure,
+    ExternalCLIAdapter,
+    ExternalEngineSandboxConfig,
+    ExternalEngineSandboxPolicy,
+    LitehiveConfig,
+    Path,
+    SubagentManager,
+    SubagentRef,
+    SubagentResourceLimitsConfig,
+    SubagentResult,
+    _cmd_intake,
+    _fail_atomic_write_on_path,
+    argparse,
+    create_task,
+    ensure_workspace,
+    get_engine,
+    get_task,
+    intake_prompt,
+    list_tasks,
+    load_engine_monitoring,
+    load_state,
+    os,
+    pytest,
+    save_task,
+    stage_prompt,
+    subprocess,
+    sys,
+    task_dir,
+    task_runtime_file,
+    tasks_module,
+    threading,
+    time,
+    update_task_metadata,
+    yaml,
+)
 
 from litehive.subagents._engine_detection import (
     _ORIGINAL_EXTERNAL_ADAPTER_RUN,
@@ -2456,6 +2493,84 @@ def test_subagent_manager_ignores_rebound_inherited_run_when_run_live_is_availab
     assert result.failure == EngineFailure(kind="execution_limit", reason="usage limit reached")
 
 
+def test_subagent_manager_uses_class_rebound_run_live_when_instance_has_stale_alias(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ensure_workspace(
+        tmp_path,
+        LitehiveConfig(
+            external_engine_sandbox=ExternalEngineSandboxConfig(
+                enabled=True,
+                engine_policies={"codex": ExternalEngineSandboxPolicy(enabled=True)},
+            )
+        ),
+    )
+    task = create_task(tmp_path, title="Fallback usage-limit task")
+    manager = SubagentManager(tmp_path)
+    engine = get_engine("codex")
+
+    monkeypatch.setattr("litehive.subagents._manager.get_engine", lambda _: engine)
+    monkeypatch.setattr(engine, "is_available", lambda: True)
+    monkeypatch.setattr("shutil.which", lambda binary: f"/usr/bin/{binary}")
+    monkeypatch.setattr(engine, "run_live", engine.run_live)
+
+    calls: list[str] = []
+
+    def fail_run(*args, **kwargs) -> CLIExecutionResult:  # type: ignore[no-untyped-def]
+        raise AssertionError("run should not be used when inherited run_live is available")
+
+    def fake_run_live(
+        self,
+        prompt: str,
+        cwd: Path,
+        model: str | None = None,
+        *,
+        max_turns: int | None = None,
+        resume_session_id: str | None = None,
+        on_started=None,
+        on_update=None,
+        inactivity_timeout_seconds=None,
+        **kwargs,
+    ) -> CLIExecutionResult:
+        del self, prompt, model, max_turns, resume_session_id, inactivity_timeout_seconds, kwargs
+        calls.append("run_live")
+        assert on_started is not None
+        on_started(4242)
+        assert on_update is not None
+        on_update(
+            CLIExecutionResult(
+                adapter="codex",
+                argv=("codex", "exec"),
+                cwd=cwd,
+                exit_code=1,
+                stdout="",
+                stderr="ERROR: You've hit your usage limit. Try again later.",
+                pid=4242,
+                sandboxed=True,
+                sandbox_summary="sandbox[docker:test net=none workspace=rw]",
+            )
+        )
+        return CLIExecutionResult(
+            adapter="codex",
+            argv=("codex", "exec"),
+            cwd=cwd,
+            exit_code=1,
+            stdout="",
+            stderr="ERROR: You've hit your usage limit. Try again later.",
+            pid=4242,
+            sandboxed=True,
+            sandbox_summary="sandbox[docker:test net=none workspace=rw]",
+        )
+
+    monkeypatch.setattr("litehive.engines.base.ExternalCLIAdapter.run", fail_run)
+    monkeypatch.setattr("litehive.engines.base.ExternalCLIAdapter.run_live", fake_run_live)
+
+    result = manager.run(task, role="swe", engine_name="codex", prompt="implement it")
+
+    assert calls == ["run_live"]
+    assert result.failure == EngineFailure(kind="execution_limit", reason="usage limit reached")
+
+
 def test_subagent_manager_prefers_instance_run_override_over_inherited_run_live(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -2709,6 +2824,36 @@ def test_supports_live_execution_does_not_leak_rebound_base_run_between_engines(
 
     assert _prefers_non_live_run(restored_engine) is False
     assert _supports_live_execution(restored_engine) is True
+
+
+def test_supports_live_execution_ignores_stale_instance_alias_to_original_run_live(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    engine = get_engine("codex")
+    monkeypatch.setattr(engine, "run_live", engine.run_live)
+
+    def rebound_run_live(*args, **kwargs) -> CLIExecutionResult:  # type: ignore[no-untyped-def]
+        raise AssertionError("execution should not happen in this unit test")
+
+    monkeypatch.setattr("litehive.engines.base.ExternalCLIAdapter.run_live", rebound_run_live)
+
+    assert _prefers_non_live_run(engine) is False
+    assert _supports_live_execution(engine) is True
+
+
+def test_supports_live_execution_prefers_class_rebound_run_over_stale_instance_alias(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    engine = get_engine("codex")
+    monkeypatch.setattr(engine, "run", engine.run)
+
+    def rebound_run(*args, **kwargs) -> CLIExecutionResult:  # type: ignore[no-untyped-def]
+        raise AssertionError("execution should not happen in this unit test")
+
+    monkeypatch.setattr(type(engine), "run", rebound_run)
+
+    assert _prefers_non_live_run(engine) is True
+    assert _supports_live_execution(engine) is False
 
 
 def test_subagent_manager_prefers_class_run_override_over_inherited_run_live(

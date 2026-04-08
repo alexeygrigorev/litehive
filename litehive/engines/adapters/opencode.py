@@ -3,8 +3,6 @@
 import logging
 from pathlib import Path
 
-logger = logging.getLogger(__name__)
-
 from litehive.engines.adapters.common import classify_execution_limit
 from litehive.engines.base import (
     CLIExecutionResult,
@@ -18,6 +16,8 @@ from litehive.models import (
     LiveEvent,
     RuntimeEngineContinuation,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class OpenCodeAdapter(ExternalCLIAdapter):
