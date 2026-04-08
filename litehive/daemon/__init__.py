@@ -4,6 +4,7 @@
 from contextlib import contextmanager
 from datetime import UTC, datetime
 import fcntl
+import logging
 import os
 from pathlib import Path
 import shlex
@@ -15,6 +16,8 @@ import time
 from typing import TextIO
 
 import yaml
+
+logger = logging.getLogger(__name__)
 
 from litehive.config import (
     daemon_config_dir,
@@ -166,7 +169,10 @@ def _prune_run_all_log_dirs(log_base: Path, *, keep: int = _RUN_ALL_SESSION_RETE
         return
     directories = sorted(path for path in log_base.iterdir() if path.is_dir())
     for directory in directories[:-keep]:
-        shutil.rmtree(directory, ignore_errors=True)
+        try:
+            shutil.rmtree(directory)
+        except OSError as exc:
+            logger.warning("Failed to prune log dir %s: %s", directory, exc)
 
 
 def _latest_matching(log_dir: Path | None, pattern: str) -> Path | None:

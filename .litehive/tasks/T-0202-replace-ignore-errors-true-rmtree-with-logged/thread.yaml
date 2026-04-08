@@ -1,0 +1,27 @@
+- role: planner
+  step: grooming
+  verdict: pass
+  message: "Grooming complete for T-0202: Replace ignore_errors=True rmtree with logged\
+    \ cleanup.\n\nSCOPE: 5 call sites across 3 files use shutil.rmtree(..., ignore_errors=True),\
+    \ silently swallowing all errors including permission failures and lock issues.\n\
+    \nCALL SITES AND PLANNED FIX:\n1. tasks.py:1674 (create_task rollback) \u2014\
+    \ wrap in try/except OSError, log warning with path, continue to re-raise original\
+    \ exception.\n2. tasks.py:1756 (create_follow_up_tasks rollback) \u2014 same pattern,\
+    \ log per directory in the cleanup loop, re-raise original.\n3. tasks.py:1771\
+    \ (discard_created_task) \u2014 guard with explicit exists() check before rmtree;\
+    \ remove ignore_errors so permission/lock errors propagate.\n4. daemon/__init__.py:169\
+    \ (log dir pruning) \u2014 try/except OSError, log warning, continue loop. Non-fatal\
+    \ housekeeping.\n5. git_ops.py:263 (conflict path removal during revert) \u2014\
+    \ try/except OSError, log warning, continue. Outer revert-abort loop handles ultimate\
+    \ failure.\n\nLOGGING PATTERN: Add `import logging` and `logger = logging.getLogger(__name__)`\
+    \ to each file, matching the existing convention in litehive/engines/base.py and\
+    \ adapters.\n\nACCEPTANCE CRITERIA CONFIRMED CLEAR:\n- No more ignore_errors=True\
+    \ on rmtree \u2014 verifiable with grep.\n- Cleanup failures logged with path\
+    \ and error \u2014 verifiable by inspecting the try/except blocks.\n- Expected\
+    \ missing paths handled explicitly, unexpected errors raised \u2014 discard_created_task\
+    \ guards with exists(), rollback paths log-and-continue.\n\nSIZING: PM_COMPLEXITY=simple,\
+    \ PLANNED_EFFORT=s. Mechanical replacement, no API changes, no new dependencies.\n\
+    \nTESTS: Add targeted tests mocking rmtree to raise PermissionError, verifying\
+    \ log output and correct exception propagation per call site category."
+  files_changed: []
+  created_at: '2026-04-08T00:42:41+00:00'
