@@ -23,19 +23,27 @@ from litehive.models import (
     EngineUsageObservation,
     EngineUsageWindow,
     LiveEvent,
+    RuntimeEngineContinuation,
 )
 
 
 class ClaudeCLIAdapter(ExternalCLIAdapter):
     DEFAULT_MODEL = "claude-sonnet-4-20250514"
+    DEFAULT_NAME = "claude"
+    DEFAULT_BINARY = "claude"
+    DEFAULT_CAPABILITIES = ExternalCLIAdapter.DEFAULT_CAPABILITIES.__class__(
+        supports_model_override=True,
+        strips_environment=False,
+        transcript_format="jsonl",
+    )
 
     def __init__(
         self,
         *,
-        name: str,
-        binary: str,
-        capabilities: AdapterCapabilities,
-        stripped_env_vars: tuple[str, ...] = (),
+        name: str | None = None,
+        binary: str | None = None,
+        capabilities: AdapterCapabilities | None = None,
+        stripped_env_vars: tuple[str, ...] | None = None,
     ) -> None:
         super().__init__(
             name=name, binary=binary, capabilities=capabilities, stripped_env_vars=stripped_env_vars
@@ -73,7 +81,7 @@ class ClaudeCLIAdapter(ExternalCLIAdapter):
     def render_transcript(self, execution: CLIExecutionResult) -> str:
         assistant_text = extract_stream_transcript(
             execution.stdout,
-            adapter=_CLAUDE_STREAM_EVENT_ADAPTER,
+            adapter=self.stream_event_adapter(),
             delta_fallback=_extract_claude_text_delta_fallback,
         )
         if assistant_text:
@@ -94,7 +102,7 @@ class ClaudeCLIAdapter(ExternalCLIAdapter):
         if transcript == execution.transcript:
             stderr_lines = extract_stream_errors(
                 execution.stdout,
-                adapter=_CLAUDE_STREAM_EVENT_ADAPTER,
+                adapter=self.stream_event_adapter(),
             ) or extract_jsonl_errors(execution.stdout)
             if stderr_lines:
                 transcript = "\n".join(stderr_lines)
@@ -135,153 +143,165 @@ class ClaudeCLIAdapter(ExternalCLIAdapter):
                 metadata=metadata,
             )
         return None
+    def stream_event_adapter(self) -> StreamEventAdapter:
+        return StreamEventAdapter(
+            unwrap_event=self._unwrap_stream_event,
+            text_deltas=self._text_deltas,
+            final_messages=self._final_messages,
+            errors=self._errors,
+            live_events=self._live_events,
+        )
 
+    def extract_continuation(
+        self,
+        execution: CLIExecutionResult | None,
+    ) -> RuntimeEngineContinuation | None:
+        if execution is None or not execution.stdout.strip():
+            return None
+        for payload in iter_jsonl_payloads(execution.stdout):
+            if payload.get("type") == "system" and payload.get("subtype") == "init":
+                session_id = payload.get("session_id")
+                if isinstance(session_id, str) and session_id:
+                    return RuntimeEngineContinuation(session_id=session_id)
+        return None
 
-def _claude_final_messages(payload: dict[str, object]) -> list[str]:
-    messages: list[str] = []
-    event_type = payload.get("type")
-    if event_type == "assistant":
-        data = payload.get("message")
-        if isinstance(data, dict):
-            content = data.get("content")
-            if isinstance(content, list):
-                for block in content:
-                    if isinstance(block, dict) and block.get("type") == "text":
-                        text = block.get("text", "")
-                        if isinstance(text, str) and text:
-                            messages.append(text)
-            elif isinstance(content, str) and content:
-                messages.append(content)
-    elif event_type == "result":
-        data = payload.get("result")
-        if isinstance(data, str) and data:
-            messages.append(data)
-    return messages
+    @staticmethod
+    def _final_messages(payload: dict[str, object]) -> list[str]:
+        messages: list[str] = []
+        event_type = payload.get("type")
+        if event_type == "assistant":
+            data = payload.get("message")
+            if isinstance(data, dict):
+                content = data.get("content")
+                if isinstance(content, list):
+                    for block in content:
+                        if isinstance(block, dict) and block.get("type") == "text":
+                            text = block.get("text", "")
+                            if isinstance(text, str) and text:
+                                messages.append(text)
+                elif isinstance(content, str) and content:
+                    messages.append(content)
+        elif event_type == "result":
+            data = payload.get("result")
+            if isinstance(data, str) and data:
+                messages.append(data)
+        return messages
 
-
-def _claude_text_deltas(payload: dict[str, object]) -> list[tuple[int, str]]:
-    if payload.get("type") != "content_block_delta":
-        return []
-    delta = payload.get("delta")
-    if not isinstance(delta, dict) or delta.get("type") != "text_delta":
-        return []
-    text = delta.get("text")
-    if not isinstance(text, str) or not text:
-        return []
-    index = payload.get("index", 0)
-    if not isinstance(index, int):
-        index = 0
-    return [(index, text)]
-
-
-def _claude_errors(payload: dict[str, object]) -> list[str]:
-    if payload.get("type") != "error":
-        return []
-    data = payload.get("data")
-    if isinstance(data, dict) and isinstance(data.get("message"), str):
-        return [data["message"]]
-    message = payload.get("message")
-    if isinstance(message, str) and message:
-        return [message]
-    return []
-
-
-def _unwrap_claude_stream_event(payload: dict[str, object]) -> dict[str, object]:
-    event = payload.get("event")
-    if isinstance(event, dict):
-        return event
-    return payload
-
-
-def _claude_live_events(payload: dict[str, object]) -> list[LiveEvent]:
-    events: list[LiveEvent] = []
-    event_type = payload.get("type")
-    if event_type == "content_block_delta":
+    @staticmethod
+    def _text_deltas(payload: dict[str, object]) -> list[tuple[int, str]]:
+        if payload.get("type") != "content_block_delta":
+            return []
         delta = payload.get("delta")
-        if isinstance(delta, dict) and delta.get("type") == "text_delta":
-            text = delta.get("text")
-            if isinstance(text, str) and text:
-                events.append(
-                    LiveEvent(kind="message", engine="claude", role="assistant", content=text)
-                )
-    elif event_type == "content_block_start":
-        block = payload.get("content_block")
-        if isinstance(block, dict) and block.get("type") == "tool_use":
-            tool_name = block.get("name")
-            if isinstance(tool_name, str):
-                tool_input = block.get("input")
-                events.append(
-                    LiveEvent(
-                        kind="tool_call",
-                        engine="claude",
-                        role="assistant",
-                        tool_name=tool_name,
-                        tool_input=json.dumps(tool_input)
-                        if isinstance(tool_input, (dict, list))
-                        else None,
-                    )
-                )
-    elif event_type == "tool_result":
-        content = payload.get("content")
-        tool_output = (
-            content if isinstance(content, str) else json.dumps(content) if content else ""
-        )
-        events.append(
-            LiveEvent(
-                kind="tool_result",
-                engine="claude",
-                role="user",
-                tool_output=tool_output,
-            )
-        )
-    elif event_type == "assistant":
-        data = payload.get("message")
-        if isinstance(data, dict):
-            content = data.get("content")
-            if isinstance(content, list):
-                for block in content:
-                    if isinstance(block, dict) and block.get("type") == "text":
-                        text = block.get("text", "")
-                        if isinstance(text, str) and text:
-                            events.append(
-                                LiveEvent(
-                                    kind="message", engine="claude", role="assistant", content=text
-                                )
-                            )
-    elif event_type == "result":
-        data = payload.get("result")
-        if isinstance(data, str) and data:
-            events.append(
-                LiveEvent(kind="message", engine="claude", role="assistant", content=data)
-            )
-        if payload.get("usage"):
-            usage = payload["usage"]
-            if isinstance(usage, dict):
-                meta: dict[str, str | int | bool | None] = {}
-                for field in ("input_tokens", "output_tokens"):
-                    raw = usage.get(field)
-                    if isinstance(raw, int):
-                        meta[field] = raw
-                events.append(LiveEvent(kind="usage", engine="claude", metadata=meta))
-    elif event_type == "error":
+        if not isinstance(delta, dict) or delta.get("type") != "text_delta":
+            return []
+        text = delta.get("text")
+        if not isinstance(text, str) or not text:
+            return []
+        index = payload.get("index", 0)
+        if not isinstance(index, int):
+            index = 0
+        return [(index, text)]
+
+    @staticmethod
+    def _errors(payload: dict[str, object]) -> list[str]:
+        if payload.get("type") != "error":
+            return []
         data = payload.get("data")
-        message = ""
         if isinstance(data, dict) and isinstance(data.get("message"), str):
-            message = data["message"]
-        elif isinstance(payload.get("message"), str):
-            message = payload["message"]
-        if message:
-            events.append(LiveEvent(kind="error", engine="claude", error=message))
-    return events
+            return [data["message"]]
+        message = payload.get("message")
+        if isinstance(message, str) and message:
+            return [message]
+        return []
 
+    @staticmethod
+    def _unwrap_stream_event(payload: dict[str, object]) -> dict[str, object]:
+        event = payload.get("event")
+        if isinstance(event, dict):
+            return event
+        return payload
 
-_CLAUDE_STREAM_EVENT_ADAPTER = StreamEventAdapter(
-    unwrap_event=_unwrap_claude_stream_event,
-    text_deltas=_claude_text_deltas,
-    final_messages=_claude_final_messages,
-    errors=_claude_errors,
-    live_events=_claude_live_events,
-)
+    @staticmethod
+    def _live_events(payload: dict[str, object]) -> list[LiveEvent]:
+        events: list[LiveEvent] = []
+        event_type = payload.get("type")
+        if event_type == "content_block_delta":
+            delta = payload.get("delta")
+            if isinstance(delta, dict) and delta.get("type") == "text_delta":
+                text = delta.get("text")
+                if isinstance(text, str) and text:
+                    events.append(
+                        LiveEvent(kind="message", engine="claude", role="assistant", content=text)
+                    )
+        elif event_type == "content_block_start":
+            block = payload.get("content_block")
+            if isinstance(block, dict) and block.get("type") == "tool_use":
+                tool_name = block.get("name")
+                if isinstance(tool_name, str):
+                    tool_input = block.get("input")
+                    events.append(
+                        LiveEvent(
+                            kind="tool_call",
+                            engine="claude",
+                            role="assistant",
+                            tool_name=tool_name,
+                            tool_input=json.dumps(tool_input)
+                            if isinstance(tool_input, (dict, list))
+                            else None,
+                        )
+                    )
+        elif event_type == "tool_result":
+            content = payload.get("content")
+            tool_output = (
+                content if isinstance(content, str) else json.dumps(content) if content else ""
+            )
+            events.append(
+                LiveEvent(
+                    kind="tool_result",
+                    engine="claude",
+                    role="user",
+                    tool_output=tool_output,
+                )
+            )
+        elif event_type == "assistant":
+            data = payload.get("message")
+            if isinstance(data, dict):
+                content = data.get("content")
+                if isinstance(content, list):
+                    for block in content:
+                        if isinstance(block, dict) and block.get("type") == "text":
+                            text = block.get("text", "")
+                            if isinstance(text, str) and text:
+                                events.append(
+                                    LiveEvent(
+                                        kind="message", engine="claude", role="assistant", content=text
+                                    )
+                                )
+        elif event_type == "result":
+            data = payload.get("result")
+            if isinstance(data, str) and data:
+                events.append(
+                    LiveEvent(kind="message", engine="claude", role="assistant", content=data)
+                )
+            if payload.get("usage"):
+                usage = payload["usage"]
+                if isinstance(usage, dict):
+                    meta: dict[str, str | int | bool | None] = {}
+                    for field in ("input_tokens", "output_tokens"):
+                        raw = usage.get(field)
+                        if isinstance(raw, int):
+                            meta[field] = raw
+                    events.append(LiveEvent(kind="usage", engine="claude", metadata=meta))
+        elif event_type == "error":
+            data = payload.get("data")
+            message = ""
+            if isinstance(data, dict) and isinstance(data.get("message"), str):
+                message = data["message"]
+            elif isinstance(payload.get("message"), str):
+                message = payload["message"]
+            if message:
+                events.append(LiveEvent(kind="error", engine="claude", error=message))
+        return events
 
 
 _CLAUDE_TEXT_DELTA_RE = re.compile(

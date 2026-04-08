@@ -22,6 +22,7 @@ from litehive.models import (
     EngineUsageObservation,
     LiveEvent,
     LiveTimeline,
+    RuntimeEngineContinuation,
     StageReport,
     StageResultSubmission,
     SubagentStatus,
@@ -112,19 +113,35 @@ class ExternalCLIAdapter:
     """Shared contract for one-shot external CLI adapters."""
 
     LIVE_UPDATE_INTERVAL_SECONDS = 0.5
+    DEFAULT_NAME: str | None = None
+    DEFAULT_BINARY: str | None = None
+    DEFAULT_CAPABILITIES = AdapterCapabilities()
+    DEFAULT_STRIPPED_ENV_VARS: tuple[str, ...] = ()
 
     def __init__(
         self,
         *,
-        name: str,
-        binary: str,
-        capabilities: AdapterCapabilities,
-        stripped_env_vars: tuple[str, ...] = (),
+        name: str | None = None,
+        binary: str | None = None,
+        capabilities: AdapterCapabilities | None = None,
+        stripped_env_vars: tuple[str, ...] | None = None,
     ) -> None:
-        self.name = name
-        self.binary = binary
-        self.capabilities = capabilities
-        self.stripped_env_vars = stripped_env_vars
+        resolved_name = name if name is not None else self.DEFAULT_NAME
+        resolved_binary = binary if binary is not None else self.DEFAULT_BINARY
+        resolved_capabilities = (
+            capabilities if capabilities is not None else self.DEFAULT_CAPABILITIES
+        )
+        resolved_stripped_env_vars = (
+            stripped_env_vars
+            if stripped_env_vars is not None
+            else self.DEFAULT_STRIPPED_ENV_VARS
+        )
+        if resolved_name is None or resolved_binary is None:
+            raise ValueError("Adapter subclasses must define default name and binary")
+        self.name = resolved_name
+        self.binary = resolved_binary
+        self.capabilities = resolved_capabilities
+        self.stripped_env_vars = resolved_stripped_env_vars
 
     def is_available(self) -> bool:
         return shutil.which(self.binary) is not None
@@ -370,6 +387,15 @@ class ExternalCLIAdapter:
         self,
         execution: CLIExecutionResult,
     ) -> EngineUsageObservation | None:
+        return None
+
+    def stream_event_adapter(self) -> StreamEventAdapter | None:
+        return None
+
+    def extract_continuation(
+        self,
+        execution: CLIExecutionResult | None,
+    ) -> RuntimeEngineContinuation | None:
         return None
 
 

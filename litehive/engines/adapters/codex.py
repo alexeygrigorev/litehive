@@ -19,6 +19,7 @@ from litehive.models import (
     EngineUsageObservation,
     EngineUsageWindow,
     LiveEvent,
+    RuntimeEngineContinuation,
 )
 
 
@@ -53,6 +54,14 @@ def _classify_codex_usage_limit(text: str | None) -> _CodexUsageLimitResult | No
 
 
 class CodexCLIAdapter(ExternalCLIAdapter):
+    DEFAULT_NAME = "codex"
+    DEFAULT_BINARY = "codex"
+    DEFAULT_CAPABILITIES = ExternalCLIAdapter.DEFAULT_CAPABILITIES.__class__(
+        supports_model_override=False,
+        strips_environment=False,
+        transcript_format="jsonl",
+    )
+
     def build_command(
         self,
         prompt: str,
@@ -174,50 +183,79 @@ class CodexCLIAdapter(ExternalCLIAdapter):
             metadata=metadata,
         )
 
+    def stream_event_adapter(self):
+        from litehive.engines.base import StreamEventAdapter
 
-def _codex_live_events(payload: dict[str, object]) -> list[LiveEvent]:
-    events: list[LiveEvent] = []
-    event_type = payload.get("type")
-    if event_type == "item.completed":
-        item = payload.get("item")
-        if isinstance(item, dict):
-            item_type = item.get("type")
-            if item_type == "agent_message":
-                text = item.get("text")
-                if isinstance(text, str) and text:
+        return StreamEventAdapter(
+            unwrap_event=self._unwrap_stream_event,
+            live_events=self._live_events,
+        )
+
+    def extract_continuation(
+        self,
+        execution: CLIExecutionResult | None,
+    ) -> RuntimeEngineContinuation | None:
+        if execution is None or not execution.stdout.strip():
+            return None
+        for payload in iter_jsonl_payloads(execution.stdout):
+            if payload.get("type") != "thread.started":
+                continue
+            thread_id = payload.get("thread_id")
+            if isinstance(thread_id, str) and thread_id:
+                return RuntimeEngineContinuation(thread_id=thread_id)
+        return None
+
+    @staticmethod
+    def _live_events(payload: dict[str, object]) -> list[LiveEvent]:
+        events: list[LiveEvent] = []
+        event_type = payload.get("type")
+        if event_type == "item.completed":
+            item = payload.get("item")
+            if isinstance(item, dict):
+                item_type = item.get("type")
+                if item_type == "agent_message":
+                    text = item.get("text")
+                    if isinstance(text, str) and text:
+                        events.append(
+                            LiveEvent(kind="message", engine="codex", role="assistant", content=text)
+                        )
+                elif item_type == "command_execution":
+                    command = item.get("command")
+                    tool_name = None
+                    if isinstance(command, list) and command:
+                        tool_name = str(command[0]) if command[0] else None
+                    aggregated = item.get("aggregated_output")
+                    exit_code = item.get("exit_code")
                     events.append(
-                        LiveEvent(kind="message", engine="codex", role="assistant", content=text)
+                        LiveEvent(
+                            kind="tool_result",
+                            engine="codex",
+                            tool_name=tool_name,
+                            tool_output=aggregated if isinstance(aggregated, str) else None,
+                            metadata={"exit_code": exit_code} if isinstance(exit_code, int) else {},
+                        )
                     )
-            elif item_type == "command_execution":
-                command = item.get("command")
-                tool_name = None
-                if isinstance(command, list) and command:
-                    tool_name = str(command[0]) if command[0] else None
-                aggregated = item.get("aggregated_output")
-                exit_code = item.get("exit_code")
-                events.append(
-                    LiveEvent(
-                        kind="tool_result",
-                        engine="codex",
-                        tool_name=tool_name,
-                        tool_output=aggregated if isinstance(aggregated, str) else None,
-                        metadata={"exit_code": exit_code} if isinstance(exit_code, int) else {},
-                    )
-                )
-    elif event_type == "turn.completed":
-        usage_payload = payload.get("usage")
-        if isinstance(usage_payload, dict):
-            meta: dict[str, str | int | bool | None] = {}
-            for field in ("input_tokens", "output_tokens", "total_tokens"):
-                raw = usage_payload.get(field)
-                if isinstance(raw, int):
-                    meta[field] = raw
-            events.append(LiveEvent(kind="usage", engine="codex", metadata=meta))
-    elif event_type in {"error", "turn.failed"}:
-        message = payload.get("message")
-        if isinstance(message, str) and message.strip():
-            events.append(LiveEvent(kind="error", engine="codex", error=message.strip()))
-    return events
+        elif event_type == "turn.completed":
+            usage_payload = payload.get("usage")
+            if isinstance(usage_payload, dict):
+                meta: dict[str, str | int | bool | None] = {}
+                for field in ("input_tokens", "output_tokens", "total_tokens"):
+                    raw = usage_payload.get(field)
+                    if isinstance(raw, int):
+                        meta[field] = raw
+                events.append(LiveEvent(kind="usage", engine="codex", metadata=meta))
+        elif event_type in {"error", "turn.failed"}:
+            message = payload.get("message")
+            if isinstance(message, str) and message.strip():
+                events.append(LiveEvent(kind="error", engine="codex", error=message.strip()))
+        return events
+
+    @staticmethod
+    def _unwrap_stream_event(payload: dict[str, object]) -> dict[str, object]:
+        event = payload.get("event")
+        if isinstance(event, dict):
+            return event
+        return payload
 
 
 def _extract_codex_transcript(stdout: str) -> str:

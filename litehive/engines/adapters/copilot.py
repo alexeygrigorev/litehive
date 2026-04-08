@@ -19,6 +19,14 @@ from litehive.models import (
 
 
 class CopilotCLIAdapter(ExternalCLIAdapter):
+    DEFAULT_NAME = "copilot"
+    DEFAULT_BINARY = "copilot"
+    DEFAULT_CAPABILITIES = ExternalCLIAdapter.DEFAULT_CAPABILITIES.__class__(
+        supports_model_override=True,
+        strips_environment=False,
+        transcript_format="jsonl",
+    )
+
     def build_command(
         self,
         prompt: str,
@@ -49,7 +57,7 @@ class CopilotCLIAdapter(ExternalCLIAdapter):
     def render_transcript(self, execution: CLIExecutionResult) -> str:
         assistant_text = extract_stream_transcript(
             execution.stdout,
-            adapter=_COPILOT_STREAM_EVENT_ADAPTER,
+            adapter=self.stream_event_adapter(),
         )
         if assistant_text:
             if execution.stderr.strip():
@@ -69,7 +77,7 @@ class CopilotCLIAdapter(ExternalCLIAdapter):
         if transcript == execution.transcript:
             error_lines = extract_stream_errors(
                 execution.stdout,
-                adapter=_COPILOT_STREAM_EVENT_ADAPTER,
+                adapter=self.stream_event_adapter(),
             )
             if error_lines:
                 transcript = "\n".join(error_lines)
@@ -140,128 +148,128 @@ class CopilotCLIAdapter(ExternalCLIAdapter):
                 metadata=metadata,
             )
         return None
+    def stream_event_adapter(self) -> StreamEventAdapter:
+        return StreamEventAdapter(
+            final_messages=self._final_messages,
+            text_deltas=self._text_deltas,
+            errors=self._errors,
+            live_events=self._live_events,
+        )
 
-
-def _copilot_live_events(payload: dict[str, object]) -> list[LiveEvent]:
-    events: list[LiveEvent] = []
-    event_type = payload.get("type")
-    data = payload.get("data")
-    if event_type == "assistant.message":
-        if isinstance(data, dict):
-            content = data.get("content")
-            if isinstance(content, str) and content:
-                events.append(
-                    LiveEvent(kind="message", engine="copilot", role="assistant", content=content)
-                )
-    elif event_type == "assistant.message_delta":
-        if isinstance(data, dict):
-            content = data.get("deltaContent")
-            if isinstance(content, str) and content:
-                events.append(
-                    LiveEvent(kind="message", engine="copilot", role="assistant", content=content)
-                )
-    elif event_type == "tool.execution_start":
-        if isinstance(data, dict):
-            tool_name = data.get("toolName") or data.get("tool")
-            events.append(
-                LiveEvent(
-                    kind="tool_call",
-                    engine="copilot",
-                    role="assistant",
-                    tool_name=tool_name if isinstance(tool_name, str) else None,
-                )
-            )
-    elif event_type == "tool.execution_complete":
-        if isinstance(data, dict):
-            tool_name = data.get("toolName") or data.get("tool")
-            result = data.get("result")
-            tool_output = None
-            if isinstance(result, str):
-                tool_output = result
-            elif isinstance(result, dict):
-                content = result.get("content") or result.get("detailedContent")
-                if isinstance(content, str):
-                    tool_output = content
-            events.append(
-                LiveEvent(
-                    kind="tool_result",
-                    engine="copilot",
-                    role="user",
-                    tool_name=tool_name if isinstance(tool_name, str) else None,
-                    tool_output=tool_output,
-                )
-            )
-    elif event_type == "assistant.usage":
-        if isinstance(data, dict):
-            meta: dict[str, str | int | bool | None] = {}
-            for field in ("inputTokens", "outputTokens"):
-                raw = data.get(field)
-                if isinstance(raw, int):
-                    meta[field] = raw
-            model = data.get("model")
-            if isinstance(model, str):
-                meta["model"] = model
-            if meta:
-                events.append(LiveEvent(kind="usage", engine="copilot", metadata=meta))
-    elif event_type == "error":
-        if isinstance(data, dict) and isinstance(data.get("message"), str):
-            events.append(LiveEvent(kind="error", engine="copilot", error=data["message"]))
-    return events
-
-
-def _copilot_final_messages(payload: dict[str, object]) -> list[str]:
-    if payload.get("type") != "assistant.message":
-        return []
-    data = payload.get("data")
-    if not isinstance(data, dict):
-        return []
-    content = data.get("content")
-    if isinstance(content, str) and content:
-        return [content]
-    return []
-
-
-def _copilot_text_deltas(payload: dict[str, object]) -> list[tuple[int, str]]:
-    if payload.get("type") != "assistant.message_delta":
-        return []
-    data = payload.get("data")
-    if not isinstance(data, dict):
-        return []
-    content = data.get("deltaContent")
-    if isinstance(content, str) and content:
-        return [(0, content)]
-    return []
-
-
-def _copilot_errors(payload: dict[str, object]) -> list[str]:
-    event_type = payload.get("type")
-    if event_type == "error":
+    @staticmethod
+    def _live_events(payload: dict[str, object]) -> list[LiveEvent]:
+        events: list[LiveEvent] = []
+        event_type = payload.get("type")
         data = payload.get("data")
-        if isinstance(data, dict):
-            message = data.get("message")
-            if isinstance(message, str) and message:
-                return [message]
-        return []
-    if event_type == "tool.execution_complete":
-        data = payload.get("data")
-        if not isinstance(data, dict) or data.get("success", True):
+        if event_type == "assistant.message":
+            if isinstance(data, dict):
+                content = data.get("content")
+                if isinstance(content, str) and content:
+                    events.append(
+                        LiveEvent(kind="message", engine="copilot", role="assistant", content=content)
+                    )
+        elif event_type == "assistant.message_delta":
+            if isinstance(data, dict):
+                content = data.get("deltaContent")
+                if isinstance(content, str) and content:
+                    events.append(
+                        LiveEvent(kind="message", engine="copilot", role="assistant", content=content)
+                    )
+        elif event_type == "tool.execution_start":
+            if isinstance(data, dict):
+                tool_name = data.get("toolName") or data.get("tool")
+                events.append(
+                    LiveEvent(
+                        kind="tool_call",
+                        engine="copilot",
+                        role="assistant",
+                        tool_name=tool_name if isinstance(tool_name, str) else None,
+                    )
+                )
+        elif event_type == "tool.execution_complete":
+            if isinstance(data, dict):
+                tool_name = data.get("toolName") or data.get("tool")
+                result = data.get("result")
+                tool_output = None
+                if isinstance(result, str):
+                    tool_output = result
+                elif isinstance(result, dict):
+                    content = result.get("content") or result.get("detailedContent")
+                    if isinstance(content, str):
+                        tool_output = content
+                events.append(
+                    LiveEvent(
+                        kind="tool_result",
+                        engine="copilot",
+                        role="user",
+                        tool_name=tool_name if isinstance(tool_name, str) else None,
+                        tool_output=tool_output,
+                    )
+                )
+        elif event_type == "assistant.usage":
+            if isinstance(data, dict):
+                meta: dict[str, str | int | bool | None] = {}
+                for field in ("inputTokens", "outputTokens"):
+                    raw = data.get(field)
+                    if isinstance(raw, int):
+                        meta[field] = raw
+                model = data.get("model")
+                if isinstance(model, str):
+                    meta["model"] = model
+                if meta:
+                    events.append(LiveEvent(kind="usage", engine="copilot", metadata=meta))
+        elif event_type == "error":
+            if isinstance(data, dict) and isinstance(data.get("message"), str):
+                events.append(LiveEvent(kind="error", engine="copilot", error=data["message"]))
+        return events
+
+
+    @staticmethod
+    def _final_messages(payload: dict[str, object]) -> list[str]:
+        if payload.get("type") != "assistant.message":
             return []
-        result = data.get("result")
-        if isinstance(result, dict):
-            content = result.get("content") or result.get("detailedContent")
-            if isinstance(content, str) and content:
-                return [content]
-        elif isinstance(result, str) and result:
-            return [result]
-    return []
+        data = payload.get("data")
+        if not isinstance(data, dict):
+            return []
+        content = data.get("content")
+        if isinstance(content, str) and content:
+            return [content]
+        return []
 
+    @staticmethod
+    def _text_deltas(payload: dict[str, object]) -> list[tuple[int, str]]:
+        if payload.get("type") != "assistant.message_delta":
+            return []
+        data = payload.get("data")
+        if not isinstance(data, dict):
+            return []
+        content = data.get("deltaContent")
+        if isinstance(content, str) and content:
+            return [(0, content)]
+        return []
 
-_COPILOT_STREAM_EVENT_ADAPTER = StreamEventAdapter(
-    final_messages=_copilot_final_messages,
-    text_deltas=_copilot_text_deltas,
-    errors=_copilot_errors,
-    live_events=_copilot_live_events,
-)
+    @staticmethod
+    def _errors(payload: dict[str, object]) -> list[str]:
+        event_type = payload.get("type")
+        if event_type == "error":
+            data = payload.get("data")
+            if isinstance(data, dict):
+                message = data.get("message")
+                if isinstance(message, str) and message:
+                    return [message]
+            return []
+        if event_type == "tool.execution_complete":
+            data = payload.get("data")
+            if not isinstance(data, dict) or data.get("success", True):
+                return []
+            result = data.get("result")
+            if isinstance(result, dict):
+                content = result.get("content") or result.get("detailedContent")
+                if isinstance(content, str) and content:
+                    return [content]
+            elif isinstance(result, str) and result:
+                return [result]
+        return []
 
 
 def _copilot_quota_usage_window(snapshot: dict[str, object]) -> EngineUsageWindow | None:
