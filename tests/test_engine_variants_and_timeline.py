@@ -56,6 +56,27 @@ def test_claude_build_invocation_includes_model_and_resume(tmp_path: Path) -> No
     ]
 
 
+def test_codex_build_invocation_uses_resume_contract_without_json_flag(tmp_path: Path) -> None:
+    engine = get_engine("codex")
+
+    invocation = engine.build_invocation(
+        "continue please",
+        tmp_path,
+        resume_session_id="abc-123",
+    )
+
+    assert invocation.cwd == tmp_path
+    assert list(invocation.argv) == [
+        "codex",
+        "resume",
+        "--dangerously-bypass-approvals-and-sandbox",
+        "--cd",
+        str(tmp_path),
+        "abc-123",
+        "continue please",
+    ]
+
+
 def test_claude_no_max_turns_by_default(tmp_path: Path) -> None:
     from litehive.engines import ClaudeCLIAdapter
 

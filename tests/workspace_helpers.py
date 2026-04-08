@@ -28,6 +28,7 @@ from litehive.cli import (
     _cmd_move,
     _cmd_prioritize,
     _cmd_promote,
+    _cmd_report,
     _cmd_queue,
     _cmd_recover,
     _cmd_repair,

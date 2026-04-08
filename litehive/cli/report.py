@@ -15,7 +15,7 @@ def _resolve_workspace_root(workspace: Path) -> Path:
 
 
 def _cmd_report(args):
-    root = args.workspace
+    root = _resolve_workspace_root(args.workspace)
     task_id = args.task_id
     if not task_id:
         task_id = os.environ.get("LITEHIVE_TASK_ID")
@@ -26,13 +26,6 @@ def _cmd_report(args):
         print("report failed: no active task and --task-id not provided")
         return 1
     task = get_task(root, task_id)
-    if task is None:
-        # Task not found locally — try the main repo (we might be in a worktree)
-        main_root = _resolve_workspace_root(root)
-        if main_root != root:
-            task = get_task(main_root, task_id)
-            if task is not None:
-                root = main_root
     if task is None:
         print(f"report failed: task {task_id} not found")
         return 1

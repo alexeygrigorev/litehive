@@ -156,6 +156,45 @@ def test_add_command_allows_future_task_while_runner_is_active(
     assert "Created task T-0002" in output
     assert load_state(tmp_path).queue == ["T-0001", "T-0002"]
 
+def test_report_command_from_task_worktree_writes_to_main_workspace(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Worktree report target")
+    worktree_path = tmp_path / ".litehive" / "worktrees" / task.id
+    worktree_path.mkdir(parents=True)
+
+    worktree_task_dir = worktree_path / ".litehive" / "tasks" / task_dir(tmp_path, task).name
+    worktree_task_dir.mkdir(parents=True)
+    (worktree_task_dir / "task.yaml").write_text(
+        (task_dir(tmp_path, task) / "task.yaml").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+
+    exit_code = _cmd_report(
+        argparse.Namespace(
+            workspace=worktree_path,
+            task_id=task.id,
+            verdict="pass",
+            message="reported from worktree",
+            role="planner",
+            step="grooming",
+        )
+    )
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "task: T-0001" in output
+    main_thread = task_dir(tmp_path, task) / "thread.yaml"
+    assert main_thread.exists()
+    comments = yaml.safe_load(main_thread.read_text(encoding="utf-8"))
+    assert comments[0]["message"] == "reported from worktree"
+    assert comments[0]["role"] == "planner"
+    assert comments[0]["step"] == "grooming"
+
+    worktree_thread = worktree_task_dir / "thread.yaml"
+    assert not worktree_thread.exists()
+
 def test_update_command_replaces_and_clears_dependencies(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:

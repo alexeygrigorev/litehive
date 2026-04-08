@@ -535,6 +535,14 @@ def parse_stage_report_text(
     # Prefer schema-validated structured submission when present.
     submission = _extract_stage_result_submission(transcript)
     if isinstance(submission, StageResultSubmission):
+        warnings = list(submission.warnings)
+        verdict = submission.verdict
+        if subagent_status != "completed" and verdict in {"pass", "accept"}:
+            verdict = "fail"
+            warnings.append(
+                "Ignoring structured passing verdict because subagent status was "
+                f"`{subagent_status}`."
+            )
         task_update_dict: dict[str, object] = (
             submission.task_update.model_dump(exclude_unset=True) if submission.task_update else {}
         )
@@ -543,12 +551,12 @@ def parse_stage_report_text(
         return StageReport(
             task_id=task_id,
             step=step,
-            verdict=submission.verdict,  # type: ignore[arg-type]
+            verdict=verdict,  # type: ignore[arg-type]
             summary=submission.summary,
             feedback=cap_feedback(transcript),
             task_update=task_update_dict,
             tests={"added": submission.tests.added, "passing": submission.tests.passing},
-            warnings=submission.warnings,
+            warnings=warnings,
         )
 
     # No valid structured submission and no CLI verdict — verdict is fail.

@@ -189,3 +189,22 @@ def test_extra_field_validation_warning_mentions_field() -> None:
     )
     assert report.verdict == "fail"
     assert any("STAGE_RESULT validation" in w for w in report.warnings)
+
+
+def test_failed_subagent_cannot_turn_structured_pass_into_passing_report() -> None:
+    payload = {
+        "verdict": "pass",
+        "summary": "partial work looked good before timeout",
+        "tests": {"added": 1, "passing": 1},
+    }
+    report = parse_stage_report_text(
+        task_id="T-0001",
+        step="testing",
+        transcript=_transcript(payload),
+        subagent_status="failed",
+    )
+
+    assert report.verdict == "fail"
+    assert report.summary == "partial work looked good before timeout"
+    assert report.tests == {"added": 1, "passing": 1}
+    assert any("subagent status was `failed`" in w for w in report.warnings)
