@@ -1454,7 +1454,7 @@ def test_resume_run_uses_structured_continuation_handoff_after_interruption(
     assert "- Kind: restart" in prompts[0]
     assert "- Engine path: gemini -> gemini" in prompts[0]
     assert "- Prior subagent: SA-0001 at `subagents/SA-0001-qa`" in prompts[0]
-    assert "- Engine session id: gemini_resume_123" in prompts[0]
+    assert "- Engine resume id: gemini_resume_123" in prompts[0]
     refreshed = get_task(tmp_path, "T-0001")
     assert refreshed is not None
     assert refreshed.runtime.continuation_handoff is None

@@ -198,14 +198,14 @@ def build_executor(
                     if (
                         engine_name == "claude"
                         and continuation is not None
-                        and continuation.session_id
+                        and continuation.resume_id
                     ):
                         crash_resume_attempted = True
-                        resume_session_id = continuation.session_id
+                        resume_session_id = continuation.resume_id
                         resume_event = (
                             f"Stage `{step}` agent crashed (exit {result.exit_code}) with no "
-                            f"failure classification — resuming claude session "
-                            f"{continuation.session_id}."
+                            f"failure classification — resuming session "
+                            f"{continuation.resume_id}."
                         )
                         execution_events.append(resume_event)
                         append_journal(root, current_task, resume_event)
@@ -251,9 +251,9 @@ def build_executor(
                 if (
                     engine_name == "claude"
                     and handoff.continuation
-                    and handoff.continuation.session_id
+                    and handoff.continuation.resume_id
                 ):
-                    resume_session_id = handoff.continuation.session_id
+                    resume_session_id = handoff.continuation.resume_id
                 if backoff_seconds > 0:
                     time.sleep(backoff_seconds)
             is_limit_failure = (
@@ -333,10 +333,7 @@ def build_executor(
                 and (result.failure is None or is_timeout)
             ):
                 continuation = extract_engine_continuation(engine_name, result.execution)
-                resume_id = (
-                    (continuation.session_id or continuation.thread_id)
-                    if continuation else None
-                )
+                resume_id = continuation.resume_id if continuation else None
                 if resume_id:
                     nudge_prompt = (
                         f"You finished the {step} stage but did not submit your verdict. "

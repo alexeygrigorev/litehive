@@ -56,6 +56,11 @@ class RuntimeEngineContinuation(BaseModel):
     metadata: dict[str, str | int | bool | None] = Field(default_factory=dict)
     updated_at: str = Field(default_factory=utcnow)
 
+    @property
+    def resume_id(self) -> str | None:
+        """Unified resume identifier — engines call it session_id or thread_id."""
+        return self.session_id or self.thread_id
+
 
 class RuntimeSubagentState(BaseModel):
     id: str

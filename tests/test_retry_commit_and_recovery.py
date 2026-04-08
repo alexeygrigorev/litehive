@@ -806,7 +806,7 @@ def test_run_next_task_reuses_structured_continuation_handoff_on_retry(
     assert "- Kind: retry" in prompts[1]
     assert "- Reason: transient timeout" in prompts[1]
     assert "- Prior subagent: SA-grooming-1 at `subagents/grooming-1`" in prompts[1]
-    assert "- Engine session id: ses_retry" in prompts[1]
+    assert "- Engine resume id: ses_retry" in prompts[1]
     task = get_task(tmp_path, "T-0001")
     assert task is not None
     assert task.runtime.continuation_handoff is None

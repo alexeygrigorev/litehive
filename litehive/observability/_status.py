@@ -219,11 +219,8 @@ def render_task_summary(task: TaskRecord, *, active: bool, root: Path | None = N
             )
         if handoff.subagent_id:
             continuation_parts.append(f"subagent={handoff.subagent_id}")
-        if handoff.continuation is not None:
-            if handoff.continuation.session_id:
-                continuation_parts.append(f"session_id={handoff.continuation.session_id}")
-            if handoff.continuation.thread_id:
-                continuation_parts.append(f"thread_id={handoff.continuation.thread_id}")
+        if handoff.continuation is not None and handoff.continuation.resume_id:
+            continuation_parts.append(f"resume_id={handoff.continuation.resume_id}")
         lines.append("  " + " ".join(continuation_parts))
 
     if runtime.last_stage.step:

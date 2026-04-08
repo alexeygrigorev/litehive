@@ -190,11 +190,8 @@ def stage_prompt(
             lines.append(f"- Prior summary: {handoff.summary}")
         if handoff.transcript_snippet:
             lines.append(f"- Prior snippet: {handoff.transcript_snippet}")
-        if handoff.continuation is not None:
-            if handoff.continuation.session_id:
-                lines.append(f"- Engine session id: {handoff.continuation.session_id}")
-            if handoff.continuation.thread_id:
-                lines.append(f"- Engine thread id: {handoff.continuation.thread_id}")
+        if handoff.continuation is not None and handoff.continuation.resume_id:
+            lines.append(f"- Engine resume id: {handoff.continuation.resume_id}")
         artifact_parts = [
             path
             for path in (
