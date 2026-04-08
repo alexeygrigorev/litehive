@@ -10,22 +10,48 @@ pipeline_mode: full
 status: queued
 pipeline_status: backlog
 priority: medium
-pm_complexity: null
-planned_effort: null
+pm_complexity: moderate
+planned_effort: m
 created_at: '2026-04-08T06:05:09+00:00'
-updated_at: '2026-04-08T06:05:09+00:00'
-goal: Replace the 1.5-second polling mechanism with Server-Sent Events (SSE) for real-time
-  updates. Add an SSE endpoint that streams workspace state changes and agent output
-  as they happen. Keep polling as fallback for browsers that don't support SSE.
+updated_at: '2026-04-08T18:39:06+00:00'
+goal: Replace the dashboard's 1.5-second polling loop with an SSE-driven live update
+  path that pushes workspace snapshot changes and active agent transcript/stdout/stderr
+  output as they happen, while preserving the existing polling JSON endpoints as a
+  fallback when SSE is unavailable or reconnecting.
 acceptance_criteria:
-- GET /api/stream SSE endpoint streams workspace snapshot diffs when state changes
-- Agent transcript/stdout/stderr updates are pushed to the frontend in real-time via
-  SSE
-- Frontend switches from polling to SSE when available, with polling as fallback
-- SSE connection handles reconnection gracefully on network interruptions
-- Reduced server load compared to 1.5s polling when workspace is idle
-constraints: []
-plan: []
+- Opening GET /api/stream from an SSE-capable client returns a text/event-stream response
+  that sends an initial dashboard payload and then emits workspace snapshot updates
+  only when the underlying workspace state changes.
+- When the active subagent transcript, stdout, or stderr files grow, the dashboard
+  receives and renders the new output through the SSE connection without waiting for
+  the 1.5-second polling interval or a manual refresh.
+- If EventSource is unavailable or the SSE channel cannot be established, the dashboard
+  continues to function via the existing /api/snapshot and /api/session polling path.
+- If the SSE connection is interrupted, the frontend reconnects automatically and
+  resumes live updates without requiring a page reload or losing the currently selected
+  task/session context.
+- When the workspace is idle, the server no longer performs unconditional 1.5-second
+  snapshot polling per connected browser; tests demonstrate that idle clients wait
+  on change notifications instead of repeatedly rebuilding full snapshots.
+constraints:
+- Keep changes scoped to the web dashboard monitor and its supporting tests.
+- Preserve the existing JSON snapshot/session endpoints so non-SSE browsers and failure
+  fallback still work.
+- Maintain lock-free, read-only snapshot behavior; the streaming path must not depend
+  on taking the runner lock.
+plan:
+- Inspect the current web monitor polling flow and identify the smallest server-side
+  change-notification source that can drive dashboard updates without periodic full
+  snapshot rebuilds while idle.
+- Add backend SSE support for an initial payload plus incremental workspace/session
+  update events, including event typing, connection keepalive/retry behavior, and
+  cleanup when clients disconnect.
+- Update the dashboard frontend to prefer EventSource for snapshot/session refreshes,
+  preserve task and subagent selection across reconnects, and fall back to the existing
+  polling loop when SSE is unavailable or errors out.
+- Add focused tests for the SSE endpoint, streamed session output updates, reconnection/fallback
+  behavior, and idle-load expectations; keep existing polling behavior covered as
+  the compatibility path.
 human_checkpoints: []
 subagents: []
 git:
@@ -35,8 +61,8 @@ git:
   checkpoint_base_sha: null
   checkpoint_attempts: 0
   rolled_back_checkpoint_attempt: null
-  worktree_path: null
   merge_agent_attempts: 0
+  worktree_path: null
 retry_policy:
   max_retries: null
   stage_retry_limit: null
