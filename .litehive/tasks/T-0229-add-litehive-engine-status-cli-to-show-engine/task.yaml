@@ -8,24 +8,41 @@ model: null
 mode: implementation
 pipeline_mode: full
 status: queued
+flag_reason: null
 pipeline_status: backlog
 priority: medium
-pm_complexity: null
-planned_effort: null
+pm_complexity: moderate
+planned_effort: s
 created_at: '2026-04-08T06:40:02+00:00'
-updated_at: '2026-04-08T06:40:02+00:00'
-goal: Add a CLI command (e.g. litehive engine status or litehive engine status codex)
-  that shows current usage stats, quota status, and whether the engine is available.
-  Should work for all engines that have monitoring data and for codex show proactive
-  quota check results.
+updated_at: '2026-04-08T22:01:07+00:00'
+goal: Add an operator-facing litehive engine status CLI that reports per-engine monitoring
+  data and Codex proactive quota state so users can see availability and recent usage
+  without opening raw YAML.
 acceptance_criteria:
-- litehive engine status shows a summary for all engines (invocations, successes,
-  failures, limits, last used)
-- litehive engine status codex shows codex-specific quota (used percent, limit_reached,
-  reset time) from the proactive quota API
-- Works without arguments (all engines) and with a specific engine name
+- Running litehive engine status --workspace . exits successfully and prints one summary
+  entry per engine present in .litehive/engine-monitoring.yaml, including invocation
+  count, success count, failure count, limit-event count, availability/status, and
+  last-used or last-observed timestamp.
+- Running litehive engine status codex --workspace . exits successfully and prints
+  Codex proactive quota fields derived from the quota API/cache, including used percent,
+  whether quota is currently exhausted, and the next reset time when available.
+- 'The command supports both forms: no engine argument for the all-engine summary
+  and a specific engine name to scope output to one engine.'
+- When monitoring data is absent for the requested scope, the command prints a clear
+  no-data result instead of crashing.
 constraints: []
-plan: []
+plan:
+- Extend the litehive engine parser so status is a supported subcommand and the engine
+  name becomes optional only for that subcommand while preserving existing set/freeze/unfreeze
+  behavior.
+- Implement a status handler in litehive/cli/engine.py that reads workspace engine
+  monitoring, formats an all-engine summary, and filters to a single engine when requested.
+- For Codex status, reuse the existing proactive quota check/monitoring path so the
+  CLI surfaces used percent, limit_reached, and reset metadata without duplicating
+  quota logic.
+- Add focused CLI and observability tests covering all-engine output, single-engine
+  filtering, Codex quota details, and no-data handling.
+- Update operator-facing docs for the new command and expected output fields.
 human_checkpoints: []
 subagents: []
 git:

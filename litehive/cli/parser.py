@@ -220,8 +220,8 @@ def build_parser():
     )
     engine.add_argument(
         "engine_action",
-        choices=[*ENGINE_CHOICES, "set", "freeze", "unfreeze"],
-        help="Engine name (shorthand for 'set') or subcommand: set, freeze, unfreeze",
+        choices=[*ENGINE_CHOICES, "set", "freeze", "unfreeze", "status"],
+        help="Engine name (shorthand for 'set') or subcommand: set, freeze, unfreeze, status",
     )
     engine.add_argument(
         "engine_name",

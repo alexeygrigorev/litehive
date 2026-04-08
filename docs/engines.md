@@ -49,6 +49,8 @@ Examples:
 
 ```bash
 litehive engine codex
+litehive engine status
+litehive engine status codex
 litehive update T-0005 --engine opencode
 litehive run --engine gemini --model gemini-2.5-pro
 ```
