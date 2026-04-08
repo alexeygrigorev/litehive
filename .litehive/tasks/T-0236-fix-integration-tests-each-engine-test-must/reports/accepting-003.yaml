@@ -1,0 +1,47 @@
+task_id: T-0236
+step: accepting
+verdict: pass
+summary: 'Accepted after reviewer verification. Confirmed the integration helpers
+  now use minimal one-sentence prompts: smoke is ''Reply with exactly: <engine> integration
+  smoke.'' and nudge is a one-line ''Run litehive report --verdict pass --role swe
+  --message ok exactly once.'' command, with the nudge flow still using two runs and
+  persisting the verdict from task thread state. Confirmed tests_integration/conftest.py
+  sets a 30-second per-test timeout guard and tests_integration/README.md documents
+  the 30-second override. Verified the installed-engine suite with env LITEHIVE_INTEGRATION_ENGINES=codex,claude,copilot,gemini,opencode,goz
+  /usr/bin/time -p uv run pytest tests_integration -q --durations=20: 14 passed in
+  120.08s, real 120.71s. Slowest actual test calls were opencode nudge 16.11s, gemini
+  nudge 14.36s, copilot nudge 14.24s, claude nudge 10.89s, codex report 8.70s, codex
+  nudge 7.61s, and goz nudge 4.11s, so every engine test call stayed under the 20-second
+  acceptance target and the full suite stayed under 3 minutes.'
+feedback: 'Accepted after reviewer verification. Confirmed the integration helpers
+  now use minimal one-sentence prompts: smoke is ''Reply with exactly: <engine> integration
+  smoke.'' and nudge is a one-line ''Run litehive report --verdict pass --role swe
+  --message ok exactly once.'' command, with the nudge flow still using two runs and
+  persisting the verdict from task thread state. Confirmed tests_integration/conftest.py
+  sets a 30-second per-test timeout guard and tests_integration/README.md documents
+  the 30-second override. Verified the installed-engine suite with env LITEHIVE_INTEGRATION_ENGINES=codex,claude,copilot,gemini,opencode,goz
+  /usr/bin/time -p uv run pytest tests_integration -q --durations=20: 14 passed in
+  120.08s, real 120.71s. Slowest actual test calls were opencode nudge 16.11s, gemini
+  nudge 14.36s, copilot nudge 14.24s, claude nudge 10.89s, codex report 8.70s, codex
+  nudge 7.61s, and goz nudge 4.11s, so every engine test call stayed under the 20-second
+  acceptance target and the full suite stayed under 3 minutes.'
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 205
+hook_results: []
+created_at: '2026-04-08T20:31:51+00:00'

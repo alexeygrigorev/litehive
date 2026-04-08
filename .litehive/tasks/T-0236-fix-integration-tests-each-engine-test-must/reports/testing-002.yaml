@@ -1,0 +1,43 @@
+task_id: T-0236
+step: testing
+verdict: pass
+summary: 'Verified integration prompt/timing changes in tests_integration and adapter
+  resume handling. Ran env LITEHIVE_INTEGRATION_ENGINES=codex,claude,copilot,gemini,opencode,goz
+  /usr/bin/time -p uv run pytest tests_integration -q --durations=20 from the task
+  worktree: 14 passed in 127.58s, real 128.34s. Slowest relevant call durations were
+  gemini nudge 15.50s, copilot nudge 15.03s, opencode nudge 14.62s, codex report 12.50s,
+  codex nudge 9.96s, claude nudge 9.86s, goz nudge 3.87s; all call timings stayed
+  under the 20s per-test target and the suite stayed under 3 minutes. Confirmed prompts
+  are minimal one-sentence prompts in tests_integration/helpers.py, nudge remains
+  a two-run flow with the second run executing one litehive report command, tests_integration/conftest.py
+  sets the timeout guard to 30s, and tests_integration/README.md matches the new timeout.'
+feedback: 'Verified integration prompt/timing changes in tests_integration and adapter
+  resume handling. Ran env LITEHIVE_INTEGRATION_ENGINES=codex,claude,copilot,gemini,opencode,goz
+  /usr/bin/time -p uv run pytest tests_integration -q --durations=20 from the task
+  worktree: 14 passed in 127.58s, real 128.34s. Slowest relevant call durations were
+  gemini nudge 15.50s, copilot nudge 15.03s, opencode nudge 14.62s, codex report 12.50s,
+  codex nudge 9.96s, claude nudge 9.86s, goz nudge 3.87s; all call timings stayed
+  under the 20s per-test target and the suite stayed under 3 minutes. Confirmed prompts
+  are minimal one-sentence prompts in tests_integration/helpers.py, nudge remains
+  a two-run flow with the second run executing one litehive report command, tests_integration/conftest.py
+  sets the timeout guard to 30s, and tests_integration/README.md matches the new timeout.'
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 169
+hook_results: []
+created_at: '2026-04-08T20:28:25+00:00'

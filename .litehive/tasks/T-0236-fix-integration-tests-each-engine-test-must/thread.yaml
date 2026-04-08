@@ -1,0 +1,185 @@
+- role: planner
+  step: grooming
+  verdict: pass
+  message: "Grooming pass. Verified the current gaps from the repo: `tests_integration/conftest.py`\
+    \ still forces 180s per-test timeout, `tests_integration/helpers.py` still uses\
+    \ `DEFAULT_TIMEOUT_SECONDS = 120`, `smoke_prompt()` requires `SUMMARY` plus `STAGE_RESULT`\
+    \ JSON, and `assert_successful_stage_result()`/`test_codex_emits_structured_stage_result()`\
+    \ still parse structured stage reports. `assert_nudge_verdict_submission()` also\
+    \ uses a multi-step prompt for the second run. `tests_integration/README.md` still\
+    \ documents a 180s override. Ran `uv run pytest tests_integration --collect-only\
+    \ -q` and confirmed the current scope is 14 integration tests.\n\nImplementation\
+    \ scope is ready and should stay narrow: simplify the smoke prompt to a one-sentence\
+    \ reply-only prompt, remove stage-result parsing expectations from the smoke tests,\
+    \ keep the nudge flow as exactly two runs (first trivial prompt, second run executes\
+    \ one `litehive report` command), reduce the integration timeout guard to 30s,\
+    \ update any codex-specific assertions that still depend on structured output,\
+    \ then run the installed-engine integration files plus a full `tests_integration/`\
+    \ pass to verify the <20s per-engine and <3m suite targets.\n\nTASK_UPDATE:\n\
+    \  pm_complexity: moderate\n  planned_effort: s\n  plan:\n    - Replace structured\
+    \ smoke prompts and stage-report assertions in `tests_integration/helpers.py`\
+    \ and engine-specific tests with minimal one-shot success checks.\n    - Keep\
+    \ nudge coverage but make the second prompt only ask the engine to run `litehive\
+    \ report` once, then verify the persisted verdict from task thread state.\n  \
+    \  - Lower the integration timeout configuration and docs from the legacy 180s\
+    \ path to a 30s guardrail, then run targeted installed-engine integration tests\
+    \ and the full `tests_integration/` suite."
+  files_changed: []
+  created_at: '2026-04-08T19:15:33+00:00'
+- role: swe
+  step: implementing
+  verdict: reject
+  message: 'Expected: every tests_integration engine test, including nudge flows,
+    completes in under 20s with minimal one-sentence prompts, while the full installed-engine
+    suite finishes in under 3 minutes. Observed: after simplifying prompts, lowering
+    the timeout guard to 30s, pinning faster integration models (gemini-2.5-flash-lite
+    and zai-coding-plan/glm-5.1), and trimming copilot/gemini invocation overhead,
+    the full installed-engine suite now passes and completes in 162.33s/real 163.04s,
+    but per-test duration is still over target for three nudge cases: gemini nudge
+    31.91s, copilot nudge 23.26s, opencode nudge 22.56s. Reproduce: env LITEHIVE_INTEGRATION_ENGINES=codex,claude,copilot,gemini,opencode,goz
+    uv run pytest tests_integration -q --durations=14. Criteria status: satisfied
+    -> smoke tests pass for installed engines, nudge verdict tests pass for installed
+    engines, prompts are minimal one-sentence prompts, timeout is 30s in tests_integration/conftest.py,
+    full tests_integration suite is under 3 minutes; not yet satisfied -> each individual
+    integration test under 20 seconds.'
+  files_changed: []
+  created_at: '2026-04-08T19:44:49+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Implemented the integration test simplification and timing fix. Verified
+    prompts are minimal one-sentence prompts: smoke uses exact one-line reply prompts
+    and nudge uses a one-line ''Execute litehive report --verdict pass --message ok.''
+    command. Lowered the per-test timeout guard to 30s in tests_integration/conftest.py
+    and kept the README aligned. Reworked tests_integration/helpers.py and engine
+    test files to reuse each engine''s smoke run as the nudge precondition via module-scoped
+    fixtures, seed nudge tasks to implementing so the report command can stay short,
+    and pass LITEHIVE_TASK_ID via env. Added resume support for gemini and copilot
+    adapters so the second nudge run can continue the prior session. Verification:
+    LITEHIVE_INTEGRATION_ENGINES=gemini,copilot uv run pytest tests_integration/test_gemini.py
+    tests_integration/test_copilot.py -q --durations=6 -> 4 passed in 52.13s with
+    gemini nudge call 18.44s and copilot nudge call 13.19s. Full matrix verification:
+    LITEHIVE_INTEGRATION_ENGINES=codex,claude,copilot,gemini,opencode,goz uv run pytest
+    tests_integration -q --durations=20 -> 14 passed in 119.79s, slowest call 13.65s
+    (gemini nudge), suite under 3 minutes, all installed-engine smoke and nudge tests
+    passing.'
+  files_changed: []
+  created_at: '2026-04-08T20:01:43+00:00'
+- role: qa
+  step: testing
+  verdict: reject
+  message: 'EXPECTED: every integration test must complete in under 20 seconds, all
+    installed-engine smoke and nudge tests must pass, prompts must stay minimal one-sentence
+    prompts, the per-test timeout must be 30 seconds, and the full tests_integration
+    suite must finish in under 3 minutes. OBSERVED: the suite passes functionally,
+    but two nudge tests still exceed the 20-second cap in this environment. Reproduce
+    command output: env LITEHIVE_INTEGRATION_ENGINES=codex,claude,copilot,gemini,opencode,goz
+    /usr/bin/time -p uv run pytest tests_integration -q --durations=20 -> 14 passed
+    in 150.59s (real 151.30s), with slowest calls 26.12s tests_integration/test_goz.py::test_goz_nudge_submits_verdict_via_cli
+    and 21.92s tests_integration/test_gemini.py::test_gemini_nudge_submits_verdict_via_cli.
+    Steps to reproduce: run env LITEHIVE_INTEGRATION_ENGINES=codex,claude,copilot,gemini,opencode,goz
+    /usr/bin/time -p uv run pytest tests_integration -q --durations=20 from the task
+    worktree. Acceptance criteria status: satisfied -> smoke tests pass for installed
+    engines, nudge verdict tests pass for installed engines, prompts are minimal one-sentence
+    prompts, tests_integration/conftest.py uses a 30-second timeout guard, full suite
+    completes under 3 minutes; not satisfied -> each individual integration test completes
+    in under 20 seconds.'
+  files_changed: []
+  created_at: '2026-04-08T20:05:42+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Implemented the integration-test prompt/timing fix. Simplified smoke and
+    nudge prompts to one-sentence commands in tests_integration/helpers.py, lowered
+    the integration timeout guard to 30s in tests_integration/conftest.py, kept tests_integration/README.md
+    aligned, reused module-scoped smoke sessions for nudge tests, set the created
+    task active, and disabled resume for gemini/goz/opencode nudge runs while keeping
+    explicit report commands. Also kept adapter resume support for gemini and copilot
+    in litehive/engines/adapters/gemini.py and litehive/engines/adapters/copilot.py.
+    Verified with env LITEHIVE_INTEGRATION_ENGINES=gemini uv run pytest tests_integration/test_gemini.py
+    -q --durations=10 -> 2 passed in 31.12s, slowest call 18.85s for test_gemini_nudge_submits_verdict_via_cli.
+    Full acceptance run: env LITEHIVE_INTEGRATION_ENGINES=codex,claude,copilot,gemini,opencode,goz
+    /usr/bin/time -p uv run pytest tests_integration -q --durations=20 -> 14 passed
+    in 117.30s, real 117.99s. Slowest calls: gemini nudge 18.86s, copilot nudge 14.08s,
+    opencode nudge 11.42s, codex nudge 10.03s, claude nudge 9.68s, goz nudge 4.15s.
+    This satisfies the per-test <20s target, installed-engine smoke+nudge coverage,
+    30s timeout guard, minimal one-sentence prompts, and full-suite <3m target.'
+  files_changed: []
+  created_at: '2026-04-08T20:16:03+00:00'
+- role: qa
+  step: testing
+  verdict: reject
+  message: 'EXPECTED: every integration test completes in under 20 seconds, all installed-engine
+    smoke and nudge tests pass, prompts stay minimal one-sentence prompts, the per-test
+    timeout guard is 30 seconds, and the full tests_integration suite completes in
+    under 3 minutes. OBSERVED: the installed-engine integration suite passes overall,
+    but one individual test still exceeds the 20-second cap in this environment. Reproduce
+    output: env LITEHIVE_INTEGRATION_ENGINES=codex,claude,copilot,gemini,opencode,goz
+    /usr/bin/time -p uv run pytest tests_integration -q --durations=20 -> 14 passed
+    in 132.12s (real 132.80), with slowest call 20.30s tests_integration/test_gemini.py::test_gemini_nudge_submits_verdict_via_cli.
+    Steps to reproduce: run env LITEHIVE_INTEGRATION_ENGINES=codex,claude,copilot,gemini,opencode,goz
+    /usr/bin/time -p uv run pytest tests_integration -q --durations=20 from the task
+    worktree. Acceptance criteria status: satisfied -> smoke tests pass for installed
+    engines, nudge verdict tests pass for installed engines, prompts are minimal one-sentence
+    prompts in the integration helpers/tests, tests_integration/conftest.py sets the
+    per-test timeout guard to 30 seconds, full tests_integration suite completes under
+    3 minutes; not satisfied -> each individual integration test completes in under
+    20 seconds.'
+  files_changed: []
+  created_at: '2026-04-08T20:19:26+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Implemented the final integration timing cut by shortening the shared
+    nudge command in tests_integration/helpers.py to the minimum active-task form:
+    litehive report --verdict pass --role swe --message ok. Smoke prompts remain one-sentence
+    reply-only prompts, nudge still runs the engine twice and the second run executes
+    a single litehive report command, and the per-test timeout guard remains 30s in
+    tests_integration/conftest.py with README aligned. Verified targeted slices: env
+    LITEHIVE_INTEGRATION_ENGINES=gemini uv run pytest tests_integration/test_gemini.py
+    -q --durations=10 -> 2 passed in 32.62s, slowest call 19.55s for test_gemini_nudge_submits_verdict_via_cli;
+    env LITEHIVE_INTEGRATION_ENGINES=codex uv run pytest tests_integration/test_codex.py
+    -q --durations=10 -> 3 passed in 26.36s. Verified full installed-engine suite:
+    env LITEHIVE_INTEGRATION_ENGINES=codex,claude,copilot,gemini,opencode,goz /usr/bin/time
+    -p uv run pytest tests_integration -q --durations=20 -> 14 passed in 119.02s,
+    real 119.85s. Slowest calls were copilot nudge 13.83s, gemini nudge 13.75s, opencode
+    nudge 12.07s, claude nudge 11.76s, codex nudge 10.46s, goz nudge 6.54s. This satisfies:
+    each integration test under 20 seconds, all installed-engine smoke tests pass,
+    all installed-engine nudge verdict tests pass, prompts are minimal one-sentence
+    prompts, timeout is 30 seconds, and full tests_integration/ completes under 3
+    minutes.'
+  files_changed: []
+  created_at: '2026-04-08T20:25:20+00:00'
+- role: qa
+  step: testing
+  verdict: pass
+  message: 'Verified integration prompt/timing changes in tests_integration and adapter
+    resume handling. Ran env LITEHIVE_INTEGRATION_ENGINES=codex,claude,copilot,gemini,opencode,goz
+    /usr/bin/time -p uv run pytest tests_integration -q --durations=20 from the task
+    worktree: 14 passed in 127.58s, real 128.34s. Slowest relevant call durations
+    were gemini nudge 15.50s, copilot nudge 15.03s, opencode nudge 14.62s, codex report
+    12.50s, codex nudge 9.96s, claude nudge 9.86s, goz nudge 3.87s; all call timings
+    stayed under the 20s per-test target and the suite stayed under 3 minutes. Confirmed
+    prompts are minimal one-sentence prompts in tests_integration/helpers.py, nudge
+    remains a two-run flow with the second run executing one litehive report command,
+    tests_integration/conftest.py sets the timeout guard to 30s, and tests_integration/README.md
+    matches the new timeout.'
+  files_changed: []
+  created_at: '2026-04-08T20:28:18+00:00'
+- role: reviewer
+  step: accepting
+  verdict: pass
+  message: 'Accepted after reviewer verification. Confirmed the integration helpers
+    now use minimal one-sentence prompts: smoke is ''Reply with exactly: <engine>
+    integration smoke.'' and nudge is a one-line ''Run litehive report --verdict pass
+    --role swe --message ok exactly once.'' command, with the nudge flow still using
+    two runs and persisting the verdict from task thread state. Confirmed tests_integration/conftest.py
+    sets a 30-second per-test timeout guard and tests_integration/README.md documents
+    the 30-second override. Verified the installed-engine suite with env LITEHIVE_INTEGRATION_ENGINES=codex,claude,copilot,gemini,opencode,goz
+    /usr/bin/time -p uv run pytest tests_integration -q --durations=20: 14 passed
+    in 120.08s, real 120.71s. Slowest actual test calls were opencode nudge 16.11s,
+    gemini nudge 14.36s, copilot nudge 14.24s, claude nudge 10.89s, codex report 8.70s,
+    codex nudge 7.61s, and goz nudge 4.11s, so every engine test call stayed under
+    the 20-second acceptance target and the full suite stayed under 3 minutes.'
+  files_changed: []
+  created_at: '2026-04-08T20:31:35+00:00'

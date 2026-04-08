@@ -1,0 +1,49 @@
+task_id: T-0236
+step: implementing
+verdict: reject
+summary: 'Expected: every tests_integration engine test, including nudge flows, completes
+  in under 20s with minimal one-sentence prompts, while the full installed-engine
+  suite finishes in under 3 minutes. Observed: after simplifying prompts, lowering
+  the timeout guard to 30s, pinning faster integration models (gemini-2.5-flash-lite
+  and zai-coding-plan/glm-5.1), and trimming copilot/gemini invocation overhead, the
+  full installed-engine suite now passes and completes in 162.33s/real 163.04s, but
+  per-test duration is still over target for three nudge cases: gemini nudge 31.91s,
+  copilot nudge 23.26s, opencode nudge 22.56s. Reproduce: env LITEHIVE_INTEGRATION_ENGINES=codex,claude,copilot,gemini,opencode,goz
+  uv run pytest tests_integration -q --durations=14. Criteria status: satisfied ->
+  smoke tests pass for installed engines, nudge verdict tests pass for installed engines,
+  prompts are minimal one-sentence prompts, timeout is 30s in tests_integration/conftest.py,
+  full tests_integration suite is under 3 minutes; not yet satisfied -> each individual
+  integration test under 20 seconds.'
+feedback: 'Expected: every tests_integration engine test, including nudge flows, completes
+  in under 20s with minimal one-sentence prompts, while the full installed-engine
+  suite finishes in under 3 minutes. Observed: after simplifying prompts, lowering
+  the timeout guard to 30s, pinning faster integration models (gemini-2.5-flash-lite
+  and zai-coding-plan/glm-5.1), and trimming copilot/gemini invocation overhead, the
+  full installed-engine suite now passes and completes in 162.33s/real 163.04s, but
+  per-test duration is still over target for three nudge cases: gemini nudge 31.91s,
+  copilot nudge 23.26s, opencode nudge 22.56s. Reproduce: env LITEHIVE_INTEGRATION_ENGINES=codex,claude,copilot,gemini,opencode,goz
+  uv run pytest tests_integration -q --durations=14. Criteria status: satisfied ->
+  smoke tests pass for installed engines, nudge verdict tests pass for installed engines,
+  prompts are minimal one-sentence prompts, timeout is 30s in tests_integration/conftest.py,
+  full tests_integration suite is under 3 minutes; not yet satisfied -> each individual
+  integration test under 20 seconds.'
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: retry
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 1760
+hook_results: []
+created_at: '2026-04-08T19:45:08+00:00'

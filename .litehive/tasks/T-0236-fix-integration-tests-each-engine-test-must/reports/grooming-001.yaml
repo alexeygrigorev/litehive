@@ -1,0 +1,53 @@
+task_id: T-0236
+step: grooming
+verdict: pass
+summary: 'Grooming pass. Verified the current gaps from the repo: `tests_integration/conftest.py`
+  still forces 180s per-test timeout, `tests_integration/helpers.py` still uses `DEFAULT_TIMEOUT_SECONDS
+  = 120`, `smoke_prompt()` requires `SUMMARY` plus `STAGE_RESULT` JSON, and `assert_successful_stage_result()`/`test_codex_emits_structured_stage_result()`
+  still parse structured stage reports. `assert_nudge_verdict_submission()` also uses
+  a multi-step prompt for the second run. `tests_integration/README.md` still documents
+  a 180s override. Ran `uv run pytest tests_integration --collect-only -q` and confirmed
+  the current scope is 14 integration tests.'
+feedback: "Grooming pass. Verified the current gaps from the repo: `tests_integration/conftest.py`\
+  \ still forces 180s per-test timeout, `tests_integration/helpers.py` still uses\
+  \ `DEFAULT_TIMEOUT_SECONDS = 120`, `smoke_prompt()` requires `SUMMARY` plus `STAGE_RESULT`\
+  \ JSON, and `assert_successful_stage_result()`/`test_codex_emits_structured_stage_result()`\
+  \ still parse structured stage reports. `assert_nudge_verdict_submission()` also\
+  \ uses a multi-step prompt for the second run. `tests_integration/README.md` still\
+  \ documents a 180s override. Ran `uv run pytest tests_integration --collect-only\
+  \ -q` and confirmed the current scope is 14 integration tests.\n\nImplementation\
+  \ scope is ready and should stay narrow: simplify the smoke prompt to a one-sentence\
+  \ reply-only prompt, remove stage-result parsing expectations from the smoke tests,\
+  \ keep the nudge flow as exactly two runs (first trivial prompt, second run executes\
+  \ one `litehive report` command), reduce the integration timeout guard to 30s, update\
+  \ any codex-specific assertions that still depend on structured output, then run\
+  \ the installed-engine integration files plus a full `tests_integration/` pass to\
+  \ verify the <20s per-engine and <3m suite targets.\n\nTASK_UPDATE:\n  pm_complexity:\
+  \ moderate\n  planned_effort: s\n  plan:\n    - Replace structured smoke prompts\
+  \ and stage-report assertions in `tests_integration/helpers.py` and engine-specific\
+  \ tests with minimal one-shot success checks.\n    - Keep nudge coverage but make\
+  \ the second prompt only ask the engine to run `litehive report` once, then verify\
+  \ the persisted verdict from task thread state.\n    - Lower the integration timeout\
+  \ configuration and docs from the legacy 180s path to a 30s guardrail, then run\
+  \ targeted installed-engine integration tests and the full `tests_integration/`\
+  \ suite."
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 109
+hook_results: []
+created_at: '2026-04-08T19:15:48+00:00'
