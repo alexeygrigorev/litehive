@@ -292,7 +292,8 @@ def stage_prompt(
         [
             "",
             "IMPORTANT: When you are done, you MUST submit your verdict by running:",
-            f'  litehive report --verdict <pass|fail|reject|blocked> --role {stage_owner} --step {step} --message "<your report>"',
+            f'  litehive report --task-id $LITEHIVE_TASK_ID --verdict <pass|fail|reject|blocked> --role {stage_owner} --step {step} --message "<your report>"',
+            f"The environment variable LITEHIVE_TASK_ID is set to {task.id} for this session. Always use --task-id $LITEHIVE_TASK_ID to ensure the verdict goes to the correct task.",
             "",
             "Your --message is the PRIMARY way the next agent understands what happened.",
             "Do NOT rely on your raw transcript being read — write the report as if it is the only thing the next agent will see.",

@@ -333,7 +333,11 @@ def build_executor(
                 and (result.failure is None or is_timeout)
             ):
                 continuation = extract_engine_continuation(engine_name, result.execution)
-                if continuation and continuation.session_id:
+                resume_id = (
+                    (continuation.session_id or continuation.thread_id)
+                    if continuation else None
+                )
+                if resume_id:
                     nudge_prompt = (
                         f"You finished the {step} stage but did not submit your verdict. "
                         f"Please run this command now:\n\n"
@@ -352,7 +356,7 @@ def build_executor(
                         engine_name=engine_name,
                         prompt=nudge_prompt,
                         model=model_name,
-                        resume_session_id=continuation.session_id,
+                        resume_session_id=resume_id,
                     )
 
             report = stage_report_from_subagent(current_task, step, result, root=root)
