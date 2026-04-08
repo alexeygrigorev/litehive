@@ -1,0 +1,44 @@
+task_id: T-0231
+step: implementing
+verdict: pass
+summary: Implementation completed. Engine adapter internals were encapsulated behind
+  a proper object-oriented boundary, with internal details no longer leaking through
+  the public surface. The change preserves expected behavior while tightening ownership
+  of responsibilities and improving maintainability. No blocking defects were identified
+  at the implementing stage.
+feedback: Implementation completed. Engine adapter internals were encapsulated behind
+  a proper object-oriented boundary, with internal details no longer leaking through
+  the public surface. The change preserves expected behavior while tightening ownership
+  of responsibilities and improving maintainability. No blocking defects were identified
+  at the implementing stage.
+files_changed:
+- litehive/engines/__init__.py
+- litehive/engines/adapters/__init__.py
+- litehive/engines/adapters/claude.py
+- litehive/engines/adapters/codex.py
+- litehive/engines/adapters/copilot.py
+- litehive/engines/adapters/gemini.py
+- litehive/engines/adapters/goz.py
+- litehive/engines/adapters/opencode.py
+- litehive/engines/base.py
+- litehive/runtime/_builder.py
+- tests/test_engine_variants_and_timeline.py
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 93
+hook_results: []
+created_at: '2026-04-08T20:59:13+00:00'

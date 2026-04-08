@@ -1,0 +1,67 @@
+task_id: T-0231
+step: implementing
+verdict: pass
+summary: 'Encapsulated engine adapter defaults and engine-specific stream and continuation
+  logic inside adapter classes. ExternalCLIAdapter now supports subclass-owned defaults
+  plus optional stream_event_adapter() and extract_continuation() hooks; each concrete
+  adapter now defines its own default name, binary, and capabilities, OpenCode owns
+  its stripped env var tuple, and codex, opencode, gemini, goz, claude, and copilot
+  own their live stream adapters on the class instead of exposing module-level helpers.
+  Simplified litehive/engines/__init__.py to instantiate an ordered list of adapter
+  classes with no adapter-specific kwargs while preserving the public ENGINE_REGISTRY,
+  ENGINE_CHOICES, and get_engine() API. Stopped exporting private adapter internals
+  from litehive/engines/adapters/__init__.py. Added regression coverage for registry
+  defaults and the adapters package export surface. Verified with python -m compileall
+  litehive/engines, uv run pytest -q tests/test_engine_variants_and_timeline.py (48
+  passed), and uv run pytest -q tests/test_runner_workflow.py -k "engine or continuation
+  or timeline or codex or opencode or gemini or claude or copilot or goz" (36 passed,
+  73 deselected). Evidence for acceptance criteria: registry no longer wires per-adapter
+  kwargs, private helper exports are absent from litehive.engines.adapters, and continuation
+  and timeline parsing still passes focused engine tests.'
+feedback: 'Encapsulated engine adapter defaults and engine-specific stream and continuation
+  logic inside adapter classes. ExternalCLIAdapter now supports subclass-owned defaults
+  plus optional stream_event_adapter() and extract_continuation() hooks; each concrete
+  adapter now defines its own default name, binary, and capabilities, OpenCode owns
+  its stripped env var tuple, and codex, opencode, gemini, goz, claude, and copilot
+  own their live stream adapters on the class instead of exposing module-level helpers.
+  Simplified litehive/engines/__init__.py to instantiate an ordered list of adapter
+  classes with no adapter-specific kwargs while preserving the public ENGINE_REGISTRY,
+  ENGINE_CHOICES, and get_engine() API. Stopped exporting private adapter internals
+  from litehive/engines/adapters/__init__.py. Added regression coverage for registry
+  defaults and the adapters package export surface. Verified with python -m compileall
+  litehive/engines, uv run pytest -q tests/test_engine_variants_and_timeline.py (48
+  passed), and uv run pytest -q tests/test_runner_workflow.py -k "engine or continuation
+  or timeline or codex or opencode or gemini or claude or copilot or goz" (36 passed,
+  73 deselected). Evidence for acceptance criteria: registry no longer wires per-adapter
+  kwargs, private helper exports are absent from litehive.engines.adapters, and continuation
+  and timeline parsing still passes focused engine tests.'
+files_changed:
+- litehive/engines/__init__.py
+- litehive/engines/adapters/__init__.py
+- litehive/engines/adapters/claude.py
+- litehive/engines/adapters/codex.py
+- litehive/engines/adapters/copilot.py
+- litehive/engines/adapters/gemini.py
+- litehive/engines/adapters/goz.py
+- litehive/engines/adapters/opencode.py
+- litehive/engines/base.py
+- tests/test_engine_variants_and_timeline.py
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 457
+hook_results: []
+created_at: '2026-04-08T20:50:12+00:00'
