@@ -622,3 +622,24 @@ def test_render_context_template_shows_base_and_project_stage_scaffolding() -> N
     assert "## Tool usage" in context
     assert "Favor small, compile-safe changes with clear module ownership." in context
     assert "`cargo test`" in context
+
+
+def test_resolve_process_profile_includes_python_and_django_testing_overlays() -> None:
+    python_profile = resolve_process_profile("python")
+    django_profile = resolve_process_profile("django")
+
+    assert "- Use `pytest` for automated verification." in python_profile["stage_overlay"]["implementing"]
+    assert "- Use `tmp_path` or pytest fixtures instead of manual tempfiles in repo code or `/tmp` setup." in python_profile["stage_overlay"]["implementing"]
+    assert "- Mock external calls and integration edges, not the internal logic under test." in python_profile["stage_overlay"]["implementing"]
+    assert "- Do not use `time.sleep` in tests; use deterministic synchronization or time control." in python_profile["stage_overlay"]["implementing"]
+    assert "- Reject tests that use manual tempfiles where `tmp_path` would make isolation explicit." in python_profile["stage_overlay"]["testing"]
+    assert "- Reject tests that mock the unit's internal logic instead of external boundaries." in python_profile["stage_overlay"]["testing"]
+    assert "- Reject tests that rely on `time.sleep` instead of deterministic control." in python_profile["stage_overlay"]["testing"]
+
+    assert "- Do not add tests that only prove ORM round-trips, model field persistence, or `CASCADE` behavior." in django_profile["stage_overlay"]["implementing"]
+    assert "- Do not test URL resolution separately when request-level coverage already exercises the route." in django_profile["stage_overlay"]["implementing"]
+    assert "- Use `setUpTestData` for read-only fixtures that can be shared across tests." in django_profile["stage_overlay"]["implementing"]
+    assert "- Prefer `assertContains` for response body checks instead of brittle string matching." in django_profile["stage_overlay"]["implementing"]
+    assert "- Reject standalone URL resolution tests unless routing behavior itself is the feature under test." in django_profile["stage_overlay"]["testing"]
+    assert "- Reject read-only fixture setup that should use `setUpTestData`." in django_profile["stage_overlay"]["testing"]
+    assert "- Reject response assertions that use raw string matching where `assertContains` is the correct Django assertion." in django_profile["stage_overlay"]["testing"]

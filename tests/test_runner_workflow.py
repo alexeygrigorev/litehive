@@ -2911,6 +2911,30 @@ def test_stage_prompt_guides_swe_for_preimplemented_or_obsolete_work(tmp_path: P
     assert "use `litehive close --outcome wont_do` or `litehive close --outcome duplicate`" in prompt
 
 
+def test_stage_prompt_includes_universal_test_quality_rules_for_swe_and_qa(
+    tmp_path: Path,
+) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(
+        tmp_path,
+        title="Testing quality guidance",
+        acceptance_criteria=["Prompt includes shared testing quality rules."],
+    )
+
+    implementing_prompt = stage_prompt(task, "implementing", workspace_context="")
+    testing_prompt = stage_prompt(task, "testing", workspace_context="")
+
+    assert "Write tests so each assertion would fail if the feature is broken." in implementing_prompt
+    assert "Do not spend test coverage on framework behavior or library guarantees." in implementing_prompt
+    assert "Do not add tests that only restate defaults, constants, or static data." in implementing_prompt
+    assert "Keep each test focused on one behavior." in implementing_prompt
+    assert "Avoid duplicate coverage; extend an existing test only when it is the same behavior." in implementing_prompt
+    assert "Reject tests whose assertions would still pass if the feature were broken." in testing_prompt
+    assert "Reject tests that duplicate existing coverage instead of covering a new behavior." in testing_prompt
+    assert "Reject tests longer than 50 lines unless a shorter structure is genuinely impossible." in testing_prompt
+    assert "Reject monolithic tests that exercise 5 or more behaviors in one flow." in testing_prompt
+
+
 def test_stage_prompt_lists_upcoming_runner_hooks_for_swe(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     task = create_task(

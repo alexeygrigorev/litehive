@@ -22,7 +22,15 @@ init_scaffold:
 stage_overlay:
   implementing:
     - "- Keep model, migration, view, form, and template changes coordinated."
+    - "- Do not add tests that only prove ORM round-trips, model field persistence, or `CASCADE` behavior."
+    - "- Do not test URL resolution separately when request-level coverage already exercises the route."
+    - "- Use `setUpTestData` for read-only fixtures that can be shared across tests."
+    - "- Prefer `assertContains` for response body checks instead of brittle string matching."
   testing:
     - "- Verify migrations and run focused Django or pytest coverage for the affected app."
+    - "- Reject tests that only prove ORM round-trips, model field persistence, or `CASCADE` behavior."
+    - "- Reject standalone URL resolution tests unless routing behavior itself is the feature under test."
+    - "- Reject read-only fixture setup that should use `setUpTestData`."
+    - "- Reject response assertions that use raw string matching where `assertContains` is the correct Django assertion."
   accepting:
     - "- Reject changes that leave migration or settings impact unclear."

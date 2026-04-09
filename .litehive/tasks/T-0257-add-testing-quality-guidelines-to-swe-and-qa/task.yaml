@@ -12,10 +12,10 @@ flag_reason: null
 flag_count: 0
 pipeline_status: backlog
 priority: high
-pm_complexity: null
-planned_effort: null
+pm_complexity: moderate
+planned_effort: s
 created_at: '2026-04-09T09:21:16+00:00'
-updated_at: '2026-04-09T09:21:16+00:00'
+updated_at: '2026-04-09T17:15:34+00:00'
 goal: Embed testing best practices into the agent prompts so agents write better tests.
   Rules should be generic (apply to any project) with profile-specific additions.
   Add to both SWE (implementing stage) and QA (testing stage) prompts.
@@ -34,7 +34,17 @@ acceptance_criteria:
 - Rules are in the prompt text, not just config guidance - agents see them every run
 - All existing tests pass
 constraints: []
-plan: []
+plan:
+- Inspect prompt assembly to confirm where stage instructions and profile overlays
+  enter the generated prompt text.
+- Add universal testing-quality rules to the shared implementing and testing prompt
+  text so SWE and QA see them on every run.
+- Extend Python and Django profile stage overlays with the required testing guidance
+  for implementing and testing.
+- Add or update focused prompt-generation tests that assert the new shared and profile-specific
+  guidance appears in stage prompts/context output.
+- Run the targeted pytest slices for prompt rendering/profile scaffolding and then
+  the relevant broader regression command if the changed area requires it.
 human_checkpoints: []
 subagents: []
 git:

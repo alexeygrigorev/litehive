@@ -18,5 +18,13 @@ init_scaffold:
 stage_overlay:
   implementing:
     - "- Write or update focused tests alongside the code change when feasible."
+    - "- Use `pytest` for automated verification."
+    - "- Use `tmp_path` or pytest fixtures instead of manual tempfiles in repo code or `/tmp` setup."
+    - "- Mock external calls and integration edges, not the internal logic under test."
+    - "- Do not use `time.sleep` in tests; use deterministic synchronization or time control."
   testing:
     - "- Prefer targeted `pytest` invocations before broader test commands."
+    - "- Verify new or updated tests use `pytest` idioms and fixtures."
+    - "- Reject tests that use manual tempfiles where `tmp_path` would make isolation explicit."
+    - "- Reject tests that mock the unit's internal logic instead of external boundaries."
+    - "- Reject tests that rely on `time.sleep` instead of deterministic control."
