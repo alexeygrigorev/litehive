@@ -12,10 +12,9 @@ def _write_stream_artifact(base: Path, name: str, content: str, *, compress: boo
     plain_path = base / f"{name}.txt"
     compressed_path = base / f"{name}.txt.gz"
     if compress and not content:
-        if plain_path.exists():
-            plain_path.unlink()
         if compressed_path.exists():
             compressed_path.unlink()
+        _write_text_if_changed(plain_path, "")
         return
     should_compress = (
         compress and len(content.encode("utf-8")) >= _COMPRESS_STREAM_ARTIFACT_MIN_BYTES

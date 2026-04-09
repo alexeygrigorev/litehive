@@ -1,0 +1,47 @@
+id: T-0247
+slug: add-litehive-health-command-single-command-for
+title: Add litehive health command - single command for full workspace diagnostics
+depends_on: []
+task_type: null
+engine: null
+model: null
+mode: implementation
+pipeline_mode: full
+status: queued
+flag_reason: null
+pipeline_status: backlog
+priority: medium
+pm_complexity: null
+planned_effort: null
+created_at: '2026-04-09T08:47:51+00:00'
+updated_at: '2026-04-09T08:47:51+00:00'
+goal: 'One command that shows everything needed to assess workspace health: active
+  task + stage, flagged tasks with reasons, stale worktrees, uncommitted code changes,
+  engine quotas, daemon status, and recent completions. Replaces running 5+ commands
+  manually.'
+acceptance_criteria:
+- 'litehive health shows: active task, flagged tasks with last verdict summary, worktrees
+  with change counts, all engine quotas, daemon status (running/stopped), last 3 completed
+  tasks'
+- Exit code 0 if healthy, 1 if problems detected (flagged tasks, stale worktrees,
+  quota warnings)
+- All existing tests pass
+constraints: []
+plan: []
+human_checkpoints: []
+subagents: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0247 add-litehive-health-command-single-command-for'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+  merge_agent_attempts: 0
+  worktree_path: null
+retry_policy:
+  max_retries: null
+  stage_retry_limit: null
+created_from: null
+upstream_origin: null
+github_origin: null

@@ -1,0 +1,49 @@
+task_id: T-0239
+step: testing
+verdict: pass
+summary: "## QA Report \u2014 T-0239 (PASS)"
+feedback: "## QA Report \u2014 T-0239 (PASS)\n\n### What was verified\n\n**Code change**\
+  \ (`litehive/agents/_artifacts.py:14-18`): `_write_stream_artifact()` now writes\
+  \ an empty `.txt` file via `_write_text_if_changed()` when `compress=True` and content\
+  \ is empty, instead of deleting both plain and compressed files. The `.gz` variant\
+  \ is still cleaned up. This is a 2-line net change \u2014 correct and minimal.\n\
+  \n**New test** (`tests/test_tasks_and_subagents.py:3398`): `test_subagent_empty_stdout_stderr_still_written`\
+  \ creates a subagent with a FakeEngine that returns empty stdout/stderr, then asserts:\n\
+  - `stdout.txt` and `stderr.txt` exist in the artifact directory\n- Both files contain\
+  \ empty strings\n- No `.gz` variants exist\n\n### Acceptance criteria verification\n\
+  \n1. **Every subagent run produces stdout.txt and stderr.txt** \u2014 PASS. The\
+  \ new test proves empty-output runs create both files. The fix is in the shared\
+  \ `_write_stream_artifact()` path called by `_write_session_finish()` for all runs.\n\
+  \n2. **Files are written even when the agent exits quickly (under 5 seconds)** \u2014\
+  \ PASS. The FakeEngine returns instantly (well under 5s). The fix is in the artifact-write\
+  \ path, not timing-dependent.\n\n3. **Files are written even when using the non-live\
+  \ run path** \u2014 PASS. The test uses FakeEngine.run() which returns a result\
+  \ directly (non-live path). `_write_session_finish()` calls `_write_stream_artifact()`\
+  \ for both live and non-live paths.\n\n4. **All existing tests pass** \u2014 PASS.\
+  \ `tests/test_tasks_and_subagents.py`: 62 passed, 3 skipped. Full suite (excluding\
+  \ pre-existing broken `test_codex_quota.py`): all failures are pre-existing and\
+  \ unrelated (e.g., `_commit_to_git_report` attribute missing in `test_retry_commit_and_recovery.py`,\
+  \ `FakePopen` signature issues in `test_runner_workflow.py`).\n\n### Tests run\n\
+  - `uv run pytest tests/test_tasks_and_subagents.py -q`: 62 passed, 3 skipped (5.15s)\n\
+  - `uv run pytest tests/ -q --ignore=tests/test_codex_quota.py`: 10 pre-existing\
+  \ failures, 0 new failures"
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 1
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 1073
+hook_results: []
+created_at: '2026-04-09T09:00:03+00:00'

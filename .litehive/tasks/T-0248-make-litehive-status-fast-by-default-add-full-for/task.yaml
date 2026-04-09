@@ -1,0 +1,44 @@
+id: T-0248
+slug: make-litehive-status-fast-by-default-add-full-for
+title: Make litehive status fast by default, add --full for verbose output
+depends_on: []
+task_type: null
+engine: null
+model: null
+mode: implementation
+pipeline_mode: full
+status: queued
+flag_reason: null
+pipeline_status: backlog
+priority: high
+pm_complexity: null
+planned_effort: null
+created_at: '2026-04-09T08:49:18+00:00'
+updated_at: '2026-04-09T08:49:18+00:00'
+goal: 'litehive status currently requires --fast for quick reads. Swap the default:
+  fast mode is the default, --full gives the verbose per-task output. Nobody wants
+  to wait for slow status.'
+acceptance_criteria:
+- litehive status uses fast mode by default
+- litehive status --full gives the current verbose output
+- --fast flag kept for backwards compat but is a no-op
+- All existing tests pass
+constraints: []
+plan: []
+human_checkpoints: []
+subagents: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0248 make-litehive-status-fast-by-default-add-full-for'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+  merge_agent_attempts: 0
+  worktree_path: null
+retry_policy:
+  max_retries: null
+  stage_retry_limit: null
+created_from: null
+upstream_origin: null
+github_origin: null

@@ -1,0 +1,72 @@
+task_id: T-0239
+step: accepting
+verdict: pass
+summary: "## Acceptance Report \u2014 T-0239 (PASS)"
+feedback: "Runner hook `before_pm_acceptance` `uv run ruff check --select E402,F401\
+  \ litehive tests` passed with exit code 0 (artifact: `artifacts/before_pm_acceptance-001.yaml`).\n\
+  \nRunner hook `before_pm_acceptance` `if [ -n \"${LITEHIVE_CHANGED_PATHS:-}\" ]\
+  \ \\\n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" | grep -q . \\\n  && printf\
+  \ '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" \\\n    | xargs -r -d '\\n' git grep -nE 'noqa:.*F401|noqa:.*F403|ruff:\\\
+  s*noqa:\\s*F401|ruff:\\s*noqa:\\s*F403' --; then\n  echo 'Forbidden noqa F401/F403\
+  \ suppression found.'\n  exit 1\nfi` passed with exit code 0 (artifact: `artifacts/before_pm_acceptance-002.yaml`).\n\
+  \n## Acceptance Report \u2014 T-0239 (PASS)\n\n### What was verified\n\n**Code change**\
+  \ (`litehive/agents/_artifacts.py:14-18`): `_write_stream_artifact()` now writes\
+  \ an empty `.txt` file via `_write_text_if_changed()` when `compress=True` and content\
+  \ is empty, instead of the previous behavior of deleting both plain and compressed\
+  \ files and returning. The `.gz` variant is still cleaned up. This is a minimal,\
+  \ correct 2-line fix.\n\n**New test** (`tests/test_tasks_and_subagents.py:3398`):\
+  \ `test_subagent_empty_stdout_stderr_still_written` creates a subagent with a FakeEngine\
+  \ returning empty stdout/stderr, then asserts both `.txt` files exist with empty\
+  \ content and no `.gz` variants remain.\n\n### Acceptance criteria\n\n1. **Every\
+  \ subagent run produces stdout.txt and stderr.txt** \u2014 PASS. New test confirms\
+  \ empty-output runs create both files. The fix is in the shared `_write_stream_artifact()`\
+  \ path used by `_write_session_finish()` for all runs.\n\n2. **Files are written\
+  \ even when the agent exits quickly (under 5 seconds)** \u2014 PASS. FakeEngine\
+  \ returns instantly. The fix is in the artifact-write path, independent of timing.\n\
+  \n3. **Files are written even when using the non-live run path** \u2014 PASS. The\
+  \ test uses FakeEngine.run() (non-live path). `_write_session_finish()` calls `_write_stream_artifact()`\
+  \ for both live and non-live paths.\n\n4. \n\n\u2026 [truncated \u2014 full transcript\
+  \ in subagent artifacts]"
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings:
+- 'runner hook passed: `before_pm_acceptance` `uv run ruff check --select E402,F401
+  litehive tests` (artifact: `artifacts/before_pm_acceptance-001.yaml`)'
+- "runner hook passed: `before_pm_acceptance` `if [ -n \"${LITEHIVE_CHANGED_PATHS:-}\"\
+  \ ] \\\n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" | grep -q . \\\n  && printf\
+  \ '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" \\\n    | xargs -r -d '\\n' git grep -nE 'noqa:.*F401|noqa:.*F403|ruff:\\\
+  s*noqa:\\s*F401|ruff:\\s*noqa:\\s*F403' --; then\n  echo 'Forbidden noqa F401/F403\
+  \ suppression found.'\n  exit 1\nfi` (artifact: `artifacts/before_pm_acceptance-002.yaml`)"
+retry_count: 1
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 47
+hook_results:
+- point: before_pm_acceptance
+  command: uv run ruff check --select E402,F401 litehive tests
+  blocking: true
+  exit_code: 0
+  status: passed
+  artifact: artifacts/before_pm_acceptance-001.yaml
+- point: before_pm_acceptance
+  command: "if [ -n \"${LITEHIVE_CHANGED_PATHS:-}\" ] \\\n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\"\
+    \ | grep -q . \\\n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" \\\n    | xargs\
+    \ -r -d '\\n' git grep -nE 'noqa:.*F401|noqa:.*F403|ruff:\\s*noqa:\\s*F401|ruff:\\\
+    s*noqa:\\s*F403' --; then\n  echo 'Forbidden noqa F401/F403 suppression found.'\n\
+    \  exit 1\nfi"
+  blocking: true
+  exit_code: 0
+  status: passed
+  artifact: artifacts/before_pm_acceptance-002.yaml
+created_at: '2026-04-09T09:00:50+00:00'

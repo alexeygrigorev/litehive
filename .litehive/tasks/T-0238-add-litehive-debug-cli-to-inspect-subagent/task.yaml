@@ -7,14 +7,14 @@ engine: null
 model: null
 mode: implementation
 pipeline_mode: full
-status: in_progress
+status: done
 flag_reason: null
-pipeline_status: commit_to_git
+pipeline_status: done
 priority: medium
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-09T07:45:26+00:00'
-updated_at: '2026-04-09T08:24:21+00:00'
+updated_at: '2026-04-09T08:27:02+00:00'
 goal: Add a command like 'litehive debug T-XXXX' that shows the latest subagent's
   session.yaml, report.yaml, exit code, transcript summary, stdout tail, stderr, and
   whether a verdict was submitted. Makes it easy to diagnose why a task failed without
@@ -66,14 +66,21 @@ subagents:
   path: subagents/SA-0005-recovery
   sandboxed: false
   sandbox_summary: host
+- id: SA-0006
+  role: merge-resolver
+  engine: claude
+  status: completed
+  path: subagents/SA-0006-merge-resolver
+  sandboxed: false
+  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0238 add-litehive-debug-cli-to-inspect-subagent'
-  commit_sha: null
-  checkpoint_base_sha: null
-  checkpoint_attempts: 0
+  commit_sha: b308dd1811b8f4971044b0d074605057ed1561f8
+  checkpoint_base_sha: f69553d1f2c1bf1efac70c80020b985d4aaa9f21
+  checkpoint_attempts: 1
   rolled_back_checkpoint_attempt: null
-  merge_agent_attempts: 0
+  merge_agent_attempts: 1
   worktree_path: null
 retry_policy:
   max_retries: null

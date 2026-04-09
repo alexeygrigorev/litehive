@@ -1,0 +1,45 @@
+id: T-0246
+slug: add-litehive-worktree-command-to-list-and-clean
+title: Add litehive worktree command to list and clean worktrees
+depends_on: []
+task_type: null
+engine: null
+model: null
+mode: implementation
+pipeline_mode: full
+status: queued
+flag_reason: null
+pipeline_status: backlog
+priority: medium
+pm_complexity: null
+planned_effort: null
+created_at: '2026-04-09T08:37:21+00:00'
+updated_at: '2026-04-09T08:37:21+00:00'
+goal: Add litehive worktree ls to show all worktrees with their task status and whether
+  they have changes. Add litehive worktree clean to remove worktrees for closed/deferred/done
+  tasks. This replaces manual git worktree list + status checking.
+acceptance_criteria:
+- litehive worktree ls shows all worktrees with task ID, status, and change count
+- litehive worktree clean removes worktrees for done/deferred/wont_do/duplicate tasks
+- litehive worktree clean --dry-run shows what would be removed without removing
+- Active task worktrees are never cleaned
+- All existing tests pass
+constraints: []
+plan: []
+human_checkpoints: []
+subagents: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0246 add-litehive-worktree-command-to-list-and-clean'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+  merge_agent_attempts: 0
+  worktree_path: null
+retry_policy:
+  max_retries: null
+  stage_retry_limit: null
+created_from: null
+upstream_origin: null
+github_origin: null
