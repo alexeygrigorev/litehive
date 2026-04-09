@@ -6,6 +6,7 @@ from litehive.runtime import run_next_task
 from litehive.web import serve_monitor
 
 from litehive.cli.configure import _cmd_configure
+from litehive.cli.debug import _cmd_debug
 from litehive.cli.daemon import (
     _cmd_daemon_instances,
     _cmd_daemon_restart,
@@ -123,6 +124,8 @@ def main():
         return _cmd_import_issue(args)
     if args.command == "import-issues":
         return _cmd_import_issues(args)
+    if args.command == "debug":
+        return _cmd_debug(args)
     if args.command == "report":
         return _cmd_report(args)
     if args.command == "list":

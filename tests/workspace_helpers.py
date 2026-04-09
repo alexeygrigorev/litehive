@@ -18,6 +18,7 @@ import litehive.tasks as tasks_module
 from litehive.cli import (
     _cmd_abandon_task,
     _cmd_add,
+    _cmd_debug,
     _cmd_archive,
     _cmd_cleanup,
     _cmd_close_task,
