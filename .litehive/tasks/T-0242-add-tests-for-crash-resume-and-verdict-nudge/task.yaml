@@ -1,7 +1,8 @@
 id: T-0242
 slug: add-tests-for-crash-resume-and-verdict-nudge
 title: Add tests for crash resume and verdict nudge across engines
-depends_on: []
+depends_on:
+- T-0241
 task_type: null
 engine: null
 model: null
@@ -11,10 +12,10 @@ status: queued
 flag_reason: null
 pipeline_status: backlog
 priority: medium
-pm_complexity: null
-planned_effort: null
+pm_complexity: moderate
+planned_effort: s
 created_at: '2026-04-09T08:01:10+00:00'
-updated_at: '2026-04-09T08:01:10+00:00'
+updated_at: '2026-04-09T10:21:28+00:00'
 goal: 'The crash resume and verdict nudge logic in _builder.py has no dedicated test
   coverage for multi-engine scenarios. Add unit tests that verify: crash resume fires
   for engines with resume_id, nudge fires on timeout with thread_id, nudge uses exec
@@ -27,7 +28,18 @@ acceptance_criteria:
 - 'Test: nudge result replaces original result for report parsing'
 - All tests pass within 60s timeout
 constraints: []
-plan: []
+plan:
+- Map current builder branches for crash-resume and verdict-nudge to concrete engine-specific
+  test cases, reusing existing workspace helper fixtures where possible.
+- 'Add focused unit coverage for crash-resume across engines: claude resumes via session_id,
+  codex resumes via thread_id-driven exec fallback, and engines without resume_id
+  do not trigger a resume call.'
+- Add focused unit coverage for verdict nudge on timeout when a resume_id exists,
+  including codex nudge behavior and an assertion that the nudge result replaces the
+  original execution for stage-report parsing.
+- Run only the touched test modules first, then the narrow regression set covering
+  crash-resume, stage-report parsing, and engine transcript handling, keeping the
+  total verification under the 60s acceptance budget.
 human_checkpoints: []
 subagents: []
 git:

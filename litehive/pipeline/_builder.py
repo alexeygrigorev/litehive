@@ -205,11 +205,7 @@ def build_executor(
                     raise KeyboardInterrupt(failure.reason)
                 if failure is None and result.exit_code != 0 and not crash_resume_attempted:
                     continuation = extract_engine_continuation(engine_name, result.execution)
-                    if (
-                        engine_name == "claude"
-                        and continuation is not None
-                        and continuation.resume_id
-                    ):
+                    if continuation is not None and continuation.resume_id:
                         crash_resume_attempted = True
                         resume_session_id = continuation.resume_id
                         resume_event = (
