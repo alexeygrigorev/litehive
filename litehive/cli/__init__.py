@@ -16,6 +16,7 @@ from litehive.cli.daemon import (
     _cmd_daemon_worker,
 )
 from litehive.cli.engine import _cmd_engine
+from litehive.cli.health import _cmd_health
 from litehive.cli.queue import (
     _cmd_abandon_task,
     _cmd_archive,
@@ -46,6 +47,7 @@ from litehive.cli.parser import build_parser
 _COMMAND_HANDLERS = {
     "configure": _cmd_configure,
     "status": _cmd_status,
+    "health": _cmd_health,
     "engine": _cmd_engine,
     "queue": _cmd_queue,
     "repair": _cmd_repair,
@@ -95,7 +97,6 @@ _WORKTREE_COMMAND_HANDLERS = {
 def main():
     parser = build_parser()
     args = parser.parse_args()
-
     if args.command == "tasks":
         return _launch_app(args.workspace, default_mode="tasks")
     if args.command == "web":

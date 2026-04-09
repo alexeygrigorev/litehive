@@ -12,8 +12,8 @@ flag_reason: null
 flag_count: 1
 pipeline_status: commit_to_git
 priority: medium
-pm_complexity: null
-planned_effort: null
+pm_complexity: moderate
+planned_effort: m
 created_at: '2026-04-09T08:47:51+00:00'
 updated_at: '2026-04-09T23:57:50+00:00'
 goal: 'One command that shows everything needed to assess workspace health: active
@@ -28,7 +28,19 @@ acceptance_criteria:
   quota warnings)
 - All existing tests pass
 constraints: []
-plan: []
+plan:
+- Add a top-level 'health' CLI command wired through parser and dispatch, following
+  the existing status/daemon/worktree command layout.
+- 'Implement a workspace health summary that aggregates: active task/stage, flagged
+  tasks with flag reason and latest verdict/report summary, managed worktrees with
+  change counts, dirty/stale worktree findings, daemon status, engine quota status,
+  and the last 3 completed tasks.'
+- 'Define the health exit code from aggregated findings: return 1 when flagged tasks
+  exist, dirty/stale worktree findings block or indicate cleanup debt, or any engine
+  reports quota/rate/budget warnings; otherwise return 0.'
+- Add focused CLI tests covering healthy and unhealthy outputs, including flagged-task
+  summaries, worktree diagnostics, recent completions, daemon status, and exit-code
+  behavior.
 human_checkpoints: []
 subagents:
 - id: SA-0001
