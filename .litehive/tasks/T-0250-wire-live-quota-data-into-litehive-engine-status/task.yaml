@@ -12,24 +12,39 @@ flag_reason: null
 flag_count: 0
 pipeline_status: commit_to_git
 priority: high
-pm_complexity: null
-planned_effort: null
+pm_complexity: moderate
+planned_effort: s
 created_at: '2026-04-09T08:53:54+00:00'
 updated_at: '2026-04-09T13:50:48+00:00'
-goal: litehive engine status shows monitoring data but not live quota from the quota
-  APIs we built (claude 5h/7d, codex windows, copilot premium, zai api/tokens). Add
-  a quota section per engine that calls the quota modules and shows current usage
-  percentages and reset times.
+goal: Wire the existing live quota checkers into litehive engine status so the status
+  output shows both recorded monitoring data and current quota state for each supported
+  engine, with graceful fail-open output when a quota source is unavailable.
 acceptance_criteria:
-- litehive engine status shows claude quota (5h and 7d utilization, reset times)
-- litehive engine status shows codex quota (5h and weekly used percent)
-- litehive engine status shows copilot quota (premium remaining/entitlement, reset
-  date)
-- litehive engine status shows zai quota (api calls and tokens percent)
-- Quota errors show gracefully (e.g. 'unavailable' not a crash)
-- All existing tests pass
+- litehive engine status claude prints a quota section with Claude 5-hour and 7-day
+  utilization plus reset timestamps from the live quota checker.
+- litehive engine status codex prints a quota section with Codex 5-hour and weekly
+  usage percentages and reset information from the live quota checker.
+- litehive engine status copilot prints a quota section with Copilot premium remaining
+  versus entitlement and the quota reset date from the live quota checker.
+- litehive engine status opencode and litehive engine status goz print a quota section
+  with Z.AI API-call and token utilization percentages from the live quota checker.
+- If any quota fetch fails or credentials are missing, litehive engine status still
+  exits successfully and prints an unavailable-style quota message instead of crashing.
+- The updated engine status behavior is covered by automated tests, and uv run pytest
+  -q passes with zero failures.
 constraints: []
-plan: []
+plan:
+- Confirm the operator-facing output contract for all-engines and single-engine status
+  calls, including what should print when monitoring data is absent but live quota
+  is still queryable.
+- Refactor litehive.cli.engine to call the Claude, Codex, Copilot, and Z.AI quota
+  helpers consistently and render a stable quota block per engine.
+- Ensure quota failures stay fail-open and user-readable, reusing unavailable-style
+  output rather than surfacing tracebacks or aborting the command.
+- Expand CLI tests to cover Claude, Codex, Copilot, and Z.AI quota rendering plus
+  quota-error handling in both scoped and aggregate engine status flows when applicable.
+- Run targeted engine-status tests during development, then run uv run pytest -q before
+  handoff.
 human_checkpoints: []
 subagents:
 - id: SA-0001
@@ -60,6 +75,13 @@ subagents:
   path: subagents/SA-0004-reviewer
   sandboxed: false
   sandbox_summary: host
+- id: SA-0005
+  role: merge-resolver
+  engine: claude
+  status: running
+  path: subagents/SA-0005-merge-resolver
+  sandboxed: false
+  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0250 wire-live-quota-data-into-litehive-engine-status'
@@ -67,7 +89,7 @@ git:
   checkpoint_base_sha: null
   checkpoint_attempts: 0
   rolled_back_checkpoint_attempt: null
-  merge_agent_attempts: 0
+  merge_agent_attempts: 1
   worktree_path: null
 retry_policy:
   max_retries: null
