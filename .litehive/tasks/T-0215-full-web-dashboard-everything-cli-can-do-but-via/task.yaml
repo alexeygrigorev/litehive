@@ -7,14 +7,14 @@ engine: null
 model: null
 mode: implementation
 pipeline_mode: full
-status: in_progress
+status: done
 flag_reason: null
-pipeline_status: commit_to_git
+pipeline_status: done
 priority: medium
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-07T20:46:27+00:00'
-updated_at: '2026-04-09T08:07:06+00:00'
+updated_at: '2026-04-09T08:07:09+00:00'
 goal: 'Investigate the current web dashboard code and design a plan to make it a full
   operator interface that mirrors all CLI capabilities. Analyze litehive/web/ and
   the existing endpoints. Produce follow-up tasks for each feature area: task detail
@@ -492,9 +492,9 @@ subagents:
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0215 full-web-dashboard-everything-cli-can-do-but-via'
-  commit_sha: null
-  checkpoint_base_sha: null
-  checkpoint_attempts: 0
+  commit_sha: f69553d1f2c1bf1efac70c80020b985d4aaa9f21
+  checkpoint_base_sha: c498aa23f67e958b0e494b5149aa041cc6d0fa87
+  checkpoint_attempts: 1
   rolled_back_checkpoint_attempt: null
   merge_agent_attempts: 0
   worktree_path: null

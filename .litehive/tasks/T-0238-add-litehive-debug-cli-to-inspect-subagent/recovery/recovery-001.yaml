@@ -1,0 +1,135 @@
+task_id: T-0238
+stage: accepting
+trigger: stage_failure
+summary: '## Recovery Verdict: PASS'
+failure_classification: blocked
+runnable_state: runnable
+blocker: null
+evidence:
+- kind: task
+  label: task.yaml
+  path: .litehive/tasks/T-0238-add-litehive-debug-cli-to-inspect-subagent/task.yaml
+  exists: true
+  summary: status=in_progress pipeline_status=accepting priority=medium
+  metadata: {}
+- kind: runtime
+  label: runtime.yaml
+  path: .litehive/tasks/T-0238-add-litehive-debug-cli-to-inspect-subagent/runtime.yaml
+  exists: true
+  summary: execution_status=running current_stage=accepting last_outcome=none
+  metadata: {}
+- kind: thread
+  label: thread.yaml
+  path: .litehive/tasks/T-0238-add-litehive-debug-cli-to-inspect-subagent/thread.yaml
+  exists: true
+  summary: discussion entries=5
+  metadata: {}
+- kind: events
+  label: events.jsonl
+  path: .litehive/tasks/T-0238-add-litehive-debug-cli-to-inspect-subagent/events.jsonl
+  exists: true
+  summary: task lifecycle and subagent event stream
+  metadata: {}
+- kind: stage_report
+  label: latest stage report
+  path: .litehive/tasks/T-0238-add-litehive-debug-cli-to-inspect-subagent/reports/testing-004.yaml
+  exists: true
+  summary: latest report for T-0238
+  metadata: {}
+- kind: subagent_artifact
+  label: latest subagent session
+  path: .litehive/tasks/T-0238-add-litehive-debug-cli-to-inspect-subagent/subagents/SA-0005-recovery/session.yaml
+  exists: true
+  summary: artifact from SA-0005-recovery
+  metadata: {}
+- kind: subagent_artifact
+  label: latest subagent report
+  path: .litehive/tasks/T-0238-add-litehive-debug-cli-to-inspect-subagent/subagents/SA-0005-recovery/report.yaml
+  exists: true
+  summary: artifact from SA-0005-recovery
+  metadata: {}
+- kind: subagent_artifact
+  label: latest subagent transcript
+  path: .litehive/tasks/T-0238-add-litehive-debug-cli-to-inspect-subagent/subagents/SA-0005-recovery/transcript.md
+  exists: true
+  summary: artifact from SA-0005-recovery
+  metadata: {}
+- kind: subagent_artifact
+  label: latest subagent stdout
+  path: .litehive/tasks/T-0238-add-litehive-debug-cli-to-inspect-subagent/subagents/SA-0005-recovery/stdout.txt.gz
+  exists: true
+  summary: artifact from SA-0005-recovery
+  metadata: {}
+- kind: subagent_artifact
+  label: latest subagent stderr
+  path: .litehive/tasks/T-0238-add-litehive-debug-cli-to-inspect-subagent/subagents/SA-0005-recovery/stderr.txt
+  exists: false
+  summary: artifact from SA-0005-recovery
+  metadata: {}
+- kind: subagent_artifact
+  label: latest subagent events timeline
+  path: .litehive/tasks/T-0238-add-litehive-debug-cli-to-inspect-subagent/subagents/SA-0005-recovery/timeline.yaml.gz
+  exists: true
+  summary: artifact from SA-0005-recovery
+  metadata: {}
+- kind: wrapper_log
+  label: latest run-all log
+  path: .litehive/logs/run-all/daemon.log
+  exists: true
+  summary: latest daemon/run-all wrapper log
+  metadata: {}
+- kind: engine_monitoring
+  label: engine-monitoring.yaml
+  path: .litehive/engine-monitoring.yaml
+  exists: true
+  summary: no engine record
+  metadata: {}
+- kind: git
+  label: main checkout git state
+  path: null
+  exists: true
+  summary: head=f69553d1f2c1bf1efac70c80020b985d4aaa9f21 dirty=16
+  metadata:
+    dirty_paths:
+    - litehive/state.yaml
+    - litehive/tasks/T-0215-full-web-dashboard-everything-cli-can-do-but-via/journal.md
+    - litehive/tasks/T-0215-full-web-dashboard-everything-cli-can-do-but-via/task.yaml
+    - litehive/tasks/T-0238-add-litehive-debug-cli-to-inspect-subagent/journal.md
+    - litehive/tasks/T-0238-add-litehive-debug-cli-to-inspect-subagent/task.yaml
+    - itehive/cli/__init__.py
+    - itehive/cli/parser.py
+    - ests/workspace_helpers.py
+    - .litehive/tasks/T-0238-add-litehive-debug-cli-to-inspect-subagent/artifacts/before_pm_acceptance-001.yaml
+    - .litehive/tasks/T-0238-add-litehive-debug-cli-to-inspect-subagent/reports/grooming-001.yaml
+    - .litehive/tasks/T-0238-add-litehive-debug-cli-to-inspect-subagent/reports/implementing-002.yaml
+    - .litehive/tasks/T-0238-add-litehive-debug-cli-to-inspect-subagent/reports/implementing-003.yaml
+    - .litehive/tasks/T-0238-add-litehive-debug-cli-to-inspect-subagent/reports/testing-004.yaml
+    - .litehive/tasks/T-0238-add-litehive-debug-cli-to-inspect-subagent/thread.yaml
+    - litehive/cli/debug.py
+    - tests/test_debug_command.py
+- kind: worktree
+  label: task worktree state
+  path: .litehive/worktrees/T-0238-add-litehive-debug-cli-to-inspect-subagent
+  exists: true
+  summary: dirty=5
+  metadata:
+    dirty_paths:
+    - itehive/cli/__init__.py
+    - itehive/cli/parser.py
+    - ests/workspace_helpers.py
+    - litehive/cli/debug.py
+    - tests/test_debug_command.py
+    stage: accepting
+actions:
+- action: resume_current_stage
+  applied: true
+  summary: Recovery agent repaired the task and returned `accepting` to a runnable
+    state.
+  metadata:
+    verdict: pass
+warnings:
+- 'runner hook failed: `before_pm_acceptance` `uv run ruff check --select E402,F401
+  litehive tests` (artifact: `artifacts/before_pm_acceptance-001.yaml`)'
+recovery_subagent_id: SA-0005
+recovery_subagent_path: subagents/SA-0005-recovery
+created_at: '2026-04-09T08:24:04+00:00'

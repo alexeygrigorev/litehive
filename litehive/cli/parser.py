@@ -1001,6 +1001,24 @@ def build_parser():
         help="Repository root containing .litehive/",
     )
 
+    # ── debug ────────────────────────────────────────────────────────
+    debug_cmd = subparsers.add_parser(
+        "debug", help="Inspect the latest subagent artifacts for a task"
+    )
+    debug_cmd.add_argument("task_id", help="Task ID (e.g. T-0001)")
+    debug_cmd.add_argument(
+        "--all",
+        action="store_true",
+        dest="show_all",
+        help="List all subagents with their status and exit code",
+    )
+    debug_cmd.add_argument(
+        "--workspace",
+        type=Path,
+        default=Path.cwd(),
+        help="Repository root containing .litehive/",
+    )
+
     # ── cleanup ──────────────────────────────────────────────────────
     cleanup_cmd = subparsers.add_parser(
         "cleanup", help="Delete archived tasks older than a given duration"

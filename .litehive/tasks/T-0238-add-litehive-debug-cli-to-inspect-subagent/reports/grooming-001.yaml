@@ -1,0 +1,56 @@
+task_id: T-0238
+step: grooming
+verdict: pass
+summary: "## Grooming Report \u2014 T-0238: Add litehive debug CLI to inspect subagent\
+  \ artifacts"
+feedback: "## Grooming Report \u2014 T-0238: Add litehive debug CLI to inspect subagent\
+  \ artifacts\n\n### Summary\nTask is well-defined and ready for implementation. The\
+  \ goal, acceptance criteria, and scope are clear. No ambiguity or missing constraints.\n\
+  \n### Key Design Decisions for Implementer\n\n**Artifact locations**: Subagent artifacts\
+  \ live under `.litehive/tasks/{TASK_ID}/subagents/{SA_ID}-{ROLE}/` and include `session.yaml`,\
+  \ `report.yaml`, `stdout.txt(.gz)`, `stderr.txt(.gz)`, `transcript.md(.gz)`. Files\
+  \ may be gzip-compressed \u2014 the implementer must handle both plain and `.gz`\
+  \ variants.\n\n**Verdict correlation**: Verdicts are stored in `{TASK_ID}.thread.yaml`\
+  \ (via `TaskThreadComment`), NOT in subagent artifacts. To show whether a verdict\
+  \ was submitted, cross-reference the task's thread entries by timestamp/role against\
+  \ the subagent's role and time window.\n\n**CLI pattern**: Follow existing pattern\
+  \ in `litehive/cli/parser.py` (add subparser), create `litehive/cli/debug.py` handler,\
+  \ register in `litehive/cli/__init__.py`.\n\n**Latest subagent**: The task's `subagents`\
+  \ list in `task.yaml` is ordered. The last entry is the latest. Use its `path` field\
+  \ to locate artifacts.\n\n### Acceptance Criteria Assessment\nAll 6 criteria are\
+  \ observable and testable:\n1. Session info display (engine, exit code, status,\
+  \ duration) \u2014 read from `session.yaml` fields\n2. Verdict display \u2014 cross-reference\
+  \ `thread.yaml` entries\n3. stdout/stderr tail (last 500 chars) \u2014 read/decompress\
+  \ artifact files\n4. Transcript summary (first 200 chars) \u2014 read/decompress\
+  \ `transcript.md`\n5. `--all` flag lists all subagents \u2014 iterate task's subagent\
+  \ list\n6. Existing tests pass \u2014 standard regression check\n\n### Implementation\
+  \ Plan\n\nTASK_UPDATE:\n```yaml\nplan:\n  - \"Add 'debug' subcommand to CLI parser\
+  \ in litehive/cli/parser.py with positional task-id arg and --all flag\"\n  - \"\
+  Create litehive/cli/debug.py with handler that loads task.yaml, reads subagent artifacts\
+  \ (handling gzip), cross-references thread.yaml for verdicts, and formats output\"\
+  \n  - \"Register debug command in litehive/cli/__init__.py dispatcher\"\n  - \"\
+  Add tests in tests/ covering: default single-subagent output, --all listing, gzipped\
+  \ artifact handling, missing artifacts gracefully handled, verdict display\"\n \
+  \ - \"Run full test suite to confirm no regressions\"\npm_complexity: simple\nplanned_effort:\
+  \ s\n```\n\n### Risks\n- None significant. This is a read-only diagnostic command\
+  \ with no side effects on task state."
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 183
+hook_results: []
+created_at: '2026-04-09T08:10:29+00:00'
