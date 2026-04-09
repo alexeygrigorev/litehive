@@ -78,6 +78,87 @@ def test_runner_advances_task_to_done(tmp_path: Path) -> None:
     assert (reports / "commit_to_git-005.yaml").exists()
 
 
+def test_empty_swe_guard_skipped_when_prior_implementing_pass_exists(tmp_path: Path) -> None:
+    """Analysis/planning tasks that re-enter implementing via recovery should
+    not be rejected by the empty SWE guard when a prior implementing pass report
+    already exists (the work was already done in an earlier run)."""
+    _init_git_repo(tmp_path)
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Plan feature", auto_commit=False)
+    # Advance to implementing
+    task.pipeline_status = "implementing"  # type: ignore[assignment]
+    save_task(tmp_path, task)
+
+    # Write a prior implementing pass report to simulate work done in an earlier run
+    reports_dir = task_dir(tmp_path, task) / "reports"
+    reports_dir.mkdir(parents=True, exist_ok=True)
+    prior_report = {
+        "task_id": task.id,
+        "step": "implementing",
+        "verdict": "pass",
+        "summary": "Analysis complete, follow-up tasks created",
+        "files_changed": [],
+        "tests": {"added": 0, "passing": 0},
+    }
+    (reports_dir / "implementing-001.yaml").write_text(
+        yaml.dump(prior_report), encoding="utf-8"
+    )
+
+    # Executor returns pass with no file changes and no tests (analysis task)
+    def executor(task, step):  # type: ignore[no-untyped-def]
+        if step == "implementing":
+            return StageReport(
+                task_id=task.id, step=step, verdict="pass",
+                summary="Analysis already done", files_changed=[], tests={"added": 0, "passing": 0},
+            )
+        return StageReport(
+            task_id=task.id, step=step, verdict="pass",
+            summary=f"{step} ok", files_changed=["app.txt"], tests={"added": 1, "passing": 1},
+        )
+
+    runner = TaskExecutionRunner(tmp_path, executor)
+    result = runner.run(task)
+
+    # Should NOT get flagged — the prior pass means the guard is skipped
+    refreshed = get_task(tmp_path, task.id)
+    assert refreshed is not None
+    assert refreshed.status != "flagged", (
+        f"Task was flagged despite prior implementing pass: {refreshed.status}"
+    )
+    # Should advance past implementing (to testing or beyond)
+    assert refreshed.pipeline_status != "implementing"
+
+
+def test_empty_swe_guard_rejects_when_no_prior_pass(tmp_path: Path) -> None:
+    """Without a prior implementing pass, an empty SWE pass should still be
+    rejected by the guard (the agent likely didn't do any work)."""
+    _init_git_repo(tmp_path)
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Real feature", auto_commit=False)
+    task.pipeline_status = "implementing"  # type: ignore[assignment]
+    save_task(tmp_path, task)
+
+    def executor(task, step):  # type: ignore[no-untyped-def]
+        if step == "implementing":
+            return StageReport(
+                task_id=task.id, step=step, verdict="pass",
+                summary="Done", files_changed=[], tests={"added": 0, "passing": 0},
+            )
+        return StageReport(
+            task_id=task.id, step=step, verdict="pass",
+            summary=f"{step} ok", files_changed=["app.txt"], tests={"added": 1, "passing": 1},
+        )
+
+    runner = TaskExecutionRunner(tmp_path, executor, max_retries=0)
+    result = runner.run(task)
+
+    refreshed = get_task(tmp_path, task.id)
+    assert refreshed is not None
+    assert refreshed.status == "flagged", (
+        f"Expected flagged but got {refreshed.status} — guard should reject empty passes"
+    )
+
+
 def test_runtime_routes_grooming_to_planner_and_accepting_to_reviewer() -> None:
     assert _role_for_step("grooming") == "planner"
     assert _role_for_step("implementing") == "swe"

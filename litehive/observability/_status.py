@@ -349,6 +349,50 @@ def render_active_task_section(task: TaskRecord | None, default_engine: str) -> 
     return lines
 
 
+def render_active_tasks_section(
+    tasks: list[TaskRecord],
+    default_engine: str,
+) -> list[str]:
+    """Render the Active Tasks dashboard section for parallel execution.
+
+    Shows multiple active tasks with their individual worktrees, stages,
+    engines, and whether they are blocked on integration or conflict resolution.
+    This is task-level parallelism: each entry is an independent task, not
+    a worker slice of a parent task.
+    """
+    lines: list[str] = ["=== Active Tasks (parallel) ==="]
+    if not tasks:
+        lines.append("  (none)")
+        return lines
+
+    lines.append(f"  {len(tasks)} task(s) running in parallel")
+    for task in tasks:
+        engine = (
+            task.runtime.active_subagent.engine
+            if task.runtime.active_subagent is not None
+            else task.runtime.last_subagent.engine
+            if task.runtime.last_subagent is not None
+            else task.engine or default_engine
+        )
+        stage = task.runtime.current_stage.step or task.pipeline_status or "-"
+        task_duration = _duration_label(task.runtime.run_started_at, 0)
+        worktree = task.git.worktree_path or task.runtime.git.worktree_path or "-"
+
+        status_suffix = ""
+        if task.status == "merge_failed":
+            status_suffix = " [CONFLICT - blocked on integration]"
+        elif task.status == "done":
+            status_suffix = " [integrated]"
+
+        lines.append(
+            f"  {task.id} {stage} with {engine}, running for {task_duration}{status_suffix}"
+        )
+        lines.append(f"    title: {task.title}")
+        lines.append(f"    worktree: {worktree}")
+
+    return lines
+
+
 def find_last_completed_task(tasks: list[TaskRecord]) -> TaskRecord | None:
     """Return the most recently completed (done) task by updated_at."""
     done_tasks = [t for t in tasks if t.status == "done"]

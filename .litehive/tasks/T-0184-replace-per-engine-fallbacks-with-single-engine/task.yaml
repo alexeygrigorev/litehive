@@ -1,9 +1,7 @@
 id: T-0184
 slug: replace-per-engine-fallbacks-with-single-engine
 title: Replace per-engine fallbacks with single engine_preference list
-depends_on:
-- T-0118
-- T-0119
+depends_on: []
 task_type: null
 engine: null
 model: null

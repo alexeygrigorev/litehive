@@ -1,0 +1,78 @@
+task_id: T-0129
+step: implementing
+verdict: pass
+summary: '## Implementation Summary'
+feedback: "## Implementation Summary\n\nImplemented parallel task execution in litehive\
+  \ with separate worktrees per task and agent-assisted merge conflict resolution.\n\
+  \n### Files Changed\n\n**New files:**\n- `litehive/pipeline/_parallel.py` \u2014\
+  \ Core parallel execution module with:\n  - `_select_parallel_tasks()`: Snapshot-based\
+  \ selection of up to N independent tasks, respecting dependencies\n  - `_run_single_parallel_task()`:\
+  \ Executes one task in its own worktree\n  - `_integrate_completed_task()`: Deterministic\
+  \ merge-back to main with merge-conflict agent on conflicts\n  - `run_parallel_tasks()`:\
+  \ Top-level orchestrator: select \u2192 execute in parallel \u2192 integrate in\
+  \ order\n  - `ParallelRunSummary` and `IntegrationResult` dataclasses\n  - `_clear_parallel_active_tasks()`:\
+  \ Cleanup after parallel batch\n- `tests/test_parallel_execution.py` \u2014 23 focused\
+  \ tests covering all acceptance criteria\n\n**Modified files:**\n- `litehive/config/model.py`\
+  \ \u2014 Added `parallel_capacity` field (default 1, validated >= 1)\n- `litehive/models/task_models.py`\
+  \ \u2014 Added `active_task_ids: list[str]` to `WorkspaceState`\n- `litehive/pipeline/__init__.py`\
+  \ \u2014 Exported parallel module symbols\n- `litehive/observability/_status.py`\
+  \ \u2014 Added `render_active_tasks_section()` for parallel task display\n- `litehive/observability/__init__.py`\
+  \ \u2014 Exported new status function\n- `litehive/cli/parser.py` \u2014 Added `--parallel`\
+  \ flag to `litehive run`\n- `litehive/cli/run.py` \u2014 Added `_cmd_run_parallel()`\
+  \ handler, dispatch logic\n\n### Acceptance Criteria Verification\n\n1. **Multiple\
+  \ independent tasks execute simultaneously**: `run_parallel_tasks()` uses `ThreadPoolExecutor`\
+  \ to run up to `parallel_capacity` tasks concurrently, each in its own worktree.\
+  \ Tests: `test_run_parallel_tasks_with_mock_executor`, `test_select_parallel_tasks_picks_independent`\n\
+  2. **Task-level parallelism, not intra-task fanout**: The design is explicitly per-task;\
+  \ code, docs, and tests make this distinction clear. The module docstring and CLI\
+  \ help text state \"task-level parallelism\".\n3. **Per-task worktree ownership\
+  \ and live state tracking**: Each task gets `_resolve_task_execution_root()` called\
+  \ individually. `active_task_ids` in state tracks all running tasks. Tests: `test_each_parallel_task_gets_own_worktree`,\
+  \ `test_active_task_ids_persistence`\n4. **Deterministic integration without agent\
+  \ git ops**: Completed tasks are merged in task-ID order using system-controlled\
+  \ `git merge`. Tests: `test_integration_order_is_deterministic`, `test_integrate_completed_task_success`\n\
+  5. **Merge-conflict agent invocation**: When merge fails, `SubagentManager.run()`\
+  \ is called with role `merge-resolver` and an integration-specific prompt. Test:\
+  \ `test_integrate_completed_task_merge_conflict_with_agent`\n6. **Conflict handling\
+  \ scoped to inter-task integration**: The merge agent prompt explicitly references\
+  \ \"parallel task integration\" and \"separate independent tasks, not intra-task\
+  \ worker fanout\".\n7. **Status reporting shows multiple active tasks**: `render_active_tasks_section()`\
+  \ shows task id, title, stage, engine, worktree, and conflict/integration status.\
+  \ Tests: `test_render_active_tasks_section_multiple`, `test_render_active_tasks_section_empty`,\
+  \ `test_render_active_tasks_section_conflict_status`\n8. **Focused tests**: 23 tests\
+  \ covering config validation, state persistence, task selection (independent/dependent/capacity/empty),\
+  \ worktree isolation, integration (success/order/conflict), full parallel run, status\
+  \ rendering, CLI parsing, dataclasses, and queue exhaustion.\n\n### Tests Run\n\
+  - `tests/test_parallel_execution.py`: 23 passed\n- `tests/test_runner_workflow.py`:\
+  \ 111 passed (no regressions)\n- `tests/test_config_and_run_cli.py`: 58 passed (no\
+  \ regressions)\n- `tests/test_task_commands_and_daemon.py`: 104 passed (no regressions)\n\
+  - `tests/test_observability_and_status.py`: 72 passed (no regressions)"
+files_changed:
+- litehive/cli/parser.py
+- litehive/cli/run.py
+- litehive/config/model.py
+- litehive/models/task_models.py
+- litehive/observability/__init__.py
+- litehive/observability/_status.py
+- litehive/pipeline/__init__.py
+- litehive/pipeline/_parallel.py
+- tests/test_parallel_execution.py
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 1
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 710
+hook_results: []
+created_at: '2026-04-09T06:41:00+00:00'

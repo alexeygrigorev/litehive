@@ -533,6 +533,11 @@ def build_parser():
         help="Drain the task pool until it reaches an explicit stop condition",
     )
     run.add_argument(
+        "--parallel",
+        action="store_true",
+        help="Run multiple independent tasks in parallel using separate worktrees (task-level parallelism)",
+    )
+    run.add_argument(
         "--engine",
         choices=ENGINE_CHOICES,
         help="Override the engine for this run only",

@@ -1,0 +1,52 @@
+task_id: T-0107
+step: grooming
+verdict: blocked
+summary: "BLOCKED: Task T-0107 cannot be groomed \u2014 insufficient product context\
+  \ to shape."
+feedback: "BLOCKED: Task T-0107 cannot be groomed \u2014 insufficient product context\
+  \ to shape.\n\nWHAT EXISTS TODAY:\n- Litehive executes tasks strictly sequentially\
+  \ with a workspace-wide runner guard (one active task at a time).\n- Each task gets\
+  \ a single worktree, runs through fixed stages (grooming \u2192 implementing \u2192\
+  \ testing \u2192 accepting \u2192 commit_to_git \u2192 done), and merges to main\
+  \ at commit_to_git.\n- There is no concept of parallel workers, parallel subtasks,\
+  \ or multi-agent concurrent execution within a single task.\n\nWHAT THE TITLE IMPLIES\
+  \ BUT DOESN'T DEFINE:\nThe phrase \"deterministic integration stage for parallel\
+  \ worker outputs\" could mean several very different things:\n1. Multiple SWE agents\
+  \ working on the same task in parallel (e.g., exploring different approaches), with\
+  \ a stage to pick/merge the best result.\n2. Multiple tasks running concurrently\
+  \ in separate worktrees, with a stage to integrate their combined changes into main\
+  \ without conflicts.\n3. Subtask decomposition where a parent task spawns child\
+  \ tasks that execute in parallel, then a gather/reduce stage merges their outputs.\n\
+  4. A post-commit integration check that validates multiple recently-merged tasks\
+  \ don't conflict at the integration level.\n\nEach of these implies fundamentally\
+  \ different architecture, scope, and effort.\n\nWHAT IS NEEDED TO UNBLOCK:\n- A\
+  \ clear goal statement: what user problem does this solve? What scenario triggers\
+  \ the need for parallel workers?\n- Which parallelism model is intended (see options\
+  \ 1-4 above, or something else)?\n- What does \"deterministic\" mean here \u2014\
+  \ ordering guarantee? idempotent merge? reproducible conflict resolution?\n- What\
+  \ are the inputs and outputs of the integration stage?\n- How does this interact\
+  \ with the existing single-worktree-per-task model and workspace runner guard?\n\
+  \nRECOMMENDATION:\nEither (a) provide product context and re-groom, or (b) decompose\
+  \ into a research spike (e.g., \"Design parallel execution model for litehive\"\
+  ) followed by the implementation task."
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: final
+outcome: blocked
+outcome_reason_code: verdict_blocked
+outcome_reason: "BLOCKED: Task T-0107 cannot be groomed \u2014 insufficient product\
+  \ context to shape."
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 122
+hook_results: []
+created_at: '2026-04-09T06:11:51+00:00'

@@ -1,5 +1,6 @@
 from litehive.config import ensure_workspace, load_config
 from litehive.runtime import TaskPoolStopConditions, drain_task_pool, run_single_task
+from litehive.pipeline._parallel import run_parallel_tasks
 from litehive.tasks import (
     WorkspaceConflictError,
     peek_next_task_selection,
@@ -95,6 +96,14 @@ def _cmd_run(args):
             config.pool_stop_on_dirty_git,
         ),
     )
+    if bool(getattr(args, "parallel", False)):
+        return _cmd_run_parallel(
+            args,
+            config=config,
+            stop_conditions=stop_conditions,
+            engine_override=engine_override,
+            model_override=model_override,
+        )
     if bool(getattr(args, "drain", False)):
         return _cmd_run_drain(
             args,
@@ -353,6 +362,110 @@ def _cmd_run_single(
         flagged=flagged,
         stop_reason=stop_reason,
         tasks_run=1,
+    )
+    _write_pool_summary_report(root=args.workspace, report=report)
+    _print_pool_summary_report(report=report)
+    return 0
+
+
+def _cmd_run_parallel(
+    args,
+    *,
+    config,
+    stop_conditions,
+    engine_override,
+    model_override,
+):
+    """Run multiple independent tasks in parallel using separate worktrees.
+
+    This is task-level parallelism: each task gets its own isolated worktree,
+    not multiple worker slices of a parent task.
+    """
+    if config.parallel_capacity <= 1:
+        print(
+            "Parallel execution requires parallel_capacity > 1 in config. "
+            "Set it in .litehive/config.yaml."
+        )
+        return 1
+
+    try:
+        summary = run_parallel_tasks(
+            args.workspace,
+            engine_override=engine_override,
+            model_override=model_override,
+            stop_conditions=stop_conditions,
+        )
+    except WorkspaceConflictError as exc:
+        print(f"run failed: {exc}")
+        return 1
+    except ValueError as exc:
+        print(f"run failed: {exc}")
+        return 1
+
+    if not summary.executions:
+        if summary.blocked:
+            print("No runnable tasks for parallel execution.")
+            for blocked in summary.blocked:
+                print(
+                    f"blocked: {blocked.task_id} {blocked.title} "
+                    f"blocked_by={', '.join(blocked.blocked_by)}"
+                )
+        else:
+            print("No queued tasks.")
+        return 0
+
+    completed = []
+    flagged = []
+    for execution in summary.executions:
+        if execution.task is None:
+            continue
+        status = execution.result.final_status if execution.result else "unknown"
+        print(f"task: {execution.task.id} {execution.task.title} status={status}")
+
+    if summary.integration_results:
+        print(f"\n--- Integration Results ({len(summary.integration_results)} tasks) ---")
+        for result in summary.integration_results:
+            status_label = "ok" if result.success else "FAILED"
+            if result.merge_conflict and result.conflict_resolved:
+                status_label = "ok (conflict resolved by agent)"
+            elif result.merge_conflict and not result.conflict_resolved:
+                status_label = "FAILED (unresolved merge conflict)"
+            commit_label = f" commit={result.commit_sha[:8]}" if result.commit_sha else ""
+            print(f"  {result.task_id}: {status_label}{commit_label}")
+            if result.error:
+                print(f"    error: {result.error}")
+
+            if result.success:
+                completed.append(
+                    _pool_task_report_entry(
+                        args.workspace,
+                        task_id=result.task_id,
+                        title=result.task_id,
+                        status="done",
+                        pipeline_status="done",
+                        slug="",
+                    )
+                )
+            else:
+                flagged.append(
+                    _pool_task_report_entry(
+                        args.workspace,
+                        task_id=result.task_id,
+                        title=result.task_id,
+                        status="merge_failed",
+                        pipeline_status="commit_to_git",
+                        slug="",
+                    )
+                )
+
+    print(f"\nstop_reason: {summary.stop_reason}")
+
+    report = _pool_summary_report_data(
+        args.workspace,
+        completed=completed,
+        flagged=flagged,
+        stop_reason=summary.stop_reason,
+        tasks_run=len(summary.executions),
     )
     _write_pool_summary_report(root=args.workspace, report=report)
     _print_pool_summary_report(report=report)

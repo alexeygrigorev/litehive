@@ -7,14 +7,14 @@ engine: null
 model: null
 mode: implementation
 pipeline_mode: full
-status: in_progress
+status: done
 flag_reason: null
-pipeline_status: commit_to_git
+pipeline_status: done
 priority: medium
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-07T08:25:03+00:00'
-updated_at: '2026-04-09T05:42:41+00:00'
+updated_at: '2026-04-09T05:42:44+00:00'
 goal: When an agent is killed or fails (non-zero exit), the text parsing fallback
   in parse_stage_report_text still runs and _parse_verdict defaults to pass when no
   VERDICT line is found. This is wrong - a failed agent should never produce a pass
@@ -227,9 +227,9 @@ subagents:
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0209 remove-text-verdict-fallback-failed-agents-must'
-  commit_sha: null
-  checkpoint_base_sha: null
-  checkpoint_attempts: 0
+  commit_sha: 1fbf33bfa7f2de41ca2ca5661cedcf28774eee33
+  checkpoint_base_sha: 120fa6cb2f81561dc3ad0850901786927835fc39
+  checkpoint_attempts: 1
   rolled_back_checkpoint_attempt: null
   merge_agent_attempts: 0
   worktree_path: null

@@ -391,8 +391,25 @@ class TaskExecutionRunner:
             # Check via `git status` in the worktree — simple and reliable.
             if current == "implementing" and target == "testing":
                 worktree_has_changes = False
-                from litehive.tasks import get_task_worktree_path
+                from litehive.tasks import get_task_worktree_path, task_dir
                 from litehive.git import current_head, is_git_repo
+                # Skip guard if prior implementing pass reports exist — this
+                # task already produced its deliverables in an earlier run
+                # (common for analysis/planning tasks re-entering implementing
+                # via recovery).
+                _prior_pass_reports = sorted(
+                    (task_dir(self.root, task) / "reports").glob("implementing-*.yaml")
+                ) if (task_dir(self.root, task) / "reports").exists() else []
+                _has_prior_pass = False
+                for _rp in _prior_pass_reports:
+                    try:
+                        import yaml as _yaml
+                        _rd = _yaml.safe_load(_rp.read_text(encoding="utf-8")) or {}
+                        if _rd.get("verdict") == "pass":
+                            _has_prior_pass = True
+                            break
+                    except Exception:
+                        pass
                 wt_path = get_task_worktree_path(task)
                 check_dir = None
                 if wt_path:
@@ -401,6 +418,7 @@ class TaskExecutionRunner:
                         check_dir = wt_full
                 if check_dir is None and is_git_repo(self.root):
                     check_dir = self.root
+                litehive_task_changes = False
                 if check_dir is not None:
                     try:
                         # `git status --porcelain` shows all dirty state in one call:
@@ -414,6 +432,13 @@ class TaskExecutionRunner:
                             for line in status_result.stdout.splitlines()
                             if line.strip() and not line[3:].strip().startswith(".litehive/")
                         ]
+                        # Track .litehive/tasks/ changes separately — planning
+                        # tasks produce task records, not code.
+                        litehive_task_changes = any(
+                            line[3:].strip().startswith(".litehive/tasks/")
+                            for line in status_result.stdout.splitlines()
+                            if line.strip()
+                        )
                         # Also check commits ahead of the fork point (agent may have
                         # committed its work already).
                         if wt_path:
@@ -428,10 +453,14 @@ class TaskExecutionRunner:
                                     ["git", "diff", "--name-only", fork_point, "HEAD"],
                                     cwd=check_dir, capture_output=True, text=True, timeout=10,
                                 )
-                                status_files.extend(
-                                    f.strip() for f in committed.stdout.splitlines()
-                                    if f.strip() and not f.strip().startswith(".litehive/")
-                                )
+                                for f in committed.stdout.splitlines():
+                                    f = f.strip()
+                                    if not f:
+                                        continue
+                                    if f.startswith(".litehive/tasks/"):
+                                        litehive_task_changes = True
+                                    elif not f.startswith(".litehive/"):
+                                        status_files.append(f)
                         all_changed = set(f for f in status_files if f)
                         if all_changed:
                             worktree_has_changes = True
@@ -439,6 +468,15 @@ class TaskExecutionRunner:
                     except (subprocess.TimeoutExpired, OSError):
                         pass
                 if check_dir is None:
+                    pass
+                elif _has_prior_pass:
+                    # Task already passed implementing in a prior run — skip the
+                    # guard to avoid infinite flag/recover loops for analysis or
+                    # planning tasks that re-enter implementing via recovery.
+                    pass
+                elif litehive_task_changes:
+                    # Planning/analysis task: produced task records under
+                    # .litehive/tasks/ but no code changes — this is valid output.
                     pass
                 elif not worktree_has_changes and (not report.tests or report.tests.get("added", 0) == 0):
                     reason = (

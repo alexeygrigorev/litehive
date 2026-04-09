@@ -85,6 +85,15 @@ from litehive.pipeline._orchestration import (
     run_single_task,
     run_task,
 )
+from litehive.pipeline._parallel import (
+    IntegrationResult,
+    ParallelRunSummary,
+    run_parallel_tasks,
+    _clear_parallel_active_tasks,
+    _integrate_completed_task,
+    _run_single_parallel_task,
+    _select_parallel_tasks,
+)
 from litehive.pipeline._pool_control import (
     _finalize_pool_run,
     _human_checkpoint_stop_reason,
@@ -186,6 +195,13 @@ __all__ = [
     "_requires_continue_or_rollback",
     "_single_task_pre_stop_reason",
     "_single_task_stop_reason",
+    "IntegrationResult",
+    "ParallelRunSummary",
+    "run_parallel_tasks",
+    "_clear_parallel_active_tasks",
+    "_integrate_completed_task",
+    "_run_single_parallel_task",
+    "_select_parallel_tasks",
     "_allowed_commit_paths",
     "_dirty_entry_paths",
     "_dirty_worktree_owner_task",

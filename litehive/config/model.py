@@ -76,6 +76,7 @@ class LitehiveConfig:
         default_factory=lambda: ["codex", "opencode", "gemini", "copilot", "goz"]
     )
     agent_startup_guidance: dict[str, list[str]] = field(default_factory=dict)
+    parallel_capacity: int = 1
     auto_commit: bool = True
     task_mode_name: str = "tasks"
     implementation_mode_name: str = "implementation"
@@ -119,3 +120,6 @@ class LitehiveConfig:
         self.external_engine_sandbox = _normalize_external_engine_sandbox_config(
             self.external_engine_sandbox
         )
+        self.parallel_capacity = int(self.parallel_capacity)
+        if self.parallel_capacity < 1:
+            raise ValueError("parallel_capacity must be at least 1")
