@@ -167,9 +167,11 @@ runner_hooks:
   before_pm_acceptance:
     - command: "uv run ruff check ."
       blocking: true
+      description: "ensures lint passes before acceptance"
   after_swe_implementation:
     - command: "uv run pytest -x -q"
       blocking: false
+      description: "runs the focused post-implementation regression slice"
 
 # Agent-specific startup guidance
 agent_startup_guidance:

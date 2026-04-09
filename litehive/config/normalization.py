@@ -109,6 +109,8 @@ def _normalize_runner_hook_config(
     hook.command = hook.command.strip()
     if not hook.command:
         raise ValueError(f"{field_name}.command must not be empty")
+    if hook.description is not None:
+        hook.description = hook.description.strip() or None
     return hook
 
 

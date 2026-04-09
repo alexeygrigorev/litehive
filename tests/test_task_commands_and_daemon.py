@@ -3770,13 +3770,12 @@ def test_run_task_blocks_before_accepting_when_pre_acceptance_hook_fails(
     summary = run_next_task(tmp_path)
 
     assert summary.result is not None
-    assert summary.result.final_status == "flagged"
+    assert summary.result.final_status == "queued"
     assert calls == ["grooming", "implementing", "testing"]
     task = get_task(tmp_path, "T-0001")
     assert task is not None
-    assert task.status == "flagged"
-    assert task.pipeline_status == "accepting"
-    assert task.runtime.last_outcome.kind == "blocked"
+    assert task.status == "queued"
+    assert task.pipeline_status == "implementing"
     accepting_report = yaml.safe_load(
         (
             tmp_path
@@ -3787,10 +3786,22 @@ def test_run_task_blocks_before_accepting_when_pre_acceptance_hook_fails(
             / "accepting-004.yaml"
         ).read_text(encoding="utf-8")
     )
-    assert accepting_report["verdict"] == "blocked"
-    assert "accepting blocked by runner hook" in accepting_report["summary"]
+    assert accepting_report["verdict"] == "reject"
+    assert accepting_report["source"] == "hook"
+    assert "accepting rejected by runner hook" in accepting_report["summary"]
     assert accepting_report["hook_results"][0]["point"] == "before_pm_acceptance"
+    assert accepting_report["hook_results"][0]["command"] == "uv run ruff check litehive tests"
+    assert accepting_report["hook_results"][0]["exit_code"] == 1
+    assert accepting_report["hook_results"][0]["stderr"] == "F401 unused import\n"
+    assert "Command: uv run ruff check litehive tests" in accepting_report["feedback"]
+    assert "Exit code: 1" in accepting_report["feedback"]
+    assert "stderr:\nF401 unused import" in accepting_report["feedback"]
     assert "runner hook failed" in "\n".join(accepting_report["warnings"])
+    journal = (
+        tmp_path / ".litehive" / "tasks" / "T-0001-block-on-failing-ruff" / "journal.md"
+    ).read_text(encoding="utf-8")
+    assert "Runner hook `before_pm_acceptance` failed" in journal
+    assert "Hook rejection routed `accepting` back to `implementing` for SWE follow-up." in journal
 
 def test_run_task_records_non_blocking_runner_hook_failure_and_continues(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -3874,11 +3885,11 @@ def test_run_task_blocks_when_post_implementation_runner_hook_fails(
     summary = run_next_task(tmp_path)
 
     assert summary.result is not None
-    assert summary.result.final_status == "flagged"
+    assert summary.result.final_status == "queued"
     assert calls == ["grooming", "implementing"]
     task = get_task(tmp_path, "T-0001")
     assert task is not None
-    assert task.status == "flagged"
+    assert task.status == "queued"
     assert task.pipeline_status == "implementing"
     implementing_report = yaml.safe_load(
         (
@@ -3890,8 +3901,19 @@ def test_run_task_blocks_when_post_implementation_runner_hook_fails(
             / "implementing-002.yaml"
         ).read_text(encoding="utf-8")
     )
-    assert implementing_report["verdict"] == "blocked"
+    assert implementing_report["verdict"] == "reject"
+    assert implementing_report["source"] == "hook"
     assert implementing_report["hook_results"][0]["point"] == "after_swe_implementation"
+    assert implementing_report["hook_results"][0]["exit_code"] == 9
+    assert "stderr:\nbad diff" in implementing_report["feedback"]
+    journal = (
+        tmp_path
+        / ".litehive"
+        / "tasks"
+        / "T-0001-block-on-post-implementation-hook"
+        / "journal.md"
+    ).read_text(encoding="utf-8")
+    assert "Hook rejection routed `implementing` back to SWE for another `implementing` pass." in journal
 
 def test_run_task_runs_after_acceptance_runner_hook_on_accept(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch

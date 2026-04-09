@@ -56,3 +56,4 @@ class SubagentResourceLimitsConfig:
 class RunnerHookConfig:
     command: str
     blocking: bool = True
+    description: str | None = None

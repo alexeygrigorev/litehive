@@ -192,6 +192,7 @@ def _commit_to_git_report(
                 "CommitToGit preserved merged main state after failing `after_merge` hook. "
                 "Requeued task at `implementing` for follow-up fixes.",
             )
+            post_merge_hook_report.verdict = "blocked"
             post_merge_hook_report.retry_decision = "retry"
             post_merge_hook_report.summary = (
                 "Post-merge verification failed after merging to main; "
