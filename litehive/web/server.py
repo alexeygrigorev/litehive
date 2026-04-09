@@ -209,7 +209,7 @@ class LitehiveWebHandler(BaseHTTPRequestHandler):
         try:
             response = handler()
         except FileNotFoundError as exc:
-            return self._send_error_json(HTTPStatus.NOT_FOUND, str(exc))
+            return self._send_error_json(HTTPStatus.BAD_REQUEST, str(exc))
         except WorkspaceConflictError as exc:
             return self._send_error_json(HTTPStatus.CONFLICT, str(exc))
         except ValueError as exc:
@@ -234,7 +234,7 @@ class LitehiveWebHandler(BaseHTTPRequestHandler):
         self.wfile.write(encoded)
 
     def _send_error_json(self, status: HTTPStatus, message: str) -> None:
-        payload = json.dumps({"error": message}).encode("utf-8")
+        payload = json.dumps({"ok": False, "error": message}).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Cache-Control", "no-store")
