@@ -38,112 +38,82 @@ from litehive.cli.logs import _cmd_logs
 from litehive.cli.report import _cmd_report
 from litehive.cli.run import _cmd_run
 from litehive.cli.status import _cmd_list, _cmd_queue, _cmd_repair, _cmd_show, _cmd_status
-from litehive.cli.github_import import _cmd_import_issue, _cmd_import_issues
 from litehive.cli.tasks import _cmd_add, _cmd_intake, _cmd_issue, _cmd_update
 from litehive.cli.worktree import _cmd_worktree_clean, _cmd_worktree_ls
 from litehive.cli.parser import build_parser
+
+
+_COMMAND_HANDLERS = {
+    "configure": _cmd_configure,
+    "status": _cmd_status,
+    "engine": _cmd_engine,
+    "queue": _cmd_queue,
+    "repair": _cmd_repair,
+    "add": _cmd_add,
+    "issue": _cmd_issue,
+    "intake": _cmd_intake,
+    "run": _cmd_run,
+    "dirty-worktree-gate": _cmd_dirty_worktree_gate,
+    "rollback": _cmd_rollback,
+    "recover": _cmd_recover,
+    "move": _cmd_move,
+    "prioritize": _cmd_prioritize,
+    "promote": _cmd_promote,
+    "requeue": _cmd_requeue_task,
+    "resume": _cmd_resume_task,
+    "abandon": _cmd_abandon_task,
+    "stop": _cmd_stop_task,
+    "switch": _cmd_switch_task,
+    "close": _cmd_close_task,
+    "archive": _cmd_archive,
+    "cleanup": _cmd_cleanup,
+    "list": _cmd_list,
+    "show": _cmd_show,
+    "import-issue": _cmd_import_issue,
+    "import-issues": _cmd_import_issues,
+    "debug": _cmd_debug,
+    "logs": _cmd_logs,
+    "update": _cmd_update,
+    "report": _cmd_report,
+}
+
+_DAEMON_COMMAND_HANDLERS = {
+    "run": _cmd_daemon_run,
+    "status": _cmd_daemon_status,
+    "stop": _cmd_daemon_stop,
+    "restart": _cmd_daemon_restart,
+    "instances": _cmd_daemon_instances,
+    "worker": _cmd_daemon_worker,
+}
+
+_WORKTREE_COMMAND_HANDLERS = {
+    "ls": _cmd_worktree_ls,
+    "clean": _cmd_worktree_clean,
+}
 
 
 def main():
     parser = build_parser()
     args = parser.parse_args()
 
-    if args.command == "configure":
-        return _cmd_configure(args)
-    if args.command == "status":
-        return _cmd_status(args)
-    if args.command == "engine":
-        return _cmd_engine(args)
-    if args.command == "queue":
-        return _cmd_queue(args)
-    if args.command == "repair":
-        return _cmd_repair(args)
     if args.command == "tasks":
         return _launch_app(args.workspace, default_mode="tasks")
     if args.command == "web":
         return serve_monitor(args.workspace, host=args.host, port=args.port)
     if args.command == "daemon":
-        if args.daemon_command == "run":
-            return _cmd_daemon_run(args)
-        if args.daemon_command == "status":
-            return _cmd_daemon_status(args)
-        if args.daemon_command == "stop":
-            return _cmd_daemon_stop(args)
-        if args.daemon_command == "restart":
-            return _cmd_daemon_restart(args)
-        if args.daemon_command == "instances":
-            return _cmd_daemon_instances(args)
-        if args.daemon_command == "worker":
-            return _cmd_daemon_worker(args)
-        parser.error("daemon requires a subcommand")
-    if args.command == "add":
-        return _cmd_add(args)
-    if args.command == "issue":
-        return _cmd_issue(args)
-    if args.command == "intake":
-        return _cmd_intake(args)
-    if args.command == "run":
-        return _cmd_run(args)
-    if args.command == "dirty-worktree-gate":
-        return _cmd_dirty_worktree_gate(args)
-    if args.command == "rollback":
-        return _cmd_rollback(args)
-    if args.command == "recover":
-        return _cmd_recover(args)
-    if args.command == "move":
-        return _cmd_move(args)
-    if args.command == "prioritize":
-        return _cmd_prioritize(args)
-    if args.command == "promote":
-        return _cmd_promote(args)
-    if args.command == "requeue":
-        return _cmd_requeue_task(args)
-    if args.command == "resume":
-        return _cmd_resume_task(args)
-    if args.command == "abandon":
-        return _cmd_abandon_task(args)
-    if args.command == "stop":
-        return _cmd_stop_task(args)
-    if args.command == "switch":
-        return _cmd_switch_task(args)
-    if args.command == "close":
-        return _cmd_close_task(args)
-    if args.command == "archive":
-        return _cmd_archive(args)
-    if args.command == "cleanup":
-        return _cmd_cleanup(args)
-    if args.command == "list":
-        return _cmd_list(args)
-    if args.command == "show":
-        return _cmd_show(args)
-    if args.command == "import-issue":
-        return _cmd_import_issue(args)
-    if args.command == "import-issues":
-        return _cmd_import_issues(args)
-    if args.command == "debug":
-        return _cmd_debug(args)
-    if args.command == "logs":
-        return _cmd_logs(args)
+        handler = _DAEMON_COMMAND_HANDLERS.get(getattr(args, "daemon_command", None))
+        if handler is None:
+            parser.error("daemon requires a subcommand")
+        return handler(args)
     if args.command == "worktree":
-        if args.worktree_command == "ls":
-            return _cmd_worktree_ls(args)
-        if args.worktree_command == "clean":
-            return _cmd_worktree_clean(args)
-        parser.error("worktree requires a subcommand")
-    if args.command == "update":
-        return _cmd_update(args)
-    if args.command == "import-issue":
-        return _cmd_import_issue(args)
-    if args.command == "import-issues":
-        return _cmd_import_issues(args)
-    if args.command == "debug":
-        return _cmd_debug(args)
-    if args.command == "report":
-        return _cmd_report(args)
-    if args.command == "list":
-        return _cmd_list(args)
-    if args.command == "show":
-        return _cmd_show(args)
+        handler = _WORKTREE_COMMAND_HANDLERS.get(getattr(args, "worktree_command", None))
+        if handler is None:
+            parser.error("worktree requires a subcommand")
+        return handler(args)
+
+    handler = _COMMAND_HANDLERS.get(args.command)
+    if handler is not None:
+        return handler(args)
 
     summary = run_next_task(Path.cwd())
     if summary.task is not None:
