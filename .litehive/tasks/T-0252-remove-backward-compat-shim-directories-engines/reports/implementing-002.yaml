@@ -1,0 +1,124 @@
+task_id: T-0252
+step: implementing
+verdict: pass
+source: agent
+summary: 'Migrated all internal production imports from litehive.engines/runtime/runner
+  to canonical litehive.agents and litehive.pipeline paths, and updated repository-owned
+  tests/helpers to the same canonical modules. Kept only top-level litehive.engines
+  compatibility coverage in tests/test_engine_variants_and_timeline.py; removed litehive/runtime
+  and litehive/runner package trees entirely and deleted litehive/engines submodule
+  shims, leaving litehive/engines/__init__.py as the external compatibility barrel.
+  Verified import cleanup with rg: no remaining litehive.runtime or litehive.runner
+  references in production/tests/docs, and the only remaining litehive.engines import
+  is the intentional top-level compatibility assertion. Tests run: uv run pytest -q
+  tests/test_engine_variants_and_timeline.py tests/test_worktree_merge_agent.py tests/test_config_and_run_cli.py
+  (123 passed); uv run pytest -q tests/test_runtime_pool.py tests/test_retry_commit_and_recovery.py
+  tests/test_task_commands_and_daemon.py (265 passed); uv run pytest -q tests/test_observability_and_status.py
+  tests/test_tasks_and_subagents.py tests/test_self_heal_recovery.py tests/test_crash_resume.py
+  tests/test_inactivity_timeout.py tests/test_stage_result_submission.py tests/test_feedback_cap.py
+  tests/test_grooming_task_updates.py tests/test_engine_freeze.py tests/test_recovery_agent.py
+  tests/test_commit_recovery_bug.py tests/test_engine_parse_warnings.py tests/test_codex_quota.py
+  (233 passed, 3 skipped).'
+feedback: 'Migrated all internal production imports from litehive.engines/runtime/runner
+  to canonical litehive.agents and litehive.pipeline paths, and updated repository-owned
+  tests/helpers to the same canonical modules. Kept only top-level litehive.engines
+  compatibility coverage in tests/test_engine_variants_and_timeline.py; removed litehive/runtime
+  and litehive/runner package trees entirely and deleted litehive/engines submodule
+  shims, leaving litehive/engines/__init__.py as the external compatibility barrel.
+  Verified import cleanup with rg: no remaining litehive.runtime or litehive.runner
+  references in production/tests/docs, and the only remaining litehive.engines import
+  is the intentional top-level compatibility assertion. Tests run: uv run pytest -q
+  tests/test_engine_variants_and_timeline.py tests/test_worktree_merge_agent.py tests/test_config_and_run_cli.py
+  (123 passed); uv run pytest -q tests/test_runtime_pool.py tests/test_retry_commit_and_recovery.py
+  tests/test_task_commands_and_daemon.py (265 passed); uv run pytest -q tests/test_observability_and_status.py
+  tests/test_tasks_and_subagents.py tests/test_self_heal_recovery.py tests/test_crash_resume.py
+  tests/test_inactivity_timeout.py tests/test_stage_result_submission.py tests/test_feedback_cap.py
+  tests/test_grooming_task_updates.py tests/test_engine_freeze.py tests/test_recovery_agent.py
+  tests/test_commit_recovery_bug.py tests/test_engine_parse_warnings.py tests/test_codex_quota.py
+  (233 passed, 3 skipped).'
+submitted_via_cli: true
+files_changed:
+- README.md
+- litehive/cli/__init__.py
+- litehive/cli/_dry_run.py
+- litehive/cli/_parse.py
+- litehive/cli/engine.py
+- litehive/cli/parser.py
+- litehive/cli/queue.py
+- litehive/cli/run.py
+- litehive/cli/status.py
+- litehive/cli/tasks.py
+- litehive/engines/adapters/__init__.py
+- litehive/engines/adapters/claude.py
+- litehive/engines/adapters/codex.py
+- litehive/engines/adapters/common.py
+- litehive/engines/adapters/copilot.py
+- litehive/engines/adapters/gemini.py
+- litehive/engines/adapters/goz.py
+- litehive/engines/adapters/opencode.py
+- litehive/engines/base.py
+- litehive/engines/quota/__init__.py
+- litehive/engines/quota/claude_quota.py
+- litehive/engines/quota/codex_quota.py
+- litehive/engines/quota/copilot_quota.py
+- litehive/engines/quota/zai_quota.py
+- litehive/engines/sandbox.py
+- litehive/pipeline/core.py
+- litehive/runner/__init__.py
+- litehive/runner/core.py
+- litehive/runner/states.py
+- litehive/runtime/__init__.py
+- litehive/runtime/_budget.py
+- litehive/runtime/_builder.py
+- litehive/runtime/_commit.py
+- litehive/runtime/_hooks.py
+- litehive/runtime/_models.py
+- litehive/runtime/_orchestration.py
+- litehive/runtime/_pool_control.py
+- litehive/runtime/_recovery.py
+- litehive/runtime/_types.py
+- litehive/runtime/_worktree.py
+- litehive/web/actions.py
+- litehive/web/snapshot.py
+- tests/conftest.py
+- tests/test_codex_quota.py
+- tests/test_commit_recovery_bug.py
+- tests/test_config_and_run_cli.py
+- tests/test_crash_resume.py
+- tests/test_engine_freeze.py
+- tests/test_engine_parse_warnings.py
+- tests/test_engine_variants_and_timeline.py
+- tests/test_feedback_cap.py
+- tests/test_grooming_task_updates.py
+- tests/test_inactivity_timeout.py
+- tests/test_observability_and_status.py
+- tests/test_recovery_agent.py
+- tests/test_retry_commit_and_recovery.py
+- tests/test_runner_workflow.py
+- tests/test_runtime_pool.py
+- tests/test_self_heal_recovery.py
+- tests/test_stage_result_submission.py
+- tests/test_task_commands_and_daemon.py
+- tests/test_tasks_and_subagents.py
+- tests/test_worktree_merge_agent.py
+- tests/workspace_helpers.py
+- tests_integration/helpers.py
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 497
+hook_results: []
+created_at: '2026-04-09T14:09:29+00:00'

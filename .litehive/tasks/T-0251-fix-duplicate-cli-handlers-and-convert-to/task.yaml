@@ -7,15 +7,15 @@ engine: null
 model: null
 mode: implementation
 pipeline_mode: full
-status: in_progress
+status: done
 flag_reason: null
 flag_count: 0
-pipeline_status: commit_to_git
+pipeline_status: done
 priority: high
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-09T09:16:09+00:00'
-updated_at: '2026-04-09T13:57:11+00:00'
+updated_at: '2026-04-09T13:58:00+00:00'
 goal: cli/__init__.py has duplicate handlers (import-issue, import-issues, debug,
   list, show appear twice) and 80+ if-statements. Remove duplicates, convert to a
   dispatch table dict. Also remove duplicate import of _cmd_import_issue/_cmd_import_issues.
@@ -59,16 +59,16 @@ subagents:
 - id: SA-0005
   role: merge-resolver
   engine: claude
-  status: running
+  status: completed
   path: subagents/SA-0005-merge-resolver
   sandboxed: false
   sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0251 fix-duplicate-cli-handlers-and-convert-to'
-  commit_sha: null
-  checkpoint_base_sha: null
-  checkpoint_attempts: 0
+  commit_sha: f627615edc19a3e6aa905302bebc579bae2e3168
+  checkpoint_base_sha: f1c663c1c0ef9bc5eefa5660d7f2080c9b2dd073
+  checkpoint_attempts: 1
   rolled_back_checkpoint_attempt: null
   merge_agent_attempts: 1
   worktree_path: null

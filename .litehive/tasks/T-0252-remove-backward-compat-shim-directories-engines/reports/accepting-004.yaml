@@ -1,0 +1,86 @@
+task_id: T-0252
+step: accepting
+verdict: pass
+source: agent
+summary: 'Acceptance PASS. Verified repo state directly against the task criteria:
+  a repo-wide import scan found only the intentional top-level compatibility import
+  in tests/test_engine_variants_and_timeline.py, with no remaining production, test,
+  or integration-helper imports of litehive.runtime or litehive.runner and no internal
+  litehive.engines submodule usage. Verified shim removal by confirming litehive/runtime
+  and litehive/runner are absent from the package tree, while litehive/engines/__init__.py
+  remains as the minimal compatibility barrel re-exporting from litehive.agents. Acceptance
+  gate test run completed successfully: uv run pytest -q -> 923 passed, 3 skipped,
+  0 failures in 113.55s. Based on direct repo inspection plus the full-suite result,
+  all acceptance criteria are met.'
+feedback: "Runner hook `before_pm_acceptance` `uv run ruff check --select E402,F401\
+  \ litehive tests` passed with exit code 0 (artifact: `artifacts/before_pm_acceptance-001.yaml`).\n\
+  \nRunner hook `before_pm_acceptance` `if [ -n \"${LITEHIVE_CHANGED_PATHS:-}\" ]\
+  \ \\\n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" | grep -q . \\\n  && printf\
+  \ '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" \\\n    | xargs -r -d '\\n' git grep -nE 'noqa:.*F401|noqa:.*F403|ruff:\\\
+  s*noqa:\\s*F401|ruff:\\s*noqa:\\s*F403' --; then\n  echo 'Forbidden noqa F401/F403\
+  \ suppression found.'\n  exit 1\nfi` passed with exit code 0 (artifact: `artifacts/before_pm_acceptance-002.yaml`).\n\
+  \nAcceptance PASS. Verified repo state directly against the task criteria: a repo-wide\
+  \ import scan found only the intentional top-level compatibility import in tests/test_engine_variants_and_timeline.py,\
+  \ with no remaining production, test, or integration-helper imports of litehive.runtime\
+  \ or litehive.runner and no internal litehive.engines submodule usage. Verified\
+  \ shim removal by confirming litehive/runtime and litehive/runner are absent from\
+  \ the package tree, while litehive/engines/__init__.py remains as the minimal compatibility\
+  \ barrel re-exporting from litehive.agents. Acceptance gate test run completed successfully:\
+  \ uv run pytest -q -> 923 passed, 3 skipped, 0 failures in 113.55s. Based on direct\
+  \ repo inspection plus the full-suite result, all acceptance criteria are met."
+submitted_via_cli: true
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings:
+- 'runner hook passed: `before_pm_acceptance` `uv run ruff check --select E402,F401
+  litehive tests` (artifact: `artifacts/before_pm_acceptance-001.yaml`)'
+- "runner hook passed: `before_pm_acceptance` `if [ -n \"${LITEHIVE_CHANGED_PATHS:-}\"\
+  \ ] \\\n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" | grep -q . \\\n  && printf\
+  \ '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" \\\n    | xargs -r -d '\\n' git grep -nE 'noqa:.*F401|noqa:.*F403|ruff:\\\
+  s*noqa:\\s*F401|ruff:\\s*noqa:\\s*F403' --; then\n  echo 'Forbidden noqa F401/F403\
+  \ suppression found.'\n  exit 1\nfi` (artifact: `artifacts/before_pm_acceptance-002.yaml`)"
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 211
+hook_results:
+- point: before_pm_acceptance
+  command: uv run ruff check --select E402,F401 litehive tests
+  blocking: true
+  description: null
+  exit_code: 0
+  status: passed
+  artifact: artifacts/before_pm_acceptance-001.yaml
+  stdout: 'All checks passed!
+
+    '
+  stderr: 'warning: `VIRTUAL_ENV=/home/alexey/git/litehive/.venv` does not match the
+    project environment path `.venv` and will be ignored; use `--active` to target
+    the active environment instead
+
+    '
+- point: before_pm_acceptance
+  command: "if [ -n \"${LITEHIVE_CHANGED_PATHS:-}\" ] \\\n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\"\
+    \ | grep -q . \\\n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" \\\n    | xargs\
+    \ -r -d '\\n' git grep -nE 'noqa:.*F401|noqa:.*F403|ruff:\\s*noqa:\\s*F401|ruff:\\\
+    s*noqa:\\s*F403' --; then\n  echo 'Forbidden noqa F401/F403 suppression found.'\n\
+    \  exit 1\nfi"
+  blocking: true
+  description: null
+  exit_code: 0
+  status: passed
+  artifact: artifacts/before_pm_acceptance-002.yaml
+  stdout: ''
+  stderr: ''
+created_at: '2026-04-09T14:14:32+00:00'
