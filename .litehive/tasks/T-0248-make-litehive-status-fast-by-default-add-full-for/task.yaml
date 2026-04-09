@@ -7,15 +7,15 @@ engine: null
 model: null
 mode: implementation
 pipeline_mode: full
-status: in_progress
+status: done
 flag_reason: null
 flag_count: 0
-pipeline_status: commit_to_git
+pipeline_status: done
 priority: high
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-09T08:49:18+00:00'
-updated_at: '2026-04-09T13:15:25+00:00'
+updated_at: '2026-04-09T13:15:26+00:00'
 goal: 'litehive status currently requires --fast for quick reads. Swap the default:
   fast mode is the default, --full gives the verbose per-task output. Nobody wants
   to wait for slow status.'
@@ -66,9 +66,9 @@ subagents:
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0248 make-litehive-status-fast-by-default-add-full-for'
-  commit_sha: null
-  checkpoint_base_sha: null
-  checkpoint_attempts: 0
+  commit_sha: 200f089ac242a83e9ebdd3b7597c0fc0720e866c
+  checkpoint_base_sha: a1d5459377816f8ff659234e0b56b725d13afc60
+  checkpoint_attempts: 1
   rolled_back_checkpoint_attempt: null
   merge_agent_attempts: 1
   worktree_path: null
