@@ -590,9 +590,12 @@ def parse_stage_report_text(
     if isinstance(submission, ValidationError):
         warnings.extend(_format_stage_result_validation_errors(submission))
 
-    summary = (
-        transcript.splitlines()[0] if transcript else f"{step} completed without verdict"
-    )
+    if transcript:
+        summary = transcript.splitlines()[0]
+    elif subagent_status == "completed":
+        summary = f"{step} completed without verdict"
+    else:
+        summary = f"{step} failed without verdict"
     return StageReport(
         task_id=task_id,
         step=step,
