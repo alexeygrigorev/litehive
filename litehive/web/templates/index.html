@@ -80,23 +80,30 @@
       cursor: pointer;
       font: inherit;
     }
-    button.task {
-      width: 100%;
-      text-align: left;
+    .task-card {
       border: 1px solid var(--line);
       background: white;
       border-radius: 14px;
       padding: 12px;
+    }
+    button.task {
+      width: 100%;
+      text-align: left;
+      border: 0;
+      background: transparent;
+      padding: 0;
       transition: transform 140ms ease, border-color 140ms ease, box-shadow 140ms ease;
     }
     button.task:hover {
       transform: translateY(-1px);
-      border-color: var(--accent);
-      box-shadow: 0 8px 18px rgba(22, 93, 82, 0.09);
     }
     button.task.active {
+      color: var(--accent);
+    }
+    .task-card.active {
       border-color: var(--accent);
       background: var(--accent-soft);
+      box-shadow: 0 8px 18px rgba(22, 93, 82, 0.09);
     }
     button.secondary, button.primary {
       border-radius: 999px;
@@ -110,6 +117,36 @@
       border-color: var(--accent);
     }
     button:disabled { opacity: 0.65; cursor: default; }
+    .queue-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .queue-button {
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--ink);
+      border-radius: 999px;
+      padding: 6px 10px;
+      font: inherit;
+      cursor: pointer;
+    }
+    .queue-button:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+    .queue-button:hover:not(:disabled) {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+    .queue-feedback {
+      min-height: 18px;
+      padding: 0 14px 14px;
+      font-size: 12px;
+    }
+    .queue-feedback.error { color: var(--danger); }
+    .queue-feedback.success { color: var(--accent); }
     .meta {
       display: flex;
       flex-wrap: wrap;
@@ -245,6 +282,7 @@
         <span class="muted mono" id="queue-summary"></span>
       </div>
       <div class="task-list" id="task-list"></div>
+      <div class="queue-feedback muted" id="queue-feedback"></div>
     </section>
     <section class="panel">
       <div class="hd">
@@ -277,6 +315,9 @@
       reportSaveState: "idle",
       reportSaveMessage: "",
       transport: "starting",
+      queueFeedback: "",
+      queueFeedbackLevel: "muted",
+      mutatingQueue: false,
     };
     const POLL_INTERVAL_MS = {{ poll_interval_ms }};
     const STREAM_ERROR_FALLBACK_MS = 8000;
@@ -360,6 +401,20 @@
       return payload;
     }
 
+    async function postJson(url, payload) {
+      const response = await fetch(url, {
+        method: "POST",
+        cache: "no-store",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.error || `${response.status} ${response.statusText}`);
+      }
+      return data;
+    }
+
     function chooseDefaults(snapshot) {
       const previousTaskId = state.selectedTaskId;
       const previousSubagentId = state.selectedSubagentId;
@@ -386,25 +441,42 @@
 
     function renderQueue(snapshot) {
       const list = document.getElementById("task-list");
-      document.getElementById("queue-summary").textContent = `${snapshot.state.queue.length} queued`;
+      const feedback = document.getElementById("queue-feedback");
+      document.getElementById("queue-summary").textContent = `${snapshot.state.queue.length} queued / ${snapshot.tasks.length} total`;
       document.getElementById("workspace-path").textContent = snapshot.workspace;
       document.getElementById("runner-badge-slot").innerHTML = badge(`runner:${snapshot.runner.status}`, snapshot.runner.status);
       document.getElementById("transport-badge").textContent = state.transport;
+      feedback.textContent = state.queueFeedback || "";
+      feedback.className = `queue-feedback ${state.queueFeedbackLevel}`;
 
       if (!snapshot.tasks.length) {
         list.innerHTML = `<div class="muted">No tasks in this workspace.</div>`;
         return;
       }
-      list.innerHTML = snapshot.tasks.map((task) => `
-        <button class="task ${task.id === state.selectedTaskId ? "active" : ""}" data-task-id="${escAttr(task.id)}">
-          <div><strong>${esc(task.id)}</strong> ${esc(task.title)}</div>
+      const taskById = new Map(snapshot.tasks.map((task) => [task.id, task]));
+      const queuedTasks = snapshot.queue.map((taskId) => taskById.get(taskId)).filter(Boolean);
+      const otherTasks = snapshot.tasks.filter((task) => !task.is_queued);
+      const orderedTasks = [...queuedTasks, ...otherTasks];
+      list.innerHTML = orderedTasks.map((task) => `
+        <div class="task-card ${task.id === state.selectedTaskId ? "active" : ""}">
+          <button class="task ${task.id === state.selectedTaskId ? "active" : ""}" data-task-id="${escAttr(task.id)}">
+            <div><strong>${task.is_queued ? `#${task.queue_position}` : "•"}</strong> ${esc(task.id)} ${esc(task.title)}</div>
+          </button>
           <div class="meta">
             ${badge(task.status, task.status)}
             ${badge(task.pipeline_status)}
+            ${task.is_queued ? badge(`queue:${task.queue_position}`) : badge("not queued")}
             ${task.is_active_task ? badge("active task", "running") : ""}
             ${task.active_subagent ? badge(`${task.active_subagent.role}:${task.active_subagent.status}`, task.active_subagent.status) : ""}
           </div>
-        </button>
+          ${task.is_queued ? `
+            <div class="queue-actions">
+              <button class="queue-button" data-queue-action="promote" data-task-id="${esc(task.id)}" ${state.mutatingQueue ? "disabled" : ""}>Promote</button>
+              <button class="queue-button" data-queue-action="up" data-task-id="${esc(task.id)}" data-position="${task.queue_position - 1}" ${(state.mutatingQueue || task.queue_position <= 1) ? "disabled" : ""}>Move Up</button>
+              <button class="queue-button" data-queue-action="down" data-task-id="${esc(task.id)}" data-position="${task.queue_position + 1}" ${(state.mutatingQueue || task.queue_position >= snapshot.queue.length) ? "disabled" : ""}>Move Down</button>
+            </div>
+          ` : ""}
+        </div>
       `).join("");
       list.querySelectorAll("button.task").forEach((button) => {
         button.addEventListener("click", () => {
@@ -416,6 +488,30 @@
           render(snapshot);
           restartStream();
           refreshSession();
+        });
+      });
+      list.querySelectorAll("[data-queue-action]").forEach((button) => {
+        button.addEventListener("click", async (event) => {
+          event.stopPropagation();
+          const { queueAction, taskId, position } = button.dataset;
+          if (!taskId || !queueAction || state.mutatingQueue) return;
+          state.mutatingQueue = true;
+          state.queueFeedback = "Updating queue...";
+          state.queueFeedbackLevel = "muted";
+          render(snapshot);
+          try {
+            if (queueAction === "promote") {
+              await mutateQueue("/api/queue/promote", { task_id: taskId }, `${taskId} moved to the front.`);
+              return;
+            }
+            await mutateQueue(
+              "/api/queue/move",
+              { task_id: taskId, position: Number(position) },
+              `${taskId} moved to position ${position}.`
+            );
+          } finally {
+            state.mutatingQueue = false;
+          }
         });
       });
     }
@@ -1066,6 +1162,22 @@
       chooseDefaults(state.snapshot);
       render(state.snapshot);
       await refreshSession();
+    }
+
+    async function mutateQueue(url, payload, successMessage) {
+      try {
+        const response = await postJson(url, payload);
+        state.snapshot = response.snapshot;
+        state.queueFeedback = successMessage;
+        state.queueFeedbackLevel = "success";
+        chooseDefaults(state.snapshot);
+        render(state.snapshot);
+        await refreshSession();
+      } catch (error) {
+        state.queueFeedback = error.message;
+        state.queueFeedbackLevel = "error";
+        render(state.snapshot);
+      }
     }
 
     async function refreshSession() {
