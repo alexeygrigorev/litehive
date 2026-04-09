@@ -1,6 +1,7 @@
 """Tests for lock-free web dashboard snapshot reads."""
 
 from contextlib import contextmanager
+from datetime import datetime, timedelta, timezone
 from functools import partial
 import http.client
 import json
@@ -142,8 +143,13 @@ def _create_detailed_snapshot_task(tmp_path: Path):
     return task, task_dir(tmp_path, task)
 
 
+def _iso8601_now_plus(*, minutes: int = 0, seconds: int = 0, days: int = 0) -> str:
+    return (datetime.now(timezone.utc) + timedelta(days=days, minutes=minutes, seconds=seconds)).isoformat()
+
+
 def _write_detailed_task_reports(base: Path, task_id: str) -> None:
     reports_dir = base / "reports"
+    started_at = datetime.now(timezone.utc)
     for index in range(6):
         (reports_dir / f"implementing-{index + 1:03d}.yaml").write_text(
             yaml.safe_dump(
@@ -152,7 +158,7 @@ def _write_detailed_task_reports(base: Path, task_id: str) -> None:
                     "step": "implementing",
                     "verdict": "pass",
                     "summary": f"report {index + 1}",
-                    "created_at": f"2026-04-08T10:0{index}:00+00:00",
+                    "created_at": (started_at + timedelta(minutes=index)).isoformat(),
                 },
                 sort_keys=False,
             ),
@@ -162,6 +168,7 @@ def _write_detailed_task_reports(base: Path, task_id: str) -> None:
 
 def _write_detailed_task_recovery_and_thread(tmp_path: Path, task, base: Path) -> None:
     (base / "recovery").mkdir(parents=True, exist_ok=True)
+    base_time = datetime.now(timezone.utc)
     (base / "recovery" / "recovery-001.yaml").write_text(
         yaml.safe_dump(
             {
@@ -170,7 +177,7 @@ def _write_detailed_task_recovery_and_thread(tmp_path: Path, task, base: Path) -
                 "trigger": "stage_failure",
                 "summary": "Recovered from a bad pass.",
                 "runnable_state": "runnable",
-                "created_at": "2026-04-08T11:00:00+00:00",
+                "created_at": (base_time + timedelta(hours=2)).isoformat(),
             },
             sort_keys=False,
         ),
@@ -184,7 +191,7 @@ def _write_detailed_task_recovery_and_thread(tmp_path: Path, task, base: Path) -
             step="grooming",
             verdict="comment",
             message="Initial shaping.",
-            created_at="2026-04-08T09:00:00+00:00",
+            created_at=base_time.isoformat(),
         ),
     )
     append_thread_comment(
@@ -195,18 +202,37 @@ def _write_detailed_task_recovery_and_thread(tmp_path: Path, task, base: Path) -
             step="testing",
             verdict="reject",
             message="Needs the full report history.",
-            created_at="2026-04-08T12:00:00+00:00",
+            created_at=(base_time + timedelta(hours=3)).isoformat(),
         ),
     )
 
 
 def _write_detailed_task_events(base: Path, task_id: str) -> None:
+    base_time = datetime.now(timezone.utc)
     (base / "events.jsonl").write_text(
         "\n".join(
             [
-                json.dumps({"ts": "2026-04-08T12:00:00+00:00", "task_id": task_id, "kind": "done"}),
-                json.dumps({"ts": "2026-04-08T08:00:00+00:00", "task_id": task_id, "kind": "queued"}),
-                json.dumps({"ts": "2026-04-08T10:00:00+00:00", "task_id": task_id, "kind": "started"}),
+                json.dumps(
+                    {
+                        "ts": (base_time + timedelta(hours=4)).isoformat(),
+                        "task_id": task_id,
+                        "kind": "done",
+                    }
+                ),
+                json.dumps(
+                    {
+                        "ts": base_time.isoformat(),
+                        "task_id": task_id,
+                        "kind": "queued",
+                    }
+                ),
+                json.dumps(
+                    {
+                        "ts": (base_time + timedelta(hours=2)).isoformat(),
+                        "task_id": task_id,
+                        "kind": "started",
+                    }
+                ),
             ]
         ) + "\n",
         encoding="utf-8",
@@ -227,8 +253,7 @@ def test_runner_status_readonly_returns_idle_when_no_metadata(tmp_path: Path) ->
 
 def test_runner_status_readonly_returns_running_when_pid_alive(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
-    from datetime import datetime, timezone
-    now = datetime.now(timezone.utc).isoformat()
+    now = _iso8601_now_plus()
     # Use our own PID — guaranteed alive.
     _write_runner_lock_metadata(tmp_path, {
         "status": "running",
@@ -251,8 +276,8 @@ def test_runner_status_readonly_returns_stale_when_pid_dead(tmp_path: Path) -> N
         "pid": 2_000_000_000,
         "workspace": str(tmp_path),
         "command": "litehive run",
-        "started_at": "2026-04-08T10:00:00+00:00",
-        "heartbeat_at": "2026-04-08T10:00:05+00:00",
+        "started_at": _iso8601_now_plus(minutes=-10),
+        "heartbeat_at": _iso8601_now_plus(minutes=-9, seconds=-55),
     })
     status = runner_status_readonly(tmp_path)
     assert status.status == "stale"
@@ -266,8 +291,8 @@ def test_runner_status_readonly_returns_late_when_heartbeat_expired(tmp_path: Pa
         "pid": os.getpid(),
         "workspace": str(tmp_path),
         "command": "litehive run",
-        "started_at": "2020-01-01T00:00:00+00:00",
-        "heartbeat_at": "2020-01-01T00:00:00+00:00",
+        "started_at": _iso8601_now_plus(days=-1),
+        "heartbeat_at": _iso8601_now_plus(days=-1),
     })
     status = runner_status_readonly(tmp_path)
     assert status.status == "late"
@@ -275,8 +300,7 @@ def test_runner_status_readonly_returns_late_when_heartbeat_expired(tmp_path: Pa
 
 def test_build_workspace_snapshot_does_not_block_on_runner_lock(tmp_path: Path, monkeypatch) -> None:
     """Snapshot must complete even when fcntl.flock would block (simulated)."""
-    from datetime import datetime, timezone
-    now = datetime.now(timezone.utc).isoformat()
+    now = _iso8601_now_plus()
     _init_git_repo(tmp_path)
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Running task")
@@ -459,7 +483,7 @@ def test_submit_stage_verdict_via_web_advances_active_testing_task(tmp_path: Pat
     task.pipeline_status = "testing"
     task.runtime.execution_status = "running"
     task.runtime.current_stage = task.runtime.current_stage.model_copy(
-        update={"step": "testing", "status": "running", "started_at": "2026-04-08T10:00:00+00:00"}
+        update={"step": "testing", "status": "running", "started_at": _iso8601_now_plus(minutes=-5)}
     )
     save_task(tmp_path, task)
     save_task_runtime(tmp_path, task)
@@ -503,7 +527,7 @@ def test_submit_stage_verdict_via_web_reject_requeues_task_for_implementation(tm
     task.pipeline_status = "accepting"
     task.runtime.execution_status = "running"
     task.runtime.current_stage = task.runtime.current_stage.model_copy(
-        update={"step": "accepting", "status": "running", "started_at": "2026-04-08T11:00:00+00:00"}
+        update={"step": "accepting", "status": "running", "started_at": _iso8601_now_plus(minutes=-5)}
     )
     save_task(tmp_path, task)
     save_task_runtime(tmp_path, task)

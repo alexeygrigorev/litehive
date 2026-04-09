@@ -2,7 +2,7 @@ id: T-0259
 slug: fix-flaky-and-timing-dependent-tests
 title: Fix flaky and timing-dependent tests
 depends_on: []
-task_type: null
+task_type: bugfix
 engine: null
 model: null
 mode: implementation
@@ -12,23 +12,42 @@ flag_reason: null
 flag_count: 0
 pipeline_status: backlog
 priority: medium
-pm_complexity: null
-planned_effort: null
+pm_complexity: moderate
+planned_effort: m
 created_at: '2026-04-09T09:21:41+00:00'
-updated_at: '2026-04-09T09:21:41+00:00'
-goal: Several tests have timing-dependent assertions or shared mutable state that
-  causes flaky failures. Fix them.
+updated_at: '2026-04-09T18:56:35+00:00'
+goal: Stabilize the known flaky tests by removing narrow timing assumptions, class-level
+  monkeypatch leakage, and fixed-calendar timestamp expectations so the suite is deterministic
+  regardless of scheduler jitter, wall-clock date, or test execution order.
 acceptance_criteria:
-- test_inactivity_timeout.py timing tests use larger margins (1s not 0.5s) or mock
-  time
-- test_has_callable_override tests fixed to not depend on class-level monkeypatch
-  pollution (currently skipped)
-- test_web_snapshot_lockfree timestamp tests use current time not hardcoded dates
-- No test depends on execution order within a file
-- All skipped tests either fixed or removed with justification
-- Full suite passes 10 consecutive runs without failures
-constraints: []
-plan: []
+- tests/test_inactivity_timeout.py passes reliably on repeated runs because its timeout
+  assertions tolerate scheduler jitter via a >=1s margin or mocked time instead of
+  0.5s real-time cutoffs.
+- The currently skipped override-detection tests in tests/test_tasks_and_subagents.py
+  run and pass without leaking class-level monkeypatch state between tests or depending
+  on test order within the file.
+- Timestamp-oriented assertions in tests/test_web_snapshot_and_verdicts.py derive
+  expectations from current test-created data rather than fixed calendar dates, so
+  they remain valid on any run date.
+- Running the affected test files repeatedly and in isolated selections shows no order
+  dependence within a file.
+- Any skipped tests touched by this task are either re-enabled and passing or removed
+  with an inline justification that explains why coverage is preserved elsewhere.
+- uv run pytest -q passes in 10 consecutive runs with zero failures.
+constraints:
+- Keep changes scoped to test stability fixes and any minimal production changes required
+  to remove shared mutable state dependencies.
+plan:
+- Inspect the three named test areas and identify whether each failure mode is caused
+  by real-time waits, shared class-level monkeypatch state, or hard-coded timestamps.
+- Stabilize the affected tests using deterministic techniques that avoid wall-clock
+  sensitivity and cross-test pollution, preferring test-only changes unless a minimal
+  production fix is required.
+- Re-enable or remove the currently skipped flaky tests with clear justification,
+  and confirm the affected files do not depend on intra-file execution order.
+- Verify with focused repeated runs of the affected test selections, then run the
+  full pytest suite 10 consecutive times and capture the exact command/output summary
+  in the testing report.
 human_checkpoints: []
 subagents: []
 git:

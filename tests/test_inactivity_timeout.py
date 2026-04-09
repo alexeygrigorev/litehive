@@ -42,7 +42,7 @@ class TestInactivityTimeout:
         result = adapter.run_live(
             prompt="unused",
             cwd=tmp_path,
-            inactivity_timeout_seconds=0.5,
+            inactivity_timeout_seconds=1.0,
         )
         assert "inactivity" in result.stderr.lower()
         # Process was killed, so exit code should be non-zero or we broke out
@@ -85,7 +85,7 @@ class TestInactivityTimeout:
         result = adapter.run_live(
             prompt="unused",
             cwd=tmp_path,
-            inactivity_timeout_seconds=0.5,
+            inactivity_timeout_seconds=1.0,
         )
         assert "hello" in result.stdout
         assert "inactivity" in result.stderr.lower()
