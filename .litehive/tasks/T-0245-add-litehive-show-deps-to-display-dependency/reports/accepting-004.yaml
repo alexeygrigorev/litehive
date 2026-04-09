@@ -1,0 +1,76 @@
+task_id: T-0245
+step: accepting
+verdict: pass
+summary: 'Accepted after reviewer verification. I inspected the T-0245 diff in litehive/cli/status.py
+  and confirmed litehive show now formats depends_on entries as ''<task-id> (<status>)''
+  by resolving active task statuses first, then falling back to .litehive/tasks/archive/INDEX.csv
+  via archive_root() to label archived dependencies, and marking unresolved IDs as
+  missing. I verified the added coverage in tests/test_list_and_show.py::test_show_displays_dependency_statuses
+  exercises all three required cases: live dependency status, archived dependency
+  from INDEX.csv, and missing dependency marker. Tests I ran: uv run pytest tests/test_list_and_show.py
+  -q -> 10 passed in 0.81s; uv run pytest -q -> 905 passed, 3 skipped in 113.60s.
+  Evidence supports all acceptance criteria: show output includes dependency statuses,
+  archived deps are resolved from INDEX.csv, missing deps are clearly marked, and
+  the existing automated test suite passes.'
+feedback: "Runner hook `before_pm_acceptance` `uv run ruff check --select E402,F401\
+  \ litehive tests` passed with exit code 0 (artifact: `artifacts/before_pm_acceptance-001.yaml`).\n\
+  \nRunner hook `before_pm_acceptance` `if [ -n \"${LITEHIVE_CHANGED_PATHS:-}\" ]\
+  \ \\\n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" | grep -q . \\\n  && printf\
+  \ '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" \\\n    | xargs -r -d '\\n' git grep -nE 'noqa:.*F401|noqa:.*F403|ruff:\\\
+  s*noqa:\\s*F401|ruff:\\s*noqa:\\s*F403' --; then\n  echo 'Forbidden noqa F401/F403\
+  \ suppression found.'\n  exit 1\nfi` passed with exit code 0 (artifact: `artifacts/before_pm_acceptance-002.yaml`).\n\
+  \nAccepted after reviewer verification. I inspected the T-0245 diff in litehive/cli/status.py\
+  \ and confirmed litehive show now formats depends_on entries as '<task-id> (<status>)'\
+  \ by resolving active task statuses first, then falling back to .litehive/tasks/archive/INDEX.csv\
+  \ via archive_root() to label archived dependencies, and marking unresolved IDs\
+  \ as missing. I verified the added coverage in tests/test_list_and_show.py::test_show_displays_dependency_statuses\
+  \ exercises all three required cases: live dependency status, archived dependency\
+  \ from INDEX.csv, and missing dependency marker. Tests I ran: uv run pytest tests/test_list_and_show.py\
+  \ -q -> 10 passed in 0.81s; uv run pytest -q -> 905 passed, 3 skipped in 113.60s.\
+  \ Evidence supports all acceptance criteria: show output includes dependency statuses,\
+  \ archived deps are resolved from INDEX.csv, missing deps are clearly marked, and\
+  \ the existing automated test suite passes."
+submitted_via_cli: true
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings:
+- 'runner hook passed: `before_pm_acceptance` `uv run ruff check --select E402,F401
+  litehive tests` (artifact: `artifacts/before_pm_acceptance-001.yaml`)'
+- "runner hook passed: `before_pm_acceptance` `if [ -n \"${LITEHIVE_CHANGED_PATHS:-}\"\
+  \ ] \\\n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" | grep -q . \\\n  && printf\
+  \ '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" \\\n    | xargs -r -d '\\n' git grep -nE 'noqa:.*F401|noqa:.*F403|ruff:\\\
+  s*noqa:\\s*F401|ruff:\\s*noqa:\\s*F403' --; then\n  echo 'Forbidden noqa F401/F403\
+  \ suppression found.'\n  exit 1\nfi` (artifact: `artifacts/before_pm_acceptance-002.yaml`)"
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 176
+hook_results:
+- point: before_pm_acceptance
+  command: uv run ruff check --select E402,F401 litehive tests
+  blocking: true
+  exit_code: 0
+  status: passed
+  artifact: artifacts/before_pm_acceptance-001.yaml
+- point: before_pm_acceptance
+  command: "if [ -n \"${LITEHIVE_CHANGED_PATHS:-}\" ] \\\n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\"\
+    \ | grep -q . \\\n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" \\\n    | xargs\
+    \ -r -d '\\n' git grep -nE 'noqa:.*F401|noqa:.*F403|ruff:\\s*noqa:\\s*F401|ruff:\\\
+    s*noqa:\\s*F403' --; then\n  echo 'Forbidden noqa F401/F403 suppression found.'\n\
+    \  exit 1\nfi"
+  blocking: true
+  exit_code: 0
+  status: passed
+  artifact: artifacts/before_pm_acceptance-002.yaml
+created_at: '2026-04-09T12:17:18+00:00'
