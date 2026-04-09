@@ -26,6 +26,7 @@ from tests.workspace_helpers import (
     _stage_subagent_result,
     _unexpected_dirty_paths,
     _with_fake_uv,
+    _write_cli_verdict,
     _write_fake_uv,
     argparse,
     classify_execution_limit,
@@ -207,6 +208,74 @@ def test_empty_swe_guard_rejects_when_no_prior_pass(tmp_path: Path) -> None:
     assert refreshed.status == "flagged", (
         f"Expected flagged but got {refreshed.status} — guard should reject empty passes"
     )
+
+
+def test_empty_swe_guard_allows_verified_preimplemented_cli_pass(tmp_path: Path) -> None:
+    _init_git_repo(tmp_path)
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Existing feature", auto_commit=False)
+    task.pipeline_status = "implementing"  # type: ignore[assignment]
+    save_task(tmp_path, task)
+
+    def executor(task, step):  # type: ignore[no-untyped-def]
+        if step == "implementing":
+            return StageReport(
+                task_id=task.id,
+                step=step,
+                verdict="pass",
+                summary="Already implemented and verified with pytest; acceptance criteria confirmed.",
+                feedback=(
+                    "Already implemented before this run. Verified existing behavior with pytest "
+                    "and confirmed the acceptance criteria still hold."
+                ),
+                submitted_via_cli=True,
+                files_changed=[],
+                tests={"added": 0, "passing": 0},
+            )
+        return StageReport(
+            task_id=task.id, step=step, verdict="pass",
+            summary=f"{step} ok", files_changed=["app.txt"], tests={"added": 1, "passing": 1},
+        )
+
+    runner = TaskExecutionRunner(tmp_path, executor)
+    runner.run(task)
+
+    refreshed = get_task(tmp_path, task.id)
+    assert refreshed is not None
+    assert refreshed.status != "flagged"
+    assert refreshed.pipeline_status != "implementing"
+
+
+def test_empty_swe_guard_rejects_cli_pass_without_preimplemented_evidence(tmp_path: Path) -> None:
+    _init_git_repo(tmp_path)
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Suspicious empty pass", auto_commit=False)
+    task.pipeline_status = "implementing"  # type: ignore[assignment]
+    save_task(tmp_path, task)
+
+    def executor(task, step):  # type: ignore[no-untyped-def]
+        if step == "implementing":
+            return StageReport(
+                task_id=task.id,
+                step=step,
+                verdict="pass",
+                summary="Verified.",
+                feedback="Confirmed it looks good.",
+                submitted_via_cli=True,
+                files_changed=[],
+                tests={"added": 0, "passing": 0},
+            )
+        return StageReport(
+            task_id=task.id, step=step, verdict="pass",
+            summary=f"{step} ok", files_changed=["app.txt"], tests={"added": 1, "passing": 1},
+        )
+
+    runner = TaskExecutionRunner(tmp_path, executor, max_retries=0)
+    runner.run(task)
+
+    refreshed = get_task(tmp_path, task.id)
+    assert refreshed is not None
+    assert refreshed.status == "flagged"
 
 
 def test_runtime_routes_grooming_to_planner_and_accepting_to_reviewer() -> None:
@@ -1552,7 +1621,7 @@ def test_opencode_strips_provider_env(monkeypatch: pytest.MonkeyPatch, tmp_path:
             self.pid = 4242
             self.returncode = 0
 
-        def communicate(self):  # type: ignore[no-untyped-def]
+        def communicate(self, input=None):  # type: ignore[no-untyped-def]
             return ("ok", "")
 
     monkeypatch.setattr("shutil.which", lambda _: "/usr/bin/fake")
@@ -2821,6 +2890,62 @@ def test_stage_prompt_distinguishes_accepting_reviewer_role(tmp_path: Path) -> N
         "Validate the strict end-user outcome, look for regressions or missing evidence, and make a final done versus not-done judgment."
         in prompt
     )
+    assert "accept the task to normal `done`" in prompt
+    assert "Use `wont_do`, `duplicate`, or `deferred` only" in prompt
+
+
+def test_stage_prompt_guides_swe_for_preimplemented_or_obsolete_work(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(
+        tmp_path,
+        title="Existing workflow behavior",
+        acceptance_criteria=["Existing behavior is verified and reported explicitly."],
+    )
+
+    prompt = stage_prompt(task, "implementing", workspace_context="")
+
+    assert "If the requested behavior is already implemented" in prompt
+    assert "submit `litehive report --verdict pass` with explicit evidence" in prompt
+    assert "Never exit the stage without calling `litehive report`." in prompt
+    assert "use `litehive update` to narrow scope or adjust the acceptance criteria" in prompt
+    assert "use `litehive close --outcome wont_do` or `litehive close --outcome duplicate`" in prompt
+
+
+def test_stage_report_from_subagent_marks_cli_verdict_source(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="CLI verdict source")
+    _write_cli_verdict(
+        tmp_path,
+        task,
+        "implementing",
+        verdict="pass",
+        message="Already implemented and verified with pytest.",
+    )
+    result = SubagentResult(
+        ref=SubagentRef(
+            id="SA-implementing",
+            role="swe",
+            engine="codex",
+            status="completed",
+            path="subagents/SA-implementing",
+        ),
+        execution=CLIExecutionResult(
+            adapter="codex",
+            argv=("codex", "exec"),
+            cwd=tmp_path,
+            exit_code=0,
+            stdout="",
+            stderr="",
+        ),
+        transcript="ignored",
+        exit_code=0,
+    )
+
+    report = stage_report_from_subagent(task, "implementing", result, root=tmp_path)
+
+    assert report.verdict == "pass"
+    assert report.submitted_via_cli is True
+    assert report.feedback == "Already implemented and verified with pytest."
 
 
 def test_stage_prompt_uses_recovery_role_when_requested(tmp_path: Path) -> None:

@@ -16,7 +16,6 @@ from litehive.tasks import (
 from litehive.config import LitehiveConfig
 
 from ._hooks import _run_runner_hooks_for_stage
-from ._models import resolve_model
 
 
 def _commit_to_git_report(
