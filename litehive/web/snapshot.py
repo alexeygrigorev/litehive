@@ -95,7 +95,6 @@ def read_engine_dashboard(root: Path) -> dict[str, Any]:
         "config": {
             "default_engine": config.default_engine,
             "recovery_engine": config.recovery_engine,
-            "claude_enabled": config.claude_enabled,
             "engine_preference": list(config.engine_preference),
             "engine_freeze": dict(config.engine_freeze),
             "active_engine_freezes": {
@@ -107,7 +106,7 @@ def read_engine_dashboard(root: Path) -> dict[str, Any]:
                 "opencode": config.opencode_model,
                 "gemini": config.gemini_model,
                 "copilot": config.copilot_model,
-                "claude": config.claude_model if config.claude_enabled else None,
+                "claude": config.claude_model,
                 "goz": config.goz_model,
             },
             "engine_usage_caps": dict(config.engine_usage_caps),

@@ -1133,7 +1133,7 @@ def _run_next_task_uses_default_gemini_retry_policy_and_records_journal(
 def _run_next_task_uses_default_claude_retry_policy_and_records_journal(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    ensure_workspace(tmp_path, LitehiveConfig(claude_enabled=True))
+    ensure_workspace(tmp_path, LitehiveConfig())
     create_task(
         tmp_path, title="Retry transient claude service failure", engine="claude", auto_commit=False
     )

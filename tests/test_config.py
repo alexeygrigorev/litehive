@@ -713,7 +713,6 @@ def test_resolve_execution_retry_policy_prefers_claude_selector_before_model_fam
     None
 ):
     config = LitehiveConfig(
-        claude_enabled=True,
         execution_retry_policies={
             "claude": {
                 "max_retries": 1,
@@ -819,7 +818,6 @@ def test_configure_no_longer_has_task_engine_routing(tmp_path: Path) -> None:
         opencode_model="zai-coding-plan/glm-5.1",
         gemini_model=None,
         copilot_model=None,
-        claude_enabled=False,
         claude_model="claude-sonnet-4-20250514",
         claude_max_turns=30,
         pool_usage_cap=None,
@@ -866,7 +864,6 @@ def test_configure_persists_runner_hooks(tmp_path: Path) -> None:
         opencode_model="zai-coding-plan/glm-5.1",
         gemini_model=None,
         copilot_model=None,
-        claude_enabled=False,
         claude_model="claude-sonnet-4-20250514",
         claude_max_turns=30,
         pool_usage_cap=None,
@@ -945,7 +942,6 @@ def test_configure_rejects_invalid_runner_hook_point(
         opencode_model="zai-coding-plan/glm-5.1",
         gemini_model=None,
         copilot_model=None,
-        claude_enabled=False,
         claude_model="claude-sonnet-4-20250514",
         claude_max_turns=30,
         pool_usage_cap=None,

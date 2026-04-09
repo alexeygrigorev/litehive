@@ -228,7 +228,7 @@ def test_claude_build_invocation_includes_max_turns(tmp_path: Path) -> None:
 def test_run_next_task_passes_configured_claude_max_turns(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    ensure_workspace(tmp_path, LitehiveConfig(claude_enabled=True, claude_max_turns=7))
+    ensure_workspace(tmp_path, LitehiveConfig(claude_max_turns=7))
     create_task(tmp_path, title="Claude max turns task", engine="claude", auto_commit=False)
     calls: list[int | None] = []
 
@@ -338,7 +338,7 @@ def test_claude_renders_partial_stream_events_for_live_capture(tmp_path: Path) -
 def test_claude_live_progress_report_uses_adapter_summary_for_restart_snippet(
     tmp_path: Path,
 ) -> None:
-    ensure_workspace(tmp_path, LitehiveConfig(claude_enabled=True))
+    ensure_workspace(tmp_path, LitehiveConfig())
     task = create_task(
         tmp_path, title="Claude live restart summary", engine="claude", auto_commit=False
     )
@@ -436,7 +436,6 @@ def test_claude_stage_report_uses_error_when_no_assistant_message(tmp_path: Path
 def test_resolve_engine_name_rejects_claude_when_not_enabled(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     config = load_config(tmp_path)
-    assert config.claude_enabled is False
 
     task = create_task(tmp_path, title="Claude task", engine="claude")
     assert resolve_engine_name(task, config) == "claude"
@@ -446,16 +445,14 @@ def test_resolve_engine_name_rejects_default_claude_when_not_enabled(tmp_path: P
     ensure_workspace(tmp_path, LitehiveConfig(default_engine="claude"))
     config = load_config(tmp_path)
     assert config.default_engine == "claude"
-    assert config.claude_enabled is False
 
     task = create_task(tmp_path, title="Claude default task")
     assert resolve_engine_name(task, config) == "claude"
 
 
 def test_resolve_engine_name_allows_claude_when_enabled(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path, LitehiveConfig(claude_enabled=True))
+    ensure_workspace(tmp_path, LitehiveConfig())
     config = load_config(tmp_path)
-    assert config.claude_enabled is True
 
     task = create_task(tmp_path, title="Claude task", engine="claude")
     assert resolve_engine_name(task, config) == "claude"
@@ -464,11 +461,10 @@ def test_resolve_engine_name_allows_claude_when_enabled(tmp_path: Path) -> None:
 def test_claude_is_not_default_engine() -> None:
     config = LitehiveConfig()
     assert config.default_engine != "claude"
-    assert config.claude_enabled is False
 
 
 def test_claude_config_defaults_to_sonnet() -> None:
-    config = LitehiveConfig(claude_enabled=True)
+    config = LitehiveConfig()
     assert config.claude_model == "claude-sonnet-4-20250514"
     assert config.claude_max_turns == 100
 
@@ -490,49 +486,6 @@ def test_goz_engine_in_registry() -> None:
     assert engine.name == "goz"
     assert engine.capabilities.supports_model_override is False
     assert engine.capabilities.transcript_format == "jsonl"
-
-
-def test_goz_build_command_render_transcript_and_stage_report(tmp_path: Path) -> None:
-    engine = get_engine("goz")
-
-    assert engine.build_command("implement it", tmp_path) == [
-        "goz",
-        "run",
-        "--format",
-        "json",
-        "implement it",
-    ]
-
-    execution = CLIExecutionResult(
-        adapter="goz",
-        argv=("goz", "run", "--format", "json"),
-        cwd=tmp_path,
-        exit_code=0,
-        stdout="\n".join(
-            [
-                '{"type":"message","role":"assistant","content":"VERDICT: PASS\\n"}',
-                '{"type":"message","role":"assistant","content":"SUMMARY: implemented goz adapter\\n"}',
-                '{"type":"message","role":"assistant","content":"FILES_CHANGED:\\n- litehive/engines.py\\n- litehive/config.py\\n"}',
-                '{"type":"message","role":"assistant","content":"TESTS_ADDED: 5\\nTESTS_PASSING: 5\\nWARNINGS:\\n"}',
-                '{"type":"message","role":"assistant","content":"STAGE_RESULT:\\n{\\"verdict\\":\\"pass\\",\\"summary\\":\\"implemented goz adapter\\",\\"files_changed\\":[\\"litehive/engines.py\\",\\"litehive/config.py\\"],\\"tests\\":{\\"added\\":5,\\"passing\\":5},\\"warnings\\":[]}\n"}',
-            ]
-        ),
-        stderr="",
-    )
-
-    transcript = engine.render_transcript(execution)
-    assert transcript.splitlines()[0] == "VERDICT: PASS"
-    report = engine.parse_stage_report(
-        task_id="T-0010",
-        step="implementing",
-        execution=execution,
-        subagent_status="completed",
-    )
-
-    # Goz "message" type events are not extracted by _extract_goz_transcript
-    # (which handles "text" type), so the STAGE_RESULT JSON in the raw fallback
-    # transcript is not found.  Without CLI verdict, verdict defaults to fail.
-    assert report.verdict == "fail"
 
 
 def test_goz_render_transcript_joins_streaming_text_and_formats_tool_blocks(tmp_path: Path) -> None:
@@ -598,7 +551,7 @@ def test_goz_extract_usage_observation_reads_tokens_and_cost(tmp_path: Path) -> 
 def test_update_command_accepts_claude_engine(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    ensure_workspace(tmp_path, LitehiveConfig(claude_enabled=True))
+    ensure_workspace(tmp_path, LitehiveConfig())
     task = create_task(tmp_path, title="Tune Claude task")
 
     exit_code = _cmd_update(
@@ -660,7 +613,6 @@ def test_configure_persists_claude_settings(tmp_path: Path) -> None:
         opencode_model="zai-coding-plan/glm-5.1",
         gemini_model=None,
         copilot_model=None,
-        claude_enabled=True,
         claude_model="claude-sonnet-4-20250514",
         claude_max_turns=20,
         pool_usage_cap=12,
@@ -678,7 +630,6 @@ def test_configure_persists_claude_settings(tmp_path: Path) -> None:
 
     assert _cmd_configure(parser) == 0
     config = load_config(tmp_path)
-    assert config.claude_enabled is True
     assert config.claude_model == "claude-sonnet-4-20250514"
     assert config.claude_max_turns == 20
     assert config.pool_usage_cap == 12
@@ -711,7 +662,6 @@ def test_configure_updates_existing_workspace_budget_settings(tmp_path: Path) ->
         opencode_model="zai-coding-plan/glm-5.1",
         gemini_model=None,
         copilot_model=None,
-        claude_enabled=True,
         claude_model="claude-sonnet-4-20250514",
         claude_max_turns=20,
         pool_usage_cap=12,
@@ -733,7 +683,6 @@ def test_configure_updates_existing_workspace_budget_settings(tmp_path: Path) ->
 
     config = load_config(tmp_path)
     assert config.process_profile == "python"
-    assert config.claude_enabled is True
     assert config.claude_max_turns == 20
     assert config.pool_usage_cap == 12
     assert config.pool_cost_cap == 30

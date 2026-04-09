@@ -46,11 +46,6 @@ def register_configure_parser(subparsers):
         help="Default model identifier when using the copilot adapter",
     )
     parser.add_argument(
-        "--claude-enabled",
-        action="store_true",
-        help="Enable the claude adapter (opt-in; disabled by default to protect quota)",
-    )
-    parser.add_argument(
         "--claude-model",
         default="claude-sonnet-4-20250514",
         help="Default model identifier when using the claude adapter",

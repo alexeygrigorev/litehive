@@ -517,7 +517,6 @@ def test_cmd_run_dry_run_predicts_claude_budget_block_without_fallback(
     ensure_workspace(
         tmp_path,
         LitehiveConfig(
-            claude_enabled=True,
             engine_budget_caps={"claude": 2},
             engine_costs={"claude": 3},
             engine_preference=[],

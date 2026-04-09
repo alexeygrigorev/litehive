@@ -1502,7 +1502,7 @@ def test_drain_task_pool_stops_on_pool_usage_cap(
 def test_drain_task_pool_stops_on_pool_cost_cap(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    ensure_workspace(tmp_path, LitehiveConfig(claude_enabled=True))
+    ensure_workspace(tmp_path, LitehiveConfig())
     create_task(tmp_path, title="First task", engine="claude", auto_commit=False)
     create_task(tmp_path, title="Second task", auto_commit=False)
 
@@ -1566,7 +1566,6 @@ def test_run_next_task_blocks_when_claude_budget_is_exhausted_before_invocation(
     ensure_workspace(
         tmp_path,
         LitehiveConfig(
-            claude_enabled=True,
             engine_preference=["claude"],
             engine_budget_caps={"claude": 2},
             engine_costs={"claude": 3},

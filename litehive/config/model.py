@@ -33,7 +33,6 @@ class LitehiveConfig:
     goz_model: str = "glm-5-turbo"
     gemini_model: str | None = None
     copilot_model: str | None = None
-    claude_enabled: bool = False
     claude_model: str = "claude-sonnet-4-20250514"
     claude_max_turns: int = 100
     pool_usage_cap: int | None = None

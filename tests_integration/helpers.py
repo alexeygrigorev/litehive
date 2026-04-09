@@ -70,7 +70,6 @@ def integration_workspace(root: Path) -> Path:
             default_engine="codex",
             opencode_model="zai-coding-plan/glm-5.1",
             gemini_model="gemini-2.5-flash-lite",
-            claude_enabled=True,
             claude_model="claude-sonnet-4-20250514",
         ),
     )
@@ -100,7 +99,7 @@ def execute_engine_prompt(
         "goz": config.goz_model,
         "gemini": config.gemini_model,
         "copilot": config.copilot_model,
-        "claude": config.claude_model if config.claude_enabled else None,
+        "claude": config.claude_model,
     }.get(engine_name)
     invocation = engine.finalize_invocation(
         engine.build_invocation(

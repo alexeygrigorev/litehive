@@ -47,7 +47,6 @@ def _cmd_configure(args):
             opencode_model=args.opencode_model,
             gemini_model=args.gemini_model,
             copilot_model=getattr(args, "copilot_model", None),
-            claude_enabled=getattr(args, "claude_enabled", False),
             claude_model=getattr(args, "claude_model", "claude-sonnet-4-20250514"),
             claude_max_turns=getattr(args, "claude_max_turns", 30),
             pool_usage_cap=getattr(args, "pool_usage_cap", None),
