@@ -23,6 +23,7 @@ from tests.workspace_helpers import (
     build_workspace_snapshot,
     create_task,
     ensure_workspace,
+    get_task,
     load_config,
     load_state,
     pytest,
