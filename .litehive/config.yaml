@@ -1,4 +1,4 @@
-default_engine: codex
+default_engine: claude
 goz_model: auto
 recovery_engine: claude
 codex_model: gpt-5.4-high
@@ -37,9 +37,17 @@ agent_startup_guidance:
     the acceptance criteria instead of refactoring the whole runner.
   - Verify with focused pytest slices and, when required by the task, add real CLI
     or wrapper-level proof instead of helper-only coverage.
-  - Never create temp files or directories in the repo root. Use pytest tmp_path fixture or /tmp for temporary files.
-  - IMPORTANT - Your process will be killed if it produces no output for 6 minutes. Never run the full test suite. Run only the specific test file for your change (e.g. pytest tests/test_specific.py -q). Each test should finish within 1 minute.
-  - IMPORTANT - Read the "Best Practices for Tests" section in README.md before writing any tests. Key rules. (1) Always mock SubagentManager.run or use a custom executor - never call real engines from tests. (2) Fake implementing passes MUST include files_changed=["app.txt"] and tests={"added":1,"passing":1} or the empty SWE guard will cause infinite retry loops. (3) Use workspace helpers from tests/workspace_helpers.py instead of inline fakes.
+  - Never create temp files or directories in the repo root. Use pytest tmp_path fixture
+    or /tmp for temporary files.
+  - IMPORTANT - Your process will be killed if it produces no output for 6 minutes.
+    Never run the full test suite. Run only the specific test file for your change
+    (e.g. pytest tests/test_specific.py -q). Each test should finish within 1 minute.
+  - IMPORTANT - Read the "Best Practices for Tests" section in README.md before writing
+    any tests. Key rules. (1) Always mock SubagentManager.run or use a custom executor
+    - never call real engines from tests. (2) Fake implementing passes MUST include
+    files_changed=["app.txt"] and tests={"added":1,"passing":1} or the empty SWE guard
+    will cause infinite retry loops. (3) Use workspace helpers from tests/workspace_helpers.py
+    instead of inline fakes.
   qa:
   - Read the latest implementing report and the task acceptance criteria before exploring
     code.
@@ -47,10 +55,17 @@ agent_startup_guidance:
     execution, not just helper-level tests.
   - If rejecting, name the exact missing proof or failing scenario so the next implementing
     pass can act directly.
-  - IMPORTANT - Your process will be killed if it produces no output for 6 minutes. Run only the specific test file for your change, not the full suite.
-  - Tests must be comprehensive but FAST. Each unit test has a 60-second hard timeout enforced by pytest-timeout. Reject tests that are slow, redundant, or run the full test suite.
-  - Each test file must finish within 1 minute. If it takes longer, reject and ask the SWE to split or optimize.
-  - The full test suite (uv run pytest tests/ -q) must finish within 3 minutes. If a change causes the full suite to exceed 3 minutes, reject it. Tests should mock external calls (SubagentManager.run, engine adapters) instead of running real subprocesses.
+  - IMPORTANT - Your process will be killed if it produces no output for 6 minutes.
+    Run only the specific test file for your change, not the full suite.
+  - Tests must be comprehensive but FAST. Each unit test has a 60-second hard timeout
+    enforced by pytest-timeout. Reject tests that are slow, redundant, or run the
+    full test suite.
+  - Each test file must finish within 1 minute. If it takes longer, reject and ask
+    the SWE to split or optimize.
+  - The full test suite (uv run pytest tests/ -q) must finish within 3 minutes. If
+    a change causes the full suite to exceed 3 minutes, reject it. Tests should mock
+    external calls (SubagentManager.run, engine adapters) instead of running real
+    subprocesses.
   - Integration tests (tests_integration/) may take up to 3 minutes per file.
   reviewer:
   - Compare the task acceptance criteria to the latest QA evidence and reports first;
@@ -67,10 +82,11 @@ agent_startup_guidance:
   - IMPORTANT - You are running in a git worktree, NOT the main repo. Your working
     directory is the worktree. All file edits, git adds, and commits happen HERE.
   - Run `git status` first to understand what state the worktree is in.
-  - Read the error message carefully. Classify it as either a project bug (fix in the
-    worktree) or a litehive infrastructure bug (report it, do not try to fix litehive
+  - Read the error message carefully. Classify it as either a project bug (fix in
+    the worktree) or a litehive infrastructure bug (report it, do not try to fix litehive
     source from inside a task worktree).
-  - If tests fail, run the specific failing test to see the exact error before changing code.
+  - If tests fail, run the specific failing test to see the exact error before changing
+    code.
   - After fixing, run the relevant tests to verify the fix works.
   - Always submit your result via `litehive report --verdict <pass|fail> --role recovery
     --step <stage> --message "<what you found and fixed>"`.
@@ -82,14 +98,11 @@ runner_hooks:
   before_pm_acceptance:
   - command: uv run ruff check --select E402,F401 litehive tests
     blocking: true
-  - command: |-
-      if [ -n "${LITEHIVE_CHANGED_PATHS:-}" ] \
-        && printf '%s\n' "$LITEHIVE_CHANGED_PATHS" | grep -q . \
-        && printf '%s\n' "$LITEHIVE_CHANGED_PATHS" \
-          | xargs -r -d '\n' git grep -nE 'noqa:.*F401|noqa:.*F403|ruff:\s*noqa:\s*F401|ruff:\s*noqa:\s*F403' --; then
-        echo 'Forbidden noqa F401/F403 suppression found.'
-        exit 1
-      fi
+  - command: "if [ -n \"${LITEHIVE_CHANGED_PATHS:-}\" ] \\\n  && printf '%s\\n' \"\
+      $LITEHIVE_CHANGED_PATHS\" | grep -q . \\\n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\"\
+      \ \\\n    | xargs -r -d '\\n' git grep -nE 'noqa:.*F401|noqa:.*F403|ruff:\\\
+      s*noqa:\\s*F401|ruff:\\s*noqa:\\s*F403' --; then\n  echo 'Forbidden noqa F401/F403\
+      \ suppression found.'\n  exit 1\nfi"
     blocking: true
 task_mode_name: tasks
 implementation_mode_name: implementation

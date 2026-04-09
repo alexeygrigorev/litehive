@@ -29,7 +29,8 @@ summary: 'SWE reported pass but produced no file changes and no tests. This usua
   or queue_command or status_command'' -> 2 passed. Evidence confirms stop records
   parked durably, parked work is manually resumable but excluded from automatic recovery,
   interrupted work remains auto-recoverable, dirty-worktree gating preserves the parked
-  vs interrupted distinction, and queue/status/docs expose parked explicitly.'
+  vs interrupted distinction, and queue/status/docs expose parked explicitly. Warning
+  observed during pytest: uv reported a non-blocking VIRTUAL_ENV mismatch with .venv.'
 feedback: 'Verified the explicit parked task state implementation in this worktree
   and confirmed the acceptance criteria are satisfied. What I verified: (1) the durable
   lifecycle model includes status=parked in litehive/models/common.py, and stop/park
@@ -56,7 +57,8 @@ feedback: 'Verified the explicit parked task state implementation in this worktr
   or queue_command or status_command'' -> 2 passed. Evidence confirms stop records
   parked durably, parked work is manually resumable but excluded from automatic recovery,
   interrupted work remains auto-recoverable, dirty-worktree gating preserves the parked
-  vs interrupted distinction, and queue/status/docs expose parked explicitly.'
+  vs interrupted distinction, and queue/status/docs expose parked explicitly. Warning
+  observed during pytest: uv reported a non-blocking VIRTUAL_ENV mismatch with .venv.'
 files_changed: []
 created_follow_up_task_ids: []
 task_update: {}
@@ -74,6 +76,6 @@ outcome_reason: ''
 failure_classification: null
 failure_diagnostics: {}
 resource_limit_event: null
-duration_seconds: 47
+duration_seconds: 50
 hook_results: []
-created_at: '2026-04-09T03:00:31+00:00'
+created_at: '2026-04-09T03:52:05+00:00'

@@ -7,14 +7,14 @@ engine: null
 model: null
 mode: implementation
 pipeline_mode: full
-status: flagged
-flag_reason: retry_limit_exhausted
+status: deferred
+flag_reason: null
 pipeline_status: implementing
 priority: medium
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-07T08:24:48+00:00'
-updated_at: '2026-04-09T02:58:18+00:00'
+updated_at: '2026-04-09T05:34:12+00:00'
 goal: When a subagent process exits with code 124 (killed by timeout), litehive classifies
   it as completed. It should be classified as failed/interrupted. This causes downstream
   issues where the text verdict fallback generates a fake pass verdict. Check subagent
@@ -949,6 +949,90 @@ subagents:
   engine: codex
   status: completed
   path: subagents/SA-0132-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0133
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0133-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0134
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0134-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0135
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0135-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0136
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0136-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0137
+  role: swe
+  engine: claude
+  status: completed
+  path: subagents/SA-0137-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0138
+  role: swe
+  engine: claude
+  status: completed
+  path: subagents/SA-0138-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0139
+  role: swe
+  engine: claude
+  status: completed
+  path: subagents/SA-0139-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0140
+  role: swe
+  engine: claude
+  status: completed
+  path: subagents/SA-0140-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0141
+  role: swe
+  engine: claude
+  status: completed
+  path: subagents/SA-0141-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0142
+  role: swe
+  engine: claude
+  status: completed
+  path: subagents/SA-0142-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0143
+  role: swe
+  engine: claude
+  status: completed
+  path: subagents/SA-0143-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0144
+  role: swe
+  engine: claude
+  status: completed
+  path: subagents/SA-0144-swe
   sandboxed: false
   sandbox_summary: host
 git:

@@ -1011,3 +1011,278 @@
     reports.'
   files_changed: []
   created_at: '2026-04-09T02:57:46+00:00'
+- role: recovery
+  step: implementing
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0208-classify-exit-code-124-timeout-as-failure-not/recovery/recovery-031.yaml'
+  files_changed: []
+  created_at: '2026-04-09T03:44:59+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Verified the current branch already satisfies T-0208 without code changes.
+    In litehive/agents/_manager.py:162-208, subagent status is set to completed only
+    when exit_code == 0; any non-zero exit is classified as failed first, classify_execution_interruption
+    can only reclassify those non-zero exits to interrupted, and the inactivity-timeout
+    path rewrites stale executions to exit_code 124 with status failed. In litehive/agents/base.py:553-585,
+    parse_stage_report_text downgrades structured STAGE_RESULT pass/accept verdicts
+    to fail whenever subagent_status is not completed, so timeout-killed or otherwise
+    non-zero exits cannot preserve a passing verdict from partial output. Verified
+    with focused tests: uv run pytest -q tests/test_tasks_and_subagents.py tests/test_stage_result_submission.py
+    -k ''marks_generic_non_zero_exit_as_failed or kills_stale_live_process_using_stdout_mtime
+    or timeout_cannot_preserve_structured_pass_verdict or failed_subagent_cannot_turn_structured_pass_into_passing_report''
+    -> 3 passed, 70 deselected in 0.52s. Evidence confirms the acceptance criteria:
+    exit code 124 is failed rather than completed, any non-zero exit is not classified
+    as completed, and timeout-killed agents do not produce pass verdicts in persisted
+    reports.'
+  files_changed: []
+  created_at: '2026-04-09T03:46:15+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Verified the current branch already satisfies T-0208 without additional
+    code changes. In litehive/agents/_manager.py:162-208, subagent status is set to
+    completed only when exit_code == 0; any non-zero exit is classified as failed
+    first, classify_execution_interruption can only reclassify those non-zero exits
+    to interrupted, and the inactivity-timeout path rewrites stale executions to exit_code
+    124 with status failed. In litehive/agents/base.py:553-580, parse_stage_report_text
+    downgrades structured STAGE_RESULT pass/accept verdicts to fail whenever subagent_status
+    is not completed, so timeout-killed or otherwise non-zero exits cannot preserve
+    a passing verdict from partial output. Verified with focused tests: uv run pytest
+    -q tests/test_tasks_and_subagents.py tests/test_stage_result_submission.py -k
+    ''marks_generic_non_zero_exit_as_failed or kills_stale_live_process_using_stdout_mtime
+    or timeout_cannot_preserve_structured_pass_verdict or failed_subagent_cannot_turn_structured_pass_into_passing_report''
+    -> 3 passed, 70 deselected in 0.45s. Evidence confirms the acceptance criteria:
+    exit code 124 is failed rather than completed, any non-zero exit is not classified
+    as completed, and timeout-killed agents do not produce pass verdicts in persisted
+    reports.'
+  files_changed: []
+  created_at: '2026-04-09T03:47:20+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Verified the current branch already satisfies T-0208 without additional
+    code changes. In litehive/agents/_manager.py, subagent status is set to completed
+    only when exit_code == 0; any non-zero exit is classified as failed first, classify_execution_interruption
+    can only reclassify those non-zero exits to interrupted, and the inactivity-timeout
+    path rewrites stale executions to exit_code 124 with status failed. In litehive/agents/base.py,
+    parse_stage_report_text downgrades structured STAGE_RESULT pass/accept verdicts
+    to fail whenever subagent_status is not completed, so timeout-killed or otherwise
+    non-zero exits cannot preserve a passing verdict from partial output. Verified
+    with focused tests: uv run pytest -q tests/test_tasks_and_subagents.py tests/test_stage_result_submission.py
+    -k ''marks_generic_non_zero_exit_as_failed or kills_stale_live_process_using_stdout_mtime
+    or timeout_cannot_preserve_structured_pass_verdict or failed_subagent_cannot_turn_structured_pass_into_passing_report''
+    -> 3 passed, 70 deselected in 0.55s. Evidence confirms the acceptance criteria:
+    exit code 124 is failed rather than completed, any non-zero exit is not classified
+    as completed, and timeout-killed agents do not produce pass verdicts in persisted
+    reports.'
+  files_changed: []
+  created_at: '2026-04-09T03:48:25+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Verified the current branch already satisfies T-0208 without code changes.
+    In litehive/subagents/_execution.py, the compatibility module delegates to litehive/agents/_execution.py
+    and the real status classification in litehive/agents/_manager.py sets subagent
+    status to completed only when exit_code == 0; any non-zero exit is classified
+    as failed first, and classify_execution_interruption can only reclassify those
+    non-zero exits to interrupted, never completed. The inactivity-timeout path explicitly
+    rewrites stale executions to exit_code 124 with status failed. In litehive/engines/base.py,
+    parse_stage_report_text downgrades structured STAGE_RESULT pass/accept verdicts
+    to fail whenever subagent_status is not completed, so timeout-killed or otherwise
+    non-zero exits cannot preserve a passing verdict from partial output. Verified
+    with focused tests: uv run pytest -q tests/test_tasks_and_subagents.py tests/test_stage_result_submission.py
+    -k ''marks_generic_non_zero_exit_as_failed or kills_stale_live_process_using_stdout_mtime
+    or timeout_cannot_preserve_structured_pass_verdict or failed_subagent_cannot_turn_structured_pass_into_passing_report''
+    -> 3 passed, 70 deselected in 0.54s. Evidence confirms the acceptance criteria:
+    exit code 124 is failed rather than completed, any non-zero exit is not classified
+    as completed, and timeout-killed agents do not produce pass verdicts in persisted
+    reports.'
+  files_changed: []
+  created_at: '2026-04-09T03:49:56+00:00'
+- role: recovery
+  step: implementing
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0208-classify-exit-code-124-timeout-as-failure-not/recovery/recovery-032.yaml'
+  files_changed: []
+  created_at: '2026-04-09T05:17:40+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Verified the implementation satisfies T-0208 without additional code changes.
+    Three key mechanisms are in place: (1) In litehive/agents/_manager.py, subagent
+    status is set to completed only when exit_code == 0; any non-zero exit is classified
+    as failed first, and classify_execution_interruption can only reclassify to interrupted,
+    never completed. The inactivity-timeout path rewrites stale executions to exit_code
+    124 with status failed. (2) In litehive/engines/base.py, parse_stage_report_text
+    downgrades structured STAGE_RESULT pass/accept verdicts to fail when subagent_status
+    is not completed, preventing timeout-killed agents from preserving passing verdicts.
+    Tests run: uv run pytest -q tests/test_tasks_and_subagents.py tests/test_stage_result_submission.py
+    -k ''marks_generic_non_zero_exit_as_failed or kills_stale_live_process_using_stdout_mtime
+    or timeout_cannot_preserve_structured_pass_verdict or failed_subagent_cannot_turn_structured_pass_into_passing_report''
+    -> 3 passed. All acceptance criteria met: exit code 124 is classified as failed,
+    non-zero exits are never completed, and timeout-killed agents cannot produce pass
+    verdicts.'
+  files_changed: []
+  created_at: '2026-04-09T05:18:07+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: "Implementation satisfies T-0208 without additional code changes. Three\
+    \ mechanisms ensure exit code 124 (timeout) is classified as failed, not completed:\n\
+    \n1. litehive/agents/_manager.py:162 \u2014 status is set to \"completed\" only\
+    \ when exit_code == 0; any non-zero exit is \"failed\" first. classify_execution_interruption\
+    \ can reclassify to \"interrupted\" but never to \"completed\".\n2. litehive/agents/_manager.py:200-213\
+    \ \u2014 SubagentInactivityTimeout handler explicitly sets exit_code=124 and status=\"\
+    failed\".\n3. litehive/engines/base.py:565-570 \u2014 parse_stage_report_text\
+    \ downgrades structured STAGE_RESULT pass/accept verdicts to \"fail\" when subagent_status\
+    \ is not \"completed\", preventing timeout-killed agents from preserving passing\
+    \ verdicts.\n\nTests run: uv run pytest -q tests/test_tasks_and_subagents.py tests/test_stage_result_submission.py\
+    \ -k 'marks_generic_non_zero_exit_as_failed or kills_stale_live_process_using_stdout_mtime\
+    \ or timeout_cannot_preserve_structured_pass_verdict or failed_subagent_cannot_turn_structured_pass_into_passing_report'\
+    \ -> 3 passed, 70 deselected.\n\nAll acceptance criteria met:\n- Exit code 124\
+    \ is classified as failed, not completed\n- Any non-zero exit code is not classified\
+    \ as completed\n- Timeout-killed agents do not produce pass verdicts"
+  files_changed: []
+  created_at: '2026-04-09T05:19:30+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: "Implementation satisfies T-0208 without additional code changes. Three\
+    \ mechanisms ensure exit code 124 (timeout) is classified as failed, not completed:\n\
+    \n1. litehive/agents/_manager.py \u2014 status is set to \"completed\" only when\
+    \ exit_code == 0; any non-zero exit is \"failed\" first. classify_execution_interruption\
+    \ can reclassify to \"interrupted\" but never to \"completed\".\n2. litehive/agents/_manager.py\
+    \ \u2014 SubagentInactivityTimeout handler explicitly sets exit_code=124 and status=\"\
+    failed\".\n3. litehive/engines/base.py \u2014 parse_stage_report_text downgrades\
+    \ structured STAGE_RESULT pass/accept verdicts to \"fail\" when subagent_status\
+    \ is not \"completed\", preventing timeout-killed agents from preserving passing\
+    \ verdicts.\n\nTests run: uv run pytest -q tests/test_tasks_and_subagents.py tests/test_stage_result_submission.py\
+    \ -k 'marks_generic_non_zero_exit_as_failed or kills_stale_live_process_using_stdout_mtime\
+    \ or timeout_cannot_preserve_structured_pass_verdict or failed_subagent_cannot_turn_structured_pass_into_passing_report'\
+    \ -> 3 passed, 70 deselected.\n\nAll acceptance criteria met:\n- Exit code 124\
+    \ is classified as failed, not completed\n- Any non-zero exit code is not classified\
+    \ as completed\n- Timeout-killed agents do not produce pass verdicts"
+  files_changed: []
+  created_at: '2026-04-09T05:20:03+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: "Implementation satisfies T-0208 without additional code changes. Three\
+    \ mechanisms ensure exit code 124 (timeout) is classified as failed, not completed:\n\
+    \n1. litehive/agents/_manager.py \u2014 status is set to \"completed\" only when\
+    \ exit_code == 0; any non-zero exit is \"failed\" first. classify_execution_interruption\
+    \ can reclassify to \"interrupted\" but never to \"completed\".\n2. litehive/agents/_manager.py\
+    \ \u2014 SubagentInactivityTimeout handler explicitly sets exit_code=124 and status=\"\
+    failed\".\n3. litehive/engines/base.py \u2014 parse_stage_report_text downgrades\
+    \ structured STAGE_RESULT pass/accept verdicts to \"fail\" when subagent_status\
+    \ is not \"completed\", preventing timeout-killed agents from preserving passing\
+    \ verdicts.\n\nTests run: uv run pytest -q tests/test_tasks_and_subagents.py tests/test_stage_result_submission.py\
+    \ -k 'marks_generic_non_zero_exit_as_failed or kills_stale_live_process_using_stdout_mtime\
+    \ or timeout_cannot_preserve_structured_pass_verdict or failed_subagent_cannot_turn_structured_pass_into_passing_report'\
+    \ -> 3 passed, 70 deselected.\n\nAll acceptance criteria met:\n- Exit code 124\
+    \ is classified as failed, not completed\n- Any non-zero exit code is not classified\
+    \ as completed\n- Timeout-killed agents do not produce pass verdicts"
+  files_changed: []
+  created_at: '2026-04-09T05:20:36+00:00'
+- role: recovery
+  step: implementing
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0208-classify-exit-code-124-timeout-as-failure-not/recovery/recovery-033.yaml'
+  files_changed: []
+  created_at: '2026-04-09T05:28:28+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: "Implementation satisfies T-0208 without additional code changes. Three\
+    \ mechanisms ensure exit code 124 (timeout) is classified as failed, not completed:\n\
+    \n1. litehive/agents/_manager.py \u2014 status is set to \"completed\" only when\
+    \ exit_code == 0; any non-zero exit is \"failed\" first. classify_execution_interruption\
+    \ can reclassify to \"interrupted\" but never to \"completed\".\n2. litehive/agents/_manager.py\
+    \ \u2014 SubagentInactivityTimeout handler explicitly sets exit_code=124 and status=\"\
+    failed\".\n3. litehive/engines/base.py \u2014 parse_stage_report_text downgrades\
+    \ structured STAGE_RESULT pass/accept verdicts to \"fail\" when subagent_status\
+    \ is not \"completed\", preventing timeout-killed agents from preserving passing\
+    \ verdicts.\n\nTests run: uv run pytest -q tests/test_tasks_and_subagents.py tests/test_stage_result_submission.py\
+    \ -k 'marks_generic_non_zero_exit_as_failed or kills_stale_live_process_using_stdout_mtime\
+    \ or timeout_cannot_preserve_structured_pass_verdict or failed_subagent_cannot_turn_structured_pass_into_passing_report'\
+    \ -> 3 passed, 70 deselected.\n\nAll acceptance criteria met:\n- Exit code 124\
+    \ is classified as failed, not completed\n- Any non-zero exit code is not classified\
+    \ as completed\n- Timeout-killed agents do not produce pass verdicts"
+  files_changed: []
+  created_at: '2026-04-09T05:28:54+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: "Implementation satisfies T-0208 without additional code changes. Three\
+    \ mechanisms ensure exit code 124 (timeout) is classified as failed, not completed:\n\
+    \n1. litehive/agents/_manager.py \u2014 status is set to \"completed\" only when\
+    \ exit_code == 0; any non-zero exit is \"failed\" first. classify_execution_interruption\
+    \ can reclassify to \"interrupted\" but never to \"completed\".\n2. litehive/agents/_manager.py\
+    \ \u2014 SubagentInactivityTimeout handler explicitly sets exit_code=124 and status=\"\
+    failed\".\n3. litehive/engines/base.py \u2014 parse_stage_report_text downgrades\
+    \ structured STAGE_RESULT pass/accept verdicts to \"fail\" when subagent_status\
+    \ is not \"completed\", preventing timeout-killed agents from preserving passing\
+    \ verdicts.\n\nTests run: uv run pytest -q tests/test_tasks_and_subagents.py tests/test_stage_result_submission.py\
+    \ -k 'marks_generic_non_zero_exit_as_failed or kills_stale_live_process_using_stdout_mtime\
+    \ or timeout_cannot_preserve_structured_pass_verdict or failed_subagent_cannot_turn_structured_pass_into_passing_report'\
+    \ -> 3 passed, 70 deselected.\n\nAll acceptance criteria met:\n- Exit code 124\
+    \ is classified as failed, not completed\n- Any non-zero exit code is not classified\
+    \ as completed\n- Timeout-killed agents do not produce pass verdicts"
+  files_changed: []
+  created_at: '2026-04-09T05:29:19+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: "Implementation satisfies T-0208 without additional code changes. Three\
+    \ mechanisms ensure exit code 124 (timeout) is classified as failed, not completed:\n\
+    \n1. litehive/agents/_manager.py \u2014 status is set to \"completed\" only when\
+    \ exit_code == 0; any non-zero exit is \"failed\" first. classify_execution_interruption\
+    \ can reclassify to \"interrupted\" but never to \"completed\".\n2. litehive/agents/_manager.py\
+    \ \u2014 SubagentInactivityTimeout handler explicitly sets exit_code=124 and status=\"\
+    failed\".\n3. litehive/engines/base.py \u2014 parse_stage_report_text downgrades\
+    \ structured STAGE_RESULT pass/accept verdicts to \"fail\" when subagent_status\
+    \ is not \"completed\", preventing timeout-killed agents from preserving passing\
+    \ verdicts.\n\nTests run: uv run pytest -q tests/test_tasks_and_subagents.py tests/test_stage_result_submission.py\
+    \ -k 'marks_generic_non_zero_exit_as_failed or kills_stale_live_process_using_stdout_mtime\
+    \ or timeout_cannot_preserve_structured_pass_verdict or failed_subagent_cannot_turn_structured_pass_into_passing_report'\
+    \ -> 3 passed, 70 deselected.\n\nAll acceptance criteria met:\n- Exit code 124\
+    \ is classified as failed, not completed\n- Any non-zero exit code is not classified\
+    \ as completed\n- Timeout-killed agents do not produce pass verdicts"
+  files_changed: []
+  created_at: '2026-04-09T05:29:53+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: "Implementation satisfies T-0208 without additional code changes. Three\
+    \ mechanisms ensure exit code 124 (timeout) is classified as failed, not completed:\n\
+    \n1. litehive/agents/_manager.py \u2014 status is set to \"completed\" only when\
+    \ exit_code == 0; any non-zero exit is \"failed\" first. classify_execution_interruption\
+    \ can reclassify to \"interrupted\" but never to \"completed\".\n2. litehive/agents/_manager.py\
+    \ \u2014 SubagentInactivityTimeout handler explicitly sets exit_code=124 and status=\"\
+    failed\".\n3. litehive/engines/base.py \u2014 parse_stage_report_text downgrades\
+    \ structured STAGE_RESULT pass/accept verdicts to \"fail\" when subagent_status\
+    \ is not \"completed\", preventing timeout-killed agents from preserving passing\
+    \ verdicts.\n\nTests run: uv run pytest -q tests/test_tasks_and_subagents.py tests/test_stage_result_submission.py\
+    \ -k 'marks_generic_non_zero_exit_as_failed or kills_stale_live_process_using_stdout_mtime\
+    \ or timeout_cannot_preserve_structured_pass_verdict or failed_subagent_cannot_turn_structured_pass_into_passing_report'\
+    \ -> 3 passed, 70 deselected.\n\nAll acceptance criteria met:\n- Exit code 124\
+    \ is classified as failed, not completed\n- Any non-zero exit code is not classified\
+    \ as completed\n- Timeout-killed agents do not produce pass verdicts"
+  files_changed: []
+  created_at: '2026-04-09T05:30:18+00:00'

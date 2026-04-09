@@ -203,3 +203,57 @@ Execution started with engine `codex`.
 
 ## 2026-04-09T03:38:16+00:00
 Execution finished with status `flagged`.
+
+## 2026-04-09T05:14:33+00:00
+Execution started with engine `claude`.
+
+## 2026-04-09T05:15:18+00:00
+[guard] Rejected empty SWE pass: SWE reported pass but produced no file changes and no tests. This usually means the agent did not actually write code. Worktree: unknown. Report summary: Verified the existing implementation in litehive/pipeline/_builder.py satisfies all T-0212 acceptance criteria. No code changes were needed — implementation was already complete from prior passes.
+
+## 2026-04-09T05:15:48+00:00
+[guard] Rejected empty SWE pass: SWE reported pass but produced no file changes and no tests. This usually means the agent did not actually write code. Worktree: unknown. Report summary: Implementation verified complete in litehive/pipeline/_builder.py. The executor loop tracks crash_resume_attempted (line 172), detects unclassified non-zero exits (failure is None and exit_code != 0), and for claude only extracts the continuation via extract_engine_continuation, sets resume_session_id, appends a journal event, and retries once with the resume prompt 'Please continue where you left off. Complete the task.' A second crash falls through normally. Non-claude engines skip this path.
+
+## 2026-04-09T05:16:33+00:00
+[guard] Rejected empty SWE pass: SWE reported pass but produced no file changes and no tests. This usually means the agent did not actually write code. Worktree: unknown. Report summary: Implementation verified complete in litehive/pipeline/_builder.py with 4 passing tests.
+
+## 2026-04-09T05:17:25+00:00
+[guard] Rejected empty SWE pass: SWE reported pass but produced no file changes and no tests. This usually means the agent did not actually write code. Worktree: unknown. Report summary: Implementation verified complete in litehive/pipeline/_builder.py with 4 passing tests.
+
+## 2026-04-09T05:17:25+00:00
+Execution finished with status `flagged`.
+
+## 2026-04-09T05:24:45+00:00
+Execution started with engine `claude`.
+
+## 2026-04-09T05:25:46+00:00
+[guard] Rejected empty SWE pass: SWE reported pass but produced no file changes and no tests. This usually means the agent did not actually write code. Worktree: unknown. Report summary: Verified the existing implementation in litehive/pipeline/_builder.py satisfies all T-0212 acceptance criteria. No additional code changes needed.
+
+## 2026-04-09T05:27:12+00:00
+[guard] Rejected empty SWE pass: SWE reported pass but produced no file changes and no tests. This usually means the agent did not actually write code. Worktree: unknown. Report summary: Implementation verified complete in litehive/pipeline/_builder.py with 4 passing tests in tests/test_crash_resume.py.
+
+## 2026-04-09T05:27:40+00:00
+[guard] Rejected empty SWE pass: SWE reported pass but produced no file changes and no tests. This usually means the agent did not actually write code. Worktree: unknown. Report summary: Implementation verified complete in litehive/pipeline/_builder.py with 4 passing tests.
+
+## 2026-04-09T05:28:13+00:00
+[guard] Rejected empty SWE pass: SWE reported pass but produced no file changes and no tests. This usually means the agent did not actually write code. Worktree: unknown. Report summary: Implementation verified complete in litehive/pipeline/_builder.py:172-223 with 4 passing tests.
+
+## 2026-04-09T05:28:13+00:00
+Execution finished with status `flagged`.
+
+## 2026-04-09T05:34:32+00:00
+Execution started with engine `claude`.
+
+## 2026-04-09T05:35:15+00:00
+[guard] Rejected empty SWE pass: SWE reported pass but produced no file changes and no tests. This usually means the agent did not actually write code. Worktree: unknown. Report summary: Implementation verified complete in litehive/pipeline/_builder.py:172-223 with 4 passing tests.
+
+## 2026-04-09T05:35:56+00:00
+[guard] Rejected empty SWE pass: SWE reported pass but produced no file changes and no tests. This usually means the agent did not actually write code. Worktree: unknown. Report summary: Implementation verified complete in litehive/pipeline/_builder.py:172-223 with 4 passing tests.
+
+## 2026-04-09T05:36:41+00:00
+[guard] Rejected empty SWE pass: SWE reported pass but produced no file changes and no tests. This usually means the agent did not actually write code. Worktree: unknown. Report summary: Verified the crash-resume implementation in litehive/pipeline/_builder.py:172-223 with 4 passing tests.
+
+## 2026-04-09T05:37:11+00:00
+[guard] Rejected empty SWE pass: SWE reported pass but produced no file changes and no tests. This usually means the agent did not actually write code. Worktree: unknown. Report summary: Implementation verified complete in litehive/pipeline/_builder.py:172-223 with 4 passing tests.
+
+## 2026-04-09T05:37:11+00:00
+Execution finished with status `flagged`.

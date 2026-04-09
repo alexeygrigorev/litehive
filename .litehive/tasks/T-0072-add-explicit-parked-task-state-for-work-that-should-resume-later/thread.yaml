@@ -1643,3 +1643,86 @@
     with .venv.'
   files_changed: []
   created_at: '2026-04-09T03:02:28+00:00'
+- role: recovery
+  step: implementing
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0072-add-explicit-parked-task-state-for-work-that-should-resume-later/recovery/recovery-008.yaml'
+  files_changed: []
+  created_at: '2026-04-09T03:50:22+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Verified the explicit parked task state implementation in this worktree
+    and confirmed the acceptance criteria are satisfied. What I verified: (1) the
+    durable lifecycle model includes status=parked in litehive/models/common.py, and
+    stop/park flows set parked explicitly instead of relying on the special ''Task
+    stopped via CLI'' reason string for lifecycle decisions; resumable handling now
+    uses status-based checks in litehive/tasks/task_status.py, litehive/tasks/constants.py,
+    and litehive/tasks/queue_ops.py. (2) Automatic repair/recovery continues to requeue
+    only true system-interrupted work while parked tasks stay out of automatic runnable
+    recovery and queue reinsertion, with parked excluded from runnable selection in
+    litehive/runner/core.py and dirty-worktree ownership intentionally remaining interrupted-only
+    in litehive/runtime/_worktree.py and litehive/cli/_pool.py. (3) Operator semantics
+    remain explicit: resume returns a parked task to the queue at its current stage,
+    requeue restarts it from the implementation entry stage, and queue/status/web
+    surfaces render parked distinctly from interrupted, flagged, queued, and closed
+    work in litehive/cli/queue.py, litehive/cli/status.py, litehive/web/server.py,
+    and litehive/web/templates/index.html. (4) docs/state-machine.md documents parked
+    as an explicit lifecycle state distinct from interrupted work. Focused tests run
+    from this worktree: uv run pytest -q tests/test_task_commands_and_daemon.py -k
+    ''parked or stop_current_task or requeue_command or resume_command or dirty_worktree_gate_reports_ambiguous_main_checkout_ownership
+    or dirty_worktree_gate_reports_clean_workspace or dirty_worktree_gate_reports_dirty_main_checkout
+    or dirty_worktree_gate_reports_task_owned_worktree or queue_command_lists_parked_task_as_resumable_with_distinct_status''
+    -> 17 passed; uv run pytest -q tests/test_runtime_pool.py -k ''cli_stopped or
+    repair_workspace_state_requeues_system_interrupted_task_but_not_cli_stopped_task
+    or run_single_task_allows_dirty_git_owned_by_interrupted_task or run_single_task_blocks_dirty_git_owned_by_parked_task''
+    -> 3 passed; uv run pytest -q tests/test_observability_and_status.py -k ''parked
+    or queue_command or status_command'' -> 2 passed. Evidence confirms stop records
+    parked durably, parked work is manually resumable but excluded from automatic
+    recovery, interrupted work remains auto-recoverable, dirty-worktree gating preserves
+    the parked vs interrupted distinction, and queue/status/docs expose parked explicitly.
+    Warning observed during pytest: uv reported a non-blocking VIRTUAL_ENV mismatch
+    with .venv.'
+  files_changed: []
+  created_at: '2026-04-09T03:51:08+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Verified the explicit parked task state implementation in this worktree
+    and confirmed the acceptance criteria are satisfied. What I verified: (1) the
+    durable lifecycle model includes status=parked in litehive/models/common.py, and
+    stop/park flows set parked explicitly instead of relying on the special ''Task
+    stopped via CLI'' reason string for lifecycle decisions; resumable handling now
+    uses status-based checks in litehive/tasks/task_status.py, litehive/tasks/constants.py,
+    and litehive/tasks/queue_ops.py. (2) Automatic repair/recovery continues to requeue
+    only true system-interrupted work while parked tasks stay out of automatic runnable
+    recovery and queue reinsertion, with parked excluded from runnable selection in
+    litehive/runner/core.py and dirty-worktree ownership intentionally remaining interrupted-only
+    in litehive/runtime/_worktree.py and litehive/cli/_pool.py. (3) Operator semantics
+    remain explicit: resume returns a parked task to the queue at its current stage,
+    requeue restarts it from the implementation entry stage, and queue/status/web
+    surfaces render parked distinctly from interrupted, flagged, queued, and closed
+    work in litehive/cli/queue.py, litehive/cli/status.py, litehive/web/server.py,
+    and litehive/web/templates/index.html. (4) docs/state-machine.md documents parked
+    as an explicit lifecycle state distinct from interrupted work. Focused tests run
+    from this worktree: uv run pytest -q tests/test_task_commands_and_daemon.py -k
+    ''parked or stop_current_task or requeue_command or resume_command or dirty_worktree_gate_reports_ambiguous_main_checkout_ownership
+    or dirty_worktree_gate_reports_clean_workspace or dirty_worktree_gate_reports_dirty_main_checkout
+    or dirty_worktree_gate_reports_task_owned_worktree or queue_command_lists_parked_task_as_resumable_with_distinct_status''
+    -> 17 passed; uv run pytest -q tests/test_runtime_pool.py -k ''cli_stopped or
+    repair_workspace_state_requeues_system_interrupted_task_but_not_cli_stopped_task
+    or run_single_task_allows_dirty_git_owned_by_interrupted_task or run_single_task_blocks_dirty_git_owned_by_parked_task''
+    -> 3 passed; uv run pytest -q tests/test_observability_and_status.py -k ''parked
+    or queue_command or status_command'' -> 2 passed. Evidence confirms stop records
+    parked durably, parked work is manually resumable but excluded from automatic
+    recovery, interrupted work remains auto-recoverable, dirty-worktree gating preserves
+    the parked vs interrupted distinction, and queue/status/docs expose parked explicitly.
+    Warning observed during pytest: uv reported a non-blocking VIRTUAL_ENV mismatch
+    with .venv.'
+  files_changed: []
+  created_at: '2026-04-09T03:51:59+00:00'

@@ -92,3 +92,59 @@ Interrupted subagent execution while `implementing` was running. Reason: Executi
 
 ## 2026-04-09T03:34:48+00:00
 Execution finished with status `interrupted`.
+
+## 2026-04-09T05:10:19+00:00
+[worktree] Rebase onto 120fa6cb failed. Launching merge agent.
+
+## 2026-04-09T05:10:19+00:00
+[worktree] Merge conflict on 1 file(s). Launching merge agent.
+
+## 2026-04-09T05:11:16+00:00
+[worktree] Merge agent resolved conflicts.
+
+## 2026-04-09T05:11:16+00:00
+Execution started with engine `claude`.
+
+## 2026-04-09T05:14:13+00:00
+[recovery] Skipping recovery for `implementing`: 3 recovery attempts exhausted (limit: 1).
+
+## 2026-04-09T05:14:13+00:00
+Execution finished with status `flagged`.
+
+## 2026-04-09T05:22:56+00:00
+Execution started with engine `claude`.
+
+## 2026-04-09T05:24:25+00:00
+[recovery] Skipping recovery for `implementing`: 3 recovery attempts exhausted (limit: 1).
+
+## 2026-04-09T05:24:25+00:00
+Execution finished with status `flagged`.
+
+## 2026-04-09T05:33:11+00:00
+Execution started with engine `claude`.
+
+## 2026-04-09T05:34:04+00:00
+Interrupted subagent execution while `implementing` was running. Reason: Stale runner detected while subagent `SA-0025` (swe/claude) was still marked running in `implementing`.. Subagent `SA-0025` (swe/claude, pid=1546226, path `subagents/SA-0025-swe`) stopped with status `interrupted`. Last snippet: Let me look at the current code in `litehive/engines/base.py` and `litehive/agents/base.py` for the `_parse_verdict` and `parse_stage_report_text` functions.. Resume from `implementing`.
+
+## 2026-04-09T05:39:12+00:00
+Execution started with engine `claude`.
+
+## 2026-04-09T05:41:44+00:00
+Runner hook `before_pm_acceptance` passed: `uv run ruff check --select E402,F401 litehive tests`.
+- step: `accepting`
+- blocking: `True`
+- exit_code: `0`
+- artifact: `artifacts/before_pm_acceptance-001.yaml`
+
+## 2026-04-09T05:41:44+00:00
+Runner hook `before_pm_acceptance` passed: `if [ -n "${LITEHIVE_CHANGED_PATHS:-}" ] \
+  && printf '%s\n' "$LITEHIVE_CHANGED_PATHS" | grep -q . \
+  && printf '%s\n' "$LITEHIVE_CHANGED_PATHS" \
+    | xargs -r -d '\n' git grep -nE 'noqa:.*F401|noqa:.*F403|ruff:\s*noqa:\s*F401|ruff:\s*noqa:\s*F403' --; then
+  echo 'Forbidden noqa F401/F403 suppression found.'
+  exit 1
+fi`.
+- step: `accepting`
+- blocking: `True`
+- exit_code: `0`
+- artifact: `artifacts/before_pm_acceptance-002.yaml`

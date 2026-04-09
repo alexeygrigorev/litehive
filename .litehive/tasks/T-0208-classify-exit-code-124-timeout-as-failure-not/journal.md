@@ -383,3 +383,60 @@ Execution started with engine `codex`.
 
 ## 2026-04-09T02:58:18+00:00
 Execution finished with status `flagged`.
+
+## 2026-04-09T03:45:03+00:00
+Execution started with engine `codex`.
+
+## 2026-04-09T03:46:27+00:00
+[guard] Rejected empty SWE pass: SWE reported pass but produced no file changes and no tests. This usually means the agent did not actually write code. Worktree: unknown. Report summary: Verified the current branch already satisfies T-0208 without code changes. In litehive/agents/_manager.py:162-208, subagent status is set to completed only when exit_code == 0; any non-zero exit is classified as failed first, classify_execution_interruption can only reclassify those non-zero exits to interrupted, and the inactivity-timeout path rewrites stale executions to exit_code 124 with status failed. In litehive/agents/base.py:553-585, parse_stage_report_text downgrades structured STAGE_RESULT pass/accept verdicts to fail whenever subagent_status is not completed, so timeout-killed or otherwise non-zero exits cannot preserve a passing verdict from partial output. Verified with focused tests: uv run pytest -q tests/test_tasks_and_subagents.py tests/test_stage_result_submission.py -k 'marks_generic_non_zero_exit_as_failed or kills_stale_live_process_using_stdout_mtime or timeout_cannot_preserve_structured_pass_verdict or failed_subagent_cannot_turn_structured_pass_into_passing_report' -> 3 passed, 70 deselected in 0.52s. Evidence confirms the acceptance criteria: exit code 124 is failed rather than completed, any non-zero exit is not classified as completed, and timeout-killed agents do not produce pass verdicts in persisted reports.
+
+## 2026-04-09T03:47:34+00:00
+[guard] Rejected empty SWE pass: SWE reported pass but produced no file changes and no tests. This usually means the agent did not actually write code. Worktree: unknown. Report summary: Verified the current branch already satisfies T-0208 without additional code changes. In litehive/agents/_manager.py:162-208, subagent status is set to completed only when exit_code == 0; any non-zero exit is classified as failed first, classify_execution_interruption can only reclassify those non-zero exits to interrupted, and the inactivity-timeout path rewrites stale executions to exit_code 124 with status failed. In litehive/agents/base.py:553-580, parse_stage_report_text downgrades structured STAGE_RESULT pass/accept verdicts to fail whenever subagent_status is not completed, so timeout-killed or otherwise non-zero exits cannot preserve a passing verdict from partial output. Verified with focused tests: uv run pytest -q tests/test_tasks_and_subagents.py tests/test_stage_result_submission.py -k 'marks_generic_non_zero_exit_as_failed or kills_stale_live_process_using_stdout_mtime or timeout_cannot_preserve_structured_pass_verdict or failed_subagent_cannot_turn_structured_pass_into_passing_report' -> 3 passed, 70 deselected in 0.45s. Evidence confirms the acceptance criteria: exit code 124 is failed rather than completed, any non-zero exit is not classified as completed, and timeout-killed agents do not produce pass verdicts in persisted reports.
+
+## 2026-04-09T03:48:45+00:00
+[guard] Rejected empty SWE pass: SWE reported pass but produced no file changes and no tests. This usually means the agent did not actually write code. Worktree: unknown. Report summary: Verified the current branch already satisfies T-0208 without additional code changes. In litehive/agents/_manager.py, subagent status is set to completed only when exit_code == 0; any non-zero exit is classified as failed first, classify_execution_interruption can only reclassify those non-zero exits to interrupted, and the inactivity-timeout path rewrites stale executions to exit_code 124 with status failed. In litehive/agents/base.py, parse_stage_report_text downgrades structured STAGE_RESULT pass/accept verdicts to fail whenever subagent_status is not completed, so timeout-killed or otherwise non-zero exits cannot preserve a passing verdict from partial output. Verified with focused tests: uv run pytest -q tests/test_tasks_and_subagents.py tests/test_stage_result_submission.py -k 'marks_generic_non_zero_exit_as_failed or kills_stale_live_process_using_stdout_mtime or timeout_cannot_preserve_structured_pass_verdict or failed_subagent_cannot_turn_structured_pass_into_passing_report' -> 3 passed, 70 deselected in 0.55s. Evidence confirms the acceptance criteria: exit code 124 is failed rather than completed, any non-zero exit is not classified as completed, and timeout-killed agents do not produce pass verdicts in persisted reports.
+
+## 2026-04-09T03:50:08+00:00
+[guard] Rejected empty SWE pass: SWE reported pass but produced no file changes and no tests. This usually means the agent did not actually write code. Worktree: unknown. Report summary: Verified the current branch already satisfies T-0208 without code changes. In litehive/subagents/_execution.py, the compatibility module delegates to litehive/agents/_execution.py and the real status classification in litehive/agents/_manager.py sets subagent status to completed only when exit_code == 0; any non-zero exit is classified as failed first, and classify_execution_interruption can only reclassify those non-zero exits to interrupted, never completed. The inactivity-timeout path explicitly rewrites stale executions to exit_code 124 with status failed. In litehive/engines/base.py, parse_stage_report_text downgrades structured STAGE_RESULT pass/accept verdicts to fail whenever subagent_status is not completed, so timeout-killed or otherwise non-zero exits cannot preserve a passing verdict from partial output. Verified with focused tests: uv run pytest -q tests/test_tasks_and_subagents.py tests/test_stage_result_submission.py -k 'marks_generic_non_zero_exit_as_failed or kills_stale_live_process_using_stdout_mtime or timeout_cannot_preserve_structured_pass_verdict or failed_subagent_cannot_turn_structured_pass_into_passing_report' -> 3 passed, 70 deselected in 0.54s. Evidence confirms the acceptance criteria: exit code 124 is failed rather than completed, any non-zero exit is not classified as completed, and timeout-killed agents do not produce pass verdicts in persisted reports.
+
+## 2026-04-09T03:50:08+00:00
+Execution finished with status `flagged`.
+
+## 2026-04-09T05:17:45+00:00
+Execution started with engine `claude`.
+
+## 2026-04-09T05:18:11+00:00
+[guard] Rejected empty SWE pass: SWE reported pass but produced no file changes and no tests. This usually means the agent did not actually write code. Worktree: unknown. Report summary: Verified the implementation satisfies T-0208 without additional code changes. Three key mechanisms are in place: (1) In litehive/agents/_manager.py, subagent status is set to completed only when exit_code == 0; any non-zero exit is classified as failed first, and classify_execution_interruption can only reclassify to interrupted, never completed. The inactivity-timeout path rewrites stale executions to exit_code 124 with status failed. (2) In litehive/engines/base.py, parse_stage_report_text downgrades structured STAGE_RESULT pass/accept verdicts to fail when subagent_status is not completed, preventing timeout-killed agents from preserving passing verdicts. Tests run: uv run pytest -q tests/test_tasks_and_subagents.py tests/test_stage_result_submission.py -k 'marks_generic_non_zero_exit_as_failed or kills_stale_live_process_using_stdout_mtime or timeout_cannot_preserve_structured_pass_verdict or failed_subagent_cannot_turn_structured_pass_into_passing_report' -> 3 passed. All acceptance criteria met: exit code 124 is classified as failed, non-zero exits are never completed, and timeout-killed agents cannot produce pass verdicts.
+
+## 2026-04-09T05:19:35+00:00
+[guard] Rejected empty SWE pass: SWE reported pass but produced no file changes and no tests. This usually means the agent did not actually write code. Worktree: unknown. Report summary: Implementation satisfies T-0208 without additional code changes. Three mechanisms ensure exit code 124 (timeout) is classified as failed, not completed:
+
+## 2026-04-09T05:20:11+00:00
+[guard] Rejected empty SWE pass: SWE reported pass but produced no file changes and no tests. This usually means the agent did not actually write code. Worktree: unknown. Report summary: Implementation satisfies T-0208 without additional code changes. Three mechanisms ensure exit code 124 (timeout) is classified as failed, not completed:
+
+## 2026-04-09T05:20:41+00:00
+[guard] Rejected empty SWE pass: SWE reported pass but produced no file changes and no tests. This usually means the agent did not actually write code. Worktree: unknown. Report summary: Implementation satisfies T-0208 without additional code changes. Three mechanisms ensure exit code 124 (timeout) is classified as failed, not completed:
+
+## 2026-04-09T05:20:41+00:00
+Execution finished with status `flagged`.
+
+## 2026-04-09T05:28:33+00:00
+Execution started with engine `claude`.
+
+## 2026-04-09T05:28:59+00:00
+[guard] Rejected empty SWE pass: SWE reported pass but produced no file changes and no tests. This usually means the agent did not actually write code. Worktree: unknown. Report summary: Implementation satisfies T-0208 without additional code changes. Three mechanisms ensure exit code 124 (timeout) is classified as failed, not completed:
+
+## 2026-04-09T05:29:25+00:00
+[guard] Rejected empty SWE pass: SWE reported pass but produced no file changes and no tests. This usually means the agent did not actually write code. Worktree: unknown. Report summary: Implementation satisfies T-0208 without additional code changes. Three mechanisms ensure exit code 124 (timeout) is classified as failed, not completed:
+
+## 2026-04-09T05:29:58+00:00
+[guard] Rejected empty SWE pass: SWE reported pass but produced no file changes and no tests. This usually means the agent did not actually write code. Worktree: unknown. Report summary: Implementation satisfies T-0208 without additional code changes. Three mechanisms ensure exit code 124 (timeout) is classified as failed, not completed:
+
+## 2026-04-09T05:30:23+00:00
+[guard] Rejected empty SWE pass: SWE reported pass but produced no file changes and no tests. This usually means the agent did not actually write code. Worktree: unknown. Report summary: Implementation satisfies T-0208 without additional code changes. Three mechanisms ensure exit code 124 (timeout) is classified as failed, not completed:
+
+## 2026-04-09T05:30:23+00:00
+Execution finished with status `flagged`.
+
+## 2026-04-09T05:34:12+00:00
+Task closed: deferred. Keeps failing - needs investigation
