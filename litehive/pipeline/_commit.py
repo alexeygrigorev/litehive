@@ -95,9 +95,8 @@ def _commit_to_git_report(
                             save_task(root, task)
                             append_journal(root, task,
                                 f"Merge conflict on {len(conflicts)} file(s). Launching merge agent (attempt {task.git.merge_agent_attempts}).")
-                            engine_name = (config.recovery_engine if config and config.recovery_engine
-                                           else task.engine or (config.default_engine if config else "codex"))
-                            model = resolve_model(task, config, engine_name=engine_name) if config else None
+                            from litehive.pipeline._recovery import _resolve_recovery_engine
+                            engine_name, model = _resolve_recovery_engine(task, config)
                             subagents.run(
                                 task, role="merge-resolver", engine_name=engine_name, model=model,
                                 prompt=(
