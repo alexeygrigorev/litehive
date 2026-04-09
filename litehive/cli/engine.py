@@ -1,8 +1,8 @@
 from datetime import datetime, timezone
 
 from litehive.config import load_config, ensure_workspace, config_path
-from litehive.engines import ENGINE_CHOICES
-from litehive.engines.quota import check_codex_quota
+from litehive.agents import ENGINE_CHOICES
+from litehive.agents.quota import check_codex_quota
 from litehive.observability import load_engine_monitoring
 from litehive.observability._engine_monitoring import record_codex_quota_check
 
@@ -205,15 +205,15 @@ def _load_live_quota(engine_name: str):
     if engine_name == "codex":
         return check_codex_quota()
     if engine_name == "claude":
-        from litehive.engines.quota.claude_quota import check_claude_quota
+        from litehive.agents.quota.claude_quota import check_claude_quota
 
         return check_claude_quota()
     if engine_name == "copilot":
-        from litehive.engines.quota.copilot_quota import check_copilot_quota
+        from litehive.agents.quota.copilot_quota import check_copilot_quota
 
         return check_copilot_quota()
     if engine_name in ("goz", "opencode"):
-        from litehive.engines.quota.zai_quota import check_zai_quota
+        from litehive.agents.quota.zai_quota import check_zai_quota
 
         return check_zai_quota()
     return None

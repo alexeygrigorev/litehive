@@ -1,6 +1,6 @@
 from litehive.config import ensure_workspace
 from litehive.git_ops import GitError, checkpoint_message
-from litehive.runtime import (
+from litehive.pipeline import (
     recover_completed_task,
     inspect_dirty_worktree_gate,
     rollback_completed_task,

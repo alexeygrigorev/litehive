@@ -4,8 +4,8 @@ import yaml
 
 from litehive.config import ensure_workspace
 from litehive.models import RuntimeStageState, SubagentRef
-from litehive.runner import TaskExecutionRunner
-from litehive.runtime import _attempt_commit_recovery
+from litehive.pipeline import TaskExecutionRunner
+from litehive.pipeline import _attempt_commit_recovery
 from litehive.subagents import SubagentResult
 from litehive.tasks import (
     create_task,

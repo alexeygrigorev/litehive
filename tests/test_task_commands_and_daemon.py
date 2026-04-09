@@ -1559,7 +1559,7 @@ def test_resume_run_uses_structured_continuation_handoff_after_interruption(
             tmp_path, current_task.pipeline_status, engine_name=engine_name, task=current_task
         )
 
-    monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_run)
+    monkeypatch.setattr("litehive.pipeline.SubagentManager.run", fake_run)
 
     summary = run_next_task(tmp_path)
 
@@ -2861,7 +2861,7 @@ def test_pool_summary_reports_closed_tasks_with_reason_and_follow_up(
             transcript="", exit_code=0,
         )
 
-    monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_run)
+    monkeypatch.setattr("litehive.pipeline.SubagentManager.run", fake_run)
 
     closed = create_task(tmp_path, title="Not now")
     follow_up = create_task(tmp_path, title="Revisit later")
@@ -3565,14 +3565,14 @@ def test_run_task_skips_pre_acceptance_hook_when_not_configured(
         return real_run(*args, **kwargs)
 
     monkeypatch.setattr(
-        "litehive.runtime.SubagentManager.run",
+        "litehive.pipeline.SubagentManager.run",
         lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
             _completed_subagent_result(  # type: ignore[no-untyped-def]
                 tmp_path, task.pipeline_status, task=task
             )
         ),
     )
-    monkeypatch.setattr("litehive.runtime.subprocess.run", fail_run)
+    monkeypatch.setattr("litehive.pipeline.subprocess.run", fail_run)
 
     summary = run_next_task(tmp_path)
 
@@ -3600,7 +3600,7 @@ def test_run_next_task_records_structured_resource_limit_outcome(
     create_task(tmp_path, title="Native code task", auto_commit=False)
 
     monkeypatch.setattr(
-        "litehive.runtime.SubagentManager.run",
+        "litehive.pipeline.SubagentManager.run",
         lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
             _resource_limited_subagent_result(  # type: ignore[no-untyped-def]
                 tmp_path, "grooming", engine_name=engine_name
@@ -3701,8 +3701,8 @@ def test_run_task_runs_pre_acceptance_hook_after_testing_passes(
         assert env["LITEHIVE_HOOK_POINT"] == "before_pm_acceptance"
         return subprocess.CompletedProcess(argv, 0, stdout="ruff clean\n", stderr="")
 
-    monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_subagent_run)
-    monkeypatch.setattr("litehive.runtime.subprocess.run", fake_hook)
+    monkeypatch.setattr("litehive.pipeline.SubagentManager.run", fake_subagent_run)
+    monkeypatch.setattr("litehive.pipeline.subprocess.run", fake_hook)
 
     summary = run_next_task(tmp_path)
 
@@ -3739,7 +3739,7 @@ def test_collect_changed_hook_paths_limits_scope_to_code_paths(tmp_path: Path) -
     changed_file.write_text("def test_scope_target():\n    assert True\n", encoding="utf-8")
     (tmp_path / "README-extra.md").write_text("outside hook scope\n", encoding="utf-8")
 
-    from litehive.runtime._hooks import _collect_changed_hook_paths
+    from litehive.pipeline._hooks import _collect_changed_hook_paths
 
     assert _collect_changed_hook_paths(tmp_path) == ["tests/test_scope_target.py"]
 
@@ -3764,8 +3764,8 @@ def test_run_task_blocks_before_accepting_when_pre_acceptance_hook_fails(
     def fake_hook(argv, cwd, capture_output, text, check, env=None):  # type: ignore[no-untyped-def]
         return subprocess.CompletedProcess(argv, 1, stdout="", stderr="F401 unused import\n")
 
-    monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_subagent_run)
-    monkeypatch.setattr("litehive.runtime.subprocess.run", fake_hook)
+    monkeypatch.setattr("litehive.pipeline.SubagentManager.run", fake_subagent_run)
+    monkeypatch.setattr("litehive.pipeline.subprocess.run", fake_hook)
 
     summary = run_next_task(tmp_path)
 
@@ -3826,8 +3826,8 @@ def test_run_task_records_non_blocking_runner_hook_failure_and_continues(
             return subprocess.CompletedProcess(argv, 7, stdout="pre\n", stderr="hook warning\n")
         return subprocess.CompletedProcess(argv, 0, stdout="", stderr="")
 
-    monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_subagent_run)
-    monkeypatch.setattr("litehive.runtime.subprocess.run", fake_hook)
+    monkeypatch.setattr("litehive.pipeline.SubagentManager.run", fake_subagent_run)
+    monkeypatch.setattr("litehive.pipeline.subprocess.run", fake_hook)
 
     summary = run_next_task(tmp_path)
 
@@ -3879,8 +3879,8 @@ def test_run_task_blocks_when_post_implementation_runner_hook_fails(
             return subprocess.CompletedProcess(argv, 9, stdout="post\n", stderr="bad diff\n")
         return subprocess.CompletedProcess(argv, 0, stdout="", stderr="")
 
-    monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_subagent_run)
-    monkeypatch.setattr("litehive.runtime.subprocess.run", fake_hook)
+    monkeypatch.setattr("litehive.pipeline.SubagentManager.run", fake_subagent_run)
+    monkeypatch.setattr("litehive.pipeline.subprocess.run", fake_hook)
 
     summary = run_next_task(tmp_path)
 
@@ -3934,8 +3934,8 @@ def test_run_task_runs_after_acceptance_runner_hook_on_accept(
             return subprocess.CompletedProcess(argv, 0, stdout="accepted\n", stderr="")
         return subprocess.CompletedProcess(argv, 0, stdout="", stderr="")
 
-    monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_subagent_run)
-    monkeypatch.setattr("litehive.runtime.subprocess.run", fake_hook)
+    monkeypatch.setattr("litehive.pipeline.SubagentManager.run", fake_subagent_run)
+    monkeypatch.setattr("litehive.pipeline.subprocess.run", fake_hook)
 
     summary = run_next_task(tmp_path)
 

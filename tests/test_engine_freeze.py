@@ -154,7 +154,7 @@ def test_engine_set_subcommand(tmp_path: Path, capsys) -> None:
 
 def test_frozen_engine_skipped_in_attempt_order(tmp_path: Path) -> None:
     """Frozen engines are removed from the attempt order."""
-    from litehive.runtime import resolve_engine_attempt_order
+    from litehive.pipeline import resolve_engine_attempt_order
 
     future = (datetime.now(timezone.utc) + timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
     config = LitehiveConfig(
@@ -171,7 +171,7 @@ def test_frozen_engine_skipped_in_attempt_order(tmp_path: Path) -> None:
 
 def test_expired_freeze_not_skipped(tmp_path: Path) -> None:
     """Engines with expired freezes are not skipped."""
-    from litehive.runtime import resolve_engine_attempt_order
+    from litehive.pipeline import resolve_engine_attempt_order
 
     past = (datetime.now(timezone.utc) - timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
     config = LitehiveConfig(
@@ -185,7 +185,7 @@ def test_expired_freeze_not_skipped(tmp_path: Path) -> None:
 
 
 def test_is_engine_frozen_and_active_freezes() -> None:
-    from litehive.runtime import is_engine_frozen, active_engine_freezes
+    from litehive.pipeline import is_engine_frozen, active_engine_freezes
 
     future = (datetime.now(timezone.utc) + timedelta(hours=2)).strftime("%Y-%m-%dT%H:%M:%SZ")
     past = (datetime.now(timezone.utc) - timedelta(hours=2)).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -269,7 +269,7 @@ def test_parser_accepts_set_subcommand() -> None:
 
 def test_frozen_engine_in_fallback_chain_skipped(tmp_path: Path) -> None:
     """When a fallback engine is frozen, it's skipped but others remain."""
-    from litehive.runtime import resolve_engine_attempt_order
+    from litehive.pipeline import resolve_engine_attempt_order
 
     future = (datetime.now(timezone.utc) + timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
     config = LitehiveConfig(

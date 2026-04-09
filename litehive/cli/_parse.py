@@ -5,7 +5,7 @@ import tempfile
 
 import yaml
 
-from litehive.engines import ENGINE_CHOICES
+from litehive.agents import ENGINE_CHOICES
 from litehive.tasks import (
     VALID_PM_COMPLEXITIES,
     VALID_PLANNED_EFFORTS,

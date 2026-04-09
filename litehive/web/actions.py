@@ -5,7 +5,7 @@ import yaml
 
 from litehive.config import config_path, load_config
 from litehive.models import StageReport, TaskRecord, TaskThreadComment
-from litehive.runner.states import _ROUTES
+from litehive.pipeline.states import _ROUTES
 from litehive.tasks import (
     _apply_stage_finished,
     _apply_task_outcome,

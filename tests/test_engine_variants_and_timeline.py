@@ -51,7 +51,7 @@ def test_engine_registry_uses_adapter_defaults_and_public_lookup_api() -> None:
 
 
 def test_adapters_package_does_not_export_private_adapter_internals() -> None:
-    import litehive.engines.adapters as adapters
+    import litehive.agents.adapters as adapters
 
     assert not hasattr(adapters, "_OPENCODE_STRIPPED_ENV_VARS")
     assert not hasattr(adapters, "_CLAUDE_STREAM_EVENT_ADAPTER")
@@ -65,7 +65,7 @@ def test_adapters_package_does_not_export_private_adapter_internals() -> None:
 
 
 def test_claude_build_invocation_includes_model_and_resume(tmp_path: Path) -> None:
-    from litehive.engines import ClaudeCLIAdapter
+    from litehive.agents import ClaudeCLIAdapter
 
     adapter = ClaudeCLIAdapter(
         name="claude",
@@ -121,7 +121,7 @@ def test_claude_build_invocation_includes_model_and_resume(tmp_path: Path) -> No
 
 def test_claude_build_invocation_uses_stdin_for_large_prompt(tmp_path: Path) -> None:
     """Prompts exceeding MAX_ARG_STRLEN are piped via stdin, not -p."""
-    from litehive.engines import ClaudeCLIAdapter
+    from litehive.agents import ClaudeCLIAdapter
 
     adapter = ClaudeCLIAdapter(
         name="claude",
@@ -184,7 +184,7 @@ def test_codex_build_invocation_uses_exec_for_resume_with_session_context(tmp_pa
 
 
 def test_claude_no_max_turns_by_default(tmp_path: Path) -> None:
-    from litehive.engines import ClaudeCLIAdapter
+    from litehive.agents import ClaudeCLIAdapter
 
     adapter = ClaudeCLIAdapter(
         name="claude",
@@ -201,7 +201,7 @@ def test_claude_no_max_turns_by_default(tmp_path: Path) -> None:
 
 
 def test_claude_build_invocation_includes_max_turns(tmp_path: Path) -> None:
-    from litehive.engines import ClaudeCLIAdapter
+    from litehive.agents import ClaudeCLIAdapter
 
     adapter = ClaudeCLIAdapter(
         name="claude",
@@ -230,7 +230,7 @@ def test_run_next_task_passes_configured_claude_max_turns(
         calls.append(max_turns)
         return _completed_subagent_result(tmp_path, task.pipeline_status, engine_name="claude", task=task)
 
-    monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_subagent_run)
+    monkeypatch.setattr("litehive.pipeline.SubagentManager.run", fake_subagent_run)
 
     summary = run_next_task(tmp_path)
 
@@ -242,7 +242,7 @@ def test_run_next_task_passes_configured_claude_max_turns(
 
 
 def test_claude_renders_jsonl_transcript_and_stage_report(tmp_path: Path) -> None:
-    from litehive.engines import ClaudeCLIAdapter
+    from litehive.agents import ClaudeCLIAdapter
 
     execution = CLIExecutionResult(
         adapter="claude",
@@ -288,7 +288,7 @@ def test_claude_renders_jsonl_transcript_and_stage_report(tmp_path: Path) -> Non
 
 
 def test_claude_renders_partial_stream_events_for_live_capture(tmp_path: Path) -> None:
-    from litehive.engines import ClaudeCLIAdapter
+    from litehive.agents import ClaudeCLIAdapter
 
     execution = CLIExecutionResult(
         adapter="claude",
@@ -396,7 +396,7 @@ def test_claude_live_progress_report_uses_adapter_summary_for_restart_snippet(
 
 
 def test_claude_stage_report_uses_error_when_no_assistant_message(tmp_path: Path) -> None:
-    from litehive.engines import ClaudeCLIAdapter
+    from litehive.agents import ClaudeCLIAdapter
 
     execution = CLIExecutionResult(
         adapter="claude",
@@ -743,7 +743,7 @@ def test_configure_updates_existing_workspace_budget_settings(tmp_path: Path) ->
 
 
 def test_claude_model_resolved_from_workspace_defaults() -> None:
-    from litehive.runtime import workspace_model_for_engine
+    from litehive.pipeline import workspace_model_for_engine
 
     config = LitehiveConfig(claude_model="claude-sonnet-4-20250514")
     assert workspace_model_for_engine(config, "claude") == "claude-sonnet-4-20250514"
