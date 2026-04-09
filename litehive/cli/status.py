@@ -75,11 +75,10 @@ def _cmd_status(args):
     config = load_config(args.workspace)
     state = load_state(args.workspace)
     monitoring = load_engine_monitoring(args.workspace)
-    fast_mode = bool(getattr(args, "fast", False))
     full_mode = bool(getattr(args, "full", False))
 
     if full_mode:
-        return _cmd_status_full(args, root, config, state, monitoring, fast_mode)
+        return _cmd_status_full(args, root, config, state, monitoring)
 
     # --- Dashboard mode (default) ---
     active_task = (
@@ -91,11 +90,7 @@ def _cmd_status(args):
         print(line)
 
     # Last Completed section
-    all_tasks = (
-        list_tasks_state_first(args.workspace, state=state)
-        if fast_mode
-        else list_tasks(args.workspace)
-    )
+    all_tasks = list_tasks_state_first(args.workspace, state=state)
     last_done = find_last_completed_task(all_tasks)
     print()
     for line in render_last_completed_section(last_done):
@@ -122,10 +117,10 @@ def _cmd_status(args):
     return 0
 
 
-def _cmd_status_full(args, root, config, state, monitoring, fast_mode):
+def _cmd_status_full(args, root, config, state, monitoring):
     """Full verbose status output (--full flag)."""
     print(f"workspace: {args.workspace}")
-    print(f"status_read_mode: {'fast' if fast_mode else 'full'}")
+    print("status_read_mode: full")
     print(f"default_engine: {config.default_engine}")
     freezes = active_engine_freezes(config)
     if freezes:
@@ -175,11 +170,7 @@ def _cmd_status_full(args, root, config, state, monitoring, fast_mode):
     print(f"pool_stop_on_dirty_git: {config.pool_stop_on_dirty_git}")
     print(f"pool_selection_policy: {config.pool_selection_policy}")
     print(f"process_profile: {config.process_profile}")
-    tasks = (
-        list_tasks_state_first(args.workspace, state=state)
-        if fast_mode
-        else list_tasks(args.workspace)
-    )
+    tasks = list_tasks(args.workspace)
     if tasks:
         print()
         for task in tasks:

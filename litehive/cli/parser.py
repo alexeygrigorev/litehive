@@ -211,7 +211,7 @@ def build_parser():
     status.add_argument(
         "--fast",
         action="store_true",
-        help="Read workspace state first and skip runtime hydration for faster summaries",
+        help="Deprecated compatibility alias; fast status is now the default",
     )
 
     engine = subparsers.add_parser(
