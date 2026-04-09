@@ -12,9 +12,14 @@ from litehive.tasks import (
     _persist_task_and_state_without_runner_guard,
     _workspace_lock,
     VALID_TASK_ENGINES,
+    abandon_task,
     append_thread_comment,
+    close_task,
+    create_task,
     load_state,
+    requeue_task,
     require_task,
+    stop_current_task,
     switch_task_engine,
     task_dir,
     update_task,
@@ -24,10 +29,19 @@ from litehive.web.common import (
     _WEB_REVIEWABLE_STAGES,
     _WEB_VERDICT_OPTIONS,
     _coerce_text_list,
+    _field_or_missing,
+    _list_field_or_missing,
+    _list_or_missing,
     _load_yaml_file,
+    _optional_bool,
+    _optional_string,
+    _optional_string_list,
+    _optional_update_priority,
+    _require_string,
 )
 from litehive.web.snapshot import (
     _serialize_task,
+    _serialize_task_with_queue_metadata,
     read_engine_dashboard,
 )
 
@@ -208,6 +222,104 @@ def submit_stage_verdict_via_web(
                 "role": cleaned_role,
             },
         }
+
+
+# ---------------------------------------------------------------------------
+# Task mutation actions (create, update, close, requeue, abandon, stop)
+# ---------------------------------------------------------------------------
+
+
+def create_task_via_web(root: Path, payload: dict[str, Any]) -> dict[str, Any]:
+    root = root.resolve()
+    title = _require_string(payload, "title")
+    task = create_task(
+        root,
+        title=title,
+        goal=_optional_string(payload, "goal") or "",
+        priority=_optional_string(payload, "priority"),
+        engine=_optional_string(payload, "engine"),
+        acceptance_criteria=_optional_string_list(payload, "acceptance_criteria"),
+    )
+    return {
+        "ok": True,
+        "task_id": task.id,
+        "task": _serialize_task_with_queue_metadata(root, task),
+    }
+
+
+def update_task_via_web(root: Path, task_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    root = root.resolve()
+    if not payload:
+        raise ValueError("Update payload must include at least one field")
+    plan = payload.get("plan", payload.get("plan_steps", ...))
+    task = update_task(
+        root,
+        task_id,
+        goal=_field_or_missing(payload, "goal"),
+        priority=_optional_update_priority(payload),
+        engine=_field_or_missing(payload, "engine"),
+        acceptance_criteria=_list_field_or_missing(payload, "acceptance_criteria"),
+        constraints=_list_field_or_missing(payload, "constraints"),
+        plan=_list_or_missing(plan, "plan"),
+        journal_message="Task updated via web dashboard.",
+    )
+    return {
+        "ok": True,
+        "task_id": task.id,
+        "task": _serialize_task_with_queue_metadata(root, task),
+    }
+
+
+def close_task_via_web(root: Path, task_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    root = root.resolve()
+    outcome = _require_string(payload, "outcome")
+    reason = _optional_string(payload, "reason")
+    task = close_task(root, task_id, outcome=outcome, reason=reason)
+    return {
+        "ok": True,
+        "task_id": task.id,
+        "task": _serialize_task_with_queue_metadata(root, task),
+    }
+
+
+def requeue_task_via_web(root: Path, task_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    root = root.resolve()
+    front = _optional_bool(payload, "front", default=False)
+    task = requeue_task(root, task_id, front=front)
+    serialized = _serialize_task_with_queue_metadata(root, task)
+    return {
+        "ok": True,
+        "task_id": task.id,
+        "front": front,
+        "queue_position": serialized["queue_position"],
+        "task": serialized,
+    }
+
+
+def abandon_task_via_web(root: Path, task_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    root = root.resolve()
+    if payload:
+        raise ValueError("Abandon endpoint does not accept request fields")
+    task = abandon_task(root, task_id)
+    return {
+        "ok": True,
+        "task_id": task.id,
+        "task": _serialize_task_with_queue_metadata(root, task),
+    }
+
+
+def stop_active_task_via_web(root: Path, payload: dict[str, Any]) -> dict[str, Any]:
+    root = root.resolve()
+    if payload:
+        raise ValueError("Stop endpoint does not accept request fields")
+    summary = stop_current_task(root)
+    return {
+        "ok": True,
+        "task_id": summary.task.id,
+        "task": _serialize_task_with_queue_metadata(root, summary.task),
+        "runner_pid": summary.runner_pid,
+        "signal_sent": summary.signal_sent,
+    }
 
 
 def _require_task_for_web(root: Path, task_id: str) -> TaskRecord:

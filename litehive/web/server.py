@@ -218,10 +218,62 @@ class LitehiveWebHandler(BaseHTTPRequestHandler):
             return self._send_error_json(HTTPStatus.CONFLICT, str(exc))
         except ValueError as exc:
             return self._send_error_json(HTTPStatus.BAD_REQUEST, str(exc))
+        # --- Task mutation endpoints ---
+        if parsed.path == "/api/tasks":
+            return self._handle_task_mutation(
+                lambda: _web_pkg.create_task_via_web(self.workspace_root, payload),
+                status=HTTPStatus.CREATED,
+            )
+        if parsed.path == "/api/tasks/active/stop":
+            return self._handle_task_mutation(
+                lambda: _web_pkg.stop_active_task_via_web(self.workspace_root, payload),
+            )
+        task_id, action = self._parse_task_action_path(parsed.path)
+        if task_id is not None and action is not None:
+            handlers = {
+                "update": lambda: _web_pkg.update_task_via_web(
+                    self.workspace_root, task_id, payload
+                ),
+                "close": lambda: _web_pkg.close_task_via_web(
+                    self.workspace_root, task_id, payload
+                ),
+                "requeue": lambda: _web_pkg.requeue_task_via_web(
+                    self.workspace_root, task_id, payload
+                ),
+                "abandon": lambda: _web_pkg.abandon_task_via_web(
+                    self.workspace_root, task_id, payload
+                ),
+            }
+            handler = handlers.get(action)
+            if handler is not None:
+                return self._handle_task_mutation(handler)
         return self._send_error_json(HTTPStatus.NOT_FOUND, "Not found")
 
     def log_message(self, format: str, *args: Any) -> None:  # noqa: A003
         return
+
+    @staticmethod
+    def _parse_task_action_path(path: str) -> tuple[str | None, str | None]:
+        parts = [part for part in path.split("/") if part]
+        if len(parts) != 4 or parts[:2] != ["api", "tasks"]:
+            return None, None
+        return parts[2], parts[3]
+
+    def _handle_task_mutation(
+        self,
+        handler: Any,
+        *,
+        status: HTTPStatus = HTTPStatus.OK,
+    ) -> None:
+        try:
+            response = handler()
+        except FileNotFoundError as exc:
+            return self._send_error_json(HTTPStatus.BAD_REQUEST, str(exc))
+        except WorkspaceConflictError as exc:
+            return self._send_error_json(HTTPStatus.CONFLICT, str(exc))
+        except ValueError as exc:
+            return self._send_error_json(HTTPStatus.BAD_REQUEST, str(exc))
+        return self._send_json(response, status=status)
 
     def _send_html(self, body: str) -> None:
         encoded = body.encode("utf-8")
@@ -243,7 +295,7 @@ class LitehiveWebHandler(BaseHTTPRequestHandler):
         self.wfile.write(encoded)
 
     def _send_error_json(self, status: HTTPStatus, message: str) -> None:
-        payload = json.dumps({"error": message}).encode("utf-8")
+        payload = json.dumps({"ok": False, "error": message}).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Cache-Control", "no-store")

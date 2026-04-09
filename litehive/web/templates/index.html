@@ -173,6 +173,78 @@
     .kv div:nth-child(odd) { color: var(--muted); }
     .section { margin-top: 18px; }
     .section:first-child { margin-top: 0; }
+    .form-grid { display: grid; gap: 10px; }
+    .form-row { display: grid; gap: 8px; }
+    .form-row.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    label {
+      display: grid;
+      gap: 6px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+    input, select, textarea {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 10px 12px;
+      font: inherit;
+      color: var(--ink);
+      background: white;
+    }
+    textarea {
+      min-height: 84px;
+      resize: vertical;
+    }
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 12px;
+    }
+    .action-btn {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 8px 12px;
+      background: white;
+      cursor: pointer;
+      font: inherit;
+    }
+    .action-btn.primary {
+      border-color: var(--accent);
+      background: var(--accent);
+      color: white;
+    }
+    .action-btn.danger {
+      border-color: var(--danger);
+      color: var(--danger);
+      background: var(--danger-soft);
+    }
+    .action-btn.warn {
+      border-color: #d4a756;
+      color: var(--warn);
+      background: var(--warn-soft);
+    }
+    .status-note {
+      margin-top: 10px;
+      padding: 10px 12px;
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      background: #fff;
+      font-size: 13px;
+    }
+    .status-note.error {
+      border-color: #e0a193;
+      background: var(--danger-soft);
+      color: var(--danger);
+    }
+    .checkbox {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+    .checkbox input { width: auto; }
     ul.flat { list-style: none; padding: 0; margin: 8px 0 0; display: grid; gap: 8px; }
     li.card, .card {
       border: 1px solid var(--line);
@@ -301,6 +373,7 @@
     @media (max-width: 1320px) {
       main { grid-template-columns: 1fr; }
       .task-list { max-height: none; }
+      .form-row.two { grid-template-columns: 1fr; }
     }
     @media (max-width: 720px) {
       .grid-two { grid-template-columns: 1fr; }
@@ -317,12 +390,43 @@
       <span class="badge mono" id="workspace-path">...</span>
       <span class="badge mono" id="transport-badge">starting</span>
     </div>
+    <div id="page-message"></div>
   </header>
   <main>
     <section class="panel">
       <div class="hd">
         <h2>Queue</h2>
         <span class="muted mono" id="queue-summary"></span>
+      </div>
+      <div class="bd">
+        <form class="form-grid" id="create-task-form">
+          <label>Title
+            <input name="title" placeholder="New task title" required>
+          </label>
+          <div class="form-row two">
+            <label>Priority
+              <select name="priority">
+                <option value="">default</option>
+                <option value="low">low</option>
+                <option value="medium">medium</option>
+                <option value="high">high</option>
+              </select>
+            </label>
+            <label>Engine
+              <input name="engine" placeholder="Optional engine">
+            </label>
+          </div>
+          <label>Goal
+            <textarea name="goal" placeholder="Optional goal"></textarea>
+          </label>
+          <label>Acceptance Criteria
+            <textarea name="acceptance_criteria" placeholder="One item per line"></textarea>
+          </label>
+          <div class="actions">
+            <button class="action-btn primary" type="submit">Create task</button>
+            <button class="action-btn danger" type="button" id="stop-active-header">Stop active</button>
+          </div>
+        </form>
       </div>
       <div class="task-list" id="task-list"></div>
       <div class="queue-feedback muted" id="queue-feedback"></div>
@@ -363,6 +467,8 @@
       queueFeedbackLevel: "muted",
       mutatingQueue: false,
       daemonAction: null,
+      message: "",
+      messageIsError: false,
     };
     const POLL_INTERVAL_MS = {{ poll_interval_ms }};
     const STREAM_ERROR_FALLBACK_MS = 8000;
@@ -469,6 +575,17 @@
         .filter(Boolean);
     }
 
+    function listToLines(items) {
+      return (items || []).join("\n");
+    }
+
+    function linesToList(value) {
+      return String(value || "")
+        .split("\n")
+        .map((item) => item.trim())
+        .filter(Boolean);
+    }
+
     async function fetchJson(url, options = {}) {
       const response = await fetch(url, {
         cache: "no-store",
@@ -502,6 +619,16 @@
         throw new Error(data.error || `${response.status} ${response.statusText}`);
       }
       return data;
+    }
+
+    function setMessage(message, isError = false) {
+      state.message = message;
+      state.messageIsError = isError;
+      const node = document.getElementById("page-message");
+      if (!node) return;
+      node.innerHTML = message
+        ? `<div class="status-note ${isError ? "error" : ""}">${esc(message)}</div>`
+        : "";
     }
 
     function chooseDefaults(snapshot) {
@@ -976,6 +1103,8 @@
           <div>Events file</div><div class="mono">${esc(task.events_file)}</div>
           <div>Reports dir</div><div class="mono">${esc(task.reports_dir)}</div>
           <div>Recovery dir</div><div class="mono">${esc(task.recovery_dir)}</div>
+          <div>Priority</div><div>${esc(task.priority || "-")}</div>
+          <div>Goal</div><div>${esc(task.goal || "-")}</div>
           <div>Current stage</div><div>${esc(task.current_stage.step || "-")} / ${esc(task.current_stage.status || "-")}</div>
           <div>Last stage</div><div>${esc(task.last_stage.step || "-")} / ${esc(task.last_stage.verdict || "-")}</div>
         </div>
@@ -998,6 +1127,63 @@
         <div class="section">
           <h3>Recovery Artifacts</h3>
           ${renderRecovery(task)}
+        </div>
+        <div class="section">
+          <h3>Actions</h3>
+          <form class="form-grid" id="task-update-form">
+            <div class="form-row two">
+              <label>Priority
+                <select name="priority">
+                  <option value="">unchanged</option>
+                  <option value="low" ${task.priority === "low" ? "selected" : ""}>low</option>
+                  <option value="medium" ${task.priority === "medium" ? "selected" : ""}>medium</option>
+                  <option value="high" ${task.priority === "high" ? "selected" : ""}>high</option>
+                </select>
+              </label>
+              <label>Engine
+                <input name="engine" value="${esc(task.engine || "")}" placeholder="codex, gemini, opencode...">
+              </label>
+            </div>
+            <label>Goal
+              <textarea name="goal" placeholder="Task goal">${esc(task.goal || "")}</textarea>
+            </label>
+            <label>Acceptance Criteria
+              <textarea name="acceptance_criteria" placeholder="One item per line">${esc(listToLines(task.acceptance_criteria))}</textarea>
+            </label>
+            <label>Constraints
+              <textarea name="constraints" placeholder="One item per line">${esc(listToLines(task.constraints))}</textarea>
+            </label>
+            <label>Plan Steps
+              <textarea name="plan_steps" placeholder="One item per line">${esc(listToLines(task.plan))}</textarea>
+            </label>
+            <div class="actions">
+              <button class="action-btn primary" type="submit">Update task</button>
+            </div>
+          </form>
+          <form class="form-grid section" id="task-close-form">
+            <div class="form-row two">
+              <label>Close Outcome
+                <select name="outcome">
+                  <option value="wont_do">wont_do</option>
+                  <option value="deferred">deferred</option>
+                  <option value="duplicate">duplicate</option>
+                </select>
+              </label>
+              <label>Reason
+                <input name="reason" placeholder="Optional reason">
+              </label>
+            </div>
+            <div class="actions">
+              <button class="action-btn warn" type="submit">Close task</button>
+              <button class="action-btn" type="button" id="task-requeue-button">Requeue</button>
+              <label class="checkbox">
+                <input type="checkbox" id="task-requeue-front">
+                <span>front of queue</span>
+              </label>
+              <button class="action-btn danger" type="button" id="task-abandon-button">Abandon</button>
+              ${task.is_active_task ? `<button class="action-btn danger" type="button" id="task-stop-button">Stop active task</button>` : ""}
+            </div>
+          </form>
         </div>
         <div class="section">
           <h3>Subagent Sessions</h3>
@@ -1059,6 +1245,67 @@
           await submitTaskVerdict(task.id, task.pipeline_status, verdict);
         });
       }
+      container.querySelector("#task-update-form")?.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const form = new FormData(event.currentTarget);
+        try {
+          const result = await postJson(`/api/tasks/${encodeURIComponent(task.id)}/update`, {
+            goal: form.get("goal"),
+            priority: form.get("priority") || null,
+            engine: form.get("engine") || null,
+            acceptance_criteria: linesToList(form.get("acceptance_criteria")),
+            constraints: linesToList(form.get("constraints")),
+            plan_steps: linesToList(form.get("plan_steps")),
+          });
+          setMessage(`Updated ${result.task_id}.`);
+          await refreshSnapshot();
+        } catch (error) {
+          setMessage(error.message, true);
+        }
+      });
+      container.querySelector("#task-close-form")?.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const form = new FormData(event.currentTarget);
+        try {
+          const result = await postJson(`/api/tasks/${encodeURIComponent(task.id)}/close`, {
+            outcome: form.get("outcome"),
+            reason: form.get("reason") || null,
+          });
+          setMessage(`Closed ${result.task_id} as ${result.task.status}.`);
+          await refreshSnapshot();
+        } catch (error) {
+          setMessage(error.message, true);
+        }
+      });
+      container.querySelector("#task-requeue-button")?.addEventListener("click", async () => {
+        try {
+          const result = await postJson(`/api/tasks/${encodeURIComponent(task.id)}/requeue`, {
+            front: Boolean(container.querySelector("#task-requeue-front")?.checked),
+          });
+          setMessage(`Requeued ${result.task_id}${result.queue_position ? ` at position ${result.queue_position}` : ""}.`);
+          await refreshSnapshot();
+        } catch (error) {
+          setMessage(error.message, true);
+        }
+      });
+      container.querySelector("#task-abandon-button")?.addEventListener("click", async () => {
+        try {
+          const result = await postJson(`/api/tasks/${encodeURIComponent(task.id)}/abandon`, {});
+          setMessage(`Abandoned ${result.task_id}.`);
+          await refreshSnapshot();
+        } catch (error) {
+          setMessage(error.message, true);
+        }
+      });
+      container.querySelector("#task-stop-button")?.addEventListener("click", async () => {
+        try {
+          const result = await postJson("/api/tasks/active/stop", {});
+          setMessage(`Stopped active task ${result.task_id}.`);
+          await refreshSnapshot();
+        } catch (error) {
+          setMessage(error.message, true);
+        }
+      });
     }
 
     function renderRunAll(snapshot) {
@@ -1464,6 +1711,36 @@
       .catch(() => {
         startPolling("poll {{ poll_seconds }}s");
       });
+
+    document.getElementById("create-task-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const form = new FormData(event.currentTarget);
+      try {
+        const result = await postJson("/api/tasks", {
+          title: form.get("title"),
+          goal: form.get("goal") || null,
+          priority: form.get("priority") || null,
+          engine: form.get("engine") || null,
+          acceptance_criteria: linesToList(form.get("acceptance_criteria")),
+        });
+        event.currentTarget.reset();
+        state.selectedTaskId = result.task_id;
+        setMessage(`Created ${result.task_id}.`);
+        await refreshSnapshot();
+      } catch (error) {
+        setMessage(error.message, true);
+      }
+    });
+
+    document.getElementById("stop-active-header").addEventListener("click", async () => {
+      try {
+        const result = await postJson("/api/tasks/active/stop", {});
+        setMessage(`Stopped active task ${result.task_id}.`);
+        await refreshSnapshot();
+      } catch (error) {
+        setMessage(error.message, true);
+      }
+    });
   </script>
 </body>
 </html>
