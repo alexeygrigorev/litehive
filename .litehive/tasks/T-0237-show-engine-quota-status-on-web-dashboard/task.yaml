@@ -7,14 +7,14 @@ engine: null
 model: null
 mode: implementation
 pipeline_mode: full
-status: in_progress
+status: done
 flag_reason: null
-pipeline_status: commit_to_git
+pipeline_status: done
 priority: medium
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-08T20:28:05+00:00'
-updated_at: '2026-04-09T00:54:14+00:00'
+updated_at: '2026-04-09T00:55:38+00:00'
 goal: Display real-time quota usage for all engines on the web dashboard. Each engine
   should show current usage percentage, remaining quota, and reset time. Use the existing
   quota modules in litehive/engines/quota/.
@@ -62,16 +62,16 @@ subagents:
 - id: SA-0005
   role: merge-resolver
   engine: claude
-  status: running
+  status: completed
   path: subagents/SA-0005-merge-resolver
   sandboxed: false
   sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0237 show-engine-quota-status-on-web-dashboard'
-  commit_sha: null
-  checkpoint_base_sha: null
-  checkpoint_attempts: 0
+  commit_sha: 3114875f192700909a7dbbc98bffb8fb704f4fef
+  checkpoint_base_sha: 1a7516483037d376b57b9ea1a0677a0885ba6843
+  checkpoint_attempts: 1
   rolled_back_checkpoint_attempt: null
   merge_agent_attempts: 1
   worktree_path: null

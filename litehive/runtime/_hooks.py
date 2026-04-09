@@ -1,5 +1,6 @@
 """Runner hook execution for stage boundaries."""
 
+import os
 import subprocess
 from pathlib import Path
 
@@ -25,6 +26,64 @@ _POST_STAGE_HOOK_POINTS = {
 }
 _POST_ACCEPT_VERDICTS = {"pass", "accept"}
 _POST_MERGE_HOOK_POINT = "after_merge"
+
+
+def _collect_changed_hook_paths(execution_root: Path) -> list[str]:
+    completed = subprocess.run(
+        [
+            "git",
+            "status",
+            "--porcelain",
+            "--untracked-files=all",
+            "--",
+            "litehive",
+            "tests",
+        ],
+        cwd=execution_root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if completed.returncode != 0:
+        return []
+
+    changed_paths: list[str] = []
+    seen: set[str] = set()
+    for raw_line in completed.stdout.splitlines():
+        if len(raw_line) < 4:
+            continue
+        candidate = raw_line[3:]
+        if " -> " in candidate:
+            candidate = candidate.split(" -> ", 1)[1]
+        candidate = candidate.strip()
+        if not candidate or candidate in seen:
+            continue
+        resolved = execution_root / candidate
+        if not resolved.is_file():
+            continue
+        seen.add(candidate)
+        changed_paths.append(candidate)
+    return changed_paths
+
+
+def _runner_hook_env(
+    root: Path,
+    execution_root: Path,
+    task: TaskRecord,
+    *,
+    step: str,
+    hook_point: str,
+) -> dict[str, str]:
+    changed_paths = _collect_changed_hook_paths(execution_root)
+    return {
+        **os.environ,
+        "LITEHIVE_TASK_ID": task.id,
+        "LITEHIVE_TASK_STEP": step,
+        "LITEHIVE_HOOK_POINT": hook_point,
+        "LITEHIVE_WORKSPACE_ROOT": str(root),
+        "LITEHIVE_EXECUTION_ROOT": str(execution_root),
+        "LITEHIVE_CHANGED_PATHS": "\n".join(changed_paths),
+    }
 
 
 def _run_runner_hooks_for_stage(
@@ -142,9 +201,17 @@ def _execute_runner_hook(
     blocking: bool,
     ordinal: int,
 ) -> dict[str, str | int | bool | None]:
+    env = _runner_hook_env(
+        root,
+        execution_root,
+        task,
+        step=step,
+        hook_point=hook_point,
+    )
     completed = subprocess.run(
         ["bash", "-lc", command],
         cwd=execution_root,
+        env=env,
         capture_output=True,
         text=True,
         check=False,

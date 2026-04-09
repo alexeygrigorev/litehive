@@ -3552,14 +3552,24 @@ def test_run_task_runs_pre_acceptance_hook_after_testing_passes(
         calls.append(task.pipeline_status)
         return _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
 
-    def fake_hook(argv, cwd, capture_output, text, check):  # type: ignore[no-untyped-def]
+    def fake_hook(argv, cwd, capture_output, text, check, env=None):  # type: ignore[no-untyped-def]
         if list(argv) != ["bash", "-lc", "uv run ruff check litehive tests"]:
-            return real_run(argv, cwd=cwd, capture_output=capture_output, text=text, check=check)
+            return real_run(
+                argv,
+                cwd=cwd,
+                env=env,
+                capture_output=capture_output,
+                text=text,
+                check=check,
+            )
         assert list(argv) == ["bash", "-lc", "uv run ruff check litehive tests"]
         assert cwd == tmp_path
         assert capture_output is True
         assert text is True
         assert check is False
+        assert env is not None
+        assert env["LITEHIVE_TASK_STEP"] == "accepting"
+        assert env["LITEHIVE_HOOK_POINT"] == "before_pm_acceptance"
         return subprocess.CompletedProcess(argv, 0, stdout="ruff clean\n", stderr="")
 
     monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_subagent_run)
@@ -3592,6 +3602,18 @@ def test_run_task_runs_pre_acceptance_hook_after_testing_passes(
     assert accepting_report["hook_results"][0]["point"] == "before_pm_acceptance"
     assert "runner hook passed" in "\n".join(accepting_report["warnings"])
 
+
+def test_collect_changed_hook_paths_limits_scope_to_code_paths(tmp_path: Path) -> None:
+    _init_git_repo(tmp_path)
+    changed_file = tmp_path / "tests" / "test_scope_target.py"
+    changed_file.parent.mkdir(parents=True, exist_ok=True)
+    changed_file.write_text("def test_scope_target():\n    assert True\n", encoding="utf-8")
+    (tmp_path / "README-extra.md").write_text("outside hook scope\n", encoding="utf-8")
+
+    from litehive.runtime._hooks import _collect_changed_hook_paths
+
+    assert _collect_changed_hook_paths(tmp_path) == ["tests/test_scope_target.py"]
+
 def test_run_task_blocks_before_accepting_when_pre_acceptance_hook_fails(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -3610,7 +3632,7 @@ def test_run_task_blocks_before_accepting_when_pre_acceptance_hook_fails(
         calls.append(task.pipeline_status)
         return _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
 
-    def fake_hook(argv, cwd, capture_output, text, check):  # type: ignore[no-untyped-def]
+    def fake_hook(argv, cwd, capture_output, text, check, env=None):  # type: ignore[no-untyped-def]
         return subprocess.CompletedProcess(argv, 1, stdout="", stderr="F401 unused import\n")
 
     monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_subagent_run)
@@ -3659,7 +3681,7 @@ def test_run_task_records_non_blocking_runner_hook_failure_and_continues(
         calls.append(task.pipeline_status)
         return _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
 
-    def fake_hook(argv, cwd, capture_output, text, check):  # type: ignore[no-untyped-def]
+    def fake_hook(argv, cwd, capture_output, text, check, env=None):  # type: ignore[no-untyped-def]
         if list(argv) == ["bash", "-lc", "echo pre && exit 7"]:
             return subprocess.CompletedProcess(argv, 7, stdout="pre\n", stderr="hook warning\n")
         return subprocess.CompletedProcess(argv, 0, stdout="", stderr="")
@@ -3712,7 +3734,7 @@ def test_run_task_blocks_when_post_implementation_runner_hook_fails(
             return _completed_subagent_result(tmp_path, task.pipeline_status)
         return _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
 
-    def fake_hook(argv, cwd, capture_output, text, check):  # type: ignore[no-untyped-def]
+    def fake_hook(argv, cwd, capture_output, text, check, env=None):  # type: ignore[no-untyped-def]
         if list(argv) == ["bash", "-lc", "echo post && exit 9"]:
             return subprocess.CompletedProcess(argv, 9, stdout="post\n", stderr="bad diff\n")
         return subprocess.CompletedProcess(argv, 0, stdout="", stderr="")
@@ -3756,7 +3778,7 @@ def test_run_task_runs_after_acceptance_runner_hook_on_accept(
     def fake_subagent_run(self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None):  # type: ignore[no-untyped-def]
         return _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
 
-    def fake_hook(argv, cwd, capture_output, text, check):  # type: ignore[no-untyped-def]
+    def fake_hook(argv, cwd, capture_output, text, check, env=None):  # type: ignore[no-untyped-def]
         if list(argv) == ["bash", "-lc", "echo accepted"]:
             return subprocess.CompletedProcess(argv, 0, stdout="accepted\n", stderr="")
         return subprocess.CompletedProcess(argv, 0, stdout="", stderr="")

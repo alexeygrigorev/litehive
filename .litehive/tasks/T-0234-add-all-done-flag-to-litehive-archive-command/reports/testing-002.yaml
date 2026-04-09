@@ -1,0 +1,47 @@
+task_id: T-0234
+step: testing
+verdict: pass
+summary: 'Validated the archive CLI change with focused QA checks. Ran uv run pytest
+  tests/test_archive.py -q -> 21 passed in 1.33s. Confirmed coverage in tests/test_archive.py
+  for single-task archive via task_id, explicit bulk archive via --all-done, no-arg
+  archive printing subcommand help with exit code 2, and logging skipped broken/missing
+  done-task references as archive skipped: <task_id> (<reason>) while continuing and
+  reporting archived_count. Also ran a direct CLI check against a temporary configured
+  workspace: uv run litehive archive --workspace <tmpdir> printed usage for litehive
+  archive including --all-done and exited 2. Code inspection in litehive/cli/parser.py,
+  litehive/cli/queue.py, and litehive/tasks/archive.py matches the expected control
+  flow: task_id archives one task, --all-done performs bulk archive, and bulk mode
+  continues on ValueError/FileNotFoundError with per-task skip logging instead of
+  failing the command. Acceptance criteria are met.'
+feedback: 'Validated the archive CLI change with focused QA checks. Ran uv run pytest
+  tests/test_archive.py -q -> 21 passed in 1.33s. Confirmed coverage in tests/test_archive.py
+  for single-task archive via task_id, explicit bulk archive via --all-done, no-arg
+  archive printing subcommand help with exit code 2, and logging skipped broken/missing
+  done-task references as archive skipped: <task_id> (<reason>) while continuing and
+  reporting archived_count. Also ran a direct CLI check against a temporary configured
+  workspace: uv run litehive archive --workspace <tmpdir> printed usage for litehive
+  archive including --all-done and exited 2. Code inspection in litehive/cli/parser.py,
+  litehive/cli/queue.py, and litehive/tasks/archive.py matches the expected control
+  flow: task_id archives one task, --all-done performs bulk archive, and bulk mode
+  continues on ValueError/FileNotFoundError with per-task skip logging instead of
+  failing the command. Acceptance criteria are met.'
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 49
+hook_results: []
+created_at: '2026-04-09T00:58:16+00:00'
