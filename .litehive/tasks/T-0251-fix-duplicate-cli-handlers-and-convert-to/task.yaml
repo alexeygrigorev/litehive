@@ -12,20 +12,32 @@ flag_reason: null
 flag_count: 0
 pipeline_status: backlog
 priority: high
-pm_complexity: null
-planned_effort: null
+pm_complexity: simple
+planned_effort: s
 created_at: '2026-04-09T09:16:09+00:00'
-updated_at: '2026-04-09T09:16:09+00:00'
-goal: cli/__init__.py has duplicate handlers (import-issue, import-issues, debug,
-  list, show appear twice) and 80+ if-statements. Remove duplicates, convert to a
-  dispatch table dict. Also remove duplicate import of _cmd_import_issue/_cmd_import_issues.
+updated_at: '2026-04-09T13:53:46+00:00'
+goal: Replace the duplicated top-level CLI branching in litehive/cli/__init__.py with
+  a single command dispatch table while preserving current command behavior, fallback
+  behavior, and daemon/worktree subcommand error handling.
 acceptance_criteria:
-- No duplicate command handlers in cli/__init__.py
-- Commands dispatched via dict lookup instead of if-chain
-- Daemon subcommands also use dispatch table
-- All existing tests pass including parser duplicate detection test
+- Running each top-level CLI command routes through one unique handler path in litehive/cli/__init__.py,
+  with no duplicate handler branches or duplicate github import helper imports remaining
+  in that module.
+- Top-level command execution is resolved by dictionary lookup rather than a long
+  if/elif chain, while preserving the existing handlers and return codes for supported
+  commands.
+- Daemon subcommands are resolved by a dedicated dispatch table and still raise the
+  same parser error when the daemon subcommand is missing or unsupported.
+- The parser duplicate-detection regression guard and the existing CLI test suite
+  relevant to command dispatch pass without requiring command name or argument changes.
 constraints: []
-plan: []
+plan:
+- Inspect litehive/cli/__init__.py and group top-level commands, daemon subcommands,
+  and worktree subcommands into explicit dispatch maps with the current handlers.
+- Refactor main() to resolve commands through dict lookup, keeping the existing run-next-task
+  and TUI fallback paths unchanged.
+- Remove duplicate imports and duplicate handler branches, then run targeted CLI/parser
+  tests that cover duplicate detection and dispatch behavior.
 human_checkpoints: []
 subagents: []
 git:
