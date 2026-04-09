@@ -1,0 +1,143 @@
+- role: planner
+  step: grooming
+  verdict: pass
+  message: 'Grooming complete. I updated T-0248 with PM sizing (simple, effort s),
+    a clarified goal, tightened acceptance criteria, one scope constraint, and a 3-step
+    implementation plan. Key verification: the packaged CLI entrypoint already routes
+    `litehive status` through the fast path in litehive.main unless --full is present,
+    so the remaining implementation is an alignment task rather than a net-new feature.
+    Evidence checked: pyproject.toml registers litehive = litehive.main:main; litehive/main.py
+    short-circuits status to _fast_status when --full is absent; litehive/cli/status.py
+    and parser still model fast mode as optional via args.fast/full; tests already
+    cover default dashboard output, explicit fast mode, and parser acceptance of --fast.
+    Commands run: uv run litehive status --workspace . confirmed default fast-style
+    output; uv run litehive status --workspace . --fast confirmed the legacy fast
+    invocation still succeeds; uv run pytest -q tests/test_observability_and_status.py
+    -k ''status and (fast_mode or default_dashboard or parser_accepts_status_fast_flag)''
+    passed (3 passed). Recommended SWE scope: make the status command path itself
+    default to fast/state-first reads, keep --full as the explicit verbose path, keep
+    --fast accepted as a no-op compatibility alias, and update targeted tests/help/docs
+    to reflect the new default consistently across direct _cmd_status and CLI entrypoint
+    behavior.'
+  files_changed: []
+  created_at: '2026-04-09T12:50:50+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Aligned the status command with the fast-by-default contract. In litehive/cli/status.py,
+    dashboard mode now always uses state-first reads by default, --full always routes
+    to the verbose per-task dump with status_read_mode: full, and --fast no longer
+    changes behavior. Updated litehive/cli/parser.py help text plus README.md and
+    .litehive/context.md to document --fast as a deprecated compatibility alias and
+    --full as the explicit verbose mode. Added/updated targeted coverage in tests/test_observability_and_status.py
+    to verify: default dashboard output remains the concise summary, --full ignores
+    --fast and keeps verbose hydrated task output, and default status vs status --fast
+    both succeed with the same dashboard-style sections. Verification: uv run pytest
+    -q tests/test_observability_and_status.py -> 73 passed in 8.87s. Direct CLI evidence:
+    uv run litehive status --workspace . and uv run litehive status --workspace .
+    --fast both returned the fast summary header (workspace/default_engine/mode/active_task_id/queued_tasks/queue_head/active
+    task fields), confirming the default swap and backwards-compatible alias behavior.'
+  files_changed: []
+  created_at: '2026-04-09T12:54:25+00:00'
+- role: qa
+  step: testing
+  verdict: pass
+  message: 'Verified the status-mode swap end to end. Targeted pytest coverage passed
+    with ....                                                                     [100%]
+
+    4 passed, 69 deselected in 0.56s -> 4 passed, 69 deselected in 0.53s. Full relevant
+    file also passed with ........................................................................
+    [ 98%]
+
+    .                                                                        [100%]
+
+    73 passed in 8.79s -> 73 passed in 9.47s, well under the 60s/file budget. Direct
+    CLI evidence on the real workspace: workspace: /home/alexey/git/litehive/.litehive/worktrees/T-0248-make-litehive-status-fast-by-default-add-full-for
+
+    default_engine: claude
+
+    mode: implementation
+
+    active_task_id: T-0246
+
+    queued_tasks: 20
+
+    pool_stop_reason: None
+
+    queue_head: T-0247
+
+    active_task_title: Add litehive worktree command to list and clean worktrees
+
+    active_task_status: in_progress/commit_to_git
+
+    active_stage: commit_to_git
+
+    active_engine: claude printed the fast summary header fields immediately; workspace:
+    /home/alexey/git/litehive/.litehive/worktrees/T-0248-make-litehive-status-fast-by-default-add-full-for
+
+    default_engine: claude
+
+    mode: implementation
+
+    active_task_id: T-0246
+
+    queued_tasks: 20
+
+    pool_stop_reason: None
+
+    queue_head: T-0247
+
+    active_task_title: Add litehive worktree command to list and clean worktrees
+
+    active_task_status: in_progress/commit_to_git
+
+    active_stage: commit_to_git
+
+    active_engine: claude produced byte-identical output to the default path ( exited
+    0), confirming  is a compatibility no-op; and an isolated workspace fixture invoked
+    through  returned  plus verbose hydrated fields (, ), confirming  still forces
+    the old verbose path even when  is present. Acceptance criteria met: default status
+    is fast/state-first,  preserves verbose output,  remains accepted without changing
+    behavior, and the existing targeted status test file passes.'
+  files_changed: []
+  created_at: '2026-04-09T12:57:29+00:00'
+- role: qa
+  step: testing
+  verdict: pass
+  message: 'Verified the status-mode swap end to end. Focused coverage passed with
+    uv run pytest -q tests/test_observability_and_status.py -k "status and (default_dashboard
+    or full_mode_ignores_fast_flag or default_and_fast_flag_match_dashboard_output
+    or parser_accepts_status_fast_flag)" -> 4 passed, 69 deselected in 0.53s. The
+    full relevant file also passed with uv run pytest -q tests/test_observability_and_status.py
+    -> 73 passed in 9.47s, well under the 60s per-file budget. Direct CLI evidence
+    on the real workspace: uv run litehive status --workspace . printed the fast summary
+    header fields immediately, and diff -u <(uv run litehive status --workspace .
+    2>/dev/null) <(uv run litehive status --workspace . --fast 2>/dev/null) exited
+    0, confirming --fast is a compatibility no-op. Additional isolated fixture evidence
+    through _cmd_status with full=True and fast=True returned status_read_mode: full
+    plus verbose hydrated task fields including run=running and stage=implementing,
+    confirming --full still forces the verbose path even when --fast is also present.
+    Acceptance criteria met: default status is fast/state-first, --full preserves
+    verbose output, --fast remains accepted without changing behavior, and the existing
+    targeted status test file passes.'
+  files_changed: []
+  created_at: '2026-04-09T12:57:44+00:00'
+- role: reviewer
+  step: accepting
+  verdict: pass
+  message: 'Accepted. Verified the implementation and current workspace behavior for
+    the status-mode swap. Code inspection confirms litehive/cli/status.py now uses
+    state-first reads by default in dashboard mode, ignores --fast there, and routes
+    --full through the hydrated verbose path with status_read_mode: full; litehive/cli/parser.py
+    keeps --fast accepted as a deprecated compatibility alias. Direct CLI check: uv
+    run litehive status --workspace . exited 0 and printed the concise fast summary
+    header immediately (workspace/default_engine/mode/active_task_id/queued_tasks/queue_head/active
+    task fields), confirming fast mode is now the default user path. Test evidence:
+    uv run pytest -q tests/test_observability_and_status.py -k "status and (default_dashboard
+    or full_mode_ignores_fast_flag or default_and_fast_flag_match_dashboard_output
+    or parser_accepts_status_fast_flag)" -> 4 passed, 69 deselected in 0.53s. Full
+    regression suite: uv run pytest -q -> 909 passed, 3 skipped in 140.55s. Acceptance
+    criteria met: default status is fast, --full preserves verbose output, --fast
+    remains a no-op compatibility flag, and existing tests pass.'
+  files_changed: []
+  created_at: '2026-04-09T13:00:59+00:00'

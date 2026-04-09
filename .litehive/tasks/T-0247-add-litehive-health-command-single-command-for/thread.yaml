@@ -1,0 +1,110 @@
+- role: planner
+  step: grooming
+  verdict: pass
+  message: 'Grooming pass. I verified the task is implementation-ready against the
+    current repo structure and updated the task record with PM sizing and a 4-step
+    implementation plan. Relevant existing seams already exist in litehive/cli/parser.py
+    and litehive/cli/__init__.py for a new top-level command; litehive/cli/status.py
+    plus litehive/observability/_status.py for active/completed/engine summary rendering;
+    litehive/cli/worktree.py and litehive/pipeline/_worktree.py for managed worktree
+    counts and dirty/stale ownership findings; litehive/cli/daemon.py plus litehive/daemon/_execution.py
+    for daemon running/stopped status; and litehive/cli/engine.py for proactive quota
+    checks. I did not run tests in grooming because this stage is task shaping only,
+    so AC 3 remains for later stages. Acceptance is now specific enough for implementation:
+    build a health summary that shows active task/stage, flagged tasks with flag reason
+    plus latest verdict/report summary, managed worktrees with change counts, dirty
+    or missing-recorded worktree findings, all engine quota statuses, daemon status,
+    and the last 3 completed tasks; return exit code 1 when flagged tasks exist, stale/dirty
+    worktree findings indicate problems, or an engine reports quota/rate/budget warnings,
+    otherwise 0. Key implementation note: reuse inspect_dirty_worktree_gate as the
+    source of truth for stale/dirty worktree problems instead of inventing separate
+    health logic.'
+  files_changed: []
+  created_at: '2026-04-09T12:35:22+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Implemented a new top-level ''health'' CLI command wired through parser
+    and dispatch. The command now aggregates workspace diagnostics in one view: active
+    task/stage, flagged tasks with flag reason and latest verdict summary, managed
+    worktrees with change counts, dirty/stale worktree findings from inspect_dirty_worktree_gate,
+    all engine quota statuses (including unsupported gemini), daemon running/stopped
+    status, and the last 3 completed tasks. Exit code returns 1 when flagged tasks
+    exist, a main-checkout/ambiguous/missing-recorded-worktree problem is present,
+    or any proactive engine quota reports warning/limit reached; otherwise 0. Verification:
+    uv run pytest tests/test_config_and_run_cli.py -q (60 passed) and uv run pytest
+    tests/test_observability_and_status.py -q (74 passed). New tests cover parser
+    wiring plus healthy/unhealthy health-command output and exit-code behavior, including
+    flagged summaries, worktree diagnostics, daemon status, quota warnings, and recent
+    completions.'
+  files_changed: []
+  created_at: '2026-04-09T12:44:24+00:00'
+- role: qa
+  step: testing
+  verdict: pass
+  message: 'Verified the new top-level health command in focused QA. Ran uv run pytest
+    tests/test_config_and_run_cli.py -q -k health_parser (1 passed), uv run pytest
+    tests/test_observability_and_status.py -q -k ''health_command_reports'' (2 passed),
+    then the full touched files uv run pytest tests/test_config_and_run_cli.py -q
+    (60 passed in 6.56s) and uv run pytest tests/test_observability_and_status.py
+    -q (74 passed in 10.42s). The tests independently confirm parser wiring plus healthy/unhealthy
+    health output and exit-code behavior: active task and stage, flagged tasks with
+    verdict summary, managed worktrees with change counts, dirty/stale worktree findings,
+    all engine quota lines including gemini unsupported, daemon status, and truncation
+    to the last 3 completed tasks. I also smoke-tested uv run litehive health --workspace
+    . in the current workspace; it executed end-to-end and returned exit code 1 because
+    the workspace currently has main-checkout dirty paths and a live Claude quota
+    warning, which matches the unhealthy-path contract rather than indicating a defect.
+    Acceptance criteria satisfied by focused automated coverage and direct CLI execution.'
+  files_changed: []
+  created_at: '2026-04-09T12:46:38+00:00'
+- role: recovery
+  step: accepting
+  verdict: blocked
+  message: '## Recovery diagnosis
+
+
+    **Root cause**: Task-level code bug, not a Litehive infrastructure issue.
+
+
+    The `before_pm_acceptance` runner hook correctly blocked acceptance because the
+    task worktree has an unused import in `tests/workspace_helpers.py:27`:
+
+
+    ```
+
+    F401 [*] `litehive.cli._cmd_health` imported but unused
+
+    ```
+
+
+    The implementing agent added `_cmd_health` to the import block but never used
+    it in the file. The QA agent passed testing without catching this lint violation.
+    The ruff gate (`uv run ruff check --select E402,F401 litehive tests`) then correctly
+    rejected the code.
+
+
+    **Classification**: Task/project code bug. The Litehive hook infrastructure is
+    working as designed.
+
+
+    **Fix needed**: Remove the unused `_cmd_health` import from `tests/workspace_helpers.py:27`
+    in the task worktree, then retry acceptance.
+
+
+    **No Litehive infrastructure fix required**.'
+  files_changed: []
+  created_at: '2026-04-09T12:47:42+00:00'
+- role: recovery
+  step: accepting
+  verdict: comment
+  message: 'Recovery trigger `stage_failure`: Recovery agent could not restore `accepting`
+    to a runnable state.
+
+    runnable_state: blocked
+
+    report: .litehive/tasks/T-0247-add-litehive-health-command-single-command-for/recovery/recovery-001.yaml
+
+    blocker: ## Recovery diagnosis'
+  files_changed: []
+  created_at: '2026-04-09T12:47:47+00:00'

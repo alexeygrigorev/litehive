@@ -1,0 +1,37 @@
+task_id: T-0247
+step: accepting
+verdict: blocked
+summary: 'accepting blocked by runner hook `before_pm_acceptance` (exit 1): uv run
+  ruff check --select E402,F401 litehive tests'
+feedback: 'Runner hook `before_pm_acceptance` `uv run ruff check --select E402,F401
+  litehive tests` failed with exit code 1 (artifact: `artifacts/before_pm_acceptance-001.yaml`).'
+submitted_via_cli: false
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings:
+- 'runner hook failed: `before_pm_acceptance` `uv run ruff check --select E402,F401
+  litehive tests` (artifact: `artifacts/before_pm_acceptance-001.yaml`)'
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: final
+outcome: blocked
+outcome_reason_code: verdict_blocked
+outcome_reason: 'accepting blocked by runner hook `before_pm_acceptance` (exit 1):
+  uv run ruff check --select E402,F401 litehive tests'
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 58
+hook_results:
+- point: before_pm_acceptance
+  command: uv run ruff check --select E402,F401 litehive tests
+  blocking: true
+  exit_code: 1
+  status: failed
+  artifact: artifacts/before_pm_acceptance-001.yaml
+created_at: '2026-04-09T12:46:49+00:00'

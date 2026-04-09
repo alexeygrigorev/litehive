@@ -1,0 +1,54 @@
+task_id: T-0248
+step: implementing
+verdict: pass
+summary: 'Aligned the status command with the fast-by-default contract. In litehive/cli/status.py,
+  dashboard mode now always uses state-first reads by default, --full always routes
+  to the verbose per-task dump with status_read_mode: full, and --fast no longer changes
+  behavior. Updated litehive/cli/parser.py help text plus README.md and .litehive/context.md
+  to document --fast as a deprecated compatibility alias and --full as the explicit
+  verbose mode. Added/updated targeted coverage in tests/test_observability_and_status.py
+  to verify: default dashboard output remains the concise summary, --full ignores
+  --fast and keeps verbose hydrated task output, and default status vs status --fast
+  both succeed with the same dashboard-style sections. Verification: uv run pytest
+  -q tests/test_observability_and_status.py -> 73 passed in 8.87s. Direct CLI evidence:
+  uv run litehive status --workspace . and uv run litehive status --workspace . --fast
+  both returned the fast summary header (workspace/default_engine/mode/active_task_id/queued_tasks/queue_head/active
+  task fields), confirming the default swap and backwards-compatible alias behavior.'
+feedback: 'Aligned the status command with the fast-by-default contract. In litehive/cli/status.py,
+  dashboard mode now always uses state-first reads by default, --full always routes
+  to the verbose per-task dump with status_read_mode: full, and --fast no longer changes
+  behavior. Updated litehive/cli/parser.py help text plus README.md and .litehive/context.md
+  to document --fast as a deprecated compatibility alias and --full as the explicit
+  verbose mode. Added/updated targeted coverage in tests/test_observability_and_status.py
+  to verify: default dashboard output remains the concise summary, --full ignores
+  --fast and keeps verbose hydrated task output, and default status vs status --fast
+  both succeed with the same dashboard-style sections. Verification: uv run pytest
+  -q tests/test_observability_and_status.py -> 73 passed in 8.87s. Direct CLI evidence:
+  uv run litehive status --workspace . and uv run litehive status --workspace . --fast
+  both returned the fast summary header (workspace/default_engine/mode/active_task_id/queued_tasks/queue_head/active
+  task fields), confirming the default swap and backwards-compatible alias behavior.'
+submitted_via_cli: true
+files_changed:
+- README.md
+- litehive/cli/parser.py
+- litehive/cli/status.py
+- tests/test_observability_and_status.py
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 215
+hook_results: []
+created_at: '2026-04-09T12:54:37+00:00'

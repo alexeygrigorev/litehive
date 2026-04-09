@@ -7,14 +7,15 @@ engine: null
 model: null
 mode: implementation
 pipeline_mode: full
-status: queued
-flag_reason: null
-pipeline_status: backlog
+status: flagged
+flag_reason: verdict_blocked
+flag_count: 1
+pipeline_status: accepting
 priority: medium
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-09T08:47:51+00:00'
-updated_at: '2026-04-09T08:47:51+00:00'
+updated_at: '2026-04-09T12:47:47+00:00'
 goal: 'One command that shows everything needed to assess workspace health: active
   task + stage, flagged tasks with reasons, stale worktrees, uncommitted code changes,
   engine quotas, daemon status, and recent completions. Replaces running 5+ commands
@@ -29,7 +30,35 @@ acceptance_criteria:
 constraints: []
 plan: []
 human_checkpoints: []
-subagents: []
+subagents:
+- id: SA-0001
+  role: planner
+  engine: codex
+  status: completed
+  path: subagents/SA-0001-planner
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0002
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0002-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0003
+  role: qa
+  engine: codex
+  status: completed
+  path: subagents/SA-0003-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0004
+  role: recovery
+  engine: claude
+  status: completed
+  path: subagents/SA-0004-recovery
+  sandboxed: false
+  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0247 add-litehive-health-command-single-command-for'

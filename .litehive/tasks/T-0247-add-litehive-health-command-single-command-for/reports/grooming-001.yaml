@@ -1,0 +1,64 @@
+task_id: T-0247
+step: grooming
+verdict: pass
+summary: 'Grooming pass. I verified the task is implementation-ready against the current
+  repo structure and updated the task record with PM sizing and a 4-step implementation
+  plan. Relevant existing seams already exist in litehive/cli/parser.py and litehive/cli/__init__.py
+  for a new top-level command; litehive/cli/status.py plus litehive/observability/_status.py
+  for active/completed/engine summary rendering; litehive/cli/worktree.py and litehive/pipeline/_worktree.py
+  for managed worktree counts and dirty/stale ownership findings; litehive/cli/daemon.py
+  plus litehive/daemon/_execution.py for daemon running/stopped status; and litehive/cli/engine.py
+  for proactive quota checks. I did not run tests in grooming because this stage is
+  task shaping only, so AC 3 remains for later stages. Acceptance is now specific
+  enough for implementation: build a health summary that shows active task/stage,
+  flagged tasks with flag reason plus latest verdict/report summary, managed worktrees
+  with change counts, dirty or missing-recorded worktree findings, all engine quota
+  statuses, daemon status, and the last 3 completed tasks; return exit code 1 when
+  flagged tasks exist, stale/dirty worktree findings indicate problems, or an engine
+  reports quota/rate/budget warnings, otherwise 0. Key implementation note: reuse
+  inspect_dirty_worktree_gate as the source of truth for stale/dirty worktree problems
+  instead of inventing separate health logic.'
+feedback: 'Stage `grooming` switched from `claude` to `codex` after claude usage limit
+  reached (7d window at 96%, resets 2026-04-10T09:00:00.828875+00:00).
+
+
+  Grooming pass. I verified the task is implementation-ready against the current repo
+  structure and updated the task record with PM sizing and a 4-step implementation
+  plan. Relevant existing seams already exist in litehive/cli/parser.py and litehive/cli/__init__.py
+  for a new top-level command; litehive/cli/status.py plus litehive/observability/_status.py
+  for active/completed/engine summary rendering; litehive/cli/worktree.py and litehive/pipeline/_worktree.py
+  for managed worktree counts and dirty/stale ownership findings; litehive/cli/daemon.py
+  plus litehive/daemon/_execution.py for daemon running/stopped status; and litehive/cli/engine.py
+  for proactive quota checks. I did not run tests in grooming because this stage is
+  task shaping only, so AC 3 remains for later stages. Acceptance is now specific
+  enough for implementation: build a health summary that shows active task/stage,
+  flagged tasks with flag reason plus latest verdict/report summary, managed worktrees
+  with change counts, dirty or missing-recorded worktree findings, all engine quota
+  statuses, daemon status, and the last 3 completed tasks; return exit code 1 when
+  flagged tasks exist, stale/dirty worktree findings indicate problems, or an engine
+  reports quota/rate/budget warnings, otherwise 0. Key implementation note: reuse
+  inspect_dirty_worktree_gate as the source of truth for stale/dirty worktree problems
+  instead of inventing separate health logic.'
+submitted_via_cli: true
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings:
+- Stage `grooming` switched from `claude` to `codex` after claude usage limit reached
+  (7d window at 96%, resets 2026-04-10T09:00:00.828875+00:00).
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 177
+hook_results: []
+created_at: '2026-04-09T12:35:37+00:00'
