@@ -1,0 +1,65 @@
+- role: planner
+  step: grooming
+  verdict: pass
+  message: 'Grooming complete. Verified the current defect by inspecting litehive/cli/__init__.py:
+    the module imports _cmd_import_issue/_cmd_import_issues twice and repeats handler
+    branches for import-issue, import-issues, debug, list, and show. The entrypoint
+    also uses a long top-level if-chain plus nested daemon/worktree if-chains, so
+    the requested dispatch-table refactor is well scoped to this module. Persisted
+    task updates with a clearer goal, 4 observable acceptance criteria, a 3-step plan,
+    and PM sizing simple / s. Baseline verification run: uv run pytest -q tests/test_config_and_run_cli.py
+    -k duplicate_subcommands_or_arguments -> 1 passed. Implementation guidance for
+    next stage: replace the top-level command chain with a dict lookup, introduce
+    dedicated dispatch maps for daemon subcommands and worktree subcommands while
+    preserving current parser.error behavior for missing/unsupported subcommands,
+    remove the duplicate github_import import and duplicate handler branches, then
+    run the relevant CLI/parser tests to prove no behavior drift.'
+  files_changed: []
+  created_at: '2026-04-09T13:54:16+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: Refactored litehive/cli/__init__.py to remove duplicate github_import imports
+    and duplicate command branches, replacing the 80+ if-chain with explicit dispatch
+    tables for top-level commands plus daemon/worktree subcommands while preserving
+    parser.error behavior for missing subcommands. Verified acceptance criteria with
+    uv run pytest -q tests/test_config_and_run_cli.py -k 'duplicate_subcommands_or_arguments
+    or daemon or worktree' (1 passed) and uv run pytest -q tests/test_debug_command.py
+    tests/test_list_and_show.py tests/test_github_import.py (61 passed), covering
+    parser duplicate detection and the affected debug/list/show/import command handlers.
+  files_changed: []
+  created_at: '2026-04-09T13:55:34+00:00'
+- role: qa
+  step: testing
+  verdict: pass
+  message: 'Validated litehive/cli/__init__.py dispatch refactor. Verified the duplicate
+    github_import helper import is removed and duplicate top-level handler branches
+    for import-issue, import-issues, debug, list, and show are gone; top-level commands
+    now resolve through _COMMAND_HANDLERS, daemon subcommands through _DAEMON_COMMAND_HANDLERS,
+    and worktree subcommands through _WORKTREE_COMMAND_HANDLERS while preserving parser.error
+    for missing subcommands. Focused regression tests passed: uv run pytest -q tests/test_config_and_run_cli.py
+    -k ''duplicate_subcommands_or_arguments or daemon or worktree'' => 1 passed in
+    0.30s; uv run pytest -q tests/test_debug_command.py tests/test_list_and_show.py
+    tests/test_github_import.py => 61 passed in 1.67s. Evidence supports all acceptance
+    criteria: no duplicate handlers/imports remain in cli/__init__.py, command dispatch
+    uses dict lookup, daemon/worktree use dispatch tables, and the parser duplicate-detection
+    guard plus affected CLI command tests pass without interface changes.'
+  files_changed: []
+  created_at: '2026-04-09T13:56:30+00:00'
+- role: reviewer
+  step: accepting
+  verdict: pass
+  message: 'Accepted after direct review of litehive/cli/__init__.py and targeted
+    regression verification. Verified the duplicate github_import helper import is
+    removed, duplicate top-level handler branches for import-issue, import-issues,
+    debug, list, and show are gone, and top-level command dispatch now uses the _COMMAND_HANDLERS
+    dict. Verified daemon subcommands dispatch through _DAEMON_COMMAND_HANDLERS and
+    worktree subcommands dispatch through _WORKTREE_COMMAND_HANDLERS, while parser.error
+    behavior is preserved when a required subcommand is missing. Tests run locally:
+    uv run pytest -q tests/test_config_and_run_cli.py -k ''duplicate_subcommands_or_arguments
+    or daemon or worktree'' -> 1 passed, 63 deselected; uv run pytest -q tests/test_debug_command.py
+    tests/test_list_and_show.py tests/test_github_import.py -> 61 passed. This evidence
+    satisfies all acceptance criteria, including the parser duplicate-detection coverage
+    and the affected CLI command paths.'
+  files_changed: []
+  created_at: '2026-04-09T13:57:04+00:00'
