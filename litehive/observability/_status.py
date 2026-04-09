@@ -376,7 +376,7 @@ def render_active_tasks_section(
         )
         stage = task.runtime.current_stage.step or task.pipeline_status or "-"
         task_duration = _duration_label(task.runtime.run_started_at, 0)
-        worktree = task.git.worktree_path or task.runtime.git.worktree_path or "-"
+        worktree = task.runtime.git.worktree_path or task.git.worktree_path or "-"
 
         status_suffix = ""
         if task.status == "merge_failed":

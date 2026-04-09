@@ -410,8 +410,10 @@ def _cmd_run_parallel(
                     f"blocked: {blocked.task_id} {blocked.title} "
                     f"blocked_by={', '.join(blocked.blocked_by)}"
                 )
-        else:
+        elif summary.stop_reason == "queue_exhausted":
             print("No queued tasks.")
+        else:
+            print("No task executed.")
         return 0
 
     completed = []

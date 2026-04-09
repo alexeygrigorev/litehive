@@ -607,6 +607,11 @@ def build_parser():
         default=None,
         help="Stop the pool when the git worktree is dirty before starting another task",
     )
+    run.add_argument(
+        "--parallel",
+        action="store_true",
+        help="Run multiple independent tasks in parallel using separate worktrees (task-level parallelism)",
+    )
 
     dirty_worktree_gate = subparsers.add_parser(
         "dirty-worktree-gate",
