@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from litehive.config import LitehiveConfig, resolve_process_profile
+from litehive.config import LitehiveConfig, default_agent_startup_guidance, resolve_process_profile
 from litehive.models import TaskRecord
 from litehive.tasks import (
     infer_acceptance_criteria,
@@ -301,11 +301,15 @@ def _stage_role_prompt(step: str, owner: str | None = None) -> list[str]:
     if owner == "recovery":
         return [
             "- You are the recovery agent responsible for diagnosing why this task stopped making progress and restoring a runnable path.",
-            "- Inspect the latest failure context, reports, continuation handoff, and existing artifacts before changing code or task state.",
+            "- Your job is to diagnose why the previous agent failed and restore a runnable path by fixing Litehive infrastructure bugs.",
+            "- Start from the failed subagent evidence first: stdout, stderr, transcript, session metadata, exit code, and any `litehive report` attempt or error.",
+            "- Your job is not to redo the failed stage's work, not to re-run the task's implementation or verification, and not to submit the failed stage verdict on the previous agent's behalf.",
             "- Make the smallest effective fix needed so the task can resume the current stage and finish cleanly.",
-            "- Preserve useful progress, avoid restarting discovery from scratch, and keep the task moving toward completion.",
-            "- If the failure traceback shows a Litehive-owned bug rather than a project bug, switch into the repo at `litehive_source_path` and repair Litehive there instead of changing the target project.",
-            "- For Litehive self-heal work, keep the external-project task as the source of audit history, run `uv run pytest` in the Litehive repo before reporting success, and leave an explicit blocker if `litehive_source_path` is missing or unusable.",
+            "- If this workspace is not already the Litehive repo, switch into the repo at `litehive_source_path` and repair Litehive there.",
+            "- Work in the Litehive source repo so you can fix the orchestrator, adapters, prompts, report wiring, resume logic, or other infrastructure bugs with the smallest safe change.",
+            "- run `uv run pytest` in the Litehive repo before reporting success when you changed Litehive code; keep verification targeted.",
+            "- If the evidence points to a project/task bug rather than a Litehive bug, do not implement the task; report that no Litehive infrastructure fix was found and leave the task for the normal stage owner.",
+            "- Submit your own recovery verdict describing the root cause, the Litehive fix you made, and why the failed stage should be retried.",
         ]
     if step == "grooming":
         return [
@@ -358,7 +362,10 @@ def _agent_startup_guidance(
     root: Path | None = None,
 ) -> list[str]:
     lines: list[str] = []
-    guidance = config.agent_startup_guidance if config is not None else {}
+    guidance = default_agent_startup_guidance()
+    if config is not None:
+        for key, values in config.agent_startup_guidance.items():
+            guidance.setdefault(key, []).extend(values)
     for key in ("all", stage_owner):
         md_lines = _load_agent_md(root, key)
         if md_lines is not None:

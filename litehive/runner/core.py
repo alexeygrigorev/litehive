@@ -299,6 +299,16 @@ class TaskExecutionRunner:
             steps += 1
             last_verdict = report.verdict
             target = routes.get((current, report.verdict))
+            if current == "commit_to_git" and report.retry_decision == "retry":
+                self._write_report(task, report, steps)
+                _apply_stage_finished(task, report)
+                save_task(self.root, task)
+                return self._finish_run(
+                    task,
+                    final_status="queued",
+                    steps=steps,
+                    last_verdict=last_verdict,
+                )
             if target is None and report.verdict == "reject" and current != "commit_to_git":
                 report.retry_decision = "retry"
                 self._write_report(task, report, steps)

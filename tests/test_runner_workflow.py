@@ -176,6 +176,47 @@ def test_runner_requeues_task_after_testing_rejection(tmp_path: Path) -> None:
     assert task.runtime.retry_source == "global"
 
 
+def test_runner_requeues_commit_to_git_retry_request_back_to_implementing(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(
+        tmp_path,
+        title="Post-merge fixup",
+        acceptance_criteria=["Keep merged main and fix failures from implementing."],
+    )
+    task.pipeline_status = "commit_to_git"
+    save_task(tmp_path, task)
+
+    def executor(task, step):  # type: ignore[no-untyped-def]
+        assert step == "commit_to_git"
+        task.status = "queued"
+        task.pipeline_status = "implementing"
+        return StageReport(
+            task_id=task.id,
+            step=step,
+            verdict="blocked",
+            summary="after_merge failed on merged main",
+            retry_decision="retry",
+            hook_results=[
+                {
+                    "point": "after_merge",
+                    "command": "exit 7",
+                    "blocking": True,
+                    "exit_code": 7,
+                    "status": "failed",
+                    "artifact": "artifacts/after_merge-001.yaml",
+                }
+            ],
+        )
+
+    runner = TaskExecutionRunner(tmp_path, executor)
+    result = runner.run(task)
+
+    assert result.final_status == "queued"
+    refreshed = require_task(tmp_path, task.id)
+    assert refreshed.status == "queued"
+    assert refreshed.pipeline_status == "implementing"
+    assert load_state(tmp_path).queue[0] == task.id
+
 def test_runner_does_not_override_qa_verdict(tmp_path: Path) -> None:
     """QA verdict is final and the runner lets testing pass advance normally."""
     ensure_workspace(tmp_path, LitehiveConfig(default_retry_limit=3))
@@ -2775,6 +2816,17 @@ def test_agent_md_absent_falls_back_to_config(tmp_path: Path) -> None:
     prompt = stage_prompt(task, "implementing", workspace_context="", config=config, root=tmp_path)
 
     assert "Config SWE fallback." in prompt
+
+
+def test_recovery_prompt_includes_default_startup_guidance(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Recovery guidance test")
+
+    prompt = stage_prompt(task, "implementing", workspace_context="", config=LitehiveConfig(), root=tmp_path, role_name="recovery")
+
+    assert "fix Litehive infrastructure bugs" in prompt
+    assert "Do not redo the failed stage's work" in prompt
+    assert "stdout, stderr, transcript, session metadata, exit code" in prompt
 
 
 def test_agent_md_all_and_role_combine(tmp_path: Path) -> None:

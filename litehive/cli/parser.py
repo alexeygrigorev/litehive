@@ -161,7 +161,7 @@ def build_parser():
         help=(
             "Add a runner hook as HOOK_POINT=blocking|nonblocking:COMMAND. "
             "Supported points: before_swe_implementation, after_swe_implementation, "
-            "before_pm_acceptance, after_pm_acceptance."
+            "before_pm_acceptance, after_pm_acceptance, after_merge."
         ),
     )
     configure.add_argument(

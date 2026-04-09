@@ -1,0 +1,77 @@
+task_id: T-0216
+step: accepting
+verdict: pass
+summary: 'Accepted after validating the current implementation and rerunning focused
+  regression coverage. Verified runner_hooks.after_merge is accepted and persisted
+  by configure/CLI parsing, commit_to_git maps post-merge success to the after_merge
+  hook point, and blocking after_merge hooks execute from the main checkout after
+  a successful merge. Verified the failure path preserves the merged main state, does
+  not revert the merge, records retry_decision=retry, and requeues the task at queued/implementing
+  so SWE fixes the already-merged main branch. Verified the backward-compatible path
+  skips post-merge verification when no after_merge hook is configured. Tests run:
+  uv run pytest -q tests/test_retry_commit_and_recovery.py::test_commit_to_git_runs_after_merge_hook_on_main_and_finishes
+  tests/test_retry_commit_and_recovery.py::test_commit_to_git_requeues_implementing_when_after_merge_hook_fails
+  tests/test_retry_commit_and_recovery.py::test_commit_to_git_skips_after_merge_when_hook_not_configured
+  tests/test_config_and_run_cli.py::test_configure_persists_runner_hooks tests/test_runner_workflow.py::test_runner_requeues_commit_to_git_retry_request_back_to_implementing.
+  Result: 5 passed in 0.91s.'
+feedback: 'Runner hook `before_pm_acceptance` `uv run ruff check --select E402,F401
+  litehive tests` passed with exit code 0 (artifact: `artifacts/before_pm_acceptance-001.yaml`).
+
+
+  Runner hook `before_pm_acceptance` `if git grep -nE ''noqa:.*F401|noqa:.*F403|ruff:\s*noqa:\s*F401|ruff:\s*noqa:\s*F403''
+  -- litehive tests; then echo ''Forbidden noqa F401/F403 suppression found.''; exit
+  1; fi` passed with exit code 0 (artifact: `artifacts/before_pm_acceptance-002.yaml`).
+
+
+  Accepted after validating the current implementation and rerunning focused regression
+  coverage. Verified runner_hooks.after_merge is accepted and persisted by configure/CLI
+  parsing, commit_to_git maps post-merge success to the after_merge hook point, and
+  blocking after_merge hooks execute from the main checkout after a successful merge.
+  Verified the failure path preserves the merged main state, does not revert the merge,
+  records retry_decision=retry, and requeues the task at queued/implementing so SWE
+  fixes the already-merged main branch. Verified the backward-compatible path skips
+  post-merge verification when no after_merge hook is configured. Tests run: uv run
+  pytest -q tests/test_retry_commit_and_recovery.py::test_commit_to_git_runs_after_merge_hook_on_main_and_finishes
+  tests/test_retry_commit_and_recovery.py::test_commit_to_git_requeues_implementing_when_after_merge_hook_fails
+  tests/test_retry_commit_and_recovery.py::test_commit_to_git_skips_after_merge_when_hook_not_configured
+  tests/test_config_and_run_cli.py::test_configure_persists_runner_hooks tests/test_runner_workflow.py::test_runner_requeues_commit_to_git_retry_request_back_to_implementing.
+  Result: 5 passed in 0.91s.'
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings:
+- 'runner hook passed: `before_pm_acceptance` `uv run ruff check --select E402,F401
+  litehive tests` (artifact: `artifacts/before_pm_acceptance-001.yaml`)'
+- 'runner hook passed: `before_pm_acceptance` `if git grep -nE ''noqa:.*F401|noqa:.*F403|ruff:\s*noqa:\s*F401|ruff:\s*noqa:\s*F403''
+  -- litehive tests; then echo ''Forbidden noqa F401/F403 suppression found.''; exit
+  1; fi` (artifact: `artifacts/before_pm_acceptance-002.yaml`)'
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 64
+hook_results:
+- point: before_pm_acceptance
+  command: uv run ruff check --select E402,F401 litehive tests
+  blocking: true
+  exit_code: 0
+  status: passed
+  artifact: artifacts/before_pm_acceptance-001.yaml
+- point: before_pm_acceptance
+  command: if git grep -nE 'noqa:.*F401|noqa:.*F403|ruff:\s*noqa:\s*F401|ruff:\s*noqa:\s*F403'
+    -- litehive tests; then echo 'Forbidden noqa F401/F403 suppression found.'; exit
+    1; fi
+  blocking: true
+  exit_code: 0
+  status: passed
+  artifact: artifacts/before_pm_acceptance-002.yaml
+created_at: '2026-04-08T23:35:24+00:00'

@@ -80,23 +80,30 @@
       cursor: pointer;
       font: inherit;
     }
-    button.task {
-      width: 100%;
-      text-align: left;
+    .task-card {
       border: 1px solid var(--line);
       background: white;
       border-radius: 14px;
       padding: 12px;
+    }
+    button.task {
+      width: 100%;
+      text-align: left;
+      border: 0;
+      background: transparent;
+      padding: 0;
       transition: transform 140ms ease, border-color 140ms ease, box-shadow 140ms ease;
     }
     button.task:hover {
       transform: translateY(-1px);
-      border-color: var(--accent);
-      box-shadow: 0 8px 18px rgba(22, 93, 82, 0.09);
     }
     button.task.active {
+      color: var(--accent);
+    }
+    .task-card.active {
       border-color: var(--accent);
       background: var(--accent-soft);
+      box-shadow: 0 8px 18px rgba(22, 93, 82, 0.09);
     }
     button.secondary, button.primary {
       border-radius: 999px;
@@ -110,6 +117,36 @@
       border-color: var(--accent);
     }
     button:disabled { opacity: 0.65; cursor: default; }
+    .queue-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .queue-button {
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--ink);
+      border-radius: 999px;
+      padding: 6px 10px;
+      font: inherit;
+      cursor: pointer;
+    }
+    .queue-button:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+    .queue-button:hover:not(:disabled) {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+    .queue-feedback {
+      min-height: 18px;
+      padding: 0 14px 14px;
+      font-size: 12px;
+    }
+    .queue-feedback.error { color: var(--danger); }
+    .queue-feedback.success { color: var(--accent); }
     .meta {
       display: flex;
       flex-wrap: wrap;
@@ -173,8 +210,50 @@
       color: #eff7f3;
     }
     .logs, .stack { display: grid; gap: 12px; }
+    .controls { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+    button.control {
+      border: 1px solid var(--line);
+      background: white;
+      color: var(--ink);
+      border-radius: 999px;
+      padding: 8px 12px;
+      font: inherit;
+      cursor: pointer;
+    }
+    button.control:disabled {
+      cursor: wait;
+      opacity: 0.6;
+    }
+    .status-strip {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      margin-top: 12px;
+    }
     .muted { color: var(--muted); }
     .mono { font-family: var(--mono); }
+    .quota-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+    .quota-window-list {
+      display: grid;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .quota-window {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 10px;
+      background: #fdfcf8;
+    }
+    .quota-window strong {
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-size: 12px;
+    }
     .toolbar {
       display: flex;
       gap: 8px;
@@ -226,6 +305,7 @@
     @media (max-width: 720px) {
       .grid-two { grid-template-columns: 1fr; }
       .kv { grid-template-columns: 1fr; }
+      .quota-grid { grid-template-columns: 1fr; }
     }
   </style>
 </head>
@@ -245,6 +325,7 @@
         <span class="muted mono" id="queue-summary"></span>
       </div>
       <div class="task-list" id="task-list"></div>
+      <div class="queue-feedback muted" id="queue-feedback"></div>
     </section>
     <section class="panel">
       <div class="hd">
@@ -264,6 +345,7 @@
   <script>
     const state = {
       snapshot: null,
+      daemon: null,
       selectedTaskId: null,
       selectedSubagentId: null,
       editTaskId: null,
@@ -277,6 +359,10 @@
       reportSaveState: "idle",
       reportSaveMessage: "",
       transport: "starting",
+      queueFeedback: "",
+      queueFeedbackLevel: "muted",
+      mutatingQueue: false,
+      daemonAction: null,
     };
     const POLL_INTERVAL_MS = {{ poll_interval_ms }};
     const STREAM_ERROR_FALLBACK_MS = 8000;
@@ -328,6 +414,50 @@
         : `<div class="card empty">${esc(emptyText)}</div>`;
     }
 
+    function formatPercent(value) {
+      if (value === null || value === undefined || value === "") return "-";
+      const number = Number(value);
+      if (!Number.isFinite(number)) return esc(value);
+      return Number.isInteger(number) ? `${number}%` : `${number.toFixed(1)}%`;
+    }
+
+    function renderQuotaCards(engines) {
+      const quota = engines?.quota?.engines || {};
+      const entries = Object.entries(quota);
+      if (!entries.length) {
+        return `<div class="card empty">Loading quota status.</div>`;
+      }
+      return `
+        <div class="quota-grid">
+          ${entries.map(([engineName, record]) => `
+            <div class="card">
+              <strong>${esc(engineName)}</strong>
+              <div class="meta">
+                ${badge(record.status || "unknown", record.status === "unavailable" ? "blocked" : "running")}
+                ${record.provider ? badge(record.provider) : ""}
+              </div>
+              <div class="muted" style="margin-top:8px">${esc(record.summary || "-")}</div>
+              ${record.error ? `<div class="muted" style="margin-top:8px">Quota check unavailable: ${esc(record.error)}</div>` : ""}
+              <div class="quota-window-list">
+                ${(record.windows || []).map((window) => `
+                  <div class="quota-window">
+                    <strong>${esc(window.label || "window")}</strong>
+                    ${formatKeyValueList([
+                      window.window ? { label: "Window", value: window.window } : null,
+                      { label: "Used", value: formatPercent(window.used_percent) },
+                      window.remaining_percent !== undefined ? { label: "Remaining", value: formatPercent(window.remaining_percent) } : null,
+                      window.remaining_display ? { label: "Remaining quota", value: window.remaining_display } : null,
+                      window.reset_at ? { label: "Reset", value: window.reset_at } : null,
+                    ], "No quota window details.")}
+                  </div>
+                `).join("")}
+              </div>
+            </div>
+          `).join("")}
+        </div>
+      `;
+    }
+
     function listToTextarea(value) {
       return (Array.isArray(value) ? value : []).join("\n");
     }
@@ -360,6 +490,20 @@
       return payload;
     }
 
+    async function postJson(url, payload) {
+      const response = await fetch(url, {
+        method: "POST",
+        cache: "no-store",
+        headers: { "Content-Type": "application/json" },
+        body: payload !== undefined ? JSON.stringify(payload) : undefined,
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.error || `${response.status} ${response.statusText}`);
+      }
+      return data;
+    }
+
     function chooseDefaults(snapshot) {
       const previousTaskId = state.selectedTaskId;
       const previousSubagentId = state.selectedSubagentId;
@@ -386,25 +530,42 @@
 
     function renderQueue(snapshot) {
       const list = document.getElementById("task-list");
-      document.getElementById("queue-summary").textContent = `${snapshot.state.queue.length} queued`;
+      const feedback = document.getElementById("queue-feedback");
+      document.getElementById("queue-summary").textContent = `${snapshot.state.queue.length} queued / ${snapshot.tasks.length} total`;
       document.getElementById("workspace-path").textContent = snapshot.workspace;
       document.getElementById("runner-badge-slot").innerHTML = badge(`runner:${snapshot.runner.status}`, snapshot.runner.status);
       document.getElementById("transport-badge").textContent = state.transport;
+      feedback.textContent = state.queueFeedback || "";
+      feedback.className = `queue-feedback ${state.queueFeedbackLevel}`;
 
       if (!snapshot.tasks.length) {
         list.innerHTML = `<div class="muted">No tasks in this workspace.</div>`;
         return;
       }
-      list.innerHTML = snapshot.tasks.map((task) => `
-        <button class="task ${task.id === state.selectedTaskId ? "active" : ""}" data-task-id="${escAttr(task.id)}">
-          <div><strong>${esc(task.id)}</strong> ${esc(task.title)}</div>
+      const taskById = new Map(snapshot.tasks.map((task) => [task.id, task]));
+      const queuedTasks = snapshot.queue.map((taskId) => taskById.get(taskId)).filter(Boolean);
+      const otherTasks = snapshot.tasks.filter((task) => !task.is_queued);
+      const orderedTasks = [...queuedTasks, ...otherTasks];
+      list.innerHTML = orderedTasks.map((task) => `
+        <div class="task-card ${task.id === state.selectedTaskId ? "active" : ""}">
+          <button class="task ${task.id === state.selectedTaskId ? "active" : ""}" data-task-id="${escAttr(task.id)}">
+            <div><strong>${task.is_queued ? `#${task.queue_position}` : "•"}</strong> ${esc(task.id)} ${esc(task.title)}</div>
+          </button>
           <div class="meta">
             ${badge(task.status, task.status)}
             ${badge(task.pipeline_status)}
+            ${task.is_queued ? badge(`queue:${task.queue_position}`) : badge("not queued")}
             ${task.is_active_task ? badge("active task", "running") : ""}
             ${task.active_subagent ? badge(`${task.active_subagent.role}:${task.active_subagent.status}`, task.active_subagent.status) : ""}
           </div>
-        </button>
+          ${task.is_queued ? `
+            <div class="queue-actions">
+              <button class="queue-button" data-queue-action="promote" data-task-id="${esc(task.id)}" ${state.mutatingQueue ? "disabled" : ""}>Promote</button>
+              <button class="queue-button" data-queue-action="up" data-task-id="${esc(task.id)}" data-position="${task.queue_position - 1}" ${(state.mutatingQueue || task.queue_position <= 1) ? "disabled" : ""}>Move Up</button>
+              <button class="queue-button" data-queue-action="down" data-task-id="${esc(task.id)}" data-position="${task.queue_position + 1}" ${(state.mutatingQueue || task.queue_position >= snapshot.queue.length) ? "disabled" : ""}>Move Down</button>
+            </div>
+          ` : ""}
+        </div>
       `).join("");
       list.querySelectorAll("button.task").forEach((button) => {
         button.addEventListener("click", () => {
@@ -416,6 +577,30 @@
           render(snapshot);
           restartStream();
           refreshSession();
+        });
+      });
+      list.querySelectorAll("[data-queue-action]").forEach((button) => {
+        button.addEventListener("click", async (event) => {
+          event.stopPropagation();
+          const { queueAction, taskId, position } = button.dataset;
+          if (!taskId || !queueAction || state.mutatingQueue) return;
+          state.mutatingQueue = true;
+          state.queueFeedback = "Updating queue...";
+          state.queueFeedbackLevel = "muted";
+          render(snapshot);
+          try {
+            if (queueAction === "promote") {
+              await mutateQueue("/api/queue/promote", { task_id: taskId }, `${taskId} moved to the front.`);
+              return;
+            }
+            await mutateQueue(
+              "/api/queue/move",
+              { task_id: taskId, position: Number(position) },
+              `${taskId} moved to position ${position}.`
+            );
+          } finally {
+            state.mutatingQueue = false;
+          }
         });
       });
     }
@@ -553,6 +738,10 @@
               <span class="mono">fallback: ${esc((row.fallback_order || []).join(" -> ") || "-")}</span>
             </li>
           `).join("")}</ul>
+        </div>
+        <div class="section">
+          <h3>Quota Status</h3>
+          ${renderQuotaCards(engines)}
         </div>
         <div class="section">
           <h3>Usage Metrics</h3>
@@ -895,11 +1084,66 @@
       return `<div class="section"><h3>Recent Run-All Logs</h3><div class="logs">${entries}</div></div>`;
     }
 
+    function renderDaemonPanel(daemon) {
+      const status = daemon?.daemon_status || "stopped";
+      const daemonBusy = Boolean(state.daemonAction && state.daemonAction.endsWith("..."));
+      const logs = daemon?.recent_logs || [];
+      const entries = logs.length ? logs.map((entry) => `
+        <div class="artifact">
+          <div class="bar">
+            <strong>${esc(entry.name)}</strong>
+            <span class="mono">${esc(entry.path)}</span>
+          </div>
+          <div style="padding:12px">
+            ${entry.files.length ? entry.files.map((file) => `
+              <div class="artifact" style="margin-top:10px">
+                <div class="bar">
+                  <span>${esc(file.name)}</span>
+                  <span class="mono">${esc(file.path)}</span>
+                </div>
+                <pre>${esc(file.preview || "(empty)")}</pre>
+              </div>
+            `).join("") : `<div class="muted">No files in this run-all directory.</div>`}
+          </div>
+        </div>
+      `).join("") : `<div class="muted">No run-all logs found under .litehive/logs/run-all/.</div>`;
+      return `
+        <div class="section">
+          <h3>Daemon Control</h3>
+          <div class="status-strip">
+            <div class="meta">
+              ${badge(`daemon:${status}`, status)}
+              ${daemon?.pid ? badge(`pid:${daemon.pid}`, "running") : ""}
+            </div>
+            <span class="muted mono" id="daemon-feedback">${esc(state.daemonAction || "idle")}</span>
+          </div>
+          <div class="kv" style="margin-top:12px">
+            <div>Workspace</div><div class="mono">${esc(daemon?.workspace || "-")}</div>
+            <div>Started</div><div>${esc(daemon?.started_at || "-")}</div>
+            <div>Uptime</div><div>${esc(daemon?.uptime || "-")}</div>
+            <div>Log dir</div><div class="mono">${esc(daemon?.log_dir || "-")}</div>
+          </div>
+          <div class="controls">
+            <button class="control" id="daemon-start" ${status === "running" || daemonBusy ? "disabled" : ""}>Start</button>
+            <button class="control" id="daemon-stop" ${status !== "running" || daemonBusy ? "disabled" : ""}>Stop</button>
+            <button class="control" id="daemon-restart" ${status !== "running" || daemonBusy ? "disabled" : ""}>Restart</button>
+          </div>
+        </div>
+        <div class="section">
+          <h3>Daemon Logs</h3>
+          <div class="logs" id="daemon-log-viewer">${entries}</div>
+        </div>
+      `;
+    }
+
     function renderSessionPayload(payload, snapshot) {
       const container = document.getElementById("session-detail");
-      document.getElementById("session-summary").textContent = payload ? `${payload.subagent_id} / ${payload.status}` : "no session";
+      document.getElementById("session-summary").textContent = payload
+        ? `${payload.subagent_id} / ${payload.status}`
+        : (state.daemon?.daemon_status || "no session");
       if (!payload) {
-        container.innerHTML = renderRunAll(snapshot);
+        container.innerHTML = `${renderDaemonPanel(state.daemon)}${renderRunAll(snapshot)}`;
+        attachDaemonControls();
         return;
       }
       const artifacts = payload.artifacts.map((artifact) => `
@@ -916,6 +1160,7 @@
         </div>
       `).join("");
       container.innerHTML = `
+        ${renderDaemonPanel(state.daemon)}
         <div class="section">
           <h3>${esc(payload.subagent_id)} ${esc(payload.role)} / ${esc(payload.engine)}</h3>
           <div class="meta">
@@ -935,6 +1180,29 @@
         </div>
         ${renderRunAll(snapshot)}
       `;
+      attachDaemonControls();
+    }
+
+    async function refreshDaemon() {
+      state.daemon = await fetchJson("/api/daemon/status");
+    }
+
+    async function runDaemonAction(action) {
+      state.daemonAction = `${action}...`;
+      renderSessionPayload(null, state.snapshot || { run_all_logs: [] });
+      try {
+        state.daemon = await postJson(`/api/daemon/${action}`);
+        state.daemonAction = `${action} ok`;
+      } catch (error) {
+        state.daemonAction = error.message;
+      }
+      await refreshSnapshot();
+    }
+
+    function attachDaemonControls() {
+      document.getElementById("daemon-start")?.addEventListener("click", () => runDaemonAction("start"));
+      document.getElementById("daemon-stop")?.addEventListener("click", () => runDaemonAction("stop"));
+      document.getElementById("daemon-restart")?.addEventListener("click", () => runDaemonAction("restart"));
     }
 
     async function saveTaskEdits(taskId) {
@@ -1060,12 +1328,32 @@
 
     async function refreshSnapshot() {
       state.snapshot = await fetchJson("/api/snapshot", { headers: {} });
+      state.daemon = state.snapshot.daemon || state.daemon;
       if (!state.engines) {
-        await refreshEngines();
+        refreshEngines()
+          .then(() => render(state.snapshot))
+          .catch(() => {});
       }
       chooseDefaults(state.snapshot);
       render(state.snapshot);
+      await refreshDaemon();
       await refreshSession();
+    }
+
+    async function mutateQueue(url, payload, successMessage) {
+      try {
+        const response = await postJson(url, payload);
+        state.snapshot = response.snapshot;
+        state.queueFeedback = successMessage;
+        state.queueFeedbackLevel = "success";
+        chooseDefaults(state.snapshot);
+        render(state.snapshot);
+        await refreshSession();
+      } catch (error) {
+        state.queueFeedback = error.message;
+        state.queueFeedbackLevel = "error";
+        render(state.snapshot);
+      }
     }
 
     async function refreshSession() {

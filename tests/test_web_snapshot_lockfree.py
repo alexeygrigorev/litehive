@@ -1,12 +1,17 @@
 """Tests for lock-free web dashboard snapshot reads."""
 
+from contextlib import contextmanager
 from functools import partial
 import http.client
 import json
 import os
 import time
 import threading
+from http.server import ThreadingHTTPServer
 from pathlib import Path
+from types import SimpleNamespace
+from urllib.error import HTTPError
+from urllib.request import Request, urlopen
 
 import yaml
 
@@ -19,6 +24,7 @@ from tests.workspace_helpers import (
     build_workspace_snapshot,
     create_task,
     ensure_workspace,
+    get_task,
     load_config,
     load_state,
     pytest,
@@ -47,7 +53,6 @@ from litehive.web import (
     update_task_detail,
     update_default_engine,
 )
-from http.server import ThreadingHTTPServer
 
 
 def _write_runner_lock_metadata(root: Path, data: dict) -> None:
@@ -83,6 +88,45 @@ def _read_sse_event(response: http.client.HTTPResponse) -> tuple[str, dict[str, 
         if stripped.startswith("data: "):
             data = json.loads(stripped.removeprefix("data: "))
             continue
+
+
+@contextmanager
+def _serve_web(root: Path):
+    server = ThreadingHTTPServer(("127.0.0.1", 0), partial(LitehiveWebHandler, workspace_root=root))
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        host, port = server.server_address[:2]
+        yield f"http://{host}:{port}"
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+
+def _post_json(url: str, payload: dict[str, object]) -> tuple[int, dict[str, object]]:
+    request = Request(
+        url,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    with urlopen(request, timeout=5) as response:
+        return response.status, json.loads(response.read().decode("utf-8"))
+
+
+def _post_json_error(url: str, payload: dict[str, object]) -> tuple[int, dict[str, object]]:
+    request = Request(
+        url,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urlopen(request, timeout=5) as response:
+            return response.status, json.loads(response.read().decode("utf-8"))
+    except HTTPError as exc:
+        return exc.code, json.loads(exc.read().decode("utf-8"))
 
 
 def test_runner_status_readonly_returns_idle_when_no_metadata(tmp_path: Path) -> None:
@@ -556,6 +600,110 @@ def test_read_engine_dashboard_includes_config_routing_and_monitoring(tmp_path: 
     }
 
 
+def test_read_engine_dashboard_includes_normalized_engine_quota(tmp_path: Path, monkeypatch) -> None:
+    _init_git_repo(tmp_path)
+    ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
+
+    monkeypatch.setattr(
+        "litehive.web.snapshot.check_codex_quota",
+        lambda: SimpleNamespace(
+            error=None,
+            primary_window=SimpleNamespace(used_percent=42.0, reset_at="2026-04-09T05:00:00Z"),
+            secondary_window=SimpleNamespace(used_percent=61.0, reset_at="2026-04-15T00:00:00Z"),
+        ),
+    )
+    monkeypatch.setattr(
+        "litehive.web.snapshot.check_claude_quota",
+        lambda: SimpleNamespace(
+            error=None,
+            five_hour=SimpleNamespace(used_percent=37.5, reset_at="2026-04-09T04:00:00Z"),
+            seven_day=SimpleNamespace(used_percent=58.0, reset_at="2026-04-12T00:00:00Z"),
+        ),
+    )
+    monkeypatch.setattr(
+        "litehive.web.snapshot.check_copilot_quota",
+        lambda: SimpleNamespace(
+            error=None,
+            premium_remaining=125,
+            premium_entitlement=500,
+            used_percent=75.0,
+            quota_reset_date="2026-05-01",
+        ),
+    )
+    monkeypatch.setattr(
+        "litehive.web.snapshot.check_zai_quota",
+        lambda: SimpleNamespace(
+            error=None,
+            api_calls=SimpleNamespace(used_percent=33.0, remaining=67, limit=100, window_hours=24),
+            tokens=SimpleNamespace(used_percent=48.0, remaining=52000, limit=100000, window_hours=24),
+        ),
+    )
+
+    payload = read_engine_dashboard(tmp_path)
+    quota = payload["quota"]["engines"]
+
+    assert quota["codex"]["windows"] == [
+        {
+            "label": "5h",
+            "used_percent": 42.0,
+            "remaining_percent": 58.0,
+            "reset_at": "2026-04-09T05:00:00Z",
+        },
+        {
+            "label": "weekly",
+            "used_percent": 61.0,
+            "remaining_percent": 39.0,
+            "reset_at": "2026-04-15T00:00:00Z",
+        },
+    ]
+    assert quota["claude"]["summary"] == "7d 58% used"
+    assert quota["copilot"]["windows"][0]["remaining_display"] == "125/500"
+    assert quota["copilot"]["windows"][0]["reset_at"] == "2026-05-01"
+    assert quota["goz"]["windows"][0]["window"] == "24h"
+    assert quota["goz"]["windows"][0]["remaining_display"] == "67/100"
+    assert quota["opencode"]["windows"][1]["remaining_display"] == "52000/100000"
+
+
+def test_read_engine_dashboard_marks_unavailable_quota_readers_fail_open(
+    tmp_path: Path, monkeypatch
+) -> None:
+    _init_git_repo(tmp_path)
+    ensure_workspace(tmp_path)
+
+    monkeypatch.setattr(
+        "litehive.web.snapshot.check_codex_quota",
+        lambda: SimpleNamespace(error="no auth token", primary_window=None, secondary_window=None),
+    )
+    monkeypatch.setattr(
+        "litehive.web.snapshot.check_claude_quota",
+        lambda: SimpleNamespace(error="no-credentials", five_hour=None, seven_day=None),
+    )
+    monkeypatch.setattr(
+        "litehive.web.snapshot.check_copilot_quota",
+        lambda: SimpleNamespace(
+            error="gh not on PATH",
+            premium_remaining=0,
+            premium_entitlement=0,
+            used_percent=None,
+            quota_reset_date=None,
+        ),
+    )
+    monkeypatch.setattr(
+        "litehive.web.snapshot.check_zai_quota",
+        lambda: SimpleNamespace(error="goz not on PATH", api_calls=None, tokens=None),
+    )
+
+    payload = read_engine_dashboard(tmp_path)
+    quota = payload["quota"]["engines"]
+
+    assert quota["codex"]["status"] == "unavailable"
+    assert quota["codex"]["summary"] == "unavailable"
+    assert quota["claude"]["error"] == "no-credentials"
+    assert quota["copilot"]["windows"][0]["remaining_display"] == "0/0"
+    assert quota["goz"]["status"] == "unavailable"
+    assert quota["opencode"]["error"] == "goz not on PATH"
+
+
 def test_update_default_engine_persists_local_config(tmp_path: Path) -> None:
     _init_git_repo(tmp_path)
     ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
@@ -625,6 +773,7 @@ def test_http_engine_endpoints_and_task_switch(tmp_path: Path) -> None:
         assert response.status == 200
         payload = json.loads(response.read().decode("utf-8"))
         assert payload["config"]["default_engine"] == "codex"
+        assert "quota" in payload
         assert payload["monitoring"]["engines"]["codex"]["token_cost_fields"]["prompt_tokens"] == 2000
 
         conn.request(
@@ -871,3 +1020,91 @@ def test_sse_idle_client_waits_without_rebuilding_snapshots(tmp_path: Path, monk
         server.shutdown()
         server.server_close()
         thread.join(timeout=2)
+
+
+def test_queue_move_endpoint_moves_task_and_returns_updated_snapshot(tmp_path: Path) -> None:
+    _init_git_repo(tmp_path)
+    ensure_workspace(tmp_path)
+    first = create_task(tmp_path, title="First task")
+    second = create_task(tmp_path, title="Second task")
+    third = create_task(tmp_path, title="Third task")
+
+    with _serve_web(tmp_path) as base_url:
+        status, payload = _post_json(
+            f"{base_url}/api/queue/move",
+            {"task_id": third.id, "position": 2},
+        )
+
+    assert status == 200
+    assert payload["ok"] is True
+    assert payload["queue"] == [first.id, third.id, second.id]
+    assert payload["snapshot"]["queue"] == [first.id, third.id, second.id]
+    assert load_state(tmp_path).queue == [first.id, third.id, second.id]
+
+
+def test_queue_promote_endpoint_resumes_flagged_task_to_front(tmp_path: Path) -> None:
+    _init_git_repo(tmp_path)
+    ensure_workspace(tmp_path)
+    first = create_task(tmp_path, title="First task")
+    flagged = create_task(tmp_path, title="Resume me")
+    task = get_task(tmp_path, flagged.id)
+    assert task is not None
+    task.status = "flagged"
+    task.pipeline_status = "testing"
+    task.runtime.execution_status = "flagged"
+    save_task(tmp_path, task)
+    state = load_state(tmp_path)
+    state.queue = [first.id]
+    save_state(tmp_path, state)
+
+    with _serve_web(tmp_path) as base_url:
+        status, payload = _post_json(
+            f"{base_url}/api/queue/promote",
+            {"task_id": flagged.id},
+        )
+
+    resumed = get_task(tmp_path, flagged.id)
+    assert resumed is not None
+    assert status == 200
+    assert payload["ok"] is True
+    assert payload["queue"] == [flagged.id, first.id]
+    assert resumed.status == "queued"
+    assert resumed.pipeline_status == "testing"
+    assert resumed.runtime.execution_status == "idle"
+    assert load_state(tmp_path).queue == [flagged.id, first.id]
+
+
+def test_queue_prioritize_endpoint_reorders_tasks_and_rejects_duplicates(tmp_path: Path) -> None:
+    _init_git_repo(tmp_path)
+    ensure_workspace(tmp_path)
+    first = create_task(tmp_path, title="First task")
+    second = create_task(tmp_path, title="Second task")
+    third = create_task(tmp_path, title="Third task")
+
+    with _serve_web(tmp_path) as base_url:
+        status, payload = _post_json(
+            f"{base_url}/api/queue/prioritize",
+            {"task_ids": [third.id, first.id]},
+        )
+        error_status, error_payload = _post_json_error(
+            f"{base_url}/api/queue/prioritize",
+            {"task_ids": [second.id, second.id]},
+        )
+
+    assert status == 200
+    assert payload["ok"] is True
+    assert payload["queue"] == [third.id, first.id, second.id]
+    assert error_status == 400
+    assert error_payload["error"] == f"Task ids must be unique: {second.id}"
+    assert load_state(tmp_path).queue == [third.id, first.id, second.id]
+
+
+def test_render_index_includes_queue_controls_and_refresh_wiring() -> None:
+    html = _render_index()
+
+    assert "Move Up" in html
+    assert "Move Down" in html
+    assert "Promote" in html
+    assert "/api/queue/move" in html
+    assert "/api/queue/promote" in html
+    assert "response.snapshot" in html

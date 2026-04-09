@@ -1,0 +1,59 @@
+task_id: T-0234
+step: grooming
+verdict: pass
+summary: 'Grooming pass. I inspected .litehive/tasks/T-0234-add-all-done-flag-to-litehive-archive-command/task.yaml
+  plus the current archive implementation in litehive/cli/parser.py, litehive/cli/queue.py,
+  litehive/tasks/archive.py, and tests/test_archive.py. No prior task-local runtime/report
+  artifacts existed. Current behavior: parser defines archive task_id as an optional
+  positional and help text says omitted task_id archives all done tasks; _cmd_archive
+  follows that branch; archive_done_tasks already skips ValueError/FileNotFoundError
+  silently during bulk mode. Task record updated for implementation readiness: task_type=bugfix,
+  pm_complexity=simple, planned_effort=s, and a 4-step plan. Implementation target
+  for next stage: 1) add explicit --all-done flag and update archive help text so
+  bulk archive is opt-in, 2) change command dispatch so task_id archives one task,
+  --all-done performs bulk archive, and no args prints archive parser help instead
+  of bulk archiving, 3) during bulk mode log each skipped missing/broken task rather
+  than failing the whole command, 4) extend tests in tests/test_archive.py to cover
+  single-task mode, explicit bulk mode, no-arg help behavior, and skip logging for
+  broken references. Tests run in grooming: none; this stage was repo inspection and
+  task shaping only. Evidence the task is ready: acceptance criteria are specific
+  and map directly to the existing parser/command/tests surface with a narrow change
+  set.'
+feedback: 'Grooming pass. I inspected .litehive/tasks/T-0234-add-all-done-flag-to-litehive-archive-command/task.yaml
+  plus the current archive implementation in litehive/cli/parser.py, litehive/cli/queue.py,
+  litehive/tasks/archive.py, and tests/test_archive.py. No prior task-local runtime/report
+  artifacts existed. Current behavior: parser defines archive task_id as an optional
+  positional and help text says omitted task_id archives all done tasks; _cmd_archive
+  follows that branch; archive_done_tasks already skips ValueError/FileNotFoundError
+  silently during bulk mode. Task record updated for implementation readiness: task_type=bugfix,
+  pm_complexity=simple, planned_effort=s, and a 4-step plan. Implementation target
+  for next stage: 1) add explicit --all-done flag and update archive help text so
+  bulk archive is opt-in, 2) change command dispatch so task_id archives one task,
+  --all-done performs bulk archive, and no args prints archive parser help instead
+  of bulk archiving, 3) during bulk mode log each skipped missing/broken task rather
+  than failing the whole command, 4) extend tests in tests/test_archive.py to cover
+  single-task mode, explicit bulk mode, no-arg help behavior, and skip logging for
+  broken references. Tests run in grooming: none; this stage was repo inspection and
+  task shaping only. Evidence the task is ready: acceptance criteria are specific
+  and map directly to the existing parser/command/tests surface with a narrow change
+  set.'
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 78
+hook_results: []
+created_at: '2026-04-08T23:23:46+00:00'

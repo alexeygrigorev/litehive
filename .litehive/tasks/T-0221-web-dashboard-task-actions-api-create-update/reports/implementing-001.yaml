@@ -1,29 +1,62 @@
 task_id: T-0221
 step: implementing
-verdict: fail
-summary: 'implementing failed: agent did not submit verdict via litehive report CLI'
-feedback: '[stderr]
-
-  Error: stdin is not a terminal'
-files_changed: []
+verdict: pass
+summary: 'Implemented and verified the web dashboard task-mutation surface for create,
+  update, close, requeue, abandon, and stop-active. The branch already contained the
+  POST handlers in litehive/web/server.py, mutation helpers in litehive/web/actions.py,
+  and UI forms/buttons in litehive/web/templates/index.html wired to the same underlying
+  litehive.tasks helpers used by the CLI (create_task, update_task, close_task, requeue_task,
+  abandon_task, stop_current_task). I completed the remaining API contract fix in
+  litehive/web/server.py so mutation errors now return structured JSON with ok=false
+  and user-correctable invalid task ids on mutation endpoints return a structured
+  400 response instead of HTML/tracebacks. Verified with: uv run pytest -q tests/test_web_task_actions.py.
+  Evidence covered by that file: POST /api/tasks creates tasks with title/goal/priority/engine/acceptance_criteria;
+  POST /api/tasks/{id}/update updates goal/priority/engine/acceptance_criteria/constraints/plan_steps;
+  POST /api/tasks/{id}/close records deferred outcome and reason; POST /api/tasks/{id}/requeue
+  requeues with front=true and reports queue_position; POST /api/tasks/{id}/abandon
+  cancels the task; POST /api/tasks/active/stop parks the active task and clears active_task_id;
+  and invalid payload / invalid outcome / invalid task id responses return structured
+  JSON errors.'
+feedback: 'Implemented and verified the web dashboard task-mutation surface for create,
+  update, close, requeue, abandon, and stop-active. The branch already contained the
+  POST handlers in litehive/web/server.py, mutation helpers in litehive/web/actions.py,
+  and UI forms/buttons in litehive/web/templates/index.html wired to the same underlying
+  litehive.tasks helpers used by the CLI (create_task, update_task, close_task, requeue_task,
+  abandon_task, stop_current_task). I completed the remaining API contract fix in
+  litehive/web/server.py so mutation errors now return structured JSON with ok=false
+  and user-correctable invalid task ids on mutation endpoints return a structured
+  400 response instead of HTML/tracebacks. Verified with: uv run pytest -q tests/test_web_task_actions.py.
+  Evidence covered by that file: POST /api/tasks creates tasks with title/goal/priority/engine/acceptance_criteria;
+  POST /api/tasks/{id}/update updates goal/priority/engine/acceptance_criteria/constraints/plan_steps;
+  POST /api/tasks/{id}/close records deferred outcome and reason; POST /api/tasks/{id}/requeue
+  requeues with front=true and reports queue_position; POST /api/tasks/{id}/abandon
+  cancels the task; POST /api/tasks/active/stop parks the active task and clears active_task_id;
+  and invalid payload / invalid outcome / invalid task id responses return structured
+  JSON errors.'
+files_changed:
+- litehive/web/__init__.py
+- litehive/web/actions.py
+- litehive/web/common.py
+- litehive/web/server.py
+- litehive/web/snapshot.py
+- litehive/web/templates/index.html
+- tests/test_web_task_actions.py
 created_follow_up_task_ids: []
 task_update: {}
 tests:
   added: 0
   passing: 0
-warnings:
-- Agent did not submit verdict via litehive report CLI.
+warnings: []
 retry_count: 0
 retry_limit: 3
 retry_source: global
-retry_decision: final
-outcome: flagged
-outcome_reason_code: unsupported_verdict
-outcome_reason: 'implementing failed: agent did not submit verdict via litehive report
-  CLI'
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
 failure_classification: null
 failure_diagnostics: {}
 resource_limit_event: null
-duration_seconds: 471
+duration_seconds: 93
 hook_results: []
-created_at: '2026-04-08T17:52:37+00:00'
+created_at: '2026-04-09T00:05:05+00:00'

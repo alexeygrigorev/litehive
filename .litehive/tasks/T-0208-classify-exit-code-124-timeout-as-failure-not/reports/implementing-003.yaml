@@ -1,0 +1,53 @@
+task_id: T-0208
+step: implementing
+verdict: reject
+summary: 'SWE reported pass but produced no file changes and no tests. This usually
+  means the agent did not actually write code. Worktree: unknown. Report summary:
+  Verified the current implementation already satisfies T-0208 without further code
+  changes. In litehive/subagents/_manager.py, subagent execution is classified as
+  completed only when exit_code == 0; any non-zero exit is marked failed first, and
+  classify_execution_interruption can reclassify those non-zero exits to interrupted.
+  The inactivity-timeout path explicitly rewrites the execution to exit_code 124 and
+  status failed. In litehive/engines/base.py, parse_stage_report_text downgrades structured
+  STAGE_RESULT verdicts of pass/accept to fail whenever subagent_status is not completed,
+  so timeout-killed or otherwise non-zero exits cannot preserve a passing verdict
+  from partial output. Verified with targeted tests: uv run pytest -q tests/test_tasks_and_subagents.py
+  tests/test_stage_result_submission.py -k ''marks_generic_non_zero_exit_as_failed
+  or timeout_cannot_preserve_structured_pass_verdict or failed_subagent_cannot_turn_structured_pass_into_passing_report
+  or kills_stale_live_process_using_stdout_mtime'' -> 3 passed, 70 deselected in 0.58s.
+  Evidence confirms: exit code 124 is failed rather than completed, any non-zero exit
+  is not classified as completed, and timeout-killed agents do not produce pass verdicts.'
+feedback: 'Verified the current implementation already satisfies T-0208 without further
+  code changes. In litehive/subagents/_manager.py, subagent execution is classified
+  as completed only when exit_code == 0; any non-zero exit is marked failed first,
+  and classify_execution_interruption can reclassify those non-zero exits to interrupted.
+  The inactivity-timeout path explicitly rewrites the execution to exit_code 124 and
+  status failed. In litehive/engines/base.py, parse_stage_report_text downgrades structured
+  STAGE_RESULT verdicts of pass/accept to fail whenever subagent_status is not completed,
+  so timeout-killed or otherwise non-zero exits cannot preserve a passing verdict
+  from partial output. Verified with targeted tests: uv run pytest -q tests/test_tasks_and_subagents.py
+  tests/test_stage_result_submission.py -k ''marks_generic_non_zero_exit_as_failed
+  or timeout_cannot_preserve_structured_pass_verdict or failed_subagent_cannot_turn_structured_pass_into_passing_report
+  or kills_stale_live_process_using_stdout_mtime'' -> 3 passed, 70 deselected in 0.58s.
+  Evidence confirms: exit code 124 is failed rather than completed, any non-zero exit
+  is not classified as completed, and timeout-killed agents do not produce pass verdicts.'
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 3
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 66
+hook_results: []
+created_at: '2026-04-09T00:38:31+00:00'

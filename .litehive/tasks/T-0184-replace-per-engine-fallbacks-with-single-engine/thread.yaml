@@ -668,3 +668,157 @@
     test files, 0 failures"],"task_update":{}}'
   files_changed: []
   created_at: '2026-04-08T07:25:05+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Implemented blocking post-merge verification for commit_to_git using runner_hooks.after_merge.
+    Added after_merge to config/CLI hook validation, taught the hook dispatcher to
+    run it only for successful commit_to_git on the main checkout, and updated commit_to_git
+    so a failing blocking after_merge hook preserves the merged main commit, records
+    hook artifacts/results, sets the task back to queued/implementing, and does not
+    revert the merge. Updated the runner to honor commit_to_git retry handoff so the
+    task is requeued instead of falling into merge_failed when this specific post-merge
+    verification path requests a retry. Verified with focused pytest slices: tests/test_config_and_run_cli.py
+    -q (54 passed), tests/test_runner_workflow.py -q (113 passed), and tests/test_retry_commit_and_recovery.py
+    -q (92 passed). Evidence covered: after_merge hook parses and persists in config,
+    commit_to_git runs after_merge successfully on main, after_merge failure requeues
+    implementing without reverting the merge, no-hook path remains pass/backward-compatible,
+    and runner queue state is preserved for the implementing retry.'
+  files_changed: []
+  created_at: '2026-04-08T08:22:22+00:00'
+- role: qa
+  step: testing
+  verdict: pass
+  message: 'Verified post-merge commit_to_git behavior for runner_hooks.after_merge
+    with focused regression tests. Evidence: tests/test_retry_commit_and_recovery.py::test_commit_to_git_runs_after_merge_hook_on_main_and_finishes
+    confirms the blocking after_merge hook executes on the main checkout after merge
+    and task finishes done when the hook passes; tests/test_retry_commit_and_recovery.py::test_commit_to_git_requeues_implementing_when_after_merge_hook_fails
+    confirms a failing blocking after_merge hook preserves the merged main commit,
+    removes the task worktree, leaves merged file content on main, and requeues the
+    task at queued/implementing with retry handoff instead of reverting; tests/test_retry_commit_and_recovery.py::test_commit_to_git_skips_after_merge_when_hook_not_configured
+    confirms backward-compatible skip behavior; tests/test_config_and_run_cli.py::test_configure_persists_runner_hooks
+    confirms after_merge is accepted and persisted in runner_hooks config; tests/test_runner_workflow.py::test_runner_requeues_commit_to_git_retry_request_back_to_implementing
+    confirms the runner honors commit_to_git retry_decision=retry by finishing queued
+    and preserving implementing as the next stage. Command run: uv run pytest -q tests/test_retry_commit_and_recovery.py::test_commit_to_git_runs_after_merge_hook_on_main_and_finishes
+    tests/test_retry_commit_and_recovery.py::test_commit_to_git_requeues_implementing_when_after_merge_hook_fails
+    tests/test_retry_commit_and_recovery.py::test_commit_to_git_skips_after_merge_when_hook_not_configured
+    tests/test_config_and_run_cli.py::test_configure_persists_runner_hooks tests/test_runner_workflow.py::test_runner_requeues_commit_to_git_retry_request_back_to_implementing.
+    Result: 5 passed in 2.74s.'
+  files_changed: []
+  created_at: '2026-04-08T08:26:54+00:00'
+- role: reviewer
+  step: accepting
+  verdict: pass
+  message: 'Accepted. Verified the implementation against the acceptance criteria
+    by inspecting the code paths and rerunning focused regression coverage. Evidence:
+    litehive/config/constants.py and litehive/cli/parser.py now accept runner_hooks.after_merge;
+    litehive/runtime/_hooks.py maps commit_to_git pass reports to the after_merge
+    hook point; litehive/runtime/_commit.py runs blocking after_merge hooks only after
+    a successful merge on the main checkout, preserves the merged main state on hook
+    failure, sets task.status=queued and task.pipeline_status=implementing, marks
+    retry_decision=retry, and does not revert the merge; litehive/runner/core.py now
+    honors commit_to_git retry_decision=retry by finishing the run as queued instead
+    of routing to merge_failed. Tests run: uv run pytest -q tests/test_retry_commit_and_recovery.py::test_commit_to_git_runs_after_merge_hook_on_main_and_finishes
+    tests/test_retry_commit_and_recovery.py::test_commit_to_git_requeues_implementing_when_after_merge_hook_fails
+    tests/test_retry_commit_and_recovery.py::test_commit_to_git_skips_after_merge_when_hook_not_configured
+    tests/test_config_and_run_cli.py::test_configure_persists_runner_hooks tests/test_runner_workflow.py::test_runner_requeues_commit_to_git_retry_request_back_to_implementing.
+    Result: 5 passed in 1.54s. This covers success on main after merge, failing after_merge
+    requeue to implementing without revert, backward-compatible skip when no after_merge
+    hook is configured, config persistence, and runner retry handoff behavior.'
+  files_changed: []
+  created_at: '2026-04-08T08:28:45+00:00'
+- role: qa
+  step: testing
+  verdict: pass
+  message: 'Verified post-merge commit_to_git behavior for blocking runner_hooks.after_merge
+    with focused regression coverage. Re-ran: uv run pytest -q tests/test_retry_commit_and_recovery.py::test_commit_to_git_runs_after_merge_hook_on_main_and_finishes
+    tests/test_retry_commit_and_recovery.py::test_commit_to_git_requeues_implementing_when_after_merge_hook_fails
+    tests/test_retry_commit_and_recovery.py::test_commit_to_git_skips_after_merge_when_hook_not_configured
+    tests/test_config_and_run_cli.py::test_configure_persists_runner_hooks tests/test_runner_workflow.py::test_runner_requeues_commit_to_git_retry_request_back_to_implementing.
+    Result: 5 passed in 1.60s. Evidence: the success-path test confirms commit_to_git
+    runs the blocking after_merge hook from the main checkout after merge and finishes
+    done when it passes; the failure-path test confirms a failing after_merge hook
+    preserves the merged main state, does not revert the merge, removes the task worktree,
+    and requeues the task at queued/implementing so SWE fixes the merged state; the
+    no-hook test confirms backward-compatible skip behavior when after_merge is not
+    configured; the config/CLI test confirms after_merge is accepted and persisted
+    in runner_hooks; the runner workflow test confirms commit_to_git reports with
+    retry_decision=retry are routed back to implementing instead of merge_failed.
+    Acceptance criteria satisfied.'
+  files_changed: []
+  created_at: '2026-04-08T08:33:20+00:00'
+- role: reviewer
+  step: accepting
+  verdict: pass
+  message: 'Accepted post-merge verification for commit_to_git. Verified in code that
+    runner_hooks.after_merge is a supported hook point in config and CLI parsing,
+    commit_to_git executes blocking after_merge hooks from the main checkout only
+    after a successful merge, and on hook failure it preserves the merged main state,
+    removes the task worktree, records retry_decision=retry, and requeues the task
+    at queued/implementing instead of reverting. Also verified the runner honors commit_to_git
+    retry_decision=retry by finishing the run queued rather than routing to merge_failed.
+    Re-ran: uv run pytest -q tests/test_retry_commit_and_recovery.py::test_commit_to_git_runs_after_merge_hook_on_main_and_finishes
+    tests/test_retry_commit_and_recovery.py::test_commit_to_git_requeues_implementing_when_after_merge_hook_fails
+    tests/test_retry_commit_and_recovery.py::test_commit_to_git_skips_after_merge_when_hook_not_configured
+    tests/test_config_and_run_cli.py::test_configure_persists_runner_hooks tests/test_runner_workflow.py::test_runner_requeues_commit_to_git_retry_request_back_to_implementing.
+    Result: 5 passed in 1.59s. Acceptance criteria covered: failing after_merge returns
+    the task to implementing, the merge is not reverted and SWE works on merged main
+    state, runner_hooks.after_merge is configurable as a blocking post-merge hook,
+    and no-hook configuration skips the check for backward compatibility.'
+  files_changed: []
+  created_at: '2026-04-08T08:35:22+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Implemented post-merge verification support for commit_to_git via blocking
+    runner_hooks.after_merge on the main checkout after a successful merge. Verified
+    that after_merge is accepted in config normalization and CLI parsing, that commit_to_git
+    runs the hook on main and finishes done when it passes, that a failing blocking
+    after_merge hook preserves the merged main state and requeues the task at queued/implementing
+    with retry handoff instead of reverting, and that commit_to_git skips the extra
+    verification when no after_merge hook is configured. Focused verification run:
+    uv run pytest -q tests/test_retry_commit_and_recovery.py::test_commit_to_git_runs_after_merge_hook_on_main_and_finishes
+    tests/test_retry_commit_and_recovery.py::test_commit_to_git_requeues_implementing_when_after_merge_hook_fails
+    tests/test_retry_commit_and_recovery.py::test_commit_to_git_skips_after_merge_when_hook_not_configured
+    tests/test_config_and_run_cli.py::test_configure_persists_runner_hooks tests/test_runner_workflow.py::test_runner_requeues_commit_to_git_retry_request_back_to_implementing.
+    Result: 5 passed in 2.92s. Evidence in code paths includes litehive/runtime/_commit.py
+    for post-merge execution and requeue behavior, litehive/runtime/_hooks.py for
+    commit_to_git -> after_merge hook mapping, litehive/config/constants.py and litehive/cli/parser.py
+    for hook surface exposure, and litehive/runner/core.py for honoring commit_to_git
+    retry_decision=retry by returning to implementing rather than merge_failed.'
+  files_changed: []
+  created_at: '2026-04-08T08:37:52+00:00'
+- role: qa
+  step: testing
+  verdict: pass
+  message: 'Verified post-merge commit_to_git behavior for blocking runner_hooks.after_merge
+    with focused regression coverage. Re-ran: uv run pytest -q tests/test_retry_commit_and_recovery.py::test_commit_to_git_runs_after_merge_hook_on_main_and_finishes
+    tests/test_retry_commit_and_recovery.py::test_commit_to_git_requeues_implementing_when_after_merge_hook_fails
+    tests/test_retry_commit_and_recovery.py::test_commit_to_git_skips_after_merge_when_hook_not_configured
+    tests/test_config_and_run_cli.py::test_configure_persists_runner_hooks tests/test_runner_workflow.py::test_runner_requeues_commit_to_git_retry_request_back_to_implementing.
+    Result: 5 passed in 1.63s. Evidence: the success-path test confirms commit_to_git
+    runs the blocking after_merge hook from the main checkout after merge and finishes
+    done when it passes; the failure-path test confirms a failing after_merge hook
+    preserves the merged main state, does not revert the merge, removes the task worktree,
+    and requeues the task at queued/implementing so SWE fixes the merged state; the
+    no-hook test confirms backward-compatible skip behavior when after_merge is not
+    configured; the config/CLI test confirms after_merge is accepted and persisted
+    in runner_hooks; the runner workflow test confirms commit_to_git reports with
+    retry_decision=retry are routed back to implementing instead of merge_failed.
+    Acceptance criteria satisfied.'
+  files_changed: []
+  created_at: '2026-04-08T08:39:32+00:00'
+- role: reviewer
+  step: accepting
+  verdict: pass
+  message: 'Verified T-0216 against the acceptance criteria. Code review confirmed  is
+    accepted in config normalization and CLI parsing,  invokes blocking  hooks on
+    the main checkout only after a successful merge, and a failing post-merge hook
+    preserves the merged main state while requeuing the task to  with  instead of
+    reverting or routing to merge_failed. Focused regression tests run: , , , , and
+    . Result: 5 passed in 1.63s. Evidence from the failing-hook test shows the merged
+    file content remains on main, the worktree is removed, the task pipeline_status
+    becomes , and the checkpoint commit SHA matches main HEAD, satisfying the no-revert
+    requirement and the SWE-on-merged-state follow-up behavior.'
+  files_changed: []
+  created_at: '2026-04-08T08:41:59+00:00'

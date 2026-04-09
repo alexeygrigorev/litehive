@@ -1,0 +1,56 @@
+task_id: T-0221
+step: accepting
+verdict: blocked
+summary: 'accepting blocked by runner hook `before_pm_acceptance` (exit 1): if git
+  grep -nE ''noqa:.*F401|noqa:.*F403|ruff:\s*noqa:\s*F401|ruff:\s*noqa:\s*F403'' --
+  litehive tests; then echo ''Forbidden noqa F401/F403 suppression found.''; exit
+  1; fi'
+feedback: 'Runner hook `before_pm_acceptance` `uv run ruff check --select E402,F401
+  litehive tests` passed with exit code 0 (artifact: `artifacts/before_pm_acceptance-001.yaml`).
+
+
+  Runner hook `before_pm_acceptance` `if git grep -nE ''noqa:.*F401|noqa:.*F403|ruff:\s*noqa:\s*F401|ruff:\s*noqa:\s*F403''
+  -- litehive tests; then echo ''Forbidden noqa F401/F403 suppression found.''; exit
+  1; fi` failed with exit code 1 (artifact: `artifacts/before_pm_acceptance-002.yaml`).'
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings:
+- 'runner hook passed: `before_pm_acceptance` `uv run ruff check --select E402,F401
+  litehive tests` (artifact: `artifacts/before_pm_acceptance-001.yaml`)'
+- 'runner hook failed: `before_pm_acceptance` `if git grep -nE ''noqa:.*F401|noqa:.*F403|ruff:\s*noqa:\s*F401|ruff:\s*noqa:\s*F403''
+  -- litehive tests; then echo ''Forbidden noqa F401/F403 suppression found.''; exit
+  1; fi` (artifact: `artifacts/before_pm_acceptance-002.yaml`)'
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: final
+outcome: blocked
+outcome_reason_code: verdict_blocked
+outcome_reason: 'accepting blocked by runner hook `before_pm_acceptance` (exit 1):
+  if git grep -nE ''noqa:.*F401|noqa:.*F403|ruff:\s*noqa:\s*F401|ruff:\s*noqa:\s*F403''
+  -- litehive tests; then echo ''Forbidden noqa F401/F403 suppression found.''; exit
+  1; fi'
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 0
+hook_results:
+- point: before_pm_acceptance
+  command: uv run ruff check --select E402,F401 litehive tests
+  blocking: true
+  exit_code: 0
+  status: passed
+  artifact: artifacts/before_pm_acceptance-001.yaml
+- point: before_pm_acceptance
+  command: if git grep -nE 'noqa:.*F401|noqa:.*F403|ruff:\s*noqa:\s*F401|ruff:\s*noqa:\s*F403'
+    -- litehive tests; then echo 'Forbidden noqa F401/F403 suppression found.'; exit
+    1; fi
+  blocking: true
+  exit_code: 1
+  status: failed
+  artifact: artifacts/before_pm_acceptance-002.yaml
+created_at: '2026-04-09T00:06:02+00:00'

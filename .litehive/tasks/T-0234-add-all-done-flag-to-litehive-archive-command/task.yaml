@@ -9,12 +9,12 @@ mode: implementation
 pipeline_mode: full
 status: queued
 flag_reason: null
-pipeline_status: backlog
+pipeline_status: implementing
 priority: medium
 pm_complexity: simple
 planned_effort: s
 created_at: '2026-04-08T07:48:05+00:00'
-updated_at: '2026-04-08T23:23:18+00:00'
+updated_at: '2026-04-08T23:34:10+00:00'
 goal: litehive archive without args currently tries to archive all done tasks but
   fails on missing references. Add explicit --all-done flag for bulk archival that
   skips missing/broken tasks gracefully. Without --all-done or a task_id, show usage
@@ -35,7 +35,42 @@ plan:
 - Revise archive CLI tests to cover single-task mode, explicit bulk mode, no-arg help
   behavior, and skip logging for broken references.
 human_checkpoints: []
-subagents: []
+subagents:
+- id: SA-0001
+  role: planner
+  engine: codex
+  status: completed
+  path: subagents/SA-0001-planner
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0002
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0002-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0003
+  role: qa
+  engine: codex
+  status: completed
+  path: subagents/SA-0003-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0004
+  role: reviewer
+  engine: codex
+  status: completed
+  path: subagents/SA-0004-reviewer
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0005
+  role: merge-resolver
+  engine: claude
+  status: completed
+  path: subagents/SA-0005-merge-resolver
+  sandboxed: false
+  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0234 add-all-done-flag-to-litehive-archive-command'
@@ -43,7 +78,7 @@ git:
   checkpoint_base_sha: null
   checkpoint_attempts: 0
   rolled_back_checkpoint_attempt: null
-  merge_agent_attempts: 0
+  merge_agent_attempts: 1
   worktree_path: null
 retry_policy:
   max_retries: null

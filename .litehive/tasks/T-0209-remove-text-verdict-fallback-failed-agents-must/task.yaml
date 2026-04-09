@@ -8,12 +8,13 @@ model: null
 mode: implementation
 pipeline_mode: full
 status: flagged
-pipeline_status: grooming
+flag_reason: unsupported_verdict
+pipeline_status: implementing
 priority: medium
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-07T08:25:03+00:00'
-updated_at: '2026-04-08T15:08:13+00:00'
+updated_at: '2026-04-08T23:37:45+00:00'
 goal: When an agent is killed or fails (non-zero exit), the text parsing fallback
   in parse_stage_report_text still runs and _parse_verdict defaults to pass when no
   VERDICT line is found. This is wrong - a failed agent should never produce a pass
@@ -46,6 +47,20 @@ subagents:
   engine: codex
   status: completed
   path: subagents/SA-0003-recovery
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0004
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0004-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0005
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0005-swe
   sandboxed: false
   sandbox_summary: host
 git:

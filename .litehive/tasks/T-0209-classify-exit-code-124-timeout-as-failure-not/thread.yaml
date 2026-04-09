@@ -1,0 +1,25 @@
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Tightened the no-CLI-verdict fallback in parse_stage_report_text so empty
+    transcripts now summarize failed subagents as '' failed without verdict'' instead
+    of a completed/pass-like fallback. Verified the failed-agent path still returns
+    verdict=fail and only structured/CLI submission can produce pass. Tests run: uv
+    run pytest -q tests/test_stage_result_submission.py ; uv run pytest -q tests/test_runner_workflow.py
+    -k ''parse_stage_report_text_fails_on_text_only_transcript or stage_report_from_subagent_fails_without_cli_verdict''.
+    Evidence: 10 passed in test_stage_result_submission, including new regression
+    for subagent_status=failed with no transcript => verdict fail; 2 passed in runner
+    workflow slice confirming text-only/no-CLI transcripts remain fail.'
+  files_changed: []
+  created_at: '2026-04-08T23:37:23+00:00'
+- role: swe
+  step: implementing
+  verdict: fail
+  message: 'Implementation-stage verdict submission from resumed session 019d6f73-ace9-7223-a55a-d249b084b5b5.
+    Verdict: fail. The stage was not completed because the required implementing verdict
+    was not submitted during the original run, so the workflow remained incomplete.
+    This report is being submitted now to close that gap. No additional implementation
+    details are available in the resumed prompt context beyond the missing verdict
+    submission itself.'
+  files_changed: []
+  created_at: '2026-04-08T23:37:41+00:00'

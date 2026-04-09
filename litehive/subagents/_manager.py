@@ -25,6 +25,7 @@ from litehive.models import (
 )
 from litehive.observability import record_engine_execution, record_engine_observation
 from litehive.subagents._artifacts import (
+    _prune_superseded_subagent_artifacts,
     _write_stream_artifact,
     _write_text_if_changed,
 )
@@ -249,8 +250,7 @@ class SubagentManager(_SessionMixin):
             resource_limit_event=None if failure is None else failure.resource_limit_event,
             continuation=continuation,
         )
-        # Disabled: keep all subagent artifacts for debugging.
-        # _prune_superseded_subagent_artifacts(task_dir(self.root, task), keep_subagent_id=ref.id)
+        _prune_superseded_subagent_artifacts(task_dir(self.root, task), keep_subagent_id=ref.id)
         if proc is not None:
             record_engine_execution(
                 self.root,

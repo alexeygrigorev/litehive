@@ -1,29 +1,60 @@
 task_id: T-0222
 step: implementing
-verdict: fail
-summary: 'implementing failed: agent did not submit verdict via litehive report CLI'
-feedback: '[stderr]
-
-  Error: stdin is not a terminal'
-files_changed: []
+verdict: pass
+summary: 'Verified the existing queue-management web implementation against the task
+  acceptance criteria and fixed the focused web test suite so that evidence is green.
+  Confirmed POST /api/queue/move in litehive/web/server.py moves queued tasks to a
+  requested 1-based position via move_queued_task and returns {ok, queue, snapshot};
+  POST /api/queue/promote promotes queued tasks and resumes resumable flagged/interrupted/parked-style
+  tasks to the front via resume_task(front=True); POST /api/queue/prioritize validates
+  a non-empty ordered task_ids list, rejects invalid/duplicate/non-queued ids through
+  queue helper validation, and returns updated queue+snapshot. Confirmed the dashboard
+  queue panel in litehive/web/templates/index.html exposes discoverable reorder controls
+  (Promote, Move Up, Move Down) and immediately refreshes local UI state after successful
+  mutations by replacing state.snapshot with response.snapshot and re-rendering. Tests
+  run: uv run pytest tests/test_web_snapshot_lockfree.py -q -> 26 passed in 6.18s.
+  Implementation evidence covered by that file includes test_queue_move_endpoint_moves_task_and_returns_updated_snapshot,
+  test_queue_promote_endpoint_resumes_flagged_task_to_front, test_queue_prioritize_endpoint_reorders_tasks_and_rejects_duplicates,
+  and test_render_index_includes_queue_controls_and_refresh_wiring. Code change made
+  in this pass: added the missing get_task import in tests/test_web_snapshot_lockfree.py
+  so the promote endpoint verification actually executes.'
+feedback: 'Verified the existing queue-management web implementation against the task
+  acceptance criteria and fixed the focused web test suite so that evidence is green.
+  Confirmed POST /api/queue/move in litehive/web/server.py moves queued tasks to a
+  requested 1-based position via move_queued_task and returns {ok, queue, snapshot};
+  POST /api/queue/promote promotes queued tasks and resumes resumable flagged/interrupted/parked-style
+  tasks to the front via resume_task(front=True); POST /api/queue/prioritize validates
+  a non-empty ordered task_ids list, rejects invalid/duplicate/non-queued ids through
+  queue helper validation, and returns updated queue+snapshot. Confirmed the dashboard
+  queue panel in litehive/web/templates/index.html exposes discoverable reorder controls
+  (Promote, Move Up, Move Down) and immediately refreshes local UI state after successful
+  mutations by replacing state.snapshot with response.snapshot and re-rendering. Tests
+  run: uv run pytest tests/test_web_snapshot_lockfree.py -q -> 26 passed in 6.18s.
+  Implementation evidence covered by that file includes test_queue_move_endpoint_moves_task_and_returns_updated_snapshot,
+  test_queue_promote_endpoint_resumes_flagged_task_to_front, test_queue_prioritize_endpoint_reorders_tasks_and_rejects_duplicates,
+  and test_render_index_includes_queue_controls_and_refresh_wiring. Code change made
+  in this pass: added the missing get_task import in tests/test_web_snapshot_lockfree.py
+  so the promote endpoint verification actually executes.'
+files_changed:
+- litehive/web/server.py
+- litehive/web/templates/index.html
+- tests/test_web_snapshot_lockfree.py
 created_follow_up_task_ids: []
 task_update: {}
 tests:
   added: 0
   passing: 0
-warnings:
-- Agent did not submit verdict via litehive report CLI.
+warnings: []
 retry_count: 0
 retry_limit: 3
 retry_source: global
-retry_decision: final
-outcome: flagged
-outcome_reason_code: unsupported_verdict
-outcome_reason: 'implementing failed: agent did not submit verdict via litehive report
-  CLI'
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
 failure_classification: null
 failure_diagnostics: {}
 resource_limit_event: null
-duration_seconds: 285
+duration_seconds: 84
 hook_results: []
-created_at: '2026-04-08T18:02:14+00:00'
+created_at: '2026-04-09T00:12:56+00:00'

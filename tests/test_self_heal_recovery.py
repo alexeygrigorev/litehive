@@ -12,7 +12,13 @@ from litehive.runtime._recovery import (
     _classify_recovery_failure_owner,
 )
 from litehive.subagents import SubagentResult
-from litehive.tasks import append_thread_comment, create_task, save_task, save_task_runtime
+from litehive.tasks import (
+    append_thread_comment,
+    create_task,
+    save_task,
+    save_task_runtime,
+    task_dir,
+)
 
 
 def _make_litehive_traceback(source_path: str) -> str:
@@ -95,6 +101,31 @@ class TestSelfHealRecovery:
         source_root = tmp_path / "litehive-src"
         source_root.mkdir()
         config = LitehiveConfig(litehive_source_path=str(source_root))
+        artifact_base = task_dir(root, task) / "subagents" / "implementing-failed"
+        artifact_base.mkdir(parents=True)
+        (artifact_base / "session.yaml").write_text(
+            "id: SA-previous\nstatus: failed\nexit_code: 17\n",
+            encoding="utf-8",
+        )
+        (artifact_base / "stdout.txt").write_text(
+            "starting stage\nlitehive report --task-id WRONG --verdict pass\n",
+            encoding="utf-8",
+        )
+        (artifact_base / "stderr.txt").write_text(
+            "error: unknown task id WRONG\n",
+            encoding="utf-8",
+        )
+        (artifact_base / "transcript.md").write_text(
+            "Tried to submit `litehive report` but it failed.\n",
+            encoding="utf-8",
+        )
+        (artifact_base / "prompt.txt").write_text(
+            "Run implementing, then call litehive report.\n",
+            encoding="utf-8",
+        )
+        task.runtime.last_subagent = task.runtime.last_subagent.model_copy(
+            update={"path": "subagents/implementing-failed"}
+        ) if task.runtime.last_subagent is not None else None
 
         failed_report = StageReport(
             task_id=task.id,
@@ -154,8 +185,11 @@ class TestSelfHealRecovery:
         assert "SELF-HEAL" in call["prompt"]
         assert "litehive source tree" in call["prompt"]
         assert str(source_root) in call["prompt"]
-        assert "uv run pytest -q" in call["prompt"]
         assert "RuntimeError: bug in litehive" in call["prompt"]
+        assert "Failed subagent exit code: 17" in call["prompt"]
+        assert "litehive report --task-id WRONG --verdict pass" in call["prompt"]
+        assert "error: unknown task id WRONG" in call["prompt"]
+        assert "Do NOT redo the failed `implementing` work" in call["prompt"]
 
         # Verify SubagentManager was constructed with litehive source root
         assert len(captured_execution_root) == 1
@@ -166,6 +200,8 @@ class TestSelfHealRecovery:
         assert report["trigger"] == "litehive_self_heal"
         assert report["failure_classification"] == "litehive"
         assert report["actions"][0]["action"] == "litehive_self_heal"
+        assert result is not None
+        assert result.retry_decision == "retry"
 
         # Verify fingerprint was recorded
         assert len(task.runtime.self_heal_traceback_fingerprints) == 1
@@ -208,7 +244,7 @@ class TestSelfHealRecovery:
         assert result is None
         mock_subagents.run.assert_not_called()
 
-    def test_project_failure_uses_standard_recovery_path(self, tmp_path: Path) -> None:
+    def test_project_failure_uses_litehive_recovery_repo_without_redoing_stage(self, tmp_path: Path) -> None:
         root, task = self._setup_task(tmp_path)
         source_root = tmp_path / "litehive-src"
         source_root.mkdir()
@@ -223,38 +259,59 @@ class TestSelfHealRecovery:
         )
 
         captured_calls: list[dict] = []
+        captured_execution_root: list[Path] = []
 
         def fake_run(t, *, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None):
             captured_calls.append({"prompt": prompt, "role": role})
+            append_thread_comment(root, t, TaskThreadComment(
+                role="recovery",
+                step="implementing",
+                verdict="pass",
+                message="Fixed Litehive recovery prompt wiring; retry implementing.",
+                files_changed=["litehive/runtime/_recovery.py"],
+            ))
             return SubagentResult(
                 ref=_fake_subagent_ref(),
                 execution=None,
-                transcript="fixed project issue",
+                transcript="fixed litehive recovery issue",
                 exit_code=0,
                 failure=None,
             )
 
+        def fake_manager_init(self, r, *, execution_root=None):
+            self.root = r.resolve()
+            self.execution_root = (execution_root or r).resolve()
+            self.config = config
+            self.sandbox = MagicMock()
+            self._stream_offsets = {}
+            self.run = fake_run
+            captured_execution_root.append(self.execution_root)
+
         mock_subagents = MagicMock()
         mock_subagents.run = fake_run
 
-        result = _attempt_stage_recovery(
-            root,
-            root,
-            task,
-            "implementing",
-            failed_report,
-            subagents=mock_subagents,
-            config=config,
-            engine_name="codex",
-        )
+        with patch("litehive.runtime._recovery.SubagentManager.__init__", fake_manager_init):
+            result = _attempt_stage_recovery(
+                root,
+                root,
+                task,
+                "implementing",
+                failed_report,
+                subagents=mock_subagents,
+                config=config,
+                engine_name="codex",
+            )
 
         assert len(captured_calls) == 1
         call = captured_calls[0]
-        # Standard path: no SELF-HEAL, uses project classification
         assert "SELF-HEAL" not in call["prompt"]
         assert "project" in call["prompt"].lower()
-        # No self-heal fingerprints recorded
+        assert "Do NOT redo the failed `implementing` work" in call["prompt"]
+        assert "If the failure is a task/project bug rather than a Litehive bug, do not implement the task" in call["prompt"]
+        assert captured_execution_root == [source_root.resolve()]
         assert len(task.runtime.self_heal_traceback_fingerprints) == 0
+        assert result is not None
+        assert result.retry_decision == "retry"
 
     def test_self_heal_failed_records_blocker_and_fingerprint(self, tmp_path: Path) -> None:
         root, task = self._setup_task(tmp_path)

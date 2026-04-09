@@ -27,3 +27,81 @@
     report: .litehive/tasks/T-0222-web-dashboard-queue-management-api-move-promote/recovery/recovery-001.yaml'
   files_changed: []
   created_at: '2026-04-08T17:57:15+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Verified the existing queue-management web implementation against the
+    task acceptance criteria and fixed the focused web test suite so that evidence
+    is green. Confirmed POST /api/queue/move in litehive/web/server.py moves queued
+    tasks to a requested 1-based position via move_queued_task and returns {ok, queue,
+    snapshot}; POST /api/queue/promote promotes queued tasks and resumes resumable
+    flagged/interrupted/parked-style tasks to the front via resume_task(front=True);
+    POST /api/queue/prioritize validates a non-empty ordered task_ids list, rejects
+    invalid/duplicate/non-queued ids through queue helper validation, and returns
+    updated queue+snapshot. Confirmed the dashboard queue panel in litehive/web/templates/index.html
+    exposes discoverable reorder controls (Promote, Move Up, Move Down) and immediately
+    refreshes local UI state after successful mutations by replacing state.snapshot
+    with response.snapshot and re-rendering. Tests run: uv run pytest tests/test_web_snapshot_lockfree.py
+    -q -> 26 passed in 6.18s. Implementation evidence covered by that file includes
+    test_queue_move_endpoint_moves_task_and_returns_updated_snapshot, test_queue_promote_endpoint_resumes_flagged_task_to_front,
+    test_queue_prioritize_endpoint_reorders_tasks_and_rejects_duplicates, and test_render_index_includes_queue_controls_and_refresh_wiring.
+    Code change made in this pass: added the missing get_task import in tests/test_web_snapshot_lockfree.py
+    so the promote endpoint verification actually executes.'
+  files_changed: []
+  created_at: '2026-04-09T00:12:48+00:00'
+- role: qa
+  step: testing
+  verdict: pass
+  message: 'Independently verified the queue-management web changes against the task
+    acceptance criteria. Ran the focused suite ..........................                                               [100%]
+
+    26 passed in 6.04s, which passed: 26 passed in 6.14s. Evidence from that file
+    covers the new POST endpoints and UI behavior:  verifies  moves a queued task
+    to the requested 1-based position and returns  with persisted queue order;  verifies  preserves
+    existing resumable-task semantics by resuming a flagged task to the front and
+    returning the updated queue;  verifies  reorders multiple task ids to the front
+    and rejects duplicate ids with a 400 JSON error;  verifies the dashboard exposes
+    discoverable reorder controls (, , ) and wires queue mutations to refresh UI state
+    immediately. Code inspection confirms the server routes in  dispatch to , , and
+    , and each success response includes a fresh workspace snapshot. Template inspection
+    in  confirms successful mutations assign  and re-render, satisfying the immediate
+    UI update requirement. Acceptance criteria met.'
+  files_changed: []
+  created_at: '2026-04-09T00:13:48+00:00'
+- role: qa
+  step: testing
+  verdict: pass
+  message: 'Independent QA verification passed. Ran uv run pytest tests/test_web_snapshot_lockfree.py
+    -q and it passed: 26 passed in 6.14s. Verified POST /api/queue/move moves a queued
+    task to the requested 1-based position and returns ok, queue, and snapshot with
+    persisted order. Verified POST /api/queue/promote moves a queued task to the front
+    and preserves resumable-task behavior by resuming a flagged task to the front.
+    Verified POST /api/queue/prioritize reorders multiple task ids to the front and
+    rejects duplicate ids with a 400 JSON error. Verified the dashboard exposes discoverable
+    reorder controls with Promote, Move Up, and Move Down buttons, and successful
+    mutations immediately refresh the UI by replacing state.snapshot with the response
+    snapshot and re-rendering. Acceptance criteria met.'
+  files_changed: []
+  created_at: '2026-04-09T00:14:09+00:00'
+- role: reviewer
+  step: accepting
+  verdict: pass
+  message: 'Reviewed the queue-management dashboard changes against the task acceptance
+    criteria and confirmed they are met. Verified in litehive/web/server.py that POST
+    /api/queue/move requires task_id plus integer position, calls move_queued_task,
+    and returns {ok, queue, snapshot}; POST /api/queue/promote accepts task_id, preserves
+    resumable-task semantics by routing flagged/interrupted/parked-style tasks through
+    resume_task(front=True), otherwise promotes queued tasks via move_queued_task(...,
+    1); POST /api/queue/prioritize validates a non-empty ordered task_ids list and
+    returns updated queue plus snapshot while surfacing queue-helper validation errors
+    as 4xx JSON responses. Verified in litehive/web/templates/index.html that the
+    queue panel exposes discoverable reorder controls with Promote, Move Up, and Move
+    Down buttons, and that successful queue mutations immediately replace state.snapshot
+    with response.snapshot and re-render so the UI updates without a manual reload.
+    Independently reran the focused verification with uv run pytest tests/test_web_snapshot_lockfree.py
+    -q and it passed: 26 passed in 6.04s. The passing evidence includes test_queue_move_endpoint_moves_task_and_returns_updated_snapshot,
+    test_queue_promote_endpoint_resumes_flagged_task_to_front, test_queue_prioritize_endpoint_reorders_tasks_and_rejects_duplicates,
+    and test_render_index_includes_queue_controls_and_refresh_wiring. Acceptance criteria
+    satisfied; ready for commit_to_git.'
+  files_changed: []
+  created_at: '2026-04-09T00:15:19+00:00'

@@ -1,4 +1,4 @@
-active_task_id: T-0233
+active_task_id: T-0237
 mode: implementation
 queue:
 - T-0232
@@ -6,17 +6,16 @@ queue:
 - T-0129
 - T-0184
 - T-0234
-- T-0216
 - T-0209
-- T-0235
-- T-0221
-- T-0222
-- T-0223
 - T-0215
+- T-0221
 - T-0212
 - T-0208
 - T-0072
-- T-0237
 pool_stop_reason: null
 next_task_number: 237
-unmerged_worktrees: []
+unmerged_worktrees:
+- task_id: T-0234
+  worktree_path: .litehive/worktrees/T-0234-add-all-done-flag-to-litehive-archive-command
+- task_id: T-0223
+  worktree_path: .litehive/worktrees/T-0223-web-dashboard-daemon-control-api-start-stop

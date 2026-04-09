@@ -8,13 +8,14 @@ engine: null
 model: null
 mode: implementation
 pipeline_mode: full
-status: queued
-pipeline_status: implementing
+status: done
+flag_reason: null
+pipeline_status: done
 priority: high
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-08T15:16:20+00:00'
-updated_at: '2026-04-08T17:39:11+00:00'
+updated_at: '2026-04-08T23:51:18+00:00'
 goal: 'The recovery agent''s job is to analyze WHY an agent failed (check logs, stdout,
   stderr, session.yaml, exit codes), identify the bug in litehive''s own code, fix
   it, and submit a recovery verdict so the next run succeeds. It should NOT re-run
@@ -152,12 +153,40 @@ subagents:
   path: subagents/SA-0014-recovery
   sandboxed: false
   sandbox_summary: host
+- id: SA-0015
+  role: merge-resolver
+  engine: claude
+  status: completed
+  path: subagents/SA-0015-merge-resolver
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0016
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0016-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0017
+  role: qa
+  engine: codex
+  status: completed
+  path: subagents/SA-0017-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0018
+  role: reviewer
+  engine: codex
+  status: completed
+  path: subagents/SA-0018-reviewer
+  sandboxed: false
+  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0235 recovery-agent-must-diagnose-and-fix-litehive'
-  commit_sha: null
-  checkpoint_base_sha: null
-  checkpoint_attempts: 0
+  commit_sha: 8d4d7636811490117c504fb55760d2cec658e9f3
+  checkpoint_base_sha: bc7364cec9e8b3e4bdb24e20a1fd483be843be45
+  checkpoint_attempts: 1
   rolled_back_checkpoint_attempt: null
   merge_agent_attempts: 0
   worktree_path: null

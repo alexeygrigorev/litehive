@@ -1,0 +1,85 @@
+task_id: T-0222
+step: accepting
+verdict: pass
+summary: 'Reviewed the queue-management dashboard changes against the task acceptance
+  criteria and confirmed they are met. Verified in litehive/web/server.py that POST
+  /api/queue/move requires task_id plus integer position, calls move_queued_task,
+  and returns {ok, queue, snapshot}; POST /api/queue/promote accepts task_id, preserves
+  resumable-task semantics by routing flagged/interrupted/parked-style tasks through
+  resume_task(front=True), otherwise promotes queued tasks via move_queued_task(...,
+  1); POST /api/queue/prioritize validates a non-empty ordered task_ids list and returns
+  updated queue plus snapshot while surfacing queue-helper validation errors as 4xx
+  JSON responses. Verified in litehive/web/templates/index.html that the queue panel
+  exposes discoverable reorder controls with Promote, Move Up, and Move Down buttons,
+  and that successful queue mutations immediately replace state.snapshot with response.snapshot
+  and re-render so the UI updates without a manual reload. Independently reran the
+  focused verification with uv run pytest tests/test_web_snapshot_lockfree.py -q and
+  it passed: 26 passed in 6.04s. The passing evidence includes test_queue_move_endpoint_moves_task_and_returns_updated_snapshot,
+  test_queue_promote_endpoint_resumes_flagged_task_to_front, test_queue_prioritize_endpoint_reorders_tasks_and_rejects_duplicates,
+  and test_render_index_includes_queue_controls_and_refresh_wiring. Acceptance criteria
+  satisfied; ready for commit_to_git.'
+feedback: 'Runner hook `before_pm_acceptance` `uv run ruff check --select E402,F401
+  litehive tests` passed with exit code 0 (artifact: `artifacts/before_pm_acceptance-001.yaml`).
+
+
+  Runner hook `before_pm_acceptance` `if git grep -nE ''noqa:.*F401|noqa:.*F403|ruff:\s*noqa:\s*F401|ruff:\s*noqa:\s*F403''
+  -- litehive tests; then echo ''Forbidden noqa F401/F403 suppression found.''; exit
+  1; fi` passed with exit code 0 (artifact: `artifacts/before_pm_acceptance-002.yaml`).
+
+
+  Reviewed the queue-management dashboard changes against the task acceptance criteria
+  and confirmed they are met. Verified in litehive/web/server.py that POST /api/queue/move
+  requires task_id plus integer position, calls move_queued_task, and returns {ok,
+  queue, snapshot}; POST /api/queue/promote accepts task_id, preserves resumable-task
+  semantics by routing flagged/interrupted/parked-style tasks through resume_task(front=True),
+  otherwise promotes queued tasks via move_queued_task(..., 1); POST /api/queue/prioritize
+  validates a non-empty ordered task_ids list and returns updated queue plus snapshot
+  while surfacing queue-helper validation errors as 4xx JSON responses. Verified in
+  litehive/web/templates/index.html that the queue panel exposes discoverable reorder
+  controls with Promote, Move Up, and Move Down buttons, and that successful queue
+  mutations immediately replace state.snapshot with response.snapshot and re-render
+  so the UI updates without a manual reload. Independently reran the focused verification
+  with uv run pytest tests/test_web_snapshot_lockfree.py -q and it passed: 26 passed
+  in 6.04s. The passing evidence includes test_queue_move_endpoint_moves_task_and_returns_updated_snapshot,
+  test_queue_promote_endpoint_resumes_flagged_task_to_front, test_queue_prioritize_endpoint_reorders_tasks_and_rejects_duplicates,
+  and test_render_index_includes_queue_controls_and_refresh_wiring. Acceptance criteria
+  satisfied; ready for commit_to_git.'
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings:
+- 'runner hook passed: `before_pm_acceptance` `uv run ruff check --select E402,F401
+  litehive tests` (artifact: `artifacts/before_pm_acceptance-001.yaml`)'
+- 'runner hook passed: `before_pm_acceptance` `if git grep -nE ''noqa:.*F401|noqa:.*F403|ruff:\s*noqa:\s*F401|ruff:\s*noqa:\s*F403''
+  -- litehive tests; then echo ''Forbidden noqa F401/F403 suppression found.''; exit
+  1; fi` (artifact: `artifacts/before_pm_acceptance-002.yaml`)'
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 61
+hook_results:
+- point: before_pm_acceptance
+  command: uv run ruff check --select E402,F401 litehive tests
+  blocking: true
+  exit_code: 0
+  status: passed
+  artifact: artifacts/before_pm_acceptance-001.yaml
+- point: before_pm_acceptance
+  command: if git grep -nE 'noqa:.*F401|noqa:.*F403|ruff:\s*noqa:\s*F401|ruff:\s*noqa:\s*F403'
+    -- litehive tests; then echo 'Forbidden noqa F401/F403 suppression found.'; exit
+    1; fi
+  blocking: true
+  exit_code: 0
+  status: passed
+  artifact: artifacts/before_pm_acceptance-002.yaml
+created_at: '2026-04-09T00:15:28+00:00'
