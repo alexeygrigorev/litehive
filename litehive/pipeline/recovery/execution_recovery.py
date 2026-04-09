@@ -524,6 +524,26 @@ def _resolve_recovery_engine(
         engine = config.recovery_engine
     elif config and config.recovery_engine == "auto":
         from litehive.agents import get_engine
+        from litehive.agents.quota import (
+            claude_quota_block_reason,
+            codex_quota_block_reason,
+            copilot_quota_block_reason,
+            zai_quota_block_reason,
+        )
+
+        def _engine_quota_ok(name: str) -> bool:
+            try:
+                if name == "claude":
+                    return claude_quota_block_reason() is None
+                if name == "codex":
+                    return codex_quota_block_reason() is None
+                if name == "copilot":
+                    return copilot_quota_block_reason() is None
+                if name in ("goz", "opencode"):
+                    return zai_quota_block_reason() is None
+            except Exception:
+                pass
+            return True  # fail-open
 
         candidates = list(config.engine_preference) if config.engine_preference else []
         if config.default_engine and config.default_engine not in candidates:
@@ -533,7 +553,7 @@ def _resolve_recovery_engine(
         engine = config.default_engine or "codex"
         for name in candidates:
             try:
-                if get_engine(name).is_available():
+                if get_engine(name).is_available() and _engine_quota_ok(name):
                     engine = name
                     break
             except Exception:
