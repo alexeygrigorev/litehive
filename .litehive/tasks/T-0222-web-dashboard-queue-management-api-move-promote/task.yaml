@@ -10,21 +10,43 @@ pipeline_mode: full
 status: queued
 pipeline_status: implementing
 priority: high
-pm_complexity: null
-planned_effort: null
+pm_complexity: moderate
+planned_effort: m
 created_at: '2026-04-08T06:04:54+00:00'
 updated_at: '2026-04-08T19:02:47+00:00'
-goal: 'Add POST endpoints to the web dashboard for queue management: move a task to
-  a specific position, promote a task to front, and prioritize multiple tasks. Add
-  drag-and-drop or button-based queue reordering in the frontend.'
+goal: Add queue mutation support to the local web dashboard so operators can reorder
+  queued tasks from the browser using the same task-layer behavior as litehive move,
+  promote, and prioritize, with immediate UI refresh after each mutation.
 acceptance_criteria:
-- POST /api/queue/move endpoint moves a task to a specified position in the queue
-- POST /api/queue/promote endpoint moves a task to the front of the queue
-- POST /api/queue/prioritize endpoint reorders multiple tasks to the front
-- Frontend queue panel shows reorder controls (move up/down buttons or drag-and-drop)
-- Queue changes are reflected immediately in the UI after mutation
-constraints: []
-plan: []
+- POST /api/queue/move accepts a queued task_id and 1-based position, returns success
+  JSON with the updated queue order, and leaves the task at the requested position
+  (or the end when the requested position exceeds queue length), matching CLI move
+  semantics.
+- POST /api/queue/promote accepts a task_id, moves a queued task to position 1, and
+  preserves existing CLI promote behavior for resumable tasks that should be resumed
+  to the front.
+- POST /api/queue/prioritize accepts an ordered list of queued task ids, returns success
+  JSON with those ids at the front in the requested order, and rejects duplicate or
+  non-queued ids with a clear 4xx JSON error.
+- The queue panel exposes browser controls to reorder queued tasks without editing
+  YAML manually, using either button-based controls or drag-and-drop, and the shipped
+  interaction makes the supported move/promote flow discoverable.
+- After any successful queue mutation, the dashboard updates the rendered queue order
+  immediately without requiring a manual page reload.
+constraints:
+- Keep scope to the web queue API and dashboard controls; do not fold the broader
+  web/__init__.py refactor from T-0220 into this task.
+- Reuse the existing task-layer queue helpers so web mutations follow the same validation
+  and persistence rules as the CLI.
+plan:
+- Add POST route handling in the web server for move, promote, and prioritize, with
+  JSON request parsing and 4xx JSON errors for invalid input.
+- Cover the new web API routes with focused tests for success cases and queue-validation
+  failures using the existing queue-management semantics.
+- Add queue reorder controls in the dashboard UI and refresh local state immediately
+  after each successful mutation.
+- Verify the UI wiring with targeted frontend/template assertions or handler-level
+  tests, keeping verification focused on queue rendering and mutation refresh behavior.
 human_checkpoints: []
 subagents:
 - id: SA-0001

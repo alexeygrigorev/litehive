@@ -10,6 +10,14 @@ import time
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
+from litehive.tasks import (
+    WorkspaceConflictError,
+    load_state,
+    move_queued_task,
+    prioritize_queued_tasks,
+    require_task,
+    resume_task,
+)
 from litehive.web.common import (
     _STREAM_KEEPALIVE_SECONDS,
     _STREAM_RETRY_MS,
@@ -158,6 +166,30 @@ class LitehiveWebHandler(BaseHTTPRequestHandler):
             except ValueError as exc:
                 return self._send_error_json(HTTPStatus.BAD_REQUEST, str(exc))
             return self._send_json(response)
+        try:
+            if parsed.path == "/api/queue/move":
+                task_id = self._require_string(payload, "task_id")
+                position = self._require_int(payload, "position")
+                state = move_queued_task(self.workspace_root, task_id, position)
+                return self._send_queue_mutation_json(state.queue)
+            if parsed.path == "/api/queue/promote":
+                task_id = self._require_string(payload, "task_id")
+                self._promote_task(task_id)
+                return self._send_queue_mutation_json(load_state(self.workspace_root).queue)
+            if parsed.path == "/api/queue/prioritize":
+                task_ids = payload.get("task_ids")
+                if not isinstance(task_ids, list) or not task_ids:
+                    raise ValueError("task_ids must be a non-empty list of task ids")
+                if any(not isinstance(tid, str) or not tid.strip() for tid in task_ids):
+                    raise ValueError("task_ids must be a non-empty list of task ids")
+                state = prioritize_queued_tasks(self.workspace_root, task_ids)
+                return self._send_queue_mutation_json(state.queue)
+        except FileNotFoundError as exc:
+            return self._send_error_json(HTTPStatus.NOT_FOUND, str(exc))
+        except WorkspaceConflictError as exc:
+            return self._send_error_json(HTTPStatus.CONFLICT, str(exc))
+        except ValueError as exc:
+            return self._send_error_json(HTTPStatus.BAD_REQUEST, str(exc))
         return self._send_error_json(HTTPStatus.NOT_FOUND, "Not found")
 
     def log_message(self, format: str, *args: Any) -> None:  # noqa: A003
@@ -189,6 +221,15 @@ class LitehiveWebHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(payload)
 
+    def _send_queue_mutation_json(self, queue: list[str]) -> None:
+        self._send_json(
+            {
+                "ok": True,
+                "queue": list(queue),
+                "snapshot": _web_pkg.build_workspace_snapshot(self.workspace_root),
+            }
+        )
+
     def _read_json_body(self) -> dict[str, Any]:
         content_length = self.headers.get("Content-Length")
         if content_length is None:
@@ -204,6 +245,33 @@ class LitehiveWebHandler(BaseHTTPRequestHandler):
         if not isinstance(payload, dict):
             raise ValueError("JSON body must be an object")
         return payload
+
+    def _require_string(self, payload: dict[str, Any], field: str) -> str:
+        value = payload.get(field)
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError(f"{field} is required")
+        return value.strip()
+
+    def _require_int(self, payload: dict[str, Any], field: str) -> int:
+        value = payload.get(field)
+        if not isinstance(value, int):
+            raise ValueError(f"{field} must be an integer")
+        return value
+
+    def _promote_task(self, task_id: str) -> None:
+        task = require_task(self.workspace_root, task_id)
+        if task.status in {
+            "interrupted",
+            "parked",
+            "flagged",
+            "cancelled",
+            "wont_do",
+            "deferred",
+            "duplicate",
+        }:
+            resume_task(self.workspace_root, task_id, front=True)
+            return
+        move_queued_task(self.workspace_root, task_id, 1)
 
     def _stream_events(self, *, task_id: str | None, subagent_id: str | None) -> None:
         monitor = self.server.workspace_stream_monitor

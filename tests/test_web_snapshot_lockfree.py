@@ -1,12 +1,16 @@
 """Tests for lock-free web dashboard snapshot reads."""
 
+from contextlib import contextmanager
 from functools import partial
 import http.client
 import json
 import os
 import time
 import threading
+from http.server import ThreadingHTTPServer
 from pathlib import Path
+from urllib.error import HTTPError
+from urllib.request import Request, urlopen
 
 import yaml
 
@@ -47,7 +51,6 @@ from litehive.web import (
     update_task_detail,
     update_default_engine,
 )
-from http.server import ThreadingHTTPServer
 
 
 def _write_runner_lock_metadata(root: Path, data: dict) -> None:
@@ -83,6 +86,45 @@ def _read_sse_event(response: http.client.HTTPResponse) -> tuple[str, dict[str, 
         if stripped.startswith("data: "):
             data = json.loads(stripped.removeprefix("data: "))
             continue
+
+
+@contextmanager
+def _serve_web(root: Path):
+    server = ThreadingHTTPServer(("127.0.0.1", 0), partial(LitehiveWebHandler, workspace_root=root))
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        host, port = server.server_address[:2]
+        yield f"http://{host}:{port}"
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+
+def _post_json(url: str, payload: dict[str, object]) -> tuple[int, dict[str, object]]:
+    request = Request(
+        url,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    with urlopen(request, timeout=5) as response:
+        return response.status, json.loads(response.read().decode("utf-8"))
+
+
+def _post_json_error(url: str, payload: dict[str, object]) -> tuple[int, dict[str, object]]:
+    request = Request(
+        url,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urlopen(request, timeout=5) as response:
+            return response.status, json.loads(response.read().decode("utf-8"))
+    except HTTPError as exc:
+        return exc.code, json.loads(exc.read().decode("utf-8"))
 
 
 def test_runner_status_readonly_returns_idle_when_no_metadata(tmp_path: Path) -> None:
@@ -871,3 +913,91 @@ def test_sse_idle_client_waits_without_rebuilding_snapshots(tmp_path: Path, monk
         server.shutdown()
         server.server_close()
         thread.join(timeout=2)
+
+
+def test_queue_move_endpoint_moves_task_and_returns_updated_snapshot(tmp_path: Path) -> None:
+    _init_git_repo(tmp_path)
+    ensure_workspace(tmp_path)
+    first = create_task(tmp_path, title="First task")
+    second = create_task(tmp_path, title="Second task")
+    third = create_task(tmp_path, title="Third task")
+
+    with _serve_web(tmp_path) as base_url:
+        status, payload = _post_json(
+            f"{base_url}/api/queue/move",
+            {"task_id": third.id, "position": 2},
+        )
+
+    assert status == 200
+    assert payload["ok"] is True
+    assert payload["queue"] == [first.id, third.id, second.id]
+    assert payload["snapshot"]["queue"] == [first.id, third.id, second.id]
+    assert load_state(tmp_path).queue == [first.id, third.id, second.id]
+
+
+def test_queue_promote_endpoint_resumes_flagged_task_to_front(tmp_path: Path) -> None:
+    _init_git_repo(tmp_path)
+    ensure_workspace(tmp_path)
+    first = create_task(tmp_path, title="First task")
+    flagged = create_task(tmp_path, title="Resume me")
+    task = get_task(tmp_path, flagged.id)
+    assert task is not None
+    task.status = "flagged"
+    task.pipeline_status = "testing"
+    task.runtime.execution_status = "flagged"
+    save_task(tmp_path, task)
+    state = load_state(tmp_path)
+    state.queue = [first.id]
+    save_state(tmp_path, state)
+
+    with _serve_web(tmp_path) as base_url:
+        status, payload = _post_json(
+            f"{base_url}/api/queue/promote",
+            {"task_id": flagged.id},
+        )
+
+    resumed = get_task(tmp_path, flagged.id)
+    assert resumed is not None
+    assert status == 200
+    assert payload["ok"] is True
+    assert payload["queue"] == [flagged.id, first.id]
+    assert resumed.status == "queued"
+    assert resumed.pipeline_status == "testing"
+    assert resumed.runtime.execution_status == "idle"
+    assert load_state(tmp_path).queue == [flagged.id, first.id]
+
+
+def test_queue_prioritize_endpoint_reorders_tasks_and_rejects_duplicates(tmp_path: Path) -> None:
+    _init_git_repo(tmp_path)
+    ensure_workspace(tmp_path)
+    first = create_task(tmp_path, title="First task")
+    second = create_task(tmp_path, title="Second task")
+    third = create_task(tmp_path, title="Third task")
+
+    with _serve_web(tmp_path) as base_url:
+        status, payload = _post_json(
+            f"{base_url}/api/queue/prioritize",
+            {"task_ids": [third.id, first.id]},
+        )
+        error_status, error_payload = _post_json_error(
+            f"{base_url}/api/queue/prioritize",
+            {"task_ids": [second.id, second.id]},
+        )
+
+    assert status == 200
+    assert payload["ok"] is True
+    assert payload["queue"] == [third.id, first.id, second.id]
+    assert error_status == 400
+    assert error_payload["error"] == f"Task ids must be unique: {second.id}"
+    assert load_state(tmp_path).queue == [third.id, first.id, second.id]
+
+
+def test_render_index_includes_queue_controls_and_refresh_wiring() -> None:
+    html = _render_index()
+
+    assert "Move Up" in html
+    assert "Move Down" in html
+    assert "Promote" in html
+    assert "/api/queue/move" in html
+    assert "/api/queue/promote" in html
+    assert "response.snapshot" in html
