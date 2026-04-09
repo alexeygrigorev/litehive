@@ -9,6 +9,7 @@ import time
 import threading
 from http.server import ThreadingHTTPServer
 from pathlib import Path
+from types import SimpleNamespace
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
@@ -599,6 +600,110 @@ def test_read_engine_dashboard_includes_config_routing_and_monitoring(tmp_path: 
     }
 
 
+def test_read_engine_dashboard_includes_normalized_engine_quota(tmp_path: Path, monkeypatch) -> None:
+    _init_git_repo(tmp_path)
+    ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
+
+    monkeypatch.setattr(
+        "litehive.web.snapshot.check_codex_quota",
+        lambda: SimpleNamespace(
+            error=None,
+            primary_window=SimpleNamespace(used_percent=42.0, reset_at="2026-04-09T05:00:00Z"),
+            secondary_window=SimpleNamespace(used_percent=61.0, reset_at="2026-04-15T00:00:00Z"),
+        ),
+    )
+    monkeypatch.setattr(
+        "litehive.web.snapshot.check_claude_quota",
+        lambda: SimpleNamespace(
+            error=None,
+            five_hour=SimpleNamespace(used_percent=37.5, reset_at="2026-04-09T04:00:00Z"),
+            seven_day=SimpleNamespace(used_percent=58.0, reset_at="2026-04-12T00:00:00Z"),
+        ),
+    )
+    monkeypatch.setattr(
+        "litehive.web.snapshot.check_copilot_quota",
+        lambda: SimpleNamespace(
+            error=None,
+            premium_remaining=125,
+            premium_entitlement=500,
+            used_percent=75.0,
+            quota_reset_date="2026-05-01",
+        ),
+    )
+    monkeypatch.setattr(
+        "litehive.web.snapshot.check_zai_quota",
+        lambda: SimpleNamespace(
+            error=None,
+            api_calls=SimpleNamespace(used_percent=33.0, remaining=67, limit=100, window_hours=24),
+            tokens=SimpleNamespace(used_percent=48.0, remaining=52000, limit=100000, window_hours=24),
+        ),
+    )
+
+    payload = read_engine_dashboard(tmp_path)
+    quota = payload["quota"]["engines"]
+
+    assert quota["codex"]["windows"] == [
+        {
+            "label": "5h",
+            "used_percent": 42.0,
+            "remaining_percent": 58.0,
+            "reset_at": "2026-04-09T05:00:00Z",
+        },
+        {
+            "label": "weekly",
+            "used_percent": 61.0,
+            "remaining_percent": 39.0,
+            "reset_at": "2026-04-15T00:00:00Z",
+        },
+    ]
+    assert quota["claude"]["summary"] == "7d 58% used"
+    assert quota["copilot"]["windows"][0]["remaining_display"] == "125/500"
+    assert quota["copilot"]["windows"][0]["reset_at"] == "2026-05-01"
+    assert quota["goz"]["windows"][0]["window"] == "24h"
+    assert quota["goz"]["windows"][0]["remaining_display"] == "67/100"
+    assert quota["opencode"]["windows"][1]["remaining_display"] == "52000/100000"
+
+
+def test_read_engine_dashboard_marks_unavailable_quota_readers_fail_open(
+    tmp_path: Path, monkeypatch
+) -> None:
+    _init_git_repo(tmp_path)
+    ensure_workspace(tmp_path)
+
+    monkeypatch.setattr(
+        "litehive.web.snapshot.check_codex_quota",
+        lambda: SimpleNamespace(error="no auth token", primary_window=None, secondary_window=None),
+    )
+    monkeypatch.setattr(
+        "litehive.web.snapshot.check_claude_quota",
+        lambda: SimpleNamespace(error="no-credentials", five_hour=None, seven_day=None),
+    )
+    monkeypatch.setattr(
+        "litehive.web.snapshot.check_copilot_quota",
+        lambda: SimpleNamespace(
+            error="gh not on PATH",
+            premium_remaining=0,
+            premium_entitlement=0,
+            used_percent=None,
+            quota_reset_date=None,
+        ),
+    )
+    monkeypatch.setattr(
+        "litehive.web.snapshot.check_zai_quota",
+        lambda: SimpleNamespace(error="goz not on PATH", api_calls=None, tokens=None),
+    )
+
+    payload = read_engine_dashboard(tmp_path)
+    quota = payload["quota"]["engines"]
+
+    assert quota["codex"]["status"] == "unavailable"
+    assert quota["codex"]["summary"] == "unavailable"
+    assert quota["claude"]["error"] == "no-credentials"
+    assert quota["copilot"]["windows"][0]["remaining_display"] == "0/0"
+    assert quota["goz"]["status"] == "unavailable"
+    assert quota["opencode"]["error"] == "goz not on PATH"
+
+
 def test_update_default_engine_persists_local_config(tmp_path: Path) -> None:
     _init_git_repo(tmp_path)
     ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
@@ -668,6 +773,7 @@ def test_http_engine_endpoints_and_task_switch(tmp_path: Path) -> None:
         assert response.status == 200
         payload = json.loads(response.read().decode("utf-8"))
         assert payload["config"]["default_engine"] == "codex"
+        assert "quota" in payload
         assert payload["monitoring"]["engines"]["codex"]["token_cost_fields"]["prompt_tokens"] == 2000
 
         conn.request(

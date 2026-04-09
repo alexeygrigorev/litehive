@@ -233,6 +233,27 @@
     }
     .muted { color: var(--muted); }
     .mono { font-family: var(--mono); }
+    .quota-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+    .quota-window-list {
+      display: grid;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .quota-window {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 10px;
+      background: #fdfcf8;
+    }
+    .quota-window strong {
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-size: 12px;
+    }
     .toolbar {
       display: flex;
       gap: 8px;
@@ -284,6 +305,7 @@
     @media (max-width: 720px) {
       .grid-two { grid-template-columns: 1fr; }
       .kv { grid-template-columns: 1fr; }
+      .quota-grid { grid-template-columns: 1fr; }
     }
   </style>
 </head>
@@ -390,6 +412,50 @@
             <div>${esc(entry.label)}</div><div>${entry.valueHtml ?? esc(entry.value ?? "-")}</div>
           `).join("")}</div>`
         : `<div class="card empty">${esc(emptyText)}</div>`;
+    }
+
+    function formatPercent(value) {
+      if (value === null || value === undefined || value === "") return "-";
+      const number = Number(value);
+      if (!Number.isFinite(number)) return esc(value);
+      return Number.isInteger(number) ? `${number}%` : `${number.toFixed(1)}%`;
+    }
+
+    function renderQuotaCards(engines) {
+      const quota = engines?.quota?.engines || {};
+      const entries = Object.entries(quota);
+      if (!entries.length) {
+        return `<div class="card empty">Loading quota status.</div>`;
+      }
+      return `
+        <div class="quota-grid">
+          ${entries.map(([engineName, record]) => `
+            <div class="card">
+              <strong>${esc(engineName)}</strong>
+              <div class="meta">
+                ${badge(record.status || "unknown", record.status === "unavailable" ? "blocked" : "running")}
+                ${record.provider ? badge(record.provider) : ""}
+              </div>
+              <div class="muted" style="margin-top:8px">${esc(record.summary || "-")}</div>
+              ${record.error ? `<div class="muted" style="margin-top:8px">Quota check unavailable: ${esc(record.error)}</div>` : ""}
+              <div class="quota-window-list">
+                ${(record.windows || []).map((window) => `
+                  <div class="quota-window">
+                    <strong>${esc(window.label || "window")}</strong>
+                    ${formatKeyValueList([
+                      window.window ? { label: "Window", value: window.window } : null,
+                      { label: "Used", value: formatPercent(window.used_percent) },
+                      window.remaining_percent !== undefined ? { label: "Remaining", value: formatPercent(window.remaining_percent) } : null,
+                      window.remaining_display ? { label: "Remaining quota", value: window.remaining_display } : null,
+                      window.reset_at ? { label: "Reset", value: window.reset_at } : null,
+                    ], "No quota window details.")}
+                  </div>
+                `).join("")}
+              </div>
+            </div>
+          `).join("")}
+        </div>
+      `;
     }
 
     function listToTextarea(value) {
@@ -672,6 +738,10 @@
               <span class="mono">fallback: ${esc((row.fallback_order || []).join(" -> ") || "-")}</span>
             </li>
           `).join("")}</ul>
+        </div>
+        <div class="section">
+          <h3>Quota Status</h3>
+          ${renderQuotaCards(engines)}
         </div>
         <div class="section">
           <h3>Usage Metrics</h3>
@@ -1260,7 +1330,9 @@
       state.snapshot = await fetchJson("/api/snapshot", { headers: {} });
       state.daemon = state.snapshot.daemon || state.daemon;
       if (!state.engines) {
-        await refreshEngines();
+        refreshEngines()
+          .then(() => render(state.snapshot))
+          .catch(() => {});
       }
       chooseDefaults(state.snapshot);
       render(state.snapshot);
