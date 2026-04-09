@@ -34,10 +34,33 @@ def enabled_integration_engines() -> set[str]:
     return {item.strip() for item in raw.split(",") if item.strip()}
 
 
+def _engine_quota_block_reason(engine_name: str) -> str | None:
+    """Check if an engine's quota is too high to run integration tests."""
+    try:
+        if engine_name == "codex":
+            from litehive.engines.quota.codex_quota import codex_quota_block_reason
+            return codex_quota_block_reason()
+        if engine_name == "claude":
+            from litehive.engines.quota.claude_quota import claude_quota_block_reason
+            return claude_quota_block_reason()
+        if engine_name == "copilot":
+            from litehive.engines.quota.copilot_quota import copilot_quota_block_reason
+            return copilot_quota_block_reason()
+        if engine_name in ("goz", "opencode"):
+            from litehive.engines.quota.zai_quota import zai_quota_block_reason
+            return zai_quota_block_reason()
+    except Exception:
+        pass
+    return None
+
+
 def require_real_engine(engine_name: str) -> None:
     engine = get_engine(engine_name)
     if not engine.is_available():
         pytest.skip(f"{engine_name} binary not available on PATH")
+    quota_reason = _engine_quota_block_reason(engine_name)
+    if quota_reason:
+        pytest.skip(f"{engine_name} quota too high: {quota_reason}")
 
 
 def integration_workspace(root: Path) -> Path:
