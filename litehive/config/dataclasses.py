@@ -55,5 +55,6 @@ class SubagentResourceLimitsConfig:
 @dataclass(slots=True)
 class RunnerHookConfig:
     command: str
-    blocking: bool = True
+    reject_on_failure: bool = False
+    blocking: bool = False  # legacy alias for reject_on_failure
     description: str | None = None

@@ -7,15 +7,15 @@ engine: null
 model: null
 mode: implementation
 pipeline_mode: full
-status: queued
+status: in_progress
 flag_reason: null
 flag_count: 0
-pipeline_status: backlog
+pipeline_status: commit_to_git
 priority: high
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-09T09:21:16+00:00'
-updated_at: '2026-04-09T09:21:16+00:00'
+updated_at: '2026-04-09T17:22:33+00:00'
 goal: Embed testing best practices into the agent prompts so agents write better tests.
   Rules should be generic (apply to any project) with profile-specific additions.
   Add to both SWE (implementing stage) and QA (testing stage) prompts.
@@ -36,7 +36,35 @@ acceptance_criteria:
 constraints: []
 plan: []
 human_checkpoints: []
-subagents: []
+subagents:
+- id: SA-0001
+  role: planner
+  engine: codex
+  status: completed
+  path: subagents/SA-0001-planner
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0002
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0002-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0003
+  role: qa
+  engine: codex
+  status: completed
+  path: subagents/SA-0003-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0004
+  role: reviewer
+  engine: codex
+  status: completed
+  path: subagents/SA-0004-reviewer
+  sandboxed: false
+  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0257 add-testing-quality-guidelines-to-swe-and-qa'

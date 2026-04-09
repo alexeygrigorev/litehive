@@ -1,0 +1,85 @@
+- role: planner
+  step: grooming
+  verdict: pass
+  message: 'Grooming pass. Verified the prompt text is assembled through litehive/agents/_prompts.py
+    using shared stage instructions from litehive/config/profiles/_shared.yaml plus
+    per-profile stage_overlay entries from litehive/config/profiles/python.yaml and
+    litehive/config/profiles/django.yaml, so this task should be implemented in those
+    prompt/profile sources rather than only in workspace config guidance. Verified
+    existing regression surfaces for prompt/context text in tests/test_runner_workflow.py,
+    tests/test_workspace_bootstrap.py, and tests/test_engine_variants_and_timeline.py.
+    Updated task metadata with PM sizing pm_complexity=moderate and planned_effort=s,
+    and persisted this plan: 1) confirm prompt assembly path, 2) add universal testing-quality
+    rules to shared implementing/testing prompt text, 3) extend Python and Django
+    stage overlays with the required testing guidance, 4) add focused assertions for
+    generated prompt/context text, 5) run targeted pytest slices plus any necessary
+    broader regression command. No blocker found. No code changes or test runs performed
+    in grooming.'
+  files_changed: []
+  created_at: '2026-04-09T17:15:55+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: Updated shared stage prompt text in litehive/config/profiles/_shared.yaml
+    so the SWE implementing prompt now instructs agents to write assertions that fail
+    when the feature is broken, avoid framework/defaults/constants coverage, keep
+    one test per behavior, and avoid duplicate coverage; and the QA testing prompt
+    now tells agents to reject always-pass tests, duplicate coverage, tests over 50
+    lines, and monolithic tests covering 5+ behaviors. Added Python profile testing
+    guidance in litehive/config/profiles/python.yaml for pytest, tmp_path over manual
+    tempfiles, mocking external calls instead of internal logic, and avoiding time.sleep
+    in tests. Added Django profile testing guidance in litehive/config/profiles/django.yaml
+    to avoid ORM round-trip/CASCADE and standalone URL resolution tests, prefer setUpTestData
+    for read-only fixtures, and use assertContains over string matching. Verified
+    prompt/profile rendering with uv run pytest -q tests/test_runner_workflow.py tests/test_workspace_bootstrap.py
+    (143 passed in 9.94s) and ran the implementing hook lint command uv run ruff check
+    --select E402,F401 litehive tests (passed).
+  files_changed: []
+  created_at: '2026-04-09T17:18:01+00:00'
+- role: qa
+  step: testing
+  verdict: pass
+  message: 'Validated the prompt-source changes in litehive/config/profiles/_shared.yaml,
+    litehive/config/profiles/python.yaml, and litehive/config/profiles/django.yaml.
+    Confirmed the shared implementing prompt now includes all required universal SWE
+    testing rules: assertions must fail when broken, no framework/library-guarantee
+    coverage, no defaults/constants/static-data tests, one behavior per test, and
+    no duplicate coverage. Confirmed the shared testing prompt now includes all required
+    QA rejection rules: reject always-pass assertions, duplicate coverage, tests longer
+    than 50 lines, and monolithic tests covering 5+ behaviors. Confirmed the Python
+    stage overlays include pytest, tmp_path over manual tempfiles, mocking external/integration
+    edges rather than internal logic, and no time.sleep in tests. Confirmed the Django
+    stage overlays include rejecting ORM round-trip/CASCADE tests, avoiding standalone
+    URL resolution tests, using setUpTestData for read-only fixtures, and preferring
+    assertContains over raw string matching. Verified these rules are exercised by
+    prompt/profile regression tests in tests/test_runner_workflow.py and tests/test_workspace_bootstrap.py,
+    so agents will see them in rendered prompt text rather than only config guidance.
+    Ran: uv run pytest -q tests/test_runner_workflow.py tests/test_workspace_bootstrap.py
+    -> 143 passed in 9.96s. No QA fixes were required.'
+  files_changed: []
+  created_at: '2026-04-09T17:19:29+00:00'
+- role: reviewer
+  step: accepting
+  verdict: pass
+  message: 'Accepted. Verified the prompt-source changes directly in litehive/config/profiles/_shared.yaml,
+    litehive/config/profiles/python.yaml, and litehive/config/profiles/django.yaml.
+    Confirmed the shared implementing prompt now includes the required universal SWE
+    testing rules: assertions must fail when the feature is broken, avoid framework/library-guarantee
+    coverage, avoid defaults/constants/static-data tests, keep one behavior per test,
+    and avoid duplicate coverage. Confirmed the shared testing prompt now includes
+    the required QA rejection rules: reject always-pass assertions, duplicate coverage,
+    tests longer than 50 lines, and monolithic tests covering 5 or more behaviors.
+    Confirmed the Python stage overlay includes pytest, tmp_path over manual tempfiles,
+    mocking external boundaries rather than internal logic, and no time.sleep in tests.
+    Confirmed the Django stage overlay includes rejecting ORM round-trip/model persistence/CASCADE
+    tests, avoiding standalone URL resolution tests, using setUpTestData for read-only
+    fixtures, and preferring assertContains over raw string matching. Verified these
+    rules are exercised in prompt/profile regression tests: tests/test_runner_workflow.py
+    asserts the rendered implementing/testing stage prompts include the shared rules,
+    and tests/test_workspace_bootstrap.py asserts the resolved Python and Django overlays
+    include the profile-specific guidance. Ran uv run pytest -q tests/test_runner_workflow.py
+    tests/test_workspace_bootstrap.py -> 143 passed in 9.97s. Ran uv run pytest -q
+    -> 926 passed, 3 skipped in 118.42s. Acceptance criteria met and existing tests
+    pass.'
+  files_changed: []
+  created_at: '2026-04-09T17:22:21+00:00'

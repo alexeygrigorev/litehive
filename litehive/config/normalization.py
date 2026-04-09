@@ -6,6 +6,7 @@ from typing import Mapping, Sequence
 from litehive.config.constants import (
     ENGINE_CATEGORY_RETRY_SELECTOR_PREFIX,
     MODEL_FAMILY_RETRY_SELECTOR_PREFIX,
+    REJECTABLE_HOOK_POINTS,
     VALID_AGENT_STARTUP_GUIDANCE_KEYS,
     VALID_ENGINE_NAMES,
     VALID_EXECUTION_RETRY_CLASSIFICATIONS,
@@ -13,6 +14,7 @@ from litehive.config.constants import (
     VALID_RUNNER_HOOK_POINTS,
     VALID_SANDBOX_BACKENDS,
     VALID_SANDBOX_NETWORK_MODES,
+    _LEGACY_HOOK_POINT_MAP,
     VALID_SANDBOX_WORKSPACE_MODES,
 )
 from litehive.config.dataclasses import (

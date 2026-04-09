@@ -1,0 +1,63 @@
+task_id: T-0257
+step: accepting
+verdict: pass
+source: agent
+summary: 'Accepted. Verified the prompt-source changes directly in litehive/config/profiles/_shared.yaml,
+  litehive/config/profiles/python.yaml, and litehive/config/profiles/django.yaml.
+  Confirmed the shared implementing prompt now includes the required universal SWE
+  testing rules: assertions must fail when the feature is broken, avoid framework/library-guarantee
+  coverage, avoid defaults/constants/static-data tests, keep one behavior per test,
+  and avoid duplicate coverage. Confirmed the shared testing prompt now includes the
+  required QA rejection rules: reject always-pass assertions, duplicate coverage,
+  tests longer than 50 lines, and monolithic tests covering 5 or more behaviors. Confirmed
+  the Python stage overlay includes pytest, tmp_path over manual tempfiles, mocking
+  external boundaries rather than internal logic, and no time.sleep in tests. Confirmed
+  the Django stage overlay includes rejecting ORM round-trip/model persistence/CASCADE
+  tests, avoiding standalone URL resolution tests, using setUpTestData for read-only
+  fixtures, and preferring assertContains over raw string matching. Verified these
+  rules are exercised in prompt/profile regression tests: tests/test_runner_workflow.py
+  asserts the rendered implementing/testing stage prompts include the shared rules,
+  and tests/test_workspace_bootstrap.py asserts the resolved Python and Django overlays
+  include the profile-specific guidance. Ran uv run pytest -q tests/test_runner_workflow.py
+  tests/test_workspace_bootstrap.py -> 143 passed in 9.97s. Ran uv run pytest -q ->
+  926 passed, 3 skipped in 118.42s. Acceptance criteria met and existing tests pass.'
+feedback: 'Accepted. Verified the prompt-source changes directly in litehive/config/profiles/_shared.yaml,
+  litehive/config/profiles/python.yaml, and litehive/config/profiles/django.yaml.
+  Confirmed the shared implementing prompt now includes the required universal SWE
+  testing rules: assertions must fail when the feature is broken, avoid framework/library-guarantee
+  coverage, avoid defaults/constants/static-data tests, keep one behavior per test,
+  and avoid duplicate coverage. Confirmed the shared testing prompt now includes the
+  required QA rejection rules: reject always-pass assertions, duplicate coverage,
+  tests longer than 50 lines, and monolithic tests covering 5 or more behaviors. Confirmed
+  the Python stage overlay includes pytest, tmp_path over manual tempfiles, mocking
+  external boundaries rather than internal logic, and no time.sleep in tests. Confirmed
+  the Django stage overlay includes rejecting ORM round-trip/model persistence/CASCADE
+  tests, avoiding standalone URL resolution tests, using setUpTestData for read-only
+  fixtures, and preferring assertContains over raw string matching. Verified these
+  rules are exercised in prompt/profile regression tests: tests/test_runner_workflow.py
+  asserts the rendered implementing/testing stage prompts include the shared rules,
+  and tests/test_workspace_bootstrap.py asserts the resolved Python and Django overlays
+  include the profile-specific guidance. Ran uv run pytest -q tests/test_runner_workflow.py
+  tests/test_workspace_bootstrap.py -> 143 passed in 9.97s. Ran uv run pytest -q ->
+  926 passed, 3 skipped in 118.42s. Acceptance criteria met and existing tests pass.'
+submitted_via_cli: true
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 171
+hook_results: []
+created_at: '2026-04-09T17:22:33+00:00'

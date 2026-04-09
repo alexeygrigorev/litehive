@@ -1,0 +1,57 @@
+task_id: T-0257
+step: grooming
+verdict: pass
+source: agent
+summary: 'Grooming pass. Verified the prompt text is assembled through litehive/agents/_prompts.py
+  using shared stage instructions from litehive/config/profiles/_shared.yaml plus
+  per-profile stage_overlay entries from litehive/config/profiles/python.yaml and
+  litehive/config/profiles/django.yaml, so this task should be implemented in those
+  prompt/profile sources rather than only in workspace config guidance. Verified existing
+  regression surfaces for prompt/context text in tests/test_runner_workflow.py, tests/test_workspace_bootstrap.py,
+  and tests/test_engine_variants_and_timeline.py. Updated task metadata with PM sizing
+  pm_complexity=moderate and planned_effort=s, and persisted this plan: 1) confirm
+  prompt assembly path, 2) add universal testing-quality rules to shared implementing/testing
+  prompt text, 3) extend Python and Django stage overlays with the required testing
+  guidance, 4) add focused assertions for generated prompt/context text, 5) run targeted
+  pytest slices plus any necessary broader regression command. No blocker found. No
+  code changes or test runs performed in grooming.'
+feedback: 'Stage `grooming` switched from `claude` to `codex` after claude usage limit
+  reached (7d window at 96%, resets 2026-04-10T09:00:00.827830+00:00).
+
+
+  Grooming pass. Verified the prompt text is assembled through litehive/agents/_prompts.py
+  using shared stage instructions from litehive/config/profiles/_shared.yaml plus
+  per-profile stage_overlay entries from litehive/config/profiles/python.yaml and
+  litehive/config/profiles/django.yaml, so this task should be implemented in those
+  prompt/profile sources rather than only in workspace config guidance. Verified existing
+  regression surfaces for prompt/context text in tests/test_runner_workflow.py, tests/test_workspace_bootstrap.py,
+  and tests/test_engine_variants_and_timeline.py. Updated task metadata with PM sizing
+  pm_complexity=moderate and planned_effort=s, and persisted this plan: 1) confirm
+  prompt assembly path, 2) add universal testing-quality rules to shared implementing/testing
+  prompt text, 3) extend Python and Django stage overlays with the required testing
+  guidance, 4) add focused assertions for generated prompt/context text, 5) run targeted
+  pytest slices plus any necessary broader regression command. No blocker found. No
+  code changes or test runs performed in grooming.'
+submitted_via_cli: true
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings:
+- Stage `grooming` switched from `claude` to `codex` after claude usage limit reached
+  (7d window at 96%, resets 2026-04-10T09:00:00.827830+00:00).
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 97
+hook_results: []
+created_at: '2026-04-09T17:16:13+00:00'
