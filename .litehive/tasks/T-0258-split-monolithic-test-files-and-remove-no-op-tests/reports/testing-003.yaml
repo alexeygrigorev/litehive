@@ -1,0 +1,63 @@
+task_id: T-0258
+step: testing
+verdict: reject
+source: agent
+summary: 'Rejected after QA validation. Expected: the monolithic test cleanup should
+  leave focused test functions; under the testing-stage rules, tests longer than 50
+  lines or still covering multiple behaviors in one flow should be split further.
+  Observed: the file splits, named no-op removals, subprocess rewrite, and suite timing
+  are all present, but many oversized tests remain in the touched area. Examples from
+  an AST length scan: tests/test_web_daemon_monitor.py line 92 test_web_daemon_api_supports_status_start_stop_restart
+  is 90 lines; tests/test_web_task_actions.py line 50 test_web_task_create_and_update_endpoints_mutate_fields
+  is 51 lines; tests/test_web_task_actions.py line 103 test_web_task_close_requeue_abandon_and_stop_endpoints_mutate_status
+  is 59 lines; tests/test_web_snapshot_and_verdicts.py line 228 test_build_workspace_snapshot_includes_full_task_detail_payload
+  is 101 lines; tests/test_web_engine_dashboard.py line 302 test_http_engine_endpoints_and_task_switch
+  is 70 lines; tests/test_recovery_and_rollback.py still contains multiple 50-88 line
+  tests and is 2050 lines overall. Steps to reproduce: run a small AST scan over the
+  touched test files and print any test function longer than 50 lines; the above functions
+  are reported immediately. Verification evidence: focused hotspot slice passed with
+  6 tests in 3.48s, and full suite timing with /usr/bin/time -p uv run pytest -q produced
+  926 passed, 3 skipped in 113.30s, real 114.27s. Acceptance criteria status: the
+  file splits, no-op removals, subprocess-test rewrite, and under-3-minute suite target
+  are satisfied; the decomposition is still insufficient under the testing-stage quality
+  bar because several replacement tests remain oversized and monolithic.'
+feedback: 'Rejected after QA validation. Expected: the monolithic test cleanup should
+  leave focused test functions; under the testing-stage rules, tests longer than 50
+  lines or still covering multiple behaviors in one flow should be split further.
+  Observed: the file splits, named no-op removals, subprocess rewrite, and suite timing
+  are all present, but many oversized tests remain in the touched area. Examples from
+  an AST length scan: tests/test_web_daemon_monitor.py line 92 test_web_daemon_api_supports_status_start_stop_restart
+  is 90 lines; tests/test_web_task_actions.py line 50 test_web_task_create_and_update_endpoints_mutate_fields
+  is 51 lines; tests/test_web_task_actions.py line 103 test_web_task_close_requeue_abandon_and_stop_endpoints_mutate_status
+  is 59 lines; tests/test_web_snapshot_and_verdicts.py line 228 test_build_workspace_snapshot_includes_full_task_detail_payload
+  is 101 lines; tests/test_web_engine_dashboard.py line 302 test_http_engine_endpoints_and_task_switch
+  is 70 lines; tests/test_recovery_and_rollback.py still contains multiple 50-88 line
+  tests and is 2050 lines overall. Steps to reproduce: run a small AST scan over the
+  touched test files and print any test function longer than 50 lines; the above functions
+  are reported immediately. Verification evidence: focused hotspot slice passed with
+  6 tests in 3.48s, and full suite timing with /usr/bin/time -p uv run pytest -q produced
+  926 passed, 3 skipped in 113.30s, real 114.27s. Acceptance criteria status: the
+  file splits, no-op removals, subprocess-test rewrite, and under-3-minute suite target
+  are satisfied; the decomposition is still insufficient under the testing-stage quality
+  bar because several replacement tests remain oversized and monolithic.'
+submitted_via_cli: true
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 1
+retry_limit: 3
+retry_source: global
+retry_decision: retry
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 245
+hook_results: []
+created_at: '2026-04-09T18:19:31+00:00'

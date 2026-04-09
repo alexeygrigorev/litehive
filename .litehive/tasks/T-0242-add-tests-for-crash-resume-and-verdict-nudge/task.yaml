@@ -7,8 +7,8 @@ engine: null
 model: null
 mode: implementation
 pipeline_mode: full
-status: queued
-flag_reason: null
+status: cancelled
+flag_reason: 'Worktree 369 files changed (-19K lines), too stale to merge. Recreate after T-0258.'
 flag_count: 0
 pipeline_status: commit_to_git
 priority: medium

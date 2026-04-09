@@ -1,0 +1,120 @@
+task_id: T-0258
+step: implementing
+verdict: pass
+source: agent
+summary: 'Split the monolithic test modules by concern and removed the named weak
+  tests. Replaced tests/test_config_and_run_cli.py with tests/test_config.py and tests/test_run_cli.py;
+  replaced tests/test_retry_commit_and_recovery.py with tests/test_retry_execution.py,
+  tests/test_commit_to_git_and_checkpoint.py, and tests/test_recovery_and_rollback.py;
+  replaced tests/test_web_snapshot_lockfree.py with tests/test_web_snapshot_and_verdicts.py,
+  tests/test_web_engine_dashboard.py, and tests/test_web_sse_and_queue.py. Split the
+  multi-behavior web tests in tests/test_web_daemon_monitor.py and tests/test_web_task_actions.py
+  into focused cases, removed test_slugify_exactly_50_unchanged, removed test_cli_report_message_stored_as_is,
+  removed the redundant flag_count persistence test, and rewrote test_workspace_transition_writes_preserve_task_added_after_state_snapshot
+  to call workflow_module._workspace_transition_writes directly instead of spawning
+  a subprocess. Also removed the forbidden noqa star-import pattern from the touched
+  web tests so the F401/F403 gate stays clean. Verified with focused pytest slices:
+  config/run-cli/slugify/feedback/flag_count = 82 passed in 6.92s; retry+commit+recovery
+  = 94 passed in 26.33s; web split files = 35 passed in 17.71s; targeted tasks/subagents
+  slice = 4 passed in 1.35s. Required checks passed: uv run ruff check --select E402,F401
+  litehive tests; forbidden noqa grep check returned clean. Full suite timing/evidence:
+  /usr/bin/time -p uv run pytest -q => 926 passed, 3 skipped in 120.24s (real 121.46s),
+  satisfying the under-3-minutes acceptance target.'
+feedback: "Split the monolithic test modules by concern and removed the named weak\
+  \ tests. Replaced tests/test_config_and_run_cli.py with tests/test_config.py and\
+  \ tests/test_run_cli.py; replaced tests/test_retry_commit_and_recovery.py with tests/test_retry_execution.py,\
+  \ tests/test_commit_to_git_and_checkpoint.py, and tests/test_recovery_and_rollback.py;\
+  \ replaced tests/test_web_snapshot_lockfree.py with tests/test_web_snapshot_and_verdicts.py,\
+  \ tests/test_web_engine_dashboard.py, and tests/test_web_sse_and_queue.py. Split\
+  \ the multi-behavior web tests in tests/test_web_daemon_monitor.py and tests/test_web_task_actions.py\
+  \ into focused cases, removed test_slugify_exactly_50_unchanged, removed test_cli_report_message_stored_as_is,\
+  \ removed the redundant flag_count persistence test, and rewrote test_workspace_transition_writes_preserve_task_added_after_state_snapshot\
+  \ to call workflow_module._workspace_transition_writes directly instead of spawning\
+  \ a subprocess. Also removed the forbidden noqa star-import pattern from the touched\
+  \ web tests so the F401/F403 gate stays clean. Verified with focused pytest slices:\
+  \ config/run-cli/slugify/feedback/flag_count = 82 passed in 6.92s; retry+commit+recovery\
+  \ = 94 passed in 26.33s; web split files = 35 passed in 17.71s; targeted tasks/subagents\
+  \ slice = 4 passed in 1.35s. Required checks passed: uv run ruff check --select\
+  \ E402,F401 litehive tests; forbidden noqa grep check returned clean. Full suite\
+  \ timing/evidence: /usr/bin/time -p uv run pytest -q => 926 passed, 3 skipped in\
+  \ 120.24s (real 121.46s), satisfying the under-3-minutes acceptance target.\n\n\
+  Runner hook `after_implementing` `uv run ruff check --select E402,F401 litehive\
+  \ tests` passed with exit code 0 (artifact: `artifacts/after_implementing-001.yaml`).\n\
+  \nRunner hook `after_implementing` `if [ -n \"${LITEHIVE_CHANGED_PATHS:-}\" ] \\\
+  \n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" | grep -q . \\\n  && printf '%s\\\
+  n' \"$LITEHIVE_CHANGED_PATHS\" \\\n    | xargs -r -d '\\n' git grep -nE 'noqa:.*F401|noqa:.*F403|ruff:\\\
+  s*noqa:\\s*F401|ruff:\\s*noqa:\\s*F403' --; then\n  echo 'Forbidden noqa F401/F403\
+  \ suppression found.'\n  exit 1\nfi` passed with exit code 0 (artifact: `artifacts/after_implementing-002.yaml`)."
+submitted_via_cli: true
+files_changed:
+- tests/test_commit_to_git_and_checkpoint.py
+- tests/test_config.py
+- tests/test_config_and_run_cli.py
+- tests/test_feedback_cap.py
+- tests/test_flag_count_auto_defer.py
+- tests/test_recovery_and_rollback.py
+- tests/test_retry_commit_and_recovery.py
+- tests/test_retry_execution.py
+- tests/test_run_cli.py
+- tests/test_slugify.py
+- tests/test_tasks_and_subagents.py
+- tests/test_web_daemon_monitor.py
+- tests/test_web_engine_dashboard.py
+- tests/test_web_snapshot_and_verdicts.py
+- tests/test_web_snapshot_lockfree.py
+- tests/test_web_sse_and_queue.py
+- tests/test_web_task_actions.py
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings:
+- 'runner hook passed: `after_implementing` `uv run ruff check --select E402,F401
+  litehive tests` (artifact: `artifacts/after_implementing-001.yaml`)'
+- "runner hook passed: `after_implementing` `if [ -n \"${LITEHIVE_CHANGED_PATHS:-}\"\
+  \ ] \\\n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" | grep -q . \\\n  && printf\
+  \ '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" \\\n    | xargs -r -d '\\n' git grep -nE 'noqa:.*F401|noqa:.*F403|ruff:\\\
+  s*noqa:\\s*F401|ruff:\\s*noqa:\\s*F403' --; then\n  echo 'Forbidden noqa F401/F403\
+  \ suppression found.'\n  exit 1\nfi` (artifact: `artifacts/after_implementing-002.yaml`)"
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 516
+hook_results:
+- point: after_implementing
+  command: uv run ruff check --select E402,F401 litehive tests
+  reject_on_failure: true
+  description: null
+  exit_code: 0
+  status: passed
+  artifact: artifacts/after_implementing-001.yaml
+  stdout: 'All checks passed!
+
+    '
+  stderr: 'warning: `VIRTUAL_ENV=/home/alexey/git/litehive/.venv` does not match the
+    project environment path `.venv` and will be ignored; use `--active` to target
+    the active environment instead
+
+    '
+- point: after_implementing
+  command: "if [ -n \"${LITEHIVE_CHANGED_PATHS:-}\" ] \\\n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\"\
+    \ | grep -q . \\\n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" \\\n    | xargs\
+    \ -r -d '\\n' git grep -nE 'noqa:.*F401|noqa:.*F403|ruff:\\s*noqa:\\s*F401|ruff:\\\
+    s*noqa:\\s*F403' --; then\n  echo 'Forbidden noqa F401/F403 suppression found.'\n\
+    \  exit 1\nfi"
+  reject_on_failure: true
+  description: null
+  exit_code: 0
+  status: passed
+  artifact: artifacts/after_implementing-002.yaml
+  stdout: ''
+  stderr: ''
+created_at: '2026-04-09T18:15:26+00:00'
