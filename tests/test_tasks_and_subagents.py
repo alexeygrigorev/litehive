@@ -3441,9 +3441,12 @@ def test_subagent_empty_stdout_stderr_still_written(
     manager.run(task, role="swe", engine_name="codex", prompt="empty run")
 
     base = task_dir(tmp_path, task) / "subagents" / "SA-0001-swe"
+    assert base.exists()
     assert (base / "session.yaml").exists()
     assert (base / "report.yaml").exists()
     assert (base / "stdout.txt").exists(), "stdout.txt must exist even when empty"
     assert (base / "stderr.txt").exists(), "stderr.txt must exist even when empty"
-    assert (base / "stdout.txt").read_text() == ""
-    assert (base / "stderr.txt").read_text() == ""
+    assert (base / "stdout.txt").read_text(encoding="utf-8") == ""
+    assert (base / "stderr.txt").read_text(encoding="utf-8") == ""
+    assert not (base / "stdout.txt.gz").exists()
+    assert not (base / "stderr.txt.gz").exists()
