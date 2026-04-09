@@ -299,3 +299,26 @@ Execution started with engine `claude`.
 
 ## 2026-04-09T07:37:37+00:00
 Execution finished with status `flagged`.
+
+## 2026-04-09T08:03:31+00:00
+Execution started with engine `claude`.
+
+## 2026-04-09T08:06:08+00:00
+Runner hook `before_pm_acceptance` passed: `uv run ruff check --select E402,F401 litehive tests`.
+- step: `accepting`
+- blocking: `True`
+- exit_code: `0`
+- artifact: `artifacts/before_pm_acceptance-001.yaml`
+
+## 2026-04-09T08:06:08+00:00
+Runner hook `before_pm_acceptance` passed: `if [ -n "${LITEHIVE_CHANGED_PATHS:-}" ] \
+  && printf '%s\n' "$LITEHIVE_CHANGED_PATHS" | grep -q . \
+  && printf '%s\n' "$LITEHIVE_CHANGED_PATHS" \
+    | xargs -r -d '\n' git grep -nE 'noqa:.*F401|noqa:.*F403|ruff:\s*noqa:\s*F401|ruff:\s*noqa:\s*F403' --; then
+  echo 'Forbidden noqa F401/F403 suppression found.'
+  exit 1
+fi`.
+- step: `accepting`
+- blocking: `True`
+- exit_code: `0`
+- artifact: `artifacts/before_pm_acceptance-002.yaml`
