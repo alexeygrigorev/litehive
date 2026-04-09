@@ -1,0 +1,48 @@
+task_id: T-0246
+step: testing
+verdict: pass
+summary: 'Validated the new worktree CLI behavior with focused and broader checks.
+  Ran uv run pytest tests/test_task_commands_and_daemon.py -q -k ''worktree_ls or
+  worktree_clean'' -> 3 passed in 1.39s, and uv run pytest tests/test_task_commands_and_daemon.py
+  -q -> 107 passed in 17.82s. Also ran an end-to-end temporary-workspace exercise
+  using real uv run litehive worktree ls, uv run litehive worktree clean --dry-run,
+  and uv run litehive worktree clean: ls listed all Litehive-managed worktrees with
+  task ID, status, and change_count; clean --dry-run reported only closed-task worktrees
+  as would_remove without deleting them; clean removed the done worktree, left queued
+  worktrees intact, and skipped the active done-looking worktree as skipped_active.
+  Evidence confirms all acceptance criteria are met for list output, cleanable statuses,
+  dry-run behavior, active-task protection, and regression coverage in the touched
+  CLI test file.'
+feedback: 'Validated the new worktree CLI behavior with focused and broader checks.
+  Ran uv run pytest tests/test_task_commands_and_daemon.py -q -k ''worktree_ls or
+  worktree_clean'' -> 3 passed in 1.39s, and uv run pytest tests/test_task_commands_and_daemon.py
+  -q -> 107 passed in 17.82s. Also ran an end-to-end temporary-workspace exercise
+  using real uv run litehive worktree ls, uv run litehive worktree clean --dry-run,
+  and uv run litehive worktree clean: ls listed all Litehive-managed worktrees with
+  task ID, status, and change_count; clean --dry-run reported only closed-task worktrees
+  as would_remove without deleting them; clean removed the done worktree, left queued
+  worktrees intact, and skipped the active done-looking worktree as skipped_active.
+  Evidence confirms all acceptance criteria are met for list output, cleanable statuses,
+  dry-run behavior, active-task protection, and regression coverage in the touched
+  CLI test file.'
+submitted_via_cli: true
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 159
+hook_results: []
+created_at: '2026-04-09T12:28:56+00:00'

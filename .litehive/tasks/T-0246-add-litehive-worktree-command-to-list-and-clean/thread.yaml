@@ -1,0 +1,157 @@
+- role: planner
+  step: grooming
+  verdict: pass
+  message: 'Grooming complete. I updated T-0246 with PM sizing pm_complexity=moderate
+    and planned_effort=m, refined the goal, added 5 explicit acceptance criteria,
+    3 constraints, and a 5-step implementation plan. Repo inspection verified there
+    is currently no `litehive worktree` command in `litehive/cli/parser.py`, existing
+    worktree primitives already exist in `litehive/git/ops.py` plus related debug/dirty-worktree-gate
+    surfaces, and the relevant closed task statuses are `done`, `deferred`, `wont_do`,
+    and `duplicate` from `litehive/models/common.py`. Scope decision for implementation:
+    operate only on Litehive-managed task worktrees under `.litehive/worktrees/`;
+    external non-Litehive git worktrees are out of scope. Active task protection is
+    required even if stale metadata would otherwise make a worktree look removable.
+    Implementation should add a `worktree` CLI group with `ls` and `clean`, shared
+    inspection helpers, targeted tests for mixed states and dry-run behavior, and
+    durable command/docs context updates. Tests run in grooming: none; this stage
+    was repo/task shaping only.'
+  files_changed: []
+  created_at: '2026-04-09T12:20:24+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Implemented a new worktree CLI group with ''litehive worktree ls'' and
+    ''litehive worktree clean''. Added litehive/cli/worktree.py to enumerate only
+    Litehive-managed task worktrees under .litehive/worktrees, map each worktree back
+    to its task, report task status plus change_count from git status porcelain, and
+    protect the active task worktree during cleanup. ''worktree clean'' removes only
+    tasks in done/deferred/wont_do/duplicate, supports --dry-run without deleting
+    directories or mutating task metadata, and clears recorded worktree_path after
+    successful removal. Wired parser and CLI dispatch, exported the commands for tests,
+    and updated README plus .litehive/context.md for operator discoverability. Verification:
+    added targeted tests in tests/test_task_commands_and_daemon.py covering ls mixed-state
+    output, clean --dry-run behavior, cleanup of done/deferred/duplicate worktrees,
+    and active-task protection. Ran: ''uv run pytest tests/test_task_commands_and_daemon.py
+    -q -k worktree_ls or worktree_clean or dirty_worktree_gate'' -> 8 passed; ''uv
+    run pytest tests/test_task_commands_and_daemon.py -q -k worktree_ls or worktree_clean''
+    -> 3 passed after final output cleanup; ''uv run pytest tests/test_task_commands_and_daemon.py
+    -q'' -> 107 passed. Acceptance criteria met: ls shows task ID/status/change count,
+    clean removes closed-task worktrees, --dry-run reports without removing, active
+    task worktree is skipped, and the targeted existing CLI test file passes fully.'
+  files_changed: []
+  created_at: '2026-04-09T12:26:03+00:00'
+- role: qa
+  step: testing
+  verdict: pass
+  message: 'Validated the new worktree CLI behavior with focused and broader checks.
+    Ran ...                                                                      [100%]
+
+    3 passed, 104 deselected in 1.22s -> 3 passed in 1.39s, and ........................................................................
+    [ 67%]
+
+    ...................................                                      [100%]
+
+    107 passed in 17.45s -> 107 passed in 17.82s. Also ran an end-to-end temporary-workspace
+    exercise using real workspace: /home/alexey/git/litehive/.litehive/worktrees/T-0246-add-litehive-worktree-command-to-list-and-clean
+
+    worktree_count: 0
+
+    worktrees: none, workspace: /home/alexey/git/litehive/.litehive/worktrees/T-0246-add-litehive-worktree-command-to-list-and-clean
+
+    dry_run: yes
+
+    removed_count: 0
+
+    would_remove_count: 0, and workspace: /home/alexey/git/litehive/.litehive/worktrees/T-0246-add-litehive-worktree-command-to-list-and-clean
+
+    dry_run: no
+
+    removed_count: 0: $tmpdir
+
+    PLAN.md
+
+    README.md
+
+    docs
+
+    litehive
+
+    pyproject.toml
+
+    tests
+
+    tests_integration
+
+    uv.lock listed all Litehive-managed worktrees with task ID, status, and change_count;  reported
+    only closed-task worktrees as  without deleting them;  removed the done worktree,
+    left queued worktrees intact, and skipped the active done-looking worktree as
+    . Evidence confirms all acceptance criteria are met for list output, cleanable
+    statuses, dry-run behavior, active-task protection, and regression coverage in
+    the touched CLI test file.'
+  files_changed: []
+  created_at: '2026-04-09T12:28:33+00:00'
+- role: qa
+  step: testing
+  verdict: pass
+  message: 'Validated the new worktree CLI behavior with focused and broader checks.
+    Ran uv run pytest tests/test_task_commands_and_daemon.py -q -k ''worktree_ls or
+    worktree_clean'' -> 3 passed in 1.39s, and uv run pytest tests/test_task_commands_and_daemon.py
+    -q -> 107 passed in 17.82s. Also ran an end-to-end temporary-workspace exercise
+    using real uv run litehive worktree ls, uv run litehive worktree clean --dry-run,
+    and uv run litehive worktree clean: ls listed all Litehive-managed worktrees with
+    task ID, status, and change_count; clean --dry-run reported only closed-task worktrees
+    as would_remove without deleting them; clean removed the done worktree, left queued
+    worktrees intact, and skipped the active done-looking worktree as skipped_active.
+    Evidence confirms all acceptance criteria are met for list output, cleanable statuses,
+    dry-run behavior, active-task protection, and regression coverage in the touched
+    CLI test file.'
+  files_changed: []
+  created_at: '2026-04-09T12:28:49+00:00'
+- role: reviewer
+  step: accepting
+  verdict: pass
+  message: "Accepted. I verified the new Litehive-managed worktree commands in code\
+    \ and by rerunning the relevant checks. Implementation review confirms  enumerates\
+    \ only task-recorded worktrees under .litehive/worktrees, prints task_id, task\
+    \ status, change_count, path, and active flag, and  removes only closed-task worktrees\
+    \ in statuses done/deferred/wont_do/duplicate while explicitly protecting the\
+    \ active task worktree. Dispatch and parser wiring are present in the CLI entrypoint,\
+    \ and README plus .litehive/context.md were updated for operator discoverability.\
+    \ Verification run: ...                                                      \
+    \                [100%]\n3 passed, 104 deselected in 1.35s -> 3 passed, 104 deselected\
+    \ in 1.29s. Broader regression check: ........................................................................\
+    \ [ 67%]\n...................................                                \
+    \      [100%]\n107 passed in 19.66s -> 107 passed in 17.78s. Direct CLI checks:\
+    \ usage: litehive worktree [-h] {ls,clean} ...\n\npositional arguments:\n  {ls,clean}\n\
+    \    ls        List Litehive-managed task worktrees with task status and change\n\
+    \              count\n    clean     Remove Litehive-managed worktrees for closed\
+    \ tasks\n\noptions:\n  -h, --help  show this help message and exit showed the\
+    \ new $tmpdir\nPLAN.md\nREADME.md\ndocs\nlitehive\npyproject.toml\ntests\ntests_integration\n\
+    uv.lock and  subcommands, and workspace: .\nworktree_count: 0\nworktrees: none\
+    \ returned the expected empty-state output in the current workspace (, ). The\
+    \ targeted tests cover ls mixed-state output with change counts, clean dry-run\
+    \ reporting without deletion, removal of done/deferred/duplicate worktrees, and\
+    \ active-task protection. Acceptance criteria are met."
+  files_changed: []
+  created_at: '2026-04-09T12:31:01+00:00'
+- role: reviewer
+  step: accepting
+  verdict: pass
+  message: 'Accepted. I verified the new Litehive-managed worktree commands in code
+    and by rerunning the relevant checks. Implementation review confirms the worktree
+    ls command enumerates only task-recorded worktrees under .litehive/worktrees,
+    prints task_id, task status, change_count, path, and active flag, and worktree
+    clean removes only closed-task worktrees in statuses done, deferred, wont_do,
+    and duplicate while explicitly protecting the active task worktree. Dispatch and
+    parser wiring are present in the CLI entrypoint, and README plus .litehive/context.md
+    were updated for operator discoverability. Verification run: uv run pytest tests/test_task_commands_and_daemon.py
+    -q -k worktree_ls or worktree_clean -> 3 passed, 104 deselected in 1.29s. Broader
+    regression check: uv run pytest tests/test_task_commands_and_daemon.py -q -> 107
+    passed in 17.78s. Direct CLI checks: uv run litehive worktree --help showed the
+    new ls and clean subcommands, and uv run litehive worktree ls --workspace . returned
+    the expected empty-state output in the current workspace with worktree_count:
+    0 and worktrees: none. The targeted tests cover ls mixed-state output with change
+    counts, clean dry-run reporting without deletion, removal of done, deferred, and
+    duplicate worktrees, and active-task protection. Acceptance criteria are met.'
+  files_changed: []
+  created_at: '2026-04-09T12:31:04+00:00'

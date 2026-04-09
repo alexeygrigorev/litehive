@@ -1,0 +1,56 @@
+task_id: T-0246
+step: grooming
+verdict: pass
+summary: 'Grooming complete. I updated T-0246 with PM sizing pm_complexity=moderate
+  and planned_effort=m, refined the goal, added 5 explicit acceptance criteria, 3
+  constraints, and a 5-step implementation plan. Repo inspection verified there is
+  currently no `litehive worktree` command in `litehive/cli/parser.py`, existing worktree
+  primitives already exist in `litehive/git/ops.py` plus related debug/dirty-worktree-gate
+  surfaces, and the relevant closed task statuses are `done`, `deferred`, `wont_do`,
+  and `duplicate` from `litehive/models/common.py`. Scope decision for implementation:
+  operate only on Litehive-managed task worktrees under `.litehive/worktrees/`; external
+  non-Litehive git worktrees are out of scope. Active task protection is required
+  even if stale metadata would otherwise make a worktree look removable. Implementation
+  should add a `worktree` CLI group with `ls` and `clean`, shared inspection helpers,
+  targeted tests for mixed states and dry-run behavior, and durable command/docs context
+  updates. Tests run in grooming: none; this stage was repo/task shaping only.'
+feedback: 'Stage `grooming` switched from `claude` to `codex` after claude usage limit
+  reached (7d window at 95%, resets 2026-04-10T09:00:00.901601+00:00).
+
+
+  Grooming complete. I updated T-0246 with PM sizing pm_complexity=moderate and planned_effort=m,
+  refined the goal, added 5 explicit acceptance criteria, 3 constraints, and a 5-step
+  implementation plan. Repo inspection verified there is currently no `litehive worktree`
+  command in `litehive/cli/parser.py`, existing worktree primitives already exist
+  in `litehive/git/ops.py` plus related debug/dirty-worktree-gate surfaces, and the
+  relevant closed task statuses are `done`, `deferred`, `wont_do`, and `duplicate`
+  from `litehive/models/common.py`. Scope decision for implementation: operate only
+  on Litehive-managed task worktrees under `.litehive/worktrees/`; external non-Litehive
+  git worktrees are out of scope. Active task protection is required even if stale
+  metadata would otherwise make a worktree look removable. Implementation should add
+  a `worktree` CLI group with `ls` and `clean`, shared inspection helpers, targeted
+  tests for mixed states and dry-run behavior, and durable command/docs context updates.
+  Tests run in grooming: none; this stage was repo/task shaping only.'
+submitted_via_cli: true
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings:
+- Stage `grooming` switched from `claude` to `codex` after claude usage limit reached
+  (7d window at 95%, resets 2026-04-10T09:00:00.901601+00:00).
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 132
+hook_results: []
+created_at: '2026-04-09T12:20:34+00:00'

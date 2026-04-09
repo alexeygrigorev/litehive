@@ -1,0 +1,64 @@
+task_id: T-0246
+step: implementing
+verdict: pass
+summary: 'Implemented a new worktree CLI group with ''litehive worktree ls'' and ''litehive
+  worktree clean''. Added litehive/cli/worktree.py to enumerate only Litehive-managed
+  task worktrees under .litehive/worktrees, map each worktree back to its task, report
+  task status plus change_count from git status porcelain, and protect the active
+  task worktree during cleanup. ''worktree clean'' removes only tasks in done/deferred/wont_do/duplicate,
+  supports --dry-run without deleting directories or mutating task metadata, and clears
+  recorded worktree_path after successful removal. Wired parser and CLI dispatch,
+  exported the commands for tests, and updated README plus .litehive/context.md for
+  operator discoverability. Verification: added targeted tests in tests/test_task_commands_and_daemon.py
+  covering ls mixed-state output, clean --dry-run behavior, cleanup of done/deferred/duplicate
+  worktrees, and active-task protection. Ran: ''uv run pytest tests/test_task_commands_and_daemon.py
+  -q -k worktree_ls or worktree_clean or dirty_worktree_gate'' -> 8 passed; ''uv run
+  pytest tests/test_task_commands_and_daemon.py -q -k worktree_ls or worktree_clean''
+  -> 3 passed after final output cleanup; ''uv run pytest tests/test_task_commands_and_daemon.py
+  -q'' -> 107 passed. Acceptance criteria met: ls shows task ID/status/change count,
+  clean removes closed-task worktrees, --dry-run reports without removing, active
+  task worktree is skipped, and the targeted existing CLI test file passes fully.'
+feedback: 'Implemented a new worktree CLI group with ''litehive worktree ls'' and
+  ''litehive worktree clean''. Added litehive/cli/worktree.py to enumerate only Litehive-managed
+  task worktrees under .litehive/worktrees, map each worktree back to its task, report
+  task status plus change_count from git status porcelain, and protect the active
+  task worktree during cleanup. ''worktree clean'' removes only tasks in done/deferred/wont_do/duplicate,
+  supports --dry-run without deleting directories or mutating task metadata, and clears
+  recorded worktree_path after successful removal. Wired parser and CLI dispatch,
+  exported the commands for tests, and updated README plus .litehive/context.md for
+  operator discoverability. Verification: added targeted tests in tests/test_task_commands_and_daemon.py
+  covering ls mixed-state output, clean --dry-run behavior, cleanup of done/deferred/duplicate
+  worktrees, and active-task protection. Ran: ''uv run pytest tests/test_task_commands_and_daemon.py
+  -q -k worktree_ls or worktree_clean or dirty_worktree_gate'' -> 8 passed; ''uv run
+  pytest tests/test_task_commands_and_daemon.py -q -k worktree_ls or worktree_clean''
+  -> 3 passed after final output cleanup; ''uv run pytest tests/test_task_commands_and_daemon.py
+  -q'' -> 107 passed. Acceptance criteria met: ls shows task ID/status/change count,
+  clean removes closed-task worktrees, --dry-run reports without removing, active
+  task worktree is skipped, and the targeted existing CLI test file passes fully.'
+submitted_via_cli: true
+files_changed:
+- README.md
+- litehive/cli/__init__.py
+- litehive/cli/parser.py
+- litehive/cli/worktree.py
+- tests/test_task_commands_and_daemon.py
+- tests/workspace_helpers.py
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 342
+hook_results: []
+created_at: '2026-04-09T12:26:17+00:00'
