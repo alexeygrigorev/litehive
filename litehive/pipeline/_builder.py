@@ -99,33 +99,32 @@ def build_executor(
                 quota_reason = copilot_quota_block_reason()
             elif engine_name in ("goz", "opencode"):
                 quota_reason = zai_quota_block_reason()
-                if quota_reason is not None:
-                    if index + 1 < len(engines):
-                        next_engine = engines[index + 1]
-                        event = (
-                            f"Stage `{step}` switched from `{engine_name}` to `{next_engine}` "
-                            f"after {quota_reason}."
-                        )
-                        execution_events.append(event)
-                        append_journal(root, current_task, event)
-                        mark_engine_switch(
-                            root,
-                            current_task,
-                            step=step,
-                            from_engine=engine_name,
-                            to_engine=next_engine,
-                            reason=quota_reason,
-                        )
-                        continue
-                    report = StageReport(
-                        task_id=current_task.id,
-                        step=step,  # type: ignore[arg-type]
-                        verdict="blocked",
-                        summary=f"{step} blocked: {quota_reason}",
-                        feedback="\n\n".join(execution_events).strip(),
-                        warnings=[*execution_events, quota_reason],
+            if quota_reason is not None:
+                if index + 1 < len(engines):
+                    next_engine = engines[index + 1]
+                    event = (
+                        f"Stage `{step}` switched from `{engine_name}` to `{next_engine}` "
+                        f"after {quota_reason}."
                     )
-                    return report
+                    execution_events.append(event)
+                    append_journal(root, current_task, event)
+                    mark_engine_switch(
+                        root,
+                        current_task,
+                        step=step,
+                        from_engine=engine_name,
+                        to_engine=next_engine,
+                        reason=quota_reason,
+                    )
+                    continue
+                return StageReport(
+                    task_id=current_task.id,
+                    step=step,  # type: ignore[arg-type]
+                    verdict="blocked",
+                    summary=f"{step} blocked: {quota_reason}",
+                    feedback="\n\n".join(execution_events).strip(),
+                    warnings=[*execution_events, quota_reason],
+                )
 
             budget_reason = budget_ledger.block_reason(engine_name)
             if budget_reason is not None:
