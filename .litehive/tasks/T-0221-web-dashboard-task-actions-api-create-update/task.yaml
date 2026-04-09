@@ -11,29 +11,60 @@ pipeline_mode: full
 status: queued
 pipeline_status: implementing
 priority: high
-pm_complexity: null
-planned_effort: null
+pm_complexity: moderate
+planned_effort: m
 created_at: '2026-04-08T06:04:50+00:00'
 updated_at: '2026-04-08T19:02:44+00:00'
-goal: 'Add POST endpoints to the web dashboard for task mutation operations: create
-  task, update task properties, close task (with outcome), requeue task, abandon task,
-  and stop active task. Each endpoint should call the same underlying functions as
-  the CLI commands. Include proper error handling and JSON responses.'
+goal: Add task-mutation POST APIs to the existing web dashboard for create, update,
+  close, requeue, abandon, and stop-active flows, reusing the same litehive.tasks
+  functions behind the CLI commands and returning machine-readable JSON results. Add
+  only the dashboard action controls/forms needed to trigger those mutations from
+  the current UI; richer task-detail editing and history views stay with the separate
+  task-detail follow-up.
 acceptance_criteria:
-- POST /api/tasks endpoint creates a new task with title, goal, priority, engine,
-  and acceptance criteria
-- POST /api/tasks/{id}/update endpoint modifies task properties (goal, priority, engine,
-  acceptance criteria, constraints, plan steps)
-- POST /api/tasks/{id}/close endpoint closes a task with outcome (wont_do, deferred,
-  duplicate) and reason
-- POST /api/tasks/{id}/requeue endpoint requeues a flagged or closed task, with optional
-  front parameter
-- POST /api/tasks/{id}/abandon endpoint cancels and removes a task
-- POST /api/tasks/active/stop endpoint stops the currently active task
-- All endpoints return proper JSON responses with success/error status
-- Frontend UI adds action buttons and forms for each operation
-constraints: []
-plan: []
+- POST /api/tasks accepts JSON for title plus optional goal, priority, engine, and
+  acceptance_criteria, creates the task through the same task creation helper used
+  by the CLI, and returns a success JSON payload with the created task id and serialized
+  task data.
+- POST /api/tasks/{id}/update accepts JSON updates for goal, priority, engine, acceptance_criteria,
+  constraints, and plan, applies them through the existing task update helper, and
+  returns the updated task data in JSON.
+- POST /api/tasks/{id}/close accepts an allowed outcome (wont_do, deferred, duplicate)
+  and optional reason, applies the existing close-task helper, and returns JSON describing
+  the closed task state and recorded outcome.
+- POST /api/tasks/{id}/requeue accepts an optional front flag, requeues an eligible
+  flagged, parked, merge-failed, or closed task through the existing requeue helper,
+  and returns JSON including the task state and resulting queue position.
+- POST /api/tasks/{id}/abandon abandons an eligible task through the existing abandon
+  helper and returns JSON describing the cancelled task state.
+- POST /api/tasks/active/stop stops the currently active task through the existing
+  stop helper and returns JSON including the task state, runner_pid, and whether a
+  signal was sent.
+- Invalid task ids, invalid payload values, unsupported outcomes, and other user-correctable
+  mutation errors produce structured non-200 JSON responses with a clear error message
+  instead of HTML or tracebacks.
+- The existing dashboard UI exposes action buttons/forms for create, update, close,
+  requeue, abandon, and stop-active operations, and the visible task/queue state refreshes
+  to show the mutation result after a successful submission.
+constraints:
+- Keep changes scoped to the existing web dashboard and task-mutation surface for
+  this task.
+- Reuse litehive.tasks helpers directly for mutation semantics; do not spawn CLI subprocesses
+  from HTTP handlers.
+- Do not expand this task into the broader enhanced task-detail/history UI tracked
+  separately.
+plan:
+- Inspect litehive/web/__init__.py request handling and extract minimal JSON body
+  parsing/response helpers for POST mutations.
+- Implement backend POST handlers for create, update, close, requeue, abandon, and
+  stop-active by calling create_task, update_task_metadata, close_task, requeue_task,
+  abandon_task, and stop_current_task.
+- Define a stable JSON response shape for success and error cases and serialize any
+  queue-position or stop-summary fields the frontend needs.
+- Add focused tests covering successful POST mutations plus representative validation/error
+  responses for bad ids and bad payload values.
+- Extend the existing dashboard template with scoped action controls/forms and refresh
+  logic that posts JSON and reloads snapshot state after success.
 human_checkpoints: []
 subagents:
 - id: SA-0001

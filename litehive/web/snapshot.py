@@ -378,6 +378,15 @@ def _read_session_artifact(root: Path, base: Path, kind: str, *, active: bool) -
     )
 
 
+def _serialize_task_with_queue_metadata(root: Path, task: TaskRecord) -> dict[str, Any]:
+    state = load_state(root)
+    payload = _serialize_task(root, task, state.active_task_id)
+    payload["queue_position"] = (
+        None if task.id not in state.queue else state.queue.index(task.id) + 1
+    )
+    return payload
+
+
 def _artifact_path(root: Path, base: Path, kind: str, *, active: bool) -> str:
     if kind == "transcript":
         path = _resolve_artifact_path(base, "transcript.md")

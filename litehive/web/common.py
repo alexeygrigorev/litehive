@@ -237,3 +237,68 @@ def _coerce_text_list(field: str, value: Any) -> list[str]:
     if not isinstance(value, list) or any(not isinstance(item, str) for item in value):
         raise ValueError(f"{field} must be a list of strings")
     return list(value)
+
+
+# ---------------------------------------------------------------------------
+# JSON payload validation helpers (used by task-mutation POST endpoints)
+# ---------------------------------------------------------------------------
+
+
+def _require_string(payload: dict[str, Any], key: str) -> str:
+    value = _optional_string(payload, key)
+    if value is None or not value.strip():
+        raise ValueError(f"'{key}' is required")
+    return value
+
+
+def _optional_string(payload: dict[str, Any], key: str) -> str | None:
+    if key not in payload:
+        return None
+    value = payload[key]
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise ValueError(f"'{key}' must be a string")
+    return value
+
+
+def _optional_string_list(payload: dict[str, Any], key: str) -> list[str] | None:
+    if key not in payload:
+        return None
+    return _coerce_text_list(key, payload[key])
+
+
+def _field_or_missing(payload: dict[str, Any], key: str) -> object:
+    if key not in payload:
+        return ...
+    return payload[key]
+
+
+def _list_field_or_missing(payload: dict[str, Any], key: str) -> object:
+    if key not in payload:
+        return ...
+    return _coerce_text_list(key, payload[key])
+
+
+def _list_or_missing(value: object, key: str) -> object:
+    if value is ...:
+        return ...
+    return _coerce_text_list(key, value)
+
+
+def _optional_bool(payload: dict[str, Any], key: str, *, default: bool) -> bool:
+    if key not in payload:
+        return default
+    value = payload[key]
+    if not isinstance(value, bool):
+        raise ValueError(f"'{key}' must be a boolean")
+    return value
+
+
+def _optional_update_priority(payload: dict[str, Any]) -> object:
+    if "priority" not in payload:
+        return ...
+    value = payload["priority"]
+    if value in {None, ""}:
+        return ...
+    return value
