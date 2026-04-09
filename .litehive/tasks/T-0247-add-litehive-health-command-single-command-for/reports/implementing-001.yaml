@@ -1,0 +1,99 @@
+task_id: T-0247
+step: implementing
+verdict: pass
+source: agent
+summary: 'Addressed the acceptance blocker and re-verified the health command implementation.
+  Kept _cmd_health intentionally exported from tests/workspace_helpers.py by including
+  it in __all__, which removes the F401 unused-import failure without breaking test
+  imports. Also fixed the health-command healthy-workspace test fixture so completion
+  ordering is deterministic by patching litehive.tasks.crud.utcnow during setup; save_task()
+  stamps updated_at on write, so the prior fixture was not persisting the intended
+  completion timestamps. Verified with: uv run ruff check --select E402,F401 litehive
+  tests (pass); uv run pytest tests/test_observability_and_status.py -q -k ''health_command_reports''
+  (2 passed); uv run pytest tests/test_config.py -q (37 passed); uv run pytest tests/test_observability_and_status.py
+  -q (75 passed). Evidence confirms litehive health remains covered for active task/stage,
+  flagged tasks with verdict summary, worktree change counts and findings, engine
+  quota lines, daemon status, exit-code behavior, and last-3 completed-task reporting.'
+feedback: "Runner hook `after_implementing` `uv run ruff check --select E402,F401\
+  \ litehive tests` passed with exit code 0 (artifact: `artifacts/after_implementing-001.yaml`).\n\
+  \nRunner hook `after_implementing` `if [ -n \"${LITEHIVE_CHANGED_PATHS:-}\" ] \\\
+  \n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" | grep -q . \\\n  && printf '%s\\\
+  n' \"$LITEHIVE_CHANGED_PATHS\" \\\n    | xargs -r -d '\\n' git grep -nE 'noqa:.*F401|noqa:.*F403|ruff:\\\
+  s*noqa:\\s*F401|ruff:\\s*noqa:\\s*F403' --; then\n  echo 'Forbidden noqa F401/F403\
+  \ suppression found.'\n  exit 1\nfi` passed with exit code 0 (artifact: `artifacts/after_implementing-002.yaml`).\n\
+  \nAddressed the acceptance blocker and re-verified the health command implementation.\
+  \ Kept _cmd_health intentionally exported from tests/workspace_helpers.py by including\
+  \ it in __all__, which removes the F401 unused-import failure without breaking test\
+  \ imports. Also fixed the health-command healthy-workspace test fixture so completion\
+  \ ordering is deterministic by patching litehive.tasks.crud.utcnow during setup;\
+  \ save_task() stamps updated_at on write, so the prior fixture was not persisting\
+  \ the intended completion timestamps. Verified with: uv run ruff check --select\
+  \ E402,F401 litehive tests (pass); uv run pytest tests/test_observability_and_status.py\
+  \ -q -k 'health_command_reports' (2 passed); uv run pytest tests/test_config.py\
+  \ -q (37 passed); uv run pytest tests/test_observability_and_status.py -q (75 passed).\
+  \ Evidence confirms litehive health remains covered for active task/stage, flagged\
+  \ tasks with verdict summary, worktree change counts and findings, engine quota\
+  \ lines, daemon status, exit-code behavior, and last-3 completed-task reporting."
+submitted_via_cli: true
+files_changed:
+- litehive/cli/__init__.py
+- litehive/cli/health.py
+- litehive/cli/parsers/__init__.py
+- litehive/cli/parsers/health.py
+- tests/test_config.py
+- tests/test_observability_and_status.py
+- tests/workspace_helpers.py
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings:
+- 'runner hook passed: `after_implementing` `uv run ruff check --select E402,F401
+  litehive tests` (artifact: `artifacts/after_implementing-001.yaml`)'
+- "runner hook passed: `after_implementing` `if [ -n \"${LITEHIVE_CHANGED_PATHS:-}\"\
+  \ ] \\\n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" | grep -q . \\\n  && printf\
+  \ '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" \\\n    | xargs -r -d '\\n' git grep -nE 'noqa:.*F401|noqa:.*F403|ruff:\\\
+  s*noqa:\\s*F401|ruff:\\s*noqa:\\s*F403' --; then\n  echo 'Forbidden noqa F401/F403\
+  \ suppression found.'\n  exit 1\nfi` (artifact: `artifacts/after_implementing-002.yaml`)"
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 177
+hook_results:
+- point: after_implementing
+  command: uv run ruff check --select E402,F401 litehive tests
+  reject_on_failure: true
+  description: null
+  exit_code: 0
+  status: passed
+  artifact: artifacts/after_implementing-001.yaml
+  stdout: 'All checks passed!
+
+    '
+  stderr: 'warning: `VIRTUAL_ENV=/home/alexey/git/litehive/.venv` does not match the
+    project environment path `.venv` and will be ignored; use `--active` to target
+    the active environment instead
+
+    '
+- point: after_implementing
+  command: "if [ -n \"${LITEHIVE_CHANGED_PATHS:-}\" ] \\\n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\"\
+    \ | grep -q . \\\n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" \\\n    | xargs\
+    \ -r -d '\\n' git grep -nE 'noqa:.*F401|noqa:.*F403|ruff:\\s*noqa:\\s*F401|ruff:\\\
+    s*noqa:\\s*F403' --; then\n  echo 'Forbidden noqa F401/F403 suppression found.'\n\
+    \  exit 1\nfi"
+  reject_on_failure: true
+  description: null
+  exit_code: 0
+  status: passed
+  artifact: artifacts/after_implementing-002.yaml
+  stdout: ''
+  stderr: ''
+created_at: '2026-04-09T23:52:19+00:00'
