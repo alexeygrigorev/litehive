@@ -108,6 +108,7 @@ class UnmergedWorktree(BaseModel):
 
 class WorkspaceState(BaseModel):
     active_task_id: str | None = None
+    active_task_ids: list[str] = Field(default_factory=list)
     mode: TaskMode = "implementation"
     queue: list[str] = Field(default_factory=list)
     pool_stop_reason: str | None = None

@@ -95,6 +95,13 @@ def _cmd_run(args):
             config.pool_stop_on_dirty_git,
         ),
     )
+    if bool(getattr(args, "parallel", False)):
+        return _cmd_run_parallel(
+            args,
+            config=config,
+            engine_override=engine_override,
+            model_override=model_override,
+        )
     if bool(getattr(args, "drain", False)):
         return _cmd_run_drain(
             args,
@@ -356,4 +363,62 @@ def _cmd_run_single(
     )
     _write_pool_summary_report(root=args.workspace, report=report)
     _print_pool_summary_report(report=report)
+    return 0
+
+
+def _cmd_run_parallel(
+    args,
+    *,
+    config,
+    engine_override,
+    model_override,
+):
+    from litehive.pipeline._parallel import run_parallel_tasks
+
+    if config.parallel_capacity < 2:
+        print("parallel_capacity must be >= 2 in config for parallel mode; using 2")
+
+    try:
+        summary = run_parallel_tasks(
+            args.workspace,
+            engine_override=engine_override,
+            model_override=model_override,
+            capacity=config.parallel_capacity if config.parallel_capacity >= 2 else None,
+        )
+    except WorkspaceConflictError as exc:
+        print(f"run failed: {exc}")
+        return 1
+
+    if not summary.executions:
+        if summary.blocked:
+            print("No runnable task.")
+            for blocked in summary.blocked:
+                print(
+                    f"blocked: {blocked.task_id} {blocked.title} "
+                    f"blocked_by={', '.join(blocked.blocked_by)}"
+                )
+        elif summary.stop_reason == "queue_exhausted":
+            print("No queued task.")
+        else:
+            print("No task executed.")
+        return 0
+
+    print(f"parallel run: {len(summary.executions)} task(s)")
+    for execution in summary.executions:
+        if execution.task is None:
+            continue
+        status = execution.result.final_status if execution.result else "error"
+        print(f"  {execution.task.id} {execution.task.title} -> {status}")
+
+    if summary.integration_results:
+        print("integration:")
+        for ir in summary.integration_results:
+            status_label = "ok" if ir.success else "FAILED"
+            conflict_label = " (conflict resolved by agent)" if ir.agent_resolved else ""
+            if ir.conflict and not ir.success:
+                conflict_label = " (UNRESOLVED CONFLICT)"
+            sha_label = f" {ir.commit_sha[:8]}" if ir.commit_sha else ""
+            print(f"  {ir.task_id}: {status_label}{conflict_label}{sha_label}")
+
+    print(f"stop_reason: {summary.stop_reason}")
     return 0
