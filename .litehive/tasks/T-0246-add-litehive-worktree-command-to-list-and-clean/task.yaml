@@ -9,23 +9,46 @@ mode: implementation
 pipeline_mode: full
 status: queued
 flag_reason: null
+flag_count: 0
 pipeline_status: backlog
 priority: medium
-pm_complexity: null
-planned_effort: null
+pm_complexity: moderate
+planned_effort: m
 created_at: '2026-04-09T08:37:21+00:00'
-updated_at: '2026-04-09T08:37:21+00:00'
-goal: Add litehive worktree ls to show all worktrees with their task status and whether
-  they have changes. Add litehive worktree clean to remove worktrees for closed/deferred/done
-  tasks. This replaces manual git worktree list + status checking.
+updated_at: '2026-04-09T12:20:06+00:00'
+goal: Add a Litehive-managed worktree CLI with litehive worktree ls and litehive worktree
+  clean so operators can inspect task worktrees and remove stale closed-task worktrees
+  without manual git worktree and git status checks.
 acceptance_criteria:
-- litehive worktree ls shows all worktrees with task ID, status, and change count
-- litehive worktree clean removes worktrees for done/deferred/wont_do/duplicate tasks
-- litehive worktree clean --dry-run shows what would be removed without removing
-- Active task worktrees are never cleaned
-- All existing tests pass
-constraints: []
-plan: []
+- litehive worktree ls lists each Litehive-managed task worktree with its task ID,
+  current task status, and a changed-path count derived from git status for that worktree.
+- litehive worktree clean removes only Litehive-managed worktrees whose task status
+  is done, deferred, wont_do, or duplicate, and leaves non-eligible worktrees in place.
+- litehive worktree clean --dry-run reports the worktrees that would be removed and
+  does not remove any worktree directories or mutate task metadata.
+- The currently active task worktree is never removed by litehive worktree clean,
+  even if other task metadata would otherwise make it look removable.
+- Targeted CLI tests for worktree listing and cleanup pass, and the existing test
+  suite still passes without regressions.
+constraints:
+- Keep the change scoped to Litehive-managed task worktrees under .litehive/worktrees/;
+  external non-Litehive git worktrees are out of scope.
+- Preserve existing task worktree merge, recovery, and debug behavior; this task adds
+  inspection and cleanup commands rather than changing execution semantics.
+- Because this adds operator-facing workflow, update the durable command/docs context
+  alongside the CLI implementation.
+plan:
+- Add a worktree CLI command group in the parser and dispatch layer with ls and clean
+  subcommands, including --dry-run for cleanup.
+- Implement shared worktree inspection helpers that resolve Litehive-managed task
+  worktrees, map them back to task records, derive task status, and count changed
+  paths from git status.
+- Implement cleanup selection rules that remove only closed-task worktrees (done,
+  deferred, wont_do, duplicate) and explicitly skip the current active task worktree.
+- Add targeted tests covering mixed worktree states, dry-run behavior, active-task
+  protection, and command output.
+- Update operator-facing docs/context so the new litehive worktree workflow is discoverable
+  in future runs.
 human_checkpoints: []
 subagents: []
 git:
