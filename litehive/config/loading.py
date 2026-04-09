@@ -61,7 +61,10 @@ def load_config(root: Path) -> LitehiveConfig:
             "        reject_on_failure: true"
         )
     import dataclasses
+    import warnings
     known_fields = {f.name for f in dataclasses.fields(LitehiveConfig)}
+    for key in sorted(set(data) - known_fields):
+        warnings.warn(f"unknown config key '{key}' — ignoring", stacklevel=2)
     data = {k: v for k, v in data.items() if k in known_fields}
     return LitehiveConfig(**data)
 
