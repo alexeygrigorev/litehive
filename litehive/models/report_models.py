@@ -111,6 +111,7 @@ class StageReport(BaseModel):
     verdict: Literal["pass", "accept", "fail", "reject", "blocked"]
     summary: str
     feedback: str = ""
+    submitted_via_cli: bool = False
     files_changed: list[str] = Field(default_factory=list)
     created_follow_up_task_ids: list[str] = Field(default_factory=list)
     task_update: dict[str, object] = Field(default_factory=dict)

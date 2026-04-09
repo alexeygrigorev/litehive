@@ -30,6 +30,7 @@ def stage_report_from_subagent(
                 if latest.message
                 else f"{step} {latest.verdict}",
                 feedback=latest.message,
+                submitted_via_cli=True,
             )
 
     # Step 2: Resource limit events produce a blocked verdict.

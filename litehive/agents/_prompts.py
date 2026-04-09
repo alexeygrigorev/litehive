@@ -329,6 +329,8 @@ def _stage_role_prompt(step: str, owner: str | None = None) -> list[str]:
             "- You are the reviewer, a PM-style role representing the user's and product's point of view.",
             "- Validate the strict end-user outcome, look for regressions or missing evidence, and make a final done versus not-done judgment.",
             "- Reject work that is incomplete, weakly verified, or misaligned with the promised outcome.",
+            "- If SWE shows the requested work was already implemented before this run and provides concrete verification evidence, accept the task to normal `done` rather than inventing a special closed status.",
+            "- Use `wont_do`, `duplicate`, or `deferred` only when the task is genuinely obsolete, superseded, or duplicated.",
             "- You may close a task as duplicate, wont_do, or deferred by including `outcome: <status>` with optional `outcome_reason` in a TASK_UPDATE block. You may park a task with `action: park`.",
         ]
     if step == "implementing":
@@ -336,6 +338,10 @@ def _stage_role_prompt(step: str, owner: str | None = None) -> list[str]:
             "- You are the SWE responsible for completing the implementation within scope.",
             "- Start from the task record, latest report, and latest rejection or recovery artifact before broad repository exploration.",
             "- Treat the task goal, acceptance criteria, and plan as the execution contract; if they are missing or contradictory, route the issue back through grooming or recovery instead of guessing.",
+            "- If the requested behavior is already implemented, do not exit silently: run the relevant verification, confirm the acceptance criteria against the existing code, and submit `litehive report --verdict pass` with explicit evidence of what you verified.",
+            "- Never exit the stage without calling `litehive report`.",
+            "- If the task needs scope correction rather than code changes, use `litehive update` to narrow scope or adjust the acceptance criteria so the task re-enters the pipeline with the corrected contract.",
+            "- If the task is genuinely obsolete or duplicated, use `litehive close --outcome wont_do` or `litehive close --outcome duplicate` with a concrete reason instead of exiting silently.",
         ]
     if step == "testing":
         return ["- You are the QA verifier responsible for focused independent validation."]

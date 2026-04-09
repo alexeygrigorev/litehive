@@ -76,6 +76,36 @@ class TaskExecutionRunner:
         self.subagents = subagents
         self.config = config
 
+    @staticmethod
+    def _report_verified_preimplemented_pass(report: StageReport) -> bool:
+        if not report.submitted_via_cli:
+            return False
+        evidence = " ".join(part for part in (report.summary, report.feedback) if part).lower()
+        already_done_markers = (
+            "already implemented",
+            "already complete",
+            "already completed",
+            "already done",
+            "pre-implemented",
+            "preimplemented",
+            "pre-existing",
+            "existing implementation",
+        )
+        verification_markers = (
+            "verified",
+            "verification",
+            "confirmed",
+            "validated",
+            "checked",
+            "test",
+            "tests",
+            "pytest",
+            "acceptance criteria",
+        )
+        return any(marker in evidence for marker in already_done_markers) and any(
+            marker in evidence for marker in verification_markers
+        )
+
     def run(self, task: TaskRecord) -> RunResult:
         steps = 0
         rejections = task.runtime.retry_count
@@ -480,6 +510,11 @@ class TaskExecutionRunner:
                     # Task already passed implementing in a prior run — skip the
                     # guard to avoid infinite flag/recover loops for analysis or
                     # planning tasks that re-enter implementing via recovery.
+                    pass
+                elif self._report_verified_preimplemented_pass(report):
+                    # A zero-change implementing pass is valid when the agent
+                    # explicitly submitted a CLI verdict explaining that the
+                    # requested work was already present and verified.
                     pass
                 elif litehive_task_changes:
                     # Planning/analysis task: produced task records under
