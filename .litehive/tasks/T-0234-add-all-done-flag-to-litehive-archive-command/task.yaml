@@ -2,7 +2,7 @@ id: T-0234
 slug: add-all-done-flag-to-litehive-archive-command
 title: Add --all-done flag to litehive archive command
 depends_on: []
-task_type: null
+task_type: bugfix
 engine: null
 model: null
 mode: implementation
@@ -11,8 +11,8 @@ status: in_progress
 flag_reason: null
 pipeline_status: commit_to_git
 priority: medium
-pm_complexity: null
-planned_effort: null
+pm_complexity: simple
+planned_effort: s
 created_at: '2026-04-08T07:48:05+00:00'
 updated_at: '2026-04-09T01:05:56+00:00'
 goal: litehive archive without args currently tries to archive all done tasks but
@@ -25,7 +25,15 @@ acceptance_criteria:
 - litehive archive with no args shows help instead of bulk archiving
 - Missing task references during bulk archive are logged and skipped, not fatal
 constraints: []
-plan: []
+plan:
+- Add explicit --all-done flag to the archive parser and update help text so bulk
+  archive is opt-in.
+- Update archive command dispatch so task_id archives one task, --all-done performs
+  bulk archive, and no args prints parser help with a non-success exit.
+- Make bulk archive tolerate missing or broken done-task references by logging each
+  skipped task and continuing.
+- Revise archive CLI tests to cover single-task mode, explicit bulk mode, no-arg help
+  behavior, and skip logging for broken references.
 human_checkpoints: []
 subagents:
 - id: SA-0001

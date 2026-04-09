@@ -2,6 +2,7 @@
 
 import re
 import shutil
+from collections.abc import Callable
 from pathlib import Path
 
 import yaml
@@ -66,7 +67,10 @@ def archive_task(root: Path, task_id: str) -> TaskRecord:
         return task
 
 
-def archive_done_tasks(root: Path) -> list[TaskRecord]:
+def archive_done_tasks(
+    root: Path,
+    on_skip: Callable[[str, Exception], None] | None = None,
+) -> list[TaskRecord]:
     """Move all done tasks to the archive directory."""
     tasks = list_tasks(root, include_runtime=False)
     archived: list[TaskRecord] = []
@@ -74,7 +78,9 @@ def archive_done_tasks(root: Path) -> list[TaskRecord]:
         if task.status == "done" and task.pipeline_status == "done":
             try:
                 archive_task(root, task.id)
-            except (ValueError, FileNotFoundError):
+            except (ValueError, FileNotFoundError) as exc:
+                if on_skip is not None:
+                    on_skip(task.id, exc)
                 continue
             archived.append(task)
     return archived

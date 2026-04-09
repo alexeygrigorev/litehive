@@ -5,6 +5,9 @@ Created task worktree at `.litehive/worktrees/T-0234-add-all-done-flag-to-litehi
 ## 2026-04-08T23:22:28+00:00
 Execution started with engine `codex`.
 
+## 2026-04-08T23:23:18+00:00
+Task metadata updated via CLI.
+
 ## 2026-04-08T23:28:08+00:00
 Runner hook `before_pm_acceptance` passed: `uv run ruff check --select E402,F401 litehive tests`.
 - step: `accepting`

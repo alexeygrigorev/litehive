@@ -1,0 +1,7 @@
+active_task_id: null
+mode: implementation
+queue:
+- T-0003
+pool_stop_reason: null
+next_task_number: 3
+unmerged_worktrees: []
