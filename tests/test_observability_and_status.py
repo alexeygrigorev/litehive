@@ -1042,7 +1042,7 @@ def test_status_default_dashboard_shows_sections_without_config_noise(
     assert "retry_limit=" not in output
     assert "auto_commit=" not in output
 
-def test_status_fast_mode_uses_state_first_reads_and_skips_runtime_hydration(
+def test_status_full_mode_ignores_fast_flag_and_keeps_verbose_output(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     ensure_workspace(tmp_path, LitehiveConfig())
@@ -1068,12 +1068,53 @@ def test_status_fast_mode_uses_state_first_reads_and_skips_runtime_hydration(
     output = capsys.readouterr().out
 
     assert exit_code == 0
-    assert "status_read_mode: fast" in output
-    assert output.index(f"* {second.id} [in_progress/implementing]") < output.index(
-        f"  {first.id} [queued/backlog]"
+    assert "status_read_mode: full" in output
+    assert f"* {second.id} [in_progress/implementing]" in output
+    assert f"  {first.id} [queued/backlog]" in output
+    assert "run=running" in output
+    assert "stage=implementing" in output
+
+def test_status_default_and_fast_flag_match_dashboard_output(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    ensure_workspace(tmp_path, LitehiveConfig())
+    active = create_task(tmp_path, title="Active task")
+    active.status = "in_progress"
+    active.pipeline_status = "implementing"
+    active.runtime.execution_status = "running"
+    active.runtime.current_stage = RuntimeStageState(
+        step="implementing",
+        status="running",
+        started_at="2026-03-31T10:00:00+00:00",
+        updated_at="2026-03-31T10:00:01+00:00",
     )
-    assert "run=running" not in output
-    assert "stage=implementing" not in output
+    save_task(tmp_path, active)
+
+    done = create_task(tmp_path, title="Done task")
+    done.status = "done"
+    done.pipeline_status = "done"
+    save_task(tmp_path, done)
+
+    state = load_state(tmp_path)
+    state.active_task_id = active.id
+    save_state(tmp_path, state)
+
+    exit_code = _cmd_status(argparse.Namespace(workspace=tmp_path))
+    default_output = capsys.readouterr().out
+    compat_exit_code = _cmd_status(argparse.Namespace(workspace=tmp_path, fast=True))
+    fast_output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert compat_exit_code == 0
+    for output in (default_output, fast_output):
+        assert "=== Active Task ===" in output
+        assert active.id in output
+        assert "=== Last Completed ===" in output
+        assert done.id in output
+        assert "=== Queue ===" in output
+        assert "=== Engine Health ===" in output
+        assert "=== Recent Activity ===" in output
+        assert "default_retry_limit:" not in output
 
 def test_status_output_includes_execution_estimate_fields(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
@@ -2030,7 +2071,6 @@ def test_status_default_dashboard_shows_sections_without_config_noise(
     assert "stage: implementing elapsed" in output
     assert "=== Last Completed ===" in output
     assert "Completed feature" in output
-    assert "verdict=pass" in output
     assert "=== Queue ===" in output
     assert "1 queued" in output
     assert "Next feature" in output

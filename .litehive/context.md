@@ -10,8 +10,9 @@
 - `uv run litehive configure --workspace .`
   Initializes `.litehive/` and can seed routing, retry, hook, sandbox, and model defaults.
 - `uv run litehive status --workspace .`
+  Uses the default fast workspace summary path.
 - `uv run litehive status --workspace . --fast`
-  Uses state-first reads and skips per-task runtime hydration for a quicker workspace summary.
+  Legacy compatibility alias for the default fast summary path.
 - `uv run litehive status --workspace . --full`
   Prints the fuller per-task workspace dump.
 - `uv run litehive queue --workspace .`

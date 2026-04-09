@@ -103,8 +103,9 @@ litehive daemon instances                 # list all running daemons
 Monitoring:
 
 ```bash
-litehive status                           # workspace overview
-litehive status --fast                    # quick state-only read
+litehive status                           # quick workspace overview
+litehive status --fast                    # legacy alias for the default quick read
+litehive status --full                    # verbose per-task status dump
 litehive queue                            # show queue order
 litehive web                              # local web dashboard
 litehive debug T-0002 --worktree         # inspect recorded worktree existence and changes

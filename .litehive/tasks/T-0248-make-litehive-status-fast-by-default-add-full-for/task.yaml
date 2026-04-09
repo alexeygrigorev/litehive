@@ -9,22 +9,35 @@ mode: implementation
 pipeline_mode: full
 status: queued
 flag_reason: null
+flag_count: 0
 pipeline_status: backlog
 priority: high
-pm_complexity: null
-planned_effort: null
+pm_complexity: simple
+planned_effort: s
 created_at: '2026-04-09T08:49:18+00:00'
-updated_at: '2026-04-09T08:49:18+00:00'
-goal: 'litehive status currently requires --fast for quick reads. Swap the default:
-  fast mode is the default, --full gives the verbose per-task output. Nobody wants
-  to wait for slow status.'
+updated_at: '2026-04-09T12:50:18+00:00'
+goal: Align litehive status so fast/state-first reads are the default behavior across
+  the supported status entrypoints, while preserving the existing verbose per-task
+  dump behind --full and keeping --fast accepted as a backwards-compatible alias.
 acceptance_criteria:
-- litehive status uses fast mode by default
-- litehive status --full gives the current verbose output
-- --fast flag kept for backwards compat but is a no-op
-- All existing tests pass
-constraints: []
-plan: []
+- Running litehive status shows the fast state-first status output by default.
+- Running litehive status --full shows the existing verbose per-task status dump instead
+  of the fast summary.
+- Running litehive status --fast still succeeds for backwards compatibility and produces
+  the same output mode as the default fast path.
+- Automated coverage is updated for the default, --full, and legacy --fast behaviors,
+  and the relevant test suite passes.
+constraints:
+- Keep changes scoped to the status command behavior, parser/help text, and tests/docs
+  that describe this workflow.
+plan:
+- Confirm the current split between the launcher fast path in litehive.main and the
+  parser/_cmd_status behavior so implementation changes the remaining mismatch instead
+  of duplicating logic.
+- Make fast mode the default in the status command path, keep --full as the explicit
+  verbose switch, and leave --fast accepted as a no-op compatibility flag.
+- Update targeted tests and any operator-facing command references so they describe
+  the new default and cover default, --full, and legacy --fast invocations.
 human_checkpoints: []
 subagents: []
 git:
