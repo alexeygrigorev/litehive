@@ -57,6 +57,8 @@
   Run-time engine and model overrides win over task routing for that invocation.
 - `uv run litehive repair --workspace .`
   Manual recovery entrypoint for stale active tasks, interrupted runs, stranded `commit_to_git`, and queue cleanup.
+- `uv run litehive debug T-0002 --workspace . --worktree`
+  Shows whether the recorded task worktree exists, plus uncommitted files and committed changes ahead of main from that worktree.
 - `uv run litehive dirty-worktree-gate --workspace .`
   Explains whether dirty git state should block the workspace and whether each dirty location belongs to main or a tracked task worktree.
 - `uv run litehive rollback T-0002 --workspace .`

@@ -9,23 +9,40 @@ mode: implementation
 pipeline_mode: full
 status: queued
 flag_reason: null
+flag_count: 0
 pipeline_status: backlog
 priority: medium
-pm_complexity: null
-planned_effort: null
+pm_complexity: simple
+planned_effort: s
 created_at: '2026-04-09T08:37:18+00:00'
-updated_at: '2026-04-09T08:37:18+00:00'
-goal: 'litehive debug T-XXXX --worktree should show: uncommitted changes (git status),
-  committed changes ahead of main (git diff merge-base..HEAD), and whether the worktree
-  exists. This is the most common debugging step - checking if the agent actually
-  wrote code.'
+updated_at: '2026-04-09T11:30:34+00:00'
+goal: Make `litehive debug T-XXXX --worktree` answer the common debugging question
+  of whether a task worktree exists and whether it contains uncommitted or committed
+  code changes relative to main.
 acceptance_criteria:
-- litehive debug T-XXXX --worktree shows uncommitted file list from git status
-- litehive debug T-XXXX --worktree shows committed changes ahead of main via merge-base
-- Shows 'no worktree' if worktree doesn't exist
-- All existing tests pass
+- '`litehive debug T-XXXX --worktree` prints the worktree''s uncommitted changed files
+  from `git status` when the recorded worktree exists.'
+- '`litehive debug T-XXXX --worktree` prints files changed by commits that are ahead
+  of main by diffing from the worktree''s merge-base with the main checkout HEAD.'
+- When the task has no recorded worktree or the recorded path is missing, `litehive
+  debug T-XXXX --worktree` prints `no worktree` instead of failing.
+- Existing debug command behavior remains intact and the relevant test suite passes.
 constraints: []
-plan: []
+plan:
+- Add a `--worktree` flag to the debug CLI parser and route it through the existing
+  debug command without regressing current `debug` and `debug --all` behavior.
+- Extend the debug handler to resolve the task's recorded worktree path, report whether
+  the path exists, collect uncommitted paths from `git status --porcelain`, and collect
+  committed paths ahead of main from `git merge-base <main-head> HEAD` plus `git diff
+  --name-only`.
+- Format the worktree section so missing worktrees are explicit and existing worktrees
+  show distinct uncommitted versus committed-ahead-of-main file lists.
+- Add targeted tests in `tests/test_debug_command.py` covering an existing worktree
+  with dirty files, a worktree with committed-ahead changes, and a missing worktree
+  path while preserving existing debug output expectations.
+- Update durable operator docs and workspace context for the new `litehive debug --worktree`
+  troubleshooting flow, then run the relevant test slice and the full test suite required
+  by the task.
 human_checkpoints: []
 subagents: []
 git:

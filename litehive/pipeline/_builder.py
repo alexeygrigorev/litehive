@@ -172,17 +172,19 @@ def build_executor(
             while True:
                 attempt_count += 1
                 role_name = _role_for_step(step, current_task)
+                prompt = stage_prompt(
+                    current_task,
+                    step,
+                    workspace_context=workspace_context,
+                    process_profile=config.process_profile,
+                    role_name=role_name,
+                    config=config,
+                    root=root,
+                )
                 if resume_session_id:
-                    prompt = "Please continue where you left off. Complete the task."
-                else:
-                    prompt = stage_prompt(
-                        current_task,
-                        step,
-                        workspace_context=workspace_context,
-                        process_profile=config.process_profile,
-                        role_name=role_name,
-                        config=config,
-                        root=root,
+                    prompt = (
+                        "Please continue where you left off. Complete the task.\n\n"
+                        f"{prompt}"
                     )
                 # Snapshot thread verdict count so we can detect new verdicts after execution
                 from litehive.tasks import load_task_thread as _load_thread
