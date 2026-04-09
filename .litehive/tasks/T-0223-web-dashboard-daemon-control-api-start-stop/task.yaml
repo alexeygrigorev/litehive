@@ -7,13 +7,14 @@ engine: null
 model: null
 mode: implementation
 pipeline_mode: full
-status: queued
-pipeline_status: implementing
+status: in_progress
+flag_reason: null
+pipeline_status: commit_to_git
 priority: medium
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-08T06:04:59+00:00'
-updated_at: '2026-04-08T19:02:49+00:00'
+updated_at: '2026-04-09T00:27:35+00:00'
 goal: 'Add endpoints to the web dashboard for daemon lifecycle management: start daemon,
   stop daemon, restart daemon, and show daemon status including PID and recent logs.
   The frontend should show daemon state and provide control buttons.'
@@ -62,6 +63,34 @@ subagents:
   engine: codex
   status: failed
   path: subagents/SA-0005-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0006
+  role: merge-resolver
+  engine: claude
+  status: completed
+  path: subagents/SA-0006-merge-resolver
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0007
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0007-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0008
+  role: qa
+  engine: codex
+  status: completed
+  path: subagents/SA-0008-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0009
+  role: reviewer
+  engine: codex
+  status: completed
+  path: subagents/SA-0009-reviewer
   sandboxed: false
   sandbox_summary: host
 git:

@@ -1,0 +1,51 @@
+task_id: T-0223
+step: testing
+verdict: pass
+summary: 'Verified the daemon control implementation with focused web tests and code
+  inspection. Evidence: GET /api/daemon/status returns daemon_status, pid, started_at-derived
+  uptime, log_dir, and recent run-all log previews via build_daemon_status_payload;
+  POST /api/daemon/start and /api/daemon/restart return HTTP 202 with running status,
+  and POST /api/daemon/stop returns HTTP 200 with previous_pid plus stopped status.
+  The dashboard template renders a daemon status/control panel with running/stopped
+  indicator, PID/uptime/log-dir fields, start/stop/restart buttons, and a daemon log
+  viewer. The client refresh loop updates daemon state from /api/snapshot and /api/daemon/status,
+  and the existing SSE/polling fallback keeps the panel/log view refreshed without
+  a full reload. Tests run: uv run pytest -q tests/test_web_daemon_monitor.py (3 passed,
+  covers status payload shape, start/stop/restart API behavior, dashboard markup,
+  and JSON error on stop-while-stopped) and uv run pytest -q tests/test_web_snapshot_lockfree.py
+  -k ''web or stream or snapshot'' (26 passed, confirms the broader snapshot/SSE refresh
+  path still works). Acceptance criteria are met.'
+feedback: 'Verified the daemon control implementation with focused web tests and code
+  inspection. Evidence: GET /api/daemon/status returns daemon_status, pid, started_at-derived
+  uptime, log_dir, and recent run-all log previews via build_daemon_status_payload;
+  POST /api/daemon/start and /api/daemon/restart return HTTP 202 with running status,
+  and POST /api/daemon/stop returns HTTP 200 with previous_pid plus stopped status.
+  The dashboard template renders a daemon status/control panel with running/stopped
+  indicator, PID/uptime/log-dir fields, start/stop/restart buttons, and a daemon log
+  viewer. The client refresh loop updates daemon state from /api/snapshot and /api/daemon/status,
+  and the existing SSE/polling fallback keeps the panel/log view refreshed without
+  a full reload. Tests run: uv run pytest -q tests/test_web_daemon_monitor.py (3 passed,
+  covers status payload shape, start/stop/restart API behavior, dashboard markup,
+  and JSON error on stop-while-stopped) and uv run pytest -q tests/test_web_snapshot_lockfree.py
+  -k ''web or stream or snapshot'' (26 passed, confirms the broader snapshot/SSE refresh
+  path still works). Acceptance criteria are met.'
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 101
+hook_results: []
+created_at: '2026-04-09T00:26:18+00:00'

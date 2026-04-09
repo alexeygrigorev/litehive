@@ -43,3 +43,60 @@
     report: .litehive/tasks/T-0223-web-dashboard-daemon-control-api-start-stop/recovery/recovery-001.yaml'
   files_changed: []
   created_at: '2026-04-08T18:07:19+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Implemented the web dashboard daemon lifecycle surface and verified it
+    with focused web tests. The monitor serves GET /api/daemon/status plus POST /api/daemon/start,
+    /api/daemon/stop, and /api/daemon/restart through the existing daemon helpers,
+    with clear JSON conflict errors, status payloads including pid/started_at/uptime/recent
+    run-all logs, and HTTP 202 for start/restart and 200 for stop. The dashboard markup
+    now includes daemon running/stopped state, start/stop/restart controls, and a
+    daemon log viewer wired to polling/SSE refresh via the snapshot+daemon status
+    flow. I also aligned the web package exports/indirection so daemon helpers and
+    run-all log readers are patchable and consistently reused by the server and snapshot
+    builder. Verified with: uv run pytest -q tests/test_web_daemon_monitor.py (3 passed)
+    and uv run pytest -q tests/test_web_snapshot_lockfree.py -k ''web or stream or
+    snapshot'' (26 passed). These cover daemon status payload shape, start/stop/restart
+    API behavior, dashboard control markup, JSON error handling when stop is requested
+    while already stopped, and broader web monitor snapshot/stream behavior.'
+  files_changed: []
+  created_at: '2026-04-09T00:24:26+00:00'
+- role: qa
+  step: testing
+  verdict: pass
+  message: 'Verified the daemon control implementation with focused web tests and
+    code inspection. Evidence: GET /api/daemon/status returns daemon_status, pid,
+    started_at-derived uptime, log_dir, and recent run-all log previews via build_daemon_status_payload;
+    POST /api/daemon/start and /api/daemon/restart return HTTP 202 with running status,
+    and POST /api/daemon/stop returns HTTP 200 with previous_pid plus stopped status.
+    The dashboard template renders a daemon status/control panel with running/stopped
+    indicator, PID/uptime/log-dir fields, start/stop/restart buttons, and a daemon
+    log viewer. The client refresh loop updates daemon state from /api/snapshot and
+    /api/daemon/status, and the existing SSE/polling fallback keeps the panel/log
+    view refreshed without a full reload. Tests run: uv run pytest -q tests/test_web_daemon_monitor.py
+    (3 passed, covers status payload shape, start/stop/restart API behavior, dashboard
+    markup, and JSON error on stop-while-stopped) and uv run pytest -q tests/test_web_snapshot_lockfree.py
+    -k ''web or stream or snapshot'' (26 passed, confirms the broader snapshot/SSE
+    refresh path still works). Acceptance criteria are met.'
+  files_changed: []
+  created_at: '2026-04-09T00:26:08+00:00'
+- role: reviewer
+  step: accepting
+  verdict: pass
+  message: 'Accepted after reviewer verification. I confirmed the web server exposes
+    GET /api/daemon/status plus POST /api/daemon/start, /api/daemon/stop, and /api/daemon/restart,
+    with start/restart returning HTTP 202, stop returning HTTP 200, clear JSON 409
+    conflict handling when stop is requested while already stopped, and restart including
+    previous_pid while status payloads include daemon_status, pid, started_at, uptime,
+    log_dir, and recent run-all log previews. I also confirmed the dashboard renders
+    a daemon control panel with running/stopped indicator, PID/uptime/log-dir fields,
+    start/stop/restart buttons, and a daemon log viewer, and that the client refresh
+    loop updates daemon state through /api/snapshot plus /api/daemon/status with SSE
+    live updates and polling fallback so logs/status refresh without a full reload.
+    Evidence inspected in litehive/web/server.py, litehive/web/snapshot.py, and litehive/web/templates/index.html.
+    Verification run: uv run pytest -q tests/test_web_daemon_monitor.py (3 passed)
+    and uv run pytest -q tests/test_web_snapshot_lockfree.py -k ''web or stream or
+    snapshot'' (26 passed). Acceptance criteria are met.'
+  files_changed: []
+  created_at: '2026-04-09T00:27:23+00:00'

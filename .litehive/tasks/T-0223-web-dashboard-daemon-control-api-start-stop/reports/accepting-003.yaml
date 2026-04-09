@@ -1,0 +1,79 @@
+task_id: T-0223
+step: accepting
+verdict: pass
+summary: 'Accepted after reviewer verification. I confirmed the web server exposes
+  GET /api/daemon/status plus POST /api/daemon/start, /api/daemon/stop, and /api/daemon/restart,
+  with start/restart returning HTTP 202, stop returning HTTP 200, clear JSON 409 conflict
+  handling when stop is requested while already stopped, and restart including previous_pid
+  while status payloads include daemon_status, pid, started_at, uptime, log_dir, and
+  recent run-all log previews. I also confirmed the dashboard renders a daemon control
+  panel with running/stopped indicator, PID/uptime/log-dir fields, start/stop/restart
+  buttons, and a daemon log viewer, and that the client refresh loop updates daemon
+  state through /api/snapshot plus /api/daemon/status with SSE live updates and polling
+  fallback so logs/status refresh without a full reload. Evidence inspected in litehive/web/server.py,
+  litehive/web/snapshot.py, and litehive/web/templates/index.html. Verification run:
+  uv run pytest -q tests/test_web_daemon_monitor.py (3 passed) and uv run pytest -q
+  tests/test_web_snapshot_lockfree.py -k ''web or stream or snapshot'' (26 passed).
+  Acceptance criteria are met.'
+feedback: 'Runner hook `before_pm_acceptance` `uv run ruff check --select E402,F401
+  litehive tests` passed with exit code 0 (artifact: `artifacts/before_pm_acceptance-001.yaml`).
+
+
+  Runner hook `before_pm_acceptance` `if git grep -nE ''noqa:.*F401|noqa:.*F403|ruff:\s*noqa:\s*F401|ruff:\s*noqa:\s*F403''
+  -- litehive tests; then echo ''Forbidden noqa F401/F403 suppression found.''; exit
+  1; fi` passed with exit code 0 (artifact: `artifacts/before_pm_acceptance-002.yaml`).
+
+
+  Accepted after reviewer verification. I confirmed the web server exposes GET /api/daemon/status
+  plus POST /api/daemon/start, /api/daemon/stop, and /api/daemon/restart, with start/restart
+  returning HTTP 202, stop returning HTTP 200, clear JSON 409 conflict handling when
+  stop is requested while already stopped, and restart including previous_pid while
+  status payloads include daemon_status, pid, started_at, uptime, log_dir, and recent
+  run-all log previews. I also confirmed the dashboard renders a daemon control panel
+  with running/stopped indicator, PID/uptime/log-dir fields, start/stop/restart buttons,
+  and a daemon log viewer, and that the client refresh loop updates daemon state through
+  /api/snapshot plus /api/daemon/status with SSE live updates and polling fallback
+  so logs/status refresh without a full reload. Evidence inspected in litehive/web/server.py,
+  litehive/web/snapshot.py, and litehive/web/templates/index.html. Verification run:
+  uv run pytest -q tests/test_web_daemon_monitor.py (3 passed) and uv run pytest -q
+  tests/test_web_snapshot_lockfree.py -k ''web or stream or snapshot'' (26 passed).
+  Acceptance criteria are met.'
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings:
+- 'runner hook passed: `before_pm_acceptance` `uv run ruff check --select E402,F401
+  litehive tests` (artifact: `artifacts/before_pm_acceptance-001.yaml`)'
+- 'runner hook passed: `before_pm_acceptance` `if git grep -nE ''noqa:.*F401|noqa:.*F403|ruff:\s*noqa:\s*F401|ruff:\s*noqa:\s*F403''
+  -- litehive tests; then echo ''Forbidden noqa F401/F403 suppression found.''; exit
+  1; fi` (artifact: `artifacts/before_pm_acceptance-002.yaml`)'
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 77
+hook_results:
+- point: before_pm_acceptance
+  command: uv run ruff check --select E402,F401 litehive tests
+  blocking: true
+  exit_code: 0
+  status: passed
+  artifact: artifacts/before_pm_acceptance-001.yaml
+- point: before_pm_acceptance
+  command: if git grep -nE 'noqa:.*F401|noqa:.*F403|ruff:\s*noqa:\s*F401|ruff:\s*noqa:\s*F403'
+    -- litehive tests; then echo 'Forbidden noqa F401/F403 suppression found.'; exit
+    1; fi
+  blocking: true
+  exit_code: 0
+  status: passed
+  artifact: artifacts/before_pm_acceptance-002.yaml
+created_at: '2026-04-09T00:27:35+00:00'
