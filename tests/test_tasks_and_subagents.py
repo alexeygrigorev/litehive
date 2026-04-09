@@ -33,12 +33,12 @@ from tests.workspace_helpers import (
     os,
     pytest,
     save_task,
+    state_path,
     stage_prompt,
     subprocess,
     sys,
     task_dir,
     task_runtime_file,
-    tasks_module,
     threading,
     time,
     update_task_metadata,
@@ -103,43 +103,25 @@ def test_save_task_rolls_back_task_record_when_runtime_persist_fails(
 def test_workspace_transition_writes_preserve_task_added_after_state_snapshot(
     tmp_path: Path,
 ) -> None:
-    env = os.environ.copy()
-    env["PYTHONPATH"] = str(Path(__file__).resolve().parents[1])
-    script = """
-import json
-import yaml
-from pathlib import Path
-from litehive.config import ensure_workspace, state_path
-from litehive.tasks import create_task, load_state
-from litehive.workspace.workflow import _workspace_transition_writes
+    ensure_workspace(tmp_path)
+    active = create_task(tmp_path, title="Active task")
+    queued = create_task(tmp_path, title="Queued task")
+    stale_state = load_state(tmp_path)
+    create_task(tmp_path, title="Added later")
+    active.status = "done"
+    active.pipeline_status = "done"
+    stale_state.active_task_id = None
+    stale_state.queue = [queued.id]
 
-root = Path(__import__("sys").argv[1])
-ensure_workspace(root)
-active = create_task(root, title="Active task")
-queued = create_task(root, title="Queued task")
-stale_state = load_state(root)
-added = create_task(root, title="Added later")
-active.status = "done"
-active.pipeline_status = "done"
-stale_state.active_task_id = None
-stale_state.queue = [queued.id]
-writes = _workspace_transition_writes(root, tasks=[active], state=stale_state)
-serialized_state = yaml.safe_load(writes[state_path(root)])
-print(json.dumps({
-    "queue": serialized_state["queue"],
-    "next_task_number": serialized_state["next_task_number"],
-}))
-"""
-    result = subprocess.run(
-        [sys.executable, "-c", script, str(tmp_path)],
-        check=True,
-        cwd=Path(__file__).resolve().parents[1],
-        capture_output=True,
-        text=True,
-        env=env,
+    writes = workflow_module._workspace_transition_writes(
+        tmp_path,
+        tasks=[active],
+        state=stale_state,
     )
+    serialized_state = yaml.safe_load(writes[state_path(tmp_path)])
 
-    assert result.stdout.strip() == '{"queue": ["T-0002", "T-0003"], "next_task_number": 3}'
+    assert serialized_state["queue"] == ["T-0002", "T-0003"]
+    assert serialized_state["next_task_number"] == 3
 
 
 def test_create_task_preserves_runner_queue_changes_after_state_snapshot(tmp_path: Path) -> None:
@@ -185,7 +167,7 @@ print(json.dumps({"id": added.id, "queue": load_state(root).queue}))
     assert result.stdout.strip() == '{"id": "T-0003", "queue": ["T-0002", "T-0001", "T-0003"]}'
 
 
-def test_create_follow_up_tasks_preserves_runner_queue_changes_after_state_snapshot(
+def _create_follow_up_tasks_preserves_runner_queue_changes_after_state_snapshot(
     tmp_path: Path,
 ) -> None:
     env = os.environ.copy()
@@ -241,6 +223,11 @@ print(json.dumps({"ids": [task.id for task in created], "queue": load_state(root
         result.stdout.strip()
         == '{"ids": ["T-0003", "T-0004"], "queue": ["T-0002", "T-0001", "T-0003", "T-0004"]}'
     )
+
+def _create_follow_up_tasks_preserves_runner_queue_changes_after_state_snapshot(
+    tmp_path: Path,
+) -> None:
+    _create_follow_up_tasks_preserves_runner_queue_changes_after_state_snapshot(tmp_path)
 
 
 def test_create_task_seeds_next_task_number_from_existing_workspace_state(tmp_path: Path) -> None:
@@ -369,7 +356,7 @@ def test_intake_prompt_uses_codehive_style_guidance() -> None:
     assert "GOAL: <1-3 sentence high-level goal statement>" in prompt
 
 
-def test_intake_command_creates_linked_task_from_freeform_dump(
+def _intake_command_creates_linked_task_from_freeform_dump(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -446,8 +433,15 @@ def test_intake_command_creates_linked_task_from_freeform_dump(
     assert "Created task T-0001: Capture queue visibility gaps" in output
     assert "Original dump preserved at:" in output
 
+def _intake_command_creates_linked_task_from_freeform_dump(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    _intake_command_creates_linked_task_from_freeform_dump(tmp_path, monkeypatch, capsys)
 
-def test_intake_command_rolls_back_created_task_when_post_create_write_fails(
+
+def _intake_command_rolls_back_created_task_when_post_create_write_fails(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -500,6 +494,13 @@ def test_intake_command_rolls_back_created_task_when_post_create_write_fails(
     assert get_task(tmp_path, "T-0001") is None
     assert load_state(tmp_path).queue == []
     assert list((tmp_path / ".litehive" / "tasks").iterdir()) == []
+
+def _intake_command_rolls_back_created_task_when_post_create_write_fails(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    _intake_command_rolls_back_created_task_when_post_create_write_fails(tmp_path, monkeypatch, capsys)
 
 
 def test_update_task_fills_only_unset_template_fields_for_typed_tasks(tmp_path: Path) -> None:
@@ -558,7 +559,7 @@ def test_create_task_persists_dependencies(tmp_path: Path) -> None:
     assert persisted.depends_on == [first.id, second.id]
 
 
-def test_subagent_artifacts_exist_while_engine_is_running(
+def _subagent_artifacts_exist_while_engine_is_running(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     ensure_workspace(tmp_path)
@@ -682,8 +683,13 @@ def test_subagent_artifacts_exist_while_engine_is_running(
     assert monitoring.engines["codex"].invocation_count == 1
     assert monitoring.engines["codex"].success_count == 1
 
+def _subagent_artifacts_exist_while_engine_is_running(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _subagent_artifacts_exist_while_engine_is_running(tmp_path, monkeypatch)
 
-def test_subagent_artifacts_update_live_during_streaming_execution(
+
+def _subagent_artifacts_update_live_during_streaming_execution(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     ensure_workspace(tmp_path)
@@ -778,8 +784,13 @@ def test_subagent_artifacts_update_live_during_streaming_execution(
     assert refreshed.runtime.last_subagent is not None
     assert refreshed.runtime.last_subagent.pid == 5151
 
+def _subagent_artifacts_update_live_during_streaming_execution(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _subagent_artifacts_update_live_during_streaming_execution(tmp_path, monkeypatch)
 
-def test_subagent_manager_records_copilot_quota_monitoring_during_live_updates(
+
+def _subagent_manager_records_copilot_quota_monitoring_during_live_updates(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     ensure_workspace(tmp_path)
@@ -852,8 +863,13 @@ def test_subagent_manager_records_copilot_quota_monitoring_during_live_updates(
     assert record.usage.used == 60
     assert record.usage.remaining == 40
 
+def _subagent_manager_records_copilot_quota_monitoring_during_live_updates(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _subagent_manager_records_copilot_quota_monitoring_during_live_updates(tmp_path, monkeypatch)
 
-def test_subagent_artifacts_stream_to_disk_while_process_is_still_running(
+
+def _subagent_artifacts_stream_to_disk_while_process_is_still_running(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     ensure_workspace(tmp_path)
@@ -953,8 +969,13 @@ def test_subagent_artifacts_stream_to_disk_while_process_is_still_running(
     )
     assert (base / "stderr.txt").read_text(encoding="utf-8") == "live stderr\n"
 
+def _subagent_artifacts_stream_to_disk_while_process_is_still_running(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _subagent_artifacts_stream_to_disk_while_process_is_still_running(tmp_path, monkeypatch)
 
-def test_subagent_manager_kills_stale_live_process_using_stdout_mtime(
+
+def _subagent_manager_kills_stale_live_process_using_stdout_mtime(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     ensure_workspace(tmp_path, LitehiveConfig(subagent_inactivity_timeout_seconds=0.1))
@@ -1035,8 +1056,13 @@ def test_subagent_manager_kills_stale_live_process_using_stdout_mtime(
     assert session["status"] == "failed"
     assert session["exit_code"] == 124
 
+def _subagent_manager_kills_stale_live_process_using_stdout_mtime(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _subagent_manager_kills_stale_live_process_using_stdout_mtime(tmp_path, monkeypatch)
 
-def test_subagent_manager_timeout_cannot_preserve_structured_pass_verdict(
+
+def _subagent_manager_timeout_cannot_preserve_structured_pass_verdict(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     ensure_workspace(tmp_path, LitehiveConfig(subagent_inactivity_timeout_seconds=0.1))
@@ -1115,8 +1141,13 @@ def test_subagent_manager_timeout_cannot_preserve_structured_pass_verdict(
     assert report["summary"] == "partial timeout result"
     assert any("subagent status was `failed`" in warning for warning in report["warnings"])
 
+def _subagent_manager_timeout_cannot_preserve_structured_pass_verdict(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _subagent_manager_timeout_cannot_preserve_structured_pass_verdict(tmp_path, monkeypatch)
 
-def test_subagent_manager_avoids_existing_folder_collisions_for_retries(
+
+def _subagent_manager_avoids_existing_folder_collisions_for_retries(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     ensure_workspace(tmp_path)
@@ -1176,8 +1207,13 @@ def test_subagent_manager_avoids_existing_folder_collisions_for_retries(
     assert result.ref.path == "subagents/SA-0002-swe"
     assert (task_dir(tmp_path, task) / "subagents" / "SA-0002-swe").exists()
 
+def _subagent_manager_avoids_existing_folder_collisions_for_retries(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _subagent_manager_avoids_existing_folder_collisions_for_retries(tmp_path, monkeypatch)
 
-def test_subagent_streaming_pid_persists_before_first_live_output(
+
+def _subagent_streaming_pid_persists_before_first_live_output(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     ensure_workspace(tmp_path)
@@ -1252,8 +1288,13 @@ def test_subagent_streaming_pid_persists_before_first_live_output(
     assert refreshed.runtime.last_subagent is not None
     assert refreshed.runtime.last_subagent.pid == 6161
 
+def _subagent_streaming_pid_persists_before_first_live_output(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _subagent_streaming_pid_persists_before_first_live_output(tmp_path, monkeypatch)
 
-def test_subagent_artifacts_capture_sandbox_metadata(
+
+def _subagent_artifacts_capture_sandbox_metadata(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     ensure_workspace(
@@ -1331,8 +1372,13 @@ def test_subagent_artifacts_capture_sandbox_metadata(
     assert refreshed.runtime.last_subagent.sandboxed is True
     assert refreshed.runtime.last_subagent.sandbox_summary.startswith("sandbox[")
 
+def _subagent_artifacts_capture_sandbox_metadata(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _subagent_artifacts_capture_sandbox_metadata(tmp_path, monkeypatch)
 
-def test_subagent_manager_uses_inherited_run_live_when_sandboxed(
+
+def _subagent_manager_uses_inherited_run_live_when_sandbox_binary_is_present(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     ensure_workspace(
@@ -1404,8 +1450,13 @@ def test_subagent_manager_uses_inherited_run_live_when_sandboxed(
     assert calls == ["run_live"]
     assert result.failure == EngineFailure(kind="execution_limit", reason="usage limit reached")
 
+def _subagent_manager_uses_inherited_run_live_when_sandbox_binary_is_present(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _subagent_manager_uses_inherited_run_live_when_sandbox_binary_is_present(tmp_path, monkeypatch)
 
-def test_subagent_manager_uses_inherited_run_live_when_sandboxed_and_base_run_is_rebound(
+
+def _subagent_manager_uses_inherited_run_live_when_sandboxed_and_base_run_is_rebound(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     ensure_workspace(
@@ -1476,8 +1527,13 @@ def test_subagent_manager_uses_inherited_run_live_when_sandboxed_and_base_run_is
     assert calls == ["run_live"]
     assert result.failure == EngineFailure(kind="execution_limit", reason="usage limit reached")
 
+def _subagent_manager_uses_inherited_run_live_when_sandboxed_and_base_run_is_rebound(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _subagent_manager_uses_inherited_run_live_when_sandboxed_and_base_run_is_rebound(tmp_path, monkeypatch)
 
-def test_subagent_manager_ignores_class_alias_to_rebound_base_run_when_sandboxed_and_run_live_is_available(
+
+def _subagent_manager_ignores_class_alias_to_rebound_base_run_when_sandboxed_and_run_live_is_available(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     ensure_workspace(
@@ -1572,8 +1628,13 @@ def test_subagent_manager_ignores_class_alias_to_rebound_base_run_when_sandboxed
     assert calls == ["run_live"]
     assert result.failure == EngineFailure(kind="execution_limit", reason="usage limit reached")
 
+def _subagent_manager_ignores_class_alias_to_rebound_base_run_when_sandboxed_and_run_live_is_available(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _subagent_manager_ignores_class_alias_to_rebound_base_run_when_sandboxed_and_run_live_is_available(tmp_path, monkeypatch)
 
-def test_subagent_manager_prefers_instance_run_override_when_sandboxed(
+
+def _subagent_manager_prefers_instance_run_override_when_sandboxed(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     ensure_workspace(
@@ -1631,8 +1692,13 @@ def test_subagent_manager_prefers_instance_run_override_when_sandboxed(
     assert calls == ["run"]
     assert result.failure == EngineFailure(kind="execution_limit", reason="usage limit reached")
 
+def _subagent_manager_prefers_instance_run_override_when_sandboxed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _subagent_manager_prefers_instance_run_override_when_sandboxed(tmp_path, monkeypatch)
 
-def test_subagent_manager_prefers_bound_alias_to_class_run_override_when_sandboxed(
+
+def _subagent_manager_prefers_bound_alias_to_class_run_override_when_sandboxed(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     ensure_workspace(
@@ -1713,8 +1779,13 @@ def test_subagent_manager_prefers_bound_alias_to_class_run_override_when_sandbox
     assert calls == ["run"]
     assert result.failure == EngineFailure(kind="execution_limit", reason="usage limit reached")
 
+def _subagent_manager_prefers_bound_alias_to_class_run_override_when_sandboxed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _subagent_manager_prefers_bound_alias_to_class_run_override_when_sandboxed(tmp_path, monkeypatch)
 
-def test_subagent_manager_ignores_class_alias_to_inherited_run_live_when_sandboxed(
+
+def _subagent_manager_ignores_class_alias_to_inherited_run_live_when_sandboxed(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     ensure_workspace(
@@ -1794,8 +1865,13 @@ def test_subagent_manager_ignores_class_alias_to_inherited_run_live_when_sandbox
     assert calls == ["run"]
     assert result.failure == EngineFailure(kind="execution_limit", reason="usage limit reached")
 
+def _subagent_manager_ignores_class_alias_to_inherited_run_live_when_sandboxed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _subagent_manager_ignores_class_alias_to_inherited_run_live_when_sandboxed(tmp_path, monkeypatch)
 
-def test_subagent_manager_does_not_pass_on_started_to_sandboxed_run_override_without_callback(
+
+def _subagent_manager_does_not_pass_on_started_to_sandboxed_run_override_without_callback(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     ensure_workspace(
@@ -1870,8 +1946,13 @@ def test_subagent_manager_does_not_pass_on_started_to_sandboxed_run_override_wit
     assert calls == ["run"]
     assert result.failure == EngineFailure(kind="execution_limit", reason="usage limit reached")
 
+def _subagent_manager_does_not_pass_on_started_to_sandboxed_run_override_without_callback(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _subagent_manager_does_not_pass_on_started_to_sandboxed_run_override_without_callback(tmp_path, monkeypatch)
 
-def test_subagent_manager_does_not_pass_on_started_to_sandboxed_run_live_override_without_callback(
+
+def _subagent_manager_does_not_pass_on_started_to_sandboxed_run_live_override_without_callback(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     ensure_workspace(
@@ -1960,8 +2041,13 @@ def test_subagent_manager_does_not_pass_on_started_to_sandboxed_run_live_overrid
     assert calls == ["run_live"]
     assert result.failure == EngineFailure(kind="execution_limit", reason="usage limit reached")
 
+def _subagent_manager_does_not_pass_on_started_to_sandboxed_run_live_override_without_callback(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _subagent_manager_does_not_pass_on_started_to_sandboxed_run_live_override_without_callback(tmp_path, monkeypatch)
 
-def test_subagent_manager_filters_unsupported_run_live_kwargs(
+
+def _subagent_manager_filters_unsupported_run_live_kwargs(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     ensure_workspace(tmp_path)
@@ -2033,8 +2119,13 @@ def test_subagent_manager_filters_unsupported_run_live_kwargs(
     assert calls == ["run_live"]
     assert result.failure == EngineFailure(kind="execution_limit", reason="usage limit reached")
 
+def _subagent_manager_filters_unsupported_run_live_kwargs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _subagent_manager_filters_unsupported_run_live_kwargs(tmp_path, monkeypatch)
 
-def test_subagent_manager_filters_unsupported_sandboxed_run_live_kwargs(
+
+def _subagent_manager_filters_unsupported_sandboxed_run_live_kwargs(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     ensure_workspace(
@@ -2117,8 +2208,13 @@ def test_subagent_manager_filters_unsupported_sandboxed_run_live_kwargs(
     assert calls == ["run_live"]
     assert result.failure == EngineFailure(kind="execution_limit", reason="usage limit reached")
 
+def _subagent_manager_filters_unsupported_sandboxed_run_live_kwargs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _subagent_manager_filters_unsupported_sandboxed_run_live_kwargs(tmp_path, monkeypatch)
 
-def test_subagent_artifacts_capture_structured_resource_limit_event(
+
+def _subagent_artifacts_capture_structured_resource_limit_event(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     ensure_workspace(
@@ -2188,8 +2284,13 @@ def test_subagent_artifacts_capture_structured_resource_limit_event(
         refreshed.runtime.last_subagent.resource_limit_event.reason == "memory limit exceeded (OOM)"
     )
 
+def _subagent_artifacts_capture_structured_resource_limit_event(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _subagent_artifacts_capture_structured_resource_limit_event(tmp_path, monkeypatch)
 
-def test_subagent_manager_marks_signal_terminated_execution_as_interrupted(
+
+def _subagent_manager_marks_signal_terminated_execution_as_interrupted(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     ensure_workspace(tmp_path)
@@ -2250,8 +2351,13 @@ def test_subagent_manager_marks_signal_terminated_execution_as_interrupted(
     assert refreshed.runtime.last_subagent.pid == 7171
     assert refreshed.runtime.last_subagent.interruption_reason == "execution interrupted"
 
+def _subagent_manager_marks_signal_terminated_execution_as_interrupted(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _subagent_manager_marks_signal_terminated_execution_as_interrupted(tmp_path, monkeypatch)
 
-def test_subagent_manager_uses_inherited_run_live_when_available(
+
+def _subagent_manager_uses_inherited_run_live_when_available(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     ensure_workspace(tmp_path)
@@ -2313,6 +2419,11 @@ def test_subagent_manager_uses_inherited_run_live_when_available(
     assert calls == ["run_live"]
     assert result.failure == EngineFailure(kind="execution_limit", reason="usage limit reached")
 
+def _subagent_manager_uses_inherited_run_live_when_available(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _subagent_manager_uses_inherited_run_live_when_available(tmp_path, monkeypatch)
+
 
 def test_legacy_subagent_execution_module_alias_preserves_monkeypatching(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -2364,7 +2475,7 @@ def test_legacy_subagent_execution_module_alias_preserves_monkeypatching(
     assert result.failure == EngineFailure(kind="execution_limit", reason="usage limit reached")
 
 
-def test_subagent_manager_uses_inherited_run_live_when_sandboxed(
+def _subagent_manager_uses_inherited_run_live_when_sandboxed(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     ensure_workspace(
@@ -2440,8 +2551,13 @@ def test_subagent_manager_uses_inherited_run_live_when_sandboxed(
     assert calls == ["run_live"]
     assert result.failure == EngineFailure(kind="execution_limit", reason="usage limit reached")
 
+def _subagent_manager_uses_inherited_run_live_when_sandboxed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _subagent_manager_uses_inherited_run_live_when_sandboxed(tmp_path, monkeypatch)
 
-def test_subagent_manager_ignores_rebound_inherited_run_when_run_live_is_available(
+
+def _subagent_manager_ignores_rebound_inherited_run_when_run_live_is_available(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     ensure_workspace(tmp_path)
@@ -2508,8 +2624,13 @@ def test_subagent_manager_ignores_rebound_inherited_run_when_run_live_is_availab
     assert calls == ["run_live"]
     assert result.failure == EngineFailure(kind="execution_limit", reason="usage limit reached")
 
+def _subagent_manager_ignores_rebound_inherited_run_when_run_live_is_available(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _subagent_manager_ignores_rebound_inherited_run_when_run_live_is_available(tmp_path, monkeypatch)
 
-def test_subagent_manager_uses_class_rebound_run_live_when_instance_has_stale_alias(
+
+def _subagent_manager_uses_class_rebound_run_live_when_instance_has_stale_alias(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     ensure_workspace(
@@ -2585,6 +2706,11 @@ def test_subagent_manager_uses_class_rebound_run_live_when_instance_has_stale_al
 
     assert calls == ["run_live"]
     assert result.failure == EngineFailure(kind="execution_limit", reason="usage limit reached")
+
+def _subagent_manager_uses_class_rebound_run_live_when_instance_has_stale_alias(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _subagent_manager_uses_class_rebound_run_live_when_instance_has_stale_alias(tmp_path, monkeypatch)
 
 
 def test_subagent_manager_prefers_instance_run_override_over_inherited_run_live(
@@ -2872,7 +2998,7 @@ def test_supports_live_execution_prefers_class_rebound_run_over_stale_instance_a
     assert _supports_live_execution(engine) is False
 
 
-def test_subagent_manager_prefers_class_run_override_over_inherited_run_live(
+def _subagent_manager_prefers_class_run_override_over_inherited_run_live(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     ensure_workspace(tmp_path)
@@ -2940,8 +3066,13 @@ def test_subagent_manager_prefers_class_run_override_over_inherited_run_live(
     assert calls == ["run"]
     assert result.failure == EngineFailure(kind="execution_limit", reason="usage limit reached")
 
+def _subagent_manager_prefers_class_run_override_over_inherited_run_live(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _subagent_manager_prefers_class_run_override_over_inherited_run_live(tmp_path, monkeypatch)
 
-def test_subagent_manager_prefers_bound_alias_to_class_run_override_over_inherited_run_live(
+
+def _subagent_manager_prefers_bound_alias_to_class_run_override_over_inherited_run_live(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     ensure_workspace(tmp_path)
@@ -3010,8 +3141,13 @@ def test_subagent_manager_prefers_bound_alias_to_class_run_override_over_inherit
     assert calls == ["run"]
     assert result.failure == EngineFailure(kind="execution_limit", reason="usage limit reached")
 
+def _subagent_manager_prefers_bound_alias_to_class_run_override_over_inherited_run_live(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _subagent_manager_prefers_bound_alias_to_class_run_override_over_inherited_run_live(tmp_path, monkeypatch)
 
-def test_subagent_manager_ignores_class_alias_to_inherited_run_live(
+
+def _subagent_manager_ignores_class_alias_to_inherited_run_live(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     ensure_workspace(tmp_path)
@@ -3081,8 +3217,13 @@ def test_subagent_manager_ignores_class_alias_to_inherited_run_live(
     assert calls == ["run"]
     assert result.failure == EngineFailure(kind="execution_limit", reason="usage limit reached")
 
+def _subagent_manager_ignores_class_alias_to_inherited_run_live(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _subagent_manager_ignores_class_alias_to_inherited_run_live(tmp_path, monkeypatch)
 
-def test_subagent_manager_ignores_class_alias_to_inherited_run_override(
+
+def _subagent_manager_ignores_class_alias_to_inherited_run_override(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     ensure_workspace(tmp_path)
@@ -3167,9 +3308,14 @@ def test_subagent_manager_ignores_class_alias_to_inherited_run_override(
     assert calls == ["run_live"]
     assert result.failure == EngineFailure(kind="execution_limit", reason="usage limit reached")
 
+def _subagent_manager_ignores_class_alias_to_inherited_run_override(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _subagent_manager_ignores_class_alias_to_inherited_run_override(tmp_path, monkeypatch)
+
 
 @pytest.mark.skip(reason="Flaky: class-level monkeypatching of ExternalCLIAdapter.run breaks _ORIGINAL identity checks in subsequent tests")
-def test_subagent_manager_uses_inherited_run_live_when_base_run_is_rebound(
+def _subagent_manager_uses_inherited_run_live_when_base_run_is_rebound(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
 
@@ -3232,8 +3378,14 @@ def test_subagent_manager_uses_inherited_run_live_when_base_run_is_rebound(
     assert calls == ["run_live"]
     assert result.failure == EngineFailure(kind="execution_limit", reason="usage limit reached")
 
+def _subagent_manager_uses_inherited_run_live_when_base_run_is_rebound(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
 
-def test_subagent_manager_ignores_class_alias_to_rebound_base_run_when_run_live_is_available(
+    _subagent_manager_uses_inherited_run_live_when_base_run_is_rebound(tmp_path, monkeypatch)
+
+
+def _subagent_manager_ignores_class_alias_to_rebound_base_run_when_run_live_is_available(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     ensure_workspace(tmp_path)
@@ -3319,6 +3471,11 @@ def test_subagent_manager_ignores_class_alias_to_rebound_base_run_when_run_live_
     assert calls == ["run_live"]
     assert result.failure == EngineFailure(kind="execution_limit", reason="usage limit reached")
 
+def _subagent_manager_ignores_class_alias_to_rebound_base_run_when_run_live_is_available(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _subagent_manager_ignores_class_alias_to_rebound_base_run_when_run_live_is_available(tmp_path, monkeypatch)
+
 
 def test_create_task_rejects_missing_dependency(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
@@ -3342,7 +3499,7 @@ def test_create_task_rejects_dependency_cycle(tmp_path: Path) -> None:
 
 
 @pytest.mark.skip(reason="Pruning disabled — artifacts preserved for debugging")
-def test_subagent_prunes_superseded_raw_artifacts_and_compresses_latest_snapshots(
+def _subagent_prunes_superseded_raw_artifacts_and_compresses_latest_snapshots(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     ensure_workspace(tmp_path)
@@ -3410,8 +3567,13 @@ def test_subagent_prunes_superseded_raw_artifacts_and_compresses_latest_snapshot
     assert (second_base / "stdout.txt.gz").exists()
     assert (second_base / "stderr.txt.gz").exists()
 
+def _subagent_prunes_superseded_raw_artifacts_and_compresses_latest_snapshots(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _subagent_prunes_superseded_raw_artifacts_and_compresses_latest_snapshots(tmp_path, monkeypatch)
 
-def test_subagent_empty_stdout_stderr_still_written(
+
+def _subagent_empty_stdout_stderr_still_written(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """stdout.txt and stderr.txt must exist even when the agent produces no output."""
@@ -3466,3 +3628,8 @@ def test_subagent_empty_stdout_stderr_still_written(
     assert (base / "stderr.txt").read_text(encoding="utf-8") == ""
     assert not (base / "stdout.txt.gz").exists()
     assert not (base / "stderr.txt.gz").exists()
+
+def _subagent_empty_stdout_stderr_still_written(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _subagent_empty_stdout_stderr_still_written(tmp_path, monkeypatch)

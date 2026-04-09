@@ -12,6 +12,9 @@ Execution started with engine `claude`.
 ## 2026-04-09T18:04:49+00:00
 Stage `grooming` switched from `claude` to `codex` after claude usage limit reached (7d window at 97%, resets 2026-04-10T09:00:00.605522+00:00).
 
+## 2026-04-09T18:06:29+00:00
+Task metadata updated via CLI.
+
 ## 2026-04-09T18:15:26+00:00
 Runner hook `after_implementing` passed: `uv run ruff check --select E402,F401 litehive tests`.
 - step: `implementing`
@@ -95,3 +98,6 @@ fi`.
 - description: `-`
 - exit_code: `0`
 - artifact: `artifacts/after_implementing-002.yaml`
+
+## 2026-04-09T18:52:52+00:00
+Merge conflict on 2 file(s). Launching merge agent (attempt 1).

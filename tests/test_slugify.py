@@ -13,12 +13,6 @@ def test_slugify_truncates_at_50_chars() -> None:
     assert result == "this-is-a-very-long-task-title-that-should-be"
 
 
-def test_slugify_exactly_50_unchanged() -> None:
-    slug_50 = "a" * 50
-    assert len(slugify(slug_50)) == 50
-    assert slugify(slug_50) == slug_50
-
-
 def test_slugify_truncation_word_boundary() -> None:
     # "a-" * 25 + "b" -> after slugify: "a-a-a-...-a-b" = 51 chars
     title = "a-" * 25 + "b"

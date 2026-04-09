@@ -69,22 +69,3 @@ def test_parse_stage_report_text_caps_feedback_no_cli_verdict() -> None:
     # Text VERDICT: PASS is no longer parsed — verdict is fail
     assert report.verdict == "fail"
 
-
-def test_cli_report_message_stored_as_is() -> None:
-    """Thread comment messages (from litehive report) are not truncated.
-
-    These are already human-authored summaries, not transcripts.
-    Verified by checking that StageReport created from thread comments
-    in subagents.py uses latest.message directly (no cap_feedback).
-    """
-    from litehive.models import StageReport
-
-    message = "Implemented feature X. Tests pass. All criteria met."
-    report = StageReport(
-        task_id="T-0001",
-        step="implementing",
-        verdict="pass",
-        summary="done",
-        feedback=message,
-    )
-    assert report.feedback == message

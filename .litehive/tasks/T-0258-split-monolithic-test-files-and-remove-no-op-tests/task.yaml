@@ -89,6 +89,13 @@ subagents:
   path: subagents/SA-0008-reviewer
   sandboxed: false
   sandbox_summary: host
+- id: SA-0009
+  role: merge-resolver
+  engine: claude
+  status: running
+  path: subagents/SA-0009-merge-resolver
+  sandboxed: false
+  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0258 split-monolithic-test-files-and-remove-no-op-tests'
@@ -96,7 +103,7 @@ git:
   checkpoint_base_sha: null
   checkpoint_attempts: 0
   rolled_back_checkpoint_attempt: null
-  merge_agent_attempts: 0
+  merge_agent_attempts: 1
   worktree_path: null
 retry_policy:
   max_retries: null
