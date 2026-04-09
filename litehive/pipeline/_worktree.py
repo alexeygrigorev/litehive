@@ -27,7 +27,6 @@ from litehive.tasks.crud import (
 )
 from litehive.tasks.journal import append_journal
 
-from ._models import resolve_model
 from ._types import DirtyWorktreeFinding, DirtyWorktreeGateReport
 
 
