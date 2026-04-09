@@ -51,7 +51,7 @@ from litehive.pipeline._models import (
     resolve_task_retry_policy,
     workspace_model_for_engine,
 )
-from litehive.pipeline._recovery import (
+from litehive.pipeline.recovery import (
     _attempt_commit_recovery,
     _attempt_stage_recovery,
     _capture_persisted_files,
