@@ -1615,3 +1615,11 @@ def test_run_task_recovers_stale_active_task_before_conflict_check(
     restored_state = load_state(tmp_path)
     assert restored_state.active_task_id is None
     assert active.id in restored_state.queue
+
+
+def test_cli_parser_has_no_duplicate_subcommands_or_arguments() -> None:
+    """Catch duplicate subparser or argument definitions that crash argparse."""
+    from litehive.cli.parser import build_parser
+    # build_parser() raises ArgumentError if any subcommand or argument is duplicated
+    parser = build_parser()
+    assert parser is not None
