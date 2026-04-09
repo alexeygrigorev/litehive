@@ -1,6 +1,11 @@
 default_engine: claude
+engine_preference:
+- claude
+- codex
+- copilot
+- goz
 goz_model: auto
-recovery_engine: claude
+recovery_engine: auto
 codex_model: gpt-5.4-high
 claude_model: claude-opus-4-6
 agent_startup_guidance:

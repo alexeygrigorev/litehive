@@ -570,8 +570,24 @@ def _resolve_recovery_engine(
     task: TaskRecord,
     config: "LitehiveConfig | None",
 ) -> tuple[str, str | None]:
-    if config and config.recovery_engine:
+    if config and config.recovery_engine and config.recovery_engine != "auto":
         engine = config.recovery_engine
+    elif config and config.recovery_engine == "auto":
+        # Pick the first available engine from preference list or fallback to default
+        from litehive.agents import get_engine
+        candidates = list(config.engine_preference) if config.engine_preference else []
+        if config.default_engine and config.default_engine not in candidates:
+            candidates.append(config.default_engine)
+        if not candidates:
+            candidates = ["claude", "codex", "copilot", "goz"]
+        engine = config.default_engine or "codex"
+        for name in candidates:
+            try:
+                if get_engine(name).is_available():
+                    engine = name
+                    break
+            except Exception:
+                continue
     else:
         engine = task.engine or (config.default_engine if config else "codex")
     model = resolve_model(task, config, engine_name=engine) if config else None
