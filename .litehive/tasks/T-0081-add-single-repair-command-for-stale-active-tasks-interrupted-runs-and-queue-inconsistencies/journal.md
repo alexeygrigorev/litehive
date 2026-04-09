@@ -37,3 +37,6 @@ Execution finished with status `interrupted`.
 
 ## 2026-04-07T20:53:29+00:00
 Task closed: deferred. Stale interrupted task, superseded by newer tasks
+
+## 2026-04-09T21:31:05+00:00
+Task closed: duplicate. Covered by repair command improvements already landed

@@ -1,9 +1,7 @@
-active_task_id: T-0259
+active_task_id: T-0261
 active_task_ids: []
 mode: implementation
 queue:
-- T-0240
-- T-0261
 - T-0107
 - T-0241
 - T-0262
@@ -14,8 +12,16 @@ queue:
 - T-0266
 - T-0268
 - T-0269
+- T-0270
+- T-0240
+- T-0274
+- T-0275
+- T-0276
+- T-0278
+- T-0279
+- T-0280
 pool_stop_reason: null
-next_task_number: 269
+next_task_number: 280
 unmerged_worktrees:
 - task_id: T-0234
   worktree_path: .litehive/worktrees/T-0234-add-all-done-flag-to-litehive-archive-command

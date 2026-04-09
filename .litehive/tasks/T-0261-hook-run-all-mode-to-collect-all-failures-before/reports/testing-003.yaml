@@ -1,0 +1,59 @@
+task_id: T-0261
+step: testing
+verdict: reject
+source: agent
+summary: 'EXPECTED behavior: the implementation should satisfy the hook-mode acceptance
+  criteria and the new regression tests should also meet the testing-stage constraints,
+  including rejecting tests longer than 50 lines unless a shorter structure is genuinely
+  impossible.'
+feedback: 'EXPECTED behavior: the implementation should satisfy the hook-mode acceptance
+  criteria and the new regression tests should also meet the testing-stage constraints,
+  including rejecting tests longer than 50 lines unless a shorter structure is genuinely
+  impossible.
+
+
+  OBSERVED behavior: functional verification passed, but the two new regression tests
+  in tests/test_task_commands_and_daemon.py exceed the allowed size without a demonstrated
+  need: test_run_task_collects_all_blocking_runner_hook_failures_by_default spans
+  lines 3806-3869 (64 lines) and test_run_task_stops_on_first_blocking_runner_hook_failure_in_fail_fast_mode
+  spans lines 3872-3932 (61 lines). The behavior covered is valid, but the tests should
+  be factored into shared setup/helpers instead of shipping oversized cases.
+
+
+  Steps to reproduce:
+
+  1. Run `nl -ba tests/test_task_commands_and_daemon.py | sed -n ''3806,3932p''` and
+  count the lines for each new test.
+
+  2. Run `uv run pytest -q tests/test_task_commands_and_daemon.py -k ''collects_all_blocking_runner_hook_failures_by_default
+  or stops_on_first_blocking_runner_hook_failure_in_fail_fast_mode''`.
+
+  3. Run `uv run pytest -q`.
+
+
+  Acceptance criteria status: all product acceptance criteria are satisfied by the
+  current implementation (default run_all, combined reject report with all failed
+  hooks/output, opt-in fail_fast, existing suite green at 894 passed), but the testing-stage
+  constraints are not met because the added tests are over 50 lines and should be
+  shortened before this stage can pass.'
+submitted_via_cli: true
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 1
+retry_limit: 3
+retry_source: global
+retry_decision: retry
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 230
+hook_results: []
+created_at: '2026-04-09T21:39:23+00:00'

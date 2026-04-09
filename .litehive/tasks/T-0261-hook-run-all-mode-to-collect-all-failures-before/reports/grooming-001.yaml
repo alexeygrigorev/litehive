@@ -1,0 +1,71 @@
+task_id: T-0261
+step: grooming
+verdict: pass
+source: agent
+summary: Grooming pass complete after repo inspection; no code changes and no tests
+  run in this stage.
+feedback: "Grooming pass complete after repo inspection; no code changes and no tests\
+  \ run in this stage.\n\nWhat I verified:\n- `litehive/pipeline/_hooks.py` currently\
+  \ executes configured hooks in order but returns immediately on the first failed\
+  \ blocking hook, so the later hooks at that same point never run.\n- The hook report\
+  \ schema already supports multiple `hook_results`, but the rejection helpers `_hook_failure_summary`,\
+  \ `_hook_failure_feedback`, and `_hook_failure_diagnostics` only format one failed\
+  \ hook today.\n- There is no existing config knob for execution policy. `RunnerHookConfig.reject_on_failure`\
+  \ only controls whether a failure is blocking; it does not distinguish run-all versus\
+  \ fail-fast. That means this task needs an explicit workspace-level policy with\
+  \ backward-compatible default behavior set to run-all.\n- The main regression surface\
+  \ is already present in `tests/test_task_commands_and_daemon.py`, with adjacent\
+  \ hook tests covering blocking/non-blocking behavior, report contents, and stage\
+  \ routing.\n\nScope for implementation:\n- Keep this task focused on runner-hook\
+  \ execution policy and reject-report aggregation. Do not broaden it into unrelated\
+  \ hook-point renames or larger config refactors.\n- Preserve existing hook definitions.\
+  \ A workspace with current `runner_hooks` config and no new setting should get the\
+  \ new default behavior: run all hooks, then reject once with combined failure details.\n\
+  - Fail-fast should remain opt-in and should stop only on the first failed blocking\
+  \ hook. Non-blocking hook failures should still be recorded as warnings/results\
+  \ and should not stop execution.\n\nRecommended implementation plan:\n1. Add a workspace-level\
+  \ hook execution mode setting, normalized and documented as `run_all` by default\
+  \ with opt-in `fail_fast`.\n2. Update `litehive/pipeline/_hooks.py` so blocking-hook\
+  \ execution can accumulate all hook results in run-all mode, remember every blocking\
+  \ failure, and return one combined reject report after the full hook list finishes.\n\
+  3. Expand reject formatting so the summary/feedback/diagnostics clearly enumerate\
+  \ every failed blocking hook, including command, exit code, stdout, stderr, and\
+  \ artifact path, while keeping `hook_results` complete for all hooks that ran.\n\
+  4. Preserve current fail-fast behavior when that mode is selected, including stopping\
+  \ on the first blocking failure and returning the first failure as the reject cause.\n\
+  5. Add targeted tests for: default run-all across multiple failing blocking hooks,\
+  \ mixed pass/fail hook batches, opt-in fail-fast behavior, and any config parsing/normalization\
+  \ needed for the new mode. Finish with the existing suite command `uv run pytest\
+  \ -q`.\n\nPM_COMPLEXITY: moderate\nPLANNED_EFFORT: s\n\nTASK_UPDATE:\n  task_type:\
+  \ bugfix\n  pm_complexity: moderate\n  planned_effort: s\n  constraints:\n    -\
+  \ Keep changes scoped to runner-hook execution policy and reporting.\n    - Preserve\
+  \ backward compatibility for existing `runner_hooks` definitions.\n  plan:\n   \
+  \ - Add a workspace-level hook execution mode with default `run_all` and opt-in\
+  \ `fail_fast`.\n    - Change runner-hook execution to collect all blocking failures\
+  \ in run-all mode before returning a single reject report.\n    - Format combined\
+  \ hook rejection feedback so each failed hook includes command, exit code, stdout,\
+  \ stderr, and artifact reference.\n    - Keep fail-fast semantics for the opt-in\
+  \ mode and leave non-blocking hook behavior unchanged.\n    - Add focused regression\
+  \ tests around execution mode, combined reporting, and config parsing, then run\
+  \ `uv run pytest -q`."
+submitted_via_cli: true
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 96
+hook_results: []
+created_at: '2026-04-09T21:29:21+00:00'

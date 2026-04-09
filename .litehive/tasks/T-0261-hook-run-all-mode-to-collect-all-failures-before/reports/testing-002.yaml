@@ -1,0 +1,57 @@
+task_id: T-0261
+step: testing
+verdict: pass
+source: agent
+summary: 'Validated T-0261 independently. Verified in litehive/pipeline/_hooks.py
+  that runner hook execution now defaults to run-all, accumulates all blocking failures
+  before rejecting, and still short-circuits only when runner_hook_execution_mode=fail_fast.
+  Verified combined reject formatting now enumerates each failed hook with command,
+  exit code, artifact, stdout, and stderr, and diagnostics preserve the full failed
+  hook command/artifact lists. Verified config coverage for default run_all persistence,
+  explicit fail_fast loading, and invalid mode rejection. Verified the two new task-level
+  regression tests were refactored under the stage size limit: tests/test_task_commands_and_daemon.py
+  lines 3872-3915 and 3918-3949 are 44 and 32 lines respectively. Commands run: uv
+  run pytest -q tests/test_config.py -k ''runner_hook_execution_mode or configure_persists_runner_hooks''
+  (3 passed); uv run pytest -q tests/test_task_commands_and_daemon.py -k ''collects_all_blocking_runner_hook_failures_by_default
+  or stops_on_first_blocking_runner_hook_failure_in_fail_fast_mode'' (2 passed); uv
+  run ruff check --select E402,F401 litehive tests (passed); uv run pytest -q (894
+  passed). Acceptance criteria confirmed: run-all mode executes all hooks before rejecting,
+  combined reject output includes all failed hooks and outputs, fail-fast remains
+  opt-in, default is run_all, and the existing suite passes.'
+feedback: 'Validated T-0261 independently. Verified in litehive/pipeline/_hooks.py
+  that runner hook execution now defaults to run-all, accumulates all blocking failures
+  before rejecting, and still short-circuits only when runner_hook_execution_mode=fail_fast.
+  Verified combined reject formatting now enumerates each failed hook with command,
+  exit code, artifact, stdout, and stderr, and diagnostics preserve the full failed
+  hook command/artifact lists. Verified config coverage for default run_all persistence,
+  explicit fail_fast loading, and invalid mode rejection. Verified the two new task-level
+  regression tests were refactored under the stage size limit: tests/test_task_commands_and_daemon.py
+  lines 3872-3915 and 3918-3949 are 44 and 32 lines respectively. Commands run: uv
+  run pytest -q tests/test_config.py -k ''runner_hook_execution_mode or configure_persists_runner_hooks''
+  (3 passed); uv run pytest -q tests/test_task_commands_and_daemon.py -k ''collects_all_blocking_runner_hook_failures_by_default
+  or stops_on_first_blocking_runner_hook_failure_in_fail_fast_mode'' (2 passed); uv
+  run ruff check --select E402,F401 litehive tests (passed); uv run pytest -q (894
+  passed). Acceptance criteria confirmed: run-all mode executes all hooks before rejecting,
+  combined reject output includes all failed hooks and outputs, fail-fast remains
+  opt-in, default is run_all, and the existing suite passes.'
+submitted_via_cli: true
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 190
+hook_results: []
+created_at: '2026-04-09T21:48:14+00:00'

@@ -1,0 +1,53 @@
+id: T-0270
+slug: auto-freeze-engines-when-quota-is-exhausted-until
+title: Auto-freeze engines when quota is exhausted until reset timestamp
+depends_on: []
+task_type: null
+engine: null
+model: null
+mode: implementation
+pipeline_mode: full
+status: queued
+flag_reason: null
+flag_count: 0
+pipeline_status: backlog
+priority: high
+pm_complexity: null
+planned_effort: null
+created_at: '2026-04-09T20:59:29+00:00'
+updated_at: '2026-04-09T21:00:24+00:00'
+goal: When quota check detects an engine is exhausted with a known reset time, record
+  the reset timestamp as an engine freeze. Skip frozen engines entirely without API
+  calls until the freeze expires. On expiry, re-check quota to confirm recovery.
+acceptance_criteria:
+- Single select_engine() function used by all engine selection paths
+- No duplicate engine selection logic across _builder.py, _resolve_recovery_engine,
+  _dry_run.py
+constraints: []
+plan:
+- 'Create a single select_engine() function in pipeline that handles: preference order,
+  availability, quota checks, budget caps, engine freezes'
+- Replace engine selection in _builder.py with select_engine()
+- Replace _resolve_recovery_engine() with select_engine()
+- Replace engine selection in _dry_run.py with select_engine()
+- When select_engine() detects quota exhaustion with a reset timestamp, auto-record
+  freeze
+- Skip frozen engines without API calls until freeze expires
+- On freeze expiry, re-check quota to confirm engine is back
+human_checkpoints: []
+subagents: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0270 auto-freeze-engines-when-quota-is-exhausted-until'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+  merge_agent_attempts: 0
+  worktree_path: null
+retry_policy:
+  max_retries: null
+  stage_retry_limit: null
+created_from: null
+upstream_origin: null
+github_origin: null

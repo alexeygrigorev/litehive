@@ -1,104 +1,75 @@
-default_engine: claude
-engine_preference:
-- claude
-- codex
-- copilot
-- goz
-goz_model: auto
+default_engine: codex
 recovery_engine: auto
-codex_model: gpt-5.4-high
-claude_model: claude-opus-4-6
-agent_startup_guidance:
-  all:
-  - Start from the task goal, acceptance criteria, plan, and the latest task-local
-    runtime/subagent artifacts before re-reading broad repo context.
-  - Prefer targeted search in litehive/runtime.py, litehive/tasks.py, litehive/subagents.py,
-    litehive/config.py, and tests/test_workspace.py instead of broad full-file reads.
-  - Treat .litehive/logs/run-all and the current task's runtime/report/transcript
-    artifacts as the primary source for what already happened.
-  - Do not spend time rediscovering the generic Litehive workflow; use the recorded
-    stage, role, and lifecycle artifacts first.
-  planner:
-  - Check whether the task already has usable goal, acceptance criteria, constraints,
-    and plan before re-grooming it.
-  - When shaping backlog items, prefer explicit CLI flows: use litehive add with --goal
-      and repeated --acceptance-criteria for new runnable work, use litehive update
-      to fill gaps on legacy tasks, and use litehive intake when the request is still
-      too messy to make runnable.
-  - If a request is ambiguous, stop and ask for the missing product constraint instead
-    of inventing acceptance criteria.
-  - For control-plane tasks, identify the exact lifecycle promise and the exact evidence
-    later stages will need to prove it.
-  - If follow-up work is needed, keep the current task narrow and push unrelated cleanup
-    into FOLLOW_UP_TASKS.
-  swe:
-  - Start by reading the task description, goal, acceptance criteria, plan, and latest
-    report in the task folder; do not rediscover them from scratch.
-  - Start from the latest QA/reviewer rejection or recovery report first, then inspect
-    only the files implicated by that feedback.
-  - Pull task context from the task record before broad repo exploration; if the task
-    description is still insufficient, route it back instead of guessing.
-  - For workflow tasks, implement the smallest lifecycle-level change that satisfies
-    the acceptance criteria instead of refactoring the whole runner.
-  - Verify with focused pytest slices and, when required by the task, add real CLI
-    or wrapper-level proof instead of helper-only coverage.
-  - Never create temp files or directories in the repo root. Use pytest tmp_path fixture
-    or /tmp for temporary files.
-  - IMPORTANT - Your process will be killed if it produces no output for 6 minutes.
-    Never run the full test suite. Run only the specific test file for your change
-    (e.g. pytest tests/test_specific.py -q). Each test should finish within 1 minute.
-  - IMPORTANT - Read the "Best Practices for Tests" section in README.md before writing
-    any tests. Key rules. (1) Always mock SubagentManager.run or use a custom executor
-    - never call real engines from tests. (2) Fake implementing passes MUST include
-    files_changed=["app.txt"] and tests={"added":1,"passing":1} or the empty SWE guard
-    will cause infinite retry loops. (3) Use workspace helpers from tests/workspace_helpers.py
-    instead of inline fakes.
-  qa:
-  - Read the latest implementing report and the task acceptance criteria before exploring
-    code.
-  - Focus on whether the evidence proves the promised lifecycle behavior in real litehive
-    execution, not just helper-level tests.
-  - If rejecting, name the exact missing proof or failing scenario so the next implementing
-    pass can act directly.
-  - IMPORTANT - Your process will be killed if it produces no output for 6 minutes.
-    Run only the specific test file for your change, not the full suite.
-  - Tests must be comprehensive but FAST. Each unit test has a 60-second hard timeout
-    enforced by pytest-timeout. Reject tests that are slow, redundant, or run the
-    full test suite.
-  - Each test file must finish within 1 minute. If it takes longer, reject and ask
-    the SWE to split or optimize.
-  - The full test suite (uv run pytest tests/ -q) must finish within 3 minutes. If
-    a change causes the full suite to exceed 3 minutes, reject it. Tests should mock
-    external calls (SubagentManager.run, engine adapters) instead of running real
-    subprocesses.
-  - Integration tests (tests_integration/) may take up to 3 minutes per file.
-  reviewer:
-  - Compare the task acceptance criteria to the latest QA evidence and reports first;
-    avoid re-reading the repo unless the evidence is ambiguous.
-  - Reject only for concrete outcome gaps, regressions, or missing proof, and state
-    those gaps explicitly.
-  recovery:
-  - Start with task.yaml, runtime.yaml, latest report/transcript/stdout/stderr/events,
-    wrapper logs, and engine monitoring before touching code.
-  - Preserve the current stage whenever safe; fix the smallest state, engine, worktree,
-    or prompt issue needed to return the task to runnable state.
-  - If the task is truly unrecoverable, record a precise blocker instead of leaving
-    ambiguous active state.
-  - IMPORTANT - You are running in a git worktree, NOT the main repo. Your working
-    directory is the worktree. All file edits, git adds, and commits happen HERE.
-  - Run `git status` first to understand what state the worktree is in.
-  - Read the error message carefully. Classify it as either a project bug (fix in
-    the worktree) or a litehive infrastructure bug (report it, do not try to fix litehive
-    source from inside a task worktree).
-  - If tests fail, run the specific failing test to see the exact error before changing
-    code.
-  - After fixing, run the relevant tests to verify the fix works.
-  - Always submit your result via `litehive report --verdict <pass|fail> --role recovery
-    --step <stage> --message "<what you found and fixed>"`.
-  - If you cannot fix the issue, submit `--verdict fail` with a detailed explanation
-    of what is broken and why, so the next agent or a human can act on it.
+litehive_source_path: null
+process_profile: generic
+codex_model: null
 opencode_model: zai-coding-plan/glm-5.1
-auto_commit: true
+goz_model: glm-5-turbo
+gemini_model: null
+copilot_model: null
+claude_model: claude-sonnet-4-20250514
+claude_max_turns: 30
+pool_usage_cap: null
+pool_cost_cap: null
+engine_usage_caps: {}
+engine_budget_caps: {}
+engine_costs:
+  codex: 1
+  opencode: 1
+  gemini: 1
+  copilot: 1
+  claude: 3
+  goz: 1
+default_retry_limit: 3
+default_stage_retry_limit: 2
+execution_retry_policies:
+  claude:
+    max_retries: 2
+    backoff_seconds: 0.25
+    backoff_multiplier: 2.0
+    retry_on:
+    - timeout
+    - network
+    - service
+  codex:
+    max_retries: 2
+    backoff_seconds: 0.25
+    backoff_multiplier: 2.0
+    retry_on:
+    - timeout
+    - network
+    - service
+  opencode:
+    max_retries: 2
+    backoff_seconds: 0.25
+    backoff_multiplier: 2.0
+    retry_on:
+    - timeout
+    - network
+    - service
+  gemini:
+    max_retries: 2
+    backoff_seconds: 0.25
+    backoff_multiplier: 2.0
+    retry_on:
+    - timeout
+    - network
+    - service
+  goz:
+    max_retries: 2
+    backoff_seconds: 0.25
+    backoff_multiplier: 2.0
+    retry_on:
+    - timeout
+    - network
+    - service
+pool_stop_on_failure: false
+pool_max_tasks: null
+pool_stop_on_execution_limit: false
+pool_quota_threshold: null
+pool_budget_threshold: null
+pool_stop_on_dirty_git: false
+pool_selection_policy: dependency_aware
 runner_hooks:
   after_implementing:
   - command: uv run ruff check --select E402,F401 litehive tests
@@ -109,5 +80,38 @@ runner_hooks:
       s*noqa:\\s*F401|ruff:\\s*noqa:\\s*F403' --; then\n  echo 'Forbidden noqa F401/F403\
       \ suppression found.'\n  exit 1\nfi"
     reject_on_failure: true
+subagent_inactivity_timeout_seconds: 360.0
+inactivity_timeout_seconds: null
+subagent_resource_limits:
+  enabled: false
+  memory_mb: null
+  cpu_count: null
+  process_limit: null
+external_engine_sandbox:
+  enabled: false
+  backend: docker
+  runtime_binary: docker
+  image: litehive-external-engine:latest
+  workspace_mount_path: /workspace
+  binary_mount_root: /litehive/bin
+  runtime_args: []
+  default_network_mode: none
+  default_workspace_mode: rw
+  read_only_rootfs: true
+  drop_capabilities: true
+  no_new_privileges: true
+  tmpfs:
+  - /tmp
+  engine_policies: {}
+engine_freeze: {}
+engine_preference:
+- claude
+- codex
+- copilot
+- goz
+agent_startup_guidance: {}
+parallel_capacity: 1
+parallel_integration_check: null
+auto_commit: true
 task_mode_name: tasks
 implementation_mode_name: implementation
