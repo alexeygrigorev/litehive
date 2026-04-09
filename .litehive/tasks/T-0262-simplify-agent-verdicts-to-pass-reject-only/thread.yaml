@@ -1,0 +1,143 @@
+- role: planner
+  step: grooming
+  verdict: pass
+  message: "Grooming complete. Repo inspection confirms the task is implementable\
+    \ without further product clarification. No code changes made in this stage and\
+    \ no tests were run; this pass is for task shaping only.\n\nExpected scope:\n\
+    - Remove `fail` and `blocked` from agent-facing verdict submission paths and prompts;\
+    \ agent authors should only be instructed to submit `pass` or `reject`.\n- Keep\
+    \ system-generated `blocked` for infrastructure conditions such as missing acceptance\
+    \ criteria, hook failures, quota/resource exhaustion, interrupts, and commit/post-merge\
+    \ failures.\n- Preserve backward compatibility by normalizing agent-submitted\
+    \ `fail` to `reject` anywhere agent thread comments or CLI/web submission can\
+    \ still surface it.\n- Keep deterministic routing local: testing/QA reject and\
+    \ accepting/reviewer reject must both requeue to `implementing`.\n\nPrimary implementation\
+    \ hotspots found:\n- `litehive/agents/_prompts.py`: prompt text still tells agents\
+    \ to use `BLOCKED` and `fail`.\n- `litehive/cli/parsers/report.py`, `litehive/cli/report.py`,\
+    \ `litehive/models/report_models.py`: CLI/thread comment verdict validation still\
+    \ accepts `fail` and `blocked` as agent inputs.\n- `litehive/agents/_parsing.py`\
+    \ and `litehive/agents/base.py`: missing/invalid agent submissions currently default\
+    \ to `fail`; structured pass from non-completed subagents is also rewritten to\
+    \ `fail`. These should become agent-side `reject` semantics where the agent did\
+    \ not complete its work, while true infrastructure/resource-limit cases remain\
+    \ system `blocked`.\n- `litehive/pipeline/states.py` and `litehive/pipeline/core.py`:\
+    \ routing already sends testing/accepting reject back to `implementing`, but `fail`\
+    \ is still treated as a distinct runner path and must be retained only for system/internal\
+    \ reports.\n- `litehive/web/common.py`, `litehive/web/templates/index.html`, `litehive/web/actions.py`:\
+    \ web verdict controls currently expose `fail` and `blocked`; agent-facing UI\
+    \ should align with pass/reject-only while still tolerating legacy `fail` as reject\
+    \ on submit.\n\nAcceptance criteria interpretation for implementation:\n- AC1\
+    \ means all agent prompts and any agent-facing verdict pickers or examples must\
+    \ present only `pass` and `reject`.\n- AC2 means `litehive report` must accept\
+    \ `pass` and `reject` for agent usage; keep legacy `fail` accepted as an alias\
+    \ that is persisted/handled as `reject`.\n- AC3 means thread/comment parsing and\
+    \ any report ingestion path should coerce legacy agent `fail` to `reject` rather\
+    \ than triggering recovery semantics.\n- AC4 is specifically about source ownership:\
+    \ agents must not be instructed to emit `blocked`, and agent submission endpoints\
+    \ should not expose `blocked`; system-generated reports may still use `blocked`.\n\
+    - AC5 is already conceptually supported in routing, but add/adjust regression\
+    \ tests so QA reject is explicitly covered with `reject` rather than legacy `fail`.\n\
+    \nSuggested implementation order:\n1. Tighten verdict enums and parser choices\
+    \ for agent submission surfaces, keeping a compatibility alias for incoming `fail`.\n\
+    2. Update prompt text and verdict nudges/examples to `pass|reject` only, including\
+    \ grooming guidance that currently mentions `BLOCKED`.\n3. Normalize agent-ingested\
+    \ legacy `fail` to `reject` in CLI/web/thread parsing before workflow routing.\n\
+    4. Update or replace tests that currently encode agent `FAIL` behavior so they\
+    \ assert reject/requeue semantics instead.\n5. Run focused verdict/routing tests\
+    \ first, then `uv run pytest -q`.\n\nRisks / decisions to keep explicit:\n- Do\
+    \ not remove system/internal uses of `fail` or `blocked` in runner/recovery/commit\
+    \ code; this task is about agent verdicts, not every internal status in the engine.\n\
+    - Be careful not to break historical task-thread data loading; normalize legacy\
+    \ values on read rather than rejecting old records.\n- Keep `comment` support\
+    \ intact for thread comments and web/manual notes unless implementation proves\
+    \ it is agent-only.\n\nTASK_UPDATE:\n  plan:\n    - Restrict agent-facing verdict\
+    \ submission surfaces to `pass` and `reject`, with legacy `fail` normalized to\
+    \ `reject`.\n    - Update agent prompts/examples so they never instruct agents\
+    \ to use `blocked`; reserve blocked for system-owned infrastructure outcomes.\n\
+    \    - Add regression coverage for QA reject -> implementing and for legacy fail\
+    \ alias handling in CLI/web/thread parsing.\n    - Run the focused verdict/routing\
+    \ suite and then `uv run pytest -q`.\n  pm_complexity: moderate\n  planned_effort:\
+    \ m"
+  files_changed: []
+  created_at: '2026-04-09T23:24:09+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Implemented pass/reject-only agent verdict flow. Updated agent prompts
+    and report guidance to offer only pass or reject, including grooming guidance
+    that now tells planners to reject when context/criteria are insufficient instead
+    of emitting blocked. Normalized agent-submitted legacy fail to reject across structured
+    STAGE_RESULT parsing, litehive report CLI ingestion, task thread comments, and
+    web verdict submission; agent-submitted blocked in structured stage results is
+    also coerced away from agent-facing paths so blocked remains system-owned. Kept
+    runner/system fail and blocked semantics intact for infrastructure errors, resource
+    limits, and commit/recovery flows. Verified QA reject and reviewer reject both
+    route back to implementing, and added regression coverage for legacy fail alias
+    handling in parser/web flows plus updated engine/crash-resume expectations for
+    reject-on-no-agent-verdict behavior. Verification: uv run pytest -q tests/test_stage_result_submission.py
+    tests/test_web_snapshot_and_verdicts.py tests/test_runner_workflow.py (149 passed);
+    uv run ruff check --select E402,F401 litehive tests (passed); forbidden noqa gate
+    check (passed); uv run pytest -q (903 passed). Acceptance criteria met: agent
+    prompts now advertise pass/reject only; litehive report accepts pass/reject and
+    normalizes legacy fail to reject; blocked no longer appears on agent-facing verdict
+    surfaces and remains system-generated; QA reject requeues to implementing same
+    as acceptance reject; full suite passes.'
+  files_changed: []
+  created_at: '2026-04-09T23:36:58+00:00'
+- role: qa
+  step: testing
+  verdict: pass
+  message: 'Verified pass/reject-only agent verdict flow end to end. Checked the implementation
+    surfaces for this task: agent prompts now instruct agents to submit only pass
+    or reject, report ingestion normalizes legacy agent fail to reject in structured
+    STAGE_RESULT parsing, CLI report submission, task thread comments, and web verdict
+    submission, and blocked remains reserved for system-owned infrastructure/resource-limit
+    outcomes rather than agent-facing submission paths. Confirmed QA reject still
+    routes back to implementing, matching reviewer reject semantics.
+
+
+    Tests run:
+
+    - uv run pytest -q tests/test_stage_result_submission.py tests/test_web_snapshot_and_verdicts.py
+    tests/test_runner_workflow.py -> 149 passed
+
+    - uv run pytest -q -> 903 passed
+
+
+    Evidence against acceptance criteria:
+
+    - AC1 met: prompt/UI surfaces expose pass/reject only for agents; web verdict
+    buttons are pass/reject/comment and prompt text rejects missing-context grooming
+    instead of telling agents to emit blocked.
+
+    - AC2 met: litehive report parser accepts pass/reject for agent use, with legacy
+    fail still accepted and coerced to reject.
+
+    - AC3 met: legacy agent fail is normalized to reject in parsing and submission
+    paths; regression coverage added for structured submission, CLI/thread, and web
+    flows.
+
+    - AC4 met: blocked is no longer agent-facing; only system-generated resource-limit/infrastructure
+    paths still emit blocked.
+
+    - AC5 met: runner workflow regression confirms testing/QA reject requeues to implementing.'
+  files_changed: []
+  created_at: '2026-04-09T23:40:31+00:00'
+- role: reviewer
+  step: accepting
+  verdict: pass
+  message: 'Acceptance review passed. Verified that agent-facing prompts now instruct
+    only pass/reject verdicts, including grooming guidance and the required litehive
+    report command. Verified structured agent submissions accept only pass/reject
+    while normalizing legacy accept->pass and fail/blocked->reject, and task-thread
+    / CLI / web submission paths normalize legacy fail to reject for backward compatibility.
+    Verified blocked is no longer exposed on agent-facing web controls and remains
+    reserved for system-owned outcomes, while QA reject and reviewer reject both route
+    back to implementing. Tests run during acceptance: uv run pytest -q tests/test_stage_result_submission.py
+    tests/test_web_snapshot_and_verdicts.py tests/test_runner_workflow.py (149 passed);
+    uv run pytest -q (903 passed). Evidence: prompt command shows <pass|reject>; StageResultSubmission
+    verdict schema is pass/reject with alias normalization; web verdict options are
+    pass/reject/comment; regression tests cover legacy fail aliasing and QA reject
+    requeue behavior.'
+  files_changed: []
+  created_at: '2026-04-09T23:43:43+00:00'

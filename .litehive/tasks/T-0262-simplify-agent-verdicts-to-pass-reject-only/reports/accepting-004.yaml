@@ -1,0 +1,51 @@
+task_id: T-0262
+step: accepting
+verdict: pass
+source: agent
+summary: 'Acceptance review passed. Verified that agent-facing prompts now instruct
+  only pass/reject verdicts, including grooming guidance and the required litehive
+  report command. Verified structured agent submissions accept only pass/reject while
+  normalizing legacy accept->pass and fail/blocked->reject, and task-thread / CLI
+  / web submission paths normalize legacy fail to reject for backward compatibility.
+  Verified blocked is no longer exposed on agent-facing web controls and remains reserved
+  for system-owned outcomes, while QA reject and reviewer reject both route back to
+  implementing. Tests run during acceptance: uv run pytest -q tests/test_stage_result_submission.py
+  tests/test_web_snapshot_and_verdicts.py tests/test_runner_workflow.py (149 passed);
+  uv run pytest -q (903 passed). Evidence: prompt command shows <pass|reject>; StageResultSubmission
+  verdict schema is pass/reject with alias normalization; web verdict options are
+  pass/reject/comment; regression tests cover legacy fail aliasing and QA reject requeue
+  behavior.'
+feedback: 'Acceptance review passed. Verified that agent-facing prompts now instruct
+  only pass/reject verdicts, including grooming guidance and the required litehive
+  report command. Verified structured agent submissions accept only pass/reject while
+  normalizing legacy accept->pass and fail/blocked->reject, and task-thread / CLI
+  / web submission paths normalize legacy fail to reject for backward compatibility.
+  Verified blocked is no longer exposed on agent-facing web controls and remains reserved
+  for system-owned outcomes, while QA reject and reviewer reject both route back to
+  implementing. Tests run during acceptance: uv run pytest -q tests/test_stage_result_submission.py
+  tests/test_web_snapshot_and_verdicts.py tests/test_runner_workflow.py (149 passed);
+  uv run pytest -q (903 passed). Evidence: prompt command shows <pass|reject>; StageResultSubmission
+  verdict schema is pass/reject with alias normalization; web verdict options are
+  pass/reject/comment; regression tests cover legacy fail aliasing and QA reject requeue
+  behavior.'
+submitted_via_cli: true
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 204
+hook_results: []
+created_at: '2026-04-09T23:44:01+00:00'

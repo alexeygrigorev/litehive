@@ -1,0 +1,65 @@
+task_id: T-0262
+step: testing
+verdict: pass
+source: agent
+summary: 'Verified pass/reject-only agent verdict flow end to end. Checked the implementation
+  surfaces for this task: agent prompts now instruct agents to submit only pass or
+  reject, report ingestion normalizes legacy agent fail to reject in structured STAGE_RESULT
+  parsing, CLI report submission, task thread comments, and web verdict submission,
+  and blocked remains reserved for system-owned infrastructure/resource-limit outcomes
+  rather than agent-facing submission paths. Confirmed QA reject still routes back
+  to implementing, matching reviewer reject semantics.'
+feedback: 'Verified pass/reject-only agent verdict flow end to end. Checked the implementation
+  surfaces for this task: agent prompts now instruct agents to submit only pass or
+  reject, report ingestion normalizes legacy agent fail to reject in structured STAGE_RESULT
+  parsing, CLI report submission, task thread comments, and web verdict submission,
+  and blocked remains reserved for system-owned infrastructure/resource-limit outcomes
+  rather than agent-facing submission paths. Confirmed QA reject still routes back
+  to implementing, matching reviewer reject semantics.
+
+
+  Tests run:
+
+  - uv run pytest -q tests/test_stage_result_submission.py tests/test_web_snapshot_and_verdicts.py
+  tests/test_runner_workflow.py -> 149 passed
+
+  - uv run pytest -q -> 903 passed
+
+
+  Evidence against acceptance criteria:
+
+  - AC1 met: prompt/UI surfaces expose pass/reject only for agents; web verdict buttons
+  are pass/reject/comment and prompt text rejects missing-context grooming instead
+  of telling agents to emit blocked.
+
+  - AC2 met: litehive report parser accepts pass/reject for agent use, with legacy
+  fail still accepted and coerced to reject.
+
+  - AC3 met: legacy agent fail is normalized to reject in parsing and submission paths;
+  regression coverage added for structured submission, CLI/thread, and web flows.
+
+  - AC4 met: blocked is no longer agent-facing; only system-generated resource-limit/infrastructure
+  paths still emit blocked.
+
+  - AC5 met: runner workflow regression confirms testing/QA reject requeues to implementing.'
+submitted_via_cli: true
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 193
+hook_results: []
+created_at: '2026-04-09T23:40:37+00:00'
