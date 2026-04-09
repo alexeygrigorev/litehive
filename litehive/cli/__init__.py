@@ -34,6 +34,7 @@ from litehive.cli.queue import (
     _launch_app,
 )
 from litehive.cli.github_import import _cmd_import_issue, _cmd_import_issues
+from litehive.cli.logs import _cmd_logs
 from litehive.cli.report import _cmd_report
 from litehive.cli.run import _cmd_run
 from litehive.cli.status import _cmd_list, _cmd_queue, _cmd_repair, _cmd_show, _cmd_status
@@ -121,6 +122,8 @@ def main():
         return _cmd_import_issues(args)
     if args.command == "debug":
         return _cmd_debug(args)
+    if args.command == "logs":
+        return _cmd_logs(args)
     if args.command == "worktree":
         if args.worktree_command == "ls":
             return _cmd_worktree_ls(args)

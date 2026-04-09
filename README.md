@@ -108,6 +108,12 @@ litehive status --fast                    # legacy alias for the default quick r
 litehive status --full                    # verbose per-task status dump
 litehive queue                            # show queue order
 litehive web                              # local web dashboard
+litehive logs                             # tail the latest daemon run log
+litehive logs --daemon                    # list recent daemon sessions with outcomes
+litehive logs T-0002                      # print the task journal
+litehive logs T-0002 --agent              # show the latest subagent transcript/stdout tail
+litehive logs T-0002 --agent --all        # list all subagent runs for a task
+litehive logs --follow                    # follow the active subagent stdout live
 litehive debug T-0002 --worktree         # inspect recorded worktree existence and changes
 litehive worktree ls                      # list Litehive-managed worktrees with task status and change counts
 litehive worktree clean --dry-run         # preview cleanup of closed-task worktrees

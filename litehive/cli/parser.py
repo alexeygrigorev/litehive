@@ -961,6 +961,43 @@ def build_parser():
         help="Repository root containing .litehive/",
     )
 
+    logs_cmd = subparsers.add_parser(
+        "logs",
+        help="Show daemon, task journal, and subagent logs",
+    )
+    logs_cmd.add_argument(
+        "task_id",
+        nargs="?",
+        default=None,
+        help="Optional task ID (e.g. T-0001)",
+    )
+    logs_cmd.add_argument(
+        "--daemon",
+        action="store_true",
+        help="List the latest daemon run-all sessions",
+    )
+    logs_cmd.add_argument(
+        "--agent",
+        action="store_true",
+        help="Show subagent transcript/stdout instead of the task journal",
+    )
+    logs_cmd.add_argument(
+        "--all",
+        action="store_true",
+        help="List all subagent runs for the task (requires --agent)",
+    )
+    logs_cmd.add_argument(
+        "--follow",
+        action="store_true",
+        help="Follow the currently running subagent stdout in real time",
+    )
+    logs_cmd.add_argument(
+        "--workspace",
+        type=Path,
+        default=Path.cwd(),
+        help="Repository root containing .litehive/",
+    )
+
     # ── worktree ──────────────────────────────────────────────────────
     worktree_cmd = subparsers.add_parser(
         "worktree",

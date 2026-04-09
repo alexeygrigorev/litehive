@@ -15,7 +15,7 @@ priority: high
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-09T08:49:18+00:00'
-updated_at: '2026-04-09T13:01:12+00:00'
+updated_at: '2026-04-09T13:15:25+00:00'
 goal: 'litehive status currently requires --fast for quick reads. Swap the default:
   fast mode is the default, --full gives the verbose per-task output. Nobody wants
   to wait for slow status.'

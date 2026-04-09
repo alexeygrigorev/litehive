@@ -58,6 +58,18 @@
   Run-time engine and model overrides win over task routing for that invocation.
 - `uv run litehive repair --workspace .`
   Manual recovery entrypoint for stale active tasks, interrupted runs, stranded `commit_to_git`, and queue cleanup.
+- `uv run litehive logs --workspace .`
+  Tails the newest daemon run log from `.litehive/logs/run-all/`.
+- `uv run litehive logs --workspace . --daemon`
+  Lists the five newest daemon run sessions with timestamps and derived outcomes.
+- `uv run litehive logs T-0002 --workspace .`
+  Prints the task journal from `journal.md`.
+- `uv run litehive logs T-0002 --workspace . --agent`
+  Shows the latest subagent transcript and stdout tail, preferring live `stdout.log` for active runs and falling back to final `.txt` or `.gz` snapshots.
+- `uv run litehive logs T-0002 --workspace . --agent --all`
+  Lists all recorded subagent runs newest-first with role, engine, status, exit code, and duration.
+- `uv run litehive logs --workspace . --follow`
+  Streams the active subagent stdout in real time until the current run ends.
 - `uv run litehive debug T-0002 --workspace . --worktree`
   Shows whether the recorded task worktree exists, plus uncommitted files and committed changes ahead of main from that worktree.
 - `uv run litehive worktree ls --workspace .`
