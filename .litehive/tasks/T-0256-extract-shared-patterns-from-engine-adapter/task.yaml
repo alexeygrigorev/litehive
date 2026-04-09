@@ -2,7 +2,7 @@ id: T-0256
 slug: extract-shared-patterns-from-engine-adapter
 title: Extract shared patterns from engine adapter classes to reduce duplication
 depends_on: []
-task_type: null
+task_type: refactor
 engine: null
 model: null
 mode: implementation
@@ -12,20 +12,41 @@ flag_reason: null
 flag_count: 0
 pipeline_status: backlog
 priority: low
-pm_complexity: null
-planned_effort: null
+pm_complexity: moderate
+planned_effort: m
 created_at: '2026-04-09T09:16:18+00:00'
-updated_at: '2026-04-09T09:16:18+00:00'
-goal: '6 adapter files (300-470 lines each) duplicate patterns: transcript extraction,
-  error classification, continuation parsing, usage observation. Extract common patterns
-  into base class methods or shared helpers.'
+updated_at: '2026-04-09T16:47:42+00:00'
+goal: Reduce duplication across the six provider adapter modules by moving shared
+  transcript rendering, stage-report fallback, generic limit/error classification
+  wiring, and continuation/usage extraction scaffolding into shared adapter helpers
+  or base-class methods, while preserving each provider's external behavior and public
+  adapter API.
 acceptance_criteria:
-- Common transcript extraction logic in base class
-- Common error/limit classification patterns shared
-- Each adapter under 200 lines
-- All existing tests pass
+- The six provider adapters keep their current observable behavior for transcript
+  rendering, stage-report parsing fallback, usage observation, and continuation capture,
+  as verified by existing or updated adapter tests.
+- Shared transcript rendering and stage-report fallback logic is implemented once
+  in shared adapter/base code so individual adapters only provide provider-specific
+  extraction hooks.
+- Generic execution-limit classification remains centralized and reused across adapters,
+  while provider-specific detectors such as Codex retry hints still surface their
+  extra metadata.
+- Each provider adapter module (claude.py, codex.py, copilot.py, gemini.py, goz.py,
+  opencode.py) is reduced below 200 lines by moving duplicated logic into shared helpers
+  without changing the public adapter registry or adapter names.
+- uv run pytest -q passes with zero failures.
 constraints: []
-plan: []
+plan:
+- Inspect the duplicated transcript, stage-report, usage, and continuation methods
+  across all six adapters and define the minimal shared hook surface needed for reuse.
+- Extract common transcript rendering and stage-report fallback behavior into shared
+  adapter/base helpers that accept provider-specific message and error extractors.
+- Extract shared usage-observation and continuation-scanning scaffolding so adapters
+  keep only provider-specific payload decoding and metadata enrichment.
+- Refactor each adapter onto the shared helpers, keeping build_command and live event
+  parsing provider-specific and preserving current public behavior.
+- Add or update focused regression tests for transcript parsing, limit classification,
+  usage observation, and continuation extraction, then run the full test suite.
 human_checkpoints: []
 subagents: []
 git:
