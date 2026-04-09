@@ -7,14 +7,14 @@ engine: null
 model: null
 mode: implementation
 pipeline_mode: full
-status: queued
-flag_reason: null
-pipeline_status: backlog
+status: flagged
+flag_reason: retry_limit_exhausted
+pipeline_status: implementing
 priority: medium
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-07T08:24:48+00:00'
-updated_at: '2026-04-09T05:34:12+00:00'
+updated_at: '2026-04-09T07:32:08+00:00'
 goal: When a subagent process exits with code 124 (killed by timeout), litehive classifies
   it as completed. It should be classified as failed/interrupted. This causes downstream
   issues where the text verdict fallback generates a fake pass verdict. Check subagent
@@ -26,7 +26,42 @@ acceptance_criteria:
 constraints: []
 plan: []
 human_checkpoints: []
-subagents: []
+subagents:
+- id: SA-0145
+  role: planner
+  engine: claude
+  status: completed
+  path: subagents/SA-0145-planner
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0146
+  role: swe
+  engine: claude
+  status: completed
+  path: subagents/SA-0146-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0147
+  role: swe
+  engine: claude
+  status: completed
+  path: subagents/SA-0147-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0148
+  role: swe
+  engine: claude
+  status: completed
+  path: subagents/SA-0148-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0149
+  role: swe
+  engine: claude
+  status: completed
+  path: subagents/SA-0149-swe
+  sandboxed: false
+  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0208 classify-exit-code-124-timeout-as-failure-not'

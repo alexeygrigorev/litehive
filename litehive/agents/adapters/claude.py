@@ -49,6 +49,12 @@ class ClaudeCLIAdapter(ExternalCLIAdapter):
             name=name, binary=binary, capabilities=capabilities, stripped_env_vars=stripped_env_vars
         )
 
+    # Maximum prompt length (in bytes) that can be safely passed via -p on the
+    # command line.  Linux enforces a per-argument ceiling of 128 KiB
+    # (MAX_ARG_STRLEN = 131072).  Prompts larger than this threshold are piped
+    # via stdin instead to avoid ``[Errno 7] Argument list too long``.
+    _MAX_ARG_PROMPT_BYTES: int = 120_000
+
     def build_command(
         self,
         prompt: str,
@@ -57,12 +63,17 @@ class ClaudeCLIAdapter(ExternalCLIAdapter):
         *,
         max_turns: int | None = None,
         resume_session_id: str | None = None,
+        prompt_via_stdin: bool = False,
     ) -> list[str]:
         command = [self.binary]
         if resume_session_id:
-            command.extend(["--resume", resume_session_id, "-p", prompt])
+            if prompt_via_stdin:
+                command.extend(["--resume", resume_session_id])
+            else:
+                command.extend(["--resume", resume_session_id, "-p", prompt])
         else:
-            command.extend(["-p", prompt])
+            if not prompt_via_stdin:
+                command.extend(["-p", prompt])
         command.extend(
             [
                 "--output-format",
@@ -77,6 +88,37 @@ class ClaudeCLIAdapter(ExternalCLIAdapter):
         if max_turns is not None:
             command.extend(["--max-turns", str(max_turns)])
         return command
+
+    def build_invocation(
+        self,
+        prompt: str,
+        cwd: Path,
+        model: str | None = None,
+        *,
+        max_turns: int | None = None,
+        resume_session_id: str | None = None,
+        extra_env: dict[str, str] | None = None,
+    ):
+        import os
+
+        use_stdin = len(prompt.encode("utf-8")) > self._MAX_ARG_PROMPT_BYTES
+        env = os.environ.copy()
+        for key in self.stripped_env_vars:
+            env.pop(key, None)
+        if extra_env:
+            env.update(extra_env)
+        from litehive.agents.base import CLIInvocation
+
+        return CLIInvocation(
+            argv=tuple(self.build_command(
+                prompt, cwd, model=model, max_turns=max_turns,
+                resume_session_id=resume_session_id,
+                prompt_via_stdin=use_stdin,
+            )),
+            cwd=cwd,
+            env=env,
+            stdin_data=prompt if use_stdin else None,
+        )
 
     def render_transcript(self, execution: CLIExecutionResult) -> str:
         assistant_text = extract_stream_transcript(

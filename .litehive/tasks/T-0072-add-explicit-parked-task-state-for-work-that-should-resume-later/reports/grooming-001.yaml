@@ -1,0 +1,43 @@
+task_id: T-0072
+step: grooming
+verdict: pass
+summary: "Grooming pass \u2014 implementation is complete and merged to main. All\
+  \ 5 acceptance criteria verified:"
+feedback: "Grooming pass \u2014 implementation is complete and merged to main. All\
+  \ 5 acceptance criteria verified:\n\n1. TaskStatus enum includes `parked` (litehive/models/common.py:15).\
+  \ `park_task()` and `_is_parked_task()` replace the magic-string detection based\
+  \ on 'Task stopped via CLI' reason string. Stop flows set status=parked explicitly.\n\
+  \n2. Parked tasks stay out of automatic recovery/repair queue reinsertion. `_is_parked_task()`\
+  \ gating in litehive/tasks/queue_ops.py excludes parked from runnable selection.\
+  \ System-interrupted tasks remain eligible for automatic repair/recovery.\n\n3.\
+  \ Operator semantics are explicit: `litehive resume` preserves the parked task's\
+  \ current stage, `litehive requeue` restarts from implementation entry stage. Queue/status\
+  \ surfaces render parked distinctly as `[parked/<stage>]`. Dirty-worktree gating\
+  \ correctly distinguishes parked from interrupted ownership.\n\n4. Focused pytest\
+  \ coverage passes: 3 parked tests in test_task_commands_and_daemon.py, 2 in test_runtime_pool.py\
+  \ (cli_stopped/parked), 2 in test_observability_and_status.py (parked/queue). Total:\
+  \ 7 focused parked-state tests passing.\n\n5. docs/state-machine.md documents parked\
+  \ as an explicit lifecycle state distinct from interrupted work.\n\nTests run:\n\
+  - tests/test_task_commands_and_daemon.py -k 'parked' -> 3 passed\n- tests/test_runtime_pool.py\
+  \ -k 'cli_stopped or parked' -> 2 passed\n- tests/test_observability_and_status.py\
+  \ -k 'parked or queue_command' -> 2 passed\n\nTask is ready to advance to commit_to_git."
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 66
+hook_results: []
+created_at: '2026-04-09T07:25:56+00:00'

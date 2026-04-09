@@ -7,14 +7,14 @@ engine: null
 model: null
 mode: implementation
 pipeline_mode: full
-status: queued
+status: deferred
 flag_reason: null
 pipeline_status: implementing
 priority: medium
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-07T15:41:35+00:00'
-updated_at: '2026-04-09T05:53:14+00:00'
+updated_at: '2026-04-09T07:44:11+00:00'
 goal: When an agent exits with code 1 and no specific failure classification (not
   quota, not timeout, not interrupted), resume the same Claude session instead of
   starting a new one. The session ID is already extracted via extract_engine_continuation.
@@ -437,6 +437,34 @@ subagents:
   engine: claude
   status: completed
   path: subagents/SA-0058-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0059
+  role: swe
+  engine: claude
+  status: completed
+  path: subagents/SA-0059-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0060
+  role: swe
+  engine: claude
+  status: completed
+  path: subagents/SA-0060-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0061
+  role: swe
+  engine: claude
+  status: completed
+  path: subagents/SA-0061-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0062
+  role: swe
+  engine: claude
+  status: completed
+  path: subagents/SA-0062-swe
   sandboxed: false
   sandbox_summary: host
 git:

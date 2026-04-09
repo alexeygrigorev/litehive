@@ -393,19 +393,26 @@ class TaskExecutionRunner:
                 worktree_has_changes = False
                 from litehive.tasks import get_task_worktree_path, task_dir
                 from litehive.git import current_head, is_git_repo
-                # Skip guard if prior implementing pass reports exist — this
-                # task already produced its deliverables in an earlier run
-                # (common for analysis/planning tasks re-entering implementing
-                # via recovery).
-                _prior_pass_reports = sorted(
+                # Skip guard if the guard already rejected this task before.
+                # The guard overwrites pass→reject before saving, so we can
+                # never find verdict=pass in prior reports.  Instead, detect
+                # prior guard rejections by their distinctive summary prefix.
+                # A second guard rejection means the task legitimately produces
+                # no code (analysis/planning task) and should advance.
+                _prior_reports = sorted(
                     (task_dir(self.root, task) / "reports").glob("implementing-*.yaml")
                 ) if (task_dir(self.root, task) / "reports").exists() else []
                 _has_prior_pass = False
-                for _rp in _prior_pass_reports:
+                _GUARD_MARKER = "SWE reported pass but produced no file changes"
+                for _rp in _prior_reports:
                     try:
                         import yaml as _yaml
                         _rd = _yaml.safe_load(_rp.read_text(encoding="utf-8")) or {}
                         if _rd.get("verdict") == "pass":
+                            _has_prior_pass = True
+                            break
+                        if (_rd.get("verdict") == "reject"
+                                and _GUARD_MARKER in (_rd.get("summary") or "")):
                             _has_prior_pass = True
                             break
                     except Exception:

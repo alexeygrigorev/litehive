@@ -77,6 +77,7 @@ class LitehiveConfig:
     )
     agent_startup_guidance: dict[str, list[str]] = field(default_factory=dict)
     parallel_capacity: int = 1
+    parallel_integration_check: str | None = None
     auto_commit: bool = True
     task_mode_name: str = "tasks"
     implementation_mode_name: str = "implementation"

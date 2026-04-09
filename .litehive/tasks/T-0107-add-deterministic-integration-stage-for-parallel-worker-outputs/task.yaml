@@ -9,12 +9,12 @@ mode: implementation
 pipeline_mode: full
 status: flagged
 flag_reason: verdict_blocked
-pipeline_status: grooming
+pipeline_status: accepting
 priority: medium
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-01T15:05:41+00:00'
-updated_at: '2026-04-09T06:11:51+00:00'
+updated_at: '2026-04-09T07:58:01+00:00'
 goal: ''
 acceptance_criteria: []
 constraints: []
@@ -33,6 +33,34 @@ subagents:
   engine: claude
   status: completed
   path: subagents/SA-0002-recovery
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0003
+  role: planner
+  engine: claude
+  status: completed
+  path: subagents/SA-0003-planner
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0004
+  role: swe
+  engine: claude
+  status: completed
+  path: subagents/SA-0004-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0005
+  role: swe
+  engine: claude
+  status: completed
+  path: subagents/SA-0005-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0006
+  role: qa
+  engine: claude
+  status: completed
+  path: subagents/SA-0006-qa
   sandboxed: false
   sandbox_summary: host
 git:

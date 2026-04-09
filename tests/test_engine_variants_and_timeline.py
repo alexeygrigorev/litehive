@@ -119,6 +119,51 @@ def test_claude_build_invocation_includes_model_and_resume(tmp_path: Path) -> No
     ]
 
 
+def test_claude_build_invocation_uses_stdin_for_large_prompt(tmp_path: Path) -> None:
+    """Prompts exceeding MAX_ARG_STRLEN are piped via stdin, not -p."""
+    from litehive.engines import ClaudeCLIAdapter
+
+    adapter = ClaudeCLIAdapter(
+        name="claude",
+        binary="claude",
+        capabilities=AdapterCapabilities(
+            supports_model_override=True,
+            strips_environment=False,
+            transcript_format="jsonl",
+        ),
+    )
+
+    large_prompt = "x" * 200_000  # exceeds _MAX_ARG_PROMPT_BYTES
+
+    invocation = adapter.build_invocation(
+        large_prompt,
+        tmp_path,
+        model="claude-sonnet-4-20250514",
+    )
+
+    # Prompt must NOT appear in argv
+    assert "-p" not in invocation.argv
+    assert large_prompt not in invocation.argv
+    # Prompt must be available as stdin_data
+    assert invocation.stdin_data == large_prompt
+
+    # Resume + large prompt also uses stdin
+    invocation_resumed = adapter.build_invocation(
+        large_prompt,
+        tmp_path,
+        model="claude-sonnet-4-20250514",
+        resume_session_id="abc-123",
+    )
+    assert "-p" not in invocation_resumed.argv
+    assert "--resume" in invocation_resumed.argv
+    assert invocation_resumed.stdin_data == large_prompt
+
+    # Small prompt still uses -p
+    small_invocation = adapter.build_invocation("hello", tmp_path)
+    assert "-p" in small_invocation.argv
+    assert small_invocation.stdin_data is None
+
+
 def test_codex_build_invocation_uses_exec_for_resume_with_session_context(tmp_path: Path) -> None:
     """codex resume is TUI-only, so resume falls back to exec with session context in prompt."""
     engine = get_engine("codex")

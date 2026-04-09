@@ -46,6 +46,7 @@ class CLIInvocation:
     argv: tuple[str, ...]
     cwd: Path
     env: dict[str, str]
+    stdin_data: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -209,14 +210,14 @@ class ExternalCLIAdapter:
             invocation.argv,
             cwd=str(invocation.cwd),
             env=invocation.env,
-            stdin=subprocess.DEVNULL,
+            stdin=subprocess.PIPE if invocation.stdin_data else subprocess.DEVNULL,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
         )
         if on_started is not None:
             on_started(proc.pid)
-        stdout, stderr = proc.communicate()
+        stdout, stderr = proc.communicate(input=invocation.stdin_data)
         return CLIExecutionResult(
             adapter=self.name,
             argv=invocation.argv,
@@ -250,12 +251,15 @@ class ExternalCLIAdapter:
         proc = subprocess.Popen(
             invocation.argv,
             cwd=str(invocation.cwd),
-            stdin=subprocess.DEVNULL,
+            stdin=subprocess.PIPE if invocation.stdin_data else subprocess.DEVNULL,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             env=invocation.env,
             text=False,
         )
+        if invocation.stdin_data and proc.stdin is not None:
+            proc.stdin.write(invocation.stdin_data.encode("utf-8"))
+            proc.stdin.close()
         if on_started is not None:
             on_started(proc.pid)
         assert proc.stdout is not None

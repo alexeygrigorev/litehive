@@ -1,0 +1,66 @@
+task_id: T-0107
+step: implementing
+verdict: pass
+summary: '## Implementation Complete'
+feedback: "## Implementation Complete\n\n### Changes Made\n\n**litehive/config/model.py:**\n\
+  - Added `parallel_integration_check: str | None = None` field to `LitehiveConfig`.\
+  \ When set to a shell command string (e.g., `uv run pytest -q`), the integration\
+  \ check runs after all parallel task merges complete. Defaults to `None` (no-op).\n\
+  \n**litehive/pipeline/_parallel.py:**\n- Added `IntegrationCheckResult` dataclass\
+  \ (fields: command, exit_code, stdout, stderr, timestamp, task_ids, merge_order,\
+  \ success).\n- Added `integration_check: IntegrationCheckResult | None` field to\
+  \ `ParallelRunSummary`.\n- Added `_run_integration_check()` function that runs the\
+  \ configured command via `subprocess.run` on the main worktree, captures all output,\
+  \ and writes a YAML batch report to `.litehive/logs/parallel-integration/{timestamp}-batch.yaml`.\n\
+  - Added Phase 4 logic in `run_parallel_tasks()` after Phase 3 merge loop: if `parallel_integration_check`\
+  \ is configured and at least one task merged successfully with stop_reason `parallel_batch_complete`,\
+  \ runs the check. If it fails, sets `stop_reason` to `parallel_integration_failed`\
+  \ and appends a journal entry to each merged task recording the failure.\n\n**tests/test_parallel_execution.py\
+  \ (4 new tests, 20 total):**\n- `test_integration_check_passes`: Configured check\
+  \ (`true`) passes \u2192 `parallel_batch_complete`, report written, integration_check.success=True.\n\
+  - `test_integration_check_fails`: Configured check (`false`) fails \u2192 `parallel_integration_failed`,\
+  \ report written with batch info (task_ids, success=False), journal entries record\
+  \ failure for each merged task.\n- `test_integration_check_not_configured`: No check\
+  \ configured \u2192 no-op, no report directory created, existing behavior preserved.\n\
+  - `test_run_integration_check_captures_output`: Direct unit test of `_run_integration_check`\
+  \ verifying stdout capture (\"hello-world\"), report file written, and all field\
+  \ values correct.\n\n### Acceptance Criteria Verification\n\n1. \u2705 After all\
+  \ parallel tasks merge to main, integration verification runs automatically \u2014\
+  \ Phase 4 in `run_parallel_tasks`, gated on `parallel_integration_check` being configured\
+  \ and at least one successful merge.\n2. \u2705 Configurable via `parallel_integration_check`\
+  \ in config.yaml, no-op if unconfigured \u2014 verified by `test_integration_check_not_configured`.\n\
+  3. \u2705 If check passes, stop_reason is `parallel_batch_complete` and integration_check.success=True\
+  \ \u2014 verified by `test_integration_check_passes`.\n4. \u2705 If check fails,\
+  \ stop_reason is `parallel_integration_failed`, failure captured in report, journal\
+  \ entries written to each merged task \u2014 verified by `test_integration_check_fails`.\n\
+  5. \u2705 Integration report includes: batch task IDs, merge order, check command,\
+  \ exit code, stdout/stderr, and timestamp \u2014 verified by report content assertions\
+  \ in tests.\n6. \u2705 Integration check is idempotent: runs on committed git state\
+  \ after merges (same HEAD \u2192 same result).\n7. \u2705 Existing tests pass (16\
+  \ pre-existing) and new tests cover pass/fail/unconfigured/output-capture scenarios\
+  \ (4 new, 20 total).\n\n### Test Results\n- `uv run pytest tests/test_parallel_execution.py\
+  \ -q` \u2192 20 passed in 1.91s\n- `uv run pytest tests/test_config_and_run_cli.py\
+  \ -q` \u2192 58 passed in 9.89s"
+files_changed:
+- litehive/config/model.py
+- litehive/pipeline/_parallel.py
+- tests/test_parallel_execution.py
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 1
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 246
+hook_results: []
+created_at: '2026-04-09T07:51:57+00:00'

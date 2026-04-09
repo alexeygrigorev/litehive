@@ -1,0 +1,48 @@
+id: T-0240
+slug: auto-defer-tasks-after-3-flags-instead-of
+title: Auto-defer tasks after 3 flags instead of allowing infinite requeue loops
+depends_on: []
+task_type: null
+engine: null
+model: null
+mode: implementation
+pipeline_mode: full
+status: queued
+flag_reason: null
+pipeline_status: backlog
+priority: high
+pm_complexity: null
+planned_effort: null
+created_at: '2026-04-09T07:50:34+00:00'
+updated_at: '2026-04-09T07:50:34+00:00'
+goal: "Tasks that repeatedly flag (implement\u2192reject\u2192flag\u2192requeue\u2192\
+  repeat) waste tokens indefinitely. Add a lifetime flag_count to track how many times\
+  \ a task has been flagged. After 3 flags, auto-defer instead of flagging. Block\
+  \ litehive requeue without --force after 3+ flags."
+acceptance_criteria:
+- TaskRecord has a flag_count field (int, default 0) persisted in task.yaml
+- flag_count increments every time a task transitions to flagged status
+- After flag_count reaches 3, task is set to deferred instead of flagged with reason
+  'flagged 3 times - needs human review'
+- litehive requeue warns and requires --force when flag_count >= 3
+- flag_count is NOT reset by requeue (it is a lifetime counter)
+- All existing tests pass
+constraints: []
+plan: []
+human_checkpoints: []
+subagents: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0240 auto-defer-tasks-after-3-flags-instead-of'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+  merge_agent_attempts: 0
+  worktree_path: null
+retry_policy:
+  max_retries: null
+  stage_retry_limit: null
+created_from: null
+upstream_origin: null
+github_origin: null

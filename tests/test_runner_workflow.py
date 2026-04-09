@@ -129,6 +129,56 @@ def test_empty_swe_guard_skipped_when_prior_implementing_pass_exists(tmp_path: P
     assert refreshed.pipeline_status != "implementing"
 
 
+def test_empty_swe_guard_skipped_when_prior_guard_rejection_exists(tmp_path: Path) -> None:
+    """The guard overwrites pass→reject before saving, so a prior guard
+    rejection (with the distinctive summary) should also bypass the guard
+    on subsequent runs — otherwise the task loops forever."""
+    _init_git_repo(tmp_path)
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Plan feature v2", auto_commit=False)
+    task.pipeline_status = "implementing"  # type: ignore[assignment]
+    save_task(tmp_path, task)
+
+    # Write a prior guard rejection report (what the guard actually saves)
+    reports_dir = task_dir(tmp_path, task) / "reports"
+    reports_dir.mkdir(parents=True, exist_ok=True)
+    prior_report = {
+        "task_id": task.id,
+        "step": "implementing",
+        "verdict": "reject",
+        "summary": (
+            "SWE reported pass but produced no file changes and no tests. "
+            "This usually means the agent did not actually write code."
+        ),
+        "files_changed": [],
+        "tests": {"added": 0, "passing": 0},
+    }
+    (reports_dir / "implementing-001.yaml").write_text(
+        yaml.dump(prior_report), encoding="utf-8"
+    )
+
+    def executor(task, step):  # type: ignore[no-untyped-def]
+        if step == "implementing":
+            return StageReport(
+                task_id=task.id, step=step, verdict="pass",
+                summary="Analysis already done", files_changed=[], tests={"added": 0, "passing": 0},
+            )
+        return StageReport(
+            task_id=task.id, step=step, verdict="pass",
+            summary=f"{step} ok", files_changed=["app.txt"], tests={"added": 1, "passing": 1},
+        )
+
+    runner = TaskExecutionRunner(tmp_path, executor)
+    result = runner.run(task)
+
+    refreshed = get_task(tmp_path, task.id)
+    assert refreshed is not None
+    assert refreshed.status != "flagged", (
+        f"Task was flagged despite prior guard rejection: {refreshed.status}"
+    )
+    assert refreshed.pipeline_status != "implementing"
+
+
 def test_empty_swe_guard_rejects_when_no_prior_pass(tmp_path: Path) -> None:
     """Without a prior implementing pass, an empty SWE pass should still be
     rejected by the guard (the agent likely didn't do any work)."""

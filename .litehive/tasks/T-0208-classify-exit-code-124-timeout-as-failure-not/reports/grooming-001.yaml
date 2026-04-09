@@ -1,44 +1,30 @@
 task_id: T-0208
 step: grooming
 verdict: pass
-summary: Recovery repaired the runnable path for T-0208 by fixing structured stage-report
-  classification for non-completed subagents.
-feedback: 'Recovery repaired the runnable path for T-0208 by fixing structured stage-report
-  classification for non-completed subagents.
-
-
-  What changed:
-
-  - In litehive/engines/base.py, parse_stage_report_text now downgrades structured
-  `pass`/`accept` submissions to `fail` when the subagent status is not `completed`.
-  This prevents timeout-killed or otherwise non-zero exits from being treated as successful
-  based on partial STAGE_RESULT output.
-
-  - Added regression coverage in tests/test_stage_result_submission.py for a failed
-  subagent with structured `pass` output.
-
-  - Added regression coverage in tests/test_tasks_and_subagents.py for a stale-timeout
-  path that exits 124 after emitting partial structured output, verifying the persisted
-  session remains `failed` and the report does not preserve a passing verdict.
-
-
-  Verification:
-
-  - `pytest -q tests/test_stage_result_submission.py tests/test_tasks_and_subagents.py
-  tests/test_runner_workflow.py -q -k "failed_subagent_cannot_turn_structured_pass_into_passing_report
-  or timeout_cannot_preserve_structured_pass_verdict or kills_stale_live_process_using_stdout_mtime
-  or parse_stage_report_text_fails_on_text_only_transcript or stage_report_from_subagent_fails_without_cli_verdict"`
-
-
-  Result:
-
-  - Exit code 124 is no longer able to surface a passing structured verdict from partial
-  output.
-
-  - Non-completed subagents cannot turn structured `pass`/`accept` payloads into passing
-  stage reports.
-
-  - The task is runnable again for the normal pipeline.'
+summary: "Implementation is complete and verified. The task has been stuck in a testing\u2192\
+  recovery loop (30+ recovery cycles) because the QA agent repeatedly fails to submit\
+  \ its verdict via the litehive report CLI \u2014 this is a process/agent issue,\
+  \ not a code issue."
+feedback: "Implementation is complete and verified. The task has been stuck in a testing\u2192\
+  recovery loop (30+ recovery cycles) because the QA agent repeatedly fails to submit\
+  \ its verdict via the litehive report CLI \u2014 this is a process/agent issue,\
+  \ not a code issue.\n\nCode evidence (all on main):\n1. litehive/agents/_manager.py\
+  \ \u2014 subagent status is \"completed\" only when exit_code == 0; non-zero exits\
+  \ are \"failed\" first, and classify_execution_interruption can only reclassify\
+  \ to \"interrupted\", never \"completed\". The inactivity-timeout handler explicitly\
+  \ sets exit_code=124 and status=\"failed\".\n2. litehive/engines/base.py \u2014\
+  \ parse_stage_report_text downgrades structured STAGE_RESULT pass/accept verdicts\
+  \ to \"fail\" when subagent_status is not \"completed\", preventing timeout-killed\
+  \ agents from preserving passing verdicts.\n\nTest evidence:\n- `uv run pytest -q\
+  \ tests/test_tasks_and_subagents.py tests/test_stage_result_submission.py -k 'marks_generic_non_zero_exit_as_failed\
+  \ or kills_stale_live_process_using_stdout_mtime or timeout_cannot_preserve_structured_pass_verdict\
+  \ or failed_subagent_cannot_turn_structured_pass_into_passing_report'` \u2192 3\
+  \ passed, 72 deselected.\n\nAll acceptance criteria are met:\n- Exit code 124 is\
+  \ classified as failed/interrupted, not completed \u2713\n- Any non-zero exit code\
+  \ is not classified as completed \u2713\n- Timeout-killed agents do not produce\
+  \ pass verdicts \u2713\n\nTASK_UPDATE:\npm_complexity: simple\nplanned_effort: xs\n\
+  auto_commit: true\n\nThe QA stage should verify by running the test command above\
+  \ and confirming 3 passes."
 files_changed: []
 created_follow_up_task_ids: []
 task_update: {}
@@ -56,6 +42,6 @@ outcome_reason: ''
 failure_classification: null
 failure_diagnostics: {}
 resource_limit_event: null
-duration_seconds: 51
+duration_seconds: 42
 hook_results: []
-created_at: '2026-04-08T15:59:12+00:00'
+created_at: '2026-04-09T07:30:27+00:00'

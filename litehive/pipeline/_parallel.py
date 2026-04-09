@@ -1,9 +1,11 @@
 """Parallel task execution: run multiple independent tasks concurrently in separate worktrees."""
 
 import logging
+import shlex
 import subprocess
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 
 from litehive.config import load_config, load_context, LitehiveConfig
@@ -39,10 +41,24 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass(slots=True)
+class IntegrationCheckResult:
+    """Result of running a post-merge integration check on the combined state."""
+    command: str
+    exit_code: int
+    stdout: str
+    stderr: str
+    timestamp: str
+    task_ids: list[str] = field(default_factory=list)
+    merge_order: list[str] = field(default_factory=list)
+    success: bool = True
+
+
+@dataclass(slots=True)
 class ParallelRunSummary:
     """Summary of a parallel task pool run."""
     executions: list[ExecutionSummary] = field(default_factory=list)
     integration_results: list["IntegrationResult"] = field(default_factory=list)
+    integration_check: IntegrationCheckResult | None = None
     stop_reason: str = "queue_exhausted"
     blocked: list[BlockedTask] = field(default_factory=list)
 
@@ -373,6 +389,57 @@ def _integrate_completed_task(
     )
 
 
+def _run_integration_check(
+    root: Path,
+    command: str,
+    merged_task_ids: list[str],
+    merge_order: list[str],
+) -> IntegrationCheckResult:
+    """Run a post-merge integration check on the combined main worktree state.
+
+    Writes a batch integration report to .litehive/logs/parallel-integration/.
+    """
+    timestamp = datetime.now(timezone.utc).isoformat()
+    proc = subprocess.run(
+        shlex.split(command),
+        cwd=root,
+        capture_output=True,
+        text=True,
+        timeout=600,
+    )
+    result = IntegrationCheckResult(
+        command=command,
+        exit_code=proc.returncode,
+        stdout=proc.stdout,
+        stderr=proc.stderr,
+        timestamp=timestamp,
+        task_ids=merged_task_ids,
+        merge_order=merge_order,
+        success=proc.returncode == 0,
+    )
+
+    # Write batch integration report
+    report_dir = root / ".litehive" / "logs" / "parallel-integration"
+    report_dir.mkdir(parents=True, exist_ok=True)
+    ts_slug = timestamp.replace(":", "-").replace("+", "p")
+    report_path = report_dir / f"{ts_slug}-batch.yaml"
+
+    import yaml
+    report_data = {
+        "command": result.command,
+        "exit_code": result.exit_code,
+        "success": result.success,
+        "stdout": result.stdout,
+        "stderr": result.stderr,
+        "timestamp": result.timestamp,
+        "task_ids": result.task_ids,
+        "merge_order": result.merge_order,
+    }
+    report_path.write_text(yaml.dump(report_data, default_flow_style=False), encoding="utf-8")
+
+    return result
+
+
 def _clear_parallel_active_tasks(root: Path) -> None:
     """Remove active_task_ids from state after parallel run completes."""
     from litehive.tasks import load_state, save_state
@@ -461,6 +528,33 @@ def run_parallel_tasks(
         # Clean up parallel state
         _clear_parallel_active_tasks(root)
 
+        # Phase 4: Post-merge integration verification
+        merged_ids = [r.task_id for r in integration_results if r.success]
+        merge_order = merged_ids  # Already in deterministic task-ID order
+        integration_check: IntegrationCheckResult | None = None
+
+        if config.parallel_integration_check and merged_ids:
+            logger.info(
+                "Running integration check: %s", config.parallel_integration_check,
+            )
+            integration_check = _run_integration_check(
+                root,
+                config.parallel_integration_check,
+                merged_ids,
+                merge_order,
+            )
+            if not integration_check.success:
+                for task_id in merged_ids:
+                    # Find the task and append journal entry
+                    for execution in executions:
+                        if execution.task and execution.task.id == task_id:
+                            append_journal(
+                                root, execution.task,
+                                f"[parallel] Integration check failed (exit code {integration_check.exit_code}). "
+                                f"Command: {integration_check.command}",
+                            )
+                            break
+
         # Determine stop reason
         all_done = all(r.success for r in integration_results) and len(integration_results) == len(tasks)
         has_conflicts = any(r.merge_conflict and not r.conflict_resolved for r in integration_results)
@@ -471,6 +565,8 @@ def run_parallel_tasks(
 
         if has_conflicts:
             stop_reason = "parallel_integration_conflict"
+        elif integration_check and not integration_check.success:
+            stop_reason = "parallel_integration_failed"
         elif has_failures:
             stop_reason = "failure_detected"
         elif all_done:
@@ -483,6 +579,7 @@ def run_parallel_tasks(
         return ParallelRunSummary(
             executions=executions,
             integration_results=integration_results,
+            integration_check=integration_check,
             stop_reason=stop_reason,
             blocked=blocked,
         )

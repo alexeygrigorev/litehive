@@ -27,9 +27,11 @@ from tests.workspace_helpers import (
 )
 
 from litehive.pipeline._parallel import (
+    IntegrationCheckResult,
     IntegrationResult,
     _clear_parallel_active_tasks,
     _integrate_completed_task,
+    _run_integration_check,
     _select_parallel_tasks,
     run_parallel_tasks,
 )
@@ -418,3 +420,128 @@ def test_each_parallel_task_gets_own_worktree(tmp_path: Path) -> None:
     # After selection, each task should have been dequeued
     # The worktree paths would be assigned during execution
     assert tasks[0].id != tasks[1].id
+
+
+# ---------------------------------------------------------------------------
+# Integration check tests
+# ---------------------------------------------------------------------------
+
+
+def _mock_parallel_run_and_integrate(monkeypatch, *, integration_success=True):
+    """Set up mocks for _run_single_parallel_task and _integrate_completed_task.
+
+    The mock executor returns tasks as "done" and the mock integrator returns
+    success results, so the pipeline reaches Phase 4 (integration check).
+    """
+    def mock_run(root, task, *, engine_override=None, model_override=None, budget_ledger=None):
+        return ExecutionSummary(
+            task=task,
+            result=RunResult(final_status="done", steps_executed=5, last_verdict="pass"),
+        )
+
+    def mock_integrate(root, execution, *, config=None):
+        return IntegrationResult(
+            task_id=execution.task.id,
+            success=integration_success,
+            commit_sha="abc1234" if integration_success else None,
+        )
+
+    monkeypatch.setattr("litehive.pipeline._parallel._run_single_parallel_task", mock_run)
+    monkeypatch.setattr("litehive.pipeline._parallel._integrate_completed_task", mock_integrate)
+
+
+def test_integration_check_passes(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """When integration check passes, stop_reason is parallel_batch_complete."""
+    root = _init_parallel_workspace(tmp_path, parallel_capacity=2)
+    config_path = root / ".litehive" / "config.yaml"
+    config_data = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
+    config_data["parallel_integration_check"] = "true"
+    config_path.write_text(yaml.dump(config_data), encoding="utf-8")
+
+    create_task(root, title="Feature A")
+    create_task(root, title="Feature B")
+    _mock_parallel_run_and_integrate(monkeypatch)
+
+    summary = run_parallel_tasks(root, stop_conditions=TaskPoolStopConditions())
+
+    assert summary.stop_reason == "parallel_batch_complete"
+    assert summary.integration_check is not None
+    assert summary.integration_check.success is True
+    assert summary.integration_check.exit_code == 0
+    # Report file should exist
+    report_dir = root / ".litehive" / "logs" / "parallel-integration"
+    assert report_dir.exists()
+    reports = list(report_dir.glob("*-batch.yaml"))
+    assert len(reports) == 1
+
+
+def test_integration_check_fails(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """When integration check fails, stop_reason is parallel_integration_failed."""
+    root = _init_parallel_workspace(tmp_path, parallel_capacity=2)
+    config_path = root / ".litehive" / "config.yaml"
+    config_data = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
+    config_data["parallel_integration_check"] = "false"
+    config_path.write_text(yaml.dump(config_data), encoding="utf-8")
+
+    create_task(root, title="Feature A")
+    create_task(root, title="Feature B")
+    _mock_parallel_run_and_integrate(monkeypatch)
+
+    summary = run_parallel_tasks(root, stop_conditions=TaskPoolStopConditions())
+
+    assert summary.stop_reason == "parallel_integration_failed"
+    assert summary.integration_check is not None
+    assert summary.integration_check.success is False
+    assert summary.integration_check.exit_code != 0
+    # Report should be written
+    report_dir = root / ".litehive" / "logs" / "parallel-integration"
+    reports = list(report_dir.glob("*-batch.yaml"))
+    assert len(reports) == 1
+    report_content = yaml.safe_load(reports[0].read_text(encoding="utf-8"))
+    assert report_content["success"] is False
+    assert len(report_content["task_ids"]) >= 1
+    assert report_content["command"] == "false"
+    # Journal entries should be written for each merged task
+    for execution in summary.executions:
+        task_dir = root / ".litehive" / "tasks" / f"{execution.task.id}-{execution.task.slug}"
+        journal = task_dir / "journal.md"
+        if journal.exists():
+            content = journal.read_text(encoding="utf-8")
+            assert "Integration check failed" in content
+
+
+def test_integration_check_not_configured(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """When no integration check is configured, it's a no-op."""
+    root = _init_parallel_workspace(tmp_path, parallel_capacity=2)
+    create_task(root, title="Feature A")
+    create_task(root, title="Feature B")
+    _mock_parallel_run_and_integrate(monkeypatch)
+
+    summary = run_parallel_tasks(root, stop_conditions=TaskPoolStopConditions())
+
+    assert summary.stop_reason == "parallel_batch_complete"
+    assert summary.integration_check is None
+    report_dir = root / ".litehive" / "logs" / "parallel-integration"
+    assert not report_dir.exists()
+
+
+def test_run_integration_check_captures_output(tmp_path: Path) -> None:
+    """_run_integration_check captures stdout, stderr, exit code, and writes report."""
+    _init_git_repo(tmp_path)
+    result = _run_integration_check(
+        tmp_path,
+        command="echo hello",
+        merged_task_ids=["T-0001", "T-0002"],
+        merge_order=["T-0001", "T-0002"],
+    )
+    assert result.success is True
+    assert result.exit_code == 0
+    assert "hello" in result.stdout
+    assert result.task_ids == ["T-0001", "T-0002"]
+    assert result.merge_order == ["T-0001", "T-0002"]
+    assert result.command == "echo hello"
+    # Report file written
+    report_dir = tmp_path / ".litehive" / "logs" / "parallel-integration"
+    assert report_dir.exists()
+    reports = list(report_dir.glob("*-batch.yaml"))
+    assert len(reports) == 1

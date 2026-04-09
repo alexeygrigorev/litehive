@@ -14,7 +14,7 @@ priority: medium
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-07T20:46:27+00:00'
-updated_at: '2026-04-09T06:09:33+00:00'
+updated_at: '2026-04-09T07:37:37+00:00'
 goal: 'Investigate the current web dashboard code and design a plan to make it a full
   operator interface that mirrors all CLI capabilities. Analyze litehive/web/ and
   the existing endpoints. Produce follow-up tasks for each feature area: task detail
@@ -438,6 +438,34 @@ subagents:
   engine: claude
   status: completed
   path: subagents/SA-0059-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0060
+  role: swe
+  engine: claude
+  status: completed
+  path: subagents/SA-0060-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0061
+  role: swe
+  engine: claude
+  status: completed
+  path: subagents/SA-0061-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0062
+  role: swe
+  engine: claude
+  status: completed
+  path: subagents/SA-0062-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0063
+  role: swe
+  engine: claude
+  status: completed
+  path: subagents/SA-0063-swe
   sandboxed: false
   sandbox_summary: host
 git:

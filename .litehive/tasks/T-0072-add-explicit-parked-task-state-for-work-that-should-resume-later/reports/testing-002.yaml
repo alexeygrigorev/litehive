@@ -1,43 +1,38 @@
 task_id: T-0072
 step: testing
 verdict: pass
-summary: 'Validated the explicit parked-state implementation on retry attempt 3. All
-  22 focused parked-state tests pass: stop writes parked status, parked tasks are
-  excluded from automatic repair/recovery while system-interrupted tasks remain eligible,
-  resume preserves the current stage, requeue restarts from implementation entry,
-  queue/status output shows parked distinctly, and dirty-worktree gating correctly
-  distinguishes parked from interrupted ownership. Three pre-existing failures (drain
-  concurrency race, switch command, editor mock import) are unrelated to T-0072 and
-  fail identically on the base commit. The implementation satisfies all 5 acceptance
-  criteria.'
-feedback: 'Stage `testing` retrying `opencode` after attempt 1/3 due to transient
-  timeout (classification: timeout, policy: opencode, backoff: 0.25s).
-
-
-  Stage `testing` retrying `opencode` after attempt 2/3 due to transient timeout (classification:
-  timeout, policy: opencode, backoff: 0.50s).
-
-
-  Validated the explicit parked-state implementation on retry attempt 3. All 22 focused
-  parked-state tests pass: stop writes parked status, parked tasks are excluded from
-  automatic repair/recovery while system-interrupted tasks remain eligible, resume
-  preserves the current stage, requeue restarts from implementation entry, queue/status
-  output shows parked distinctly, and dirty-worktree gating correctly distinguishes
-  parked from interrupted ownership. Three pre-existing failures (drain concurrency
-  race, switch command, editor mock import) are unrelated to T-0072 and fail identically
-  on the base commit. The implementation satisfies all 5 acceptance criteria.'
+summary: QA validation pass for explicit parked task state.
+feedback: "QA validation pass for explicit parked task state.\n\nTests run (22 passed,\
+  \ 0 failed):\n- tests/test_task_commands_and_daemon.py -k 'parked or stop_current_task\
+  \ or requeue_command or resume_command or dirty_worktree_gate' -> 18 passed\n- tests/test_runtime_pool.py\
+  \ -k 'cli_stopped or parked or repair_workspace_state_requeues_system_interrupted'\
+  \ -> 2 passed\n- tests/test_observability_and_status.py -k 'parked or queue_command'\
+  \ -> 2 passed\n\nAcceptance criteria verification:\n\n1. SATISFIED \u2014 TaskStatus\
+  \ enum includes 'parked' (models/common.py:15). park_task() and _is_parked_task()\
+  \ replace magic-string detection based on 'Task stopped via CLI' reason string.\
+  \ Stop flows set status=parked explicitly.\n\n2. SATISFIED \u2014 Parked tasks excluded\
+  \ from automatic recovery/repair queue reinsertion: _is_parked_task() gating in\
+  \ tasks/queue_ops.py:322 skips parked tasks during repair (line 517 also guards).\
+  \ System-interrupted tasks remain eligible for automatic queue reinsertion. Dirty-worktree\
+  \ ownership in cli/_pool.py:174 includes parked in ownership check but only interrupted\
+  \ keeps gate open for automatic resumption.\n\n3. SATISFIED \u2014 Resume preserves\
+  \ parked task's current stage, requeue restarts from implementation entry. Queue\
+  \ output (cli/queue.py:106) includes parked in visible statuses. Status output (cli/status.py:186)\
+  \ shows resumable tasks including parked. CLI parser help text (cli/parser.py:695)\
+  \ updated to mention parked.\n\n4. SATISFIED \u2014 Focused pytest coverage proves\
+  \ parked vs interrupted behavior across stop, repair, dirty-worktree gating, resume/requeue\
+  \ command semantics, and queue visibility. 22 tests passing.\n\n5. SATISFIED \u2014\
+  \ docs/state-machine.md:130 documents parked as '| parked | Deliberately paused\
+  \ by operator |', an explicit lifecycle state distinct from interrupted work.\n\n\
+  No regressions. Non-blocking warning: uv reported VIRTUAL_ENV mismatch with .venv\
+  \ (pre-existing, unrelated)."
 files_changed: []
-follow_up_tasks: []
 created_follow_up_task_ids: []
 task_update: {}
 tests:
   added: 0
   passing: 0
-warnings:
-- 'Stage `testing` retrying `opencode` after attempt 1/3 due to transient timeout
-  (classification: timeout, policy: opencode, backoff: 0.25s).'
-- 'Stage `testing` retrying `opencode` after attempt 2/3 due to transient timeout
-  (classification: timeout, policy: opencode, backoff: 0.50s).'
+warnings: []
 retry_count: 0
 retry_limit: 3
 retry_source: global
@@ -48,6 +43,6 @@ outcome_reason: ''
 failure_classification: null
 failure_diagnostics: {}
 resource_limit_event: null
-duration_seconds: 4826
+duration_seconds: 54
 hook_results: []
-created_at: '2026-04-06T14:35:03+00:00'
+created_at: '2026-04-09T07:59:43+00:00'

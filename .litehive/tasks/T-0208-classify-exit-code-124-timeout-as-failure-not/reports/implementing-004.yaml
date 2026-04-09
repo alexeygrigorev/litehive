@@ -17,7 +17,7 @@ feedback: "Implementation satisfies T-0208 without additional code changes. Thre
   \ verdicts.\n\nTests run: uv run pytest -q tests/test_tasks_and_subagents.py tests/test_stage_result_submission.py\
   \ -k 'marks_generic_non_zero_exit_as_failed or kills_stale_live_process_using_stdout_mtime\
   \ or timeout_cannot_preserve_structured_pass_verdict or failed_subagent_cannot_turn_structured_pass_into_passing_report'\
-  \ -> 3 passed, 70 deselected.\n\nAll acceptance criteria met:\n- Exit code 124 is\
+  \ -> 3 passed, 72 deselected.\n\nAll acceptance criteria met:\n- Exit code 124 is\
   \ classified as failed, not completed\n- Any non-zero exit code is not classified\
   \ as completed\n- Timeout-killed agents do not produce pass verdicts"
 files_changed: []
@@ -27,16 +27,16 @@ tests:
   added: 0
   passing: 0
 warnings: []
-retry_count: 4
+retry_count: 3
 retry_limit: 3
 retry_source: global
 retry_decision: continue
 outcome: null
-outcome_reason_code: retry_limit_exhausted
-outcome_reason: 'Empty SWE pass rejected 4 time(s) (limit: 3)'
+outcome_reason_code: null
+outcome_reason: ''
 failure_classification: null
 failure_diagnostics: {}
 resource_limit_event: null
-duration_seconds: 25
+duration_seconds: 26
 hook_results: []
-created_at: '2026-04-09T05:30:23+00:00'
+created_at: '2026-04-09T07:31:40+00:00'

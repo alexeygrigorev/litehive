@@ -1,0 +1,5 @@
+active_task_id: null
+mode: implementation
+queue: []
+pool_stop_reason: null
+next_task_number: 0
