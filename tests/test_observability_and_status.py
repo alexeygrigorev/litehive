@@ -194,7 +194,7 @@ def test_health_command_reports_healthy_workspace(
     active.pipeline_status = "testing"
     active.runtime.current_stage = RuntimeStageState(step="testing", status="running")
     active.runtime.last_stage = RuntimeStageState(step="implementing", verdict="pass", summary="implemented health command")
-    active.updated_at = "2026-04-09T10:00:00Z"
+    monkeypatch.setattr("litehive.tasks.crud.utcnow", lambda: "2026-04-09T10:00:00Z")
     save_task(tmp_path, active)
 
     state = load_state(tmp_path)
@@ -220,12 +220,12 @@ def test_health_command_reports_healthy_workspace(
         task = create_task(tmp_path, title=title, auto_commit=False)
         task.status = "done"
         task.pipeline_status = "done"
-        task.updated_at = updated_at
         task.runtime.last_stage = RuntimeStageState(
             step="commit_to_git",
             verdict="pass",
             summary=f"{title} summary",
         )
+        monkeypatch.setattr("litehive.tasks.crud.utcnow", lambda ts=updated_at: ts)
         save_task(tmp_path, task)
     _commit_repo_state(tmp_path)
 
