@@ -20,12 +20,14 @@ from tests.workspace_helpers import (
     WorkspaceConflictError,
     _block_runner_lock,
     _cmd_add,
+    _cmd_health,
     _cmd_issue,
     _cmd_queue,
     _cmd_repair,
     _cmd_run,
     _cmd_status,
     _completed_subagent_result,
+    _commit_repo_state,
     _init_git_repo,
     _interrupted_subagent_result,
     _latest_pool_run_report,
@@ -67,6 +69,7 @@ from tests.workspace_helpers import (
     yaml,
 )
 from litehive.tasks.reports import collect_recovery_evidence
+from types import SimpleNamespace
 
 def test_dequeue_next_task_selection_rejects_multiple_active_tasks(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
@@ -177,6 +180,204 @@ def test_cmd_run_default_executes_single_task_and_reports_summary(
         }
     ]
     assert load_state(tmp_path).queue == ["T-0002"]
+
+
+def test_health_command_reports_healthy_workspace(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ensure_workspace(tmp_path)
+    _init_git_repo(tmp_path)
+
+    active = create_task(tmp_path, title="Active task", auto_commit=False)
+    active.pipeline_status = "testing"
+    active.runtime.current_stage = RuntimeStageState(step="testing", status="running")
+    active.runtime.last_stage = RuntimeStageState(step="implementing", verdict="pass", summary="implemented health command")
+    active.updated_at = "2026-04-09T10:00:00Z"
+    save_task(tmp_path, active)
+
+    state = load_state(tmp_path)
+    state.active_task_id = active.id
+    save_state(tmp_path, state)
+
+    worktree_path = tmp_path / ".litehive" / "worktrees" / f"{active.id}-{active.slug}"
+    worktree_path.parent.mkdir(parents=True, exist_ok=True)
+    _run(["git", "worktree", "add", "--detach", str(worktree_path), "HEAD"], tmp_path)
+    active.git.worktree_path = str(worktree_path.relative_to(tmp_path))
+    save_task(tmp_path, active)
+    _commit_repo_state(tmp_path)
+    (worktree_path / "health.txt").write_text("pending\n", encoding="utf-8")
+
+    done_titles = ["Completed first", "Completed second", "Completed third", "Completed older"]
+    done_times = [
+        "2026-04-09T11:00:00Z",
+        "2026-04-09T10:30:00Z",
+        "2026-04-09T10:15:00Z",
+        "2026-04-08T09:00:00Z",
+    ]
+    for title, updated_at in zip(done_titles, done_times, strict=True):
+        task = create_task(tmp_path, title=title, auto_commit=False)
+        task.status = "done"
+        task.pipeline_status = "done"
+        task.updated_at = updated_at
+        task.runtime.last_stage = RuntimeStageState(
+            step="commit_to_git",
+            verdict="pass",
+            summary=f"{title} summary",
+        )
+        save_task(tmp_path, task)
+    _commit_repo_state(tmp_path)
+
+    monkeypatch.setattr(
+        "litehive.cli.health.check_codex_quota",
+        lambda: SimpleNamespace(
+            error=None,
+            limit_reached=False,
+            primary_window=SimpleNamespace(used_percent=42.0),
+            secondary_window=SimpleNamespace(used_percent=61.0),
+            earliest_reset_at="2026-04-15T00:00:00Z",
+        ),
+    )
+    monkeypatch.setattr(
+        "litehive.cli.health.check_claude_quota",
+        lambda: SimpleNamespace(
+            error=None,
+            limit_reached=False,
+            five_hour=SimpleNamespace(used_percent=37.5, reset_at="2026-04-09T04:00:00Z"),
+            seven_day=SimpleNamespace(used_percent=58.0, reset_at="2026-04-12T00:00:00Z"),
+        ),
+    )
+    monkeypatch.setattr(
+        "litehive.cli.health.check_copilot_quota",
+        lambda: SimpleNamespace(
+            error=None,
+            limit_reached=False,
+            used_percent=25.0,
+            premium_remaining=75,
+            premium_entitlement=100,
+            quota_reset_date="2026-04-10",
+        ),
+    )
+    monkeypatch.setattr(
+        "litehive.cli.health.check_zai_quota",
+        lambda: SimpleNamespace(
+            error=None,
+            limit_reached=False,
+            api_calls=SimpleNamespace(used_percent=33.0),
+            tokens=SimpleNamespace(used_percent=48.0),
+        ),
+    )
+    monkeypatch.setattr(
+        "litehive.cli.health.daemon_status_lines",
+        lambda workspace: [
+            f"workspace: {workspace.resolve()}",
+            "daemon_status: running",
+            "pid: 4242",
+        ],
+    )
+
+    exit_code = _cmd_health(argparse.Namespace(workspace=tmp_path))
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert f"active_task: {active.id} [queued/testing] stage=testing title=Active task" in output
+    assert "flagged_count: 0" in output
+    assert f"worktree: {active.id} status=queued changes=1 active=yes" in output
+    assert "ownership=task-owned-worktree" in output
+    assert "quota: codex status=ok summary=5h=42.0% weekly=61.0% reset=2026-04-15T00:00:00Z" in output
+    assert "quota: gemini status=unsupported summary=no proactive quota check" in output
+    assert "daemon_status: running" in output
+    assert "daemon_pid: 4242" in output
+    assert "completed: T-0002 title=Completed first" in output
+    assert "completed: T-0003 title=Completed second" in output
+    assert "completed: T-0004 title=Completed third" in output
+    assert "Completed older" not in output
+
+
+def test_health_command_reports_unhealthy_workspace_and_exit_code(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ensure_workspace(tmp_path)
+    _init_git_repo(tmp_path)
+
+    flagged = create_task(tmp_path, title="Needs operator", auto_commit=False)
+    flagged.status = "flagged"
+    flagged.pipeline_status = "implementing"
+    flagged.flag_reason = "retry_limit_exhausted"
+    flagged.runtime.last_stage = RuntimeStageState(
+        step="testing",
+        verdict="reject",
+        summary="tests failing",
+    )
+    save_task(tmp_path, flagged)
+
+    stale = create_task(tmp_path, title="Missing worktree", auto_commit=False)
+    stale.git.worktree_path = ".litehive/worktrees/missing-worktree"
+    save_task(tmp_path, stale)
+
+    monkeypatch.setattr(
+        "litehive.cli.health.check_codex_quota",
+        lambda: SimpleNamespace(
+            error=None,
+            limit_reached=True,
+            primary_window=SimpleNamespace(used_percent=95.0),
+            secondary_window=SimpleNamespace(used_percent=40.0),
+            earliest_reset_at="2026-04-10T05:00:00Z",
+        ),
+    )
+    monkeypatch.setattr(
+        "litehive.cli.health.check_claude_quota",
+        lambda: SimpleNamespace(
+            error=None,
+            limit_reached=False,
+            five_hour=SimpleNamespace(used_percent=10.0, reset_at="2026-04-09T04:00:00Z"),
+            seven_day=SimpleNamespace(used_percent=20.0, reset_at="2026-04-12T00:00:00Z"),
+        ),
+    )
+    monkeypatch.setattr(
+        "litehive.cli.health.check_copilot_quota",
+        lambda: SimpleNamespace(
+            error=None,
+            limit_reached=False,
+            used_percent=15.0,
+            premium_remaining=85,
+            premium_entitlement=100,
+            quota_reset_date="2026-04-10",
+        ),
+    )
+    monkeypatch.setattr(
+        "litehive.cli.health.check_zai_quota",
+        lambda: SimpleNamespace(
+            error=None,
+            limit_reached=False,
+            api_calls=SimpleNamespace(used_percent=10.0),
+            tokens=SimpleNamespace(used_percent=20.0),
+        ),
+    )
+    monkeypatch.setattr(
+        "litehive.cli.health.daemon_status_lines",
+        lambda workspace: [
+            f"workspace: {workspace.resolve()}",
+            "daemon_status: stopped",
+        ],
+    )
+
+    exit_code = _cmd_health(argparse.Namespace(workspace=tmp_path))
+    output = capsys.readouterr().out
+
+    assert exit_code == 1
+    assert "flagged_count: 1" in output
+    assert (
+        f"flagged: {flagged.id} stage=implementing reason=retry_limit_exhausted "
+        "last_verdict=reject summary=tests failing"
+    ) in output
+    assert "finding: location=task-worktree ownership=missing-recorded-worktree" in output
+    assert "path=.litehive/worktrees/missing-worktree" in output
+    assert "quota: codex status=warning summary=5h=95.0% weekly=40.0% reset=2026-04-10T05:00:00Z" in output
+    assert "daemon_status: stopped" in output
 
 def test_cmd_run_drains_task_pool_and_reports_summary(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch

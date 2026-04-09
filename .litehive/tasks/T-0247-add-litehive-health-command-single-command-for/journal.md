@@ -12,6 +12,9 @@ Execution started with engine `claude`.
 ## 2026-04-09T12:32:41+00:00
 Stage `grooming` switched from `claude` to `codex` after claude usage limit reached (7d window at 96%, resets 2026-04-10T09:00:00.828875+00:00).
 
+## 2026-04-09T12:35:06+00:00
+Task metadata updated via CLI.
+
 ## 2026-04-09T12:46:49+00:00
 Runner hook `before_pm_acceptance` failed: `uv run ruff check --select E402,F401 litehive tests`.
 - step: `accepting`

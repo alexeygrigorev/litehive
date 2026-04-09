@@ -25,6 +25,7 @@ from litehive.cli import (
     _cmd_close_task,
     _cmd_debug,
     _cmd_dirty_worktree_gate,
+    _cmd_health,
     _cmd_intake,
     _cmd_issue,
     _cmd_list,

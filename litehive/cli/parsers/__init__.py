@@ -12,6 +12,7 @@ from litehive.cli.parsers.github_import import (
     register_import_issue_parser,
     register_import_issues_parser,
 )
+from litehive.cli.parsers.health import register_health_parser
 from litehive.cli.parsers.intake import register_intake_parser
 from litehive.cli.parsers.issue import register_issue_parser
 from litehive.cli.parsers.list import register_list_parser
@@ -39,6 +40,7 @@ from litehive.cli.parsers.worktree import register_worktree_parser
 COMMAND_PARSER_BUILDERS = (
     register_configure_parser,
     register_status_parser,
+    register_health_parser,
     register_engine_parser,
     register_queue_parser,
     register_repair_parser,

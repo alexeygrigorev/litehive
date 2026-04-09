@@ -64,6 +64,15 @@ def test_engine_status_parser_accepts_optional_engine_name() -> None:
     assert args.workspace == Path("/tmp/demo")
 
 
+def test_health_parser_accepts_workspace_arg() -> None:
+    parser = build_parser()
+
+    args = parser.parse_args(["health", "--workspace", "/tmp/demo"])
+
+    assert args.command == "health"
+    assert args.workspace == Path("/tmp/demo")
+
+
 def _assert_engine_status_command_shows_all_monitored_engines(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
