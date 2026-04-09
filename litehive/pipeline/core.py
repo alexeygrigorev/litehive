@@ -628,8 +628,12 @@ class TaskExecutionRunner:
                         task,
                         f"Hook rejection routed `{current}` back to `implementing` for SWE follow-up.",
                     )
-                stage_count = task.runtime.stage_retry_counts.get(current, 0) + 1
-                task.runtime.stage_retry_counts[current] = stage_count
+                # Hook rejections go straight back to SWE — no stage escalation
+                if report.source != "hook":
+                    stage_count = task.runtime.stage_retry_counts.get(current, 0) + 1
+                    task.runtime.stage_retry_counts[current] = stage_count
+                else:
+                    stage_count = 0
                 effective_stage_limit = (
                     task.retry_policy.stage_retry_limit
                     if task.retry_policy.stage_retry_limit is not None

@@ -2,20 +2,20 @@ id: T-0255
 slug: unify-recovery-logic-into-single-pipeline
 title: Unify recovery logic into single pipeline/recovery/ package
 depends_on: []
-task_type: refactor
+task_type: null
 engine: null
 model: null
 mode: implementation
 pipeline_mode: full
-status: in_progress
+status: done
 flag_reason: null
 flag_count: 0
-pipeline_status: commit_to_git
+pipeline_status: done
 priority: medium
-pm_complexity: complex
-planned_effort: l
+pm_complexity: null
+planned_effort: null
 created_at: '2026-04-09T09:16:17+00:00'
-updated_at: '2026-04-09T16:43:57+00:00'
+updated_at: '2026-04-09T16:45:28+00:00'
 goal: 'Recovery is split between workspace/recovery.py (1037 lines, startup repair)
   and pipeline/_recovery.py (747 lines, execution recovery). Merge into pipeline/recovery/
   with clear separation: detection.py, workspace_repair.py, execution_recovery.py.'
@@ -24,24 +24,8 @@ acceptance_criteria:
 - workspace/recovery.py removed, functions moved to pipeline/recovery/
 - No function over 100 lines
 - All existing tests pass
-constraints:
-- Keep changes scoped to consolidating recovery code and preserving current recovery semantics.
-- Avoid user-visible workflow changes unless they are required to preserve the existing recovery contract.
-plan:
-- Inventory current recovery responsibilities, public entry points, and import sites
-  across litehive.workspace.recovery, litehive.pipeline._recovery, CLI/status callers,
-  queue ops, and tests.
-- Create litehive/pipeline/recovery/ with explicit module boundaries such as detection.py,
-  workspace_repair.py, and execution_recovery.py, plus package exports that preserve
-  the intended public API.
-- Move startup-repair and stale-runner reconciliation logic out of litehive.workspace.recovery
-  into the new package, update callers, and keep report/state behavior unchanged.
-- Move stage-recovery, commit-recovery, rollback, and recover logic out of litehive.pipeline._recovery
-  into the new package, update imports/tests, and remove the old modules once callers
-  are migrated or intentionally shimmed.
-- Break up oversized recovery helpers so each touched function is at most 100 lines,
-  then run the targeted recovery test suite followed by the full existing test suite
-  required by the task.
+constraints: []
+plan: []
 human_checkpoints: []
 subagents:
 - id: SA-0001
@@ -268,14 +252,21 @@ subagents:
   path: subagents/SA-0032-recovery
   sandboxed: false
   sandbox_summary: host
+- id: SA-0033
+  role: merge-resolver
+  engine: claude
+  status: completed
+  path: subagents/SA-0033-merge-resolver
+  sandboxed: false
+  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0255 unify-recovery-logic-into-single-pipeline'
-  commit_sha: null
-  checkpoint_base_sha: null
-  checkpoint_attempts: 0
+  commit_sha: a747dddebbcee0b54d708a3b490988ad65638788
+  checkpoint_base_sha: 042be1b6c24aeeca340a250573e87db9cd2de41a
+  checkpoint_attempts: 1
   rolled_back_checkpoint_attempt: null
-  merge_agent_attempts: 0
+  merge_agent_attempts: 1
   worktree_path: null
 retry_policy:
   max_retries: null

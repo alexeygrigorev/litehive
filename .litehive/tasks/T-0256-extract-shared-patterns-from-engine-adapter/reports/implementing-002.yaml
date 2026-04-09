@@ -1,0 +1,71 @@
+task_id: T-0256
+step: implementing
+verdict: pass
+source: agent
+summary: 'Refactored shared adapter plumbing into ExternalCLIAdapter helpers and provider-specific
+  helper modules. Added base helpers for transcript assembly, stage-report error fallback,
+  continuation extraction, and usage-observation finalization in litehive/agents/base.py;
+  moved provider-specific transcript/error/usage/live-event parsing into _claude_impl.py,
+  _codex_impl.py, _copilot_impl.py, _gemini_impl.py, _goz_impl.py, and _opencode_impl.py.
+  The six public adapter modules now stay under 200 lines each (claude 147, codex
+  110, copilot 91, gemini 101, goz 84, opencode 110), with an explicit regression
+  test in tests/test_engine_variants_and_timeline.py. Verified behavior with focused
+  regressions: uv run pytest tests/test_runner_workflow.py -q -k ''codex or gemini
+  or copilot or opencode'' (32 passed), uv run pytest tests/test_workspace_bootstrap.py
+  -q -k ''codex or gemini or claude or copilot or opencode'' (9 passed), uv run pytest
+  tests/test_engine_variants_and_timeline.py -q -k ''adapter or claude or goz or codex
+  or gemini or copilot or opencode'' (36 passed). Also ran uv run ruff check --select
+  E402,F401 litehive tests (passed). This preserves existing observable transcript
+  rendering, stage-report fallback behavior, continuation capture, and shared generic
+  limit classification while reducing duplication.'
+feedback: 'Refactored shared adapter plumbing into ExternalCLIAdapter helpers and
+  provider-specific helper modules. Added base helpers for transcript assembly, stage-report
+  error fallback, continuation extraction, and usage-observation finalization in litehive/agents/base.py;
+  moved provider-specific transcript/error/usage/live-event parsing into _claude_impl.py,
+  _codex_impl.py, _copilot_impl.py, _gemini_impl.py, _goz_impl.py, and _opencode_impl.py.
+  The six public adapter modules now stay under 200 lines each (claude 147, codex
+  110, copilot 91, gemini 101, goz 84, opencode 110), with an explicit regression
+  test in tests/test_engine_variants_and_timeline.py. Verified behavior with focused
+  regressions: uv run pytest tests/test_runner_workflow.py -q -k ''codex or gemini
+  or copilot or opencode'' (32 passed), uv run pytest tests/test_workspace_bootstrap.py
+  -q -k ''codex or gemini or claude or copilot or opencode'' (9 passed), uv run pytest
+  tests/test_engine_variants_and_timeline.py -q -k ''adapter or claude or goz or codex
+  or gemini or copilot or opencode'' (36 passed). Also ran uv run ruff check --select
+  E402,F401 litehive tests (passed). This preserves existing observable transcript
+  rendering, stage-report fallback behavior, continuation capture, and shared generic
+  limit classification while reducing duplication.'
+submitted_via_cli: true
+files_changed:
+- litehive/agents/adapters/_claude_impl.py
+- litehive/agents/adapters/_codex_impl.py
+- litehive/agents/adapters/_copilot_impl.py
+- litehive/agents/adapters/_gemini_impl.py
+- litehive/agents/adapters/_goz_impl.py
+- litehive/agents/adapters/_opencode_impl.py
+- litehive/agents/adapters/claude.py
+- litehive/agents/adapters/codex.py
+- litehive/agents/adapters/copilot.py
+- litehive/agents/adapters/gemini.py
+- litehive/agents/adapters/goz.py
+- litehive/agents/adapters/opencode.py
+- litehive/agents/base.py
+- tests/test_engine_variants_and_timeline.py
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 680
+hook_results: []
+created_at: '2026-04-09T16:59:31+00:00'

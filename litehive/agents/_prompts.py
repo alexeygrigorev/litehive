@@ -89,7 +89,12 @@ def stage_prompt(
         )
     hook_summary = _runner_hook_prompt_lines(step, config)
     if hook_summary:
-        lines.extend(["", "Runner hooks:", *hook_summary])
+        lines.extend([
+            "",
+            "Runner hooks:",
+            *hook_summary,
+            "- IMPORTANT: If any hook fails, your work will be rejected and you will need to fix it. Run these checks yourself before finishing.",
+        ])
     lines.extend(
         [
             "",
