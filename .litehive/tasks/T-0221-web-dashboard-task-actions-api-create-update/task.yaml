@@ -8,14 +8,14 @@ engine: null
 model: null
 mode: implementation
 pipeline_mode: full
-status: queued
+status: in_progress
 flag_reason: null
-pipeline_status: implementing
+pipeline_status: commit_to_git
 priority: high
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-08T06:04:50+00:00'
-updated_at: '2026-04-09T00:34:04+00:00'
+updated_at: '2026-04-09T01:14:39+00:00'
 goal: 'Add POST endpoints to the web dashboard for task mutation operations: create
   task, update task properties, close task (with outcome), requeue task, abandon task,
   and stop active task. Each endpoint should call the same underlying functions as
@@ -91,6 +91,27 @@ subagents:
   engine: codex
   status: completed
   path: subagents/SA-0008-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0009
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0009-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0010
+  role: qa
+  engine: codex
+  status: completed
+  path: subagents/SA-0010-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0011
+  role: reviewer
+  engine: codex
+  status: completed
+  path: subagents/SA-0011-reviewer
   sandboxed: false
   sandbox_summary: host
 git:

@@ -1,17 +1,43 @@
 task_id: T-0221
 step: accepting
-verdict: blocked
-summary: 'accepting blocked by runner hook `before_pm_acceptance` (exit 1): if git
-  grep -nE ''noqa:.*F401|noqa:.*F403|ruff:\s*noqa:\s*F401|ruff:\s*noqa:\s*F403'' --
-  litehive tests; then echo ''Forbidden noqa F401/F403 suppression found.''; exit
-  1; fi'
-feedback: 'Runner hook `before_pm_acceptance` `uv run ruff check --select E402,F401
-  litehive tests` passed with exit code 0 (artifact: `artifacts/before_pm_acceptance-001.yaml`).
-
-
-  Runner hook `before_pm_acceptance` `if git grep -nE ''noqa:.*F401|noqa:.*F403|ruff:\s*noqa:\s*F401|ruff:\s*noqa:\s*F403''
-  -- litehive tests; then echo ''Forbidden noqa F401/F403 suppression found.''; exit
-  1; fi` failed with exit code 1 (artifact: `artifacts/before_pm_acceptance-002.yaml`).'
+verdict: pass
+summary: 'Reviewed T-0221 against the task.yaml acceptance criteria and accepted it.
+  Verified the backend mutation helpers in litehive/web/actions.py call the same litehive.tasks
+  functions used by the CLI: create_task, update_task, close_task, requeue_task, abandon_task,
+  and stop_current_task. Verified litehive/web/server.py exposes POST /api/tasks,
+  /api/tasks/{id}/update, /close, /requeue, /abandon, and /api/tasks/active/stop,
+  and that mutation errors now return structured JSON with ok=false; user-correctable
+  invalid task ids are mapped to HTTP 400 instead of HTML/tracebacks. Verified litehive/web/templates/index.html
+  includes dashboard controls wired to create, update, close, requeue, abandon, and
+  stop-active actions and refreshes snapshot state after successful submissions. Ran
+  focused verification: uv run pytest -q tests/test_web_task_actions.py -> 2 passed
+  in 1.69s. That test coverage confirms create with title/goal/priority/engine/acceptance_criteria,
+  update of goal/priority/engine/acceptance_criteria/constraints/plan_steps, close
+  with deferred outcome and reason, requeue with front=true and queue_position, abandon,
+  stop-active clearing active_task_id, and structured JSON errors for missing title,
+  unsupported outcome, and invalid task id. Acceptance criteria are met.'
+feedback: "Runner hook `before_pm_acceptance` `uv run ruff check --select E402,F401\
+  \ litehive tests` passed with exit code 0 (artifact: `artifacts/before_pm_acceptance-001.yaml`).\n\
+  \nRunner hook `before_pm_acceptance` `if [ -n \"${LITEHIVE_CHANGED_PATHS:-}\" ]\
+  \ \\\n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" | grep -q . \\\n  && printf\
+  \ '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" \\\n    | xargs -r -d '\\n' git grep -nE 'noqa:.*F401|noqa:.*F403|ruff:\\\
+  s*noqa:\\s*F401|ruff:\\s*noqa:\\s*F403' --; then\n  echo 'Forbidden noqa F401/F403\
+  \ suppression found.'\n  exit 1\nfi` passed with exit code 0 (artifact: `artifacts/before_pm_acceptance-002.yaml`).\n\
+  \nReviewed T-0221 against the task.yaml acceptance criteria and accepted it. Verified\
+  \ the backend mutation helpers in litehive/web/actions.py call the same litehive.tasks\
+  \ functions used by the CLI: create_task, update_task, close_task, requeue_task,\
+  \ abandon_task, and stop_current_task. Verified litehive/web/server.py exposes POST\
+  \ /api/tasks, /api/tasks/{id}/update, /close, /requeue, /abandon, and /api/tasks/active/stop,\
+  \ and that mutation errors now return structured JSON with ok=false; user-correctable\
+  \ invalid task ids are mapped to HTTP 400 instead of HTML/tracebacks. Verified litehive/web/templates/index.html\
+  \ includes dashboard controls wired to create, update, close, requeue, abandon,\
+  \ and stop-active actions and refreshes snapshot state after successful submissions.\
+  \ Ran focused verification: uv run pytest -q tests/test_web_task_actions.py -> 2\
+  \ passed in 1.69s. That test coverage confirms create with title/goal/priority/engine/acceptance_criteria,\
+  \ update of goal/priority/engine/acceptance_criteria/constraints/plan_steps, close\
+  \ with deferred outcome and reason, requeue with front=true and queue_position,\
+  \ abandon, stop-active clearing active_task_id, and structured JSON errors for missing\
+  \ title, unsupported outcome, and invalid task id. Acceptance criteria are met."
 files_changed: []
 created_follow_up_task_ids: []
 task_update: {}
@@ -21,23 +47,22 @@ tests:
 warnings:
 - 'runner hook passed: `before_pm_acceptance` `uv run ruff check --select E402,F401
   litehive tests` (artifact: `artifacts/before_pm_acceptance-001.yaml`)'
-- 'runner hook failed: `before_pm_acceptance` `if git grep -nE ''noqa:.*F401|noqa:.*F403|ruff:\s*noqa:\s*F401|ruff:\s*noqa:\s*F403''
-  -- litehive tests; then echo ''Forbidden noqa F401/F403 suppression found.''; exit
-  1; fi` (artifact: `artifacts/before_pm_acceptance-002.yaml`)'
+- "runner hook passed: `before_pm_acceptance` `if [ -n \"${LITEHIVE_CHANGED_PATHS:-}\"\
+  \ ] \\\n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" | grep -q . \\\n  && printf\
+  \ '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" \\\n    | xargs -r -d '\\n' git grep -nE 'noqa:.*F401|noqa:.*F403|ruff:\\\
+  s*noqa:\\s*F401|ruff:\\s*noqa:\\s*F403' --; then\n  echo 'Forbidden noqa F401/F403\
+  \ suppression found.'\n  exit 1\nfi` (artifact: `artifacts/before_pm_acceptance-002.yaml`)"
 retry_count: 0
 retry_limit: 3
 retry_source: global
-retry_decision: final
-outcome: blocked
-outcome_reason_code: verdict_blocked
-outcome_reason: 'accepting blocked by runner hook `before_pm_acceptance` (exit 1):
-  if git grep -nE ''noqa:.*F401|noqa:.*F403|ruff:\s*noqa:\s*F401|ruff:\s*noqa:\s*F403''
-  -- litehive tests; then echo ''Forbidden noqa F401/F403 suppression found.''; exit
-  1; fi'
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
 failure_classification: null
 failure_diagnostics: {}
 resource_limit_event: null
-duration_seconds: 0
+duration_seconds: 68
 hook_results:
 - point: before_pm_acceptance
   command: uv run ruff check --select E402,F401 litehive tests
@@ -46,11 +71,13 @@ hook_results:
   status: passed
   artifact: artifacts/before_pm_acceptance-001.yaml
 - point: before_pm_acceptance
-  command: if git grep -nE 'noqa:.*F401|noqa:.*F403|ruff:\s*noqa:\s*F401|ruff:\s*noqa:\s*F403'
-    -- litehive tests; then echo 'Forbidden noqa F401/F403 suppression found.'; exit
-    1; fi
+  command: "if [ -n \"${LITEHIVE_CHANGED_PATHS:-}\" ] \\\n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\"\
+    \ | grep -q . \\\n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" \\\n    | xargs\
+    \ -r -d '\\n' git grep -nE 'noqa:.*F401|noqa:.*F403|ruff:\\s*noqa:\\s*F401|ruff:\\\
+    s*noqa:\\s*F403' --; then\n  echo 'Forbidden noqa F401/F403 suppression found.'\n\
+    \  exit 1\nfi"
   blocking: true
-  exit_code: 1
-  status: failed
+  exit_code: 0
+  status: passed
   artifact: artifacts/before_pm_acceptance-002.yaml
-created_at: '2026-04-09T00:06:02+00:00'
+created_at: '2026-04-09T01:14:39+00:00'

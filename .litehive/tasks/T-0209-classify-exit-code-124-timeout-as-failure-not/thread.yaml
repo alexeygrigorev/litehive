@@ -23,3 +23,26 @@
     submission itself.'
   files_changed: []
   created_at: '2026-04-08T23:37:41+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Updated parse_stage_report_text so missing CLI submissions stay fail and
+    failed subagents with no submission summarize as ''<step> failed without verdict''
+    instead of looking completed. Verified failed agents cannot produce pass unless
+    they explicitly submit a structured litehive report CLI payload. Tests run: uv
+    run pytest tests/test_stage_result_submission.py -q and uv run pytest tests/test_runner_workflow.py
+    -q -k ''parse_stage_report_text or stage_report_from_subagent_fails_without_cli_verdict''
+    (both passing). Evidence: failed/no-submission path returns verdict=fail; structured
+    pass from subagent_status=failed is downgraded to fail; text-only VERDICT: PASS
+    transcripts still fail.'
+  files_changed: []
+  created_at: '2026-04-09T01:07:14+00:00'
+- role: swe
+  step: implementing
+  verdict: fail
+  message: Implementation stage was not completed in the prior session, so I cannot
+    honestly mark it as pass. Submitting fail to accurately reflect the incomplete
+    state and unblock workflow recovery. No additional code changes are included with
+    this report.
+  files_changed: []
+  created_at: '2026-04-09T01:07:30+00:00'

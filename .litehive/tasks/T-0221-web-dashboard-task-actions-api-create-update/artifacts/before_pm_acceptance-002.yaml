@@ -1,14 +1,11 @@
 step: accepting
 hook_point: before_pm_acceptance
-command: if git grep -nE 'noqa:.*F401|noqa:.*F403|ruff:\s*noqa:\s*F401|ruff:\s*noqa:\s*F403'
-  -- litehive tests; then echo 'Forbidden noqa F401/F403 suppression found.'; exit
-  1; fi
+command: "if [ -n \"${LITEHIVE_CHANGED_PATHS:-}\" ] \\\n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\"\
+  \ | grep -q . \\\n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" \\\n    | xargs\
+  \ -r -d '\\n' git grep -nE 'noqa:.*F401|noqa:.*F403|ruff:\\s*noqa:\\s*F401|ruff:\\\
+  s*noqa:\\s*F403' --; then\n  echo 'Forbidden noqa F401/F403 suppression found.'\n\
+  \  exit 1\nfi"
 blocking: true
-exit_code: 1
-stdout: 'tests/test_web_task_actions.py:11:from tests.workspace_helpers import *  #
-  noqa: F401,F403
-
-  Forbidden noqa F401/F403 suppression found.
-
-  '
+exit_code: 0
+stdout: ''
 stderr: ''

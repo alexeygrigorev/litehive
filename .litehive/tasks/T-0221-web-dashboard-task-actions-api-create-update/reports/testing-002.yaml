@@ -1,34 +1,38 @@
 task_id: T-0221
 step: testing
 verdict: pass
-summary: 'Verified the web dashboard task-mutation surface end to end with focused
-  HTTP tests and code inspection. Ran: uv run pytest -q tests/test_web_task_actions.py
-  -> 2 passed in 1.67s. Evidence from the passing tests: POST /api/tasks creates a
-  task from title plus optional goal/priority/engine/acceptance_criteria and returns
-  JSON with ok=true and task_id; POST /api/tasks/{id}/update updates goal/priority/engine/acceptance_criteria/constraints/plan_steps;
-  POST /api/tasks/{id}/close records a deferred outcome and reason; POST /api/tasks/{id}/requeue
+summary: 'Verified the web dashboard task-mutation surface with focused HTTP tests
+  and code inspection. Ran: uv run pytest -q tests/test_web_task_actions.py -> 2 passed
+  in 1.75s. Evidence from the passing tests: POST /api/tasks creates a task from title
+  plus optional goal/priority/engine/acceptance_criteria and returns JSON with ok=true,
+  task_id, and serialized task data; POST /api/tasks/{id}/update updates goal/priority/engine/acceptance_criteria/constraints/plan_steps;
+  POST /api/tasks/{id}/close records the deferred outcome and reason; POST /api/tasks/{id}/requeue
   accepts front=true and returns queue_position; POST /api/tasks/{id}/abandon cancels
   the task; POST /api/tasks/active/stop parks the active task and clears active_task_id.
-  Error handling is also covered: missing title, unsupported close outcome, and invalid
-  task id all return structured JSON errors instead of HTML. Code inspection confirmed
+  Error handling is covered for missing title, unsupported close outcome, and invalid
+  task id, all returning structured JSON errors instead of HTML. Code inspection confirmed
   litehive/web/actions.py routes these endpoints through the same litehive.tasks helpers
   used by the CLI (create_task, update_task, close_task, requeue_task, abandon_task,
-  stop_current_task), litehive/web/server.py wraps mutation errors into JSON responses,
-  and litehive/web/templates/index.html includes UI controls wired to the new endpoints.'
-feedback: 'Verified the web dashboard task-mutation surface end to end with focused
-  HTTP tests and code inspection. Ran: uv run pytest -q tests/test_web_task_actions.py
-  -> 2 passed in 1.67s. Evidence from the passing tests: POST /api/tasks creates a
-  task from title plus optional goal/priority/engine/acceptance_criteria and returns
-  JSON with ok=true and task_id; POST /api/tasks/{id}/update updates goal/priority/engine/acceptance_criteria/constraints/plan_steps;
-  POST /api/tasks/{id}/close records a deferred outcome and reason; POST /api/tasks/{id}/requeue
+  stop_current_task), litehive/web/server.py wraps mutation errors into JSON responses
+  with bad user-correctable task ids mapped to HTTP 400, and litehive/web/templates/index.html
+  includes UI controls wired to the create/update/close/requeue/abandon/stop-active
+  endpoints with snapshot refresh after success.'
+feedback: 'Verified the web dashboard task-mutation surface with focused HTTP tests
+  and code inspection. Ran: uv run pytest -q tests/test_web_task_actions.py -> 2 passed
+  in 1.75s. Evidence from the passing tests: POST /api/tasks creates a task from title
+  plus optional goal/priority/engine/acceptance_criteria and returns JSON with ok=true,
+  task_id, and serialized task data; POST /api/tasks/{id}/update updates goal/priority/engine/acceptance_criteria/constraints/plan_steps;
+  POST /api/tasks/{id}/close records the deferred outcome and reason; POST /api/tasks/{id}/requeue
   accepts front=true and returns queue_position; POST /api/tasks/{id}/abandon cancels
   the task; POST /api/tasks/active/stop parks the active task and clears active_task_id.
-  Error handling is also covered: missing title, unsupported close outcome, and invalid
-  task id all return structured JSON errors instead of HTML. Code inspection confirmed
+  Error handling is covered for missing title, unsupported close outcome, and invalid
+  task id, all returning structured JSON errors instead of HTML. Code inspection confirmed
   litehive/web/actions.py routes these endpoints through the same litehive.tasks helpers
   used by the CLI (create_task, update_task, close_task, requeue_task, abandon_task,
-  stop_current_task), litehive/web/server.py wraps mutation errors into JSON responses,
-  and litehive/web/templates/index.html includes UI controls wired to the new endpoints.'
+  stop_current_task), litehive/web/server.py wraps mutation errors into JSON responses
+  with bad user-correctable task ids mapped to HTTP 400, and litehive/web/templates/index.html
+  includes UI controls wired to the create/update/close/requeue/abandon/stop-active
+  endpoints with snapshot refresh after success.'
 files_changed: []
 created_follow_up_task_ids: []
 task_update: {}
@@ -46,6 +50,6 @@ outcome_reason: ''
 failure_classification: null
 failure_diagnostics: {}
 resource_limit_event: null
-duration_seconds: 57
+duration_seconds: 52
 hook_results: []
-created_at: '2026-04-09T00:06:02+00:00'
+created_at: '2026-04-09T01:13:31+00:00'

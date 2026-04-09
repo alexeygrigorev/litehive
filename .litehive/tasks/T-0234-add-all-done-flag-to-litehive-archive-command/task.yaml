@@ -2,19 +2,19 @@ id: T-0234
 slug: add-all-done-flag-to-litehive-archive-command
 title: Add --all-done flag to litehive archive command
 depends_on: []
-task_type: bugfix
+task_type: null
 engine: null
 model: null
 mode: implementation
 pipeline_mode: full
-status: in_progress
+status: done
 flag_reason: null
-pipeline_status: commit_to_git
+pipeline_status: done
 priority: medium
-pm_complexity: simple
-planned_effort: s
+pm_complexity: null
+planned_effort: null
 created_at: '2026-04-08T07:48:05+00:00'
-updated_at: '2026-04-09T01:05:56+00:00'
+updated_at: '2026-04-09T01:05:58+00:00'
 goal: litehive archive without args currently tries to archive all done tasks but
   fails on missing references. Add explicit --all-done flag for bulk archival that
   skips missing/broken tasks gracefully. Without --all-done or a task_id, show usage
@@ -25,15 +25,7 @@ acceptance_criteria:
 - litehive archive with no args shows help instead of bulk archiving
 - Missing task references during bulk archive are logged and skipped, not fatal
 constraints: []
-plan:
-- Add explicit --all-done flag to the archive parser and update help text so bulk
-  archive is opt-in.
-- Update archive command dispatch so task_id archives one task, --all-done performs
-  bulk archive, and no args prints parser help with a non-success exit.
-- Make bulk archive tolerate missing or broken done-task references by logging each
-  skipped task and continuing.
-- Revise archive CLI tests to cover single-task mode, explicit bulk mode, no-arg help
-  behavior, and skip logging for broken references.
+plan: []
 human_checkpoints: []
 subagents:
 - id: SA-0001
@@ -102,9 +94,9 @@ subagents:
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0234 add-all-done-flag-to-litehive-archive-command'
-  commit_sha: null
-  checkpoint_base_sha: null
-  checkpoint_attempts: 0
+  commit_sha: 2a34bc489a8f37abd4c6c1c974ca390f99685ccc
+  checkpoint_base_sha: 3114875f192700909a7dbbc98bffb8fb704f4fef
+  checkpoint_attempts: 1
   rolled_back_checkpoint_attempt: null
   merge_agent_attempts: 1
   worktree_path: null

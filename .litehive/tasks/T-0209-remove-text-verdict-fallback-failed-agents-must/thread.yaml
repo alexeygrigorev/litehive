@@ -22,3 +22,14 @@
     report: .litehive/tasks/T-0209-remove-text-verdict-fallback-failed-agents-must/recovery/recovery-002.yaml'
   files_changed: []
   created_at: '2026-04-08T23:35:40+00:00'
+- role: recovery
+  step: implementing
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0209-remove-text-verdict-fallback-failed-agents-must/recovery/recovery-003.yaml'
+  files_changed: []
+  created_at: '2026-04-09T01:06:11+00:00'

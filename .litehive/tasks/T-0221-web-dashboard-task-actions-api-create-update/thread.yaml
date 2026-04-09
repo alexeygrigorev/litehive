@@ -74,3 +74,66 @@
     and litehive/web/templates/index.html includes UI controls wired to the new endpoints.'
   files_changed: []
   created_at: '2026-04-09T00:05:54+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Verified the web dashboard task-mutation implementation is complete for
+    create, update, close, requeue, abandon, and stop-active. Confirmed the backend
+    mutation helpers in litehive/web/actions.py call the same litehive.tasks helpers
+    used by the CLI (create_task, update_task, close_task, requeue_task, abandon_task,
+    stop_current_task), the POST routes are wired in litehive/web/server.py, and the
+    dashboard UI in litehive/web/templates/index.html posts to the new endpoints for
+    create/update/close/requeue/abandon/stop-active. Re-ran focused verification with
+    uv run pytest -q tests/test_web_task_actions.py and it passed: 2 passed in 1.70s.
+    That test file covers success cases for POST /api/tasks, /api/tasks/{id}/update,
+    /api/tasks/{id}/close, /api/tasks/{id}/requeue with front=true, /api/tasks/{id}/abandon,
+    and /api/tasks/active/stop, plus structured JSON error handling for missing title,
+    unsupported close outcome, and invalid task id. Current local diff in litehive/web/server.py
+    ensures mutation errors return {ok:false,error:...} JSON and maps invalid task-id
+    mutation requests to HTTP 400 instead of HTML/tracebacks, matching the acceptance
+    criteria for structured user-correctable error responses.'
+  files_changed: []
+  created_at: '2026-04-09T01:12:29+00:00'
+- role: qa
+  step: testing
+  verdict: pass
+  message: 'Verified the web dashboard task-mutation surface with focused HTTP tests
+    and code inspection. Ran: uv run pytest -q tests/test_web_task_actions.py -> 2
+    passed in 1.75s. Evidence from the passing tests: POST /api/tasks creates a task
+    from title plus optional goal/priority/engine/acceptance_criteria and returns
+    JSON with ok=true, task_id, and serialized task data; POST /api/tasks/{id}/update
+    updates goal/priority/engine/acceptance_criteria/constraints/plan_steps; POST
+    /api/tasks/{id}/close records the deferred outcome and reason; POST /api/tasks/{id}/requeue
+    accepts front=true and returns queue_position; POST /api/tasks/{id}/abandon cancels
+    the task; POST /api/tasks/active/stop parks the active task and clears active_task_id.
+    Error handling is covered for missing title, unsupported close outcome, and invalid
+    task id, all returning structured JSON errors instead of HTML. Code inspection
+    confirmed litehive/web/actions.py routes these endpoints through the same litehive.tasks
+    helpers used by the CLI (create_task, update_task, close_task, requeue_task, abandon_task,
+    stop_current_task), litehive/web/server.py wraps mutation errors into JSON responses
+    with bad user-correctable task ids mapped to HTTP 400, and litehive/web/templates/index.html
+    includes UI controls wired to the create/update/close/requeue/abandon/stop-active
+    endpoints with snapshot refresh after success.'
+  files_changed: []
+  created_at: '2026-04-09T01:13:23+00:00'
+- role: reviewer
+  step: accepting
+  verdict: pass
+  message: 'Reviewed T-0221 against the task.yaml acceptance criteria and accepted
+    it. Verified the backend mutation helpers in litehive/web/actions.py call the
+    same litehive.tasks functions used by the CLI: create_task, update_task, close_task,
+    requeue_task, abandon_task, and stop_current_task. Verified litehive/web/server.py
+    exposes POST /api/tasks, /api/tasks/{id}/update, /close, /requeue, /abandon, and
+    /api/tasks/active/stop, and that mutation errors now return structured JSON with
+    ok=false; user-correctable invalid task ids are mapped to HTTP 400 instead of
+    HTML/tracebacks. Verified litehive/web/templates/index.html includes dashboard
+    controls wired to create, update, close, requeue, abandon, and stop-active actions
+    and refreshes snapshot state after successful submissions. Ran focused verification:
+    uv run pytest -q tests/test_web_task_actions.py -> 2 passed in 1.69s. That test
+    coverage confirms create with title/goal/priority/engine/acceptance_criteria,
+    update of goal/priority/engine/acceptance_criteria/constraints/plan_steps, close
+    with deferred outcome and reason, requeue with front=true and queue_position,
+    abandon, stop-active clearing active_task_id, and structured JSON errors for missing
+    title, unsupported outcome, and invalid task id. Acceptance criteria are met.'
+  files_changed: []
+  created_at: '2026-04-09T01:14:33+00:00'
