@@ -1,0 +1,49 @@
+task_id: T-0250
+step: implementing
+verdict: pass
+source: agent
+summary: 'Normalized engine status live-quota rendering in litehive/cli/engine.py
+  so quota output no longer depends on monitoring records. All-engines status now
+  always prints a live quota section for claude/codex/copilot/goz/opencode even when
+  monitoring is empty, and single-engine status still exits 0 and prints quota for
+  claude, codex, copilot, opencode, and goz even when that engine has no monitoring
+  data. Added fail-open handling around quota fetches so unexpected quota checker
+  exceptions render as quota: unavailable instead of crashing. Verified with uv run
+  pytest tests/test_config_and_run_cli.py -q (64 passed). New coverage exercises codex
+  5h/weekly output, claude 5h/7d output and reset times, copilot remaining/entitlement
+  and reset date, Z.AI api-call/token percentages for opencode, aggregate live-quota
+  rendering, and graceful unavailable output on quota errors.'
+feedback: 'Normalized engine status live-quota rendering in litehive/cli/engine.py
+  so quota output no longer depends on monitoring records. All-engines status now
+  always prints a live quota section for claude/codex/copilot/goz/opencode even when
+  monitoring is empty, and single-engine status still exits 0 and prints quota for
+  claude, codex, copilot, opencode, and goz even when that engine has no monitoring
+  data. Added fail-open handling around quota fetches so unexpected quota checker
+  exceptions render as quota: unavailable instead of crashing. Verified with uv run
+  pytest tests/test_config_and_run_cli.py -q (64 passed). New coverage exercises codex
+  5h/weekly output, claude 5h/7d output and reset times, copilot remaining/entitlement
+  and reset date, Z.AI api-call/token percentages for opencode, aggregate live-quota
+  rendering, and graceful unavailable output on quota errors.'
+submitted_via_cli: true
+files_changed:
+- litehive/cli/engine.py
+- tests/test_config_and_run_cli.py
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 210
+hook_results: []
+created_at: '2026-04-09T13:46:54+00:00'
