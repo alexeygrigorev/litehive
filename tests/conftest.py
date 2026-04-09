@@ -37,10 +37,13 @@ def _neutralize_codex_quota(request, monkeypatch):
         except (ImportError, AttributeError):
             pass
         try:
-            import litehive.runtime._builder as builder_mod
+            import litehive.pipeline._builder as builder_mod
 
             monkeypatch.setattr(builder_mod, "codex_quota_block_reason", _noop_block_reason)
             monkeypatch.setattr(builder_mod, "check_codex_quota", _noop_check_quota)
+            monkeypatch.setattr(builder_mod, "claude_quota_block_reason", _noop_block_reason)
+            monkeypatch.setattr(builder_mod, "copilot_quota_block_reason", _noop_block_reason)
+            monkeypatch.setattr(builder_mod, "zai_quota_block_reason", _noop_block_reason)
         except (ImportError, AttributeError):
             pass
     yield
