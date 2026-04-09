@@ -12,6 +12,9 @@ Execution started with engine `claude`.
 ## 2026-04-09T16:45:52+00:00
 Stage `grooming` switched from `claude` to `codex` after claude usage limit reached (7d window at 96%, resets 2026-04-10T09:00:00.789122+00:00).
 
+## 2026-04-09T16:47:42+00:00
+Task metadata updated via CLI.
+
 ## 2026-04-09T17:01:21+00:00
 Execution finished with status `queued`.
 
@@ -42,3 +45,6 @@ fi`.
 - description: `-`
 - exit_code: `0`
 - artifact: `artifacts/before_pm_acceptance-002.yaml`
+
+## 2026-04-09T17:13:05+00:00
+Merge conflict on 2 file(s). Launching merge agent (attempt 1).

@@ -64,6 +64,12 @@ def test_adapters_package_does_not_export_private_adapter_internals() -> None:
     assert not hasattr(adapters, "_goz_live_events")
 
 
+def test_provider_adapter_modules_stay_under_200_lines() -> None:
+    adapter_dir = Path(__file__).resolve().parents[1] / "litehive" / "agents" / "adapters"
+    for name in ("claude.py", "codex.py", "copilot.py", "gemini.py", "goz.py", "opencode.py"):
+        assert len((adapter_dir / name).read_text(encoding="utf-8").splitlines()) < 200
+
+
 def test_claude_build_invocation_includes_model_and_resume(tmp_path: Path) -> None:
     from litehive.agents import ClaudeCLIAdapter
 

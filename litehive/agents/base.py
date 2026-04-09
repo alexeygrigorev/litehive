@@ -17,6 +17,7 @@ from pydantic import ValidationError
 
 from litehive.models import (
     EngineUsageObservation,
+    EngineUsageWindow,
     LiveEvent,
     LiveTimeline,
     RuntimeEngineContinuation,
@@ -386,6 +387,76 @@ class ExternalCLIAdapter:
     def render_transcript(self, execution: CLIExecutionResult) -> str:
         return execution.transcript
 
+    def render_transcript_from_parts(
+        self,
+        execution: CLIExecutionResult,
+        *,
+        assistant_text: str,
+        error_text: str = "",
+        empty_on_parsed_payloads: bool = False,
+    ) -> str:
+        if assistant_text or error_text:
+            parts = [part for part in (assistant_text, error_text) if part]
+            if execution.stderr.strip():
+                parts.append(f"[stderr]\n{execution.stderr.strip()}")
+            return "\n\n".join(parts)
+        if empty_on_parsed_payloads and iter_jsonl_payloads(execution.stdout):
+            return f"[stderr]\n{execution.stderr.strip()}" if execution.stderr.strip() else ""
+        return execution.transcript
+
+    def parse_stage_report_with_error_fallback(
+        self,
+        *,
+        task_id: str,
+        step: Literal["grooming", "implementing", "testing", "accepting"],
+        execution: CLIExecutionResult,
+        subagent_status: SubagentStatus,
+        transcript: str,
+        fallback_errors: list[str],
+        fallback_when_default_transcript: bool = True,
+    ) -> StageReport:
+        if fallback_when_default_transcript and transcript == execution.transcript and fallback_errors:
+            transcript = "\n".join(fallback_errors)
+        elif not fallback_when_default_transcript and not transcript and fallback_errors:
+            transcript = "\n".join(fallback_errors)
+        return parse_stage_report_text(
+            task_id=task_id,
+            step=step,
+            transcript=transcript,
+            subagent_status=subagent_status,
+        )
+
+    def usage_observation_from_scan(
+        self,
+        execution: CLIExecutionResult,
+        *,
+        provider: str,
+        usage: EngineUsageWindow | None,
+        limit_reason: str | None,
+        metadata: dict[str, str | int | bool | None],
+        saw_payloads: bool,
+        require_payloads: bool = False,
+        stderr_limit_extractor: Callable[
+            [str, dict[str, str | int | bool | None]],
+            str | None,
+        ]
+        | None = None,
+    ) -> EngineUsageObservation | None:
+        if limit_reason is None and execution.stderr.strip() and stderr_limit_extractor is not None:
+            limit_reason = stderr_limit_extractor(execution.stderr, metadata)
+        if require_payloads and not saw_payloads:
+            return None
+        if usage is None and limit_reason is None and not metadata:
+            return None
+        return EngineUsageObservation(
+            source="provider" if saw_payloads else "local",
+            provider=provider,
+            success=execution.exit_code == 0,
+            limit_reason=limit_reason,
+            usage=usage,
+            metadata=metadata,
+        )
+
     def extract_usage_observation(
         self,
         execution: CLIExecutionResult,
@@ -399,6 +470,19 @@ class ExternalCLIAdapter:
         self,
         execution: CLIExecutionResult | None,
     ) -> RuntimeEngineContinuation | None:
+        return None
+
+    def extract_continuation_from_payloads(
+        self,
+        execution: CLIExecutionResult | None,
+        extractor: Callable[[dict[str, object]], RuntimeEngineContinuation | None],
+    ) -> RuntimeEngineContinuation | None:
+        if execution is None or not execution.stdout.strip():
+            return None
+        for payload in iter_jsonl_payloads(execution.stdout):
+            continuation = extractor(payload)
+            if continuation is not None:
+                return continuation
         return None
 
 
