@@ -10,6 +10,7 @@ build/
 .DS_Store
 tmp_accept_t*/
 tmp-*/
+$tmpdir/
 
 # Litehive runtime artifacts (execution residue, not project state)
 .litehive/tasks/*/subagents/
