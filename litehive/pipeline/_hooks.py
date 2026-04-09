@@ -15,14 +15,19 @@ from litehive.tasks.persistence import _atomic_write_gzip_text, _atomic_write_te
 _COMPRESS_HOOK_ARTIFACT_MIN_BYTES = 4096
 
 _PRE_STAGE_HOOK_POINTS = {
-    "implementing": "before_swe_implementation",
-    "accepting": "before_pm_acceptance",
+    "grooming": "before_grooming",
+    "implementing": "before_implementing",
+    "testing": "before_testing",
+    "accepting": "before_accepting",
 }
 _POST_STAGE_HOOK_POINTS = {
-    "implementing": "after_swe_implementation",
+    "grooming": "after_grooming",
+    "implementing": "after_implementing",
+    "testing": "after_testing",
 }
 _POST_ACCEPT_VERDICTS = {"pass", "accept"}
-_POST_MERGE_HOOK_POINT = "after_merge"
+_POST_ACCEPT_HOOK_POINT = "after_accepting"
+_POST_MERGE_HOOK_POINT = "after_commit"
 
 
 def _collect_changed_hook_paths(execution_root: Path) -> list[str]:
@@ -109,14 +114,14 @@ def _run_runner_hooks_for_stage(
             step=step,
             hook_point=hook_point,
             command=hook.command,
-            blocking=hook.blocking,
+            blocking=hook.reject_on_failure,
             description=hook.description,
             ordinal=index,
         )
         if report is None:
             if collected_results is not None:
                 collected_results.append(hook_result)
-            if hook_result["status"] == "failed" and hook.blocking:
+            if hook_result["status"] == "failed" and hook.reject_on_failure:
                 blocking_results = list(collected_results or [hook_result])
                 return _hook_failure_report(
                     task,
@@ -131,7 +136,7 @@ def _run_runner_hooks_for_stage(
         report.feedback = "\n\n".join(
             part for part in [report.feedback, _runner_hook_feedback(hook_result)] if part
         ).strip()
-        if hook_result["status"] == "failed" and hook.blocking:
+        if hook_result["status"] == "failed" and hook.reject_on_failure:
             report.verdict = "reject"
             report.source = "hook"
             report.summary = _hook_failure_summary(step=step, hook_result=hook_result)
@@ -176,7 +181,7 @@ def _runner_hook_point(
         return _POST_STAGE_HOOK_POINTS.get(step)
     if phase == "after_accept" and step == "accepting" and report is not None:
         if report.verdict in _POST_ACCEPT_VERDICTS:
-            return "after_pm_acceptance"
+            return _POST_ACCEPT_HOOK_POINT
     if phase == "after_merge" and step == "commit_to_git" and report is not None:
         if report.verdict == "pass":
             return _POST_MERGE_HOOK_POINT

@@ -14,7 +14,6 @@ from litehive.config.constants import (
     VALID_RUNNER_HOOK_POINTS,
     VALID_SANDBOX_BACKENDS,
     VALID_SANDBOX_NETWORK_MODES,
-    _LEGACY_HOOK_POINT_MAP,
     VALID_SANDBOX_WORKSPACE_MODES,
 )
 from litehive.config.dataclasses import (
@@ -104,6 +103,7 @@ def _normalize_runner_hook_config(
     raw_hook: RunnerHookConfig | Mapping[str, object],
     *,
     field_name: str,
+    point: str,
 ) -> RunnerHookConfig:
     hook = (
         raw_hook if isinstance(raw_hook, RunnerHookConfig) else RunnerHookConfig(**dict(raw_hook))
@@ -113,6 +113,11 @@ def _normalize_runner_hook_config(
         raise ValueError(f"{field_name}.command must not be empty")
     if hook.description is not None:
         hook.description = hook.description.strip() or None
+    if hook.reject_on_failure and point not in REJECTABLE_HOOK_POINTS:
+        allowed = ", ".join(sorted(REJECTABLE_HOOK_POINTS))
+        raise ValueError(
+            f"{field_name}.reject_on_failure is only valid for: {allowed} (got {point})"
+        )
     return hook
 
 
@@ -131,6 +136,7 @@ def _normalize_runner_hooks(
             _normalize_runner_hook_config(
                 hook,
                 field_name=f"runner_hooks[{point}][{index}]",
+                point=point,
             )
             for index, hook in enumerate(hooks)
         ]

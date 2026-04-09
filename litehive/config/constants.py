@@ -24,12 +24,5 @@ VALID_RUNNER_HOOK_POINTS = frozenset(
     }
 )
 REJECTABLE_HOOK_POINTS = frozenset({"after_implementing", "after_testing"})
-_LEGACY_HOOK_POINT_MAP = {
-    "before_swe_implementation": "before_implementing",
-    "after_swe_implementation": "after_implementing",
-    "before_pm_acceptance": "before_accepting",
-    "after_pm_acceptance": "after_accepting",
-    "after_merge": "after_commit",
-}
 MODEL_FAMILY_RETRY_SELECTOR_PREFIX = "model_family:"
 ENGINE_CATEGORY_RETRY_SELECTOR_PREFIX = "engine_category:"
