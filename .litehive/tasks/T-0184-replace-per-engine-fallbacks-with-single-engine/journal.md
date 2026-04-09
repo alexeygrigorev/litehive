@@ -115,3 +115,9 @@ Execution started with engine `claude`.
 
 ## 2026-04-08T07:32:08+00:00
 Recovered interrupted `commit_to_git` attempt and requeued the task at `commit_to_git`.
+
+## 2026-04-09T07:05:22+00:00
+Created task worktree at `.litehive/worktrees/T-0184-replace-per-engine-fallbacks-with-single-engine`.
+
+## 2026-04-09T07:05:23+00:00
+Execution started with engine `claude`.
