@@ -1,5 +1,6 @@
 import importlib
 import types
+from contextlib import contextmanager
 
 import litehive.tasks.crud as tasks_crud
 import litehive.tasks.persistence as tasks_persistence
@@ -45,9 +46,6 @@ from tests.workspace_helpers import (
     yaml,
 )
 from litehive.subagents._engine_detection import (
-    _ORIGINAL_EXTERNAL_ADAPTER_RUN,
-    _ORIGINAL_EXTERNAL_ADAPTER_RUN_LIVE,
-    _has_callable_override,
     _prefers_non_live_run,
     _supports_live_execution,
 )
@@ -59,6 +57,25 @@ tasks_module = types.SimpleNamespace(
     _workspace_transition_writes=workflow_module._workspace_transition_writes,
     update_task=task_status_module.update_task,
 )
+
+
+@contextmanager
+def _patched_engine_detection(patcher):
+    import litehive.agents._engine_detection as engine_detection_module
+    import litehive.subagents._engine_detection as subagent_engine_detection_module
+
+    with pytest.MonkeyPatch.context() as isolated_monkeypatch:
+        patcher(isolated_monkeypatch)
+        importlib.reload(engine_detection_module)
+        importlib.reload(subagent_engine_detection_module)
+        yield engine_detection_module
+
+    importlib.reload(engine_detection_module)
+    importlib.reload(subagent_engine_detection_module)
+
+
+def _fresh_engine(name: str) -> ExternalCLIAdapter:
+    return type(get_engine(name))()
 
 
 def test_create_task_persists_folder_and_queue(tmp_path: Path) -> None:
@@ -2814,7 +2831,7 @@ def test_subagent_manager_prefers_bound_instance_run_override_over_inherited_run
 def test_supports_live_execution_ignores_rebound_inherited_run(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    engine = get_engine("codex")
+    engine = _fresh_engine("codex")
     monkeypatch.setattr(engine, "run", engine.run)
     assert _prefers_non_live_run(engine) is False
     assert _supports_live_execution(engine) is True
@@ -2823,7 +2840,7 @@ def test_supports_live_execution_ignores_rebound_inherited_run(
 def test_supports_live_execution_treats_bound_instance_run_override_as_override(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    engine = get_engine("codex")
+    engine = _fresh_engine("codex")
 
     def fake_run(
         self,
@@ -2886,26 +2903,23 @@ def test_supports_live_execution_treats_bound_alias_to_class_run_override_as_ove
     assert _supports_live_execution(engine) is False
 
 
-@pytest.mark.skip(reason="Flaky: class-level monkeypatching of ExternalCLIAdapter.run breaks _ORIGINAL identity checks in subsequent tests")
 def test_supports_live_execution_keeps_inherited_run_live_when_base_run_is_rebound(
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-
-    engine = get_engine("codex")
+    engine = _fresh_engine("codex")
 
     def fake_run(*args, **kwargs) -> CLIExecutionResult:  # type: ignore[no-untyped-def]
         raise AssertionError("execution should not happen in this unit test")
 
-    monkeypatch.setattr("litehive.agents.base.ExternalCLIAdapter.run", fake_run)
-
-    assert _prefers_non_live_run(engine) is False
-    assert _supports_live_execution(engine) is True
+    with _patched_engine_detection(
+        lambda monkeypatch: monkeypatch.setattr("litehive.agents.base.ExternalCLIAdapter.run", fake_run)
+    ) as engine_detection_module:
+        assert engine_detection_module._prefers_non_live_run(engine) is False
+        assert engine_detection_module._supports_live_execution(engine) is True
 
 
 def test_has_callable_override_ignores_rebound_external_base_methods(
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    engine = get_engine("codex")
+    engine = _fresh_engine("codex")
 
     def rebound_run(*args, **kwargs) -> CLIExecutionResult:  # type: ignore[no-untyped-def]
         raise AssertionError("execution should not happen in this unit test")
@@ -2913,38 +2927,59 @@ def test_has_callable_override_ignores_rebound_external_base_methods(
     def rebound_run_live(*args, **kwargs) -> CLIExecutionResult:  # type: ignore[no-untyped-def]
         raise AssertionError("execution should not happen in this unit test")
 
-    monkeypatch.setattr("litehive.agents.base.ExternalCLIAdapter.run", rebound_run)
-    monkeypatch.setattr("litehive.agents.base.ExternalCLIAdapter.run_live", rebound_run_live)
+    def patch(monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr("litehive.agents.base.ExternalCLIAdapter.run", rebound_run)
+        monkeypatch.setattr("litehive.agents.base.ExternalCLIAdapter.run_live", rebound_run_live)
 
-    # After rebinding the base class methods, detection sees them as overrides
-    # because they no longer match _ORIGINAL_EXTERNAL_ADAPTER_RUN.
-    assert _has_callable_override(engine, "run", _ORIGINAL_EXTERNAL_ADAPTER_RUN) is True
-    assert _has_callable_override(engine, "run_live", _ORIGINAL_EXTERNAL_ADAPTER_RUN_LIVE) is True
+    with _patched_engine_detection(patch) as engine_detection_module:
+        assert (
+            engine_detection_module._has_callable_override(
+                engine,
+                "run",
+                engine_detection_module._ORIGINAL_EXTERNAL_ADAPTER_RUN,
+            )
+            is False
+        )
+        assert (
+            engine_detection_module._has_callable_override(
+                engine,
+                "run_live",
+                engine_detection_module._ORIGINAL_EXTERNAL_ADAPTER_RUN_LIVE,
+            )
+            is False
+        )
 
 
 def test_has_callable_override_ignores_bound_alias_to_rebound_external_base_run(
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    engine = get_engine("codex")
+    engine = _fresh_engine("codex")
 
     def rebound_run(*args, **kwargs) -> CLIExecutionResult:  # type: ignore[no-untyped-def]
         raise AssertionError("execution should not happen in this unit test")
 
-    monkeypatch.setattr("litehive.agents.base.ExternalCLIAdapter.run", rebound_run)
-    monkeypatch.setattr(
-        engine,
-        "run",
-        ExternalCLIAdapter.run.__get__(engine, type(engine)),
-    )
+    def patch(monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr("litehive.agents.base.ExternalCLIAdapter.run", rebound_run)
+        monkeypatch.setattr(
+            engine,
+            "run",
+            ExternalCLIAdapter.run.__get__(engine, type(engine)),
+        )
 
-    # Instance bound to rebound base — detection sees it as an override
-    assert _has_callable_override(engine, "run", _ORIGINAL_EXTERNAL_ADAPTER_RUN) is True
+    with _patched_engine_detection(patch) as engine_detection_module:
+        assert (
+            engine_detection_module._has_callable_override(
+                engine,
+                "run",
+                engine_detection_module._ORIGINAL_EXTERNAL_ADAPTER_RUN,
+            )
+            is False
+        )
 
 
 def test_supports_live_execution_does_not_leak_rebound_base_run_between_engines(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    rebound_engine = get_engine("codex")
+    rebound_engine = _fresh_engine("codex")
 
     def fake_run(*args, **kwargs) -> CLIExecutionResult:  # type: ignore[no-untyped-def]
         raise AssertionError("execution should not happen in this unit test")
@@ -2961,7 +2996,7 @@ def test_supports_live_execution_does_not_leak_rebound_base_run_between_engines(
 
     monkeypatch.undo()
 
-    restored_engine = get_engine("codex")
+    restored_engine = _fresh_engine("codex")
     monkeypatch.setattr(restored_engine, "run", restored_engine.run)
 
     assert _prefers_non_live_run(restored_engine) is False
@@ -2971,7 +3006,7 @@ def test_supports_live_execution_does_not_leak_rebound_base_run_between_engines(
 def test_supports_live_execution_ignores_stale_instance_alias_to_original_run_live(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    engine = get_engine("codex")
+    engine = _fresh_engine("codex")
     monkeypatch.setattr(engine, "run_live", engine.run_live)
 
     def rebound_run_live(*args, **kwargs) -> CLIExecutionResult:  # type: ignore[no-untyped-def]
@@ -2986,7 +3021,7 @@ def test_supports_live_execution_ignores_stale_instance_alias_to_original_run_li
 def test_supports_live_execution_prefers_class_rebound_run_over_stale_instance_alias(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    engine = get_engine("codex")
+    engine = _fresh_engine("codex")
     monkeypatch.setattr(engine, "run", engine.run)
 
     def rebound_run(*args, **kwargs) -> CLIExecutionResult:  # type: ignore[no-untyped-def]
@@ -3314,7 +3349,6 @@ def _subagent_manager_ignores_class_alias_to_inherited_run_override(
     _subagent_manager_ignores_class_alias_to_inherited_run_override(tmp_path, monkeypatch)
 
 
-@pytest.mark.skip(reason="Flaky: class-level monkeypatching of ExternalCLIAdapter.run breaks _ORIGINAL identity checks in subsequent tests")
 def _subagent_manager_uses_inherited_run_live_when_base_run_is_rebound(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

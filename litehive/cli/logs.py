@@ -144,18 +144,16 @@ def _follow_active_subagent(root: Path, *, task_id: str | None = None) -> int:
     position = 0
 
     while True:
-        if stdout_path.exists():
-            content = stdout_path.read_text(encoding="utf-8")
-            if len(content) > position:
-                chunk = content[position:]
-                print(chunk, end="")
-                position = len(content)
+        position = _print_follow_chunk(stdout_path, position)
         task = _resolve_follow_task(root, task_id=task_id)
         if task is None or task.runtime.active_subagent is None:
+            position = _print_follow_chunk(stdout_path, position)
             break
         if task.id != active_task_id or task.runtime.active_subagent.id != active_subagent_id:
+            position = _print_follow_chunk(stdout_path, position)
             break
         if task.runtime.active_subagent.path != active_path:
+            position = _print_follow_chunk(stdout_path, position)
             break
         time.sleep(_FOLLOW_POLL_SECONDS)
     return 0
@@ -176,6 +174,16 @@ def _tail_text(text: str, *, lines: int = _DEFAULT_TAIL_LINES) -> str:
     if not text:
         return ""
     return "\n".join(text.splitlines()[-lines:])
+
+
+def _print_follow_chunk(stdout_path: Path, position: int) -> int:
+    if not stdout_path.exists():
+        return position
+    content = stdout_path.read_text(encoding="utf-8")
+    if len(content) <= position:
+        return position
+    print(content[position:], end="")
+    return len(content)
 
 
 def _session_outcome(directory: Path) -> str:
