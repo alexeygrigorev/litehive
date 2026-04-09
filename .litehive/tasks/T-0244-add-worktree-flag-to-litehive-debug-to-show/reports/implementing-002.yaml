@@ -1,0 +1,46 @@
+task_id: T-0244
+step: implementing
+verdict: pass
+summary: 'Added litehive debug --worktree support in the debug CLI. Verified it resolves
+  the recorded task worktree, prints ''no worktree'' when the worktree is unset or
+  the recorded path is missing, prints uncommitted file paths from git status --porcelain
+  --untracked-files=all, and prints committed-ahead-of-main paths from git merge-base
+  <main HEAD> HEAD plus git diff --name-only <fork-point> HEAD. Updated parser wiring,
+  debug command formatting, README, and .litehive/context.md. Ran uv run pytest tests/test_debug_command.py
+  -q: 17 passed in 0.88s, including new cases for dirty worktree files, committed
+  changes ahead of main, and missing worktree handling while preserving existing debug
+  command behavior.'
+feedback: 'Added litehive debug --worktree support in the debug CLI. Verified it resolves
+  the recorded task worktree, prints ''no worktree'' when the worktree is unset or
+  the recorded path is missing, prints uncommitted file paths from git status --porcelain
+  --untracked-files=all, and prints committed-ahead-of-main paths from git merge-base
+  <main HEAD> HEAD plus git diff --name-only <fork-point> HEAD. Updated parser wiring,
+  debug command formatting, README, and .litehive/context.md. Ran uv run pytest tests/test_debug_command.py
+  -q: 17 passed in 0.88s, including new cases for dirty worktree files, committed
+  changes ahead of main, and missing worktree handling while preserving existing debug
+  command behavior.'
+submitted_via_cli: true
+files_changed:
+- README.md
+- litehive/cli/debug.py
+- litehive/cli/parser.py
+- tests/test_debug_command.py
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 275
+hook_results: []
+created_at: '2026-04-09T11:35:57+00:00'

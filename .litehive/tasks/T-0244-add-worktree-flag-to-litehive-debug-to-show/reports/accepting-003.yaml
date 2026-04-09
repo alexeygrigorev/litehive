@@ -1,0 +1,77 @@
+task_id: T-0244
+step: accepting
+verdict: pass
+summary: 'Accepted in review. Verified litehive debug --worktree in litehive/cli/debug.py
+  and parser wiring in litehive/cli/parser.py. The command resolves the recorded task
+  worktree, prints ''worktree: no worktree'' when unset, prints the recorded path
+  plus ''exists: no'' and ''no worktree'' when the path is missing, lists uncommitted
+  files from git status --porcelain --untracked-files=all, and lists committed changes
+  ahead of main from git merge-base <main HEAD> HEAD plus git diff --name-only <fork-point>
+  HEAD. Confirmed regression coverage in tests/test_debug_command.py for dirty worktree
+  files, committed-ahead files, and missing worktree handling. Verification run: uv
+  run pytest tests/test_debug_command.py -q => 17 passed in 0.97s. Full-suite gate:
+  uv run pytest -q => 904 passed, 3 skipped in 115.38s. README.md and .litehive/context.md
+  also document the new operator-facing debug path. Acceptance criteria 1-4 are satisfied.'
+feedback: "Runner hook `before_pm_acceptance` `uv run ruff check --select E402,F401\
+  \ litehive tests` passed with exit code 0 (artifact: `artifacts/before_pm_acceptance-001.yaml`).\n\
+  \nRunner hook `before_pm_acceptance` `if [ -n \"${LITEHIVE_CHANGED_PATHS:-}\" ]\
+  \ \\\n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" | grep -q . \\\n  && printf\
+  \ '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" \\\n    | xargs -r -d '\\n' git grep -nE 'noqa:.*F401|noqa:.*F403|ruff:\\\
+  s*noqa:\\s*F401|ruff:\\s*noqa:\\s*F403' --; then\n  echo 'Forbidden noqa F401/F403\
+  \ suppression found.'\n  exit 1\nfi` passed with exit code 0 (artifact: `artifacts/before_pm_acceptance-002.yaml`).\n\
+  \nAccepted in review. Verified litehive debug --worktree in litehive/cli/debug.py\
+  \ and parser wiring in litehive/cli/parser.py. The command resolves the recorded\
+  \ task worktree, prints 'worktree: no worktree' when unset, prints the recorded\
+  \ path plus 'exists: no' and 'no worktree' when the path is missing, lists uncommitted\
+  \ files from git status --porcelain --untracked-files=all, and lists committed changes\
+  \ ahead of main from git merge-base <main HEAD> HEAD plus git diff --name-only <fork-point>\
+  \ HEAD. Confirmed regression coverage in tests/test_debug_command.py for dirty worktree\
+  \ files, committed-ahead files, and missing worktree handling. Verification run:\
+  \ uv run pytest tests/test_debug_command.py -q => 17 passed in 0.97s. Full-suite\
+  \ gate: uv run pytest -q => 904 passed, 3 skipped in 115.38s. README.md and .litehive/context.md\
+  \ also document the new operator-facing debug path. Acceptance criteria 1-4 are\
+  \ satisfied."
+submitted_via_cli: true
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings:
+- 'runner hook passed: `before_pm_acceptance` `uv run ruff check --select E402,F401
+  litehive tests` (artifact: `artifacts/before_pm_acceptance-001.yaml`)'
+- "runner hook passed: `before_pm_acceptance` `if [ -n \"${LITEHIVE_CHANGED_PATHS:-}\"\
+  \ ] \\\n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" | grep -q . \\\n  && printf\
+  \ '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" \\\n    | xargs -r -d '\\n' git grep -nE 'noqa:.*F401|noqa:.*F403|ruff:\\\
+  s*noqa:\\s*F401|ruff:\\s*noqa:\\s*F403' --; then\n  echo 'Forbidden noqa F401/F403\
+  \ suppression found.'\n  exit 1\nfi` (artifact: `artifacts/before_pm_acceptance-002.yaml`)"
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 160
+hook_results:
+- point: before_pm_acceptance
+  command: uv run ruff check --select E402,F401 litehive tests
+  blocking: true
+  exit_code: 0
+  status: passed
+  artifact: artifacts/before_pm_acceptance-001.yaml
+- point: before_pm_acceptance
+  command: "if [ -n \"${LITEHIVE_CHANGED_PATHS:-}\" ] \\\n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\"\
+    \ | grep -q . \\\n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" \\\n    | xargs\
+    \ -r -d '\\n' git grep -nE 'noqa:.*F401|noqa:.*F403|ruff:\\s*noqa:\\s*F401|ruff:\\\
+    s*noqa:\\s*F403' --; then\n  echo 'Forbidden noqa F401/F403 suppression found.'\n\
+    \  exit 1\nfi"
+  blocking: true
+  exit_code: 0
+  status: passed
+  artifact: artifacts/before_pm_acceptance-002.yaml
+created_at: '2026-04-09T12:07:00+00:00'

@@ -1,0 +1,52 @@
+task_id: T-0244
+step: testing
+verdict: pass
+summary: 'Verified litehive debug --worktree behavior with focused QA checks. I inspected
+  the implementation in litehive/cli/debug.py and parser wiring in litehive/cli/parser.py,
+  confirming the command resolves the recorded task worktree, prints ''no worktree''
+  when no recorded path exists or the recorded path is missing, gathers uncommitted
+  files from git status --porcelain --untracked-files=all, and gathers committed-ahead
+  files from git merge-base <main checkout HEAD> HEAD plus git diff --name-only <fork-point>
+  HEAD. Ran uv run pytest tests/test_debug_command.py -q: 17 passed in 0.82s. That
+  suite covers existing debug behavior plus the new worktree cases: dirty worktree
+  files, committed changes ahead of main, and missing worktree handling. I also ran
+  a disposable-repo smoke check against the actual CLI from this checkout: uv run
+  litehive debug T-0001 --workspace <temp repo> --worktree printed task id, worktree
+  path, exists: yes, uncommitted: dirty.py, and committed_ahead_of_main: (none), matching
+  the acceptance criteria for the common debugging flow. Based on the targeted tests
+  and direct CLI evidence, the acceptance criteria are met.'
+feedback: 'Verified litehive debug --worktree behavior with focused QA checks. I inspected
+  the implementation in litehive/cli/debug.py and parser wiring in litehive/cli/parser.py,
+  confirming the command resolves the recorded task worktree, prints ''no worktree''
+  when no recorded path exists or the recorded path is missing, gathers uncommitted
+  files from git status --porcelain --untracked-files=all, and gathers committed-ahead
+  files from git merge-base <main checkout HEAD> HEAD plus git diff --name-only <fork-point>
+  HEAD. Ran uv run pytest tests/test_debug_command.py -q: 17 passed in 0.82s. That
+  suite covers existing debug behavior plus the new worktree cases: dirty worktree
+  files, committed changes ahead of main, and missing worktree handling. I also ran
+  a disposable-repo smoke check against the actual CLI from this checkout: uv run
+  litehive debug T-0001 --workspace <temp repo> --worktree printed task id, worktree
+  path, exists: yes, uncommitted: dirty.py, and committed_ahead_of_main: (none), matching
+  the acceptance criteria for the common debugging flow. Based on the targeted tests
+  and direct CLI evidence, the acceptance criteria are met.'
+submitted_via_cli: true
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 134
+hook_results: []
+created_at: '2026-04-09T11:38:11+00:00'
