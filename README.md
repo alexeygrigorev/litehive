@@ -108,6 +108,8 @@ litehive status --fast                    # quick state-only read
 litehive queue                            # show queue order
 litehive web                              # local web dashboard
 litehive debug T-0002 --worktree         # inspect recorded worktree existence and changes
+litehive worktree ls                      # list Litehive-managed worktrees with task status and change counts
+litehive worktree clean --dry-run         # preview cleanup of closed-task worktrees
 ```
 
 Recovery:

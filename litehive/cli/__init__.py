@@ -39,6 +39,7 @@ from litehive.cli.run import _cmd_run
 from litehive.cli.status import _cmd_list, _cmd_queue, _cmd_repair, _cmd_show, _cmd_status
 from litehive.cli.github_import import _cmd_import_issue, _cmd_import_issues
 from litehive.cli.tasks import _cmd_add, _cmd_intake, _cmd_issue, _cmd_update
+from litehive.cli.worktree import _cmd_worktree_clean, _cmd_worktree_ls
 from litehive.cli.parser import build_parser
 
 
@@ -120,6 +121,12 @@ def main():
         return _cmd_import_issues(args)
     if args.command == "debug":
         return _cmd_debug(args)
+    if args.command == "worktree":
+        if args.worktree_command == "ls":
+            return _cmd_worktree_ls(args)
+        if args.worktree_command == "clean":
+            return _cmd_worktree_clean(args)
+        parser.error("worktree requires a subcommand")
     if args.command == "update":
         return _cmd_update(args)
     if args.command == "import-issue":

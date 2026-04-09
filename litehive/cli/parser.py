@@ -961,6 +961,40 @@ def build_parser():
         help="Repository root containing .litehive/",
     )
 
+    # ── worktree ──────────────────────────────────────────────────────
+    worktree_cmd = subparsers.add_parser(
+        "worktree",
+        help="Inspect and clean Litehive-managed task worktrees",
+    )
+    worktree_subparsers = worktree_cmd.add_subparsers(dest="worktree_command")
+
+    worktree_ls = worktree_subparsers.add_parser(
+        "ls",
+        help="List Litehive-managed task worktrees with task status and change count",
+    )
+    worktree_ls.add_argument(
+        "--workspace",
+        type=Path,
+        default=Path.cwd(),
+        help="Repository root containing .litehive/",
+    )
+
+    worktree_clean = worktree_subparsers.add_parser(
+        "clean",
+        help="Remove Litehive-managed worktrees for closed tasks",
+    )
+    worktree_clean.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Show which worktrees would be removed without removing them",
+    )
+    worktree_clean.add_argument(
+        "--workspace",
+        type=Path,
+        default=Path.cwd(),
+        help="Repository root containing .litehive/",
+    )
+
     # ── list ──────────────────────────────────────────────────────────
     list_cmd = subparsers.add_parser(
         "list", help="Compact task listing with optional filters"

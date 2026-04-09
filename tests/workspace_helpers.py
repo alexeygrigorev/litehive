@@ -43,6 +43,8 @@ from litehive.cli import (
     _cmd_stop_task,
     _cmd_switch_task,
     _cmd_update,
+    _cmd_worktree_clean,
+    _cmd_worktree_ls,
     build_parser,
 )
 from litehive.config import (
@@ -612,6 +614,8 @@ __all__ = [
     "_cmd_stop_task",
     "_cmd_switch_task",
     "_cmd_update",
+    "_cmd_worktree_clean",
+    "_cmd_worktree_ls",
     "build_parser",
     "ExternalEngineSandboxConfig",
     "ExternalEngineSandboxPolicy",

@@ -33,6 +33,8 @@ from tests.workspace_helpers import (
     _cmd_stop_task,
     _cmd_switch_task,
     _cmd_update,
+    _cmd_worktree_clean,
+    _cmd_worktree_ls,
     _commit_repo_state,
     _completed_subagent_result,
     _fail_atomic_write_on_path,
@@ -2641,6 +2643,133 @@ def test_dirty_worktree_gate_reports_ambiguous_main_checkout_ownership(
     assert "location_kind: main-checkout" in output
     assert "ownership: ambiguous-ownership" in output
     assert f"task_id: {first.id},{second.id}" in output
+
+def test_worktree_ls_shows_task_status_and_change_count(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    ensure_workspace(tmp_path)
+    _init_git_repo(tmp_path)
+    queued = create_task(tmp_path, title="Queued worktree")
+    done = create_task(tmp_path, title="Done worktree")
+    done.status = "done"
+    done.pipeline_status = "done"
+    save_task(tmp_path, done)
+
+    queued_path = tmp_path / ".litehive" / "worktrees" / f"{queued.id}-{queued.slug}"
+    done_path = tmp_path / ".litehive" / "worktrees" / f"{done.id}-{done.slug}"
+    queued_path.parent.mkdir(parents=True, exist_ok=True)
+    for task, worktree_path in ((queued, queued_path), (done, done_path)):
+        _run(["git", "worktree", "add", "--detach", str(worktree_path), "HEAD"], tmp_path)
+        task.git.worktree_path = str(worktree_path.relative_to(tmp_path))
+        save_task(tmp_path, task)
+
+    (queued_path / "queued.txt").write_text("queued\n", encoding="utf-8")
+    (done_path / "done.txt").write_text("done\n", encoding="utf-8")
+    (done_path / "done-extra.txt").write_text("extra\n", encoding="utf-8")
+
+    exit_code = _cmd_worktree_ls(argparse.Namespace(workspace=tmp_path))
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "worktree_count: 2" in output
+    assert f"task_id: {queued.id}" in output
+    assert "status: queued" in output
+    assert f"worktree_path: .litehive/worktrees/{queued.id}-{queued.slug}" in output
+    assert "change_count: 1" in output
+    assert f"task_id: {done.id}" in output
+    assert "status: done" in output
+    assert f"worktree_path: .litehive/worktrees/{done.id}-{done.slug}" in output
+    assert "change_count: 2" in output
+
+
+def test_worktree_clean_dry_run_reports_without_removing(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    ensure_workspace(tmp_path)
+    _init_git_repo(tmp_path)
+    done = create_task(tmp_path, title="Done cleanup target")
+    deferred = create_task(tmp_path, title="Deferred cleanup target")
+    queued = create_task(tmp_path, title="Queued worktree")
+    done.status = "done"
+    done.pipeline_status = "done"
+    deferred.status = "deferred"
+    save_task(tmp_path, done)
+    save_task(tmp_path, deferred)
+
+    paths = {}
+    for task in (done, deferred, queued):
+        worktree_path = tmp_path / ".litehive" / "worktrees" / f"{task.id}-{task.slug}"
+        worktree_path.parent.mkdir(parents=True, exist_ok=True)
+        _run(["git", "worktree", "add", "--detach", str(worktree_path), "HEAD"], tmp_path)
+        task.git.worktree_path = str(worktree_path.relative_to(tmp_path))
+        save_task(tmp_path, task)
+        paths[task.id] = worktree_path
+
+    exit_code = _cmd_worktree_clean(argparse.Namespace(workspace=tmp_path, dry_run=True))
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "dry_run: yes" in output
+    assert f"would_remove: {done.id} done .litehive/worktrees/{done.id}-{done.slug}" in output
+    assert (
+        f"would_remove: {deferred.id} deferred .litehive/worktrees/{deferred.id}-{deferred.slug}"
+        in output
+    )
+    assert "would_remove_count: 2" in output
+    assert all(path.exists() for path in paths.values())
+    assert get_task_worktree_path(require_task(tmp_path, done.id)) is not None
+    assert get_task_worktree_path(require_task(tmp_path, deferred.id)) is not None
+
+
+def test_worktree_clean_removes_closed_worktrees_and_skips_active(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    ensure_workspace(tmp_path)
+    _init_git_repo(tmp_path)
+    done = create_task(tmp_path, title="Done cleanup target")
+    deferred = create_task(tmp_path, title="Deferred cleanup target")
+    duplicate = create_task(tmp_path, title="Duplicate cleanup target")
+    active = create_task(tmp_path, title="Active done-looking task")
+    queued = create_task(tmp_path, title="Queued worktree")
+    done.status = "done"
+    done.pipeline_status = "done"
+    deferred.status = "deferred"
+    duplicate.status = "duplicate"
+    active.status = "done"
+    active.pipeline_status = "done"
+    for task in (done, deferred, duplicate, active):
+        save_task(tmp_path, task)
+
+    paths = {}
+    for task in (done, deferred, duplicate, active, queued):
+        worktree_path = tmp_path / ".litehive" / "worktrees" / f"{task.id}-{task.slug}"
+        worktree_path.parent.mkdir(parents=True, exist_ok=True)
+        _run(["git", "worktree", "add", "--detach", str(worktree_path), "HEAD"], tmp_path)
+        task.git.worktree_path = str(worktree_path.relative_to(tmp_path))
+        save_task(tmp_path, task)
+        paths[task.id] = worktree_path
+
+    set_active_task(tmp_path, active.id)
+
+    exit_code = _cmd_worktree_clean(argparse.Namespace(workspace=tmp_path, dry_run=False))
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "dry_run: no" in output
+    assert f"skipped_active: {active.id} done .litehive/worktrees/{active.id}-{active.slug}" in output
+    assert f"removed: {done.id} done .litehive/worktrees/{done.id}-{done.slug}" in output
+    assert f"removed: {deferred.id} deferred .litehive/worktrees/{deferred.id}-{deferred.slug}" in output
+    assert f"removed: {duplicate.id} duplicate .litehive/worktrees/{duplicate.id}-{duplicate.slug}" in output
+    assert "removed_count: 3" in output
+    assert not paths[done.id].exists()
+    assert not paths[deferred.id].exists()
+    assert not paths[duplicate.id].exists()
+    assert paths[active.id].exists()
+    assert paths[queued.id].exists()
+    assert get_task_worktree_path(require_task(tmp_path, done.id)) is None
+    assert get_task_worktree_path(require_task(tmp_path, deferred.id)) is None
+    assert get_task_worktree_path(require_task(tmp_path, duplicate.id)) is None
+    assert get_task_worktree_path(require_task(tmp_path, active.id)) is not None
 
 def test_queue_command_lists_parked_task_as_resumable_with_distinct_status(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
