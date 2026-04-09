@@ -3,39 +3,53 @@ step: implementing
 verdict: reject
 summary: 'SWE reported pass but produced no file changes and no tests. This usually
   means the agent did not actually write code. Worktree: unknown. Report summary:
-  Verified the explicit parked task state implementation. All 5 acceptance criteria
-  are satisfied.'
-feedback: "Verified the explicit parked task state implementation. All 5 acceptance\
-  \ criteria are satisfied.\n\n1. TaskStatus enum includes parked (models.py:18).\
-  \ park_task() sets status=parked with execution_status=paused and preserves stage\
-  \ context. _is_parked_task() helper replaces magic-string detection based on 'Task\
-  \ stopped via CLI' reason string.\n\n2. Parked tasks stay out of automatic recovery:\
-  \ repair/recovery only auto-requeues interrupted tasks. Parked tasks are excluded\
-  \ from runnable candidates. System-interrupted tasks remain eligible for automatic\
-  \ queue reinsertion.\n\n3. Operator flows are explicit: litehive resume preserves\
-  \ parked task's current stage, litehive requeue restarts from implementation entry.\
-  \ Queue/status output shows parked distinctly as [parked/<stage>]. Dirty-worktree\
-  \ gating correctly distinguishes parked from interrupted: interrupted task-owned\
-  \ dirt keeps gate open; parked blocks until explicit operator action.\n\n4. Focused\
-  \ pytest coverage (17 tests passing):\n   - tests/test_task_commands_and_daemon.py\
-  \ -k \"parked or stop_current_task or requeue_command or resume_command\" -> 13\
-  \ passed\n   - tests/test_runtime_pool.py -k \"cli_stopped or parked\" -> 2 passed\n\
-  \   - tests/test_observability_and_status.py -k \"parked or queue_command\" -> 2\
-  \ passed\n\n5. docs/state-machine.md documents parked as an explicit resumable state\
-  \ distinct from interrupted (line 130).\n\nFiles implementing the change: litehive/models.py,\
-  \ litehive/tasks.py, litehive/runtime.py, litehive/cli.py, litehive/web.py, docs/state-machine.md,\
-  \ tests/test_task_commands_and_daemon.py, tests/test_runtime_pool.py.\n\nSTAGE_RESULT:\n\
-  {\"verdict\":\"pass\",\"summary\":\"Explicit parked task state verified across lifecycle\
-  \ model, operator commands, recovery exclusion, dirty-worktree gating, and documentation.\"\
-  ,\"files_changed\":[\"litehive/models.py\",\"litehive/tasks.py\",\"litehive/runtime.py\"\
-  ,\"litehive/cli.py\",\"litehive/web.py\",\"docs/state-machine.md\",\"tests/test_task_commands_and_daemon.py\"\
-  ,\"tests/test_runtime_pool.py\"],\"tests\":{\"added\":4,\"passing\":17},\"warnings\"\
-  :[],\"follow_up_tasks\":[],\"acceptance_criteria\":[\"Explicit parked status replaces\
-  \ CLI-stop magic-string lifecycle detection.\",\"Parked tasks stay out of automatic\
-  \ recovery while interrupted tasks still auto-requeue.\",\"Resume/requeue/queue\
-  \ surfaces distinguish parked from interrupted semantics.\",\"Focused pytest coverage\
-  \ covers stop, repair, dirty-worktree gating, and resume/requeue.\",\"State-machine\
-  \ documentation matches the explicit parked status contract.\"]}"
+  Verified the explicit parked task state implementation in this worktree and confirmed
+  all acceptance criteria are satisfied. The durable lifecycle model includes status=parked,
+  stop/park flows set parked explicitly instead of relying on the special ''Task stopped
+  via CLI'' reason string for lifecycle decisions, and parked remains part of resumable
+  operator handling while preserving interruption metadata and stage context for visibility.
+  Automatic repair/recovery continues to requeue only true system-interrupted work;
+  parked tasks stay out of automatic runnable recovery and queue reinsertion. Operator
+  semantics remain explicit: resume returns a parked task to the queue at its current
+  stage, requeue restarts it from the implementation entry stage, queue/status/web
+  surfaces render parked distinctly from interrupted and other lifecycle states, and
+  dirty-worktree gating distinguishes parked from interrupted ownership correctly.
+  docs/state-machine.md documents parked as an explicit lifecycle state distinct from
+  interrupted work. Focused tests run from this worktree: uv run pytest -q tests/test_task_commands_and_daemon.py
+  -k ''parked or stop_current_task or requeue_command or resume_command or dirty_worktree_gate_reports_ambiguous_main_checkout_ownership
+  or dirty_worktree_gate_reports_clean_workspace or dirty_worktree_gate_reports_dirty_main_checkout
+  or dirty_worktree_gate_reports_task_owned_worktree or queue_command_lists_parked_task_as_resumable_with_distinct_status''
+  -> 17 passed; uv run pytest -q tests/test_runtime_pool.py -k ''cli_stopped or repair_workspace_state_requeues_system_interrupted_task_but_not_cli_stopped_task
+  or run_single_task_allows_dirty_git_owned_by_interrupted_task or run_single_task_blocks_dirty_git_owned_by_parked_task''
+  -> 3 passed; uv run pytest -q tests/test_observability_and_status.py -k ''parked
+  or queue_command or status_command'' -> 2 passed. Evidence confirms stop records
+  parked durably, parked work is manually resumable but excluded from automatic recovery,
+  interrupted work remains auto-recoverable, dirty-worktree gating preserves the parked
+  vs interrupted distinction, and queue/status/docs expose parked explicitly.'
+feedback: 'Verified the explicit parked task state implementation in this worktree
+  and confirmed all acceptance criteria are satisfied. The durable lifecycle model
+  includes status=parked, stop/park flows set parked explicitly instead of relying
+  on the special ''Task stopped via CLI'' reason string for lifecycle decisions, and
+  parked remains part of resumable operator handling while preserving interruption
+  metadata and stage context for visibility. Automatic repair/recovery continues to
+  requeue only true system-interrupted work; parked tasks stay out of automatic runnable
+  recovery and queue reinsertion. Operator semantics remain explicit: resume returns
+  a parked task to the queue at its current stage, requeue restarts it from the implementation
+  entry stage, queue/status/web surfaces render parked distinctly from interrupted
+  and other lifecycle states, and dirty-worktree gating distinguishes parked from
+  interrupted ownership correctly. docs/state-machine.md documents parked as an explicit
+  lifecycle state distinct from interrupted work. Focused tests run from this worktree:
+  uv run pytest -q tests/test_task_commands_and_daemon.py -k ''parked or stop_current_task
+  or requeue_command or resume_command or dirty_worktree_gate_reports_ambiguous_main_checkout_ownership
+  or dirty_worktree_gate_reports_clean_workspace or dirty_worktree_gate_reports_dirty_main_checkout
+  or dirty_worktree_gate_reports_task_owned_worktree or queue_command_lists_parked_task_as_resumable_with_distinct_status''
+  -> 17 passed; uv run pytest -q tests/test_runtime_pool.py -k ''cli_stopped or repair_workspace_state_requeues_system_interrupted_task_but_not_cli_stopped_task
+  or run_single_task_allows_dirty_git_owned_by_interrupted_task or run_single_task_blocks_dirty_git_owned_by_parked_task''
+  -> 3 passed; uv run pytest -q tests/test_observability_and_status.py -k ''parked
+  or queue_command or status_command'' -> 2 passed. Evidence confirms stop records
+  parked durably, parked work is manually resumable but excluded from automatic recovery,
+  interrupted work remains auto-recoverable, dirty-worktree gating preserves the parked
+  vs interrupted distinction, and queue/status/docs expose parked explicitly.'
 files_changed: []
 created_follow_up_task_ids: []
 task_update: {}
@@ -53,6 +67,6 @@ outcome_reason: ''
 failure_classification: null
 failure_diagnostics: {}
 resource_limit_event: null
-duration_seconds: 46
+duration_seconds: 53
 hook_results: []
-created_at: '2026-04-08T17:39:09+00:00'
+created_at: '2026-04-09T00:42:55+00:00'

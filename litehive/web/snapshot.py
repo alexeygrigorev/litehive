@@ -47,6 +47,7 @@ def build_workspace_snapshot(root: Path) -> dict[str, Any]:
         "workspace": str(root),
         "generated_at": _read_iso_now(),
         "runner": runner.model_dump(mode="python"),
+        "daemon": build_daemon_status_payload(root),
         "state": state.model_dump(mode="python"),
         "editable_fields": {
             "priority_options": sorted(VALID_TASK_PRIORITIES),
@@ -59,6 +60,26 @@ def build_workspace_snapshot(root: Path) -> dict[str, Any]:
         else _serialize_task(root, active_task, state.active_task_id),
         "tasks": tasks_payload,
         "run_all_logs": list_recent_run_all_logs(root),
+    }
+
+
+def build_daemon_status_payload(root: Path) -> dict[str, Any]:
+    from litehive import web as _web_pkg
+
+    root = root.resolve()
+    entry = _web_pkg.get_workspace_daemon(root)
+    daemon_status = "running" if entry is not None else "stopped"
+    started_at = entry.get("started_at") if isinstance(entry, dict) else None
+    uptime_seconds = _uptime_seconds(str(started_at) if started_at is not None else None)
+    return {
+        "workspace": str(root),
+        "daemon_status": daemon_status,
+        "pid": entry.get("pid") if isinstance(entry, dict) else None,
+        "started_at": started_at if isinstance(started_at, str) else None,
+        "uptime_seconds": uptime_seconds,
+        "uptime": _format_duration(uptime_seconds),
+        "log_dir": entry.get("log_dir") if isinstance(entry, dict) else None,
+        "recent_logs": _web_pkg.list_recent_run_all_logs(root),
     }
 
 
@@ -391,3 +412,28 @@ def _artifact_path(root: Path, base: Path, kind: str, *, active: bool) -> str:
         if candidate.exists():
             return _relative_to_root(root, candidate)
     return _relative_to_root(root, candidates[0])
+
+
+def _uptime_seconds(started_at: str | None) -> int | None:
+    from datetime import UTC, datetime
+
+    if not started_at:
+        return None
+    try:
+        started = datetime.fromisoformat(started_at.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    elapsed = int((datetime.now(UTC) - started).total_seconds())
+    return max(elapsed, 0)
+
+
+def _format_duration(seconds: int | None) -> str | None:
+    if seconds is None:
+        return None
+    hours, remainder = divmod(seconds, 3600)
+    minutes, secs = divmod(remainder, 60)
+    if hours:
+        return f"{hours}h {minutes}m {secs}s"
+    if minutes:
+        return f"{minutes}m {secs}s"
+    return f"{secs}s"

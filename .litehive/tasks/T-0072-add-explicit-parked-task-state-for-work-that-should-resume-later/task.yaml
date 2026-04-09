@@ -7,13 +7,14 @@ engine: null
 model: null
 mode: implementation
 pipeline_mode: full
-status: queued
+status: flagged
+flag_reason: retry_limit_exhausted
 pipeline_status: implementing
 priority: medium
 pm_complexity: moderate
 planned_effort: m
 created_at: '2026-04-01T06:36:00+00:00'
-updated_at: '2026-04-08T19:02:59+00:00'
+updated_at: '2026-04-09T00:44:15+00:00'
 goal: Replace the current magic-string handling for user-stopped work with an explicit
   parked task lifecycle state so Litehive can distinguish resumable system interruptions
   from intentionally parked tasks in durable state, CLI output, repair logic, and
@@ -280,6 +281,34 @@ subagents:
   engine: codex
   status: failed
   path: subagents/SA-0047-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0048
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0048-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0049
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0049-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0050
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0050-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0051
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0051-swe
   sandboxed: false
   sandbox_summary: host
 git:

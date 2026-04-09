@@ -14,7 +14,7 @@ summary: 'SWE reported pass but produced no file changes and no tests. This usua
   from partial output. Verified with targeted tests: uv run pytest -q tests/test_tasks_and_subagents.py
   tests/test_stage_result_submission.py -k ''marks_generic_non_zero_exit_as_failed
   or timeout_cannot_preserve_structured_pass_verdict or failed_subagent_cannot_turn_structured_pass_into_passing_report
-  or kills_stale_live_process_using_stdout_mtime'' -> 3 passed, 70 deselected in 0.53s.
+  or kills_stale_live_process_using_stdout_mtime'' -> 3 passed, 70 deselected in 0.58s.
   Evidence confirms: exit code 124 is failed rather than completed, any non-zero exit
   is not classified as completed, and timeout-killed agents do not produce pass verdicts.'
 feedback: 'Verified the current implementation already satisfies T-0208 without further
@@ -28,7 +28,7 @@ feedback: 'Verified the current implementation already satisfies T-0208 without 
   from partial output. Verified with targeted tests: uv run pytest -q tests/test_tasks_and_subagents.py
   tests/test_stage_result_submission.py -k ''marks_generic_non_zero_exit_as_failed
   or timeout_cannot_preserve_structured_pass_verdict or failed_subagent_cannot_turn_structured_pass_into_passing_report
-  or kills_stale_live_process_using_stdout_mtime'' -> 3 passed, 70 deselected in 0.53s.
+  or kills_stale_live_process_using_stdout_mtime'' -> 3 passed, 70 deselected in 0.58s.
   Evidence confirms: exit code 124 is failed rather than completed, any non-zero exit
   is not classified as completed, and timeout-killed agents do not produce pass verdicts.'
 files_changed: []
@@ -38,7 +38,7 @@ tests:
   added: 0
   passing: 0
 warnings: []
-retry_count: 2
+retry_count: 3
 retry_limit: 3
 retry_source: global
 retry_decision: continue
@@ -48,6 +48,6 @@ outcome_reason: ''
 failure_classification: null
 failure_diagnostics: {}
 resource_limit_event: null
-duration_seconds: 70
+duration_seconds: 66
 hook_results: []
-created_at: '2026-04-09T00:37:25+00:00'
+created_at: '2026-04-09T00:38:31+00:00'
