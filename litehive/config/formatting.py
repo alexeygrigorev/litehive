@@ -44,7 +44,10 @@ def format_runner_hooks(config: LitehiveConfig) -> str:
     parts: list[str] = []
     for point in sorted(config.runner_hooks):
         hooks = ", ".join(
-            f"{'blocking' if hook.blocking else 'non-blocking'}:{hook.command}"
+            (
+                f"{'blocking' if hook.blocking else 'non-blocking'}:{hook.command}"
+                + (f" ({hook.description})" if hook.description else "")
+            )
             for hook in config.runner_hooks[point]
         )
         parts.append(f"{point}=[{hooks}]")

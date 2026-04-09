@@ -109,6 +109,7 @@ class StageReport(BaseModel):
     task_id: str
     step: Literal["grooming", "implementing", "testing", "accepting", "commit_to_git"]
     verdict: Literal["pass", "accept", "fail", "reject", "blocked"]
+    source: Literal["agent", "hook"] = "agent"
     summary: str
     feedback: str = ""
     submitted_via_cli: bool = False

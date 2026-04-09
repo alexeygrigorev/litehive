@@ -341,6 +341,12 @@ class TaskExecutionRunner:
                 )
             if target is None and report.verdict == "reject" and current != "commit_to_git":
                 report.retry_decision = "retry"
+                if report.source == "hook":
+                    append_journal(
+                        self.root,
+                        task,
+                        f"Hook rejection routed `{current}` back to SWE for another `{current}` pass.",
+                    )
                 self._write_report(task, report, steps)
                 _apply_stage_finished(task, report)
                 task.pipeline_status = current  # type: ignore[assignment]
@@ -617,6 +623,12 @@ class TaskExecutionRunner:
                 rejections += 1
                 report.retry_count = rejections
                 report.retry_limit = self.max_retries
+                if report.source == "hook":
+                    append_journal(
+                        self.root,
+                        task,
+                        f"Hook rejection routed `{current}` back to `implementing` for SWE follow-up.",
+                    )
                 stage_count = task.runtime.stage_retry_counts.get(current, 0) + 1
                 task.runtime.stage_retry_counts[current] = stage_count
                 effective_stage_limit = (

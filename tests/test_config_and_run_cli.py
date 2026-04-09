@@ -756,6 +756,33 @@ def test_configure_persists_runner_hooks(tmp_path: Path) -> None:
     assert config.runner_hooks["after_merge"][0].command == "echo verify"
 
 
+def test_load_config_preserves_runner_hook_descriptions(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    (tmp_path / ".litehive" / "config.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "runner_hooks": {
+                    "before_pm_acceptance": [
+                        {
+                            "command": "uv run ruff check .",
+                            "blocking": True,
+                            "description": "ensures lint passes before acceptance",
+                        }
+                    ]
+                }
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+
+    config = load_config(tmp_path)
+
+    assert config.runner_hooks["before_pm_acceptance"][0].description == (
+        "ensures lint passes before acceptance"
+    )
+
+
 def test_configure_rejects_invalid_runner_hook_point(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:

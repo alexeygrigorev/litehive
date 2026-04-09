@@ -2911,6 +2911,45 @@ def test_stage_prompt_guides_swe_for_preimplemented_or_obsolete_work(tmp_path: P
     assert "use `litehive close --outcome wont_do` or `litehive close --outcome duplicate`" in prompt
 
 
+def test_stage_prompt_lists_upcoming_runner_hooks_for_swe(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(
+        tmp_path,
+        title="Hook-aware implementation",
+        acceptance_criteria=["Lint and acceptance hooks pass."],
+    )
+    config = LitehiveConfig(
+        runner_hooks={
+            "before_pm_acceptance": [
+                {
+                    "command": "ruff check --select E402,F401",
+                    "blocking": True,
+                    "description": "ensures no unused imports or wrong import order",
+                }
+            ],
+            "after_swe_implementation": [
+                {
+                    "command": "pytest -q tests/test_runner_workflow.py",
+                    "blocking": True,
+                    "description": "checks the workflow slice stays green",
+                }
+            ],
+        }
+    )
+
+    prompt = stage_prompt(task, "implementing", workspace_context="", config=config)
+
+    assert "Runner hooks:" in prompt
+    assert (
+        "After implementing, these checks will run: pytest -q tests/test_runner_workflow.py (checks the workflow slice stays green)"
+        in prompt
+    )
+    assert (
+        "Before acceptance, these checks will run: ruff check --select E402,F401 (ensures no unused imports or wrong import order)"
+        in prompt
+    )
+
+
 def test_stage_report_from_subagent_marks_cli_verdict_source(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="CLI verdict source")
@@ -2944,6 +2983,7 @@ def test_stage_report_from_subagent_marks_cli_verdict_source(tmp_path: Path) -> 
     report = stage_report_from_subagent(task, "implementing", result, root=tmp_path)
 
     assert report.verdict == "pass"
+    assert report.source == "agent"
     assert report.submitted_via_cli is True
     assert report.feedback == "Already implemented and verified with pytest."
 

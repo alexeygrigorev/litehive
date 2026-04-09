@@ -11,6 +11,16 @@ from litehive.tasks import (
 )
 
 
+_PROMPT_HOOK_POINT_GROUPS: dict[str, list[tuple[str, str]]] = {
+    "implementing": [
+        ("After implementing, these checks will run:", "after_swe_implementation"),
+        ("Before acceptance, these checks will run:", "before_pm_acceptance"),
+        ("After acceptance, these checks will run:", "after_pm_acceptance"),
+        ("After merge, these checks will run:", "after_merge"),
+    ]
+}
+
+
 def stage_prompt(
     task: TaskRecord,
     step: str,
@@ -77,6 +87,9 @@ def stage_prompt(
                 *startup_guidance,
             ]
         )
+    hook_summary = _runner_hook_prompt_lines(step, config)
+    if hook_summary:
+        lines.extend(["", "Runner hooks:", *hook_summary])
     lines.extend(
         [
             "",
@@ -294,6 +307,30 @@ def _stage_owner_for_step(step: str) -> str:
         "accepting": "reviewer",
         "commit_to_git": "runner",
     }.get(step, "swe")
+
+
+def _runner_hook_prompt_lines(step: str, config: LitehiveConfig | None) -> list[str]:
+    if config is None:
+        return []
+    groups = _PROMPT_HOOK_POINT_GROUPS.get(step, [])
+    if not groups:
+        return []
+    lines: list[str] = []
+    for label, hook_point in groups:
+        hooks = config.runner_hooks.get(hook_point, [])
+        if not hooks:
+            continue
+        rendered = "; ".join(_format_runner_hook_prompt_entry(hook) for hook in hooks)
+        lines.append(f"- {label} {rendered}")
+    return lines
+
+
+def _format_runner_hook_prompt_entry(hook: object) -> str:
+    description = getattr(hook, "description", None)
+    command = getattr(hook, "command")
+    if description:
+        return f"{command} ({description})"
+    return command
 
 
 def _stage_role_prompt(step: str, owner: str | None = None) -> list[str]:
