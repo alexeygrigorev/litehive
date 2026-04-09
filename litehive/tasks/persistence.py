@@ -77,7 +77,7 @@ def _serialize_state(state: WorkspaceState) -> str:
 
 
 def save_state(root: Path, state: WorkspaceState) -> None:
-    from .locking import workspace_mutation_guard
+    from litehive.workspace.locking import workspace_mutation_guard
 
     with workspace_mutation_guard(root):
         _atomic_write_text(state_path(root), _serialize_state(state))
@@ -88,7 +88,7 @@ def _save_state_without_runner_guard(root: Path, state: WorkspaceState) -> None:
 
 
 def set_pool_stop_reason(root: Path, stop_reason: str | None) -> WorkspaceState:
-    from .locking import _workspace_lock
+    from litehive.workspace.locking import _workspace_lock
 
     with _workspace_lock(root):
         state = load_state(root)

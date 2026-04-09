@@ -5,7 +5,7 @@ from pathlib import Path
 from litehive.models import TaskRecord, TaskOutcomeState, WorkspaceState, utcnow
 
 from .crud import set_task_commit_sha
-from .locking import _workspace_lock, _ensure_future_task_mutation_allowed
+from litehive.workspace.locking import _workspace_lock, _ensure_future_task_mutation_allowed
 from .persistence import _save_state_without_runner_guard, load_state
 
 

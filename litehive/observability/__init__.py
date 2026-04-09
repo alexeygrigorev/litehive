@@ -19,15 +19,27 @@ from litehive.observability._status import (
     render_recent_activity_section,
     render_task_summary,
 )
+from litehive.observability.events import (
+    append_event,
+    append_session_log,
+    ensure_session_log,
+    last_event_timestamp,
+    read_events,
+)
 
 __all__ = [
     "collect_recent_activity",
+    "append_event",
+    "append_session_log",
     "engine_monitoring_file",
+    "ensure_session_log",
     "estimate_task_execution",
     "find_last_completed_task",
+    "last_event_timestamp",
     "load_engine_monitoring",
     "record_engine_execution",
     "record_engine_observation",
+    "read_events",
     "render_active_task_section",
     "render_engine_health_section",
     "render_engine_monitoring_lines",

@@ -6,37 +6,66 @@ depends_on:
 - T-0219
 - T-0220
 - T-0231
-task_type: null
+task_type: refactor
 engine: null
 model: null
 mode: implementation
 pipeline_mode: full
 status: queued
+flag_reason: null
 pipeline_status: backlog
 priority: medium
-pm_complexity: null
-planned_effort: null
+pm_complexity: complex
+planned_effort: xl
 created_at: '2026-04-08T07:09:18+00:00'
-updated_at: '2026-04-08T07:10:37+00:00'
-goal: 'Restructure the litehive package to have clearer domain boundaries. Key changes:
-  (1) Merge engines/ + subagents/ into agents/ (adapters/ for CLI adapters, manager/prompts/parsing/session
-  at top level). (2) Merge runner/ + runtime/ into pipeline/ (runner state machine
-  + orchestration + commit + recovery + hooks + budget). (3) Slim down tasks/ to data
-  + queue only, extract workspace state management (locking, status transitions, recovery,
-  runtime tracking) into workspace/. (4) Move git_ops.py into git/ package. (5) Move
-  events.py into observability/. All existing imports must keep working via re-exports
-  during transition.'
+updated_at: '2026-04-09T03:08:48+00:00'
+goal: 'Restructure the litehive package into clearer domain packages with explicit
+  ownership boundaries: make litehive.agents the canonical home for engine adapters
+  and subagent orchestration helpers, make litehive.pipeline the canonical home for
+  runner/orchestration/commit/recovery logic, keep litehive.tasks focused on task
+  data and queue persistence, move workspace lifecycle/state helpers into litehive.workspace,
+  and relocate git and event helpers into litehive.git and litehive.observability
+  while preserving all currently supported import paths through re-export facades
+  during the transition.'
 acceptance_criteria:
-- engines/ and subagents/ merged into agents/ with adapters/ subdirectory
-- runner/ and runtime/ merged into pipeline/
-- "tasks/ contains only data, CRUD, queue, paths, persistence \u2014 workflow/locking/recovery/status\
-  \ transitions moved to workspace/"
-- git_ops.py moved to git/ package
-- events.py moved to observability/
-- All existing tests pass without modification
-- Old import paths work via re-exports (backward compat)
-constraints: []
-plan: []
+- The repository exposes litehive.agents as the canonical package for adapter and
+  subagent concerns, with adapters under litehive/agents/adapters/, and existing imports
+  from litehive.engines and litehive.subagents continue to resolve the same public
+  APIs without call-site changes.
+- The repository exposes litehive.pipeline as the canonical package for runner state-machine,
+  orchestration, commit, recovery, hook, and execution-budget concerns, and existing
+  imports from litehive.runner and litehive.runtime continue to resolve the same public
+  APIs without call-site changes.
+- The litehive.tasks package is limited to task records, CRUD, queueing, path helpers,
+  templates, and persistence concerns, while workspace locking, runner status, state
+  transitions, recovery, and runtime tracking live under litehive.workspace and remain
+  reachable from previous import sites during the compatibility window.
+- Git helpers resolve from litehive.git and task-event helpers resolve from litehive.observability,
+  while legacy imports from litehive.git_ops and litehive.events still work via re-exports.
+- The existing automated test suite passes without modifying current tests, and targeted
+  compatibility coverage verifies both the new canonical imports and the legacy import
+  aliases.
+constraints:
+- Keep changes scoped to package-boundary reorganization, compatibility re-exports,
+  and directly necessary import or documentation updates.
+- Do not break existing import sites in source or tests during the transition; old
+  import paths must remain valid until a later cleanup task removes them intentionally.
+plan:
+- Inventory the public symbols currently exported from litehive.engines, litehive.subagents,
+  litehive.runner, litehive.runtime, litehive.tasks, litehive.git_ops, and litehive.events,
+  then define the canonical destination package for each surface area before moving
+  files.
+- Create the new package shells (agents, pipeline, workspace, git) and move modules
+  in compatibility-preserving slices, starting with internal imports and package __init__
+  facades so the old import graph continues to load throughout the refactor.
+- Trim litehive.tasks down to task data, CRUD, queue, paths, templates, and persistence
+  modules, and move locking, runner-status, state-transition, recovery, and runtime-tracking
+  helpers into litehive.workspace with backward-compatible re-exports.
+- Relocate git_ops.py into litehive/git/ and events.py into litehive/observability/,
+  then update internal imports to prefer the new canonical packages while keeping
+  thin legacy modules in place as shims.
+- Run the affected regression suites and any added compatibility tests to prove the
+  reorganized package layout and old import paths both work unchanged.
 human_checkpoints: []
 subagents: []
 git:
