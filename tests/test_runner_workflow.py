@@ -1485,7 +1485,7 @@ def test_run_next_task_requeues_after_qa_rejection(
             / "testing-003.yaml"
         ).read_text(encoding="utf-8")
     )
-    assert testing_report["verdict"] == "fail"
+    assert testing_report["verdict"] == "reject"
     assert testing_report["retry_count"] == 1
     assert testing_report["retry_limit"] == 3
     assert testing_report["retry_source"] == "task"
@@ -1551,8 +1551,8 @@ def test_cli_run_end_to_end_requeues_after_qa_failure_then_commits_in_temp_git_r
     assert _cmd_run(argparse.Namespace(workspace=tmp_path, dry_run=False, drain=False)) == 0
     first_output = capsys.readouterr().out
     assert "status: queued" in first_output
-    assert "last_verdict: fail" in first_output
-    assert "stage_outcomes: grooming=pass, implementing=pass, testing=fail" in first_output
+    assert "last_verdict: reject" in first_output
+    assert "stage_outcomes: grooming=pass, implementing=pass, testing=reject" in first_output
     assert _run(["git", "rev-parse", "HEAD"], tmp_path) == initial_sha
     assert (tmp_path / "app.txt").read_text(encoding="utf-8") == "base\n"
 
@@ -1602,9 +1602,9 @@ def test_cli_run_end_to_end_requeues_after_qa_failure_then_commits_in_temp_git_r
         yaml.safe_load(path.read_text(encoding="utf-8")) for path in testing_reports
     ]
     commit_report = yaml.safe_load(commit_reports[0].read_text(encoding="utf-8"))
-    assert {report["verdict"] for report in parsed_testing_reports} == {"fail", "pass"}
+    assert {report["verdict"] for report in parsed_testing_reports} == {"reject", "pass"}
     failed_testing = next(
-        report for report in parsed_testing_reports if report["verdict"] == "fail"
+        report for report in parsed_testing_reports if report["verdict"] == "reject"
     )
     assert failed_testing["retry_decision"] == "retry"
     assert commit_report["verdict"] == "pass"
@@ -2354,8 +2354,8 @@ def test_gemini_renders_jsonl_transcript_and_stage_report(tmp_path: Path) -> Non
         subagent_status="completed",
     )
 
-    # Without CLI verdict, text VERDICT: PASS is not parsed — verdict is fail.
-    assert report.verdict == "fail"
+    # Without CLI verdict, text VERDICT: PASS is not parsed — verdict is reject.
+    assert report.verdict == "reject"
     assert any("litehive report" in w for w in report.warnings)
 
 
@@ -2386,8 +2386,8 @@ def test_codex_renders_jsonl_transcript_and_stage_report(tmp_path: Path) -> None
         subagent_status="completed",
     )
 
-    # Without CLI verdict, text VERDICT: PASS is not parsed — verdict is fail.
-    assert report.verdict == "fail"
+    # Without CLI verdict, text VERDICT: PASS is not parsed — verdict is reject.
+    assert report.verdict == "reject"
     assert any("litehive report" in w for w in report.warnings)
 
 
@@ -2458,8 +2458,8 @@ def test_codex_stage_report_uses_failed_command_output_when_no_agent_message(
     )
 
     assert report.summary == "tests failed"
-    # Without CLI verdict, failed agents produce fail (not blocked).
-    assert report.verdict == "fail"
+    # Without CLI verdict, failed agents produce reject (not blocked).
+    assert report.verdict == "reject"
 
 
 def test_codex_stage_report_ignores_stale_failed_command_output_after_restart(
@@ -2487,8 +2487,8 @@ def test_codex_stage_report_ignores_stale_failed_command_output_after_restart(
         subagent_status="completed",
     )
 
-    # Without CLI verdict, verdict is fail regardless of exit code.
-    assert report.verdict == "fail"
+    # Without CLI verdict, verdict is reject regardless of exit code.
+    assert report.verdict == "reject"
 
 
 def test_gemini_stage_report_uses_tool_error_when_no_assistant_message(tmp_path: Path) -> None:
@@ -2509,8 +2509,8 @@ def test_gemini_stage_report_uses_tool_error_when_no_assistant_message(tmp_path:
     )
 
     assert report.summary == "permission denied"
-    # Without CLI verdict, failed agents produce fail (not blocked).
-    assert report.verdict == "fail"
+    # Without CLI verdict, failed agents produce reject (not blocked).
+    assert report.verdict == "reject"
 
 
 def test_copilot_renders_jsonl_transcript_and_stage_report(tmp_path: Path) -> None:
@@ -2540,8 +2540,8 @@ def test_copilot_renders_jsonl_transcript_and_stage_report(tmp_path: Path) -> No
         subagent_status="completed",
     )
 
-    # Without CLI verdict, text VERDICT: PASS is not parsed — verdict is fail.
-    assert report.verdict == "fail"
+    # Without CLI verdict, text VERDICT: PASS is not parsed — verdict is reject.
+    assert report.verdict == "reject"
     assert any("litehive report" in w for w in report.warnings)
 
 
@@ -2563,8 +2563,8 @@ def test_copilot_stage_report_uses_json_error_when_no_assistant_message(tmp_path
     )
 
     assert report.summary == "authentication required"
-    # Without CLI verdict, failed agents produce fail (not blocked).
-    assert report.verdict == "fail"
+    # Without CLI verdict, failed agents produce reject (not blocked).
+    assert report.verdict == "reject"
 
 
 def test_copilot_render_transcript_falls_back_to_message_deltas(tmp_path: Path) -> None:
@@ -2610,7 +2610,7 @@ def test_copilot_stage_report_uses_failed_tool_result_when_no_message(tmp_path: 
     )
 
     assert report.summary == "disk full"
-    assert report.verdict == "fail"
+    assert report.verdict == "reject"
 
 
 def test_copilot_stream_event_adapter_extracts_final_message(tmp_path: Path) -> None:
@@ -2677,7 +2677,7 @@ def test_copilot_stream_event_adapter_extracts_tool_error_without_message(
     )
 
     assert report.summary == "permission denied"
-    assert report.verdict == "fail"
+    assert report.verdict == "reject"
 
 
 def test_copilot_engine_continuation_returns_none(tmp_path: Path) -> None:
@@ -2715,7 +2715,7 @@ def test_execution_result_transcript_combines_stdout_and_stderr(tmp_path: Path) 
 
 
 def test_parse_stage_report_text_fails_on_text_only_transcript() -> None:
-    """Text VERDICT:/SUMMARY: without STAGE_RESULT JSON produces fail."""
+    """Text VERDICT:/SUMMARY: without STAGE_RESULT JSON produces reject."""
     report = parse_stage_report_text(
         task_id="T-0003",
         step="implementing",
@@ -2728,13 +2728,13 @@ def test_parse_stage_report_text_fails_on_text_only_transcript() -> None:
         subagent_status="completed",
     )
 
-    # No CLI verdict and no valid STAGE_RESULT → fail
-    assert report.verdict == "fail"
+    # No CLI verdict and no valid STAGE_RESULT → reject
+    assert report.verdict == "reject"
     assert any("litehive report" in w for w in report.warnings)
 
 
 def test_parse_stage_report_text_no_text_follow_up_extraction() -> None:
-    """Text-only transcript without structured STAGE_RESULT produces a fail verdict."""
+    """Text-only transcript without structured STAGE_RESULT produces a reject verdict."""
     report = parse_stage_report_text(
         task_id="T-0003",
         step="accepting",
@@ -2747,11 +2747,11 @@ def test_parse_stage_report_text_no_text_follow_up_extraction() -> None:
         subagent_status="completed",
     )
 
-    assert report.verdict == "fail"
+    assert report.verdict == "reject"
 
 
-def test_stage_report_from_subagent_fails_without_cli_verdict(tmp_path: Path) -> None:
-    """Without CLI verdict in thread, verdict is always fail."""
+def test_stage_report_from_subagent_rejects_without_cli_verdict(tmp_path: Path) -> None:
+    """Without CLI verdict in thread, verdict is always reject."""
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Adapter task")
     result = SubagentResult(
@@ -2776,8 +2776,8 @@ def test_stage_report_from_subagent_fails_without_cli_verdict(tmp_path: Path) ->
 
     report = stage_report_from_subagent(task, "implementing", result)
 
-    # No CLI verdict → fail, regardless of text VERDICT: PASS in transcript
-    assert report.verdict == "fail"
+    # No CLI verdict → reject, regardless of text VERDICT: PASS in transcript
+    assert report.verdict == "reject"
     assert any("litehive report" in w for w in report.warnings)
 
 
@@ -2822,7 +2822,7 @@ def test_stage_prompt_surfaces_acceptance_gate_for_large_task_without_inferable_
         in prompt
     )
     assert "ACCEPTANCE_CRITERIA:" in prompt
-    assert "If the context is still insufficient, return `VERDICT: BLOCKED`" in prompt
+    assert "If the context is still insufficient, return `VERDICT: REJECT`" in prompt
 
 
 def test_stage_prompt_allows_grooming_to_pass_with_inferred_acceptance_criteria(
@@ -2841,14 +2841,14 @@ def test_stage_prompt_allows_grooming_to_pass_with_inferred_acceptance_criteria(
         in prompt
     )
     assert (
-        "If the current task context is not sufficient after all, return `VERDICT: BLOCKED` instead of passing grooming without criteria."
+        "If the current task context is not sufficient after all, return `VERDICT: REJECT` instead of passing grooming without criteria."
         in prompt
     )
     assert "you may add an `ACCEPTANCE_CRITERIA:` section with concrete `- ` bullets" in prompt
     assert "the current task context is sufficient to infer them" in prompt
     assert "You may return `VERDICT: PASS` without restating them" in prompt
     assert (
-        "Return `VERDICT: BLOCKED` only if the inferred criteria are incomplete or incorrect"
+        "Return `VERDICT: REJECT` if the inferred criteria are incomplete or incorrect"
         in prompt
     )
     assert (

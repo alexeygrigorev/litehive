@@ -50,12 +50,12 @@ def stage_report_from_subagent(
             resource_limit_event=event,
         )
 
-    # No CLI verdict submitted — verdict is fail.
+    # No CLI verdict submitted — treat agent non-completion as reject.
     return StageReport(
         task_id=task.id,
         step=step,  # type: ignore[arg-type]
-        verdict="fail",
-        summary=f"{step} failed: agent did not submit verdict via litehive report CLI",
+        verdict="reject",
+        summary=f"{step} rejected: agent did not submit verdict via litehive report CLI",
         feedback=cap_feedback(result.transcript),
         warnings=["Agent did not submit verdict via litehive report CLI."],
     )

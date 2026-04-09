@@ -123,7 +123,8 @@ def submit_stage_verdict_via_web(
     message: str,
 ) -> dict[str, Any]:
     root = root.resolve()
-    if verdict not in _WEB_VERDICT_OPTIONS:
+    normalized_verdict = "reject" if verdict == "fail" else verdict
+    if normalized_verdict not in _WEB_VERDICT_OPTIONS:
         allowed = ", ".join(_WEB_VERDICT_OPTIONS)
         raise ValueError(f"Unsupported verdict '{verdict}'. Expected one of: {allowed}")
 
@@ -150,18 +151,18 @@ def submit_stage_verdict_via_web(
         comment = TaskThreadComment(
             role=cleaned_role,
             step=step,
-            verdict=verdict,  # type: ignore[arg-type]
+            verdict=normalized_verdict,  # type: ignore[arg-type]
             message=cleaned_message,
         )
         append_thread_comment(root, task, comment)
 
-        if verdict == "comment":
+        if normalized_verdict == "comment":
             return {
                 "task": _serialize_task(root, task, state.active_task_id),
                 "submitted": {
                     "task_id": task.id,
                     "step": step,
-                    "verdict": verdict,
+                    "verdict": normalized_verdict,
                     "role": cleaned_role,
                 },
             }
@@ -169,14 +170,14 @@ def submit_stage_verdict_via_web(
         report = StageReport(
             task_id=task.id,
             step=step,  # type: ignore[arg-type]
-            verdict=verdict,  # type: ignore[arg-type]
+            verdict=normalized_verdict,  # type: ignore[arg-type]
             summary=cleaned_message,
             feedback=cleaned_message,
         )
         _write_stage_report(root, task, report)
         _apply_stage_finished(task, report)
 
-        target = _ROUTES.get((step, verdict))
+        target = _ROUTES.get((step, normalized_verdict))
         if target == "accepting":
             task.pipeline_status = "accepting"
             task.status = "in_progress"
@@ -218,7 +219,7 @@ def submit_stage_verdict_via_web(
             "submitted": {
                 "task_id": task.id,
                 "step": step,
-                "verdict": verdict,
+                "verdict": normalized_verdict,
                 "role": cleaned_role,
             },
         }

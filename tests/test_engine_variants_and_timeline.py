@@ -287,8 +287,8 @@ def test_claude_renders_jsonl_transcript_and_stage_report(tmp_path: Path) -> Non
     )
 
     # Text-based verdict parsing removed; without CLI verdict or STAGE_RESULT JSON,
-    # verdict defaults to fail.
-    assert report.verdict == "fail"
+    # verdict defaults to reject.
+    assert report.verdict == "reject"
     assert report.summary == "VERDICT: PASS"
     assert report.files_changed == []
 
@@ -430,7 +430,7 @@ def test_claude_stage_report_uses_error_when_no_assistant_message(tmp_path: Path
     )
 
     assert report.summary == "authentication required"
-    assert report.verdict == "fail"
+    assert report.verdict == "reject"
 
 
 def test_resolve_engine_name_rejects_claude_when_not_enabled(tmp_path: Path) -> None:

@@ -123,9 +123,9 @@ def stage_prompt(
                     "- Structured acceptance criteria are still missing on the task record, but the current task context is sufficient to infer them.",
                     "- As the planner for grooming, either provide explicit `ACCEPTANCE_CRITERIA:` bullets or let the runner persist the inferred version by returning `VERDICT: PASS`.",
                     "- You may return `VERDICT: PASS` without restating them; the runner will infer and persist the criteria after grooming.",
-                    "- If the current task context is not sufficient after all, return `VERDICT: BLOCKED` instead of passing grooming without criteria.",
+                    "- If the current task context is not sufficient after all, return `VERDICT: REJECT` instead of passing grooming without criteria.",
                     "- To override the inferred version, you may add an `ACCEPTANCE_CRITERIA:` section with concrete `- ` bullets that can be persisted directly.",
-                    "- Return `VERDICT: BLOCKED` only if the inferred criteria are incomplete or incorrect and the task still needs more information.",
+                    "- Return `VERDICT: REJECT` if the inferred criteria are incomplete or incorrect and the task still needs more information.",
                     "",
                     "Inferred acceptance criteria available from current task context:",
                 ]
@@ -142,7 +142,7 @@ def stage_prompt(
                 lines.extend(
                     [
                         "- As the planner for grooming, provide an `ACCEPTANCE_CRITERIA:` section with concrete `- ` bullets before passing grooming.",
-                        "- If the context is still insufficient, return `VERDICT: BLOCKED` and explain the missing information in `SUMMARY` or `WARNINGS`.",
+                        "- If the context is still insufficient, return `VERDICT: REJECT` and explain the missing information in `SUMMARY` or `WARNINGS`.",
                     ]
                 )
 
@@ -273,7 +273,7 @@ def stage_prompt(
         [
             "",
             "IMPORTANT: When you are done, you MUST submit your verdict by running:",
-            f'  litehive report --task-id $LITEHIVE_TASK_ID --verdict <pass|fail|reject|blocked> --role {stage_owner} --step {step} --message "<your report>"',
+            f'  litehive report --task-id $LITEHIVE_TASK_ID --verdict <pass|reject> --role {stage_owner} --step {step} --message "<your report>"',
             f"The environment variable LITEHIVE_TASK_ID is set to {task.id} for this session. Always use --task-id $LITEHIVE_TASK_ID to ensure the verdict goes to the correct task.",
             "",
             "Your --message is the PRIMARY way the next agent understands what happened.",
@@ -286,8 +286,6 @@ def stage_prompt(
             "  2. OBSERVED behavior: what actually happens (exact error messages, test output, wrong values)",
             "  3. Steps to reproduce: the exact command or test that demonstrates the gap",
             "  4. Which acceptance criteria are not met and which ones are already satisfied",
-            "- On FAIL: explain what went wrong and whether it is fixable or needs a different approach.",
-            "- On BLOCKED: explain what dependency or resource is missing.",
             "",
             "A vague rejection like 'tests fail' or 'missing evidence' is useless and causes infinite loops.",
             "A good rejection looks like: 'Expected: `litehive engine gemini` switches the default engine and prints confirmation. "
@@ -354,7 +352,7 @@ def _stage_role_prompt(step: str, owner: str | None = None) -> list[str]:
             "- You are the planner, a PM-style role representing the user's and product's point of view.",
             "- Frame the real user problem, clarify scope, sharpen acceptance criteria, decompose the work, identify follow-up tasks, and estimate PM sizing.",
             "- Treat the Litehive CLI as the source of truth for task shaping: use the task record fields directly, and when documenting operator guidance prefer concrete `litehive add`, `litehive update`, and `litehive intake` flows over vague prose.",
-            "- Do not pass grooming with a blank task record; make sure the task has a clear goal and explicit acceptance criteria, or return a blocked outcome that names what is missing.",
+            "- Do not pass grooming with a blank task record; make sure the task has a clear goal and explicit acceptance criteria, or reject it with a clear explanation of what is missing.",
             "- During grooming, you can emit a structured `TASK_UPDATE:` YAML block to update any task field (goal, acceptance_criteria, constraints, plan, pm_complexity, planned_effort, priority, auto_commit, etc.).",
             "- To close a task as duplicate, wont_do, or deferred, include `outcome: <status>` and optional `outcome_reason: <text>` in the TASK_UPDATE block.",
             "- To park a task (pause without closing), include `action: park` in the TASK_UPDATE block.",

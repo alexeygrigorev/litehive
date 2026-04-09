@@ -17,7 +17,7 @@ _STREAM_KEEPALIVE_SECONDS = 15.0
 _STREAM_RETRY_MS = 2000
 _STREAM_SCAN_INTERVAL_SECONDS = 0.25
 _WEB_REVIEWABLE_STAGES = {"testing", "accepting"}
-_WEB_VERDICT_OPTIONS = ("pass", "fail", "reject", "blocked", "comment")
+_WEB_VERDICT_OPTIONS = ("pass", "reject", "comment")
 
 _TEMPLATES_DIR = Path(__file__).parent / "templates"
 _jinja_env = Environment(loader=FileSystemLoader(str(_TEMPLATES_DIR)), autoescape=False)

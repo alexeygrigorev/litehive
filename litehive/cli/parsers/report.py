@@ -3,9 +3,7 @@ from litehive.cli.parsers._common import add_workspace_argument
 
 def register_report_parser(subparsers):
     parser = subparsers.add_parser("report", help="Submit a stage verdict for the active task")
-    parser.add_argument(
-        "--verdict", required=True, choices=["pass", "fail", "reject", "blocked", "comment"]
-    )
+    parser.add_argument("--verdict", required=True, choices=["pass", "fail", "reject", "comment"])
     parser.add_argument(
         "--message",
         required=True,

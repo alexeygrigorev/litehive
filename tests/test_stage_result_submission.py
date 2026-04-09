@@ -38,10 +38,10 @@ def test_valid_submission_produces_structured_report() -> None:
 
 
 # ---------------------------------------------------------------------------
-# AC-2: Extra unknown field → validation error, verdict is fail (no text fallback)
+# AC-2: Extra unknown field → validation error, verdict is reject (no text fallback)
 # ---------------------------------------------------------------------------
 
-def test_extra_field_rejected_produces_fail() -> None:
+def test_extra_field_rejected_produces_reject() -> None:
     payload = {
         "verdict": "pass",
         "summary": "done",
@@ -54,8 +54,8 @@ def test_extra_field_rejected_produces_fail() -> None:
         transcript=transcript,
         subagent_status="completed",
     )
-    # No text fallback — verdict is always fail when STAGE_RESULT is invalid
-    assert report.verdict == "fail"
+    # No text fallback — verdict is always reject when STAGE_RESULT is invalid
+    assert report.verdict == "reject"
     # A validation warning should be present
     assert any("STAGE_RESULT validation" in w for w in report.warnings)
     # Also warns about missing CLI verdict
@@ -63,10 +63,10 @@ def test_extra_field_rejected_produces_fail() -> None:
 
 
 # ---------------------------------------------------------------------------
-# AC-3: Missing required verdict field → fail verdict, no text fallback
+# AC-3: Missing required verdict field → reject verdict, no text fallback
 # ---------------------------------------------------------------------------
 
-def test_missing_verdict_produces_fail_with_warning() -> None:
+def test_missing_verdict_produces_reject_with_warning() -> None:
     payload = {
         "summary": "done",
         "files_changed": [],
@@ -79,7 +79,7 @@ def test_missing_verdict_produces_fail_with_warning() -> None:
         subagent_status="completed",
     )
     # Text VERDICT: PASS is NOT parsed — no text fallback
-    assert report.verdict == "fail"
+    assert report.verdict == "reject"
     assert any("STAGE_RESULT validation" in w for w in report.warnings)
     # Warning should mention the missing field
     assert any("verdict" in w for w in report.warnings)
@@ -165,8 +165,8 @@ def test_validation_warning_is_human_readable() -> None:
         transcript=transcript,
         subagent_status="completed",
     )
-    # Verdict is fail — text VERDICT: PASS is not parsed
-    assert report.verdict == "fail"
+    # Verdict is reject — text VERDICT: PASS is not parsed
+    assert report.verdict == "reject"
     validation_warnings = [w for w in report.warnings if "STAGE_RESULT validation" in w]
     assert validation_warnings, "Expected at least one STAGE_RESULT validation warning"
     # Each warning should be a non-empty human-readable string
@@ -187,7 +187,7 @@ def test_extra_field_validation_warning_mentions_field() -> None:
         transcript=transcript,
         subagent_status="completed",
     )
-    assert report.verdict == "fail"
+    assert report.verdict == "reject"
     assert any("STAGE_RESULT validation" in w for w in report.warnings)
 
 
@@ -204,13 +204,13 @@ def test_failed_subagent_cannot_turn_structured_pass_into_passing_report() -> No
         subagent_status="failed",
     )
 
-    assert report.verdict == "fail"
+    assert report.verdict == "reject"
     assert report.summary == "partial work looked good before timeout"
     assert report.tests == {"added": 1, "passing": 1}
     assert any("subagent status was `failed`" in w for w in report.warnings)
 
 
-def test_failed_subagent_without_cli_submission_stays_failed() -> None:
+def test_failed_subagent_without_cli_submission_becomes_reject() -> None:
     report = parse_stage_report_text(
         task_id="T-0001",
         step="implementing",
@@ -218,12 +218,12 @@ def test_failed_subagent_without_cli_submission_stays_failed() -> None:
         subagent_status="failed",
     )
 
-    assert report.verdict == "fail"
-    assert report.summary == "implementing failed without verdict"
+    assert report.verdict == "reject"
+    assert report.summary == "implementing rejected without verdict"
     assert any("litehive report" in w for w in report.warnings)
 
 
-def test_failed_subagent_text_transcript_without_cli_submission_stays_failed() -> None:
+def test_failed_subagent_text_transcript_without_cli_submission_becomes_reject() -> None:
     report = parse_stage_report_text(
         task_id="T-0001",
         step="implementing",
@@ -231,6 +231,22 @@ def test_failed_subagent_text_transcript_without_cli_submission_stays_failed() -
         subagent_status="failed",
     )
 
-    assert report.verdict == "fail"
+    assert report.verdict == "reject"
     assert report.summary == "VERDICT: PASS"
     assert any("litehive report" in w for w in report.warnings)
+
+
+def test_legacy_fail_verdict_in_structured_submission_normalizes_to_reject() -> None:
+    payload = {
+        "verdict": "fail",
+        "summary": "could not complete the work",
+    }
+    report = parse_stage_report_text(
+        task_id="T-0001",
+        step="implementing",
+        transcript=_transcript(payload),
+        subagent_status="completed",
+    )
+
+    assert report.verdict == "reject"
+    assert report.summary == "could not complete the work"

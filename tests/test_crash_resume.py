@@ -463,7 +463,7 @@ def test_stage_executor_crash_resume_skips_engines_without_resume_id(
 
     report = executor(task, "implementing")
 
-    assert report.verdict == "fail"
+    assert report.verdict == "reject"
     assert len(calls) == 1
     assert calls[0]["resume_session_id"] is None
 
