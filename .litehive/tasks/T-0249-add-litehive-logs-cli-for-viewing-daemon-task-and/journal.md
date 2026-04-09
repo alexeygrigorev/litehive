@@ -12,6 +12,15 @@ Execution started with engine `claude`.
 ## 2026-04-09T13:02:21+00:00
 Stage `grooming` switched from `claude` to `codex` after claude usage limit reached (7d window at 96%, resets 2026-04-10T09:00:00.409320+00:00).
 
+## 2026-04-09T13:15:38+00:00
+Created task worktree at `.litehive/worktrees/T-0249-add-litehive-logs-cli-for-viewing-daemon-task-and`.
+
+## 2026-04-09T13:15:38+00:00
+Execution started with engine `claude`.
+
+## 2026-04-09T13:15:39+00:00
+Stage `grooming` switched from `claude` to `codex` after claude usage limit reached (7d window at 96%, resets 2026-04-10T09:00:00.786281+00:00).
+
 ## 2026-04-09T13:15:45+00:00
 Runner hook `before_pm_acceptance` passed: `uv run ruff check --select E402,F401 litehive tests`.
 - step: `accepting`
@@ -31,3 +40,6 @@ fi`.
 - blocking: `True`
 - exit_code: `0`
 - artifact: `artifacts/before_pm_acceptance-002.yaml`
+
+## 2026-04-09T13:18:52+00:00
+Merge conflict on 5 file(s). Launching merge agent (attempt 1).
