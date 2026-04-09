@@ -12,13 +12,10 @@ from litehive.pipeline._recovery import (
     _classify_recovery_failure_owner,
 )
 from litehive.subagents import SubagentResult
-from litehive.tasks import (
-    append_thread_comment,
-    create_task,
-    save_task,
-    save_task_runtime,
-    task_dir,
-)
+from litehive.tasks import create_task, save_task
+from litehive.tasks.crud import save_task_runtime
+from litehive.tasks.paths import task_dir
+from litehive.tasks.reports import append_thread_comment
 
 
 def _make_litehive_traceback(source_path: str) -> str:

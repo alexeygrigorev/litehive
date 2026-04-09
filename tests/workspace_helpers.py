@@ -3,18 +3,19 @@ import gzip
 import os
 from pathlib import Path, PurePosixPath
 import shutil as _shutil
+import signal
 import subprocess
 import sys
 import tempfile as _tempfile
 import threading
 import time
+import types
 
 import pytest
 import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-import litehive.tasks as tasks_module
 from litehive.cli import (
     _cmd_abandon_task,
     _cmd_add,
@@ -62,6 +63,7 @@ from litehive.config import (
     load_config,
     render_context_template,
     resolve_process_profile,
+    state_path,
 )
 from litehive.agents import (
     classify_execution_interruption,
@@ -131,49 +133,88 @@ from litehive.subagents import (
     stage_prompt,
     stage_report_from_subagent,
 )
-from litehive.tasks import (
-    WorkspaceConflictError,
-    abandon_task,
+from litehive.tasks.archive import (
     archive_done_tasks,
     archive_root,
     archive_task,
     cleanup_archived_tasks,
-    close_task,
+    list_archived_tasks,
+)
+from litehive.tasks.crud import (
     create_follow_up_tasks,
     create_task,
-    dequeue_next_task_selection,
-    finish_task_run_transition,
     get_task,
     get_task_worktree_path,
-    implementation_entry_stage,
-    list_archived_tasks,
     list_tasks,
-    load_state,
-    mark_subagent_started,
-    move_queued_task,
-    needs_normalization,
-    peek_next_task_selection,
-    recover_stale_runner_state,
-    requeue_task,
-    repair_workspace_state,
     require_task,
-    reroute_stage_for_acceptance_criteria,
-    restore_untouched_active_task,
-    resume_task,
-    runner_status,
-    save_state,
     save_task,
     save_task_runtime,
+)
+from litehive.tasks.models import WorkspaceConflictError
+from litehive.tasks.normalization import (
+    implementation_entry_stage,
+    needs_normalization,
+    reroute_stage_for_acceptance_criteria,
+    task_requires_acceptance_criteria,
+)
+from litehive.tasks.paths import task_dir, task_file, task_runtime_file
+from litehive.tasks.persistence import load_state, save_state
+from litehive.tasks.queue_management import move_queued_task
+from litehive.tasks.queue_ops import (
+    dequeue_next_task_selection,
+    peek_next_task_selection,
+    restore_untouched_active_task,
     set_active_task,
+)
+from litehive.tasks.reports import append_thread_comment, load_task_thread
+from litehive.workspace.locking import runner_heartbeat, runner_status, workspace_runner_guard
+from litehive.workspace.recovery import (
+    _mark_interrupted_subagent,
+    _prepare_interrupted_task,
+    recover_stale_runner_state,
+    repair_workspace_state,
+)
+from litehive.workspace.runtime_tracking import (
+    finish_task_run_transition,
+    mark_subagent_started,
+    mark_task_run_started,
+)
+from litehive.workspace.task_status import (
+    abandon_task,
+    close_task,
+    requeue_task,
+    resume_task,
     stop_current_task,
     switch_task_engine,
-    task_dir,
-    task_file,
-    task_requires_acceptance_criteria,
-    task_runtime_file,
+    update_task,
     update_task_metadata,
 )
 from litehive.web import build_workspace_snapshot, read_session_view
+import litehive.tasks.persistence as _tasks_persistence
+import litehive.tasks.templates as _tasks_templates
+import litehive.workspace.locking as _workspace_locking
+import litehive.workspace.workflow as _workspace_workflow
+
+tasks_module = types.SimpleNamespace(
+    TASK_TEMPLATES=_tasks_templates.TASK_TEMPLATES,
+    _atomic_write_text=_tasks_persistence._atomic_write_text,
+    _mark_interrupted_subagent=_mark_interrupted_subagent,
+    _merged_state_for_runner_owned_write=_workspace_workflow._merged_state_for_runner_owned_write,
+    _prepare_interrupted_task=_prepare_interrupted_task,
+    _save_state_without_runner_guard=_tasks_persistence._save_state_without_runner_guard,
+    _workspace_transition_writes=_workspace_workflow._workspace_transition_writes,
+    append_thread_comment=append_thread_comment,
+    fcntl=_workspace_locking.fcntl,
+    load_task_thread=load_task_thread,
+    mark_task_run_started=mark_task_run_started,
+    resume_task=resume_task,
+    runner_heartbeat=runner_heartbeat,
+    signal=signal,
+    state_path=state_path,
+    task_dir=task_dir,
+    update_task=update_task,
+    workspace_runner_guard=workspace_runner_guard,
+)
 
 
 
@@ -186,7 +227,7 @@ def _block_runner_lock(monkeypatch: pytest.MonkeyPatch) -> None:
             raise BlockingIOError("runner is busy")
         return real_flock(fd, flags)
 
-    monkeypatch.setattr("litehive.tasks.fcntl.flock", fake_flock)
+    monkeypatch.setattr("litehive.workspace.locking.fcntl.flock", fake_flock)
 
 
 def _fail_atomic_write_on_path(
@@ -199,7 +240,7 @@ def _fail_atomic_write_on_path(
             raise OSError(message)
         original_atomic_write(path, content)
 
-    monkeypatch.setattr("litehive.tasks._atomic_write_text", fail_on_selected_write)
+    monkeypatch.setattr("litehive.tasks.persistence._atomic_write_text", fail_on_selected_write)
 
 
 def _latest_pool_run_report(root: Path) -> dict[str, object]:
@@ -552,7 +593,8 @@ def _interrupted_subagent_result(
 def _successful_stage_execution(tmp_path: Path, adapter: str, step: str) -> CLIExecutionResult:
     # Auto-write a CLI verdict for the active task in the workspace.
     ws_root = _resolve_workspace_root(tmp_path)
-    from litehive.tasks import load_state as _load_state, get_task as _get_task
+    from litehive.tasks.crud import get_task as _get_task
+    from litehive.tasks.persistence import load_state as _load_state
 
     state = _load_state(ws_root)
     active_id = state.active_task_id

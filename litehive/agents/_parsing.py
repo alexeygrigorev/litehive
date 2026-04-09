@@ -16,7 +16,7 @@ def stage_report_from_subagent(
 ) -> StageReport:
     # Step 1: Check if agent submitted a verdict via `litehive report` CLI.
     if root is not None:
-        from litehive.tasks import load_task_thread
+        from litehive.tasks.reports import load_task_thread
 
         thread = load_task_thread(root, task)
         step_comments = [c for c in thread if c.step == step and c.verdict != "comment"]

@@ -16,7 +16,8 @@ from litehive.agents._artifacts import (
     _write_text_artifact,
 )
 from litehive.agents._models import SubagentInactivityTimeout
-from litehive.tasks import _write_atomic_files, mark_subagent_pid
+from litehive.tasks.persistence import _write_atomic_files
+from litehive.workspace.runtime_tracking import mark_subagent_pid
 
 
 class _SessionMixin:

@@ -7,7 +7,8 @@ from textual.app import App, ComposeResult
 from textual.widgets import Footer, Header, Static
 
 from litehive.observability import render_task_summary
-from litehive.tasks import list_tasks, load_state
+from litehive.tasks.crud import list_tasks
+from litehive.tasks.persistence import load_state
 
 
 class LitehiveApp(App[None]):

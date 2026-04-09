@@ -4,11 +4,11 @@ from pathlib import Path
 
 from litehive.config import LitehiveConfig, default_agent_startup_guidance, resolve_process_profile
 from litehive.models import TaskRecord
-from litehive.tasks import (
+from litehive.tasks.normalization import (
     infer_acceptance_criteria,
     missing_acceptance_criteria_reason,
-    task_template,
 )
+from litehive.tasks.templates import task_template
 
 
 _PROMPT_HOOK_POINT_GROUPS: dict[str, list[tuple[str, str]]] = {
@@ -261,7 +261,7 @@ def stage_prompt(
         )
 
     # Include the task discussion thread so agents see the full history
-    from litehive.tasks import render_task_thread
+    from litehive.tasks.reports import render_task_thread
 
     thread_text = render_task_thread(root, task) if root is not None else ""
     if thread_text:

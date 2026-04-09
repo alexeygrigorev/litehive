@@ -1,10 +1,8 @@
 from litehive.models import StageReport
-from litehive.tasks import (
-    create_task,
-    get_task,
-    apply_task_updates_from_report,
-)
 from litehive.config import ensure_workspace
+from litehive.tasks import create_task, get_task
+from litehive.tasks.persistence import load_state, save_state
+from litehive.workspace.workflow import apply_task_updates_from_report
 
 
 def test_apply_task_updates_from_structured_report(tmp_path):
@@ -106,9 +104,9 @@ def test_apply_task_updates_from_stage_result_json(tmp_path):
 def test_apply_task_updates_with_outcome_duplicate_closes_task(tmp_path):
     root = ensure_workspace(tmp_path)
     task = create_task(root, title="Dupe task", goal="Check duplicate closure")
-    state = __import__("litehive.tasks", fromlist=["load_state"]).load_state(root)
+    state = load_state(root)
     state.queue.append(task.id)
-    __import__("litehive.tasks", fromlist=["save_state"]).save_state(root, state)
+    save_state(root, state)
 
     report = StageReport(
         task_id=task.id,

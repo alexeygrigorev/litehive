@@ -9,11 +9,8 @@ from pathlib import Path
 
 from litehive.config import ensure_workspace
 from litehive.models import GitHubOrigin
-from litehive.tasks import (
-    WorkspaceConflictError,
-    create_task,
-    list_tasks,
-)
+from litehive.tasks.crud import create_task, list_tasks
+from litehive.tasks.models import WorkspaceConflictError
 
 # ── Label mapping ────────────────────────────────────────────────────────
 

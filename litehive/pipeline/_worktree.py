@@ -18,14 +18,14 @@ from litehive.git import (
 )
 from litehive.models import TaskRecord
 from litehive.agents import SubagentManager
-from litehive.tasks import (
-    append_journal,
+from litehive.tasks.crud import (
     get_task,
     get_task_worktree_path,
     list_tasks,
     save_task,
     set_task_worktree_path,
 )
+from litehive.tasks.journal import append_journal
 
 from ._models import resolve_model
 from ._types import DirtyWorktreeFinding, DirtyWorktreeGateReport

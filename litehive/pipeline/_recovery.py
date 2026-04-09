@@ -6,7 +6,7 @@ from pathlib import Path
 
 import yaml
 
-from litehive.config import LitehiveConfig
+from litehive.config import LitehiveConfig, state_path
 from litehive.git import (
     GitError,
     abort_revert,
@@ -18,24 +18,16 @@ from litehive.git import (
 )
 from litehive.models import RecoveryAction, StageReport, TaskRecord
 from litehive.agents import SubagentManager, stage_report_from_subagent
-from litehive.tasks import (
-    _atomic_write_text,
-    _workspace_lock,
-    append_journal,
-    collect_recovery_evidence,
-    implementation_entry_stage,
-    load_state,
-    persist_task_and_state,
-    prepare_completed_task_for_recovery,
-    record_recovery_report,
-    save_task_runtime,
-    state_path,
-    task_dir,
-    task_file,
-    task_runtime_file,
-    workspace_mutation_guard,
-)
 from litehive.tasks.paths import _latest_subagent_base, _read_text_artifact, _resolve_artifact_path
+from litehive.tasks.crud import save_task_runtime
+from litehive.tasks.journal import append_journal
+from litehive.tasks.normalization import implementation_entry_stage
+from litehive.tasks.paths import task_dir, task_file, task_runtime_file
+from litehive.tasks.persistence import _atomic_write_text, load_state
+from litehive.tasks.queue_management import prepare_completed_task_for_recovery
+from litehive.tasks.reports import collect_recovery_evidence, record_recovery_report
+from litehive.workspace.locking import _workspace_lock, workspace_mutation_guard
+from litehive.workspace.workflow import persist_task_and_state
 
 from ._models import resolve_model
 from ._types import RollbackSummary, _path_within
@@ -322,7 +314,7 @@ def _attempt_stage_recovery(
         model=model_name,
     )
 
-    from litehive.tasks import load_task_thread
+    from litehive.tasks.reports import load_task_thread
 
     thread = load_task_thread(root, task)
     recovery_comments = [
@@ -474,7 +466,7 @@ def _run_litehive_self_heal(
     task.runtime.self_heal_traceback_fingerprints.append(fingerprint)
     save_task_runtime(root, task)
 
-    from litehive.tasks import load_task_thread
+    from litehive.tasks.reports import load_task_thread
 
     thread = load_task_thread(root, task)
     recovery_comments = [
@@ -673,7 +665,7 @@ def _restore_persisted_files(snapshot: dict[Path, str | None]) -> None:
 def rollback_completed_task(root: Path, task_id: str) -> RollbackSummary:
     root = root.resolve()
     with workspace_mutation_guard(root), _workspace_lock(root):
-        from litehive.tasks import get_task
+        from litehive.tasks.crud import get_task
         task = get_task(root, task_id)
         if task is None:
             raise GitError(f"Task {task_id} not found")
@@ -726,7 +718,7 @@ def rollback_completed_task(root: Path, task_id: str) -> RollbackSummary:
 def recover_completed_task(root: Path, task_id: str) -> TaskRecord:
     root = root.resolve()
     with workspace_mutation_guard(root), _workspace_lock(root):
-        from litehive.tasks import get_task
+        from litehive.tasks.crud import get_task
         task = get_task(root, task_id)
         if task is None:
             raise GitError(f"Task {task_id} not found")

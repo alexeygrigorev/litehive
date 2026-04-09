@@ -49,10 +49,7 @@ def _atomic_write_gzip_text(path: Path, content: str) -> None:
 
 
 def _write_atomic_files(writes: dict[Path, str]) -> None:
-    # Use late-bound lookup so monkeypatching litehive.tasks._atomic_write_text works.
-    import sys
-    _write = sys.modules["litehive.tasks"]._atomic_write_text
-
+    _write = _atomic_write_text
     snapshots = {
         path: path.read_text(encoding="utf-8") if path.exists() else _MISSING for path in writes
     }

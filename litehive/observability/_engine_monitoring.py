@@ -13,7 +13,8 @@ from litehive.models import (
     WorkspaceEngineMonitoring,
     utcnow,
 )
-from litehive.tasks import _atomic_write_text, workspace_mutation_guard
+from litehive.tasks.persistence import _atomic_write_text
+from litehive.workspace.locking import workspace_mutation_guard
 
 
 def engine_monitoring_file(root: Path) -> Path:

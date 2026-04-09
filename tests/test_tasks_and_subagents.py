@@ -1,5 +1,11 @@
 import importlib
+import types
 
+import litehive.tasks.crud as tasks_crud
+import litehive.tasks.persistence as tasks_persistence
+import litehive.tasks.templates as tasks_templates
+import litehive.workspace.task_status as task_status_module
+import litehive.workspace.workflow as workflow_module
 from tests.workspace_helpers import (
     AdapterCapabilities,
     CLIExecutionResult,
@@ -38,13 +44,20 @@ from tests.workspace_helpers import (
     update_task_metadata,
     yaml,
 )
-
 from litehive.subagents._engine_detection import (
     _ORIGINAL_EXTERNAL_ADAPTER_RUN,
     _ORIGINAL_EXTERNAL_ADAPTER_RUN_LIVE,
     _has_callable_override,
     _prefers_non_live_run,
     _supports_live_execution,
+)
+
+tasks_module = types.SimpleNamespace(
+    TASK_TEMPLATES=tasks_templates.TASK_TEMPLATES,
+    _merged_state_for_runner_owned_write=workflow_module._merged_state_for_runner_owned_write,
+    _save_state_without_runner_guard=tasks_persistence._save_state_without_runner_guard,
+    _workspace_transition_writes=workflow_module._workspace_transition_writes,
+    update_task=task_status_module.update_task,
 )
 
 
@@ -96,9 +109,9 @@ def test_workspace_transition_writes_preserve_task_added_after_state_snapshot(
 import json
 import yaml
 from pathlib import Path
-import litehive.tasks as tasks_module
-from litehive.config import ensure_workspace
+from litehive.config import ensure_workspace, state_path
 from litehive.tasks import create_task, load_state
+from litehive.workspace.workflow import _workspace_transition_writes
 
 root = Path(__import__("sys").argv[1])
 ensure_workspace(root)
@@ -110,8 +123,8 @@ active.status = "done"
 active.pipeline_status = "done"
 stale_state.active_task_id = None
 stale_state.queue = [queued.id]
-writes = tasks_module._workspace_transition_writes(root, tasks=[active], state=stale_state)
-serialized_state = yaml.safe_load(writes[tasks_module.state_path(root)])
+writes = _workspace_transition_writes(root, tasks=[active], state=stale_state)
+serialized_state = yaml.safe_load(writes[state_path(root)])
 print(json.dumps({
     "queue": serialized_state["queue"],
     "next_task_number": serialized_state["next_task_number"],
@@ -135,15 +148,16 @@ def test_create_task_preserves_runner_queue_changes_after_state_snapshot(tmp_pat
     script = """
 import json
 from pathlib import Path
-import litehive.tasks as tasks_module
 from litehive.config import ensure_workspace
 from litehive.tasks import create_task, load_state
+from litehive.tasks.persistence import _save_state_without_runner_guard
+from litehive.workspace import workflow as workflow_module
 
 root = Path(__import__("sys").argv[1])
 ensure_workspace(root)
 first = create_task(root, title="First queued task")
 second = create_task(root, title="Second queued task")
-original_merge = tasks_module._merged_state_for_runner_owned_write
+original_merge = workflow_module._merged_state_for_runner_owned_write
 injected = False
 
 def inject_latest_state(root, *, state, protected_task_ids=()):
@@ -152,10 +166,10 @@ def inject_latest_state(root, *, state, protected_task_ids=()):
         injected = True
         latest = load_state(root)
         latest.queue = [second.id, first.id]
-        tasks_module._save_state_without_runner_guard(root, latest)
+        _save_state_without_runner_guard(root, latest)
     return original_merge(root, state=state, protected_task_ids=protected_task_ids)
 
-tasks_module._merged_state_for_runner_owned_write = inject_latest_state
+workflow_module._merged_state_for_runner_owned_write = inject_latest_state
 added = create_task(root, title="Added while runner updated queue")
 print(json.dumps({"id": added.id, "queue": load_state(root).queue}))
 """
@@ -179,16 +193,18 @@ def test_create_follow_up_tasks_preserves_runner_queue_changes_after_state_snaps
     script = """
 import json
 from pathlib import Path
-import litehive.tasks as tasks_module
 from litehive.config import ensure_workspace
 from litehive.models import FollowUpTaskSpec
-from litehive.tasks import create_follow_up_tasks, create_task, load_state
+from litehive.tasks import create_task, load_state
+from litehive.tasks.crud import create_follow_up_tasks
+from litehive.tasks.persistence import _save_state_without_runner_guard
+from litehive.workspace import workflow as workflow_module
 
 root = Path(__import__("sys").argv[1])
 ensure_workspace(root)
 parent = create_task(root, title="Parent task")
 sibling = create_task(root, title="Sibling task")
-original_merge = tasks_module._merged_state_for_runner_owned_write
+original_merge = workflow_module._merged_state_for_runner_owned_write
 injected = False
 
 def inject_latest_state(root, *, state, protected_task_ids=()):
@@ -197,10 +213,10 @@ def inject_latest_state(root, *, state, protected_task_ids=()):
         injected = True
         latest = load_state(root)
         latest.queue = [sibling.id, parent.id]
-        tasks_module._save_state_without_runner_guard(root, latest)
+        _save_state_without_runner_guard(root, latest)
     return original_merge(root, state=state, protected_task_ids=protected_task_ids)
 
-tasks_module._merged_state_for_runner_owned_write = inject_latest_state
+workflow_module._merged_state_for_runner_owned_write = inject_latest_state
 created = create_follow_up_tasks(
     root,
     parent_task=parent,
@@ -252,7 +268,7 @@ def test_create_task_uses_persisted_next_task_number_without_rescanning(
     def fail_scan(root: Path) -> int:
         raise AssertionError("task id allocation should not rescan task directories")
 
-    monkeypatch.setattr(tasks_module, "_highest_task_number_on_disk", fail_scan)
+    monkeypatch.setattr(tasks_crud, "_highest_task_number_on_disk", fail_scan)
 
     created = create_task(tmp_path, title="Second task")
 

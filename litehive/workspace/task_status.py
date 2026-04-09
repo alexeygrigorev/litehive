@@ -1,5 +1,6 @@
 """Task status transitions: requeue, resume, abandon, close, park, update, stop, switch."""
 
+import os
 import signal
 import threading
 import time
@@ -89,31 +90,34 @@ def stop_current_task(
     wait_timeout_seconds: float = 5.0,
     poll_interval_seconds: float = 0.1,
 ) -> StopTaskSummary:
-    import sys
-
-    _tasks = sys.modules["litehive.tasks"]
     from litehive.tasks.crud import require_task
     from litehive.tasks.persistence import load_state
     from litehive.tasks.queue_ops import active_task_markers
+    from litehive.workspace.locking import (
+        _read_runner_lock_metadata,
+        _runner_lock_is_held,
+        _runner_pid_is_alive,
+    )
+    from litehive.workspace.recovery import recover_stale_runner_state
 
     state = load_state(root)
     active_task_id = _active_task_id_for_stop(root, state)
     runner_pid: int | None = None
-    if _tasks._runner_lock_is_held(root):
-        metadata = _tasks._read_runner_lock_metadata(root)
+    if _runner_lock_is_held(root):
+        metadata = _read_runner_lock_metadata(root)
         pid = metadata.pid
-        if _tasks._runner_pid_is_alive(pid):
+        if _runner_pid_is_alive(pid):
             runner_pid = int(pid)
-            _tasks.os.kill(runner_pid, signal.SIGINT)
+            os.kill(runner_pid, signal.SIGINT)
             deadline = time.monotonic() + max(wait_timeout_seconds, 0.0)
             sleep_interval = max(poll_interval_seconds, 0.01)
-            while _tasks._runner_lock_is_held(root) and time.monotonic() < deadline:
+            while _runner_lock_is_held(root) and time.monotonic() < deadline:
                 time.sleep(sleep_interval)
-            if _tasks._runner_lock_is_held(root):
+            if _runner_lock_is_held(root):
                 raise WorkspaceConflictError(
                     f"runner for task {active_task_id} did not stop cleanly after SIGINT (pid={runner_pid})"
                 )
-            _tasks.recover_stale_runner_state(root)
+            recover_stale_runner_state(root)
             state = load_state(root)
             markers = active_task_markers(root, state)
             if active_task_id not in markers:

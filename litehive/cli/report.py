@@ -2,7 +2,9 @@ import os
 from pathlib import Path
 
 from litehive.models import TaskThreadComment
-from litehive.tasks import append_thread_comment, load_state, get_task
+from litehive.tasks.crud import get_task
+from litehive.tasks.persistence import load_state
+from litehive.tasks.reports import append_thread_comment
 
 
 def _resolve_workspace_root(workspace: Path) -> Path:

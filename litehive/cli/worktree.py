@@ -5,14 +5,14 @@ from pathlib import Path, PurePosixPath
 
 from litehive.config import ensure_workspace
 from litehive.git import GitError, remove_worktree, status_porcelain
-from litehive.tasks import (
+from litehive.tasks.crud import (
     clear_task_worktree_path,
     get_task,
     get_task_worktree_path,
     list_tasks,
-    load_state,
     save_task,
 )
+from litehive.tasks.persistence import load_state
 
 _CLEANABLE_STATUSES = {"done", "deferred", "wont_do", "duplicate"}
 

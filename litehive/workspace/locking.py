@@ -138,20 +138,17 @@ def runner_status_readonly(root: Path) -> RunnerStatusState:
 
 
 def runner_status(root: Path) -> RunnerStatusState:
-    import sys
-
-    _tasks = sys.modules["litehive.tasks"]
     root = root.resolve()
-    status = _tasks._read_runner_lock_metadata(root)
-    if _tasks._runner_lock_is_active(root):
-        if _tasks._heartbeat_is_late(status.heartbeat_at):
+    status = _read_runner_lock_metadata(root)
+    if _runner_lock_is_active(root):
+        if _heartbeat_is_late(status.heartbeat_at):
             return status.model_copy(update={"status": "late"})
         return status.model_copy(update={"status": "running"})
-    if not _tasks._runner_metadata_present(status):
+    if not _runner_metadata_present(status):
         return RunnerStatusState()
-    if _tasks._runner_status_needs_reconciliation(root):
+    if _runner_status_needs_reconciliation(root):
         return status.model_copy(update={"status": "stale"})
-    _tasks._clear_runner_lock_metadata(root)
+    _clear_runner_lock_metadata(root)
     return RunnerStatusState()
 
 
@@ -430,4 +427,3 @@ def _persist_future_task_update(
         writes[task_brief_file(root, task)] = render_task_brief(task)
     _write_atomic_files(writes)
     _ensure_runtime_ignored(root)
-

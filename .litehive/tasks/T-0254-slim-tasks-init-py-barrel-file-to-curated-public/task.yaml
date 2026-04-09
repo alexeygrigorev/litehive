@@ -2,7 +2,7 @@ id: T-0254
 slug: slim-tasks-init-py-barrel-file-to-curated-public
 title: Slim tasks/__init__.py barrel file to curated public API
 depends_on: []
-task_type: null
+task_type: refactor
 engine: null
 model: null
 mode: implementation
@@ -12,20 +12,40 @@ flag_reason: null
 flag_count: 0
 pipeline_status: backlog
 priority: medium
-pm_complexity: null
-planned_effort: null
+pm_complexity: moderate
+planned_effort: m
 created_at: '2026-04-09T09:16:15+00:00'
-updated_at: '2026-04-09T09:16:15+00:00'
-goal: tasks/__init__.py re-exports ~100 items from 8+ submodules in 499 lines. Reduce
-  to a curated public API of ~20 essential items. Internal code should import from
-  specific submodules directly.
+updated_at: '2026-04-09T14:39:47+00:00'
+goal: Replace the oversized litehive.tasks barrel with a curated top-level API focused
+  on core task CRUD, queue, thread/report, and runtime/status helpers. Repo-internal
+  code and tests that need private or module-specific helpers should import them from
+  their defining litehive.tasks.* or litehive.workspace.* modules instead of from
+  litehive.tasks.
 acceptance_criteria:
-- tasks/__init__.py under 50 lines
-- Only frequently-used public API items exported
-- Internal imports updated to use specific submodules
-- All existing tests pass
-constraints: []
-plan: []
+- litehive/tasks/__init__.py is under 50 lines and exports only the curated top-level
+  task API, rather than the current broad internal surface.
+- No Litehive package module or test imports private or internal-only task helpers
+  from litehive.tasks; those imports resolve from the defining submodule instead.
+- The selected curated symbols that remain top-level in litehive.tasks cover the common
+  package-facing task API used by callers after this refactor.
+- The relevant Litehive test suite for task, pipeline, CLI, web, observability, and
+  recovery flows passes with zero failures.
+constraints:
+- Keep changes scoped to the litehive.tasks public surface and the direct callers
+  that must switch to specific submodule imports.
+- Preserve package-level compatibility only for symbols intentionally kept in the
+  curated public API or for narrowly justified module-level monkeypatch hooks that
+  tests still require.
+plan:
+- Inventory current litehive.tasks exports and barrel import sites, then define the
+  explicit curated keep-list for the public API before editing imports.
+- Move repo-internal and test imports for removed helpers to their defining litehive.tasks.*
+  or litehive.workspace.* modules, keeping package boundaries explicit.
+- Rewrite litehive/tasks/__init__.py as a small explicit facade with only the curated
+  exports and any narrowly justified compatibility module objects.
+- Run focused regression tests covering tasks, pipeline, CLI, web, observability,
+  and recovery paths touched by the import changes, then widen if needed until the
+  suite is clean.
 human_checkpoints: []
 subagents: []
 git:

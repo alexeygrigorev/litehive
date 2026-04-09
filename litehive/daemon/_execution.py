@@ -15,7 +15,7 @@ from typing import TextIO
 import yaml
 
 from litehive.config import ensure_workspace, state_path, workspace_dir
-from litehive.tasks import runner_status
+from litehive.workspace.locking import runner_status
 
 from ._logs import _latest_matching, _prune_run_all_log_dirs, latest_run_all_log_dir
 from ._registry import (

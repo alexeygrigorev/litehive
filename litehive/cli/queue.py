@@ -5,19 +5,16 @@ from litehive.pipeline import (
     inspect_dirty_worktree_gate,
     rollback_completed_task,
 )
-from litehive.tasks import (
-    WorkspaceConflictError,
+from litehive.tasks.archive import archive_done_tasks, archive_task, cleanup_archived_tasks
+from litehive.tasks.crud import require_task
+from litehive.tasks.models import WorkspaceConflictError
+from litehive.tasks.normalization import missing_acceptance_criteria_reason
+from litehive.tasks.persistence import load_state
+from litehive.tasks.queue_management import move_queued_task, prioritize_queued_tasks
+from litehive.workspace.task_status import (
     abandon_task,
-    archive_done_tasks,
-    archive_task,
-    cleanup_archived_tasks,
     close_task,
-    load_state,
-    missing_acceptance_criteria_reason,
-    move_queued_task,
-    prioritize_queued_tasks,
     requeue_task,
-    require_task,
     resume_task,
     stop_current_task,
     switch_task_engine,

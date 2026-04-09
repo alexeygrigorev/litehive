@@ -9,7 +9,9 @@ import pytest
 
 from litehive.config import ensure_workspace
 from litehive.daemon import _prune_run_all_log_dirs
-from litehive.tasks import create_task, discard_created_task, task_dir
+from litehive.tasks import create_task
+from litehive.tasks.crud import discard_created_task
+from litehive.tasks.paths import task_dir
 
 
 def test_discard_created_task_missing_dir_no_error(tmp_path: Path) -> None:

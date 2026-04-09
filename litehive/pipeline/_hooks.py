@@ -8,12 +8,9 @@ import yaml
 
 from litehive.config import LitehiveConfig
 from litehive.models import StageReport, TaskRecord, cap_feedback
-from litehive.tasks import (
-    _atomic_write_gzip_text,
-    _atomic_write_text,
-    append_journal,
-    task_dir,
-)
+from litehive.tasks.journal import append_journal
+from litehive.tasks.paths import task_dir
+from litehive.tasks.persistence import _atomic_write_gzip_text, _atomic_write_text
 
 _COMPRESS_HOOK_ARTIFACT_MIN_BYTES = 4096
 

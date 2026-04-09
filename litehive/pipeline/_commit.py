@@ -6,12 +6,8 @@ from pathlib import Path
 from litehive.git import checkpoint_message, current_head, is_git_repo
 from litehive.models import StageReport, TaskRecord
 from litehive.agents import SubagentManager
-from litehive.tasks import (
-    append_journal,
-    get_task_worktree_path,
-    save_task,
-    set_task_commit_sha,
-)
+from litehive.tasks.crud import get_task_worktree_path, save_task, set_task_commit_sha
+from litehive.tasks.journal import append_journal
 
 from litehive.config import LitehiveConfig
 
