@@ -61,7 +61,7 @@ from .persistence import (
     save_state,
     set_pool_stop_reason,
 )
-from .locking import (
+from litehive.workspace.locking import (
     _clear_runner_lock_metadata,
     _current_thread_owns_runner_guard,
     _ensure_future_task_mutation_allowed,
@@ -133,7 +133,7 @@ from .crud import (
     set_task_commit_sha,
     set_task_worktree_path,
 )
-from .workflow import (
+from litehive.workspace.workflow import (
     _merge_queue_preserving_future_changes,
     _merged_state_for_runner_owned_write,
     _persist_task_and_state_without_runner_guard,
@@ -143,7 +143,7 @@ from .workflow import (
     persist_task_and_state,
     persist_tasks_and_state,
 )
-from .runtime_tracking import (
+from litehive.workspace.runtime_tracking import (
     _apply_stage_finished,
     _apply_task_outcome,
     _apply_task_retry_state,
@@ -210,7 +210,7 @@ from .queue_management import (
     prepare_completed_task_for_recovery,
     prioritize_queued_tasks,
 )
-from .task_status import (
+from litehive.workspace.task_status import (
     _CLOSE_OUTCOME_REASON_CODES,
     _CLOSE_REASON_CODE_LABELS,
     _active_task_id_for_stop,
@@ -228,7 +228,7 @@ from .task_status import (
     update_task,
     update_task_metadata,
 )
-from .recovery import (
+from litehive.workspace.recovery import (
     _find_existing_checkpoint_commit,
     _finalize_recovered_commit_task,
     _has_inactive_running_tasks,

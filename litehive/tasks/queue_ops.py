@@ -14,9 +14,9 @@ logger = logging.getLogger(__name__)
 
 def set_active_task(root: Path, task_id: str | None) -> WorkspaceState:
     from .crud import require_task
-    from .locking import _workspace_lock, workspace_mutation_guard
+    from litehive.workspace.locking import _workspace_lock, workspace_mutation_guard
     from .persistence import load_state, save_state
-    from .workflow import persist_task_and_state
+    from litehive.workspace.workflow import persist_task_and_state
 
     with workspace_mutation_guard(root), _workspace_lock(root):
         state = load_state(root)
@@ -39,9 +39,9 @@ def peek_next_task(root: Path) -> TaskRecord | None:
 
 
 def peek_next_task_selection(root: Path) -> TaskSelection:
-    from .locking import _workspace_lock, workspace_mutation_guard
+    from litehive.workspace.locking import _workspace_lock, workspace_mutation_guard
     from .persistence import load_state, save_state
-    from .recovery import _reconcile_stale_runner_tasks, recover_stale_runner_state
+    from litehive.workspace.recovery import _reconcile_stale_runner_tasks, recover_stale_runner_state
 
     recover_stale_runner_state(root)
     with workspace_mutation_guard(root), _workspace_lock(root):
@@ -56,9 +56,9 @@ def peek_next_task_selection(root: Path) -> TaskSelection:
 
 def plan_task_selections(root: Path) -> TaskPlan:
     from .crud import list_tasks
-    from .locking import _workspace_lock, workspace_mutation_guard
+    from litehive.workspace.locking import _workspace_lock, workspace_mutation_guard
     from .persistence import load_state
-    from .recovery import _reconcile_stale_runner_tasks, recover_stale_runner_state
+    from litehive.workspace.recovery import _reconcile_stale_runner_tasks, recover_stale_runner_state
 
     recover_stale_runner_state(root)
     with workspace_mutation_guard(root), _workspace_lock(root):
@@ -94,12 +94,12 @@ def dequeue_next_task(root: Path) -> TaskRecord | None:
 
 
 def dequeue_next_task_selection(root: Path) -> TaskSelection:
-    from .locking import _workspace_lock, workspace_mutation_guard
+    from litehive.workspace.locking import _workspace_lock, workspace_mutation_guard
     from .persistence import load_state, save_state
     from .queue_management import _reset_task_for_recovery
-    from .recovery import _reconcile_stale_runner_tasks, recover_stale_runner_state
+    from litehive.workspace.recovery import _reconcile_stale_runner_tasks, recover_stale_runner_state
     from .reports import record_recovery_report
-    from .workflow import persist_task_and_state
+    from litehive.workspace.workflow import persist_task_and_state
 
     recover_stale_runner_state(root)
     with workspace_mutation_guard(root), _workspace_lock(root):
@@ -295,7 +295,7 @@ def _resolve_next_task_from_state(
     root: Path, state: WorkspaceState
 ) -> tuple[TaskRecord | None, list[BlockedTask], bool]:
     from .crud import list_tasks
-    from .recovery import _recover_stranded_commit_tasks
+    from litehive.workspace.recovery import _recover_stranded_commit_tasks
 
     mutated = _recover_stranded_commit_tasks(root, state)
     tasks_by_id = {task.id: task for task in list_tasks(root)}
@@ -408,10 +408,10 @@ def clear_active_task(root: Path) -> WorkspaceState:
 
 def restore_untouched_active_task(root: Path) -> WorkspaceState:
     from .crud import get_task
-    from .locking import _workspace_lock, workspace_mutation_guard
+    from litehive.workspace.locking import _workspace_lock, workspace_mutation_guard
     from .persistence import load_state, save_state
     from .queue_management import _enqueue_recovered_task
-    from .recovery import (
+    from litehive.workspace.recovery import (
         _is_stranded_commit_task,
         _prepare_interrupted_task,
         _recover_existing_checkpoint_commit,
@@ -420,7 +420,7 @@ def restore_untouched_active_task(root: Path) -> WorkspaceState:
         _stale_interruption_reason,
         interruption_journal_message,
     )
-    from .workflow import persist_task_and_state
+    from litehive.workspace.workflow import persist_task_and_state
 
     with workspace_mutation_guard(root), _workspace_lock(root):
         state = load_state(root)
@@ -557,4 +557,3 @@ def _validate_single_active_task(root: Path, state: WorkspaceState | None = None
     raise WorkspaceConflictError(
         f"workspace has multiple active tasks: {details}. Clear the stale active task state before running again."
     )
-

@@ -31,7 +31,7 @@ from .constants import (
     VALID_TASK_PRIORITIES,
     VALID_TASK_TYPES,
 )
-from .locking import _workspace_lock, workspace_mutation_guard
+from litehive.workspace.locking import _workspace_lock, workspace_mutation_guard
 from .normalization import normalize_acceptance_criteria, normalize_human_checkpoints
 from .paths import slugify, task_dir, task_file, task_runtime_file, tasks_root
 from .persistence import (
@@ -430,7 +430,7 @@ def require_task(root: Path, task_id: str) -> TaskRecord:
 
 
 def save_task(root: Path, task: TaskRecord) -> None:
-    from .workflow import _workspace_transition_writes
+    from litehive.workspace.workflow import _workspace_transition_writes
 
     task.updated_at = utcnow()
     with workspace_mutation_guard(root):

@@ -10,7 +10,7 @@ import yaml
 from litehive.models import TaskRecord, utcnow
 
 from .crud import _load_task_record_file, list_tasks, require_task
-from .locking import _workspace_lock
+from litehive.workspace.locking import _workspace_lock
 from .paths import task_dir, tasks_root
 from .persistence import _atomic_write_text
 
