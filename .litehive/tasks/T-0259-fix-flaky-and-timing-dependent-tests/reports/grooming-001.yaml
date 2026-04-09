@@ -1,0 +1,71 @@
+task_id: T-0259
+step: grooming
+verdict: pass
+source: agent
+summary: 'Grooming pass. I verified the durable task record for T-0259, updated it
+  to task_type=bugfix with PM_COMPLEXITY=moderate and PLANNED_EFFORT=m, and replaced
+  the empty plan with a concrete 4-step implementation/verification plan. Source inspection
+  only in this stage; no implementation changes made and no pytest commands run yet.
+  Evidence from repo inspection: tests/test_inactivity_timeout.py still contains real-time
+  timeout assertions with 0.5s inactivity windows in two tests; tests/test_tasks_and_subagents.py
+  contains currently skipped flaky override-detection tests caused by class-level
+  monkeypatching of ExternalCLIAdapter.run / run_live and notes identity-check pollution;
+  tests/test_web_snapshot_and_verdicts.py contains fixed calendar timestamps (for
+  example 2026-04-08 and 2020-01-01) in snapshot/verdict fixtures that should be made
+  date-agnostic where the assertions are meant to validate current behavior rather
+  than a specific day. Acceptance criteria now require observable outcomes: stabilize
+  the named files, remove intra-file order dependence, re-enable or justify skipped
+  tests touched by this task, and prove the final state with focused repeated runs
+  plus 10 consecutive full-suite passes via uv run pytest -q. Recommended implementation
+  order: 1) stabilize the inactivity timeout tests with larger margins or mocked time,
+  2) isolate the override-detection tests from shared mutable class state and re-enable
+  the skipped coverage, 3) replace fixed-date expectations in web snapshot tests with
+  current test-created timestamps, 4) run repeated targeted selections before the
+  10x full-suite verification.'
+feedback: 'Stage `grooming` switched from `claude` to `codex` after claude usage limit
+  reached (7d window at 97%, resets 2026-04-10T09:00:00.808784+00:00).
+
+
+  Grooming pass. I verified the durable task record for T-0259, updated it to task_type=bugfix
+  with PM_COMPLEXITY=moderate and PLANNED_EFFORT=m, and replaced the empty plan with
+  a concrete 4-step implementation/verification plan. Source inspection only in this
+  stage; no implementation changes made and no pytest commands run yet. Evidence from
+  repo inspection: tests/test_inactivity_timeout.py still contains real-time timeout
+  assertions with 0.5s inactivity windows in two tests; tests/test_tasks_and_subagents.py
+  contains currently skipped flaky override-detection tests caused by class-level
+  monkeypatching of ExternalCLIAdapter.run / run_live and notes identity-check pollution;
+  tests/test_web_snapshot_and_verdicts.py contains fixed calendar timestamps (for
+  example 2026-04-08 and 2020-01-01) in snapshot/verdict fixtures that should be made
+  date-agnostic where the assertions are meant to validate current behavior rather
+  than a specific day. Acceptance criteria now require observable outcomes: stabilize
+  the named files, remove intra-file order dependence, re-enable or justify skipped
+  tests touched by this task, and prove the final state with focused repeated runs
+  plus 10 consecutive full-suite passes via uv run pytest -q. Recommended implementation
+  order: 1) stabilize the inactivity timeout tests with larger margins or mocked time,
+  2) isolate the override-detection tests from shared mutable class state and re-enable
+  the skipped coverage, 3) replace fixed-date expectations in web snapshot tests with
+  current test-created timestamps, 4) run repeated targeted selections before the
+  10x full-suite verification.'
+submitted_via_cli: true
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings:
+- Stage `grooming` switched from `claude` to `codex` after claude usage limit reached
+  (7d window at 97%, resets 2026-04-10T09:00:00.808784+00:00).
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 147
+hook_results: []
+created_at: '2026-04-09T18:56:58+00:00'

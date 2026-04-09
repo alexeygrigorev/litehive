@@ -1,0 +1,110 @@
+task_id: T-0259
+step: implementing
+verdict: pass
+source: agent
+summary: 'Fixed the flaky/timing-dependent test coverage in the task worktree. Stabilized
+  tests/test_inactivity_timeout.py by increasing the inactivity timeout margins from
+  0.5s to 1.0s. Reworked the callable-override regressions in tests/test_tasks_and_subagents.py
+  so class-level ExternalCLIAdapter monkeypatching is isolated with a reload-based
+  context manager, fresh engine instances are used per assertion, and the previously
+  skipped rebound-base-run coverage now runs without polluting later tests. Updated
+  tests/test_web_snapshot_and_verdicts.py to generate timestamps from current UTC
+  time instead of hardcoded calendar dates while preserving the ordering assertions.
+  Verification: uv run pytest -q tests/test_inactivity_timeout.py (3 passed), uv run
+  pytest -q tests/test_tasks_and_subagents.py -k "has_callable_override or keeps_inherited_run_live_when_base_run_is_rebound
+  or does_not_leak_rebound_base_run_between_engines" (4 passed), uv run pytest -q
+  tests/test_web_snapshot_and_verdicts.py -k "runner_status_readonly or build_workspace_snapshot
+  or submit_stage_verdict_via_web" (14 passed), uv run ruff check --select E402,F401
+  litehive tests (passed), and uv run pytest -q completed 10 consecutive clean full-suite
+  runs; each run finished with 891 passed and no failures. Note: there is an unrelated
+  pre-existing modification in litehive/cli/logs.py that I did not touch.'
+feedback: "Stage `implementing` retrying `codex` after attempt 1/3 due to transient\
+  \ timeout (classification: timeout, policy: codex, backoff: 0.25s).\n\nStage `implementing`\
+  \ retrying `codex` after attempt 2/3 due to transient timeout (classification: timeout,\
+  \ policy: codex, backoff: 0.50s).\n\nFixed the flaky/timing-dependent test coverage\
+  \ in the task worktree. Stabilized tests/test_inactivity_timeout.py by increasing\
+  \ the inactivity timeout margins from 0.5s to 1.0s. Reworked the callable-override\
+  \ regressions in tests/test_tasks_and_subagents.py so class-level ExternalCLIAdapter\
+  \ monkeypatching is isolated with a reload-based context manager, fresh engine instances\
+  \ are used per assertion, and the previously skipped rebound-base-run coverage now\
+  \ runs without polluting later tests. Updated tests/test_web_snapshot_and_verdicts.py\
+  \ to generate timestamps from current UTC time instead of hardcoded calendar dates\
+  \ while preserving the ordering assertions. Verification: uv run pytest -q tests/test_inactivity_timeout.py\
+  \ (3 passed), uv run pytest -q tests/test_tasks_and_subagents.py -k \"has_callable_override\
+  \ or keeps_inherited_run_live_when_base_run_is_rebound or does_not_leak_rebound_base_run_between_engines\"\
+  \ (4 passed), uv run pytest -q tests/test_web_snapshot_and_verdicts.py -k \"runner_status_readonly\
+  \ or build_workspace_snapshot or submit_stage_verdict_via_web\" (14 passed), uv\
+  \ run ruff check --select E402,F401 litehive tests (passed), and uv run pytest -q\
+  \ completed 10 consecutive clean full-suite runs; each run finished with 891 passed\
+  \ and no failures. Note: there is an unrelated pre-existing modification in litehive/cli/logs.py\
+  \ that I did not touch.\n\nRunner hook `after_implementing` `uv run ruff check --select\
+  \ E402,F401 litehive tests` passed with exit code 0 (artifact: `artifacts/after_implementing-001.yaml`).\n\
+  \nRunner hook `after_implementing` `if [ -n \"${LITEHIVE_CHANGED_PATHS:-}\" ] \\\
+  \n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" | grep -q . \\\n  && printf '%s\\\
+  n' \"$LITEHIVE_CHANGED_PATHS\" \\\n    | xargs -r -d '\\n' git grep -nE 'noqa:.*F401|noqa:.*F403|ruff:\\\
+  s*noqa:\\s*F401|ruff:\\s*noqa:\\s*F403' --; then\n  echo 'Forbidden noqa F401/F403\
+  \ suppression found.'\n  exit 1\nfi` passed with exit code 0 (artifact: `artifacts/after_implementing-002.yaml`)."
+submitted_via_cli: true
+files_changed:
+- litehive/cli/logs.py
+- tests/test_inactivity_timeout.py
+- tests/test_tasks_and_subagents.py
+- tests/test_web_snapshot_and_verdicts.py
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings:
+- 'Stage `implementing` retrying `codex` after attempt 1/3 due to transient timeout
+  (classification: timeout, policy: codex, backoff: 0.25s).'
+- 'Stage `implementing` retrying `codex` after attempt 2/3 due to transient timeout
+  (classification: timeout, policy: codex, backoff: 0.50s).'
+- 'runner hook passed: `after_implementing` `uv run ruff check --select E402,F401
+  litehive tests` (artifact: `artifacts/after_implementing-001.yaml`)'
+- "runner hook passed: `after_implementing` `if [ -n \"${LITEHIVE_CHANGED_PATHS:-}\"\
+  \ ] \\\n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" | grep -q . \\\n  && printf\
+  \ '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" \\\n    | xargs -r -d '\\n' git grep -nE 'noqa:.*F401|noqa:.*F403|ruff:\\\
+  s*noqa:\\s*F401|ruff:\\s*noqa:\\s*F403' --; then\n  echo 'Forbidden noqa F401/F403\
+  \ suppression found.'\n  exit 1\nfi` (artifact: `artifacts/after_implementing-002.yaml`)"
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 3705
+hook_results:
+- point: after_implementing
+  command: uv run ruff check --select E402,F401 litehive tests
+  reject_on_failure: true
+  description: null
+  exit_code: 0
+  status: passed
+  artifact: artifacts/after_implementing-001.yaml
+  stdout: 'All checks passed!
+
+    '
+  stderr: 'warning: `VIRTUAL_ENV=/home/alexey/git/litehive/.venv` does not match the
+    project environment path `.venv` and will be ignored; use `--active` to target
+    the active environment instead
+
+    '
+- point: after_implementing
+  command: "if [ -n \"${LITEHIVE_CHANGED_PATHS:-}\" ] \\\n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\"\
+    \ | grep -q . \\\n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" \\\n    | xargs\
+    \ -r -d '\\n' git grep -nE 'noqa:.*F401|noqa:.*F403|ruff:\\s*noqa:\\s*F401|ruff:\\\
+    s*noqa:\\s*F403' --; then\n  echo 'Forbidden noqa F401/F403 suppression found.'\n\
+    \  exit 1\nfi"
+  reject_on_failure: true
+  description: null
+  exit_code: 0
+  status: passed
+  artifact: artifacts/after_implementing-002.yaml
+  stdout: ''
+  stderr: ''
+created_at: '2026-04-09T19:58:43+00:00'

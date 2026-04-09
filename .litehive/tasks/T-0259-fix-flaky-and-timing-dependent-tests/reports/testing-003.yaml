@@ -1,0 +1,61 @@
+task_id: T-0259
+step: testing
+verdict: pass
+source: agent
+summary: 'QA verification passed. Verified the three targeted flaky areas independently:
+  tests/test_inactivity_timeout.py now uses a 1.0s inactivity timeout margin and passed
+  5 repeated runs (3 tests each run); tests/test_tasks_and_subagents.py re-enabled
+  the previously skipped callable-override coverage and isolates class-level ExternalCLIAdapter
+  monkeypatching via reload-scoped helpers, and the focused override subset passed
+  5 repeated runs (4 passed, 26 deselected each run); tests/test_web_snapshot_and_verdicts.py
+  now generates timestamps from current UTC time instead of fixed dates, and the focused
+  runner-status/snapshot/web-verdict subset passed 5 repeated runs (14 passed, 2 deselected
+  each run). I also checked the touched files for residual task-relevant skips; the
+  previously flaky override tests are no longer skipped, and the only remaining skip
+  in tests/test_tasks_and_subagents.py is an unrelated artifact-pruning skip with
+  an explicit justification. Full-suite verification was reproduced in QA, not just
+  accepted from handoff: uv run pytest -q completed 10 consecutive clean runs, each
+  at 891 passed with runtimes between 126.29s and 130.23s, which also satisfies the
+  suite-under-3-minutes constraint. Evidence supports all acceptance criteria: wider
+  inactivity timing margin, fixed callable-override pollution, current-time web snapshot
+  timestamps, no observed order dependence within the touched files, skipped flaky
+  tests fixed, and 10 consecutive full-suite passes.'
+feedback: 'QA verification passed. Verified the three targeted flaky areas independently:
+  tests/test_inactivity_timeout.py now uses a 1.0s inactivity timeout margin and passed
+  5 repeated runs (3 tests each run); tests/test_tasks_and_subagents.py re-enabled
+  the previously skipped callable-override coverage and isolates class-level ExternalCLIAdapter
+  monkeypatching via reload-scoped helpers, and the focused override subset passed
+  5 repeated runs (4 passed, 26 deselected each run); tests/test_web_snapshot_and_verdicts.py
+  now generates timestamps from current UTC time instead of fixed dates, and the focused
+  runner-status/snapshot/web-verdict subset passed 5 repeated runs (14 passed, 2 deselected
+  each run). I also checked the touched files for residual task-relevant skips; the
+  previously flaky override tests are no longer skipped, and the only remaining skip
+  in tests/test_tasks_and_subagents.py is an unrelated artifact-pruning skip with
+  an explicit justification. Full-suite verification was reproduced in QA, not just
+  accepted from handoff: uv run pytest -q completed 10 consecutive clean runs, each
+  at 891 passed with runtimes between 126.29s and 130.23s, which also satisfies the
+  suite-under-3-minutes constraint. Evidence supports all acceptance criteria: wider
+  inactivity timing margin, fixed callable-override pollution, current-time web snapshot
+  timestamps, no observed order dependence within the touched files, skipped flaky
+  tests fixed, and 10 consecutive full-suite passes.'
+submitted_via_cli: true
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 1412
+hook_results: []
+created_at: '2026-04-09T20:22:15+00:00'

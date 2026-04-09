@@ -1,0 +1,92 @@
+- role: planner
+  step: grooming
+  verdict: pass
+  message: 'Grooming pass. I verified the durable task record for T-0259, updated
+    it to task_type=bugfix with PM_COMPLEXITY=moderate and PLANNED_EFFORT=m, and replaced
+    the empty plan with a concrete 4-step implementation/verification plan. Source
+    inspection only in this stage; no implementation changes made and no pytest commands
+    run yet. Evidence from repo inspection: tests/test_inactivity_timeout.py still
+    contains real-time timeout assertions with 0.5s inactivity windows in two tests;
+    tests/test_tasks_and_subagents.py contains currently skipped flaky override-detection
+    tests caused by class-level monkeypatching of ExternalCLIAdapter.run / run_live
+    and notes identity-check pollution; tests/test_web_snapshot_and_verdicts.py contains
+    fixed calendar timestamps (for example 2026-04-08 and 2020-01-01) in snapshot/verdict
+    fixtures that should be made date-agnostic where the assertions are meant to validate
+    current behavior rather than a specific day. Acceptance criteria now require observable
+    outcomes: stabilize the named files, remove intra-file order dependence, re-enable
+    or justify skipped tests touched by this task, and prove the final state with
+    focused repeated runs plus 10 consecutive full-suite passes via uv run pytest
+    -q. Recommended implementation order: 1) stabilize the inactivity timeout tests
+    with larger margins or mocked time, 2) isolate the override-detection tests from
+    shared mutable class state and re-enable the skipped coverage, 3) replace fixed-date
+    expectations in web snapshot tests with current test-created timestamps, 4) run
+    repeated targeted selections before the 10x full-suite verification.'
+  files_changed: []
+  created_at: '2026-04-09T18:56:50+00:00'
+- role: recovery
+  step: implementing
+  verdict: pass
+  message: 'Fixed the flaky/timing-dependent test coverage in the task worktree. Stabilized
+    tests/test_inactivity_timeout.py by increasing the inactivity timeout margins
+    from 0.5s to 1.0s. Reworked the callable-override regressions in tests/test_tasks_and_subagents.py
+    so class-level ExternalCLIAdapter monkeypatching is isolated with a reload-based
+    context manager, fresh engine instances are used per assertion, and the previously
+    skipped rebound-base-run coverage now runs without polluting later tests. Updated
+    tests/test_web_snapshot_and_verdicts.py to generate timestamps from current UTC
+    time instead of hardcoded calendar dates while preserving the ordering assertions.
+    Verification: uv run pytest -q tests/test_inactivity_timeout.py (3 passed), uv
+    run pytest -q tests/test_tasks_and_subagents.py -k "has_callable_override or keeps_inherited_run_live_when_base_run_is_rebound
+    or does_not_leak_rebound_base_run_between_engines" (4 passed), uv run pytest -q
+    tests/test_web_snapshot_and_verdicts.py -k "runner_status_readonly or build_workspace_snapshot
+    or submit_stage_verdict_via_web" (14 passed), uv run ruff check --select E402,F401
+    litehive tests (passed), and uv run pytest -q completed 10 consecutive clean full-suite
+    runs; each run finished with 891 passed and no failures. Note: there is an unrelated
+    pre-existing modification in litehive/cli/logs.py that I did not touch.'
+  files_changed: []
+  created_at: '2026-04-09T19:58:27+00:00'
+- role: qa
+  step: testing
+  verdict: pass
+  message: 'QA verification passed. Verified the three targeted flaky areas independently:
+    tests/test_inactivity_timeout.py now uses a 1.0s inactivity timeout margin and
+    passed 5 repeated runs (3 tests each run); tests/test_tasks_and_subagents.py re-enabled
+    the previously skipped callable-override coverage and isolates class-level ExternalCLIAdapter
+    monkeypatching via reload-scoped helpers, and the focused override subset passed
+    5 repeated runs (4 passed, 26 deselected each run); tests/test_web_snapshot_and_verdicts.py
+    now generates timestamps from current UTC time instead of fixed dates, and the
+    focused runner-status/snapshot/web-verdict subset passed 5 repeated runs (14 passed,
+    2 deselected each run). I also checked the touched files for residual task-relevant
+    skips; the previously flaky override tests are no longer skipped, and the only
+    remaining skip in tests/test_tasks_and_subagents.py is an unrelated artifact-pruning
+    skip with an explicit justification. Full-suite verification was reproduced in
+    QA, not just accepted from handoff: uv run pytest -q completed 10 consecutive
+    clean runs, each at 891 passed with runtimes between 126.29s and 130.23s, which
+    also satisfies the suite-under-3-minutes constraint. Evidence supports all acceptance
+    criteria: wider inactivity timing margin, fixed callable-override pollution, current-time
+    web snapshot timestamps, no observed order dependence within the touched files,
+    skipped flaky tests fixed, and 10 consecutive full-suite passes.'
+  files_changed: []
+  created_at: '2026-04-09T20:22:05+00:00'
+- role: reviewer
+  step: accepting
+  verdict: pass
+  message: 'Accepted after review of the test-only diff plus independent spot verification.
+    Verified the implementation changes match the acceptance criteria: tests/test_inactivity_timeout.py
+    raises the inactivity timeout margins from 0.5s to 1.0s in the timing-sensitive
+    cases; tests/test_tasks_and_subagents.py re-enables the previously skipped callable-override
+    coverage and isolates class-level ExternalCLIAdapter monkeypatching with reload-scoped
+    helpers and fresh engine instances so state does not leak between tests; tests/test_web_snapshot_and_verdicts.py
+    replaces hardcoded calendar timestamps with current UTC-derived values while preserving
+    ordering assertions. I independently ran: uv run pytest -q tests/test_inactivity_timeout.py
+    tests/test_tasks_and_subagents.py -k ''has_callable_override or keeps_inherited_run_live_when_base_run_is_rebound
+    or does_not_leak_rebound_base_run_between_engines'' tests/test_web_snapshot_and_verdicts.py
+    -k ''runner_status_readonly or build_workspace_snapshot or submit_stage_verdict_via_web''
+    and got 14 passed, 35 deselected in 1.25s. QA evidence also reports repeated targeted
+    runs for the three affected areas, confirms the flaky override tests are no longer
+    skipped, notes the only remaining skip in tests/test_tasks_and_subagents.py is
+    unrelated and justified, and reproduces 10 consecutive clean full-suite runs of
+    uv run pytest -q with 891 passed each time. Based on the diff plus independent
+    verification, the named flaky areas are stabilized, no task-relevant skipped tests
+    remain, and the full-suite reliability criterion is satisfied.'
+  files_changed: []
+  created_at: '2026-04-09T20:23:25+00:00'
