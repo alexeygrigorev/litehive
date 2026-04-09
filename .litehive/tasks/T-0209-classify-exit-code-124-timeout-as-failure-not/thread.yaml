@@ -46,3 +46,166 @@
     this report.
   files_changed: []
   created_at: '2026-04-09T01:07:30+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Updated parse_stage_report_text so the no-CLI-submission path distinguishes
+    completed vs failed subagents in its summary and still always returns verdict=fail.
+    Verified that only structured STAGE_RESULT submissions can produce pass/accept,
+    and failed subagents cannot produce a passing verdict even if their transcript
+    contains text like VERDICT: PASS. Ran: uv run pytest -q tests/test_stage_result_submission.py
+    (11 passed) and uv run pytest -q tests/test_feedback_cap.py (7 passed). Evidence:
+    tests cover failed subagent with structured pass coerced to fail, failed subagent
+    with no submission returning ''implementing failed without verdict'', and failed
+    subagent with text-only VERDICT: PASS still returning fail with litehive report
+    warning.'
+  files_changed: []
+  created_at: '2026-04-09T01:30:52+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Updated parse_stage_report_text so failed subagents without a CLI submission
+    now produce the summary ''implementing failed without verdict'' instead of incorrectly
+    saying the step completed. Added regression coverage for failed subagents with
+    no transcript and with plain text transcript but no structured/CLI submission,
+    preserving fail verdict behavior and warning expectations. Verification: pytest
+    -q tests/test_stage_result_submission.py -> 11 passed in 0.58s.'
+  files_changed: []
+  created_at: '2026-04-09T01:31:32+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Kept the change scoped to stage report parsing. In litehive/engines/base.py,
+    the no-CLI-submission fallback now preserves fail and distinguishes failed subagents
+    with summary text ''<step> failed without verdict'' when there is no transcript,
+    instead of describing them as completed. This preserves the rule that only explicit
+    litehive report CLI submissions can produce pass/accept, and failed subagents
+    without a structured submission stay fail. Added focused coverage in tests/test_stage_result_submission.py
+    for failed subagents with no transcript and with text-only VERDICT: PASS content,
+    both asserting fail verdict plus the missing-CLI warning. Verified with: uv run
+    pytest tests/test_stage_result_submission.py -q (11 passed) and uv run pytest
+    tests/test_runner_workflow.py -q -k ''parse_stage_report_text_fails_on_text_only_transcript
+    or parse_stage_report_text_no_text_follow_up_extraction or stage_report_from_subagent_fails_without_cli_verdict''
+    (3 passed). Evidence: missing CLI submission still yields fail, failed subagents
+    cannot produce pass from text fallback, and pass remains limited to explicit structured
+    CLI submission.'
+  files_changed: []
+  created_at: '2026-04-09T01:50:36+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Updated stage-report parsing so missing CLI submissions no longer default
+    failed subagents to a completed-style summary. When there is no transcript, completed
+    subagents still summarize as ''<step> completed without verdict'', while non-completed
+    subagents now summarize as ''<step> failed without verdict''. Added focused regression
+    coverage for failed subagents with no CLI submission and for failed subagents
+    whose transcript contains only textual verdict content. Validation: pytest -q
+    tests/test_stage_result_submission.py (11 passed).'
+  files_changed: []
+  created_at: '2026-04-09T01:51:11+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Updated failed-no-verdict fallback in litehive/engines/base.py so missing
+    CLI submissions still produce verdict=fail and now summarize failed subagents
+    as ''<step> failed without verdict'' when there is no transcript. Added regression
+    tests in tests/test_stage_result_submission.py covering failed subagents with
+    empty transcript and text-only transcript, ensuring only explicit CLI/STAGE_RESULT
+    submissions can produce pass. Verified with: uv run pytest -q tests/test_stage_result_submission.py
+    (11 passed) and uv run pytest -q tests/test_runner_workflow.py::test_parse_stage_report_text_fails_on_text_only_transcript
+    tests/test_runner_workflow.py::test_parse_stage_report_text_no_text_follow_up_extraction
+    tests/test_runner_workflow.py::test_stage_report_from_subagent_fails_without_cli_verdict
+    tests/test_runner_workflow.py::test_codex_stage_report_uses_failed_command_output_when_no_agent_message
+    tests/test_runner_workflow.py::test_gemini_stage_report_uses_tool_error_when_no_assistant_message
+    tests/test_runner_workflow.py::test_copilot_stage_report_uses_json_error_when_no_assistant_message
+    (6 passed). Evidence: failed agents without CLI verdict remain fail, text-only
+    VERDICT: PASS is ignored, and structured pass from failed subagents is already
+    downgraded to fail.'
+  files_changed: []
+  created_at: '2026-04-09T02:10:14+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Implemented the fallback change so missing CLI verdicts no longer look
+    like successful completion when the subagent status is failed. In litehive/engines/base.py,
+    parse_stage_report_text now returns ''<step> failed without verdict'' when there
+    is no transcript and subagent_status is not completed, while preserving ''<step>
+    completed without verdict'' for completed runs and preserving the transcript first
+    line when present. Added regression tests in tests/test_stage_result_submission.py
+    covering both an empty failed transcript and a failed transcript that contains
+    misleading text like ''VERDICT: PASS'' without a real litehive report submission;
+    both still resolve to verdict=fail. Verification: pytest -q tests/test_stage_result_submission.py
+    -> 11 passed; pytest -q tests/test_runner_workflow.py -k ''stage_report and fail
+    and verdict'' -> 1 passed. I did not run the full suite.'
+  files_changed: []
+  created_at: '2026-04-09T02:11:36+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Adjusted parse_stage_report_text so missing CLI submissions from non-completed
+    subagents now summarize as ''<step> failed without verdict'' instead of implying
+    completion, while keeping the verdict hard-failed when no litehive report CLI
+    submission exists. Added focused coverage for failed subagents with no transcript
+    and with text-only ''VERDICT: PASS'' transcripts to confirm they still produce
+    fail and cannot pass without an explicit CLI report. Verified with: uv run pytest
+    tests/test_stage_result_submission.py -q (11 passed) and uv run pytest tests/test_feedback_cap.py
+    -q (7 passed). Evidence: failed agents without a CLI submission now yield verdict=fail
+    and only structured CLI submissions can produce pass; failed structured pass submissions
+    are already downgraded to fail.'
+  files_changed: []
+  created_at: '2026-04-09T02:28:59+00:00'
+- role: swe
+  step: implementing
+  verdict: fail
+  message: I did not submit an implementing-stage verdict in the prior session. This
+    report is being submitted now to close that gap. Verdict set to fail because the
+    implementing step was left incomplete from a process perspective and no validated
+    implementation outcome was recorded in that session.
+  files_changed: []
+  created_at: '2026-04-09T02:29:17+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Updated parse_stage_report_text so missing CLI submissions still return
+    verdict=fail, but failed subagents now get a failure-specific summary when no
+    transcript exists: completed statuses keep ''<step> completed without verdict'',
+    non-completed statuses now use ''<step> failed without verdict''. Added focused
+    regression tests covering failed subagents with empty transcript and with text-only
+    ''VERDICT: PASS'' transcript; both stay fail and still warn that litehive report
+    CLI was not used. Verified with: uv run pytest tests/test_stage_result_submission.py
+    -q (11 passed) and uv run pytest tests/test_runner_workflow.py -q -k ''parse_stage_report_text_fails_on_text_only_transcript
+    or stage_report_from_subagent_fails_without_cli_verdict'' (2 passed). Evidence
+    for acceptance criteria: failed agents do not produce pass, text-only fallback
+    does not promote any failed subagent, and only explicit structured/CLI submission
+    can yield pass.'
+  files_changed: []
+  created_at: '2026-04-09T02:50:05+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Implemented T-0209 by removing the misleading text fallback that labeled
+    failed subagents as completed when no structured verdict was submitted. Updated
+    litehive/engines/base.py so parse_stage_report_text now uses ''<step> failed without
+    verdict'' when transcript is empty and subagent_status is failed, while preserving
+    the existing completed fallback for successful subagents. Added regression coverage
+    in tests/test_stage_result_submission.py for both empty-transcript and text-only-transcript
+    failed-subagent cases to ensure verdict remains fail and warnings still direct
+    the agent to use litehive report. Verification: pytest -q tests/test_stage_result_submission.py
+    -> 11 passed.'
+  files_changed: []
+  created_at: '2026-04-09T02:50:55+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Removed the failed-run summary fallback that treated missing CLI submissions
+    like completed runs. In parse_stage_report_text, missing structured litehive report
+    submissions still always return verdict fail, and failed subagents now summarize
+    as ''<step> failed without verdict'' when no transcript exists. Added regression
+    coverage for failed subagents with no CLI submission and with a text-only transcript
+    that says VERDICT: PASS; both remain fail and warn that the agent did not submit
+    via litehive report CLI. Verified with: uv run pytest tests/test_stage_result_submission.py
+    -q (11 passed). This satisfies: failed agents always produce fail verdict, there
+    is no pass fallback for failed subagents, and only explicit litehive report CLI
+    submissions can produce pass.'
+  files_changed: []
+  created_at: '2026-04-09T03:34:24+00:00'

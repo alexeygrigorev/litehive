@@ -7,14 +7,14 @@ engine: null
 model: null
 mode: implementation
 pipeline_mode: full
-status: flagged
-flag_reason: unsupported_verdict
+status: interrupted
+flag_reason: null
 pipeline_status: implementing
 priority: medium
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-07T08:25:03+00:00'
-updated_at: '2026-04-09T01:07:35+00:00'
+updated_at: '2026-04-09T03:34:48+00:00'
 goal: When an agent is killed or fails (non-zero exit), the text parsing fallback
   in parse_stage_report_text still runs and _parse_verdict defaults to pass when no
   VERDICT line is found. This is wrong - a failed agent should never produce a pass
@@ -75,6 +75,90 @@ subagents:
   engine: codex
   status: completed
   path: subagents/SA-0007-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0008
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0008-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0009
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0009-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0010
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0010-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0011
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0011-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0012
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0012-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0013
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0013-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0014
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0014-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0015
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0015-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0016
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0016-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0017
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0017-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0018
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0018-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0019
+  role: swe
+  engine: codex
+  status: interrupted
+  path: subagents/SA-0019-swe
   sandboxed: false
   sandbox_summary: host
 git:

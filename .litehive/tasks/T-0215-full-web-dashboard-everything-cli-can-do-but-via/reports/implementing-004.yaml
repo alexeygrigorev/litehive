@@ -3,51 +3,48 @@ step: implementing
 verdict: reject
 summary: 'SWE reported pass but produced no file changes and no tests. This usually
   means the agent did not actually write code. Worktree: unknown. Report summary:
-  Verified T-0215 against the live checkout by direct repository inspection. Current
-  web dashboard code analyzed and documented from the package layout under litehive/web/:
-  __init__.py exports the web surface, server.py defines the HTTP routes, snapshot.py
-  builds workspace/session/daemon/engine payloads, actions.py implements existing
-  web mutations, common.py holds shared web helpers, and templates/index.html is the
-  operator UI. Current HTTP surface confirmed in litehive/web/server.py: GET /, /api/daemon/status,
-  /api/snapshot, /api/engines, /api/session, /api/stream and POST /api/daemon/start,
-  /api/daemon/stop, /api/daemon/restart, /api/task, /api/engines/default, /api/task/engine,
-  /api/report, /api/queue/move, /api/queue/promote, /api/queue/prioritize. This documents
-  the present browser/operator interface and shows the dashboard has evolved beyond
-  the older single-file read-only monitor referenced earlier in the thread. Follow-up
-  tasks verified present under .litehive/tasks with clear goal and explicit acceptance
-  criteria for each required feature area: T-0221 task actions API, T-0222 queue management
-  API, T-0223 daemon control API, T-0224 enhanced task detail views, T-0225 live agent
-  streaming via SSE, T-0226 engine monitoring/configuration, and T-0227 report/verdict
-  submission. Current task-state evidence from task.yaml inspection: T-0222, T-0224,
-  T-0225, T-0226, and T-0227 are done; T-0221 is queued; T-0223 is merge_failed. Tests
-  run: none, because T-0215 is an analysis/planning task and verification was by direct
-  inspection of litehive/web package files and task.yaml records for T-0215 and T-0221
-  through T-0227. Evidence confirms both acceptance criteria are met: the current
-  web dashboard code has been analyzed and documented, and follow-up tasks exist for
-  each required feature area with clear scope and acceptance criteria.'
-feedback: 'Verified T-0215 against the live checkout by direct repository inspection.
-  Current web dashboard code analyzed and documented from the package layout under
-  litehive/web/: __init__.py exports the web surface, server.py defines the HTTP routes,
-  snapshot.py builds workspace/session/daemon/engine payloads, actions.py implements
-  existing web mutations, common.py holds shared web helpers, and templates/index.html
-  is the operator UI. Current HTTP surface confirmed in litehive/web/server.py: GET
-  /, /api/daemon/status, /api/snapshot, /api/engines, /api/session, /api/stream and
-  POST /api/daemon/start, /api/daemon/stop, /api/daemon/restart, /api/task, /api/engines/default,
-  /api/task/engine, /api/report, /api/queue/move, /api/queue/promote, /api/queue/prioritize.
-  This documents the present browser/operator interface and shows the dashboard has
-  evolved beyond the older single-file read-only monitor referenced earlier in the
-  thread. Follow-up tasks verified present under .litehive/tasks with clear goal and
-  explicit acceptance criteria for each required feature area: T-0221 task actions
+  Verified T-0215 by direct repository inspection against the live checkout. Acceptance
+  criterion 1 is met: the current web dashboard code has been analyzed and documented
+  from the package layout under litehive/web/. Confirmed modules: __init__.py (53
+  lines), actions.py (340), common.py (304), server.py (563), snapshot.py (641), and
+  templates/index.html (1746), for 3647 total lines. Confirmed current HTTP surface
+  in litehive/web/server.py: GET /, /api/daemon/status, /api/snapshot, /api/engines,
+  /api/session, /api/stream; POST /api/daemon/start, /api/daemon/stop, /api/daemon/restart,
+  /api/task, /api/engines/default, /api/task/engine, /api/report, /api/queue/move,
+  /api/queue/promote, /api/queue/prioritize, /api/tasks, /api/tasks/active/stop, plus
+  task-scoped POST actions under /api/tasks/{id}/update|close|requeue|abandon. This
+  documents the present browser/operator surface and confirms the dashboard has evolved
+  beyond the original single-file read-only monitor. Acceptance criterion 2 is met:
+  follow-up task records exist under .litehive/tasks with clear goal and explicit
+  acceptance criteria for each required feature area: T-0221 web dashboard task actions
   API, T-0222 queue management API, T-0223 daemon control API, T-0224 enhanced task
-  detail views, T-0225 live agent streaming via SSE, T-0226 engine monitoring/configuration,
-  and T-0227 report/verdict submission. Current task-state evidence from task.yaml
-  inspection: T-0222, T-0224, T-0225, T-0226, and T-0227 are done; T-0221 is queued;
-  T-0223 is merge_failed. Tests run: none, because T-0215 is an analysis/planning
-  task and verification was by direct inspection of litehive/web package files and
-  task.yaml records for T-0215 and T-0221 through T-0227. Evidence confirms both acceptance
-  criteria are met: the current web dashboard code has been analyzed and documented,
-  and follow-up tasks exist for each required feature area with clear scope and acceptance
-  criteria.'
+  detail views, T-0225 live agent output streaming via SSE, T-0226 engine monitoring/configuration,
+  and T-0227 report and verdict submission. Current task-state evidence from task.yaml
+  inspection: T-0221 is in_progress at commit_to_git; T-0222, T-0224, T-0225, T-0226,
+  and T-0227 are done; T-0223 is merge_failed. Tests run: none, because T-0215 is
+  an analysis/planning task and required verification was direct inspection of litehive/web
+  package files and task.yaml records for T-0215 and T-0221 through T-0227.'
+feedback: 'Verified T-0215 by direct repository inspection against the live checkout.
+  Acceptance criterion 1 is met: the current web dashboard code has been analyzed
+  and documented from the package layout under litehive/web/. Confirmed modules: __init__.py
+  (53 lines), actions.py (340), common.py (304), server.py (563), snapshot.py (641),
+  and templates/index.html (1746), for 3647 total lines. Confirmed current HTTP surface
+  in litehive/web/server.py: GET /, /api/daemon/status, /api/snapshot, /api/engines,
+  /api/session, /api/stream; POST /api/daemon/start, /api/daemon/stop, /api/daemon/restart,
+  /api/task, /api/engines/default, /api/task/engine, /api/report, /api/queue/move,
+  /api/queue/promote, /api/queue/prioritize, /api/tasks, /api/tasks/active/stop, plus
+  task-scoped POST actions under /api/tasks/{id}/update|close|requeue|abandon. This
+  documents the present browser/operator surface and confirms the dashboard has evolved
+  beyond the original single-file read-only monitor. Acceptance criterion 2 is met:
+  follow-up task records exist under .litehive/tasks with clear goal and explicit
+  acceptance criteria for each required feature area: T-0221 web dashboard task actions
+  API, T-0222 queue management API, T-0223 daemon control API, T-0224 enhanced task
+  detail views, T-0225 live agent output streaming via SSE, T-0226 engine monitoring/configuration,
+  and T-0227 report and verdict submission. Current task-state evidence from task.yaml
+  inspection: T-0221 is in_progress at commit_to_git; T-0222, T-0224, T-0225, T-0226,
+  and T-0227 are done; T-0223 is merge_failed. Tests run: none, because T-0215 is
+  an analysis/planning task and required verification was direct inspection of litehive/web
+  package files and task.yaml records for T-0215 and T-0221 through T-0227.'
 files_changed: []
 created_follow_up_task_ids: []
 task_update: {}
@@ -65,6 +62,6 @@ outcome_reason: 'Empty SWE pass rejected 4 time(s) (limit: 3)'
 failure_classification: null
 failure_diagnostics: {}
 resource_limit_event: null
-duration_seconds: 42
+duration_seconds: 53
 hook_results: []
-created_at: '2026-04-09T01:11:18+00:00'
+created_at: '2026-04-09T03:06:35+00:00'

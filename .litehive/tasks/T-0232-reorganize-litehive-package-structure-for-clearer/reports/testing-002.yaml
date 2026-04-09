@@ -1,0 +1,67 @@
+task_id: T-0232
+step: testing
+verdict: pass
+summary: 'QA validation passed after the acceptance-retry fix. Verified the blocker
+  in litehive/agents/__init__.py is resolved: the exact hook command ''uv run ruff
+  check --select E402,F401 litehive tests'' now exits 0. Inspected source layout and
+  confirmed the canonical packages remain in place: litehive.agents with adapters/
+  plus manager/prompts/parsing/session helpers, litehive.pipeline for runner/runtime
+  orchestration, litehive.workspace for locking/workflow/recovery/runtime-tracking/task-status
+  helpers, litehive.git/ops.py as the git helper home, and litehive.observability/events.py
+  for event persistence; legacy modules/packages still exist as compatibility shims.
+  Ran an import smoke check covering canonical and legacy paths and confirmed representative
+  alias identity across the transition surface: litehive.agents.SubagentManager ==
+  litehive.subagents.SubagentManager, litehive.agents.adapters.CodexCLIAdapter ==
+  litehive.engines.adapters.CodexCLIAdapter, litehive.pipeline.run_task == litehive.runner.run_task,
+  litehive.pipeline._budget_ledger_from_config == litehive.runtime._budget_ledger_from_config,
+  litehive.workspace.locking.workspace_runner_guard == litehive.tasks.locking.workspace_runner_guard,
+  litehive.git.status_porcelain == litehive.git_ops.status_porcelain, and litehive.observability.events.append_event
+  == litehive.events.append_event; prompt/parsing exports from litehive.agents remain
+  callable. Focused regression suites passed without modifying tests: ''uv run pytest
+  -q tests/test_tasks_and_subagents.py'' -> 61 passed, 3 skipped in 5.32s; ''uv run
+  pytest -q tests/test_runner_workflow.py'' -> 111 passed in 10.45s; ''uv run pytest
+  -q tests/test_observability_and_status.py'' -> 72 passed in 16.56s. This is sufficient
+  evidence that the package-boundary refactor and backward-compatible re-exports still
+  hold after the lazy-export change that fixed the Ruff E402 acceptance blocker.'
+feedback: 'QA validation passed after the acceptance-retry fix. Verified the blocker
+  in litehive/agents/__init__.py is resolved: the exact hook command ''uv run ruff
+  check --select E402,F401 litehive tests'' now exits 0. Inspected source layout and
+  confirmed the canonical packages remain in place: litehive.agents with adapters/
+  plus manager/prompts/parsing/session helpers, litehive.pipeline for runner/runtime
+  orchestration, litehive.workspace for locking/workflow/recovery/runtime-tracking/task-status
+  helpers, litehive.git/ops.py as the git helper home, and litehive.observability/events.py
+  for event persistence; legacy modules/packages still exist as compatibility shims.
+  Ran an import smoke check covering canonical and legacy paths and confirmed representative
+  alias identity across the transition surface: litehive.agents.SubagentManager ==
+  litehive.subagents.SubagentManager, litehive.agents.adapters.CodexCLIAdapter ==
+  litehive.engines.adapters.CodexCLIAdapter, litehive.pipeline.run_task == litehive.runner.run_task,
+  litehive.pipeline._budget_ledger_from_config == litehive.runtime._budget_ledger_from_config,
+  litehive.workspace.locking.workspace_runner_guard == litehive.tasks.locking.workspace_runner_guard,
+  litehive.git.status_porcelain == litehive.git_ops.status_porcelain, and litehive.observability.events.append_event
+  == litehive.events.append_event; prompt/parsing exports from litehive.agents remain
+  callable. Focused regression suites passed without modifying tests: ''uv run pytest
+  -q tests/test_tasks_and_subagents.py'' -> 61 passed, 3 skipped in 5.32s; ''uv run
+  pytest -q tests/test_runner_workflow.py'' -> 111 passed in 10.45s; ''uv run pytest
+  -q tests/test_observability_and_status.py'' -> 72 passed in 16.56s. This is sufficient
+  evidence that the package-boundary refactor and backward-compatible re-exports still
+  hold after the lazy-export change that fixed the Ruff E402 acceptance blocker.'
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 151
+hook_results: []
+created_at: '2026-04-09T03:42:20+00:00'

@@ -33,3 +33,69 @@
     report: .litehive/tasks/T-0209-remove-text-verdict-fallback-failed-agents-must/recovery/recovery-003.yaml'
   files_changed: []
   created_at: '2026-04-09T01:06:11+00:00'
+- role: recovery
+  step: implementing
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0209-remove-text-verdict-fallback-failed-agents-must/recovery/recovery-004.yaml'
+  files_changed: []
+  created_at: '2026-04-09T01:29:25+00:00'
+- role: recovery
+  step: implementing
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0209-remove-text-verdict-fallback-failed-agents-must/recovery/recovery-005.yaml'
+  files_changed: []
+  created_at: '2026-04-09T01:49:26+00:00'
+- role: recovery
+  step: implementing
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0209-remove-text-verdict-fallback-failed-agents-must/recovery/recovery-006.yaml'
+  files_changed: []
+  created_at: '2026-04-09T02:08:30+00:00'
+- role: recovery
+  step: implementing
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0209-remove-text-verdict-fallback-failed-agents-must/recovery/recovery-007.yaml'
+  files_changed: []
+  created_at: '2026-04-09T02:27:44+00:00'
+- role: recovery
+  step: implementing
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0209-remove-text-verdict-fallback-failed-agents-must/recovery/recovery-008.yaml'
+  files_changed: []
+  created_at: '2026-04-09T02:48:58+00:00'
+- role: recovery
+  step: implementing
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0209-remove-text-verdict-fallback-failed-agents-must/recovery/recovery-009.yaml'
+  files_changed: []
+  created_at: '2026-04-09T03:33:16+00:00'

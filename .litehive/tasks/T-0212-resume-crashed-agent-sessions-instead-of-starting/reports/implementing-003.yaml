@@ -4,31 +4,31 @@ verdict: reject
 summary: 'SWE reported pass but produced no file changes and no tests. This usually
   means the agent did not actually write code. Worktree: unknown. Report summary:
   Verified the existing implementation in litehive/runtime/_builder.py satisfies T-0212
-  without further code changes. The executor loop tracks crash_resume_attempted, detects
-  unclassified non-zero exits (failure is None and exit_code != 0), and for claude
-  only extracts the continuation via extract_engine_continuation, sets resume_session_id,
-  appends a clear journal event, and retries once with the existing resume prompt
-  ''Please continue where you left off. Complete the task.'' If the resumed claude
-  session crashes again, the single-attempt guard prevents another resume and execution
-  falls through the normal failure path. Non-claude engines skip this path. Verified
-  with: uv run pytest tests/test_crash_resume.py -q -> 4 passed in 1.50s. The tests
-  cover: claude crash resumes the same session id, resumed prompt contains ''continue
+  without further code changes. In the executor loop, crash_resume_attempted limits
+  recovery to a single retry, unclassified non-zero exits (failure is None and exit_code
+  != 0) on claude extract the continuation via extract_engine_continuation, set resume_session_id,
+  append a clear journal event, and retry with the existing resume prompt ''Please
+  continue where you left off. Complete the task.'' If the resumed claude session
+  crashes again, the single-attempt guard prevents another resume and execution falls
+  through the normal failure path; non-claude engines skip this path. Verified with
+  uv run pytest tests/test_crash_resume.py -q: 4 passed in 1.78s. Those tests cover:
+  claude crash resumes the same session id, the resumed prompt contains ''continue
   where you left off'', only one resume attempt occurs, non-claude engines do not
   resume, and the journal records the resume attempt clearly. git status was clean
   at verification time.'
 feedback: 'Verified the existing implementation in litehive/runtime/_builder.py satisfies
-  T-0212 without further code changes. The executor loop tracks crash_resume_attempted,
-  detects unclassified non-zero exits (failure is None and exit_code != 0), and for
-  claude only extracts the continuation via extract_engine_continuation, sets resume_session_id,
-  appends a clear journal event, and retries once with the existing resume prompt
-  ''Please continue where you left off. Complete the task.'' If the resumed claude
-  session crashes again, the single-attempt guard prevents another resume and execution
-  falls through the normal failure path. Non-claude engines skip this path. Verified
-  with: uv run pytest tests/test_crash_resume.py -q -> 4 passed in 1.50s. The tests
-  cover: claude crash resumes the same session id, resumed prompt contains ''continue
-  where you left off'', only one resume attempt occurs, non-claude engines do not
-  resume, and the journal records the resume attempt clearly. git status was clean
-  at verification time.'
+  T-0212 without further code changes. In the executor loop, crash_resume_attempted
+  limits recovery to a single retry, unclassified non-zero exits (failure is None
+  and exit_code != 0) on claude extract the continuation via extract_engine_continuation,
+  set resume_session_id, append a clear journal event, and retry with the existing
+  resume prompt ''Please continue where you left off. Complete the task.'' If the
+  resumed claude session crashes again, the single-attempt guard prevents another
+  resume and execution falls through the normal failure path; non-claude engines skip
+  this path. Verified with uv run pytest tests/test_crash_resume.py -q: 4 passed in
+  1.78s. Those tests cover: claude crash resumes the same session id, the resumed
+  prompt contains ''continue where you left off'', only one resume attempt occurs,
+  non-claude engines do not resume, and the journal records the resume attempt clearly.
+  git status was clean at verification time.'
 files_changed: []
 created_follow_up_task_ids: []
 task_update: {}
@@ -46,6 +46,6 @@ outcome_reason: ''
 failure_classification: null
 failure_diagnostics: {}
 resource_limit_event: null
-duration_seconds: 37
+duration_seconds: 47
 hook_results: []
-created_at: '2026-04-09T00:33:59+00:00'
+created_at: '2026-04-09T03:37:17+00:00'

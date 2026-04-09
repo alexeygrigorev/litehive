@@ -1,0 +1,125 @@
+task_id: T-0232
+step: implementing
+verdict: pass
+summary: 'Implemented the package-boundary refactor with backward-compatible re-exports.
+  Canonical packages now exist at litehive/agents (merged former engines + subagents,
+  with adapters/ and quota/ plus manager/prompts/parsing/session helpers), litehive/pipeline
+  (merged former runner + runtime), litehive/workspace (moved locking, workflow/state
+  transitions, recovery, runtime tracking, task status helpers out of tasks), litehive/git
+  (moved git_ops to git/ops.py with package exports), and litehive/observability/events.py
+  (moved event persistence under observability). Existing legacy import paths continue
+  to work via shim modules/packages under litehive.engines, litehive.subagents, litehive.runner,
+  litehive.runtime, litehive.tasks.{locking,workflow,recovery,runtime_tracking,task_status},
+  litehive.git_ops, and litehive.events. I also restored legacy private monkeypatch
+  seams used by tests, especially under litehive.subagents._manager and litehive.tasks.locking.
+  Verified with python -m compileall litehive, a direct import smoke test covering
+  new and old module paths, and focused pytest slices: uv run pytest -q tests/test_tasks_and_subagents.py
+  (61 passed, 3 skipped), uv run pytest -q tests/test_engine_variants_and_timeline.py
+  (48 passed), uv run pytest -q tests/test_runtime_pool.py (64 passed), and uv run
+  pytest -q tests/test_tasks_and_subagents.py::test_subagent_artifacts_capture_sandbox_metadata
+  tests/test_tasks_and_subagents.py::test_subagent_artifacts_capture_structured_resource_limit_event
+  tests/test_runtime_pool.py tests/test_observability_and_status.py (138 passed).
+  This provides evidence for the accepted boundary moves plus backward-compat import
+  coverage without modifying tests.'
+feedback: 'Implemented the package-boundary refactor with backward-compatible re-exports.
+  Canonical packages now exist at litehive/agents (merged former engines + subagents,
+  with adapters/ and quota/ plus manager/prompts/parsing/session helpers), litehive/pipeline
+  (merged former runner + runtime), litehive/workspace (moved locking, workflow/state
+  transitions, recovery, runtime tracking, task status helpers out of tasks), litehive/git
+  (moved git_ops to git/ops.py with package exports), and litehive/observability/events.py
+  (moved event persistence under observability). Existing legacy import paths continue
+  to work via shim modules/packages under litehive.engines, litehive.subagents, litehive.runner,
+  litehive.runtime, litehive.tasks.{locking,workflow,recovery,runtime_tracking,task_status},
+  litehive.git_ops, and litehive.events. I also restored legacy private monkeypatch
+  seams used by tests, especially under litehive.subagents._manager and litehive.tasks.locking.
+  Verified with python -m compileall litehive, a direct import smoke test covering
+  new and old module paths, and focused pytest slices: uv run pytest -q tests/test_tasks_and_subagents.py
+  (61 passed, 3 skipped), uv run pytest -q tests/test_engine_variants_and_timeline.py
+  (48 passed), uv run pytest -q tests/test_runtime_pool.py (64 passed), and uv run
+  pytest -q tests/test_tasks_and_subagents.py::test_subagent_artifacts_capture_sandbox_metadata
+  tests/test_tasks_and_subagents.py::test_subagent_artifacts_capture_structured_resource_limit_event
+  tests/test_runtime_pool.py tests/test_observability_and_status.py (138 passed).
+  This provides evidence for the accepted boundary moves plus backward-compat import
+  coverage without modifying tests.'
+files_changed:
+- litehive/agents/
+- litehive/engines/__init__.py
+- litehive/engines/adapters/__init__.py
+- litehive/engines/adapters/claude.py
+- litehive/engines/adapters/codex.py
+- litehive/engines/adapters/common.py
+- litehive/engines/adapters/copilot.py
+- litehive/engines/adapters/gemini.py
+- litehive/engines/adapters/goz.py
+- litehive/engines/adapters/opencode.py
+- litehive/engines/base.py
+- litehive/engines/quota/__init__.py
+- litehive/engines/quota/claude_quota.py
+- litehive/engines/quota/codex_quota.py
+- litehive/engines/quota/copilot_quota.py
+- litehive/engines/quota/zai_quota.py
+- litehive/engines/sandbox.py
+- litehive/events.py
+- litehive/git/
+- litehive/git_ops.py
+- litehive/observability/__init__.py
+- litehive/observability/_engine_monitoring.py
+- litehive/observability/events.py
+- litehive/pipeline/
+- litehive/runner/__init__.py
+- litehive/runner/core.py
+- litehive/runner/states.py
+- litehive/runtime/__init__.py
+- litehive/runtime/_budget.py
+- litehive/runtime/_builder.py
+- litehive/runtime/_commit.py
+- litehive/runtime/_hooks.py
+- litehive/runtime/_models.py
+- litehive/runtime/_orchestration.py
+- litehive/runtime/_pool_control.py
+- litehive/runtime/_recovery.py
+- litehive/runtime/_types.py
+- litehive/runtime/_worktree.py
+- litehive/subagents/__init__.py
+- litehive/subagents/_artifacts.py
+- litehive/subagents/_continuation.py
+- litehive/subagents/_engine_detection.py
+- litehive/subagents/_execution.py
+- litehive/subagents/_manager.py
+- litehive/subagents/_models.py
+- litehive/subagents/_parsing.py
+- litehive/subagents/_prompts.py
+- litehive/subagents/_sandbox.py
+- litehive/subagents/_session.py
+- litehive/tasks/__init__.py
+- litehive/tasks/archive.py
+- litehive/tasks/crud.py
+- litehive/tasks/journal.py
+- litehive/tasks/locking.py
+- litehive/tasks/persistence.py
+- litehive/tasks/queue_management.py
+- litehive/tasks/queue_ops.py
+- litehive/tasks/recovery.py
+- litehive/tasks/runtime_tracking.py
+- litehive/tasks/task_status.py
+- litehive/tasks/workflow.py
+- litehive/workspace/
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 1065
+hook_results: []
+created_at: '2026-04-09T03:27:03+00:00'

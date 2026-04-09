@@ -342,3 +342,607 @@
     clearly. git status was clean at verification time.'
   files_changed: []
   created_at: '2026-04-09T00:34:40+00:00'
+- role: recovery
+  step: implementing
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0212-resume-crashed-agent-sessions-instead-of-starting/recovery/recovery-001.yaml'
+  files_changed: []
+  created_at: '2026-04-09T01:16:42+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Verified the existing implementation in litehive/runtime/_builder.py satisfies
+    T-0212 without further code changes. The executor loop tracks crash_resume_attempted,
+    detects unclassified non-zero exits (failure is None and exit_code != 0), and
+    for claude only extracts the continuation via extract_engine_continuation, sets
+    resume_session_id, appends a clear journal event, and retries once with the existing
+    resume prompt ''Please continue where you left off. Complete the task.'' If the
+    resumed claude session crashes again, the single-attempt guard prevents another
+    resume and execution falls through the normal failure path. Non-claude engines
+    skip this path. Verified with: uv run pytest tests/test_crash_resume.py -q ->
+    4 passed in 1.79s. The tests cover: claude crash resumes the same session id,
+    resumed prompt contains ''continue where you left off'', only one resume attempt
+    occurs, non-claude engines do not resume, and the journal records the resume attempt
+    clearly. git status was clean at verification time.'
+  files_changed: []
+  created_at: '2026-04-09T01:17:18+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Verified the existing implementation in litehive/runtime/_builder.py satisfies
+    T-0212 without further code changes. The executor loop tracks crash_resume_attempted,
+    detects unclassified non-zero exits (failure is None and exit_code != 0), and
+    for claude only extracts the continuation via extract_engine_continuation, sets
+    resume_session_id, appends a clear journal event, and retries once with the existing
+    resume prompt ''Please continue where you left off. Complete the task.'' If the
+    resumed claude session crashes again, the single-attempt guard prevents another
+    resume and execution falls through the normal failure path. Non-claude engines
+    skip this path. Verified with: uv run pytest tests/test_crash_resume.py -q ->
+    4 passed in 1.73s. The tests cover: claude crash resumes the same session id,
+    resumed prompt contains ''continue where you left off'', only one resume attempt
+    occurs, non-claude engines do not resume, and the journal records the resume attempt
+    clearly.'
+  files_changed: []
+  created_at: '2026-04-09T01:18:10+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Verified the existing implementation in litehive/runtime/_builder.py satisfies
+    T-0212 without further code changes. The executor loop tracks crash_resume_attempted,
+    detects unclassified non-zero exits (failure is None and exit_code != 0), and
+    for claude only extracts the continuation via extract_engine_continuation, sets
+    resume_session_id, appends a clear journal event, and retries once with the existing
+    resume prompt ''Please continue where you left off. Complete the task.'' If the
+    resumed claude session crashes again, the single-attempt guard prevents another
+    resume and execution falls through the normal failure path. Non-claude engines
+    skip this path. Verified with: uv run pytest tests/test_crash_resume.py -q ->
+    4 passed in 1.64s. The tests cover: claude crash resumes the same session id,
+    resumed prompt contains ''continue where you left off'', only one resume attempt
+    occurs, non-claude engines do not resume, and the journal records the resume attempt
+    clearly. git status was clean at verification time.'
+  files_changed: []
+  created_at: '2026-04-09T01:18:55+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Verified the existing implementation in litehive/runtime/_builder.py satisfies
+    T-0212 without further code changes. The executor loop tracks crash_resume_attempted,
+    detects unclassified non-zero exits (failure is None and exit_code != 0), and
+    for claude only extracts the continuation via extract_engine_continuation, sets
+    resume_session_id, appends a clear journal event, and retries once with the existing
+    resume prompt ''Please continue where you left off. Complete the task.'' If the
+    resumed claude session crashes again, the single-attempt guard prevents another
+    resume and execution falls through the normal failure path. Non-claude engines
+    skip this path. Verified with: uv run pytest tests/test_crash_resume.py -q ->
+    4 passed in 1.72s. The tests cover: claude crash resumes the same session id,
+    resumed prompt contains ''continue where you left off'', only one resume attempt
+    occurs, non-claude engines do not resume, and the journal records the resume attempt
+    clearly. git status was clean at verification time.'
+  files_changed: []
+  created_at: '2026-04-09T01:19:29+00:00'
+- role: recovery
+  step: implementing
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0212-resume-crashed-agent-sessions-instead-of-starting/recovery/recovery-002.yaml'
+  files_changed: []
+  created_at: '2026-04-09T01:37:00+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Verified the existing implementation in litehive/runtime/_builder.py satisfies
+    T-0212 without further code changes. The executor loop tracks crash_resume_attempted,
+    detects unclassified non-zero exits (failure is None and exit_code != 0), and
+    for claude only extracts the continuation via extract_engine_continuation, sets
+    resume_session_id, appends a clear journal event, and retries once with the existing
+    resume prompt ''Please continue where you left off. Complete the task.'' If the
+    resumed claude session crashes again, the single-attempt guard prevents another
+    resume and execution falls through the normal failure path. Non-claude engines
+    skip this path. Verified with: uv run pytest tests/test_crash_resume.py -q ->
+    4 passed in 1.64s. The tests cover: claude crash resumes the same session id,
+    resumed prompt contains ''continue where you left off'', only one resume attempt
+    occurs, non-claude engines do not resume, and the journal records the resume attempt
+    clearly. git status was clean at verification time.'
+  files_changed: []
+  created_at: '2026-04-09T01:37:48+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Verified the existing implementation in litehive/runtime/_builder.py satisfies
+    T-0212 without further code changes. The executor loop tracks crash_resume_attempted,
+    detects unclassified non-zero exits (failure is None and exit_code != 0), and
+    for claude only extracts the continuation via extract_engine_continuation, sets
+    resume_session_id, appends a clear journal event, and retries once with the existing
+    resume prompt ''Please continue where you left off. Complete the task.'' If the
+    resumed claude session crashes again, the single-attempt guard prevents another
+    resume and execution falls through the normal failure path. Non-claude engines
+    skip this path. Verified with: uv run pytest tests/test_crash_resume.py -q ->
+    4 passed in 1.52s. The tests cover: claude crash resumes the same session id,
+    resumed prompt contains ''continue where you left off'', only one resume attempt
+    occurs, non-claude engines do not resume, and the journal records the resume attempt
+    clearly. git status was clean at verification time.'
+  files_changed: []
+  created_at: '2026-04-09T01:38:33+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Verified the existing implementation in litehive/runtime/_builder.py satisfies
+    T-0212 without further code changes. The executor loop tracks crash_resume_attempted,
+    detects unclassified non-zero exits (failure is None and exit_code != 0), and
+    for claude only extracts the continuation via extract_engine_continuation, sets
+    resume_session_id, appends a clear journal event, and retries once with the existing
+    resume prompt ''Please continue where you left off. Complete the task.'' If the
+    resumed claude session crashes again, the single-attempt guard prevents another
+    resume and execution falls through the normal failure path. Non-claude engines
+    skip this path. Verified with: uv run pytest tests/test_crash_resume.py -q ->
+    4 passed in 1.69s. The tests cover: claude crash resumes the same session id,
+    resumed prompt contains ''continue where you left off'', only one resume attempt
+    occurs, non-claude engines do not resume, and the journal records the resume attempt
+    clearly. git status was clean at verification time.'
+  files_changed: []
+  created_at: '2026-04-09T01:39:17+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Verified the existing implementation in litehive/runtime/_builder.py satisfies
+    T-0212 without further code changes. The executor loop tracks crash_resume_attempted,
+    detects unclassified non-zero exits (failure is None and exit_code != 0), and
+    for claude only extracts the continuation via extract_engine_continuation, sets
+    resume_session_id, appends a clear journal event, and retries once with the existing
+    resume prompt ''Please continue where you left off. Complete the task.'' If the
+    resumed claude session crashes again, the single-attempt guard prevents another
+    resume and execution falls through the normal failure path. Non-claude engines
+    skip this path. Verified with: uv run pytest tests/test_crash_resume.py -q ->
+    4 passed in 1.66s. The tests cover: claude crash resumes the same session id,
+    resumed prompt contains ''continue where you left off'', only one resume attempt
+    occurs, non-claude engines do not resume, and the journal records the resume attempt
+    clearly. git status was clean at verification time.'
+  files_changed: []
+  created_at: '2026-04-09T01:40:02+00:00'
+- role: recovery
+  step: implementing
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0212-resume-crashed-agent-sessions-instead-of-starting/recovery/recovery-003.yaml'
+  files_changed: []
+  created_at: '2026-04-09T01:55:15+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Verified the existing implementation in litehive/runtime/_builder.py satisfies
+    T-0212 without further code changes. The executor loop tracks crash_resume_attempted,
+    detects unclassified non-zero exits (failure is None and exit_code != 0), and
+    for claude only extracts the continuation via extract_engine_continuation, sets
+    resume_session_id, appends a clear journal event, and retries once with the existing
+    resume prompt ''Please continue where you left off. Complete the task.'' If the
+    resumed claude session crashes again, the single-attempt guard prevents another
+    resume and execution falls through the normal failure path. Non-claude engines
+    skip this path. Verified with: uv run pytest tests/test_crash_resume.py -q ->
+    4 passed in 1.91s. The tests cover: claude crash resumes the same session id,
+    resumed prompt contains ''continue where you left off'', only one resume attempt
+    occurs, non-claude engines do not resume, and the journal records the resume attempt
+    clearly. git status was clean at verification time.'
+  files_changed: []
+  created_at: '2026-04-09T01:56:01+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Verified the existing implementation in litehive/runtime/_builder.py satisfies
+    T-0212 without further code changes. The executor loop tracks crash_resume_attempted,
+    detects unclassified non-zero exits (failure is None and exit_code != 0), and
+    for claude only extracts the continuation via extract_engine_continuation, sets
+    resume_session_id, appends a clear journal event, and retries once with the existing
+    resume prompt ''Please continue where you left off. Complete the task.'' If the
+    resumed claude session crashes again, the single-attempt guard prevents another
+    resume and execution falls through the normal failure path. Non-claude engines
+    skip this path. Verified with: uv run pytest tests/test_crash_resume.py -q ->
+    4 passed in 1.71s. The tests cover: claude crash resumes the same session id,
+    resumed prompt contains ''continue where you left off'', only one resume attempt
+    occurs, non-claude engines do not resume, and the journal records the resume attempt
+    clearly. git status was clean at verification time.'
+  files_changed: []
+  created_at: '2026-04-09T01:56:38+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Verified the existing implementation in litehive/runtime/_builder.py satisfies
+    T-0212 without further code changes. The executor loop tracks crash_resume_attempted,
+    detects unclassified non-zero exits (failure is None and exit_code != 0), and
+    for claude only extracts the continuation via extract_engine_continuation, sets
+    resume_session_id, appends a clear journal event, and retries once with the existing
+    resume prompt ''Please continue where you left off. Complete the task.'' If the
+    resumed claude session crashes again, the single-attempt guard prevents another
+    resume and execution falls through the normal failure path. Non-claude engines
+    skip this path. Verified with: uv run pytest tests/test_crash_resume.py -q ->
+    4 passed in 1.68s. The tests cover: claude crash resumes the same session id,
+    resumed prompt contains ''continue where you left off'', only one resume attempt
+    occurs, non-claude engines do not resume, and the journal records the resume attempt
+    clearly. git status was clean at verification time.'
+  files_changed: []
+  created_at: '2026-04-09T01:57:26+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Verified the existing implementation in litehive/runtime/_builder.py satisfies
+    T-0212 without further code changes. The executor loop tracks crash_resume_attempted,
+    detects unclassified non-zero exits (failure is None and exit_code != 0), and
+    for claude only extracts the continuation via extract_engine_continuation, sets
+    resume_session_id, appends a clear journal event, and retries once with the existing
+    resume prompt ''Please continue where you left off. Complete the task.'' If the
+    resumed claude session crashes again, the single-attempt guard prevents another
+    resume and execution falls through the normal failure path. Non-claude engines
+    skip this path. Verified with: uv run pytest tests/test_crash_resume.py -q ->
+    4 passed in 1.59s. The tests cover: claude crash resumes the same session id,
+    resumed prompt contains ''continue where you left off'', only one resume attempt
+    occurs, non-claude engines do not resume, and the journal records the resume attempt
+    clearly. git status was clean at verification time.'
+  files_changed: []
+  created_at: '2026-04-09T01:58:12+00:00'
+- role: recovery
+  step: implementing
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0212-resume-crashed-agent-sessions-instead-of-starting/recovery/recovery-004.yaml'
+  files_changed: []
+  created_at: '2026-04-09T02:15:43+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Verified the existing implementation in litehive/runtime/_builder.py satisfies
+    T-0212 without further code changes. The executor loop tracks crash_resume_attempted,
+    detects unclassified non-zero exits (failure is None and exit_code != 0), and
+    for claude only extracts the continuation via extract_engine_continuation, sets
+    resume_session_id, appends a clear journal event, and retries once with the existing
+    resume prompt ''Please continue where you left off. Complete the task.'' If the
+    resumed claude session crashes again, the single-attempt guard prevents another
+    resume and execution falls through the normal failure path. Non-claude engines
+    skip this path. Verified with: uv run pytest tests/test_crash_resume.py -q ->
+    4 passed in 1.70s. The tests cover: claude crash resumes the same session id,
+    resumed prompt contains ''continue where you left off'', only one resume attempt
+    occurs, non-claude engines do not resume, and the journal records the resume attempt
+    clearly. git status was clean at verification time.'
+  files_changed: []
+  created_at: '2026-04-09T02:16:28+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Verified the existing implementation in litehive/runtime/_builder.py satisfies
+    T-0212 without further code changes. The executor loop tracks crash_resume_attempted,
+    detects unclassified non-zero exits (failure is None and exit_code != 0), and
+    for claude only extracts the continuation via extract_engine_continuation, sets
+    resume_session_id, appends a clear journal event, and retries once with the existing
+    resume prompt ''Please continue where you left off. Complete the task.'' If the
+    resumed claude session crashes again, the single-attempt guard prevents another
+    resume and execution falls through the normal failure path. Non-claude engines
+    skip this path. Verified with: uv run pytest tests/test_crash_resume.py -q ->
+    4 passed in 1.71s. The tests cover: claude crash resumes the same session id,
+    resumed prompt contains ''continue where you left off'', only one resume attempt
+    occurs, non-claude engines do not resume, and the journal records the resume attempt
+    clearly. git status was clean at verification time.'
+  files_changed: []
+  created_at: '2026-04-09T02:17:11+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Verified the existing implementation in litehive/runtime/_builder.py satisfies
+    T-0212 without further code changes. The executor loop tracks a single crash_resume_attempted
+    flag, detects unclassified non-zero exits (failure is None and exit_code != 0),
+    and for claude only extracts the continuation via extract_engine_continuation,
+    sets resume_session_id, appends a clear journal event, and retries once with the
+    existing resume prompt ''Please continue where you left off. Complete the task.''
+    If the resumed claude session crashes again, the single-attempt guard prevents
+    another resume and execution falls through the normal failure path. Non-claude
+    engines skip this path. Verified with: uv run pytest tests/test_crash_resume.py
+    -q -> 4 passed in 1.58s. The tests cover: claude crash resumes the same session
+    id, resumed prompt contains ''continue where you left off'', only one resume attempt
+    occurs, non-claude engines do not resume, and the journal records the resume attempt
+    clearly. git status was clean at verification time.'
+  files_changed: []
+  created_at: '2026-04-09T02:17:48+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Verified the existing implementation in litehive/runtime/_builder.py satisfies
+    T-0212 without further code changes. The executor loop tracks a single crash_resume_attempted
+    flag, detects unclassified non-zero exits (failure is None and exit_code != 0),
+    and for claude only extracts the continuation via extract_engine_continuation,
+    sets resume_session_id, appends a clear journal event, and retries once with the
+    existing resume prompt ''Please continue where you left off. Complete the task.''
+    If the resumed claude session crashes again, the single-attempt guard prevents
+    another resume and execution falls through the normal failure path. Non-claude
+    engines skip this path. Verified with: uv run pytest tests/test_crash_resume.py
+    -q -> 4 passed in 1.74s. The tests cover: claude crash resumes the same session
+    id, resumed prompt contains ''continue where you left off'', only one resume attempt
+    occurs, non-claude engines do not resume, and the journal records the resume attempt
+    clearly. git status was clean at verification time.'
+  files_changed: []
+  created_at: '2026-04-09T02:18:48+00:00'
+- role: recovery
+  step: implementing
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0212-resume-crashed-agent-sessions-instead-of-starting/recovery/recovery-005.yaml'
+  files_changed: []
+  created_at: '2026-04-09T02:33:20+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Verified the existing implementation in litehive/runtime/_builder.py satisfies
+    T-0212 without further code changes. The executor loop tracks a single crash_resume_attempted
+    flag, detects unclassified non-zero exits (failure is None and exit_code != 0),
+    and for claude only extracts the continuation via extract_engine_continuation,
+    sets resume_session_id, appends a clear journal event, and retries once with the
+    existing resume prompt ''Please continue where you left off. Complete the task.''
+    If the resumed claude session crashes again, the single-attempt guard prevents
+    another resume and execution falls through the normal failure path. Non-claude
+    engines skip this path. Verified with: uv run pytest tests/test_crash_resume.py
+    -q -> 4 passed in 1.90s. The tests cover: claude crash resumes the same session
+    id, resumed prompt contains ''continue where you left off'', only one resume attempt
+    occurs, non-claude engines do not resume, and the journal records the resume attempt
+    clearly. git status was clean at verification time.'
+  files_changed: []
+  created_at: '2026-04-09T02:33:52+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Verified the existing implementation in litehive/runtime/_builder.py satisfies
+    T-0212 without further code changes. The executor loop tracks a single crash_resume_attempted
+    flag, detects unclassified non-zero exits (failure is None and exit_code != 0),
+    and for claude only extracts the continuation via extract_engine_continuation,
+    sets resume_session_id, appends a clear journal event, and retries once with the
+    existing resume prompt ''Please continue where you left off. Complete the task.''
+    If the resumed claude session crashes again, the single-attempt guard prevents
+    another resume and execution falls through the normal failure path. Non-claude
+    engines skip this path. Verified with: uv run pytest tests/test_crash_resume.py
+    -q -> 4 passed in 1.61s. The tests cover: claude crash resumes the same session
+    id, resumed prompt contains ''continue where you left off'', only one resume attempt
+    occurs, non-claude engines do not resume, and the journal records the resume attempt
+    clearly. git status was clean at verification time.'
+  files_changed: []
+  created_at: '2026-04-09T02:34:29+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Verified the existing implementation in litehive/runtime/_builder.py satisfies
+    T-0212 without further code changes. In litehive/runtime/_builder.py:171-177 and
+    :207-215, the executor loop tracks crash_resume_attempted, uses the existing resume
+    prompt ''Please continue where you left off. Complete the task.'' when resume_session_id
+    is set, detects unclassified non-zero exits (failure is None and exit_code !=
+    0), extracts the continuation via extract_engine_continuation, and for claude
+    only retries once with the same resume_session_id. The journal appends a clear
+    resume event before continuing, and a second crash falls through the normal failure
+    path because the single-attempt guard is set. Verified by focused tests in tests/test_crash_resume.py:57-99,
+    :102-135, :138-186, and :189-217 covering: claude crash resumes same session id,
+    resumed prompt contains ''continue where you left off'', only one resume attempt
+    occurs, non-claude engines do not resume, and the journal records the resume attempt
+    clearly. Ran: uv run pytest tests/test_crash_resume.py -q -> 4 passed in 1.73s.
+    git status was clean at verification time.'
+  files_changed: []
+  created_at: '2026-04-09T02:35:18+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Verified the existing implementation in litehive/runtime/_builder.py satisfies
+    T-0212 without further code changes. In litehive/runtime/_builder.py:171-177 and
+    :207-220, the executor loop tracks crash_resume_attempted, uses the resume prompt
+    ''Please continue where you left off. Complete the task.'' when resume_session_id
+    is set, detects unclassified non-zero exits (failure is None and exit_code !=
+    0), extracts the continuation via extract_engine_continuation, and for claude
+    only retries once with the same resume_session_id. The journal appends a clear
+    resume event before continuing, and a second crash falls through the normal failure
+    path because the single-attempt guard is set. Non-claude engines skip this path.
+    Verified by focused tests in tests/test_crash_resume.py:57-99, :102-135, :138-186,
+    and :189-217 covering: claude crash resumes the same session id, resumed prompt
+    contains ''continue where you left off'', only one resume attempt occurs, non-claude
+    engines do not resume, and the journal records the resume attempt clearly. Ran:
+    uv run pytest tests/test_crash_resume.py -q -> 4 passed in 1.90s. git status was
+    clean at verification time.'
+  files_changed: []
+  created_at: '2026-04-09T02:36:03+00:00'
+- role: recovery
+  step: implementing
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0212-resume-crashed-agent-sessions-instead-of-starting/recovery/recovery-006.yaml'
+  files_changed: []
+  created_at: '2026-04-09T02:51:21+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Verified the existing implementation in litehive/runtime/_builder.py satisfies
+    T-0212 without further code changes. In litehive/runtime/_builder.py, the executor
+    loop tracks crash_resume_attempted, uses the resume prompt ''Please continue where
+    you left off. Complete the task.'' when resume_session_id is set, detects unclassified
+    non-zero exits (failure is None and exit_code != 0), and for claude only extracts
+    the continuation via extract_engine_continuation, sets resume_session_id, appends
+    a clear journal event, and retries once with the same session id. If the resumed
+    claude session crashes again, the single-attempt guard prevents another resume
+    and execution falls through the normal failure path; non-claude engines skip this
+    path. Verified with uv run pytest tests/test_crash_resume.py -q: 4 passed in 1.89s.
+    The tests cover: claude crash resumes the same session id, the resumed prompt
+    contains ''continue where you left off'', only one resume attempt occurs, non-claude
+    engines do not resume, and the journal records the resume attempt clearly. git
+    status was clean at verification time.'
+  files_changed: []
+  created_at: '2026-04-09T02:51:57+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Verified the existing implementation in litehive/runtime/_builder.py satisfies
+    T-0212 without further code changes. The executor loop tracks a single crash_resume_attempted
+    flag, detects unclassified non-zero exits (failure is None and exit_code != 0),
+    and for claude only extracts the continuation via extract_engine_continuation,
+    sets resume_session_id, appends a clear journal event, and retries once with the
+    existing resume prompt ''Please continue where you left off. Complete the task.''
+    If the resumed claude session crashes again, the single-attempt guard prevents
+    another resume and execution falls through the normal failure path; non-claude
+    engines skip this path. Verified with uv run pytest tests/test_crash_resume.py
+    -q: 4 passed in 2.19s. The tests cover: claude crash resumes the same session
+    id, the resumed prompt contains ''continue where you left off'', only one resume
+    attempt occurs, non-claude engines do not resume, and the journal records the
+    resume attempt clearly. git status was clean at verification time.'
+  files_changed: []
+  created_at: '2026-04-09T02:52:37+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Verified the existing implementation in litehive/runtime/_builder.py satisfies
+    T-0212 without further code changes. The executor loop tracks a single crash_resume_attempted
+    flag, detects unclassified non-zero exits (failure is None and exit_code != 0),
+    and for claude only extracts the continuation via extract_engine_continuation,
+    sets resume_session_id, appends a clear journal event, and retries once with the
+    existing resume prompt ''Please continue where you left off. Complete the task.''
+    If the resumed claude session crashes again, the single-attempt guard prevents
+    another resume and execution falls through the normal failure path; non-claude
+    engines skip this path. Verified with uv run pytest tests/test_crash_resume.py
+    -q: 4 passed in 2.03s. The tests cover: claude crash resumes the same session
+    id, the resumed prompt contains ''continue where you left off'', only one resume
+    attempt occurs, non-claude engines do not resume, and the journal records the
+    resume attempt clearly. git status was clean at verification time.'
+  files_changed: []
+  created_at: '2026-04-09T02:53:21+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Verified the existing implementation in litehive/runtime/_builder.py satisfies
+    T-0212 without further code changes. The executor loop tracks a single crash_resume_attempted
+    flag, uses the resume prompt ''Please continue where you left off. Complete the
+    task.'' when resume_session_id is set, detects unclassified non-zero exits (failure
+    is None and exit_code != 0), and for claude only extracts the continuation via
+    extract_engine_continuation, sets resume_session_id, appends a clear journal event,
+    and retries once with the same session id. If the resumed claude session crashes
+    again, the single-attempt guard prevents another resume and execution falls through
+    the normal failure path; non-claude engines skip this path. Verified with uv run
+    pytest tests/test_crash_resume.py -q: 4 passed in 1.51s. The tests cover: claude
+    crash resumes the same session id, the resumed prompt contains ''continue where
+    you left off'', only one resume attempt occurs, non-claude engines do not resume,
+    and the journal records the resume attempt clearly. git status was clean at verification
+    time.'
+  files_changed: []
+  created_at: '2026-04-09T02:54:03+00:00'
+- role: recovery
+  step: implementing
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0212-resume-crashed-agent-sessions-instead-of-starting/recovery/recovery-007.yaml'
+  files_changed: []
+  created_at: '2026-04-09T03:35:03+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Verified the existing implementation in litehive/runtime/_builder.py satisfies
+    T-0212 without further code changes. The executor loop tracks a single crash_resume_attempted
+    flag, detects unclassified non-zero exits (failure is None and exit_code != 0),
+    and for claude only extracts the continuation via extract_engine_continuation,
+    sets resume_session_id, appends a clear journal event, and retries once with the
+    existing resume prompt ''Please continue where you left off. Complete the task.''
+    If the resumed claude session crashes again, the single-attempt guard prevents
+    another resume and execution falls through the normal failure path; non-claude
+    engines skip this path. Verified with uv run pytest tests/test_crash_resume.py
+    -q: 4 passed in 1.77s. The tests cover: claude crash resumes the same session
+    id, the resumed prompt contains ''continue where you left off'', only one resume
+    attempt occurs, non-claude engines do not resume, and the journal records the
+    resume attempt clearly. git status was clean at verification time.'
+  files_changed: []
+  created_at: '2026-04-09T03:35:38+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Verified the existing implementation in litehive/runtime/_builder.py satisfies
+    T-0212 without further code changes. The executor loop tracks a single crash_resume_attempted
+    flag, detects unclassified non-zero exits (failure is None and exit_code != 0),
+    and for claude only extracts the continuation via extract_engine_continuation,
+    sets resume_session_id, appends a clear journal event, and retries once with the
+    existing resume prompt ''Please continue where you left off. Complete the task.''
+    If the resumed claude session crashes again, the single-attempt guard prevents
+    another resume and execution falls through the normal failure path; non-claude
+    engines skip this path. Verified with uv run pytest tests/test_crash_resume.py
+    -q: 4 passed in 1.99s. The tests cover: claude crash resumes the same session
+    id, the resumed prompt contains ''continue where you left off'', only one resume
+    attempt occurs, non-claude engines do not resume, and the journal records the
+    resume attempt clearly. git status was clean at verification time.'
+  files_changed: []
+  created_at: '2026-04-09T03:36:23+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Verified the existing implementation in litehive/runtime/_builder.py satisfies
+    T-0212 without further code changes. In the executor loop,  limits recovery to
+    a single retry, unclassified non-zero exits () on  extract the continuation via
+    , set , append a clear journal event, and retry with the existing resume prompt
+    ''Please continue where you left off. Complete the task.'' If the resumed claude
+    session crashes again, the single-attempt guard prevents another resume and execution
+    falls through the normal failure path; non-claude engines skip this path. Verified
+    with ....                                                                     [100%]
+
+    4 passed in 1.47s: 4 passed in 1.78s. Those tests cover: claude crash resumes
+    the same session id, the resumed prompt contains ''continue where you left off'',
+    only one resume attempt occurs, non-claude engines do not resume, and the journal
+    records the resume attempt clearly. git status was clean at verification time.'
+  files_changed: []
+  created_at: '2026-04-09T03:37:04+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Verified the existing implementation in litehive/runtime/_builder.py satisfies
+    T-0212 without further code changes. In the executor loop, crash_resume_attempted
+    limits recovery to a single retry, unclassified non-zero exits (failure is None
+    and exit_code != 0) on claude extract the continuation via extract_engine_continuation,
+    set resume_session_id, append a clear journal event, and retry with the existing
+    resume prompt ''Please continue where you left off. Complete the task.'' If the
+    resumed claude session crashes again, the single-attempt guard prevents another
+    resume and execution falls through the normal failure path; non-claude engines
+    skip this path. Verified with uv run pytest tests/test_crash_resume.py -q: 4 passed
+    in 1.78s. Those tests cover: claude crash resumes the same session id, the resumed
+    prompt contains ''continue where you left off'', only one resume attempt occurs,
+    non-claude engines do not resume, and the journal records the resume attempt clearly.
+    git status was clean at verification time.'
+  files_changed: []
+  created_at: '2026-04-09T03:37:09+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Verified the existing implementation for T-0212 in litehive/runtime/_builder.py.
+    In lines 171-223, the executor loop tracks crash_resume_attempted, uses the resume
+    prompt ''Please continue where you left off. Complete the task.'' when resume_session_id
+    is set, detects unclassified non-zero exits (failure is None and exit_code !=
+    0), and for claude only extracts the continuation via extract_engine_continuation,
+    sets resume_session_id, appends a clear journal event, and retries once with the
+    same session id. If the resumed claude session crashes again, the single-attempt
+    guard prevents another resume and execution falls through the normal failure path.
+    Non-claude engines skip this path. Verified with uv run pytest tests/test_crash_resume.py
+    -q: 4 passed in 1.79s. Tests/test_crash_resume.py covers: claude crash resumes
+    the same session id, the resumed prompt contains ''continue where you left off'',
+    only one resume attempt occurs, non-claude engines do not resume, and the journal
+    records the resume attempt clearly. git status was clean at verification time.'
+  files_changed: []
+  created_at: '2026-04-09T03:38:07+00:00'

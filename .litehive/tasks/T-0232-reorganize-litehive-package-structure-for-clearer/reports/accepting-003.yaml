@@ -1,0 +1,93 @@
+task_id: T-0232
+step: accepting
+verdict: pass
+summary: 'Accepted. Verified the acceptance blocker is resolved in litehive/agents/__init__.py:
+  the previous Ruff gate failure from late compatibility imports is gone, and the
+  exact hook command ''uv run ruff check --select E402,F401 litehive tests'' now exits
+  0. Confirmed the canonical package reorganization remains in place in the task worktree:
+  litehive.agents exists with adapters plus lazy top-level compatibility exports for
+  subagent manager/prompt/parsing APIs; litehive.pipeline exists for runner/runtime
+  orchestration; litehive.workspace now owns locking and related workflow/runtime
+  helpers while litehive.tasks keeps compatibility shims; litehive.git/ops.py and
+  litehive.observability/events.py are present as canonical homes with legacy litehive.git_ops
+  and litehive.events preserved. Reproduced backward-compat import evidence with a
+  direct smoke check confirming alias identity for representative public APIs: litehive.agents.SubagentManager
+  == litehive.subagents.SubagentManager, litehive.agents.adapters.CodexCLIAdapter
+  == litehive.engines.adapters.CodexCLIAdapter, litehive.pipeline.run_task == litehive.runner.run_task,
+  litehive.pipeline._budget_ledger_from_config == litehive.runtime._budget_ledger_from_config,
+  litehive.workspace.locking.workspace_runner_guard == litehive.tasks.locking.workspace_runner_guard,
+  litehive.git.status_porcelain == litehive.git_ops.status_porcelain, and litehive.observability.events.append_event
+  == litehive.events.append_event; intake_prompt and stage_prompt remain callable
+  through litehive.agents. Ran focused regression verification without modifying tests:
+  ''uv run pytest -q tests/test_runner_workflow.py tests/test_observability_and_status.py''
+  -> 183 passed in 26.41s. Combined with the existing SWE/QA evidence already recorded
+  for tests/test_tasks_and_subagents.py, tests/test_runtime_pool.py, and tests/test_engine_variants_and_timeline.py,
+  this is sufficient evidence that the package-boundary refactor and compatibility
+  re-exports satisfy the acceptance criteria.'
+feedback: "Runner hook `before_pm_acceptance` `uv run ruff check --select E402,F401\
+  \ litehive tests` passed with exit code 0 (artifact: `artifacts/before_pm_acceptance-001.yaml`).\n\
+  \nRunner hook `before_pm_acceptance` `if [ -n \"${LITEHIVE_CHANGED_PATHS:-}\" ]\
+  \ \\\n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" | grep -q . \\\n  && printf\
+  \ '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" \\\n    | xargs -r -d '\\n' git grep -nE 'noqa:.*F401|noqa:.*F403|ruff:\\\
+  s*noqa:\\s*F401|ruff:\\s*noqa:\\s*F403' --; then\n  echo 'Forbidden noqa F401/F403\
+  \ suppression found.'\n  exit 1\nfi` passed with exit code 0 (artifact: `artifacts/before_pm_acceptance-002.yaml`).\n\
+  \nAccepted. Verified the acceptance blocker is resolved in litehive/agents/__init__.py:\
+  \ the previous Ruff gate failure from late compatibility imports is gone, and the\
+  \ exact hook command 'uv run ruff check --select E402,F401 litehive tests' now exits\
+  \ 0. Confirmed the canonical package reorganization remains in place in the task\
+  \ worktree: litehive.agents exists with adapters plus lazy top-level compatibility\
+  \ exports for subagent manager/prompt/parsing APIs; litehive.pipeline exists for\
+  \ runner/runtime orchestration; litehive.workspace now owns locking and related\
+  \ workflow/runtime helpers while litehive.tasks keeps compatibility shims; litehive.git/ops.py\
+  \ and litehive.observability/events.py are present as canonical homes with legacy\
+  \ litehive.git_ops and litehive.events preserved. Reproduced backward-compat import\
+  \ evidence with a direct smoke check confirming alias identity for representative\
+  \ public APIs: litehive.agents.SubagentManager == litehive.subagents.SubagentManager,\
+  \ litehive.agents.adapters.CodexCLIAdapter == litehive.engines.adapters.CodexCLIAdapter,\
+  \ litehive.pipeline.run_task == litehive.runner.run_task, litehive.pipeline._budget_ledger_from_config\
+  \ == litehive.runtime._budget_ledger_from_config, litehive.workspace.locking.workspace_runner_guard\
+  \ == litehive.tasks.locking.workspace_runner_guard, litehive.git\n\n\u2026 [truncated\
+  \ \u2014 full transcript in subagent artifacts]"
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings:
+- 'runner hook passed: `before_pm_acceptance` `uv run ruff check --select E402,F401
+  litehive tests` (artifact: `artifacts/before_pm_acceptance-001.yaml`)'
+- "runner hook passed: `before_pm_acceptance` `if [ -n \"${LITEHIVE_CHANGED_PATHS:-}\"\
+  \ ] \\\n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" | grep -q . \\\n  && printf\
+  \ '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" \\\n    | xargs -r -d '\\n' git grep -nE 'noqa:.*F401|noqa:.*F403|ruff:\\\
+  s*noqa:\\s*F401|ruff:\\s*noqa:\\s*F403' --; then\n  echo 'Forbidden noqa F401/F403\
+  \ suppression found.'\n  exit 1\nfi` (artifact: `artifacts/before_pm_acceptance-002.yaml`)"
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 86
+hook_results:
+- point: before_pm_acceptance
+  command: uv run ruff check --select E402,F401 litehive tests
+  blocking: true
+  exit_code: 0
+  status: passed
+  artifact: artifacts/before_pm_acceptance-001.yaml
+- point: before_pm_acceptance
+  command: "if [ -n \"${LITEHIVE_CHANGED_PATHS:-}\" ] \\\n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\"\
+    \ | grep -q . \\\n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" \\\n    | xargs\
+    \ -r -d '\\n' git grep -nE 'noqa:.*F401|noqa:.*F403|ruff:\\s*noqa:\\s*F401|ruff:\\\
+    s*noqa:\\s*F403' --; then\n  echo 'Forbidden noqa F401/F403 suppression found.'\n\
+    \  exit 1\nfi"
+  blocking: true
+  exit_code: 0
+  status: passed
+  artifact: artifacts/before_pm_acceptance-002.yaml
+created_at: '2026-04-09T03:43:46+00:00'
