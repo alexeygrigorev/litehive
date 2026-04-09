@@ -3393,3 +3393,58 @@ def test_subagent_prunes_superseded_raw_artifacts_and_compresses_latest_snapshot
     assert (second_base / "transcript.md.gz").exists()
     assert (second_base / "stdout.txt.gz").exists()
     assert (second_base / "stderr.txt.gz").exists()
+
+
+def test_subagent_empty_stdout_stderr_still_written(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Empty subagent runs must still produce stdout.txt and stderr.txt."""
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Empty output run")
+    manager = SubagentManager(tmp_path)
+
+    class FakeEngine:
+        name = "codex"
+        binary = "codex"
+
+        def is_available(self) -> bool:
+            return True
+
+        def run(
+            self,
+            prompt: str,
+            cwd: Path,
+            model: str | None = None,
+            *,
+            max_turns: int | None = None,
+            on_started=None,
+        ) -> CLIExecutionResult:
+            del prompt, model, max_turns
+            if on_started is not None:
+                on_started(7777)
+            return CLIExecutionResult(
+                adapter="codex",
+                argv=("codex", "exec"),
+                cwd=cwd,
+                exit_code=0,
+                stdout="",
+                stderr="",
+                pid=7777,
+            )
+
+        def render_transcript(self, execution: CLIExecutionResult) -> str:
+            return execution.transcript
+
+    engine = FakeEngine()
+    monkeypatch.setattr("litehive.subagents._manager.get_engine", lambda _: engine)
+
+    manager.run(task, role="swe", engine_name="codex", prompt="do nothing")
+
+    base = task_dir(tmp_path, task) / "subagents" / "SA-0001-swe"
+    assert base.exists()
+    assert (base / "stdout.txt").exists()
+    assert (base / "stderr.txt").exists()
+    assert (base / "stdout.txt").read_text(encoding="utf-8") == ""
+    assert (base / "stderr.txt").read_text(encoding="utf-8") == ""
+    assert not (base / "stdout.txt.gz").exists()
+    assert not (base / "stderr.txt.gz").exists()
