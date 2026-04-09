@@ -8,6 +8,7 @@ from tests.workspace_helpers import (
     Path,
     SubagentRef,
     RuntimeSubagentState,
+    _run,
     _cmd_debug,
     argparse,
     create_task,
@@ -21,8 +22,13 @@ from litehive.models import TaskThreadComment
 from litehive.tasks.reports import append_thread_comment
 
 
-def _ns(workspace, task_id, all_flag=False):
-    return argparse.Namespace(workspace=workspace, task_id=task_id, all=all_flag)
+def _ns(workspace, task_id, all_flag=False, worktree_flag=False):
+    return argparse.Namespace(
+        workspace=workspace,
+        task_id=task_id,
+        all=all_flag,
+        worktree=worktree_flag,
+    )
 
 
 def _make_task_with_subagent(tmp_path, *, engine="codex", role="swe", sa_id="SA-implementing"):
@@ -56,6 +62,24 @@ def _write_session_yaml(sa_dir, *, sa_id="SA-implementing", role="swe", engine="
     (sa_dir / "session.yaml").write_text(
         yaml.safe_dump(session_data, sort_keys=False), encoding="utf-8"
     )
+
+
+def _init_git_repo(root: Path) -> None:
+    _run(["git", "init"], root)
+    _run(["git", "config", "user.name", "Test User"], root)
+    _run(["git", "config", "user.email", "test@example.com"], root)
+    (root / "README.md").write_text("base\n", encoding="utf-8")
+    _run(["git", "add", "README.md"], root)
+    _run(["git", "commit", "-m", "initial"], root)
+
+
+def _create_task_worktree(root: Path, task) -> Path:
+    worktree_path = root / ".litehive" / "worktrees" / f"{task.id}-{task.slug}"
+    worktree_path.parent.mkdir(parents=True, exist_ok=True)
+    _run(["git", "worktree", "add", "--detach", str(worktree_path), "HEAD"], root)
+    task.git.worktree_path = str(worktree_path.relative_to(root))
+    save_task(root, task)
+    return worktree_path
 
 
 # -- Basic latest subagent display --
@@ -314,3 +338,62 @@ def test_debug_shows_exit_code_from_runtime(
     assert "exit_code: 0" in output
     assert "started_at: 2026-04-09T08:00:00Z" in output
     assert "completed_at: 2026-04-09T08:05:00Z" in output
+
+
+def test_debug_worktree_shows_uncommitted_changes(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    ensure_workspace(tmp_path)
+    _init_git_repo(tmp_path)
+    task = create_task(tmp_path, title="Worktree debug task", auto_commit=False)
+    worktree_path = _create_task_worktree(tmp_path, task)
+    (worktree_path / "dirty.py").write_text("print('dirty')\n", encoding="utf-8")
+
+    exit_code = _cmd_debug(_ns(tmp_path, task.id, worktree_flag=True))
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert f"task: {task.id}" in output
+    assert f"worktree: {task.runtime.git.worktree_path}" in output
+    assert "exists: yes" in output
+    assert "uncommitted:" in output
+    assert "  - dirty.py" in output
+    assert "committed_ahead_of_main:" in output
+    assert "  (none)" in output
+
+
+def test_debug_worktree_shows_committed_changes_ahead_of_main(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    ensure_workspace(tmp_path)
+    _init_git_repo(tmp_path)
+    task = create_task(tmp_path, title="Committed worktree debug task", auto_commit=False)
+    worktree_path = _create_task_worktree(tmp_path, task)
+    (worktree_path / "feature.py").write_text("print('feature')\n", encoding="utf-8")
+    _run(["git", "add", "feature.py"], worktree_path)
+    _run(["git", "commit", "-m", "feature commit"], worktree_path)
+
+    exit_code = _cmd_debug(_ns(tmp_path, task.id, worktree_flag=True))
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "exists: yes" in output
+    assert "uncommitted:" in output
+    assert "committed_ahead_of_main:" in output
+    assert "  - feature.py" in output
+
+
+def test_debug_worktree_shows_no_worktree_when_missing(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Missing worktree task", auto_commit=False)
+    task.git.worktree_path = ".litehive/worktrees/missing-task"
+    save_task(tmp_path, task)
+
+    exit_code = _cmd_debug(_ns(tmp_path, task.id, worktree_flag=True))
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "exists: no" in output
+    assert "no worktree" in output

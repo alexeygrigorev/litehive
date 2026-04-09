@@ -197,6 +197,8 @@ def _print_live_quota(engine_name: str) -> None:
         else:
             print()
             print("quota: proactive")
+            print(f"used_percent: {quota_status.primary_window.used_percent:.1f}")
+            print(f"reset_at: {quota_status.secondary_window.reset_at or '-'}")
             print(f"5h_used: {quota_status.primary_window.used_percent:.0f}%")
             print(f"weekly_used: {quota_status.secondary_window.used_percent:.0f}%")
             print(f"limit_reached: {'yes' if quota_status.limit_reached else 'no'}")

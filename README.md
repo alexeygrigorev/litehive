@@ -107,6 +107,7 @@ litehive status                           # workspace overview
 litehive status --fast                    # quick state-only read
 litehive queue                            # show queue order
 litehive web                              # local web dashboard
+litehive debug T-0002 --worktree         # inspect recorded worktree existence and changes
 ```
 
 Recovery:

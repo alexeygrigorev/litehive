@@ -1,3 +1,5 @@
+import fcntl
+
 from litehive.workspace.locking import (
     _clear_runner_lock_metadata,
     _current_thread_owns_runner_guard,
@@ -41,6 +43,7 @@ __all__ = [
     "_touch_runner_status",
     "_workspace_lock",
     "_write_runner_lock_metadata",
+    "fcntl",
     "runner_heartbeat",
     "runner_status",
     "runner_status_readonly",

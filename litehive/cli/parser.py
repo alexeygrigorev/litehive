@@ -950,6 +950,11 @@ def build_parser():
         help="List all subagents with their status and exit code",
     )
     debug_cmd.add_argument(
+        "--worktree",
+        action="store_true",
+        help="Show whether the task worktree exists plus uncommitted and committed changes",
+    )
+    debug_cmd.add_argument(
         "--workspace",
         type=Path,
         default=Path.cwd(),
