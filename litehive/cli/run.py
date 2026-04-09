@@ -1,11 +1,8 @@
 from litehive.config import ensure_workspace, load_config
 from litehive.pipeline import TaskPoolStopConditions, drain_task_pool, run_single_task
 from litehive.pipeline._parallel import run_parallel_tasks
-from litehive.tasks import (
-    WorkspaceConflictError,
-    peek_next_task_selection,
-    plan_task_selections,
-)
+from litehive.tasks.models import WorkspaceConflictError
+from litehive.tasks.queue_ops import peek_next_task_selection, plan_task_selections
 
 from litehive.cli._pool import (
     _pool_summary_report_data,

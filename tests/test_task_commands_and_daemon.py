@@ -1703,7 +1703,7 @@ def test_requeue_task_rolls_back_when_atomic_state_persist_fails(
             raise OSError("state write failed")
         original_atomic_write(path, content)
 
-    monkeypatch.setattr("litehive.tasks._atomic_write_text", fail_on_state_write)
+    monkeypatch.setattr("litehive.tasks.persistence._atomic_write_text", fail_on_state_write)
 
     with pytest.raises(OSError, match="state write failed"):
         requeue_task(tmp_path, flagged.id, front=True)
@@ -1767,7 +1767,7 @@ def test_resume_task_rolls_back_when_atomic_state_persist_fails(
             raise OSError("state write failed")
         original_atomic_write(path, content)
 
-    monkeypatch.setattr("litehive.tasks._atomic_write_text", fail_on_state_write)
+    monkeypatch.setattr("litehive.tasks.persistence._atomic_write_text", fail_on_state_write)
 
     with pytest.raises(OSError, match="state write failed"):
         resume_task(tmp_path, flagged.id, front=True)
@@ -1952,7 +1952,7 @@ def test_abandon_task_rolls_back_when_atomic_state_persist_fails(
             raise OSError("state write failed")
         original_atomic_write(path, content)
 
-    monkeypatch.setattr("litehive.tasks._atomic_write_text", fail_on_state_write)
+    monkeypatch.setattr("litehive.tasks.persistence._atomic_write_text", fail_on_state_write)
 
     with pytest.raises(OSError, match="state write failed"):
         abandon_task(tmp_path, flagged.id)
@@ -2140,19 +2140,19 @@ def test_stop_current_task_signals_live_runner_before_fallback(
     signals: list[tuple[int, int]] = []
 
     monkeypatch.setattr(
-        "litehive.tasks._runner_lock_is_held", lambda root: next(held_states, False)
+        "litehive.workspace.locking._runner_lock_is_held", lambda root: next(held_states, False)
     )
     monkeypatch.setattr(
-        "litehive.tasks._read_runner_lock_metadata",
+        "litehive.workspace.locking._read_runner_lock_metadata",
         lambda root: RunnerStatusState(pid=4242, started_at="2026-04-01T00:00:00+00:00"),
     )
-    monkeypatch.setattr("litehive.tasks._runner_pid_is_alive", lambda pid: True)
-    monkeypatch.setattr("litehive.tasks.recover_stale_runner_state", lambda root: False)
+    monkeypatch.setattr("litehive.workspace.locking._runner_pid_is_alive", lambda pid: True)
+    monkeypatch.setattr("litehive.workspace.recovery.recover_stale_runner_state", lambda root: False)
 
     def fake_kill(pid: int, sig: int) -> None:
         signals.append((pid, sig))
 
-    monkeypatch.setattr("litehive.tasks.os.kill", fake_kill)
+    monkeypatch.setattr("litehive.workspace.task_status.os.kill", fake_kill)
 
     summary = stop_current_task(tmp_path, wait_timeout_seconds=0.01, poll_interval_seconds=0.01)
 

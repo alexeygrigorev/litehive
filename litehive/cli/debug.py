@@ -7,8 +7,7 @@ import yaml
 
 from litehive.config import ensure_workspace
 from litehive.git.ops import current_head
-from litehive.tasks import get_task_worktree_path
-from litehive.tasks.crud import require_task
+from litehive.tasks.crud import get_task_worktree_path, require_task
 from litehive.tasks.paths import (
     _read_text_artifact,
     _resolve_artifact_path,

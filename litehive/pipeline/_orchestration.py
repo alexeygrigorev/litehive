@@ -7,21 +7,19 @@ from litehive.config import load_config, load_context
 from litehive.models import TaskRecord
 from litehive.pipeline.core import TaskExecutionRunner
 from litehive.agents import SubagentManager
-from litehive.tasks import (
-    BlockedTask,
+from litehive.tasks.journal import append_journal
+from litehive.tasks.models import BlockedTask, WorkspaceConflictError
+from litehive.tasks.persistence import set_pool_stop_reason
+from litehive.tasks.queue_ops import (
     active_task_markers,
-    append_journal,
     dequeue_next_task,
     dequeue_next_task_selection,
-    mark_task_run_started,
     peek_next_task,
     peek_next_task_selection,
-    recover_stale_runner_state,
-    runner_heartbeat,
-    set_pool_stop_reason,
-    workspace_runner_guard,
-    WorkspaceConflictError,
 )
+from litehive.workspace.locking import runner_heartbeat, workspace_runner_guard
+from litehive.workspace.recovery import recover_stale_runner_state
+from litehive.workspace.runtime_tracking import mark_task_run_started
 
 from ._budget import _budget_ledger_from_conditions, _budget_ledger_from_config
 from ._builder import build_executor

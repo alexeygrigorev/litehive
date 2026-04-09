@@ -39,12 +39,12 @@ from litehive.agents._engine_detection import (
 from litehive.agents._models import EngineFailure, SubagentInactivityTimeout, SubagentResult
 from litehive.agents._sandbox import _SandboxedAdapter
 from litehive.agents._session import _SessionMixin
-from litehive.tasks import (
+from litehive.tasks.crud import save_task
+from litehive.tasks.paths import task_dir
+from litehive.workspace.runtime_tracking import (
     mark_subagent_finished,
     mark_subagent_progress,
     mark_subagent_started,
-    save_task,
-    task_dir,
 )
 
 

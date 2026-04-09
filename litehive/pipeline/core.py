@@ -16,25 +16,23 @@ from litehive.models import (
     StageReport,
     TaskRecord,
 )
-from litehive.tasks import (
-    CLOSED_TASK_STATUSES,
-    _apply_task_retry_state,
+from litehive.tasks.constants import CLOSED_TASK_STATUSES
+from litehive.tasks.crud import save_task
+from litehive.tasks.journal import append_journal
+from litehive.tasks.normalization import missing_acceptance_criteria_reason, needs_normalization
+from litehive.tasks.paths import task_dir
+from litehive.tasks.reports import record_recovery_report
+from litehive.workspace.recovery import _prepare_interrupted_task, interruption_journal_message
+from litehive.workspace.runtime_tracking import (
     _apply_stage_finished,
     _apply_task_outcome,
+    _apply_task_retry_state,
     _clear_task_outcome,
-    _prepare_interrupted_task,
-    append_journal,
     clear_task_outcome,
     finish_task_run_transition,
-    interruption_journal_message,
     mark_stage_finished,
     mark_stage_started,
-    missing_acceptance_criteria_reason,
-    needs_normalization,
-    record_recovery_report,
-    save_task,
     set_task_retry_state,
-    task_dir,
 )
 from litehive.pipeline.states import _ROUTES, _SINGLE_ROUTES, _SINGLE_STEPS_FROM, _STEPS_FROM
 
@@ -427,7 +425,8 @@ class TaskExecutionRunner:
             # Check via `git status` in the worktree — simple and reliable.
             if current == "implementing" and target == "testing":
                 worktree_has_changes = False
-                from litehive.tasks import get_task_worktree_path, task_dir
+                from litehive.tasks.crud import get_task_worktree_path
+                from litehive.tasks.paths import task_dir
                 from litehive.git import current_head, is_git_repo
                 # Skip guard if the guard already rejected this task before.
                 # The guard overwrites pass→reject before saving, so we can
@@ -563,7 +562,7 @@ class TaskExecutionRunner:
                         )
 
             if current == "grooming" and target == "implementing":
-                from litehive.tasks import apply_task_updates_from_report
+                from litehive.workspace.workflow import apply_task_updates_from_report
 
                 apply_task_updates_from_report(self.root, task, report)
                 if task.status in CLOSED_TASK_STATUSES | {"parked"}:
@@ -987,7 +986,7 @@ class TaskExecutionRunner:
         if report.duration_seconds == 0:
             started_at = task.runtime.current_stage.started_at
             if started_at is not None:
-                from litehive.tasks import _duration_seconds
+                from litehive.workspace.runtime_tracking import _duration_seconds
                 from litehive.models import utcnow
 
                 report.duration_seconds = _duration_seconds(started_at, utcnow())
@@ -1064,7 +1063,8 @@ def _human_checkpoint_reason(task: TaskRecord, target: str) -> str | None:
 def _record_unmerged_worktree(root: Path, task: TaskRecord) -> None:
     """Record a task's worktree as unmerged in state.yaml for later resolution."""
     from litehive.models import UnmergedWorktree
-    from litehive.tasks import get_task_worktree_path, load_state, save_state
+    from litehive.tasks.crud import get_task_worktree_path
+    from litehive.tasks.persistence import load_state, save_state
 
     worktree_path = get_task_worktree_path(task)
     if not worktree_path:

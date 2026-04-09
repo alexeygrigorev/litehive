@@ -12,15 +12,12 @@ from litehive.config import load_config, load_context, LitehiveConfig
 from litehive.models import TaskRecord
 from litehive.agents import SubagentManager
 from litehive.pipeline.core import TaskExecutionRunner
-from litehive.tasks import (
-    BlockedTask,
-    append_journal,
-    mark_task_run_started,
-    recover_stale_runner_state,
-    runner_heartbeat,
-    set_pool_stop_reason,
-    workspace_runner_guard,
-)
+from litehive.tasks.journal import append_journal
+from litehive.tasks.models import BlockedTask
+from litehive.tasks.persistence import set_pool_stop_reason
+from litehive.workspace.locking import runner_heartbeat, workspace_runner_guard
+from litehive.workspace.recovery import recover_stale_runner_state
+from litehive.workspace.runtime_tracking import mark_task_run_started
 
 from ._budget import _budget_ledger_from_conditions, _budget_ledger_from_config
 from ._builder import build_executor
@@ -86,10 +83,8 @@ def _select_parallel_tasks(
     """
     from litehive.config import load_config as _load_config
     from litehive.config.constants import VALID_POOL_SELECTION_POLICIES
-    from litehive.tasks import (
-        load_state,
-        list_tasks,
-    )
+    from litehive.tasks.crud import list_tasks
+    from litehive.tasks.persistence import load_state
     from litehive.tasks.queue_ops import (
         _resolve_next_task_from_snapshot,
     )
@@ -217,11 +212,7 @@ def _integrate_completed_task(
     tasks finish, so the merge order is observable and reproducible.
     """
     from litehive.git import current_head, checkpoint_message, is_git_repo
-    from litehive.tasks import (
-        get_task_worktree_path,
-        save_task,
-        set_task_commit_sha,
-    )
+    from litehive.tasks.crud import get_task_worktree_path, save_task, set_task_commit_sha
 
     task = execution.task
     if task is None or execution.result is None:
@@ -442,7 +433,7 @@ def _run_integration_check(
 
 def _clear_parallel_active_tasks(root: Path) -> None:
     """Remove active_task_ids from state after parallel run completes."""
-    from litehive.tasks import load_state, save_state
+    from litehive.tasks.persistence import load_state, save_state
 
     state = load_state(root)
     state.active_task_ids = []

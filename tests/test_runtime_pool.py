@@ -551,7 +551,7 @@ def test_restore_untouched_active_task_rolls_back_when_atomic_state_persist_fail
             raise OSError("state write failed")
         original_atomic_write(path, content)
 
-    monkeypatch.setattr("litehive.tasks._atomic_write_text", fail_on_state_write)
+    monkeypatch.setattr("litehive.tasks.persistence._atomic_write_text", fail_on_state_write)
 
     with pytest.raises(OSError, match="state write failed"):
         restore_untouched_active_task(tmp_path)
@@ -1035,7 +1035,7 @@ def test_finish_task_run_transition_rolls_back_when_atomic_state_persist_fails(
             raise OSError("state write failed")
         original_atomic_write(path, content)
 
-    monkeypatch.setattr("litehive.tasks._atomic_write_text", fail_on_state_write)
+    monkeypatch.setattr("litehive.tasks.persistence._atomic_write_text", fail_on_state_write)
 
     with pytest.raises(OSError, match="state write failed"):
         finish_task_run_transition(tmp_path, task, "done")

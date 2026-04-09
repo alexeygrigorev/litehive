@@ -2,15 +2,11 @@ from litehive.config import ensure_workspace, load_config
 from litehive.agents import get_engine
 from litehive.models import UpstreamContributionOrigin, UpstreamPatchProposal
 from litehive.subagents import intake_prompt
-from litehive.tasks import (
-    WorkspaceConflictError,
-    create_task,
-    discard_created_task,
-    load_state,
-    missing_acceptance_criteria_cli_warning,
-    require_task,
-    update_task_metadata,
-)
+from litehive.tasks.crud import create_task, discard_created_task, require_task
+from litehive.tasks.models import WorkspaceConflictError
+from litehive.tasks.normalization import missing_acceptance_criteria_cli_warning
+from litehive.tasks.persistence import load_state
+from litehive.workspace.task_status import update_task_metadata
 
 from litehive.cli._display import (
     _fallback_intake_goal,
@@ -260,7 +256,8 @@ def _cmd_intake(args):
 
     task = None
     try:
-        from litehive.tasks import task_dir, task_brief_file
+        from litehive.tasks.paths import task_dir
+        from litehive.tasks.templates import task_brief_file
 
         task_goal = raw_goal.strip() if raw_goal.strip() else _fallback_intake_goal(brain_dump)
         task_goal += "\n\n(See intake.md for the original brain dump)"

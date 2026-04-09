@@ -232,10 +232,9 @@ def create_task(
         (base / "artifacts").mkdir(parents=True, exist_ok=False)
         state.queue.append(task.id)
         try:
-            import sys
-            _merged_state = sys.modules["litehive.tasks"]._merged_state_for_runner_owned_write
+            from litehive.workspace.workflow import _merged_state_for_runner_owned_write
 
-            state = _merged_state(
+            state = _merged_state_for_runner_owned_write(
                 root,
                 state=state,
                 protected_task_ids=[task.id],
@@ -327,10 +326,9 @@ def create_follow_up_tasks(
                 writes[task_brief_file(root, task)] = render_task_brief(task)
             created_tasks.append(task)
 
-        import sys
-        _merged_state = sys.modules["litehive.tasks"]._merged_state_for_runner_owned_write
+        from litehive.workspace.workflow import _merged_state_for_runner_owned_write
 
-        state = _merged_state(
+        state = _merged_state_for_runner_owned_write(
             root,
             state=state,
             protected_task_ids=[task.id for task in created_tasks],

@@ -6,15 +6,17 @@ import tempfile
 import yaml
 
 from litehive.agents import ENGINE_CHOICES
-from litehive.tasks import (
+from litehive.tasks.constants import (
     VALID_PM_COMPLEXITIES,
     VALID_PLANNED_EFFORTS,
     VALID_TASK_PRIORITIES,
     VALID_TASK_TYPES,
+)
+from litehive.tasks.crud import require_task
+from litehive.tasks.normalization import (
     normalize_acceptance_criteria,
     normalize_human_checkpoints,
     normalize_task_text_list,
-    require_task,
 )
 
 TASK_TYPE_CHOICES = sorted(VALID_TASK_TYPES)

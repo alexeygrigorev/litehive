@@ -66,7 +66,7 @@ from tests.workspace_helpers import (
     time,
     yaml,
 )
-from litehive.tasks import collect_recovery_evidence
+from litehive.tasks.reports import collect_recovery_evidence
 
 def test_dequeue_next_task_selection_rejects_multiple_active_tasks(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
@@ -253,16 +253,16 @@ def test_cmd_run_reports_runner_conflict(
     ensure_workspace(tmp_path)
     create_task(tmp_path, title="Pending task", auto_commit=False)
 
-    from litehive import tasks as tasks_module
+    from litehive.workspace import locking as locking_module
 
-    real_flock = tasks_module.fcntl.flock
+    real_flock = locking_module.fcntl.flock
 
     def fake_flock(fd, flags):  # type: ignore[no-untyped-def]
-        if flags & tasks_module.fcntl.LOCK_NB:
+        if flags & locking_module.fcntl.LOCK_NB:
             raise BlockingIOError("runner is busy")
         return real_flock(fd, flags)
 
-    monkeypatch.setattr("litehive.tasks.fcntl.flock", fake_flock)
+    monkeypatch.setattr("litehive.workspace.locking.fcntl.flock", fake_flock)
 
     exit_code = _cmd_run(
         argparse.Namespace(
@@ -292,16 +292,16 @@ def test_save_task_rejects_runner_conflict(tmp_path: Path, monkeypatch: pytest.M
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Pending task", auto_commit=False)
 
-    from litehive import tasks as tasks_module
+    from litehive.workspace import locking as locking_module
 
-    real_flock = tasks_module.fcntl.flock
+    real_flock = locking_module.fcntl.flock
 
     def fake_flock(fd, flags):  # type: ignore[no-untyped-def]
-        if flags & tasks_module.fcntl.LOCK_NB:
+        if flags & locking_module.fcntl.LOCK_NB:
             raise BlockingIOError("runner is busy")
         return real_flock(fd, flags)
 
-    monkeypatch.setattr("litehive.tasks.fcntl.flock", fake_flock)
+    monkeypatch.setattr("litehive.workspace.locking.fcntl.flock", fake_flock)
 
     task.title = "Updated title"
     with pytest.raises(
@@ -316,16 +316,16 @@ def test_save_state_rejects_runner_conflict(
     ensure_workspace(tmp_path)
     state = load_state(tmp_path)
 
-    from litehive import tasks as tasks_module
+    from litehive.workspace import locking as locking_module
 
-    real_flock = tasks_module.fcntl.flock
+    real_flock = locking_module.fcntl.flock
 
     def fake_flock(fd, flags):  # type: ignore[no-untyped-def]
-        if flags & tasks_module.fcntl.LOCK_NB:
+        if flags & locking_module.fcntl.LOCK_NB:
             raise BlockingIOError("runner is busy")
         return real_flock(fd, flags)
 
-    monkeypatch.setattr("litehive.tasks.fcntl.flock", fake_flock)
+    monkeypatch.setattr("litehive.workspace.locking.fcntl.flock", fake_flock)
 
     with pytest.raises(
         WorkspaceConflictError,
@@ -1863,7 +1863,7 @@ def test_runner_status_reports_late_when_lock_held_but_heartbeat_expired(
         ),
         encoding="utf-8",
     )
-    monkeypatch.setattr("litehive.tasks._runner_lock_is_active", lambda root: True)
+    monkeypatch.setattr("litehive.workspace.locking._runner_lock_is_active", lambda root: True)
 
     status = runner_status(tmp_path)
 

@@ -7,17 +7,11 @@ from litehive.models import RuntimeStageState, SubagentRef
 from litehive.pipeline import TaskExecutionRunner
 from litehive.pipeline import _attempt_commit_recovery
 from litehive.subagents import SubagentResult
-from litehive.tasks import (
-    create_task,
-    dequeue_next_task_selection,
-    get_task,
-    load_state,
-    recover_stale_runner_state,
-    save_state,
-    save_task,
-    save_task_runtime,
-    set_active_task,
-)
+from litehive.tasks import create_task, get_task, save_task
+from litehive.tasks.crud import save_task_runtime
+from litehive.tasks.persistence import load_state, save_state
+from litehive.tasks.queue_ops import dequeue_next_task_selection, set_active_task
+from litehive.workspace.recovery import recover_stale_runner_state
 from tests.workspace_helpers import _init_git_repo
 
 

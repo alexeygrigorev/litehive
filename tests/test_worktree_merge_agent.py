@@ -24,7 +24,9 @@ from litehive.observability import render_task_summary
 from litehive.pipeline import _commit_to_git_report
 from litehive.pipeline.states import PipelineState, _ROUTES, _SINGLE_ROUTES
 from litehive.subagents import SubagentResult
-from litehive.tasks import create_task, load_state, save_task, set_task_worktree_path
+from litehive.tasks import create_task, save_task
+from litehive.tasks.crud import set_task_worktree_path
+from litehive.tasks.persistence import load_state
 
 
 def _init_git_repo(path: Path) -> str:

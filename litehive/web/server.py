@@ -10,14 +10,11 @@ import time
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
-from litehive.tasks import (
-    WorkspaceConflictError,
-    load_state,
-    move_queued_task,
-    prioritize_queued_tasks,
-    require_task,
-    resume_task,
-)
+from litehive.tasks.crud import require_task
+from litehive.tasks.models import WorkspaceConflictError
+from litehive.tasks.persistence import load_state
+from litehive.tasks.queue_management import move_queued_task, prioritize_queued_tasks
+from litehive.workspace.task_status import resume_task
 from litehive.web.common import (
     _STREAM_KEEPALIVE_SECONDS,
     _STREAM_RETRY_MS,

@@ -15,10 +15,8 @@ from litehive.agents.quota import (
 from litehive.models import StageReport, TaskRecord, cap_feedback
 from litehive.pipeline.core import StageExecutor
 from litehive.agents import SubagentManager, stage_prompt, stage_report_from_subagent
-from litehive.tasks import (
-    append_journal,
-    mark_engine_switch,
-)
+from litehive.tasks.journal import append_journal
+from litehive.workspace.runtime_tracking import mark_engine_switch
 
 from ._budget import _engine_attempt_order
 from ._commit import _commit_to_git_report
@@ -187,7 +185,7 @@ def build_executor(
                         f"{prompt}"
                     )
                 # Snapshot thread verdict count so we can detect new verdicts after execution
-                from litehive.tasks import load_task_thread as _load_thread
+                from litehive.tasks.reports import load_task_thread as _load_thread
                 thread_verdict_count_before = len([
                     c for c in _load_thread(root, current_task)
                     if c.step == step and c.verdict != "comment"
@@ -315,7 +313,7 @@ def build_executor(
             # If the agent didn't submit a verdict via `litehive report` and we
             # have a session to resume, ask it to submit one.  Compare thread
             # comment count before/after execution to detect new verdicts.
-            from litehive.tasks import load_task_thread
+            from litehive.tasks.reports import load_task_thread
 
             thread_comments_after = [
                 c
@@ -359,7 +357,7 @@ def build_executor(
             # Launch recovery agent in two cases:
             # 1. Something broke (engine error/crash on a stage)
             # 2. Too many rejections on the same step (stuck in a loop)
-            from litehive.tasks import task_dir as _task_dir
+            from litehive.tasks.paths import task_dir as _task_dir
 
             _reports_dir = _task_dir(root, current_task) / "reports"
             prior_attempts = (

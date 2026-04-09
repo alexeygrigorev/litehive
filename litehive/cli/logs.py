@@ -10,7 +10,7 @@ import yaml
 
 from litehive.config import ensure_workspace, workspace_dir
 from litehive.daemon import latest_run_all_log_dir
-from litehive.tasks import list_tasks_state_first
+from litehive.tasks.crud import list_tasks_state_first
 from litehive.tasks.paths import _read_text_artifact, _resolve_artifact_path, task_dir
 
 _DEFAULT_TAIL_LINES = 40

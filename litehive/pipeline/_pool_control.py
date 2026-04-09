@@ -2,14 +2,10 @@
 
 from pathlib import Path
 
-from litehive.tasks import (
-    BlockedTask,
-    append_journal,
-    load_state,
-    peek_next_task_selection,
-    restore_untouched_active_task,
-    set_pool_stop_reason,
-)
+from litehive.tasks.journal import append_journal
+from litehive.tasks.models import BlockedTask
+from litehive.tasks.persistence import load_state, set_pool_stop_reason
+from litehive.tasks.queue_ops import peek_next_task_selection, restore_untouched_active_task
 
 from ._budget import (
     _count_execution_limits,

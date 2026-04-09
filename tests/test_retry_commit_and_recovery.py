@@ -2691,7 +2691,7 @@ def test_recover_completed_task_rolls_back_when_atomic_state_persist_fails(
             raise OSError("state write failed")
         original_atomic_write(path, content)
 
-    monkeypatch.setattr("litehive.tasks._atomic_write_text", fail_on_state_write)
+    monkeypatch.setattr("litehive.tasks.persistence._atomic_write_text", fail_on_state_write)
 
     with pytest.raises(OSError, match="state write failed"):
         recover_completed_task(tmp_path, task.id)
@@ -3821,7 +3821,7 @@ def test_rollback_completed_task_restores_state_when_atomic_state_persist_fails(
             raise OSError("state write failed")
         original_atomic_write(path, content)
 
-    monkeypatch.setattr("litehive.tasks._atomic_write_text", fail_on_state_write)
+    monkeypatch.setattr("litehive.tasks.persistence._atomic_write_text", fail_on_state_write)
 
     with pytest.raises(OSError, match="state write failed"):
         rollback_completed_task(tmp_path, "T-0001")

@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from litehive.tasks import _atomic_write_gzip_text, _write_atomic_files
+from litehive.tasks.persistence import _atomic_write_gzip_text, _write_atomic_files
 
 _COMPRESS_STREAM_ARTIFACT_MIN_BYTES = 4096
 _COMPRESS_TEXT_ARTIFACT_MIN_BYTES = 4096

@@ -40,9 +40,10 @@ from litehive.models import (
     TaskThreadComment,
     UpstreamContributionOrigin,
 )
-from litehive.tasks import append_thread_comment, load_task_thread, require_task
-from litehive.tasks import runner_status_readonly
+from litehive.tasks import require_task
 from litehive.tasks.paths import runner_lock_path
+from litehive.tasks.reports import append_thread_comment, load_task_thread
+from litehive.workspace.locking import runner_status_readonly
 from litehive.web import (
     LitehiveWebHandler,
     WorkspaceStreamMonitor,
@@ -211,7 +212,7 @@ def test_build_workspace_snapshot_does_not_block_on_runner_lock(tmp_path: Path, 
 
     # Make fcntl.flock always raise BlockingIOError to prove the snapshot
     # code path never calls it.
-    import litehive.tasks.locking as locking_mod
+    import litehive.workspace.locking as locking_mod
 
     def flock_that_blocks(fd, flags):
         raise BlockingIOError("flock must not be called from snapshot path")

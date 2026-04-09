@@ -3,7 +3,7 @@ from pathlib import Path
 from litehive.agents import ENGINE_CHOICES
 from litehive.cli._parse import TASK_TYPE_CHOICES
 from litehive.cli.parsers._common import add_workspace_argument
-from litehive.tasks import (
+from litehive.tasks.constants import (
     VALID_HUMAN_CHECKPOINTS,
     VALID_PM_COMPLEXITIES,
     VALID_PLANNED_EFFORTS,

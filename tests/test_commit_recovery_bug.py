@@ -14,6 +14,7 @@ from litehive.config import LitehiveConfig, ensure_workspace
 from litehive.git_ops import current_head
 from litehive.pipeline import _commit_to_git_report
 from litehive.tasks import create_task, save_task
+from litehive.workspace.recovery import _should_recover_flagged_commit_stage_task
 
 
 def _init_git_repo(path: Path) -> str:
@@ -278,7 +279,6 @@ def test_merge_agent_launches_exactly_once(tmp_path: Path) -> None:
 
 def test_recovery_failed_blocks_repair_requeue(tmp_path: Path) -> None:
     """Tasks with status=recovery_failed must not be requeued by repair."""
-    from litehive.tasks import _should_recover_flagged_commit_stage_task
     _init_git_repo(tmp_path)
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Recovery failed task")
@@ -292,7 +292,6 @@ def test_recovery_failed_blocks_repair_requeue(tmp_path: Path) -> None:
 
 def test_merge_attempts_blocks_repair_requeue(tmp_path: Path) -> None:
     """Tasks with merge_agent_attempts >= 1 must not be requeued by repair, even if flagged."""
-    from litehive.tasks import _should_recover_flagged_commit_stage_task
     _init_git_repo(tmp_path)
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Already attempted task")
