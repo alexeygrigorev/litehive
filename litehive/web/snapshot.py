@@ -3,7 +3,6 @@ from pathlib import Path
 from typing import Any
 
 from litehive.config import load_config
-from litehive.daemon import get_workspace_daemon
 from litehive.models import TaskRecord
 from litehive.observability import load_engine_monitoring
 from litehive.runtime import active_engine_freezes
@@ -65,8 +64,10 @@ def build_workspace_snapshot(root: Path) -> dict[str, Any]:
 
 
 def build_daemon_status_payload(root: Path) -> dict[str, Any]:
+    from litehive import web as _web_pkg
+
     root = root.resolve()
-    entry = get_workspace_daemon(root)
+    entry = _web_pkg.get_workspace_daemon(root)
     daemon_status = "running" if entry is not None else "stopped"
     started_at = entry.get("started_at") if isinstance(entry, dict) else None
     uptime_seconds = _uptime_seconds(str(started_at) if started_at is not None else None)
@@ -78,7 +79,7 @@ def build_daemon_status_payload(root: Path) -> dict[str, Any]:
         "uptime_seconds": uptime_seconds,
         "uptime": _format_duration(uptime_seconds),
         "log_dir": entry.get("log_dir") if isinstance(entry, dict) else None,
-        "recent_logs": list_recent_run_all_logs(root),
+        "recent_logs": _web_pkg.list_recent_run_all_logs(root),
     }
 
 
