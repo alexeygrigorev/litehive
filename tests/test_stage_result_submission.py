@@ -208,3 +208,29 @@ def test_failed_subagent_cannot_turn_structured_pass_into_passing_report() -> No
     assert report.summary == "partial work looked good before timeout"
     assert report.tests == {"added": 1, "passing": 1}
     assert any("subagent status was `failed`" in w for w in report.warnings)
+
+
+def test_failed_subagent_without_cli_submission_stays_failed() -> None:
+    report = parse_stage_report_text(
+        task_id="T-0001",
+        step="implementing",
+        transcript="",
+        subagent_status="failed",
+    )
+
+    assert report.verdict == "fail"
+    assert report.summary == "implementing failed without verdict"
+    assert any("litehive report" in w for w in report.warnings)
+
+
+def test_failed_subagent_text_transcript_without_cli_submission_stays_failed() -> None:
+    report = parse_stage_report_text(
+        task_id="T-0001",
+        step="implementing",
+        transcript="VERDICT: PASS\nSUMMARY: looked good before crash\n",
+        subagent_status="failed",
+    )
+
+    assert report.verdict == "fail"
+    assert report.summary == "VERDICT: PASS"
+    assert any("litehive report" in w for w in report.warnings)
