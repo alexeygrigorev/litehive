@@ -1,0 +1,47 @@
+id: T-0241
+slug: extend-crash-resume-to-all-engines-not-just-claude
+title: Extend crash resume to all engines, not just Claude
+depends_on: []
+task_type: null
+engine: null
+model: null
+mode: implementation
+pipeline_mode: full
+status: queued
+flag_reason: null
+pipeline_status: backlog
+priority: medium
+pm_complexity: null
+planned_effort: null
+created_at: '2026-04-09T08:01:08+00:00'
+updated_at: '2026-04-09T08:01:08+00:00'
+goal: 'Currently crash_resume_attempted only fires for engine_name == ''claude''.
+  Extend to any engine that provides a resume_id (codex thread_id, gemini session_id,
+  opencode sessionID). Use the same pattern: detect crash (exit != 0, no failure classification),
+  extract resume_id, retry once with resume prompt.'
+acceptance_criteria:
+- Crash resume works for codex (via exec with context, not codex resume)
+- Crash resume works for gemini and opencode if they provide session IDs
+- The engine_name == claude guard in _builder.py is replaced with a resume_id availability
+  check
+- Only one crash resume attempt per crash (existing behavior preserved)
+- All existing tests pass
+constraints: []
+plan: []
+human_checkpoints: []
+subagents: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0241 extend-crash-resume-to-all-engines-not-just-claude'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+  merge_agent_attempts: 0
+  worktree_path: null
+retry_policy:
+  max_retries: null
+  stage_retry_limit: null
+created_from: null
+upstream_origin: null
+github_origin: null

@@ -27,7 +27,6 @@ from tests.workspace_helpers import (
 )
 
 from litehive.pipeline._parallel import (
-    IntegrationCheckResult,
     IntegrationResult,
     _clear_parallel_active_tasks,
     _integrate_completed_task,
