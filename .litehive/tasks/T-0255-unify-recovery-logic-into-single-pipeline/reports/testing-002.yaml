@@ -1,0 +1,55 @@
+task_id: T-0255
+step: testing
+verdict: pass
+source: agent
+summary: 'Validated the recovery refactor in the current worktree. Confirmed recovery
+  is unified under litehive/pipeline/recovery/ with detection.py, workspace_repair.py,
+  execution_recovery.py, and package exports from litehive/pipeline/recovery/__init__.py.
+  Confirmed legacy modules litehive/workspace/recovery.py and litehive/pipeline/_recovery.py
+  are removed, and a repo-wide import scan found no remaining references to those
+  old module paths. Independently checked the function-length constraint with an AST
+  scan over litehive/pipeline/recovery/*.py: no functions over 100 lines. Ran focused
+  recovery/regression coverage: uv run pytest tests/test_recovery_agent.py tests/test_commit_recovery_bug.py
+  tests/test_self_heal_recovery.py tests/test_retry_commit_and_recovery.py tests/test_runtime_pool.py
+  tests/test_observability_and_status.py -q -> 249 passed in 50.95s. Ran additional
+  targeted regression: uv run pytest tests/test_task_commands_and_daemon.py::test_stop_current_task_signals_live_runner_before_fallback
+  -q -> 1 passed in 0.40s. Evidence supports all acceptance criteria: single pipeline/recovery
+  package, workspace recovery module removed with logic consolidated into the package,
+  touched recovery functions within 100 lines, and the existing targeted recovery
+  tests passing.'
+feedback: 'Validated the recovery refactor in the current worktree. Confirmed recovery
+  is unified under litehive/pipeline/recovery/ with detection.py, workspace_repair.py,
+  execution_recovery.py, and package exports from litehive/pipeline/recovery/__init__.py.
+  Confirmed legacy modules litehive/workspace/recovery.py and litehive/pipeline/_recovery.py
+  are removed, and a repo-wide import scan found no remaining references to those
+  old module paths. Independently checked the function-length constraint with an AST
+  scan over litehive/pipeline/recovery/*.py: no functions over 100 lines. Ran focused
+  recovery/regression coverage: uv run pytest tests/test_recovery_agent.py tests/test_commit_recovery_bug.py
+  tests/test_self_heal_recovery.py tests/test_retry_commit_and_recovery.py tests/test_runtime_pool.py
+  tests/test_observability_and_status.py -q -> 249 passed in 50.95s. Ran additional
+  targeted regression: uv run pytest tests/test_task_commands_and_daemon.py::test_stop_current_task_signals_live_runner_before_fallback
+  -q -> 1 passed in 0.40s. Evidence supports all acceptance criteria: single pipeline/recovery
+  package, workspace recovery module removed with logic consolidated into the package,
+  touched recovery functions within 100 lines, and the existing targeted recovery
+  tests passing.'
+submitted_via_cli: true
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 97
+hook_results: []
+created_at: '2026-04-09T15:30:26+00:00'

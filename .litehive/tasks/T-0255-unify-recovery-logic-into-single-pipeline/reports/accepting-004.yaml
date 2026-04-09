@@ -1,0 +1,91 @@
+task_id: T-0255
+step: accepting
+verdict: pass
+source: agent
+summary: 'Recovery diagnosis: repeated accepting-stage escalations were same-stage
+  retry churn, not a remaining Litehive infrastructure failure. Verified the current
+  worktree satisfies the task contract: recovery is unified under litehive/pipeline/recovery/
+  with detection.py, workspace_repair.py, execution_recovery.py, and exports from
+  litehive/pipeline/recovery/__init__.py; legacy modules litehive/workspace/recovery.py
+  and litehive/pipeline/_recovery.py are removed. Repo-wide search under litehive/,
+  tests/, and the task folder found no remaining code or test references to those
+  legacy module paths; only historical plan text remains in task metadata. Ran an
+  AST scan over litehive/pipeline/recovery/*.py and found no functions over 100 lines.
+  Ran full verification required by the acceptance criteria: uv run pytest -q -> 923
+  passed, 3 skipped in 114.92s. Evidence confirms all acceptance criteria are met
+  and this task should move forward rather than re-enter rework.'
+feedback: "Runner hook `before_pm_acceptance` `uv run ruff check --select E402,F401\
+  \ litehive tests` passed with exit code 0 (artifact: `artifacts/before_pm_acceptance-001.yaml`).\n\
+  \nRunner hook `before_pm_acceptance` `if [ -n \"${LITEHIVE_CHANGED_PATHS:-}\" ]\
+  \ \\\n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" | grep -q . \\\n  && printf\
+  \ '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" \\\n    | xargs -r -d '\\n' git grep -nE 'noqa:.*F401|noqa:.*F403|ruff:\\\
+  s*noqa:\\s*F401|ruff:\\s*noqa:\\s*F403' --; then\n  echo 'Forbidden noqa F401/F403\
+  \ suppression found.'\n  exit 1\nfi` passed with exit code 0 (artifact: `artifacts/before_pm_acceptance-002.yaml`).\n\
+  \nRecovery diagnosis: repeated accepting-stage escalations were same-stage retry\
+  \ churn, not a remaining Litehive infrastructure failure. Verified the current worktree\
+  \ satisfies the task contract: recovery is unified under litehive/pipeline/recovery/\
+  \ with detection.py, workspace_repair.py, execution_recovery.py, and exports from\
+  \ litehive/pipeline/recovery/__init__.py; legacy modules litehive/workspace/recovery.py\
+  \ and litehive/pipeline/_recovery.py are removed. Repo-wide search under litehive/,\
+  \ tests/, and the task folder found no remaining code or test references to those\
+  \ legacy module paths; only historical plan text remains in task metadata. Ran an\
+  \ AST scan over litehive/pipeline/recovery/*.py and found no functions over 100\
+  \ lines. Ran full verification required by the acceptance criteria: uv run pytest\
+  \ -q -> 923 passed, 3 skipped in 114.92s. Evidence confirms all acceptance criteria\
+  \ are met and this task should move forward rather than re-enter rework."
+submitted_via_cli: true
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings:
+- 'runner hook passed: `before_pm_acceptance` `uv run ruff check --select E402,F401
+  litehive tests` (artifact: `artifacts/before_pm_acceptance-001.yaml`)'
+- "runner hook passed: `before_pm_acceptance` `if [ -n \"${LITEHIVE_CHANGED_PATHS:-}\"\
+  \ ] \\\n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" | grep -q . \\\n  && printf\
+  \ '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" \\\n    | xargs -r -d '\\n' git grep -nE 'noqa:.*F401|noqa:.*F403|ruff:\\\
+  s*noqa:\\s*F401|ruff:\\s*noqa:\\s*F403' --; then\n  echo 'Forbidden noqa F401/F403\
+  \ suppression found.'\n  exit 1\nfi` (artifact: `artifacts/before_pm_acceptance-002.yaml`)"
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 168
+hook_results:
+- point: before_pm_acceptance
+  command: uv run ruff check --select E402,F401 litehive tests
+  blocking: true
+  description: null
+  exit_code: 0
+  status: passed
+  artifact: artifacts/before_pm_acceptance-001.yaml
+  stdout: 'All checks passed!
+
+    '
+  stderr: 'warning: `VIRTUAL_ENV=/home/alexey/git/litehive/.venv` does not match the
+    project environment path `.venv` and will be ignored; use `--active` to target
+    the active environment instead
+
+    '
+- point: before_pm_acceptance
+  command: "if [ -n \"${LITEHIVE_CHANGED_PATHS:-}\" ] \\\n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\"\
+    \ | grep -q . \\\n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" \\\n    | xargs\
+    \ -r -d '\\n' git grep -nE 'noqa:.*F401|noqa:.*F403|ruff:\\s*noqa:\\s*F401|ruff:\\\
+    s*noqa:\\s*F403' --; then\n  echo 'Forbidden noqa F401/F403 suppression found.'\n\
+    \  exit 1\nfi"
+  blocking: true
+  description: null
+  exit_code: 0
+  status: passed
+  artifact: artifacts/before_pm_acceptance-002.yaml
+  stdout: ''
+  stderr: ''
+created_at: '2026-04-09T16:43:57+00:00'

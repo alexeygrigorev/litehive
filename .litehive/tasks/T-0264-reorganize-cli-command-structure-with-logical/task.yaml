@@ -30,7 +30,16 @@ acceptance_criteria:
 - Old command names kept as hidden aliases for backward compat
 - 'Agent-facing API is 4 commands: report, task update, task close, task add'
 - All existing tests pass
-constraints: []
+- README.md updated with new command names and examples
+- Agent prompts updated to use new command names (litehive report, litehive task update, litehive task close, litehive task add)
+- config.yaml agent_startup_guidance updated with new command names
+- context.md template updated if it references CLI commands
+- All docs/*.md files updated with new command names
+- Web dashboard API endpoints and UI labels match new CLI terminology (e.g. start/stop not daemon, task group names)
+- Web dashboard action buttons use same command names as CLI
+constraints:
+- Update all docs and prompts that reference CLI commands - no stale references
+- Web dashboard must use same terminology as CLI - no mismatch between web and terminal
 plan: []
 human_checkpoints: []
 subagents: []

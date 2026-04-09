@@ -833,6 +833,65 @@ def recover_stale_runner_state(root: Path) -> bool:
     return _recover_stale_runner_state(root)
 
 
+def _repair_duplicate_task_ids(root: Path, summary: WorkspaceRepairSummary) -> None:
+    """Find task dirs sharing the same ID, assign new unique IDs to duplicates."""
+    import shutil
+
+    from litehive.tasks.crud import _load_task_record_file, _serialize_task_record
+    from litehive.tasks.paths import slugify, tasks_root
+    from litehive.tasks.persistence import load_state, _save_state_without_runner_guard
+
+    troot = tasks_root(root)
+    if not troot.exists():
+        return
+
+    dirs_by_id: dict[str, list[Path]] = {}
+    for child in sorted(troot.iterdir()):
+        if not child.is_dir():
+            continue
+        task_path = child / "task.yaml"
+        if not task_path.exists():
+            continue
+        task = _load_task_record_file(task_path)
+        dirs_by_id.setdefault(task.id, []).append(child)
+
+    duplicates = {tid: dirs for tid, dirs in dirs_by_id.items() if len(dirs) > 1}
+    if not duplicates:
+        return
+
+    state = load_state(root)
+    id_remap: dict[str, str] = {}  # old_dir_name -> new_task_id
+
+    for _tid, dirs in sorted(duplicates.items()):
+        # Keep the first directory with the original ID; reassign the rest
+        for dup_dir in dirs[1:]:
+            task = _load_task_record_file(dup_dir / "task.yaml")
+            old_id = task.id
+            new_number = state.next_task_number + 1
+            state.next_task_number = new_number
+            new_id = f"T-{new_number:04d}"
+            new_slug = slugify(task.title)
+            new_dir = troot / f"{new_id}-{new_slug}"
+
+            task.id = new_id
+            task.slug = new_slug
+            (dup_dir / "task.yaml").write_text(
+                _serialize_task_record(task), encoding="utf-8"
+            )
+            shutil.move(str(dup_dir), str(new_dir))
+
+            # Update queue references
+            state.queue = [new_id if q == old_id else q for q in state.queue]
+            if state.active_task_id == old_id:
+                state.active_task_id = new_id
+
+            summary.reassigned_duplicate_ids.append(f"{old_id}->{new_id}")
+            summary.mutated = True
+
+    if summary.reassigned_duplicate_ids:
+        _save_state_without_runner_guard(root, state)
+
+
 def repair_workspace_state(root: Path) -> WorkspaceRepairSummary:
     from litehive.tasks.crud import list_tasks
     from .locking import _workspace_lock, workspace_mutation_guard
@@ -842,8 +901,9 @@ def repair_workspace_state(root: Path) -> WorkspaceRepairSummary:
     from .workflow import _persist_tasks_and_state_without_runner_guard
 
     summary = WorkspaceRepairSummary()
+    _repair_duplicate_task_ids(root, summary)
     summary.stale_runner_recovered = _recover_stale_runner_state(root, summary=summary)
-    summary.mutated = summary.stale_runner_recovered
+    summary.mutated = summary.mutated or summary.stale_runner_recovered
 
     with workspace_mutation_guard(root), _workspace_lock(root):
         state = load_state(root)

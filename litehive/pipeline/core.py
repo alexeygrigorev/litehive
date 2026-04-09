@@ -658,15 +658,21 @@ class TaskExecutionRunner:
                     report.retry_decision = "retry"
                     self._write_report(task, report, steps)
                     _apply_stage_finished(task, report)
+                    rejection_feedback = (report.feedback or "").strip()
+                    summary_parts = [
+                        f"Repeated {current} rejections ({stage_count}) "
+                        f"triggered {escalation_kind} reroute to grooming. "
+                        f"Retry count: {rejections}/{self.max_retries}.",
+                    ]
+                    if rejection_feedback:
+                        summary_parts.append(
+                            f"\n\nLast rejection output:\n{rejection_feedback}"
+                        )
                     task.runtime.continuation_handoff = RuntimeContinuationHandoff(
                         step=current,
                         kind="restart",
                         reason=escalation_reason,
-                        summary=(
-                            f"Repeated {current} rejections ({stage_count}) "
-                            f"triggered {escalation_kind} reroute to grooming. "
-                            f"Retry count: {rejections}/{self.max_retries}."
-                        ),
+                        summary="\n".join(summary_parts),
                     )
                     task.pipeline_status = "grooming"  # type: ignore[assignment]
                     task.status = "queued"
@@ -752,6 +758,19 @@ class TaskExecutionRunner:
                 report.retry_decision = "retry"
                 self._write_report(task, report, steps)
                 _apply_stage_finished(task, report)
+                rejection_feedback = (report.feedback or "").strip()
+                retry_summary = (
+                    f"{current} rejected (attempt {rejections}/{self.max_retries}). "
+                    f"Routing back to implementing for fixes."
+                )
+                if rejection_feedback:
+                    retry_summary += f"\n\nRejection output:\n{rejection_feedback}"
+                task.runtime.continuation_handoff = RuntimeContinuationHandoff(
+                    step=target,
+                    kind="retry",
+                    reason=report.summary or f"{current} rejected",
+                    summary=retry_summary,
+                )
                 task.pipeline_status = target  # type: ignore[assignment]
                 task.status = "queued"
                 return self._finish_run(

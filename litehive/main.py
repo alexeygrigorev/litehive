@@ -67,6 +67,26 @@ def _fast_status(argv: list[str]) -> int:
             )
             print(f"active_stage: {stage}")
             print(f"active_engine: {engine}")
+    # Duplicate task ID check
+    tasks_root = workspace / ".litehive" / "tasks"
+    if tasks_root.is_dir():
+        id_counts: dict[str, int] = {}
+        for child in sorted(tasks_root.iterdir()):
+            if not child.is_dir():
+                continue
+            task_path = child / "task.yaml"
+            if not task_path.exists():
+                continue
+            try:
+                td = yaml.safe_load(task_path.read_text()) or {}
+                tid = td.get("id", "")
+            except Exception:
+                continue
+            id_counts[tid] = id_counts.get(tid, 0) + 1
+        for tid, count in sorted(id_counts.items()):
+            if count > 1:
+                print(f"WARNING: duplicate task id {tid} ({count} directories) — run `litehive repair` to fix")
+
     for engine_name in sorted((monitoring.get("engines") or {}).keys()):
         record = monitoring["engines"][engine_name] or {}
         parts = [

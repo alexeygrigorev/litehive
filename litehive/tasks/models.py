@@ -48,6 +48,7 @@ class WorkspaceRepairSummary:
     finalized_commit_task_ids: list[str] = field(default_factory=list)
     stale_process_task_ids: list[str] = field(default_factory=list)
     inactivity_recovered_task_ids: list[str] = field(default_factory=list)
+    reassigned_duplicate_ids: list[str] = field(default_factory=list)
 
 
 class WorkspaceConflictError(ValueError):

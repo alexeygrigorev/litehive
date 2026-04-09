@@ -30,6 +30,37 @@ from litehive.cli._display import (
 )
 
 
+def _find_duplicate_task_ids(root) -> dict[str, int]:
+    """Return {task_id: count} for any ID used by more than one task directory."""
+    from litehive.tasks.paths import tasks_root
+    import yaml as _yaml
+
+    troot = tasks_root(root)
+    if not troot.exists():
+        return {}
+    id_counts: dict[str, int] = {}
+    for child in sorted(troot.iterdir()):
+        if not child.is_dir():
+            continue
+        task_path = child / "task.yaml"
+        if not task_path.exists():
+            continue
+        try:
+            data = _yaml.safe_load(task_path.read_text(encoding="utf-8")) or {}
+            tid = data.get("id", "")
+        except Exception:
+            continue
+        id_counts[tid] = id_counts.get(tid, 0) + 1
+    return {tid: count for tid, count in id_counts.items() if count > 1}
+
+
+def _print_duplicate_id_warnings(root) -> None:
+    dupes = _find_duplicate_task_ids(root)
+    if dupes:
+        for tid, count in sorted(dupes.items()):
+            print(f"WARNING: duplicate task id {tid} ({count} directories) — run `litehive repair` to fix")
+
+
 def _display_flag_reason(task) -> str:
     if task.status != "flagged":
         return "-"
@@ -109,6 +140,9 @@ def _cmd_status(args):
     for line in render_recent_activity_section(events):
         print(line)
 
+    # Warnings
+    _print_duplicate_id_warnings(root)
+
     return 0
 
 
@@ -165,6 +199,7 @@ def _cmd_status_full(args, root, config, state, monitoring):
     print(f"pool_stop_on_dirty_git: {config.pool_stop_on_dirty_git}")
     print(f"pool_selection_policy: {config.pool_selection_policy}")
     print(f"process_profile: {config.process_profile}")
+    _print_duplicate_id_warnings(root)
     tasks = list_tasks(args.workspace)
     if tasks:
         print()
@@ -336,6 +371,14 @@ def _cmd_repair(args):
     print(
         "stale_process_tasks: "
         + (" ".join(summary.stale_process_task_ids) if summary.stale_process_task_ids else "-")
+    )
+    print(
+        "reassigned_duplicate_ids: "
+        + (
+            " ".join(summary.reassigned_duplicate_ids)
+            if summary.reassigned_duplicate_ids
+            else "-"
+        )
     )
     print(f"active_task_id: {state.active_task_id}")
     print(f"queue_length: {len(state.queue)}")
