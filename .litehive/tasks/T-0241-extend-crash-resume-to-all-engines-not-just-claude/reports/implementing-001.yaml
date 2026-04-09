@@ -1,73 +1,90 @@
 task_id: T-0241
 step: implementing
-verdict: fail
-summary: 'Root cause fixed: crash resume in litehive/pipeline/_builder.py only retried
-  when engine_name == ''claude''. I replaced both claude-only guards with continuation.resume_id
-  availability checks so any adapter that extracts a resume_id can reuse the same
-  single crash-resume path, and I added focused coverage in tests/test_crash_resume.py
-  for codex thread_id, gemini session_id, opencode sessionID, plus the no-resume-id
-  skip case while preserving the one-attempt limit. I also restored the litehive/engines/quota/codex_quota.py
-  compatibility shim so full-suite collection could proceed. Verification: uv run
-  pytest -q tests/test_crash_resume.py passed (7 passed). Full-suite result: uv run
-  pytest -q still fails outside this task area with 16 unrelated existing failures,
-  including tests/test_config_and_run_cli.py::test_engine_status_command_scopes_to_single_engine_and_shows_codex_quota,
-  tests/test_engine_variants_and_timeline.py::test_run_next_task_passes_configured_claude_max_turns,
-  multiple tests in tests/test_retry_commit_and_recovery.py, tests/test_self_heal_recovery.py,
-  tests/test_web_daemon_monitor.py, and tests/test_web_snapshot_lockfree.py. The crash-resume
-  fix is in place and ready to retry, but acceptance cannot be closed until those
-  repo-wide failures are addressed.'
-feedback: 'Stage `implementing` switched from `claude` to `codex` after claude usage
-  limit reached (7d window at 95%, resets 2026-04-10T09:00:00.503440+00:00).
-
-
-  Root cause fixed: crash resume in litehive/pipeline/_builder.py only retried when
-  engine_name == ''claude''. I replaced both claude-only guards with continuation.resume_id
-  availability checks so any adapter that extracts a resume_id can reuse the same
-  single crash-resume path, and I added focused coverage in tests/test_crash_resume.py
-  for codex thread_id, gemini session_id, opencode sessionID, plus the no-resume-id
-  skip case while preserving the one-attempt limit. I also restored the litehive/engines/quota/codex_quota.py
-  compatibility shim so full-suite collection could proceed. Verification: uv run
-  pytest -q tests/test_crash_resume.py passed (7 passed). Full-suite result: uv run
-  pytest -q still fails outside this task area with 16 unrelated existing failures,
-  including tests/test_config_and_run_cli.py::test_engine_status_command_scopes_to_single_engine_and_shows_codex_quota,
-  tests/test_engine_variants_and_timeline.py::test_run_next_task_passes_configured_claude_max_turns,
-  multiple tests in tests/test_retry_commit_and_recovery.py, tests/test_self_heal_recovery.py,
-  tests/test_web_daemon_monitor.py, and tests/test_web_snapshot_lockfree.py. The crash-resume
-  fix is in place and ready to retry, but acceptance cannot be closed until those
-  repo-wide failures are addressed.'
-files_changed: []
+verdict: pass
+source: agent
+summary: Verified crash resume now keys off continuation resume_id availability in
+  litehive/pipeline/_builder.py:206-218 and retry handoff resume uses the same resume_id
+  path at litehive/pipeline/_builder.py:244-258, so the claude-only guard is no longer
+  present. Verified focused coverage in tests/test_crash_resume.py:241-289 for codex
+  thread_id, gemini session_id, and opencode sessionID crash resumes, plus tests/test_crash_resume.py:291-320
+  for the no-resume-id skip case and the existing one-attempt behavior in tests/test_crash_resume.py:188-238.
+  Ran uv run pytest -q tests/test_crash_resume.py -> 13 passed, uv run ruff check
+  --select E402,F401 litehive tests -> passed after removing an unrelated unused import
+  from litehive/pipeline/_worktree.py:30, and uv run pytest -q -> 901 passed. Acceptance
+  criteria satisfied in this worktree.
+feedback: "Runner hook `after_implementing` `uv run ruff check --select E402,F401\
+  \ litehive tests` passed with exit code 0 (artifact: `artifacts/after_implementing-001.yaml`).\n\
+  \nRunner hook `after_implementing` `if [ -n \"${LITEHIVE_CHANGED_PATHS:-}\" ] \\\
+  \n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" | grep -q . \\\n  && printf '%s\\\
+  n' \"$LITEHIVE_CHANGED_PATHS\" \\\n    | xargs -r -d '\\n' git grep -nE 'noqa:.*F401|noqa:.*F403|ruff:\\\
+  s*noqa:\\s*F401|ruff:\\s*noqa:\\s*F403' --; then\n  echo 'Forbidden noqa F401/F403\
+  \ suppression found.'\n  exit 1\nfi` passed with exit code 0 (artifact: `artifacts/after_implementing-002.yaml`).\n\
+  \nVerified crash resume now keys off continuation resume_id availability in litehive/pipeline/_builder.py:206-218\
+  \ and retry handoff resume uses the same resume_id path at litehive/pipeline/_builder.py:244-258,\
+  \ so the claude-only guard is no longer present. Verified focused coverage in tests/test_crash_resume.py:241-289\
+  \ for codex thread_id, gemini session_id, and opencode sessionID crash resumes,\
+  \ plus tests/test_crash_resume.py:291-320 for the no-resume-id skip case and the\
+  \ existing one-attempt behavior in tests/test_crash_resume.py:188-238. Ran uv run\
+  \ pytest -q tests/test_crash_resume.py -> 13 passed, uv run ruff check --select\
+  \ E402,F401 litehive tests -> passed after removing an unrelated unused import from\
+  \ litehive/pipeline/_worktree.py:30, and uv run pytest -q -> 901 passed. Acceptance\
+  \ criteria satisfied in this worktree."
+submitted_via_cli: true
+files_changed:
+- litehive/engines/quota/codex_quota.py
+- litehive/pipeline/_worktree.py
+- tests/test_crash_resume.py
 created_follow_up_task_ids: []
 task_update: {}
 tests:
   added: 0
   passing: 0
 warnings:
-- Stage `implementing` switched from `claude` to `codex` after claude usage limit
-  reached (7d window at 95%, resets 2026-04-10T09:00:00.503440+00:00).
+- 'runner hook passed: `after_implementing` `uv run ruff check --select E402,F401
+  litehive tests` (artifact: `artifacts/after_implementing-001.yaml`)'
+- "runner hook passed: `after_implementing` `if [ -n \"${LITEHIVE_CHANGED_PATHS:-}\"\
+  \ ] \\\n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" | grep -q . \\\n  && printf\
+  \ '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" \\\n    | xargs -r -d '\\n' git grep -nE 'noqa:.*F401|noqa:.*F403|ruff:\\\
+  s*noqa:\\s*F401|ruff:\\s*noqa:\\s*F403' --; then\n  echo 'Forbidden noqa F401/F403\
+  \ suppression found.'\n  exit 1\nfi` (artifact: `artifacts/after_implementing-002.yaml`)"
 retry_count: 0
 retry_limit: 3
 retry_source: global
-retry_decision: final
-outcome: flagged
-outcome_reason_code: unsupported_verdict
-outcome_reason: 'Root cause fixed: crash resume in litehive/pipeline/_builder.py only
-  retried when engine_name == ''claude''. I replaced both claude-only guards with
-  continuation.resume_id availability checks so any adapter that extracts a resume_id
-  can reuse the same single crash-resume path, and I added focused coverage in tests/test_crash_resume.py
-  for codex thread_id, gemini session_id, opencode sessionID, plus the no-resume-id
-  skip case while preserving the one-attempt limit. I also restored the litehive/engines/quota/codex_quota.py
-  compatibility shim so full-suite collection could proceed. Verification: uv run
-  pytest -q tests/test_crash_resume.py passed (7 passed). Full-suite result: uv run
-  pytest -q still fails outside this task area with 16 unrelated existing failures,
-  including tests/test_config_and_run_cli.py::test_engine_status_command_scopes_to_single_engine_and_shows_codex_quota,
-  tests/test_engine_variants_and_timeline.py::test_run_next_task_passes_configured_claude_max_turns,
-  multiple tests in tests/test_retry_commit_and_recovery.py, tests/test_self_heal_recovery.py,
-  tests/test_web_daemon_monitor.py, and tests/test_web_snapshot_lockfree.py. The crash-resume
-  fix is in place and ready to retry, but acceptance cannot be closed until those
-  repo-wide failures are addressed.'
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
 failure_classification: null
 failure_diagnostics: {}
 resource_limit_event: null
-duration_seconds: 764
-hook_results: []
-created_at: '2026-04-09T10:18:26+00:00'
+duration_seconds: 187
+hook_results:
+- point: after_implementing
+  command: uv run ruff check --select E402,F401 litehive tests
+  reject_on_failure: true
+  description: null
+  exit_code: 0
+  status: passed
+  artifact: artifacts/after_implementing-001.yaml
+  stdout: 'All checks passed!
+
+    '
+  stderr: 'warning: `VIRTUAL_ENV=/home/alexey/git/litehive/.venv` does not match the
+    project environment path `.venv` and will be ignored; use `--active` to target
+    the active environment instead
+
+    '
+- point: after_implementing
+  command: "if [ -n \"${LITEHIVE_CHANGED_PATHS:-}\" ] \\\n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\"\
+    \ | grep -q . \\\n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" \\\n    | xargs\
+    \ -r -d '\\n' git grep -nE 'noqa:.*F401|noqa:.*F403|ruff:\\s*noqa:\\s*F401|ruff:\\\
+    s*noqa:\\s*F403' --; then\n  echo 'Forbidden noqa F401/F403 suppression found.'\n\
+    \  exit 1\nfi"
+  reject_on_failure: true
+  description: null
+  exit_code: 0
+  status: passed
+  artifact: artifacts/after_implementing-002.yaml
+  stdout: ''
+  stderr: ''
+created_at: '2026-04-09T23:15:40+00:00'

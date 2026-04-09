@@ -1,0 +1,55 @@
+task_id: T-0241
+step: testing
+verdict: pass
+source: agent
+summary: 'Validated the crash-resume change in litehive/pipeline/_builder.py and confirmed
+  the claude-only guards were replaced with resume_id availability checks in both
+  the unclassified-crash path and the retry handoff path. Verified adapter behavior:
+  codex still resumes via codex exec context by passing resume_session_id through
+  to the adapter, which prefixes the exec prompt with the prior thread ID instead
+  of using a native codex resume command; gemini uses --resume when a session_id is
+  present; opencode exposes continuation extraction via sessionID and participates
+  in the same crash-resume gate when a resume_id exists. Ran focused verification
+  with uv run pytest -q tests/test_crash_resume.py -> 13 passed. That coverage includes
+  crash-resume success for codex thread_id, gemini session_id, and opencode sessionID;
+  the no-resume-id skip case; and the existing single-attempt-only behavior. Ran repo
+  regression suite with uv run pytest -q -> 901 passed in 129.70s. Acceptance criteria
+  satisfied: crash resume works for codex, gemini, and opencode when a resume_id is
+  available; the engine_name == claude guard is gone from _builder.py; only one crash-resume
+  attempt occurs per crash; and the existing test suite passes.'
+feedback: 'Validated the crash-resume change in litehive/pipeline/_builder.py and
+  confirmed the claude-only guards were replaced with resume_id availability checks
+  in both the unclassified-crash path and the retry handoff path. Verified adapter
+  behavior: codex still resumes via codex exec context by passing resume_session_id
+  through to the adapter, which prefixes the exec prompt with the prior thread ID
+  instead of using a native codex resume command; gemini uses --resume when a session_id
+  is present; opencode exposes continuation extraction via sessionID and participates
+  in the same crash-resume gate when a resume_id exists. Ran focused verification
+  with uv run pytest -q tests/test_crash_resume.py -> 13 passed. That coverage includes
+  crash-resume success for codex thread_id, gemini session_id, and opencode sessionID;
+  the no-resume-id skip case; and the existing single-attempt-only behavior. Ran repo
+  regression suite with uv run pytest -q -> 901 passed in 129.70s. Acceptance criteria
+  satisfied: crash resume works for codex, gemini, and opencode when a resume_id is
+  available; the engine_name == claude guard is gone from _builder.py; only one crash-resume
+  attempt occurs per crash; and the existing test suite passes.'
+submitted_via_cli: true
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 171
+hook_results: []
+created_at: '2026-04-09T23:18:32+00:00'

@@ -1,0 +1,53 @@
+task_id: T-0241
+step: accepting
+verdict: pass
+source: agent
+summary: 'Verified builder crash-resume gating now depends on continuation.resume_id
+  availability in litehive/pipeline/_builder.py lines 206-218, and retry handoff reuse
+  depends on handoff.continuation.resume_id in lines 257-258; the claude-only guard
+  is gone from both paths. Verified adapter behavior for the acceptance criteria:
+  codex resumes via codex exec context by prefixing the prompt when resume_session_id
+  is present in litehive/agents/adapters/codex.py lines 69-70 and extracts thread_id
+  from thread.started payloads in litehive/agents/adapters/_codex_impl.py lines 118-122;
+  gemini uses --resume in litehive/agents/adapters/gemini.py lines 40-42 and extracts
+  session_id in litehive/agents/adapters/_gemini_impl.py lines 86-97; opencode exposes
+  sessionID continuation in litehive/agents/adapters/_opencode_impl.py lines 110-112.
+  Verified tests in tests/test_crash_resume.py cover one-attempt-only behavior, codex/gemini/opencode
+  crash resume when a resume ID is present, and the no-resume-id skip case. Ran uv
+  run pytest -q tests/test_crash_resume.py and got 13 passed in 2.98s. Ran uv run
+  pytest -q and got 901 passed in 130.57s. Acceptance criteria satisfied.'
+feedback: 'Verified builder crash-resume gating now depends on continuation.resume_id
+  availability in litehive/pipeline/_builder.py lines 206-218, and retry handoff reuse
+  depends on handoff.continuation.resume_id in lines 257-258; the claude-only guard
+  is gone from both paths. Verified adapter behavior for the acceptance criteria:
+  codex resumes via codex exec context by prefixing the prompt when resume_session_id
+  is present in litehive/agents/adapters/codex.py lines 69-70 and extracts thread_id
+  from thread.started payloads in litehive/agents/adapters/_codex_impl.py lines 118-122;
+  gemini uses --resume in litehive/agents/adapters/gemini.py lines 40-42 and extracts
+  session_id in litehive/agents/adapters/_gemini_impl.py lines 86-97; opencode exposes
+  sessionID continuation in litehive/agents/adapters/_opencode_impl.py lines 110-112.
+  Verified tests in tests/test_crash_resume.py cover one-attempt-only behavior, codex/gemini/opencode
+  crash resume when a resume ID is present, and the no-resume-id skip case. Ran uv
+  run pytest -q tests/test_crash_resume.py and got 13 passed in 2.98s. Ran uv run
+  pytest -q and got 901 passed in 130.57s. Acceptance criteria satisfied.'
+submitted_via_cli: true
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 213
+hook_results: []
+created_at: '2026-04-09T23:22:05+00:00'

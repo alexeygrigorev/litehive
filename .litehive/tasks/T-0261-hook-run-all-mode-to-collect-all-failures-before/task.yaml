@@ -7,15 +7,15 @@ engine: null
 model: null
 mode: implementation
 pipeline_mode: full
-status: in_progress
+status: done
 flag_reason: null
 flag_count: 0
-pipeline_status: commit_to_git
+pipeline_status: done
 priority: medium
 pm_complexity: moderate
 planned_effort: s
 created_at: '2026-04-09T09:50:39+00:00'
-updated_at: '2026-04-09T21:51:31+00:00'
+updated_at: '2026-04-09T21:51:34+00:00'
 goal: When multiple hooks run for a stage, collect all failures into one combined
   reject report instead of stopping on first. Also support fail-fast mode. Default
   is run-all so SWE gets all problems at once.
@@ -74,9 +74,9 @@ subagents:
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0261 hook-run-all-mode-to-collect-all-failures-before'
-  commit_sha: null
-  checkpoint_base_sha: null
-  checkpoint_attempts: 0
+  commit_sha: d4b53b8ec42ab673a2a04422afc7a69332aaa1ac
+  checkpoint_base_sha: b74604eecafa236459077a976f3e87be7090b58d
+  checkpoint_attempts: 1
   rolled_back_checkpoint_attempt: null
   merge_agent_attempts: 0
   worktree_path: null
