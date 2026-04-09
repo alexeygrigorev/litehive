@@ -2,7 +2,7 @@ id: T-0258
 slug: split-monolithic-test-files-and-remove-no-op-tests
 title: Split monolithic test files and remove no-op tests
 depends_on: []
-task_type: null
+task_type: refactor
 engine: null
 model: null
 mode: implementation
@@ -12,25 +12,45 @@ flag_reason: null
 flag_count: 0
 pipeline_status: backlog
 priority: medium
-pm_complexity: null
-planned_effort: null
+pm_complexity: moderate
+planned_effort: m
 created_at: '2026-04-09T09:21:39+00:00'
-updated_at: '2026-04-09T09:21:39+00:00'
-goal: Several test files are too large or contain tests that don't test anything meaningful.
-  Split, remove, or rewrite as identified in the test quality analysis.
+updated_at: '2026-04-09T18:06:29+00:00'
+goal: Reduce test maintenance cost by splitting oversized test modules into focused
+  files and removing tests that do not provide meaningful behavioral coverage, without
+  changing production behavior.
 acceptance_criteria:
-- test_retry_commit_and_recovery.py (4069 lines) split into focused files by concern
-- test_config_and_run_cli.py (1625 lines) split into config tests and CLI tests
-- test_web_snapshot_lockfree.py (1110 lines) split by web feature area
-- 'Monolithic multi-assertion tests split: test_web_daemon_api_supports_status_start_stop_restart_and_dashboard_markup,
-  test_web_task_action_endpoints_mutate_tasks'
-- 'Remove no-op tests: test_slugify_exactly_50_unchanged (identity test), test_cli_report_message_stored_as_is
-  (tests nothing), duplicate flag_count test'
-- Remove subprocess-based test in test_tasks_and_subagents.py (test_workspace_transition_writes_preserve_task_added_after_state_snapshot)
-  - replace with direct function call
-- All remaining tests pass within 60s timeout and full suite under 3 minutes
+- Retry/commit/recovery coverage is split out of tests/test_retry_commit_and_recovery.py
+  into smaller concern-focused test files, with the original monolithic file removed
+  or reduced so it no longer acts as the primary home for those concerns.
+- Config loading/routing coverage and run/CLI command coverage are separated instead
+  of sharing one monolithic tests/test_config_and_run_cli.py file.
+- Lock-free web dashboard snapshot coverage is split into smaller files by feature
+  area such as runner status, task detail/task actions, engine dashboard, SSE, or
+  queue controls instead of one monolithic tests/test_web_snapshot_lockfree.py file.
+- The current multi-behavior tests for daemon API controls and web task action endpoints
+  are decomposed into focused tests so each test verifies one endpoint or one user-visible
+  behavior.
+- No-op or duplicate tests are removed or rewritten so each remaining test fails when
+  the covered behavior regresses, including the slugify identity case, the StageReport
+  message identity case, and redundant flag_count coverage.
+- The workspace-transition regression coverage in tests/test_tasks_and_subagents.py
+  exercises _workspace_transition_writes directly instead of spawning a subprocess.
+- The affected targeted test files pass under a 60s timeout and the full pytest suite
+  remains under 3 minutes.
 constraints: []
-plan: []
+plan:
+- 'Split tests/test_retry_commit_and_recovery.py into smaller files grouped by concern:
+  execution-limit classification, retry/fallback policy, checkpoint/commit integration,
+  and recovery/rollback flows.'
+- Split tests/test_config_and_run_cli.py into config-focused tests and CLI/run-command
+  tests, reusing shared helpers instead of reintroducing new monoliths.
+- Split tests/test_web_snapshot_lockfree.py by web feature area and break the daemon/task-action
+  mega-tests into endpoint-sized assertions.
+- Remove or rewrite the identified no-op and duplicate tests, then replace the subprocess-based
+  workspace-transition test with an in-process direct-call regression test.
+- Run the affected test slices first, then the full suite, and keep file moves scoped
+  to tests plus any helper imports required by the split.
 human_checkpoints: []
 subagents: []
 git:

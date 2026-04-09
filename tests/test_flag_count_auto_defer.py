@@ -129,18 +129,6 @@ def test_flag_count_not_reset_by_requeue(tmp_path: Path) -> None:
     assert t.status == "queued"
 
 
-def test_flag_count_persisted_in_task_yaml(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
-    task = create_task(tmp_path, title="Persisted counter")
-
-    _flag_task(tmp_path, task.id)
-
-    # Re-read from disk
-    t = get_task(tmp_path, task.id)
-    assert t is not None
-    assert t.flag_count == 1
-
-
 def test_cli_requeue_warns_and_fails_without_force(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:

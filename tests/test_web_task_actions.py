@@ -4,11 +4,19 @@ import json
 import threading
 from functools import partial
 from http.server import ThreadingHTTPServer
-from pathlib import Path
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
-from tests.workspace_helpers import *  # noqa: F401,F403
+from tests.workspace_helpers import (
+    Path,
+    _init_git_repo,
+    close_task,
+    create_task,
+    ensure_workspace,
+    get_task,
+    load_state,
+    set_active_task,
+)
 
 from litehive.web import LitehiveWebHandler
 
@@ -39,22 +47,26 @@ def _post_json(base_url: str, path: str, payload: dict[str, object]) -> tuple[in
         return exc.code, json.loads(exc.read().decode("utf-8"))
 
 
-def test_web_task_action_endpoints_mutate_tasks(tmp_path: Path) -> None:
+def _create_task_via_api(base_url: str) -> tuple[int, dict[str, object]]:
+    return _post_json(
+        base_url,
+        "/api/tasks",
+        {
+            "title": "Dashboard create",
+            "goal": "Ship POST endpoints",
+            "priority": "high",
+            "engine": "codex",
+            "acceptance_criteria": ["first criterion", "second criterion"],
+        },
+    )
+
+
+def test_web_task_create_endpoint_persists_requested_fields(tmp_path: Path) -> None:
     _init_git_repo(tmp_path)
     ensure_workspace(tmp_path)
     server, base_url = _start_server(tmp_path)
     try:
-        status, created = _post_json(
-            base_url,
-            "/api/tasks",
-            {
-                "title": "Dashboard create",
-                "goal": "Ship POST endpoints",
-                "priority": "high",
-                "engine": "codex",
-                "acceptance_criteria": ["first criterion", "second criterion"],
-            },
-        )
+        status, created = _create_task_via_api(base_url)
         assert status == 201
         assert created["ok"] is True
         task_id = str(created["task_id"])
@@ -64,7 +76,18 @@ def test_web_task_action_endpoints_mutate_tasks(tmp_path: Path) -> None:
         assert created_task.goal == "Ship POST endpoints"
         assert created_task.priority == "high"
         assert created_task.engine == "codex"
+    finally:
+        server.shutdown()
+        server.server_close()
 
+
+def test_web_task_update_endpoint_replaces_editable_fields(tmp_path: Path) -> None:
+    _init_git_repo(tmp_path)
+    ensure_workspace(tmp_path)
+    server, base_url = _start_server(tmp_path)
+    try:
+        _, created = _create_task_via_api(base_url)
+        task_id = str(created["task_id"])
         status, updated = _post_json(
             base_url,
             f"/api/tasks/{task_id}/update",
@@ -87,32 +110,62 @@ def test_web_task_action_endpoints_mutate_tasks(tmp_path: Path) -> None:
         assert updated_task.acceptance_criteria == ["updated criterion"]
         assert updated_task.constraints == ["keep scope tight"]
         assert updated_task.plan == ["wire endpoint", "add tests"]
+    finally:
+        server.shutdown()
+        server.server_close()
 
+
+def test_web_task_close_requeue_abandon_and_stop_endpoints_mutate_status(tmp_path: Path) -> None:
+    _init_git_repo(tmp_path)
+    ensure_workspace(tmp_path)
+    server, base_url = _start_server(tmp_path)
+    try:
+        task = create_task(tmp_path, title="Lifecycle task")
         status, closed = _post_json(
             base_url,
-            f"/api/tasks/{task_id}/close",
+            f"/api/tasks/{task.id}/close",
             {"outcome": "deferred", "reason": "Waiting on upstream"},
         )
         assert status == 200
         assert closed["ok"] is True
-        closed_task = get_task(tmp_path, task_id)
+        closed_task = get_task(tmp_path, task.id)
         assert closed_task is not None
         assert closed_task.status == "deferred"
         assert closed_task.runtime.last_outcome.reason == "Waiting on upstream"
+    finally:
+        server.shutdown()
+        server.server_close()
 
+
+def test_web_task_requeue_endpoint_moves_closed_task_to_queue_front(tmp_path: Path) -> None:
+    _init_git_repo(tmp_path)
+    ensure_workspace(tmp_path)
+    server, base_url = _start_server(tmp_path)
+    try:
+        task = create_task(tmp_path, title="Lifecycle task")
+        close_task(tmp_path, task.id, outcome="deferred", reason="Waiting on upstream")
         status, requeued = _post_json(
             base_url,
-            f"/api/tasks/{task_id}/requeue",
+            f"/api/tasks/{task.id}/requeue",
             {"front": True},
         )
         assert status == 200
         assert requeued["ok"] is True
         assert requeued["front"] is True
         assert requeued["queue_position"] == 1
-        requeued_task = get_task(tmp_path, task_id)
+        requeued_task = get_task(tmp_path, task.id)
         assert requeued_task is not None
         assert requeued_task.status == "queued"
+    finally:
+        server.shutdown()
+        server.server_close()
 
+
+def test_web_task_abandon_endpoint_cancels_closed_task(tmp_path: Path) -> None:
+    _init_git_repo(tmp_path)
+    ensure_workspace(tmp_path)
+    server, base_url = _start_server(tmp_path)
+    try:
         abandonable = create_task(tmp_path, title="Abandon me")
         close_task(tmp_path, abandonable.id, outcome="duplicate", reason="Already tracked")
         status, abandoned = _post_json(
@@ -126,7 +179,16 @@ def test_web_task_action_endpoints_mutate_tasks(tmp_path: Path) -> None:
         assert abandoned_task is not None
         assert abandoned_task.status == "cancelled"
         assert abandoned_task.runtime.execution_status == "cancelled"
+    finally:
+        server.shutdown()
+        server.server_close()
 
+
+def test_web_task_stop_endpoint_clears_active_task(tmp_path: Path) -> None:
+    _init_git_repo(tmp_path)
+    ensure_workspace(tmp_path)
+    server, base_url = _start_server(tmp_path)
+    try:
         active = create_task(tmp_path, title="Stop me")
         set_active_task(tmp_path, active.id)
         status, stopped = _post_json(base_url, "/api/tasks/active/stop", {})
