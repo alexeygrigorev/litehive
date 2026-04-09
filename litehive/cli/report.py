@@ -32,15 +32,16 @@ def _cmd_report(args):
         print(f"report failed: task {task_id} not found")
         return 1
     step = args.step or task.pipeline_status
+    normalized_verdict = "reject" if args.verdict == "fail" else args.verdict
     comment = TaskThreadComment(
         role=args.role,
         step=step,
-        verdict=args.verdict,
+        verdict=normalized_verdict,
         message=args.message,
     )
     append_thread_comment(root, task, comment)
     print(f"task: {task.id}")
     print(f"step: {step}")
-    print(f"verdict: {args.verdict}")
+    print(f"verdict: {comment.verdict}")
     print(f"role: {args.role}")
     return 0

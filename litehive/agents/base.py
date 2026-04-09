@@ -650,8 +650,8 @@ def parse_stage_report_text(
     if isinstance(submission, StageResultSubmission):
         warnings = list(submission.warnings)
         verdict = submission.verdict
-        if subagent_status != "completed" and verdict in {"pass", "accept"}:
-            verdict = "fail"
+        if subagent_status != "completed" and verdict == "pass":
+            verdict = "reject"
             warnings.append(
                 "Ignoring structured passing verdict because subagent status was "
                 f"`{subagent_status}`."
@@ -672,7 +672,7 @@ def parse_stage_report_text(
             warnings=warnings,
         )
 
-    # No valid structured submission and no CLI verdict — verdict is fail.
+    # No valid structured submission and no CLI verdict — treat agent non-completion as reject.
     # Attach validation warnings if the structured block was present but invalid.
     warnings: list[str] = ["Agent did not submit verdict via litehive report CLI."]
     if isinstance(submission, ValidationError):
@@ -683,11 +683,11 @@ def parse_stage_report_text(
     elif subagent_status == "completed":
         summary = f"{step} completed without verdict"
     else:
-        summary = f"{step} failed without verdict"
+        summary = f"{step} rejected without verdict"
     return StageReport(
         task_id=task_id,
         step=step,
-        verdict="fail",
+        verdict="reject",
         summary=summary,
         feedback=cap_feedback(transcript),
         warnings=warnings,

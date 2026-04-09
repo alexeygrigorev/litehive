@@ -2,7 +2,7 @@
 
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from .common import (
     FEEDBACK_CAP,
@@ -64,13 +64,25 @@ class StageResultSubmission(BaseModel):
 
     model_config = {"extra": "forbid"}
 
-    verdict: Literal["pass", "accept", "fail", "reject", "blocked"]
+    verdict: Literal["pass", "reject"]
     summary: str
     files_changed: list[str] = Field(default_factory=list)
     tests: StageResultTests = Field(default_factory=StageResultTests)
     warnings: list[str] = Field(default_factory=list)
     acceptance_criteria: list[str] = Field(default_factory=list)
     task_update: TaskUpdateSubmission | None = None
+
+    @field_validator("verdict", mode="before")
+    @classmethod
+    def _normalize_agent_submission_verdict(cls, value: object) -> object:
+        if not isinstance(value, str):
+            return value
+        normalized = value.strip().lower()
+        if normalized in {"accept"}:
+            return "pass"
+        if normalized in {"fail", "blocked"}:
+            return "reject"
+        return normalized
 
 
 class RecoveryEvidenceItem(BaseModel):
@@ -146,10 +158,22 @@ class TaskThreadComment(BaseModel):
 
     role: str
     step: str
-    verdict: Literal["pass", "fail", "reject", "blocked", "comment"] = "comment"
+    verdict: Literal["pass", "reject", "blocked", "comment"] = "comment"
     message: str
     files_changed: list[str] = Field(default_factory=list)
     created_at: str = Field(default_factory=utcnow)
+
+    @field_validator("verdict", mode="before")
+    @classmethod
+    def _normalize_thread_verdict(cls, value: object) -> object:
+        if not isinstance(value, str):
+            return value
+        normalized = value.strip().lower()
+        if normalized in {"accept"}:
+            return "pass"
+        if normalized in {"fail"}:
+            return "reject"
+        return normalized
 
 
 __all__ = [

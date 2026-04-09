@@ -406,7 +406,8 @@ def test_render_index_includes_origin_metadata_sections() -> None:
     assert "/api/task/engine" in html
     assert "/api/report" in html
     assert "Submit Verdict" in html
-    assert "blocked" in html
+    assert '["pass", "reject", "comment"]' in html
+    assert '["pass", "fail", "reject", "blocked", "comment"]' not in html
 
 
 def test_build_workspace_snapshot_includes_origin_metadata_payload(tmp_path: Path) -> None:
@@ -553,6 +554,40 @@ def test_submit_stage_verdict_via_web_reject_requeues_task_for_implementation(tm
     assert reloaded.status == "queued"
     assert refreshed_state.active_task_id is None
     assert refreshed_state.queue[0] == task.id
+
+
+def test_submit_stage_verdict_via_web_legacy_fail_alias_requeues_task_for_implementation(
+    tmp_path: Path,
+) -> None:
+    _init_git_repo(tmp_path)
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Legacy fail alias")
+    task.status = "in_progress"
+    task.pipeline_status = "testing"
+    task.runtime.execution_status = "running"
+    save_task(tmp_path, task)
+    save_task_runtime(tmp_path, task)
+
+    state = load_state(tmp_path)
+    state.active_task_id = task.id
+    state.queue = [task.id]
+    save_state(tmp_path, state)
+
+    payload = submit_stage_verdict_via_web(
+        tmp_path,
+        task_id=task.id,
+        role="qa",
+        step="testing",
+        verdict="fail",
+        message="Legacy fail should behave like reject.",
+    )
+    reloaded = require_task(tmp_path, task.id)
+    thread = load_task_thread(tmp_path, reloaded)
+
+    assert payload["submitted"]["verdict"] == "reject"
+    assert reloaded.pipeline_status == "implementing"
+    assert reloaded.status == "queued"
+    assert thread[-1].verdict == "reject"
 
 
 def test_submit_stage_verdict_via_web_rejects_invalid_request(tmp_path: Path) -> None:

@@ -972,7 +972,7 @@
 
     function renderVerdictSection(task) {
       if (!task.can_submit_verdict) return "";
-      const buttons = ["pass", "fail", "reject", "blocked", "comment"].map((verdict) => `
+      const buttons = ["pass", "reject", "comment"].map((verdict) => `
         <button
           class="${verdict === "pass" ? "primary" : "secondary"}"
           type="submit"
