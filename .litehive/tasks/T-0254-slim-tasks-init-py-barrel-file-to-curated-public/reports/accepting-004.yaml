@@ -1,0 +1,99 @@
+task_id: T-0254
+step: accepting
+verdict: pass
+source: agent
+summary: 'Reviewed T-0254 and verified the curated litehive.tasks API refactor against
+  the task record. Confirmed litehive/tasks/__init__.py is 30 lines and now exposes
+  a small explicit facade with 22 curated exports only. Repo-internal callers were
+  moved off the barrel: rg found no ''from litehive.tasks import ...'' imports anywhere
+  under litehive/, and sampled diffs in cli/status.py, pipeline/core.py, web/actions.py,
+  workspace/__init__.py, tests/test_task_commands_and_daemon.py, and tests/workspace_helpers.py
+  show internal and test code now imports from defining litehive.tasks.* or litehive.workspace.*
+  modules instead of relying on the oversized package barrel. Verified focused regression
+  covering task, recovery, web snapshot, observability, task commands/daemon, and
+  runtime pool flows with: uv run pytest -q tests/test_tasks_and_subagents.py tests/test_recovery_agent.py
+  tests/test_self_heal_recovery.py tests/test_web_snapshot_lockfree.py tests/test_observability_and_status.py
+  tests/test_grooming_task_updates.py tests/test_worktree_merge_agent.py tests/test_commit_recovery_bug.py
+  tests/test_rmtree_cleanup_logging.py tests/test_task_commands_and_daemon.py tests/test_runtime_pool.py
+  -> 373 passed, 3 skipped. Acceptance criteria met: barrel under 50 lines, curated
+  public exports only, internal direct imports updated, and relevant regression suite
+  passes with zero failures.'
+feedback: "Runner hook `before_pm_acceptance` `uv run ruff check --select E402,F401\
+  \ litehive tests` passed with exit code 0 (artifact: `artifacts/before_pm_acceptance-001.yaml`).\n\
+  \nRunner hook `before_pm_acceptance` `if [ -n \"${LITEHIVE_CHANGED_PATHS:-}\" ]\
+  \ \\\n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" | grep -q . \\\n  && printf\
+  \ '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" \\\n    | xargs -r -d '\\n' git grep -nE 'noqa:.*F401|noqa:.*F403|ruff:\\\
+  s*noqa:\\s*F401|ruff:\\s*noqa:\\s*F403' --; then\n  echo 'Forbidden noqa F401/F403\
+  \ suppression found.'\n  exit 1\nfi` passed with exit code 0 (artifact: `artifacts/before_pm_acceptance-002.yaml`).\n\
+  \nReviewed T-0254 and verified the curated litehive.tasks API refactor against the\
+  \ task record. Confirmed litehive/tasks/__init__.py is 30 lines and now exposes\
+  \ a small explicit facade with 22 curated exports only. Repo-internal callers were\
+  \ moved off the barrel: rg found no 'from litehive.tasks import ...' imports anywhere\
+  \ under litehive/, and sampled diffs in cli/status.py, pipeline/core.py, web/actions.py,\
+  \ workspace/__init__.py, tests/test_task_commands_and_daemon.py, and tests/workspace_helpers.py\
+  \ show internal and test code now imports from defining litehive.tasks.* or litehive.workspace.*\
+  \ modules instead of relying on the oversized package barrel. Verified focused regression\
+  \ covering task, recovery, web snapshot, observability, task commands/daemon, and\
+  \ runtime pool flows with: uv run pytest -q tests/test_tasks_and_subagents.py tests/test_recovery_agent.py\
+  \ tests/test_self_heal_recovery.py tests/test_web_snapshot_lockfree.py tests/test_observability_and_status.py\
+  \ tests/test_grooming_task_updates.py tests/test_worktree_merge_agent.py tests/test_commit_recovery_bug.py\
+  \ tests/test_rmtree_cleanup_logging.py tests/test_task_commands_and_daemon.py tests/test_runtime_pool.py\
+  \ -> 373 passed, 3 skipped. Acceptance criteria met: barrel under 50 lines, curated\
+  \ public exports only, internal direct imports updated, and relevant regression\
+  \ suite passes with zero failures."
+submitted_via_cli: true
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings:
+- 'runner hook passed: `before_pm_acceptance` `uv run ruff check --select E402,F401
+  litehive tests` (artifact: `artifacts/before_pm_acceptance-001.yaml`)'
+- "runner hook passed: `before_pm_acceptance` `if [ -n \"${LITEHIVE_CHANGED_PATHS:-}\"\
+  \ ] \\\n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" | grep -q . \\\n  && printf\
+  \ '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" \\\n    | xargs -r -d '\\n' git grep -nE 'noqa:.*F401|noqa:.*F403|ruff:\\\
+  s*noqa:\\s*F401|ruff:\\s*noqa:\\s*F403' --; then\n  echo 'Forbidden noqa F401/F403\
+  \ suppression found.'\n  exit 1\nfi` (artifact: `artifacts/before_pm_acceptance-002.yaml`)"
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 127
+hook_results:
+- point: before_pm_acceptance
+  command: uv run ruff check --select E402,F401 litehive tests
+  blocking: true
+  description: null
+  exit_code: 0
+  status: passed
+  artifact: artifacts/before_pm_acceptance-001.yaml
+  stdout: 'All checks passed!
+
+    '
+  stderr: 'warning: `VIRTUAL_ENV=/home/alexey/git/litehive/.venv` does not match the
+    project environment path `.venv` and will be ignored; use `--active` to target
+    the active environment instead
+
+    '
+- point: before_pm_acceptance
+  command: "if [ -n \"${LITEHIVE_CHANGED_PATHS:-}\" ] \\\n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\"\
+    \ | grep -q . \\\n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" \\\n    | xargs\
+    \ -r -d '\\n' git grep -nE 'noqa:.*F401|noqa:.*F403|ruff:\\s*noqa:\\s*F401|ruff:\\\
+    s*noqa:\\s*F403' --; then\n  echo 'Forbidden noqa F401/F403 suppression found.'\n\
+    \  exit 1\nfi"
+  blocking: true
+  description: null
+  exit_code: 0
+  status: passed
+  artifact: artifacts/before_pm_acceptance-002.yaml
+  stdout: ''
+  stderr: ''
+created_at: '2026-04-09T15:01:48+00:00'

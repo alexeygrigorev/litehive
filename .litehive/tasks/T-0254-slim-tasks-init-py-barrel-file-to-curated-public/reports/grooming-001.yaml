@@ -1,0 +1,59 @@
+task_id: T-0254
+step: grooming
+verdict: pass
+source: agent
+summary: 'Grooming passed. I updated T-0254 with task_type=refactor, PM_COMPLEXITY=moderate,
+  PLANNED_EFFORT=m, a narrowed goal, 4 observable acceptance criteria, 2 scope constraints,
+  and a 4-step execution plan. Repo inspection evidence: litehive/tasks/__init__.py
+  is currently 499 lines and re-exports 223 names; AST/rg inventory found 106 unique
+  names imported from the barrel across litehive/ and tests/. Highest-frequency barrel
+  imports are load_state, create_task, save_task, task_dir, list_tasks, append_journal,
+  require_task, get_task_worktree_path, get_task, and load_task_thread. Important
+  compatibility risk: tests/helpers currently monkeypatch package-level litehive.tasks
+  symbols including fcntl, os.kill via os, signal, _atomic_write_text, _workspace_transition_writes,
+  _merged_state_for_runner_owned_write, _prepare_interrupted_task, and _mark_interrupted_subagent.
+  The implementation should first define the explicit curated keep-list, then move
+  all removed internal/test imports to their defining litehive.tasks.* or litehive.workspace.*
+  modules, then shrink __init__.py to a small explicit facade under 50 lines. Tests
+  run in grooming: none; this stage was task shaping and risk identification only.'
+feedback: 'Stage `grooming` switched from `claude` to `codex` after claude usage limit
+  reached (7d window at 96%, resets 2026-04-10T09:00:01.026858+00:00).
+
+
+  Grooming passed. I updated T-0254 with task_type=refactor, PM_COMPLEXITY=moderate,
+  PLANNED_EFFORT=m, a narrowed goal, 4 observable acceptance criteria, 2 scope constraints,
+  and a 4-step execution plan. Repo inspection evidence: litehive/tasks/__init__.py
+  is currently 499 lines and re-exports 223 names; AST/rg inventory found 106 unique
+  names imported from the barrel across litehive/ and tests/. Highest-frequency barrel
+  imports are load_state, create_task, save_task, task_dir, list_tasks, append_journal,
+  require_task, get_task_worktree_path, get_task, and load_task_thread. Important
+  compatibility risk: tests/helpers currently monkeypatch package-level litehive.tasks
+  symbols including fcntl, os.kill via os, signal, _atomic_write_text, _workspace_transition_writes,
+  _merged_state_for_runner_owned_write, _prepare_interrupted_task, and _mark_interrupted_subagent.
+  The implementation should first define the explicit curated keep-list, then move
+  all removed internal/test imports to their defining litehive.tasks.* or litehive.workspace.*
+  modules, then shrink __init__.py to a small explicit facade under 50 lines. Tests
+  run in grooming: none; this stage was task shaping and risk identification only.'
+submitted_via_cli: true
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings:
+- Stage `grooming` switched from `claude` to `codex` after claude usage limit reached
+  (7d window at 96%, resets 2026-04-10T09:00:01.026858+00:00).
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 157
+hook_results: []
+created_at: '2026-04-09T14:40:31+00:00'

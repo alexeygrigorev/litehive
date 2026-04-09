@@ -7,15 +7,15 @@ engine: null
 model: null
 mode: implementation
 pipeline_mode: full
-status: queued
+status: in_progress
 flag_reason: null
 flag_count: 0
-pipeline_status: backlog
+pipeline_status: commit_to_git
 priority: medium
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-09T09:16:15+00:00'
-updated_at: '2026-04-09T09:16:15+00:00'
+updated_at: '2026-04-09T15:01:48+00:00'
 goal: tasks/__init__.py re-exports ~100 items from 8+ submodules in 499 lines. Reduce
   to a curated public API of ~20 essential items. Internal code should import from
   specific submodules directly.
@@ -27,7 +27,35 @@ acceptance_criteria:
 constraints: []
 plan: []
 human_checkpoints: []
-subagents: []
+subagents:
+- id: SA-0001
+  role: planner
+  engine: codex
+  status: completed
+  path: subagents/SA-0001-planner
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0002
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0002-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0003
+  role: qa
+  engine: codex
+  status: completed
+  path: subagents/SA-0003-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0004
+  role: reviewer
+  engine: codex
+  status: completed
+  path: subagents/SA-0004-reviewer
+  sandboxed: false
+  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0254 slim-tasks-init-py-barrel-file-to-curated-public'

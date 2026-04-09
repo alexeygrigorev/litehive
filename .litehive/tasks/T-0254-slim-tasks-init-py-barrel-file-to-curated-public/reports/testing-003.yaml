@@ -1,0 +1,55 @@
+task_id: T-0254
+step: testing
+verdict: pass
+source: agent
+summary: 'Verified the curated tasks public API refactor. Confirmed litehive/tasks/__init__.py
+  is 30 lines and exports 22 curated symbols only; package and test import scan found
+  no remaining repo-internal imports of private helpers from litehive.tasks. Ran focused
+  regression covering tasks, pipeline, CLI, web snapshot, observability, recovery,
+  daemon, and runtime-pool paths: uv run pytest -q tests/test_tasks_and_subagents.py
+  tests/test_recovery_agent.py tests/test_self_heal_recovery.py tests/test_web_snapshot_lockfree.py
+  tests/test_observability_and_status.py tests/test_grooming_task_updates.py tests/test_worktree_merge_agent.py
+  tests/test_commit_recovery_bug.py tests/test_rmtree_cleanup_logging.py tests/test_task_commands_and_daemon.py
+  tests/test_runtime_pool.py -> 373 passed, 3 skipped. During verification I found
+  one missed test monkeypatch target caused by the import move in stop_current_task();
+  updated tests/test_task_commands_and_daemon.py to patch litehive.workspace.recovery.recover_stale_runner_state
+  instead of litehive.workspace.task_status.recover_stale_runner_state, then reran
+  the same slice cleanly. Evidence supports all acceptance criteria: barrel under
+  50 lines, curated public exports only, internal/test callers updated to specific
+  submodules, and relevant regression suite passes.'
+feedback: 'Verified the curated tasks public API refactor. Confirmed litehive/tasks/__init__.py
+  is 30 lines and exports 22 curated symbols only; package and test import scan found
+  no remaining repo-internal imports of private helpers from litehive.tasks. Ran focused
+  regression covering tasks, pipeline, CLI, web snapshot, observability, recovery,
+  daemon, and runtime-pool paths: uv run pytest -q tests/test_tasks_and_subagents.py
+  tests/test_recovery_agent.py tests/test_self_heal_recovery.py tests/test_web_snapshot_lockfree.py
+  tests/test_observability_and_status.py tests/test_grooming_task_updates.py tests/test_worktree_merge_agent.py
+  tests/test_commit_recovery_bug.py tests/test_rmtree_cleanup_logging.py tests/test_task_commands_and_daemon.py
+  tests/test_runtime_pool.py -> 373 passed, 3 skipped. During verification I found
+  one missed test monkeypatch target caused by the import move in stop_current_task();
+  updated tests/test_task_commands_and_daemon.py to patch litehive.workspace.recovery.recover_stale_runner_state
+  instead of litehive.workspace.task_status.recover_stale_runner_state, then reran
+  the same slice cleanly. Evidence supports all acceptance criteria: barrel under
+  50 lines, curated public exports only, internal/test callers updated to specific
+  submodules, and relevant regression suite passes.'
+submitted_via_cli: true
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 241
+hook_results: []
+created_at: '2026-04-09T14:59:41+00:00'
