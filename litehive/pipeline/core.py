@@ -22,7 +22,7 @@ from litehive.tasks.journal import append_journal
 from litehive.tasks.normalization import missing_acceptance_criteria_reason, needs_normalization
 from litehive.tasks.paths import task_dir
 from litehive.tasks.reports import record_recovery_report
-from litehive.workspace.recovery import _prepare_interrupted_task, interruption_journal_message
+from litehive.pipeline.recovery import _prepare_interrupted_task, interruption_journal_message
 from litehive.workspace.runtime_tracking import (
     _apply_stage_finished,
     _apply_task_outcome,

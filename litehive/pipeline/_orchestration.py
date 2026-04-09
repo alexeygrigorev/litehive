@@ -18,7 +18,7 @@ from litehive.tasks.queue_ops import (
     peek_next_task_selection,
 )
 from litehive.workspace.locking import runner_heartbeat, workspace_runner_guard
-from litehive.workspace.recovery import recover_stale_runner_state
+from litehive.pipeline.recovery import recover_stale_runner_state
 from litehive.workspace.runtime_tracking import mark_task_run_started
 
 from ._budget import _budget_ledger_from_conditions, _budget_ledger_from_config

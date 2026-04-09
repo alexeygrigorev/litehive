@@ -28,7 +28,7 @@ from ._models import (
     resolve_execution_retry_policy,
     resolve_model,
 )
-from ._recovery import _attempt_stage_recovery
+from .recovery import _attempt_stage_recovery
 from ._types import EngineBudgetLedger
 
 

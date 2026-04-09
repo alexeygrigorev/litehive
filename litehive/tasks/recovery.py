@@ -1,2 +1,1 @@
-from litehive.workspace.recovery import *
-
+from litehive.pipeline.recovery import *

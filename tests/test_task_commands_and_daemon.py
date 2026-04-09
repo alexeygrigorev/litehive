@@ -2147,7 +2147,7 @@ def test_stop_current_task_signals_live_runner_before_fallback(
         lambda root: RunnerStatusState(pid=4242, started_at="2026-04-01T00:00:00+00:00"),
     )
     monkeypatch.setattr("litehive.workspace.locking._runner_pid_is_alive", lambda pid: True)
-    monkeypatch.setattr("litehive.workspace.recovery.recover_stale_runner_state", lambda root: False)
+    monkeypatch.setattr("litehive.pipeline.recovery.recover_stale_runner_state", lambda root: False)
 
     def fake_kill(pid: int, sig: int) -> None:
         signals.append((pid, sig))

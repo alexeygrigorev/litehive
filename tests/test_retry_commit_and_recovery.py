@@ -3779,7 +3779,7 @@ def test_rollback_completed_task_restores_state_when_rollback_commit_fails(
             raise GitError("git rollback commit failed")
         return None
 
-    monkeypatch.setattr("litehive.pipeline._recovery.commit_task", fail_rollback_commit)
+    monkeypatch.setattr("litehive.pipeline.recovery.execution_recovery.commit_task", fail_rollback_commit)
 
     with pytest.raises(GitError, match="git rollback commit failed"):
         rollback_completed_task(tmp_path, "T-0001")

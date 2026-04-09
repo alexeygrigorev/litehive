@@ -168,7 +168,7 @@ from litehive.tasks.queue_ops import (
 )
 from litehive.tasks.reports import append_thread_comment, load_task_thread
 from litehive.workspace.locking import runner_heartbeat, runner_status, workspace_runner_guard
-from litehive.workspace.recovery import (
+from litehive.pipeline.recovery import (
     _mark_interrupted_subagent,
     _prepare_interrupted_task,
     recover_stale_runner_state,

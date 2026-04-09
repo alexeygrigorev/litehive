@@ -11,7 +11,7 @@ from litehive.tasks import create_task, get_task, save_task
 from litehive.tasks.crud import save_task_runtime
 from litehive.tasks.persistence import load_state, save_state
 from litehive.tasks.queue_ops import dequeue_next_task_selection, set_active_task
-from litehive.workspace.recovery import recover_stale_runner_state
+from litehive.pipeline.recovery import recover_stale_runner_state
 from tests.workspace_helpers import _init_git_repo
 
 
