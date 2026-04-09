@@ -210,6 +210,27 @@
       color: #eff7f3;
     }
     .logs, .stack { display: grid; gap: 12px; }
+    .controls { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+    button.control {
+      border: 1px solid var(--line);
+      background: white;
+      color: var(--ink);
+      border-radius: 999px;
+      padding: 8px 12px;
+      font: inherit;
+      cursor: pointer;
+    }
+    button.control:disabled {
+      cursor: wait;
+      opacity: 0.6;
+    }
+    .status-strip {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      margin-top: 12px;
+    }
     .muted { color: var(--muted); }
     .mono { font-family: var(--mono); }
     .toolbar {
@@ -302,6 +323,7 @@
   <script>
     const state = {
       snapshot: null,
+      daemon: null,
       selectedTaskId: null,
       selectedSubagentId: null,
       editTaskId: null,
@@ -318,6 +340,7 @@
       queueFeedback: "",
       queueFeedbackLevel: "muted",
       mutatingQueue: false,
+      daemonAction: null,
     };
     const POLL_INTERVAL_MS = {{ poll_interval_ms }};
     const STREAM_ERROR_FALLBACK_MS = 8000;
@@ -406,7 +429,7 @@
         method: "POST",
         cache: "no-store",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: payload !== undefined ? JSON.stringify(payload) : undefined,
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
@@ -991,11 +1014,66 @@
       return `<div class="section"><h3>Recent Run-All Logs</h3><div class="logs">${entries}</div></div>`;
     }
 
+    function renderDaemonPanel(daemon) {
+      const status = daemon?.daemon_status || "stopped";
+      const daemonBusy = Boolean(state.daemonAction && state.daemonAction.endsWith("..."));
+      const logs = daemon?.recent_logs || [];
+      const entries = logs.length ? logs.map((entry) => `
+        <div class="artifact">
+          <div class="bar">
+            <strong>${esc(entry.name)}</strong>
+            <span class="mono">${esc(entry.path)}</span>
+          </div>
+          <div style="padding:12px">
+            ${entry.files.length ? entry.files.map((file) => `
+              <div class="artifact" style="margin-top:10px">
+                <div class="bar">
+                  <span>${esc(file.name)}</span>
+                  <span class="mono">${esc(file.path)}</span>
+                </div>
+                <pre>${esc(file.preview || "(empty)")}</pre>
+              </div>
+            `).join("") : `<div class="muted">No files in this run-all directory.</div>`}
+          </div>
+        </div>
+      `).join("") : `<div class="muted">No run-all logs found under .litehive/logs/run-all/.</div>`;
+      return `
+        <div class="section">
+          <h3>Daemon Control</h3>
+          <div class="status-strip">
+            <div class="meta">
+              ${badge(`daemon:${status}`, status)}
+              ${daemon?.pid ? badge(`pid:${daemon.pid}`, "running") : ""}
+            </div>
+            <span class="muted mono" id="daemon-feedback">${esc(state.daemonAction || "idle")}</span>
+          </div>
+          <div class="kv" style="margin-top:12px">
+            <div>Workspace</div><div class="mono">${esc(daemon?.workspace || "-")}</div>
+            <div>Started</div><div>${esc(daemon?.started_at || "-")}</div>
+            <div>Uptime</div><div>${esc(daemon?.uptime || "-")}</div>
+            <div>Log dir</div><div class="mono">${esc(daemon?.log_dir || "-")}</div>
+          </div>
+          <div class="controls">
+            <button class="control" id="daemon-start" ${status === "running" || daemonBusy ? "disabled" : ""}>Start</button>
+            <button class="control" id="daemon-stop" ${status !== "running" || daemonBusy ? "disabled" : ""}>Stop</button>
+            <button class="control" id="daemon-restart" ${status !== "running" || daemonBusy ? "disabled" : ""}>Restart</button>
+          </div>
+        </div>
+        <div class="section">
+          <h3>Daemon Logs</h3>
+          <div class="logs" id="daemon-log-viewer">${entries}</div>
+        </div>
+      `;
+    }
+
     function renderSessionPayload(payload, snapshot) {
       const container = document.getElementById("session-detail");
-      document.getElementById("session-summary").textContent = payload ? `${payload.subagent_id} / ${payload.status}` : "no session";
+      document.getElementById("session-summary").textContent = payload
+        ? `${payload.subagent_id} / ${payload.status}`
+        : (state.daemon?.daemon_status || "no session");
       if (!payload) {
-        container.innerHTML = renderRunAll(snapshot);
+        container.innerHTML = `${renderDaemonPanel(state.daemon)}${renderRunAll(snapshot)}`;
+        attachDaemonControls();
         return;
       }
       const artifacts = payload.artifacts.map((artifact) => `
@@ -1012,6 +1090,7 @@
         </div>
       `).join("");
       container.innerHTML = `
+        ${renderDaemonPanel(state.daemon)}
         <div class="section">
           <h3>${esc(payload.subagent_id)} ${esc(payload.role)} / ${esc(payload.engine)}</h3>
           <div class="meta">
@@ -1031,6 +1110,29 @@
         </div>
         ${renderRunAll(snapshot)}
       `;
+      attachDaemonControls();
+    }
+
+    async function refreshDaemon() {
+      state.daemon = await fetchJson("/api/daemon/status");
+    }
+
+    async function runDaemonAction(action) {
+      state.daemonAction = `${action}...`;
+      renderSessionPayload(null, state.snapshot || { run_all_logs: [] });
+      try {
+        state.daemon = await postJson(`/api/daemon/${action}`);
+        state.daemonAction = `${action} ok`;
+      } catch (error) {
+        state.daemonAction = error.message;
+      }
+      await refreshSnapshot();
+    }
+
+    function attachDaemonControls() {
+      document.getElementById("daemon-start")?.addEventListener("click", () => runDaemonAction("start"));
+      document.getElementById("daemon-stop")?.addEventListener("click", () => runDaemonAction("stop"));
+      document.getElementById("daemon-restart")?.addEventListener("click", () => runDaemonAction("restart"));
     }
 
     async function saveTaskEdits(taskId) {
@@ -1156,11 +1258,13 @@
 
     async function refreshSnapshot() {
       state.snapshot = await fetchJson("/api/snapshot", { headers: {} });
+      state.daemon = state.snapshot.daemon || state.daemon;
       if (!state.engines) {
         await refreshEngines();
       }
       chooseDefaults(state.snapshot);
       render(state.snapshot);
+      await refreshDaemon();
       await refreshSession();
     }
 

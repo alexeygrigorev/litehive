@@ -10,23 +10,42 @@ pipeline_mode: full
 status: queued
 pipeline_status: implementing
 priority: medium
-pm_complexity: null
-planned_effort: null
+pm_complexity: moderate
+planned_effort: m
 created_at: '2026-04-08T06:04:59+00:00'
 updated_at: '2026-04-08T19:02:49+00:00'
-goal: 'Add endpoints to the web dashboard for daemon lifecycle management: start daemon,
-  stop daemon, restart daemon, and show daemon status including PID and recent logs.
-  The frontend should show daemon state and provide control buttons.'
+goal: Expose daemon lifecycle controls in the Litehive web monitor with JSON endpoints
+  for start, stop, restart, and status, plus a dashboard panel that shows running/stopped
+  state, PID, uptime, and recent run-all logs with polling-based refresh.
 acceptance_criteria:
-- POST /api/daemon/start endpoint starts the workspace daemon
-- POST /api/daemon/stop endpoint stops the workspace daemon
-- POST /api/daemon/restart endpoint restarts the workspace daemon
-- GET /api/daemon/status endpoint returns daemon PID, uptime, and recent log entries
-- Frontend shows daemon status indicator (running/stopped) with start/stop/restart
-  buttons
-- Daemon log viewer in the frontend shows recent run-all logs with auto-refresh
-constraints: []
-plan: []
+- When the workspace daemon is stopped, POST /api/daemon/start starts it and returns
+  JSON showing daemon_status=running with the new PID for that workspace.
+- When the workspace daemon is running, POST /api/daemon/stop stops it and returns
+  JSON showing daemon_status=stopped; a follow-up status read shows no active daemon
+  PID.
+- When the workspace daemon is running, POST /api/daemon/restart replaces the daemon
+  process and returns JSON with both the previous PID and the new PID.
+- GET /api/daemon/status returns JSON for the current workspace that includes daemon
+  state, PID when running, started_at-derived uptime, and recent run-all log previews.
+- The web dashboard renders a daemon status panel with a running/stopped indicator
+  plus start, stop, and restart controls wired to the daemon API.
+- The dashboard refresh loop updates daemon status and recent run-all log output without
+  a full page reload.
+constraints:
+- Reuse the existing daemon lifecycle helpers and workspace-local run-all log readers
+  instead of duplicating daemon orchestration logic.
+- Keep the web monitor local-only and scoped to the current workspace.
+- Daemon control failures should return clear JSON errors to the frontend instead
+  of hanging or silently failing.
+plan:
+- Add a daemon-status payload builder in the web layer that wraps existing daemon
+  registry/status helpers and recent run-all log previews.
+- Implement GET /api/daemon/status and POST /api/daemon/start, /api/daemon/stop, and
+  /api/daemon/restart with consistent JSON success and error responses.
+- Extend the monitor template and client script with a daemon control panel, button
+  actions, and polling-based refresh of daemon state and logs.
+- Add focused tests for daemon control endpoints, status payload shape, and dashboard
+  behavior around lifecycle actions and refresh.
 human_checkpoints: []
 subagents:
 - id: SA-0001

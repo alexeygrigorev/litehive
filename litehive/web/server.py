@@ -10,6 +10,7 @@ import time
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
+from litehive.daemon import start_background_daemon, stop_workspace_daemon
 from litehive.tasks import (
     WorkspaceConflictError,
     load_state,
@@ -61,6 +62,8 @@ class LitehiveWebHandler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         if parsed.path == "/":
             return self._send_html(_render_index())
+        if parsed.path == "/api/daemon/status":
+            return self._send_json(_web_pkg.build_daemon_status_payload(self.workspace_root))
         if parsed.path == "/api/snapshot":
             return self._send_json(_web_pkg.build_workspace_snapshot(self.workspace_root))
         if parsed.path == "/api/engines":
@@ -87,6 +90,29 @@ class LitehiveWebHandler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:  # noqa: N802
         parsed = urlparse(self.path)
+        if parsed.path == "/api/daemon/start":
+            try:
+                start_background_daemon(self.workspace_root)
+            except RuntimeError as exc:
+                return self._send_error_json(HTTPStatus.CONFLICT, str(exc))
+            return self._send_json(_web_pkg.build_daemon_status_payload(self.workspace_root))
+        if parsed.path == "/api/daemon/stop":
+            previous = stop_workspace_daemon(self.workspace_root)
+            if previous is None:
+                return self._send_error_json(HTTPStatus.CONFLICT, "daemon is not running")
+            payload = _web_pkg.build_daemon_status_payload(self.workspace_root)
+            payload["previous_pid"] = previous.get("pid")
+            return self._send_json(payload)
+        if parsed.path == "/api/daemon/restart":
+            previous = stop_workspace_daemon(self.workspace_root)
+            previous_pid = previous.get("pid") if previous is not None else None
+            try:
+                start_background_daemon(self.workspace_root)
+            except RuntimeError as exc:
+                return self._send_error_json(HTTPStatus.CONFLICT, str(exc))
+            payload = _web_pkg.build_daemon_status_payload(self.workspace_root)
+            payload["previous_pid"] = previous_pid
+            return self._send_json(payload)
         try:
             payload = self._read_json_body()
         except ValueError as exc:

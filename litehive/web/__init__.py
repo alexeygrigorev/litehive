@@ -9,6 +9,7 @@ from litehive.web.actions import (
 from litehive.web.common import _render_index
 from litehive.web.server import LitehiveWebHandler, WorkspaceStreamMonitor, serve_monitor
 from litehive.web.snapshot import (
+    build_daemon_status_payload,
     build_workspace_snapshot,
     list_recent_run_all_logs,
     read_engine_dashboard,
@@ -20,6 +21,7 @@ __all__ = [
     "LitehiveWebHandler",
     "WorkspaceStreamMonitor",
     "serve_monitor",
+    "build_daemon_status_payload",
     "build_workspace_snapshot",
     "list_recent_run_all_logs",
     "read_engine_dashboard",

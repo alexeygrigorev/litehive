@@ -9,6 +9,9 @@ Created task worktree at `.litehive/worktrees/T-0223-web-dashboard-daemon-contro
 ## 2026-04-08T18:02:29+00:00
 Execution started with engine `codex`.
 
+## 2026-04-08T18:04:19+00:00
+Task metadata updated via CLI.
+
 ## 2026-04-08T18:04:46+00:00
 Stage `grooming` fail: grooming failed: agent did not submit verdict via litehive report CLI. Launching recovery agent.
 
