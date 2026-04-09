@@ -1,0 +1,100 @@
+task_id: T-0253
+step: accepting
+verdict: pass
+source: agent
+summary: 'Accepted. Verified the refactor directly in code: litehive/cli/parser.py
+  is now 11 lines and build_parser() only creates the root parser, creates subparsers,
+  and iterates COMMAND_PARSER_BUILDERS from litehive/cli/parsers/__init__.py. Verified
+  the command surface is split into dedicated parser modules under litehive/cli/parsers/
+  including run.py, queue.py, tasks.py, daemon.py, worktree.py, engine.py, archive.py,
+  logs.py, status.py, update.py, and the rest of the command groups. Verified nested
+  parser compatibility by inspection of extracted modules: daemon.py preserves daemon_command
+  subparsers, worktree.py preserves worktree_command subparsers, and archive.py preserves
+  the command_parser set_defaults help wiring. The extension point matches the acceptance
+  intent: adding a command is localized to a new parser file plus one registry entry
+  in COMMAND_PARSER_BUILDERS. Verification run in this acceptance step: uv run pytest
+  -q tests/test_config_and_run_cli.py -k ''test_cli_parser_has_no_duplicate_subcommands_or_arguments
+  or test_engine_command_parser_accepts_workspace_switch_args or test_engine_status_parser_accepts_optional_engine_name
+  or test_switch_command_parser_accepts_task_engine_reason_and_workspace'' => 4 passed;
+  uv run pytest -q => 923 passed, 3 skipped. Acceptance criteria satisfied: build_parser()
+  under 100 lines, per-command parser modules present, registration is centralized
+  and minimal, and existing tests including duplicate parser detection pass.'
+feedback: "Runner hook `before_pm_acceptance` `uv run ruff check --select E402,F401\
+  \ litehive tests` passed with exit code 0 (artifact: `artifacts/before_pm_acceptance-001.yaml`).\n\
+  \nRunner hook `before_pm_acceptance` `if [ -n \"${LITEHIVE_CHANGED_PATHS:-}\" ]\
+  \ \\\n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" | grep -q . \\\n  && printf\
+  \ '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" \\\n    | xargs -r -d '\\n' git grep -nE 'noqa:.*F401|noqa:.*F403|ruff:\\\
+  s*noqa:\\s*F401|ruff:\\s*noqa:\\s*F403' --; then\n  echo 'Forbidden noqa F401/F403\
+  \ suppression found.'\n  exit 1\nfi` passed with exit code 0 (artifact: `artifacts/before_pm_acceptance-002.yaml`).\n\
+  \nAccepted. Verified the refactor directly in code: litehive/cli/parser.py is now\
+  \ 11 lines and build_parser() only creates the root parser, creates subparsers,\
+  \ and iterates COMMAND_PARSER_BUILDERS from litehive/cli/parsers/__init__.py. Verified\
+  \ the command surface is split into dedicated parser modules under litehive/cli/parsers/\
+  \ including run.py, queue.py, tasks.py, daemon.py, worktree.py, engine.py, archive.py,\
+  \ logs.py, status.py, update.py, and the rest of the command groups. Verified nested\
+  \ parser compatibility by inspection of extracted modules: daemon.py preserves daemon_command\
+  \ subparsers, worktree.py preserves worktree_command subparsers, and archive.py\
+  \ preserves the command_parser set_defaults help wiring. The extension point matches\
+  \ the acceptance intent: adding a command is localized to a new parser file plus\
+  \ one registry entry in COMMAND_PARSER_BUILDERS. Verification run in this acceptance\
+  \ step: uv run pytest -q tests/test_config_and_run_cli.py -k 'test_cli_parser_has_no_duplicate_subcommands_or_arguments\
+  \ or test_engine_command_parser_accepts_workspace_switch_args or test_engine_status_parser_accepts_optional_engine_name\
+  \ or test_switch_command_parser_accepts_task_engine_reason_and_workspace' => 4 passed;\
+  \ uv run pytest -q => 923 passed, 3 skipped. Acceptance criteria satisfied: build_parser()\
+  \ under 100 \n\n\u2026 [truncated \u2014 full transcript in subagent artifacts]"
+submitted_via_cli: true
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings:
+- 'runner hook passed: `before_pm_acceptance` `uv run ruff check --select E402,F401
+  litehive tests` (artifact: `artifacts/before_pm_acceptance-001.yaml`)'
+- "runner hook passed: `before_pm_acceptance` `if [ -n \"${LITEHIVE_CHANGED_PATHS:-}\"\
+  \ ] \\\n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" | grep -q . \\\n  && printf\
+  \ '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" \\\n    | xargs -r -d '\\n' git grep -nE 'noqa:.*F401|noqa:.*F403|ruff:\\\
+  s*noqa:\\s*F401|ruff:\\s*noqa:\\s*F403' --; then\n  echo 'Forbidden noqa F401/F403\
+  \ suppression found.'\n  exit 1\nfi` (artifact: `artifacts/before_pm_acceptance-002.yaml`)"
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 185
+hook_results:
+- point: before_pm_acceptance
+  command: uv run ruff check --select E402,F401 litehive tests
+  blocking: true
+  description: null
+  exit_code: 0
+  status: passed
+  artifact: artifacts/before_pm_acceptance-001.yaml
+  stdout: 'All checks passed!
+
+    '
+  stderr: 'warning: `VIRTUAL_ENV=/home/alexey/git/litehive/.venv` does not match the
+    project environment path `.venv` and will be ignored; use `--active` to target
+    the active environment instead
+
+    '
+- point: before_pm_acceptance
+  command: "if [ -n \"${LITEHIVE_CHANGED_PATHS:-}\" ] \\\n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\"\
+    \ | grep -q . \\\n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" \\\n    | xargs\
+    \ -r -d '\\n' git grep -nE 'noqa:.*F401|noqa:.*F403|ruff:\\s*noqa:\\s*F401|ruff:\\\
+    s*noqa:\\s*F403' --; then\n  echo 'Forbidden noqa F401/F403 suppression found.'\n\
+    \  exit 1\nfi"
+  blocking: true
+  description: null
+  exit_code: 0
+  status: passed
+  artifact: artifacts/before_pm_acceptance-002.yaml
+  stdout: ''
+  stderr: ''
+created_at: '2026-04-09T14:36:47+00:00'

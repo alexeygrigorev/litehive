@@ -1,0 +1,54 @@
+task_id: T-0253
+step: grooming
+verdict: pass
+source: agent
+summary: Grooming pass. Verified by repo inspection that the current CLI parser is
+  still a single monolith in litehive/cli/parser.py at 1119 lines, with build_parser()
+  assembling the full command surface and nested command trees for engine, daemon,
+  and worktree. Verified the regression guard for duplicate parser definitions exists
+  at tests/test_config_and_run_cli.py::test_cli_parser_has_no_duplicate_subcommands_or_arguments,
+  and noted archive help wiring via command_parser set_defaults plus engine/daemon/worktree
+  nested dest behavior as compatibility constraints for the refactor. Updated the
+  task record to task_type=refactor, pm_complexity=moderate, planned_effort=m, and
+  added a four-step implementation plan covering parser-surface inventory, cli/parsers
+  package creation with central registration, behavior-preserving extraction, and
+  focused parser-test verification. No code changes or test runs were performed in
+  grooming; task is ready for SWE implementation against the existing acceptance criteria.
+feedback: 'Stage `grooming` switched from `claude` to `codex` after claude usage limit
+  reached (7d window at 96%, resets 2026-04-10T09:00:00.470536+00:00).
+
+
+  Grooming pass. Verified by repo inspection that the current CLI parser is still
+  a single monolith in litehive/cli/parser.py at 1119 lines, with build_parser() assembling
+  the full command surface and nested command trees for engine, daemon, and worktree.
+  Verified the regression guard for duplicate parser definitions exists at tests/test_config_and_run_cli.py::test_cli_parser_has_no_duplicate_subcommands_or_arguments,
+  and noted archive help wiring via command_parser set_defaults plus engine/daemon/worktree
+  nested dest behavior as compatibility constraints for the refactor. Updated the
+  task record to task_type=refactor, pm_complexity=moderate, planned_effort=m, and
+  added a four-step implementation plan covering parser-surface inventory, cli/parsers
+  package creation with central registration, behavior-preserving extraction, and
+  focused parser-test verification. No code changes or test runs were performed in
+  grooming; task is ready for SWE implementation against the existing acceptance criteria.'
+submitted_via_cli: true
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings:
+- Stage `grooming` switched from `claude` to `codex` after claude usage limit reached
+  (7d window at 96%, resets 2026-04-10T09:00:00.470536+00:00).
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 103
+hook_results: []
+created_at: '2026-04-09T14:17:39+00:00'

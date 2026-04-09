@@ -1,0 +1,83 @@
+- role: planner
+  step: grooming
+  verdict: pass
+  message: Grooming pass. Verified by repo inspection that the current CLI parser
+    is still a single monolith in litehive/cli/parser.py at 1119 lines, with build_parser()
+    assembling the full command surface and nested command trees for engine, daemon,
+    and worktree. Verified the regression guard for duplicate parser definitions exists
+    at tests/test_config_and_run_cli.py::test_cli_parser_has_no_duplicate_subcommands_or_arguments,
+    and noted archive help wiring via command_parser set_defaults plus engine/daemon/worktree
+    nested dest behavior as compatibility constraints for the refactor. Updated the
+    task record to task_type=refactor, pm_complexity=moderate, planned_effort=m, and
+    added a four-step implementation plan covering parser-surface inventory, cli/parsers
+    package creation with central registration, behavior-preserving extraction, and
+    focused parser-test verification. No code changes or test runs were performed
+    in grooming; task is ready for SWE implementation against the existing acceptance
+    criteria.
+  files_changed: []
+  created_at: '2026-04-09T14:17:20+00:00'
+- role: recovery
+  step: implementing
+  verdict: pass
+  message: 'Recovered the CLI parser refactor by replacing the 1000+ line monolithic
+    litehive/cli/parser.py with a registry-driven assembler and extracting command
+    definitions into litehive/cli/parsers/*. The new build_parser() is 11 lines and
+    only creates the root parser, subparsers, and loops COMMAND_PARSER_BUILDERS. Added
+    one parser module per command group, including nested daemon/worktree builders,
+    while preserving existing argparse behavior such as engine_action/engine_name
+    parsing, daemon_command/worktree_command dests, and archive command_parser help
+    wiring. Verified acceptance criteria with: wc -l litehive/cli/parser.py => 11;
+    focused parser suites: uv run pytest -q tests/test_config_and_run_cli.py -k ''parser
+    or engine_command_parser or engine_status_parser or switch_command_parser'' =>
+    11 passed, uv run pytest -q tests/test_engine_freeze.py tests/test_logs_command.py
+    tests/test_archive.py tests/test_observability_and_status.py -k parser => 5 passed;
+    guard/lint: uv run ruff check --select E402,F401 litehive tests => passed; full
+    regression: uv run pytest -q => 923 passed, 3 skipped. This should be retried
+    normally from implementing if any follow-on work remains, but the parser split
+    itself is complete and stable.'
+  files_changed: []
+  created_at: '2026-04-09T14:31:41+00:00'
+- role: qa
+  step: testing
+  verdict: pass
+  message: 'Verified the CLI parser refactor in code and with focused parser tests.
+    Evidence: litehive/cli/parser.py is now 11 lines and only assembles the root parser
+    plus COMMAND_PARSER_BUILDERS; per-command modules exist under litehive/cli/parsers/
+    including run.py, queue.py, tasks.py, daemon.py, worktree.py, engine.py, archive.py,
+    logs.py, status.py, update.py, and the rest of the command surface; central registration
+    lives in litehive/cli/parsers/__init__.py so adding a command is a new parser
+    file plus one registry entry. Compatibility checks passed for nested engine/daemon/worktree
+    parsing and archive help wiring by inspection of the extracted modules. Tests
+    run: uv run pytest -q tests/test_config_and_run_cli.py -k ''test_cli_parser_has_no_duplicate_subcommands_or_arguments
+    or test_engine_command_parser_accepts_workspace_switch_args or test_engine_status_parser_accepts_optional_engine_name
+    or test_switch_command_parser_accepts_task_engine_reason_and_workspace'' => 4
+    passed in 0.42s; uv run pytest -q tests/test_archive.py tests/test_engine_freeze.py
+    tests/test_logs_command.py tests/test_observability_and_status.py -k parser =>
+    5 passed in 0.50s. Acceptance criteria satisfied: build_parser() is under 100
+    lines, command groups are split into dedicated parser modules, the registry-based
+    design makes extension localized, and the duplicate parser detection test passes.'
+  files_changed: []
+  created_at: '2026-04-09T14:33:22+00:00'
+- role: reviewer
+  step: accepting
+  verdict: pass
+  message: 'Accepted. Verified the refactor directly in code: litehive/cli/parser.py
+    is now 11 lines and build_parser() only creates the root parser, creates subparsers,
+    and iterates COMMAND_PARSER_BUILDERS from litehive/cli/parsers/__init__.py. Verified
+    the command surface is split into dedicated parser modules under litehive/cli/parsers/
+    including run.py, queue.py, tasks.py, daemon.py, worktree.py, engine.py, archive.py,
+    logs.py, status.py, update.py, and the rest of the command groups. Verified nested
+    parser compatibility by inspection of extracted modules: daemon.py preserves daemon_command
+    subparsers, worktree.py preserves worktree_command subparsers, and archive.py
+    preserves the command_parser set_defaults help wiring. The extension point matches
+    the acceptance intent: adding a command is localized to a new parser file plus
+    one registry entry in COMMAND_PARSER_BUILDERS. Verification run in this acceptance
+    step: uv run pytest -q tests/test_config_and_run_cli.py -k ''test_cli_parser_has_no_duplicate_subcommands_or_arguments
+    or test_engine_command_parser_accepts_workspace_switch_args or test_engine_status_parser_accepts_optional_engine_name
+    or test_switch_command_parser_accepts_task_engine_reason_and_workspace'' => 4
+    passed; uv run pytest -q => 923 passed, 3 skipped. Acceptance criteria satisfied:
+    build_parser() under 100 lines, per-command parser modules present, registration
+    is centralized and minimal, and existing tests including duplicate parser detection
+    pass.'
+  files_changed: []
+  created_at: '2026-04-09T14:36:36+00:00'
