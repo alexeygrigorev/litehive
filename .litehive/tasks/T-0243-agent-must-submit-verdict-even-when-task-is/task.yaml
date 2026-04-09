@@ -7,14 +7,15 @@ engine: null
 model: null
 mode: implementation
 pipeline_mode: full
-status: queued
+status: in_progress
 flag_reason: null
-pipeline_status: backlog
+flag_count: 0
+pipeline_status: commit_to_git
 priority: high
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-09T08:01:46+00:00'
-updated_at: '2026-04-09T08:01:46+00:00'
+updated_at: '2026-04-09T11:28:38+00:00'
 goal: 'When an SWE agent discovers the task is already implemented (code exists, tests
   pass), it must submit a pass verdict with evidence, not exit silently. Currently
   agents exit with code 0 and no verdict, triggering the empty SWE guard rejection.
@@ -28,13 +29,64 @@ acceptance_criteria:
 - Empty SWE guard allows pass when agent submits verdict via CLI even with zero file
   changes (the verdict is the evidence)
 - PM reviewer can close a task as already-done when SWE reports it was pre-implemented
-- SWE can use litehive update to narrow scope or modify acceptance criteria if the task needs changes, then the task re-enters the pipeline with updated criteria
-- Agent can use litehive close --outcome wont_do/duplicate if the task is genuinely obsolete
+- SWE can use litehive update to narrow scope or modify acceptance criteria if the
+  task needs changes, then the task re-enters the pipeline with updated criteria
+- Agent can use litehive close --outcome wont_do/duplicate if the task is genuinely
+  obsolete
 - All existing tests pass
 constraints: []
 plan: []
 human_checkpoints: []
-subagents: []
+subagents:
+- id: SA-0001
+  role: planner
+  engine: codex
+  status: completed
+  path: subagents/SA-0001-planner
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0002
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0002-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0003
+  role: qa
+  engine: codex
+  status: completed
+  path: subagents/SA-0003-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0004
+  role: reviewer
+  engine: codex
+  status: completed
+  path: subagents/SA-0004-reviewer
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0005
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0005-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0006
+  role: qa
+  engine: codex
+  status: completed
+  path: subagents/SA-0006-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0007
+  role: recovery
+  engine: claude
+  status: completed
+  path: subagents/SA-0007-recovery
+  sandboxed: false
+  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0243 agent-must-submit-verdict-even-when-task-is'

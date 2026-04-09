@@ -1,0 +1,64 @@
+task_id: T-0243
+step: implementing
+verdict: pass
+summary: 'Implemented the already-done/verdict flow in Litehive. Verified prompt guidance
+  now tells SWE to: (1) never exit without litehive report, (2) if work is already
+  implemented, run verification and submit pass with evidence, (3) use litehive update
+  to narrow scope/adjust acceptance criteria when scope is wrong, and (4) use litehive
+  close --outcome wont_do|duplicate when obsolete. Verified reviewer prompt now explicitly
+  allows accepting pre-implemented work to normal done and reserves wont_do/duplicate/deferred
+  for genuinely obsolete/duplicate work. Refined the empty SWE guard so zero-change
+  implementing passes are still rejected by default, but a pass submitted via CLI
+  is allowed when the report explicitly states the work was already implemented and
+  verified; added StageReport.submitted_via_cli so the guard can distinguish a real
+  litehive report verdict from silent/no-op output. Added focused tests covering:
+  prompt guidance, reviewer guidance, CLI verdict source tracking, allowing verified
+  pre-implemented zero-change passes, and still rejecting vague zero-change CLI passes.
+  Tests run: uv run pytest tests/test_runner_workflow.py -q (118 passed), uv run pytest
+  tests/test_stage_result_submission.py -q (11 passed), uv run pytest tests/test_feedback_cap.py
+  -q (7 passed). Note: I did not run the full repository suite because the workspace
+  guidance for this task explicitly says not to run the full suite; verification was
+  kept targeted to the changed behavior.'
+feedback: 'Implemented the already-done/verdict flow in Litehive. Verified prompt
+  guidance now tells SWE to: (1) never exit without litehive report, (2) if work is
+  already implemented, run verification and submit pass with evidence, (3) use litehive
+  update to narrow scope/adjust acceptance criteria when scope is wrong, and (4) use
+  litehive close --outcome wont_do|duplicate when obsolete. Verified reviewer prompt
+  now explicitly allows accepting pre-implemented work to normal done and reserves
+  wont_do/duplicate/deferred for genuinely obsolete/duplicate work. Refined the empty
+  SWE guard so zero-change implementing passes are still rejected by default, but
+  a pass submitted via CLI is allowed when the report explicitly states the work was
+  already implemented and verified; added StageReport.submitted_via_cli so the guard
+  can distinguish a real litehive report verdict from silent/no-op output. Added focused
+  tests covering: prompt guidance, reviewer guidance, CLI verdict source tracking,
+  allowing verified pre-implemented zero-change passes, and still rejecting vague
+  zero-change CLI passes. Tests run: uv run pytest tests/test_runner_workflow.py -q
+  (118 passed), uv run pytest tests/test_stage_result_submission.py -q (11 passed),
+  uv run pytest tests/test_feedback_cap.py -q (7 passed). Note: I did not run the
+  full repository suite because the workspace guidance for this task explicitly says
+  not to run the full suite; verification was kept targeted to the changed behavior.'
+files_changed:
+- litehive/agents/_parsing.py
+- litehive/agents/_prompts.py
+- litehive/models/report_models.py
+- litehive/pipeline/core.py
+- tests/test_runner_workflow.py
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 240
+hook_results: []
+created_at: '2026-04-09T11:19:48+00:00'

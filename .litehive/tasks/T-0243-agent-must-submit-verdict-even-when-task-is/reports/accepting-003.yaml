@@ -1,0 +1,38 @@
+task_id: T-0243
+step: accepting
+verdict: pass
+summary: "Recovery diagnosis: The `accepting` stage was blocked by the `before_pm_acceptance`\
+  \ runner hook (`uv run ruff check --select E402,F401 litehive tests`) because the\
+  \ T-0243 SWE agent introduced an unused import `resolve_model` in `litehive/pipeline/_commit.py:19`.\
+  \ This is not a Litehive infrastructure bug \u2014 it is a lint error introduced\
+  \ by the task implementation that the hook correctly caught."
+feedback: "Recovery diagnosis: The `accepting` stage was blocked by the `before_pm_acceptance`\
+  \ runner hook (`uv run ruff check --select E402,F401 litehive tests`) because the\
+  \ T-0243 SWE agent introduced an unused import `resolve_model` in `litehive/pipeline/_commit.py:19`.\
+  \ This is not a Litehive infrastructure bug \u2014 it is a lint error introduced\
+  \ by the task implementation that the hook correctly caught.\n\nFix applied: Removed\
+  \ the unused `from ._models import resolve_model` import from `litehive/pipeline/_commit.py`\
+  \ on both main and the task worktree. The ruff check now passes cleanly on both.\
+  \ Verified with `uv run pytest tests/test_runner_workflow.py tests/test_stage_result_submission.py\
+  \ -q` (124 passed, 1 pre-existing unrelated failure).\n\nThe `accepting` stage can\
+  \ now be retried \u2014 the `before_pm_acceptance` hook will pass."
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: retry
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: unknown
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 134
+hook_results: []
+created_at: '2026-04-09T11:28:18+00:00'

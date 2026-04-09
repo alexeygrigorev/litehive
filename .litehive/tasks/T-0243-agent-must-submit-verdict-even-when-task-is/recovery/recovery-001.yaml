@@ -1,0 +1,142 @@
+task_id: T-0243
+stage: accepting
+trigger: stage_failure
+summary: "Recovery diagnosis: The `accepting` stage was blocked by the `before_pm_acceptance`\
+  \ runner hook (`uv run ruff check --select E402,F401 litehive tests`) because the\
+  \ T-0243 SWE agent introduced an unused import `resolve_model` in `litehive/pipeline/_commit.py:19`.\
+  \ This is not a Litehive infrastructure bug \u2014 it is a lint error introduced\
+  \ by the task implementation that the hook correctly caught."
+failure_classification: blocked
+runnable_state: runnable
+blocker: null
+evidence:
+- kind: task
+  label: task.yaml
+  path: .litehive/tasks/T-0243-agent-must-submit-verdict-even-when-task-is/task.yaml
+  exists: true
+  summary: status=in_progress pipeline_status=accepting priority=high
+  metadata: {}
+- kind: runtime
+  label: runtime.yaml
+  path: .litehive/tasks/T-0243-agent-must-submit-verdict-even-when-task-is/runtime.yaml
+  exists: true
+  summary: execution_status=running current_stage=accepting last_outcome=none
+  metadata: {}
+- kind: thread
+  label: thread.yaml
+  path: .litehive/tasks/T-0243-agent-must-submit-verdict-even-when-task-is/thread.yaml
+  exists: true
+  summary: discussion entries=8
+  metadata: {}
+- kind: events
+  label: events.jsonl
+  path: .litehive/tasks/T-0243-agent-must-submit-verdict-even-when-task-is/events.jsonl
+  exists: true
+  summary: task lifecycle and subagent event stream
+  metadata: {}
+- kind: stage_report
+  label: latest stage report
+  path: .litehive/tasks/T-0243-agent-must-submit-verdict-even-when-task-is/reports/testing-003.yaml
+  exists: true
+  summary: latest report for T-0243
+  metadata: {}
+- kind: subagent_artifact
+  label: latest subagent session
+  path: .litehive/tasks/T-0243-agent-must-submit-verdict-even-when-task-is/subagents/SA-0007-recovery/session.yaml
+  exists: true
+  summary: artifact from SA-0007-recovery
+  metadata: {}
+- kind: subagent_artifact
+  label: latest subagent report
+  path: .litehive/tasks/T-0243-agent-must-submit-verdict-even-when-task-is/subagents/SA-0007-recovery/report.yaml
+  exists: true
+  summary: artifact from SA-0007-recovery
+  metadata: {}
+- kind: subagent_artifact
+  label: latest subagent transcript
+  path: .litehive/tasks/T-0243-agent-must-submit-verdict-even-when-task-is/subagents/SA-0007-recovery/transcript.md
+  exists: true
+  summary: artifact from SA-0007-recovery
+  metadata: {}
+- kind: subagent_artifact
+  label: latest subagent stdout
+  path: .litehive/tasks/T-0243-agent-must-submit-verdict-even-when-task-is/subagents/SA-0007-recovery/stdout.txt.gz
+  exists: true
+  summary: artifact from SA-0007-recovery
+  metadata: {}
+- kind: subagent_artifact
+  label: latest subagent stderr
+  path: .litehive/tasks/T-0243-agent-must-submit-verdict-even-when-task-is/subagents/SA-0007-recovery/stderr.txt
+  exists: true
+  summary: artifact from SA-0007-recovery
+  metadata: {}
+- kind: subagent_artifact
+  label: latest subagent events timeline
+  path: .litehive/tasks/T-0243-agent-must-submit-verdict-even-when-task-is/subagents/SA-0007-recovery/timeline.yaml.gz
+  exists: true
+  summary: artifact from SA-0007-recovery
+  metadata: {}
+- kind: wrapper_log
+  label: latest run-all log
+  path: .litehive/logs/run-all/daemon.log
+  exists: true
+  summary: latest daemon/run-all wrapper log
+  metadata: {}
+- kind: engine_monitoring
+  label: engine-monitoring.yaml
+  path: .litehive/engine-monitoring.yaml
+  exists: true
+  summary: no engine record
+  metadata: {}
+- kind: git
+  label: main checkout git state
+  path: null
+  exists: true
+  summary: head=08ae4211c56248b887251b464d106b9bae091731 dirty=17
+  metadata:
+    dirty_paths:
+    - litehive/state.yaml
+    - litehive/tasks/T-0241-extend-crash-resume-to-all-engines-not-just-claude/journal.md
+    - litehive/tasks/T-0241-extend-crash-resume-to-all-engines-not-just-claude/task.yaml
+    - litehive/tasks/T-0243-agent-must-submit-verdict-even-when-task-is/journal.md
+    - litehive/tasks/T-0243-agent-must-submit-verdict-even-when-task-is/task.yaml
+    - itehive/pipeline/_commit.py
+    - .litehive/tasks/T-0243-agent-must-submit-verdict-even-when-task-is/artifacts/before_pm_acceptance-001.yaml
+    - .litehive/tasks/T-0243-agent-must-submit-verdict-even-when-task-is/artifacts/before_pm_acceptance-002.yaml
+    - .litehive/tasks/T-0243-agent-must-submit-verdict-even-when-task-is/reports/accepting-004.yaml
+    - .litehive/tasks/T-0243-agent-must-submit-verdict-even-when-task-is/reports/grooming-001.yaml
+    - .litehive/tasks/T-0243-agent-must-submit-verdict-even-when-task-is/reports/implementing-001.yaml
+    - .litehive/tasks/T-0243-agent-must-submit-verdict-even-when-task-is/reports/implementing-002.yaml
+    - .litehive/tasks/T-0243-agent-must-submit-verdict-even-when-task-is/reports/testing-002.yaml
+    - .litehive/tasks/T-0243-agent-must-submit-verdict-even-when-task-is/reports/testing-003.yaml
+    - .litehive/tasks/T-0243-agent-must-submit-verdict-even-when-task-is/thread.yaml
+    - .litehive/tasks/T-0262-simplify-agent-verdicts-to-pass-reject-only/journal.md
+    - .litehive/tasks/T-0262-simplify-agent-verdicts-to-pass-reject-only/task.yaml
+- kind: worktree
+  label: task worktree state
+  path: .litehive/worktrees/T-0243-agent-must-submit-verdict-even-when-task-is
+  exists: true
+  summary: dirty=7
+  metadata:
+    dirty_paths:
+    - itehive/agents/_parsing.py
+    - itehive/agents/_prompts.py
+    - itehive/engines/quota/codex_quota.py
+    - itehive/models/report_models.py
+    - itehive/pipeline/_commit.py
+    - itehive/pipeline/core.py
+    - ests/test_runner_workflow.py
+    stage: accepting
+actions:
+- action: resume_current_stage
+  applied: true
+  summary: Recovery agent repaired the task and returned `accepting` to a runnable
+    state.
+  metadata:
+    verdict: pass
+warnings:
+- 'runner hook failed: `before_pm_acceptance` `uv run ruff check --select E402,F401
+  litehive tests` (artifact: `artifacts/before_pm_acceptance-001.yaml`)'
+recovery_subagent_id: SA-0007
+recovery_subagent_path: subagents/SA-0007-recovery
+created_at: '2026-04-09T11:28:18+00:00'

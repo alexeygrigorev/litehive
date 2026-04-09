@@ -1,0 +1,49 @@
+id: T-0262
+slug: simplify-agent-verdicts-to-pass-reject-only
+title: Simplify agent verdicts to pass/reject only - remove fail and blocked
+depends_on: []
+task_type: null
+engine: null
+model: null
+mode: implementation
+pipeline_mode: full
+status: queued
+flag_reason: null
+flag_count: 0
+pipeline_status: backlog
+priority: high
+pm_complexity: null
+planned_effort: null
+created_at: '2026-04-09T10:56:14+00:00'
+updated_at: '2026-04-09T10:56:14+00:00'
+goal: 'Agents currently submit pass/fail/reject/blocked verdicts. This causes routing
+  confusion: fail triggers recovery instead of going back to SWE. Simplify to pass
+  or reject only. If the agent cannot complete the work, that is a reject with an
+  explanation. Blocked and fail are infrastructure concerns detected by the system,
+  not by agents.'
+acceptance_criteria:
+- Agent prompt only offers pass and reject as verdict options
+- litehive report CLI accepts pass and reject from agents
+- If an agent submits fail, it is treated as reject (backward compat)
+- blocked verdict only comes from system (hooks, missing deps, quota) never from agents
+- QA reject routes back to implementing, same as acceptance reject
+- All existing tests pass
+constraints: []
+plan: []
+human_checkpoints: []
+subagents: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0262 simplify-agent-verdicts-to-pass-reject-only'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+  merge_agent_attempts: 0
+  worktree_path: null
+retry_policy:
+  max_retries: null
+  stage_retry_limit: null
+created_from: null
+upstream_origin: null
+github_origin: null
