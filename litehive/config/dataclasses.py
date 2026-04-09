@@ -57,3 +57,6 @@ class RunnerHookConfig:
     command: str
     reject_on_failure: bool = False
     description: str | None = None
+
+
+RUNNER_HOOK_EXECUTION_MODES = {"run_all", "fail_fast"}

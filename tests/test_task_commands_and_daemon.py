@@ -3802,6 +3802,152 @@ def test_run_task_blocks_after_implementing_when_pre_acceptance_hook_fails(
     ).read_text(encoding="utf-8")
     assert "Runner hook `after_implementing` failed" in journal
 
+
+def _stub_runner_hook_pipeline(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, calls: list[str]
+) -> None:
+    def fake_subagent_run(self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None):  # type: ignore[no-untyped-def]
+        if role == "recovery":
+            return _failed_subagent_result(tmp_path, task.pipeline_status, task=task)
+        calls.append(task.pipeline_status)
+        return _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
+
+    monkeypatch.setattr("litehive.pipeline.SubagentManager.run", fake_subagent_run)
+
+
+def _stub_runner_hooks(
+    monkeypatch: pytest.MonkeyPatch,
+    hook_results: dict[str, subprocess.CompletedProcess[str]],
+    *,
+    fail_on_unexpected: bool = False,
+) -> None:
+    real_run = subprocess.run
+
+    def fake_hook(argv, cwd, capture_output, text, check, env=None):  # type: ignore[no-untyped-def]
+        if list(argv[:2]) != ["bash", "-lc"]:
+            return real_run(
+                argv,
+                cwd=cwd,
+                env=env,
+                capture_output=capture_output,
+                text=text,
+                check=check,
+            )
+        command = list(argv)[2]
+        if command in hook_results:
+            return hook_results[command]
+        if fail_on_unexpected:
+            pytest.fail(f"unexpected hook execution: {argv!r}")
+        return subprocess.CompletedProcess(argv, 0, stdout="", stderr="")
+
+    monkeypatch.setattr("litehive.pipeline._hooks.subprocess.run", fake_hook)
+
+
+def _load_implementing_report(tmp_path: Path, slug: str) -> dict[str, object]:
+    return yaml.safe_load(
+        (
+            tmp_path
+            / ".litehive"
+            / "tasks"
+            / f"T-0001-{slug}"
+            / "reports"
+            / "implementing-002.yaml"
+        ).read_text(encoding="utf-8")
+    )
+
+
+def _blocking_after_implementing_config(
+    *commands: str, execution_mode: str = "run_all"
+) -> LitehiveConfig:
+    return LitehiveConfig(
+        runner_hook_execution_mode=execution_mode,
+        runner_hooks={
+            "after_implementing": [
+                {"command": command, "reject_on_failure": True} for command in commands
+            ]
+        },
+    )
+
+
+def test_run_task_collects_all_blocking_runner_hook_failures_by_default(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ensure_workspace(
+        tmp_path,
+        _blocking_after_implementing_config("echo first && exit 3", "echo second && exit 5"),
+    )
+    create_task(tmp_path, title="Collect all hook failures", auto_commit=False)
+    calls: list[str] = []
+    _stub_runner_hook_pipeline(monkeypatch, tmp_path, calls)
+    _stub_runner_hooks(
+        monkeypatch,
+        {
+            "echo first && exit 3": subprocess.CompletedProcess(
+                ["bash", "-lc", "echo first && exit 3"], 3, stdout="first\n", stderr="bad 1\n"
+            ),
+            "echo second && exit 5": subprocess.CompletedProcess(
+                ["bash", "-lc", "echo second && exit 5"], 5, stdout="second\n", stderr="bad 2\n"
+            ),
+        },
+    )
+
+    summary = run_next_task(tmp_path)
+
+    assert summary.result is not None
+    assert summary.result.final_status == "queued"
+    assert calls == ["grooming", "implementing"]
+    implementing_report = _load_implementing_report(tmp_path, "collect-all-hook-failures")
+    assert implementing_report["verdict"] == "reject"
+    assert len(implementing_report["hook_results"]) == 2
+    assert [result["command"] for result in implementing_report["hook_results"]] == [
+        "echo first && exit 3",
+        "echo second && exit 5",
+    ]
+    assert "rejected by 2 runner hooks" in implementing_report["summary"]
+    assert "Runner hooks failed: 2" in implementing_report["feedback"]
+    assert "Command: echo first && exit 3" in implementing_report["feedback"]
+    assert "stderr:\nbad 1" in implementing_report["feedback"]
+    assert "Command: echo second && exit 5" in implementing_report["feedback"]
+    assert "stderr:\nbad 2" in implementing_report["feedback"]
+    assert implementing_report["failure_diagnostics"]["failed_hook_commands"] == [
+        "echo first && exit 3",
+        "echo second && exit 5",
+    ]
+
+
+def test_run_task_stops_on_first_blocking_runner_hook_failure_in_fail_fast_mode(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ensure_workspace(
+        tmp_path,
+        _blocking_after_implementing_config(
+            "echo first && exit 3", "echo second && exit 5", execution_mode="fail_fast"
+        ),
+    )
+    create_task(tmp_path, title="Fail fast hook failures", auto_commit=False)
+    calls: list[str] = []
+    _stub_runner_hook_pipeline(monkeypatch, tmp_path, calls)
+    _stub_runner_hooks(
+        monkeypatch,
+        {
+            "echo first && exit 3": subprocess.CompletedProcess(
+                ["bash", "-lc", "echo first && exit 3"], 3, stdout="first\n", stderr="bad 1\n"
+            )
+        },
+        fail_on_unexpected=True,
+    )
+
+    summary = run_next_task(tmp_path)
+
+    assert summary.result is not None
+    assert summary.result.final_status == "queued"
+    assert calls == ["grooming", "implementing"]
+    implementing_report = _load_implementing_report(tmp_path, "fail-fast-hook-failures")
+    assert implementing_report["verdict"] == "reject"
+    assert len(implementing_report["hook_results"]) == 1
+    assert implementing_report["hook_results"][0]["command"] == "echo first && exit 3"
+    assert "rejected by runner hook `after_implementing`" in implementing_report["summary"]
+
 def test_run_task_records_non_blocking_runner_hook_failure_and_continues(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

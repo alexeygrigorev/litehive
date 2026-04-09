@@ -40,7 +40,7 @@ def format_subagent_resource_limits(config: LitehiveConfig) -> str:
 
 def format_runner_hooks(config: LitehiveConfig) -> str:
     if not config.runner_hooks:
-        return "none"
+        return f"mode:{config.runner_hook_execution_mode}; none"
     parts: list[str] = []
     for point in sorted(config.runner_hooks):
         hooks = ", ".join(
@@ -51,4 +51,4 @@ def format_runner_hooks(config: LitehiveConfig) -> str:
             for hook in config.runner_hooks[point]
         )
         parts.append(f"{point}=[{hooks}]")
-    return "; ".join(parts)
+    return "; ".join([f"mode:{config.runner_hook_execution_mode}", *parts])

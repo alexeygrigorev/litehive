@@ -3,6 +3,7 @@
 from dataclasses import dataclass, field
 
 from litehive.config.dataclasses import (
+    RUNNER_HOOK_EXECUTION_MODES,
     ExecutionRetryPolicy,
     ExternalEngineSandboxConfig,
     RunnerHookConfig,
@@ -61,6 +62,7 @@ class LitehiveConfig:
     pool_budget_threshold: int | None = None
     pool_stop_on_dirty_git: bool = False
     pool_selection_policy: str = "dependency_aware"
+    runner_hook_execution_mode: str = "run_all"
     runner_hooks: dict[str, list[RunnerHookConfig]] = field(default_factory=dict)
     subagent_inactivity_timeout_seconds: float = 360.0
     inactivity_timeout_seconds: float | None = None
@@ -103,6 +105,12 @@ class LitehiveConfig:
         self.execution_retry_policies = _normalize_execution_retry_policies(
             self.execution_retry_policies
         )
+        self.runner_hook_execution_mode = str(self.runner_hook_execution_mode).strip().lower()
+        if self.runner_hook_execution_mode not in RUNNER_HOOK_EXECUTION_MODES:
+            allowed = ", ".join(sorted(RUNNER_HOOK_EXECUTION_MODES))
+            raise ValueError(
+                f"runner_hook_execution_mode must be one of: {allowed}"
+            )
         self.runner_hooks = _normalize_runner_hooks(self.runner_hooks)
         self.subagent_inactivity_timeout_seconds = float(self.subagent_inactivity_timeout_seconds)
         if self.subagent_inactivity_timeout_seconds <= 0:
