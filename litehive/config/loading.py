@@ -60,6 +60,9 @@ def load_config(root: Path) -> LitehiveConfig:
             "      - command: '<your command>'\n"
             "        reject_on_failure: true"
         )
+    import dataclasses
+    known_fields = {f.name for f in dataclasses.fields(LitehiveConfig)}
+    data = {k: v for k, v in data.items() if k in known_fields}
     return LitehiveConfig(**data)
 
 
