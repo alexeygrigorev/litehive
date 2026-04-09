@@ -1,0 +1,58 @@
+task_id: T-0249
+step: implementing
+verdict: pass
+summary: 'Implemented a new read-only ''litehive logs'' CLI command with parser/dispatcher
+  wiring. Verified behaviors: default mode tails the newest daemon run log from .litehive/logs/run-all/;
+  --daemon lists the 5 newest daemon sessions with parsed timestamps and derived stop
+  outcomes; TASK_ID prints journal.md; TASK_ID --agent shows the latest subagent transcript/stdout
+  tail while preferring live stdout.log for active runs and falling back to final
+  .txt/.gz snapshots; TASK_ID --agent --all lists all subagent runs newest-first with
+  role, engine, status, exit_code, and computed duration; --follow streams active
+  subagent stdout until the run ends. Added targeted regression coverage in tests/test_logs_command.py,
+  plus updated README.md and .litehive/context.md for the new operator-facing command.
+  Tests run: uv run pytest tests/test_logs_command.py -q (8 passed), uv run pytest
+  tests/test_debug_command.py -q (17 passed), uv run pytest tests/test_observability_and_status.py
+  -q -k ''run_all_logs or session_view'' (4 passed), uv run pytest tests/test_task_commands_and_daemon.py
+  -q -k ''daemon_foreground_restarts_litehive_until_queue_is_empty or daemon_foreground_continues_after_task_requeued
+  or prunes_old_run_all_log_directories'' (3 passed).'
+feedback: 'Implemented a new read-only ''litehive logs'' CLI command with parser/dispatcher
+  wiring. Verified behaviors: default mode tails the newest daemon run log from .litehive/logs/run-all/;
+  --daemon lists the 5 newest daemon sessions with parsed timestamps and derived stop
+  outcomes; TASK_ID prints journal.md; TASK_ID --agent shows the latest subagent transcript/stdout
+  tail while preferring live stdout.log for active runs and falling back to final
+  .txt/.gz snapshots; TASK_ID --agent --all lists all subagent runs newest-first with
+  role, engine, status, exit_code, and computed duration; --follow streams active
+  subagent stdout until the run ends. Added targeted regression coverage in tests/test_logs_command.py,
+  plus updated README.md and .litehive/context.md for the new operator-facing command.
+  Tests run: uv run pytest tests/test_logs_command.py -q (8 passed), uv run pytest
+  tests/test_debug_command.py -q (17 passed), uv run pytest tests/test_observability_and_status.py
+  -q -k ''run_all_logs or session_view'' (4 passed), uv run pytest tests/test_task_commands_and_daemon.py
+  -q -k ''daemon_foreground_restarts_litehive_until_queue_is_empty or daemon_foreground_continues_after_task_requeued
+  or prunes_old_run_all_log_directories'' (3 passed).'
+submitted_via_cli: true
+files_changed:
+- README.md
+- litehive/cli/__init__.py
+- litehive/cli/logs.py
+- litehive/cli/parser.py
+- tests/test_logs_command.py
+- tests/workspace_helpers.py
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 450
+hook_results: []
+created_at: '2026-04-09T13:13:18+00:00'

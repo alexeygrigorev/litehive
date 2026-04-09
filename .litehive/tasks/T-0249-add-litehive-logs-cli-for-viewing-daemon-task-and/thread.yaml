@@ -1,0 +1,185 @@
+- role: planner
+  step: grooming
+  verdict: pass
+  message: 'Grooming pass complete. Task is ready for implementation with moderate
+    complexity and planned effort m.\n\nWhat I verified:\n- Existing daemon log primitives
+    already exist in litehive/daemon/_logs.py and litehive/daemon/_execution.py, including
+    newest run-all directory lookup and current daemon status output.\n- Existing
+    task/subagent artifact resolution already exists in litehive/tasks/paths.py, litehive/tasks/reports.py,
+    and litehive/web/snapshot.py, including fallback handling for latest subagent,
+    compressed artifacts, and active stdout/transcript targets.\n- Existing CLI style
+    to mirror is the read-only debug command in litehive/cli/debug.py plus parser/dispatcher
+    wiring in litehive/cli/parser.py and litehive/cli/__init__.py.\n\nProduct decisions
+    for implementation:\n-  with no task id should default to the tail of the newest
+    daemon run log under .\n-  should summarize the five most recent run-all session
+    directories newest-first and derive the outcome/stop reason from existing post-status
+    or run logs rather than introducing new persisted metadata.\n-  should prefer
+    live artifacts for an active subagent (, live transcript) and fall back to final
+    snapshots (, , , ) for completed runs.\n-  should stream only the currently active
+    subagent stdout and exit cleanly when no active subagent exists or when the active
+    stream ends.\n\nTests run: none in grooming; this stage was repo/task inspection
+    only.\n\nAttempted task shaping persistence via , but Litehive rejected concurrent
+    mutation because  for T-0249. Carry the update below into implementation if the
+    task record is still unchanged.\n\nTASK_UPDATE:\nlitehive logslitehive logslitehive
+    logs --daemonlitehive logs T-XXXXjournal.mdlitehive logs T-XXXX --agentlitehive
+    logs T-XXXX --agent --all-litehive logs --followlogs--daemon--agent--all--follow.log.txt/.gz--follow--agent
+    --all'
+  files_changed: []
+  created_at: '2026-04-09T13:05:10+00:00'
+- role: planner
+  step: grooming
+  verdict: pass
+  message: "Grooming pass complete. Task is ready for implementation with moderate\
+    \ complexity and planned effort m.\n\nWhat I verified:\n- Existing daemon log\
+    \ primitives already exist in litehive/daemon/_logs.py and litehive/daemon/_execution.py,\
+    \ including newest run-all directory lookup and current daemon status output.\n\
+    - Existing task/subagent artifact resolution already exists in litehive/tasks/paths.py,\
+    \ litehive/tasks/reports.py, and litehive/web/snapshot.py, including fallback\
+    \ handling for latest subagent, compressed artifacts, and active stdout/transcript\
+    \ targets.\n- Existing CLI style to mirror is the read-only debug command in litehive/cli/debug.py\
+    \ plus parser/dispatcher wiring in litehive/cli/parser.py and litehive/cli/__init__.py.\n\
+    \nProduct decisions for implementation:\n- `litehive logs` with no task id should\
+    \ default to the tail of the newest daemon run log under `.litehive/logs/run-all/`.\n\
+    - `litehive logs --daemon` should summarize the five most recent run-all session\
+    \ directories newest-first and derive the outcome/stop reason from existing post-status\
+    \ or run logs rather than introducing new persisted metadata.\n- `litehive logs\
+    \ T-XXXX --agent` should prefer live artifacts for an active subagent (`stdout.log`,\
+    \ live transcript) and fall back to final snapshots (`stdout.txt`, `stdout.txt.gz`,\
+    \ `transcript.md`, `transcript.md.gz`) for completed runs.\n- `litehive logs --follow`\
+    \ should stream only the currently active subagent stdout and exit cleanly when\
+    \ no active subagent exists or when the active stream ends.\n\nTests run: none\
+    \ in grooming; this stage was repo/task inspection only.\n\nAttempted task shaping\
+    \ persistence via `uv run litehive update`, but Litehive rejected concurrent mutation\
+    \ because `runtime.execution_status=running` for T-0249. Carry the update below\
+    \ into implementation if the task record is still unchanged.\n\nTASK_UPDATE:\n\
+    ```yaml\ngoal: Add a read-only `litehive logs` command that gives quick access\
+    \ to daemon run logs, task journals, and subagent stdout/transcript without manual\
+    \ directory navigation.\nacceptance_criteria:\n  - \"`litehive logs` without a\
+    \ task id prints the tail of the newest daemon run log from .litehive/logs/run-all/,\
+    \ or a clear no-logs message when none exist.\"\n  - \"`litehive logs --daemon`\
+    \ lists the five most recent daemon run sessions newest-first, including the session\
+    \ timestamp/name and the final outcome or stop reason visible from that session's\
+    \ logs.\"\n  - \"`litehive logs T-XXXX` prints the task journal from `journal.md`,\
+    \ or a clear message when the task or journal is missing.\"\n  - \"`litehive logs\
+    \ T-XXXX --agent` shows the latest subagent transcript and stdout tail for that\
+    \ task, preferring live artifacts for an active subagent and falling back to final\
+    \ snapshots, including compressed artifacts, when the run has completed.\"\n \
+    \ - \"`litehive logs T-XXXX --agent --all` lists all recorded subagent runs newest-first\
+    \ with id, role, engine, status, exit code, and duration, using `-` when a value\
+    \ is unavailable.\"\n  - \"`litehive logs --follow` streams the active subagent\
+    \ stdout in real time and exits cleanly when no active subagent exists or when\
+    \ the active stream ends.\"\n  - \"All relevant tests for the new command pass,\
+    \ and the existing regression suite still passes.\"\nplan:\n  - \"Add a top-level\
+    \ `logs` subcommand in the CLI parser and dispatcher with the required modes:\
+    \ default daemon tail, `--daemon`, task journal, `--agent`, `--all`, and `--follow`.\"\
+    \n  - \"Implement the command as a read-only CLI module that reuses existing workspace/task\
+    \ artifact resolution helpers for run-all directories, task directories, and subagent\
+    \ artifact fallback (live `.log` first, then final `.txt/.gz` snapshots).\"\n\
+    \  - \"Define daemon session summary formatting by reading the most recent run-all\
+    \ session directories and deriving each session outcome from existing post-status\
+    \ or run logs instead of introducing new persisted metadata.\"\n  - \"Define agent\
+    \ log selection rules for both completed and active runs so the command consistently\
+    \ resolves the latest subagent, prints transcript/stdout tails, and supports `--follow`\
+    \ against the active stdout artifact.\"\n  - \"Add targeted CLI tests that cover:\
+    \ no-log fallbacks, daemon listing, task journal view, latest agent view, `--agent\
+    \ --all`, compressed artifacts, active-artifact preference, and follow-mode behavior.\"\
+    \n  - \"Run the targeted command tests plus the relevant existing CLI/daemon/observability\
+    \ regression suites, then run the full test suite if the repo's normal task flow\
+    \ expects it for this command family.\"\npm_complexity: moderate\nplanned_effort:\
+    \ m\n```"
+  files_changed: []
+  created_at: '2026-04-09T13:05:35+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Implemented a new read-only ''litehive logs'' CLI command with parser/dispatcher
+    wiring. Verified behaviors: default mode tails the newest daemon run log from
+    .litehive/logs/run-all/; --daemon lists the 5 newest daemon sessions with parsed
+    timestamps and derived stop outcomes; TASK_ID prints journal.md; TASK_ID --agent
+    shows the latest subagent transcript/stdout tail while preferring live stdout.log
+    for active runs and falling back to final .txt/.gz snapshots; TASK_ID --agent
+    --all lists all subagent runs newest-first with role, engine, status, exit_code,
+    and computed duration; --follow streams active subagent stdout until the run ends.
+    Added targeted regression coverage in tests/test_logs_command.py, plus updated
+    README.md and .litehive/context.md for the new operator-facing command. Tests
+    run: uv run pytest tests/test_logs_command.py -q (8 passed), uv run pytest tests/test_debug_command.py
+    -q (17 passed), uv run pytest tests/test_observability_and_status.py -q -k ''run_all_logs
+    or session_view'' (4 passed), uv run pytest tests/test_task_commands_and_daemon.py
+    -q -k ''daemon_foreground_restarts_litehive_until_queue_is_empty or daemon_foreground_continues_after_task_requeued
+    or prunes_old_run_all_log_directories'' (3 passed).'
+  files_changed: []
+  created_at: '2026-04-09T13:13:03+00:00'
+- role: qa
+  step: testing
+  verdict: pass
+  message: 'Validated the new read-only logs CLI against the task acceptance criteria.
+    Verified from code and focused execution that:  defaults to the newest daemon
+    run log tail;  summarizes the 5 newest run-all sessions with parsed timestamps
+    and derived outcomes;  prints ;  resolves the latest subagent, prefers live  for
+    active runs, and falls back to final  and  artifacts;  lists subagent runs newest-first
+    with role, engine, status, exit code, and computed duration; and  streams active
+    stdout until the active subagent ends. Test evidence: ........                                                                 [100%]
+
+    8 passed in 0.49s -> 8 passed in 0.67s; .................                                                        [100%]
+
+    17 passed in 0.84s -> 17 passed in 1.15s; ....                                                                     [100%]
+
+    4 passed, 69 deselected in 0.42s -> 4 passed; ...                                                                      [100%]
+
+    3 passed, 104 deselected in 1.81s -> 3 passed. Also ran end-to-end CLI spot checks
+    through T-0248: done: default daemon log tail printed the expected newest run
+    log, and task journal lookup printed the expected  contents. No acceptance-criteria
+    failures found. Note: I did not run the full repository test suite in this QA
+    pass; validation stayed within the stage guidance to run focused, fast checks
+    only.'
+  files_changed: []
+  created_at: '2026-04-09T13:15:28+00:00'
+- role: qa
+  step: testing
+  verdict: pass
+  message: 'Validated the new read-only logs CLI against the task acceptance criteria.
+    Verified from code and focused execution that: litehive logs defaults to the newest
+    daemon run log tail; litehive logs --daemon summarizes the 5 newest run-all sessions
+    with parsed timestamps and derived outcomes; litehive logs T-XXXX prints journal.md;
+    litehive logs T-XXXX --agent resolves the latest subagent, prefers live stdout.log
+    for active runs, and falls back to final stdout.txt(.gz) and transcript.md(.gz)
+    artifacts; litehive logs T-XXXX --agent --all lists subagent runs newest-first
+    with role, engine, status, exit code, and computed duration; and litehive logs
+    --follow streams active stdout until the active subagent ends. Test evidence:
+    uv run pytest tests/test_logs_command.py -q -> 8 passed in 0.67s; uv run pytest
+    tests/test_debug_command.py -q -> 17 passed in 1.15s; uv run pytest tests/test_observability_and_status.py
+    -q -k run_all_logs or session_view -> 4 passed; uv run pytest tests/test_task_commands_and_daemon.py
+    -q -k daemon_foreground_restarts_litehive_until_queue_is_empty or daemon_foreground_continues_after_task_requeued
+    or prunes_old_run_all_log_directories -> 3 passed. Also ran end-to-end CLI spot
+    checks through uv run litehive: default daemon log tail printed the expected newest
+    run log, and task journal lookup printed the expected journal.md contents. No
+    acceptance-criteria failures found. Note: I did not run the full repository test
+    suite in this QA pass; validation stayed within the stage guidance to run focused,
+    fast checks only.'
+  files_changed: []
+  created_at: '2026-04-09T13:15:35+00:00'
+- role: reviewer
+  step: accepting
+  verdict: pass
+  message: 'Accepted. I verified the new read-only logs CLI against the task acceptance
+    criteria by reviewing the implementation in litehive/cli/logs.py plus parser and
+    dispatcher wiring, and by confirming the behavior-focused coverage in tests/test_logs_command.py.
+    Evidence from code and tests shows: litehive logs without a task id tails the
+    newest daemon run log from .litehive/logs/run-all/; litehive logs --daemon lists
+    the five newest run-all session directories newest-first with parsed timestamps
+    and derived outcomes from existing post-status or run logs; litehive logs T-XXXX
+    prints journal.md; litehive logs T-XXXX --agent resolves the latest subagent,
+    prefers active stdout.log, and falls back to transcript and stdout snapshots including
+    .gz artifacts; litehive logs T-XXXX --agent --all lists all subagent runs newest-first
+    with role, engine, status, exit code, and computed duration; and litehive logs
+    --follow streams the active subagent stdout until the active run ends. Verification
+    run in acceptance: uv run pytest -q completed successfully with 917 passed, 3
+    skipped in 117.14s. Prior focused regressions were also green: uv run pytest tests/test_logs_command.py
+    -q with 8 passed; uv run pytest tests/test_debug_command.py -q with 17 passed;
+    uv run pytest tests/test_observability_and_status.py -q -k run_all_logs or session_view
+    with 4 passed; and uv run pytest tests/test_task_commands_and_daemon.py -q -k
+    daemon_foreground_restarts_litehive_until_queue_is_empty or daemon_foreground_continues_after_task_requeued
+    or prunes_old_run_all_log_directories with 3 passed. Acceptance criteria are met
+    and the repo-wide test suite passes.'
+  files_changed: []
+  created_at: '2026-04-09T13:18:43+00:00'
