@@ -1,0 +1,54 @@
+task_id: T-0260
+step: testing
+verdict: pass
+summary: 'Validated the T-0260 hook-awareness and hook-routing changes, including
+  the reviewer-found commit-stage regression fix. Ran: uv run pytest -q tests/test_retry_commit_and_recovery.py::test_commit_to_git_requeues_implementing_when_after_merge_hook_fails
+  (1 passed in 0.41s) and uv run pytest -q tests/test_runner_workflow.py tests/test_task_commands_and_daemon.py
+  tests/test_config_and_run_cli.py (286 passed in 31.24s). Evidence confirmed: SWE
+  implementing prompts now include configured upcoming runner hooks with command plus
+  optional description text; RunnerHook config preserves the new optional description
+  field; StageReport now distinguishes source=agent|hook; blocking implementing/accepting
+  hook failures persist structured hook-origin reports with failed command, exit code,
+  stdout/stderr feedback, and hook artifacts/journal entries; before_pm_acceptance
+  failures route back to implementing with task status queued instead of flagged;
+  and commit_to_git after_merge failures retain their prior blocked+retry semantics
+  while preserving merged-main state and requeueing implementing without reverting
+  the merge. I did not rerun the full suite in QA because stage guidance requires
+  focused fast validation, but the touched regression slice and the exact reviewer-reported
+  failure are both green.'
+feedback: 'Validated the T-0260 hook-awareness and hook-routing changes, including
+  the reviewer-found commit-stage regression fix. Ran: uv run pytest -q tests/test_retry_commit_and_recovery.py::test_commit_to_git_requeues_implementing_when_after_merge_hook_fails
+  (1 passed in 0.41s) and uv run pytest -q tests/test_runner_workflow.py tests/test_task_commands_and_daemon.py
+  tests/test_config_and_run_cli.py (286 passed in 31.24s). Evidence confirmed: SWE
+  implementing prompts now include configured upcoming runner hooks with command plus
+  optional description text; RunnerHook config preserves the new optional description
+  field; StageReport now distinguishes source=agent|hook; blocking implementing/accepting
+  hook failures persist structured hook-origin reports with failed command, exit code,
+  stdout/stderr feedback, and hook artifacts/journal entries; before_pm_acceptance
+  failures route back to implementing with task status queued instead of flagged;
+  and commit_to_git after_merge failures retain their prior blocked+retry semantics
+  while preserving merged-main state and requeueing implementing without reverting
+  the merge. I did not rerun the full suite in QA because stage guidance requires
+  focused fast validation, but the touched regression slice and the exact reviewer-reported
+  failure are both green.'
+submitted_via_cli: true
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 84
+hook_results: []
+created_at: '2026-04-09T13:37:36+00:00'

@@ -1,0 +1,67 @@
+task_id: T-0260
+step: implementing
+verdict: pass
+summary: 'Implemented a narrow follow-up fix for the reviewer-found regression in
+  commit-stage hook handling. Preserved the new hook-origin report shape and diagnostics,
+  but restored after_merge commit-stage semantics so post-merge hook failures return
+  verdict=blocked with retry_decision=retry, keeping the merged main state and requeueing
+  the task at implementing without reverting the merge. This leaves the intended T-0260
+  behavior unchanged for implementing/accepting hooks: SWE prompts include configured
+  runner hooks with command+description, RunnerHook supports optional description,
+  StageReport carries source=agent|hook, and blocking implementing/accepting hook
+  failures persist structured hook reports with command, exit code, stdout/stderr
+  feedback and route back to SWE instead of flagging. Verified with uv run pytest
+  -q tests/test_retry_commit_and_recovery.py::test_commit_to_git_requeues_implementing_when_after_merge_hook_fails
+  and uv run pytest -q tests/test_runner_workflow.py tests/test_task_commands_and_daemon.py
+  tests/test_config_and_run_cli.py; 287 tests passed total across those runs.'
+feedback: 'Stage `implementing` switched from `claude` to `codex` after claude usage
+  limit reached (7d window at 96%, resets 2026-04-10T09:00:01.067749+00:00).
+
+
+  Implemented a narrow follow-up fix for the reviewer-found regression in commit-stage
+  hook handling. Preserved the new hook-origin report shape and diagnostics, but restored
+  after_merge commit-stage semantics so post-merge hook failures return verdict=blocked
+  with retry_decision=retry, keeping the merged main state and requeueing the task
+  at implementing without reverting the merge. This leaves the intended T-0260 behavior
+  unchanged for implementing/accepting hooks: SWE prompts include configured runner
+  hooks with command+description, RunnerHook supports optional description, StageReport
+  carries source=agent|hook, and blocking implementing/accepting hook failures persist
+  structured hook reports with command, exit code, stdout/stderr feedback and route
+  back to SWE instead of flagging. Verified with uv run pytest -q tests/test_retry_commit_and_recovery.py::test_commit_to_git_requeues_implementing_when_after_merge_hook_fails
+  and uv run pytest -q tests/test_runner_workflow.py tests/test_task_commands_and_daemon.py
+  tests/test_config_and_run_cli.py; 287 tests passed total across those runs.'
+submitted_via_cli: true
+files_changed:
+- README.md
+- litehive/agents/_prompts.py
+- litehive/config/dataclasses.py
+- litehive/config/formatting.py
+- litehive/config/normalization.py
+- litehive/models/report_models.py
+- litehive/pipeline/_commit.py
+- litehive/pipeline/_hooks.py
+- litehive/pipeline/core.py
+- tests/test_config_and_run_cli.py
+- tests/test_runner_workflow.py
+- tests/test_task_commands_and_daemon.py
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings:
+- Stage `implementing` switched from `claude` to `codex` after claude usage limit
+  reached (7d window at 96%, resets 2026-04-10T09:00:01.067749+00:00).
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 110
+hook_results: []
+created_at: '2026-04-09T13:36:12+00:00'

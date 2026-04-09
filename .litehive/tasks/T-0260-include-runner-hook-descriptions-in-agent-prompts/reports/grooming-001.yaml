@@ -1,0 +1,53 @@
+task_id: T-0260
+step: grooming
+verdict: pass
+summary: Grooming pass based on repo inspection; no code changes made and no tests
+  run in this stage.
+feedback: "Stage `grooming` switched from `claude` to `codex` after claude usage limit\
+  \ reached (7d window at 96%, resets 2026-04-10T09:00:00.678465+00:00).\n\nGrooming\
+  \ pass based on repo inspection; no code changes made and no tests run in this stage.\n\
+  \nVerified current behavior in the existing code and tests:\n- `litehive/agents/_prompts.py`\
+  \ builds the stage prompt but does not include any runner-hook summary for SWE,\
+  \ so agents are not told which post-stage checks will run.\n- `litehive/config/dataclasses.py`\
+  \ defines `RunnerHookConfig` with `command` and `blocking` only; there is no human-readable\
+  \ description field yet.\n- `litehive/pipeline/_hooks.py` currently turns blocking\
+  \ hook failures into `StageReport(verdict=\"blocked\")` and formats feedback as\
+  \ generic runner-hook status lines, not command stdout/stderr.\n- `litehive/pipeline/states.py`\
+  \ already has the desired accept/testing reject routing back to `implementing`;\
+  \ once hook failures become structured `reject` reports instead of `blocked`, the\
+  \ deterministic router will send them back to SWE instead of flagging.\n- Existing\
+  \ regression coverage in `tests/test_task_commands_and_daemon.py` currently encodes\
+  \ the bad behavior: failing `before_pm_acceptance` ends `final_status=\"flagged\"\
+  ` with an `accepting` report whose verdict is `blocked`.\n\nImplementation plan\
+  \ for SWE:\n1. Extend runner-hook config to carry an optional `description` field\
+  \ and normalize/persist it anywhere runner hooks are loaded or formatted.\n2. Add\
+  \ a prompt helper in `litehive/agents/_prompts.py` that renders stage-relevant upcoming\
+  \ hooks for the SWE prompt using config data, with human wording like: `After implementing,\
+  \ these checks will run: <command> (<description>)`. Keep this generic across hook\
+  \ commands and project profiles.\n3. Extend `StageReport` with a `source` field\
+  \ that distinguishes `agent` versus `hook`, defaulting existing agent-produced reports\
+  \ to `agent`.\n4. Change blocking runner-hook failures in\n\n\u2026 [truncated \u2014\
+  \ full transcript in subagent artifacts]"
+submitted_via_cli: true
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings:
+- Stage `grooming` switched from `claude` to `codex` after claude usage limit reached
+  (7d window at 96%, resets 2026-04-10T09:00:00.678465+00:00).
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 148
+hook_results: []
+created_at: '2026-04-09T13:22:37+00:00'

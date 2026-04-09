@@ -1,0 +1,161 @@
+- role: planner
+  step: grooming
+  verdict: pass
+  message: "Grooming pass based on repo inspection; no code changes made and no tests\
+    \ run in this stage.\n\nVerified current behavior in the existing code and tests:\n\
+    - `litehive/agents/_prompts.py` builds the stage prompt but does not include any\
+    \ runner-hook summary for SWE, so agents are not told which post-stage checks\
+    \ will run.\n- `litehive/config/dataclasses.py` defines `RunnerHookConfig` with\
+    \ `command` and `blocking` only; there is no human-readable description field\
+    \ yet.\n- `litehive/pipeline/_hooks.py` currently turns blocking hook failures\
+    \ into `StageReport(verdict=\"blocked\")` and formats feedback as generic runner-hook\
+    \ status lines, not command stdout/stderr.\n- `litehive/pipeline/states.py` already\
+    \ has the desired accept/testing reject routing back to `implementing`; once hook\
+    \ failures become structured `reject` reports instead of `blocked`, the deterministic\
+    \ router will send them back to SWE instead of flagging.\n- Existing regression\
+    \ coverage in `tests/test_task_commands_and_daemon.py` currently encodes the bad\
+    \ behavior: failing `before_pm_acceptance` ends `final_status=\"flagged\"` with\
+    \ an `accepting` report whose verdict is `blocked`.\n\nImplementation plan for\
+    \ SWE:\n1. Extend runner-hook config to carry an optional `description` field\
+    \ and normalize/persist it anywhere runner hooks are loaded or formatted.\n2.\
+    \ Add a prompt helper in `litehive/agents/_prompts.py` that renders stage-relevant\
+    \ upcoming hooks for the SWE prompt using config data, with human wording like:\
+    \ `After implementing, these checks will run: <command> (<description>)`. Keep\
+    \ this generic across hook commands and project profiles.\n3. Extend `StageReport`\
+    \ with a `source` field that distinguishes `agent` versus `hook`, defaulting existing\
+    \ agent-produced reports to `agent`.\n4. Change blocking runner-hook failures\
+    \ in `litehive/pipeline/_hooks.py` to emit structured hook-origin stage reports\
+    \ with `verdict=\"reject\"` for implementation/acceptance quality gates, include\
+    \ failed command, exit code, and stdout/stderr-derived feedback, and preserve\
+    \ stage-report persistence under `reports/` plus journal evidence.\n5. Keep commit/integration-specific\
+    \ hook handling aligned with existing commit-stage semantics unless tests show\
+    \ a broader routing change is needed; the required behavioral change for this\
+    \ task is that implementation/acceptance hook quality failures requeue to SWE\
+    \ rather than flagging.\n6. Update targeted tests for prompt text, hook config\
+    \ description handling, hook-origin stage report shape, journal/report persistence,\
+    \ and the acceptance-hook routing regression. Finish by running the existing relevant\
+    \ pytest coverage, then `uv run pytest -q` if the targeted set is green and runtime\
+    \ is reasonable.\n\nAcceptance criteria status after grooming:\n- Criteria about\
+    \ scope and expected behavior are clear and actionable.\n- Nothing is implemented\
+    \ yet; all behavioral criteria remain for SWE.\n\nTASK_UPDATE:\n  pm_complexity:\
+    \ moderate\n  planned_effort: m\n  plan:\n    - Add optional runner hook descriptions\
+    \ to config and human-readable formatting.\n    - Surface stage-relevant runner\
+    \ hooks in the SWE prompt with command plus description text.\n    - Add `source`\
+    \ to `StageReport` and mark hook-produced rejections as `source: hook`.\n    -\
+    \ Route blocking implementation and pre-acceptance hook failures through normal\
+    \ reject-to-implementing flow instead of flagging.\n    - Persist hook failure\
+    \ details in stage reports and journal entries, then update regression tests."
+  files_changed: []
+  created_at: '2026-04-09T13:22:20+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Implemented runner-hook descriptions in SWE prompts and converted blocking
+    hook failures into structured hook-origin rejects. Added optional runner_hook.description
+    support, StageReport.source=agent|hook, hook failure feedback/diagnostics with
+    command+exit_code+stdout/stderr, and journal entries for hook failure routing.
+    Verified with: uv run pytest -q tests/test_runner_workflow.py tests/test_task_commands_and_daemon.py
+    tests/test_config_and_run_cli.py (286 passed in 34.32s). Evidence: SWE prompt
+    now lists upcoming configured hooks with command plus description; before_pm_acceptance
+    and after_swe_implementation blocking failures persist reject reports with source=hook
+    and requeue back to implementing instead of flagging; README config example documents
+    description field.'
+  files_changed: []
+  created_at: '2026-04-09T13:28:35+00:00'
+- role: qa
+  step: testing
+  verdict: pass
+  message: 'Verified the hook-awareness and hook-reject routing changes with focused
+    regression coverage. Ran: uv run pytest -q tests/test_runner_workflow.py tests/test_task_commands_and_daemon.py
+    tests/test_config_and_run_cli.py -> 286 passed in 31.92s. Evidence confirmed:
+    SWE implementing prompt now lists upcoming configured runner hooks with command
+    plus optional description text; RunnerHook config preserves the new optional description
+    field; StageReport now carries source=agent|hook; blocking hook failures persist
+    structured reject reports with source=hook, failed command, exit code, and stdout/stderr
+    feedback; before_pm_acceptance failures route back to implementing with task status
+    queued instead of flagged; reports are written under task reports and hook artifacts
+    are persisted; journal entries record both the hook failure and the routing decision.
+    I did not run the full suite in QA because the stage guidance requires focused
+    fast validation, but the touched regression slice for this task is green.'
+  files_changed: []
+  created_at: '2026-04-09T13:30:29+00:00'
+- role: reviewer
+  step: accepting
+  verdict: reject
+  message: 'Expected: This task should add hook descriptions to SWE prompts and route
+    implementing/accepting hook failures back to SWE, while leaving existing commit_to_git
+    after_merge hook semantics intact; all existing tests must pass. In particular,
+    commit-stage after_merge failures are still expected to produce a blocked retry-style
+    report, as covered by tests/test_retry_commit_and_recovery.py::test_commit_to_git_requeues_implementing_when_after_merge_hook_fails.
+    Observed: the new hook-failure handling changes that commit-stage report to verdict=reject
+    instead of blocked. Full suite result: 1 failed, 918 passed, 3 skipped. Failing
+    assertion: tests/test_retry_commit_and_recovery.py:3183 expected report.verdict
+    == ''blocked'' but got ''reject''. Steps to reproduce: 1) uv run pytest -q tests/test_retry_commit_and_recovery.py::test_commit_to_git_requeues_implementing_when_after_merge_hook_fails
+    2) or run uv run pytest -q and observe the same failure. Acceptance criteria status:
+    satisfied based on code review and focused green tests -> SWE prompt now lists
+    configured runner hooks with command plus optional description; RunnerHook supports
+    description; implementing/accepting hook failures persist structured StageReport
+    with source=hook, command, exit code, stdout/stderr feedback, persisted reports,
+    and journal routing back to implementing. Not yet satisfied: all existing tests
+    pass. There is also a concrete regression risk in commit_to_git after_merge behavior
+    because this task unintentionally changed commit-stage hook failure semantics.'
+  files_changed: []
+  created_at: '2026-04-09T13:33:52+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Implemented a narrow follow-up fix for the reviewer-found regression in
+    commit-stage hook handling. Preserved the new hook-origin report shape and diagnostics,
+    but restored after_merge commit-stage semantics so post-merge hook failures return
+    verdict=blocked with retry_decision=retry, keeping the merged main state and requeueing
+    the task at implementing without reverting the merge. This leaves the intended
+    T-0260 behavior unchanged for implementing/accepting hooks: SWE prompts include
+    configured runner hooks with command+description, RunnerHook supports optional
+    description, StageReport carries source=agent|hook, and blocking implementing/accepting
+    hook failures persist structured hook reports with command, exit code, stdout/stderr
+    feedback and route back to SWE instead of flagging. Verified with uv run pytest
+    -q tests/test_retry_commit_and_recovery.py::test_commit_to_git_requeues_implementing_when_after_merge_hook_fails
+    and uv run pytest -q tests/test_runner_workflow.py tests/test_task_commands_and_daemon.py
+    tests/test_config_and_run_cli.py; 287 tests passed total across those runs.'
+  files_changed: []
+  created_at: '2026-04-09T13:36:04+00:00'
+- role: qa
+  step: testing
+  verdict: pass
+  message: 'Validated the T-0260 hook-awareness and hook-routing changes, including
+    the reviewer-found commit-stage regression fix. Ran: uv run pytest -q tests/test_retry_commit_and_recovery.py::test_commit_to_git_requeues_implementing_when_after_merge_hook_fails
+    (1 passed in 0.41s) and uv run pytest -q tests/test_runner_workflow.py tests/test_task_commands_and_daemon.py
+    tests/test_config_and_run_cli.py (286 passed in 31.24s). Evidence confirmed: SWE
+    implementing prompts now include configured upcoming runner hooks with command
+    plus optional description text; RunnerHook config preserves the new optional description
+    field; StageReport now distinguishes source=agent|hook; blocking implementing/accepting
+    hook failures persist structured hook-origin reports with failed command, exit
+    code, stdout/stderr feedback, and hook artifacts/journal entries; before_pm_acceptance
+    failures route back to implementing with task status queued instead of flagged;
+    and commit_to_git after_merge failures retain their prior blocked+retry semantics
+    while preserving merged-main state and requeueing implementing without reverting
+    the merge. I did not rerun the full suite in QA because stage guidance requires
+    focused fast validation, but the touched regression slice and the exact reviewer-reported
+    failure are both green.'
+  files_changed: []
+  created_at: '2026-04-09T13:37:30+00:00'
+- role: reviewer
+  step: accepting
+  verdict: pass
+  message: 'Accepted after code review and independent verification. Verified the
+    SWE implementing prompt now includes configured upcoming runner hooks with command
+    plus optional human description text, matching the intended format for post-stage
+    checks. Verified RunnerHook config now supports optional description and StageReport
+    now carries source=agent|hook so hook-origin rejections are distinguishable from
+    agent reports. Verified blocking after_swe_implementation and before_pm_acceptance
+    hook failures persist structured hook-origin reports with source=hook, failed
+    command, exit code, stdout/stderr feedback, warnings/artifact references, and
+    journal entries, and they route back to implementing/queued instead of flagging.
+    Verified commit_to_git after_merge behavior still preserves its prior blocked+retry
+    semantics while keeping the merged-main state and requeueing implementing. Tests
+    run: uv run pytest -q tests/test_retry_commit_and_recovery.py::test_commit_to_git_requeues_implementing_when_after_merge_hook_fails
+    (1 passed in 0.51s); uv run pytest -q tests/test_runner_workflow.py tests/test_task_commands_and_daemon.py
+    tests/test_config_and_run_cli.py (286 passed in 34.00s); uv run pytest -q (919
+    passed, 3 skipped in 120.17s).'
+  files_changed: []
+  created_at: '2026-04-09T13:40:34+00:00'
