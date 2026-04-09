@@ -1,3 +1,5 @@
+import csv
+
 from litehive.config import ensure_workspace, load_config
 from litehive.observability import (
     collect_recent_activity,
@@ -14,6 +16,7 @@ from litehive.observability import (
 from litehive.runtime._models import active_engine_freezes
 from litehive.tasks import (
     WorkspaceConflictError,
+    archive_root,
     list_tasks,
     list_tasks_state_first,
     load_state,
@@ -36,6 +39,35 @@ def _display_flag_reason(task) -> str:
     if task.status != "flagged":
         return "-"
     return task.flag_reason or "unknown"
+
+
+def _archived_dependency_ids(root) -> set[str]:
+    index_path = archive_root(root) / "INDEX.csv"
+    if not index_path.exists():
+        return set()
+    with index_path.open(newline="", encoding="utf-8") as handle:
+        return {
+            row["id"]
+            for row in csv.DictReader(handle)
+            if row.get("id")
+        }
+
+
+def _show_dependency_label(root, task) -> str:
+    if not task.depends_on:
+        return "-"
+
+    active_statuses = {record.id: record.status for record in list_tasks(root, include_runtime=False)}
+    archived_ids = _archived_dependency_ids(root)
+    labels: list[str] = []
+    for dependency_id in task.depends_on:
+        if dependency_id in active_statuses:
+            labels.append(f"{dependency_id} ({active_statuses[dependency_id]})")
+        elif dependency_id in archived_ids:
+            labels.append(f"{dependency_id} (archived)")
+        else:
+            labels.append(f"{dependency_id} (missing)")
+    return ", ".join(labels)
 
 
 def _cmd_status(args):
@@ -243,7 +275,7 @@ def _cmd_show(args):
     print(f"task_type: {task.task_type or '-'}")
     print(f"mode: {task.mode}")
     print(f"pipeline_mode: {task.pipeline_mode}")
-    print(f"depends_on: {', '.join(task.depends_on) if task.depends_on else '-'}")
+    print(f"depends_on: {_show_dependency_label(args.workspace, task)}")
     print(f"pm_complexity: {task.pm_complexity or '-'}")
     print(f"planned_effort: {task.planned_effort or '-'}")
     print(f"created_at: {task.created_at}")

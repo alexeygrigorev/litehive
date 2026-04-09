@@ -9,23 +9,33 @@ mode: implementation
 pipeline_mode: full
 status: queued
 flag_reason: null
+flag_count: 0
 pipeline_status: backlog
 priority: medium
-pm_complexity: null
-planned_effort: null
+pm_complexity: simple
+planned_effort: s
 created_at: '2026-04-09T08:37:19+00:00'
-updated_at: '2026-04-09T08:37:19+00:00'
-goal: litehive show T-XXXX should display each dependency with its current status
-  (done/queued/flagged/archived). Currently deps show as bare task IDs with no status,
-  requiring manual lookup. Also check archived tasks via INDEX.csv for deps that were
-  archived.
+updated_at: '2026-04-09T12:10:08+00:00'
+goal: Make 'litehive show T-XXXX' resolve each dependency to a human-readable status
+  label from active task records or the archive index, instead of printing bare task
+  IDs.
 acceptance_criteria:
-- litehive show T-XXXX displays each dep with its status
-- Archived deps are resolved from INDEX.csv
-- Missing deps (not found anywhere) are clearly marked
-- All existing tests pass
+- When a task has live dependencies, 'litehive show T-XXXX' prints each dependency
+  with its current task status so operators can see state without separate lookup.
+- When a dependency is no longer in active task records but exists in .litehive/tasks/archive/INDEX.csv,
+  'litehive show T-XXXX' marks that dependency as archived.
+- When a dependency cannot be found in either active task records or the archive index,
+  'litehive show T-XXXX' marks it clearly as missing.
+- Existing automated tests still pass after the change.
 constraints: []
-plan: []
+plan:
+- Inspect current show/display helpers and choose a dependency-status formatter that
+  keeps list/queue output unchanged unless a shared helper clearly fits.
+- Resolve dependency IDs against active tasks first, then fall back to .litehive/tasks/archive/INDEX.csv
+  for archived markers, and emit an explicit missing marker when neither source contains
+  the ID.
+- Add targeted CLI tests for live, archived, and missing dependencies in show output,
+  then run the relevant test module and the full suite.
 human_checkpoints: []
 subagents: []
 git:

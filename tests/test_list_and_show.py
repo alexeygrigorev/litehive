@@ -5,6 +5,7 @@ from tests.workspace_helpers import (
     _cmd_list,
     _cmd_show,
     argparse,
+    archive_task,
     create_task,
     ensure_workspace,
     pytest,
@@ -185,6 +186,34 @@ def test_show_prints_task_details(
     assert "  - keep it simple" in output
     assert "  - step one" in output
     assert "  - step two" in output
+
+
+def test_show_displays_dependency_statuses(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    ensure_workspace(tmp_path)
+    live = create_task(tmp_path, title="Live dependency", auto_commit=False)
+    live.status = "flagged"
+    save_task(tmp_path, live)
+
+    archived = create_task(tmp_path, title="Archived dependency", auto_commit=False)
+    archived.status = "done"
+    archived.pipeline_status = "done"
+    save_task(tmp_path, archived)
+    archive_task(tmp_path, archived.id)
+
+    task = create_task(tmp_path, title="Depends on multiple states", auto_commit=False)
+    task.depends_on = [live.id, archived.id, "T-9999"]
+    save_task(tmp_path, task)
+
+    exit_code = _cmd_show(argparse.Namespace(workspace=tmp_path, task_id=task.id))
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert (
+        f"depends_on: {live.id} (flagged), {archived.id} (archived), T-9999 (missing)"
+        in output
+    )
 
 
 def test_show_nonexistent_task_exits_nonzero(
