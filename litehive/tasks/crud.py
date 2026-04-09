@@ -130,6 +130,8 @@ def _normalize_task_flag_reason(task: TaskRecord) -> None:
     if task.status == "flagged":
         task.flag_reason = task.flag_reason or task.runtime.last_outcome.reason_code or "unknown"
         return
+    if task.status == "deferred" and task.flag_count >= 3:
+        return
     task.flag_reason = None
 
 

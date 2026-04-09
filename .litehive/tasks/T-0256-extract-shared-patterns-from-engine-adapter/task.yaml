@@ -1,0 +1,45 @@
+id: T-0256
+slug: extract-shared-patterns-from-engine-adapter
+title: Extract shared patterns from engine adapter classes to reduce duplication
+depends_on: []
+task_type: null
+engine: null
+model: null
+mode: implementation
+pipeline_mode: full
+status: queued
+flag_reason: null
+flag_count: 0
+pipeline_status: backlog
+priority: low
+pm_complexity: null
+planned_effort: null
+created_at: '2026-04-09T09:16:18+00:00'
+updated_at: '2026-04-09T09:16:18+00:00'
+goal: '6 adapter files (300-470 lines each) duplicate patterns: transcript extraction,
+  error classification, continuation parsing, usage observation. Extract common patterns
+  into base class methods or shared helpers.'
+acceptance_criteria:
+- Common transcript extraction logic in base class
+- Common error/limit classification patterns shared
+- Each adapter under 200 lines
+- All existing tests pass
+constraints: []
+plan: []
+human_checkpoints: []
+subagents: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0256 extract-shared-patterns-from-engine-adapter'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+  merge_agent_attempts: 0
+  worktree_path: null
+retry_policy:
+  max_retries: null
+  stage_retry_limit: null
+created_from: null
+upstream_origin: null
+github_origin: null

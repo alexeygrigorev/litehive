@@ -1,0 +1,60 @@
+id: T-0260
+slug: include-runner-hook-descriptions-in-agent-prompts
+title: Include runner hook descriptions in agent prompts and route hook failures to
+  SWE
+depends_on: []
+task_type: null
+engine: null
+model: null
+mode: implementation
+pipeline_mode: full
+status: queued
+flag_reason: null
+flag_count: 0
+pipeline_status: backlog
+priority: high
+pm_complexity: null
+planned_effort: null
+created_at: '2026-04-09T09:45:36+00:00'
+updated_at: '2026-04-09T09:45:36+00:00'
+goal: 'Two issues: (1) Agents don''t know about runner hooks - they should be told
+  what checks will run after their stage so they can write code that passes. Include
+  hook commands with descriptions in the SWE prompt. (2) When a before_pm_acceptance
+  hook fails (e.g. ruff check), the task gets flagged instead of going back to SWE.
+  Hook failures on code quality should route to implementing, not flag.'
+acceptance_criteria:
+- SWE prompt includes a section listing all configured runner hooks that will run,
+  with their commands and what they check
+- 'Hook descriptions are pulled from config runner_hooks and formatted as: ''After
+  implementing, these checks will run: ruff check --select E402,F401 (ensures no unused
+  imports or wrong import order)'''
+- Hook failures produce a structured StageReport(verdict=reject, source=hook) same as agent reports
+- StageReport gets a source field (agent | hook) to distinguish hook rejections from QA rejections
+- Hook report includes the command that failed, exit code, and stdout/stderr as feedback
+- Task routes back to implementing (same as QA reject flow), not flagged
+- Reports are persisted the same way as agent reports so they show up in litehive debug and journal
+- Journal logs the hook failure and routing decision
+- All existing tests pass
+constraints:
+- Must be generic - works with any hook command, not just ruff
+- Add optional description field to hook config (RunnerHook dataclass) for human-readable explanation
+- The hook command output is the reject feedback, not a hardcoded ruff message
+- Works for any project profile (python, django, rust, etc.)
+plan: []
+human_checkpoints: []
+subagents: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0260 include-runner-hook-descriptions-in-agent-prompts'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+  merge_agent_attempts: 0
+  worktree_path: null
+retry_policy:
+  max_retries: null
+  stage_retry_limit: null
+created_from: null
+upstream_origin: null
+github_origin: null

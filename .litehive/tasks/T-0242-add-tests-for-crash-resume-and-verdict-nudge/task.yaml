@@ -7,14 +7,15 @@ engine: null
 model: null
 mode: implementation
 pipeline_mode: full
-status: queued
+status: in_progress
 flag_reason: null
-pipeline_status: backlog
+flag_count: 0
+pipeline_status: commit_to_git
 priority: medium
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-09T08:01:10+00:00'
-updated_at: '2026-04-09T08:01:10+00:00'
+updated_at: '2026-04-09T10:30:53+00:00'
 goal: 'The crash resume and verdict nudge logic in _builder.py has no dedicated test
   coverage for multi-engine scenarios. Add unit tests that verify: crash resume fires
   for engines with resume_id, nudge fires on timeout with thread_id, nudge uses exec
@@ -29,7 +30,35 @@ acceptance_criteria:
 constraints: []
 plan: []
 human_checkpoints: []
-subagents: []
+subagents:
+- id: SA-0001
+  role: planner
+  engine: codex
+  status: completed
+  path: subagents/SA-0001-planner
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0002
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0002-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0003
+  role: qa
+  engine: codex
+  status: completed
+  path: subagents/SA-0003-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0004
+  role: recovery
+  engine: claude
+  status: completed
+  path: subagents/SA-0004-recovery
+  sandboxed: false
+  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0242 add-tests-for-crash-resume-and-verdict-nudge'

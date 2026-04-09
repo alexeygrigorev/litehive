@@ -1,0 +1,73 @@
+task_id: T-0241
+step: implementing
+verdict: fail
+summary: 'Root cause fixed: crash resume in litehive/pipeline/_builder.py only retried
+  when engine_name == ''claude''. I replaced both claude-only guards with continuation.resume_id
+  availability checks so any adapter that extracts a resume_id can reuse the same
+  single crash-resume path, and I added focused coverage in tests/test_crash_resume.py
+  for codex thread_id, gemini session_id, opencode sessionID, plus the no-resume-id
+  skip case while preserving the one-attempt limit. I also restored the litehive/engines/quota/codex_quota.py
+  compatibility shim so full-suite collection could proceed. Verification: uv run
+  pytest -q tests/test_crash_resume.py passed (7 passed). Full-suite result: uv run
+  pytest -q still fails outside this task area with 16 unrelated existing failures,
+  including tests/test_config_and_run_cli.py::test_engine_status_command_scopes_to_single_engine_and_shows_codex_quota,
+  tests/test_engine_variants_and_timeline.py::test_run_next_task_passes_configured_claude_max_turns,
+  multiple tests in tests/test_retry_commit_and_recovery.py, tests/test_self_heal_recovery.py,
+  tests/test_web_daemon_monitor.py, and tests/test_web_snapshot_lockfree.py. The crash-resume
+  fix is in place and ready to retry, but acceptance cannot be closed until those
+  repo-wide failures are addressed.'
+feedback: 'Stage `implementing` switched from `claude` to `codex` after claude usage
+  limit reached (7d window at 95%, resets 2026-04-10T09:00:00.503440+00:00).
+
+
+  Root cause fixed: crash resume in litehive/pipeline/_builder.py only retried when
+  engine_name == ''claude''. I replaced both claude-only guards with continuation.resume_id
+  availability checks so any adapter that extracts a resume_id can reuse the same
+  single crash-resume path, and I added focused coverage in tests/test_crash_resume.py
+  for codex thread_id, gemini session_id, opencode sessionID, plus the no-resume-id
+  skip case while preserving the one-attempt limit. I also restored the litehive/engines/quota/codex_quota.py
+  compatibility shim so full-suite collection could proceed. Verification: uv run
+  pytest -q tests/test_crash_resume.py passed (7 passed). Full-suite result: uv run
+  pytest -q still fails outside this task area with 16 unrelated existing failures,
+  including tests/test_config_and_run_cli.py::test_engine_status_command_scopes_to_single_engine_and_shows_codex_quota,
+  tests/test_engine_variants_and_timeline.py::test_run_next_task_passes_configured_claude_max_turns,
+  multiple tests in tests/test_retry_commit_and_recovery.py, tests/test_self_heal_recovery.py,
+  tests/test_web_daemon_monitor.py, and tests/test_web_snapshot_lockfree.py. The crash-resume
+  fix is in place and ready to retry, but acceptance cannot be closed until those
+  repo-wide failures are addressed.'
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings:
+- Stage `implementing` switched from `claude` to `codex` after claude usage limit
+  reached (7d window at 95%, resets 2026-04-10T09:00:00.503440+00:00).
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: final
+outcome: flagged
+outcome_reason_code: unsupported_verdict
+outcome_reason: 'Root cause fixed: crash resume in litehive/pipeline/_builder.py only
+  retried when engine_name == ''claude''. I replaced both claude-only guards with
+  continuation.resume_id availability checks so any adapter that extracts a resume_id
+  can reuse the same single crash-resume path, and I added focused coverage in tests/test_crash_resume.py
+  for codex thread_id, gemini session_id, opencode sessionID, plus the no-resume-id
+  skip case while preserving the one-attempt limit. I also restored the litehive/engines/quota/codex_quota.py
+  compatibility shim so full-suite collection could proceed. Verification: uv run
+  pytest -q tests/test_crash_resume.py passed (7 passed). Full-suite result: uv run
+  pytest -q still fails outside this task area with 16 unrelated existing failures,
+  including tests/test_config_and_run_cli.py::test_engine_status_command_scopes_to_single_engine_and_shows_codex_quota,
+  tests/test_engine_variants_and_timeline.py::test_run_next_task_passes_configured_claude_max_turns,
+  multiple tests in tests/test_retry_commit_and_recovery.py, tests/test_self_heal_recovery.py,
+  tests/test_web_daemon_monitor.py, and tests/test_web_snapshot_lockfree.py. The crash-resume
+  fix is in place and ready to retry, but acceptance cannot be closed until those
+  repo-wide failures are addressed.'
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 764
+hook_results: []
+created_at: '2026-04-09T10:18:26+00:00'

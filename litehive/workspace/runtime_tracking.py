@@ -54,9 +54,20 @@ def mark_task_run_finished(root: Path, task: TaskRecord, final_status: str) -> N
     save_task_runtime(root, task)
 
 
+def _apply_flag_count_auto_defer(task: TaskRecord) -> None:
+    """Increment flag_count and auto-defer if the threshold is reached."""
+    if task.status != "flagged":
+        return
+    task.flag_count += 1
+    if task.flag_count >= 3:
+        task.status = "deferred"
+        task.flag_reason = "flagged 3 times - needs human review"
+
+
 def finish_task_run_transition(root: Path, task: TaskRecord, final_status: str) -> TaskRecord:
     with workspace_mutation_guard(root), _workspace_lock(root):
         now = utcnow()
+        _apply_flag_count_auto_defer(task)
         task.runtime.execution_status = final_status
         task.runtime.updated_at = now
         task.runtime.active_subagent = None

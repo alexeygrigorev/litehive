@@ -684,6 +684,11 @@ def build_parser():
         help="Insert the task at the front of the queue",
     )
     requeue.add_argument(
+        "--force",
+        action="store_true",
+        help="Force requeue even if the task has been flagged 3+ times",
+    )
+    requeue.add_argument(
         "--workspace",
         type=Path,
         default=Path.cwd(),

@@ -1,0 +1,45 @@
+task_id: T-0242
+step: testing
+verdict: pass
+summary: 'Verified targeted multi-engine crash-resume and timeout-verdict coverage
+  for T-0242. Inspected litehive/pipeline/_builder.py and confirmed crash resume now
+  gates on extract_engine_continuation(...).resume_id rather than a claude-only branch,
+  while the timeout nudge path still resumes via the extracted resume_id and replaces
+  the original result before stage_report_from_subagent parsing. Reviewed tests/test_crash_resume.py
+  and confirmed dedicated unit coverage for: claude crash resume via session_id; codex
+  crash resume via thread.started thread_id on codex exec output; skip/no-resume behavior
+  for copilot and goz when no resume_id is present; timeout verdict nudge when resume_id
+  is available; and use of the nudged result for final report parsing. Focused verification
+  run: uv run pytest tests/test_crash_resume.py -q -> 6 passed in 0.49s, comfortably
+  within the 60s budget.'
+feedback: 'Verified targeted multi-engine crash-resume and timeout-verdict coverage
+  for T-0242. Inspected litehive/pipeline/_builder.py and confirmed crash resume now
+  gates on extract_engine_continuation(...).resume_id rather than a claude-only branch,
+  while the timeout nudge path still resumes via the extracted resume_id and replaces
+  the original result before stage_report_from_subagent parsing. Reviewed tests/test_crash_resume.py
+  and confirmed dedicated unit coverage for: claude crash resume via session_id; codex
+  crash resume via thread.started thread_id on codex exec output; skip/no-resume behavior
+  for copilot and goz when no resume_id is present; timeout verdict nudge when resume_id
+  is available; and use of the nudged result for final report parsing. Focused verification
+  run: uv run pytest tests/test_crash_resume.py -q -> 6 passed in 0.49s, comfortably
+  within the 60s budget.'
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 46
+hook_results: []
+created_at: '2026-04-09T10:29:38+00:00'

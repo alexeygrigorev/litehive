@@ -1,0 +1,46 @@
+id: T-0261
+slug: hook-run-all-mode-to-collect-all-failures-before
+title: Hook run-all mode to collect all failures before rejecting
+depends_on: []
+task_type: null
+engine: null
+model: null
+mode: implementation
+pipeline_mode: full
+status: queued
+flag_reason: null
+flag_count: 0
+pipeline_status: backlog
+priority: medium
+pm_complexity: null
+planned_effort: null
+created_at: '2026-04-09T09:50:39+00:00'
+updated_at: '2026-04-09T09:50:39+00:00'
+goal: When multiple hooks run for a stage, collect all failures into one combined
+  reject report instead of stopping on first. Also support fail-fast mode. Default
+  is run-all so SWE gets all problems at once.
+acceptance_criteria:
+- run-all mode runs all hooks even if earlier ones fail
+- Combined reject report lists all failed hooks with their output
+- fail-fast mode stops on first blocking failure (opt-in)
+- Default is run-all
+- All existing tests pass
+constraints: []
+plan: []
+human_checkpoints: []
+subagents: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0261 hook-run-all-mode-to-collect-all-failures-before'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+  merge_agent_attempts: 0
+  worktree_path: null
+retry_policy:
+  max_retries: null
+  stage_retry_limit: null
+created_from: null
+upstream_origin: null
+github_origin: null

@@ -199,6 +199,8 @@ def submit_stage_verdict_via_web(
         else:
             task.status = "flagged"
             task.runtime.execution_status = "flagged"
+            from litehive.workspace.runtime_tracking import _apply_flag_count_auto_defer
+            _apply_flag_count_auto_defer(task)
             state.active_task_id = None
             state.queue = [item for item in state.queue if item != task.id]
             _apply_task_outcome(

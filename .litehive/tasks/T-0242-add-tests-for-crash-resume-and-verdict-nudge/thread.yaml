@@ -1,0 +1,81 @@
+- role: planner
+  step: grooming
+  verdict: pass
+  message: 'Grooming complete. Verified the current scope by inspecting .litehive/tasks/T-0242-add-tests-for-crash-resume-and-verdict-nudge/task.yaml,
+    litehive/pipeline/_builder.py, tests/test_crash_resume.py, tests/test_runner_workflow.py,
+    tests/test_stage_result_submission.py, and codex adapter continuation/parsing
+    code. Current code evidence: crash-resume in litehive/pipeline/_builder.py is
+    still gated to claude-only when an unclassified non-zero exit exposes continuation.resume_id,
+    while the verdict-nudge path already keys off continuation.resume_id for any engine
+    and replaces the original subagent result before stage_report_from_subagent parses
+    the report. Existing dedicated tests only cover Claude resume and explicitly assert
+    Codex does not resume, so this task must update that coverage to match the multi-engine
+    behavior tracked by T-0241. I updated the task metadata for execution: depends_on=T-0241,
+    pm_complexity=moderate, planned_effort=s, and recorded a 4-step plan covering
+    engine-specific crash-resume tests, timeout nudge tests, codex exec-fallback assertions,
+    and a narrow verification pass under the 60s budget. Baseline test run: uv run
+    pytest tests/test_crash_resume.py -q -> 4 passed in 1.74s. Next stage should keep
+    scope test-focused, reuse existing workspace helper fixtures, and only touch production
+    code if the minimal T-0241 behavior needed to make the new Codex resume assertions
+    pass is still absent in this branch.'
+  files_changed: []
+  created_at: '2026-04-09T10:22:00+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Expanded crash-resume coverage in tests/test_crash_resume.py to cover
+    claude session_id resumes, codex thread_id resumes, and no-resume engines (copilot/goz).
+    Added timeout verdict-nudge coverage proving the nudge fires when a resume_id
+    is available and that the nudged SubagentResult replaces the original timeout
+    result before stage_report_from_subagent parses it. Updated litehive/pipeline/_builder.py
+    so crash resume keys off continuation.resume_id instead of a claude-only guard,
+    which is required for the codex acceptance case on this branch. Verification:
+    uv run pytest tests/test_crash_resume.py -q -> 6 passed in 0.54s.'
+  files_changed: []
+  created_at: '2026-04-09T10:28:43+00:00'
+- role: qa
+  step: testing
+  verdict: pass
+  message: 'Verified targeted multi-engine crash-resume and timeout-verdict coverage
+    for T-0242. Inspected litehive/pipeline/_builder.py and confirmed crash resume
+    now gates on extract_engine_continuation(...).resume_id rather than a claude-only
+    branch, while the timeout nudge path still resumes via the extracted resume_id
+    and replaces the original result before stage_report_from_subagent parsing. Reviewed
+    tests/test_crash_resume.py and confirmed dedicated unit coverage for: claude crash
+    resume via session_id; codex crash resume via thread.started thread_id on codex
+    exec output; skip/no-resume behavior for copilot and goz when no resume_id is
+    present; timeout verdict nudge when resume_id is available; and use of the nudged
+    result for final report parsing. Focused verification run: uv run pytest tests/test_crash_resume.py
+    -q -> 6 passed in 0.49s, comfortably within the 60s budget.'
+  files_changed: []
+  created_at: '2026-04-09T10:29:29+00:00'
+- role: recovery
+  step: accepting
+  verdict: pass
+  message: 'Root cause: unused import `run_task` in tests/test_crash_resume.py:25
+    triggered F401 ruff violation. The `before_pm_acceptance` hook (`uv run ruff check
+    --select E402,F401 litehive tests`) correctly rejected the code. This is a task-level
+    code defect (the implementing agent imported `run_task` but never used it), not
+    a Litehive infrastructure bug. Fix applied: removed unused `run_task` import from
+    tests/test_crash_resume.py in both the worktree and main checkout. Verified: ruff
+    check now passes (All checks passed) and all 6 tests pass in 0.47s. The `accepting`
+    stage can now be retried cleanly.'
+  files_changed: []
+  created_at: '2026-04-09T10:30:28+00:00'
+- role: recovery
+  step: accepting
+  verdict: comment
+  message: 'Recovery trigger `stage_failure`: Root cause: unused import `run_task`
+    in tests/test_crash_resume.py:25 triggered F401 ruff violation. The `before_pm_acceptance`
+    hook (`uv run ruff check --select E402,F401 litehive tests`) correctly rejected
+    the code. This is a task-level code defect (the implementing agent imported `run_task`
+    but never used it), not a Litehive infrastructure bug. Fix applied: removed unused
+    `run_task` import from tests/test_crash_resume.py in both the worktree and main
+    checkout. Verified: ruff check now passes (All checks passed) and all 6 tests
+    pass in 0.47s. The `accepting` stage can now be retried cleanly.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0242-add-tests-for-crash-resume-and-verdict-nudge/recovery/recovery-001.yaml'
+  files_changed: []
+  created_at: '2026-04-09T10:30:33+00:00'

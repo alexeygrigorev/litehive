@@ -1,0 +1,71 @@
+task_id: T-0241
+step: grooming
+verdict: pass
+summary: '## Grooming verdict: PASS'
+feedback: "## Grooming verdict: PASS\n\n### Summary\nThe task is well-scoped and ready\
+  \ for implementation. Two `engine_name == \"claude\"` guards in `litehive/pipeline/_builder.py`\
+  \ restrict crash resume and retry resume to Claude only. Removing these guards and\
+  \ checking `continuation.resume_id` availability instead will enable crash resume\
+  \ for all engines that provide session/thread IDs.\n\n### What I verified\n- **_builder.py:209-213**\
+  \ \u2014 crash resume guard checks `engine_name == \"claude\"`. Should check `continuation\
+  \ is not None and continuation.resume_id` only.\n- **_builder.py:262-266** \u2014\
+  \ retry resume guard has the same claude-only restriction. Same fix needed.\n- **Engine\
+  \ adapter support** \u2014 Claude, codex, gemini, and opencode all implement `extract_continuation()`\
+  \ and return `RuntimeEngineContinuation` with `resume_id`. Goz and copilot do not\
+  \ extract continuation (no change needed \u2014 they simply won't have a resume_id).\n\
+  - **Resume command handling** \u2014 Claude uses `--resume <id>`, gemini uses `--resume\
+  \ <id>`, codex embeds session ID in the prompt prefix, opencode accepts the parameter\
+  \ but currently ignores it in `build_command` (resume still retries with the resume\
+  \ prompt, just without native session context \u2014 acceptable for this task).\n\
+  - **Existing test coverage** \u2014 `test_crash_resume_skipped_for_non_claude_engines`\
+  \ tests the CURRENT behavior where codex crashes with empty stdout (no thread_id).\
+  \ After the guard removal, this test still passes because empty stdout yields no\
+  \ resume_id. New tests are needed for engines that DO provide resume IDs.\n\n###\
+  \ Plan for implementation\n\n1. **Remove claude guard in crash resume** (`_builder.py:209-213`):\
+  \ Change the condition from `engine_name == \"claude\" and continuation is not None\
+  \ and continuation.resume_id` to just `continuation is not None and continuation.resume_id`.\n\
+  \n2. **Remove claude guard in retry resume** (`_builder.py:262-266`): Same change\
+  \ \u2014 drop `engine_name == \"claude\"` from the condition.\n\n3. **Add test:\
+  \ crash resume works for codex with thread_id** \u2014 Create a crash result with\
+  \ codex JSONL containing `{\"type\": \"thread.started\", \"thread_id\": \"...\"\
+  }` in stdout. Verify resume fires with that thread_id as resume_session_id.\n\n\
+  4. **Add test: crash resume works for gemini with session_id** \u2014 Create a crash\
+  \ result with gemini JSONL containing `{\"type\": \"init\", \"session_id\": \"...\"\
+  }`. Verify resume fires.\n\n5. **Add test: crash resume works for opencode with\
+  \ sessionID** \u2014 Create a crash result with opencode JSONL containing `{\"sessionID\"\
+  : \"...\"}`. Verify resume fires.\n\n6. **Update existing test** \u2014 `test_crash_resume_skipped_for_non_claude_engines`\
+  \ should be renamed/updated to test that engines WITHOUT a resume_id in their output\
+  \ do NOT trigger resume (engine-agnostic, not codex-specific).\n\n7. **Run full\
+  \ test suite** \u2014 `uv run pytest -q` must pass.\n\n### Constraints\n- Opencode's\
+  \ adapter accepts `resume_session_id` but doesn't wire it into the CLI command.\
+  \ Crash resume still works (agent retries with resume prompt) but without native\
+  \ session context. Wiring opencode's `--session` flag is out of scope for this task.\n\
+  - Only one crash resume attempt per crash \u2014 existing `crash_resume_attempted`\
+  \ flag logic is unchanged.\n\n### PM Sizing\n\nTASK_UPDATE:\npm_complexity: simple\n\
+  planned_effort: s\nplan:\n  - \"Remove engine_name == 'claude' guard from crash\
+  \ resume path (_builder.py:209-213)\"\n  - \"Remove engine_name == 'claude' guard\
+  \ from retry resume path (_builder.py:262-266)\"\n  - \"Add crash resume test for\
+  \ codex (thread_id in JSONL stdout)\"\n  - \"Add crash resume test for gemini (session_id\
+  \ in JSONL stdout)\"\n  - \"Add crash resume test for opencode (sessionID in JSONL\
+  \ stdout)\"\n  - \"Update test_crash_resume_skipped_for_non_claude_engines to be\
+  \ engine-agnostic\"\n  - \"Run full test suite and verify all pass\""
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 205
+hook_results: []
+created_at: '2026-04-09T10:04:49+00:00'

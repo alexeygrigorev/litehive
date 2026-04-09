@@ -145,7 +145,7 @@ def _cmd_prioritize(args):
 def _cmd_requeue_task(args):
     ensure_workspace(args.workspace)
     try:
-        task = requeue_task(args.workspace, args.task_id, front=args.front)
+        task = requeue_task(args.workspace, args.task_id, front=args.front, force=getattr(args, "force", False))
     except (ValueError, WorkspaceConflictError) as exc:
         print(f"requeue failed: {exc}")
         return 1

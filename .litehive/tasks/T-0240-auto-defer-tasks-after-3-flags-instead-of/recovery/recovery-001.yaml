@@ -1,0 +1,159 @@
+task_id: T-0240
+stage: accepting
+trigger: stage_failure
+summary: Recovery agent could not restore `accepting` to a runnable state.
+failure_classification: blocked
+runnable_state: blocked
+blocker: '## Recovery Diagnosis: Task-level code quality issue, NOT a Litehive infrastructure
+  bug'
+evidence:
+- kind: task
+  label: task.yaml
+  path: .litehive/tasks/T-0240-auto-defer-tasks-after-3-flags-instead-of/task.yaml
+  exists: true
+  summary: status=in_progress pipeline_status=accepting priority=high
+  metadata: {}
+- kind: runtime
+  label: runtime.yaml
+  path: .litehive/tasks/T-0240-auto-defer-tasks-after-3-flags-instead-of/runtime.yaml
+  exists: true
+  summary: execution_status=running current_stage=accepting last_outcome=none
+  metadata: {}
+- kind: thread
+  label: thread.yaml
+  path: .litehive/tasks/T-0240-auto-defer-tasks-after-3-flags-instead-of/thread.yaml
+  exists: true
+  summary: discussion entries=5
+  metadata: {}
+- kind: events
+  label: events.jsonl
+  path: .litehive/tasks/T-0240-auto-defer-tasks-after-3-flags-instead-of/events.jsonl
+  exists: true
+  summary: task lifecycle and subagent event stream
+  metadata: {}
+- kind: stage_report
+  label: latest stage report
+  path: .litehive/tasks/T-0240-auto-defer-tasks-after-3-flags-instead-of/reports/testing-004.yaml
+  exists: true
+  summary: latest report for T-0240
+  metadata: {}
+- kind: subagent_artifact
+  label: latest subagent session
+  path: .litehive/tasks/T-0240-auto-defer-tasks-after-3-flags-instead-of/subagents/SA-0005-recovery/session.yaml
+  exists: true
+  summary: artifact from SA-0005-recovery
+  metadata: {}
+- kind: subagent_artifact
+  label: latest subagent report
+  path: .litehive/tasks/T-0240-auto-defer-tasks-after-3-flags-instead-of/subagents/SA-0005-recovery/report.yaml
+  exists: true
+  summary: artifact from SA-0005-recovery
+  metadata: {}
+- kind: subagent_artifact
+  label: latest subagent transcript
+  path: .litehive/tasks/T-0240-auto-defer-tasks-after-3-flags-instead-of/subagents/SA-0005-recovery/transcript.md
+  exists: true
+  summary: artifact from SA-0005-recovery
+  metadata: {}
+- kind: subagent_artifact
+  label: latest subagent stdout
+  path: .litehive/tasks/T-0240-auto-defer-tasks-after-3-flags-instead-of/subagents/SA-0005-recovery/stdout.txt.gz
+  exists: true
+  summary: artifact from SA-0005-recovery
+  metadata: {}
+- kind: subagent_artifact
+  label: latest subagent stderr
+  path: .litehive/tasks/T-0240-auto-defer-tasks-after-3-flags-instead-of/subagents/SA-0005-recovery/stderr.txt
+  exists: true
+  summary: artifact from SA-0005-recovery
+  metadata: {}
+- kind: subagent_artifact
+  label: latest subagent events timeline
+  path: .litehive/tasks/T-0240-auto-defer-tasks-after-3-flags-instead-of/subagents/SA-0005-recovery/timeline.yaml.gz
+  exists: true
+  summary: artifact from SA-0005-recovery
+  metadata: {}
+- kind: wrapper_log
+  label: latest run-all log
+  path: .litehive/logs/run-all/daemon.log
+  exists: true
+  summary: latest daemon/run-all wrapper log
+  metadata: {}
+- kind: engine_monitoring
+  label: engine-monitoring.yaml
+  path: .litehive/engine-monitoring.yaml
+  exists: true
+  summary: no engine record
+  metadata: {}
+- kind: git
+  label: main checkout git state
+  path: null
+  exists: true
+  summary: head=e6dee38ff49d805621e30ecf6d7da75c950bc674 dirty=37
+  metadata:
+    dirty_paths:
+    - litehive/state.yaml
+    - litehive/tasks/T-0239-ensure-subagent-stdout-stderr-are-always-written/journal.md
+    - litehive/tasks/T-0239-ensure-subagent-stdout-stderr-are-always-written/task.yaml
+    - litehive/tasks/T-0240-auto-defer-tasks-after-3-flags-instead-of/journal.md
+    - litehive/tasks/T-0240-auto-defer-tasks-after-3-flags-instead-of/task.yaml
+    - itehive/cli/parser.py
+    - itehive/cli/queue.py
+    - itehive/models/task_models.py
+    - itehive/tasks/crud.py
+    - itehive/web/actions.py
+    - itehive/workspace/runtime_tracking.py
+    - itehive/workspace/task_status.py
+    - .litehive/tasks/T-0240-auto-defer-tasks-after-3-flags-instead-of/artifacts/before_pm_acceptance-001.yaml
+    - .litehive/tasks/T-0240-auto-defer-tasks-after-3-flags-instead-of/reports/grooming-001.yaml
+    - .litehive/tasks/T-0240-auto-defer-tasks-after-3-flags-instead-of/reports/implementing-002.yaml
+    - .litehive/tasks/T-0240-auto-defer-tasks-after-3-flags-instead-of/reports/implementing-003.yaml
+    - .litehive/tasks/T-0240-auto-defer-tasks-after-3-flags-instead-of/reports/testing-004.yaml
+    - .litehive/tasks/T-0240-auto-defer-tasks-after-3-flags-instead-of/thread.yaml
+    - .litehive/tasks/T-0251-fix-duplicate-cli-handlers-and-convert-to/journal.md
+    - .litehive/tasks/T-0251-fix-duplicate-cli-handlers-and-convert-to/task.yaml
+    - .litehive/tasks/T-0252-remove-backward-compat-shim-directories-engines/journal.md
+    - .litehive/tasks/T-0252-remove-backward-compat-shim-directories-engines/task.yaml
+    - .litehive/tasks/T-0253-split-cli-parser-py-build-parser-into-per-command/journal.md
+    - .litehive/tasks/T-0253-split-cli-parser-py-build-parser-into-per-command/task.yaml
+    - .litehive/tasks/T-0254-slim-tasks-init-py-barrel-file-to-curated-public/journal.md
+    - .litehive/tasks/T-0254-slim-tasks-init-py-barrel-file-to-curated-public/task.yaml
+    - .litehive/tasks/T-0255-unify-recovery-logic-into-single-pipeline/journal.md
+    - .litehive/tasks/T-0255-unify-recovery-logic-into-single-pipeline/task.yaml
+    - .litehive/tasks/T-0256-extract-shared-patterns-from-engine-adapter/journal.md
+    - .litehive/tasks/T-0256-extract-shared-patterns-from-engine-adapter/task.yaml
+    - .litehive/tasks/T-0257-add-testing-quality-guidelines-to-swe-and-qa/journal.md
+    - .litehive/tasks/T-0257-add-testing-quality-guidelines-to-swe-and-qa/task.yaml
+    - .litehive/tasks/T-0258-split-monolithic-test-files-and-remove-no-op-tests/journal.md
+    - .litehive/tasks/T-0258-split-monolithic-test-files-and-remove-no-op-tests/task.yaml
+    - .litehive/tasks/T-0259-fix-flaky-and-timing-dependent-tests/journal.md
+    - .litehive/tasks/T-0259-fix-flaky-and-timing-dependent-tests/task.yaml
+    - tests/test_flag_count_auto_defer.py
+- kind: worktree
+  label: task worktree state
+  path: .litehive/worktrees/T-0240-auto-defer-tasks-after-3-flags-instead-of
+  exists: true
+  summary: dirty=8
+  metadata:
+    dirty_paths:
+    - itehive/cli/parser.py
+    - itehive/cli/queue.py
+    - itehive/models/task_models.py
+    - itehive/tasks/crud.py
+    - itehive/web/actions.py
+    - itehive/workspace/runtime_tracking.py
+    - itehive/workspace/task_status.py
+    - tests/test_flag_count_auto_defer.py
+    stage: accepting
+actions:
+- action: no_safe_repair
+  applied: false
+  summary: Recovery agent investigated the failure but could not apply a safe bounded
+    repair.
+  metadata: {}
+warnings:
+- 'runner hook failed: `before_pm_acceptance` `uv run ruff check --select E402,F401
+  litehive tests` (artifact: `artifacts/before_pm_acceptance-001.yaml`)'
+recovery_subagent_id: SA-0005
+recovery_subagent_path: subagents/SA-0005-recovery
+created_at: '2026-04-09T09:25:49+00:00'

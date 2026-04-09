@@ -1,0 +1,67 @@
+task_id: T-0240
+step: grooming
+verdict: pass
+summary: '## Grooming Verdict: PASS'
+feedback: "## Grooming Verdict: PASS\n\n### Summary\nTask is well-defined and ready\
+  \ for implementation. The goal is to prevent infinite flag\u2192requeue loops by\
+  \ adding a lifetime flag counter and auto-deferring after 3 flags.\n\n### Acceptance\
+  \ Criteria Review\nAll 6 criteria are observable and testable:\n1. TaskRecord.flag_count\
+  \ field (int, default 0) in task.yaml \u2014 verified no existing field\n2. flag_count\
+  \ increments on each flagged transition\n3. Auto-defer after 3 flags with reason\
+  \ message\n4. requeue warns + requires --force when flag_count >= 3\n5. flag_count\
+  \ is NOT reset by requeue (lifetime counter)\n6. All existing tests pass\n\n###\
+  \ Implementation Plan\n\n**Step 1: Add flag_count field to TaskRecord**\n- File:\
+  \ `litehive/models/task_models.py` (~line 83, near flag_reason)\n- Add `flag_count:\
+  \ int = 0`\n- This auto-persists to task.yaml via existing serialization\n\n**Step\
+  \ 2: Increment flag_count on flagged transitions**\n- File: `litehive/tasks/crud.py`\
+  \ (~line 131) \u2014 this is where flag_reason is set when status==\"flagged\"\n\
+  - Increment `task.flag_count += 1` at the same point where flag_reason is set\n\
+  - This is the centralized persistence point, so all 6+ pipeline locations that set\
+  \ status=\"flagged\" flow through here\n\n**Step 3: Auto-defer after 3 flags**\n\
+  - Same location in crud.py: after incrementing flag_count, if flag_count >= 3, change\
+  \ status to \"deferred\" and set an appropriate reason like \"flagged 3 times -\
+  \ needs human review\"\n- This intercepts at persistence time so no pipeline code\
+  \ needs changing\n\n**Step 4: Block requeue without --force after 3+ flags**\n-\
+  \ File: `litehive/cli/queue.py` (~line 145) \u2014 add `--force` argument to requeue\
+  \ parser\n- File: `litehive/workspace/task_status.py` (~line 271) \u2014 add `force:\
+  \ bool = False` param to `requeue_task()`; if flag_count >= 3 and not force, raise\
+  \ or return error with warning message\n- CLI prints warning and exits non-zero\
+  \ without --force\n\n**Step 5: Tests**\n- Add tests for: flag_count increment, auto-defer\
+  \ threshold, requeue blocking, --force bypass, lifetime counter survives requeue\n\
+  - Verify all existing tests pass with `uv run pytest -q`\n\n### Key Files\n- `litehive/models/task_models.py`\
+  \ \u2014 TaskRecord model\n- `litehive/tasks/crud.py` \u2014 task persistence (flag_reason\
+  \ logic)\n- `litehive/workspace/task_status.py` \u2014 requeue_task()\n- `litehive/cli/queue.py`\
+  \ \u2014 requeue CLI command\n- `litehive/models/common.py` \u2014 TaskStatus type\
+  \ (no changes needed)\n\n### Risks\n- The centralization assumption (all flag transitions\
+  \ flow through crud.py persistence) should be verified by the SWE. If some paths\
+  \ set status=\"flagged\" without going through that codepath, the increment will\
+  \ be missed.\n- Alternative: grep all `= \"flagged\"` assignments and ensure they\
+  \ all flow through the same save path, or add increment logic at each site.\n\n\
+  ### Sizing\n- PM_COMPLEXITY: simple\n- PLANNED_EFFORT: s\n\nTASK_UPDATE:\n  plan:\n\
+  \    - \"Add flag_count: int = 0 field to TaskRecord in litehive/models/task_models.py\"\
+  \n    - \"Increment flag_count at the flagged-transition persistence point in litehive/tasks/crud.py\"\
+  \n    - \"Auto-defer (status=deferred) when flag_count reaches 3 at the same persistence\
+  \ point\"\n    - \"Add --force flag to requeue CLI; block requeue when flag_count\
+  \ >= 3 without --force\"\n    - \"Add targeted tests for flag_count increment, auto-defer,\
+  \ requeue blocking, and --force bypass\"\n    - \"Run full test suite to confirm\
+  \ no regressions\"\n  pm_complexity: simple\n  planned_effort: s"
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 131
+hook_results: []
+created_at: '2026-04-09T09:04:17+00:00'

@@ -81,6 +81,7 @@ class TaskRecord(BaseModel):
     pipeline_mode: PipelineMode = "full"
     status: TaskStatus = "queued"
     flag_reason: str | None = None
+    flag_count: int = 0
     pipeline_status: PipelineStatus = "backlog"
     priority: str = "medium"
     pm_complexity: TaskComplexity | None = None

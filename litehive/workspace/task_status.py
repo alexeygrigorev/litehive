@@ -268,7 +268,7 @@ def switch_task_engine(root: Path, task_id: str, *, engine: str, reason: str) ->
 
 
 
-def requeue_task(root: Path, task_id: str, *, front: bool = False) -> TaskRecord:
+def requeue_task(root: Path, task_id: str, *, front: bool = False, force: bool = False) -> TaskRecord:
     from litehive.tasks.crud import require_task
     from .locking import _ensure_future_task_mutation_allowed, _workspace_lock
     from litehive.tasks.persistence import load_state
@@ -277,6 +277,11 @@ def requeue_task(root: Path, task_id: str, *, front: bool = False) -> TaskRecord
 
     with _workspace_lock(root):
         task = require_task(root, task_id)
+        if task.flag_count >= 3 and not force:
+            raise ValueError(
+                f"Task {task.id} has been flagged {task.flag_count} times. "
+                "Use --force to requeue anyway."
+            )
         state = load_state(root)
         _ensure_future_task_mutation_allowed(root, [task.id], state=state)
         if task.status not in {"flagged", "merge_failed", "parked", *CLOSED_TASK_STATUSES}:

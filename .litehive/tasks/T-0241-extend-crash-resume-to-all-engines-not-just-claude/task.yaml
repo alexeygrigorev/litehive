@@ -7,14 +7,15 @@ engine: null
 model: null
 mode: implementation
 pipeline_mode: full
-status: queued
-flag_reason: null
-pipeline_status: backlog
+status: flagged
+flag_reason: unsupported_verdict
+flag_count: 1
+pipeline_status: implementing
 priority: medium
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-09T08:01:08+00:00'
-updated_at: '2026-04-09T08:01:08+00:00'
+updated_at: '2026-04-09T10:18:26+00:00'
 goal: 'Currently crash_resume_attempted only fires for engine_name == ''claude''.
   Extend to any engine that provides a resume_id (codex thread_id, gemini session_id,
   opencode sessionID). Use the same pattern: detect crash (exit != 0, no failure classification),
@@ -29,7 +30,28 @@ acceptance_criteria:
 constraints: []
 plan: []
 human_checkpoints: []
-subagents: []
+subagents:
+- id: SA-0001
+  role: planner
+  engine: claude
+  status: completed
+  path: subagents/SA-0001-planner
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0002
+  role: swe
+  engine: claude
+  status: interrupted
+  path: subagents/SA-0002-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0003
+  role: recovery
+  engine: codex
+  status: completed
+  path: subagents/SA-0003-recovery
+  sandboxed: false
+  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0241 extend-crash-resume-to-all-engines-not-just-claude'

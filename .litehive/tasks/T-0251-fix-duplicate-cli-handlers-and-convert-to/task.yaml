@@ -1,0 +1,45 @@
+id: T-0251
+slug: fix-duplicate-cli-handlers-and-convert-to
+title: Fix duplicate CLI handlers and convert to dispatch table
+depends_on: []
+task_type: null
+engine: null
+model: null
+mode: implementation
+pipeline_mode: full
+status: queued
+flag_reason: null
+flag_count: 0
+pipeline_status: backlog
+priority: high
+pm_complexity: null
+planned_effort: null
+created_at: '2026-04-09T09:16:09+00:00'
+updated_at: '2026-04-09T09:16:09+00:00'
+goal: cli/__init__.py has duplicate handlers (import-issue, import-issues, debug,
+  list, show appear twice) and 80+ if-statements. Remove duplicates, convert to a
+  dispatch table dict. Also remove duplicate import of _cmd_import_issue/_cmd_import_issues.
+acceptance_criteria:
+- No duplicate command handlers in cli/__init__.py
+- Commands dispatched via dict lookup instead of if-chain
+- Daemon subcommands also use dispatch table
+- All existing tests pass including parser duplicate detection test
+constraints: []
+plan: []
+human_checkpoints: []
+subagents: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0251 fix-duplicate-cli-handlers-and-convert-to'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+  merge_agent_attempts: 0
+  worktree_path: null
+retry_policy:
+  max_retries: null
+  stage_retry_limit: null
+created_from: null
+upstream_origin: null
+github_origin: null

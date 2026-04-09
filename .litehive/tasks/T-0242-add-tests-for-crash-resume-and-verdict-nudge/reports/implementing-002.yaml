@@ -1,0 +1,41 @@
+task_id: T-0242
+step: implementing
+verdict: pass
+summary: 'Expanded crash-resume coverage in tests/test_crash_resume.py to cover claude
+  session_id resumes, codex thread_id resumes, and no-resume engines (copilot/goz).
+  Added timeout verdict-nudge coverage proving the nudge fires when a resume_id is
+  available and that the nudged SubagentResult replaces the original timeout result
+  before stage_report_from_subagent parses it. Updated litehive/pipeline/_builder.py
+  so crash resume keys off continuation.resume_id instead of a claude-only guard,
+  which is required for the codex acceptance case on this branch. Verification: uv
+  run pytest tests/test_crash_resume.py -q -> 6 passed in 0.54s.'
+feedback: 'Expanded crash-resume coverage in tests/test_crash_resume.py to cover claude
+  session_id resumes, codex thread_id resumes, and no-resume engines (copilot/goz).
+  Added timeout verdict-nudge coverage proving the nudge fires when a resume_id is
+  available and that the nudged SubagentResult replaces the original timeout result
+  before stage_report_from_subagent parses it. Updated litehive/pipeline/_builder.py
+  so crash resume keys off continuation.resume_id instead of a claude-only guard,
+  which is required for the codex acceptance case on this branch. Verification: uv
+  run pytest tests/test_crash_resume.py -q -> 6 passed in 0.54s.'
+files_changed:
+- litehive/pipeline/_builder.py
+- tests/test_crash_resume.py
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 390
+hook_results: []
+created_at: '2026-04-09T10:28:52+00:00'

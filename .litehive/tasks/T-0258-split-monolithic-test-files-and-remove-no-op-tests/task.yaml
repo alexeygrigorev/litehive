@@ -1,0 +1,50 @@
+id: T-0258
+slug: split-monolithic-test-files-and-remove-no-op-tests
+title: Split monolithic test files and remove no-op tests
+depends_on: []
+task_type: null
+engine: null
+model: null
+mode: implementation
+pipeline_mode: full
+status: queued
+flag_reason: null
+flag_count: 0
+pipeline_status: backlog
+priority: medium
+pm_complexity: null
+planned_effort: null
+created_at: '2026-04-09T09:21:39+00:00'
+updated_at: '2026-04-09T09:21:39+00:00'
+goal: Several test files are too large or contain tests that don't test anything meaningful.
+  Split, remove, or rewrite as identified in the test quality analysis.
+acceptance_criteria:
+- test_retry_commit_and_recovery.py (4069 lines) split into focused files by concern
+- test_config_and_run_cli.py (1625 lines) split into config tests and CLI tests
+- test_web_snapshot_lockfree.py (1110 lines) split by web feature area
+- 'Monolithic multi-assertion tests split: test_web_daemon_api_supports_status_start_stop_restart_and_dashboard_markup,
+  test_web_task_action_endpoints_mutate_tasks'
+- 'Remove no-op tests: test_slugify_exactly_50_unchanged (identity test), test_cli_report_message_stored_as_is
+  (tests nothing), duplicate flag_count test'
+- Remove subprocess-based test in test_tasks_and_subagents.py (test_workspace_transition_writes_preserve_task_added_after_state_snapshot)
+  - replace with direct function call
+- All remaining tests pass within 60s timeout and full suite under 3 minutes
+constraints: []
+plan: []
+human_checkpoints: []
+subagents: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0258 split-monolithic-test-files-and-remove-no-op-tests'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+  merge_agent_attempts: 0
+  worktree_path: null
+retry_policy:
+  max_retries: null
+  stage_retry_limit: null
+created_from: null
+upstream_origin: null
+github_origin: null

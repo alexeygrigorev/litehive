@@ -7,14 +7,14 @@ engine: null
 model: null
 mode: implementation
 pipeline_mode: full
-status: in_progress
+status: done
 flag_reason: null
-pipeline_status: commit_to_git
+pipeline_status: done
 priority: medium
 pm_complexity: simple
 planned_effort: xs
 created_at: '2026-04-09T07:46:52+00:00'
-updated_at: '2026-04-09T09:00:50+00:00'
+updated_at: '2026-04-09T09:01:48+00:00'
 goal: Some subagent runs produce no stdout/transcript artifacts (only session.yaml
   and report.yaml). This makes debugging impossible. Ensure stdout.txt and stderr.txt
   are always written, even if empty, so we can distinguish 'agent produced nothing'
@@ -63,14 +63,21 @@ subagents:
   path: subagents/SA-0005-reviewer
   sandboxed: false
   sandbox_summary: host
+- id: SA-0006
+  role: merge-resolver
+  engine: claude
+  status: completed
+  path: subagents/SA-0006-merge-resolver
+  sandboxed: false
+  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0239 ensure-subagent-stdout-stderr-are-always-written'
-  commit_sha: null
-  checkpoint_base_sha: null
-  checkpoint_attempts: 0
+  commit_sha: e6dee38ff49d805621e30ecf6d7da75c950bc674
+  checkpoint_base_sha: df667322d0082d1e829d9ccd5232a42e614a2a51
+  checkpoint_attempts: 1
   rolled_back_checkpoint_attempt: null
-  merge_agent_attempts: 0
+  merge_agent_attempts: 1
   worktree_path: null
 retry_policy:
   max_retries: null

@@ -1,0 +1,48 @@
+id: T-0259
+slug: fix-flaky-and-timing-dependent-tests
+title: Fix flaky and timing-dependent tests
+depends_on: []
+task_type: null
+engine: null
+model: null
+mode: implementation
+pipeline_mode: full
+status: queued
+flag_reason: null
+flag_count: 0
+pipeline_status: backlog
+priority: medium
+pm_complexity: null
+planned_effort: null
+created_at: '2026-04-09T09:21:41+00:00'
+updated_at: '2026-04-09T09:21:41+00:00'
+goal: Several tests have timing-dependent assertions or shared mutable state that
+  causes flaky failures. Fix them.
+acceptance_criteria:
+- test_inactivity_timeout.py timing tests use larger margins (1s not 0.5s) or mock
+  time
+- test_has_callable_override tests fixed to not depend on class-level monkeypatch
+  pollution (currently skipped)
+- test_web_snapshot_lockfree timestamp tests use current time not hardcoded dates
+- No test depends on execution order within a file
+- All skipped tests either fixed or removed with justification
+- Full suite passes 10 consecutive runs without failures
+constraints: []
+plan: []
+human_checkpoints: []
+subagents: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0259 fix-flaky-and-timing-dependent-tests'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+  merge_agent_attempts: 0
+  worktree_path: null
+retry_policy:
+  max_retries: null
+  stage_retry_limit: null
+created_from: null
+upstream_origin: null
+github_origin: null

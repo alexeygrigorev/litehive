@@ -9,12 +9,13 @@ mode: implementation
 pipeline_mode: full
 status: queued
 flag_reason: null
-pipeline_status: backlog
+flag_count: 0
+pipeline_status: implementing
 priority: high
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-09T07:50:34+00:00'
-updated_at: '2026-04-09T07:50:34+00:00'
+updated_at: '2026-04-09T09:34:11+00:00'
 goal: "Tasks that repeatedly flag (implement\u2192reject\u2192flag\u2192requeue\u2192\
   repeat) waste tokens indefinitely. Add a lifetime flag_count to track how many times\
   \ a task has been flagged. After 3 flags, auto-defer instead of flagging. Block\
@@ -30,7 +31,42 @@ acceptance_criteria:
 constraints: []
 plan: []
 human_checkpoints: []
-subagents: []
+subagents:
+- id: SA-0001
+  role: planner
+  engine: claude
+  status: completed
+  path: subagents/SA-0001-planner
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0002
+  role: swe
+  engine: claude
+  status: completed
+  path: subagents/SA-0002-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0003
+  role: swe
+  engine: claude
+  status: completed
+  path: subagents/SA-0003-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0004
+  role: qa
+  engine: claude
+  status: completed
+  path: subagents/SA-0004-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0005
+  role: recovery
+  engine: claude
+  status: completed
+  path: subagents/SA-0005-recovery
+  sandboxed: false
+  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0240 auto-defer-tasks-after-3-flags-instead-of'

@@ -1,0 +1,63 @@
+task_id: T-0242
+step: grooming
+verdict: pass
+summary: 'Grooming complete. Verified the current scope by inspecting .litehive/tasks/T-0242-add-tests-for-crash-resume-and-verdict-nudge/task.yaml,
+  litehive/pipeline/_builder.py, tests/test_crash_resume.py, tests/test_runner_workflow.py,
+  tests/test_stage_result_submission.py, and codex adapter continuation/parsing code.
+  Current code evidence: crash-resume in litehive/pipeline/_builder.py is still gated
+  to claude-only when an unclassified non-zero exit exposes continuation.resume_id,
+  while the verdict-nudge path already keys off continuation.resume_id for any engine
+  and replaces the original subagent result before stage_report_from_subagent parses
+  the report. Existing dedicated tests only cover Claude resume and explicitly assert
+  Codex does not resume, so this task must update that coverage to match the multi-engine
+  behavior tracked by T-0241. I updated the task metadata for execution: depends_on=T-0241,
+  pm_complexity=moderate, planned_effort=s, and recorded a 4-step plan covering engine-specific
+  crash-resume tests, timeout nudge tests, codex exec-fallback assertions, and a narrow
+  verification pass under the 60s budget. Baseline test run: uv run pytest tests/test_crash_resume.py
+  -q -> 4 passed in 1.74s. Next stage should keep scope test-focused, reuse existing
+  workspace helper fixtures, and only touch production code if the minimal T-0241
+  behavior needed to make the new Codex resume assertions pass is still absent in
+  this branch.'
+feedback: 'Stage `grooming` switched from `claude` to `codex` after claude usage limit
+  reached (7d window at 95%, resets 2026-04-10T09:00:00.402789+00:00).
+
+
+  Grooming complete. Verified the current scope by inspecting .litehive/tasks/T-0242-add-tests-for-crash-resume-and-verdict-nudge/task.yaml,
+  litehive/pipeline/_builder.py, tests/test_crash_resume.py, tests/test_runner_workflow.py,
+  tests/test_stage_result_submission.py, and codex adapter continuation/parsing code.
+  Current code evidence: crash-resume in litehive/pipeline/_builder.py is still gated
+  to claude-only when an unclassified non-zero exit exposes continuation.resume_id,
+  while the verdict-nudge path already keys off continuation.resume_id for any engine
+  and replaces the original subagent result before stage_report_from_subagent parses
+  the report. Existing dedicated tests only cover Claude resume and explicitly assert
+  Codex does not resume, so this task must update that coverage to match the multi-engine
+  behavior tracked by T-0241. I updated the task metadata for execution: depends_on=T-0241,
+  pm_complexity=moderate, planned_effort=s, and recorded a 4-step plan covering engine-specific
+  crash-resume tests, timeout nudge tests, codex exec-fallback assertions, and a narrow
+  verification pass under the 60s budget. Baseline test run: uv run pytest tests/test_crash_resume.py
+  -q -> 4 passed in 1.74s. Next stage should keep scope test-focused, reuse existing
+  workspace helper fixtures, and only touch production code if the minimal T-0241
+  behavior needed to make the new Codex resume assertions pass is still absent in
+  this branch.'
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings:
+- Stage `grooming` switched from `claude` to `codex` after claude usage limit reached
+  (7d window at 95%, resets 2026-04-10T09:00:00.402789+00:00).
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 215
+hook_results: []
+created_at: '2026-04-09T10:22:22+00:00'

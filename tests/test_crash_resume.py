@@ -16,13 +16,40 @@ from tests.workspace_helpers import (
     create_task,
     ensure_workspace,
     require_task,
-    run_task,
 )
+
+_AC = ["Tests pass"]
 
 
 def _claude_init_stdout(session_id: str) -> str:
     """Build JSONL stdout containing a claude session init payload."""
     return json.dumps({"type": "system", "subtype": "init", "session_id": session_id}) + "\n"
+
+
+def _codex_init_stdout(thread_id: str) -> str:
+    """Build JSONL stdout containing a codex thread.started payload."""
+    return json.dumps({"type": "thread.started", "thread_id": thread_id}) + "\n"
+
+
+def _gemini_init_stdout(session_id: str) -> str:
+    """Build JSONL stdout containing a gemini init payload."""
+    return json.dumps({"type": "init", "session_id": session_id}) + "\n"
+
+
+def _opencode_init_stdout(session_id: str) -> str:
+    """Build JSONL stdout containing an opencode sessionID payload."""
+    return json.dumps({"sessionID": session_id}) + "\n"
+
+
+def _engine_init_stdout(engine_name: str, resume_id: str) -> str:
+    """Return JSONL init stdout for a given engine."""
+    dispatch = {
+        "claude": _claude_init_stdout,
+        "codex": _codex_init_stdout,
+        "gemini": _gemini_init_stdout,
+        "opencode": _opencode_init_stdout,
+    }
+    return dispatch[engine_name](resume_id)
 
 
 def _crash_result(
@@ -45,7 +72,9 @@ def _crash_result(
             argv=(engine_name, "exec"),
             cwd=Path("/tmp"),
             exit_code=1,
-            stdout=_claude_init_stdout(session_id),
+            stdout=_engine_init_stdout(engine_name, session_id)
+            if engine_name in ("claude", "codex", "gemini", "opencode")
+            else "",
             stderr="",
         ),
         transcript="",
@@ -59,7 +88,7 @@ def test_crash_resume_triggers_session_resume_for_claude(
 ) -> None:
     """Unclassified crash with exit 1 on claude triggers one resume attempt with session ID."""
     ensure_workspace(tmp_path, LitehiveConfig(default_engine="claude"))
-    create_task(tmp_path, title="Crash resume task", engine="claude", auto_commit=False)
+    create_task(tmp_path, title="Crash resume task", engine="claude", auto_commit=False, acceptance_criteria=_AC)
     task = require_task(tmp_path, "T-0001")
 
     calls: list[dict] = []
@@ -71,11 +100,12 @@ def test_crash_resume_triggers_session_resume_for_claude(
             "engine": engine_name,
             "resume_session_id": resume_session_id,
             "prompt": prompt,
+            "step": task_arg.pipeline_status,
         })
-        if len(calls) == 1:
+        if task_arg.pipeline_status == "implementing" and len([c for c in calls if c["step"] == "implementing"]) == 1:
             # First call for implementing: crash with no failure classification
             return _crash_result("implementing", session_id="ses-abc-789")
-        # Second call: resumed session succeeds
+        # Other calls succeed
         return _completed_subagent_result(tmp_path, task_arg.pipeline_status, task=task_arg)
 
     monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_run)
@@ -84,11 +114,8 @@ def test_crash_resume_triggers_session_resume_for_claude(
     assert summary.result is not None
     assert summary.result.final_status == "done"
 
-    # The implementing stage should have been called twice: initial + resume
-    impl_calls = [c for c in calls if c["prompt"] and "continue where you left off" not in c["prompt"]]
-    resume_calls = [c for c in calls if c["prompt"] and "continue where you left off" in c["prompt"]]
-
     # At least one resume call happened with session ID
+    resume_calls = [c for c in calls if c["prompt"] and "continue where you left off" in c["prompt"]]
     assert len(resume_calls) >= 1, f"Expected at least one resume call, got calls: {calls}"
     assert resume_calls[0]["resume_session_id"] == "ses-abc-789"
 
@@ -104,7 +131,7 @@ def test_crash_resume_only_once_per_crash(
 ) -> None:
     """If the resumed session also crashes, do not attempt another resume."""
     ensure_workspace(tmp_path, LitehiveConfig(default_engine="claude"))
-    create_task(tmp_path, title="Double crash task", engine="claude", auto_commit=False)
+    create_task(tmp_path, title="Double crash task", engine="claude", auto_commit=False, acceptance_criteria=_AC)
     task = require_task(tmp_path, "T-0001")
 
     calls: list[dict] = []
@@ -135,12 +162,12 @@ def test_crash_resume_only_once_per_crash(
     )
 
 
-def test_crash_resume_skipped_for_non_claude_engines(
+def test_crash_resume_skipped_when_no_resume_id(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Non-claude engines with unclassified crash should NOT trigger resume."""
+    """Engines that crash without producing a resume_id should NOT trigger resume."""
     ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
-    create_task(tmp_path, title="Codex crash task", engine="codex", auto_commit=False)
+    create_task(tmp_path, title="Codex crash task", engine="codex", auto_commit=False, acceptance_criteria=_AC)
     task = require_task(tmp_path, "T-0001")
 
     calls: list[dict] = []
@@ -154,7 +181,7 @@ def test_crash_resume_skipped_for_non_claude_engines(
             "step": task_arg.pipeline_status,
         })
         if task_arg.pipeline_status == "implementing" and len([c for c in calls if c["step"] == "implementing"]) == 1:
-            # First implementing call: crash with no failure classification
+            # First implementing call: crash with no failure classification and empty stdout (no resume_id)
             return SubagentResult(
                 ref=SubagentRef(
                     id="SA-impl-crash",
@@ -180,10 +207,57 @@ def test_crash_resume_skipped_for_non_claude_engines(
     monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_run)
     summary = run_task(tmp_path, task)
 
-    # No crash-resume calls should happen for codex (no "continue where you left off" with session ID)
+    # No crash-resume calls should happen (no resume_id in empty stdout)
     resume_calls = [c for c in calls if c.get("resume_session_id") is not None
                     and "continue where you left off" in (c.get("prompt") or "")]
-    assert len(resume_calls) == 0, f"Expected 0 resume calls for codex, got {len(resume_calls)}: {resume_calls}"
+    assert len(resume_calls) == 0, f"Expected 0 resume calls, got {len(resume_calls)}: {resume_calls}"
+
+
+@pytest.mark.parametrize(
+    "engine_name,resume_id",
+    [
+        ("codex", "thread-codex-abc"),
+        ("gemini", "ses-gemini-xyz"),
+        ("opencode", "ses-opencode-789"),
+    ],
+)
+def test_crash_resume_triggers_for_non_claude_engines(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, engine_name: str, resume_id: str
+) -> None:
+    """Crash resume fires for any engine that provides a resume_id in stdout."""
+    ensure_workspace(tmp_path, LitehiveConfig(default_engine=engine_name))
+    create_task(tmp_path, title=f"{engine_name} crash resume", engine=engine_name, auto_commit=False, acceptance_criteria=_AC)
+    task = require_task(tmp_path, "T-0001")
+
+    calls: list[dict] = []
+
+    def fake_run(
+        self, task_arg, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None
+    ):  # type: ignore[no-untyped-def]
+        calls.append({
+            "engine": engine_name,
+            "resume_session_id": resume_session_id,
+            "prompt": prompt,
+            "step": task_arg.pipeline_status,
+        })
+        if task_arg.pipeline_status == "implementing" and len([c for c in calls if c["step"] == "implementing"]) == 1:
+            return _crash_result("implementing", engine_name=engine_name, session_id=resume_id)
+        return _completed_subagent_result(tmp_path, task_arg.pipeline_status, task=task_arg)
+
+    monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_run)
+    summary = run_task(tmp_path, task)
+
+    assert summary.result is not None
+    assert summary.result.final_status == "done"
+
+    resume_calls = [c for c in calls if c["prompt"] and "continue where you left off" in c["prompt"]]
+    assert len(resume_calls) >= 1, f"Expected resume call for {engine_name}, got calls: {calls}"
+    assert resume_calls[0]["resume_session_id"] == resume_id
+
+    task_folder = tmp_path / ".litehive" / "tasks" / f"{task.id}-{task.slug}"
+    journal = (task_folder / "journal.md").read_text(encoding="utf-8")
+    assert resume_id in journal
+    assert f"resuming {engine_name} session" in journal
 
 
 def test_crash_resume_journal_entry(
@@ -191,7 +265,7 @@ def test_crash_resume_journal_entry(
 ) -> None:
     """Journal clearly logs the resume attempt with session ID and exit code."""
     ensure_workspace(tmp_path, LitehiveConfig(default_engine="claude"))
-    create_task(tmp_path, title="Journal crash task", engine="claude", auto_commit=False)
+    create_task(tmp_path, title="Journal crash task", engine="claude", auto_commit=False, acceptance_criteria=_AC)
     task = require_task(tmp_path, "T-0001")
 
     impl_call_count = 0
