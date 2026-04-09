@@ -934,6 +934,23 @@ def build_parser():
         help="Repository root containing .litehive/",
     )
 
+    # ── debug ─────────────────────────────────────────────────────────
+    debug_cmd = subparsers.add_parser(
+        "debug", help="Inspect subagent artifacts for a task"
+    )
+    debug_cmd.add_argument("task_id", help="Task ID (e.g. T-0001)")
+    debug_cmd.add_argument(
+        "--all",
+        action="store_true",
+        help="List all subagents with their status and exit code",
+    )
+    debug_cmd.add_argument(
+        "--workspace",
+        type=Path,
+        default=Path.cwd(),
+        help="Repository root containing .litehive/",
+    )
+
     # ── list ──────────────────────────────────────────────────────────
     list_cmd = subparsers.add_parser(
         "list", help="Compact task listing with optional filters"

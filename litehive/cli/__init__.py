@@ -126,6 +126,8 @@ def main():
         return _cmd_import_issue(args)
     if args.command == "import-issues":
         return _cmd_import_issues(args)
+    if args.command == "debug":
+        return _cmd_debug(args)
     if args.command == "report":
         return _cmd_report(args)
     if args.command == "list":
