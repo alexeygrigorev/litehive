@@ -9,6 +9,9 @@ from litehive.observability._engine_monitoring import record_codex_quota_check
 import yaml
 
 
+_LIVE_QUOTA_ENGINES = ("claude", "codex", "copilot", "goz", "opencode")
+
+
 def _parse_local_datetime(value: str) -> datetime:
     """Parse a date or datetime string as local timezone, return UTC datetime."""
     value = value.strip()
@@ -162,13 +165,13 @@ def _cmd_engine_status(workspace, engine_name):
     print(f"workspace: {workspace}")
 
     if engine_name is None:
-        if not monitoring.engines:
+        if monitoring.engines:
+            _print_engine_records(sorted(monitoring.engines.items()))
+        else:
             print("engine_status: no monitoring data recorded")
-            return 0
-        _print_engine_records(sorted(monitoring.engines.items()))
         print()
         print("=== live quota ===")
-        for name in sorted(monitoring.engines.keys()):
+        for name in _engines_for_live_quota(monitoring.engines.keys()):
             _print_live_quota(name)
         return 0
 
@@ -181,63 +184,80 @@ def _cmd_engine_status(workspace, engine_name):
     record = monitoring.engines.get(engine_name)
     if record is None:
         print(f"engine_status: no monitoring data for {engine_name}")
-        return 0
-
-    _print_engine_records([(engine_name, record)])
+    else:
+        _print_engine_records([(engine_name, record)])
 
     _print_live_quota(engine_name)
     return 0
 
 
-def _print_live_quota(engine_name: str) -> None:
+def _engines_for_live_quota(monitored_engines) -> list[str]:
+    names = set(monitored_engines)
+    names.update(_LIVE_QUOTA_ENGINES)
+    return sorted(names)
+
+
+def _supports_live_quota(engine_name: str) -> bool:
+    return engine_name in _LIVE_QUOTA_ENGINES
+
+
+def _load_live_quota(engine_name: str):
     if engine_name == "codex":
-        quota_status = check_codex_quota()
-        if quota_status.error is not None:
-            print(f"quota: unavailable ({quota_status.error})")
-        else:
-            print()
-            print("quota: proactive")
-            print(f"used_percent: {quota_status.primary_window.used_percent:.1f}")
-            print(f"reset_at: {quota_status.secondary_window.reset_at or '-'}")
-            print(f"5h_used: {quota_status.primary_window.used_percent:.0f}%")
-            print(f"weekly_used: {quota_status.secondary_window.used_percent:.0f}%")
-            print(f"limit_reached: {'yes' if quota_status.limit_reached else 'no'}")
-    elif engine_name == "claude":
+        return check_codex_quota()
+    if engine_name == "claude":
         from litehive.engines.quota.claude_quota import check_claude_quota
-        s = check_claude_quota()
-        if s.error is not None:
-            print(f"quota: unavailable ({s.error})")
-        else:
-            print()
-            print("quota: proactive")
-            print(f"5h_used: {s.five_hour.used_percent:.0f}%")
-            print(f"7d_used: {s.seven_day.used_percent:.0f}%")
-            print(f"5h_resets: {s.five_hour.reset_at or '-'}")
-            print(f"7d_resets: {s.seven_day.reset_at or '-'}")
-            print(f"limit_reached: {'yes' if s.limit_reached else 'no'}")
-    elif engine_name == "copilot":
+
+        return check_claude_quota()
+    if engine_name == "copilot":
         from litehive.engines.quota.copilot_quota import check_copilot_quota
-        s = check_copilot_quota()
-        if s.error is not None:
-            print(f"quota: unavailable ({s.error})")
-        else:
-            print()
-            print("quota: proactive")
-            print(f"premium_remaining: {s.premium_remaining}/{s.premium_entitlement}")
-            print(f"percent_remaining: {s.premium_percent_remaining:.0f}%")
-            print(f"resets: {s.quota_reset_date or '-'}")
-            print(f"limit_reached: {'yes' if s.limit_reached else 'no'}")
-    elif engine_name in ("goz", "opencode"):
+
+        return check_copilot_quota()
+    if engine_name in ("goz", "opencode"):
         from litehive.engines.quota.zai_quota import check_zai_quota
-        s = check_zai_quota()
-        if s.error is not None:
-            print(f"quota: unavailable ({s.error})")
-        else:
-            print()
-            print("quota: proactive")
-            print(f"api_calls_used: {s.api_calls.used_percent:.0f}%")
-            print(f"tokens_used: {s.tokens.used_percent:.0f}%")
-            print(f"limit_reached: {'yes' if s.limit_reached else 'no'}")
+
+        return check_zai_quota()
+    return None
+
+
+def _print_live_quota(engine_name: str) -> None:
+    if not _supports_live_quota(engine_name):
+        return
+
+    print()
+    print(f"engine: {engine_name}")
+    try:
+        status = _load_live_quota(engine_name)
+    except Exception as exc:
+        print(f"quota: unavailable ({exc})")
+        return
+
+    if status is None or status.error is not None:
+        error = getattr(status, "error", None) or "unknown"
+        print(f"quota: unavailable ({error})")
+        return
+
+    print("quota: proactive")
+    if engine_name == "codex":
+        print(f"used_percent: {status.primary_window.used_percent:.1f}")
+        print(f"reset_at: {status.secondary_window.reset_at or '-'}")
+        print(f"5h_used: {status.primary_window.used_percent:.0f}%")
+        print(f"weekly_used: {status.secondary_window.used_percent:.0f}%")
+        print(f"limit_reached: {'yes' if status.limit_reached else 'no'}")
+    elif engine_name == "claude":
+        print(f"5h_used: {status.five_hour.used_percent:.0f}%")
+        print(f"7d_used: {status.seven_day.used_percent:.0f}%")
+        print(f"5h_resets: {status.five_hour.reset_at or '-'}")
+        print(f"7d_resets: {status.seven_day.reset_at or '-'}")
+        print(f"limit_reached: {'yes' if status.limit_reached else 'no'}")
+    elif engine_name == "copilot":
+        print(f"premium_remaining: {status.premium_remaining}/{status.premium_entitlement}")
+        print(f"percent_remaining: {status.premium_percent_remaining:.0f}%")
+        print(f"resets: {status.quota_reset_date or '-'}")
+        print(f"limit_reached: {'yes' if status.limit_reached else 'no'}")
+    elif engine_name in ("goz", "opencode"):
+        print(f"api_calls_used: {status.api_calls.used_percent:.0f}%")
+        print(f"tokens_used: {status.tokens.used_percent:.0f}%")
+        print(f"limit_reached: {'yes' if status.limit_reached else 'no'}")
 
 
 def _cmd_engine_set(workspace, engine_name):
