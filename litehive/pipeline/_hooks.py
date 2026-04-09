@@ -105,6 +105,9 @@ def _run_runner_hooks_for_stage(
     configured_hooks = config.runner_hooks.get(hook_point, [])
     if not configured_hooks:
         return None
+    run_all = config.runner_hook_execution_mode != "fail_fast"
+    hook_results: list[dict[str, str | int | bool | None]] = []
+    blocking_failures: list[dict[str, str | int | bool | None]] = []
 
     for index, hook in enumerate(configured_hooks, start=1):
         hook_result = _execute_runner_hook(
@@ -118,32 +121,34 @@ def _run_runner_hooks_for_stage(
             description=hook.description,
             ordinal=index,
         )
-        if report is None:
-            if collected_results is not None:
-                collected_results.append(hook_result)
-            if hook_result["status"] == "failed" and hook.reject_on_failure:
-                blocking_results = list(collected_results or [hook_result])
-                return _hook_failure_report(
-                    task,
-                    step=step,
-                    hook_result=hook_result,
-                    hook_results=blocking_results,
-                )
-            continue
-
-        report.hook_results.append(hook_result)
-        report.warnings = [*report.warnings, *_runner_hook_warnings(hook_result)]
-        report.feedback = "\n\n".join(
-            part for part in [report.feedback, _runner_hook_feedback(hook_result)] if part
-        ).strip()
+        hook_results.append(hook_result)
         if hook_result["status"] == "failed" and hook.reject_on_failure:
-            report.verdict = "reject"
-            report.source = "hook"
-            report.summary = _hook_failure_summary(step=step, hook_result=hook_result)
-            report.feedback = _hook_failure_feedback(hook_result)
-            report.failure_classification = "runner_hook_failed"
-            report.failure_diagnostics = _hook_failure_diagnostics(hook_result)
-            return report
+            blocking_failures.append(hook_result)
+            if not run_all:
+                break
+
+    if collected_results is not None:
+        collected_results.extend(hook_results)
+
+    if report is None:
+        if blocking_failures:
+            return _hook_failure_report(
+                task,
+                step=step,
+                hook_results=hook_results,
+                failed_hook_results=blocking_failures,
+            )
+        return None
+
+    _attach_runner_hook_results(report, hook_results)
+    if blocking_failures:
+        report.verdict = "reject"
+        report.source = "hook"
+        report.summary = _hook_failure_summary(step=step, failed_hook_results=blocking_failures)
+        report.feedback = _hook_failure_feedback(blocking_failures)
+        report.failure_classification = "runner_hook_failed"
+        report.failure_diagnostics = _hook_failure_diagnostics(blocking_failures)
+        return report
 
     return None
 
@@ -280,48 +285,68 @@ def _runner_hook_feedback(hook_result: dict[str, str | int | bool | None]) -> st
     )
 
 
-def _hook_failure_summary(*, step: str, hook_result: dict[str, str | int | bool | None]) -> str:
+def _hook_failure_summary(
+    *,
+    step: str,
+    failed_hook_results: list[dict[str, str | int | bool | None]],
+) -> str:
+    first_failure = failed_hook_results[0]
+    if len(failed_hook_results) == 1:
+        return (
+            f"{step} rejected by runner hook `{first_failure['point']}` "
+            f"(exit {first_failure['exit_code']}): {first_failure['command']}"
+        )
     return (
-        f"{step} rejected by runner hook `{hook_result['point']}` "
-        f"(exit {hook_result['exit_code']}): {hook_result['command']}"
+        f"{step} rejected by {len(failed_hook_results)} runner hooks; "
+        f"first failure `{first_failure['point']}` "
+        f"(exit {first_failure['exit_code']}): {first_failure['command']}"
     )
 
 
-def _hook_failure_feedback(hook_result: dict[str, str | int | bool | None]) -> str:
-    stdout = str(hook_result.get("stdout") or "").rstrip()
-    stderr = str(hook_result.get("stderr") or "").rstrip()
-    lines = [
-        f"Runner hook failed: `{hook_result['point']}`",
-        f"Command: {hook_result['command']}",
-        f"Exit code: {hook_result['exit_code']}",
-    ]
-    description = hook_result.get("description")
-    if description:
-        lines.append(f"Check: {description}")
-    lines.extend(
-        [
-            "",
-            "stdout:",
-            stdout or "(empty)",
-            "",
-            "stderr:",
-            stderr or "(empty)",
-        ]
-    )
+def _hook_failure_feedback(failed_hook_results: list[dict[str, str | int | bool | None]]) -> str:
+    lines = [f"Runner hooks failed: {len(failed_hook_results)}"]
+    for index, hook_result in enumerate(failed_hook_results, start=1):
+        stdout = str(hook_result.get("stdout") or "").rstrip()
+        stderr = str(hook_result.get("stderr") or "").rstrip()
+        lines.extend(
+            [
+                "",
+                f"{index}. Hook: `{hook_result['point']}`",
+                f"Command: {hook_result['command']}",
+                f"Exit code: {hook_result['exit_code']}",
+                f"Artifact: {hook_result['artifact']}",
+            ]
+        )
+        description = hook_result.get("description")
+        if description:
+            lines.append(f"Check: {description}")
+        lines.extend(
+            [
+                "",
+                "stdout:",
+                stdout or "(empty)",
+                "",
+                "stderr:",
+                stderr or "(empty)",
+            ]
+        )
     return cap_feedback("\n".join(lines).strip())
 
 
 def _hook_failure_diagnostics(
-    hook_result: dict[str, str | int | bool | None],
+    failed_hook_results: list[dict[str, str | int | bool | None]],
 ) -> dict[str, str | int | bool | None | list[str]]:
+    first_failure = failed_hook_results[0]
     return {
-        "hook_point": hook_result["point"],
-        "command": hook_result["command"],
-        "description": hook_result.get("description"),
-        "exit_code": hook_result["exit_code"],
-        "artifact": hook_result["artifact"],
-        "stdout": hook_result.get("stdout"),
-        "stderr": hook_result.get("stderr"),
+        "hook_point": first_failure["point"],
+        "command": first_failure["command"],
+        "description": first_failure.get("description"),
+        "exit_code": first_failure["exit_code"],
+        "artifact": first_failure["artifact"],
+        "stdout": first_failure.get("stdout"),
+        "stderr": first_failure.get("stderr"),
+        "failed_hook_commands": [str(result["command"]) for result in failed_hook_results],
+        "failed_hook_artifacts": [str(result["artifact"]) for result in failed_hook_results],
     }
 
 
@@ -329,20 +354,20 @@ def _hook_failure_report(
     task: TaskRecord,
     *,
     step: str,
-    hook_result: dict[str, str | int | bool | None],
     hook_results: list[dict[str, str | int | bool | None]],
+    failed_hook_results: list[dict[str, str | int | bool | None]],
 ) -> StageReport:
     return StageReport(
         task_id=task.id,
         step=step,  # type: ignore[arg-type]
         verdict="reject",
         source="hook",
-        summary=_hook_failure_summary(step=step, hook_result=hook_result),
-        feedback=_hook_failure_feedback(hook_result),
+        summary=_hook_failure_summary(step=step, failed_hook_results=failed_hook_results),
+        feedback=_hook_failure_feedback(failed_hook_results),
         warnings=_flatten_runner_hook_warnings(hook_results),
         hook_results=hook_results,
         failure_classification="runner_hook_failed",
-        failure_diagnostics=_hook_failure_diagnostics(hook_result),
+        failure_diagnostics=_hook_failure_diagnostics(failed_hook_results),
     )
 
 
