@@ -398,9 +398,9 @@ def test_runner_requeues_commit_to_git_retry_request_back_to_implementing(tmp_pa
             retry_decision="retry",
             hook_results=[
                 {
-                    "point": "after_merge",
+                    "point": "after_commit",
                     "command": "exit 7",
-                    "blocking": True,
+                    "reject_on_failure": True,
                     "exit_code": 7,
                     "status": "failed",
                     "artifact": "artifacts/after_merge-001.yaml",
@@ -2944,17 +2944,17 @@ def test_stage_prompt_lists_upcoming_runner_hooks_for_swe(tmp_path: Path) -> Non
     )
     config = LitehiveConfig(
         runner_hooks={
-            "before_pm_acceptance": [
+            "after_implementing": [
                 {
                     "command": "ruff check --select E402,F401",
-                    "blocking": True,
+                    "reject_on_failure": True,
                     "description": "ensures no unused imports or wrong import order",
-                }
+                },
             ],
-            "after_swe_implementation": [
+            "after_testing": [
                 {
                     "command": "pytest -q tests/test_runner_workflow.py",
-                    "blocking": True,
+                    "reject_on_failure": True,
                     "description": "checks the workflow slice stays green",
                 }
             ],
@@ -2963,15 +2963,12 @@ def test_stage_prompt_lists_upcoming_runner_hooks_for_swe(tmp_path: Path) -> Non
 
     prompt = stage_prompt(task, "implementing", workspace_context="", config=config)
 
-    assert "Runner hooks:" in prompt
-    assert (
-        "After implementing, these checks will run: pytest -q tests/test_runner_workflow.py (checks the workflow slice stays green)"
-        in prompt
-    )
-    assert (
-        "Before acceptance, these checks will run: ruff check --select E402,F401 (ensures no unused imports or wrong import order)"
-        in prompt
-    )
+    assert "Checks that will reject your work if they fail:" in prompt
+    assert "ruff check --select E402,F401 (ensures no unused imports or wrong import order)" in prompt
+    # pytest hook is under after_testing, only visible in testing stage prompt
+    testing_prompt = stage_prompt(task, "testing", workspace_context="", config=config)
+    assert "Checks that will reject your work if they fail:" in testing_prompt
+    assert "pytest -q tests/test_runner_workflow.py (checks the workflow slice stays green)" in testing_prompt
 
 
 def test_stage_report_from_subagent_marks_cli_verdict_source(tmp_path: Path) -> None:

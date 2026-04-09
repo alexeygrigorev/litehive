@@ -916,22 +916,25 @@ def test_configure_persists_runner_hooks(tmp_path: Path) -> None:
         pool_selection_policy="dependency_aware",
         pre_acceptance_command=None,
         hook=[
-            "before_swe_implementation=nonblocking:echo pre",
-            "after_swe_implementation=blocking:echo post",
-            "before_pm_acceptance=blocking:echo review",
-            "after_pm_acceptance=nonblocking:echo accepted",
-            "after_merge=blocking:echo verify",
+            "before_implementing=run:echo pre",
+            "after_implementing=reject:echo post",
+            "before_accepting=run:echo review",
+            "after_accepting=run:echo accepted",
+            "after_commit=reject:echo verify",
         ],
     )
 
     assert _cmd_configure(parser) == 0
     config = load_config(tmp_path)
 
-    assert config.runner_hooks["before_swe_implementation"][0].blocking is False
-    assert config.runner_hooks["after_swe_implementation"][0].command == "echo post"
-    assert config.runner_hooks["before_pm_acceptance"][0].command == "echo review"
-    assert config.runner_hooks["after_pm_acceptance"][0].blocking is False
-    assert config.runner_hooks["after_merge"][0].command == "echo verify"
+    assert config.runner_hooks["before_implementing"][0].reject_on_failure is False
+    assert config.runner_hooks["after_implementing"][0].command == "echo post"
+    assert config.runner_hooks["after_implementing"][0].reject_on_failure is True
+    assert config.runner_hooks["before_accepting"][0].command == "echo review"
+    assert config.runner_hooks["before_accepting"][0].reject_on_failure is False
+    assert config.runner_hooks["after_accepting"][0].reject_on_failure is False
+    assert config.runner_hooks["after_commit"][0].command == "echo verify"
+    assert config.runner_hooks["after_commit"][0].reject_on_failure is True
 
 
 def test_load_config_preserves_runner_hook_descriptions(tmp_path: Path) -> None:
@@ -940,10 +943,10 @@ def test_load_config_preserves_runner_hook_descriptions(tmp_path: Path) -> None:
         yaml.safe_dump(
             {
                 "runner_hooks": {
-                    "before_pm_acceptance": [
+                    "after_implementing": [
                         {
                             "command": "uv run ruff check .",
-                            "blocking": True,
+                            "reject_on_failure": True,
                             "description": "ensures lint passes before acceptance",
                         }
                     ]
@@ -956,7 +959,7 @@ def test_load_config_preserves_runner_hook_descriptions(tmp_path: Path) -> None:
 
     config = load_config(tmp_path)
 
-    assert config.runner_hooks["before_pm_acceptance"][0].description == (
+    assert config.runner_hooks["after_implementing"][0].description == (
         "ensures lint passes before acceptance"
     )
 
@@ -991,7 +994,7 @@ def test_configure_rejects_invalid_runner_hook_point(
         pool_stop_on_dirty_git=False,
         pool_selection_policy="dependency_aware",
         pre_acceptance_command=None,
-        hook=["before_testing=blocking:echo nope"],
+        hook=["invalid_hook_point=run:echo nope"],
         subagent_resource_limits_enabled=None,
         subagent_memory_mb=None,
         subagent_cpu_count=None,

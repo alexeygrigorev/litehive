@@ -114,7 +114,7 @@ def _run_runner_hooks_for_stage(
             step=step,
             hook_point=hook_point,
             command=hook.command,
-            blocking=hook.reject_on_failure,
+            reject_on_failure=hook.reject_on_failure,
             description=hook.description,
             ordinal=index,
         )
@@ -196,7 +196,7 @@ def _execute_runner_hook(
     step: str,
     hook_point: str,
     command: str,
-    blocking: bool,
+    reject_on_failure: bool,
     description: str | None,
     ordinal: int,
 ) -> dict[str, str | int | bool | None]:
@@ -221,7 +221,7 @@ def _execute_runner_hook(
         "step": step,
         "hook_point": hook_point,
         "command": command,
-        "blocking": blocking,
+        "reject_on_failure": reject_on_failure,
         "description": description,
         "exit_code": completed.returncode,
         "stdout": completed.stdout,
@@ -242,7 +242,7 @@ def _execute_runner_hook(
             [
                 f"Runner hook `{hook_point}` {status}: `{command}`.",
                 f"- step: `{step}`",
-                f"- blocking: `{blocking}`",
+                f"- reject_on_failure: `{reject_on_failure}`",
                 f"- description: `{description or '-'}`",
                 f"- exit_code: `{completed.returncode}`",
                 f"- artifact: `{artifact_label}`",
@@ -252,7 +252,7 @@ def _execute_runner_hook(
     return {
         "point": hook_point,
         "command": command,
-        "blocking": blocking,
+        "reject_on_failure": reject_on_failure,
         "description": description,
         "exit_code": completed.returncode,
         "status": status,

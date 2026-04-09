@@ -11,13 +11,9 @@ from litehive.tasks.normalization import (
 from litehive.tasks.templates import task_template
 
 
-_PROMPT_HOOK_POINT_GROUPS: dict[str, list[tuple[str, str]]] = {
-    "implementing": [
-        ("After implementing, these checks will run:", "after_swe_implementation"),
-        ("Before acceptance, these checks will run:", "before_pm_acceptance"),
-        ("After acceptance, these checks will run:", "after_pm_acceptance"),
-        ("After merge, these checks will run:", "after_merge"),
-    ]
+_REJECTING_HOOK_POINTS: dict[str, str] = {
+    "implementing": "after_implementing",
+    "testing": "after_testing",
 }
 
 
@@ -91,9 +87,9 @@ def stage_prompt(
     if hook_summary:
         lines.extend([
             "",
-            "Runner hooks:",
+            "Checks that will reject your work if they fail:",
             *hook_summary,
-            "- IMPORTANT: If any hook fails, your work will be rejected and you will need to fix it. Run these checks yourself before finishing.",
+            "- IMPORTANT: Run these checks yourself before finishing. If they fail, your work will be rejected.",
         ])
     lines.extend(
         [
@@ -317,16 +313,16 @@ def _stage_owner_for_step(step: str) -> str:
 def _runner_hook_prompt_lines(step: str, config: LitehiveConfig | None) -> list[str]:
     if config is None:
         return []
-    groups = _PROMPT_HOOK_POINT_GROUPS.get(step, [])
-    if not groups:
+    hook_point = _REJECTING_HOOK_POINTS.get(step)
+    if hook_point is None:
+        return []
+    hooks = config.runner_hooks.get(hook_point, [])
+    rejecting = [h for h in hooks if h.reject_on_failure]
+    if not rejecting:
         return []
     lines: list[str] = []
-    for label, hook_point in groups:
-        hooks = config.runner_hooks.get(hook_point, [])
-        if not hooks:
-            continue
-        rendered = "; ".join(_format_runner_hook_prompt_entry(hook) for hook in hooks)
-        lines.append(f"- {label} {rendered}")
+    for hook in rejecting:
+        lines.append(f"- {_format_runner_hook_prompt_entry(hook)}")
     return lines
 
 

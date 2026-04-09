@@ -1976,8 +1976,8 @@ def test_status_output_includes_runner_hooks(
         tmp_path,
         LitehiveConfig(
             runner_hooks={
-                "before_swe_implementation": [{"command": "echo pre", "blocking": False}],
-                "before_pm_acceptance": [{"command": "echo review", "blocking": True}],
+                "before_implementing": [{"command": "echo pre", "reject_on_failure": False}],
+                "after_implementing": [{"command": "echo review", "reject_on_failure": True}],
             }
         ),
     )
@@ -1987,12 +1987,12 @@ def test_status_output_includes_runner_hooks(
 
     assert exit_code == 0
     config = load_config(tmp_path)
-    assert "before_pm_acceptance" in config.runner_hooks
-    assert config.runner_hooks["before_pm_acceptance"][0].command == "echo review"
-    assert config.runner_hooks["before_pm_acceptance"][0].blocking is True
-    assert "before_swe_implementation" in config.runner_hooks
-    assert config.runner_hooks["before_swe_implementation"][0].command == "echo pre"
-    assert config.runner_hooks["before_swe_implementation"][0].blocking is False
+    assert "after_implementing" in config.runner_hooks
+    assert config.runner_hooks["after_implementing"][0].command == "echo review"
+    assert config.runner_hooks["after_implementing"][0].reject_on_failure is True
+    assert "before_implementing" in config.runner_hooks
+    assert config.runner_hooks["before_implementing"][0].command == "echo pre"
+    assert config.runner_hooks["before_implementing"][0].reject_on_failure is False
 
 def test_status_output_includes_budget_control_settings(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]

@@ -56,5 +56,4 @@ class SubagentResourceLimitsConfig:
 class RunnerHookConfig:
     command: str
     reject_on_failure: bool = False
-    blocking: bool = False  # legacy alias for reject_on_failure
     description: str | None = None

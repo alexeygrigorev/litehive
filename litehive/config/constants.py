@@ -23,6 +23,6 @@ VALID_RUNNER_HOOK_POINTS = frozenset(
         "after_commit",
     }
 )
-REJECTABLE_HOOK_POINTS = frozenset({"after_implementing", "after_testing"})
+REJECTABLE_HOOK_POINTS = frozenset({"after_implementing", "after_testing", "after_commit"})
 MODEL_FAMILY_RETRY_SELECTOR_PREFIX = "model_family:"
 ENGINE_CATEGORY_RETRY_SELECTOR_PREFIX = "engine_category:"

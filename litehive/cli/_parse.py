@@ -92,20 +92,20 @@ def _parse_runner_hooks(
         point, separator, remainder = raw_value.partition("=")
         if separator != "=":
             raise ValueError(
-                f"{option_name} entries must use HOOK_POINT=blocking|nonblocking:COMMAND"
+                f"{option_name} entries must use HOOK_POINT=reject|run:COMMAND"
             )
-        blocking_label, separator, command = remainder.partition(":")
+        mode_label, separator, command = remainder.partition(":")
         if separator != ":":
             raise ValueError(
-                f"{option_name} entries must use HOOK_POINT=blocking|nonblocking:COMMAND"
+                f"{option_name} entries must use HOOK_POINT=reject|run:COMMAND"
             )
-        blocking_key = blocking_label.strip().lower()
-        if blocking_key not in {"blocking", "nonblocking", "non-blocking"}:
-            raise ValueError(f"{option_name} blocking mode must be `blocking` or `nonblocking`")
+        mode_key = mode_label.strip().lower()
+        if mode_key not in {"reject", "run"}:
+            raise ValueError(f"{option_name} mode must be `reject` or `run`")
         hooks.setdefault(point.strip(), []).append(
             {
                 "command": command.strip(),
-                "blocking": blocking_key == "blocking",
+                "reject_on_failure": mode_key == "reject",
             }
         )
     return hooks

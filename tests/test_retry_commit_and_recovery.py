@@ -3118,8 +3118,8 @@ def test_commit_to_git_runs_after_merge_hook_on_main_and_finishes(tmp_path: Path
         tmp_path,
         LitehiveConfig(
             runner_hooks={
-                "after_merge": [
-                    {"command": "grep -q '^from worktree$' app.txt", "blocking": True}
+                "after_commit": [
+                    {"command": "grep -q '^from worktree$' app.txt", "reject_on_failure": True}
                 ]
             }
         ),
@@ -3145,7 +3145,7 @@ def test_commit_to_git_runs_after_merge_hook_on_main_and_finishes(tmp_path: Path
     assert report.verdict == "pass"
     assert task.status == "done"
     assert task.pipeline_status == "done"
-    assert report.hook_results[0]["point"] == "after_merge"
+    assert report.hook_results[0]["point"] == "after_commit"
     assert report.hook_results[0]["status"] == "passed"
     assert (tmp_path / "app.txt").read_text(encoding="utf-8") == "from worktree\n"
 
@@ -3156,8 +3156,8 @@ def test_commit_to_git_requeues_implementing_when_after_merge_hook_fails(tmp_pat
         tmp_path,
         LitehiveConfig(
             runner_hooks={
-                "after_merge": [
-                    {"command": "echo post-merge failed >&2; exit 7", "blocking": True}
+                "after_commit": [
+                    {"command": "echo post-merge failed >&2; exit 7", "reject_on_failure": True}
                 ]
             }
         ),
@@ -3188,7 +3188,7 @@ def test_commit_to_git_requeues_implementing_when_after_merge_hook_fails(tmp_pat
     assert task.git.commit_sha != initial_sha
     assert (tmp_path / "app.txt").read_text(encoding="utf-8") == "merged before failure\n"
     assert not worktree_path.exists()
-    assert report.hook_results[0]["point"] == "after_merge"
+    assert report.hook_results[0]["point"] == "after_commit"
     assert report.hook_results[0]["status"] == "failed"
     assert "without reverting the merge" in report.summary
 

@@ -3670,7 +3670,7 @@ def test_run_task_runs_pre_acceptance_hook_after_testing_passes(
     ensure_workspace(
         tmp_path,
         LitehiveConfig(runner_hooks={
-            "before_pm_acceptance": [{"command": "uv run ruff check litehive tests", "blocking": True}],
+            "after_implementing": [{"command": "uv run ruff check litehive tests", "reject_on_failure": True}],
         }),
     )
     create_task(tmp_path, title="Run ruff before acceptance", auto_commit=False)
@@ -3697,12 +3697,12 @@ def test_run_task_runs_pre_acceptance_hook_after_testing_passes(
         assert text is True
         assert check is False
         assert env is not None
-        assert env["LITEHIVE_TASK_STEP"] == "accepting"
-        assert env["LITEHIVE_HOOK_POINT"] == "before_pm_acceptance"
+        assert env["LITEHIVE_TASK_STEP"] == "implementing"
+        assert env["LITEHIVE_HOOK_POINT"] == "after_implementing"
         return subprocess.CompletedProcess(argv, 0, stdout="ruff clean\n", stderr="")
 
     monkeypatch.setattr("litehive.pipeline.SubagentManager.run", fake_subagent_run)
-    monkeypatch.setattr("litehive.pipeline.subprocess.run", fake_hook)
+    monkeypatch.setattr("litehive.pipeline._hooks.subprocess.run", fake_hook)
 
     summary = run_next_task(tmp_path)
 
@@ -3715,21 +3715,21 @@ def test_run_task_runs_pre_acceptance_hook_after_testing_passes(
         / "tasks"
         / "T-0001-run-ruff-before-acceptance"
         / "artifacts"
-        / "before_pm_acceptance-001.yaml"
+        / "after_implementing-001.yaml"
     )
     assert "command: uv run ruff check litehive tests" in artifact.read_text(encoding="utf-8")
-    accepting_report = yaml.safe_load(
+    implementing_report = yaml.safe_load(
         (
             tmp_path
             / ".litehive"
             / "tasks"
             / "T-0001-run-ruff-before-acceptance"
             / "reports"
-            / "accepting-004.yaml"
+            / "implementing-002.yaml"
         ).read_text(encoding="utf-8")
     )
-    assert accepting_report["hook_results"][0]["point"] == "before_pm_acceptance"
-    assert "runner hook passed" in "\n".join(accepting_report["warnings"])
+    assert implementing_report["hook_results"][0]["point"] == "after_implementing"
+    assert "runner hook passed" in "\n".join(implementing_report["warnings"])
 
 
 def test_collect_changed_hook_paths_limits_scope_to_code_paths(tmp_path: Path) -> None:
@@ -3743,13 +3743,13 @@ def test_collect_changed_hook_paths_limits_scope_to_code_paths(tmp_path: Path) -
 
     assert _collect_changed_hook_paths(tmp_path) == ["tests/test_scope_target.py"]
 
-def test_run_task_blocks_before_accepting_when_pre_acceptance_hook_fails(
+def test_run_task_blocks_after_implementing_when_pre_acceptance_hook_fails(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     ensure_workspace(
         tmp_path,
         LitehiveConfig(runner_hooks={
-            "before_pm_acceptance": [{"command": "uv run ruff check litehive tests", "blocking": True}],
+            "after_implementing": [{"command": "uv run ruff check litehive tests", "reject_on_failure": True}],
         }),
     )
     create_task(tmp_path, title="Block on failing ruff", auto_commit=False)
@@ -3765,43 +3765,42 @@ def test_run_task_blocks_before_accepting_when_pre_acceptance_hook_fails(
         return subprocess.CompletedProcess(argv, 1, stdout="", stderr="F401 unused import\n")
 
     monkeypatch.setattr("litehive.pipeline.SubagentManager.run", fake_subagent_run)
-    monkeypatch.setattr("litehive.pipeline.subprocess.run", fake_hook)
+    monkeypatch.setattr("litehive.pipeline._hooks.subprocess.run", fake_hook)
 
     summary = run_next_task(tmp_path)
 
     assert summary.result is not None
     assert summary.result.final_status == "queued"
-    assert calls == ["grooming", "implementing", "testing"]
+    assert calls == ["grooming", "implementing"]
     task = get_task(tmp_path, "T-0001")
     assert task is not None
     assert task.status == "queued"
     assert task.pipeline_status == "implementing"
-    accepting_report = yaml.safe_load(
+    implementing_report = yaml.safe_load(
         (
             tmp_path
             / ".litehive"
             / "tasks"
             / "T-0001-block-on-failing-ruff"
             / "reports"
-            / "accepting-004.yaml"
+            / "implementing-002.yaml"
         ).read_text(encoding="utf-8")
     )
-    assert accepting_report["verdict"] == "reject"
-    assert accepting_report["source"] == "hook"
-    assert "accepting rejected by runner hook" in accepting_report["summary"]
-    assert accepting_report["hook_results"][0]["point"] == "before_pm_acceptance"
-    assert accepting_report["hook_results"][0]["command"] == "uv run ruff check litehive tests"
-    assert accepting_report["hook_results"][0]["exit_code"] == 1
-    assert accepting_report["hook_results"][0]["stderr"] == "F401 unused import\n"
-    assert "Command: uv run ruff check litehive tests" in accepting_report["feedback"]
-    assert "Exit code: 1" in accepting_report["feedback"]
-    assert "stderr:\nF401 unused import" in accepting_report["feedback"]
-    assert "runner hook failed" in "\n".join(accepting_report["warnings"])
+    assert implementing_report["verdict"] == "reject"
+    assert implementing_report["source"] == "hook"
+    assert "implementing rejected by runner hook" in implementing_report["summary"]
+    assert implementing_report["hook_results"][0]["point"] == "after_implementing"
+    assert implementing_report["hook_results"][0]["command"] == "uv run ruff check litehive tests"
+    assert implementing_report["hook_results"][0]["exit_code"] == 1
+    assert implementing_report["hook_results"][0]["stderr"] == "F401 unused import\n"
+    assert "Command: uv run ruff check litehive tests" in implementing_report["feedback"]
+    assert "Exit code: 1" in implementing_report["feedback"]
+    assert "stderr:\nF401 unused import" in implementing_report["feedback"]
+    assert "runner hook failed" in "\n".join(implementing_report["warnings"])
     journal = (
         tmp_path / ".litehive" / "tasks" / "T-0001-block-on-failing-ruff" / "journal.md"
     ).read_text(encoding="utf-8")
-    assert "Runner hook `before_pm_acceptance` failed" in journal
-    assert "Hook rejection routed `accepting` back to `implementing` for SWE follow-up." in journal
+    assert "Runner hook `after_implementing` failed" in journal
 
 def test_run_task_records_non_blocking_runner_hook_failure_and_continues(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -3810,7 +3809,7 @@ def test_run_task_records_non_blocking_runner_hook_failure_and_continues(
         tmp_path,
         LitehiveConfig(
             runner_hooks={
-                "before_swe_implementation": [{"command": "echo pre && exit 7", "blocking": False}]
+                "before_implementing": [{"command": "echo pre && exit 7", "reject_on_failure": False}]
             }
         ),
     )
@@ -3827,7 +3826,7 @@ def test_run_task_records_non_blocking_runner_hook_failure_and_continues(
         return subprocess.CompletedProcess(argv, 0, stdout="", stderr="")
 
     monkeypatch.setattr("litehive.pipeline.SubagentManager.run", fake_subagent_run)
-    monkeypatch.setattr("litehive.pipeline.subprocess.run", fake_hook)
+    monkeypatch.setattr("litehive.pipeline._hooks.subprocess.run", fake_hook)
 
     summary = run_next_task(tmp_path)
 
@@ -3844,7 +3843,7 @@ def test_run_task_records_non_blocking_runner_hook_failure_and_continues(
             / "implementing-002.yaml"
         ).read_text(encoding="utf-8")
     )
-    assert implementing_report["hook_results"][0]["point"] == "before_swe_implementation"
+    assert implementing_report["hook_results"][0]["point"] == "before_implementing"
     assert implementing_report["hook_results"][0]["status"] == "failed"
     assert implementing_report["verdict"] == "pass"
     assert "runner hook failed" in "\n".join(implementing_report["warnings"])
@@ -3856,7 +3855,7 @@ def test_run_task_blocks_when_post_implementation_runner_hook_fails(
         tmp_path,
         LitehiveConfig(
             runner_hooks={
-                "after_swe_implementation": [{"command": "echo post && exit 9", "blocking": True}]
+                "after_implementing": [{"command": "echo post && exit 9", "reject_on_failure": True}]
             }
         ),
     )
@@ -3880,7 +3879,7 @@ def test_run_task_blocks_when_post_implementation_runner_hook_fails(
         return subprocess.CompletedProcess(argv, 0, stdout="", stderr="")
 
     monkeypatch.setattr("litehive.pipeline.SubagentManager.run", fake_subagent_run)
-    monkeypatch.setattr("litehive.pipeline.subprocess.run", fake_hook)
+    monkeypatch.setattr("litehive.pipeline._hooks.subprocess.run", fake_hook)
 
     summary = run_next_task(tmp_path)
 
@@ -3903,7 +3902,7 @@ def test_run_task_blocks_when_post_implementation_runner_hook_fails(
     )
     assert implementing_report["verdict"] == "reject"
     assert implementing_report["source"] == "hook"
-    assert implementing_report["hook_results"][0]["point"] == "after_swe_implementation"
+    assert implementing_report["hook_results"][0]["point"] == "after_implementing"
     assert implementing_report["hook_results"][0]["exit_code"] == 9
     assert "stderr:\nbad diff" in implementing_report["feedback"]
     journal = (
@@ -3921,7 +3920,7 @@ def test_run_task_runs_after_acceptance_runner_hook_on_accept(
     ensure_workspace(
         tmp_path,
         LitehiveConfig(
-            runner_hooks={"after_pm_acceptance": [{"command": "echo accepted", "blocking": True}]}
+            runner_hooks={"after_accepting": [{"command": "echo accepted"}]}
         ),
     )
     create_task(tmp_path, title="Run after acceptance hook", auto_commit=False)
@@ -3935,7 +3934,7 @@ def test_run_task_runs_after_acceptance_runner_hook_on_accept(
         return subprocess.CompletedProcess(argv, 0, stdout="", stderr="")
 
     monkeypatch.setattr("litehive.pipeline.SubagentManager.run", fake_subagent_run)
-    monkeypatch.setattr("litehive.pipeline.subprocess.run", fake_hook)
+    monkeypatch.setattr("litehive.pipeline._hooks.subprocess.run", fake_hook)
 
     summary = run_next_task(tmp_path)
 
@@ -3951,7 +3950,7 @@ def test_run_task_runs_after_acceptance_runner_hook_on_accept(
             / "accepting-004.yaml"
         ).read_text(encoding="utf-8")
     )
-    assert accepting_report["hook_results"][0]["point"] == "after_pm_acceptance"
+    assert accepting_report["hook_results"][0]["point"] == "after_accepting"
 
 
 def test_add_command_with_priority_high(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:

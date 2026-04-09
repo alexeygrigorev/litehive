@@ -54,11 +54,11 @@ def load_config(root: Path) -> LitehiveConfig:
     if data.pop("pre_acceptance_command", None):
         raise ValueError(
             "pre_acceptance_command is no longer supported. "
-            "Migrate to runner_hooks.before_pm_acceptance in config.yaml. Example:\n"
+            "Migrate to runner_hooks.after_implementing in config.yaml. Example:\n"
             "  runner_hooks:\n"
-            "    before_pm_acceptance:\n"
+            "    after_implementing:\n"
             "      - command: '<your command>'\n"
-            "        blocking: true"
+            "        reject_on_failure: true"
         )
     return LitehiveConfig(**data)
 

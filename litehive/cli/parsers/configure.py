@@ -135,9 +135,11 @@ def register_configure_parser(subparsers):
         action="append",
         default=None,
         help=(
-            "Add a runner hook as HOOK_POINT=blocking|nonblocking:COMMAND. "
-            "Supported points: before_swe_implementation, after_swe_implementation, "
-            "before_pm_acceptance, after_pm_acceptance, after_merge."
+            "Add a runner hook as HOOK_POINT=reject|run:COMMAND. "
+            "Supported points: before_grooming, after_grooming, before_implementing, "
+            "after_implementing, before_testing, after_testing, before_accepting, "
+            "after_accepting, after_commit. "
+            "reject_on_failure only valid for after_implementing and after_testing."
         ),
     )
     parser.add_argument(

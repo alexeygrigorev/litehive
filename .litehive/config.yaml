@@ -100,14 +100,14 @@ agent_startup_guidance:
 opencode_model: zai-coding-plan/glm-5.1
 auto_commit: true
 runner_hooks:
-  after_swe_implementation:
+  after_implementing:
   - command: uv run ruff check --select E402,F401 litehive tests
-    blocking: true
+    reject_on_failure: true
   - command: "if [ -n \"${LITEHIVE_CHANGED_PATHS:-}\" ] \\\n  && printf '%s\\n' \"\
       $LITEHIVE_CHANGED_PATHS\" | grep -q . \\\n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\"\
       \ \\\n    | xargs -r -d '\\n' git grep -nE 'noqa:.*F401|noqa:.*F403|ruff:\\\
       s*noqa:\\s*F401|ruff:\\s*noqa:\\s*F403' --; then\n  echo 'Forbidden noqa F401/F403\
       \ suppression found.'\n  exit 1\nfi"
-    blocking: true
+    reject_on_failure: true
 task_mode_name: tasks
 implementation_mode_name: implementation
