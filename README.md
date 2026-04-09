@@ -320,7 +320,7 @@ def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None, 
             stderr=""),
         transcript="", exit_code=0,
     )
-monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_run)
+monkeypatch.setattr("litehive.pipeline.SubagentManager.run", fake_run)
 ```
 
 **Option B: Custom executor** (bypasses SubagentManager, tests runner logic only):
@@ -374,7 +374,7 @@ When a function is imported with `from module import func`, monkeypatch the impo
 ```python
 # If runner/core.py does: from litehive.tasks import save_task
 # Patch at the import site:
-monkeypatch.setattr("litehive.runner.core.save_task", fake)
+monkeypatch.setattr("litehive.pipeline.core.save_task", fake)
 # NOT at the source:
 monkeypatch.setattr("litehive.tasks.save_task", fake)  # won't work
 ```

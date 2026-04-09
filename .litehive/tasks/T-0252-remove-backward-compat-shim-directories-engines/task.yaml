@@ -2,7 +2,7 @@ id: T-0252
 slug: remove-backward-compat-shim-directories-engines
 title: Remove backward-compat shim directories (engines/, runtime/, runner/)
 depends_on: []
-task_type: null
+task_type: refactor
 engine: null
 model: null
 mode: implementation
@@ -12,21 +12,38 @@ flag_reason: null
 flag_count: 0
 pipeline_status: backlog
 priority: high
-pm_complexity: null
-planned_effort: null
+pm_complexity: moderate
+planned_effort: m
 created_at: '2026-04-09T09:16:11+00:00'
-updated_at: '2026-04-09T09:16:11+00:00'
+updated_at: '2026-04-09T14:00:37+00:00'
 goal: After T-0232 reorg, engines/, runtime/, runner/ are pure re-export shims (from
   litehive.agents/pipeline import *). Update all internal imports to use canonical
   paths (agents/, pipeline/) and remove or minimize the shim directories.
 acceptance_criteria:
-- All internal imports use litehive.agents instead of litehive.engines
-- All internal imports use litehive.pipeline instead of litehive.runtime
-- engines/__init__.py kept as minimal re-export for external API compat
-- runtime/ and runner/ stub files removed
-- All existing tests pass
+- No production code under litehive/ imports from litehive.engines, litehive.runtime,
+  or litehive.runner; canonical imports use litehive.agents and litehive.pipeline
+  instead.
+- Repository-owned tests and integration helpers use canonical litehive.agents and
+  litehive.pipeline paths, except for any explicit coverage that verifies top-level
+  litehive.engines compatibility.
+- Importing litehive.engines still exposes the supported top-level engine API, while
+  litehive/runtime and litehive/runner shim modules are removed from the package tree.
+- uv run pytest -q passes with zero failures after the import migration and shim cleanup.
 constraints: []
-plan: []
+plan:
+- Audit current shim usage in source, tests, and integration helpers; separate required
+  canonical-path migrations from any compatibility assertions that should remain.
+- Update production imports in CLI, web, and pipeline modules to use litehive.agents
+  and litehive.pipeline directly, including quota/model imports that still flow through
+  shim packages.
+- Migrate tests and integration helpers off litehive.runtime, litehive.runner, and
+  litehive.engines submodules to canonical paths, preserving only intentional top-level
+  litehive.engines compatibility coverage if needed.
+- Remove litehive/runtime and litehive/runner shim files, reduce litehive/engines
+  to a minimal __init__.py compatibility barrel, and delete obsolete shim submodules.
+- Run the focused and full test suite needed to prove the package still works after
+  the path cleanup, then fix any regressions caused by moved monkeypatch targets or
+  module names.
 human_checkpoints: []
 subagents: []
 git:

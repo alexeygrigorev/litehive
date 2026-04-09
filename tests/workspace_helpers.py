@@ -63,7 +63,7 @@ from litehive.config import (
     render_context_template,
     resolve_process_profile,
 )
-from litehive.engines import (
+from litehive.agents import (
     classify_execution_interruption,
     classify_execution_limit,
     classify_retryable_execution_failure,
@@ -71,13 +71,13 @@ from litehive.engines import (
     extract_engine_timeline,
     get_engine,
 )
-from litehive.engines.base import (
+from litehive.agents.base import (
     AdapterCapabilities,
     CLIExecutionResult,
     ExternalCLIAdapter,
     parse_stage_report_text,
 )
-from litehive.engines.sandbox import SandboxLauncher
+from litehive.agents.sandbox import SandboxLauncher
 from litehive.git_ops import GitError, checkpoint_message, commit_task
 from litehive.models import (
     EngineUsageObservation,
@@ -103,10 +103,10 @@ from litehive.observability import (
     record_engine_execution,
     render_task_summary,
 )
-from litehive.runner import TaskExecutionRunner
-from litehive.runtime import (
+from litehive.pipeline import (
     EngineBudgetLedger,
     TaskPoolStopConditions,
+    TaskExecutionRunner,
     _allowed_commit_paths,
     _commit_to_git_report,
     _role_for_step,

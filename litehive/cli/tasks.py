@@ -1,5 +1,5 @@
 from litehive.config import ensure_workspace, load_config
-from litehive.engines import get_engine
+from litehive.agents import get_engine
 from litehive.models import UpstreamContributionOrigin, UpstreamPatchProposal
 from litehive.subagents import intake_prompt
 from litehive.tasks import (

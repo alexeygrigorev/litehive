@@ -2,7 +2,7 @@ import argparse
 from pathlib import Path
 
 from litehive.config import available_process_profiles, VALID_POOL_SELECTION_POLICIES
-from litehive.engines import ENGINE_CHOICES
+from litehive.agents import ENGINE_CHOICES
 from litehive.tasks import (
     VALID_HUMAN_CHECKPOINTS,
     VALID_PM_COMPLEXITIES,

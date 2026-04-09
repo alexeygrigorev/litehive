@@ -34,7 +34,7 @@ from tests.workspace_helpers import (
     yaml,
 )
 
-import litehive.engines.quota.codex_quota as _codex_quota_mod
+import litehive.agents.quota.codex_quota as _codex_quota_mod
 
 
 def test_engine_command_switches_workspace_default_engine(
@@ -91,24 +91,24 @@ def test_engine_status_command_shows_all_monitored_engines(
     from litehive.models import EngineUsageRecord, EngineUsageWindow, WorkspaceEngineMonitoring
     from litehive.observability._engine_monitoring import save_engine_monitoring
     from litehive.cli import _cmd_engine
-    from litehive.engines.quota.claude_quota import ClaudeQuotaStatus
-    from litehive.engines.quota.copilot_quota import CopilotQuotaStatus
-    from litehive.engines.quota.zai_quota import ZaiQuotaStatus
+    from litehive.agents.quota.claude_quota import ClaudeQuotaStatus
+    from litehive.agents.quota.copilot_quota import CopilotQuotaStatus
+    from litehive.agents.quota.zai_quota import ZaiQuotaStatus
 
     monkeypatch.setattr(
         "litehive.cli.engine.check_codex_quota",
         lambda: _codex_quota_mod.CodexQuotaStatus(error="test-disabled"),
     )
     monkeypatch.setattr(
-        "litehive.engines.quota.claude_quota.check_claude_quota",
+        "litehive.agents.quota.claude_quota.check_claude_quota",
         lambda: ClaudeQuotaStatus(error="no-credentials"),
     )
     monkeypatch.setattr(
-        "litehive.engines.quota.copilot_quota.check_copilot_quota",
+        "litehive.agents.quota.copilot_quota.check_copilot_quota",
         lambda: CopilotQuotaStatus(error="gh not on PATH"),
     )
     monkeypatch.setattr(
-        "litehive.engines.quota.zai_quota.check_zai_quota",
+        "litehive.agents.quota.zai_quota.check_zai_quota",
         lambda: ZaiQuotaStatus(error="goz not on PATH"),
     )
 
@@ -181,7 +181,7 @@ def test_engine_status_command_scopes_to_single_engine_and_shows_codex_quota(
     ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
 
     from litehive.cli import _cmd_engine
-    from litehive.engines.quota.codex_quota import CodexQuotaStatus, CodexQuotaWindow
+    from litehive.agents.quota.codex_quota import CodexQuotaStatus, CodexQuotaWindow
 
     def fake_check_codex_quota():
         return CodexQuotaStatus(
@@ -224,7 +224,7 @@ def test_engine_status_command_shows_claude_quota_without_monitoring_data(
     ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
 
     from litehive.cli import _cmd_engine
-    from litehive.engines.quota.claude_quota import ClaudeQuotaStatus, ClaudeQuotaWindow
+    from litehive.agents.quota.claude_quota import ClaudeQuotaStatus, ClaudeQuotaWindow
 
     def fake_check_claude_quota():
         return ClaudeQuotaStatus(
@@ -241,7 +241,7 @@ def test_engine_status_command_shows_claude_quota_without_monitoring_data(
         )
 
     monkeypatch.setattr(
-        "litehive.engines.quota.claude_quota.check_claude_quota",
+        "litehive.agents.quota.claude_quota.check_claude_quota",
         fake_check_claude_quota,
     )
 
@@ -269,7 +269,7 @@ def test_engine_status_command_shows_copilot_quota_without_monitoring_data(
     ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
 
     from litehive.cli import _cmd_engine
-    from litehive.engines.quota.copilot_quota import CopilotQuotaStatus
+    from litehive.agents.quota.copilot_quota import CopilotQuotaStatus
 
     def fake_check_copilot_quota():
         return CopilotQuotaStatus(
@@ -282,7 +282,7 @@ def test_engine_status_command_shows_copilot_quota_without_monitoring_data(
         )
 
     monkeypatch.setattr(
-        "litehive.engines.quota.copilot_quota.check_copilot_quota",
+        "litehive.agents.quota.copilot_quota.check_copilot_quota",
         fake_check_copilot_quota,
     )
 
@@ -309,7 +309,7 @@ def test_engine_status_command_shows_zai_quota_without_monitoring_data(
     ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
 
     from litehive.cli import _cmd_engine
-    from litehive.engines.quota.zai_quota import ZaiQuotaStatus, ZaiQuotaWindow
+    from litehive.agents.quota.zai_quota import ZaiQuotaStatus, ZaiQuotaWindow
 
     def fake_check_zai_quota():
         return ZaiQuotaStatus(
@@ -320,7 +320,7 @@ def test_engine_status_command_shows_zai_quota_without_monitoring_data(
         )
 
     monkeypatch.setattr(
-        "litehive.engines.quota.zai_quota.check_zai_quota",
+        "litehive.agents.quota.zai_quota.check_zai_quota",
         fake_check_zai_quota,
     )
 
@@ -352,7 +352,7 @@ def test_engine_status_command_handles_live_quota_errors_gracefully(
         raise RuntimeError("boom")
 
     monkeypatch.setattr(
-        "litehive.engines.quota.copilot_quota.check_copilot_quota",
+        "litehive.agents.quota.copilot_quota.check_copilot_quota",
         fake_check_copilot_quota,
     )
 
@@ -1549,7 +1549,7 @@ def test_drain_task_pool_uses_run_engine_override_for_execution(
         seen_engines.append(engine_name)
         return _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
 
-    monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_run)
+    monkeypatch.setattr("litehive.pipeline.SubagentManager.run", fake_run)
 
     summary = drain_task_pool(tmp_path, engine_override="opencode")
 
@@ -1570,7 +1570,7 @@ def test_run_single_task_uses_run_engine_override_for_execution(
         seen_engines.append(engine_name)
         return _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
 
-    monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_run)
+    monkeypatch.setattr("litehive.pipeline.SubagentManager.run", fake_run)
 
     summary = run_single_task(tmp_path, engine_override="opencode")
 
@@ -1600,7 +1600,7 @@ def test_run_single_task_model_precedence_uses_run_override_then_task_then_works
         seen_models.append(model)
         return _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
 
-    monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_run)
+    monkeypatch.setattr("litehive.pipeline.SubagentManager.run", fake_run)
 
     run_single_task(tmp_path, model_override="run-model")
     assert seen_models == ["run-model", "run-model", "run-model", "run-model"]
@@ -1638,7 +1638,7 @@ def test_run_single_task_does_not_pass_model_override_to_codex(
         seen_models.append(model)
         return _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
 
-    monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_run)
+    monkeypatch.setattr("litehive.pipeline.SubagentManager.run", fake_run)
 
     summary = run_single_task(tmp_path, model_override="run-model")
 
@@ -1701,7 +1701,7 @@ def test_drain_task_pool_wraps_pool_execution_behavior(
     create_task(tmp_path, title="Second task", auto_commit=False)
 
     monkeypatch.setattr(
-        "litehive.runtime.SubagentManager.run",
+        "litehive.pipeline.SubagentManager.run",
         lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
             _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
         ),
@@ -1797,7 +1797,7 @@ def test_run_task_recovers_stale_active_task_before_conflict_check(
     save_state(tmp_path, state)
 
     monkeypatch.setattr(
-        "litehive.runtime.SubagentManager.run",
+        "litehive.pipeline.SubagentManager.run",
         lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
             _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
         ),

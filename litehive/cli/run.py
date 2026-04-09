@@ -1,5 +1,5 @@
 from litehive.config import ensure_workspace, load_config
-from litehive.runtime import TaskPoolStopConditions, drain_task_pool, run_single_task
+from litehive.pipeline import TaskPoolStopConditions, drain_task_pool, run_single_task
 from litehive.pipeline._parallel import run_parallel_tasks
 from litehive.tasks import (
     WorkspaceConflictError,

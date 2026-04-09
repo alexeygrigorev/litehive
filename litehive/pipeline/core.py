@@ -219,7 +219,7 @@ class TaskExecutionRunner:
                 traceback_text = traceback.format_exc()
                 # Try recovery agent before flagging
                 if self.subagents is not None:
-                    from litehive.runtime import _attempt_stage_recovery
+                    from litehive.pipeline import _attempt_stage_recovery
                     from litehive.models import StageReport as _SR
 
                     append_journal(self.root, task, f"{reason}. Launching recovery agent.")
@@ -918,7 +918,7 @@ class TaskExecutionRunner:
     ) -> StageReport | None:
         if self.subagents is None:
             return None
-        from litehive.runtime import _attempt_stage_recovery
+        from litehive.pipeline import _attempt_stage_recovery
 
         engine_name = task.engine or (self.config.default_engine if self.config else "codex")
         try:

@@ -13,7 +13,7 @@ from litehive.observability import (
     render_recent_activity_section,
     render_task_summary,
 )
-from litehive.runtime._models import active_engine_freezes
+from litehive.pipeline._models import active_engine_freezes
 from litehive.tasks import (
     WorkspaceConflictError,
     archive_root,

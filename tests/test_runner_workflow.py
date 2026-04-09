@@ -506,7 +506,7 @@ def test_runner_accepts_workflow_testing_with_real_lifecycle_evidence(
             self.execution_root, current_task.pipeline_status, engine_name=engine_name, task=current_task
         )
 
-    monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_run)
+    monkeypatch.setattr("litehive.pipeline.SubagentManager.run", fake_run)
 
     assert _cmd_run(argparse.Namespace(workspace=commit_workspace, dry_run=False, drain=False)) == 0
     commit_output = capsys.readouterr().out
@@ -1401,7 +1401,7 @@ def test_run_next_task_uses_task_retry_override(
                 )
         return _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
 
-    monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_run)
+    monkeypatch.setattr("litehive.pipeline.SubagentManager.run", fake_run)
 
     summary = run_next_task(tmp_path)
 
@@ -1458,7 +1458,7 @@ def test_run_next_task_requeues_after_qa_rejection(
             )
         return _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
 
-    monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_run)
+    monkeypatch.setattr("litehive.pipeline.SubagentManager.run", fake_run)
 
     summary = run_next_task(tmp_path)
 
@@ -1546,7 +1546,7 @@ def test_cli_run_end_to_end_requeues_after_qa_failure_then_commits_in_temp_git_r
             task=current_task,
         )
 
-    monkeypatch.setattr("litehive.runtime.SubagentManager.run", fake_run)
+    monkeypatch.setattr("litehive.pipeline.SubagentManager.run", fake_run)
 
     assert _cmd_run(argparse.Namespace(workspace=tmp_path, dry_run=False, drain=False)) == 0
     first_output = capsys.readouterr().out
@@ -2117,7 +2117,7 @@ def test_codex_renders_jsonl_error_payloads_and_extracts_limit_observation(tmp_p
 
 
 def test_classify_codex_usage_limit_matches_exact_message() -> None:
-    from litehive.engines.adapters.codex import _classify_codex_usage_limit
+    from litehive.agents.adapters.codex import _classify_codex_usage_limit
 
     result = _classify_codex_usage_limit(
         "You've hit your usage limit. Visit https://chatgpt.com/codex/settings/usage "
@@ -2131,7 +2131,7 @@ def test_classify_codex_usage_limit_matches_exact_message() -> None:
 
 
 def test_classify_codex_usage_limit_extracts_date_with_timezone() -> None:
-    from litehive.engines.adapters.codex import _classify_codex_usage_limit
+    from litehive.agents.adapters.codex import _classify_codex_usage_limit
 
     result = _classify_codex_usage_limit(
         "You've hit your usage limit. Visit https://chatgpt.com/codex/settings/usage "
@@ -2143,7 +2143,7 @@ def test_classify_codex_usage_limit_extracts_date_with_timezone() -> None:
 
 
 def test_classify_codex_usage_limit_without_date() -> None:
-    from litehive.engines.adapters.codex import _classify_codex_usage_limit
+    from litehive.agents.adapters.codex import _classify_codex_usage_limit
 
     result = _classify_codex_usage_limit(
         "You've hit your usage limit. Visit https://chatgpt.com/codex/settings/usage "
@@ -2157,7 +2157,7 @@ def test_classify_codex_usage_limit_without_date() -> None:
 
 
 def test_classify_codex_usage_limit_returns_none_for_unrelated_error() -> None:
-    from litehive.engines.adapters.codex import _classify_codex_usage_limit
+    from litehive.agents.adapters.codex import _classify_codex_usage_limit
 
     assert _classify_codex_usage_limit("Connection refused") is None
     assert _classify_codex_usage_limit("") is None
@@ -2165,7 +2165,7 @@ def test_classify_codex_usage_limit_returns_none_for_unrelated_error() -> None:
 
 
 def test_classify_codex_usage_limit_with_smart_apostrophe() -> None:
-    from litehive.engines.adapters.codex import _classify_codex_usage_limit
+    from litehive.agents.adapters.codex import _classify_codex_usage_limit
 
     result = _classify_codex_usage_limit(
         "You\u2019ve hit your usage limit. Purchase more credits."

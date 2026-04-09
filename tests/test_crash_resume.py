@@ -12,7 +12,7 @@ from litehive.config import ExecutionRetryPolicy, load_config
 from litehive.models import StageReport
 from litehive.pipeline._builder import build_executor
 from litehive.pipeline._types import ResolvedExecutionRetryPolicy
-from litehive.runtime import EngineBudgetLedger, SubagentManager
+from litehive.pipeline import EngineBudgetLedger, SubagentManager
 from tests.workspace_helpers import (
     CLIExecutionResult,
     LitehiveConfig,

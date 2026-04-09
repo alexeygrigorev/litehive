@@ -3,7 +3,7 @@
 import json
 
 
-from litehive.engines.base import parse_stage_report_text
+from litehive.agents.base import parse_stage_report_text
 
 
 def _transcript(payload: dict) -> str:

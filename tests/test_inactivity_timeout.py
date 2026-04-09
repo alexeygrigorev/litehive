@@ -5,7 +5,7 @@ import textwrap
 from pathlib import Path
 
 
-from litehive.engines.base import ExternalCLIAdapter, AdapterCapabilities
+from litehive.agents.base import ExternalCLIAdapter, AdapterCapabilities
 
 
 class _StubAdapter(ExternalCLIAdapter):

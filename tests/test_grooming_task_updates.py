@@ -73,7 +73,7 @@ def test_apply_task_updates_from_stage_result_json(tmp_path):
     root = ensure_workspace(tmp_path)
     task = create_task(root, title="New Task", goal="Original goal")
 
-    from litehive.engines.base import parse_stage_report_text
+    from litehive.agents.base import parse_stage_report_text
     import json
 
     payload = {
@@ -157,7 +157,7 @@ def test_apply_task_updates_with_action_park(tmp_path):
 
 
 def test_runner_exits_cleanly_when_grooming_report_closes_task(tmp_path):
-    from litehive.runner import TaskExecutionRunner
+    from litehive.pipeline import TaskExecutionRunner
     from litehive.tasks import save_task
 
     root = ensure_workspace(tmp_path)
@@ -191,7 +191,7 @@ def test_runner_exits_cleanly_when_grooming_report_closes_task(tmp_path):
 
 
 def test_runner_exits_cleanly_when_grooming_report_parks_task(tmp_path):
-    from litehive.runner import TaskExecutionRunner
+    from litehive.pipeline import TaskExecutionRunner
     from litehive.tasks import save_task
 
     root = ensure_workspace(tmp_path)

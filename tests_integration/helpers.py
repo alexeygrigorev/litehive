@@ -7,8 +7,8 @@ from pathlib import Path
 import pytest
 
 from litehive.config import LitehiveConfig, VALID_ENGINE_NAMES, ensure_workspace, load_config
-from litehive.engines import extract_engine_continuation, get_engine
-from litehive.engines.base import CLIExecutionResult
+from litehive.agents import extract_engine_continuation, get_engine
+from litehive.agents.base import CLIExecutionResult
 
 
 INTEGRATION_ENV = "LITEHIVE_INTEGRATION_ENGINES"
@@ -38,16 +38,16 @@ def _engine_quota_block_reason(engine_name: str) -> str | None:
     """Check if an engine's quota is too high to run integration tests."""
     try:
         if engine_name == "codex":
-            from litehive.engines.quota.codex_quota import codex_quota_block_reason
+            from litehive.agents.quota.codex_quota import codex_quota_block_reason
             return codex_quota_block_reason()
         if engine_name == "claude":
-            from litehive.engines.quota.claude_quota import claude_quota_block_reason
+            from litehive.agents.quota.claude_quota import claude_quota_block_reason
             return claude_quota_block_reason()
         if engine_name == "copilot":
-            from litehive.engines.quota.copilot_quota import copilot_quota_block_reason
+            from litehive.agents.quota.copilot_quota import copilot_quota_block_reason
             return copilot_quota_block_reason()
         if engine_name in ("goz", "opencode"):
-            from litehive.engines.quota.zai_quota import zai_quota_block_reason
+            from litehive.agents.quota.zai_quota import zai_quota_block_reason
             return zai_quota_block_reason()
     except Exception:
         pass

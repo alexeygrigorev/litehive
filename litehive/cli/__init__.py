@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from litehive.runtime import run_next_task
+from litehive.pipeline import run_next_task
 from litehive.web import serve_monitor
 
 from litehive.cli.configure import _cmd_configure

@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import Any
 
 from litehive.config import load_config
-from litehive.engines.quota import (
+from litehive.agents.quota import (
     check_claude_quota,
     check_codex_quota,
     check_copilot_quota,
@@ -11,7 +11,7 @@ from litehive.engines.quota import (
 )
 from litehive.models import TaskRecord
 from litehive.observability import load_engine_monitoring
-from litehive.runtime import active_engine_freezes
+from litehive.pipeline import active_engine_freezes
 from litehive.events import read_events
 from litehive.tasks import (
     VALID_TASK_ENGINES,

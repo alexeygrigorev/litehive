@@ -1,5 +1,5 @@
-from litehive.engines.quota import codex_quota_block_reason
-from litehive.runtime import (
+from litehive.agents.quota import codex_quota_block_reason
+from litehive.pipeline import (
     EngineBudgetLedger,
     resolve_engine_attempt_order,
     resolve_model,
@@ -34,7 +34,7 @@ def _plan_pool_dry_run(
     engine_override,
     model_override,
 ):
-    from litehive.runtime import _git_worktree_blocks_pool
+    from litehive.pipeline import _git_worktree_blocks_pool
 
     if stop_conditions.stop_on_dirty_git and _git_worktree_blocks_pool(root):
         return [], "dirty_git_state"
@@ -110,7 +110,7 @@ def _plan_single_task_dry_run(
     engine_override,
     model_override,
 ):
-    from litehive.runtime import _git_worktree_blocks_pool
+    from litehive.pipeline import _git_worktree_blocks_pool
 
     if stop_conditions.stop_on_dirty_git and _git_worktree_blocks_pool(root):
         return [], "dirty_git_state"
