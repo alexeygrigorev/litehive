@@ -1,7 +1,4 @@
-"""Unified agent package: adapters, prompts, parsing, sessions, and manager."""
-
-from importlib import import_module
-from typing import TYPE_CHECKING
+"""Reusable engine adapter layer extracted from Litehive."""
 
 from heru.adapters import (
     ClaudeCLIAdapter,
@@ -22,6 +19,7 @@ from heru.adapters import (
 from heru.base import (
     AdapterCapabilities,
     CLIExecutionResult,
+    CLIInvocation,
     ExternalCLIAdapter,
     StreamEventAdapter,
     extract_jsonl_errors,
@@ -40,54 +38,80 @@ from heru.types import (
     RuntimeEngineContinuation,
 )
 
-from heru import (
-    ENGINE_ADAPTER_TYPES,
-    ENGINE_CHOICES,
-    ENGINE_REGISTRY,
-    extract_engine_continuation,
-    extract_engine_timeline,
-    get_engine,
-    get_stream_event_adapter,
+ENGINE_ADAPTER_TYPES: tuple[type[ExternalCLIAdapter], ...] = (
+    CodexCLIAdapter,
+    OpenCodeAdapter,
+    GozCLIAdapter,
+    GeminiCLIAdapter,
+    CopilotCLIAdapter,
+    ClaudeCLIAdapter,
 )
 
-if TYPE_CHECKING:
-    from litehive.agents._manager import SubagentManager
-    from litehive.agents._models import EngineFailure, SubagentInactivityTimeout, SubagentResult
-    from litehive.agents._parsing import stage_report_from_subagent
-    from litehive.agents._prompts import intake_prompt, stage_prompt
-
-
-_LAZY_EXPORTS = {
-    "SubagentManager": ("litehive.agents._manager", "SubagentManager"),
-    "EngineFailure": ("litehive.agents._models", "EngineFailure"),
-    "SubagentInactivityTimeout": ("litehive.agents._models", "SubagentInactivityTimeout"),
-    "SubagentResult": ("litehive.agents._models", "SubagentResult"),
-    "stage_report_from_subagent": ("litehive.agents._parsing", "stage_report_from_subagent"),
-    "intake_prompt": ("litehive.agents._prompts", "intake_prompt"),
-    "stage_prompt": ("litehive.agents._prompts", "stage_prompt"),
+ENGINE_REGISTRY: dict[str, ExternalCLIAdapter] = {
+    adapter.name: adapter for adapter in (adapter_type() for adapter_type in ENGINE_ADAPTER_TYPES)
 }
 
+ENGINE_CHOICES = sorted(ENGINE_REGISTRY.keys())
 
-def __getattr__(name: str) -> object:
+
+def get_engine(name: str) -> ExternalCLIAdapter:
     try:
-        module_name, attr_name = _LAZY_EXPORTS[name]
+        return ENGINE_REGISTRY[name]
     except KeyError as exc:
-        raise AttributeError(f"module {__name__!r} has no attribute {name!r}") from exc
-    value = getattr(import_module(module_name), attr_name)
-    globals()[name] = value
-    return value
+        raise EngineError(f"Unknown engine '{name}'") from exc
+
+
+def get_stream_event_adapter(engine_name: str) -> StreamEventAdapter | None:
+    adapter = ENGINE_REGISTRY.get(engine_name)
+    if adapter is None:
+        return None
+    return adapter.stream_event_adapter()
+
+
+def extract_engine_timeline(
+    engine_name: str,
+    stdout: str,
+    *,
+    task_id: str | None = None,
+    subagent_id: str | None = None,
+) -> LiveTimeline | None:
+    if not stdout.strip():
+        return None
+    adapter = get_stream_event_adapter(engine_name)
+    timeline = extract_live_timeline(stdout, engine=engine_name, adapter=adapter)
+    if not timeline.events:
+        return None
+    if task_id is not None:
+        timeline.task_id = task_id
+    if subagent_id is not None:
+        timeline.subagent_id = subagent_id
+    return timeline
+
+
+def extract_engine_continuation_for_execution(
+    engine_name: str, execution: CLIExecutionResult | None
+) -> RuntimeEngineContinuation | None:
+    if execution is None or not execution.stdout.strip():
+        return None
+    adapter = ENGINE_REGISTRY.get(engine_name)
+    if adapter is None:
+        return None
+    return adapter.extract_continuation(execution)
+
+
+extract_engine_continuation = extract_engine_continuation_for_execution
 
 __all__ = [
     "AdapterCapabilities",
     "CLIExecutionResult",
+    "CLIInvocation",
     "ClaudeCLIAdapter",
     "CodexCLIAdapter",
     "CopilotCLIAdapter",
+    "ENGINE_ADAPTER_TYPES",
     "ENGINE_CHOICES",
     "ENGINE_REGISTRY",
-    "ENGINE_ADAPTER_TYPES",
     "EngineError",
-    "EngineFailure",
     "EngineUsageObservation",
     "EngineUsageWindow",
     "ExternalCLIAdapter",
@@ -99,9 +123,6 @@ __all__ = [
     "RetryableExecutionFailure",
     "RuntimeEngineContinuation",
     "StreamEventAdapter",
-    "SubagentInactivityTimeout",
-    "SubagentManager",
-    "SubagentResult",
     "_ENGINE_LIMIT_PATTERNS",
     "_EXECUTION_INTERRUPTION_PATTERNS",
     "_RETRYABLE_EXECUTION_PATTERNS",
@@ -117,9 +138,6 @@ __all__ = [
     "extract_stream_transcript",
     "get_engine",
     "get_stream_event_adapter",
-    "intake_prompt",
     "iter_jsonl_payloads",
     "parse_stage_report_text",
-    "stage_prompt",
-    "stage_report_from_subagent",
 ]

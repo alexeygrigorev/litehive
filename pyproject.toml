@@ -24,9 +24,10 @@ dev = [
 
 [project.scripts]
 litehive = "litehive.main:main"
+heru = "heru.main:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["litehive"]
+packages = ["litehive", "heru"]
 include = ["litehive/config/profiles/*.yaml"]
 
 [tool.hatch.version]
