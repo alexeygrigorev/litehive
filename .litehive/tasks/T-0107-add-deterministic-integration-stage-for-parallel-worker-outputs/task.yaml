@@ -6,15 +6,15 @@ task_type: null
 model: null
 mode: implementation
 pipeline_mode: full
-status: in_progress
+status: done
 flag_reason: null
 flag_count: 0
-pipeline_status: commit_to_git
+pipeline_status: done
 priority: medium
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-01T15:05:41+00:00'
-updated_at: '2026-04-10T14:36:27+00:00'
+updated_at: '2026-04-10T14:38:45+00:00'
 goal: ''
 acceptance_criteria: []
 constraints: []
@@ -91,14 +91,21 @@ subagents:
   path: subagents/SA-0016-reviewer
   sandboxed: false
   sandbox_summary: host
+- id: SA-0017
+  role: merge-resolver
+  engine: codex
+  status: completed
+  path: subagents/SA-0017-merge-resolver
+  sandboxed: false
+  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0107 add-deterministic-integration-stage-for-parallel-worker-outputs'
-  commit_sha: null
-  checkpoint_base_sha: null
-  checkpoint_attempts: 0
+  commit_sha: 97486fbf52b9c929f16d6f615c1ba4ab5e7c741f
+  checkpoint_base_sha: 207e5f7ff8ff9727e6c3b5db85ccd2830f7169df
+  checkpoint_attempts: 1
   rolled_back_checkpoint_attempt: null
-  merge_agent_attempts: 0
+  merge_agent_attempts: 1
   worktree_path: null
 retry_policy:
   max_retries: null
