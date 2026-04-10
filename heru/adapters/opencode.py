@@ -54,6 +54,11 @@ class OpenCodeAdapter(ExternalCLIAdapter):
         resume_session_id: str | None = None,
     ) -> list[str]:
         command = [self.binary, "run", "--format", "json", "--dir", str(cwd)]
+        if resume_session_id:
+            # opencode supports --continue for the most recent session and
+            # --session <id> for a specific id. We always have the id from
+            # extract_continuation, so emit --session.
+            command.extend(["--session", resume_session_id])
         if model:
             command.extend(["--model", model])
         command.append(prompt)
