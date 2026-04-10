@@ -1,5 +1,6 @@
 import logging
 import re
+import json
 from dataclasses import dataclass
 
 from heru.adapters.common import _decode_json_object, classify_execution_limit
@@ -33,6 +34,107 @@ def classify_codex_usage_limit(text: str | None) -> CodexUsageLimitResult | None
         retry_at=retry_at,
         purchase_more_credits="purchase more credits" in text.lower(),
     )
+
+
+@dataclass(slots=True)
+class _JsonBalance:
+    braces: int = 0
+    brackets: int = 0
+    in_string: bool = False
+    escaped: bool = False
+
+
+def iter_codex_payloads(stdout: str) -> list[dict[str, object]]:
+    payloads: list[dict[str, object]] = []
+    buffered_lines: list[str] = []
+    buffer_start_line = 0
+    balance = _JsonBalance()
+
+    for line_number, raw_line in enumerate(stdout.splitlines(), 1):
+        stripped = raw_line.strip()
+        if not stripped and not buffered_lines:
+            continue
+
+        if not buffered_lines:
+            payload = _decode_codex_payload(stripped)
+            if payload is not None:
+                payloads.append(payload)
+                continue
+            if stripped.startswith("{"):
+                buffered_lines = [raw_line]
+                buffer_start_line = line_number
+                balance = _update_json_balance(_JsonBalance(), raw_line)
+                if _json_buffer_is_complete(balance):
+                    _warn_bad_codex_payload(buffer_start_line, stripped, "invalid JSON object")
+                    buffered_lines = []
+                continue
+            _warn_bad_codex_payload(line_number, stripped, "invalid JSON object")
+            continue
+
+        buffered_lines.append(raw_line)
+        balance = _update_json_balance(balance, raw_line)
+        if not _json_buffer_is_complete(balance):
+            continue
+
+        payload_text = "\n".join(buffered_lines).strip()
+        payload = _decode_codex_payload(payload_text)
+        if payload is not None:
+            payloads.append(payload)
+        else:
+            _warn_bad_codex_payload(buffer_start_line, payload_text, "invalid buffered JSON object")
+        buffered_lines = []
+        balance = _JsonBalance()
+
+    if buffered_lines:
+        payload_text = "\n".join(buffered_lines).strip()
+        _warn_bad_codex_payload(buffer_start_line, payload_text, "unterminated JSON object")
+    return payloads
+
+
+def extract_codex_messages(stdout: str) -> str:
+    messages: dict[str, str] = {}
+    for payload in iter_codex_payloads(stdout):
+        if payload.get("type") not in {"item.completed", "item.updated"}:
+            continue
+        item = payload.get("item")
+        if not isinstance(item, dict) or item.get("type") != "agent_message":
+            continue
+        item_id = item.get("id")
+        if not isinstance(item_id, str) or not item_id:
+            continue
+        text = item.get("text")
+        if isinstance(text, str) and text:
+            messages[item_id] = text
+    return "\n".join(messages.values()).strip()
+
+
+def extract_codex_errors(stdout: str) -> list[str]:
+    errors: list[str] = []
+    command_errors: dict[str, str] = {}
+    for payload in iter_codex_payloads(stdout):
+        event_type = payload.get("type")
+        if event_type in {"error", "turn.failed"}:
+            message = payload.get("message")
+            if isinstance(message, str) and message.strip():
+                errors.append(message.strip())
+            continue
+        if event_type not in {"item.completed", "item.updated"}:
+            continue
+        item = payload.get("item")
+        if not isinstance(item, dict) or item.get("type") != "command_execution":
+            continue
+        item_id = item.get("id")
+        if not isinstance(item_id, str) or not item_id:
+            continue
+        aggregated_output = item.get("aggregated_output")
+        if isinstance(aggregated_output, str) and aggregated_output.strip():
+            if item.get("status") == "failed" or item.get("exit_code") not in {None, 0}:
+                command_errors[item_id] = aggregated_output.strip()
+                continue
+        command_errors.pop(item_id, None)
+    return [*errors, *command_errors.values()]
+
+
 def codex_usage_window(
     payload: dict[str, object],
     metadata: dict[str, str | int | bool | None],
@@ -201,3 +303,65 @@ def codex_error_message(raw_error: object) -> str | None:
         if isinstance(message, str) and message.strip():
             return message.strip()
     return None
+
+
+def _decode_codex_payload(raw_payload: str) -> dict[str, object] | None:
+    try:
+        payload = json.loads(raw_payload)
+    except (json.JSONDecodeError, TypeError, ValueError):
+        return None
+    if isinstance(payload, dict):
+        return payload
+    logger.warning(
+        "codex: skipping non-object JSON payload (type=%s, content: %.200s)",
+        type(payload).__name__,
+        raw_payload,
+    )
+    return None
+
+
+def _json_buffer_is_complete(balance: _JsonBalance) -> bool:
+    return (
+        not balance.in_string
+        and not balance.escaped
+        and balance.braces == 0
+        and balance.brackets == 0
+    )
+
+
+def _update_json_balance(balance: _JsonBalance, text: str) -> _JsonBalance:
+    for char in text:
+        if balance.in_string:
+            if balance.escaped:
+                balance.escaped = False
+                continue
+            if char == "\\":
+                balance.escaped = True
+                continue
+            if char == '"':
+                balance.in_string = False
+            continue
+        if char == '"':
+            balance.in_string = True
+            continue
+        if char == "{":
+            balance.braces += 1
+            continue
+        if char == "}":
+            balance.braces -= 1
+            continue
+        if char == "[":
+            balance.brackets += 1
+            continue
+        if char == "]":
+            balance.brackets -= 1
+    return balance
+
+
+def _warn_bad_codex_payload(line_number: int, content: str, reason: str) -> None:
+    logger.warning(
+        "codex: skipping %s at line %d (content: %.200s)",
+        reason,
+        line_number,
+        content,
+    )

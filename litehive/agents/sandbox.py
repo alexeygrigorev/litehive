@@ -572,7 +572,7 @@ class SandboxLauncher:
             real_git_host = shutil.which("git")
             if real_git_host is None:
                 raise SandboxError("git is unavailable on the host; merge-resolver profile cannot be prepared.")
-            hidden_git = hidden_dir / "git-real"
+            hidden_git = hidden_dir / "git"
             if not hidden_git.exists():
                 shutil.copy2(real_git_host, hidden_git)
                 hidden_git.chmod(
@@ -586,7 +586,7 @@ class SandboxLauncher:
             wrapper_path = wrapper_dir / "git"
             wrapper_path.write_text(
                 self._render_git_wrapper_script(
-                    real_git_path="/sandbox/internal/git-real",
+                    real_git_path="/sandbox/internal/git",
                     workspace_root=str(self.root),
                 ),
                 encoding="utf-8",
@@ -618,14 +618,45 @@ class SandboxLauncher:
                 continue
             target = mirror_dir / entry.name
             expected.add(entry.name)
-            if target.is_symlink() and os.readlink(target) == str(entry):
+            if entry.is_symlink():
+                link_target = os.readlink(entry)
+                if target.is_symlink() and os.readlink(target) == link_target:
+                    continue
+                if target.exists() or target.is_symlink():
+                    if target.is_dir() and not target.is_symlink():
+                        shutil.rmtree(target)
+                    else:
+                        target.unlink()
+                target.symlink_to(link_target)
+                continue
+            if entry.is_file():
+                try:
+                    if target.exists() and not target.is_symlink():
+                        source_stat = entry.stat()
+                        target_stat = target.stat()
+                        if (
+                            source_stat.st_dev == target_stat.st_dev
+                            and source_stat.st_ino == target_stat.st_ino
+                        ):
+                            continue
+                except OSError:
+                    pass
+                if target.exists() or target.is_symlink():
+                    if target.is_dir() and not target.is_symlink():
+                        shutil.rmtree(target)
+                    else:
+                        target.unlink()
+                try:
+                    os.link(entry, target)
+                except OSError:
+                    shutil.copy2(entry, target)
                 continue
             if target.exists() or target.is_symlink():
                 if target.is_dir() and not target.is_symlink():
                     shutil.rmtree(target)
                 else:
                     target.unlink()
-            target.symlink_to(entry)
+            shutil.copytree(entry, target, symlinks=True)
         for existing in mirror_dir.iterdir():
             if existing.name not in expected:
                 if existing.is_dir() and not existing.is_symlink():

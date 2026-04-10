@@ -2,7 +2,7 @@ id: T-0283
 slug: reduce-noisy-jsonl-parse-warnings-for-codex
 title: Reduce noisy JSONL parse warnings for Codex command_execution payloads
 depends_on: []
-task_type: null
+task_type: bugfix
 model: null
 mode: implementation
 pipeline_mode: full
@@ -11,19 +11,33 @@ flag_reason: null
 flag_count: 0
 pipeline_status: commit_to_git
 priority: low
-pm_complexity: null
-planned_effort: null
+pm_complexity: moderate
+planned_effort: s
 created_at: '2026-04-10T05:52:45+00:00'
-updated_at: '2026-04-10T11:54:03+00:00'
-goal: Codex emits command_execution payloads that trip JSONL parse warnings. Filter
-  or normalize them in heru/adapters/_codex_impl.py so the warnings don't spam logs
-  during task execution.
+updated_at: '2026-04-10T11:54:04+00:00'
+goal: Litehive should stop logging repeated JSONL parse warnings when Codex emits
+  normal command_execution payloads whose command or aggregated output content breaks
+  line-oriented JSONL parsing, while preserving the shared parser's warning behavior
+  for genuinely malformed non-Codex input.
 acceptance_criteria:
-- No parse warnings for normal codex command_execution payloads during test runs
-- Fix is in heru/adapters/_codex_impl.py (not the litehive shim)
-- All existing tests pass
-constraints: []
-plan: []
+- Codex transcript, error, and usage parsing no longer emit JSONL parse warnings for
+  the observed normal command_execution payload shape during focused test coverage.
+- The fix lives in heru/adapters/_codex_impl.py and does not relax generic iter_jsonl_payloads
+  warning behavior for unrelated malformed input.
+- A focused regression test covers the command_execution payload shape or equivalent
+  malformed-line case, and the existing relevant test suite passes.
+constraints:
+- Keep the change scoped to Codex adapter handling; do not move the fix into the litehive
+  shim or broadly disable parser warnings.
+- Prefer the smallest normalization or filtering change that preserves valid Codex
+  event classification.
+plan:
+- Localize where Codex command_execution payloads reach shared JSONL parsing and identify
+  the minimal adapter-layer interception point.
+- Implement a targeted normalization or filtering path in heru/adapters/_codex_impl.py
+  so normal command_execution payloads no longer trigger parse-warning spam.
+- Add a focused regression test for the observed payload shape and run the relevant
+  pytest coverage plus the existing smoke suite if practical.
 human_checkpoints: []
 subagents:
 - id: SA-0001
@@ -96,6 +110,13 @@ subagents:
   path: subagents/SA-0010-reviewer
   sandboxed: false
   sandbox_summary: host
+- id: SA-0011
+  role: merge-resolver
+  engine: codex
+  status: running
+  path: subagents/SA-0011-merge-resolver
+  sandboxed: false
+  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0283 reduce-noisy-jsonl-parse-warnings-for-codex'
@@ -103,7 +124,7 @@ git:
   checkpoint_base_sha: null
   checkpoint_attempts: 0
   rolled_back_checkpoint_attempt: null
-  merge_agent_attempts: 0
+  merge_agent_attempts: 1
   worktree_path: null
 retry_policy:
   max_retries: null

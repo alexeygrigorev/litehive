@@ -1,3 +1,5 @@
+import logging
+
 from tests.workspace_helpers import (
     CLIExecutionResult,
     ExternalEngineSandboxConfig,
@@ -2412,6 +2414,56 @@ def test_codex_render_transcript_ignores_non_message_events_until_text_arrives(
     )
 
     assert get_engine("codex").render_transcript(execution) == ""
+
+
+def test_codex_multiline_command_execution_payloads_do_not_warn_during_parsing(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    execution = CLIExecutionResult(
+        adapter="codex",
+        argv=("codex", "exec"),
+        cwd=tmp_path,
+        exit_code=1,
+        stdout="\n".join(
+            [
+                '{"type":"thread.started","thread_id":"thread_123"}',
+                "{",
+                '  "type": "item.completed",',
+                '  "item": {',
+                '    "id": "item_1",',
+                '    "type": "command_execution",',
+                '    "command": [',
+                '      "bash",',
+                '      "-lc",',
+                '      "uv run pytest -q"',
+                "    ],",
+                '    "aggregated_output": "tests failed",',
+                '    "exit_code": 1,',
+                '    "status": "failed"',
+                "  }",
+                "}",
+                "{",
+                '  "type": "turn.completed",',
+                '  "usage": {',
+                '    "input_tokens": 10,',
+                '    "output_tokens": 5,',
+                '    "total_tokens": 15',
+                "  }",
+                "}",
+            ]
+        ),
+        stderr="",
+    )
+
+    with caplog.at_level(logging.WARNING):
+        transcript = get_engine("codex").render_transcript(execution)
+        usage = get_engine("codex").extract_usage_observation(execution)
+
+    assert transcript == "tests failed"
+    assert usage is not None
+    assert usage.usage is not None
+    assert usage.usage.used == 15
+    assert not any("iter_jsonl_payloads" in rec.message for rec in caplog.records)
 
 
 def test_codex_render_transcript_replaces_updated_agent_message_text(tmp_path: Path) -> None:

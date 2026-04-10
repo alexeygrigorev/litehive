@@ -169,7 +169,7 @@ def test_merge_resolver_profile_rejects_filter_repo_and_reset_hard_origin(tmp_pa
     assert "cherry-pick" in cherry_pick.stderr
 
 
-def test_task_worktree_origin_is_removed_before_handoff(tmp_path: Path) -> None:
+def test_task_worktree_creation_does_not_strip_origin_from_shared_config(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     _init_repo(tmp_path)
     remote = tmp_path / "remote.git"
@@ -185,6 +185,15 @@ def test_task_worktree_origin_is_removed_before_handoff(tmp_path: Path) -> None:
         text=True,
         check=False,
     )
+    main_remotes = subprocess.run(
+        ["git", "remote"],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
 
     assert remotes.returncode == 0
-    assert "origin" not in remotes.stdout.split()
+    assert "origin" in remotes.stdout.split()
+    assert main_remotes.returncode == 0
+    assert "origin" in main_remotes.stdout.split()
