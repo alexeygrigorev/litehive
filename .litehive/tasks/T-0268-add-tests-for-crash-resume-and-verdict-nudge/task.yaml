@@ -8,15 +8,15 @@ engine: null
 model: null
 mode: implementation
 pipeline_mode: full
-status: in_progress
+status: done
 flag_reason: null
 flag_count: 0
-pipeline_status: commit_to_git
+pipeline_status: done
 priority: low
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-09T18:26:22+00:00'
-updated_at: '2026-04-10T02:39:52+00:00'
+updated_at: '2026-04-10T02:39:54+00:00'
 goal: 'Add unit tests for crash resume and verdict nudge logic in _builder.py. Test:
   resume fires for claude (session_id), resume fires for codex (thread_id via exec),
   nudge fires on timeout, nudge uses exec fallback for codex. Tests only - no refactoring.'
@@ -62,9 +62,9 @@ subagents:
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0268 add-tests-for-crash-resume-and-verdict-nudge'
-  commit_sha: null
-  checkpoint_base_sha: null
-  checkpoint_attempts: 0
+  commit_sha: 57ebf28a4aa70d2531e2c7ce4bedabd7e8fbe6d7
+  checkpoint_base_sha: bec1ce7d1ba43dc1ae6804298d4502ca9b1f1bfb
+  checkpoint_attempts: 1
   rolled_back_checkpoint_attempt: null
   merge_agent_attempts: 0
   worktree_path: null

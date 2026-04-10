@@ -1,0 +1,75 @@
+task_id: T-0269
+step: testing
+verdict: pass
+source: agent
+summary: 'QA verification passed. I validated that the new top-level heru package
+  exists and exports the engine adapter layer for all six engines (claude,codex,copilot,gemini,goz,opencode)
+  via heru.ENGINE_CHOICES, and confirmed litehive.agents now acts as a compatibility
+  surface importing from heru rather than keeping the adapter/base/quota implementations
+  locally. I inspected the moved-module boundaries: pyproject.toml exposes a standalone
+  ''heru'' console script, heru/main.py implements the standalone CLI, litehive/agents/base.py
+  and litehive/agents/quota/__init__.py are re-export shims, litehive/agents/adapters/*
+  are shims into heru.adapters.*, and litehive/agents/_engine_detection.py preserves
+  the reload-sensitive helper behavior by delegating to heru._engine_detection. Focused
+  verification run: ''uv run pytest -q tests/test_heru_cli.py tests/test_engine_parse_warnings.py
+  tests/test_codex_quota.py'' -> 31 passed in 0.67s; ''uv run pytest -q tests/test_tasks_and_subagents.py::test_has_callable_override_ignores_rebound_external_base_methods
+  tests/test_tasks_and_subagents.py::test_has_callable_override_ignores_bound_alias_to_rebound_external_base_run''
+  -> 2 passed in 0.42s; ''uv run heru --help'' -> exit 0 with standalone heru usage
+  including prompt, --engine, --model, --cwd, --max-turns, and --resume-session-id.
+  I also directly checked that heru and litehive resolve the same adapter surface:
+  a short Python import check showed heru.get_engine(''claude'') and litehive.agents.get_engine(''claude'')
+  both return ClaudeCLIAdapter, and heru.ENGINE_CHOICES reports all six expected engines.
+  Full regression verification: ''uv run pytest -q'' -> 913 passed in 129.64s. Test
+  quality check: the newly added tests are focused, short, and behavior-specific;
+  I did not find monolithic or no-op coverage in the added heru CLI test. Based on
+  the shim inspection plus the passing focused/full test runs, the acceptance criteria
+  are satisfied: reusable adapter/invocation/parsing/quota/continuation code now lives
+  under heru, Litehive imports from heru through backward-compatible shims, the standalone
+  heru CLI entry point is exposed and runnable, and the existing Litehive suite passes
+  with no observed functional regression.'
+feedback: 'QA verification passed. I validated that the new top-level heru package
+  exists and exports the engine adapter layer for all six engines (claude,codex,copilot,gemini,goz,opencode)
+  via heru.ENGINE_CHOICES, and confirmed litehive.agents now acts as a compatibility
+  surface importing from heru rather than keeping the adapter/base/quota implementations
+  locally. I inspected the moved-module boundaries: pyproject.toml exposes a standalone
+  ''heru'' console script, heru/main.py implements the standalone CLI, litehive/agents/base.py
+  and litehive/agents/quota/__init__.py are re-export shims, litehive/agents/adapters/*
+  are shims into heru.adapters.*, and litehive/agents/_engine_detection.py preserves
+  the reload-sensitive helper behavior by delegating to heru._engine_detection. Focused
+  verification run: ''uv run pytest -q tests/test_heru_cli.py tests/test_engine_parse_warnings.py
+  tests/test_codex_quota.py'' -> 31 passed in 0.67s; ''uv run pytest -q tests/test_tasks_and_subagents.py::test_has_callable_override_ignores_rebound_external_base_methods
+  tests/test_tasks_and_subagents.py::test_has_callable_override_ignores_bound_alias_to_rebound_external_base_run''
+  -> 2 passed in 0.42s; ''uv run heru --help'' -> exit 0 with standalone heru usage
+  including prompt, --engine, --model, --cwd, --max-turns, and --resume-session-id.
+  I also directly checked that heru and litehive resolve the same adapter surface:
+  a short Python import check showed heru.get_engine(''claude'') and litehive.agents.get_engine(''claude'')
+  both return ClaudeCLIAdapter, and heru.ENGINE_CHOICES reports all six expected engines.
+  Full regression verification: ''uv run pytest -q'' -> 913 passed in 129.64s. Test
+  quality check: the newly added tests are focused, short, and behavior-specific;
+  I did not find monolithic or no-op coverage in the added heru CLI test. Based on
+  the shim inspection plus the passing focused/full test runs, the acceptance criteria
+  are satisfied: reusable adapter/invocation/parsing/quota/continuation code now lives
+  under heru, Litehive imports from heru through backward-compatible shims, the standalone
+  heru CLI entry point is exposed and runnable, and the existing Litehive suite passes
+  with no observed functional regression.'
+submitted_via_cli: true
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 215
+hook_results: []
+created_at: '2026-04-10T02:59:19+00:00'

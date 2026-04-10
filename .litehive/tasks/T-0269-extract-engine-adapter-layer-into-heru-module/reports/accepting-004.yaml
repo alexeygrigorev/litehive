@@ -1,0 +1,75 @@
+task_id: T-0269
+step: accepting
+verdict: pass
+source: agent
+summary: 'Accepted. I verified the extraction directly in the workspace and confirmed
+  the acceptance criteria are met. Evidence inspected: pyproject.toml now packages
+  both litehive and heru and exposes a standalone heru = heru.main:main console script;
+  the new top-level heru/ package exists with base.py, types.py, models.py, _engine_detection.py,
+  _continuation.py, quota/, and adapters/ for all six engines (claude, codex, copilot,
+  gemini, goz, opencode). heru/__init__.py owns the shared engine registry and adapter-facing
+  exports. Litehive now consumes that layer through compatibility shims and re-exports
+  rather than retaining duplicate adapter/base/quota implementations locally: for
+  example litehive/agents/base.py re-exports heru.base, litehive/agents/quota/__init__.py
+  re-exports heru.quota, adapter modules under litehive/agents/adapters/ delegate
+  into heru.adapters.*, and litehive/agents/_engine_detection.py preserves the reload-sensitive
+  behavior while delegating to heru._engine_detection. I also confirmed the shared
+  runtime surface matches between packages with a direct import check showing heru.ENGINE_CHOICES
+  contains claude,codex,copilot,gemini,goz,opencode and type(heru.get_engine("claude"))
+  is type(litehive.agents.get_engine("claude")) is True. Verification run by me: uv
+  run pytest -q tests/test_heru_cli.py tests/test_engine_parse_warnings.py tests/test_codex_quota.py
+  -> 31 passed in 0.50s; uv run pytest -q tests/test_tasks_and_subagents.py::test_has_callable_override_ignores_rebound_external_base_methods
+  tests/test_tasks_and_subagents.py::test_has_callable_override_ignores_bound_alias_to_rebound_external_base_run
+  -> 2 passed in 0.46s; uv run heru --help -> exit 0 and showed standalone heru usage
+  with prompt, --engine, --model, --cwd, --max-turns, and --resume-session-id; uv
+  run pytest -q -> 913 passed in 134.44s. Based on the inspected module boundaries
+  plus the focused and full verification results, this is a behavior-preserving extraction:
+  engine invocation building, transcript parsing, quota helpers, and session continuation
+  logic now live under heru, Litehive imports from heru through backward-compatible
+  shims, the standalone heru CLI works, and the existing Litehive test suite passes.'
+feedback: 'Accepted. I verified the extraction directly in the workspace and confirmed
+  the acceptance criteria are met. Evidence inspected: pyproject.toml now packages
+  both litehive and heru and exposes a standalone heru = heru.main:main console script;
+  the new top-level heru/ package exists with base.py, types.py, models.py, _engine_detection.py,
+  _continuation.py, quota/, and adapters/ for all six engines (claude, codex, copilot,
+  gemini, goz, opencode). heru/__init__.py owns the shared engine registry and adapter-facing
+  exports. Litehive now consumes that layer through compatibility shims and re-exports
+  rather than retaining duplicate adapter/base/quota implementations locally: for
+  example litehive/agents/base.py re-exports heru.base, litehive/agents/quota/__init__.py
+  re-exports heru.quota, adapter modules under litehive/agents/adapters/ delegate
+  into heru.adapters.*, and litehive/agents/_engine_detection.py preserves the reload-sensitive
+  behavior while delegating to heru._engine_detection. I also confirmed the shared
+  runtime surface matches between packages with a direct import check showing heru.ENGINE_CHOICES
+  contains claude,codex,copilot,gemini,goz,opencode and type(heru.get_engine("claude"))
+  is type(litehive.agents.get_engine("claude")) is True. Verification run by me: uv
+  run pytest -q tests/test_heru_cli.py tests/test_engine_parse_warnings.py tests/test_codex_quota.py
+  -> 31 passed in 0.50s; uv run pytest -q tests/test_tasks_and_subagents.py::test_has_callable_override_ignores_rebound_external_base_methods
+  tests/test_tasks_and_subagents.py::test_has_callable_override_ignores_bound_alias_to_rebound_external_base_run
+  -> 2 passed in 0.46s; uv run heru --help -> exit 0 and showed standalone heru usage
+  with prompt, --engine, --model, --cwd, --max-turns, and --resume-session-id; uv
+  run pytest -q -> 913 passed in 134.44s. Based on the inspected module boundaries
+  plus the focused and full verification results, this is a behavior-preserving extraction:
+  engine invocation building, transcript parsing, quota helpers, and session continuation
+  logic now live under heru, Litehive imports from heru through backward-compatible
+  shims, the standalone heru CLI works, and the existing Litehive test suite passes.'
+submitted_via_cli: true
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 236
+hook_results: []
+created_at: '2026-04-10T03:03:15+00:00'

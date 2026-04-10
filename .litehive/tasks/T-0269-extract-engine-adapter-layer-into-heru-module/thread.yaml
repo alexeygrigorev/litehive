@@ -1,0 +1,151 @@
+- role: planner
+  step: grooming
+  verdict: pass
+  message: "Grooming completed. I inspected the current adapter surface under `litehive/agents/`,\
+    \ the packaging config in `pyproject.toml`, and the import graph across tests,\
+    \ CLI, pipeline, web, `litehive/subagents`, and `litehive/engines`. Evidence:\
+    \ the engine adapter code currently lives in `litehive/agents/adapters/*`, shared\
+    \ invocation/parsing contracts live in `litehive/agents/base.py`, quota helpers\
+    \ live in `litehive/agents/quota/*`, continuation helpers are exposed via `litehive/agents/__init__.py`,\
+    \ and the repo currently publishes only the `litehive` console script. I also\
+    \ verified that `litehive/agents/_prompts.py` and `litehive/agents/sandbox.py`\
+    \ are Litehive-specific orchestration/config modules rather than generic engine-layer\
+    \ code, so they should not be moved wholesale.\n\nTask record updates applied:\
+    \ PM_COMPLEXITY=complex, PLANNED_EFFORT=l. Scope is narrowed to extracting the\
+    \ reusable engine layer into a new in-repo `heru` package while preserving Litehive\
+    \ compatibility. The implementation should move adapter implementations, shared\
+    \ adapter contracts, transcript/event parsing helpers, quota helpers, engine continuation\
+    \ extraction, and any engine-agnostic invocation helpers into `heru`; then leave\
+    \ `litehive.agents`, `litehive.agents.adapters`, `litehive.agents.base`, `litehive.agents.quota`,\
+    \ `litehive.subagents`, and existing compatibility shims importing from `heru`\
+    \ so current Litehive call sites and tests keep working. Do not move Litehive-owned\
+    \ stage prompt generation, subagent result models, manager/session orchestration,\
+    \ or config-bound sandbox policy code unless a small generic helper can be cleanly\
+    \ split out without changing behavior.\n\nRecommended acceptance criteria for\
+    \ implementation:\nTASK_UPDATE:\n  pm_complexity: complex\n  planned_effort: l\n\
+    \  goal: Extract the reusable engine adapter layer from `litehive/agents/` into\
+    \ a new in-repo `heru/` package, then have Litehive consume that package through\
+    \ backward-compatible imports with no behavioral changes.\n  acceptance_criteria:\n\
+    \    - A new top-level `heru/` package contains the reusable engine layer for\
+    \ claude, codex, copilot, gemini, goz, and opencode, including shared adapter\
+    \ contracts, transcript/event parsing helpers, continuation extraction, and quota\
+    \ helpers.\n    - Litehive continues to expose its existing adapter-facing imports\
+    \ (`litehive.agents`, `litehive.agents.adapters`, `litehive.agents.base`, and\
+    \ `litehive.agents.quota`) while sourcing the moved engine-layer code from `heru`\
+    \ instead of duplicating adapter implementations locally.\n    - Litehive-specific\
+    \ orchestration modules remain in Litehive; prompt-building, task/stage report\
+    \ parsing, subagent manager/session flow, and config-bound sandbox policy logic\
+    \ are not regressed by the extraction.\n    - Installing/running the repo exposes\
+    \ a standalone `heru` CLI entry point that accepts a prompt plus `--engine <name>`\
+    \ without requiring Litehive task/workspace commands.\n    - The existing Litehive\
+    \ test suite passes after the extraction, and focused tests cover the `heru` package\
+    \ entry points or compatibility shims introduced by the move.\n    - The extraction\
+    \ is behavior-preserving: existing Litehive engine selection, invocation building,\
+    \ transcript parsing, quota checks, and session resume flows continue to work\
+    \ through the same public Litehive APIs.\n  constraints:\n    - Keep Litehive\
+    \ public imports backward compatible during this extraction; prefer shim/re-export\
+    \ modules over call-site churn.\n    - Do not expand the task into publishing\
+    \ a separate external package; this task is limited to the in-repo module extraction\
+    \ and standalone CLI exposure.\n    - Keep implementation scoped to engine-layer\
+    \ reuse and behavior preservation.\n  plan:\n    - Inventory the exact engine-layer\
+    \ modules and symbols to move from `litehive/agents/` into `heru/`, distinguishing\
+    \ reusable engine code from Litehive orchestration code.\n    - Create the new\
+    \ `heru/` package structure and move shared adapter contracts, adapter implementations,\
+    \ helper impl modules, continuation helpers, and quota modules there with minimal\
+    \ internal API changes.\n    - Update Litehive compatibility modules to import/re-export\
+    \ from `heru`, preserving current public import paths used by tests and runtime\
+    \ code.\n    - Add a `heru` CLI entry point and focused tests for standalone engine\
+    \ selection / invocation plumbing without depending on real external binaries.\n\
+    \    - Run focused adapter/CLI compatibility tests first, then run `uv run pytest\
+    \ -q` for the existing smoke suite.\n\nTests run in grooming: none. Evidence gathered\
+    \ from repository inspection plus PyPI package metadata review for `heru` 0.0.1,\
+    \ which confirms the intended standalone CLI shape (`heru \"prompt\" --engine\
+    \ claude`) and supported engines. No code changes were made in grooming."
+  files_changed: []
+  created_at: '2026-04-10T02:42:34+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Extracted the engine adapter layer into a new top-level heru package and
+    converted litehive.agents adapter/base/quota modules into compatibility shims
+    that import from heru. Added heru/__init__.py registry exports, heru/base.py,
+    heru/adapters/ for claude/codex/copilot/gemini/goz/opencode plus impl/common modules,
+    heru/quota/ helpers, heru/types.py and heru/models.py compatibility exports, heru/_engine_detection.py,
+    heru/_continuation.py, and a standalone heru CLI entrypoint in heru/main.py wired
+    through pyproject.toml. Litehive-specific orchestration modules remain in litehive;
+    only engine-layer code moved. Preserved backward compatibility for existing litehive
+    import paths, including private helper imports used by tests, and kept reload-sensitive
+    engine-detection behavior working by reloading the moved module in the litehive
+    shim. Verification: uv run ruff check --select E402,F401 litehive tests heru ->
+    pass; uv run pytest -q tests/test_heru_cli.py tests/test_engine_parse_warnings.py
+    tests/test_codex_quota.py -> 31 passed; uv run pytest -q tests/test_tasks_and_subagents.py::test_has_callable_override_ignores_rebound_external_base_methods
+    tests/test_tasks_and_subagents.py::test_has_callable_override_ignores_bound_alias_to_rebound_external_base_run
+    -> 2 passed; uv run pytest -q -> 913 passed in 131.75s; uv run heru --help ->
+    exit 0 and showed standalone heru CLI usage. Evidence for acceptance criteria:
+    heru package now exists at repo root with all six adapters, shared invocation/parsing/quota
+    logic lives there, litehive imports the moved code through shims, the standalone
+    heru console script is exposed, and the full existing litehive smoke suite passes
+    with behavior preserved.'
+  files_changed: []
+  created_at: '2026-04-10T02:55:30+00:00'
+- role: qa
+  step: testing
+  verdict: pass
+  message: 'QA verification passed. I validated that the new top-level heru package
+    exists and exports the engine adapter layer for all six engines (claude,codex,copilot,gemini,goz,opencode)
+    via heru.ENGINE_CHOICES, and confirmed litehive.agents now acts as a compatibility
+    surface importing from heru rather than keeping the adapter/base/quota implementations
+    locally. I inspected the moved-module boundaries: pyproject.toml exposes a standalone
+    ''heru'' console script, heru/main.py implements the standalone CLI, litehive/agents/base.py
+    and litehive/agents/quota/__init__.py are re-export shims, litehive/agents/adapters/*
+    are shims into heru.adapters.*, and litehive/agents/_engine_detection.py preserves
+    the reload-sensitive helper behavior by delegating to heru._engine_detection.
+    Focused verification run: ''uv run pytest -q tests/test_heru_cli.py tests/test_engine_parse_warnings.py
+    tests/test_codex_quota.py'' -> 31 passed in 0.67s; ''uv run pytest -q tests/test_tasks_and_subagents.py::test_has_callable_override_ignores_rebound_external_base_methods
+    tests/test_tasks_and_subagents.py::test_has_callable_override_ignores_bound_alias_to_rebound_external_base_run''
+    -> 2 passed in 0.42s; ''uv run heru --help'' -> exit 0 with standalone heru usage
+    including prompt, --engine, --model, --cwd, --max-turns, and --resume-session-id.
+    I also directly checked that heru and litehive resolve the same adapter surface:
+    a short Python import check showed heru.get_engine(''claude'') and litehive.agents.get_engine(''claude'')
+    both return ClaudeCLIAdapter, and heru.ENGINE_CHOICES reports all six expected
+    engines. Full regression verification: ''uv run pytest -q'' -> 913 passed in 129.64s.
+    Test quality check: the newly added tests are focused, short, and behavior-specific;
+    I did not find monolithic or no-op coverage in the added heru CLI test. Based
+    on the shim inspection plus the passing focused/full test runs, the acceptance
+    criteria are satisfied: reusable adapter/invocation/parsing/quota/continuation
+    code now lives under heru, Litehive imports from heru through backward-compatible
+    shims, the standalone heru CLI entry point is exposed and runnable, and the existing
+    Litehive suite passes with no observed functional regression.'
+  files_changed: []
+  created_at: '2026-04-10T02:59:06+00:00'
+- role: reviewer
+  step: accepting
+  verdict: pass
+  message: 'Accepted. I verified the extraction directly in the workspace and confirmed
+    the acceptance criteria are met. Evidence inspected: pyproject.toml now packages
+    both litehive and heru and exposes a standalone heru = heru.main:main console
+    script; the new top-level heru/ package exists with base.py, types.py, models.py,
+    _engine_detection.py, _continuation.py, quota/, and adapters/ for all six engines
+    (claude, codex, copilot, gemini, goz, opencode). heru/__init__.py owns the shared
+    engine registry and adapter-facing exports. Litehive now consumes that layer through
+    compatibility shims and re-exports rather than retaining duplicate adapter/base/quota
+    implementations locally: for example litehive/agents/base.py re-exports heru.base,
+    litehive/agents/quota/__init__.py re-exports heru.quota, adapter modules under
+    litehive/agents/adapters/ delegate into heru.adapters.*, and litehive/agents/_engine_detection.py
+    preserves the reload-sensitive behavior while delegating to heru._engine_detection.
+    I also confirmed the shared runtime surface matches between packages with a direct
+    import check showing heru.ENGINE_CHOICES contains claude,codex,copilot,gemini,goz,opencode
+    and type(heru.get_engine("claude")) is type(litehive.agents.get_engine("claude"))
+    is True. Verification run by me: uv run pytest -q tests/test_heru_cli.py tests/test_engine_parse_warnings.py
+    tests/test_codex_quota.py -> 31 passed in 0.50s; uv run pytest -q tests/test_tasks_and_subagents.py::test_has_callable_override_ignores_rebound_external_base_methods
+    tests/test_tasks_and_subagents.py::test_has_callable_override_ignores_bound_alias_to_rebound_external_base_run
+    -> 2 passed in 0.46s; uv run heru --help -> exit 0 and showed standalone heru
+    usage with prompt, --engine, --model, --cwd, --max-turns, and --resume-session-id;
+    uv run pytest -q -> 913 passed in 134.44s. Based on the inspected module boundaries
+    plus the focused and full verification results, this is a behavior-preserving
+    extraction: engine invocation building, transcript parsing, quota helpers, and
+    session continuation logic now live under heru, Litehive imports from heru through
+    backward-compatible shims, the standalone heru CLI works, and the existing Litehive
+    test suite passes.'
+  files_changed: []
+  created_at: '2026-04-10T03:03:08+00:00'

@@ -1,0 +1,93 @@
+task_id: T-0269
+step: grooming
+verdict: pass
+source: agent
+summary: 'Grooming completed. I inspected the current adapter surface under `litehive/agents/`,
+  the packaging config in `pyproject.toml`, and the import graph across tests, CLI,
+  pipeline, web, `litehive/subagents`, and `litehive/engines`. Evidence: the engine
+  adapter code currently lives in `litehive/agents/adapters/*`, shared invocation/parsing
+  contracts live in `litehive/agents/base.py`, quota helpers live in `litehive/agents/quota/*`,
+  continuation helpers are exposed via `litehive/agents/__init__.py`, and the repo
+  currently publishes only the `litehive` console script. I also verified that `litehive/agents/_prompts.py`
+  and `litehive/agents/sandbox.py` are Litehive-specific orchestration/config modules
+  rather than generic engine-layer code, so they should not be moved wholesale.'
+feedback: "Grooming completed. I inspected the current adapter surface under `litehive/agents/`,\
+  \ the packaging config in `pyproject.toml`, and the import graph across tests, CLI,\
+  \ pipeline, web, `litehive/subagents`, and `litehive/engines`. Evidence: the engine\
+  \ adapter code currently lives in `litehive/agents/adapters/*`, shared invocation/parsing\
+  \ contracts live in `litehive/agents/base.py`, quota helpers live in `litehive/agents/quota/*`,\
+  \ continuation helpers are exposed via `litehive/agents/__init__.py`, and the repo\
+  \ currently publishes only the `litehive` console script. I also verified that `litehive/agents/_prompts.py`\
+  \ and `litehive/agents/sandbox.py` are Litehive-specific orchestration/config modules\
+  \ rather than generic engine-layer code, so they should not be moved wholesale.\n\
+  \nTask record updates applied: PM_COMPLEXITY=complex, PLANNED_EFFORT=l. Scope is\
+  \ narrowed to extracting the reusable engine layer into a new in-repo `heru` package\
+  \ while preserving Litehive compatibility. The implementation should move adapter\
+  \ implementations, shared adapter contracts, transcript/event parsing helpers, quota\
+  \ helpers, engine continuation extraction, and any engine-agnostic invocation helpers\
+  \ into `heru`; then leave `litehive.agents`, `litehive.agents.adapters`, `litehive.agents.base`,\
+  \ `litehive.agents.quota`, `litehive.subagents`, and existing compatibility shims\
+  \ importing from `heru` so current Litehive call sites and tests keep working. Do\
+  \ not move Litehive-owned stage prompt generation, subagent result models, manager/session\
+  \ orchestration, or config-bound sandbox policy code unless a small generic helper\
+  \ can be cleanly split out without changing behavior.\n\nRecommended acceptance\
+  \ criteria for implementation:\nTASK_UPDATE:\n  pm_complexity: complex\n  planned_effort:\
+  \ l\n  goal: Extract the reusable engine adapter layer from `litehive/agents/` into\
+  \ a new in-repo `heru/` package, then have Litehive consume that package through\
+  \ backward-compatible imports with no behavioral changes.\n  acceptance_criteria:\n\
+  \    - A new top-level `heru/` package contains the reusable engine layer for claude,\
+  \ codex, copilot, gemini, goz, and opencode, including shared adapter contracts,\
+  \ transcript/event parsing helpers, continuation extraction, and quota helpers.\n\
+  \    - Litehive continues to expose its existing adapter-facing imports (`litehive.agents`,\
+  \ `litehive.agents.adapters`, `litehive.agents.base`, and `litehive.agents.quota`)\
+  \ while sourcing the moved engine-layer code from `heru` instead of duplicating\
+  \ adapter implementations locally.\n    - Litehive-specific orchestration modules\
+  \ remain in Litehive; prompt-building, task/stage report parsing, subagent manager/session\
+  \ flow, and config-bound sandbox policy logic are not regressed by the extraction.\n\
+  \    - Installing/running the repo exposes a standalone `heru` CLI entry point that\
+  \ accepts a prompt plus `--engine <name>` without requiring Litehive task/workspace\
+  \ commands.\n    - The existing Litehive test suite passes after the extraction,\
+  \ and focused tests cover the `heru` package entry points or compatibility shims\
+  \ introduced by the move.\n    - The extraction is behavior-preserving: existing\
+  \ Litehive engine selection, invocation building, transcript parsing, quota checks,\
+  \ and session resume flows continue to work through the same public Litehive APIs.\n\
+  \  constraints:\n    - Keep Litehive public imports backward compatible during this\
+  \ extraction; prefer shim/re-export modules over call-site churn.\n    - Do not\
+  \ expand the task into publishing a separate external package; this task is limited\
+  \ to the in-repo module extraction and standalone CLI exposure.\n    - Keep implementation\
+  \ scoped to engine-layer reuse and behavior preservation.\n  plan:\n    - Inventory\
+  \ the exact engine-layer modules and symbols to move from `litehive/agents/` into\
+  \ `heru/`, distinguishing reusable engine code from Litehive orchestration code.\n\
+  \    - Create the new `heru/` package structure and move shared adapter contracts,\
+  \ adapter implementations, helper impl modules, continuation helpers, and quota\
+  \ modules there with minimal internal API changes.\n    - Update Litehive compatibility\
+  \ modules to import/re-export from `heru`, preserving current public import paths\
+  \ used by tests and runtime code.\n    - Add a `heru` CLI entry point and focused\
+  \ tests for standalone engine selection / invocation plumbing without depending\
+  \ on real external binaries.\n    - Run focused adapter/CLI compatibility tests\
+  \ first, then run `uv run pytest -q` for the existing smoke suite.\n\nTests run\
+  \ in grooming: none. Evidence gathered from repository inspection plus PyPI package\
+  \ metadata review for `heru` 0.0.1, which confirms the intended standalone CLI shape\
+  \ (`heru \"prompt\" --engine claude`) and supported engines. No code changes were\
+  \ made in grooming."
+submitted_via_cli: true
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 140
+hook_results: []
+created_at: '2026-04-10T02:42:43+00:00'
