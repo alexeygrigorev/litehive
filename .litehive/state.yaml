@@ -1,9 +1,8 @@
-active_task_id: T-0269
+active_task_id: T-0270
 active_task_ids: []
 mode: implementation
 queue:
 - T-0263
-- T-0270
 - T-0240
 - T-0274
 - T-0275
@@ -21,3 +20,5 @@ unmerged_worktrees:
   worktree_path: .litehive/worktrees/T-0223-web-dashboard-daemon-control-api-start-stop
 - task_id: T-0264
   worktree_path: .litehive/worktrees/T-0264-reorganize-cli-command-structure-with-logical
+- task_id: T-0269
+  worktree_path: .litehive/worktrees/T-0269-extract-engine-adapter-layer-into-heru-module

@@ -7,15 +7,15 @@ engine: null
 model: null
 mode: implementation
 pipeline_mode: full
-status: in_progress
+status: merge_failed
 flag_reason: null
 flag_count: 0
-pipeline_status: commit_to_git
+pipeline_status: merge_failed
 priority: medium
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-09T18:31:43+00:00'
-updated_at: '2026-04-10T03:03:15+00:00'
+updated_at: '2026-04-10T03:05:16+00:00'
 goal: Move engine adapters, invocation building, transcript parsing, quota checking,
   and session resume logic from litehive/agents/ into a heru/ package within the repo.
   litehive imports from heru instead of litehive/agents/adapters/. First step toward
@@ -73,6 +73,13 @@ subagents:
   path: subagents/SA-0004-reviewer
   sandboxed: false
   sandbox_summary: host
+- id: SA-0005
+  role: merge-resolver
+  engine: codex
+  status: completed
+  path: subagents/SA-0005-merge-resolver
+  sandboxed: false
+  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0269 extract-engine-adapter-layer-into-heru-module'
@@ -80,7 +87,7 @@ git:
   checkpoint_base_sha: null
   checkpoint_attempts: 0
   rolled_back_checkpoint_attempt: null
-  merge_agent_attempts: 0
+  merge_agent_attempts: 1
   worktree_path: null
 retry_policy:
   max_retries: null

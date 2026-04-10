@@ -1,0 +1,55 @@
+task_id: T-0270
+step: accepting
+verdict: pass
+source: agent
+summary: 'Acceptance PASS. I verified the implementation routes execution, recovery
+  auto-selection, and dry-run planning through the shared pipeline selector: litehive/pipeline/_models.py
+  select_engine() now owns active-freeze filtering, quota checks, budget caps, and
+  freeze persistence; litehive/pipeline/_builder.py, litehive/pipeline/recovery/execution_recovery.py,
+  and litehive/cli/_dry_run.py all delegate to it. I confirmed the selector skips
+  engines with active engine_freeze entries before quota calls, re-checks quota after
+  an expired freeze, persists a new freeze when quota exhaustion includes a reset
+  timestamp, and refreshes that freeze if the engine is still exhausted. Reviewer
+  verification run: uv run pytest -q tests/test_engine_freeze.py (24 passed), uv run
+  pytest -q tests/test_crash_resume.py tests/test_run_cli.py (44 passed), and uv run
+  pytest -q tests/test_commit_to_git_and_checkpoint.py::test_run_next_task_records_blocked_reason_code_when_fallbacks_are_exhausted
+  (1 passed). Evidence: tests/test_engine_freeze.py covers auto-freeze persistence,
+  skipping active freezes without quota calls, expired-freeze recheck with both refresh
+  and recovery outcomes, and delegation from builder/dry-run/recovery into the shared
+  selector. Acceptance criteria are met.'
+feedback: 'Acceptance PASS. I verified the implementation routes execution, recovery
+  auto-selection, and dry-run planning through the shared pipeline selector: litehive/pipeline/_models.py
+  select_engine() now owns active-freeze filtering, quota checks, budget caps, and
+  freeze persistence; litehive/pipeline/_builder.py, litehive/pipeline/recovery/execution_recovery.py,
+  and litehive/cli/_dry_run.py all delegate to it. I confirmed the selector skips
+  engines with active engine_freeze entries before quota calls, re-checks quota after
+  an expired freeze, persists a new freeze when quota exhaustion includes a reset
+  timestamp, and refreshes that freeze if the engine is still exhausted. Reviewer
+  verification run: uv run pytest -q tests/test_engine_freeze.py (24 passed), uv run
+  pytest -q tests/test_crash_resume.py tests/test_run_cli.py (44 passed), and uv run
+  pytest -q tests/test_commit_to_git_and_checkpoint.py::test_run_next_task_records_blocked_reason_code_when_fallbacks_are_exhausted
+  (1 passed). Evidence: tests/test_engine_freeze.py covers auto-freeze persistence,
+  skipping active freezes without quota calls, expired-freeze recheck with both refresh
+  and recovery outcomes, and delegation from builder/dry-run/recovery into the shared
+  selector. Acceptance criteria are met.'
+submitted_via_cli: true
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 82
+hook_results: []
+created_at: '2026-04-10T03:27:23+00:00'

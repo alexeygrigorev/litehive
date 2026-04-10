@@ -1,0 +1,59 @@
+task_id: T-0270
+step: testing
+verdict: pass
+source: agent
+summary: 'Verified the shared engine-selection path and the quota-freeze behavior.
+  I inspected the implementation in litehive/pipeline/_models.py, litehive/pipeline/_builder.py,
+  litehive/pipeline/recovery/execution_recovery.py, and litehive/cli/_dry_run.py and
+  confirmed execution, recovery auto-engine selection, and dry-run planning all call
+  the shared select_engine() path. The selector skips active engine_freeze entries
+  before quota checks, persists a freeze when quota exhaustion returns a reset timestamp,
+  re-checks quota after an expired freeze, refreshes the freeze if still exhausted,
+  and allows the engine again when quota recovers. Focused tests are appropriately
+  scoped and cover the new behaviors without broad duplicated flows.\n\nTests run:\n-
+  uv run pytest -q tests/test_engine_freeze.py\n- uv run pytest -q tests/test_crash_resume.py
+  tests/test_run_cli.py\n- uv run pytest -q tests/test_commit_to_git_and_checkpoint.py::test_run_next_task_records_blocked_reason_code_when_fallbacks_are_exhausted\n\nEvidence:
+  tests/test_engine_freeze.py covers auto-freeze persistence on quota exhaustion with
+  reset timestamp, skipping active freezes without quota calls, expired-freeze recheck
+  with both refresh and recovery outcomes, and delegation from builder/dry-run/recovery
+  into the shared selector. The additional crash-resume, CLI, and executor regression
+  checks passed, which gives independent confidence that the refactor did not break
+  the updated selection paths. Acceptance criteria are met.'
+feedback: 'Verified the shared engine-selection path and the quota-freeze behavior.
+  I inspected the implementation in litehive/pipeline/_models.py, litehive/pipeline/_builder.py,
+  litehive/pipeline/recovery/execution_recovery.py, and litehive/cli/_dry_run.py and
+  confirmed execution, recovery auto-engine selection, and dry-run planning all call
+  the shared select_engine() path. The selector skips active engine_freeze entries
+  before quota checks, persists a freeze when quota exhaustion returns a reset timestamp,
+  re-checks quota after an expired freeze, refreshes the freeze if still exhausted,
+  and allows the engine again when quota recovers. Focused tests are appropriately
+  scoped and cover the new behaviors without broad duplicated flows.\n\nTests run:\n-
+  uv run pytest -q tests/test_engine_freeze.py\n- uv run pytest -q tests/test_crash_resume.py
+  tests/test_run_cli.py\n- uv run pytest -q tests/test_commit_to_git_and_checkpoint.py::test_run_next_task_records_blocked_reason_code_when_fallbacks_are_exhausted\n\nEvidence:
+  tests/test_engine_freeze.py covers auto-freeze persistence on quota exhaustion with
+  reset timestamp, skipping active freezes without quota calls, expired-freeze recheck
+  with both refresh and recovery outcomes, and delegation from builder/dry-run/recovery
+  into the shared selector. The additional crash-resume, CLI, and executor regression
+  checks passed, which gives independent confidence that the refactor did not break
+  the updated selection paths. Acceptance criteria are met.'
+submitted_via_cli: true
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 89
+hook_results: []
+created_at: '2026-04-10T03:26:01+00:00'

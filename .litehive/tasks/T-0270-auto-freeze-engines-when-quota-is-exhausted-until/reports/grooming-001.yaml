@@ -1,0 +1,92 @@
+task_id: T-0270
+step: grooming
+verdict: pass
+source: agent
+summary: Grooming PASS. The task is implementation-ready after tightening the task
+  contract to match the actual user-facing behavior.
+feedback: "Grooming PASS. The task is implementation-ready after tightening the task\
+  \ contract to match the actual user-facing behavior.\n\nWhat I verified\n- Inspected\
+  \ the current task record at `.litehive/tasks/T-0270-auto-freeze-engines-when-quota-is-exhausted-until/task.yaml`.\n\
+  - Confirmed manual freeze support already exists in `litehive/cli/engine.py`, freeze\
+  \ filtering already exists in `litehive/pipeline/_models.py` via `resolve_engine_attempt_order()`\
+  \ / `is_engine_frozen()`, and status/web surfaces already read active freezes.\n\
+  - Confirmed engine selection logic is currently duplicated across three paths:\n\
+  \  - `litehive/pipeline/_builder.py`: inline quota + budget + fallback loop during\
+  \ stage execution.\n  - `litehive/pipeline/recovery/execution_recovery.py` `_resolve_recovery_engine()`:\
+  \ separate recovery-specific engine chooser.\n  - `litehive/cli/_dry_run.py`: separate\
+  \ dry-run chooser with only codex quota wired.\n- Confirmed current quota block\
+  \ strings already expose reset timestamps for some engines:\n  - codex: `codex quota\
+  \ exhausted (..., resets at <timestamp>)`\n  - claude: `claude usage limit reached\
+  \ (..., resets <timestamp>)`\n  - copilot: `... resets <date>`\n  - zai/opencode:\
+  \ no reset timestamp in the current block reason string.\n- Confirmed existing tests\
+  \ cover manual freeze behavior and attempt-order filtering in `tests/test_engine_freeze.py`,\
+  \ but there is no coverage yet for auto-recording freezes from quota exhaustion,\
+  \ skipping frozen engines without rechecking quota before expiry, or rechecking\
+  \ quota after expiry.\n\nTests run\n- None. Grooming only; I did repo inspection\
+  \ and task-shaping review, not implementation verification.\n\nWhy the task needs\
+  \ a TASK_UPDATE\n- The current acceptance criteria are implementation-shaped (`Single\
+  \ select_engine() function...`, `No duplicate logic...`) and do not directly verify\
+  \ the stated goal: automatically freezing an exhausted engine until its known reset\
+  \ time, skipping it without API calls, and re-checking once the freeze expires.\n\
+  - The task is still ready to implement, but the next agent needs observable behavioral\
+  \ criteria plus a scoped plan that names the affected code paths.\n\nImplementation\
+  \ guidance for the next agent\n- Introduce a single shared selection path in pipeline\
+  \ code that every runtime caller uses: stage execution, recovery-engine resolution,\
+  \ and dry-run planning.\n- Preserve existing manual freeze semantics in `config.engine_freeze`,\
+  \ but add automatic writes when a quota check returns both \"blocked\" and a parseable\
+  \ reset timestamp.\n- The selector should distinguish:\n  - active freeze in the\
+  \ future: skip engine immediately and do not call quota APIs for that engine.\n\
+  \  - freeze expired: allow one fresh quota check; if still exhausted and reset is\
+  \ known, refresh the freeze; if recovered, continue normally.\n- Dry-run should\
+  \ use the same selector contract or a shared helper so predicted engine choice matches\
+  \ actual runtime behavior.\n- The implementation should stay scoped to engine selection\
+  \ and freeze persistence; do not broaden into unrelated engine adapter cleanup.\n\
+  \nTASK_UPDATE:\ngoal: When quota detection finds an engine exhausted and provides\
+  \ a reset timestamp, Litehive automatically freezes that engine until the reset\
+  \ time, skips it without further quota/API checks while the freeze is active, and\
+  \ re-checks quota once the freeze expires before using it again.\nacceptance_criteria:\n\
+  \  - When the preferred engine reports quota exhaustion with a known reset timestamp,\
+  \ Litehive records an engine freeze until that timestamp and falls back to the next\
+  \ eligible engine.\n  - While an engine freeze is still active, execution, recovery-engine\
+  \ selection, and dry-run planning all skip that engine without calling its quota\
+  \ check again.\n  - After a freeze timestamp has passed, Litehive re-checks quota\
+  \ before selecting that engine; if quota is still exhausted with a new reset timestamp,\
+  \ the freeze is refreshed, and if quota has recovered the engine becomes eligible\
+  \ again.\n  - Execution, recovery, and dry-run engine selection all go through one\
+  \ shared selection path, so the chosen engine/fallback behavior is consistent across\
+  \ `litehive/pipeline/_builder.py`, `litehive/pipeline/recovery/execution_recovery.py`,\
+  \ and `litehive/cli/_dry_run.py`.\npm_complexity: moderate\nplanned_effort: m\n\
+  plan:\n  - Extract a shared engine-selection helper in pipeline that combines attempt\
+  \ order, active freezes, quota checks, and budget caps.\n  - Replace the inline\
+  \ chooser in `litehive/pipeline/_builder.py` with the shared selector.\n  - Replace\
+  \ `_resolve_recovery_engine()` selection logic in `litehive/pipeline/recovery/execution_recovery.py`\
+  \ with the shared selector.\n  - Replace dry-run selection logic in `litehive/cli/_dry_run.py`\
+  \ with the shared selector or a thin wrapper over it.\n  - Add persistence for automatic\
+  \ quota freezes using the existing `engine_freeze` config field.\n  - Add focused\
+  \ tests for: auto-freeze on quota exhaustion with reset timestamp; skipping frozen\
+  \ engines without quota calls; re-check after expiry; shared behavior in runtime/dry-run/recovery.\n\
+  \nAcceptance-criteria status for grooming\n- Satisfied for grooming readiness: the\
+  \ task now has a clear user problem, concrete observable outcomes, scoped implementation\
+  \ plan, and PM sizing.\n- Not yet satisfied in code: the product behavior itself\
+  \ is not implemented yet."
+submitted_via_cli: true
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 106
+hook_results: []
+created_at: '2026-04-10T03:07:30+00:00'

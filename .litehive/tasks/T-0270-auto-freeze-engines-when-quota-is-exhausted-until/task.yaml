@@ -7,15 +7,15 @@ engine: null
 model: null
 mode: implementation
 pipeline_mode: full
-status: queued
+status: in_progress
 flag_reason: null
 flag_count: 0
-pipeline_status: backlog
+pipeline_status: commit_to_git
 priority: high
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-09T20:59:29+00:00'
-updated_at: '2026-04-09T21:00:24+00:00'
+updated_at: '2026-04-10T03:27:23+00:00'
 goal: When quota check detects an engine is exhausted with a known reset time, record
   the reset timestamp as an engine freeze. Skip frozen engines entirely without API
   calls until the freeze expires. On expiry, re-check quota to confirm recovery.
@@ -35,7 +35,35 @@ plan:
 - Skip frozen engines without API calls until freeze expires
 - On freeze expiry, re-check quota to confirm engine is back
 human_checkpoints: []
-subagents: []
+subagents:
+- id: SA-0001
+  role: planner
+  engine: codex
+  status: completed
+  path: subagents/SA-0001-planner
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0002
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0002-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0003
+  role: qa
+  engine: codex
+  status: completed
+  path: subagents/SA-0003-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0004
+  role: reviewer
+  engine: codex
+  status: completed
+  path: subagents/SA-0004-reviewer
+  sandboxed: false
+  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0270 auto-freeze-engines-when-quota-is-exhausted-until'
