@@ -58,7 +58,7 @@ class LitehiveWebHandler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         if parsed.path == "/":
             return self._send_html(_render_index())
-        if parsed.path == "/api/daemon/status":
+        if parsed.path in {"/api/runner/status", "/api/daemon/status"}:
             return self._send_json(_web_pkg.build_daemon_status_payload(self.workspace_root))
         if parsed.path == "/api/snapshot":
             return self._send_json(_web_pkg.build_workspace_snapshot(self.workspace_root))
@@ -86,7 +86,7 @@ class LitehiveWebHandler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:  # noqa: N802
         parsed = urlparse(self.path)
-        if parsed.path == "/api/daemon/start":
+        if parsed.path in {"/api/runner/start", "/api/daemon/start"}:
             try:
                 _web_pkg.start_background_daemon(self.workspace_root)
             except RuntimeError as exc:
@@ -95,7 +95,7 @@ class LitehiveWebHandler(BaseHTTPRequestHandler):
                 _web_pkg.build_daemon_status_payload(self.workspace_root),
                 status=HTTPStatus.ACCEPTED,
             )
-        if parsed.path == "/api/daemon/stop":
+        if parsed.path in {"/api/runner/stop", "/api/daemon/stop"}:
             previous = _web_pkg.stop_workspace_daemon(self.workspace_root)
             if previous is None:
                 return self._send_json(
@@ -105,7 +105,7 @@ class LitehiveWebHandler(BaseHTTPRequestHandler):
             payload = _web_pkg.build_daemon_status_payload(self.workspace_root)
             payload["previous_pid"] = previous.get("pid")
             return self._send_json(payload)
-        if parsed.path == "/api/daemon/restart":
+        if parsed.path in {"/api/runner/restart", "/api/daemon/restart"}:
             previous = _web_pkg.stop_workspace_daemon(self.workspace_root)
             previous_pid = previous.get("pid") if previous is not None else None
             try:
@@ -212,6 +212,15 @@ class LitehiveWebHandler(BaseHTTPRequestHandler):
                     raise ValueError("task_ids must be a non-empty list of task ids")
                 state = prioritize_queued_tasks(self.workspace_root, task_ids)
                 return self._send_queue_mutation_json(state.queue)
+            if parsed.path == "/api/queue/requeue":
+                task_id = self._require_string(payload, "task_id")
+                return self._handle_task_mutation(
+                    lambda: _web_pkg.requeue_task_via_web(self.workspace_root, task_id, payload)
+                )
+            if parsed.path == "/api/queue/stop":
+                return self._handle_task_mutation(
+                    lambda: _web_pkg.stop_active_task_via_web(self.workspace_root, payload),
+                )
         except FileNotFoundError as exc:
             return self._send_error_json(HTTPStatus.NOT_FOUND, str(exc))
         except WorkspaceConflictError as exc:

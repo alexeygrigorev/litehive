@@ -280,3 +280,12 @@ def _cmd_import_issues(args) -> int:
 
     print(f"\nImported {created} issue(s), skipped {skipped} already-tracked issue(s).")
     return 0 if errors == 0 else 1
+
+
+def _cmd_import_github(args) -> int:
+    if getattr(args, "all", False):
+        return _cmd_import_issues(args)
+    if not getattr(args, "issue_ref", None):
+        print("import github failed: provide an issue reference or use --all")
+        return 1
+    return _cmd_import_issue(args)

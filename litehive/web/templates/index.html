@@ -424,7 +424,7 @@
           </label>
           <div class="actions">
             <button class="action-btn primary" type="submit">Create task</button>
-            <button class="action-btn danger" type="button" id="stop-active-header">Stop active</button>
+            <button class="action-btn danger" type="button" id="queue-stop-header">Queue stop</button>
           </div>
         </form>
       </div>
@@ -458,8 +458,6 @@
       engines: null,
       defaultEngineSaveState: "idle",
       defaultEngineSaveMessage: "",
-      taskSwitchState: "idle",
-      taskSwitchMessage: "",
       reportSaveState: "idle",
       reportSaveMessage: "",
       transport: "starting",
@@ -877,33 +875,6 @@
       `;
     }
 
-    function renderTaskSwitchSection(task, snapshot) {
-      const options = (snapshot.editable_fields?.engine_options || []).map((value) => `
-        <option value="${escAttr(value)}" ${value === (task.record?.engine || "") ? "selected" : ""}>${esc(value)}</option>
-      `).join("");
-      return `
-        <div class="section">
-          <h3>Switch Engine</h3>
-          <form id="task-switch-form" class="stack">
-            <div class="grid-two">
-              <div class="field">
-                <label for="task-switch-engine">New engine</label>
-                <select id="task-switch-engine" name="engine">${options}</select>
-              </div>
-              <div class="field">
-                <label for="task-switch-reason">Reason</label>
-                <input id="task-switch-reason" name="reason" type="text" placeholder="quota exhausted" value="">
-              </div>
-            </div>
-            <div class="toolbar">
-              <button class="primary" type="submit" ${state.taskSwitchState === "saving" ? "disabled" : ""}>${state.taskSwitchState === "saving" ? "Switching..." : "Switch Task Engine"}</button>
-              <span class="status-line">${esc(state.taskSwitchMessage)}</span>
-            </div>
-          </form>
-        </div>
-      `;
-    }
-
     function renderEditSection(task, snapshot) {
       const record = task.record || {};
       const options = snapshot.editable_fields || { priority_options: [], engine_options: [] };
@@ -1108,7 +1079,6 @@
           <div>Current stage</div><div>${esc(task.current_stage.step || "-")} / ${esc(task.current_stage.status || "-")}</div>
           <div>Last stage</div><div>${esc(task.last_stage.step || "-")} / ${esc(task.last_stage.verdict || "-")}</div>
         </div>
-        ${renderTaskSwitchSection(task, snapshot)}
         ${renderVerdictSection(task)}
         ${renderEditSection(task, snapshot)}
         ${renderRecordSection(task)}
@@ -1229,13 +1199,6 @@
           await saveDefaultEngine();
         });
       }
-      const taskSwitchForm = document.getElementById("task-switch-form");
-      if (taskSwitchForm) {
-        taskSwitchForm.addEventListener("submit", async (event) => {
-          event.preventDefault();
-          await switchTaskEngine(task.id);
-        });
-      }
       const reportForm = document.getElementById("task-report-form");
       if (reportForm) {
         reportForm.addEventListener("submit", async (event) => {
@@ -1279,7 +1242,8 @@
       });
       container.querySelector("#task-requeue-button")?.addEventListener("click", async () => {
         try {
-          const result = await postJson(`/api/tasks/${encodeURIComponent(task.id)}/requeue`, {
+          const result = await postJson("/api/queue/requeue", {
+            task_id: task.id,
             front: Boolean(container.querySelector("#task-requeue-front")?.checked),
           });
           setMessage(`Requeued ${result.task_id}${result.queue_position ? ` at position ${result.queue_position}` : ""}.`);
@@ -1299,7 +1263,7 @@
       });
       container.querySelector("#task-stop-button")?.addEventListener("click", async () => {
         try {
-          const result = await postJson("/api/tasks/active/stop", {});
+          const result = await postJson("/api/queue/stop", {});
           setMessage(`Stopped active task ${result.task_id}.`);
           await refreshSnapshot();
         } catch (error) {
@@ -1371,9 +1335,9 @@
             <div>Log dir</div><div class="mono">${esc(daemon?.log_dir || "-")}</div>
           </div>
           <div class="controls">
-            <button class="control" id="daemon-start" ${status === "running" || daemonBusy ? "disabled" : ""}>Start</button>
-            <button class="control" id="daemon-stop" ${status !== "running" || daemonBusy ? "disabled" : ""}>Stop</button>
-            <button class="control" id="daemon-restart" ${status !== "running" || daemonBusy ? "disabled" : ""}>Restart</button>
+            <button class="control" id="runner-start" ${status === "running" || daemonBusy ? "disabled" : ""}>Start</button>
+            <button class="control" id="runner-stop" ${status !== "running" || daemonBusy ? "disabled" : ""}>Stop</button>
+            <button class="control" id="runner-restart" ${status !== "running" || daemonBusy ? "disabled" : ""}>Restart</button>
           </div>
         </div>
         <div class="section">
@@ -1431,14 +1395,14 @@
     }
 
     async function refreshDaemon() {
-      state.daemon = await fetchJson("/api/daemon/status");
+      state.daemon = await fetchJson("/api/runner/status");
     }
 
     async function runDaemonAction(action) {
       state.daemonAction = `${action}...`;
       renderSessionPayload(null, state.snapshot || { run_all_logs: [] });
       try {
-        state.daemon = await postJson(`/api/daemon/${action}`);
+        state.daemon = await postJson(`/api/runner/${action}`);
         state.daemonAction = `${action} ok`;
       } catch (error) {
         state.daemonAction = error.message;
@@ -1447,9 +1411,9 @@
     }
 
     function attachDaemonControls() {
-      document.getElementById("daemon-start")?.addEventListener("click", () => runDaemonAction("start"));
-      document.getElementById("daemon-stop")?.addEventListener("click", () => runDaemonAction("stop"));
-      document.getElementById("daemon-restart")?.addEventListener("click", () => runDaemonAction("restart"));
+      document.getElementById("runner-start")?.addEventListener("click", () => runDaemonAction("start"));
+      document.getElementById("runner-stop")?.addEventListener("click", () => runDaemonAction("stop"));
+      document.getElementById("runner-restart")?.addEventListener("click", () => runDaemonAction("restart"));
     }
 
     async function saveTaskEdits(taskId) {
@@ -1512,36 +1476,6 @@
       } catch (error) {
         state.defaultEngineSaveState = "idle";
         state.defaultEngineSaveMessage = error.message || "Default engine update failed.";
-        render(state.snapshot);
-      }
-    }
-
-    async function switchTaskEngine(taskId) {
-      const form = document.getElementById("task-switch-form");
-      if (!form) return;
-      state.taskSwitchState = "saving";
-      state.taskSwitchMessage = "";
-      render(state.snapshot);
-      try {
-        const result = await fetchJson("/api/task/engine", {
-          method: "POST",
-          body: JSON.stringify({
-            task_id: taskId,
-            engine: form.engine.value,
-            reason: form.reason.value,
-          }),
-        });
-        if (state.snapshot) {
-          const index = state.snapshot.tasks.findIndex((item) => item.id === taskId);
-          if (index >= 0) state.snapshot.tasks[index] = result.task;
-          if (state.snapshot.active_task_id === taskId) state.snapshot.active_task = result.task;
-        }
-        state.taskSwitchState = "idle";
-        state.taskSwitchMessage = `Switched ${result.switch.previous_engine} -> ${result.switch.new_engine}.`;
-        render(state.snapshot);
-      } catch (error) {
-        state.taskSwitchState = "idle";
-        state.taskSwitchMessage = error.message || "Task switch failed.";
         render(state.snapshot);
       }
     }
@@ -1732,9 +1666,9 @@
       }
     });
 
-    document.getElementById("stop-active-header").addEventListener("click", async () => {
-      try {
-        const result = await postJson("/api/tasks/active/stop", {});
+      document.getElementById("queue-stop-header").addEventListener("click", async () => {
+        try {
+        const result = await postJson("/api/queue/stop", {});
         setMessage(`Stopped active task ${result.task_id}.`);
         await refreshSnapshot();
       } catch (error) {

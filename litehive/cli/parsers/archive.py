@@ -1,4 +1,5 @@
 from litehive.cli.parsers._common import add_workspace_argument
+from litehive.cli.parsers.cleanup import register_cleanup_parser
 
 
 def register_archive_parser(subparsers):
@@ -18,3 +19,5 @@ def register_archive_parser(subparsers):
         help="Archive all done tasks and skip missing or broken task references",
     )
     add_workspace_argument(parser)
+    archive_subparsers = parser.add_subparsers(dest="archive_command")
+    register_cleanup_parser(archive_subparsers)

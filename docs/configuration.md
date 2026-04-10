@@ -95,13 +95,13 @@ litehive engine gemini
 Set a task-specific engine:
 
 ```bash
-litehive update T-0002 --engine opencode
+litehive task update T-0002 --engine opencode
 ```
 
 Switch a task to a different engine mid-stream and record the reason:
 
 ```bash
-litehive switch T-0002 gemini --reason "quota exhausted"
+litehive task update T-0002 --engine gemini
 ```
 
 Model resolution is:
@@ -142,7 +142,7 @@ Litehive has two distinct retry layers:
 Per-task override at creation time:
 
 ```bash
-litehive add "Stabilize flaky API test" \
+litehive task add "Stabilize flaky API test" \
   --goal "..." \
   --acceptance-criteria "..." \
   --retry-limit 5 \
@@ -152,8 +152,8 @@ litehive add "Stabilize flaky API test" \
 Per-task override after creation:
 
 ```bash
-litehive update T-0004 --retry-limit 5
-litehive update T-0004 --retry-limit default
+litehive task update T-0004 --retry-limit 5
+litehive task update T-0004 --retry-limit default
 ```
 
 Behavior:

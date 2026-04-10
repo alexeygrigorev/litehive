@@ -403,7 +403,8 @@ def test_render_index_includes_origin_metadata_sections() -> None:
     assert "GitHub Origin" in html
     assert "Engine Dashboard" in html
     assert "/api/engines" in html
-    assert "/api/task/engine" in html
+    assert "/api/runner/status" in html
+    assert "/api/queue/stop" in html
     assert "/api/report" in html
     assert "Submit Verdict" in html
     assert '["pass", "reject", "comment"]' in html

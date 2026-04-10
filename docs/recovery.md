@@ -39,9 +39,9 @@ These states can still move forward:
 Main controls:
 
 ```bash
-litehive resume T-0008
-litehive requeue T-0008 --front
-litehive abandon T-0008
+litehive queue resume T-0008
+litehive queue requeue T-0008 --front
+litehive task abandon T-0008
 ```
 
 Use `resume` when you want to continue from the task's current preserved stage.
@@ -132,7 +132,7 @@ implementation pass.
 ### `recover`
 
 ```bash
-litehive recover T-0009
+litehive queue requeue T-0009
 ```
 
 This requeues the completed task without reverting workspace code.
@@ -145,7 +145,7 @@ If an engine runs out of quota or becomes unsuitable mid-task, switch it without
 losing history:
 
 ```bash
-litehive switch T-0004 gemini --reason "codex quota exhausted"
+litehive task update T-0004 --engine gemini
 ```
 
 Litehive records the switch in task artifacts and keeps continuation pointers so
@@ -156,7 +156,7 @@ the next pass has the right context.
 Use this before long pool runs if you suspect unowned local changes:
 
 ```bash
-litehive dirty-worktree-gate
+litehive health
 ```
 
 The report explains whether dirty git state should block the pool and whether
@@ -182,4 +182,4 @@ litehive queue
 ```
 
 Then decide whether to resume, requeue, close, or file upstream Litehive work
-with `litehive issue`.
+with `litehive import issue`.

@@ -60,12 +60,12 @@ litehive configure
 Create a few tasks:
 
 ```bash
-litehive add "Fix queue ordering bug" \
+litehive task add "Fix queue ordering bug" \
   --goal "Dependency-blocked tasks do not jump ahead of runnable work." \
   --acceptance-criteria "Blocked tasks remain visible but are not selected before prerequisites finish." \
  
 
-litehive add "Document API auth flow" \
+litehive task add "Document API auth flow" \
   --task-type docs \
  
 ```
@@ -86,8 +86,8 @@ litehive run
 Or run continuously in the background:
 
 ```bash
-litehive daemon run
-litehive daemon status
+litehive start
+litehive status
 ```
 
 ## First Concepts To Know
@@ -107,7 +107,7 @@ litehive daemon status
 
 ```bash
 litehive configure
-litehive add "Implement feature X" --goal "..." --acceptance-criteria "..."
+litehive task add "Implement feature X" --goal "..." --acceptance-criteria "..."
 litehive run
 litehive status
 litehive repair   # when a prior run was interrupted

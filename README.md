@@ -34,16 +34,16 @@ cd /path/to/your/project
 litehive configure
 
 # Add some tasks
-litehive add "Add user authentication" --goal "Users can sign up and log in"
-litehive add "Fix the search bug" --goal "Search returns results for partial matches"
-litehive add "Write API documentation" --task-type docs
+litehive task add "Add user authentication" --goal "Users can sign up and log in"
+litehive task add "Fix the search bug" --goal "Search returns results for partial matches"
+litehive task add "Write API documentation" --task-type docs
 
 # Start the daemon
-litehive daemon run
+litehive start
 
 # Check progress
 litehive status
-litehive daemon status
+litehive status
 ```
 
 ## Engines
@@ -67,8 +67,8 @@ codex_model: gpt-5.4-high
 You can also set engines per task:
 
 ```bash
-litehive add "Refactor the database layer" --engine claude
-litehive update T-0005 --engine copilot
+litehive task add "Refactor the database layer" --engine claude
+litehive task update T-0005 --engine copilot
 ```
 
 When an engine hits its quota limit, litehive can fall back to another engine automatically.
@@ -78,14 +78,14 @@ When an engine hits its quota limit, litehive can fall back to another engine au
 Task management:
 
 ```bash
-litehive add "Task title" --goal "What needs to happen"
-litehive add "Research task" --task-type research --mode tasks
-litehive update T-0001 --engine opencode --priority high
-litehive move T-0003 1                    # move to position 1
-litehive promote T-0005                   # move to front
-litehive requeue T-0002 --front           # requeue a flagged task
-litehive close T-0004 --outcome wont_do --reason "No longer needed"
-litehive abandon T-0006
+litehive task add "Task title" --goal "What needs to happen"
+litehive task add "Research task" --task-type research --mode tasks
+litehive task update T-0001 --engine opencode --priority high
+litehive queue move T-0003 1                    # move to position 1
+litehive queue promote T-0005                   # move to front
+litehive queue requeue T-0002 --front           # requeue a flagged task
+litehive task close T-0004 --outcome wont_do --reason "No longer needed"
+litehive task abandon T-0006
 ```
 
 Execution:
@@ -94,10 +94,10 @@ Execution:
 litehive run                              # run one task
 litehive run --drain                      # run until queue is empty
 litehive run --dry-run                    # preview what would run
-litehive daemon run                       # start background daemon
-litehive daemon stop                      # stop daemon
-litehive daemon status                    # check daemon state
-litehive daemon instances                 # list all running daemons
+litehive start                       # start background daemon
+litehive stop                      # stop daemon
+litehive status                    # quick runner and queue state
+litehive task logs --daemon        # recent background-runner sessions
 ```
 
 Monitoring:
@@ -108,13 +108,13 @@ litehive status --fast                    # legacy alias for the default quick r
 litehive status --full                    # verbose per-task status dump
 litehive queue                            # show queue order
 litehive web                              # local web dashboard
-litehive logs                             # tail the latest daemon run log
-litehive logs --daemon                    # list recent daemon sessions with outcomes
-litehive logs T-0002                      # print the task journal
-litehive logs T-0002 --agent              # show the latest subagent transcript/stdout tail
-litehive logs T-0002 --agent --all        # list all subagent runs for a task
-litehive logs --follow                    # follow the active subagent stdout live
-litehive debug T-0002 --worktree         # inspect recorded worktree existence and changes
+litehive task logs                             # tail the latest daemon run log
+litehive task logs --daemon                    # list recent daemon sessions with outcomes
+litehive task logs T-0002                      # print the task journal
+litehive task logs T-0002 --agent              # show the latest subagent transcript/stdout tail
+litehive task logs T-0002 --agent --all        # list all subagent runs for a task
+litehive task logs --follow                    # follow the active subagent stdout live
+litehive task debug T-0002 --worktree         # inspect recorded worktree existence and changes
 litehive worktree ls                      # list Litehive-managed worktrees with task status and change counts
 litehive worktree clean --dry-run         # preview cleanup of closed-task worktrees
 ```
@@ -124,8 +124,8 @@ Recovery:
 ```bash
 litehive repair                           # fix stale state
 litehive rollback T-0001                  # revert a completed task
-litehive recover T-0001                   # requeue without reverting
-litehive resume T-0002                    # resume an interrupted task
+litehive queue requeue T-0001                   # requeue without reverting
+litehive queue resume T-0002                    # resume an interrupted task
 ```
 
 Agent interaction:
@@ -229,16 +229,16 @@ High-volume raw execution artifacts are treated as disposable support data:
 The daemon runs tasks continuously in the background:
 
 ```bash
-litehive daemon run
+litehive start
 ```
 
 Each iteration spawns a fresh subprocess, so code changes to litehive itself are picked up automatically without restarting.
 
 ```bash
-litehive daemon status                    # this workspace
-litehive daemon instances                 # all workspaces
-litehive daemon stop
-litehive daemon restart
+litehive status                    # this workspace
+litehive task logs --daemon   # recent runner sessions
+litehive stop
+litehive restart
 ```
 
 ## Git integration
@@ -256,7 +256,7 @@ To undo a completed task:
 
 ```bash
 litehive rollback T-0001     # reverts the commit and requeues the task
-litehive recover T-0001      # requeues without reverting (keeps the code)
+litehive queue requeue T-0001      # requeues without reverting (keeps the code)
 ```
 
 ## Running on multiple projects
@@ -267,15 +267,15 @@ Install litehive once, use it anywhere:
 # Project A
 cd ~/projects/webapp
 litehive configure
-litehive daemon run
+litehive start
 
 # Project B
 cd ~/projects/api-server
 litehive configure
-litehive daemon run
+litehive start
 
 # See all running daemons
-litehive daemon instances
+litehive web
 ```
 
 All instances share quota tracking at `~/.config/litehive/quota.yaml` so they coordinate engine usage across projects.

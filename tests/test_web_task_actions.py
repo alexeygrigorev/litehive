@@ -144,11 +144,7 @@ def test_web_task_requeue_endpoint_moves_closed_task_to_queue_front(tmp_path: Pa
     try:
         task = create_task(tmp_path, title="Lifecycle task")
         close_task(tmp_path, task.id, outcome="deferred", reason="Waiting on upstream")
-        status, requeued = _post_json(
-            base_url,
-            f"/api/tasks/{task.id}/requeue",
-            {"front": True},
-        )
+        status, requeued = _post_json(base_url, "/api/queue/requeue", {"task_id": task.id, "front": True})
         assert status == 200
         assert requeued["ok"] is True
         assert requeued["front"] is True
@@ -191,7 +187,7 @@ def test_web_task_stop_endpoint_clears_active_task(tmp_path: Path) -> None:
     try:
         active = create_task(tmp_path, title="Stop me")
         set_active_task(tmp_path, active.id)
-        status, stopped = _post_json(base_url, "/api/tasks/active/stop", {})
+        status, stopped = _post_json(base_url, "/api/queue/stop", {})
         assert status == 200
         assert stopped["ok"] is True
         assert stopped["task_id"] == active.id

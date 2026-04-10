@@ -2907,8 +2907,8 @@ def test_stage_prompt_guides_swe_for_preimplemented_or_obsolete_work(tmp_path: P
     assert "If the requested behavior is already implemented" in prompt
     assert "submit `litehive report --verdict pass` with explicit evidence" in prompt
     assert "Never exit the stage without calling `litehive report`." in prompt
-    assert "use `litehive update` to narrow scope or adjust the acceptance criteria" in prompt
-    assert "use `litehive close --outcome wont_do` or `litehive close --outcome duplicate`" in prompt
+    assert "use `litehive task update` to narrow scope or adjust the acceptance criteria" in prompt
+    assert "use `litehive task close --outcome wont_do` or `litehive task close --outcome duplicate`" in prompt
 
 
 def test_stage_prompt_includes_universal_test_quality_rules_for_swe_and_qa(

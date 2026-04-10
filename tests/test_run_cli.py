@@ -68,6 +68,67 @@ def test_build_parser_accepts_model_flags(tmp_path: Path) -> None:
     assert update_args.model == "default"
 
 
+def test_build_parser_accepts_grouped_task_commands(tmp_path: Path) -> None:
+    parser = build_parser()
+
+    add_args = parser.parse_args(
+        ["task", "add", "Ship task", "--workspace", str(tmp_path), "--model", "gemini-2.5-pro"]
+    )
+    update_args = parser.parse_args(
+        ["task", "update", "T-0001", "--workspace", str(tmp_path), "--model", "default"]
+    )
+    list_args = parser.parse_args(["task", "list", "--workspace", str(tmp_path)])
+
+    assert add_args.command == "task"
+    assert add_args.task_command == "add"
+    assert add_args.model == "gemini-2.5-pro"
+    assert update_args.command == "task"
+    assert update_args.task_command == "update"
+    assert update_args.model == "default"
+    assert list_args.command == "task"
+    assert list_args.task_command == "list"
+
+
+def test_build_parser_accepts_grouped_queue_commands(tmp_path: Path) -> None:
+    parser = build_parser()
+
+    args = parser.parse_args(["queue", "requeue", "T-0001", "--front", "--workspace", str(tmp_path)])
+
+    assert args.command == "queue"
+    assert args.queue_command == "requeue"
+    assert args.task_id == "T-0001"
+    assert args.front is True
+
+
+def test_build_parser_accepts_grouped_import_commands(tmp_path: Path) -> None:
+    parser = build_parser()
+
+    spec_args = parser.parse_args(["import", "spec", "--workspace", str(tmp_path), "notes.md"])
+    github_args = parser.parse_args(
+        ["import", "github", "--workspace", str(tmp_path), "--repo", "owner/repo", "--all"]
+    )
+
+    assert spec_args.command == "import"
+    assert spec_args.import_command == "spec"
+    assert spec_args.file == Path("notes.md")
+    assert github_args.command == "import"
+    assert github_args.import_command == "github"
+    assert github_args.repo == "owner/repo"
+    assert github_args.all is True
+
+
+def test_build_parser_accepts_runner_lifecycle_commands(tmp_path: Path) -> None:
+    parser = build_parser()
+
+    start_args = parser.parse_args(["start", "--workspace", str(tmp_path)])
+    stop_args = parser.parse_args(["stop", "--workspace", str(tmp_path)])
+    restart_args = parser.parse_args(["restart", "--workspace", str(tmp_path)])
+
+    assert start_args.command == "start"
+    assert stop_args.command == "stop"
+    assert restart_args.command == "restart"
+
+
 def test_build_parser_accepts_acceptance_criteria_flags(tmp_path: Path) -> None:
     parser = build_parser()
 

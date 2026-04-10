@@ -361,14 +361,14 @@ def _stage_role_prompt(step: str, owner: str | None = None) -> list[str]:
         return [
             "- You are the planner, a PM-style role representing the user's and product's point of view.",
             "- Frame the real user problem, clarify scope, sharpen acceptance criteria, decompose the work, identify follow-up tasks, and estimate PM sizing.",
-            "- Treat the Litehive CLI as the source of truth for task shaping: use the task record fields directly, and when documenting operator guidance prefer concrete `litehive add`, `litehive update`, and `litehive intake` flows over vague prose.",
+            "- Treat the Litehive CLI as the source of truth for task shaping: use the task record fields directly, and when documenting operator guidance prefer concrete `litehive task add`, `litehive task update`, and `litehive task close` flows over vague prose.",
             "- Do not pass grooming with a blank task record; make sure the task has a clear goal and explicit acceptance criteria, or reject it with a clear explanation of what is missing.",
             "- During grooming, you can emit a structured `TASK_UPDATE:` YAML block to update any task field (goal, acceptance_criteria, constraints, plan, pm_complexity, planned_effort, priority, auto_commit, etc.).",
             "- To close a task as duplicate, wont_do, or deferred, include `outcome: <status>` and optional `outcome_reason: <text>` in the TASK_UPDATE block.",
             "- To park a task (pause without closing), include `action: park` in the TASK_UPDATE block.",
             "- To requeue a previously parked or closed task for another pass, include `action: requeue`. To abandon it entirely, include `action: abandon`.",
             "- Do not implement code in this stage.",
-            "- Scope contamination: if the task mixes in work that belongs to a separate concern, use `litehive add` to create follow-up tasks and narrow the current task via TASK_UPDATE.",
+            "- Scope contamination: if the task mixes in work that belongs to a separate concern, use `litehive task add` to create follow-up tasks and narrow the current task via TASK_UPDATE.",
         ]
     if step == "accepting":
         return [
@@ -386,8 +386,8 @@ def _stage_role_prompt(step: str, owner: str | None = None) -> list[str]:
             "- Treat the task goal, acceptance criteria, and plan as the execution contract; if they are missing or contradictory, route the issue back through grooming or recovery instead of guessing.",
             "- If the requested behavior is already implemented, do not exit silently: run the relevant verification, confirm the acceptance criteria against the existing code, and submit `litehive report --verdict pass` with explicit evidence of what you verified.",
             "- Never exit the stage without calling `litehive report`.",
-            "- If the task needs scope correction rather than code changes, use `litehive update` to narrow scope or adjust the acceptance criteria so the task re-enters the pipeline with the corrected contract.",
-            "- If the task is genuinely obsolete or duplicated, use `litehive close --outcome wont_do` or `litehive close --outcome duplicate` with a concrete reason instead of exiting silently.",
+            "- If the task needs scope correction rather than code changes, use `litehive task update` to narrow scope or adjust the acceptance criteria so the task re-enters the pipeline with the corrected contract.",
+            "- If the task is genuinely obsolete or duplicated, use `litehive task close --outcome wont_do` or `litehive task close --outcome duplicate` with a concrete reason instead of exiting silently.",
         ]
     if step == "testing":
         return ["- You are the QA verifier responsible for focused independent validation."]

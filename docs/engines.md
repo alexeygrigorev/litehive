@@ -51,7 +51,7 @@ Examples:
 litehive engine codex
 litehive engine status
 litehive engine status codex
-litehive update T-0005 --engine opencode
+litehive task update T-0005 --engine opencode
 litehive run --engine gemini --model gemini-2.5-pro
 ```
 
@@ -189,5 +189,5 @@ At minimum, a Litehive adapter must answer these questions cleanly:
 - Enable Claude only if you actually intend to spend quota on it.
 - Set `recovery_engine` intentionally if you want failures handled by a
   different adapter than normal execution.
-- Use `litehive switch` instead of manually editing `task.yaml` when changing a
-  task's engine mid-run.
+- Use `litehive task update --engine ...` instead of manually editing
+  `task.yaml` when changing a task's persisted engine override.

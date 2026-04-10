@@ -12,30 +12,22 @@ Top-level commands:
 
 - `configure`
 - `status`
+- `health`
 - `engine`
 - `queue`
+- `task`
+- `import`
 - `repair`
 - `tasks`
 - `web`
-- `daemon`
-- `add`
-- `issue`
-- `intake`
-- `run`
-- `dirty-worktree-gate`
-- `rollback`
-- `recover`
-- `move`
-- `prioritize`
-- `promote`
-- `requeue`
-- `resume`
-- `abandon`
+- `start`
 - `stop`
-- `switch`
-- `close`
-- `update`
+- `restart`
+- `run`
+- `rollback`
 - `report`
+- `worktree`
+- `archive`
 
 ## Workspace Setup And Inspection
 
@@ -125,14 +117,14 @@ including used percent, whether quota is exhausted, and reset times when availab
 
 ## Task Creation
 
-### `litehive add`
+### `litehive task add`
 
 Create a queued task.
 
 Implementation-style task:
 
 ```bash
-litehive add "Fix queue ordering bug" \
+litehive task add "Fix queue ordering bug" \
   --goal "Dependency-blocked tasks do not jump ahead of runnable work." \
   --acceptance-criteria "Blocked tasks remain visible but are not selected before prerequisites finish." \
  
@@ -141,7 +133,7 @@ litehive add "Fix queue ordering bug" \
 Typed task:
 
 ```bash
-litehive add "Write admin guide" --task-type docs
+litehive task add "Write admin guide" --task-type docs
 ```
 
 Useful options:
@@ -157,22 +149,22 @@ Useful options:
 - `--retry-limit`
 - `--no-auto-commit`
 
-### `litehive intake`
+### `litehive import spec`
 
 Create a rough task from a freeform specification using an engine.
 
 ```bash
-litehive intake spec.md
-cat notes.txt | litehive intake
-litehive intake spec.md --engine gemini --model gemini-2.5-pro
+litehive import spec spec.md
+cat notes.txt | litehive import spec
+litehive import spec spec.md --engine gemini --model gemini-2.5-pro
 ```
 
-### `litehive issue`
+### `litehive import issue`
 
 File upstream Litehive work from another project.
 
 ```bash
-litehive issue \
+litehive import issue \
   --upstream "engine timeout not handled correctly" \
   --type runtime_bug \
   --details "Observed during recovery in project X." \
@@ -182,7 +174,7 @@ litehive issue \
 Patch handoff example:
 
 ```bash
-litehive issue \
+litehive import issue \
   --upstream "improve codex timeout handling" \
   --type engine_adapter_fix \
   --patch-branch recover/codex-timeout-fix \
@@ -192,20 +184,20 @@ litehive issue \
 
 ## Task Editing
 
-### `litehive update`
+### `litehive task update`
 
 Update task metadata after creation.
 
 ```bash
-litehive update T-0002 --engine opencode
-litehive update T-0002 --priority high
-litehive update T-0002 --human-checkpoint before_acceptance
+litehive task update T-0002 --engine opencode
+litehive task update T-0002 --priority high
+litehive task update T-0002 --human-checkpoint before_acceptance
 ```
 
 Replace durable shaping fields:
 
 ```bash
-litehive update T-0002 \
+litehive task update T-0002 \
   --goal "Clarify final done-state for queue recovery." \
   --acceptance-criteria "Interrupted tasks resume at the preserved stage." \
   --constraint "Keep changes scoped to queue state handling." \
@@ -216,81 +208,73 @@ litehive update T-0002 \
 Other supported patterns:
 
 ```bash
-litehive update T-0002 --depends-on T-0001,T-0003
-litehive update T-0002 --depends-on none
-litehive update T-0002 --from-file task-shape.yaml
-litehive update T-0002 --edit
-litehive update T-0002 --retry-limit default
+litehive task update T-0002 --depends-on T-0001,T-0003
+litehive task update T-0002 --depends-on none
+litehive task update T-0002 --from-file task-shape.yaml
+litehive task update T-0002 --edit
+litehive task update T-0002 --retry-limit default
 ```
 
-### `litehive switch`
+Use `litehive task update ... --engine ...` to change the persisted task-level
+engine override. To make a non-runnable task active again after changing task
+metadata, follow it with `litehive queue resume` or `litehive queue requeue`
+when appropriate.
 
-Switch the task-level engine override and requeue the task for the next pass.
-
-```bash
-litehive switch T-0002 gemini --reason "quota exhausted"
-```
-
-### `litehive close`
+### `litehive task close`
 
 Close a task with an explicit non-implementation outcome.
 
 ```bash
-litehive close T-0007 --outcome wont_do --reason "superseded by T-0011"
-litehive close T-0008 --outcome deferred --reason "revisit after release"
-litehive close T-0009 --outcome duplicate --follow-up-task T-0004
+litehive task close T-0007 --outcome wont_do --reason "superseded by T-0011"
+litehive task close T-0008 --outcome deferred --reason "revisit after release"
+litehive task close T-0009 --outcome duplicate --follow-up-task T-0004
 ```
 
 ## Queue Management
 
-### `litehive move`
+### `litehive queue move`
 
 Move a queued task to a 1-based position.
 
 ```bash
-litehive move T-0004 1
+litehive queue move T-0004 1
 ```
 
-### `litehive prioritize`
+To reorder several tasks, combine `litehive queue promote` and
+`litehive queue move` instead of a dedicated prioritize command.
 
-Move multiple queued tasks to the front in the order given.
-
-```bash
-litehive prioritize T-0003 T-0002 T-0005
-```
-
-### `litehive promote`
+### `litehive queue promote`
 
 Promote one queued task to the front.
 
 ```bash
-litehive promote T-0006
+litehive queue promote T-0006
 ```
 
-### `litehive requeue`
+### `litehive queue requeue`
 
 Requeue a flagged or closed task.
 
 ```bash
-litehive requeue T-0006
-litehive requeue T-0006 --front
+litehive queue requeue T-0006
+litehive queue requeue T-0006 --front
 ```
 
-### `litehive resume`
+### `litehive queue resume`
 
 Resume an interrupted, parked, flagged, or closed task from its current stage.
 
 ```bash
-litehive resume T-0006
-litehive resume T-0006 --front
+litehive queue resume T-0006
+litehive queue resume T-0006 --front
 ```
 
-### `litehive abandon`
+### `litehive task abandon`
 
 Cancel a flagged or closed task and remove it from the queue.
 
 ```bash
-litehive abandon T-0006
+litehive task abandon T-0006
 ```
 
 ## Running Work
@@ -336,12 +320,12 @@ Useful pool controls:
 - `--engine-cost ENGINE=UNITS`
 - `--stop-on-dirty-git`
 
-### `litehive stop`
+### `litehive queue stop`
 
 Stop the current active task cleanly.
 
 ```bash
-litehive stop
+litehive queue stop
 ```
 
 ## Recovery And Diagnostics
@@ -354,12 +338,12 @@ Repair stale active tasks, interrupted runs, and queue inconsistencies.
 litehive repair
 ```
 
-### `litehive dirty-worktree-gate`
+### `litehive health`
 
 Report whether dirty git state should block the pool and explain ownership.
 
 ```bash
-litehive dirty-worktree-gate
+litehive health
 ```
 
 ### `litehive rollback`
@@ -370,12 +354,12 @@ Revert a task checkpoint commit and requeue the task.
 litehive rollback T-0010
 ```
 
-### `litehive recover`
+### `litehive queue requeue`
 
 Requeue a completed task without reverting code.
 
 ```bash
-litehive recover T-0010
+litehive queue requeue T-0010
 ```
 
 ## Reporting From Agents
@@ -412,44 +396,44 @@ Useful options:
 
 ## Daemon Commands
 
-### `litehive daemon run`
+### `litehive start`
 
 Start the workspace daemon.
 
 ```bash
-litehive daemon run
+litehive start
 ```
 
-### `litehive daemon status`
+### `litehive status`
 
 Show the registered daemon PID and recent workspace-local logs.
 
 ```bash
-litehive daemon status
+litehive status
 ```
 
-### `litehive daemon stop`
+### `litehive stop`
 
 Stop the workspace daemon.
 
 ```bash
-litehive daemon stop
+litehive stop
 ```
 
-### `litehive daemon restart`
+### `litehive restart`
 
 Restart the workspace daemon.
 
 ```bash
-litehive daemon restart
+litehive restart
 ```
 
-### `litehive daemon instances`
+### `litehive web`
 
 List live Litehive daemons across workspaces from the global registry.
 
 ```bash
-litehive daemon instances
+litehive web
 ```
 
 ## Common Workflows
@@ -464,7 +448,7 @@ litehive status
 ### Add and run a task
 
 ```bash
-litehive add "Implement feature X" \
+litehive task add "Implement feature X" \
   --goal "..." \
   --acceptance-criteria "..." \
  
@@ -474,8 +458,8 @@ litehive run
 ### Operate a background queue
 
 ```bash
-litehive daemon run
-litehive daemon status
+litehive start
+litehive status
 litehive queue
 ```
 
@@ -484,7 +468,7 @@ litehive queue
 ```bash
 litehive repair
 litehive status --full
-litehive resume T-0004
+litehive queue resume T-0004
 ```
 
 For workflow behavior and routing semantics, continue with

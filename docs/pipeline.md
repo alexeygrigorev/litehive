@@ -205,8 +205,8 @@ If the same review stage keeps rejecting:
 Tasks can pause before important boundaries:
 
 ```bash
-litehive update T-0007 --human-checkpoint before_acceptance
-litehive update T-0007 --human-checkpoint before_commit
+litehive task update T-0007 --human-checkpoint before_acceptance
+litehive task update T-0007 --human-checkpoint before_commit
 ```
 
 When a checkpoint is reached, the pool stops cleanly and leaves the task queued
@@ -217,9 +217,9 @@ at the next stage.
 The daemon wraps the same pool logic but repeats it in the background:
 
 ```bash
-litehive daemon run
-litehive daemon status
-litehive daemon stop
+litehive start
+litehive status
+litehive stop
 ```
 
 A daemon iteration:
@@ -234,11 +234,11 @@ A daemon iteration:
 Useful intervention commands:
 
 ```bash
-litehive stop
-litehive resume T-0003
-litehive requeue T-0003
-litehive abandon T-0003
-litehive close T-0003 --outcome deferred --reason "waiting on upstream dependency"
+litehive queue stop
+litehive queue resume T-0003
+litehive queue requeue T-0003
+litehive task abandon T-0003
+litehive task close T-0003 --outcome deferred --reason "waiting on upstream dependency"
 ```
 
 The main principle is: tasks that cannot make progress right now should stay

@@ -157,6 +157,14 @@ def _cmd_requeue_task(args):
     return 0
 
 
+def _cmd_queue_requeue(args):
+    ensure_workspace(args.workspace)
+    task = require_task(args.workspace, args.task_id)
+    if task.pipeline_status == "done" or task.status == "done":
+        return _cmd_recover(args)
+    return _cmd_requeue_task(args)
+
+
 def _cmd_resume_task(args):
     ensure_workspace(args.workspace)
     try:

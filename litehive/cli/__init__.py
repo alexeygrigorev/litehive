@@ -26,6 +26,7 @@ from litehive.cli.queue import (
     _cmd_move,
     _cmd_prioritize,
     _cmd_promote,
+    _cmd_queue_requeue,
     _cmd_recover,
     _cmd_requeue_task,
     _cmd_resume_task,
@@ -34,7 +35,7 @@ from litehive.cli.queue import (
     _cmd_switch_task,
     _launch_app,
 )
-from litehive.cli.github_import import _cmd_import_issue, _cmd_import_issues
+from litehive.cli.github_import import _cmd_import_github, _cmd_import_issue, _cmd_import_issues
 from litehive.cli.logs import _cmd_logs
 from litehive.cli.report import _cmd_report
 from litehive.cli.run import _cmd_run
@@ -93,6 +94,35 @@ _WORKTREE_COMMAND_HANDLERS = {
     "clean": _cmd_worktree_clean,
 }
 
+_TASK_COMMAND_HANDLERS = {
+    "add": _cmd_add,
+    "list": _cmd_list,
+    "show": _cmd_show,
+    "update": _cmd_update,
+    "close": _cmd_close_task,
+    "abandon": _cmd_abandon_task,
+    "debug": _cmd_debug,
+    "logs": _cmd_logs,
+}
+
+_QUEUE_COMMAND_HANDLERS = {
+    "move": _cmd_move,
+    "promote": _cmd_promote,
+    "requeue": _cmd_queue_requeue,
+    "resume": _cmd_resume_task,
+    "stop": _cmd_stop_task,
+}
+
+_IMPORT_COMMAND_HANDLERS = {
+    "github": _cmd_import_github,
+    "issue": _cmd_issue,
+    "spec": _cmd_intake,
+}
+
+_ARCHIVE_COMMAND_HANDLERS = {
+    "cleanup": _cmd_cleanup,
+}
+
 
 def main():
     parser = build_parser()
@@ -101,11 +131,37 @@ def main():
         return _launch_app(args.workspace, default_mode="tasks")
     if args.command == "web":
         return serve_monitor(args.workspace, host=args.host, port=args.port)
+    if args.command == "start":
+        return _cmd_daemon_run(args)
+    if args.command == "stop":
+        return _cmd_daemon_stop(args)
+    if args.command == "restart":
+        return _cmd_daemon_restart(args)
     if args.command == "daemon":
         handler = _DAEMON_COMMAND_HANDLERS.get(getattr(args, "daemon_command", None))
         if handler is None:
             parser.error("daemon requires a subcommand")
         return handler(args)
+    if args.command == "task":
+        handler = _TASK_COMMAND_HANDLERS.get(getattr(args, "task_command", None))
+        if handler is None:
+            parser.error("task requires a subcommand")
+        return handler(args)
+    if args.command == "queue":
+        handler = _QUEUE_COMMAND_HANDLERS.get(getattr(args, "queue_command", None))
+        if handler is None:
+            return _cmd_queue(args)
+        return handler(args)
+    if args.command == "import":
+        handler = _IMPORT_COMMAND_HANDLERS.get(getattr(args, "import_command", None))
+        if handler is None:
+            parser.error("import requires a subcommand")
+        return handler(args)
+    if args.command == "archive":
+        handler = _ARCHIVE_COMMAND_HANDLERS.get(getattr(args, "archive_command", None))
+        if handler is not None:
+            return handler(args)
+        return _cmd_archive(args)
     if args.command == "worktree":
         handler = _WORKTREE_COMMAND_HANDLERS.get(getattr(args, "worktree_command", None))
         if handler is None:

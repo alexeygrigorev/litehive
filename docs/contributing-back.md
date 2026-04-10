@@ -23,7 +23,7 @@ upstream tasks will be created.
 Create an upstream Litehive task from the current project:
 
 ```bash
-litehive issue \
+litehive import issue \
   --upstream "engine timeout not working" \
   --type runtime_bug \
   --details "Observed during recovery while running project X." \
@@ -61,7 +61,7 @@ workflow/config/prompt issue, the recovery path should file an upstream task
 instead of only leaving a local note:
 
 ```bash
-litehive issue \
+litehive import issue \
   --upstream "Litehive crashed while recovering adapter task" \
   --type runtime_bug \
   --details "Include traceback, reproduction steps, and why this is a Litehive failure." \
@@ -80,7 +80,7 @@ prepare a branch in the Litehive repo and attach that branch to the upstream
 task:
 
 ```bash
-litehive issue \
+litehive import issue \
   --upstream "Tune Codex timeout handling" \
   --type engine_adapter_fix \
   --patch-branch recover/codex-timeout-fix \

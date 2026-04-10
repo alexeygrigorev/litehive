@@ -131,10 +131,10 @@ def test_web_daemon_dashboard_markup_includes_daemon_controls(tmp_path: Path) ->
     try:
         with urlopen(f"{base_url}/", timeout=5) as response:
             html = response.read().decode("utf-8")
-        assert 'id="daemon-start"' in html
-        assert 'id="daemon-stop"' in html
-        assert 'id="daemon-restart"' in html
-        assert "/api/daemon/status" in html
+        assert 'id="runner-start"' in html
+        assert 'id="runner-stop"' in html
+        assert 'id="runner-restart"' in html
+        assert "/api/runner/status" in html
         assert 'id="daemon-log-viewer"' in html
     finally:
         server.shutdown()
@@ -151,7 +151,7 @@ def test_web_daemon_status_endpoint_reports_stopped_before_start(
     server, thread = _start_web_server(tmp_path)
     base_url = f"http://127.0.0.1:{server.server_address[1]}"
     try:
-        status_code, payload = _read_json(base_url, "/api/daemon/status")
+        status_code, payload = _read_json(base_url, "/api/runner/status")
         assert status_code == 200
         assert payload["daemon_status"] == "stopped"
         assert payload["pid"] is None
@@ -170,7 +170,7 @@ def test_web_daemon_start_endpoint_returns_running_payload(
     server, thread = _start_web_server(tmp_path)
     base_url = f"http://127.0.0.1:{server.server_address[1]}"
     try:
-        status_code, payload = _read_json(base_url, "/api/daemon/start", method="POST")
+        status_code, payload = _read_json(base_url, "/api/runner/start", method="POST")
         assert status_code == 202
         assert payload["daemon_status"] == "running"
         assert isinstance(payload["pid"], int)
@@ -189,9 +189,9 @@ def test_web_daemon_status_endpoint_includes_recent_logs_after_start(
     server, thread = _start_web_server(tmp_path)
     base_url = f"http://127.0.0.1:{server.server_address[1]}"
     try:
-        _, started = _read_json(base_url, "/api/daemon/start", method="POST")
+        _, started = _read_json(base_url, "/api/runner/start", method="POST")
         first_pid = started["pid"]
-        status_code, payload = _read_json(base_url, "/api/daemon/status")
+        status_code, payload = _read_json(base_url, "/api/runner/status")
         assert status_code == 200
         assert payload["daemon_status"] == "running"
         assert payload["pid"] == first_pid
@@ -211,9 +211,9 @@ def test_web_daemon_restart_endpoint_replaces_previous_pid(
     server, thread = _start_web_server(tmp_path)
     base_url = f"http://127.0.0.1:{server.server_address[1]}"
     try:
-        _, started = _read_json(base_url, "/api/daemon/start", method="POST")
+        _, started = _read_json(base_url, "/api/runner/start", method="POST")
         first_pid = started["pid"]
-        status_code, payload = _read_json(base_url, "/api/daemon/restart", method="POST")
+        status_code, payload = _read_json(base_url, "/api/runner/restart", method="POST")
         assert status_code == 202
         assert payload["daemon_status"] == "running"
         assert payload["previous_pid"] == first_pid
@@ -233,9 +233,9 @@ def test_web_daemon_stop_endpoint_reports_previous_pid(
     server, thread = _start_web_server(tmp_path)
     base_url = f"http://127.0.0.1:{server.server_address[1]}"
     try:
-        _, started = _read_json(base_url, "/api/daemon/start", method="POST")
+        _, started = _read_json(base_url, "/api/runner/start", method="POST")
         running_pid = started["pid"]
-        status_code, payload = _read_json(base_url, "/api/daemon/stop", method="POST")
+        status_code, payload = _read_json(base_url, "/api/runner/stop", method="POST")
         assert status_code == 200
         assert payload["daemon_status"] == "stopped"
         assert payload["previous_pid"] == running_pid
@@ -256,7 +256,7 @@ def test_web_daemon_api_returns_json_error_when_stop_requested_while_stopped(
     server, thread = _start_web_server(tmp_path)
     base_url = f"http://127.0.0.1:{server.server_address[1]}"
     try:
-        status_code, payload = _read_json(base_url, "/api/daemon/stop", method="POST")
+        status_code, payload = _read_json(base_url, "/api/runner/stop", method="POST")
         assert status_code == 409
         assert payload == {"error": "daemon is not running"}
     finally:
