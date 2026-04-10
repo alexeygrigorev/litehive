@@ -6,15 +6,15 @@ task_type: null
 model: null
 mode: implementation
 pipeline_mode: full
-status: in_progress
+status: queued
 flag_reason: null
 flag_count: 0
-pipeline_status: commit_to_git
+pipeline_status: backlog
 priority: high
 pm_complexity: simple
 planned_effort: s
 created_at: '2026-04-09T07:50:34+00:00'
-updated_at: '2026-04-10T13:56:41+00:00'
+updated_at: '2026-04-10T13:58:18+00:00'
 goal: "Tasks that repeatedly flag (implement\u2192reject\u2192flag\u2192requeue\u2192\
   repeat) waste tokens indefinitely. Add a lifetime flag_count to track how many times\
   \ a task has been flagged. After 3 flags, auto-defer instead of flagging. Block\
@@ -94,6 +94,13 @@ subagents:
   path: subagents/SA-0013-reviewer
   sandboxed: false
   sandbox_summary: host
+- id: SA-0014
+  role: merge-resolver
+  engine: codex
+  status: completed
+  path: subagents/SA-0014-merge-resolver
+  sandboxed: false
+  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0240 auto-defer-tasks-after-3-flags-instead-of'
@@ -101,7 +108,7 @@ git:
   checkpoint_base_sha: null
   checkpoint_attempts: 0
   rolled_back_checkpoint_attempt: null
-  merge_agent_attempts: 0
+  merge_agent_attempts: 1
   worktree_path: null
 retry_policy:
   max_retries: null
