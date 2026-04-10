@@ -43,8 +43,8 @@ plan:
 - Reproduce both regressions with a minimal test case
 - Inspect litehive/cli/__init__.py's task add handler and find where options are declared
   versus where they're being read — likely a decorator/signature mismatch
-- Inspect the queue promote handler and find the AttributeError — replace get_current_context
-  with whatever Typer's actual API is (context: typer.Context = None parameter, most likely)
+- 'Inspect the queue promote handler and find the AttributeError — replace get_current_context
+  with whatever Typer''s actual API is (context via typer.Context parameter, most likely)'
 - Add regression tests for both commands so this doesn't happen again
 human_checkpoints: []
 subagents: []
