@@ -92,6 +92,7 @@ def test_add_command_persists_pm_sizing(tmp_path: Path, capsys: pytest.CaptureFi
             human_checkpoint=None,
             task_type=None,
             mode=None,
+            record_mode=None,
             engine=None,
             model=None,
             retry_limit=None,
@@ -121,7 +122,9 @@ def test_add_command_persists_task_type(tmp_path: Path, capsys: pytest.CaptureFi
             human_checkpoint=None,
             task_type="review",
             mode=None,
+            record_mode=None,
             engine=None,
+            model=None,
             retry_limit=None,
             no_auto_commit=False,
         )
@@ -156,8 +159,10 @@ def test_add_command_can_force_implementation_mode_for_typed_task(
             depends_on=None,
             human_checkpoint=None,
             task_type="review",
-            mode="implementation",
+            mode=None,
+            record_mode="implementation",
             engine=None,
+            model=None,
             retry_limit=None,
             no_auto_commit=False,
         )
@@ -173,6 +178,101 @@ def test_add_command_can_force_implementation_mode_for_typed_task(
     assert not (task_dir(tmp_path, task) / "brief.md").exists()
     assert "mode: implementation" in output
 
+
+def test_add_command_defaults_to_full_pipeline_mode(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    ensure_workspace(tmp_path)
+
+    exit_code = _cmd_add(
+        argparse.Namespace(
+            workspace=tmp_path,
+            title="Default pipeline task",
+            goal="",
+            acceptance_criteria=None,
+            depends_on=None,
+            human_checkpoint=None,
+            task_type=None,
+            mode=None,
+            record_mode=None,
+            engine=None,
+            model=None,
+            retry_limit=None,
+            no_auto_commit=False,
+        )
+    )
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    task = get_task(tmp_path, "T-0001")
+    assert task is not None
+    assert task.pipeline_mode == "full"
+    assert "pipeline_mode: full" in output
+
+
+def test_add_command_persists_single_pipeline_mode(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    ensure_workspace(tmp_path)
+
+    exit_code = _cmd_add(
+        argparse.Namespace(
+            workspace=tmp_path,
+            title="Research queue behavior",
+            goal="Answer the queue question",
+            acceptance_criteria=["Summarize the evidence"],
+            depends_on=None,
+            human_checkpoint=None,
+            task_type=None,
+            mode="single",
+            record_mode=None,
+            engine=None,
+            model=None,
+            retry_limit=None,
+            no_auto_commit=False,
+        )
+    )
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    task = get_task(tmp_path, "T-0001")
+    assert task is not None
+    assert task.pipeline_mode == "single"
+    assert "pipeline_mode: single" in output
+
+
+def test_add_command_uses_record_mode_flag_independently_of_pipeline_mode(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    ensure_workspace(tmp_path)
+
+    exit_code = _cmd_add(
+        argparse.Namespace(
+            workspace=tmp_path,
+            title="Review queue behavior",
+            goal="",
+            acceptance_criteria=None,
+            depends_on=None,
+            human_checkpoint=None,
+            task_type="review",
+            mode="full",
+            record_mode="tasks",
+            engine=None,
+            model=None,
+            retry_limit=None,
+            no_auto_commit=False,
+        )
+    )
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    task = get_task(tmp_path, "T-0001")
+    assert task is not None
+    assert task.mode == "tasks"
+    assert task.pipeline_mode == "full"
+    assert "mode: tasks" in output
+    assert "pipeline_mode: full" in output
+
 def test_add_command_warns_when_large_task_lacks_acceptance_criteria(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -186,7 +286,10 @@ def test_add_command_warns_when_large_task_lacks_acceptance_criteria(
             goal="Ship deterministic routing",
             acceptance_criteria=None,
             depends_on=[prerequisite.id],
+            mode=None,
+            record_mode=None,
             engine=None,
+            model=None,
             retry_limit=None,
             no_auto_commit=False,
         )
@@ -222,7 +325,9 @@ def test_add_command_allows_future_task_while_runner_is_active(
             human_checkpoint=None,
             task_type=None,
             mode=None,
+            record_mode=None,
             engine=None,
+            model=None,
             retry_limit=None,
             no_auto_commit=False,
         )

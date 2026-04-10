@@ -3541,6 +3541,24 @@ def test_single_mode_task_skips_normalization(tmp_path: Path) -> None:
     assert "implementing" in stages_executed
 
 
+def test_single_mode_stage_prompt_frames_end_to_end_contract(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(
+        tmp_path,
+        title="Research pipeline modes",
+        pipeline_mode="single",
+        goal="Decide whether this task should use the single-agent path.",
+        acceptance_criteria=["Recommendation is backed by repository evidence."],
+    )
+
+    prompt = stage_prompt(task, "implementing", workspace_context="")
+
+    assert "Pipeline mode is `single`: you are the only execution-stage agent for this task." in prompt
+    assert "Own the full task outcome yourself" in prompt
+    assert "Do not assume separate `testing` or `accepting` stages will clean this up later" in prompt
+    assert "If you do not change files and the task passes, the task can finish at `done` immediately." in prompt
+
+
 def test_create_task_pipeline_mode_field_persists(tmp_path: Path) -> None:
     """pipeline_mode is persisted and loaded correctly from task.yaml."""
     ensure_workspace(tmp_path)

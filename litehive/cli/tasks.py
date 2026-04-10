@@ -37,9 +37,11 @@ def _cmd_add(args):
         acceptance_criteria = _parse_acceptance_criteria(getattr(args, "acceptance_criteria", None))
         human_checkpoints = _parse_human_checkpoints(getattr(args, "human_checkpoint", None))
         requested_task_type = getattr(args, "task_type", None)
-        requested_mode = getattr(args, "mode", None)
-        mode = requested_mode or ("tasks" if requested_task_type is not None else "implementation")
-        pipeline_mode = "single" if getattr(args, "single", False) else "full"
+        requested_record_mode = getattr(args, "record_mode", None)
+        mode = requested_record_mode or (
+            "tasks" if requested_task_type is not None else "implementation"
+        )
+        pipeline_mode = getattr(args, "mode", None) or "full"
         task = create_task(
             args.workspace,
             title=args.title,
