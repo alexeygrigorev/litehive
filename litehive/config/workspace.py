@@ -10,8 +10,8 @@ from litehive.config.model import LitehiveConfig
 from litehive.config.paths import (
     config_path,
     context_path,
-    global_config_path,
-    state_path,
+    workspace_database_path,
+    workspace_registry_path,
     workspace_dir,
     workspace_gitignore_path,
 )
@@ -88,8 +88,8 @@ def _task_exists(root: Path, task_id: str) -> bool:
 
 def _workspace_registry_paths() -> list[Path]:
     return [
+        workspace_registry_path(),
         Path.home() / ".litehive" / "workspaces.yaml",
-        global_config_path().parent / "workspaces.yaml",
     ]
 
 
@@ -134,7 +134,9 @@ def resolve_workspace(
 ) -> Path:
     effective_task_id = task_id or os.environ.get("LITEHIVE_TASK_ID")
     if workspace is not None:
-        return _validate_workspace_root(workspace, source="--workspace")
+        resolved = _validate_workspace_root(workspace, source="--workspace")
+        _register_workspace(resolved)
+        return resolved
 
     env_workspace = os.environ.get("LITEHIVE_WORKSPACE_ROOT")
     if env_workspace:
@@ -142,6 +144,7 @@ def resolve_workspace(
             Path(env_workspace), source="LITEHIVE_WORKSPACE_ROOT"
         )
         if not effective_task_id or _task_exists(resolved_env_workspace, effective_task_id):
+            _register_workspace(resolved_env_workspace)
             return resolved_env_workspace
 
     search_root = (cwd or Path.cwd()).resolve()
@@ -151,16 +154,37 @@ def resolve_workspace(
         resolved = _validate_workspace_root(candidate, source=f"cwd:{search_root}")
         if effective_task_id and not _task_exists(resolved, effective_task_id):
             continue
+        _register_workspace(resolved)
         return resolved
 
     if effective_task_id:
         for root in _iter_registry_workspace_roots():
             if _task_exists(root, effective_task_id):
+                _register_workspace(root)
                 return root
 
     raise ValueError(
         "unable to resolve workspace: provide --workspace, set LITEHIVE_WORKSPACE_ROOT, "
         "run inside a Litehive workspace, or set LITEHIVE_TASK_ID so the workspace registry can be used"
+    )
+
+
+def _register_workspace(root: Path) -> None:
+    registry_path = workspace_registry_path()
+    registry_path.parent.mkdir(parents=True, exist_ok=True)
+    existing = yaml.safe_load(registry_path.read_text(encoding="utf-8")) if registry_path.exists() else {}
+    if not isinstance(existing, dict):
+        existing = {}
+    workspaces = existing.get("workspaces")
+    if not isinstance(workspaces, dict):
+        workspaces = {}
+    from litehive.config.paths import workspace_id
+
+    workspaces[workspace_id(root)] = str(root.resolve())
+    registry_payload = {**existing, "workspaces": dict(sorted(workspaces.items()))}
+    registry_path.write_text(
+        yaml.safe_dump(registry_payload, sort_keys=False),
+        encoding="utf-8",
     )
 
 
@@ -182,21 +206,6 @@ def ensure_workspace(root: Path, config: LitehiveConfig | None = None) -> Path:
             encoding="utf-8",
         )
 
-    if not state_path(root).exists():
-        state_path(root).write_text(
-            yaml.safe_dump(
-                {
-                    "active_task_id": None,
-                    "mode": cfg.implementation_mode_name,
-                    "queue": [],
-                    "pool_stop_reason": None,
-                    "next_task_number": 0,
-                },
-                sort_keys=False,
-            ),
-            encoding="utf-8",
-        )
-
     if not context_path(root).exists():
         context_path(root).write_text(
             render_context_template(cfg.process_profile), encoding="utf-8"
@@ -207,5 +216,12 @@ def ensure_workspace(root: Path, config: LitehiveConfig | None = None) -> Path:
             render_workspace_gitignore(),
             encoding="utf-8",
         )
+
+    _register_workspace(root)
+
+    # Import here to avoid circular import with litehive.storage
+    from litehive.storage import runtime_store
+    runtime_store(root).bootstrap()
+    workspace_database_path(root).parent.mkdir(parents=True, exist_ok=True)
 
     return base

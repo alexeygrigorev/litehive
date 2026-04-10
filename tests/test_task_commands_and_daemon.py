@@ -448,6 +448,7 @@ def test_report_command_uses_registry_outside_repo(
 def test_report_command_defaults_missing_files_changed_arg(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
+    ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Missing files_changed report target")
 
     exit_code = _cmd_report(
@@ -456,7 +457,7 @@ def test_report_command_defaults_missing_files_changed_arg(
             task_id=task.id,
             verdict="pass",
             message="reported without explicit files_changed",
-            role="swe",
+            role="recovery",
             step="implementing",
         )
     )
@@ -466,6 +467,7 @@ def test_report_command_defaults_missing_files_changed_arg(
     assert "task: T-0001" in output
     comments = yaml.safe_load((task_dir(tmp_path, task) / "thread.yaml").read_text(encoding="utf-8"))
     assert comments[0]["message"] == "reported without explicit files_changed"
+    assert comments[0]["role"] == "recovery"
     assert comments[0]["files_changed"] == []
 
 

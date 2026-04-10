@@ -13,7 +13,8 @@ from litehive.git import (
     rollback_message,
     rollback_task,
 )
-from litehive.models import RecoveryAction, StageReport, TaskRecord
+from litehive.models import RecoveryAction, StageReport, TaskRecord, TaskRuntime, WorkspaceState
+from litehive.storage import runtime_store
 from litehive.tasks.crud import save_task_runtime
 from litehive.tasks.journal import append_journal
 from litehive.tasks.normalization import implementation_entry_stage
@@ -603,6 +604,26 @@ def _restore_persisted_files(snapshot: dict[Path, str | None]) -> None:
             continue
         _atomic_write_text(path, content)
 
+def _capture_runtime_snapshot(
+    root: Path, task_id: str
+) -> tuple[WorkspaceState | None, TaskRuntime | None]:
+    store = runtime_store(root)
+    return store.load_workspace_state(), store.load_task_runtime(task_id)
+
+
+def _restore_runtime_snapshot(
+    root: Path,
+    *,
+    workspace_state: WorkspaceState | None,
+    task_id: str,
+    task_runtime: TaskRuntime | None,
+) -> None:
+    store = runtime_store(root)
+    if workspace_state is not None:
+        store.save_workspace_state(workspace_state)
+    if task_runtime is not None:
+        store.save_task_runtime(task_id, task_runtime)
+
 
 def rollback_completed_task(root: Path, task_id: str) -> "RollbackSummary":
     from .._types import RollbackSummary
@@ -621,6 +642,7 @@ def rollback_completed_task(root: Path, task_id: str) -> "RollbackSummary":
         snapshot = _capture_persisted_files(
             [task_file(root, task), task_runtime_file(root, task), state_path(root), task_dir(root, task) / "journal.md"]
         )
+        runtime_snapshot = _capture_runtime_snapshot(root, task.id)
         rollback = None
         try:
             rollback = rollback_task(root, task)
@@ -644,6 +666,12 @@ def rollback_completed_task(root: Path, task_id: str) -> "RollbackSummary":
             if rollback is not None and has_changes(root):
                 abort_revert(root)
             _restore_persisted_files(snapshot)
+            _restore_runtime_snapshot(
+                root,
+                workspace_state=runtime_snapshot[0],
+                task_id=task.id,
+                task_runtime=runtime_snapshot[1],
+            )
             raise
         return RollbackSummary(
             task=task,

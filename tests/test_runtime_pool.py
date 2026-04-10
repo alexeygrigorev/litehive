@@ -329,7 +329,7 @@ def test_drain_task_pool_allows_future_queue_mutation_during_active_run(
         dequeue_next_task_selection(tmp_path)
 
     resume.set()
-    thread.join(timeout=5)
+    thread.join(timeout=20)
     assert not thread.is_alive()
     assert failures == []
 

@@ -22,9 +22,20 @@ from litehive.config.paths import (
     daemon_config_dir as daemon_config_dir,
     daemon_registry_path as daemon_registry_path,
     global_config_path as global_config_path,
+    litehive_config_home as litehive_config_home,
+    litehive_data_home as litehive_data_home,
+    litehive_state_home as litehive_state_home,
     state_path as state_path,
+    workspace_database_path as workspace_database_path,
+    workspace_data_dir as workspace_data_dir,
     workspace_dir as workspace_dir,
     workspace_gitignore_path as workspace_gitignore_path,
+    workspace_id as workspace_id,
+    workspace_logs_dir as workspace_logs_dir,
+    workspace_registry_path as workspace_registry_path,
+    workspace_state_root as workspace_state_root,
+    workspace_subagents_dir as workspace_subagents_dir,
+    workspace_worktrees_dir as workspace_worktrees_dir,
 )
 from litehive.config.profiles import *
 from litehive.config.retry import (

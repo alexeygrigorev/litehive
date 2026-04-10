@@ -1,9 +1,8 @@
 """Runtime and execution state models.
 
-SubagentRef, ResourceLimitEvent, and RuntimeEngineContinuation now live in
-heru.types. This module re-exports them and keeps the litehive-only
-runtime state models (RuntimeGitState, RuntimeStageState, etc.)
-authoritative here.
+ResourceLimitEvent and RuntimeEngineContinuation now live in heru.types.
+This module re-exports them and keeps the litehive-only runtime state
+models (RuntimeGitState, RuntimeStageState, etc.) authoritative here.
 """
 
 from typing import Literal
@@ -13,7 +12,7 @@ from pydantic import BaseModel, Field
 from heru.types import (
     ResourceLimitEvent,
     RuntimeEngineContinuation,
-    SubagentRef,
+    SubagentRef as HeruSubagentRef,
 )
 
 from .common import (
@@ -59,6 +58,9 @@ class RuntimeSubagentState(BaseModel):
     interruption_reason: str = ""
     resource_limit_event: ResourceLimitEvent | None = None
     continuation: RuntimeEngineContinuation | None = None
+
+
+SubagentRef = HeruSubagentRef
 
 
 class RuntimeEngineSwitch(BaseModel):

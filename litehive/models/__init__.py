@@ -1,5 +1,7 @@
 """Core YAML-backed models for litehive."""
 
+from heru.types import SubagentRef, _TRUNCATION_MARKER
+
 from .common import (
     EngineLimitKind,
     EngineMonitoringSource,
@@ -19,7 +21,6 @@ from .common import (
     TaskMode,
     TaskStatus,
     UpstreamContributionKind,
-    _TRUNCATION_MARKER,
     cap_feedback,
     utcnow,
 )
@@ -53,7 +54,6 @@ from .runtime_models import (
     RuntimeInterruptionState,
     RuntimeStageState,
     RuntimeSubagentState,
-    SubagentRef,
     TaskOutcomeState,
     TaskRuntime,
 )

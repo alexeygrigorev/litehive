@@ -11,14 +11,21 @@ from tests.workspace_helpers import (
     SandboxCredentialInput,
     SubagentResourceLimitsConfig,
     available_process_profiles,
+    create_task,
     ensure_workspace,
+    get_task,
     get_engine,
     load_config,
     load_engine_monitoring,
+    load_state,
     record_engine_execution,
     render_context_template,
     resolve_process_profile,
+    save_task_runtime,
+    state_path,
 )
+import pytest
+import yaml
 
 
 def test_config_package_facade_re_exports_public_helpers() -> None:
@@ -40,16 +47,111 @@ def test_config_package_facade_re_exports_public_helpers() -> None:
     assert exported["load_config"].__module__ == "litehive.config.loading"
     assert exported["workspace_dir"].__module__ == "litehive.config.paths"
     assert exported["format_runner_hooks"].__module__ == "litehive.config.formatting"
-    assert len((Path(config_module.__file__)).read_text(encoding="utf-8").splitlines()) < 50
+    assert len((Path(config_module.__file__)).read_text(encoding="utf-8").splitlines()) < 60
 
 
 def test_ensure_workspace_creates_layout(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
 
     assert (tmp_path / ".litehive" / "config.yaml").exists()
-    assert (tmp_path / ".litehive" / "state.yaml").exists()
+    assert not (tmp_path / ".litehive" / "state.yaml").exists()
     assert (tmp_path / ".litehive" / ".gitignore").exists()
     assert (tmp_path / ".litehive" / "tasks").exists()
+
+
+def test_ensure_workspace_bootstraps_runtime_db_and_registry(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config_home = tmp_path / "xdg-config"
+    data_home = tmp_path / "xdg-data"
+    state_home = tmp_path / "xdg-state"
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(config_home))
+    monkeypatch.setenv("XDG_DATA_HOME", str(data_home))
+    monkeypatch.setenv("XDG_STATE_HOME", str(state_home))
+
+    from litehive.config import (
+        workspace_database_path,
+        workspace_id,
+        workspace_logs_dir,
+        workspace_registry_path,
+        workspace_subagents_dir,
+        workspace_worktrees_dir,
+    )
+    from litehive.storage import connect_workspace_db
+
+    ensure_workspace(tmp_path)
+
+    wid = workspace_id(tmp_path)
+    assert workspace_database_path(tmp_path) == data_home / "litehive" / wid / "data.db"
+    assert workspace_logs_dir(tmp_path) == state_home / "litehive" / wid / "logs"
+    assert workspace_worktrees_dir(tmp_path) == state_home / "litehive" / wid / "worktrees"
+    assert workspace_subagents_dir(tmp_path, "T-0001", "agent-1") == (
+        data_home / "litehive" / wid / "subagents" / "T-0001" / "agent-1"
+    )
+    assert workspace_database_path(tmp_path).exists()
+
+    registry = yaml.safe_load(workspace_registry_path().read_text(encoding="utf-8"))
+    assert registry["workspaces"][wid] == str(tmp_path.resolve())
+
+    with connect_workspace_db(tmp_path) as connection:
+        tables = {
+            row[0]
+            for row in connection.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'table'"
+            ).fetchall()
+        }
+    assert {
+        "pool_state",
+        "queue",
+        "task_state",
+        "task_journal",
+        "stage_reports",
+        "hook_artifacts",
+        "subagent_sessions",
+        "events",
+        "engine_monitoring",
+        "attention",
+        "worktrees",
+    } <= tables
+
+
+def test_load_state_imports_legacy_state_yaml_into_db(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    state_path(tmp_path).write_text(
+        yaml.safe_dump(
+            {
+                "active_task_id": "T-0007",
+                "queue": ["T-0007", "T-0008"],
+                "next_task_number": 8,
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+
+    state = load_state(tmp_path)
+
+    assert state.active_task_id == "T-0007"
+    assert state.queue == ["T-0007", "T-0008"]
+    assert state.next_task_number == 8
+
+
+def test_get_task_reads_runtime_from_database_without_runtime_yaml(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="DB runtime")
+    task.runtime.execution_status = "running"
+    task.runtime.current_stage.step = "implementing"
+    save_task_runtime(tmp_path, task)
+
+    runtime_path = tmp_path / ".litehive" / "tasks" / f"{task.id}-{task.slug}" / "runtime.yaml"
+    if runtime_path.exists():
+        runtime_path.unlink()
+
+    loaded = get_task(tmp_path, task.id)
+
+    assert loaded is not None
+    assert loaded.runtime.execution_status == "running"
+    assert loaded.runtime.current_stage.step == "implementing"
 
 
 def test_ensure_workspace_scaffolds_workspace_gitignore(tmp_path: Path) -> None:

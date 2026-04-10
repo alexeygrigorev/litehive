@@ -9,6 +9,7 @@ import yaml
 
 from litehive.config import ensure_workspace, state_path
 from litehive.models import WorkspaceState
+from litehive.storage import runtime_store
 
 from .constants import _MISSING
 
@@ -17,8 +18,21 @@ logger = logging.getLogger(__name__)
 
 def load_state(root: Path) -> WorkspaceState:
     ensure_workspace(root)
-    data = yaml.safe_load(state_path(root).read_text(encoding="utf-8")) or {}
-    return WorkspaceState(**data)
+    store = runtime_store(root)
+    state = store.load_workspace_state()
+    legacy_path = state_path(root)
+    if legacy_path.exists():
+        legacy = WorkspaceState(
+            **(yaml.safe_load(legacy_path.read_text(encoding="utf-8")) or {})
+        )
+        if state is None or state == WorkspaceState():
+            store.save_workspace_state(legacy)
+            return legacy
+        return state
+    if state is None:
+        state = WorkspaceState()
+        store.save_workspace_state(state)
+    return state
 
 
 def _atomic_write_text(path: Path, content: str) -> None:
@@ -77,10 +91,12 @@ def save_state(root: Path, state: WorkspaceState) -> None:
     from litehive.workspace.locking import workspace_mutation_guard
 
     with workspace_mutation_guard(root):
+        runtime_store(root).save_workspace_state(state)
         _atomic_write_text(state_path(root), _serialize_state(state))
 
 
 def _save_state_without_runner_guard(root: Path, state: WorkspaceState) -> None:
+    runtime_store(root).save_workspace_state(state)
     _atomic_write_text(state_path(root), _serialize_state(state))
 
 

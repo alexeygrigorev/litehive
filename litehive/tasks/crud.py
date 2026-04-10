@@ -24,6 +24,7 @@ from litehive.models import (
     WorkspaceState,
     utcnow,
 )
+from litehive.storage import runtime_store
 
 from .constants import (
     VALID_PLANNED_EFFORTS,
@@ -85,7 +86,7 @@ def _serialize_task_runtime(task: TaskRecord) -> str:
     _normalize_task_worktree_state(task)
     return yaml.safe_dump(
         {
-            **task.runtime.model_dump(mode="python"),
+            **_task_runtime_for_storage(task).model_dump(mode="python"),
             "git": {
                 "commit_sha": task.git.commit_sha,
                 "worktree_path": task.runtime.git.worktree_path,
@@ -95,7 +96,16 @@ def _serialize_task_runtime(task: TaskRecord) -> str:
     )
 
 
+def _task_runtime_for_storage(task: TaskRecord) -> TaskRuntime:
+    _normalize_task_worktree_state(task)
+    runtime = task.runtime.model_copy(deep=True)
+    runtime.git.commit_sha = task.git.commit_sha
+    runtime.git.worktree_path = task.runtime.git.worktree_path
+    return runtime
+
+
 def _write_task_runtime(root: Path, task: TaskRecord) -> None:
+    runtime_store(root).save_task_runtime(task.id, _task_runtime_for_storage(task))
     _atomic_write_text(task_runtime_file(root, task), _serialize_task_runtime(task))
     _ensure_runtime_ignored(root)
 
@@ -141,12 +151,20 @@ def save_task_runtime(root: Path, task: TaskRecord) -> None:
 
 
 def _load_task_runtime(root: Path, task: TaskRecord) -> TaskRecord:
+    store = runtime_store(root)
+    runtime = store.load_task_runtime(task.id)
+    if runtime is not None:
+        task.runtime = runtime
+        set_task_commit_sha(task, task.runtime.git.commit_sha)
+        _normalize_task_worktree_state(task)
+        return task
     runtime_file = task_runtime_file(root, task)
     if not runtime_file.exists():
         _normalize_task_worktree_state(task)
         return task
     data = yaml.safe_load(runtime_file.read_text(encoding="utf-8")) or {}
     task.runtime = TaskRuntime(**data)
+    store.save_task_runtime(task.id, task.runtime)
     set_task_commit_sha(task, task.runtime.git.commit_sha)
     _normalize_task_worktree_state(task)
     return task
@@ -248,6 +266,8 @@ def create_task(
             if task.mode == "tasks":
                 writes[task_brief_file(root, task)] = render_task_brief(task)
             _write_atomic_files(writes)
+            runtime_store(root).save_task_runtime(task.id, _task_runtime_for_storage(task))
+            runtime_store(root).save_workspace_state(state)
         except Exception:
             try:
                 shutil.rmtree(base)
@@ -334,6 +354,10 @@ def create_follow_up_tasks(
         writes[state_path(root)] = _serialize_state(state)
         try:
             _write_atomic_files(writes)
+            store = runtime_store(root)
+            for task in created_tasks:
+                store.save_task_runtime(task.id, _task_runtime_for_storage(task))
+            store.save_workspace_state(state)
         except Exception:
             for base in reversed(created_dirs):
                 try:
@@ -434,4 +458,5 @@ def save_task(root: Path, task: TaskRecord) -> None:
     with workspace_mutation_guard(root):
         writes = _workspace_transition_writes(root, tasks=[task])
         _write_atomic_files(writes)
+        runtime_store(root).save_task_runtime(task.id, _task_runtime_for_storage(task))
         _ensure_runtime_ignored(root)
