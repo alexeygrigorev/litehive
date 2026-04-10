@@ -1,7 +1,5 @@
 """Recovery detection helpers shared by workspace and execution recovery."""
 
-from __future__ import annotations
-
 import hashlib
 import re
 from datetime import UTC, datetime

@@ -1,7 +1,5 @@
 """Tests for crash resume and timeout verdict nudges across engines."""
 
-from __future__ import annotations
-
 import json
 from pathlib import Path
 

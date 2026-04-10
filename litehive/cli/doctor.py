@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from litehive.config import ensure_workspace
 from litehive.pipeline.recovery import apply_doctor_fixes, scan_workspace_doctor
 

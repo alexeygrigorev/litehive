@@ -1,7 +1,5 @@
 """Execution recovery: recovery agents, rollback, and recover operations."""
 
-from __future__ import annotations
-
 from pathlib import Path
 
 from litehive.agents import SubagentManager, stage_report_from_subagent
@@ -606,7 +604,7 @@ def _restore_persisted_files(snapshot: dict[Path, str | None]) -> None:
         _atomic_write_text(path, content)
 
 
-def rollback_completed_task(root: Path, task_id: str) -> RollbackSummary:
+def rollback_completed_task(root: Path, task_id: str) -> "RollbackSummary":
     from .._types import RollbackSummary
 
     root = root.resolve()

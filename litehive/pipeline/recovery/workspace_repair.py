@@ -1,7 +1,5 @@
 """Workspace-level recovery and stale-runner repair."""
 
-from __future__ import annotations
-
 from pathlib import Path
 
 import yaml

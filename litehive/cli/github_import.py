@@ -1,7 +1,5 @@
 """Import GitHub issues as litehive tasks via the gh CLI."""
 
-from __future__ import annotations
-
 import json
 import re
 import subprocess
