@@ -57,7 +57,6 @@ def _fast_status(argv: list[str]) -> int:
             engine = (
                 active_subagent.get("engine")
                 or last_subagent.get("engine")
-                or task_data.get("engine")
                 or default_engine
             )
             print(f"active_task_title: {task_data.get('title', '-')}")

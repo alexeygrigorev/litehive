@@ -372,7 +372,7 @@ def _assert_run_next_task_records_blocked_outcome_when_fallbacks_are_exhausted(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     ensure_workspace(tmp_path)
-    create_task(tmp_path, title="Exhausted fallback task", engine="codex", auto_commit=False)
+    create_task(tmp_path, title="Exhausted fallback task", auto_commit=False)
 
     def fake_run(
         self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None

@@ -100,8 +100,8 @@ litehive status
   going until Litehive reaches an explicit stop condition.
 - `litehive repair` is the manual recovery entrypoint for stale active tasks,
   interrupted runs, and queue cleanup.
-- Each task can have a preferred engine, but the final attempt order is resolved
-  from run overrides, task overrides, task-type routing, and workspace defaults.
+- Engine selection starts from any run override, then the workspace default,
+  then global fallback preference and quota/availability checks.
 
 ## Minimal Daily Workflow
 

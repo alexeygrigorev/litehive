@@ -189,9 +189,8 @@ litehive import issue \
 Update task metadata after creation.
 
 ```bash
-litehive task update T-0002 --engine opencode
-litehive task update T-0002 --priority high
-litehive task update T-0002 --human-checkpoint before_acceptance
+litehive update T-0002 --priority high
+litehive update T-0002 --human-checkpoint before_acceptance
 ```
 
 Replace durable shaping fields:
@@ -220,7 +219,13 @@ engine override. To make a non-runnable task active again after changing task
 metadata, follow it with `litehive queue resume` or `litehive queue requeue`
 when appropriate.
 
-### `litehive task close`
+Record an engine switch request and requeue the task for the next pass.
+
+```bash
+litehive switch T-0002 gemini --reason "quota exhausted"
+```
+
+### `litehive close`
 
 Close a task with an explicit non-implementation outcome.
 

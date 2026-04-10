@@ -412,9 +412,6 @@
                 <option value="high">high</option>
               </select>
             </label>
-            <label>Engine
-              <input name="engine" placeholder="Optional engine">
-            </label>
           </div>
           <label>Goal
             <textarea name="goal" placeholder="Optional goal"></textarea>
@@ -744,7 +741,6 @@
             <div>Status</div><div>${esc(record.status || task.status)}</div>
             <div>Pipeline status</div><div>${esc(record.pipeline_status || task.pipeline_status)}</div>
             <div>Priority</div><div>${esc(record.priority || "-")}</div>
-            <div>Engine</div><div>${esc(record.engine || "-")}</div>
             <div>Model</div><div>${esc(record.model || "-")}</div>
             <div>Task type</div><div>${esc(record.task_type || "-")}</div>
             <div>Mode</div><div>${esc(record.mode || "-")}</div>
@@ -875,20 +871,40 @@
       `;
     }
 
+    function renderTaskSwitchSection(task, snapshot) {
+      const options = (snapshot.editable_fields?.engine_options || []).map((value) => `
+        <option value="${escAttr(value)}" ${value === (task.effective_engine || "") ? "selected" : ""}>${esc(value)}</option>
+      `).join("");
+      return `
+        <div class="section">
+          <h3>Switch Engine</h3>
+          <form id="task-switch-form" class="stack">
+            <div class="grid-two">
+              <div class="field">
+                <label for="task-switch-engine">New engine</label>
+                <select id="task-switch-engine" name="engine">${options}</select>
+              </div>
+              <div class="field">
+                <label for="task-switch-reason">Reason</label>
+                <input id="task-switch-reason" name="reason" type="text" placeholder="quota exhausted" value="">
+              </div>
+            </div>
+            <div class="toolbar">
+              <button class="primary" type="submit" ${state.taskSwitchState === "saving" ? "disabled" : ""}>${state.taskSwitchState === "saving" ? "Switching..." : "Switch Task Engine"}</button>
+              <span class="status-line">${esc(state.taskSwitchMessage)}</span>
+            </div>
+          </form>
+        </div>
+      `;
+    }
+
     function renderEditSection(task, snapshot) {
       const record = task.record || {};
-      const options = snapshot.editable_fields || { priority_options: [], engine_options: [] };
+      const options = snapshot.editable_fields || { priority_options: [] };
       const isEditing = state.editTaskId === task.id;
       const priorityOptions = options.priority_options.map((value) => `
         <option value="${escAttr(value)}" ${value === (record.priority || "") ? "selected" : ""}>${esc(value)}</option>
       `).join("");
-      const engineOptions = [
-        `<option value="" ${(record.engine || "") === "" ? "selected" : ""}>inherit default</option>`,
-        ...options.engine_options.map((value) => `
-          <option value="${escAttr(value)}" ${value === (record.engine || "") ? "selected" : ""}>${esc(value)}</option>
-        `),
-      ].join("");
-
       if (!isEditing) {
         return `
           <div class="section">
@@ -909,10 +925,6 @@
               <div class="field">
                 <label for="task-priority">Priority</label>
                 <select id="task-priority" name="priority">${priorityOptions}</select>
-              </div>
-              <div class="field">
-                <label for="task-engine">Engine</label>
-                <select id="task-engine" name="engine">${engineOptions}</select>
               </div>
             </div>
             <div class="field">
@@ -1110,9 +1122,6 @@
                   <option value="high" ${task.priority === "high" ? "selected" : ""}>high</option>
                 </select>
               </label>
-              <label>Engine
-                <input name="engine" value="${esc(task.engine || "")}" placeholder="codex, gemini, opencode...">
-              </label>
             </div>
             <label>Goal
               <textarea name="goal" placeholder="Task goal">${esc(task.goal || "")}</textarea>
@@ -1215,7 +1224,6 @@
           const result = await postJson(`/api/tasks/${encodeURIComponent(task.id)}/update`, {
             goal: form.get("goal"),
             priority: form.get("priority") || null,
-            engine: form.get("engine") || null,
             acceptance_criteria: linesToList(form.get("acceptance_criteria")),
             constraints: linesToList(form.get("constraints")),
             plan_steps: linesToList(form.get("plan_steps")),
@@ -1424,7 +1432,6 @@
         updates: {
           goal: form.goal.value,
           priority: form.priority.value,
-          engine: form.engine.value || null,
           acceptance_criteria: textareaToList(form.acceptance_criteria.value),
           constraints: textareaToList(form.constraints.value),
           plan: textareaToList(form.plan.value),
@@ -1654,7 +1661,6 @@
           title: form.get("title"),
           goal: form.get("goal") || null,
           priority: form.get("priority") || null,
-          engine: form.get("engine") || null,
           acceptance_criteria: linesToList(form.get("acceptance_criteria")),
         });
         event.currentTarget.reset();

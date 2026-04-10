@@ -291,8 +291,6 @@ def resolve_engine_plan(
 ) -> list[str]:
     if engine_override is not None:
         return [engine_override]
-    if task.engine is not None:
-        return [task.engine]
     return [config.default_engine]
 
 

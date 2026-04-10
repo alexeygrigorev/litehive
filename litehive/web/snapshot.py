@@ -53,7 +53,6 @@ def build_workspace_snapshot(root: Path) -> dict[str, Any]:
         "state": state.model_dump(mode="python"),
         "editable_fields": {
             "priority_options": sorted(VALID_TASK_PRIORITIES),
-            "engine_options": sorted(VALID_TASK_ENGINES),
         },
         "queue": list(state.queue),
         "active_task_id": state.active_task_id,
@@ -117,13 +116,13 @@ def read_engine_dashboard(root: Path) -> dict[str, Any]:
             "precedence": [
                 {
                     "order": 1,
-                    "rule": "task_override",
-                    "description": "Task engine override wins when task.yaml sets engine.",
+                    "rule": "run_override",
+                    "description": "A run-level engine override wins when explicitly passed to litehive run.",
                 },
                 {
                     "order": 2,
                     "rule": "workspace_default",
-                    "description": "Otherwise Litehive uses the workspace default engine.",
+                    "description": "Otherwise Litehive starts from the workspace default engine.",
                 },
                 {
                     "order": 3,
@@ -157,9 +156,7 @@ def read_engine_dashboard(root: Path) -> dict[str, Any]:
         "quota": {
             "engines": _read_engine_quota_snapshot(),
         },
-        "editable_fields": {
-            "engine_options": sorted(VALID_TASK_ENGINES),
-        },
+        "editable_fields": {"engine_options": sorted(VALID_TASK_ENGINES)},
     }
 
 
@@ -460,6 +457,13 @@ def _serialize_task(root: Path, task: TaskRecord, active_task_id: str | None) ->
         "status": task.status,
         "pipeline_status": task.pipeline_status,
         "priority": task.priority,
+        "effective_engine": (
+            active_subagent.engine
+            if active_subagent is not None
+            else last_subagent.engine
+            if last_subagent is not None
+            else load_config(root).default_engine
+        ),
         "goal": task.goal,
         "acceptance_criteria": list(task.acceptance_criteria),
         "plan": list(task.plan),

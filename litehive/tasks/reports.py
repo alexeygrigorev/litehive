@@ -45,7 +45,14 @@ def collect_recovery_evidence(
     latest_run_log = _latest_run_all_log_path(root)
     monitoring_path = engine_monitoring_file(root)
     monitoring = load_engine_monitoring(root)
-    engine_record = monitoring.engines.get(task.engine or "")
+    engine_name = (
+        task.runtime.active_subagent.engine
+        if task.runtime.active_subagent is not None
+        else task.runtime.last_subagent.engine
+        if task.runtime.last_subagent is not None
+        else None
+    )
+    engine_record = monitoring.engines.get(engine_name or "")
     subagent_base = _latest_subagent_base(root, task)
 
     evidence.append(
@@ -280,4 +287,3 @@ def render_task_thread(root: Path, task: TaskRecord) -> str:
         if c.files_changed:
             lines.append(f"Files: {', '.join(c.files_changed)}")
     return "\n".join(lines)
-

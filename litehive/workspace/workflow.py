@@ -181,7 +181,6 @@ def apply_task_updates_from_report(root: Path, task: TaskRecord, report: "object
         task_type=updates.get("task_type", ...),
         mode=updates.get("mode", ...),
         priority=updates.get("priority", ...),
-        engine=updates.get("engine", ...),
         model=updates.get("model", ...),
         retry_limit=updates.get("retry_limit", ...),
         auto_commit=updates.get("auto_commit", ...),

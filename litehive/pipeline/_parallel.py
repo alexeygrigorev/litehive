@@ -313,7 +313,7 @@ def _integrate_completed_task(
     )
 
     cfg = config or load_config(root)
-    engine_name = cfg.recovery_engine or task.engine or cfg.default_engine
+    engine_name = cfg.recovery_engine or cfg.default_engine
     model = resolve_model(task, cfg, engine_name=engine_name)
     subagents = SubagentManager(root, execution_root=root)
     subagents.run(

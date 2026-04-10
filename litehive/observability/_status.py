@@ -75,8 +75,8 @@ def render_task_summary(task: TaskRecord, *, active: bool, root: Path | None = N
         lines.append(f"  depends_on={', '.join(task.depends_on)}")
     if task.human_checkpoints:
         lines.append(f"  human_checkpoints={', '.join(task.human_checkpoints)}")
-    if task.engine or task.model:
-        lines.append(f"  engine={task.engine or '-'} model={task.model or 'default'}")
+    if task.model:
+        lines.append(f"  engine=workspace-default model={task.model or 'default'}")
     if task.pm_complexity or task.planned_effort:
         lines.append(
             f"  pm_complexity={task.pm_complexity or '-'} planned_effort={task.planned_effort or '-'}"
@@ -327,7 +327,7 @@ def render_active_task_section(task: TaskRecord | None, default_engine: str) -> 
         if task.runtime.active_subagent is not None
         else task.runtime.last_subagent.engine
         if task.runtime.last_subagent is not None
-        else task.engine or default_engine
+        else default_engine
     )
     stage = task.runtime.current_stage.step or task.pipeline_status or "-"
 
@@ -372,7 +372,7 @@ def render_active_tasks_section(
             if task.runtime.active_subagent is not None
             else task.runtime.last_subagent.engine
             if task.runtime.last_subagent is not None
-            else task.engine or default_engine
+            else default_engine
         )
         stage = task.runtime.current_stage.step or task.pipeline_status or "-"
         task_duration = _duration_label(task.runtime.run_started_at, 0)

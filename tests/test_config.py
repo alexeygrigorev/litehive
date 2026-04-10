@@ -571,18 +571,24 @@ def test_load_config_applies_workspace_overrides_on_top_of_global_defaults(
     assert config.subagent_resource_limits.cpu_count == 2.0
 
 
-def test_resolve_engine_name_prefers_run_override_then_task_then_workspace_default(
+def test_resolve_engine_name_prefers_run_override_then_workspace_default(
     tmp_path: Path,
 ) -> None:
     ensure_workspace(tmp_path)
     config = load_config(tmp_path)
-    task = create_task(tmp_path, title="Pending task", engine="opencode")
+    task = create_task(tmp_path, title="Pending task")
 
     assert resolve_engine_name(task, config, engine_override="gemini") == "gemini"
-    assert resolve_engine_name(task, config) == "opencode"
-
-    task.engine = None
     assert resolve_engine_name(task, config) == config.default_engine
+
+
+def test_create_task_rejects_removed_engine_override(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+
+    with pytest.raises(TypeError):
+        create_task(tmp_path, title="Pending task", engine="gemini")
+
+    assert load_config(tmp_path).default_engine == "codex"
 
 
 def test_resolve_model_prefers_run_override_then_task_then_workspace_default(
@@ -596,7 +602,7 @@ def test_resolve_model_prefers_run_override_then_task_then_workspace_default(
         ),
     )
     config = load_config(tmp_path)
-    task = create_task(tmp_path, title="Pending task", engine="opencode", model="custom-task-model")
+    task = create_task(tmp_path, title="Pending task", model="custom-task-model")
 
     assert (
         resolve_model(task, config, engine_name="opencode", model_override="run-model")
@@ -611,7 +617,7 @@ def test_resolve_model_prefers_run_override_then_task_then_workspace_default(
 def test_resolve_model_skips_unsupported_engine_override(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     config = load_config(tmp_path)
-    task = create_task(tmp_path, title="Pending task", engine="codex", model="custom-task-model")
+    task = create_task(tmp_path, title="Pending task", model="custom-task-model")
 
     assert resolve_model(task, config, engine_name="codex", model_override="run-model") is None
 
