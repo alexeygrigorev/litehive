@@ -6,10 +6,10 @@ task_type: bugfix
 model: null
 mode: implementation
 pipeline_mode: full
-status: queued
+status: done
 flag_reason: null
 flag_count: 0
-pipeline_status: backlog
+pipeline_status: done
 priority: medium
 pm_complexity: simple
 planned_effort: s
@@ -50,7 +50,7 @@ subagents: []
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0284 isolate-workspace-execution-from-inherited'
-  commit_sha: null
+  commit_sha: 04d170c872bc2818cef4125ab3cd215556e11648
   checkpoint_base_sha: null
   checkpoint_attempts: 0
   rolled_back_checkpoint_attempt: null
