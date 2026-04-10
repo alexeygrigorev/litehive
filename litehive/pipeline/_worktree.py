@@ -213,22 +213,17 @@ def _task_worktree_path(root: Path, task: TaskRecord) -> Path:
 
 
 def _remove_origin_remote(worktree_path: Path) -> None:
-    remotes = subprocess.run(
-        ["git", "remote"],
-        cwd=worktree_path,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if remotes.returncode != 0 or "origin" not in remotes.stdout.split():
-        return
-    subprocess.run(
-        ["git", "remote", "remove", "origin"],
-        cwd=worktree_path,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    """DISABLED — running `git remote remove origin` inside a linked worktree
+    modifies the SHARED .git/config and wipes origin from the main repo too,
+    breaking every subsequent push from the daemon. The true protection
+    against agent-initiated pushes is the sandbox layer (no git binary for
+    non-merge-resolver roles); the git wrapper that ships with T-0286 handles
+    destructive-command blocking for merge-resolver. Do not restore this
+    belt-and-suspenders until worktree_config extension is in use or
+    per-task repos (not linked worktrees) are adopted.
+    """
+    _ = worktree_path
+    return
 
 
 def _run_worktree_merge_agent(
