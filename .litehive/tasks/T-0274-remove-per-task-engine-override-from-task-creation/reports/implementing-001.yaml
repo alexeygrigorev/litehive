@@ -1,0 +1,137 @@
+task_id: T-0274
+step: implementing
+verdict: pass
+source: agent
+summary: 'Root cause: Litehive still exposed a hidden per-task engine override through
+  the Python task-creation API. Even after CLI and task-record cleanup, litehive.tasks.crud.create_task
+  with an engine keyword was still accepted and rewrote .litehive/config.yaml default_engine
+  during task creation, which violated the task contract and the shared global engine-selection
+  model. Fix made: removed the engine parameter and config-rewrite logic from litehive/tasks/crud.py
+  so task creation can no longer mutate workspace engine preference. Updated remaining
+  tests that were still relying on task-specific engine injection to set workspace
+  defaults explicitly instead, and added a regression test that create_task with an
+  engine keyword now raises and leaves default_engine unchanged. Verification: uv
+  run ruff check --select E402,F401 litehive tests passed; forbidden noqa suppression
+  gate passed; focused pytest coverage over the touched engine/task suites passed
+  (225 passed); targeted web snapshot regression passed (17 passed); full suite passed
+  (uv run pytest => 919 passed in 131.62s). Retry guidance: the failed implementing
+  stage should be retried; task creation no longer accepts or acts on a task-specific
+  engine input, and engine choice now stays with run override or shared workspace
+  preference/quota logic only.'
+feedback: "Runner hook `after_implementing` `uv run ruff check --select E402,F401\
+  \ litehive tests` passed with exit code 0 (artifact: `artifacts/after_implementing-001.yaml`).\n\
+  \nRunner hook `after_implementing` `if [ -n \"${LITEHIVE_CHANGED_PATHS:-}\" ] \\\
+  \n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" | grep -q . \\\n  && printf '%s\\\
+  n' \"$LITEHIVE_CHANGED_PATHS\" \\\n    | xargs -r -d '\\n' git grep -nE 'noqa:.*F401|noqa:.*F403|ruff:\\\
+  s*noqa:\\s*F401|ruff:\\s*noqa:\\s*F403' --; then\n  echo 'Forbidden noqa F401/F403\
+  \ suppression found.'\n  exit 1\nfi` passed with exit code 0 (artifact: `artifacts/after_implementing-002.yaml`).\n\
+  \nRoot cause: Litehive still exposed a hidden per-task engine override through the\
+  \ Python task-creation API. Even after CLI and task-record cleanup, litehive.tasks.crud.create_task\
+  \ with an engine keyword was still accepted and rewrote .litehive/config.yaml default_engine\
+  \ during task creation, which violated the task contract and the shared global engine-selection\
+  \ model. Fix made: removed the engine parameter and config-rewrite logic from litehive/tasks/crud.py\
+  \ so task creation can no longer mutate workspace engine preference. Updated remaining\
+  \ tests that were still relying on task-specific engine injection to set workspace\
+  \ defaults explicitly instead, and added a regression test that create_task with\
+  \ an engine keyword now raises and leaves default_engine unchanged. Verification:\
+  \ uv run ruff check --select E402,F401 litehive tests passed; forbidden noqa suppression\
+  \ gate passed; focused pytest coverage over the touched engine/task suites passed\
+  \ (225 passed); targeted web snapshot regression passed (17 passed); full suite\
+  \ passed (uv run pytest => 919 passed in 131.62s). Retry guidance: the failed implementing\
+  \ stage should be retried; task creation no longer accepts or acts on a task-specific\
+  \ engine input, and engine choice now stays with run override or shared workspace\
+  \ preference/quota logic only."
+submitted_via_cli: true
+files_changed:
+- docs/README.md
+- docs/cli.md
+- docs/configuration.md
+- docs/engines.md
+- docs/state-machine.md
+- litehive/cli/_parse.py
+- litehive/cli/parsers/add.py
+- litehive/cli/parsers/switch.py
+- litehive/cli/parsers/update.py
+- litehive/cli/status.py
+- litehive/cli/tasks.py
+- litehive/main.py
+- litehive/models/task_models.py
+- litehive/observability/_status.py
+- litehive/pipeline/_models.py
+- litehive/pipeline/_parallel.py
+- litehive/pipeline/core.py
+- litehive/pipeline/recovery/execution_recovery.py
+- litehive/tasks/crud.py
+- litehive/tasks/reports.py
+- litehive/web/actions.py
+- litehive/web/snapshot.py
+- litehive/web/templates/index.html
+- litehive/workspace/task_status.py
+- litehive/workspace/workflow.py
+- tests/test_commit_to_git_and_checkpoint.py
+- tests/test_config.py
+- tests/test_crash_resume.py
+- tests/test_engine_variants_and_timeline.py
+- tests/test_list_and_show.py
+- tests/test_observability_and_status.py
+- tests/test_retry_execution.py
+- tests/test_run_cli.py
+- tests/test_runtime_pool.py
+- tests/test_task_commands_and_daemon.py
+- tests/test_web_engine_dashboard.py
+- tests/test_web_snapshot_and_verdicts.py
+- tests/test_web_task_actions.py
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings:
+- 'runner hook passed: `after_implementing` `uv run ruff check --select E402,F401
+  litehive tests` (artifact: `artifacts/after_implementing-001.yaml`)'
+- "runner hook passed: `after_implementing` `if [ -n \"${LITEHIVE_CHANGED_PATHS:-}\"\
+  \ ] \\\n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" | grep -q . \\\n  && printf\
+  \ '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" \\\n    | xargs -r -d '\\n' git grep -nE 'noqa:.*F401|noqa:.*F403|ruff:\\\
+  s*noqa:\\s*F401|ruff:\\s*noqa:\\s*F403' --; then\n  echo 'Forbidden noqa F401/F403\
+  \ suppression found.'\n  exit 1\nfi` (artifact: `artifacts/after_implementing-002.yaml`)"
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 691
+hook_results:
+- point: after_implementing
+  command: uv run ruff check --select E402,F401 litehive tests
+  reject_on_failure: true
+  description: null
+  exit_code: 0
+  status: passed
+  artifact: artifacts/after_implementing-001.yaml
+  stdout: 'All checks passed!
+
+    '
+  stderr: 'warning: `VIRTUAL_ENV=/home/alexey/git/litehive/.venv` does not match the
+    project environment path `.venv` and will be ignored; use `--active` to target
+    the active environment instead
+
+    '
+- point: after_implementing
+  command: "if [ -n \"${LITEHIVE_CHANGED_PATHS:-}\" ] \\\n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\"\
+    \ | grep -q . \\\n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" \\\n    | xargs\
+    \ -r -d '\\n' git grep -nE 'noqa:.*F401|noqa:.*F403|ruff:\\s*noqa:\\s*F401|ruff:\\\
+    s*noqa:\\s*F403' --; then\n  echo 'Forbidden noqa F401/F403 suppression found.'\n\
+    \  exit 1\nfi"
+  reject_on_failure: true
+  description: null
+  exit_code: 0
+  status: passed
+  artifact: artifacts/after_implementing-002.yaml
+  stdout: ''
+  stderr: ''
+created_at: '2026-04-10T04:13:42+00:00'

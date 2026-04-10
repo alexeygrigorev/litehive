@@ -1,0 +1,78 @@
+task_id: T-0274
+step: grooming
+verdict: pass
+source: agent
+summary: Repo inspection confirms the task is implementable, but the scope is slightly
+  wider than the title suggests because `TaskRecord.engine` is referenced beyond `litehive
+  add/update`.
+feedback: "Repo inspection confirms the task is implementable, but the scope is slightly\
+  \ wider than the title suggests because `TaskRecord.engine` is referenced beyond\
+  \ `litehive add/update`.\n\nWhat I verified:\n- `TaskRecord.engine` still exists\
+  \ in `litehive/models/task_models.py` and is persisted by `create_task` / `update_task`.\n\
+  - `--engine` is still exposed by both `litehive add` and `litehive update` in `litehive/cli/parsers/add.py`\
+  \ and `litehive/cli/parsers/update.py`.\n- Runtime selection still uses task-level\
+  \ engine in `litehive/pipeline/_models.py` via `resolve_engine_plan(...): task.engine\
+  \ -> config.default_engine`.\n- User-visible task views and editable update payloads\
+  \ still expose task engine in `litehive/cli/tasks.py`, `litehive/cli/status.py`,\
+  \ and `litehive/cli/_parse.py`.\n- Existing switch-task flow in `litehive/workspace/task_status.py`\
+  \ persists `task.engine`, so removing the field requires either adapting or explicitly\
+  \ retiring that path in this task.\n- Docs still advertise task-specific engines\
+  \ in `docs/configuration.md`.\n\nTests run:\n- None. Grooming only; this pass is\
+  \ based on source inspection.\n\nExecution plan for implementing/testing:\n1. Remove\
+  \ `engine` from durable task schema and task creation/update persistence surfaces\
+  \ (`TaskRecord`, `create_task`, `update_task`, editable YAML payloads, CLI add/update\
+  \ handlers/parsers, and any serialization assumptions).\n2. Change engine resolution\
+  \ to stop reading task-level engine and rely only on run-level override when present,\
+  \ otherwise workspace/global selection (`select_engine` / `resolve_engine_plan`\
+  \ / related tests).\n3. Update user-facing task output and docs so task records\
+  \ no longer claim a stored engine override.\n4. Resolve the current `switch_task_engine`\
+  \ dependency explicitly during implementation: either rework it to use non-durable\
+  \ continuation/switch metadata compatible with no `TaskRecord.engine`, or remove/adjust\
+  \ that behavior and its tests as part of this task. Do not leave a dead reference\
+  \ to the removed field.\n5. Run focused tests first around config/task CLI/status/list/show/switch\
+  \ paths, then run `uv run pytest -q` to satisfy the final acceptance criterion.\n\
+  \nRecommended acceptance criteria rewrite:\n- New tasks created with `litehive add`\
+  \ do not accept or persist a task-specific engine override.\n- Existing tasks updated\
+  \ with `litehive update` cannot set or clear a task-specific engine override.\n\
+  - Engine selection for task execution is determined only by run-level override when\
+  \ provided, otherwise by workspace preference/default, availability, and quota logic.\n\
+  - Task record serialization, CLI displays, editable task update payloads, and docs\
+  \ no longer expose a durable `engine` field on tasks.\n- `uv run pytest -q` passes\
+  \ with zero failures.\n\nScope note:\n- The title says \u201Cfrom task creation\u201D\
+  , but the accepted scope must include all remaining `TaskRecord.engine` consumers\
+  \ because the record field removal otherwise leaves broken code paths, especially\
+  \ task switching/status surfaces.\n\nPM_COMPLEXITY: moderate\nPLANNED_EFFORT: m\n\
+  \nTASK_UPDATE:\n  pm_complexity: moderate\n  planned_effort: m\n  acceptance_criteria:\n\
+  \    - New tasks created with `litehive add` do not accept or persist a task-specific\
+  \ engine override.\n    - Existing tasks updated with `litehive update` cannot set\
+  \ or clear a task-specific engine override.\n    - Engine selection for task execution\
+  \ is determined only by run-level override when provided, otherwise by workspace\
+  \ preference/default, availability, and quota logic.\n    - Task record serialization,\
+  \ CLI displays, editable task update payloads, and docs no longer expose a durable\
+  \ `engine` field on tasks.\n    - `uv run pytest -q` passes with zero failures.\n\
+  \  plan:\n    - Remove durable task-engine storage and CLI add/update support for\
+  \ task engine.\n    - Route engine selection through shared global selection helpers\
+  \ only.\n    - Update task-facing output, editable metadata payloads, documentation,\
+  \ and tests for the removed field.\n    - Resolve or retire switch-task references\
+  \ that currently depend on `TaskRecord.engine`."
+submitted_via_cli: true
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 127
+hook_results: []
+created_at: '2026-04-10T03:40:34+00:00'

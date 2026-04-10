@@ -1,0 +1,56 @@
+task_id: T-0274
+step: testing
+verdict: reject
+source: agent
+summary: 'REJECT. EXPECTED behavior: removing per-task engine override from task creation
+  means task creation should not accept or act on a task-specific engine input anywhere
+  in the task-creation path; engine selection should come only from run override or
+  global workspace preference/quota logic. OBSERVED behavior: TaskRecord.engine is
+  removed and add/update CLI no longer expose --engine, but internal task creation
+  still accepts engine and rewrites the workspace default engine in litehive/tasks/crud.py
+  create_task(). Reproduction changed default_engine from codex to gemini during task
+  creation. Steps to reproduce: run uv run python - <<''PY'''
+feedback: "REJECT. EXPECTED behavior: removing per-task engine override from task\
+  \ creation means task creation should not accept or act on a task-specific engine\
+  \ input anywhere in the task-creation path; engine selection should come only from\
+  \ run override or global workspace preference/quota logic. OBSERVED behavior: TaskRecord.engine\
+  \ is removed and add/update CLI no longer expose --engine, but internal task creation\
+  \ still accepts engine and rewrites the workspace default engine in litehive/tasks/crud.py\
+  \ create_task(). Reproduction changed default_engine from codex to gemini during\
+  \ task creation. Steps to reproduce: run uv run python - <<'PY'\nfrom pathlib import\
+  \ Path\nfrom tempfile import TemporaryDirectory\nfrom litehive.config import ensure_workspace,\
+  \ load_config\nfrom litehive.tasks.crud import create_task\nwith TemporaryDirectory()\
+  \ as tmp:\n    root = Path(tmp)\n    ensure_workspace(root)\n    print('before',\
+  \ load_config(root).default_engine)\n    create_task(root, title='demo', engine='gemini',\
+  \ auto_commit=False)\n    print('after', load_config(root).default_engine)\nPY\n\
+  Observed output: before codex / after gemini. This shows task creation still consumes\
+  \ an engine-specific input instead of relying solely on shared global selection.\
+  \ Acceptance criteria status: satisfied -> TaskRecord.engine field removed; --engine\
+  \ flag removed from add and update CLI; runtime engine plan no longer reads task.engine;\
+  \ focused verification passed (uv run pytest -q tests/test_config.py tests/test_task_commands_and_daemon.py\
+  \ tests/test_list_and_show.py tests/test_web_engine_dashboard.py => 169 passed);\
+  \ full suite passed (uv run pytest -q => 918 passed in 131.95s). NOT satisfied ->\
+  \ remove per-task engine override from task creation / all engine selection goes\
+  \ through global preference-quota logic, because create_task(..., engine=...) remains\
+  \ as an active task-creation path and mutates workspace default configuration."
+submitted_via_cli: true
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 1
+retry_limit: 3
+retry_source: global
+retry_decision: retry
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 259
+hook_results: []
+created_at: '2026-04-10T04:01:40+00:00'

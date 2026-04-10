@@ -1,0 +1,59 @@
+task_id: T-0274
+step: accepting
+verdict: pass
+source: agent
+summary: 'PASS. Verified the per-task engine override is removed across durable task
+  state, CLI task-shaping surfaces, and runtime engine selection. Repo inspection
+  confirmed litehive/models/task_models.py no longer defines TaskRecord.engine; litehive/cli/parsers/add.py
+  and litehive/cli/parsers/update.py no longer expose --engine; and litehive/pipeline/_models.py
+  resolve_engine_plan now returns only the run-level override when provided, otherwise
+  [config.default_engine], with no task-level engine input. I also verified litehive/tasks/crud.py
+  create_task no longer accepts an engine parameter. Direct regression check: running
+  a Python snippet with create_task(root, title=''demo'', engine=''gemini'', auto_commit=False)
+  now raises TypeError: create_task() got an unexpected keyword argument ''engine'',
+  and load_config(root).default_engine remains codex before and after, so task creation
+  no longer mutates workspace engine preference through a hidden API path. Verification
+  rerun in acceptance: uv run pytest -q tests/test_config.py tests/test_task_commands_and_daemon.py
+  -q passed. Supporting evidence in repo tests includes tests/test_config.py::test_create_task_rejects_removed_engine_override.
+  Acceptance criteria met: task record engine field removed; add/update CLI no longer
+  accept per-task --engine; engine selection goes through global run/workspace preference
+  logic rather than task state; and prior testing evidence shows the full suite passed
+  (uv run pytest -q => 919 passed).'
+feedback: 'PASS. Verified the per-task engine override is removed across durable task
+  state, CLI task-shaping surfaces, and runtime engine selection. Repo inspection
+  confirmed litehive/models/task_models.py no longer defines TaskRecord.engine; litehive/cli/parsers/add.py
+  and litehive/cli/parsers/update.py no longer expose --engine; and litehive/pipeline/_models.py
+  resolve_engine_plan now returns only the run-level override when provided, otherwise
+  [config.default_engine], with no task-level engine input. I also verified litehive/tasks/crud.py
+  create_task no longer accepts an engine parameter. Direct regression check: running
+  a Python snippet with create_task(root, title=''demo'', engine=''gemini'', auto_commit=False)
+  now raises TypeError: create_task() got an unexpected keyword argument ''engine'',
+  and load_config(root).default_engine remains codex before and after, so task creation
+  no longer mutates workspace engine preference through a hidden API path. Verification
+  rerun in acceptance: uv run pytest -q tests/test_config.py tests/test_task_commands_and_daemon.py
+  -q passed. Supporting evidence in repo tests includes tests/test_config.py::test_create_task_rejects_removed_engine_override.
+  Acceptance criteria met: task record engine field removed; add/update CLI no longer
+  accept per-task --engine; engine selection goes through global run/workspace preference
+  logic rather than task state; and prior testing evidence shows the full suite passed
+  (uv run pytest -q => 919 passed).'
+submitted_via_cli: true
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 95
+hook_results: []
+created_at: '2026-04-10T04:18:57+00:00'
