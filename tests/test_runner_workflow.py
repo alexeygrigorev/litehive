@@ -1,5 +1,7 @@
 import logging
 
+from litehive.agents.sandbox import SandboxError
+
 from tests.workspace_helpers import (
     CLIExecutionResult,
     ExternalEngineSandboxConfig,
@@ -1747,6 +1749,8 @@ def test_sandbox_launcher_classifies_cpu_limit_events() -> None:
 def test_sandbox_launcher_wraps_selected_engine_with_bubblewrap_policy(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    runtime_dir = tmp_path / "runtime"
+    runtime_dir.mkdir()
     config = LitehiveConfig(
         external_engine_sandbox=ExternalEngineSandboxConfig(
             enabled=True,
@@ -1758,6 +1762,7 @@ def test_sandbox_launcher_wraps_selected_engine_with_bubblewrap_policy(
                     network_mode="none",
                     workspace_mode="rw",
                     environment=["OPENAI_API_KEY"],
+                    extra_ro_binds=[str(runtime_dir)],
                     credential_inputs=[
                         SandboxCredentialInput(
                             env_var="GOOGLE_APPLICATION_CREDENTIALS",
@@ -1798,6 +1803,7 @@ def test_sandbox_launcher_wraps_selected_engine_with_bubblewrap_policy(
     assert "--unshare-net" in wrapped.argv  # network_mode=none
     assert f"--bind {tmp_path} {tmp_path}" in joined  # rw workspace
     assert f"--ro-bind /usr/bin/codex /usr/bin/codex" in joined  # engine binary
+    assert f"--ro-bind {runtime_dir} {runtime_dir}" in joined
     assert "--setenv OPENAI_API_KEY secret" in joined
     assert "ANTHROPIC_API_KEY" not in joined  # not in allowed env
     assert f"--ro-bind {creds_path} /run/credentials/google.json" in joined
@@ -1805,6 +1811,32 @@ def test_sandbox_launcher_wraps_selected_engine_with_bubblewrap_policy(
     assert "--setenv HOME /home/test" in joined
     assert "--setenv PATH /usr/bin:/bin" in joined
     assert "--" in wrapped.argv  # separator before command
+    separator = wrapped.argv.index("--")
+    assert wrapped.argv[separator + 1] == "/usr/bin/codex"
+
+
+def test_sandbox_bubblewrap_missing_extra_ro_bind_fails_closed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config = LitehiveConfig(
+        external_engine_sandbox=ExternalEngineSandboxConfig(
+            enabled=True,
+            backend="bubblewrap",
+            runtime_binary="bwrap",
+            engine_policies={
+                "codex": ExternalEngineSandboxPolicy(
+                    enabled=True,
+                    extra_ro_binds=["/missing/runtime"],
+                )
+            },
+        )
+    )
+    launcher = SandboxLauncher(tmp_path, config)
+    monkeypatch.setattr("shutil.which", lambda binary: f"/usr/bin/{binary}")
+    invocation = get_engine("codex").build_invocation("ship it", tmp_path)
+
+    with pytest.raises(SandboxError, match="requires read-only bind path '/missing/runtime'"):
+        launcher.wrap_invocation("codex", "codex", invocation)
 
 
 def test_sandbox_bubblewrap_readonly_workspace(
@@ -1930,6 +1962,7 @@ def test_load_config_round_trips_bubblewrap_backend(tmp_path: Path) -> None:
                         network_mode="none",
                         workspace_mode="rw",
                         environment=["OPENAI_API_KEY"],
+                        extra_ro_binds=["/opt/runtime"],
                     )
                 },
             )
@@ -1941,6 +1974,7 @@ def test_load_config_round_trips_bubblewrap_backend(tmp_path: Path) -> None:
     assert config.external_engine_sandbox.backend == "bubblewrap"
     assert config.external_engine_sandbox.runtime_binary == "bwrap"
     assert config.external_engine_sandbox.enabled is True
+    assert config.external_engine_sandbox.engine_policies["codex"].extra_ro_binds == ["/opt/runtime"]
 
 
 def test_format_external_engine_sandbox_includes_backend() -> None:
@@ -1954,6 +1988,7 @@ def test_format_external_engine_sandbox_includes_backend() -> None:
                     enabled=True,
                     network_mode="none",
                     workspace_mode="rw",
+                    extra_ro_binds=["/opt/runtime"],
                 )
             },
         )
@@ -1963,6 +1998,7 @@ def test_format_external_engine_sandbox_includes_backend() -> None:
 
     assert "backend:bubblewrap" in rendered
     assert "runtime:bwrap" in rendered
+    assert "binds:/opt/runtime" in rendered
 
 
 def test_gemini_build_invocation_includes_model_and_jsonl_flags(tmp_path: Path) -> None:
