@@ -7,15 +7,15 @@ task_type: refactor
 model: null
 mode: implementation
 pipeline_mode: full
-status: queued
+status: in_progress
 flag_reason: null
 flag_count: 0
-pipeline_status: implementing
+pipeline_status: commit_to_git
 priority: low
 pm_complexity: complex
 planned_effort: l
 created_at: '2026-04-09T14:52:45+00:00'
-updated_at: '2026-04-10T14:16:03+00:00'
+updated_at: '2026-04-10T14:27:24+00:00'
 goal: Replace the argparse-based Litehive CLI with a Typer-based entrypoint that preserves
   the current public command surface, aliases, help visibility, and validation behavior
   while removing the dedicated parser module and dict-style dispatch wiring in favor
@@ -71,6 +71,34 @@ subagents:
   engine: codex
   status: completed
   path: subagents/SA-0003-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0004
+  role: merge-resolver
+  engine: codex
+  status: completed
+  path: subagents/SA-0004-merge-resolver
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0005
+  role: recovery
+  engine: codex
+  status: completed
+  path: subagents/SA-0005-recovery
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0006
+  role: qa
+  engine: codex
+  status: completed
+  path: subagents/SA-0006-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0007
+  role: reviewer
+  engine: codex
+  status: completed
+  path: subagents/SA-0007-reviewer
   sandboxed: false
   sandbox_summary: host
 git:
