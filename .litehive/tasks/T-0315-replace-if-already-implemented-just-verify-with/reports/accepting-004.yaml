@@ -1,0 +1,45 @@
+task_id: T-0315
+step: accepting
+verdict: pass
+source: agent
+summary: 'Accepted after filesystem verification. Confirmed in litehive/agents/_prompts.py
+  that the implementing-stage clause now requires running `git diff main...HEAD` before
+  assuming work is already implemented, tells SWE to implement from scratch when the
+  diff is empty regardless of prior stage reports, and only allows skipping implementation
+  when the diff shows the expected changes and the acceptance criteria are met. Confirmed
+  in tests/test_runner_workflow.py that the rendered implementing prompt asserts the
+  new `git diff main...HEAD` wording, asserts the defensive no-changes clause, and
+  asserts the old ''If the requested behavior is already implemented'' phrasing is
+  absent. Verification run: `uv run pytest -q tests/test_runner_workflow.py -k preimplemented_or_obsolete_work`
+  -> 1 passed.'
+feedback: 'Accepted after filesystem verification. Confirmed in litehive/agents/_prompts.py
+  that the implementing-stage clause now requires running `git diff main...HEAD` before
+  assuming work is already implemented, tells SWE to implement from scratch when the
+  diff is empty regardless of prior stage reports, and only allows skipping implementation
+  when the diff shows the expected changes and the acceptance criteria are met. Confirmed
+  in tests/test_runner_workflow.py that the rendered implementing prompt asserts the
+  new `git diff main...HEAD` wording, asserts the defensive no-changes clause, and
+  asserts the old ''If the requested behavior is already implemented'' phrasing is
+  absent. Verification run: `uv run pytest -q tests/test_runner_workflow.py -k preimplemented_or_obsolete_work`
+  -> 1 passed.'
+submitted_via_cli: true
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 68
+hook_results: []
+created_at: '2026-04-10T16:14:40+00:00'

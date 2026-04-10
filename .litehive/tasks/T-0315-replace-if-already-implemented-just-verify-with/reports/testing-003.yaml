@@ -1,0 +1,45 @@
+task_id: T-0315
+step: testing
+verdict: pass
+source: agent
+summary: 'QA verified T-0315 against the filesystem and targeted test coverage. Inspection
+  of litehive/agents/_prompts.py shows the implementing-stage guidance now requires
+  running `git diff main...HEAD` before assuming work is already implemented, instructs
+  SWE to implement from scratch when no diff exists, and only allows skipping implementation
+  when the diff shows the expected changes and acceptance criteria are met. Inspection
+  of tests/test_runner_workflow.py confirms the rendered prompt test now asserts the
+  new `git diff main...HEAD` wording, asserts the defensive no-changes clause, and
+  asserts the old ''If the requested behavior is already implemented'' phrasing is
+  absent. Verification run: `pytest -q tests/test_runner_workflow.py -q` exited 0
+  and the suite passed. Result: acceptance criteria for the testing stage are satisfied.'
+feedback: 'QA verified T-0315 against the filesystem and targeted test coverage. Inspection
+  of litehive/agents/_prompts.py shows the implementing-stage guidance now requires
+  running `git diff main...HEAD` before assuming work is already implemented, instructs
+  SWE to implement from scratch when no diff exists, and only allows skipping implementation
+  when the diff shows the expected changes and acceptance criteria are met. Inspection
+  of tests/test_runner_workflow.py confirms the rendered prompt test now asserts the
+  new `git diff main...HEAD` wording, asserts the defensive no-changes clause, and
+  asserts the old ''If the requested behavior is already implemented'' phrasing is
+  absent. Verification run: `pytest -q tests/test_runner_workflow.py -q` exited 0
+  and the suite passed. Result: acceptance criteria for the testing stage are satisfied.'
+submitted_via_cli: true
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 221
+hook_results: []
+created_at: '2026-04-10T16:13:32+00:00'

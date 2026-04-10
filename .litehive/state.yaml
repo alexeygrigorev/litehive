@@ -1,8 +1,7 @@
-active_task_id: T-0314
+active_task_id: T-0315
 active_task_ids: []
 mode: implementation
 queue:
-- T-0315
 - T-0291
 - T-0292
 - T-0293

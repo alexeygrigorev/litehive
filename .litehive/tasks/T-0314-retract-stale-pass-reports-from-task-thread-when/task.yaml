@@ -8,15 +8,15 @@ task_type: null
 model: null
 mode: implementation
 pipeline_mode: full
-status: in_progress
+status: done
 flag_reason: null
 flag_count: 0
-pipeline_status: commit_to_git
+pipeline_status: done
 priority: medium
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-10T14:54:49+00:00'
-updated_at: '2026-04-10T16:02:00+00:00'
+updated_at: '2026-04-10T16:02:01+00:00'
 goal: "T-0240's confirmation-bias loop was amplified because a single hallucinated\
   \ 'Implementation Complete' report from 2026-04-09 stayed in the task's discussion\
   \ thread forever and was fed to every subsequent SWE as authoritative context. The\
@@ -77,9 +77,9 @@ subagents:
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0314 retract-stale-pass-reports-from-task-thread-when'
-  commit_sha: null
-  checkpoint_base_sha: null
-  checkpoint_attempts: 0
+  commit_sha: c0ef2783f6bef5f4445d10c90e20fc9baa2e4f79
+  checkpoint_base_sha: 4ac32518c8f3bbdd70f734f4635cf6674e032f58
+  checkpoint_attempts: 1
   rolled_back_checkpoint_attempt: null
   merge_agent_attempts: 0
   worktree_path: null

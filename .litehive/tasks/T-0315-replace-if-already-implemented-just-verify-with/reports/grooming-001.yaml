@@ -1,0 +1,62 @@
+task_id: T-0315
+step: grooming
+verdict: pass
+source: agent
+summary: 'Grooming pass. Verified by repository inspection that the change is narrowly
+  scoped and acceptance criteria are actionable. Evidence: `litehive/agents/_prompts.py`
+  currently emits the old implementing-stage clause ''If the requested behavior is
+  already implemented, do not exit silently...'', so the prompt source needs a wording
+  change there. `tests/test_runner_workflow.py` contains a prompt-rendering regression
+  test that currently asserts the old phrase, so that test is the correct minimum
+  regression surface to update. `tests/test_task_commands_and_daemon.py` already demonstrates
+  the stale-report risk this task is addressing by asserting that a requeued implementing
+  prompt withholds a stale ''Implementation Complete'' message after filesystem validation.
+  Tests run in grooming: none; this stage was repo/task shaping only.'
+feedback: "Grooming pass. Verified by repository inspection that the change is narrowly\
+  \ scoped and acceptance criteria are actionable. Evidence: `litehive/agents/_prompts.py`\
+  \ currently emits the old implementing-stage clause 'If the requested behavior is\
+  \ already implemented, do not exit silently...', so the prompt source needs a wording\
+  \ change there. `tests/test_runner_workflow.py` contains a prompt-rendering regression\
+  \ test that currently asserts the old phrase, so that test is the correct minimum\
+  \ regression surface to update. `tests/test_task_commands_and_daemon.py` already\
+  \ demonstrates the stale-report risk this task is addressing by asserting that a\
+  \ requeued implementing prompt withholds a stale 'Implementation Complete' message\
+  \ after filesystem validation. Tests run in grooming: none; this stage was repo/task\
+  \ shaping only.\n\nImplementation plan: 1. Update the implementing-stage prompt\
+  \ text in `litehive/agents/_prompts.py` so SWE must first run `git diff main...HEAD`\
+  \ before assuming work is already implemented; if the diff is empty, implement from\
+  \ scratch regardless of prior reports; only skip implementation when the diff shows\
+  \ the expected changes and the acceptance criteria are met. 2. Keep the clause defensive\
+  \ by default and remove wording that lets SWE rely on thread history alone. 3. Update\
+  \ the focused prompt regression in `tests/test_runner_workflow.py` to assert the\
+  \ new `git diff main...HEAD` language and assert the old phrase is absent. 4. Run\
+  \ the focused pytest slice covering that prompt-rendering test and expand only if\
+  \ the changed area requires it.\n\nTASK_UPDATE:\n  pm_complexity: simple\n  planned_effort:\
+  \ xs\n  plan:\n    - Rewrite the implementing-stage 'already implemented' guidance\
+  \ in `litehive/agents/_prompts.py` to require a filesystem-grounded `git diff main...HEAD`\
+  \ check before skipping implementation.\n    - Preserve the defensive default: if\
+  \ there is no diff evidence, implement from scratch and do not trust prior stage\
+  \ reports.\n    - Update the prompt-rendering regression test in `tests/test_runner_workflow.py`\
+  \ to assert the new clause and reject the old wording.\n    - Run the targeted pytest\
+  \ coverage for the prompt change and report the exact verification evidence.\n"
+submitted_via_cli: true
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 166
+hook_results: []
+created_at: '2026-04-10T16:05:08+00:00'

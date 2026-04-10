@@ -1,0 +1,97 @@
+task_id: T-0315
+step: implementing
+verdict: pass
+source: agent
+summary: 'Updated the implementing-stage prompt in litehive/agents/_prompts.py so
+  the preimplemented-work decision is now filesystem-grounded: it tells SWE to run
+  git diff main...HEAD before assuming work is already implemented, to implement from
+  scratch if that diff is empty regardless of prior stage reports, and to skip implementation
+  only when the diff shows the expected changes and the acceptance criteria are met.
+  Updated tests/test_runner_workflow.py to render the implementing prompt for a sample
+  task and assert the new git diff main...HEAD wording is present while the old If
+  the requested behavior is already implemented phrasing is absent. Verified with
+  uv run pytest -q tests/test_runner_workflow.py -k preimplemented_or_obsolete_work
+  (1 passed), uv run ruff check --select E402,F401 litehive tests (passed), uv run
+  pytest -q (992 passed), and the forbidden-noqa changed-path guard command from the
+  stage instructions (passed with no matches). Also attempted litehive report twice,
+  but the CLI currently crashes with AttributeError: Namespace object has no attribute
+  files_changed in litehive/cli/report.py.'
+feedback: "Runner hook `after_implementing` `uv run ruff check --select E402,F401\
+  \ litehive tests` passed with exit code 0 (artifact: `artifacts/after_implementing-001.yaml`).\n\
+  \nRunner hook `after_implementing` `if [ -n \"${LITEHIVE_CHANGED_PATHS:-}\" ] \\\
+  \n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" | grep -q . \\\n  && printf '%s\\\
+  n' \"$LITEHIVE_CHANGED_PATHS\" \\\n    | xargs -r -d '\\n' git grep -nE 'noqa:.*F401|noqa:.*F403|ruff:\\\
+  s*noqa:\\s*F401|ruff:\\s*noqa:\\s*F403' --; then\n  echo 'Forbidden noqa F401/F403\
+  \ suppression found.'\n  exit 1\nfi` passed with exit code 0 (artifact: `artifacts/after_implementing-002.yaml`).\n\
+  \nUpdated the implementing-stage prompt in litehive/agents/_prompts.py so the preimplemented-work\
+  \ decision is now filesystem-grounded: it tells SWE to run git diff main...HEAD\
+  \ before assuming work is already implemented, to implement from scratch if that\
+  \ diff is empty regardless of prior stage reports, and to skip implementation only\
+  \ when the diff shows the expected changes and the acceptance criteria are met.\
+  \ Updated tests/test_runner_workflow.py to render the implementing prompt for a\
+  \ sample task and assert the new git diff main...HEAD wording is present while the\
+  \ old If the requested behavior is already implemented phrasing is absent. Verified\
+  \ with uv run pytest -q tests/test_runner_workflow.py -k preimplemented_or_obsolete_work\
+  \ (1 passed), uv run ruff check --select E402,F401 litehive tests (passed), uv run\
+  \ pytest -q (992 passed), and the forbidden-noqa changed-path guard command from\
+  \ the stage instructions (passed with no matches). Also attempted litehive report\
+  \ twice, but the CLI currently crashes with AttributeError: Namespace object has\
+  \ no attribute files_changed in litehive/cli/report.py."
+submitted_via_cli: true
+files_changed:
+- litehive/agents/_prompts.py
+- tests/test_runner_workflow.py
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings:
+- 'runner hook passed: `after_implementing` `uv run ruff check --select E402,F401
+  litehive tests` (artifact: `artifacts/after_implementing-001.yaml`)'
+- "runner hook passed: `after_implementing` `if [ -n \"${LITEHIVE_CHANGED_PATHS:-}\"\
+  \ ] \\\n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" | grep -q . \\\n  && printf\
+  \ '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" \\\n    | xargs -r -d '\\n' git grep -nE 'noqa:.*F401|noqa:.*F403|ruff:\\\
+  s*noqa:\\s*F401|ruff:\\s*noqa:\\s*F403' --; then\n  echo 'Forbidden noqa F401/F403\
+  \ suppression found.'\n  exit 1\nfi` (artifact: `artifacts/after_implementing-002.yaml`)"
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 283
+hook_results:
+- point: after_implementing
+  command: uv run ruff check --select E402,F401 litehive tests
+  reject_on_failure: true
+  description: null
+  exit_code: 0
+  status: passed
+  artifact: artifacts/after_implementing-001.yaml
+  stdout: 'All checks passed!
+
+    '
+  stderr: 'warning: `VIRTUAL_ENV=/home/alexey/git/litehive/.venv` does not match the
+    project environment path `.venv` and will be ignored; use `--active` to target
+    the active environment instead
+
+    '
+- point: after_implementing
+  command: "if [ -n \"${LITEHIVE_CHANGED_PATHS:-}\" ] \\\n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\"\
+    \ | grep -q . \\\n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" \\\n    | xargs\
+    \ -r -d '\\n' git grep -nE 'noqa:.*F401|noqa:.*F403|ruff:\\s*noqa:\\s*F401|ruff:\\\
+    s*noqa:\\s*F403' --; then\n  echo 'Forbidden noqa F401/F403 suppression found.'\n\
+    \  exit 1\nfi"
+  reject_on_failure: true
+  description: null
+  exit_code: 0
+  status: passed
+  artifact: artifacts/after_implementing-002.yaml
+  stdout: ''
+  stderr: ''
+created_at: '2026-04-10T16:09:50+00:00'
