@@ -481,14 +481,15 @@ def test_claude_engine_in_registry() -> None:
 def test_goz_engine_in_registry() -> None:
     engine = get_engine("goz")
     assert engine.name == "goz"
-    assert engine.capabilities.supports_model_override is False
+    assert engine.capabilities.supports_model_override is True
     assert engine.capabilities.transcript_format == "jsonl"
 
 
-def test_goz_build_invocation_includes_resume_session(tmp_path: Path) -> None:
+def test_goz_build_invocation_includes_model_and_resume_session(tmp_path: Path) -> None:
     invocation = get_engine("goz").build_invocation(
         "continue please",
         tmp_path,
+        model="glm-5-run",
         resume_session_id="goz-session-123",
     )
 
@@ -498,6 +499,8 @@ def test_goz_build_invocation_includes_resume_session(tmp_path: Path) -> None:
         "run",
         "--format",
         "json",
+        "--model",
+        "glm-5-run",
         "--resume-session",
         "goz-session-123",
         "continue please",

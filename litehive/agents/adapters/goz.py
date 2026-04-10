@@ -22,7 +22,7 @@ class GozCLIAdapter(ExternalCLIAdapter):
     DEFAULT_NAME = "goz"
     DEFAULT_BINARY = "goz"
     DEFAULT_CAPABILITIES = ExternalCLIAdapter.DEFAULT_CAPABILITIES.__class__(
-        supports_model_override=False,
+        supports_model_override=True,
         strips_environment=False,
         transcript_format="jsonl",
     )
