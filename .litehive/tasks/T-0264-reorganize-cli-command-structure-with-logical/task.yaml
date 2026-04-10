@@ -7,15 +7,15 @@ engine: null
 model: null
 mode: implementation
 pipeline_mode: full
-status: in_progress
+status: merge_failed
 flag_reason: null
 flag_count: 0
-pipeline_status: commit_to_git
+pipeline_status: merge_failed
 priority: medium
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-09T15:00:33+00:00'
-updated_at: '2026-04-10T00:27:44+00:00'
+updated_at: '2026-04-10T00:30:00+00:00'
 goal: Restructure the CLI for clarity. Group commands under task/queue/engine/worktree/archive/import.
   Rename daemon to start/stop/restart. Remove internal commands from public API. Keep
   backward compat aliases temporarily.
@@ -73,6 +73,13 @@ subagents:
   path: subagents/SA-0004-reviewer
   sandboxed: false
   sandbox_summary: host
+- id: SA-0005
+  role: merge-resolver
+  engine: codex
+  status: completed
+  path: subagents/SA-0005-merge-resolver
+  sandboxed: false
+  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0264 reorganize-cli-command-structure-with-logical'
@@ -80,7 +87,7 @@ git:
   checkpoint_base_sha: null
   checkpoint_attempts: 0
   rolled_back_checkpoint_attempt: null
-  merge_agent_attempts: 0
+  merge_agent_attempts: 1
   worktree_path: null
 retry_policy:
   max_retries: null

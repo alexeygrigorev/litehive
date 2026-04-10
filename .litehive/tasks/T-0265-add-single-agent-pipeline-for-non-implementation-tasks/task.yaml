@@ -6,13 +6,16 @@ task_type: null
 engine: null
 model: null
 mode: implementation
-status: queued
-pipeline_status: backlog
+pipeline_mode: full
+status: in_progress
+flag_reason: null
+flag_count: 0
+pipeline_status: commit_to_git
 priority: medium
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-04T18:14:37+00:00'
-updated_at: '2026-04-04T18:16:02+00:00'
+updated_at: '2026-04-10T00:41:57+00:00'
 goal: 'Add two pipeline modes: ''full'' (grooming, implementing, testing, accepting,
   commit_to_git) and ''single'' (one agent executes, then done). Tasks default to
   full. Use --mode single for simple work like research, docs, config changes.'
@@ -25,7 +28,35 @@ acceptance_criteria:
 constraints: []
 plan: []
 human_checkpoints: []
-subagents: []
+subagents:
+- id: SA-0001
+  role: planner
+  engine: codex
+  status: completed
+  path: subagents/SA-0001-planner
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0002
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0002-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0003
+  role: qa
+  engine: codex
+  status: completed
+  path: subagents/SA-0003-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0004
+  role: reviewer
+  engine: codex
+  status: completed
+  path: subagents/SA-0004-reviewer
+  sandboxed: false
+  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0143 add-single-agent-pipeline-for-non-implementation-tasks'
@@ -33,7 +64,11 @@ git:
   checkpoint_base_sha: null
   checkpoint_attempts: 0
   rolled_back_checkpoint_attempt: null
+  merge_agent_attempts: 0
   worktree_path: null
 retry_policy:
   max_retries: null
+  stage_retry_limit: null
 created_from: null
+upstream_origin: null
+github_origin: null

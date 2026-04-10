@@ -1,0 +1,89 @@
+task_id: T-0265
+step: grooming
+verdict: pass
+source: agent
+summary: 'VERDICT: PASS'
+feedback: "VERDICT: PASS\nSUMMARY: Grooming complete. The runner already supports\
+  \ `pipeline_mode: single` internally, but the user-facing contract does not match\
+  \ the task goal yet: `litehive add` still exposes single mode as `--single`, while\
+  \ `--mode` is currently used for task record mode (`implementation|tasks`). The\
+  \ implementation work should therefore focus on the CLI/API migration, preserving\
+  \ existing task-mode behavior under a replacement flag or compatibility path, and\
+  \ tightening single-mode prompt semantics so one-agent runs work cleanly for research/docs/config\
+  \ tasks as well as code changes.\n\nWhat was verified\n- `TaskRecord.pipeline_mode`\
+  \ already exists and defaults to `full` in `litehive/models/task_models.py`.\n-\
+  \ `create_task(..., pipeline_mode=...)` already validates and persists `single|full`\
+  \ in `litehive/tasks/crud.py`.\n- `TaskExecutionRunner` already switches to `_SINGLE_STEPS_FROM`\
+  \ / `_SINGLE_ROUTES` and skips `commit_to_git` when the implementing report has\
+  \ no `files_changed` in `litehive/pipeline/core.py`.\n- Existing tests already cover\
+  \ internal single-mode routing in `tests/test_runner_workflow.py`.\n- The remaining\
+  \ gap is the CLI and product contract: `litehive add` currently uses `--single`,\
+  \ while `--mode` still means task record mode in `litehive/cli/parsers/add.py` and\
+  \ `litehive/cli/tasks.py`.\n- Current single-mode execution still uses the `implementing`\
+  \ stage prompt, which is workable for code tasks but should be made explicit for\
+  \ one-agent non-implementation tasks.\n\nTests run\n- No automated tests were run\
+  \ in grooming. Verification was by direct source inspection of task models, CLI\
+  \ add flow, runner state machine, prompt construction, and existing runner tests.\n\
+  \nExecution plan\n1. Rework `litehive add` so `--mode` selects pipeline mode (`single|full`,\
+  \ default `full`) and preserve current task-record mode selection through a separate\
+  \ flag or explicit compatibility path.\n2. Update add-command tests to cover `--mode\
+  \ single`, `--mode full`, default full behavior, and the preserved ability to create\
+  \ `tasks`-mode records.\n3. Tighten single-mode prompt/execution semantics so the\
+  \ lone agent is told it owns the full task outcome using the goal and acceptance\
+  \ criteria directly, without assuming downstream `testing` or `accepting` stages.\n\
+  4. Extend runner tests around single mode to prove: one execution for no-change\
+  \ tasks, implementing+commit path for changed tasks, and no regression to full-mode\
+  \ stage order.\n5. Update help text and pipeline docs so the public workflow consistently\
+  \ describes task pipeline modes and when to use `single`.\n\nTASK_UPDATE:\n  acceptance_criteria:\n\
+  \    - \"`litehive add --mode single ...` creates a task with `pipeline_mode: single`,\
+  \ and `litehive add` without `--mode` or with `--mode full` creates a task with\
+  \ `pipeline_mode: full`.\"\n    - \"Repurposing `litehive add --mode` for pipeline\
+  \ selection does not remove the existing ability to create `tasks`-mode versus `implementation`-mode\
+  \ task records.\"\n    - \"Running a `pipeline_mode: single` task executes one worker\
+  \ stage using the task goal and acceptance criteria as its contract, skips grooming/testing/accepting,\
+  \ and finishes at `done` when no code changes are reported.\"\n    - \"When a single-mode\
+  \ run reports code changes, it still routes through `commit_to_git`; when no code\
+  \ changes are reported, it does not create a commit stage report.\"\n    - \"Full-mode\
+  \ tasks continue to follow the existing `grooming -> implementing -> testing ->\
+  \ accepting -> commit_to_git` pipeline unchanged.\"\n  constraints:\n    - \"Keep\
+  \ scope limited to task pipeline mode selection, single-run prompt semantics, and\
+  \ the minimum CLI/docs/test updates required by that contract.\"\n    - \"Do not\
+  \ introduce additional pipeline modes or broader task-routing refactors.\"\n  plan:\n\
+  \    - \"Repurpose `litehive add --mode` to mean `single|full` and preserve task\
+  \ record mode selection with a separate flag or compatibility alias.\"\n    - \"\
+  Adjust single-mode prompt generation so one-agent tasks are framed as end-to-end\
+  \ execution rather than normal staged implementation only.\"\n    - \"Add focused\
+  \ CLI and runner regression tests for both pipeline modes.\"\n    - \"Update help\
+  \ text and docs to reflect the new public interface.\"\n  pm_complexity: moderate\n\
+  \  planned_effort: m\n\nSTAGE_RESULT:\n{\"verdict\":\"pass\",\"summary\":\"Grooming\
+  \ complete \u2014 internal single-mode pipeline already exists; implementation should\
+  \ focus on exposing `--mode single|full`, preserving task-record mode selection,\
+  \ tightening single-agent prompt semantics, and adding regression coverage.\",\"\
+  files_changed\":[],\"tests\":{\"added\":0,\"passing\":0},\"warnings\":[],\"follow_up_tasks\"\
+  :[],\"acceptance_criteria\":[\"`litehive add --mode single` persists `pipeline_mode:\
+  \ single` while default/`--mode full` persists `pipeline_mode: full`.\",\"Existing\
+  \ task-record mode selection remains available after the CLI change.\",\"Single\
+  \ mode runs one worker stage plus optional `commit_to_git` only when changes exist,\
+  \ otherwise it completes at `done`.\",\"Full mode remains on the existing multi-stage\
+  \ pipeline unchanged.\"]}"
+submitted_via_cli: true
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 211
+hook_results: []
+created_at: '2026-04-10T00:34:00+00:00'

@@ -1,9 +1,8 @@
-active_task_id: T-0264
+active_task_id: T-0265
 active_task_ids: []
 mode: implementation
 queue:
 - T-0263
-- T-0265
 - T-0266
 - T-0268
 - T-0269
@@ -23,3 +22,5 @@ unmerged_worktrees:
   worktree_path: .litehive/worktrees/T-0234-add-all-done-flag-to-litehive-archive-command
 - task_id: T-0223
   worktree_path: .litehive/worktrees/T-0223-web-dashboard-daemon-control-api-start-stop
+- task_id: T-0264
+  worktree_path: .litehive/worktrees/T-0264-reorganize-cli-command-structure-with-logical
