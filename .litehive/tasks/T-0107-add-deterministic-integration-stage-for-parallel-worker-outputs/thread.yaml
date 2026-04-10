@@ -264,3 +264,211 @@
     report: .litehive/tasks/T-0107-add-deterministic-integration-stage-for-parallel-worker-outputs/recovery/recovery-003.yaml'
   files_changed: []
   created_at: '2026-04-09T09:26:04+00:00'
+- role: planner
+  step: grooming
+  verdict: pass
+  message: "GROOMING PASS \u2014 task scope is now re-established in the task record.\n\
+    \nWhat I verified:\n- The intended feature is still coherent with the current\
+    \ repo: the parallel pipeline exists in , config model exists in , and the current\
+    \ worktree already contains implementation/tests referencing , , and .\n- The\
+    \ source-of-truth task record was still blank despite the earlier grooming transcript:\
+    \  had empty , , , , and null PM sizing. That must be corrected for deterministic\
+    \ routing.\n- There is a downstream acceptance-stage blocker recorded separately:\
+    \  failed on F401 [*] `litehive.pipeline._parallel.IntegrationCheckResult` imported\
+    \ but unused\n  --> tests/test_parallel_execution.py:30:5\n   |\n29 | from litehive.pipeline._parallel\
+    \ import (\n30 |     IntegrationCheckResult,\n   |     ^^^^^^^^^^^^^^^^^^^^^^\n\
+    31 |     IntegrationResult,\n32 |     _clear_parallel_active_tasks,\n   |\nhelp:\
+    \ Remove unused import: `litehive.pipeline._parallel.IntegrationCheckResult`\n\
+    \nFound 1 error.\n[*] 1 fixable with the `--fix` option. because of an unused\
+    \ import in . That is implementation/acceptance work, not a grooming blocker.\n\
+    \nScope decision:\nThis task is specifically about adding a deterministic post-merge\
+    \ integration verification stage to the existing parallel task pipeline introduced\
+    \ by T-0129. It is not about general parallel subagents, rollback, blame attribution,\
+    \ or recovery automation.\n\nTASK_UPDATE:\nparallel_integration_checkparallel_batch_completeparallel_integration_failedparallel_integration_checkrun_parallel_tasks().litehive/logs/parallel-integration/parallel_integration_failedParallelRunSummary\n\
+    \nNotes for the next agent:\n- Treat the acceptance-hook lint failure as the current\
+    \ implementation blocker, not a task-shaping issue.\n- No follow-up task is needed\
+    \ from grooming; rollback, recovery automation, and per-task blame remain explicitly\
+    \ out of scope."
+  files_changed: []
+  created_at: '2026-04-10T05:14:36+00:00'
+- role: planner
+  step: grooming
+  verdict: pass
+  message: "GROOMING PASS - task scope is now re-established in the task record.\n\
+    \nWhat I verified:\n- The intended feature is still coherent with the current\
+    \ repo: the parallel pipeline exists in litehive/pipeline/_parallel.py, the config\
+    \ model exists in litehive/config/model.py, and the current worktree already contains\
+    \ implementation/tests referencing parallel_integration_check, IntegrationCheckResult,\
+    \ and parallel_integration_failed.\n- The source-of-truth task record was still\
+    \ blank despite the earlier grooming transcript: .litehive/tasks/T-0107-add-deterministic-integration-stage-for-parallel-worker-outputs/task.yaml\
+    \ had empty goal, acceptance_criteria, constraints, and plan, plus null PM sizing.\
+    \ That must be corrected for deterministic routing.\n- There is a downstream acceptance-stage\
+    \ blocker recorded separately: before_pm_acceptance failed on uv run ruff check\
+    \ --select E402,F401 litehive tests because of an unused import in tests/test_parallel_execution.py.\
+    \ That is implementation/acceptance work, not a grooming blocker.\n\nScope decision:\n\
+    This task is specifically about adding a deterministic post-merge integration\
+    \ verification stage to the existing parallel task pipeline introduced by T-0129.\
+    \ It is not about general parallel subagents, rollback, blame attribution, or\
+    \ recovery automation.\n\nTASK_UPDATE:\n```yaml\ngoal: >\n  Add a post-merge integration\
+    \ verification stage to the parallel execution pipeline.\n  After all parallel\
+    \ tasks are merged to main (Phase 3), run a configurable integration\n  check\
+    \ on the combined merged state. If the check fails, report which tasks were in\n\
+    \  the batch, mark the batch result as integration_failed, and leave actionable\
+    \ evidence\n  for recovery. The stage must be deterministic: the same merged state\
+    \ and check command\n  produce the same verdict.\n\nacceptance_criteria:\n  -\
+    \ \"After all parallel tasks merge to main, an integration verification step runs\
+    \ automatically on the combined merged state before the batch is marked complete.\"\
+    \n  - \"The integration check is configurable via config.yaml using parallel_integration_check,\
+    \ with a no-op default when unconfigured.\"\n  - \"If the integration check passes,\
+    \ the ParallelRunSummary reports stop_reason parallel_batch_complete and tasks\
+    \ already merged in the batch remain done.\"\n  - \"If the integration check fails,\
+    \ the ParallelRunSummary reports stop_reason parallel_integration_failed, a batch\
+    \ integration report captures the failure output, and each task in the merged\
+    \ batch records the integration failure in its journal.\"\n  - \"The integration\
+    \ report includes batch task IDs, merge order, check command, exit code, stdout,\
+    \ stderr, and timestamp so an operator or recovery agent can diagnose the failure.\"\
+    \n  - \"Running the same integration check against the same merged state is idempotent\
+    \ and produces the same verdict.\"\n  - \"Focused automated tests cover: configured\
+    \ check passes, configured check fails, and no integration check configured (no-op).\"\
+    \n\nconstraints:\n  - \"Keep changes scoped to the parallel pipeline and its configuration;\
+    \ do not modify the sequential single-task flow.\"\n  - \"Do not require rollback\
+    \ or recovery-pipeline changes in this task; leave actionable evidence instead.\"\
+    \n  - \"Run the integration check on the main worktree after merges, not in a\
+    \ separate worktree.\"\n\nplan:\n  - \"Add optional parallel_integration_check\
+    \ to LitehiveConfig.\"\n  - \"Extend run_parallel_tasks() with a post-merge integration\
+    \ phase that runs after the merge loop and before final batch completion is reported.\"\
+    \n  - \"Capture exit code, stdout/stderr, timestamp, task IDs, and merge order\
+    \ in a batch integration report under .litehive/logs/parallel-integration/.\"\n\
+    \  - \"If the check fails, set stop_reason to parallel_integration_failed and\
+    \ append journal evidence to each merged task.\"\n  - \"Include integration-check\
+    \ result data in ParallelRunSummary.\"\n  - \"Add focused tests for pass, fail,\
+    \ and unconfigured/no-op behavior.\"\n\npm_complexity: moderate\nplanned_effort:\
+    \ m\n```\n\nNotes for the next agent:\n- Treat the acceptance-hook lint failure\
+    \ as the current implementation blocker, not a task-shaping issue.\n- No follow-up\
+    \ task is needed from grooming; rollback, recovery automation, and per-task blame\
+    \ remain explicitly out of scope."
+  files_changed: []
+  created_at: '2026-04-10T05:15:02+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Implementation remains in place for the deterministic post-merge parallel
+    integration stage; this pass addressed the current implementation blocker by removing
+    the unused IntegrationCheckResult import from tests/test_parallel_execution.py
+    that was causing the acceptance lint gate to fail. Verified the task-specific
+    code paths are still present in litehive/config/model.py and litehive/pipeline/_parallel.py,
+    including parallel_integration_check config support, IntegrationCheckResult on
+    ParallelRunSummary, post-merge integration check execution, integration report
+    writing under .litehive/logs/parallel-integration/, and parallel_integration_failed
+    stop_reason handling.\n\nChecks run:\n- uv run ruff check --select E402,F401 litehive
+    tests -> PASS\n- uv run pytest tests/test_parallel_execution.py -q -> PASS (20
+    passed in 2.27s)\n- uv run pytest tests/test_config_and_run_cli.py -q -> FAIL,
+    but failure is unrelated to this task: test_engine_status_command_scopes_to_single_engine_and_shows_codex_quota
+    expected output containing used_percent: 100.0 and current output instead reports
+    quota fields as 5h_used: 100% / weekly_used: 34%.\n\nAcceptance evidence for this
+    task remains covered by tests/test_parallel_execution.py: configured integration
+    check pass path, configured integration check fail path with journal/report evidence,
+    no-op when unconfigured, and direct _run_integration_check output/report capture.
+    The only code change in this stage was the test import cleanup needed to satisfy
+    the required lint gate.'
+  files_changed: []
+  created_at: '2026-04-10T05:17:54+00:00'
+- role: qa
+  step: testing
+  verdict: pass
+  message: "QA PASS. Verified the deterministic post-merge integration stage is implemented\
+    \ and behaves as required. Code review confirmed config support at litehive/config/model.py:79-80,\
+    \ IntegrationCheckResult and ParallelRunSummary.integration_check at litehive/pipeline/_parallel.py:43-62,\
+    \ report generation in _run_integration_check at litehive/pipeline/_parallel.py:392-440,\
+    \ and Phase 4 execution after deterministic merge ordering in run_parallel_tasks\
+    \ at litehive/pipeline/_parallel.py:518-585. Focused automated evidence: All checks\
+    \ passed! passed; ....................                                       \
+    \              [100%]\n20 passed in 2.18s passed (20 passed in 2.25s). The new\
+    \ tests in tests/test_parallel_execution.py:452-551 cover configured pass, configured\
+    \ fail, unconfigured no-op, and direct output/report capture. Evidence against\
+    \ acceptance criteria: pass path keeps stop_reason  and writes a batch report;\
+    \ fail path sets , captures report fields including task_ids/command/success,\
+    \ and records journal evidence; unconfigured path skips report creation; direct\
+    \ check test verifies stdout capture plus task_ids, merge_order, command, and\
+    \ persisted YAML report content. I also reran ....F......................................................\
+    \              [100%]\n=================================== FAILURES ===================================\n\
+    ___ test_engine_status_command_scopes_to_single_engine_and_shows_codex_quota ___\n\
+    \ntmp_path = PosixPath('/tmp/pytest-of-alexey/pytest-7708/test_engine_status_command_sco0')\n\
+    capsys = <_pytest.capture.CaptureFixture object at 0x7768a7373110>\nmonkeypatch\
+    \ = <_pytest.monkeypatch.MonkeyPatch object at 0x7768a751a470>\n\n    def test_engine_status_command_scopes_to_single_engine_and_shows_codex_quota(\n\
+    \        tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch\n\
+    \    ) -> None:\n        ensure_workspace(tmp_path, LitehiveConfig(default_engine=\"\
+    codex\"))\n    \n        from litehive.cli import _cmd_engine\n        from litehive.engines.quota.codex_quota\
+    \ import CodexQuotaStatus, CodexQuotaWindow\n    \n        def fake_check_codex_quota():\n\
+    \            return CodexQuotaStatus(\n                limit_reached=True,\n \
+    \               primary_window=CodexQuotaWindow(\n                    used_percent=100.0,\n\
+    \                    reset_at=\"2026-04-09T05:00:00Z\",\n                ),\n\
+    \                secondary_window=CodexQuotaWindow(\n                    used_percent=34.0,\n\
+    \                    reset_at=\"2026-04-14T00:00:00Z\",\n                ),\n\
+    \                checked_at=1.0,\n            )\n    \n        monkeypatch.setattr(\"\
+    litehive.cli.engine.check_codex_quota\", fake_check_codex_quota)\n    \n     \
+    \   exit_code = _cmd_engine(\n            argparse.Namespace(\n              \
+    \  workspace=tmp_path,\n                engine_action=\"status\",\n          \
+    \      engine_name=\"codex\",\n            )\n        )\n        output = capsys.readouterr().out\n\
+    \    \n        assert exit_code == 0\n        assert \"engine: codex\" in output\n\
+    \        assert \"available: no\" in output\n        assert \"usage_used: 100\"\
+    \ in output\n        assert \"usage_limit: 100\" in output\n>       assert \"\
+    used_percent: 100.0\" in output\nE       AssertionError: assert 'used_percent:\
+    \ 100.0' in 'workspace: /tmp/pytest-of-alexey/pytest-7708/test_engine_status_command_sco0\\\
+    nengine: codex\\navailable: no\\nsource: p...rcent\\nusage_reset_at: 2026-04-14T00:00:00Z\\\
+    n\\nquota: proactive\\n5h_used: 100%\\nweekly_used: 34%\\nlimit_reached: yes\\\
+    n'\n\ntests/test_config_and_run_cli.py:189: AssertionError\n===========================\
+    \ short test summary info ============================\nFAILED tests/test_config_and_run_cli.py::test_engine_status_command_scopes_to_single_engine_and_shows_codex_quota\n\
+    1 failed, 58 passed in 12.33s; it still has one unrelated pre-existing failure\
+    \ in test_engine_status_command_scopes_to_single_engine_and_shows_codex_quota\
+    \ expecting  while current output shows  / . That failure is outside the parallel\
+    \ integration code path and does not invalidate this task."
+  files_changed: []
+  created_at: '2026-04-10T05:19:20+00:00'
+- role: qa
+  step: testing
+  verdict: pass
+  message: 'QA PASS. Verified the deterministic post-merge integration stage is implemented
+    and behaves as required. Code review confirmed config support at litehive/config/model.py:79-80,
+    IntegrationCheckResult and ParallelRunSummary.integration_check at litehive/pipeline/_parallel.py:43-62,
+    report generation in _run_integration_check at litehive/pipeline/_parallel.py:392-440,
+    and Phase 4 execution after deterministic merge ordering in run_parallel_tasks
+    at litehive/pipeline/_parallel.py:518-585. Focused automated evidence: uv run
+    ruff check --select E402,F401 litehive tests passed; uv run pytest tests/test_parallel_execution.py
+    -q passed (20 passed in 2.25s). The new tests in tests/test_parallel_execution.py:452-551
+    cover configured pass, configured fail, unconfigured no-op, and direct output/report
+    capture. Evidence against acceptance criteria: pass path keeps stop_reason parallel_batch_complete
+    and writes a batch report; fail path sets parallel_integration_failed, captures
+    report fields including task_ids/command/success, and records journal evidence;
+    unconfigured path skips report creation; direct check test verifies stdout capture
+    plus task_ids, merge_order, command, and persisted YAML report content. I also
+    reran uv run pytest tests/test_config_and_run_cli.py -q; it still has one unrelated
+    pre-existing failure in test_engine_status_command_scopes_to_single_engine_and_shows_codex_quota
+    expecting used_percent: 100.0 while current output shows 5h_used: 100% / weekly_used:
+    34%. That failure is outside the parallel integration code path and does not invalidate
+    this task.'
+  files_changed: []
+  created_at: '2026-04-10T05:19:27+00:00'
+- role: reviewer
+  step: accepting
+  verdict: pass
+  message: 'Acceptance PASS. I verified the task record is now shaped and the implementation
+    for the deterministic post-merge integration stage is present and scoped to the
+    parallel pipeline. Code evidence: litehive/config/model.py adds optional parallel_integration_check;
+    litehive/pipeline/_parallel.py adds IntegrationCheckResult and ParallelRunSummary.integration_check,
+    writes batch reports in _run_integration_check() under .litehive/logs/parallel-integration/,
+    and runs a new Phase 4 after deterministic merge ordering in run_parallel_tasks(),
+    switching stop_reason to parallel_integration_failed and appending per-task journal
+    evidence on failure. Focused verification I ran: uv run ruff check --select E402,F401
+    litehive tests -> PASS; uv run pytest tests/test_parallel_execution.py -q -> PASS
+    (20 passed in 2.69s); uv run pytest tests/test_config_and_run_cli.py -q -> FAIL
+    with the same unrelated pre-existing codex quota assertion already reported by
+    SWE/QA (expected used_percent: 100.0, actual output shows 5h_used/weekly_used).
+    Acceptance criteria coverage is satisfied by the implemented code and focused
+    tests: configured check pass keeps stop_reason parallel_batch_complete and records
+    integration_check success; configured check fail sets parallel_integration_failed,
+    writes a batch report with command/exit_code/stdout/stderr/timestamp/task_ids/merge_order,
+    and records journal evidence for merged tasks; unconfigured check is a no-op with
+    no report directory. No sequential-flow changes were introduced.'
+  files_changed: []
+  created_at: '2026-04-10T05:21:05+00:00'

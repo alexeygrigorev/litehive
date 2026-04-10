@@ -1,0 +1,63 @@
+task_id: T-0107
+step: testing
+verdict: pass
+source: agent
+summary: 'QA PASS. Verified the deterministic post-merge integration stage is implemented
+  and behaves as required. Code review confirmed config support at litehive/config/model.py:79-80,
+  IntegrationCheckResult and ParallelRunSummary.integration_check at litehive/pipeline/_parallel.py:43-62,
+  report generation in _run_integration_check at litehive/pipeline/_parallel.py:392-440,
+  and Phase 4 execution after deterministic merge ordering in run_parallel_tasks at
+  litehive/pipeline/_parallel.py:518-585. Focused automated evidence: uv run ruff
+  check --select E402,F401 litehive tests passed; uv run pytest tests/test_parallel_execution.py
+  -q passed (20 passed in 2.25s). The new tests in tests/test_parallel_execution.py:452-551
+  cover configured pass, configured fail, unconfigured no-op, and direct output/report
+  capture. Evidence against acceptance criteria: pass path keeps stop_reason parallel_batch_complete
+  and writes a batch report; fail path sets parallel_integration_failed, captures
+  report fields including task_ids/command/success, and records journal evidence;
+  unconfigured path skips report creation; direct check test verifies stdout capture
+  plus task_ids, merge_order, command, and persisted YAML report content. I also reran
+  uv run pytest tests/test_config_and_run_cli.py -q; it still has one unrelated pre-existing
+  failure in test_engine_status_command_scopes_to_single_engine_and_shows_codex_quota
+  expecting used_percent: 100.0 while current output shows 5h_used: 100% / weekly_used:
+  34%. That failure is outside the parallel integration code path and does not invalidate
+  this task.'
+feedback: 'QA PASS. Verified the deterministic post-merge integration stage is implemented
+  and behaves as required. Code review confirmed config support at litehive/config/model.py:79-80,
+  IntegrationCheckResult and ParallelRunSummary.integration_check at litehive/pipeline/_parallel.py:43-62,
+  report generation in _run_integration_check at litehive/pipeline/_parallel.py:392-440,
+  and Phase 4 execution after deterministic merge ordering in run_parallel_tasks at
+  litehive/pipeline/_parallel.py:518-585. Focused automated evidence: uv run ruff
+  check --select E402,F401 litehive tests passed; uv run pytest tests/test_parallel_execution.py
+  -q passed (20 passed in 2.25s). The new tests in tests/test_parallel_execution.py:452-551
+  cover configured pass, configured fail, unconfigured no-op, and direct output/report
+  capture. Evidence against acceptance criteria: pass path keeps stop_reason parallel_batch_complete
+  and writes a batch report; fail path sets parallel_integration_failed, captures
+  report fields including task_ids/command/success, and records journal evidence;
+  unconfigured path skips report creation; direct check test verifies stdout capture
+  plus task_ids, merge_order, command, and persisted YAML report content. I also reran
+  uv run pytest tests/test_config_and_run_cli.py -q; it still has one unrelated pre-existing
+  failure in test_engine_status_command_scopes_to_single_engine_and_shows_codex_quota
+  expecting used_percent: 100.0 while current output shows 5h_used: 100% / weekly_used:
+  34%. That failure is outside the parallel integration code path and does not invalidate
+  this task.'
+submitted_via_cli: true
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 97
+hook_results: []
+created_at: '2026-04-10T05:19:39+00:00'

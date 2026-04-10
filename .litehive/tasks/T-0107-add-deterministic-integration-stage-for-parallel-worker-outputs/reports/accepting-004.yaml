@@ -1,0 +1,61 @@
+task_id: T-0107
+step: accepting
+verdict: pass
+source: agent
+summary: 'Acceptance PASS. I verified the task record is now shaped and the implementation
+  for the deterministic post-merge integration stage is present and scoped to the
+  parallel pipeline. Code evidence: litehive/config/model.py adds optional parallel_integration_check;
+  litehive/pipeline/_parallel.py adds IntegrationCheckResult and ParallelRunSummary.integration_check,
+  writes batch reports in _run_integration_check() under .litehive/logs/parallel-integration/,
+  and runs a new Phase 4 after deterministic merge ordering in run_parallel_tasks(),
+  switching stop_reason to parallel_integration_failed and appending per-task journal
+  evidence on failure. Focused verification I ran: uv run ruff check --select E402,F401
+  litehive tests -> PASS; uv run pytest tests/test_parallel_execution.py -q -> PASS
+  (20 passed in 2.69s); uv run pytest tests/test_config_and_run_cli.py -q -> FAIL
+  with the same unrelated pre-existing codex quota assertion already reported by SWE/QA
+  (expected used_percent: 100.0, actual output shows 5h_used/weekly_used). Acceptance
+  criteria coverage is satisfied by the implemented code and focused tests: configured
+  check pass keeps stop_reason parallel_batch_complete and records integration_check
+  success; configured check fail sets parallel_integration_failed, writes a batch
+  report with command/exit_code/stdout/stderr/timestamp/task_ids/merge_order, and
+  records journal evidence for merged tasks; unconfigured check is a no-op with no
+  report directory. No sequential-flow changes were introduced.'
+feedback: 'Acceptance PASS. I verified the task record is now shaped and the implementation
+  for the deterministic post-merge integration stage is present and scoped to the
+  parallel pipeline. Code evidence: litehive/config/model.py adds optional parallel_integration_check;
+  litehive/pipeline/_parallel.py adds IntegrationCheckResult and ParallelRunSummary.integration_check,
+  writes batch reports in _run_integration_check() under .litehive/logs/parallel-integration/,
+  and runs a new Phase 4 after deterministic merge ordering in run_parallel_tasks(),
+  switching stop_reason to parallel_integration_failed and appending per-task journal
+  evidence on failure. Focused verification I ran: uv run ruff check --select E402,F401
+  litehive tests -> PASS; uv run pytest tests/test_parallel_execution.py -q -> PASS
+  (20 passed in 2.69s); uv run pytest tests/test_config_and_run_cli.py -q -> FAIL
+  with the same unrelated pre-existing codex quota assertion already reported by SWE/QA
+  (expected used_percent: 100.0, actual output shows 5h_used/weekly_used). Acceptance
+  criteria coverage is satisfied by the implemented code and focused tests: configured
+  check pass keeps stop_reason parallel_batch_complete and records integration_check
+  success; configured check fail sets parallel_integration_failed, writes a batch
+  report with command/exit_code/stdout/stderr/timestamp/task_ids/merge_order, and
+  records journal evidence for merged tasks; unconfigured check is a no-op with no
+  report directory. No sequential-flow changes were introduced.'
+submitted_via_cli: true
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 94
+hook_results: []
+created_at: '2026-04-10T05:21:13+00:00'

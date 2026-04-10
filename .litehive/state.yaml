@@ -1,9 +1,8 @@
-active_task_id: T-0280
+active_task_id: T-0107
 active_task_ids: []
 mode: implementation
 queue:
 - T-0263
-- T-0107
 pool_stop_reason: null
 next_task_number: 280
 unmerged_worktrees:
@@ -15,3 +14,5 @@ unmerged_worktrees:
   worktree_path: .litehive/worktrees/T-0264-reorganize-cli-command-structure-with-logical
 - task_id: T-0269
   worktree_path: .litehive/worktrees/T-0269-extract-engine-adapter-layer-into-heru-module
+- task_id: T-0280
+  worktree_path: .litehive/worktrees/T-0280-handle-no-op-merges-in-commit-to-git-without

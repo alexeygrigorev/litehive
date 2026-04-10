@@ -6,15 +6,15 @@ task_type: bugfix
 model: null
 mode: tasks
 pipeline_mode: full
-status: in_progress
+status: merge_failed
 flag_reason: null
 flag_count: 0
-pipeline_status: commit_to_git
+pipeline_status: merge_failed
 priority: medium
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-09T21:39:19+00:00'
-updated_at: '2026-04-10T05:07:21+00:00'
+updated_at: '2026-04-10T05:08:13+00:00'
 goal: Make commit_to_git reconcile tasks correctly when the intended changes are already
   present on the target branch and merge produces no new commit.
 acceptance_criteria:
@@ -61,6 +61,13 @@ subagents:
   path: subagents/SA-0004-reviewer
   sandboxed: false
   sandbox_summary: host
+- id: SA-0005
+  role: merge-resolver
+  engine: codex
+  status: completed
+  path: subagents/SA-0005-merge-resolver
+  sandboxed: false
+  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0280 handle-no-op-merges-in-commit-to-git-without'
@@ -68,7 +75,7 @@ git:
   checkpoint_base_sha: null
   checkpoint_attempts: 0
   rolled_back_checkpoint_attempt: null
-  merge_agent_attempts: 0
+  merge_agent_attempts: 1
   worktree_path: null
 retry_policy:
   max_retries: null

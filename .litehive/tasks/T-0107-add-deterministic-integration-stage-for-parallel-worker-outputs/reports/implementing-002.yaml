@@ -1,50 +1,67 @@
 task_id: T-0107
 step: implementing
-verdict: reject
-summary: 'SWE reported pass but produced no file changes and no tests. This usually
-  means the agent did not actually write code. Worktree: unknown. Report summary:
-  ## Implementation Complete'
-feedback: "## Implementation Complete\n\n### What was implemented\nAdded a post-merge\
-  \ integration verification stage (Phase 4) to the parallel execution pipeline.\n\
-  \n### Changes made\n\n**litehive/config/model.py:**\n- Added `parallel_integration_check:\
-  \ str | None = None` field to `LitehiveConfig`. When set to a shell command string,\
-  \ the integration check runs after all parallel task merges complete.\n\n**litehive/pipeline/_parallel.py:**\n\
-  - Added `IntegrationCheckResult` dataclass with fields: command, exit_code, stdout,\
-  \ stderr, timestamp, task_ids, merge_order, success.\n- Added `integration_check:\
-  \ IntegrationCheckResult | None` field to `ParallelRunSummary`.\n- Added `_run_integration_check()`\
-  \ function that runs the configured command via `subprocess.run` on the main worktree,\
-  \ captures all output, and writes a YAML batch report to `.litehive/logs/parallel-integration/{timestamp}-batch.yaml`.\n\
-  - Added Phase 4 logic in `run_parallel_tasks()` after Phase 3 merge loop: if `parallel_integration_check`\
-  \ is configured and at least one task merged successfully, runs the check. If it\
-  \ fails, sets `stop_reason` to `parallel_integration_failed` and appends a journal\
-  \ entry to each merged task.\n\n**tests/test_parallel_execution.py:**\n- `test_integration_check_passes`:\
-  \ Configured check (`true`) passes \u2192 `parallel_batch_complete`, report written.\n\
-  - `test_integration_check_fails`: Configured check (`false`) fails \u2192 `parallel_integration_failed`,\
-  \ report written with batch info, journal entries written.\n- `test_integration_check_not_configured`:\
-  \ No check configured \u2192 no-op, no report directory created, existing behavior\
-  \ preserved.\n- `test_run_integration_check_captures_output`: Direct unit test of\
-  \ `_run_integration_check` verifying stdout capture, report file, and field values.\n\
-  \n### Acceptance criteria verification\n1. \u2705 After all parallel tasks merge,\
-  \ integration verification runs automatically \u2014 Phase 4 in `run_parallel_tasks`.\n\
-  2. \u2705 Configurable via `parallel_integration_check` in config.yaml, no-op if\
-  \ unconfigured.\n3. \u2705 If check passes, stop_reason is `parallel_batch_complete`\
-  \ \u2014 verified by `test_integration_check_passes`.\n4. \u2705 If check fails,\
-  \ stop_reason is `parallel_integration_failed`, failure captured in report, journal\
-  \ entries written \u2014 verified by `test_integration_check_fails`.\n5. \u2705\
-  \ Integration report includes: batch task IDs, merge order, check command, exit\
-  \ code, stdout/stderr, timestamp \u2014 verified by report content assertions.\n\
-  6. \u2705 Integration check is idempotent: runs on committed git state after merges.\n\
-  7. \u2705 Existing tests pass (20/20), new tests cover pass/fail/unconfigured scenarios.\n\
-  \n### Tests run\n- `uv run pytest tests/test_parallel_execution.py -q` \u2192 20\
-  \ passed\n- `uv run pytest tests/test_config_and_run_cli.py -q` \u2192 58 passed"
-files_changed: []
+verdict: pass
+source: agent
+summary: 'Implementation remains in place for the deterministic post-merge parallel
+  integration stage; this pass addressed the current implementation blocker by removing
+  the unused IntegrationCheckResult import from tests/test_parallel_execution.py that
+  was causing the acceptance lint gate to fail. Verified the task-specific code paths
+  are still present in litehive/config/model.py and litehive/pipeline/_parallel.py,
+  including parallel_integration_check config support, IntegrationCheckResult on ParallelRunSummary,
+  post-merge integration check execution, integration report writing under .litehive/logs/parallel-integration/,
+  and parallel_integration_failed stop_reason handling.\n\nChecks run:\n- uv run ruff
+  check --select E402,F401 litehive tests -> PASS\n- uv run pytest tests/test_parallel_execution.py
+  -q -> PASS (20 passed in 2.27s)\n- uv run pytest tests/test_config_and_run_cli.py
+  -q -> FAIL, but failure is unrelated to this task: test_engine_status_command_scopes_to_single_engine_and_shows_codex_quota
+  expected output containing used_percent: 100.0 and current output instead reports
+  quota fields as 5h_used: 100% / weekly_used: 34%.\n\nAcceptance evidence for this
+  task remains covered by tests/test_parallel_execution.py: configured integration
+  check pass path, configured integration check fail path with journal/report evidence,
+  no-op when unconfigured, and direct _run_integration_check output/report capture.
+  The only code change in this stage was the test import cleanup needed to satisfy
+  the required lint gate.'
+feedback: "Runner hook `after_implementing` `uv run ruff check --select E402,F401\
+  \ litehive tests` passed with exit code 0 (artifact: `artifacts/after_implementing-001.yaml`).\n\
+  \nRunner hook `after_implementing` `if [ -n \"${LITEHIVE_CHANGED_PATHS:-}\" ] \\\
+  \n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" | grep -q . \\\n  && printf '%s\\\
+  n' \"$LITEHIVE_CHANGED_PATHS\" \\\n    | xargs -r -d '\\n' git grep -nE 'noqa:.*F401|noqa:.*F403|ruff:\\\
+  s*noqa:\\s*F401|ruff:\\s*noqa:\\s*F403' --; then\n  echo 'Forbidden noqa F401/F403\
+  \ suppression found.'\n  exit 1\nfi` passed with exit code 0 (artifact: `artifacts/after_implementing-002.yaml`).\n\
+  \nImplementation remains in place for the deterministic post-merge parallel integration\
+  \ stage; this pass addressed the current implementation blocker by removing the\
+  \ unused IntegrationCheckResult import from tests/test_parallel_execution.py that\
+  \ was causing the acceptance lint gate to fail. Verified the task-specific code\
+  \ paths are still present in litehive/config/model.py and litehive/pipeline/_parallel.py,\
+  \ including parallel_integration_check config support, IntegrationCheckResult on\
+  \ ParallelRunSummary, post-merge integration check execution, integration report\
+  \ writing under .litehive/logs/parallel-integration/, and parallel_integration_failed\
+  \ stop_reason handling.\\n\\nChecks run:\\n- uv run ruff check --select E402,F401\
+  \ litehive tests -> PASS\\n- uv run pytest tests/test_parallel_execution.py -q ->\
+  \ PASS (20 passed in 2.27s)\\n- uv run pytest tests/test_config_and_run_cli.py -q\
+  \ -> FAIL, but failure is unrelated to this task: test_engine_status_command_scopes_to_single_engine_and_shows_codex_quota\
+  \ expected output containing used_percent: 100.0 and current output instead reports\
+  \ quota fields as 5h_used: 100% / weekly_used: 34%.\\n\\nAcceptance evidence for\
+  \ this task remains covered by tests/test_parallel_execution.py: configured integration\
+  \ check pass path, configured integration check fail path with journal/report evidence,\
+  \ no\n\n\u2026 [truncated \u2014 full transcript in subagent artifacts]"
+submitted_via_cli: true
+files_changed:
+- litehive/pipeline/_parallel.py
+- tests/test_parallel_execution.py
 created_follow_up_task_ids: []
 task_update: {}
 tests:
   added: 0
   passing: 0
-warnings: []
-retry_count: 1
+warnings:
+- 'runner hook passed: `after_implementing` `uv run ruff check --select E402,F401
+  litehive tests` (artifact: `artifacts/after_implementing-001.yaml`)'
+- "runner hook passed: `after_implementing` `if [ -n \"${LITEHIVE_CHANGED_PATHS:-}\"\
+  \ ] \\\n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" | grep -q . \\\n  && printf\
+  \ '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" \\\n    | xargs -r -d '\\n' git grep -nE 'noqa:.*F401|noqa:.*F403|ruff:\\\
+  s*noqa:\\s*F401|ruff:\\s*noqa:\\s*F403' --; then\n  echo 'Forbidden noqa F401/F403\
+  \ suppression found.'\n  exit 1\nfi` (artifact: `artifacts/after_implementing-002.yaml`)"
+retry_count: 0
 retry_limit: 3
 retry_source: global
 retry_decision: continue
@@ -54,6 +71,30 @@ outcome_reason: ''
 failure_classification: null
 failure_diagnostics: {}
 resource_limit_event: null
-duration_seconds: 447
-hook_results: []
-created_at: '2026-04-09T07:47:51+00:00'
+duration_seconds: 75
+hook_results:
+- point: after_implementing
+  command: uv run ruff check --select E402,F401 litehive tests
+  reject_on_failure: true
+  description: null
+  exit_code: 0
+  status: passed
+  artifact: artifacts/after_implementing-001.yaml
+  stdout: 'All checks passed!
+
+    '
+  stderr: ''
+- point: after_implementing
+  command: "if [ -n \"${LITEHIVE_CHANGED_PATHS:-}\" ] \\\n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\"\
+    \ | grep -q . \\\n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" \\\n    | xargs\
+    \ -r -d '\\n' git grep -nE 'noqa:.*F401|noqa:.*F403|ruff:\\s*noqa:\\s*F401|ruff:\\\
+    s*noqa:\\s*F403' --; then\n  echo 'Forbidden noqa F401/F403 suppression found.'\n\
+    \  exit 1\nfi"
+  reject_on_failure: true
+  description: null
+  exit_code: 0
+  status: passed
+  artifact: artifacts/after_implementing-002.yaml
+  stdout: ''
+  stderr: ''
+created_at: '2026-04-10T05:18:01+00:00'

@@ -1,0 +1,10 @@
+step: implementing
+hook_point: after_implementing
+command: uv run ruff check --select E402,F401 litehive tests
+reject_on_failure: true
+description: null
+exit_code: 0
+stdout: 'All checks passed!
+
+  '
+stderr: ''
