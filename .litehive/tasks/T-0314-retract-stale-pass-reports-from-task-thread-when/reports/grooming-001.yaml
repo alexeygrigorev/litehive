@@ -1,0 +1,78 @@
+task_id: T-0314
+step: grooming
+verdict: pass
+source: agent
+summary: Verified by inspection that the implementation seam is correct and the task
+  is ready for SWE.
+feedback: "Verified by inspection that the implementation seam is correct and the\
+  \ task is ready for SWE.\n\nWhat I verified:\n- `litehive/workspace/task_status.py:requeue_task()`\
+  \ is the right once-per-cycle hook. It currently resets queue/runtime state and\
+  \ journals the requeue, but does not inspect prior pass comments.\n- `litehive/agents/_prompts.py:stage_prompt()`\
+  \ currently includes the full rendered task thread unconditionally via `render_task_thread(root,\
+  \ task)`, so stale pass comments are replayed into every future prompt today.\n\
+  - `litehive/tasks/reports.py` currently only appends/loads/renders raw thread entries;\
+  \ there is no concept of a retracted pass entry yet.\n- Existing guard coverage\
+  \ in `tests/test_runner_workflow.py` already covers hallucinated implementing passes\
+  \ on a clean worktree, so this task is a follow-on hardening pass for retry/requeue\
+  \ behavior rather than a new product area.\n\nClarification needed and resolved\
+  \ for implementation:\n- The current AC text has one contradiction: it says retracted\
+  \ reports are excluded from the next prompt's `discussion_thread`, but the example\
+  \ test says the next prompt should contain a retraction marker for the stale report.\n\
+  - Recommended interpretation: the original stale pass body must be excluded from\
+  \ the prompt as authoritative context, while a separate retraction notice remains\
+  \ visible in the prompt/journal for auditability.\n\nImplementation plan:\n1. Add\
+  \ thread/report support for marking a pass comment as retracted without deleting\
+  \ or overwriting the original claim text.\n2. Run a retraction sweep from `requeue_task()`\
+  \ only, limited to prior `pass` comments from `implementing`/`testing`/`accepting`\
+  \ that have non-empty `files_changed`.\n3. Validate each claimed path against git\
+  \ diff evidence between the workspace main baseline and the current task HEAD/worktree\
+  \ state; if none of the claimed paths differ, append the required retraction marker\
+  \ and persist it idempotently.\n4. Update prompt-thread rendering so retracted pass\
+  \ entries are not replayed in `discussion_thread`, but a compact retraction notice\
+  \ is included.\n5. Add focused tests around requeue plus prompt rendering; reuse\
+  \ existing git-backed test helpers instead of broad end-to-end coverage.\n\nTests\
+  \ run in grooming:\n- Repo inspection only; no code changes made and no test suite\
+  \ executed in this stage.\n\nTASK_UPDATE:\n  pm_complexity: moderate\n  planned_effort:\
+  \ s\n  plan:\n    - Add requeue-time stale-pass retraction for prior implementing/testing/accepting\
+  \ pass comments with claimed file changes.\n    - Persist retraction as an audit-trail\
+  \ marker and make the operation idempotent.\n    - Exclude retracted pass entries\
+  \ from prompt discussion history while surfacing a concise retraction notice.\n\
+  \    - Add focused tests for requeue-time retraction and prompt rendering.\n  acceptance_criteria:\n\
+  \    - When a task is requeued, Litehive re-validates prior `pass` thread reports\
+  \ from `implementing`, `testing`, and `accepting` that declare `files_changed`,\
+  \ using git diff evidence between the workspace main baseline and the current task\
+  \ HEAD/worktree state.\n    - If a prior pass report's claimed `files_changed` paths\
+  \ show no diff evidence, Litehive preserves the original thread entry but marks\
+  \ it retracted with the marker `[retracted - filesystem check shows no changes landed]`\
+  \ exactly once.\n    - Retracted reports remain in task artifacts for audit and\
+  \ forensics, but the original retracted pass body is excluded from the next subagent\
+  \ prompt's discussion-thread context.\n    - The next subagent prompt includes a\
+  \ concise retraction notice so future agents know the earlier pass claim was invalidated\
+  \ without replaying it as authoritative implementation evidence.\n    - The stale-report\
+  \ retraction sweep runs during task requeue, not at every subagent spawn, and re-running\
+  \ requeue does not duplicate retraction markers.\n    - Focused test coverage demonstrates:\
+  \ create a task with a prior `pass` report claiming `files_changed=[\"foo.py\"]`\
+  \ while `foo.py` is unchanged versus main, requeue the task, and assert the next\
+  \ prompt contains the retraction notice while excluding the stale pass entry from\
+  \ active discussion context.\n"
+submitted_via_cli: true
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 136
+hook_results: []
+created_at: '2026-04-10T15:53:35+00:00'

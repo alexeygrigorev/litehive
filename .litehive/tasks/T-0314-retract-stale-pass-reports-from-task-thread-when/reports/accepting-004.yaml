@@ -1,0 +1,67 @@
+task_id: T-0314
+step: accepting
+verdict: pass
+source: agent
+summary: 'Verified the requeue-time stale-pass retraction behavior in code and with
+  focused checks. I inspected litehive/workspace/task_status.py:requeue_task() and
+  confirmed the sweep runs only during task requeue, limited to prior pass thread
+  comments from implementing, testing, and accepting that have normalized non-placeholder
+  files_changed. For each claimed path it compares the task checkout/worktree against
+  the workspace main checkout HEAD via git diff; when none of the claimed files differ,
+  it appends [retracted - filesystem check shows no changes landed] exactly once and
+  persists the updated thread. I inspected litehive/tasks/reports.py and confirmed
+  retracted entries remain stored in the YAML thread for audit/forensics, while render_task_thread(...,
+  for_prompt=True) withholds the original stale pass body and substitutes a compact
+  retraction notice plus claimed files. I inspected litehive/agents/_prompts.py and
+  confirmed stage prompts now use that prompt-safe rendering path before feeding discussion_thread
+  context to subagents. Tests I ran locally: uv run pytest -q tests/test_task_commands_and_daemon.py
+  -k ''retracts_stale_pass_reports or requeue_command'' -> 5 passed; uv run pytest
+  -q tests/test_runner_workflow.py -k agent_md_absent_falls_back_to_config -> 1 passed;
+  uv run ruff check --select E402,F401 litehive tests -> passed. The focused regression
+  test in tests/test_task_commands_and_daemon.py constructs a stale implementing pass
+  claiming files_changed=["foo.py"] while foo.py is unchanged vs main, requeues the
+  task, asserts the marker is persisted once, asserts the next prompt contains the
+  retraction notice and claimed file, and asserts the original stale pass body is
+  excluded from prompt context. Acceptance criteria met.'
+feedback: 'Verified the requeue-time stale-pass retraction behavior in code and with
+  focused checks. I inspected litehive/workspace/task_status.py:requeue_task() and
+  confirmed the sweep runs only during task requeue, limited to prior pass thread
+  comments from implementing, testing, and accepting that have normalized non-placeholder
+  files_changed. For each claimed path it compares the task checkout/worktree against
+  the workspace main checkout HEAD via git diff; when none of the claimed files differ,
+  it appends [retracted - filesystem check shows no changes landed] exactly once and
+  persists the updated thread. I inspected litehive/tasks/reports.py and confirmed
+  retracted entries remain stored in the YAML thread for audit/forensics, while render_task_thread(...,
+  for_prompt=True) withholds the original stale pass body and substitutes a compact
+  retraction notice plus claimed files. I inspected litehive/agents/_prompts.py and
+  confirmed stage prompts now use that prompt-safe rendering path before feeding discussion_thread
+  context to subagents. Tests I ran locally: uv run pytest -q tests/test_task_commands_and_daemon.py
+  -k ''retracts_stale_pass_reports or requeue_command'' -> 5 passed; uv run pytest
+  -q tests/test_runner_workflow.py -k agent_md_absent_falls_back_to_config -> 1 passed;
+  uv run ruff check --select E402,F401 litehive tests -> passed. The focused regression
+  test in tests/test_task_commands_and_daemon.py constructs a stale implementing pass
+  claiming files_changed=["foo.py"] while foo.py is unchanged vs main, requeues the
+  task, asserts the marker is persisted once, asserts the next prompt contains the
+  retraction notice and claimed file, and asserts the original stale pass body is
+  excluded from prompt context. Acceptance criteria met.'
+submitted_via_cli: true
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 112
+hook_results: []
+created_at: '2026-04-10T16:02:00+00:00'

@@ -1,0 +1,104 @@
+task_id: T-0314
+step: implementing
+verdict: pass
+source: agent
+summary: Implemented stale pass-report retraction during requeue. `litehive/workspace/task_status.py:requeue_task()`
+  now performs a once-per-requeue sweep over prior `pass` thread comments from `implementing`/`testing`/`accepting`
+  that declare non-placeholder `files_changed`, compares each claimed path against
+  current main via git diff in the task checkout/worktree, and appends `[retracted
+  - filesystem check shows no changes landed]` exactly once when none of the claimed
+  paths differ. `litehive/tasks/reports.py` now centralizes path normalization/retraction
+  helpers, persists updated thread entries, and supports prompt-safe rendering that
+  replaces retracted pass bodies with a compact retraction notice while preserving
+  the original entry plus marker in the task journal YAML. `litehive/agents/_prompts.py`
+  now uses prompt-safe thread rendering so stale pass text is excluded from future
+  `discussion_thread` context. Added focused regression coverage in `tests/test_task_commands_and_daemon.py`
+  that creates a git-backed task with a stale implementing pass report claiming `files_changed=["foo.py"]`
+  while `foo.py` is unchanged versus main, requeues the task, asserts the marker is
+  persisted once, asserts the next implementing prompt contains the retraction notice
+  and claimed file, and asserts the original stale pass body is excluded from prompt
+  context; the test also proves idempotency across a second requeue.
+feedback: "Runner hook `after_implementing` `uv run ruff check --select E402,F401\
+  \ litehive tests` passed with exit code 0 (artifact: `artifacts/after_implementing-001.yaml`).\n\
+  \nRunner hook `after_implementing` `if [ -n \"${LITEHIVE_CHANGED_PATHS:-}\" ] \\\
+  \n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" | grep -q . \\\n  && printf '%s\\\
+  n' \"$LITEHIVE_CHANGED_PATHS\" \\\n    | xargs -r -d '\\n' git grep -nE 'noqa:.*F401|noqa:.*F403|ruff:\\\
+  s*noqa:\\s*F401|ruff:\\s*noqa:\\s*F403' --; then\n  echo 'Forbidden noqa F401/F403\
+  \ suppression found.'\n  exit 1\nfi` passed with exit code 0 (artifact: `artifacts/after_implementing-002.yaml`).\n\
+  \nImplemented stale pass-report retraction during requeue. `litehive/workspace/task_status.py:requeue_task()`\
+  \ now performs a once-per-requeue sweep over prior `pass` thread comments from `implementing`/`testing`/`accepting`\
+  \ that declare non-placeholder `files_changed`, compares each claimed path against\
+  \ current main via git diff in the task checkout/worktree, and appends `[retracted\
+  \ - filesystem check shows no changes landed]` exactly once when none of the claimed\
+  \ paths differ. `litehive/tasks/reports.py` now centralizes path normalization/retraction\
+  \ helpers, persists updated thread entries, and supports prompt-safe rendering that\
+  \ replaces retracted pass bodies with a compact retraction notice while preserving\
+  \ the original entry plus marker in the task journal YAML. `litehive/agents/_prompts.py`\
+  \ now uses prompt-safe thread rendering so stale pass text is excluded from future\
+  \ `discussion_thread` context. Added focused regression coverage in `tests/test_task_commands_and_daemon.py`\
+  \ that creates a git-backed task with a stale implementing pass report claiming\
+  \ `files_changed=[\"foo.py\"]` while `foo.py` is unchanged versus main, requeues\
+  \ the task, asserts the marker is persisted once, asserts the next implementing\
+  \ prompt contains the retraction notice and claimed file, and asserts the original\
+  \ stale pass body is excluded from p\n\n\u2026 [truncated \u2014 full transcript\
+  \ in subagent artifacts]"
+submitted_via_cli: true
+files_changed:
+- litehive/agents/_prompts.py
+- litehive/tasks/reports.py
+- litehive/workspace/task_status.py
+- tests/test_task_commands_and_daemon.py
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings:
+- 'runner hook passed: `after_implementing` `uv run ruff check --select E402,F401
+  litehive tests` (artifact: `artifacts/after_implementing-001.yaml`)'
+- "runner hook passed: `after_implementing` `if [ -n \"${LITEHIVE_CHANGED_PATHS:-}\"\
+  \ ] \\\n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" | grep -q . \\\n  && printf\
+  \ '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" \\\n    | xargs -r -d '\\n' git grep -nE 'noqa:.*F401|noqa:.*F403|ruff:\\\
+  s*noqa:\\s*F401|ruff:\\s*noqa:\\s*F403' --; then\n  echo 'Forbidden noqa F401/F403\
+  \ suppression found.'\n  exit 1\nfi` (artifact: `artifacts/after_implementing-002.yaml`)"
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 278
+hook_results:
+- point: after_implementing
+  command: uv run ruff check --select E402,F401 litehive tests
+  reject_on_failure: true
+  description: null
+  exit_code: 0
+  status: passed
+  artifact: artifacts/after_implementing-001.yaml
+  stdout: 'All checks passed!
+
+    '
+  stderr: 'warning: `VIRTUAL_ENV=/home/alexey/git/litehive/.venv` does not match the
+    project environment path `.venv` and will be ignored; use `--active` to target
+    the active environment instead
+
+    '
+- point: after_implementing
+  command: "if [ -n \"${LITEHIVE_CHANGED_PATHS:-}\" ] \\\n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\"\
+    \ | grep -q . \\\n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" \\\n    | xargs\
+    \ -r -d '\\n' git grep -nE 'noqa:.*F401|noqa:.*F403|ruff:\\s*noqa:\\s*F401|ruff:\\\
+    s*noqa:\\s*F403' --; then\n  echo 'Forbidden noqa F401/F403 suppression found.'\n\
+    \  exit 1\nfi"
+  reject_on_failure: true
+  description: null
+  exit_code: 0
+  status: passed
+  artifact: artifacts/after_implementing-002.yaml
+  stdout: ''
+  stderr: ''
+created_at: '2026-04-10T15:58:13+00:00'
