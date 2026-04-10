@@ -1,0 +1,111 @@
+task_id: T-0301
+step: implementing
+verdict: pass
+source: agent
+summary: 'Implemented bubblewrap argv[0] rewrite plus per-engine extra_ro_binds support.
+  ExternalEngineSandboxPolicy now carries extra_ro_binds, normalization validates
+  absolute paths, formatting/status round-trip includes the field, and bubblewrap
+  mounts each declared host path read-only after fail-closed host existence checks
+  with a clear SandboxError. _wrap_bubblewrap now rewrites the executed command argv[0]
+  to the resolved absolute host binary path before the ''--'' separator, matching
+  the docker path rewrite semantics. Updated workspace config in .litehive/config.yaml
+  so codex and claude declare the required nvm runtime bind (/home/alexey/.nvm/versions/node/v24.13.1).
+  Verification: uv run ruff check --select E402,F401 litehive tests -> pass; forbidden
+  noqa grep hook -> pass; uv run pytest -q tests/test_runner_workflow.py -k ''sandbox
+  and (bubblewrap or external_engine_sandbox)'' -> 6 passed; uv run pytest -q tests/test_workspace_bootstrap.py
+  -k external_engine_sandbox -> 1 passed; uv run pytest -q tests/test_observability_and_status.py
+  -k external_engine_sandbox -> 2 passed; uv run pytest -q tests/test_sandbox_git_profiles.py
+  -> 14 passed. Acceptance evidence: unit coverage now asserts bubblewrap rewrites
+  argv[0] to the resolved binary path and adds extra_ro_binds ro-binds; missing extra_ro_binds
+  paths raise a clear fail-closed SandboxError; config round-trip preserves extra_ro_binds;
+  real bubblewrap subprocess tests execute python3+uv successfully, codex --version
+  successfully (stdout contains codex version text), and claude --version successfully
+  when installed on host.'
+feedback: "Runner hook `after_implementing` `uv run ruff check --select E402,F401\
+  \ litehive tests` passed with exit code 0 (artifact: `artifacts/after_implementing-001.yaml`).\n\
+  \nRunner hook `after_implementing` `if [ -n \"${LITEHIVE_CHANGED_PATHS:-}\" ] \\\
+  \n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" | grep -q . \\\n  && printf '%s\\\
+  n' \"$LITEHIVE_CHANGED_PATHS\" \\\n    | xargs -r -d '\\n' git grep -nE 'noqa:.*F401|noqa:.*F403|ruff:\\\
+  s*noqa:\\s*F401|ruff:\\s*noqa:\\s*F403' --; then\n  echo 'Forbidden noqa F401/F403\
+  \ suppression found.'\n  exit 1\nfi` passed with exit code 0 (artifact: `artifacts/after_implementing-002.yaml`).\n\
+  \nImplemented bubblewrap argv[0] rewrite plus per-engine extra_ro_binds support.\
+  \ ExternalEngineSandboxPolicy now carries extra_ro_binds, normalization validates\
+  \ absolute paths, formatting/status round-trip includes the field, and bubblewrap\
+  \ mounts each declared host path read-only after fail-closed host existence checks\
+  \ with a clear SandboxError. _wrap_bubblewrap now rewrites the executed command\
+  \ argv[0] to the resolved absolute host binary path before the '--' separator, matching\
+  \ the docker path rewrite semantics. Updated workspace config in .litehive/config.yaml\
+  \ so codex and claude declare the required nvm runtime bind (/home/alexey/.nvm/versions/node/v24.13.1).\
+  \ Verification: uv run ruff check --select E402,F401 litehive tests -> pass; forbidden\
+  \ noqa grep hook -> pass; uv run pytest -q tests/test_runner_workflow.py -k 'sandbox\
+  \ and (bubblewrap or external_engine_sandbox)' -> 6 passed; uv run pytest -q tests/test_workspace_bootstrap.py\
+  \ -k external_engine_sandbox -> 1 passed; uv run pytest -q tests/test_observability_and_status.py\
+  \ -k external_engine_sandbox -> 2 passed; uv run pytest -q tests/test_sandbox_git_profiles.py\
+  \ -> 14 passed. Acceptance evidence: unit coverage now asserts bubblewrap rewrites\
+  \ argv[0] to the resolved binary path and adds extra_ro_binds ro-binds; missing\
+  \ extra_ro_binds paths raise a clear fail-closed\n\n\u2026 [truncated \u2014 full\
+  \ transcript in subagent artifacts]"
+submitted_via_cli: true
+files_changed:
+- litehive/agents/sandbox.py
+- litehive/config/dataclasses.py
+- litehive/config/formatting.py
+- litehive/config/normalization.py
+- tests/test_observability_and_status.py
+- tests/test_runner_workflow.py
+- tests/test_sandbox_git_profiles.py
+- tests/test_workspace_bootstrap.py
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings:
+- 'runner hook passed: `after_implementing` `uv run ruff check --select E402,F401
+  litehive tests` (artifact: `artifacts/after_implementing-001.yaml`)'
+- "runner hook passed: `after_implementing` `if [ -n \"${LITEHIVE_CHANGED_PATHS:-}\"\
+  \ ] \\\n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" | grep -q . \\\n  && printf\
+  \ '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" \\\n    | xargs -r -d '\\n' git grep -nE 'noqa:.*F401|noqa:.*F403|ruff:\\\
+  s*noqa:\\s*F401|ruff:\\s*noqa:\\s*F403' --; then\n  echo 'Forbidden noqa F401/F403\
+  \ suppression found.'\n  exit 1\nfi` (artifact: `artifacts/after_implementing-002.yaml`)"
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 482
+hook_results:
+- point: after_implementing
+  command: uv run ruff check --select E402,F401 litehive tests
+  reject_on_failure: true
+  description: null
+  exit_code: 0
+  status: passed
+  artifact: artifacts/after_implementing-001.yaml
+  stdout: 'All checks passed!
+
+    '
+  stderr: 'warning: `VIRTUAL_ENV=/home/alexey/git/litehive/.venv` does not match the
+    project environment path `.venv` and will be ignored; use `--active` to target
+    the active environment instead
+
+    '
+- point: after_implementing
+  command: "if [ -n \"${LITEHIVE_CHANGED_PATHS:-}\" ] \\\n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\"\
+    \ | grep -q . \\\n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" \\\n    | xargs\
+    \ -r -d '\\n' git grep -nE 'noqa:.*F401|noqa:.*F403|ruff:\\s*noqa:\\s*F401|ruff:\\\
+    s*noqa:\\s*F403' --; then\n  echo 'Forbidden noqa F401/F403 suppression found.'\n\
+    \  exit 1\nfi"
+  reject_on_failure: true
+  description: null
+  exit_code: 0
+  status: passed
+  artifact: artifacts/after_implementing-002.yaml
+  stdout: ''
+  stderr: ''
+created_at: '2026-04-10T12:20:08+00:00'

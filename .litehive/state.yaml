@@ -1,8 +1,7 @@
-active_task_id: T-0305
+active_task_id: T-0301
 active_task_ids: []
 mode: implementation
 queue:
-- T-0301
 - T-0282
 - T-0284
 - T-0240
@@ -29,3 +28,5 @@ next_task_number: 305
 unmerged_worktrees:
 - task_id: T-0281
   worktree_path: .litehive/worktrees/T-0281-goz-adapter-wire-continuation-extraction-and
+- task_id: T-0305
+  worktree_path: .litehive/worktrees/T-0305-fix-litehive-worktree-rescue-so-it-does-not-need
