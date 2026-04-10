@@ -35,6 +35,8 @@ from litehive.pipeline._budget import (
     _limit_stop_condition_is_configured,
 )
 from litehive.pipeline._models import (
+    EngineSelection,
+    EngineSkip,
     _execution_retry_model_family,
     _is_recovery_run,
     _resolve_stage_retry_limit,
@@ -49,6 +51,7 @@ from litehive.pipeline._models import (
     resolve_execution_retry_policy,
     resolve_model,
     resolve_task_retry_policy,
+    select_engine,
     workspace_model_for_engine,
 )
 from litehive.pipeline.recovery import (
@@ -145,6 +148,8 @@ __all__ = [
     "_execution_hit_limit",
     "_execution_limit_kind",
     "_limit_stop_condition_is_configured",
+    "EngineSelection",
+    "EngineSkip",
     "_execution_retry_model_family",
     "_is_recovery_run",
     "_resolve_stage_retry_limit",
@@ -159,6 +164,7 @@ __all__ = [
     "resolve_engine_plan",
     "resolve_model",
     "resolve_task_retry_policy",
+    "select_engine",
     "workspace_model_for_engine",
     "_attempt_commit_recovery",
     "_attempt_stage_recovery",

@@ -239,7 +239,7 @@ def _run_worktree_merge_agent(
     append_journal(root, task, f"[worktree] Merge conflict on {len(conflicts)} file(s). Launching merge agent.")
     cfg = config or load_config(root)
     from litehive.pipeline.recovery import _resolve_recovery_engine
-    engine_name, model = _resolve_recovery_engine(task, cfg)
+    engine_name, model = _resolve_recovery_engine(root, task, cfg)
     subagents = SubagentManager(root, execution_root=worktree_path)
     subagents.run(
         task, role="merge-resolver", engine_name=engine_name, model=model,

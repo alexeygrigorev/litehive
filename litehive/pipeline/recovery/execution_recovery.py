@@ -515,52 +515,34 @@ def _run_litehive_self_heal(
 
 
 def _resolve_recovery_engine(
+    root: Path,
     task: TaskRecord,
     config: LitehiveConfig | None,
 ) -> tuple[str, str | None]:
-    from .._models import resolve_model
+    from .._models import resolve_model, select_engine
 
+    model: str | None = None
     if config and config.recovery_engine and config.recovery_engine != "auto":
         engine = config.recovery_engine
     elif config and config.recovery_engine == "auto":
-        from litehive.agents import get_engine
-        from litehive.agents.quota import (
-            claude_quota_block_reason,
-            codex_quota_block_reason,
-            copilot_quota_block_reason,
-            zai_quota_block_reason,
-        )
-
-        def _engine_quota_ok(name: str) -> bool:
-            try:
-                if name == "claude":
-                    return claude_quota_block_reason() is None
-                if name == "codex":
-                    return codex_quota_block_reason() is None
-                if name == "copilot":
-                    return copilot_quota_block_reason() is None
-                if name in ("goz", "opencode"):
-                    return zai_quota_block_reason() is None
-            except Exception:
-                pass
-            return True  # fail-open
-
         candidates = list(config.engine_preference) if config.engine_preference else []
         if config.default_engine and config.default_engine not in candidates:
             candidates.append(config.default_engine)
         if not candidates:
             candidates = ["claude", "codex", "copilot", "goz"]
-        engine = config.default_engine or "codex"
-        for name in candidates:
-            try:
-                if get_engine(name).is_available() and _engine_quota_ok(name):
-                    engine = name
-                    break
-            except Exception:
-                continue
+        selection = select_engine(
+            root,
+            task,
+            config,
+            engine_names=candidates,
+            require_available=True,
+        )
+        engine = selection.engine_name or config.default_engine or "codex"
+        model = selection.model_name if selection.engine_name is not None else None
     else:
         engine = task.engine or (config.default_engine if config else "codex")
-    model = resolve_model(task, config, engine_name=engine) if config else None
+    if model is None:
+        model = resolve_model(task, config, engine_name=engine) if config else None
     return engine, model
 
 
@@ -576,7 +558,7 @@ def _attempt_commit_recovery(
     del execution_root
     if subagents is None:
         return None
-    engine_name, model = _resolve_recovery_engine(task, config)
+    engine_name, model = _resolve_recovery_engine(root, task, config)
     recovery_result = subagents.run(
         task,
         role="recovery",

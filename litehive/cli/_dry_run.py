@@ -1,8 +1,6 @@
-from litehive.agents.quota import codex_quota_block_reason
 from litehive.pipeline import (
     EngineBudgetLedger,
-    resolve_engine_attempt_order,
-    resolve_model,
+    select_engine,
 )
 
 from litehive.cli._pool import _pool_stop_condition_label
@@ -58,39 +56,28 @@ def _plan_pool_dry_run(
         if pool_stop_reason is not None:
             return runnable_tasks, pool_stop_reason
 
-        engine_attempts = resolve_engine_attempt_order(
+        selection = select_engine(
+            root,
             task,
             config,
+            budget_ledger=budget_ledger,
             engine_override=engine_override,
-        )
-        blocked_reasons = []
-        selected_engine = None
-        for engine_name in engine_attempts:
-            if engine_name == "codex":
-                quota_reason = codex_quota_block_reason()
-                if quota_reason is not None:
-                    blocked_reasons.append(quota_reason)
-                    continue
-            blocked_reason = budget_ledger.block_reason(engine_name)
-            if blocked_reason is None:
-                selected_engine = engine_name
-                break
-            blocked_reasons.append(blocked_reason)
-
-        if selected_engine is None:
-            return runnable_tasks, _determine_dry_run_stop_reason(
-                blocked_reasons,
-                stop_conditions=stop_conditions,
-            )
-
-        selected_model = resolve_model(
-            task,
-            config,
-            engine_name=selected_engine,
             model_override=model_override,
         )
-        runnable_tasks.append((task, selected_engine, engine_attempts, selected_model))
-        budget_ledger.record(selected_engine)
+        if selection.engine_name is None:
+            return runnable_tasks, _determine_dry_run_stop_reason(
+                [skip.reason for skip in selection.skipped] or [selection.blocked_reason or ""],
+                stop_conditions=stop_conditions,
+            )
+        runnable_tasks.append(
+            (
+                task,
+                selection.engine_name,
+                selection.engine_attempts,
+                selection.model_name,
+            )
+        )
+        budget_ledger.record(selection.engine_name)
 
     pool_stop_reason = budget_ledger.pool_stop_reason()
     if pool_stop_reason is not None:
@@ -121,37 +108,27 @@ def _plan_single_task_dry_run(
 
     budget_ledger = _budget_ledger_from_stop_conditions(stop_conditions)
     task = planned_tasks[0]
-    engine_attempts = resolve_engine_attempt_order(
+    selection = select_engine(
+        root,
         task,
         config,
+        budget_ledger=budget_ledger,
         engine_override=engine_override,
-    )
-    blocked_reasons = []
-    selected_engine = None
-    for engine_name in engine_attempts:
-        if engine_name == "codex":
-            quota_reason = codex_quota_block_reason()
-            if quota_reason is not None:
-                blocked_reasons.append(quota_reason)
-                continue
-        blocked_reason = budget_ledger.block_reason(engine_name)
-        if blocked_reason is None:
-            selected_engine = engine_name
-            break
-        blocked_reasons.append(blocked_reason)
-
-    if selected_engine is None:
-        return [], _determine_dry_run_stop_reason(
-            blocked_reasons,
-            stop_conditions=stop_conditions,
-        )
-    selected_model = resolve_model(
-        task,
-        config,
-        engine_name=selected_engine,
         model_override=model_override,
     )
-    return [(task, selected_engine, engine_attempts, selected_model)], "single_task_complete"
+    if selection.engine_name is None:
+        return [], _determine_dry_run_stop_reason(
+            [skip.reason for skip in selection.skipped] or [selection.blocked_reason or ""],
+            stop_conditions=stop_conditions,
+        )
+    return [
+        (
+            task,
+            selection.engine_name,
+            selection.engine_attempts,
+            selection.model_name,
+        )
+    ], "single_task_complete"
 
 
 def _print_pool_dry_run_plan(
