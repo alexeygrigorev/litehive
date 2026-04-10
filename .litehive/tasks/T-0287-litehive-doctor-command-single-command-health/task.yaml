@@ -6,15 +6,15 @@ task_type: null
 model: null
 mode: implementation
 pipeline_mode: full
-status: in_progress
+status: done
 flag_reason: null
 flag_count: 0
-pipeline_status: commit_to_git
+pipeline_status: done
 priority: medium
 pm_complexity: moderate
 planned_effort: m
 created_at: '2026-04-10T05:59:18+00:00'
-updated_at: '2026-04-10T09:23:36+00:00'
+updated_at: '2026-04-10T09:23:37+00:00'
 goal: 'Add a ''litehive doctor'' command that runs a comprehensive workspace health
   check: duplicate task IDs, merge_failed tasks, flagged tasks, local/origin divergence,
   stale worktrees without active tasks, stuck tasks in commit_to_git, orphaned subagents,
@@ -95,9 +95,9 @@ subagents:
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0287 litehive-doctor-command-single-command-health'
-  commit_sha: null
-  checkpoint_base_sha: null
-  checkpoint_attempts: 0
+  commit_sha: 35b3ccf6b5118f614585a84df2f22d31b405b9c3
+  checkpoint_base_sha: ef692c3a59b00c5b816c594858cc7e0c4bd8a641
+  checkpoint_attempts: 1
   rolled_back_checkpoint_attempt: null
   merge_agent_attempts: 0
   worktree_path: null

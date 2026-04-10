@@ -1,0 +1,87 @@
+task_id: T-0288
+step: grooming
+verdict: pass
+source: agent
+summary: Grooming PASS. Repo inspection completed and the task is implementation-ready.
+feedback: "Grooming PASS. Repo inspection completed and the task is implementation-ready.\n\
+  \nWhat I verified:\n- `litehive/cli/worktree.py` and `litehive/cli/parsers/worktree.py`\
+  \ are the right public CLI seam for this feature; current CLI structure prefers\
+  \ grouped commands over new public top-level commands.\n- `litehive/pipeline/core.py:_record_unmerged_worktree`\
+  \ persists only `task_id` and `worktree_path` in `.litehive/state.yaml`, so rescue\
+  \ logic must derive cherry-pick candidates from git history in the recorded worktree.\n\
+  - `litehive/cli/debug.py --worktree` already computes worktree changes ahead of\
+  \ main and is a good reference for commit/file discovery.\n- `litehive/git/ops.py`\
+  \ has basic cherry-pick helpers, but there is no existing helper for metadata-skipping\
+  \ rescue or for clearing rescued `unmerged_worktrees` entries/state.\n- Live workspace\
+  \ evidence: `.litehive/state.yaml` currently has `unmerged_worktrees: []`, `git\
+  \ worktree list` shows only `main` plus this task worktree, and `litehive doctor`\
+  \ reports a clean workspace. The referenced incident tasks (`T-0264`, `T-0269`,\
+  \ `T-0280`) are already marked `done`, so there was no live merge_failed incident\
+  \ to validate against in grooming.\n\nTests run:\n- `litehive doctor` -> pass (`doctor:\
+  \ clean workspace=...`)\n- No automated pytest slice was run in grooming; this stage\
+  \ was repo/task inspection only.\n\nImplementation guidance:\n1. Add the rescue\
+  \ command under the worktree command group as the primary public surface: `litehive\
+  \ worktree rescue`. If product insists on the old spelling from the task text, keep\
+  \ `litehive rescue-worktrees` as a hidden compatibility alias only.\n2. Default\
+  \ behavior should be preview/list only. Show each candidate merge_failed task, its\
+  \ recorded worktree path, and the commit SHA(s) or commit count ahead of current\
+  \ main that would be rescued.\n3. `--apply` should require a clean `main` checkout,\
+  \ cherry-pick candidate commits oldest-first, and classify each task result as `clean`,\
+  \ `already_landed`, `manual_conflict`, `missing_worktree`, or `no_commits`.\n4.\
+  \ Rescue must exclude per-task metadata under `.litehive/tasks/<task-id>-*/` from\
+  \ the applied patch so task artifact conflicts do not block feature-code recovery.\n\
+  5. A clean or already-landed rescue should also finalize state: remove the task\
+  \ from pending rescue visibility, clear any `unmerged_worktrees` entry for that\
+  \ task, update task/journal evidence, and record the reconciled main commit SHA\
+  \ or explicit no-op outcome.\n6. Add focused tests for preview output, clean apply,\
+  \ metadata-skip behavior, manual-conflict reporting, already-landed/no-op handling,\
+  \ and \u201Crerun preview no longer lists rescued task\u201D.\n\nTASK_UPDATE:\n\
+  goal: Rescue merge_failed task worktrees by replaying recoverable code changes onto\
+  \ current main without reintroducing per-task Litehive metadata conflicts.\nacceptance_criteria:\n\
+  \  - `litehive worktree rescue` lists each merge_failed task that still has a recorded\
+  \ worktree, including the task id, recorded worktree path, and the commit SHA(s)\
+  \ or commit count that are ahead of current main and eligible for rescue.\n  - `litehive\
+  \ worktree rescue --apply` from a clean main checkout cherry-picks each eligible\
+  \ task's recoverable commits onto main in commit order and reports, per task, whether\
+  \ rescue applied cleanly, was already landed/no-op, or now needs manual conflict\
+  \ resolution.\n  - Files under `.litehive/tasks/<task-id>-*/` are excluded from\
+  \ the applied rescue patch, so task artifact conflicts do not block recovery of\
+  \ the task's feature code.\n  - After a task is rescued cleanly or recognized as\
+  \ already landed, rerunning the preview no longer lists it as pending rescue, and\
+  \ the task/journal record the reconciled main commit SHA or explicit no-op outcome.\n\
+  constraints:\n  - Keep scope limited to merge_failed worktree rescue; do not broaden\
+  \ this into generic workspace repair or doctor autofix behavior.\n  - Prefer `litehive\
+  \ worktree rescue` as the public command to stay aligned with the grouped CLI introduced\
+  \ by T-0264; add a hidden alias only if necessary for backward compatibility.\n\
+  plan:\n  - Add a focused rescue service that enumerates merge_failed tasks with\
+  \ managed worktrees, derives commits ahead of main from each worktree, and returns\
+  \ preview/apply result objects for the CLI.\n  - Wire a `worktree rescue` parser/command\
+  \ that prints deterministic preview and apply summaries using the existing plain-text\
+  \ CLI style.\n  - Implement rescue apply via cherry-pick of worktree-only commits\
+  \ oldest-first while stripping `.litehive/tasks/<task-id>-*/` paths from the applied\
+  \ patch and distinguishing already-landed/no-op from true conflicts.\n  - Finalize\
+  \ successful rescues by updating task/state/journal data so rescued tasks are not\
+  \ offered again.\n  - Cover the feature with targeted command/recovery tests rather\
+  \ than broad end-to-end suites.\npm_complexity: moderate\nplanned_effort: m\n\n\
+  Verdict: pass to implementing."
+submitted_via_cli: true
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 199
+hook_results: []
+created_at: '2026-04-10T09:27:33+00:00'
