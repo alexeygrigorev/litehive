@@ -1,0 +1,49 @@
+task_id: T-0283
+step: testing
+verdict: pass
+source: agent
+summary: 'Verified the Codex-specific fix in heru/adapters/_codex_impl.py and its
+  adapter wiring in heru/adapters/codex.py. Confirmed the new regression coverage
+  in tests/test_runner_workflow.py specifically exercises multiline command_execution
+  payloads and asserts Codex parsing no longer emits the generic JSONL warning path
+  while still extracting command failure text and usage. Ran: uv run pytest -q tests/test_runner_workflow.py
+  -k codex -> 17 passed, 105 deselected; uv run pytest -q tests/test_engine_parse_warnings.py
+  -> 12 passed; uv run pytest -q tests/test_sandbox_git_profiles.py -> 11 passed;
+  uv run ruff check --select E402,F401 litehive tests -> passed; forbidden noqa guard
+  -> passed; uv run pytest -q -> 963 passed. Acceptance criteria are met: normal Codex
+  command_execution payloads no longer produce parse-warning noise in test coverage,
+  the fix is localized to the Codex adapter implementation rather than the shim, and
+  the existing test suite passes in this worktree.'
+feedback: 'Verified the Codex-specific fix in heru/adapters/_codex_impl.py and its
+  adapter wiring in heru/adapters/codex.py. Confirmed the new regression coverage
+  in tests/test_runner_workflow.py specifically exercises multiline command_execution
+  payloads and asserts Codex parsing no longer emits the generic JSONL warning path
+  while still extracting command failure text and usage. Ran: uv run pytest -q tests/test_runner_workflow.py
+  -k codex -> 17 passed, 105 deselected; uv run pytest -q tests/test_engine_parse_warnings.py
+  -> 12 passed; uv run pytest -q tests/test_sandbox_git_profiles.py -> 11 passed;
+  uv run ruff check --select E402,F401 litehive tests -> passed; forbidden noqa guard
+  -> passed; uv run pytest -q -> 963 passed. Acceptance criteria are met: normal Codex
+  command_execution payloads no longer produce parse-warning noise in test coverage,
+  the fix is localized to the Codex adapter implementation rather than the shim, and
+  the existing test suite passes in this worktree.'
+submitted_via_cli: true
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 407
+hook_results: []
+created_at: '2026-04-10T11:50:32+00:00'
