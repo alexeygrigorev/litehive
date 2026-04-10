@@ -1,6 +1,7 @@
 """Recovery evidence, thread comments, and report helpers."""
 
 from pathlib import Path
+from typing import Iterable
 
 import yaml
 
@@ -24,6 +25,10 @@ from .paths import (
     task_thread_file,
     task_recovery_dir,
 )
+
+RETRACTED_FILESYSTEM_MARKER = "[retracted - filesystem check shows no changes landed]"
+_RETRACTABLE_STEPS = {"implementing", "testing", "accepting"}
+_FILES_CHANGED_PLACEHOLDERS = {"none", "n/a", "-", ""}
 
 
 def collect_recovery_evidence(
@@ -263,6 +268,39 @@ def append_thread_comment(root: Path, task: TaskRecord, comment: "TaskThreadComm
     path.write_text(yaml.safe_dump(existing, sort_keys=False), encoding="utf-8")
 
 
+def _normalized_files_changed(paths: Iterable[str]) -> list[str]:
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for raw_path in paths:
+        stripped = str(raw_path).strip().strip("/")
+        if stripped.lower() in _FILES_CHANGED_PLACEHOLDERS or not stripped:
+            continue
+        if stripped in seen:
+            continue
+        seen.add(stripped)
+        normalized.append(stripped)
+    return normalized
+
+
+def is_retracted_thread_comment(comment: "TaskThreadComment") -> bool:
+    return RETRACTED_FILESYSTEM_MARKER in comment.message
+
+
+def is_retractable_pass_comment(comment: "TaskThreadComment") -> bool:
+    return (
+        comment.verdict == "pass"
+        and comment.step in _RETRACTABLE_STEPS
+        and bool(_normalized_files_changed(comment.files_changed))
+    )
+
+
+def retract_thread_comment(comment: "TaskThreadComment") -> bool:
+    if is_retracted_thread_comment(comment):
+        return False
+    comment.message = f"{comment.message.rstrip()}\n{RETRACTED_FILESYSTEM_MARKER}"
+    return True
+
+
 def load_task_thread(root: Path, task: TaskRecord) -> list["TaskThreadComment"]:
     from litehive.models import TaskThreadComment
 
@@ -275,12 +313,30 @@ def load_task_thread(root: Path, task: TaskRecord) -> list["TaskThreadComment"]:
     return [TaskThreadComment(**entry) for entry in loaded if isinstance(entry, dict)]
 
 
-def render_task_thread(root: Path, task: TaskRecord) -> str:
+def save_task_thread(root: Path, task: TaskRecord, thread: list["TaskThreadComment"]) -> None:
+    path = task_thread_file(root, task)
+    path.write_text(
+        yaml.safe_dump([comment.model_dump(mode="python") for comment in thread], sort_keys=False),
+        encoding="utf-8",
+    )
+
+
+def render_task_thread(root: Path, task: TaskRecord, *, for_prompt: bool = False) -> str:
     thread = load_task_thread(root, task)
     if not thread:
         return ""
     lines = ["Discussion thread:"]
     for c in thread:
+        if for_prompt and is_retracted_thread_comment(c):
+            header = f"[{c.created_at}] {c.role} ({c.step}) - {c.verdict} {RETRACTED_FILESYSTEM_MARKER}"
+            lines.append(f"\n--- {header} ---")
+            lines.append(
+                "Prior pass report withheld from prompt context after requeue-time filesystem validation."
+            )
+            claimed_files = _normalized_files_changed(c.files_changed)
+            if claimed_files:
+                lines.append(f"Claimed files: {', '.join(claimed_files)}")
+            continue
         header = f"[{c.created_at}] {c.role} ({c.step}) — {c.verdict}"
         lines.append(f"\n--- {header} ---")
         lines.append(c.message)
