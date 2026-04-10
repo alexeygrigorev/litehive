@@ -22,3 +22,9 @@ def register_report_parser(subparsers):
         type=Path,
         help="Repository root containing .litehive/. Optional when workspace resolution can use env, cwd, or the registry.",
     )
+    parser.add_argument(
+        "--files-changed",
+        action="append",
+        default=[],
+        help="Claimed changed file path. Repeat for multiple paths.",
+    )

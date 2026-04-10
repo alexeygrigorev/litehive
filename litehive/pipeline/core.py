@@ -523,6 +523,37 @@ class TaskExecutionRunner:
                     # Planning/analysis task: produced task records under
                     # .litehive/tasks/ but no code changes — this is valid output.
                     pass
+                elif not worktree_has_changes and report.files_changed:
+                    claimed_files = sorted({path for path in report.files_changed if path})
+                    reason = (
+                        "agent reported changes but worktree is clean — likely hallucination. "
+                        "The implementing pass claimed file changes, but `git status --porcelain` "
+                        "found no tracked or untracked code changes in the task worktree, so the "
+                        "completion report was rejected and its claimed files were not trusted. "
+                        f"Claimed files: {', '.join(claimed_files)}. "
+                        f"Report summary: {report.summary}"
+                    )
+                    append_journal(
+                        self.root,
+                        task,
+                        "[guard] Rejected hallucinated SWE completion: "
+                        "prior completion claim was bogus because the worktree was clean. "
+                        f"Claimed files: {', '.join(claimed_files)}.",
+                    )
+                    report.verdict = "reject"
+                    report.summary = reason
+                    report.outcome_reason_code = "hallucinated_completion"
+                    report.outcome_reason = (
+                        "Rejected implementing pass because the agent claimed file changes "
+                        "but the task worktree was clean."
+                    )
+                    report.failure_classification = "hallucinated_completion"
+                    report.failure_diagnostics = {
+                        "claimed_files": claimed_files,
+                        "worktree_has_changes": False,
+                    }
+                    report.files_changed = []
+                    target = "implementing"
                 elif not worktree_has_changes and (not report.tests or report.tests.get("added", 0) == 0):
                     reason = (
                         "SWE reported pass but produced no file changes and no tests. "
@@ -534,30 +565,6 @@ class TaskExecutionRunner:
                     report.verdict = "reject"
                     report.summary = reason
                     target = "implementing"
-                    rejections += 1
-                    report.retry_count = rejections
-                    if rejections > self.max_retries:
-                        report.outcome_reason_code = "retry_limit_exhausted"
-                        report.outcome_reason = f"Empty SWE pass rejected {rejections} time(s) (limit: {self.max_retries})"
-                        task.status = "flagged"
-                        _apply_task_outcome(
-                            task,
-                            kind="flagged",
-                            stage=current,
-                            reason_code="retry_limit_exhausted",
-                            reason=report.outcome_reason,
-                            retry_count=rejections,
-                            retry_limit=self.max_retries,
-                            retry_source=self.retry_source,
-                        )
-                        self._write_report(task, report, steps)
-                        _apply_stage_finished(task, report)
-                        return self._finish_run(
-                            task,
-                            final_status="flagged",
-                            steps=steps,
-                            last_verdict="reject",
-                        )
 
             if current == "grooming" and target == "implementing":
                 from litehive.workspace.workflow import apply_task_updates_from_report
@@ -616,7 +623,7 @@ class TaskExecutionRunner:
                 if not report.files_changed:
                     target = "done"
 
-            if target == "implementing" and current in {"testing", "accepting"}:
+            if target == "implementing" and current in {"implementing", "testing", "accepting"}:
                 rejections += 1
                 report.retry_count = rejections
                 report.retry_limit = self.max_retries
@@ -627,7 +634,7 @@ class TaskExecutionRunner:
                         f"Hook rejection routed `{current}` back to `implementing` for SWE follow-up.",
                     )
                 # Hook rejections go straight back to SWE — no stage escalation
-                if report.source != "hook":
+                if report.source != "hook" and current in {"testing", "accepting"}:
                     stage_count = task.runtime.stage_retry_counts.get(current, 0) + 1
                     task.runtime.stage_retry_counts[current] = stage_count
                 else:
