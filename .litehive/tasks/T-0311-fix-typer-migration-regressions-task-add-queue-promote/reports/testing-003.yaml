@@ -1,0 +1,57 @@
+task_id: T-0311
+step: testing
+verdict: pass
+source: agent
+summary: 'Verified the Typer regression fix independently. Reviewed the implementation
+  in litehive/cli/__init__.py: broken typer.get_current_context() wrapper calls were
+  replaced with injected typer.Context via _ctx_command(ctx), covering queue promote
+  and the adjacent wrapper commands using the same pattern. Reviewed the new public-CLI
+  regression tests in tests/test_run_cli.py: test_typer_task_add_persists_options_to_task_yaml
+  and test_typer_queue_promote_moves_task_to_front are focused, under 50 lines each,
+  and assert user-visible behavior rather than framework internals. Ran uv run pytest
+  -q tests/test_run_cli.py -k ''typer_task_add_persists_options_to_task_yaml or typer_queue_promote_moves_task_to_front''
+  -> 2 passed. Ran uv run pytest -q tests/test_run_cli.py -> 36 passed. Performed
+  direct CLI smokes against scratch workspaces initialized with tests.workspace_helpers.ensure_workspace:
+  1) python -m litehive.main task add ''Ship task'' --goal ''Goal text'' --priority
+  high --acceptance-criteria ''Criterion A'' --depends-on T-0001,T-0002 persisted
+  task.yaml with title=''Ship task'', goal=''Goal text'', priority=''high'', acceptance_criteria=[''Criterion
+  A''], depends_on=[''T-0001'',''T-0002'']; 2) python -m litehive.main queue promote
+  T-0002 moved the queue to [''T-0002'',''T-0001''] and printed position: 1 without
+  error. Acceptance criteria satisfied, including preserving existing tests in tests/test_run_cli.py.'
+feedback: 'Verified the Typer regression fix independently. Reviewed the implementation
+  in litehive/cli/__init__.py: broken typer.get_current_context() wrapper calls were
+  replaced with injected typer.Context via _ctx_command(ctx), covering queue promote
+  and the adjacent wrapper commands using the same pattern. Reviewed the new public-CLI
+  regression tests in tests/test_run_cli.py: test_typer_task_add_persists_options_to_task_yaml
+  and test_typer_queue_promote_moves_task_to_front are focused, under 50 lines each,
+  and assert user-visible behavior rather than framework internals. Ran uv run pytest
+  -q tests/test_run_cli.py -k ''typer_task_add_persists_options_to_task_yaml or typer_queue_promote_moves_task_to_front''
+  -> 2 passed. Ran uv run pytest -q tests/test_run_cli.py -> 36 passed. Performed
+  direct CLI smokes against scratch workspaces initialized with tests.workspace_helpers.ensure_workspace:
+  1) python -m litehive.main task add ''Ship task'' --goal ''Goal text'' --priority
+  high --acceptance-criteria ''Criterion A'' --depends-on T-0001,T-0002 persisted
+  task.yaml with title=''Ship task'', goal=''Goal text'', priority=''high'', acceptance_criteria=[''Criterion
+  A''], depends_on=[''T-0001'',''T-0002'']; 2) python -m litehive.main queue promote
+  T-0002 moved the queue to [''T-0002'',''T-0001''] and printed position: 1 without
+  error. Acceptance criteria satisfied, including preserving existing tests in tests/test_run_cli.py.'
+submitted_via_cli: true
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 105
+hook_results: []
+created_at: '2026-04-10T15:27:08+00:00'

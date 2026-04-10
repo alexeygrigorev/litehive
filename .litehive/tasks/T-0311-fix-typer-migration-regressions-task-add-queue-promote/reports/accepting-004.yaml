@@ -1,0 +1,53 @@
+task_id: T-0311
+step: accepting
+verdict: pass
+source: agent
+summary: 'Accepted. I reviewed the fix in litehive/cli/__init__.py and confirmed the
+  broken Typer wrapper pattern was replaced with injected typer.Context via _ctx_command(ctx),
+  removing the invalid typer.get_current_context() usage that caused queue promote
+  to crash. I also reviewed the new public-CLI regression tests in tests/test_run_cli.py:
+  test_typer_task_add_persists_options_to_task_yaml and test_typer_queue_promote_moves_task_to_front.
+  Independent verification run: uv run pytest -q tests/test_run_cli.py -k ''typer_task_add_persists_options_to_task_yaml
+  or typer_queue_promote_moves_task_to_front'' -> 2 passed; uv run pytest -q tests/test_run_cli.py
+  -> 36 passed. Direct end-to-end smoke via python -m litehive.main against temporary
+  workspaces also passed: task add with --goal, --priority, --acceptance-criteria,
+  and --depends-on exited 0 and persisted title=Ship task, goal=Goal text, priority=high,
+  acceptance_criteria=[Criterion A], depends_on=[T-0001, T-0002] in task.yaml; queue
+  promote T-0002 exited 0, printed position: 1, and reordered the queue to [T-0002,
+  T-0001]. This satisfies the acceptance criteria, including preserving existing tests
+  in tests/test_run_cli.py.'
+feedback: 'Accepted. I reviewed the fix in litehive/cli/__init__.py and confirmed
+  the broken Typer wrapper pattern was replaced with injected typer.Context via _ctx_command(ctx),
+  removing the invalid typer.get_current_context() usage that caused queue promote
+  to crash. I also reviewed the new public-CLI regression tests in tests/test_run_cli.py:
+  test_typer_task_add_persists_options_to_task_yaml and test_typer_queue_promote_moves_task_to_front.
+  Independent verification run: uv run pytest -q tests/test_run_cli.py -k ''typer_task_add_persists_options_to_task_yaml
+  or typer_queue_promote_moves_task_to_front'' -> 2 passed; uv run pytest -q tests/test_run_cli.py
+  -> 36 passed. Direct end-to-end smoke via python -m litehive.main against temporary
+  workspaces also passed: task add with --goal, --priority, --acceptance-criteria,
+  and --depends-on exited 0 and persisted title=Ship task, goal=Goal text, priority=high,
+  acceptance_criteria=[Criterion A], depends_on=[T-0001, T-0002] in task.yaml; queue
+  promote T-0002 exited 0, printed position: 1, and reordered the queue to [T-0002,
+  T-0001]. This satisfies the acceptance criteria, including preserving existing tests
+  in tests/test_run_cli.py.'
+submitted_via_cli: true
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 57
+hook_results: []
+created_at: '2026-04-10T15:28:05+00:00'
