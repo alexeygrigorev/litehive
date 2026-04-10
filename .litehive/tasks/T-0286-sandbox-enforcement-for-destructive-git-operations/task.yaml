@@ -15,49 +15,72 @@ pm_complexity: null
 planned_effort: null
 created_at: '2026-04-10T05:59:06+00:00'
 updated_at: '2026-04-10T07:45:27+00:00'
-goal: 'Prevent agents from running destructive git operations by intercepting git
-  itself at the PATH level with a role-aware shim. The T-0266 incident had codex
-  running non-sandboxed with full host access and force-pushed to origin/main.
-  Policy: only the merge-resolver role gets normal git access (and even it cannot
-  force-push or rewrite history); every other role has zero git access.'
+goal: 'Prevent agents from running destructive git operations by removing git from
+  the sandbox filesystem for every role except merge-resolver. The T-0266 incident
+  had codex running non-sandboxed with full host access and force-pushed to
+  origin/main. Policy: merge-resolver is the ONLY role whose sandbox exposes a git
+  binary, and even that binary is a wrapper that blocks destructive subcommands.
+  Every other role (planner, SWE, QA, reviewer, recovery) has no git binary
+  reachable at all — not at /usr/bin/git, not anywhere on PATH, not via absolute
+  path. Enforcement is at the filesystem/sandbox boundary, not via env vars or
+  role-checking logic (those are trivially bypassable by the agent itself).'
 acceptance_criteria:
-- 'A small git shim executable is installed into the per-subagent sandbox PATH ahead
-  of /usr/bin/git. When invoked, it reads LITEHIVE_SUBAGENT_ROLE from the environment
-  and applies role-based policy.'
-- 'Role policy: merge-resolver → denylist mode (all normal git allowed, destructive
-  subcommands rejected with non-zero exit). Any other role or unset → allowlist mode
-  with empty allowlist (every git invocation rejected).'
-- 'Denylist (applied only to merge-resolver): push --force, push -f, push --force-with-lease,
-  push --mirror, filter-repo, filter-branch, reflog expire, gc --prune=now, update-ref -d
-  on refs/remotes/*, reset --hard with origin/* target, rebase/cherry-pick onto protected
-  refs, remote set-url that changes origin URL.'
-- Rejection prints a clear message naming the blocked command and the current subagent
-  role, and logs to .litehive/runtime/attention.log so the operator sees it after the run.
-- LITEHIVE_SUBAGENT_ROLE is exported by SubagentManager when spawning each subagent (or
-  equivalent env-injection point), with value equal to the subagent's role field.
-- Task worktrees have origin removed (git remote remove origin) before the worktree is
-  handed to any non-merge-resolver subagent — defense in depth so even a bypassed shim
-  has nothing to push to.
-- Tests cover all role × operation combinations for the matrix above (merge-resolver
-  allowed commit/push/pull, merge-resolver blocked force-push/filter-repo, swe blocked
-  on everything, unset role blocked on everything).
-- README or docs/ section describing the policy and how to extend the denylist.
+- 'Sandbox profile per role. Non-merge-resolver roles (planner, swe, qa, reviewer,
+  recovery, grooming, etc.) launch with a sandbox whose filesystem view contains NO
+  executable named "git" at any reachable path. Running `git`, `/usr/bin/git`, or
+  `which git` inside the sandbox yields command-not-found.'
+- 'Merge-resolver role launches with a sandbox that bind-mounts a single git wrapper
+  (e.g. /sandbox/bin/git) onto PATH. The real git binary is NOT directly reachable;
+  only the wrapper is. The wrapper forwards safe subcommands to the real git (stored
+  at a path the agent cannot reach) and rejects a hardcoded denylist.'
+- 'Merge-resolver denylist: push --force, push -f, push --force-with-lease, push
+  --mirror, filter-repo, filter-branch, reflog expire, gc --prune=now, update-ref -d
+  on refs/remotes/*, reset --hard targeting origin/*, remote set-url on origin,
+  rebase or cherry-pick onto protected refs. Rejection is clear and logged to
+  .litehive/runtime/attention.log.'
+- Enforcement does not depend on any environment variable the agent could set or
+  unset. An agent setting PATH, LD_PRELOAD, LITEHIVE_*, etc. cannot gain git access
+  because the binary does not exist inside the sandbox filesystem namespace.
+- Task worktrees have origin removed (`git remote remove origin`) before handoff to
+  any non-merge-resolver subagent. Belt-and-suspenders so that even if sandbox
+  isolation is somehow bypassed, there is nothing for `git push` to push to.
+- Sandbox profile selection lives in a single code path so it can be audited, and
+  the default (unknown role) is the no-git profile (fail closed).
+- Tests exercise each role's profile by spawning a real subagent process with the
+  profile applied and asserting that `git --version` succeeds or fails as expected,
+  plus that the merge-resolver wrapper denylist actually rejects force-push and
+  filter-repo.
+- README or docs/ section describing the per-role sandbox profile and the git
+  wrapper denylist.
 constraints:
-- Do not rely on parsing agent output or prompt scanning — that is bypassable. Enforce
-  at the git invocation boundary only.
-- Merge-resolver is the only role that should ever need push access; do not add escape
-  hatches for other roles without changing this task's AC.
-- Fail closed on unknown roles and on shim internal errors.
+- Do not rely on env vars, role strings, or prompt-scanning for git gating — they
+  are bypassable by the very thing we are trying to restrict.
+- Do not rely on PATH manipulation alone; the binary must actually be absent from
+  the sandbox filesystem view for non-merge-resolver roles.
+- Merge-resolver is the only role that may have git. Do not add per-task overrides
+  without changing this task's AC.
+- Fail closed on unknown roles and on sandbox setup errors.
 plan:
-- Add litehive/sandbox/git_shim.py (or a small shell script) that implements role-based
-  policy parsing argv and exec'ing /usr/bin/git on allow, exit 1 on deny.
-- Add ROLE_GIT_POLICY constant describing allowed/denied subcommands per role.
-- Wire SubagentManager (or whichever code spawns sandboxed subprocesses) to prepend the
-  shim directory to PATH and export LITEHIVE_SUBAGENT_ROLE=<role>.
-- In worktree setup (litehive/pipeline/_worktree.py or equivalent), run git remote remove
-  origin inside the worktree after creation, for all roles that are not merge-resolver.
-- Add tests under tests/test_git_shim.py exercising the role × command matrix.
-- Update docs/architecture or README with the policy.
+- Inventory the existing sandbox/execution layer (litehive/pipeline, heru adapters)
+  to find where subagent subprocesses are launched and what sandboxing primitives
+  are already available (codex sandbox modes, claude, etc.). The shim is built on
+  top of whatever sandbox primitive already exists — we do not need a new sandbox
+  runtime.
+- Define SandboxProfile enum with NO_GIT (default) and MERGE_RESOLVER. Map role →
+  profile in a single audited function.
+- For NO_GIT profile, use the sandbox primitive to either (a) launch in a mount
+  namespace / container where /usr/bin/git is not bind-mounted, or (b) in a chroot
+  with no git binary. The exact mechanism depends on what the existing sandbox
+  layer supports; document any gaps.
+- For MERGE_RESOLVER profile, build a small wrapper binary
+  (litehive/sandbox/git_wrapper.py compiled or kept as a script) that exec's a
+  hidden real git and enforces the denylist. Bind-mount it into the sandbox as the
+  only visible git.
+- Wire profile selection into subagent spawn path. Make sure every spawn goes
+  through the single entry point so no role can silently get a different profile.
+- Strip origin from non-merge-resolver worktrees in the worktree setup code.
+- Tests exercising role × command matrix against the real sandbox.
+- Docs update describing the policy and how to audit it.
 human_checkpoints: []
 subagents: []
 git:
