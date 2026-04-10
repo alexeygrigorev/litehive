@@ -1,69 +1,60 @@
 task_id: T-0107
 step: grooming
 verdict: pass
-summary: "GROOMING PASS \u2014 Task shaped with goal, acceptance criteria, plan, and\
-  \ sizing."
-feedback: "GROOMING PASS \u2014 Task shaped with goal, acceptance criteria, plan,\
-  \ and sizing.\n\n## What this task is about\n\nThe parallel execution pipeline (T-0129)\
-  \ runs multiple independent tasks in separate worktrees, then merges them to main\
-  \ sequentially in task-ID order with agent-assisted merge conflict resolution. However,\
-  \ after all parallel tasks merge, there is NO post-batch integration verification.\
-  \ Each task passes its own tests in its worktree, but the combined merged state\
-  \ is never validated. Two tasks could individually pass tests but break each other\
-  \ when combined (e.g., conflicting imports, incompatible API changes, duplicate\
-  \ definitions).\n\nThis task adds a deterministic integration verification stage\
-  \ that runs after Phase 3 (merge) completes, validating the combined result before\
-  \ the batch is considered done.\n\n## TASK_UPDATE:\n\n```yaml\ngoal: >\n  Add a\
-  \ post-merge integration verification stage to the parallel execution pipeline.\n\
-  \  After all parallel tasks are merged to main (Phase 3), run a configurable integration\n\
-  \  check (tests, lint, build) on the combined merged state. If the check fails,\
-  \ report\n  which tasks were in the batch, mark the batch result as integration_failed,\
-  \ and leave\n  actionable evidence for recovery. The stage must be deterministic:\
-  \ same inputs produce\n  same verdicts.\n\nacceptance_criteria:\n  - \"After all\
-  \ parallel tasks merge to main, an integration verification step runs automatically\
-  \ on the combined merged state before the batch is marked complete.\"\n  - \"The\
-  \ integration check is configurable via config.yaml (e.g., `parallel_integration_check:\
-  \ 'uv run pytest -q'`) with a sensible default (no-op if unconfigured).\"\n  - \"\
-  If the integration check passes, the ParallelRunSummary reports stop_reason 'parallel_batch_complete'\
-  \ and all tasks remain done.\"\n  - \"If the integration check fails, the ParallelRunSummary\
-  \ reports stop_reason 'parallel_integration_failed', the failure output is captured\
-  \ in a batch integration report, and the journal of each task in the batch records\
-  \ the integration failure.\"\n  - \"The integration report includes: batch task\
-  \ IDs, merge order, check command, exit code, stdout/stderr, and timestamp \u2014\
-  \ enough for an operator or recovery agent to diagnose the failure.\"\n  - \"Integration\
-  \ verification is idempotent: running the same check on the same merged state produces\
-  \ the same result.\"\n  - \"Existing tests pass and new tests cover: (a) integration\
-  \ check passes, (b) integration check fails, (c) no integration check configured\
-  \ (no-op).\"\n\nconstraints:\n  - \"Keep changes scoped to the parallel pipeline\
-  \ and its configuration; do not modify the sequential single-task flow.\"\n  - \"\
-  Do not block on or require changes to the recovery pipeline \u2014 just leave actionable\
-  \ evidence that recovery can consume later.\"\n  - \"The integration check runs\
-  \ on the main worktree after merges, not in a separate worktree.\"\n\nplan:\n  -\
-  \ \"Add `parallel_integration_check` field to LitehiveConfig (optional string, default\
-  \ None).\"\n  - \"In `_parallel.py` `run_parallel_tasks`, after Phase 3 merge loop\
-  \ and before determining stop_reason, add Phase 4: if `parallel_integration_check`\
-  \ is configured and at least one task merged successfully, run the check command\
-  \ on the main worktree.\"\n  - \"Capture check results (exit code, stdout, stderr,\
-  \ timestamp) and write a batch integration report to `.litehive/logs/parallel-integration/`.\"\
-  \n  - \"If the check fails, set stop_reason to 'parallel_integration_failed' and\
-  \ append a journal entry to each merged task.\"\n  - \"Add IntegrationCheckResult\
-  \ dataclass to _parallel.py and include it in ParallelRunSummary.\"\n  - \"Add the\
-  \ new config field to config schema and documentation.\"\n  - \"Write tests: (a)\
-  \ configured check passes \u2192 batch_complete, (b) configured check fails \u2192\
-  \ integration_failed + report written, (c) no check configured \u2192 no-op, existing\
-  \ behavior preserved.\"\n\npm_complexity: moderate\nplanned_effort: m\n```\n\n##\
-  \ Key architectural decisions for the implementer\n\n1. **Where the check runs**:\
-  \ On the main worktree (`root`), after all merges complete. This is the combined\
-  \ state.\n2. **How the check runs**: `subprocess.run(shlex.split(config.parallel_integration_check),\
-  \ cwd=root)` \u2014 same pattern as existing hook execution.\n3. **Report location**:\
-  \ `.litehive/logs/parallel-integration/{timestamp}-batch.yaml` \u2014 keeps it out\
-  \ of per-task artifacts since this is a batch-level concern.\n4. **No rollback**:\
-  \ This task does NOT roll back failed integrations. It only reports. Rollback/recovery\
-  \ is a separate concern.\n5. **Determinism guarantee**: The check command runs on\
-  \ a committed git state (all merges are committed), so re-running it on the same\
-  \ HEAD produces the same result.\n\n## Follow-up work (not in scope)\n- Automatic\
-  \ rollback of failed integration batches\n- Recovery agent integration for `parallel_integration_failed`\
-  \ state\n- Per-task integration blame (which task broke the integration)"
+source: agent
+summary: GROOMING PASS.
+feedback: 'GROOMING PASS.
+
+
+  I verified that the durable task record was the only grooming gap left. The repository
+  already contains the scoped implementation and QA evidence for this feature: litehive/config/model.py
+  defines parallel_integration_check, litehive/pipeline/_parallel.py defines IntegrationCheckResult
+  and Phase 4 post-merge integration verification, and tests/test_parallel_execution.py
+  contains focused pass/fail/unconfigured coverage.
+
+
+  I updated .litehive/tasks/T-0107-add-deterministic-integration-stage-for-parallel-worker-outputs/task.yaml
+  so the task source of truth is no longer blank. The task now has a concrete goal,
+  7 acceptance criteria, 3 constraints, a 7-step execution plan, pm_complexity=moderate,
+  and planned_effort=m.
+
+
+  What I verified:
+
+  - The task title now maps to a specific user problem: validate the combined merged
+  state after a parallel batch finishes merging.
+
+  - Acceptance criteria are observable and reviewer-checkable rather than implementation-only.
+
+  - Scope is constrained to the parallel pipeline and config; sequential flow and
+  recovery automation stay out of scope.
+
+  - Repo evidence matches the shaped task: config field, post-merge integration stage,
+  batch report output, failure journaling, and focused tests all exist.
+
+  - Existing prior test evidence recorded on the task is consistent with the shaped
+  scope: uv run pytest tests/test_parallel_execution.py -q passed with 20 tests including
+  the new integration-check scenarios; QA also recorded a larger suite run with unrelated
+  pre-existing failures only.
+
+
+  Operator note: the intended CLI path litehive task update is currently broken in
+  this workspace. Running litehive task update T-0107 ... fails with AttributeError:
+  module ''typer'' has no attribute ''get_current_context'', so I persisted the grooming
+  fields directly in task.yaml instead.
+
+
+  Handoff summary for downstream stages:
+
+  - Goal: add deterministic post-merge integration verification for parallel batches.
+
+  - Key outcomes expected: configurable integration command on main worktree, no-op
+  when unset, batch report on every configured run, parallel_integration_failed stop
+  reason on failure, and task journal evidence for each merged task.
+
+  - Follow-up work remains out of scope: rollback, recovery automation, and per-task
+  blame for integration failures.'
+submitted_via_cli: true
 files_changed: []
 created_follow_up_task_ids: []
 task_update: {}
@@ -81,6 +72,6 @@ outcome_reason: ''
 failure_classification: null
 failure_diagnostics: {}
 resource_limit_event: null
-duration_seconds: 150
+duration_seconds: 207
 hook_results: []
-created_at: '2026-04-09T07:40:24+00:00'
+created_at: '2026-04-10T14:32:41+00:00'

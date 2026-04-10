@@ -1,0 +1,67 @@
+task_id: T-0107
+step: testing
+verdict: pass
+source: agent
+summary: 'QA PASS for T-0107. I independently verified the deterministic post-merge
+  integration stage in the parallel pipeline and confirmed the task record now matches
+  the implemented scope. Code review evidence: litehive/config/model.py adds optional
+  parallel_integration_check on LitehiveConfig; litehive/pipeline/_parallel.py adds
+  IntegrationCheckResult, stores integration_check on ParallelRunSummary, runs Phase
+  4 after deterministic task-ID merge ordering, writes batch reports under .litehive/logs/parallel-integration/,
+  sets stop_reason to parallel_integration_failed when the configured check exits
+  non-zero, and appends per-task journal entries for merged tasks on failure. Focused
+  test evidence: uv run pytest tests/test_parallel_execution.py -q -> 20 passed in
+  1.11s; uv run pytest tests/test_parallel_execution.py -q -k ''integration_check
+  or run_integration_check'' -> 4 passed, 16 deselected in 0.53s; uv run pytest tests/test_config.py
+  -q -> 39 passed in 0.60s; uv run pytest tests/test_run_cli.py -q -> 34 passed in
+  2.80s. Acceptance criteria coverage confirmed: configured integration check auto-runs
+  after merges and before batch completion; no-op when parallel_integration_check
+  is unset; passing check preserves stop_reason parallel_batch_complete; failing check
+  produces stop_reason parallel_integration_failed plus batch report and failure journal
+  entries; report includes command, exit_code, stdout, stderr, timestamp, task_ids,
+  and merge_order; behavior stays scoped to the parallel pipeline and does not alter
+  sequential flow. Note: an earlier implementation note referenced tests/test_config_and_run_cli.py,
+  but in this workspace those checks live in tests/test_config.py and tests/test_run_cli.py;
+  both passed.'
+feedback: 'QA PASS for T-0107. I independently verified the deterministic post-merge
+  integration stage in the parallel pipeline and confirmed the task record now matches
+  the implemented scope. Code review evidence: litehive/config/model.py adds optional
+  parallel_integration_check on LitehiveConfig; litehive/pipeline/_parallel.py adds
+  IntegrationCheckResult, stores integration_check on ParallelRunSummary, runs Phase
+  4 after deterministic task-ID merge ordering, writes batch reports under .litehive/logs/parallel-integration/,
+  sets stop_reason to parallel_integration_failed when the configured check exits
+  non-zero, and appends per-task journal entries for merged tasks on failure. Focused
+  test evidence: uv run pytest tests/test_parallel_execution.py -q -> 20 passed in
+  1.11s; uv run pytest tests/test_parallel_execution.py -q -k ''integration_check
+  or run_integration_check'' -> 4 passed, 16 deselected in 0.53s; uv run pytest tests/test_config.py
+  -q -> 39 passed in 0.60s; uv run pytest tests/test_run_cli.py -q -> 34 passed in
+  2.80s. Acceptance criteria coverage confirmed: configured integration check auto-runs
+  after merges and before batch completion; no-op when parallel_integration_check
+  is unset; passing check preserves stop_reason parallel_batch_complete; failing check
+  produces stop_reason parallel_integration_failed plus batch report and failure journal
+  entries; report includes command, exit_code, stdout, stderr, timestamp, task_ids,
+  and merge_order; behavior stays scoped to the parallel pipeline and does not alter
+  sequential flow. Note: an earlier implementation note referenced tests/test_config_and_run_cli.py,
+  but in this workspace those checks live in tests/test_config.py and tests/test_run_cli.py;
+  both passed.'
+submitted_via_cli: true
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 68
+hook_results: []
+created_at: '2026-04-10T14:35:23+00:00'
