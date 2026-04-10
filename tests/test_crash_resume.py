@@ -43,11 +43,7 @@ def _continuation_stdout(engine_name: str, session_id: str) -> str:
 
 
 def _disable_quota_gates(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("litehive.pipeline._builder.check_codex_quota", lambda: None)
-    monkeypatch.setattr("litehive.pipeline._builder.codex_quota_block_reason", lambda: None)
-    monkeypatch.setattr("litehive.pipeline._builder.claude_quota_block_reason", lambda: None)
-    monkeypatch.setattr("litehive.pipeline._builder.copilot_quota_block_reason", lambda: None)
-    monkeypatch.setattr("litehive.pipeline._builder.zai_quota_block_reason", lambda: None)
+    monkeypatch.setattr("litehive.pipeline._models._engine_quota_block", lambda *args, **kwargs: (None, None))
 
 
 def _set_task_to_implementing(tmp_path: Path):

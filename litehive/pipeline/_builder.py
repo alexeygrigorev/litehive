@@ -1,17 +1,10 @@
-"""Stage executor builder (build_executor + _record_codex_monitoring)."""
+"""Stage executor builder."""
 
 import time
 from pathlib import Path
 
 from litehive.config import LitehiveConfig
 from litehive.agents import extract_engine_continuation
-from litehive.agents.quota import (
-    check_codex_quota,
-    claude_quota_block_reason,
-    codex_quota_block_reason,
-    copilot_quota_block_reason,
-    zai_quota_block_reason,
-)
 from litehive.models import StageReport, TaskRecord, cap_feedback
 from litehive.pipeline.core import StageExecutor
 from litehive.agents import SubagentManager, stage_prompt, stage_report_from_subagent
@@ -25,20 +18,12 @@ from ._models import (
     _retry_backoff_seconds,
     _role_for_step,
     _set_continuation_handoff,
+    select_engine,
     resolve_execution_retry_policy,
     resolve_model,
 )
 from .recovery import _attempt_stage_recovery
 from ._types import EngineBudgetLedger
-
-
-def _record_codex_monitoring(root: Path, status: object) -> None:
-    try:
-        from litehive.observability._engine_monitoring import record_codex_quota_check
-
-        record_codex_quota_check(root, status=status)
-    except Exception:  # noqa: BLE001
-        pass  # best-effort monitoring
 
 
 def build_executor(
@@ -82,81 +67,50 @@ def build_executor(
             return pre_stage_hook_report
 
         execution_events: list[str] = []
-        engines = _engine_attempt_order(next_stage_engine_names, config.engine_preference)
         limit_trigger_reason: str | None = None
-
-        for index, engine_name in enumerate(engines):
-            quota_reason = None
-            if engine_name == "codex":
-                quota_status = check_codex_quota()
-                _record_codex_monitoring(root, quota_status)
-                quota_reason = codex_quota_block_reason()
-            elif engine_name == "claude":
-                quota_reason = claude_quota_block_reason()
-            elif engine_name == "copilot":
-                quota_reason = copilot_quota_block_reason()
-            elif engine_name in ("goz", "opencode"):
-                quota_reason = zai_quota_block_reason()
-            if quota_reason is not None:
-                if index + 1 < len(engines):
-                    next_engine = engines[index + 1]
-                    event = (
-                        f"Stage `{step}` switched from `{engine_name}` to `{next_engine}` "
-                        f"after {quota_reason}."
-                    )
-                    execution_events.append(event)
-                    append_journal(root, current_task, event)
-                    mark_engine_switch(
-                        root,
-                        current_task,
-                        step=step,
-                        from_engine=engine_name,
-                        to_engine=next_engine,
-                        reason=quota_reason,
-                    )
+        remaining_engines = _engine_attempt_order(next_stage_engine_names, config.engine_preference)
+        while remaining_engines:
+            selection = select_engine(
+                root,
+                current_task,
+                config,
+                budget_ledger=budget_ledger,
+                model_override=model_override,
+                engine_names=remaining_engines,
+            )
+            engines = selection.engine_attempts
+            for skipped in selection.skipped:
+                skipped_index = engines.index(skipped.engine_name)
+                if skipped_index + 1 >= len(engines):
                     continue
+                next_engine = engines[skipped_index + 1]
+                event = (
+                    f"Stage `{step}` switched from `{skipped.engine_name}` to `{next_engine}` "
+                    f"after {skipped.reason}."
+                )
+                execution_events.append(event)
+                append_journal(root, current_task, event)
+                mark_engine_switch(
+                    root,
+                    current_task,
+                    step=step,
+                    from_engine=skipped.engine_name,
+                    to_engine=next_engine,
+                    reason=skipped.reason,
+                )
+            if selection.engine_name is None:
+                blocked_reason = selection.blocked_reason or "no eligible engine available"
                 return StageReport(
                     task_id=current_task.id,
                     step=step,  # type: ignore[arg-type]
                     verdict="blocked",
-                    summary=f"{step} blocked: {quota_reason}",
+                    summary=f"{step} blocked: {blocked_reason}",
                     feedback="\n\n".join(execution_events).strip(),
-                    warnings=[*execution_events, quota_reason],
+                    warnings=[*execution_events, blocked_reason],
                 )
-
-            budget_reason = budget_ledger.block_reason(engine_name)
-            if budget_reason is not None:
-                if index + 1 < len(engines):
-                    next_engine = engines[index + 1]
-                    event = (
-                        f"Stage `{step}` switched from `{engine_name}` to `{next_engine}` "
-                        f"after {budget_reason}."
-                    )
-                    execution_events.append(event)
-                    append_journal(root, current_task, event)
-                    mark_engine_switch(
-                        root,
-                        current_task,
-                        step=step,
-                        from_engine=engine_name,
-                        to_engine=next_engine,
-                        reason=budget_reason,
-                    )
-                    continue
-                report = StageReport(
-                    task_id=current_task.id,
-                    step=step,  # type: ignore[arg-type]
-                    verdict="blocked",
-                    summary=f"{step} blocked: {budget_reason}",
-                    feedback="\n\n".join(execution_events).strip(),
-                    warnings=[*execution_events, budget_reason],
-                )
-                return report
-
+            engine_name = selection.engine_name
             budget_ledger.record(engine_name)
-            model_name = resolve_model(
-                task, config, engine_name=engine_name, model_override=model_override
-            )
+            model_name = selection.model_name
             retry_policy = resolve_execution_retry_policy(
                 config,
                 engine_name=engine_name,
@@ -269,10 +223,12 @@ def build_executor(
                 and result.failure is not None
                 and result.failure.kind == "engine_error"
             )
+            selected_index = engines.index(engine_name)
+            remaining_after_selected = engines[selected_index + 1 :]
             if (
                 is_limit_failure or is_unavailable_fallback or is_retry_exhausted_failure
-            ) and index + 1 < len(engines):
-                next_engine = engines[index + 1]
+            ) and remaining_after_selected:
+                next_engine = remaining_after_selected[0]
                 failure_reason = (
                     result.failure.reason if result.failure is not None else retry_exhausted_reason
                 )
@@ -308,6 +264,7 @@ def build_executor(
                     to_engine=next_engine,
                     reason=failure_reason,
                 )
+                remaining_engines = remaining_after_selected
                 continue
 
             # If the agent didn't submit a verdict via `litehive report` and we
