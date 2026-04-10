@@ -50,4 +50,4 @@ target-version = "py311"
 extend-select = ["E402", "F401"]
 
 [tool.uv.sources]
-heru = { path = "../heru", editable = true }
+heru = { path = "/home/alexey/git/heru", editable = true }
