@@ -3013,6 +3013,105 @@ def test_worktree_rescue_apply_reports_manual_conflict(
     assert get_task_worktree_path(refreshed) is not None
     assert load_state(tmp_path).unmerged_worktrees
 
+
+def test_worktree_rescue_apply_succeeds_while_daemon_holds_runner_lock(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    import threading
+
+    ensure_workspace(tmp_path)
+    _init_git_repo(tmp_path)
+    active = create_task(tmp_path, title="Daemon-owned task", auto_commit=False)
+    set_active_task(tmp_path, active.id)
+    task, worktree_path = _create_merge_failed_worktree(tmp_path)
+
+    (worktree_path / "feature.py").write_text("print('rescued under lock')\n", encoding="utf-8")
+    _run(["git", "add", "feature.py"], worktree_path)
+    _run(["git", "commit", "-m", "feature under lock"], worktree_path)
+
+    started = threading.Event()
+    release = threading.Event()
+
+    def hold_runner_lock() -> None:
+        with tasks_module.workspace_runner_guard(tmp_path):
+            with tasks_module.runner_heartbeat(tmp_path, active_task_id=active.id):
+                started.set()
+                release.wait(timeout=5)
+
+    worker = threading.Thread(target=hold_runner_lock, daemon=True)
+    worker.start()
+    assert started.wait(timeout=5)
+
+    exit_code = _cmd_worktree_rescue(argparse.Namespace(workspace=tmp_path, apply=True))
+    output = capsys.readouterr().out
+
+    release.set()
+    worker.join(timeout=5)
+    assert not worker.is_alive()
+
+    assert exit_code == 0
+    assert f"task_id: {task.id}" in output
+    assert "status: clean" in output
+    assert "clean_count: 1" in output
+    assert "active_task_count: 0" in output
+    assert (tmp_path / "feature.py").read_text(encoding="utf-8") == "print('rescued under lock')\n"
+    refreshed = require_task(tmp_path, task.id)
+    assert refreshed.status == "done"
+    assert refreshed.pipeline_status == "done"
+    assert refreshed.git.commit_sha == _run(["git", "rev-parse", "HEAD"], tmp_path)
+    assert get_task_worktree_path(refreshed) is None
+    assert load_state(tmp_path).unmerged_worktrees == []
+
+
+def test_worktree_rescue_apply_refuses_active_task_even_with_runner_lock_held(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    import threading
+
+    ensure_workspace(tmp_path)
+    _init_git_repo(tmp_path)
+    task, worktree_path = _create_merge_failed_worktree(tmp_path)
+
+    (worktree_path / "feature.py").write_text("print('should not land')\n", encoding="utf-8")
+    _run(["git", "add", "feature.py"], worktree_path)
+    _run(["git", "commit", "-m", "should stay in worktree"], worktree_path)
+    original_head = _run(["git", "rev-parse", "HEAD"], tmp_path)
+    set_active_task(tmp_path, task.id)
+
+    started = threading.Event()
+    release = threading.Event()
+
+    def hold_runner_lock() -> None:
+        with tasks_module.workspace_runner_guard(tmp_path):
+            with tasks_module.runner_heartbeat(tmp_path, active_task_id=task.id):
+                started.set()
+                release.wait(timeout=5)
+
+    worker = threading.Thread(target=hold_runner_lock, daemon=True)
+    worker.start()
+    assert started.wait(timeout=5)
+
+    exit_code = _cmd_worktree_rescue(argparse.Namespace(workspace=tmp_path, apply=True))
+    output = capsys.readouterr().out
+
+    release.set()
+    worker.join(timeout=5)
+    assert not worker.is_alive()
+
+    assert exit_code == 1
+    assert "status: active_task" in output
+    assert "active_task_count: 1" in output
+    assert "worktree rescue refuses to race with the runner" in output
+    assert _run(["git", "rev-parse", "HEAD"], tmp_path) == original_head
+    assert not (tmp_path / "feature.py").exists()
+    refreshed = require_task(tmp_path, task.id)
+    assert refreshed.status == "merge_failed"
+    assert refreshed.pipeline_status == "commit_to_git"
+    assert get_task_worktree_path(refreshed) is not None
+    assert load_state(tmp_path).active_task_id == task.id
+    assert load_state(tmp_path).unmerged_worktrees
+
+
 def test_queue_command_lists_parked_task_as_resumable_with_distinct_status(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
