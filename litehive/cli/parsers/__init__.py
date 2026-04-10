@@ -6,6 +6,7 @@ from litehive.cli.parsers.close import register_close_parser
 from litehive.cli.parsers.configure import register_configure_parser
 from litehive.cli.parsers.daemon import register_daemon_parser
 from litehive.cli.parsers.debug import register_debug_parser
+from litehive.cli.parsers.doctor import register_doctor_parser
 from litehive.cli.parsers.dirty_worktree_gate import register_dirty_worktree_gate_parser
 from litehive.cli.parsers.engine import register_engine_parser
 from litehive.cli.parsers.import_group import register_import_parser
@@ -46,6 +47,7 @@ from litehive.cli.parsers.worktree import register_worktree_parser
 COMMAND_PARSER_BUILDERS = (
     register_configure_parser,
     register_status_parser,
+    register_doctor_parser,
     register_health_parser,
     register_engine_parser,
     register_queue_parser,

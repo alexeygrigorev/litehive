@@ -7,6 +7,7 @@ from litehive.web import serve_monitor
 
 from litehive.cli.configure import _cmd_configure
 from litehive.cli.debug import _cmd_debug
+from litehive.cli.doctor import _cmd_doctor
 from litehive.cli.daemon import (
     _cmd_daemon_instances,
     _cmd_daemon_restart,
@@ -48,6 +49,7 @@ from litehive.cli.parser import build_parser
 _COMMAND_HANDLERS = {
     "configure": _cmd_configure,
     "status": _cmd_status,
+    "doctor": _cmd_doctor,
     "health": _cmd_health,
     "engine": _cmd_engine,
     "queue": _cmd_queue,

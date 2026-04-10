@@ -20,6 +20,7 @@ from tests.workspace_helpers import (
     WorkspaceConflictError,
     _block_runner_lock,
     _cmd_add,
+    _cmd_doctor,
     _cmd_health,
     _cmd_issue,
     _cmd_queue,
@@ -69,6 +70,7 @@ from tests.workspace_helpers import (
     yaml,
 )
 from litehive.tasks.reports import collect_recovery_evidence
+import shutil
 from types import SimpleNamespace
 
 def test_dequeue_next_task_selection_rejects_multiple_active_tasks(tmp_path: Path) -> None:
@@ -378,6 +380,288 @@ def test_health_command_reports_unhealthy_workspace_and_exit_code(
     assert "path=.litehive/worktrees/missing-worktree" in output
     assert "quota: codex status=warning summary=5h=95.0% weekly=40.0% reset=2026-04-10T05:00:00Z" in output
     assert "daemon_status: stopped" in output
+
+
+def _create_duplicate_task_directory(root: Path, task: TaskRecord, *, suffix: str) -> None:
+    duplicate_dir = task_dir(root, task).with_name(f"{task.id}-{suffix}")
+    shutil.copytree(task_dir(root, task), duplicate_dir)
+
+
+def _doctor_output(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], *, fix: bool = False
+) -> tuple[int, str]:
+    exit_code = _cmd_doctor(argparse.Namespace(workspace=tmp_path, fix=fix))
+    return exit_code, capsys.readouterr().out
+
+
+def _create_merge_failed_task(root: Path) -> TaskRecord:
+    task = create_task(root, title="Merge failed task", auto_commit=False)
+    task.status = "merge_failed"
+    save_task(root, task)
+    return task
+
+
+def _create_flagged_task(root: Path) -> TaskRecord:
+    task = create_task(root, title="Flagged task", auto_commit=False)
+    task.status = "flagged"
+    task.pipeline_status = "testing"
+    save_task(root, task)
+    return task
+
+
+def _create_stale_worktree_task(root: Path) -> TaskRecord:
+    task = create_task(root, title="Finished worktree task", auto_commit=False)
+    task.status = "done"
+    task.pipeline_status = "done"
+    stale_path = root / ".litehive" / "worktrees" / f"{task.id}-{task.slug}"
+    stale_path.parent.mkdir(parents=True, exist_ok=True)
+    _run(["git", "worktree", "add", "--detach", str(stale_path), "HEAD"], root)
+    task.runtime.git.worktree_path = str(stale_path.relative_to(root))
+    save_task(root, task)
+    save_task_runtime(root, task)
+    return task
+
+
+def _create_stranded_commit_task(root: Path) -> TaskRecord:
+    task = create_task(root, title="Stranded checkpoint")
+    task.status = "done"
+    task.pipeline_status = "done"
+    task.git.checkpoint_attempts = 1
+    task.git.commit_sha = None
+    save_task(root, task)
+    return task
+
+
+def _create_orphaned_subagent_task(root: Path) -> TaskRecord:
+    task = create_task(root, title="Orphaned subagent", auto_commit=False)
+    task.runtime.execution_status = "idle"
+    task.runtime.active_subagent = RuntimeSubagentState(
+        id="SA-0001",
+        role="swe",
+        engine="codex",
+        status="running",
+        path="subagents/SA-0001-swe",
+        started_at="2026-04-10T00:00:00+00:00",
+        updated_at="2026-04-10T00:00:00+00:00",
+    )
+    save_task_runtime(root, task)
+    return task
+
+
+def test_parser_exposes_doctor_command() -> None:
+    parser = build_parser()
+
+    args = parser.parse_args(["doctor", "--fix"])
+
+    assert args.command == "doctor"
+    assert args.fix is True
+
+
+def test_doctor_command_reports_clean_workspace(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    ensure_workspace(tmp_path)
+    _init_git_repo(tmp_path)
+
+    exit_code, output = _doctor_output(tmp_path, capsys)
+
+    assert exit_code == 0
+    assert "doctor: clean" in output
+
+
+def test_doctor_command_reports_duplicate_task_ids(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    ensure_workspace(tmp_path)
+    _init_git_repo(tmp_path)
+
+    duplicate = create_task(tmp_path, title="Duplicate task", auto_commit=False)
+    _create_duplicate_task_directory(tmp_path, duplicate, suffix="duplicate-copy")
+
+    exit_code, output = _doctor_output(tmp_path, capsys)
+
+    assert exit_code == 1
+    assert "finding: duplicate_task_id task_id=T-0001 count=2 fix=litehive doctor --fix" in output
+
+
+def test_doctor_command_reports_merge_failed_tasks(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    ensure_workspace(tmp_path)
+    _init_git_repo(tmp_path)
+
+    merge_failed = _create_merge_failed_task(tmp_path)
+
+    exit_code, output = _doctor_output(tmp_path, capsys)
+
+    assert exit_code == 1
+    assert f"finding: merge_failed_task task_id={merge_failed.id} title=Merge failed task " in output
+
+
+def test_doctor_command_reports_flagged_tasks(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    ensure_workspace(tmp_path)
+    _init_git_repo(tmp_path)
+
+    flagged = _create_flagged_task(tmp_path)
+
+    exit_code, output = _doctor_output(tmp_path, capsys)
+
+    assert exit_code == 1
+    assert f"finding: flagged_task task_id={flagged.id} stage=testing title=Flagged task " in output
+
+
+def test_doctor_command_reports_origin_divergence(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ensure_workspace(tmp_path)
+    _init_git_repo(tmp_path)
+
+    monkeypatch.setattr(
+        "litehive.pipeline.recovery.doctor._check_origin_divergence",
+        lambda root: "local main and origin/main have diverged",
+    )
+
+    exit_code, output = _doctor_output(tmp_path, capsys)
+
+    assert exit_code == 1
+    assert "finding: origin_divergence local main and origin/main have diverged " in output
+
+
+def test_doctor_command_reports_stale_worktrees(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    ensure_workspace(tmp_path)
+    _init_git_repo(tmp_path)
+
+    stale_worktree = _create_stale_worktree_task(tmp_path)
+
+    exit_code, output = _doctor_output(tmp_path, capsys)
+
+    assert exit_code == 1
+    assert f"finding: stale_worktree task_id={stale_worktree.id} status=done " in output
+
+
+def test_doctor_command_reports_stuck_commit_to_git_tasks(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    ensure_workspace(tmp_path)
+    _init_git_repo(tmp_path)
+
+    stranded = _create_stranded_commit_task(tmp_path)
+
+    exit_code, output = _doctor_output(tmp_path, capsys)
+
+    assert exit_code == 1
+    assert f"finding: commit_to_git_stuck task_id={stranded.id} kind=stranded checkpoint_attempts=1 " in output
+
+
+def test_doctor_command_reports_orphaned_subagents(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    ensure_workspace(tmp_path)
+    _init_git_repo(tmp_path)
+
+    orphaned_subagent = _create_orphaned_subagent_task(tmp_path)
+
+    exit_code, output = _doctor_output(tmp_path, capsys)
+
+    assert exit_code == 1
+    assert f"finding: orphaned_subagent task_id={orphaned_subagent.id} subagent_id=SA-0001 reason=missing_artifacts " in output
+
+
+def test_doctor_command_reports_broken_state_yaml_without_crashing(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    ensure_workspace(tmp_path)
+    (tmp_path / ".litehive" / "state.yaml").write_text(
+        "<<<<<<< HEAD\nactive_task_id: T-0001\n=======\nqueue: []\n>>>>>>> branch\n",
+        encoding="utf-8",
+    )
+
+    exit_code, output = _doctor_output(tmp_path, capsys)
+
+    assert exit_code == 1
+    assert "finding: broken_state_yaml path=.litehive/state.yaml reason=merge_conflict_markers " in output
+    assert "fix=cp .litehive/state.yaml .litehive/state.yaml.bak && ${EDITOR:-vi} .litehive/state.yaml" in output
+
+
+def test_doctor_fix_repairs_duplicate_task_ids(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    ensure_workspace(tmp_path)
+    _init_git_repo(tmp_path)
+
+    duplicate = create_task(tmp_path, title="Duplicate task", auto_commit=False)
+    _create_duplicate_task_directory(tmp_path, duplicate, suffix="duplicate-copy")
+
+    exit_code, output = _doctor_output(tmp_path, capsys, fix=True)
+
+    assert exit_code == 0
+    assert "fixed: duplicate_task_id task_id=T-0001 count=2 fix=litehive doctor --fix" in output
+
+    duplicate_count = 0
+    for task_path in (tmp_path / ".litehive" / "tasks").glob("*/task.yaml"):
+        payload = yaml.safe_load(task_path.read_text(encoding="utf-8")) or {}
+        if payload.get("id") == duplicate.id:
+            duplicate_count += 1
+    assert duplicate_count == 1
+
+
+def test_doctor_fix_repairs_stranded_commit_and_orphaned_subagent(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ensure_workspace(tmp_path)
+    _init_git_repo(tmp_path)
+
+    stranded = _create_stranded_commit_task(tmp_path)
+    orphaned_subagent = _create_orphaned_subagent_task(tmp_path)
+
+    monkeypatch.setattr(
+        "litehive.pipeline.recovery.doctor._check_origin_divergence",
+        lambda root: None,
+    )
+
+    exit_code, output = _doctor_output(tmp_path, capsys, fix=True)
+
+    assert exit_code == 0
+    assert f"fixed: commit_to_git_stuck task_id={stranded.id} kind=stranded checkpoint_attempts=1 fix=litehive doctor --fix" in output
+    assert f"fixed: orphaned_subagent task_id={orphaned_subagent.id} subagent_id=SA-0001 reason=missing_artifacts fix=litehive doctor --fix" in output
+
+    refreshed_stranded = get_task(tmp_path, stranded.id)
+    assert refreshed_stranded is not None
+    assert refreshed_stranded.pipeline_status == "commit_to_git"
+    assert refreshed_stranded.status == "queued"
+
+    refreshed_orphaned = get_task(tmp_path, orphaned_subagent.id)
+    assert refreshed_orphaned is not None
+    assert refreshed_orphaned.runtime.active_subagent is None
+
+
+def test_doctor_fix_leaves_flagged_tasks_unchanged(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    ensure_workspace(tmp_path)
+    _init_git_repo(tmp_path)
+
+    flagged = create_task(tmp_path, title="Needs review", auto_commit=False)
+    flagged.status = "flagged"
+    save_task(tmp_path, flagged)
+
+    exit_code, output = _doctor_output(tmp_path, capsys, fix=True)
+
+    assert exit_code == 1
+    assert f"finding: flagged_task task_id={flagged.id} stage=backlog title=Needs review " in output
+
+    refreshed_flagged = get_task(tmp_path, flagged.id)
+    assert refreshed_flagged is not None
+    assert refreshed_flagged.status == "flagged"
 
 def test_cmd_run_drains_task_pool_and_reports_summary(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch

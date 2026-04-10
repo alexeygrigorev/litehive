@@ -5,6 +5,7 @@ from litehive.cli.parsers import COMMAND_PARSER_BUILDERS
 _PUBLIC_TOP_LEVEL_COMMANDS = {
     "configure",
     "status",
+    "doctor",
     "health",
     "engine",
     "queue",

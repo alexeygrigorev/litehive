@@ -8,6 +8,7 @@ Describe this repository and how subagents should work in it.
 - Purpose:
 - Main package/module locations:
 - Commands to know:
+  - `litehive doctor` for workspace-integrity scans and safe non-destructive autofixes via `litehive doctor --fix`.
 
 ## Process overlay
 - Source of truth: tasks and implementation state live under `.litehive/`.
