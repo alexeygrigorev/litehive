@@ -93,9 +93,21 @@ def _fast_status(argv: list[str]) -> int:
         alerts: list[str] = []
         if stop_reason == "diverged_from_origin":
             alerts.append(
-                "pool halted: local main has diverged from origin/main — "
-                "manual reconciliation required"
+                "pool halted: local main has diverged from origin/main and "
+                "auto-recovery failed — manual reconciliation required"
             )
+        attention_log = workspace / ".litehive" / "runtime" / "attention.log"
+        if attention_log.exists():
+            try:
+                entries = [
+                    line.strip()
+                    for line in attention_log.read_text(encoding="utf-8").splitlines()
+                    if line.strip()
+                ]
+            except Exception:
+                entries = []
+            for entry in entries[-5:]:
+                alerts.append(f"attention: {entry}")
         for tid, count in sorted(id_counts.items()):
             if count > 1:
                 alerts.append(

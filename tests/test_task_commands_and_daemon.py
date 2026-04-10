@@ -3654,11 +3654,8 @@ exit 1
     assert "20260404T100001Z" not in directories
     assert any(name.startswith("2026") for name in directories)
 
-def test_run_daemon_loop_halts_when_local_main_diverges_from_origin(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    import litehive.daemon as daemon_module
-
+def _make_diverged_workspace(tmp_path: Path) -> Path:
+    """Create a workspace whose local main has diverged from origin/main."""
     def _git(cwd: Path, *args: str) -> None:
         subprocess.run(
             ["git", *args],
@@ -3675,11 +3672,9 @@ def test_run_daemon_loop_halts_when_local_main_diverges_from_origin(
             },
         )
 
-    # Bare remote
     remote = tmp_path / "remote.git"
     subprocess.run(["git", "init", "--bare", "-b", "main", str(remote)], check=True, capture_output=True)
 
-    # Workspace clone with one commit, pushed
     workspace = tmp_path / "workspace"
     subprocess.run(["git", "init", "-b", "main", str(workspace)], check=True, capture_output=True)
     (workspace / "file.txt").write_text("base\n", encoding="utf-8")
@@ -3688,7 +3683,6 @@ def test_run_daemon_loop_halts_when_local_main_diverges_from_origin(
     _git(workspace, "remote", "add", "origin", str(remote))
     _git(workspace, "push", "-u", "origin", "main")
 
-    # Second clone force-pushes a rewritten history
     hostile = tmp_path / "hostile"
     subprocess.run(["git", "clone", str(remote), str(hostile)], check=True, capture_output=True)
     (hostile / "file.txt").write_text("rewritten\n", encoding="utf-8")
@@ -3696,30 +3690,111 @@ def test_run_daemon_loop_halts_when_local_main_diverges_from_origin(
     _git(hostile, "commit", "--amend", "-m", "rewritten")
     _git(hostile, "push", "--force", "origin", "main")
 
-    # Workspace now adds a local commit → divergence
     (workspace / "file.txt").write_text("local change\n", encoding="utf-8")
     _git(workspace, "add", ".")
     _git(workspace, "commit", "-m", "local")
+    return workspace
 
+
+def test_auto_recover_from_divergence_preserves_local_in_backup_branch(tmp_path: Path) -> None:
+    from litehive.daemon._execution import _auto_recover_from_divergence, _check_origin_divergence
+
+    workspace = _make_diverged_workspace(tmp_path)
+    # sanity: divergence detected
+    assert _check_origin_divergence(workspace) is not None
+
+    local_before = subprocess.run(
+        ["git", "rev-parse", "main"], cwd=workspace, capture_output=True, text=True, check=True
+    ).stdout.strip()
+    remote_before = subprocess.run(
+        ["git", "rev-parse", "origin/main"], cwd=workspace, capture_output=True, text=True, check=True
+    ).stdout.strip()
+
+    summary = _auto_recover_from_divergence(workspace)
+    assert "preserved in branch backup/diverged-" in summary
+
+    # After recovery, main == origin/main
+    local_after = subprocess.run(
+        ["git", "rev-parse", "main"], cwd=workspace, capture_output=True, text=True, check=True
+    ).stdout.strip()
+    assert local_after == remote_before
+
+    # Backup branch points at the pre-reset local sha
+    branches = subprocess.run(
+        ["git", "for-each-ref", "--format=%(refname:short) %(objectname)", "refs/heads/backup/"],
+        cwd=workspace,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip().splitlines()
+    assert any(line.endswith(local_before) for line in branches), branches
+
+    # Attention log written
+    attention_log = workspace / ".litehive" / "runtime" / "attention.log"
+    assert attention_log.exists()
+    assert "divergence auto-recovered" in attention_log.read_text(encoding="utf-8")
+
+    # Divergence check is now clean
+    assert _check_origin_divergence(workspace) is None
+
+
+def test_run_daemon_loop_auto_recovers_from_divergence_and_continues(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import litehive.daemon as daemon_module
+
+    workspace = _make_diverged_workspace(tmp_path)
     (workspace / ".litehive").mkdir()
     (workspace / ".litehive" / "state.yaml").write_text(
-        "active_task_id: null\nqueue:\n  - T-0001\npool_stop_reason: null\n",
+        "active_task_id: null\nqueue: []\npool_stop_reason: null\n",
         encoding="utf-8",
     )
 
-    def _fail(*_a, **_k):
-        raise AssertionError("daemon should not have invoked subcommands after divergence halt")
-
+    fake_uv = _write_fake_uv(
+        tmp_path,
+        """#!/usr/bin/env bash
+set -euo pipefail
+if [[ "${1:-}" == "run" && "${2:-}" == "litehive" && "${3:-}" == "repair" ]]; then
+  echo "repaired: no"
+  exit 0
+fi
+echo "unexpected uv invocation: $*" >&2
+exit 1
+""",
+    )
     monkeypatch.setattr(
-        "litehive.daemon._execution._run_logged_subprocess",
-        _fail,
+        "litehive.daemon._execution._default_command_prefix",
+        lambda: [str(fake_uv), "run", "litehive"],
     )
 
     exit_code = daemon_module.run_daemon_loop(workspace, output_stream=None)
+    # Empty queue → exit 0 after auto-recovery, not a halt
     assert exit_code == 0
 
     state = yaml.safe_load((workspace / ".litehive" / "state.yaml").read_text(encoding="utf-8"))
-    assert state["pool_stop_reason"] == "diverged_from_origin"
+    assert state.get("pool_stop_reason") in (None, "None")
+
+    # Recovery happened: backup branch exists, main == origin/main
+    local_sha = subprocess.run(
+        ["git", "rev-parse", "main"], cwd=workspace, capture_output=True, text=True, check=True
+    ).stdout.strip()
+    remote_sha = subprocess.run(
+        ["git", "rev-parse", "origin/main"], cwd=workspace, capture_output=True, text=True, check=True
+    ).stdout.strip()
+    assert local_sha == remote_sha
+
+    backups = subprocess.run(
+        ["git", "for-each-ref", "--format=%(refname:short)", "refs/heads/backup/"],
+        cwd=workspace,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip().splitlines()
+    assert any(b.startswith("backup/diverged-") for b in backups)
+
+    attention_log = workspace / ".litehive" / "runtime" / "attention.log"
+    assert attention_log.exists()
+    assert "divergence auto-recovered" in attention_log.read_text(encoding="utf-8")
 
 
 def test_check_origin_divergence_ignores_fast_forward(tmp_path: Path) -> None:

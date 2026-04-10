@@ -111,6 +111,46 @@ def _write_pool_stop_reason(workspace: Path, reason: str) -> None:
     sp.write_text(yaml.safe_dump(state, sort_keys=False), encoding="utf-8")
 
 
+def _append_attention_log(workspace: Path, message: str) -> None:
+    """Append a timestamped entry to the runtime attention log (gitignored)."""
+    timestamp = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+    path = workspace / ".litehive" / "runtime" / "attention.log"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(f"{timestamp}\t{message}\n")
+
+
+def _auto_recover_from_divergence(workspace: Path) -> str:
+    """Snapshot local main into a backup branch and reset to origin/main.
+
+    Preserves any local commits in `backup/diverged-<ts>` so they can be
+    inspected or cherry-picked later. Raises if any git step fails.
+    """
+    timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+    local = _git(workspace, "rev-parse", "main")
+    remote = _git(workspace, "rev-parse", "origin/main")
+    if local.returncode != 0 or remote.returncode != 0:
+        raise RuntimeError("failed to resolve main / origin/main SHAs")
+    local_sha = local.stdout.strip()
+    remote_sha = remote.stdout.strip()
+    ahead = _git(workspace, "rev-list", "--count", f"origin/main..{local_sha}").stdout.strip() or "?"
+    behind = _git(workspace, "rev-list", "--count", f"{local_sha}..origin/main").stdout.strip() or "?"
+    backup_branch = f"backup/diverged-{timestamp}"
+    branch = _git(workspace, "branch", backup_branch, local_sha)
+    if branch.returncode != 0:
+        raise RuntimeError(f"failed to create backup branch {backup_branch}: {branch.stderr.strip()}")
+    reset = _git(workspace, "reset", "--hard", "origin/main")
+    if reset.returncode != 0:
+        raise RuntimeError(f"failed to reset main to origin/main: {reset.stderr.strip()}")
+    summary = (
+        f"divergence auto-recovered: local main ({local_sha[:8]}) had {ahead} unique "
+        f"commit(s), origin/main ({remote_sha[:8]}) had {behind}. "
+        f"Local commits preserved in branch {backup_branch}. Reset main to origin/main."
+    )
+    _append_attention_log(workspace, summary)
+    return summary
+
+
 def _state_snapshot(workspace: Path) -> tuple[dict[str, object], str]:
     sp = state_path(workspace)
     state = yaml.safe_load(sp.read_text(encoding="utf-8")) if sp.exists() else {}
@@ -234,13 +274,29 @@ def run_daemon_loop(
 
             divergence_reason = _check_origin_divergence(workspace)
             if divergence_reason is not None:
-                _write_pool_stop_reason(workspace, "diverged_from_origin")
                 _emit(
-                    "!!! ATTENTION REQUIRED !!! Halting pool: diverged_from_origin",
+                    "!!! ATTENTION !!! Detected divergence from origin/main. "
+                    "Attempting auto-recovery (backup branch + reset).",
                     stream=output_stream,
                 )
                 _emit(divergence_reason, stream=output_stream)
-                return 0
+                try:
+                    recovery_summary = _auto_recover_from_divergence(workspace)
+                    _emit(recovery_summary, stream=output_stream)
+                except Exception as exc:
+                    logger.exception("auto-recovery from divergence failed")
+                    _append_attention_log(
+                        workspace,
+                        f"divergence auto-recovery FAILED: {exc}",
+                    )
+                    _write_pool_stop_reason(workspace, "diverged_from_origin")
+                    _emit(
+                        "!!! ATTENTION REQUIRED !!! Auto-recovery failed. "
+                        "Halting pool: diverged_from_origin",
+                        stream=output_stream,
+                    )
+                    _emit(str(exc), stream=output_stream)
+                    return 0
 
             repair_rc = _run_logged_subprocess(
                 [*command_prefix, "repair", "--workspace", str(workspace)],
