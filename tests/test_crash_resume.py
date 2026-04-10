@@ -499,6 +499,72 @@ def test_verdict_nudge_fires_on_timeout_when_resume_id_available(
     assert "You did not submit your verdict" in (calls[1]["prompt"] or "")
 
 
+def test_verdict_nudge_fires_on_clean_exit_without_verdict(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
+    create_task(tmp_path, title="Clean exit nudge task", engine="codex", auto_commit=False)
+    task = require_task(tmp_path, "T-0001")
+    executor = _build_stage_executor(tmp_path, task, "codex", monkeypatch)
+
+    initial_result = SubagentResult(
+        ref=SubagentRef(
+            id="SA-implementing-clean-exit",
+            role="swe",
+            engine="codex",
+            status="completed",
+            path="subagents/implementing-clean-exit",
+        ),
+        execution=CLIExecutionResult(
+            adapter="codex",
+            argv=("codex", "exec"),
+            cwd=Path("/tmp"),
+            exit_code=0,
+            stdout=_codex_thread_started_stdout("thread-clean-123"),
+            stderr="",
+        ),
+        transcript="finished work but no verdict",
+        exit_code=0,
+    )
+    nudged_result = _completed_subagent_result(
+        tmp_path, "implementing", engine_name="codex", task=task
+    )
+    calls: list[dict[str, str | None]] = []
+    seen_results: list[SubagentResult] = []
+
+    def fake_run(
+        self, task_arg, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None
+    ):  # type: ignore[no-untyped-def]
+        del self, task_arg, role, engine_name, model, max_turns
+        calls.append({"prompt": prompt, "resume_session_id": resume_session_id})
+        return initial_result if len(calls) == 1 else nudged_result
+
+    def fake_stage_report(current_task, step, result, *, root=None):  # type: ignore[no-untyped-def]
+        del current_task, step, root
+        seen_results.append(result)
+        return StageReport(
+            task_id=task.id,
+            step="implementing",
+            verdict="pass",
+            summary=result.transcript,
+            files_changed=["app.txt"],
+            tests={"added": 1, "passing": 1},
+        )
+
+    monkeypatch.setattr("litehive.pipeline._builder.SubagentManager.run", fake_run)
+    monkeypatch.setattr("litehive.pipeline._builder.stage_report_from_subagent", fake_stage_report)
+
+    report = executor(task, "implementing")
+
+    assert report.verdict == "pass"
+    assert len(calls) == 2
+    assert calls[0]["resume_session_id"] is None
+    assert calls[1]["resume_session_id"] == "thread-clean-123"
+    assert "You did not submit your verdict" in (calls[1]["prompt"] or "")
+    assert seen_results == [nudged_result]
+    assert report.summary == nudged_result.transcript
+
+
 def test_timeout_nudge_result_replaces_original_result_for_report_parsing(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
