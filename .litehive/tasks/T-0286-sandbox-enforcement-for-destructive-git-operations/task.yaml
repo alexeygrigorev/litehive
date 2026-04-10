@@ -90,18 +90,11 @@ acceptance_criteria:
 constraints:
 - "Do not rely on env vars, role strings, or prompt-scanning for git gating \u2014\
   \ they are bypassable by the very thing we are trying to restrict."
-- Do not rely on PATH manipulation alone; the binary must actually be absent from
-  the sandbox filesystem view for non-merge-resolver roles.
-- Merge-resolver is the only role that may have git. Do not add per-task overrides
-  without changing this task's AC.
-- Fail closed on unknown roles and on sandbox setup errors.
-- No host mode, ever. There is no config flag, env var, CLI option, or task
-  field that allows a subagent to run outside the sandbox. If docker is not
-  available on the host, litehive refuses to start the pool at all rather than
-  silently falling back to host execution.
-- The image must be MINIMAL. The goal is: agent has access to workspace + python
-  + uv, and nothing else. Do not bind-mount /usr, /bin, /lib wholesale from the
-  host into the container. The container image itself is the allowlist.
+- "Do not rely on PATH manipulation alone; the binary must actually be absent from the sandbox filesystem view for non-merge-resolver roles."
+- "Merge-resolver is the only role that may have git. Do not add per-task overrides without changing this task's AC."
+- "Fail closed on unknown roles and on sandbox setup errors."
+- "No host mode, ever. There is no config flag, env var, CLI option, or task field that allows a subagent to run outside the sandbox. If docker is not available on the host, litehive refuses to start the pool at all rather than silently falling back to host execution."
+- "The image must be MINIMAL. The goal is: agent has access to workspace + python + uv, and nothing else. Do not bind-mount /usr, /bin, /lib wholesale from the host into the container. The container image itself is the allowlist."
 plan:
 - "Inventory the existing sandbox/execution layer (litehive/pipeline, heru adapters)\
   \ to find where subagent subprocesses are launched and what sandboxing primitives\
@@ -110,13 +103,8 @@ plan:
   \ runtime."
 - "Define SandboxProfile enum with NO_GIT (default) and MERGE_RESOLVER. Map role \u2192\
   \ profile in a single audited function."
-- For NO_GIT profile, use the sandbox primitive to either (a) launch in a mount namespace
-  / container where /usr/bin/git is not bind-mounted, or (b) in a chroot with no git
-  binary. The exact mechanism depends on what the existing sandbox layer supports;
-  document any gaps.
-- For MERGE_RESOLVER profile, build a small wrapper binary (litehive/sandbox/git_wrapper.py
-  compiled or kept as a script) that exec's a hidden real git and enforces the denylist.
-  Bind-mount it into the sandbox as the only visible git.
+- "For NO_GIT profile, use the sandbox primitive to either (a) launch in a mount namespace / container where /usr/bin/git is not bind-mounted, or (b) in a chroot with no git binary. The exact mechanism depends on what the existing sandbox layer supports; document any gaps."
+- "For MERGE_RESOLVER profile, build a small wrapper binary (litehive/sandbox/git_wrapper.py compiled or kept as a script) that exec's a hidden real git and enforces the denylist. Bind-mount it into the sandbox as the only visible git."
 - Wire profile selection into subagent spawn path. Make sure every spawn goes through
   the single entry point so no role can silently get a different profile.
 - Strip origin from non-merge-resolver worktrees in the worktree setup code.

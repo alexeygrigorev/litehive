@@ -6,15 +6,15 @@ task_type: null
 model: null
 mode: implementation
 pipeline_mode: full
-status: queued
+status: in_progress
 flag_reason: null
 flag_count: 0
-pipeline_status: backlog
+pipeline_status: commit_to_git
 priority: medium
-pm_complexity: null
-planned_effort: null
+pm_complexity: moderate
+planned_effort: m
 created_at: '2026-04-10T05:59:18+00:00'
-updated_at: '2026-04-10T05:59:18+00:00'
+updated_at: '2026-04-10T09:23:36+00:00'
 goal: 'Add a ''litehive doctor'' command that runs a comprehensive workspace health
   check: duplicate task IDs, merge_failed tasks, flagged tasks, local/origin divergence,
   stale worktrees without active tasks, stuck tasks in commit_to_git, orphaned subagents,
@@ -25,10 +25,73 @@ acceptance_criteria:
   orphaned subagents, YAML conflicts'
 - Each finding includes a recommended fix command
 - --fix flag runs the automated fixes for non-destructive problems
-constraints: []
-plan: []
+constraints:
+- Keep changes scoped to the new `doctor` command and shared detection/fix helpers
+  it needs.
+- Prefer reusing existing `repair_workspace_state()`, worktree inspection, and task-loading
+  utilities over reimplementing repair logic.
+- Treat malformed `state.yaml` as a first-class doctor finding; the command should
+  diagnose it without crashing.
+- Do not make `--fix` delete worktrees, resolve git divergence, or mutate ambiguous
+  flagged/merge-failed task state automatically.
+plan:
+- Define the `doctor` command surface and output contract, including exit-code behavior
+  for clean, warning, and fix-applied runs.
+- Extract current ad hoc health checks from `litehive/main.py` / related CLI code
+  into reusable doctor detection helpers.
+- Implement detectors for each required finding class, including a safe parser path
+  for malformed or conflict-marked `.litehive/state.yaml`.
+- Wire `--fix` only to deterministic non-destructive remediations, likely by delegating
+  duplicate-ID and stranded-commit recovery to existing repair helpers and adding
+  narrow helpers for any remaining safe cases.
+- Add focused CLI tests that construct each broken workspace condition and assert
+  both the finding text and the recommended fix command.
+- Update CLI help/README so operators know when to use `doctor` versus `health` and
+  `repair`.
 human_checkpoints: []
-subagents: []
+subagents:
+- id: SA-0001
+  role: planner
+  engine: codex
+  status: completed
+  path: subagents/SA-0001-planner
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0002
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0002-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0003
+  role: qa
+  engine: codex
+  status: completed
+  path: subagents/SA-0003-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0004
+  role: recovery
+  engine: codex
+  status: completed
+  path: subagents/SA-0004-recovery
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0005
+  role: qa
+  engine: codex
+  status: completed
+  path: subagents/SA-0005-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0006
+  role: reviewer
+  engine: codex
+  status: completed
+  path: subagents/SA-0006-reviewer
+  sandboxed: false
+  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0287 litehive-doctor-command-single-command-health'

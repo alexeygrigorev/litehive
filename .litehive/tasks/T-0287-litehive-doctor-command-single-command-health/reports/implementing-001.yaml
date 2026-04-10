@@ -1,0 +1,107 @@
+task_id: T-0287
+step: implementing
+verdict: pass
+source: agent
+summary: 'Root cause: the doctor implementation was accepted functionally, but testing
+  rejected it because tests/test_observability_and_status.py used one 66-line doctor
+  test that asserted 7 finding classes in a single flow, violating the stage rule
+  for focused coverage. Fix made: split that monolithic doctor test into focused tests
+  per finding class (duplicate IDs, merge_failed, flagged, origin divergence, stale
+  worktree, stuck commit_to_git, orphaned subagent, broken state.yaml) and narrowed
+  --fix coverage into focused safe-fix tests with small shared setup helpers. Product
+  behavior was not changed. Verification: uv run ruff check --select E402,F401 litehive
+  tests -> pass; forbidden-noqa check -> pass; uv run pytest -q tests/test_observability_and_status.py
+  -k ''doctor or parser_exposes_doctor_command'' -> 13 passed; uv run pytest -q tests/test_observability_and_status.py
+  -> 88 passed. Note: uv run pytest -q currently has one unrelated failing test outside
+  doctor coverage, tests/test_sandbox_git_profiles.py::test_task_worktree_origin_is_removed_before_handoff,
+  which reproduces in isolation and was not introduced by this change. Runnable path
+  for T-0287 is restored; retry implementing/testing on the doctor task should now
+  satisfy the focused-test requirement.'
+feedback: "Runner hook `after_implementing` `uv run ruff check --select E402,F401\
+  \ litehive tests` passed with exit code 0 (artifact: `artifacts/after_implementing-001.yaml`).\n\
+  \nRunner hook `after_implementing` `if [ -n \"${LITEHIVE_CHANGED_PATHS:-}\" ] \\\
+  \n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" | grep -q . \\\n  && printf '%s\\\
+  n' \"$LITEHIVE_CHANGED_PATHS\" \\\n    | xargs -r -d '\\n' git grep -nE 'noqa:.*F401|noqa:.*F403|ruff:\\\
+  s*noqa:\\s*F401|ruff:\\s*noqa:\\s*F403' --; then\n  echo 'Forbidden noqa F401/F403\
+  \ suppression found.'\n  exit 1\nfi` passed with exit code 0 (artifact: `artifacts/after_implementing-002.yaml`).\n\
+  \nRoot cause: the doctor implementation was accepted functionally, but testing rejected\
+  \ it because tests/test_observability_and_status.py used one 66-line doctor test\
+  \ that asserted 7 finding classes in a single flow, violating the stage rule for\
+  \ focused coverage. Fix made: split that monolithic doctor test into focused tests\
+  \ per finding class (duplicate IDs, merge_failed, flagged, origin divergence, stale\
+  \ worktree, stuck commit_to_git, orphaned subagent, broken state.yaml) and narrowed\
+  \ --fix coverage into focused safe-fix tests with small shared setup helpers. Product\
+  \ behavior was not changed. Verification: uv run ruff check --select E402,F401 litehive\
+  \ tests -> pass; forbidden-noqa check -> pass; uv run pytest -q tests/test_observability_and_status.py\
+  \ -k 'doctor or parser_exposes_doctor_command' -> 13 passed; uv run pytest -q tests/test_observability_and_status.py\
+  \ -> 88 passed. Note: uv run pytest -q currently has one unrelated failing test\
+  \ outside doctor coverage, tests/test_sandbox_git_profiles.py::test_task_worktree_origin_is_removed_before_handoff,\
+  \ which reproduces in isolation and was not introduced by this change. Runnable\
+  \ path for T-0287 is restored; retry implementing/testing on the doctor task should\
+  \ now satisfy the focused-test requirement."
+submitted_via_cli: true
+files_changed:
+- litehive/cli/__init__.py
+- litehive/cli/doctor.py
+- litehive/cli/parser.py
+- litehive/cli/parsers/__init__.py
+- litehive/cli/parsers/doctor.py
+- litehive/main.py
+- litehive/pipeline/recovery/__init__.py
+- litehive/pipeline/recovery/doctor.py
+- tests/test_observability_and_status.py
+- tests/workspace_helpers.py
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings:
+- 'runner hook passed: `after_implementing` `uv run ruff check --select E402,F401
+  litehive tests` (artifact: `artifacts/after_implementing-001.yaml`)'
+- "runner hook passed: `after_implementing` `if [ -n \"${LITEHIVE_CHANGED_PATHS:-}\"\
+  \ ] \\\n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" | grep -q . \\\n  && printf\
+  \ '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" \\\n    | xargs -r -d '\\n' git grep -nE 'noqa:.*F401|noqa:.*F403|ruff:\\\
+  s*noqa:\\s*F401|ruff:\\s*noqa:\\s*F403' --; then\n  echo 'Forbidden noqa F401/F403\
+  \ suppression found.'\n  exit 1\nfi` (artifact: `artifacts/after_implementing-002.yaml`)"
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 468
+hook_results:
+- point: after_implementing
+  command: uv run ruff check --select E402,F401 litehive tests
+  reject_on_failure: true
+  description: null
+  exit_code: 0
+  status: passed
+  artifact: artifacts/after_implementing-001.yaml
+  stdout: 'All checks passed!
+
+    '
+  stderr: 'warning: `VIRTUAL_ENV=/home/alexey/git/litehive/.venv` does not match the
+    project environment path `.venv` and will be ignored; use `--active` to target
+    the active environment instead
+
+    '
+- point: after_implementing
+  command: "if [ -n \"${LITEHIVE_CHANGED_PATHS:-}\" ] \\\n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\"\
+    \ | grep -q . \\\n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" \\\n    | xargs\
+    \ -r -d '\\n' git grep -nE 'noqa:.*F401|noqa:.*F403|ruff:\\s*noqa:\\s*F401|ruff:\\\
+    s*noqa:\\s*F403' --; then\n  echo 'Forbidden noqa F401/F403 suppression found.'\n\
+    \  exit 1\nfi"
+  reject_on_failure: true
+  description: null
+  exit_code: 0
+  status: passed
+  artifact: artifacts/after_implementing-002.yaml
+  stdout: ''
+  stderr: ''
+created_at: '2026-04-10T09:20:31+00:00'
