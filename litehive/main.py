@@ -67,10 +67,12 @@ def _fast_status(argv: list[str]) -> int:
             )
             print(f"active_stage: {stage}")
             print(f"active_engine: {engine}")
-    # Duplicate task ID check
+    # Task health scan: duplicate IDs, merge_failed, flagged
     tasks_root = workspace / ".litehive" / "tasks"
     if tasks_root.is_dir():
         id_counts: dict[str, int] = {}
+        merge_failed: list[tuple[str, str]] = []
+        flagged: list[tuple[str, str]] = []
         for child in sorted(tasks_root.iterdir()):
             if not child.is_dir():
                 continue
@@ -80,12 +82,33 @@ def _fast_status(argv: list[str]) -> int:
             try:
                 td = yaml.safe_load(task_path.read_text()) or {}
                 tid = td.get("id", "")
+                tstatus = td.get("status", "")
+                ttitle = td.get("title", "")
             except Exception:
                 continue
             id_counts[tid] = id_counts.get(tid, 0) + 1
+            if tstatus == "merge_failed":
+                merge_failed.append((tid, ttitle))
+            elif tstatus == "flagged":
+                flagged.append((tid, ttitle))
+        alerts: list[str] = []
         for tid, count in sorted(id_counts.items()):
             if count > 1:
-                print(f"WARNING: duplicate task id {tid} ({count} directories) — run `litehive repair` to fix")
+                alerts.append(
+                    f"duplicate task id {tid} ({count} directories) — run `litehive repair` to fix"
+                )
+        for tid, title in merge_failed:
+            alerts.append(
+                f"merge_failed: {tid} {title} — commits are in the worktree but never landed on main"
+            )
+        for tid, title in flagged:
+            alerts.append(f"flagged: {tid} {title}")
+        if alerts:
+            print()
+            print("!!! ATTENTION REQUIRED !!!")
+            for alert in alerts:
+                print(f"  ⚠ {alert}")
+            print()
 
     for engine_name in sorted((monitoring.get("engines") or {}).keys()):
         record = monitoring["engines"][engine_name] or {}
