@@ -7,10 +7,10 @@ task_type: null
 model: null
 mode: implementation
 pipeline_mode: full
-status: in_progress
+status: done
 flag_reason: null
 flag_count: 0
-pipeline_status: commit_to_git
+pipeline_status: done
 priority: medium
 pm_complexity: null
 planned_effort: null
@@ -81,9 +81,9 @@ subagents:
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0315 replace-if-already-implemented-just-verify-with'
-  commit_sha: null
-  checkpoint_base_sha: null
-  checkpoint_attempts: 0
+  commit_sha: e762f072fe7ce77f21085e6fd1adce47fff598b7
+  checkpoint_base_sha: c0ef2783f6bef5f4445d10c90e20fc9baa2e4f79
+  checkpoint_attempts: 1
   rolled_back_checkpoint_attempt: null
   merge_agent_attempts: 0
   worktree_path: null

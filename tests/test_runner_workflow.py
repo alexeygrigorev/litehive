@@ -1755,7 +1755,7 @@ def test_sandbox_launcher_wraps_selected_engine_with_docker_policy(
     assert f"src={creds_path},dst=/run/credentials/google.json,readonly" in joined
     assert "--env GOOGLE_APPLICATION_CREDENTIALS=/run/credentials/google.json" in joined
     assert (
-        "/litehive/bin/codex exec --json --dangerously-bypass-approvals-and-sandbox --cd /workspace"
+        "/litehive/bin/codex exec --json --dangerously-bypass-approvals-and-sandbox --skip-git-repo-check --cd /workspace"
         in joined
     )
 
@@ -2128,9 +2128,9 @@ def test_codex_build_invocation_includes_workspace_and_prompt(tmp_path: Path) ->
         "exec",
         "--json",
         "--dangerously-bypass-approvals-and-sandbox",
+        "--skip-git-repo-check",
         "--cd",
         str(tmp_path),
-        "--skip-git-repo-check",
         "ship it",
     ]
 

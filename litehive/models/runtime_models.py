@@ -1,8 +1,20 @@
-"""Runtime and execution state models."""
+"""Runtime and execution state models.
+
+SubagentRef, ResourceLimitEvent, and RuntimeEngineContinuation now live in
+heru.types. This module re-exports them and keeps the litehive-only
+runtime state models (RuntimeGitState, RuntimeStageState, etc.)
+authoritative here.
+"""
 
 from typing import Literal
 
 from pydantic import BaseModel, Field
+
+from heru.types import (
+    ResourceLimitEvent,
+    RuntimeEngineContinuation,
+    SubagentRef,
+)
 
 from .common import (
     OutcomeKind,
@@ -12,26 +24,6 @@ from .common import (
     SubagentStatus,
     utcnow,
 )
-
-
-class SubagentRef(BaseModel):
-    id: str
-    role: str
-    engine: str
-    status: SubagentStatus = "created"
-    path: str
-    sandboxed: bool = False
-    sandbox_summary: str = ""
-
-
-class ResourceLimitEvent(BaseModel):
-    resource: Literal["memory", "cpu", "processes", "resource"] = "resource"
-    reason: str
-    observed_signal: str | None = None
-    exit_code: int | None = None
-    memory_mb: int | None = None
-    cpu_count: float | None = None
-    process_limit: int | None = None
 
 
 class RuntimeGitState(BaseModel):
@@ -48,18 +40,6 @@ class RuntimeStageState(BaseModel):
     duration_seconds: int = 0
     verdict: str | None = None
     summary: str = ""
-
-
-class RuntimeEngineContinuation(BaseModel):
-    session_id: str | None = None
-    thread_id: str | None = None
-    metadata: dict[str, str | int | bool | None] = Field(default_factory=dict)
-    updated_at: str = Field(default_factory=utcnow)
-
-    @property
-    def resume_id(self) -> str | None:
-        """Unified resume identifier — engines call it session_id or thread_id."""
-        return self.session_id or self.thread_id
 
 
 class RuntimeSubagentState(BaseModel):

@@ -1,28 +1,21 @@
-"""Engine monitoring and live event models."""
+"""Engine monitoring and live event models.
+
+The engine-facing types (EngineUsageWindow, EngineUsageObservation,
+LiveEvent, LiveTimeline) now live in heru.types. This module re-exports
+them and keeps the litehive-only `EngineUsageRecord` /
+`WorkspaceEngineMonitoring` authoritative here.
+"""
 
 from pydantic import BaseModel, Field
 
-from .common import EngineLimitKind, EngineMonitoringSource, LiveEventKind, LiveEventRole, utcnow
-
-
-class EngineUsageWindow(BaseModel):
-    used: int | None = None
-    limit: int | None = None
-    remaining: int | None = None
-    unit: str | None = None
-    reset_at: str | None = None
-
-
-class EngineUsageObservation(BaseModel):
-    source: EngineMonitoringSource = "local"
-    provider: str | None = None
-    observed_at: str = Field(default_factory=utcnow)
-    invocation_count: int = 1
-    success: bool | None = None
-    limit_reason: str | None = None
-    limit_kind: EngineLimitKind | None = None
-    usage: EngineUsageWindow | None = None
-    metadata: dict[str, str | int | bool | None] = Field(default_factory=dict)
+from heru.types import (
+    EngineLimitKind,
+    EngineMonitoringSource,
+    EngineUsageObservation,
+    EngineUsageWindow,
+    LiveEvent,
+    LiveTimeline,
+)
 
 
 class EngineUsageRecord(BaseModel):
@@ -47,31 +40,11 @@ class WorkspaceEngineMonitoring(BaseModel):
     engines: dict[str, EngineUsageRecord] = Field(default_factory=dict)
 
 
-class LiveEvent(BaseModel):
-    kind: LiveEventKind
-    engine: str
-    sequence: int = 0
-    timestamp: str = Field(default_factory=utcnow)
-    role: LiveEventRole | None = None
-    content: str = ""
-    tool_name: str | None = None
-    tool_input: str | None = None
-    tool_output: str | None = None
-    error: str | None = None
-    metadata: dict[str, str | int | bool | None] = Field(default_factory=dict)
-
-
-class LiveTimeline(BaseModel):
-    events: list[LiveEvent] = Field(default_factory=list)
-    engine: str = ""
-    task_id: str | None = None
-    subagent_id: str | None = None
-    started_at: str | None = None
-    completed_at: str | None = None
-    event_counts: dict[str, int] = Field(default_factory=dict)
-
-    def recompute_counts(self) -> None:
-        counts: dict[str, int] = {}
-        for event in self.events:
-            counts[event.kind] = counts.get(event.kind, 0) + 1
-        self.event_counts = counts
+__all__ = [
+    "EngineUsageObservation",
+    "EngineUsageRecord",
+    "EngineUsageWindow",
+    "LiveEvent",
+    "LiveTimeline",
+    "WorkspaceEngineMonitoring",
+]

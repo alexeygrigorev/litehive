@@ -1,0 +1,92 @@
+task_id: T-0291
+step: grooming
+verdict: pass
+source: agent
+summary: Repo inspection only; no code changes made and no tests were run in grooming.
+feedback: "Repo inspection only; no code changes made and no tests were run in grooming.\n\
+  \nVerified by reading `.litehive/tasks/T-0291.../task.yaml`, sibling tasks `T-0292`\
+  \ through `T-0300`, and the current file-backed implementation in `litehive/config/paths.py`,\
+  \ `litehive/config/workspace.py`, `litehive/tasks/persistence.py`, `litehive/tasks/crud.py`,\
+  \ `litehive/tasks/paths.py`, plus a repo-wide grep across `litehive/` and `tests/`\
+  \ for `.litehive` runtime artifacts.\n\nEvidence from inspection:\n- Current implementation\
+  \ is still heavily file-backed: direct reads/writes exist for `.litehive/state.yaml`,\
+  \ `tasks/*/runtime.yaml`, `thread.yaml`, `journal.md`, `events.jsonl`, `engine-monitoring.yaml`,\
+  \ `.litehive/worktrees`, `.litehive/logs`, and `pool-summary.txt` across core runtime,\
+  \ CLI, observability, doctor, and web layers.\n- The repository already contains\
+  \ follow-up tasks `T-0292`..`T-0300` that split this migration into backup, schema\
+  \ migration framework, comments rename, task intent/runtime split, worktree relocation,\
+  \ log relocation, archive semantics, nested workspace guards, and one-time import.\n\
+  - Because those follow-up tasks already exist, the current `T-0291` acceptance criteria\
+  \ are too broad for a predecessor/foundation task and overlap multiple children.\
+  \ Grooming should pass only with the task narrowed to storage foundations and compatibility\
+  \ seams.\n\nRecommended execution order:\n1. Add workspace-id and XDG path/registry\
+  \ helpers.\n2. Introduce the SQLite storage bootstrap and initial schema behind\
+  \ a small API.\n3. Refactor load/save entry points to consume that API while keeping\
+  \ pre-migration file compatibility.\n4. Update `ensure_workspace()` bootstrap and\
+  \ nested-workspace protection.\n5. Add focused tests, then run `uv run pytest -q`.\n\
+  \nPM sizing: `complex`\nPlanned effort: `l`\n\nTASK_UPDATE:\n  pm_complexity: complex\n\
+  \  planned_effort: l\n  goal: >-\n    Establish the SQLite-backed workspace-state\
+  \ foundation for Litehive so runtime execution\n    data can move out of the repo\
+  \ while git keeps only durable workspace/task intent files.\n    This task should\
+  \ introduce the workspace identity and XDG path model, bootstrap the\n    workspace\
+  \ registry and `data.db` location, create the initial SQLite schema contract for\n\
+  \    runtime state, and define the dual-source load model that later migration tasks\
+  \ will\n    consume. Backup policy, migration framework, archive restore UX, task\
+  \ intent trimming,\n    worktree/log relocation, and one-time data import remain\
+  \ in the follow-up tasks already\n    split out from this epic.\n  acceptance_criteria:\n\
+  \    - A stable workspace-id can be derived from the canonical repo path, and Litehive\
+  \ resolves per-workspace XDG config/data/state roots from that id.\n    - Litehive\
+  \ maintains a workspace registry at `~/.config/litehive/workspaces.yaml` (or XDG\
+  \ equivalent) that maps workspace-id to repo path and is updated when the workspace\
+  \ is resolved or bootstrapped.\n    - Litehive resolves a SQLite database path at\
+  \ `$XDG_DATA_HOME/litehive/<workspace-id>/data.db` (default `~/.local/share/litehive/<workspace-id>/data.db`)\
+  \ and creates parent directories as needed.\n    - An initial SQLite schema exists\
+  \ for runtime state and includes tables for `pool_state`, `queue`, `task_state`,\
+  \ `task_journal`, `stage_reports`, `hook_artifacts`, `subagent_sessions`, `events`,\
+  \ `engine_monitoring`, `attention`, and `worktrees`.\n    - The codebase has a single\
+  \ storage-layer entry point for opening the workspace database and reading or writing\
+  \ runtime state without requiring callers to manipulate SQLite directly.\n    -\
+  \ Task and workspace loading can read intent from filesystem files and runtime state\
+  \ from SQLite together, with a defined fallback for pre-migration file-backed workspaces\
+  \ so follow-up migration tasks can land incrementally.\n    - `ensure_workspace()`\
+  \ refuses to create a workspace inside another `.litehive` tree and continues to\
+  \ scaffold only the durable git-tracked workspace files needed after the migration.\n\
+  \    - Focused tests cover workspace-id/path resolution, registry behavior, database\
+  \ bootstrap, schema creation, and the mixed file-plus-database load path; the existing\
+  \ smoke suite still passes.\n  constraints:\n    - Keep T-0291 scoped to storage\
+  \ foundations and compatibility seams. Do not absorb backup/restore tooling, archive\
+  \ UX, one-time migration, or external path moves that are already tracked as follow-up\
+  \ tasks.\n  plan:\n    - Add workspace identity and XDG path helpers, including\
+  \ registry read/write utilities keyed by workspace-id.\n    - Introduce a SQLite\
+  \ storage module that bootstraps `data.db` and creates the initial runtime-state\
+  \ schema behind a small repository-style API.\n    - Refactor workspace and task\
+  \ persistence entry points to consume the storage module while preserving compatibility\
+  \ with the current file-backed layout during the transition.\n    - Update `ensure_workspace()`\
+  \ and related bootstrap logic to register the workspace, enforce nested-workspace\
+  \ guards, and scaffold only durable workspace files.\n    - Add focused tests for\
+  \ registry/path/schema/bootstrap behavior, then run `uv run pytest -q` to confirm\
+  \ the storage foundation does not regress current workflows.\n\nNote: `litehive\
+  \ task update` could not persist these field changes during grooming because the\
+  \ active task is locked while running (`runtime.execution_status=running`). The\
+  \ YAML above is the intended shaping update."
+submitted_via_cli: true
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 206
+hook_results: []
+created_at: '2026-04-10T16:18:27+00:00'
