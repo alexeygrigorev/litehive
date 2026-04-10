@@ -274,7 +274,7 @@ def stage_prompt(
     # Include the task discussion thread so agents see the full history
     from litehive.tasks.reports import render_task_thread
 
-    thread_text = render_task_thread(root, task) if root is not None else ""
+    thread_text = render_task_thread(root, task, for_prompt=True) if root is not None else ""
     if thread_text:
         lines.extend(["", thread_text])
 

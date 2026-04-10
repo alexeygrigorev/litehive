@@ -67,6 +67,7 @@ from tests.workspace_helpers import (
     save_task,
     save_task_runtime,
     set_active_task,
+    stage_prompt,
     stage_report_from_subagent,
     stop_current_task,
     subprocess,
@@ -1564,6 +1565,52 @@ def test_requeue_command_restarts_parked_task_from_implementation_entry_stage(
     assert requeued.status == "queued"
     assert requeued.pipeline_status == "implementing"
     assert requeued.runtime.last_outcome.kind == "interrupted"
+
+
+def test_requeue_task_retracts_stale_pass_reports_from_prompt_context(tmp_path: Path) -> None:
+    from litehive.models import TaskThreadComment
+    from litehive.tasks.reports import RETRACTED_FILESYSTEM_MARKER, append_thread_comment, load_task_thread
+
+    _init_git_repo(tmp_path)
+    ensure_workspace(tmp_path)
+    (tmp_path / "foo.py").write_text("print('stable')\n", encoding="utf-8")
+    _commit_repo_state(tmp_path, "add foo")
+
+    task = create_task(tmp_path, title="Retract stale pass report")
+    task.status = "flagged"
+    task.pipeline_status = "testing"
+    save_task(tmp_path, task)
+
+    append_thread_comment(
+        tmp_path,
+        task,
+        TaskThreadComment(
+            role="swe",
+            step="implementing",
+            verdict="pass",
+            message="Implementation Complete: foo.py updated and verified.",
+            files_changed=["foo.py"],
+        ),
+    )
+
+    requeue_task(tmp_path, task.id)
+
+    thread = load_task_thread(tmp_path, require_task(tmp_path, task.id))
+    assert len(thread) == 1
+    assert thread[0].message.count(RETRACTED_FILESYSTEM_MARKER) == 1
+
+    prompt = stage_prompt(require_task(tmp_path, task.id), "implementing", workspace_context="", root=tmp_path)
+    assert RETRACTED_FILESYSTEM_MARKER in prompt
+    assert "Prior pass report withheld from prompt context after requeue-time filesystem validation." in prompt
+    assert "Claimed files: foo.py" in prompt
+    assert "Implementation Complete: foo.py updated and verified." not in prompt
+
+    reretry = require_task(tmp_path, task.id)
+    reretry.status = "flagged"
+    save_task(tmp_path, reretry)
+    requeue_task(tmp_path, task.id, force=True)
+    thread = load_task_thread(tmp_path, require_task(tmp_path, task.id))
+    assert thread[0].message.count(RETRACTED_FILESYSTEM_MARKER) == 1
 
 def test_resume_command_preserves_flagged_task_stage(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]

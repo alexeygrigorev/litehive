@@ -2,11 +2,13 @@
 
 import os
 import signal
+import subprocess
 import threading
 import time
 from pathlib import Path
 
 from litehive.config import load_config
+from litehive.git_ops import current_head
 from litehive.models import TaskRecord, WorkspaceState, utcnow
 
 from litehive.tasks.constants import (
@@ -271,7 +273,36 @@ def requeue_task(root: Path, task_id: str, *, front: bool = False, force: bool =
     from .locking import _ensure_future_task_mutation_allowed, _workspace_lock
     from litehive.tasks.persistence import load_state
     from litehive.tasks.queue_management import _reset_task_for_recovery
+    from litehive.tasks.reports import (
+        _normalized_files_changed,
+        is_retractable_pass_comment,
+        load_task_thread,
+        retract_thread_comment,
+        save_task_thread,
+    )
     from .workflow import _persist_task_and_state_without_runner_guard
+
+    def _task_checkout_path(task: TaskRecord) -> Path:
+        relative = task.git.worktree_path
+        if relative:
+            worktree_path = root / relative
+            if worktree_path.exists():
+                return worktree_path
+        return root
+
+    def _path_differs_from_main(checkout_path: Path, main_ref: str, relative_path: str) -> bool:
+        proc = subprocess.run(
+            ["git", "diff", "--quiet", main_ref, "--", relative_path],
+            cwd=checkout_path,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if proc.returncode == 1:
+            return True
+        if proc.returncode == 0:
+            return False
+        raise ValueError(proc.stderr.strip() or f"git diff failed for {relative_path}")
 
     with _workspace_lock(root):
         task = require_task(root, task_id)
@@ -284,6 +315,20 @@ def requeue_task(root: Path, task_id: str, *, front: bool = False, force: bool =
         _ensure_future_task_mutation_allowed(root, [task.id], state=state)
         if task.status not in {"flagged", "merge_failed", "parked", *CLOSED_TASK_STATUSES}:
             raise ValueError(f"Task {task.id} is not flagged, merge_failed, parked, or closed")
+        main_ref = current_head(root)
+        if main_ref is not None:
+            checkout_path = _task_checkout_path(task)
+            thread = load_task_thread(root, task)
+            changed = False
+            for comment in thread:
+                if not is_retractable_pass_comment(comment):
+                    continue
+                claimed_paths = _normalized_files_changed(comment.files_changed)
+                if any(_path_differs_from_main(checkout_path, main_ref, path) for path in claimed_paths):
+                    continue
+                changed = retract_thread_comment(comment) or changed
+            if changed:
+                save_task_thread(root, task, thread)
         _reset_task_for_recovery(
             task,
             status="queued",
