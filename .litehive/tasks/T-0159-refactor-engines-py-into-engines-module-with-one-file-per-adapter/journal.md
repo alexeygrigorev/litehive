@@ -17,3 +17,6 @@ Interrupted subagent execution while `grooming` was running. Reason: Stale runne
 
 ## 2026-04-07T20:54:06+00:00
 Task closed: deferred. Stale interrupted task, superseded by newer tasks
+
+## 2026-04-10T19:31:12+00:00
+Task closed: wont_do. Superseded by T-0269 which extracted the engine adapter layer into the heru/ module (now a standalone repo at github.com/alexeygrigorev/heru). The original refactor goal is fully addressed — each adapter lives in its own file under heru/adapters/.
