@@ -1,8 +1,7 @@
-active_task_id: T-0263
+active_task_id: T-0107
 active_task_ids: []
 mode: implementation
 queue:
-- T-0107
 - T-0265
 - T-0290
 - T-0291
@@ -32,3 +31,5 @@ unmerged_worktrees:
   worktree_path: .litehive/worktrees/T-0284-isolate-workspace-execution-from-inherited
 - task_id: T-0240
   worktree_path: .litehive/worktrees/T-0240-auto-defer-tasks-after-3-flags-instead-of
+- task_id: T-0263
+  worktree_path: .litehive/worktrees/T-0263-migrate-cli-from-argparse-to-typer

@@ -264,3 +264,186 @@
     report: .litehive/tasks/T-0107-add-deterministic-integration-stage-for-parallel-worker-outputs/recovery/recovery-003.yaml'
   files_changed: []
   created_at: '2026-04-09T09:26:04+00:00'
+- role: planner
+  step: grooming
+  verdict: pass
+  message: 'GROOMING PASS.
+
+
+    I verified that the durable task record was the only grooming gap left. The repository
+    already contains the scoped implementation and QA evidence for this feature:  defines
+    ,  defines  and Phase 4 post-merge integration verification, and  contains focused
+    pass/fail/unconfigured coverage.
+
+
+    I updated  so the task source of truth is no longer blank. The task now has a
+    concrete goal, 7 acceptance criteria, 3 constraints, a 7-step execution plan,
+    , and .
+
+
+    What I verified:
+
+    - The task title now maps to a specific user problem: validate the combined merged
+    state after a parallel batch finishes merging.
+
+    - Acceptance criteria are observable and reviewer-checkable rather than implementation-only.
+
+    - Scope is constrained to the parallel pipeline and config; sequential flow and
+    recovery automation stay out of scope.
+
+    - Repo evidence matches the shaped task: config field, post-merge integration
+    stage, batch report output, failure journaling, and focused tests all exist.
+
+    - Existing prior test evidence recorded on the task is consistent with the shaped
+    scope: ....................                                                     [100%]
+
+    20 passed in 1.66s passed with 20 tests including the new integration-check scenarios;
+    QA also recorded a larger suite run with unrelated pre-existing failures only.
+
+
+    Operator note: the intended CLI path  is currently broken in this workspace. Running  fails
+    with , so I persisted the grooming fields directly in  instead.
+
+
+    Handoff summary for downstream stages:
+
+    - Goal: add deterministic post-merge integration verification for parallel batches.
+
+    - Key outcomes expected: configurable integration command on main worktree, no-op
+    when unset, batch report on every configured run,  stop reason on failure, and
+    task journal evidence for each merged task.
+
+    - Follow-up work remains out of scope: rollback, recovery automation, and per-task
+    blame for integration failures.'
+  files_changed: []
+  created_at: '2026-04-10T14:32:24+00:00'
+- role: planner
+  step: grooming
+  verdict: pass
+  message: 'GROOMING PASS.
+
+
+    I verified that the durable task record was the only grooming gap left. The repository
+    already contains the scoped implementation and QA evidence for this feature: litehive/config/model.py
+    defines parallel_integration_check, litehive/pipeline/_parallel.py defines IntegrationCheckResult
+    and Phase 4 post-merge integration verification, and tests/test_parallel_execution.py
+    contains focused pass/fail/unconfigured coverage.
+
+
+    I updated .litehive/tasks/T-0107-add-deterministic-integration-stage-for-parallel-worker-outputs/task.yaml
+    so the task source of truth is no longer blank. The task now has a concrete goal,
+    7 acceptance criteria, 3 constraints, a 7-step execution plan, pm_complexity=moderate,
+    and planned_effort=m.
+
+
+    What I verified:
+
+    - The task title now maps to a specific user problem: validate the combined merged
+    state after a parallel batch finishes merging.
+
+    - Acceptance criteria are observable and reviewer-checkable rather than implementation-only.
+
+    - Scope is constrained to the parallel pipeline and config; sequential flow and
+    recovery automation stay out of scope.
+
+    - Repo evidence matches the shaped task: config field, post-merge integration
+    stage, batch report output, failure journaling, and focused tests all exist.
+
+    - Existing prior test evidence recorded on the task is consistent with the shaped
+    scope: uv run pytest tests/test_parallel_execution.py -q passed with 20 tests
+    including the new integration-check scenarios; QA also recorded a larger suite
+    run with unrelated pre-existing failures only.
+
+
+    Operator note: the intended CLI path litehive task update is currently broken
+    in this workspace. Running litehive task update T-0107 ... fails with AttributeError:
+    module ''typer'' has no attribute ''get_current_context'', so I persisted the
+    grooming fields directly in task.yaml instead.
+
+
+    Handoff summary for downstream stages:
+
+    - Goal: add deterministic post-merge integration verification for parallel batches.
+
+    - Key outcomes expected: configurable integration command on main worktree, no-op
+    when unset, batch report on every configured run, parallel_integration_failed
+    stop reason on failure, and task journal evidence for each merged task.
+
+    - Follow-up work remains out of scope: rollback, recovery automation, and per-task
+    blame for integration failures.'
+  files_changed: []
+  created_at: '2026-04-10T14:32:29+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Verified the existing T-0107 implementation already satisfies the shaped
+    task contract. Confirmed litehive/config/model.py adds optional parallel_integration_check,
+    litehive/pipeline/_parallel.py adds IntegrationCheckResult plus Phase 4 post-merge
+    integration verification on the main worktree, writes batch reports under .litehive/logs/parallel-integration/,
+    exposes integration_check on ParallelRunSummary, sets stop_reason to parallel_integration_failed
+    on check failure, and appends per-task journal entries for merged tasks when the
+    integration check fails. Confirmed focused coverage in tests/test_parallel_execution.py
+    for pass/fail/unconfigured cases plus direct output capture/report assertions.
+    Fresh verification run in this workspace: uv run pytest tests/test_parallel_execution.py
+    -q -> 20 passed in 1.07s; uv run ruff check --select E402,F401 litehive tests
+    -> All checks passed; required forbidden-noqa shell gate -> passed with exit 0.
+    Acceptance criteria evidence: configured check runs automatically after deterministic
+    merge ordering and before batch completion, is a no-op when unset, preserves parallel_batch_complete
+    on success, switches to parallel_integration_failed on failure, captures command/exit_code/stdout/stderr/timestamp/task_ids/merge_order
+    in the batch report, and remains scoped to the parallel pipeline without changing
+    the sequential flow. No additional code changes were needed in this pass.'
+  files_changed: []
+  created_at: '2026-04-10T14:33:57+00:00'
+- role: qa
+  step: testing
+  verdict: pass
+  message: 'QA PASS for T-0107. I independently verified the deterministic post-merge
+    integration stage in the parallel pipeline and confirmed the task record now matches
+    the implemented scope. Code review evidence: litehive/config/model.py adds optional
+    parallel_integration_check on LitehiveConfig; litehive/pipeline/_parallel.py adds
+    IntegrationCheckResult, stores integration_check on ParallelRunSummary, runs Phase
+    4 after deterministic task-ID merge ordering, writes batch reports under .litehive/logs/parallel-integration/,
+    sets stop_reason to parallel_integration_failed when the configured check exits
+    non-zero, and appends per-task journal entries for merged tasks on failure. Focused
+    test evidence: uv run pytest tests/test_parallel_execution.py -q -> 20 passed
+    in 1.11s; uv run pytest tests/test_parallel_execution.py -q -k ''integration_check
+    or run_integration_check'' -> 4 passed, 16 deselected in 0.53s; uv run pytest
+    tests/test_config.py -q -> 39 passed in 0.60s; uv run pytest tests/test_run_cli.py
+    -q -> 34 passed in 2.80s. Acceptance criteria coverage confirmed: configured integration
+    check auto-runs after merges and before batch completion; no-op when parallel_integration_check
+    is unset; passing check preserves stop_reason parallel_batch_complete; failing
+    check produces stop_reason parallel_integration_failed plus batch report and failure
+    journal entries; report includes command, exit_code, stdout, stderr, timestamp,
+    task_ids, and merge_order; behavior stays scoped to the parallel pipeline and
+    does not alter sequential flow. Note: an earlier implementation note referenced
+    tests/test_config_and_run_cli.py, but in this workspace those checks live in tests/test_config.py
+    and tests/test_run_cli.py; both passed.'
+  files_changed: []
+  created_at: '2026-04-10T14:35:13+00:00'
+- role: reviewer
+  step: accepting
+  verdict: pass
+  message: 'ACCEPTED. I verified the implemented scope matches the shaped task for
+    deterministic post-merge integration verification in the parallel pipeline. Code
+    review confirms litehive/config/model.py adds optional parallel_integration_check
+    on LitehiveConfig; litehive/pipeline/_parallel.py adds IntegrationCheckResult,
+    exposes integration_check on ParallelRunSummary, runs a Phase 4 integration check
+    on the main worktree after deterministic task-ID-ordered merges, writes batch
+    reports under .litehive/logs/parallel-integration/, records task_ids/merge_order/command/exit_code/stdout/stderr/timestamp,
+    sets stop_reason to parallel_integration_failed on non-zero exit, and appends
+    failure journal entries to each merged task. The behavior remains scoped to the
+    parallel pipeline; the sequential single-task flow is unchanged. Fresh verification
+    in this workspace: uv run pytest tests/test_parallel_execution.py -q -> 20 passed
+    in 1.18s; uv run pytest tests/test_parallel_execution.py -q -k ''integration_check
+    or run_integration_check'' -> 4 passed, 16 deselected in 0.56s; uv run pytest
+    tests/test_config.py -q -> 39 passed in 0.60s; uv run pytest tests/test_run_cli.py
+    -q -> 34 passed in 2.86s. Acceptance criteria coverage: configured integration
+    check runs automatically after all successful merges and before batch completion;
+    no-op when parallel_integration_check is unset; passing check preserves stop_reason
+    parallel_batch_complete; failing check produces stop_reason parallel_integration_failed
+    plus batch report and per-task journal evidence; report content is sufficient
+    for diagnosis; focused tests cover pass, fail, no-op, and output capture scenarios.
+    Note: git status shows a modified task record file (.litehive/tasks/T-0107-add-deterministic-integration-stage-for-parallel-worker-outputs/task.yaml)
+    from grooming persistence, but it does not affect the acceptance outcome.'
+  files_changed: []
+  created_at: '2026-04-10T14:36:14+00:00'
