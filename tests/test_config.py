@@ -622,6 +622,24 @@ def test_resolve_model_skips_unsupported_engine_override(tmp_path: Path) -> None
     assert resolve_model(task, config, engine_name="codex", model_override="run-model") is None
 
 
+def test_resolve_model_honors_goz_run_task_and_workspace_overrides(tmp_path: Path) -> None:
+    ensure_workspace(
+        tmp_path,
+        LitehiveConfig(
+            default_engine="goz",
+            goz_model="glm-5-workspace",
+        ),
+    )
+    config = load_config(tmp_path)
+    task = create_task(tmp_path, title="Pending task", model="glm-5-task")
+
+    assert resolve_model(task, config, engine_name="goz", model_override="glm-5-run") == "glm-5-run"
+    assert resolve_model(task, config, engine_name="goz") == "glm-5-task"
+
+    task.model = None
+    assert resolve_model(task, config, engine_name="goz") == "glm-5-workspace"
+
+
 def test_litehive_config_normalizes_execution_retry_policies() -> None:
     config = LitehiveConfig(
         execution_retry_policies={
