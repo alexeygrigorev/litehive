@@ -1,3 +1,7 @@
+from typer.testing import CliRunner
+
+from litehive.cli import app
+
 from tests.workspace_helpers import (
     LitehiveConfig,
     Path,
@@ -15,6 +19,7 @@ from tests.workspace_helpers import (
     create_task,
     drain_task_pool,
     ensure_workspace,
+    get_task,
     load_config,
     load_state,
     os,
@@ -157,6 +162,55 @@ def test_build_parser_accepts_acceptance_criteria_flags(tmp_path: Path) -> None:
 
     assert add_args.acceptance_criteria == ["first criterion", "second criterion"]
     assert update_args.acceptance_criteria == ["none"]
+
+
+def test_typer_task_add_persists_options_to_task_yaml(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    create_task(tmp_path, title="First prerequisite")
+    create_task(tmp_path, title="Second prerequisite")
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "task",
+            "add",
+            "Ship task",
+            "--workspace",
+            str(tmp_path),
+            "--goal",
+            "Goal text",
+            "--priority",
+            "high",
+            "--acceptance-criteria",
+            "Criterion A",
+            "--depends-on",
+            "T-0001,T-0002",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    task = get_task(tmp_path, load_state(tmp_path).queue[-1])
+    assert task is not None
+    task_yaml = yaml.safe_load((task_dir(tmp_path, task) / "task.yaml").read_text(encoding="utf-8"))
+    assert task_yaml["title"] == "Ship task"
+    assert task_yaml["goal"] == "Goal text"
+    assert task_yaml["priority"] == "high"
+    assert task_yaml["acceptance_criteria"] == ["Criterion A"]
+    assert task_yaml["depends_on"] == ["T-0001", "T-0002"]
+
+
+def test_typer_queue_promote_moves_task_to_front(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    first = create_task(tmp_path, title="First task")
+    second = create_task(tmp_path, title="Second task")
+
+    result = CliRunner().invoke(
+        app, ["queue", "promote", second.id, "--workspace", str(tmp_path)]
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "position: 1" in result.output
+    assert load_state(tmp_path).queue == [second.id, first.id]
 
 
 def test_build_parser_accepts_pm_sizing_flags(tmp_path: Path) -> None:

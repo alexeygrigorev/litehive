@@ -116,6 +116,10 @@ def _ns(**kwargs: object) -> argparse.Namespace:
     return argparse.Namespace(**kwargs)
 
 
+def _ctx_command(ctx: typer.Context) -> str:
+    return ctx.info_name or ""
+
+
 def _require_subcommand(ctx: typer.Context) -> None:
     if ctx.invoked_subcommand is not None:
         return
@@ -500,6 +504,7 @@ def add(
 @app.command("issue", help="File an upstream Litehive issue/task from the current project", hidden=True)
 @import_app.command("issue", help="File an upstream Litehive issue/task from the current project")
 def issue(
+    ctx: typer.Context,
     workspace: WorkspaceOption = Path.cwd(),
     upstream: Annotated[str, typer.Option(help="Upstream Litehive issue title or short summary")] = ...,
     type: Annotated[
@@ -531,12 +536,13 @@ def issue(
         bool, typer.Option(help="Create the patch branch in the Litehive repo before filing the task")
     ] = False,
 ) -> int:
-    return _cmd_issue(_ns(command=typer.get_current_context().info_name, **locals()))
+    return _cmd_issue(_ns(command=_ctx_command(ctx), **locals()))
 
 
 @app.command("intake", help="Create a rough task from a freeform brain dump using an LLM", hidden=True)
 @import_app.command("spec", help="Create a rough task from a freeform spec using an LLM")
 def intake(
+    ctx: typer.Context,
     file: Annotated[
         Path | None, typer.Argument(help="File containing the brain dump; omit to read from stdin")
     ] = None,
@@ -546,7 +552,9 @@ def intake(
     ] = "opencode",
     model: Annotated[str | None, typer.Option(help="Model override for the selected engine")] = None,
 ) -> int:
-    return _cmd_intake(_ns(command=typer.get_current_context().info_name, file=file, workspace=workspace, engine=engine, model=model))
+    return _cmd_intake(
+        _ns(command=_ctx_command(ctx), file=file, workspace=workspace, engine=engine, model=model)
+    )
 
 
 @app.command("report", help="Submit a stage verdict for the active task")
@@ -596,6 +604,7 @@ def import_issues(
 @app.command("debug", help="Inspect subagent artifacts for a task", hidden=True)
 @task_app.command("debug", help="Inspect subagent artifacts for a task")
 def debug_command(
+    ctx: typer.Context,
     task_id: Annotated[str, typer.Argument(help="Task ID (e.g. T-0001)")] = ...,
     workspace: WorkspaceOption = Path.cwd(),
     all_: Annotated[
@@ -605,12 +614,15 @@ def debug_command(
         bool, typer.Option(help="Show whether the task worktree exists plus uncommitted and committed changes")
     ] = False,
 ) -> int:
-    return _cmd_debug(_ns(command=typer.get_current_context().info_name, task_id=task_id, workspace=workspace, all=all_, worktree=worktree))
+    return _cmd_debug(
+        _ns(command=_ctx_command(ctx), task_id=task_id, workspace=workspace, all=all_, worktree=worktree)
+    )
 
 
 @app.command("logs", help="Show daemon, task journal, and subagent logs", hidden=True)
 @task_app.command("logs", help="Show daemon, task journal, and subagent logs")
 def logs_command(
+    ctx: typer.Context,
     task_id: Annotated[str | None, typer.Argument(help="Optional task ID (e.g. T-0001)")] = None,
     workspace: WorkspaceOption = Path.cwd(),
     daemon: Annotated[bool, typer.Option(help="List the latest daemon run-all sessions")] = False,
@@ -624,7 +636,9 @@ def logs_command(
         bool, typer.Option(help="Follow the currently running subagent stdout in real time")
     ] = False,
 ) -> int:
-    return _cmd_logs(_ns(command=typer.get_current_context().info_name, task_id=task_id, workspace=workspace, daemon=daemon, agent=agent, all=all_, follow=follow))
+    return _cmd_logs(
+        _ns(command=_ctx_command(ctx), task_id=task_id, workspace=workspace, daemon=daemon, agent=agent, all=all_, follow=follow)
+    )
 
 
 @worktree_app.callback()
@@ -635,6 +649,7 @@ def worktree_group(ctx: typer.Context) -> None:
 @app.command("list", help="Compact task listing with optional filters", hidden=True)
 @task_app.command("list", help="Compact task listing with optional filters")
 def list_tasks(
+    ctx: typer.Context,
     workspace: WorkspaceOption = Path.cwd(),
     show_all: Annotated[
         bool, typer.Option("--all", help="Include done tasks (excluded by default)")
@@ -649,16 +664,19 @@ def list_tasks(
         str | None, typer.Option("--engine", help="Filter by engine name")
     ] = None,
 ) -> int:
-    return _cmd_list(_ns(command=typer.get_current_context().info_name, workspace=workspace, show_all=show_all, filter_status=filter_status, filter_pipeline_status=filter_pipeline_status, filter_engine=filter_engine))
+    return _cmd_list(
+        _ns(command=_ctx_command(ctx), workspace=workspace, show_all=show_all, filter_status=filter_status, filter_pipeline_status=filter_pipeline_status, filter_engine=filter_engine)
+    )
 
 
 @app.command("show", help="Print full details for a single task", hidden=True)
 @task_app.command("show", help="Print full details for a single task")
 def show(
+    ctx: typer.Context,
     task_id: Annotated[str, typer.Argument(help="Task ID (e.g. T-0001)")] = ...,
     workspace: WorkspaceOption = Path.cwd(),
 ) -> int:
-    return _cmd_show(_ns(command=typer.get_current_context().info_name, task_id=task_id, workspace=workspace))
+    return _cmd_show(_ns(command=_ctx_command(ctx), task_id=task_id, workspace=workspace))
 
 
 @archive_app.callback()
@@ -681,11 +699,14 @@ def archive_group(
 @queue_app.command("move", help="Move a queued task to a 1-based position")
 @app.command("move", help="Move a queued task to a 1-based position", hidden=True)
 def move(
+    ctx: typer.Context,
     task_id: Annotated[str, typer.Argument(help="Queued task id to move")] = ...,
     position: Annotated[int, typer.Argument(help="Target queue position (1-based)")] = ...,
     workspace: WorkspaceOption = Path.cwd(),
 ) -> int:
-    return _cmd_move(_ns(command=typer.get_current_context().info_name, task_id=task_id, position=position, workspace=workspace))
+    return _cmd_move(
+        _ns(command=_ctx_command(ctx), task_id=task_id, position=position, workspace=workspace)
+    )
 
 
 @app.command("prioritize", help="Move multiple queued tasks to the front in the requested order", hidden=True)
@@ -699,10 +720,11 @@ def prioritize(
 @queue_app.command("promote", help="Move a queued task to the front of the queue")
 @app.command("promote", help="Move a queued task to the front of the queue", hidden=True)
 def promote(
+    ctx: typer.Context,
     task_id: Annotated[str, typer.Argument(help="Queued task id to promote")] = ...,
     workspace: WorkspaceOption = Path.cwd(),
 ) -> int:
-    return _cmd_promote(_ns(command=typer.get_current_context().info_name, task_id=task_id, workspace=workspace))
+    return _cmd_promote(_ns(command=_ctx_command(ctx), task_id=task_id, workspace=workspace))
 
 
 @queue_app.command("requeue", help="Requeue a flagged or closed task")
@@ -732,20 +754,26 @@ def requeue_task(
 @queue_app.command("resume", help="Resume an interrupted, parked, flagged, or closed task from its current stage")
 @app.command("resume", help="Resume an interrupted, parked, flagged, or closed task from its current stage", hidden=True)
 def resume(
+    ctx: typer.Context,
     task_id: Annotated[str, typer.Argument(help="Task id to resume")] = ...,
     workspace: WorkspaceOption = Path.cwd(),
     front: Annotated[bool, typer.Option(help="Insert the task at the front of the queue")] = False,
 ) -> int:
-    return _cmd_resume_task(_ns(command=typer.get_current_context().info_name, task_id=task_id, workspace=workspace, front=front))
+    return _cmd_resume_task(
+        _ns(command=_ctx_command(ctx), task_id=task_id, workspace=workspace, front=front)
+    )
 
 
 @app.command("abandon", help="Cancel a flagged or closed task and remove it from the queue", hidden=True)
 @task_app.command("abandon", help="Cancel a flagged or closed task and remove it from the queue")
 def abandon(
+    ctx: typer.Context,
     task_id: Annotated[str, typer.Argument(help="Task id to abandon")] = ...,
     workspace: WorkspaceOption = Path.cwd(),
 ) -> int:
-    return _cmd_abandon_task(_ns(command=typer.get_current_context().info_name, task_id=task_id, workspace=workspace))
+    return _cmd_abandon_task(
+        _ns(command=_ctx_command(ctx), task_id=task_id, workspace=workspace)
+    )
 
 
 @queue_app.command("stop", help="Stop the current active task cleanly")
@@ -770,6 +798,7 @@ def switch(
 @app.command("close", help="Close a task with an explicit non-implementation outcome (wont_do, deferred, duplicate)", hidden=True)
 @task_app.command("close", help="Close a task with an explicit non-implementation outcome (wont_do, deferred, duplicate)")
 def close(
+    ctx: typer.Context,
     task_id: Annotated[str, typer.Argument(help="Task id to close")] = ...,
     workspace: WorkspaceOption = Path.cwd(),
     outcome: Annotated[
@@ -782,12 +811,15 @@ def close(
         str | None, typer.Option(help="Optional existing task id linked as the follow-up for this close decision")
     ] = None,
 ) -> int:
-    return _cmd_close_task(_ns(command=typer.get_current_context().info_name, task_id=task_id, workspace=workspace, outcome=outcome, reason=reason, follow_up_task=follow_up_task))
+    return _cmd_close_task(
+        _ns(command=_ctx_command(ctx), task_id=task_id, workspace=workspace, outcome=outcome, reason=reason, follow_up_task=follow_up_task)
+    )
 
 
 @app.command("update", help="Update task metadata", hidden=True)
 @task_app.command("update", help="Update task metadata")
 def update(
+    ctx: typer.Context,
     task_id: Annotated[str, typer.Argument(help="Task id to update")] = ...,
     workspace: WorkspaceOption = Path.cwd(),
     model: Annotated[
@@ -844,7 +876,7 @@ def update(
         bool, typer.Option(help="Open the current task shaping fields in $VISUAL or $EDITOR and persist the edited YAML")
     ] = False,
 ) -> int:
-    return _cmd_update(_ns(command=typer.get_current_context().info_name, **locals()))
+    return _cmd_update(_ns(command=_ctx_command(ctx), **locals()))
 
 
 @daemon_app.command("run", help="Start the workspace daemon")
@@ -906,12 +938,15 @@ def import_github(
 @archive_app.command("cleanup", help="Delete archived tasks older than a given duration")
 @app.command("cleanup", help="Delete archived tasks older than a given duration", hidden=True)
 def cleanup(
+    ctx: typer.Context,
     workspace: WorkspaceOption = Path.cwd(),
     older_than: Annotated[
         str, typer.Option(help="Duration threshold (e.g. 30d, 24h, 60m)")
     ] = ...,
 ) -> int:
-    return _cmd_cleanup(_ns(command=typer.get_current_context().info_name, workspace=workspace, older_than=older_than))
+    return _cmd_cleanup(
+        _ns(command=_ctx_command(ctx), workspace=workspace, older_than=older_than)
+    )
 
 
 @worktree_app.command("ls", help="List Litehive-managed task worktrees with task status and change count")
