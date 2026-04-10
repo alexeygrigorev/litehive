@@ -1,6 +1,5 @@
 from pathlib import Path
 
-from litehive.agents import ENGINE_CHOICES
 from litehive.cli._parse import TASK_TYPE_CHOICES
 from litehive.cli.parsers._common import add_workspace_argument
 from litehive.tasks.constants import (
@@ -12,13 +11,8 @@ from litehive.tasks.constants import (
 
 
 def register_update_parser(subparsers):
-    parser = subparsers.add_parser("update", help="Update task engine and metadata")
+    parser = subparsers.add_parser("update", help="Update task metadata")
     parser.add_argument("task_id", help="Task id to update")
-    parser.add_argument(
-        "--engine",
-        choices=[*ENGINE_CHOICES, "default"],
-        help="Override task engine, or use 'default' to clear the override",
-    )
     parser.add_argument(
         "--model",
         help="Override task model, or use 'default' to clear the override",

@@ -48,7 +48,7 @@ def update_task_detail(root: Path, task_id: str, updates: dict[str, Any]) -> dic
     root = root.resolve()
     task = _require_task_for_web(root, task_id)
     payload: dict[str, Any] = {}
-    for field in ("goal", "priority", "engine"):
+    for field in ("goal", "priority"):
         if field in updates:
             value = updates[field]
             if value is not None and not isinstance(value, str):
@@ -238,7 +238,6 @@ def create_task_via_web(root: Path, payload: dict[str, Any]) -> dict[str, Any]:
         title=title,
         goal=_optional_string(payload, "goal") or "",
         priority=_optional_string(payload, "priority"),
-        engine=_optional_string(payload, "engine"),
         acceptance_criteria=_optional_string_list(payload, "acceptance_criteria"),
     )
     return {
@@ -258,7 +257,6 @@ def update_task_via_web(root: Path, task_id: str, payload: dict[str, Any]) -> di
         task_id,
         goal=_field_or_missing(payload, "goal"),
         priority=_optional_update_priority(payload),
-        engine=_field_or_missing(payload, "engine"),
         acceptance_criteria=_list_field_or_missing(payload, "acceptance_criteria"),
         constraints=_list_field_or_missing(payload, "constraints"),
         plan=_list_or_missing(plan, "plan"),

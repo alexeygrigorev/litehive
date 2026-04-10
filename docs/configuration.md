@@ -5,9 +5,8 @@ Litehive reads configuration from two places:
 1. Global config: `~/.config/litehive/config.yaml`
 2. Workspace config: `.litehive/config.yaml`
 
-Workspace values override global values. Task-level settings then override the
-workspace for that task, and some commands such as `litehive run --engine ...`
-can override the resolved engine for a single run.
+Workspace values override global values, and commands such as
+`litehive run --engine ...` can override the resolved engine for a single run.
 
 ## Creating Config
 
@@ -56,10 +55,9 @@ auto_commit: true
 
 What they do:
 
-- `default_engine`: fallback engine when no task-specific or run-specific choice
-  applies.
+- `default_engine`: fallback engine when no run-specific choice applies.
 - `recovery_engine`: engine used for recovery and merge-resolution agents. If
-  omitted, Litehive falls back to the task engine or workspace default engine.
+  omitted, Litehive falls back to the workspace default engine.
 - `process_profile`: prompt/process overlay used when scaffolding
   `.litehive/context.md`.
 - `litehive_source_path`: path to the Litehive repository used for upstream
@@ -92,12 +90,6 @@ Set the workspace default engine:
 litehive engine gemini
 ```
 
-Set a task-specific engine:
-
-```bash
-litehive update T-0002 --engine opencode
-```
-
 Switch a task to a different engine mid-stream and record the reason:
 
 ```bash
@@ -107,7 +99,7 @@ litehive switch T-0002 gemini --reason "quota exhausted"
 Model resolution is:
 
 1. Explicit run override such as `litehive run --engine gemini --model ...`
-2. Task-level `engine` and `model`
+2. Task-level `model`
 3. Task-type routing from `task_engine_routing`
 4. Workspace `default_engine`
 5. Adapter-specific default model field such as `opencode_model`

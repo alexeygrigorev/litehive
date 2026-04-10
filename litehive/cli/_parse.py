@@ -160,7 +160,6 @@ _RICH_TASK_UPDATE_KEYS = {
     "task_type",
     "mode",
     "priority",
-    "engine",
     "model",
     "retry_limit",
     "auto_commit",
@@ -277,13 +276,6 @@ def _parse_rich_task_update_document(data, *, source):
             raise ValueError(f"{source} field 'priority' must be one of: {allowed}")
         updates["priority"] = priority
 
-    if "engine" in data:
-        engine = data["engine"]
-        if engine is not None and engine not in ENGINE_CHOICES:
-            allowed = ", ".join(ENGINE_CHOICES)
-            raise ValueError(f"{source} field 'engine' must be one of: {allowed}, or null")
-        updates["engine"] = engine
-
     if "model" in data:
         model = data["model"]
         if model is not None and not isinstance(model, str):
@@ -344,7 +336,6 @@ def _editable_task_update_payload(task):
         "task_type": task.task_type,
         "mode": task.mode,
         "priority": task.priority,
-        "engine": task.engine,
         "model": task.model,
         "retry_limit": task.retry_policy.max_retries,
         "auto_commit": task.git.auto_commit,

@@ -213,7 +213,7 @@ def _run_next_task_falls_back_from_codex_to_opencode_on_usage_limit(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     ensure_workspace(tmp_path)
-    create_task(tmp_path, title="Fallback usage-limit task", engine="codex", auto_commit=False)
+    create_task(tmp_path, title="Fallback usage-limit task", auto_commit=False)
     codex = get_engine("codex")
     opencode = get_engine("opencode")
 
@@ -317,7 +317,7 @@ def _run_next_task_falls_back_after_stale_subagent_timeout(
             subagent_inactivity_timeout_seconds=0.1,
         ),
     )
-    create_task(tmp_path, title="Fallback stale timeout task", engine="codex", auto_commit=False)
+    create_task(tmp_path, title="Fallback stale timeout task", auto_commit=False)
     task = require_task(tmp_path, "T-0001")
     codex = get_engine("codex")
     opencode = get_engine("opencode")
@@ -417,7 +417,7 @@ def _run_next_task_falls_back_from_codex_to_gemini_on_usage_limit(
             engine_preference=["codex", "gemini", "opencode", "copilot"]
         ),
     )
-    create_task(tmp_path, title="Gemini fallback task", engine="codex", auto_commit=False)
+    create_task(tmp_path, title="Gemini fallback task", auto_commit=False)
     codex = get_engine("codex")
     gemini = get_engine("gemini")
 
@@ -585,7 +585,7 @@ def _run_next_task_walks_same_stage_fallback_graph_after_usage_limit(
             engine_preference=["codex", "opencode", "gemini", "copilot"]
         ),
     )
-    create_task(tmp_path, title="Chained fallback task", engine="codex", auto_commit=False)
+    create_task(tmp_path, title="Chained fallback task", auto_commit=False)
     codex = get_engine("codex")
     opencode = get_engine("opencode")
     gemini = get_engine("gemini")
@@ -1247,7 +1247,7 @@ def _run_next_task_uses_codex_retry_policy_before_external_cli_fallback(
             },
         ),
     )
-    create_task(tmp_path, title="Codex retry policy task", engine="codex", auto_commit=False)
+    create_task(tmp_path, title="Codex retry policy task", auto_commit=False)
 
     monkeypatch.setattr("litehive.pipeline.time.sleep", lambda _seconds: None)
 
@@ -1540,7 +1540,7 @@ def _run_next_task_skips_retries_for_non_retryable_failure(
             }
         ),
     )
-    create_task(tmp_path, title="Skip non-retryable failure", engine="codex", auto_commit=False)
+    create_task(tmp_path, title="Skip non-retryable failure", auto_commit=False)
 
     attempts: list[tuple[str, str]] = []
 
@@ -1594,7 +1594,7 @@ def _run_next_task_skips_unavailable_fallback_engine_after_usage_limit(
             engine_preference=["codex", "gemini", "opencode", "copilot"]
         ),
     )
-    create_task(tmp_path, title="Unavailable fallback task", engine="codex", auto_commit=False)
+    create_task(tmp_path, title="Unavailable fallback task", auto_commit=False)
     codex = get_engine("codex")
     gemini = get_engine("gemini")
     opencode = get_engine("opencode")
@@ -1672,5 +1672,4 @@ def _run_next_task_skips_unavailable_fallback_engine_after_usage_limit(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _run_next_task_skips_unavailable_fallback_engine_after_usage_limit(tmp_path, monkeypatch)
-
 

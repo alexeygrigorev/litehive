@@ -231,9 +231,7 @@ class TaskExecutionRunner:
                         failure_classification="stage_exception",
                         failure_diagnostics={"traceback": traceback_text, "exception": str(exc)},
                     )
-                    engine_name = task.engine or (
-                        self.config.default_engine if self.config else "codex"
-                    )
+                    engine_name = self.config.default_engine if self.config else "codex"
                     recovered = _attempt_stage_recovery(
                         self.root,
                         self.root,
@@ -942,7 +940,7 @@ class TaskExecutionRunner:
             return None
         from litehive.pipeline import _attempt_stage_recovery
 
-        engine_name = task.engine or (self.config.default_engine if self.config else "codex")
+        engine_name = self.config.default_engine if self.config else "codex"
         try:
             return _attempt_stage_recovery(
                 self.root,

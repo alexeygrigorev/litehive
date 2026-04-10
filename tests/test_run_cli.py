@@ -178,8 +178,8 @@ def test_build_parser_accepts_web_monitor_flags(tmp_path: Path) -> None:
 def test_cmd_run_dry_run_shows_planned_tasks_and_stop_conditions_without_execution(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    ensure_workspace(tmp_path)
-    create_task(tmp_path, title="Pending task", engine="opencode")
+    ensure_workspace(tmp_path, LitehiveConfig(default_engine="opencode"))
+    create_task(tmp_path, title="Pending task")
 
     def fail_run_single(*args, **kwargs):  # type: ignore[no-untyped-def]
         raise AssertionError("run_single_task should not be called for dry-run")
@@ -210,8 +210,8 @@ def test_cmd_run_dry_run_shows_planned_tasks_and_stop_conditions_without_executi
 def test_cmd_run_dry_run_prefers_run_engine_override(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    ensure_workspace(tmp_path)
-    create_task(tmp_path, title="Pending task", engine="opencode")
+    ensure_workspace(tmp_path, LitehiveConfig(default_engine="opencode"))
+    create_task(tmp_path, title="Pending task")
 
     def fail_run_single(*args, **kwargs):  # type: ignore[no-untyped-def]
         raise AssertionError("run_single_task should not be called for dry-run")
@@ -244,9 +244,7 @@ def test_cmd_run_dry_run_prefers_run_model_override_without_mutating_workspace_c
         tmp_path,
         LitehiveConfig(default_engine="opencode", opencode_model="zai-coding-plan/glm-5.1"),
     )
-    create_task(
-        tmp_path, title="Pending task", engine="opencode", model="task-model", auto_commit=False
-    )
+    create_task(tmp_path, title="Pending task", model="task-model", auto_commit=False)
 
     config_before = load_config(tmp_path)
 
@@ -270,9 +268,9 @@ def test_cmd_run_dry_run_prefers_run_model_override_without_mutating_workspace_c
 def test_cmd_run_dry_run_plans_dependency_aware_pool_order(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    ensure_workspace(tmp_path)
+    ensure_workspace(tmp_path, LitehiveConfig(default_engine="opencode"))
     blocked = create_task(tmp_path, title="Blocked dependent", auto_commit=False)
-    prerequisite = create_task(tmp_path, title="Prerequisite", engine="opencode", auto_commit=False)
+    prerequisite = create_task(tmp_path, title="Prerequisite", auto_commit=False)
 
     blocked.depends_on = [prerequisite.id]
     save_task(tmp_path, blocked)
@@ -290,8 +288,8 @@ def test_cmd_run_dry_run_plans_dependency_aware_pool_order(
 def test_cmd_run_drain_dry_run_reports_queue_exhausted_without_execution(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    ensure_workspace(tmp_path)
-    create_task(tmp_path, title="Pending task", engine="opencode", auto_commit=False)
+    ensure_workspace(tmp_path, LitehiveConfig(default_engine="opencode"))
+    create_task(tmp_path, title="Pending task", auto_commit=False)
 
     def fail_drain_task_pool(*args, **kwargs):  # type: ignore[no-untyped-def]
         raise AssertionError("drain_task_pool should not be called for dry-run")
@@ -334,7 +332,7 @@ def test_cmd_run_drain_dry_run_reports_blocked_tasks_remaining_without_mutation(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     ensure_workspace(tmp_path)
-    task = create_task(tmp_path, title="Blocked task", engine="codex", auto_commit=False)
+    task = create_task(tmp_path, title="Blocked task", auto_commit=False)
     task.depends_on = ["T-9999"]
     save_task(tmp_path, task)
 
@@ -517,12 +515,13 @@ def test_cmd_run_dry_run_predicts_claude_budget_block_without_fallback(
     ensure_workspace(
         tmp_path,
         LitehiveConfig(
+            default_engine="claude",
             engine_budget_caps={"claude": 2},
             engine_costs={"claude": 3},
             engine_preference=[],
         ),
     )
-    create_task(tmp_path, title="Claude task", engine="claude", auto_commit=False)
+    create_task(tmp_path, title="Claude task", auto_commit=False)
 
     exit_code = _cmd_run(
         argparse.Namespace(
@@ -568,7 +567,7 @@ def test_drain_task_pool_uses_run_engine_override_for_execution(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     ensure_workspace(tmp_path)
-    create_task(tmp_path, title="Pending task", engine="codex", auto_commit=False)
+    create_task(tmp_path, title="Pending task", auto_commit=False)
     seen_engines: list[str] = []
 
     def fake_run(
@@ -589,7 +588,7 @@ def test_run_single_task_uses_run_engine_override_for_execution(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     ensure_workspace(tmp_path)
-    create_task(tmp_path, title="Pending task", engine="codex", auto_commit=False)
+    create_task(tmp_path, title="Pending task", auto_commit=False)
     seen_engines: list[str] = []
 
     def fake_run(
@@ -617,9 +616,7 @@ def test_run_single_task_model_precedence_uses_run_override_then_task_then_works
         tmp_path,
         LitehiveConfig(default_engine="opencode", opencode_model="workspace-model"),
     )
-    create_task(
-        tmp_path, title="Pending task", engine="opencode", model="task-model", auto_commit=False
-    )
+    create_task(tmp_path, title="Pending task", model="task-model", auto_commit=False)
     seen_models: list[str | None] = []
 
     def fake_run(
@@ -634,14 +631,12 @@ def test_run_single_task_model_precedence_uses_run_override_then_task_then_works
     assert seen_models == ["run-model", "run-model", "run-model", "run-model"]
 
     seen_models.clear()
-    create_task(
-        tmp_path, title="Pending task 2", engine="opencode", model="task-model-2", auto_commit=False
-    )
+    create_task(tmp_path, title="Pending task 2", model="task-model-2", auto_commit=False)
     run_single_task(tmp_path)
     assert seen_models == ["task-model-2", "task-model-2", "task-model-2", "task-model-2"]
 
     seen_models.clear()
-    create_task(tmp_path, title="Pending task 3", engine="opencode", auto_commit=False)
+    create_task(tmp_path, title="Pending task 3", auto_commit=False)
     run_single_task(tmp_path)
     assert seen_models == [
         "workspace-model",
@@ -655,9 +650,7 @@ def test_run_single_task_does_not_pass_model_override_to_codex(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     ensure_workspace(tmp_path)
-    create_task(
-        tmp_path, title="Pending task", engine="codex", model="task-model", auto_commit=False
-    )
+    create_task(tmp_path, title="Pending task", model="task-model", auto_commit=False)
     seen_models: list[str | None] = []
 
     def fake_run(

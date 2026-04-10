@@ -53,6 +53,7 @@ from tests.workspace_helpers import (
     finish_task_run_transition,
     get_task,
     get_task_worktree_path,
+    load_config,
     load_state,
     pytest,
     render_task_summary,
@@ -1055,8 +1056,8 @@ def test_add_command_persists_task_model_override(
     assert exit_code == 0
     task = get_task(tmp_path, "T-0001")
     assert task is not None
-    assert task.engine == "gemini"
     assert task.model == "gemini-2.5-pro"
+    assert load_config(tmp_path).default_engine == "codex"
     assert "model: gemini-2.5-pro" in output
 
 def test_add_command_persists_priority_high(
@@ -2269,7 +2270,7 @@ def test_stop_current_task_signals_live_runner_before_fallback(
     assert refreshed.status == "parked"
     assert refreshed.runtime.execution_status == "interrupted"
 
-def test_switch_command_interrupts_active_task_persists_engine_and_records_thread_comment(
+def test_switch_command_interrupts_active_task_records_runtime_switch_and_thread_comment(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
@@ -2325,7 +2326,6 @@ def test_switch_command_interrupts_active_task_persists_engine_and_records_threa
 
     refreshed = get_task(tmp_path, task.id)
     assert refreshed is not None
-    assert refreshed.engine == "gemini"
     assert refreshed.status == "queued"
     assert refreshed.pipeline_status == "testing"
     assert refreshed.runtime.execution_status == "idle"
@@ -2356,7 +2356,6 @@ def test_switch_task_engine_resumes_interrupted_task_at_same_stage_and_front_of_
     interrupted = create_task(tmp_path, title="Switch interrupted task", auto_commit=False)
     interrupted.status = "interrupted"
     interrupted.pipeline_status = "implementing"
-    interrupted.engine = "codex"
     interrupted.runtime.execution_status = "interrupted"
     interrupted.runtime.last_outcome.kind = "interrupted"
     interrupted.runtime.last_outcome.stage = "implementing"
@@ -2405,9 +2404,10 @@ def test_switch_task_engine_resumes_interrupted_task_at_same_stage_and_front_of_
 
     refreshed = get_task(tmp_path, interrupted.id)
     assert refreshed is not None
-    assert refreshed.engine == "gemini"
     assert refreshed.status == "queued"
     assert refreshed.pipeline_status == "implementing"
+    assert refreshed.runtime.last_engine_switch is not None
+    assert refreshed.runtime.last_engine_switch.to_engine == "gemini"
     assert refreshed.runtime.continuation_handoff is not None
     assert refreshed.runtime.continuation_handoff.subagent_path == "subagents/SA-0002-swe"
 
@@ -3039,7 +3039,6 @@ def test_update_command_updates_task_metadata(
     assert exit_code == 0
     updated = get_task(tmp_path, task.id)
     assert updated is not None
-    assert updated.engine == "opencode"
     assert updated.model == "zai-coding-plan/glm-5.1"
     assert updated.retry_policy.max_retries == 2
     assert updated.priority == "high"
@@ -3049,7 +3048,7 @@ def test_update_command_updates_task_metadata(
     assert updated.task_type == "research"
     assert updated.mode == "tasks"
     assert updated.git.auto_commit is False
-    assert "engine: opencode" in output
+    assert "engine: codex" in output
     assert "model: zai-coding-plan/glm-5.1" in output
     assert "retry_limit: 2" in output
     assert "priority: high" in output
@@ -3181,7 +3180,7 @@ def test_update_command_clears_task_retry_override(
     assert updated is not None
     assert updated.retry_policy.max_retries is None
 
-def test_update_command_accepts_gemini_engine(
+def test_update_command_rejects_removed_engine_flag(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     ensure_workspace(tmp_path)
@@ -3201,13 +3200,12 @@ def test_update_command_accepts_gemini_engine(
     )
     output = capsys.readouterr().out
 
-    assert exit_code == 0
+    assert exit_code == 1
     updated = get_task(tmp_path, task.id)
     assert updated is not None
-    assert updated.engine == "gemini"
-    assert "engine: gemini" in output
+    assert "update failed: no changes requested" in output
 
-def test_update_command_accepts_copilot_engine(
+def test_update_command_rejects_removed_copilot_engine_flag(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     ensure_workspace(tmp_path)
@@ -3227,11 +3225,10 @@ def test_update_command_accepts_copilot_engine(
     )
     output = capsys.readouterr().out
 
-    assert exit_code == 0
+    assert exit_code == 1
     updated = get_task(tmp_path, task.id)
     assert updated is not None
-    assert updated.engine == "copilot"
-    assert "engine: copilot" in output
+    assert "update failed: no changes requested" in output
 
 def test_daemon_foreground_stops_before_run_when_pre_status_has_explicit_pool_stop_reason(
     tmp_path: Path,

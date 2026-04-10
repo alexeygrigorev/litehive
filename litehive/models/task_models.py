@@ -75,7 +75,6 @@ class TaskRecord(BaseModel):
     title: str
     depends_on: list[str] = Field(default_factory=list)
     task_type: str | None = None
-    engine: str | None = None
     model: str | None = None
     mode: TaskMode = "implementation"
     pipeline_mode: PipelineMode = "full"

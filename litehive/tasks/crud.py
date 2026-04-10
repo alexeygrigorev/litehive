@@ -165,7 +165,6 @@ def create_task(
     mode: str = "implementation",
     pipeline_mode: str = "full",
     task_type: str | None = None,
-    engine: str | None = None,
     model: str | None = None,
     retry_limit: int | None = None,
     goal: str = "",
@@ -206,7 +205,6 @@ def create_task(
             title=title,
             depends_on=list(depends_on or []),
             task_type=task_type,
-            engine=engine,
             model=model,
             mode=mode,  # type: ignore[arg-type]
             pipeline_mode=pipeline_mode,  # type: ignore[arg-type]

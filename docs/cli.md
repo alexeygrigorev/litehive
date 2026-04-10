@@ -197,7 +197,6 @@ litehive issue \
 Update task metadata after creation.
 
 ```bash
-litehive update T-0002 --engine opencode
 litehive update T-0002 --priority high
 litehive update T-0002 --human-checkpoint before_acceptance
 ```
@@ -225,7 +224,7 @@ litehive update T-0002 --retry-limit default
 
 ### `litehive switch`
 
-Switch the task-level engine override and requeue the task for the next pass.
+Record an engine switch request and requeue the task for the next pass.
 
 ```bash
 litehive switch T-0002 gemini --reason "quota exhausted"

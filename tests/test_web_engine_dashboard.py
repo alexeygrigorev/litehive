@@ -282,7 +282,7 @@ def test_update_default_engine_persists_local_config(tmp_path: Path) -> None:
 def test_switch_task_engine_via_web_reuses_switch_logic(tmp_path: Path) -> None:
     _init_git_repo(tmp_path)
     ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
-    task = create_task(tmp_path, title="Switch me", engine="codex", auto_commit=False)
+    task = create_task(tmp_path, title="Switch me", auto_commit=False)
     task.status = "parked"
     task.pipeline_status = "implementing"
     save_task(tmp_path, task)
@@ -298,8 +298,9 @@ def test_switch_task_engine_via_web_reuses_switch_logic(tmp_path: Path) -> None:
 
     assert payload["switch"]["previous_engine"] == "codex"
     assert payload["switch"]["new_engine"] == "gemini"
-    assert payload["task"]["record"]["engine"] == "gemini"
-    assert reloaded.engine == "gemini"
+    assert "engine" not in payload["task"]["record"]
+    assert reloaded.runtime.last_engine_switch is not None
+    assert reloaded.runtime.last_engine_switch.to_engine == "gemini"
     assert thread[-1].message.startswith("Engine switch requested: Need larger context window")
 
 
@@ -325,7 +326,7 @@ def _seed_engine_monitoring(tmp_path: Path) -> None:
 def test_http_engines_endpoint_returns_dashboard_payload(tmp_path: Path) -> None:
     _init_git_repo(tmp_path)
     ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
-    task = create_task(tmp_path, title="HTTP switch", engine="codex", auto_commit=False)
+    task = create_task(tmp_path, title="HTTP switch", auto_commit=False)
     task.status = "parked"
     task.pipeline_status = "implementing"
     save_task(tmp_path, task)
@@ -377,7 +378,7 @@ def test_http_default_engine_endpoint_persists_new_default(tmp_path: Path) -> No
 def test_http_task_engine_endpoint_switches_task_engine(tmp_path: Path) -> None:
     _init_git_repo(tmp_path)
     ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
-    task = create_task(tmp_path, title="HTTP switch", engine="codex", auto_commit=False)
+    task = create_task(tmp_path, title="HTTP switch", auto_commit=False)
     task.status = "parked"
     task.pipeline_status = "implementing"
     save_task(tmp_path, task)
@@ -400,9 +401,10 @@ def test_http_task_engine_endpoint_switches_task_engine(tmp_path: Path) -> None:
         response = conn.getresponse()
         assert response.status == 200
         payload = json.loads(response.read().decode("utf-8"))
-        assert payload["task"]["record"]["engine"] == "opencode"
+        assert "engine" not in payload["task"]["record"]
         assert payload["switch"]["new_engine"] == "opencode"
-        assert require_task(tmp_path, task.id).engine == "opencode"
+        assert require_task(tmp_path, task.id).runtime.last_engine_switch is not None
+        assert require_task(tmp_path, task.id).runtime.last_engine_switch.to_engine == "opencode"
     finally:
         conn.close()
         server.shutdown()
