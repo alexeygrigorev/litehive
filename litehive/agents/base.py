@@ -16,6 +16,7 @@ from typing import Callable, Literal
 
 from pydantic import ValidationError
 
+from litehive.execution_env import build_child_process_env
 from litehive.models import (
     EngineUsageObservation,
     EngineUsageWindow,
@@ -172,11 +173,11 @@ class ExternalCLIAdapter:
         resume_session_id: str | None = None,
         extra_env: dict[str, str] | None = None,
     ) -> CLIInvocation:
-        env = os.environ.copy()
-        for key in self.stripped_env_vars:
-            env.pop(key, None)
-        if extra_env:
-            env.update(extra_env)
+        env = build_child_process_env(
+            target_root=cwd,
+            extra_env=extra_env,
+            stripped_env_vars=self.stripped_env_vars,
+        )
         return CLIInvocation(
             argv=tuple(self.build_command(
                 prompt, cwd, model=model, max_turns=max_turns,
