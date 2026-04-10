@@ -3,19 +3,18 @@ slug: auto-defer-tasks-after-3-flags-instead-of
 title: Auto-defer tasks after 3 flags instead of allowing infinite requeue loops
 depends_on: []
 task_type: null
-engine: null
 model: null
 mode: implementation
 pipeline_mode: full
-status: queued
+status: in_progress
 flag_reason: null
 flag_count: 0
-pipeline_status: backlog
+pipeline_status: commit_to_git
 priority: high
-pm_complexity: null
-planned_effort: null
+pm_complexity: simple
+planned_effort: s
 created_at: '2026-04-09T07:50:34+00:00'
-updated_at: '2026-04-09T21:06:38+00:00'
+updated_at: '2026-04-10T13:56:41+00:00'
 goal: "Tasks that repeatedly flag (implement\u2192reject\u2192flag\u2192requeue\u2192\
   repeat) waste tokens indefinitely. Add a lifetime flag_count to track how many times\
   \ a task has been flagged. After 3 flags, auto-defer instead of flagging. Block\
@@ -67,10 +66,38 @@ subagents:
   path: subagents/SA-0005-recovery
   sandboxed: false
   sandbox_summary: host
+- id: SA-0010
+  role: planner
+  engine: codex
+  status: completed
+  path: subagents/SA-0010-planner
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0011
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0011-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0012
+  role: qa
+  engine: codex
+  status: completed
+  path: subagents/SA-0012-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0013
+  role: reviewer
+  engine: codex
+  status: completed
+  path: subagents/SA-0013-reviewer
+  sandboxed: false
+  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0240 auto-defer-tasks-after-3-flags-instead-of'
-  commit_sha: null
+  commit_sha: b32c380b4ef0dfd98d717ae7faa735b8de10a979
   checkpoint_base_sha: null
   checkpoint_attempts: 0
   rolled_back_checkpoint_attempt: null

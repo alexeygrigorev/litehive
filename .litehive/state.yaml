@@ -1,8 +1,7 @@
-active_task_id: T-0284
+active_task_id: T-0240
 active_task_ids: []
 mode: implementation
 queue:
-- T-0240
 - T-0263
 - T-0107
 - T-0265
@@ -29,3 +28,5 @@ unmerged_worktrees:
   worktree_path: .litehive/worktrees/T-0281-goz-adapter-wire-continuation-extraction-and
 - task_id: T-0305
   worktree_path: .litehive/worktrees/T-0305-fix-litehive-worktree-rescue-so-it-does-not-need
+- task_id: T-0284
+  worktree_path: .litehive/worktrees/T-0284-isolate-workspace-execution-from-inherited
