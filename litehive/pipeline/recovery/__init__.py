@@ -19,6 +19,14 @@ from .detection import (
     _traceback_text,
     _truncate_recovery_text,
 )
+from .doctor import (
+    DoctorFinding,
+    DoctorFixResult,
+    DoctorReport,
+    apply_doctor_fixes,
+    scan_workspace_doctor,
+    status_attention_findings,
+)
 from .execution_recovery import (
     _attempt_commit_recovery,
     _attempt_stage_recovery,
@@ -52,6 +60,9 @@ __all__ = [
     "_attempt_stage_recovery",
     "_capture_persisted_files",
     "_classify_recovery_failure_owner",
+    "DoctorFinding",
+    "DoctorFixResult",
+    "DoctorReport",
     "_find_existing_checkpoint_commit",
     "_finalize_recovered_commit_task",
     "_has_inactive_running_tasks",
@@ -83,9 +94,12 @@ __all__ = [
     "_traceback_frame_paths",
     "_traceback_text",
     "_truncate_recovery_text",
+    "apply_doctor_fixes",
     "interruption_journal_message",
     "recover_completed_task",
     "recover_stale_runner_state",
     "repair_workspace_state",
     "rollback_completed_task",
+    "scan_workspace_doctor",
+    "status_attention_findings",
 ]

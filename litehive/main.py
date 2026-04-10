@@ -7,6 +7,7 @@ from pathlib import Path
 import yaml
 
 from litehive.config import load_config
+from litehive.pipeline.recovery import status_attention_findings
 
 
 def _resolve_workspace(argv: list[str]) -> Path:
@@ -66,65 +67,25 @@ def _fast_status(argv: list[str]) -> int:
             )
             print(f"active_stage: {stage}")
             print(f"active_engine: {engine}")
-    # Task health scan: duplicate IDs, merge_failed, flagged
-    tasks_root = workspace / ".litehive" / "tasks"
-    if tasks_root.is_dir():
-        id_counts: dict[str, int] = {}
-        merge_failed: list[tuple[str, str]] = []
-        flagged: list[tuple[str, str]] = []
-        for child in sorted(tasks_root.iterdir()):
-            if not child.is_dir():
-                continue
-            task_path = child / "task.yaml"
-            if not task_path.exists():
-                continue
-            try:
-                td = yaml.safe_load(task_path.read_text()) or {}
-                tid = td.get("id", "")
-                tstatus = td.get("status", "")
-                ttitle = td.get("title", "")
-            except Exception:
-                continue
-            id_counts[tid] = id_counts.get(tid, 0) + 1
-            if tstatus == "merge_failed":
-                merge_failed.append((tid, ttitle))
-            elif tstatus == "flagged":
-                flagged.append((tid, ttitle))
-        alerts: list[str] = []
-        if stop_reason == "diverged_from_origin":
-            alerts.append(
-                "pool halted: local main has diverged from origin/main and "
-                "auto-recovery failed — manual reconciliation required"
-            )
-        attention_log = workspace / ".litehive" / "runtime" / "attention.log"
-        if attention_log.exists():
-            try:
-                entries = [
-                    line.strip()
-                    for line in attention_log.read_text(encoding="utf-8").splitlines()
-                    if line.strip()
-                ]
-            except Exception:
-                entries = []
-            for entry in entries[-5:]:
-                alerts.append(f"attention: {entry}")
-        for tid, count in sorted(id_counts.items()):
-            if count > 1:
-                alerts.append(
-                    f"duplicate task id {tid} ({count} directories) — run `litehive repair` to fix"
-                )
-        for tid, title in merge_failed:
-            alerts.append(
-                f"merge_failed: {tid} {title} — commits are in the worktree but never landed on main"
-            )
-        for tid, title in flagged:
-            alerts.append(f"flagged: {tid} {title}")
-        if alerts:
-            print()
-            print("!!! ATTENTION REQUIRED !!!")
-            for alert in alerts:
-                print(f"  ⚠ {alert}")
-            print()
+    alerts = status_attention_findings(workspace, pool_stop_reason=stop_reason)
+    attention_log = workspace / ".litehive" / "runtime" / "attention.log"
+    if attention_log.exists():
+        try:
+            entries = [
+                line.strip()
+                for line in attention_log.read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
+        except Exception:
+            entries = []
+        for entry in entries[-5:]:
+            alerts.append(f"attention: {entry}")
+    if alerts:
+        print()
+        print("!!! ATTENTION REQUIRED !!!")
+        for alert in alerts:
+            print(f"  ⚠ {alert}")
+        print()
 
     for engine_name in sorted((monitoring.get("engines") or {}).keys()):
         record = monitoring["engines"][engine_name] or {}
