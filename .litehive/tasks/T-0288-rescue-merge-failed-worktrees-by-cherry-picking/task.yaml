@@ -6,15 +6,15 @@ task_type: null
 model: null
 mode: implementation
 pipeline_mode: full
-status: in_progress
+status: done
 flag_reason: null
 flag_count: 0
-pipeline_status: commit_to_git
+pipeline_status: done
 priority: medium
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-10T05:59:31+00:00'
-updated_at: '2026-04-10T09:47:14+00:00'
+updated_at: '2026-04-10T09:47:15+00:00'
 goal: Add a rescue command that scans all merge_failed tasks and attempts to recover
   their code by cherry-picking the non-task-metadata changes onto current main. Useful
   when the worktree completed all stages but the merge stalled (as with the T-0264/T-0269/T-0280
@@ -60,9 +60,9 @@ subagents:
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0288 rescue-merge-failed-worktrees-by-cherry-picking'
-  commit_sha: null
-  checkpoint_base_sha: null
-  checkpoint_attempts: 0
+  commit_sha: c13ea4d1999a98a0419b8ea9b2b02c874b420d76
+  checkpoint_base_sha: 35b3ccf6b5118f614585a84df2f22d31b405b9c3
+  checkpoint_attempts: 1
   rolled_back_checkpoint_attempt: null
   merge_agent_attempts: 0
   worktree_path: null

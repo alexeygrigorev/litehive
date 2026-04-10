@@ -1,0 +1,55 @@
+task_id: T-0281
+step: testing
+verdict: pass
+source: agent
+summary: 'Verified the goz continuation/resume implementation against all acceptance
+  criteria. Code inspection confirmed heru/adapters/goz.py now appends --resume-session
+  <id> when resume_session_id is provided and overrides extract_continuation() via
+  extract_continuation_from_payloads(goz_continuation). Code inspection also confirmed
+  heru/adapters/_goz_impl.py now provides goz_session_id() and goz_continuation(),
+  with continuation extraction limited to step_finish payloads that include sessionID.
+  Focused verification: uv run pytest -q tests/test_goz_adapter.py tests/test_engine_variants_and_timeline.py
+  -> 53 passed in 1.76s. The added goz tests specifically cover resume flag wiring,
+  helper extraction from step_finish, rejection of non-step_finish payloads, and adapter-level
+  continuation extraction from JSONL step_finish output, which directly demonstrates
+  the acceptance criteria. Additional repo smoke run: uv run pytest -q -> 957 passed,
+  5 failed, all in tests/test_sandbox_git_profiles.py and unrelated to the goz adapter
+  changes (bubblewrap /usr/bin/bash path failures plus an origin-remote assertion).
+  Verdict: pass for this task because the scoped acceptance criteria are met and the
+  focused task tests pass.'
+feedback: 'Verified the goz continuation/resume implementation against all acceptance
+  criteria. Code inspection confirmed heru/adapters/goz.py now appends --resume-session
+  <id> when resume_session_id is provided and overrides extract_continuation() via
+  extract_continuation_from_payloads(goz_continuation). Code inspection also confirmed
+  heru/adapters/_goz_impl.py now provides goz_session_id() and goz_continuation(),
+  with continuation extraction limited to step_finish payloads that include sessionID.
+  Focused verification: uv run pytest -q tests/test_goz_adapter.py tests/test_engine_variants_and_timeline.py
+  -> 53 passed in 1.76s. The added goz tests specifically cover resume flag wiring,
+  helper extraction from step_finish, rejection of non-step_finish payloads, and adapter-level
+  continuation extraction from JSONL step_finish output, which directly demonstrates
+  the acceptance criteria. Additional repo smoke run: uv run pytest -q -> 957 passed,
+  5 failed, all in tests/test_sandbox_git_profiles.py and unrelated to the goz adapter
+  changes (bubblewrap /usr/bin/bash path failures plus an origin-remote assertion).
+  Verdict: pass for this task because the scoped acceptance criteria are met and the
+  focused task tests pass.'
+submitted_via_cli: true
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 191
+hook_results: []
+created_at: '2026-04-10T09:57:44+00:00'

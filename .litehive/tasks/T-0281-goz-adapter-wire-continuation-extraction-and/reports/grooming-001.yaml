@@ -1,0 +1,49 @@
+task_id: T-0281
+step: grooming
+verdict: pass
+source: agent
+summary: 'Grooming passed. I inspected the current goz adapter surface and updated
+  T-0281 with task_type=adapter, pm_complexity=simple, planned_effort=s, a concrete
+  goal, 3 observable acceptance criteria, 2 constraints, and a 4-step implementation
+  plan. Evidence from repo inspection: heru/adapters/goz.py currently has build_command(...,
+  resume_session_id=...) but does not append --resume-session, and it does not override
+  extract_continuation; heru/adapters/_goz_impl.py currently contains transcript/usage/error
+  helpers but no goz-specific continuation helper; heru/base.py already provides extract_continuation_from_payloads(),
+  so the intended implementation seam is adapter-local rather than pipeline-wide.
+  I also confirmed existing goz-related test coverage lives primarily in tests/test_engine_variants_and_timeline.py
+  plus step_finish/sessionID fixtures in tests/test_workspace_bootstrap.py, which
+  should be extended with focused continuation and resume-command assertions. No code
+  changes were made and no tests were run in grooming.'
+feedback: 'Grooming passed. I inspected the current goz adapter surface and updated
+  T-0281 with task_type=adapter, pm_complexity=simple, planned_effort=s, a concrete
+  goal, 3 observable acceptance criteria, 2 constraints, and a 4-step implementation
+  plan. Evidence from repo inspection: heru/adapters/goz.py currently has build_command(...,
+  resume_session_id=...) but does not append --resume-session, and it does not override
+  extract_continuation; heru/adapters/_goz_impl.py currently contains transcript/usage/error
+  helpers but no goz-specific continuation helper; heru/base.py already provides extract_continuation_from_payloads(),
+  so the intended implementation seam is adapter-local rather than pipeline-wide.
+  I also confirmed existing goz-related test coverage lives primarily in tests/test_engine_variants_and_timeline.py
+  plus step_finish/sessionID fixtures in tests/test_workspace_bootstrap.py, which
+  should be extended with focused continuation and resume-command assertions. No code
+  changes were made and no tests were run in grooming.'
+submitted_via_cli: true
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 111
+hook_results: []
+created_at: '2026-04-10T09:49:42+00:00'

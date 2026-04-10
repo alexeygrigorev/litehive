@@ -1,0 +1,57 @@
+task_id: T-0281
+step: accepting
+verdict: pass
+source: agent
+summary: 'Accepted. I verified the scoped goz adapter changes against the acceptance
+  criteria by inspecting the implementation and rerunning the focused tests. Evidence:
+  heru/adapters/_goz_impl.py now defines goz_session_id(payload) and goz_continuation(payload),
+  and goz_continuation only returns RuntimeEngineContinuation(session_id=...) for
+  step_finish payloads with a non-empty sessionID. heru/adapters/goz.py now appends
+  --resume-session <id> in build_command() when resume_session_id is provided, and
+  GozCLIAdapter.extract_continuation() delegates to extract_continuation_from_payloads(...,
+  goz_continuation). Focused verification run: uv run pytest -q tests/test_goz_adapter.py
+  tests/test_engine_variants_and_timeline.py -> 53 passed in 1.53s. The new tests
+  in tests/test_goz_adapter.py directly cover resume flag wiring, step_finish session
+  extraction, non-step_finish rejection, and adapter-level continuation extraction
+  from JSONL step_finish output. Acceptance criteria met: 1) extract_continuation
+  returns RuntimeEngineContinuation from step_finish payloads, 2) build_command passes
+  --resume-session when resume_session_id is provided, 3) _goz_impl.py has goz-specific
+  continuation/session helpers, and 4) test_goz_adapter coverage passes along with
+  the focused goz-related suite.'
+feedback: 'Accepted. I verified the scoped goz adapter changes against the acceptance
+  criteria by inspecting the implementation and rerunning the focused tests. Evidence:
+  heru/adapters/_goz_impl.py now defines goz_session_id(payload) and goz_continuation(payload),
+  and goz_continuation only returns RuntimeEngineContinuation(session_id=...) for
+  step_finish payloads with a non-empty sessionID. heru/adapters/goz.py now appends
+  --resume-session <id> in build_command() when resume_session_id is provided, and
+  GozCLIAdapter.extract_continuation() delegates to extract_continuation_from_payloads(...,
+  goz_continuation). Focused verification run: uv run pytest -q tests/test_goz_adapter.py
+  tests/test_engine_variants_and_timeline.py -> 53 passed in 1.53s. The new tests
+  in tests/test_goz_adapter.py directly cover resume flag wiring, step_finish session
+  extraction, non-step_finish rejection, and adapter-level continuation extraction
+  from JSONL step_finish output. Acceptance criteria met: 1) extract_continuation
+  returns RuntimeEngineContinuation from step_finish payloads, 2) build_command passes
+  --resume-session when resume_session_id is provided, 3) _goz_impl.py has goz-specific
+  continuation/session helpers, and 4) test_goz_adapter coverage passes along with
+  the focused goz-related suite.'
+submitted_via_cli: true
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 46
+hook_results: []
+created_at: '2026-04-10T09:58:30+00:00'

@@ -1,0 +1,76 @@
+- role: planner
+  step: grooming
+  verdict: pass
+  message: 'Grooming passed. I inspected the current goz adapter surface and updated
+    T-0281 with task_type=adapter, pm_complexity=simple, planned_effort=s, a concrete
+    goal, 3 observable acceptance criteria, 2 constraints, and a 4-step implementation
+    plan. Evidence from repo inspection: heru/adapters/goz.py currently has build_command(...,
+    resume_session_id=...) but does not append --resume-session, and it does not override
+    extract_continuation; heru/adapters/_goz_impl.py currently contains transcript/usage/error
+    helpers but no goz-specific continuation helper; heru/base.py already provides
+    extract_continuation_from_payloads(), so the intended implementation seam is adapter-local
+    rather than pipeline-wide. I also confirmed existing goz-related test coverage
+    lives primarily in tests/test_engine_variants_and_timeline.py plus step_finish/sessionID
+    fixtures in tests/test_workspace_bootstrap.py, which should be extended with focused
+    continuation and resume-command assertions. No code changes were made and no tests
+    were run in grooming.'
+  files_changed: []
+  created_at: '2026-04-10T09:49:19+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Implemented goz resume-session and continuation support. Evidence: heru/adapters/_goz_impl.py
+    adds goz_session_id() and goz_continuation() to extract RuntimeEngineContinuation(session_id=...)
+    only from step_finish payloads; heru/adapters/goz.py now appends --resume-session
+    <id> in build_command() and overrides extract_continuation() via extract_continuation_from_payloads(goz_continuation).
+    Added focused coverage in tests/test_goz_adapter.py for resume flag wiring, helper
+    extraction, non-step_finish rejection, and adapter continuation extraction from
+    step_finish JSONL. Verification run: uv run pytest -q tests/test_goz_adapter.py
+    tests/test_engine_variants_and_timeline.py => 53 passed; uv run ruff check --select
+    E402,F401 litehive tests => passed; forbidden noqa suppression gate command =>
+    passed. Additional repo smoke run uv run pytest -q currently has 5 unrelated failures
+    in tests/test_sandbox_git_profiles.py (bubblewrap /usr/bin/bash path failures
+    and origin remote assertion), while the new goz coverage passes.'
+  files_changed: []
+  created_at: '2026-04-10T09:54:23+00:00'
+- role: qa
+  step: testing
+  verdict: pass
+  message: 'Verified the goz continuation/resume implementation against all acceptance
+    criteria. Code inspection confirmed heru/adapters/goz.py now appends --resume-session
+    <id> when resume_session_id is provided and overrides extract_continuation() via
+    extract_continuation_from_payloads(goz_continuation). Code inspection also confirmed
+    heru/adapters/_goz_impl.py now provides goz_session_id() and goz_continuation(),
+    with continuation extraction limited to step_finish payloads that include sessionID.
+    Focused verification: uv run pytest -q tests/test_goz_adapter.py tests/test_engine_variants_and_timeline.py
+    -> 53 passed in 1.76s. The added goz tests specifically cover resume flag wiring,
+    helper extraction from step_finish, rejection of non-step_finish payloads, and
+    adapter-level continuation extraction from JSONL step_finish output, which directly
+    demonstrates the acceptance criteria. Additional repo smoke run: uv run pytest
+    -q -> 957 passed, 5 failed, all in tests/test_sandbox_git_profiles.py and unrelated
+    to the goz adapter changes (bubblewrap /usr/bin/bash path failures plus an origin-remote
+    assertion). Verdict: pass for this task because the scoped acceptance criteria
+    are met and the focused task tests pass.'
+  files_changed: []
+  created_at: '2026-04-10T09:57:35+00:00'
+- role: reviewer
+  step: accepting
+  verdict: pass
+  message: 'Accepted. I verified the scoped goz adapter changes against the acceptance
+    criteria by inspecting the implementation and rerunning the focused tests. Evidence:
+    heru/adapters/_goz_impl.py now defines goz_session_id(payload) and goz_continuation(payload),
+    and goz_continuation only returns RuntimeEngineContinuation(session_id=...) for
+    step_finish payloads with a non-empty sessionID. heru/adapters/goz.py now appends
+    --resume-session <id> in build_command() when resume_session_id is provided, and
+    GozCLIAdapter.extract_continuation() delegates to extract_continuation_from_payloads(...,
+    goz_continuation). Focused verification run: uv run pytest -q tests/test_goz_adapter.py
+    tests/test_engine_variants_and_timeline.py -> 53 passed in 1.53s. The new tests
+    in tests/test_goz_adapter.py directly cover resume flag wiring, step_finish session
+    extraction, non-step_finish rejection, and adapter-level continuation extraction
+    from JSONL step_finish output. Acceptance criteria met: 1) extract_continuation
+    returns RuntimeEngineContinuation from step_finish payloads, 2) build_command
+    passes --resume-session when resume_session_id is provided, 3) _goz_impl.py has
+    goz-specific continuation/session helpers, and 4) test_goz_adapter coverage passes
+    along with the focused goz-related suite.'
+  files_changed: []
+  created_at: '2026-04-10T09:58:22+00:00'
