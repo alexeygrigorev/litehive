@@ -7,15 +7,15 @@ task_type: null
 model: null
 mode: implementation
 pipeline_mode: full
-status: in_progress
+status: merge_failed
 flag_reason: null
 flag_count: 0
-pipeline_status: commit_to_git
+pipeline_status: merge_failed
 priority: low
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-09T14:52:45+00:00'
-updated_at: '2026-04-10T14:39:06+00:00'
+updated_at: '2026-04-10T14:39:52+00:00'
 goal: Replace argparse with Typer for the CLI. Each command becomes a decorated function
   with type-annotated arguments. Eliminates the separate parser module and dispatch
   table. Modern, clean, auto-generated help.
@@ -78,6 +78,13 @@ subagents:
   path: subagents/SA-0007-reviewer
   sandboxed: false
   sandbox_summary: host
+- id: SA-0009
+  role: merge-resolver
+  engine: codex
+  status: completed
+  path: subagents/SA-0009-merge-resolver
+  sandboxed: false
+  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0263 migrate-cli-from-argparse-to-typer'
@@ -85,7 +92,7 @@ git:
   checkpoint_base_sha: null
   checkpoint_attempts: 0
   rolled_back_checkpoint_attempt: null
-  merge_agent_attempts: 0
+  merge_agent_attempts: 1
   worktree_path: null
 retry_policy:
   max_retries: null

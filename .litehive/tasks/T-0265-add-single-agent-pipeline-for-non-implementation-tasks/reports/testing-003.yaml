@@ -6,28 +6,33 @@ summary: 'VERDICT: PASS'
 feedback: 'VERDICT: PASS
 
 
-  Verified the new pipeline-mode contract and single-agent behavior for T-0265.
+  Verified the pipeline-mode contract and the real CLI entrypoint for T-0265.
 
 
   What I verified:
 
-  - `litehive add --mode single` persists `pipeline_mode: single` and leaves record
-  mode independent (`litehive/cli/parsers/add.py`, `litehive/cli/tasks.py`).
+  - `litehive add --mode single` persists `pipeline_mode: single` while keeping record
+  mode independent.
 
   - `litehive add` without `--mode`, and `litehive add --mode full`, persist `pipeline_mode:
   full`.
 
-  - `--record-mode` preserves the existing `implementation` vs `tasks` record-shaping
-  behavior independently of pipeline mode.
+  - `--record-mode` still preserves the existing `implementation` vs `tasks` task-record
+  shaping independently of pipeline mode.
 
-  - Single-mode prompt framing explicitly tells the lone implementing agent it owns
-  the full task outcome, should use the goal and acceptance criteria directly, should
-  not assume later testing/accepting stages, and may finish at `done` without file
-  changes (`litehive/agents/_prompts.py`).
+  - Single-mode prompt framing in `litehive/agents/_prompts.py` explicitly tells the
+  lone implementing agent it owns the full task outcome, should use the goal and acceptance
+  criteria directly, should not assume later `testing` or `accepting` stages, and
+  may finish at `done` without file changes.
 
-  - Runner behavior remains correct: single mode executes only `implementing`, then
-  goes to `done` when `files_changed` is empty, or continues to `commit_to_git` when
-  files were changed; full mode still follows the existing staged pipeline (`tests/test_runner_workflow.py`).
+  - Runner behavior remains correct in `litehive/pipeline/core.py`: single mode executes
+  only `implementing`, then goes to `done` when `files_changed` is empty or continues
+  to `commit_to_git` when files were changed; full mode still follows the existing
+  staged pipeline.
+
+  - The live Typer entrypoint fix in `litehive/cli/__init__.py` is required in this
+  environment: `add()` now uses injected `typer.Context` instead of `typer.get_current_context()`,
+  so `uv run litehive add ...` works on Typer 0.24.1.
 
 
   Tests run:
@@ -46,30 +51,32 @@ feedback: 'VERDICT: PASS
 
   - `uv run litehive add "Research task" --workspace <tmpdir> --goal "Check docs"
   --acceptance-criteria "Answer is backed by repo evidence" --mode single` created
-  a task with `mode: implementation` and `pipeline_mode: single`.
+  a task whose `task.yaml` contains `mode: implementation` and `pipeline_mode: single`.
 
   - `uv run litehive add "Full task" --workspace <tmpdir> --mode full --record-mode
-  tasks --task-type review` created a task with `mode: tasks` and `pipeline_mode:
-  full`.
+  tasks --task-type review` created a task whose `task.yaml` contains `mode: tasks`
+  and `pipeline_mode: full`.
 
 
   Acceptance criteria status:
 
-  - Met: `litehive add --mode single` creates a single-pipeline task.
+  - Met: `litehive add --mode single` creates a task that runs under single pipeline
+  mode.
 
   - Met: `litehive add` default and `--mode full` create full-pipeline tasks.
 
-  - Met: single mode is framed and tested as one worker stage with direct goal/AC
+  - Met: single mode is framed as one worker stage with direct goal/acceptance-criteria
   ownership, finishing at `done` without changes or routing to `commit_to_git` with
   changes.
 
-  - Met: full mode behavior remains unchanged in the runner tests.
+  - Met: full mode remains unchanged in the runner behavior covered by the focused
+  tests.
 
 
   Notes:
 
-  - The `add` command still prints `priority` twice, but that is pre-existing output
-  noise and unrelated to this task.'
+  - `litehive add` still prints `priority` twice, but that output duplication is pre-existing
+  and unrelated to this task.'
 submitted_via_cli: true
 files_changed: []
 created_follow_up_task_ids: []
@@ -88,6 +95,6 @@ outcome_reason: ''
 failure_classification: null
 failure_diagnostics: {}
 resource_limit_event: null
-duration_seconds: 91
+duration_seconds: 99
 hook_results: []
-created_at: '2026-04-10T00:39:47+00:00'
+created_at: '2026-04-10T14:46:02+00:00'

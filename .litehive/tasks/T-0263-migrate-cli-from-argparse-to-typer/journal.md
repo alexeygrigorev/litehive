@@ -9,6 +9,9 @@ Created task worktree at `.litehive/worktrees/T-0263-migrate-cli-from-argparse-t
 ## 2026-04-10T13:58:39+00:00
 Execution started with engine `codex`.
 
+## 2026-04-10T14:01:06+00:00
+Task metadata updated via CLI.
+
 ## 2026-04-10T14:13:52+00:00
 Runner hook `after_implementing` passed: `uv run ruff check --select E402,F401 litehive tests`.
 - step: `implementing`
@@ -79,3 +82,12 @@ Recovered accepted task back to `queued/commit_to_git` because no final checkpoi
 
 ## 2026-04-10T14:39:06+00:00
 Execution started with engine `codex`.
+
+## 2026-04-10T14:39:06+00:00
+Merge conflict on 1 file(s). Launching merge agent (attempt 1).
+
+## 2026-04-10T14:39:52+00:00
+CommitToGit failed: merge conflict prevented integrating task worktree into main.
+
+## 2026-04-10T14:39:52+00:00
+Execution finished with status `merge_failed`.

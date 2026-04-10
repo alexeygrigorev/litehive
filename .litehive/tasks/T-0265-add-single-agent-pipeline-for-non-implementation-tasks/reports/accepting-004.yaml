@@ -2,83 +2,75 @@ task_id: T-0265
 step: accepting
 verdict: pass
 source: agent
-summary: 'PASS: Verified the new pipeline-mode contract and single-agent behavior
+summary: 'PASS: Verified the new pipeline-mode contract and the live CLI entrypoint
   for T-0265.'
-feedback: 'PASS: Verified the new pipeline-mode contract and single-agent behavior
+feedback: 'PASS: Verified the new pipeline-mode contract and the live CLI entrypoint
   for T-0265.
 
 
   What I verified:
 
-  - litehive add --mode single persists pipeline_mode: single, while default litehive
-  add and litehive add --mode full persist pipeline_mode: full.
+  - `litehive add --mode single` persists `pipeline_mode: single`.
 
-  - Existing task record shaping remains available independently through --record-mode,
-  so implementation vs tasks records still work after repurposing --mode.
+  - Default `litehive add` and `litehive add --mode full` persist `pipeline_mode:
+  full`.
 
-  - Single-mode prompt framing now explicitly tells the lone implementing agent it
-  owns the full task outcome, should use the goal and acceptance criteria directly,
-  should not assume later testing or accepting stages, and may finish at done without
-  file changes.
+  - `--record-mode` still preserves independent `implementation` vs `tasks` task-record
+  shaping.
 
-  - Full mode remains on the existing staged pipeline; single mode still executes
-  one worker stage and only routes to commit_to_git when files_changed is non-empty.
+  - Single-mode prompt framing tells the lone implementing agent it owns the full
+  task outcome, should use the goal and acceptance criteria directly, should not assume
+  later `testing` or `accepting` stages, and may finish at `done` without file changes.
+
+  - Runner behavior remains correct for single mode (`implementing` only, then `done`
+  with no changes or `commit_to_git` with changes) and full mode remains on the existing
+  staged pipeline.
 
 
   Code evidence:
 
-  - litehive/cli/parsers/add.py repurposes --mode to full|single and adds --record-mode
-  for task record mode.
+  - `litehive/cli/parsers/add.py` repurposes `--mode` to `full|single` and adds `--record-mode`.
 
-  - litehive/cli/tasks.py now derives pipeline_mode from args.mode with default full,
-  and mode from args.record_mode or the existing typed-task fallback.
+  - `litehive/cli/tasks.py` derives `pipeline_mode` from `args.mode` with default
+  `full` and keeps record mode independent.
 
-  - litehive/agents/_prompts.py adds a single-mode implementing-stage overlay that
-  frames the task as end-to-end execution.
+  - `litehive/agents/_prompts.py` adds the single-mode end-to-end overlay.
 
-  - tests/test_task_commands_and_daemon.py adds CLI regression coverage for default/full/single
-  pipeline mode and independent record mode.
+  - `litehive/pipeline/core.py` still routes single mode through one worker stage
+  plus optional commit.
 
-  - tests/test_runner_workflow.py adds prompt coverage and keeps single-mode/full-mode
-  workflow assertions intact.
+  - `litehive/cli/__init__.py` uses injected `typer.Context` for the real `add` entrypoint
+  so `uv run litehive add ...` works on Typer 0.24.1.
 
 
   Tests run:
 
-  - uv run pytest -q tests/test_task_commands_and_daemon.py -k "add_command and (pipeline_mode
+  - `uv run pytest -q tests/test_task_commands_and_daemon.py -k "add_command and (pipeline_mode
   or record_mode or force_implementation_mode or persists_task_type or persists_pm_sizing
-  or lacks_acceptance_criteria or allows_future_task)" -> 8 passed
+  or lacks_acceptance_criteria or allows_future_task)"` -> 8 passed
 
-  - uv run pytest -q tests/test_runner_workflow.py -k "full_mode_is_default_pipeline_mode
-  or single_mode" -> 6 passed
+  - `uv run pytest -q tests/test_runner_workflow.py -k "full_mode_is_default_pipeline_mode
+  or single_mode"` -> 6 passed
 
-  - uv run ruff check --select E402,F401 litehive tests -> passed
+  - `uv run ruff check --select E402,F401 litehive tests` -> passed
 
 
   Direct CLI evidence:
 
-  - uv run litehive add "Research task" --workspace <tmpdir> --goal "Check docs" --acceptance-criteria
-  "Answer is backed by repo evidence" --mode single created a task whose task.yaml
-  contains mode: implementation and pipeline_mode: single.
+  - `uv run litehive add "Research task" --workspace <tmpdir> --goal "Check docs"
+  --acceptance-criteria "Answer is backed by repo evidence" --mode single` created
+  a task whose `task.yaml` contains `mode: implementation` and `pipeline_mode: single`.
 
-  - uv run litehive add "Full task" --workspace <tmpdir> --mode full --record-mode
-  tasks --task-type review created a task whose task.yaml contains mode: tasks and
-  pipeline_mode: full.
-
-
-  Acceptance criteria status:
-
-  - Met: litehive add --mode single creates a single-pipeline task.
-
-  - Met: litehive add default and --mode full create full-pipeline tasks.
-
-  - Met: single mode is framed and tested as one worker stage with direct goal/AC
-  ownership, finishing at done without changes or routing to commit_to_git with changes.
-
-  - Met: full mode behavior remains unchanged in the runner tests.
+  - `uv run litehive add "Full task" --workspace <tmpdir> --mode full --record-mode
+  tasks --task-type review` created a task whose `task.yaml` contains `mode: tasks`
+  and `pipeline_mode: full`.
 
 
-  No regressions found in the changed surface.'
+  Acceptance criteria status: all met.
+
+
+  Note: `litehive add` still prints `priority` twice, but that output duplication
+  is pre-existing and unrelated to this task.'
 submitted_via_cli: true
 files_changed: []
 created_follow_up_task_ids: []
@@ -97,6 +89,6 @@ outcome_reason: ''
 failure_classification: null
 failure_diagnostics: {}
 resource_limit_event: null
-duration_seconds: 130
+duration_seconds: 94
 hook_results: []
-created_at: '2026-04-10T00:41:57+00:00'
+created_at: '2026-04-10T14:47:36+00:00'

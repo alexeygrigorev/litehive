@@ -600,3 +600,528 @@
     No regressions found in the changed surface.'
   files_changed: []
   created_at: '2026-04-10T00:41:49+00:00'
+- role: planner
+  step: grooming
+  verdict: pass
+  message: 'PASS: Grooming verification complete for T-0265. I verified the implemented
+    contract matches the task goal and the task record does not need further shaping.
+    Code inspection confirmed: litehive/cli/parsers/add.py repurposes --mode to pipeline
+    selection (full|single) and adds --record-mode for task record shaping; litehive/cli/tasks.py
+    defaults pipeline_mode to full and keeps implementation vs tasks mode independent;
+    litehive/agents/_prompts.py adds single-mode implementing guidance that tells
+    the lone agent it owns the full outcome, should use the goal and acceptance criteria
+    directly, should not assume later testing/accepting cleanup, and may finish at
+    done with no file changes; litehive/pipeline/core.py still uses single-mode routing
+    with implementing only plus optional commit_to_git when files_changed is non-empty,
+    while full mode keeps the existing staged pipeline. Tests run: uv run pytest -q
+    tests/test_task_commands_and_daemon.py -k "add_command and (pipeline_mode or record_mode
+    or force_implementation_mode or persists_task_type or persists_pm_sizing or lacks_acceptance_criteria
+    or allows_future_task)" -> 8 passed; uv run pytest -q tests/test_runner_workflow.py
+    -k "full_mode_is_default_pipeline_mode or single_mode" -> 6 passed; uv run ruff
+    check --select E402,F401 litehive tests -> passed. Direct evidence: invoking _cmd_add
+    in temporary workspaces created one task with mode=implementation and pipeline_mode=single,
+    and another with mode=tasks and pipeline_mode=full. Acceptance criteria status:
+    met for --mode single creating a single-pipeline task; met for default/--mode
+    full creating full-pipeline tasks; met for single mode running one worker stage
+    with goal/acceptance-criteria ownership and finishing at done without changes
+    or routing to commit_to_git with changes; met for full mode remaining unchanged.
+    Note: add still prints priority twice, but that is pre-existing output noise and
+    unrelated to this task.'
+  files_changed: []
+  created_at: '2026-04-10T14:41:34+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Implemented and verified the single-agent pipeline contract for T-0265,
+    plus one required entrypoint fix so the real CLI path works with the Typer version
+    in this environment.
+
+
+    What changed:
+
+    - The pipeline-mode work is present and verified:  selects  and defaults to ;
+    task record shaping remains independent via ; single-mode prompt framing tells
+    the lone implementing agent it owns the full outcome and may finish at  with no
+    file changes or continue to  when files changed.
+
+    - I fixed the actual  Typer entrypoint in  to use injected  instead of , which
+    does not exist in Typer 0.24.1. Before this fix, Created task T-0308 in /home/alexey/git/litehive/.litehive/worktrees/T-0265-add-single-agent-pipeline-for-non-implementation-tasks/.litehive/tasks/T-0308-task
+
+    priority: medium
+
+    retry_limit: default
+
+    priority: medium
+
+    mode: implementation
+
+    pipeline_mode: full
+
+    engine: codex
+
+    model: default
+
+    human_checkpoints: -
+
+    task_type: -
+
+    depends_on: -
+
+    pm_complexity: -
+
+    planned_effort: -
+
+    acceptance_criteria: 0 crashed before task creation.
+
+
+    Acceptance-criteria evidence:
+
+    -  now creates a task whose  contains  and .
+
+    -  default /  create full-pipeline tasks, and  still independently creates ; verified
+    directly with Created task T-0309 in /home/alexey/git/litehive/.litehive/worktrees/T-0265-add-single-agent-pipeline-for-non-implementation-tasks/.litehive/tasks/T-0309-task
+
+    priority: medium
+
+    retry_limit: default
+
+    priority: medium
+
+    mode: tasks
+
+    pipeline_mode: full
+
+    engine: codex
+
+    model: default
+
+    human_checkpoints: -
+
+    task_type: review
+
+    depends_on: -
+
+    pm_complexity: -
+
+    planned_effort: -
+
+    acceptance_criteria: 3, whose  contains  and .
+
+    - Single mode remains a one-worker pipeline plus optional ; verified by existing
+    focused runner tests for no-change  flow and changed-files  flow.
+
+    - Full mode remains unchanged; verified by focused runner tests covering default
+    full-mode behavior.
+
+
+    Tests and checks run:
+
+    - ........                                                                 [100%]
+
+    8 passed, 113 deselected in 0.36s -> 8 passed
+
+    - ......                                                                   [100%]
+
+    6 passed, 117 deselected in 0.44s -> 6 passed
+
+    - All checks passed! -> passed
+
+    - Ran the forbidden-noqa gate from the stage instructions -> passed
+
+
+    Direct CLI note:
+
+    - Before the  fix, Created task T-0310 in /home/alexey/git/litehive/.litehive/worktrees/T-0265-add-single-agent-pipeline-for-non-implementation-tasks/.litehive/tasks/T-0310-task
+
+    priority: medium
+
+    retry_limit: default
+
+    priority: medium
+
+    mode: implementation
+
+    pipeline_mode: full
+
+    engine: codex
+
+    model: default
+
+    human_checkpoints: -
+
+    task_type: -
+
+    depends_on: -
+
+    pm_complexity: -
+
+    planned_effort: -
+
+    acceptance_criteria: 0 failed with .
+
+    - After the fix, both direct CLI add flows above succeeded and persisted the expected  values.'
+  files_changed: []
+  created_at: '2026-04-10T14:43:57+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Implemented and verified the single-agent pipeline contract for T-0265,
+    plus one required entrypoint fix so the real CLI path works with the Typer version
+    in this environment.
+
+
+    What changed:
+
+    - The pipeline-mode work is present and verified: `litehive add --mode` selects
+    `full|single` and defaults to `full`; task record shaping remains independent
+    via `--record-mode`; single-mode prompt framing tells the lone implementing agent
+    it owns the full outcome and may finish at `done` with no file changes or continue
+    to `commit_to_git` when files changed.
+
+    - I fixed the actual `litehive add` Typer entrypoint in `litehive/cli/__init__.py`
+    to use injected `typer.Context` instead of `typer.get_current_context()`, which
+    does not exist in Typer 0.24.1. Before this fix, `uv run litehive add ...` crashed
+    before task creation.
+
+
+    Acceptance-criteria evidence:
+
+    - `litehive add --mode single` now creates a task whose `task.yaml` contains `mode:
+    implementation` and `pipeline_mode: single`.
+
+    - `litehive add` default / `--mode full` create full-pipeline tasks, and `--record-mode
+    tasks` still independently creates `mode: tasks`; verified directly with `uv run
+    litehive add ... --mode full --record-mode tasks --task-type review`, whose `task.yaml`
+    contains `mode: tasks` and `pipeline_mode: full`.
+
+    - Single mode remains a one-worker pipeline plus optional `commit_to_git`; verified
+    by existing focused runner tests for no-change `done` flow and changed-files `commit_to_git`
+    flow.
+
+    - Full mode remains unchanged; verified by focused runner tests covering default
+    full-mode behavior.
+
+
+    Tests and checks run:
+
+    - `uv run pytest -q tests/test_task_commands_and_daemon.py -k "add_command and
+    (pipeline_mode or record_mode or force_implementation_mode or persists_task_type
+    or persists_pm_sizing or lacks_acceptance_criteria or allows_future_task)"` ->
+    8 passed
+
+    - `uv run pytest -q tests/test_runner_workflow.py -k "full_mode_is_default_pipeline_mode
+    or single_mode"` -> 6 passed
+
+    - `uv run ruff check --select E402,F401 litehive tests` -> passed
+
+    - Ran the forbidden-noqa gate from the stage instructions -> passed
+
+
+    Direct CLI note:
+
+    - Before the `typer.Context` fix, `uv run litehive add ...` failed with `AttributeError:
+    module ''typer'' has no attribute ''get_current_context''`.
+
+    - After the fix, both direct CLI add flows above succeeded and persisted the expected
+    `pipeline_mode` values.'
+  files_changed: []
+  created_at: '2026-04-10T14:44:06+00:00'
+- role: qa
+  step: testing
+  verdict: pass
+  message: 'VERDICT: PASS
+
+
+    Verified the pipeline-mode contract and the real CLI entrypoint for T-0265.
+
+
+    What I verified:
+
+    -  persists  while keeping record mode independent.
+
+    -  without , and , persist .
+
+    -  still preserves the existing  vs  task-record shaping independently of pipeline
+    mode.
+
+    - Single-mode prompt framing in  explicitly tells the lone implementing agent
+    it owns the full task outcome, should use the goal and acceptance criteria directly,
+    should not assume later  or  stages, and may finish at  without file changes.
+
+    - Runner behavior remains correct in : single mode executes only , then goes to  when  is
+    empty or continues to  when files were changed; full mode still follows the existing
+    staged pipeline.
+
+    - The live Typer entrypoint fix in  is required in this environment:  now uses
+    injected  instead of , so Created task T-0311 in /home/alexey/git/litehive/.litehive/worktrees/T-0265-add-single-agent-pipeline-for-non-implementation-tasks/.litehive/tasks/T-0311-task
+
+    priority: medium
+
+    retry_limit: default
+
+    priority: medium
+
+    mode: implementation
+
+    pipeline_mode: full
+
+    engine: codex
+
+    model: default
+
+    human_checkpoints: -
+
+    task_type: -
+
+    depends_on: -
+
+    pm_complexity: -
+
+    planned_effort: -
+
+    acceptance_criteria: 0 works on Typer 0.24.1.
+
+
+    Tests run:
+
+    - ........                                                                 [100%]
+
+    8 passed, 113 deselected in 0.38s -> 8 passed
+
+    - ......                                                                   [100%]
+
+    6 passed, 117 deselected in 0.45s -> 6 passed
+
+    - All checks passed! -> passed
+
+
+    Direct CLI evidence:
+
+    -  created a task whose  contains  and .
+
+    -  created a task whose  contains  and .
+
+
+    Acceptance criteria status:
+
+    - Met:  creates a task that runs under single pipeline mode.
+
+    - Met:  default and  create full-pipeline tasks.
+
+    - Met: single mode is framed as one worker stage with direct goal/acceptance-criteria
+    ownership, finishing at  without changes or routing to  with changes.
+
+    - Met: full mode remains unchanged in the runner behavior covered by the focused
+    tests.
+
+
+    Notes:
+
+    -  still prints  twice, but that output duplication is pre-existing and unrelated
+    to this task.'
+  files_changed: []
+  created_at: '2026-04-10T14:45:33+00:00'
+- role: qa
+  step: testing
+  verdict: pass
+  message: 'VERDICT: PASS
+
+
+    Verified the pipeline-mode contract and the real CLI entrypoint for T-0265.
+
+
+    What I verified:
+
+    - `litehive add --mode single` persists `pipeline_mode: single` while keeping
+    record mode independent.
+
+    - `litehive add` without `--mode`, and `litehive add --mode full`, persist `pipeline_mode:
+    full`.
+
+    - `--record-mode` still preserves the existing `implementation` vs `tasks` task-record
+    shaping independently of pipeline mode.
+
+    - Single-mode prompt framing in `litehive/agents/_prompts.py` explicitly tells
+    the lone implementing agent it owns the full task outcome, should use the goal
+    and acceptance criteria directly, should not assume later `testing` or `accepting`
+    stages, and may finish at `done` without file changes.
+
+    - Runner behavior remains correct in `litehive/pipeline/core.py`: single mode
+    executes only `implementing`, then goes to `done` when `files_changed` is empty
+    or continues to `commit_to_git` when files were changed; full mode still follows
+    the existing staged pipeline.
+
+    - The live Typer entrypoint fix in `litehive/cli/__init__.py` is required in this
+    environment: `add()` now uses injected `typer.Context` instead of `typer.get_current_context()`,
+    so `uv run litehive add ...` works on Typer 0.24.1.
+
+
+    Tests run:
+
+    - `uv run pytest -q tests/test_task_commands_and_daemon.py -k "add_command and
+    (pipeline_mode or record_mode or force_implementation_mode or persists_task_type
+    or persists_pm_sizing or lacks_acceptance_criteria or allows_future_task)"` ->
+    8 passed
+
+    - `uv run pytest -q tests/test_runner_workflow.py -k "full_mode_is_default_pipeline_mode
+    or single_mode"` -> 6 passed
+
+    - `uv run ruff check --select E402,F401 litehive tests` -> passed
+
+
+    Direct CLI evidence:
+
+    - `uv run litehive add "Research task" --workspace <tmpdir> --goal "Check docs"
+    --acceptance-criteria "Answer is backed by repo evidence" --mode single` created
+    a task whose `task.yaml` contains `mode: implementation` and `pipeline_mode: single`.
+
+    - `uv run litehive add "Full task" --workspace <tmpdir> --mode full --record-mode
+    tasks --task-type review` created a task whose `task.yaml` contains `mode: tasks`
+    and `pipeline_mode: full`.
+
+
+    Acceptance criteria status:
+
+    - Met: `litehive add --mode single` creates a task that runs under single pipeline
+    mode.
+
+    - Met: `litehive add` default and `--mode full` create full-pipeline tasks.
+
+    - Met: single mode is framed as one worker stage with direct goal/acceptance-criteria
+    ownership, finishing at `done` without changes or routing to `commit_to_git` with
+    changes.
+
+    - Met: full mode remains unchanged in the runner behavior covered by the focused
+    tests.
+
+
+    Notes:
+
+    - `litehive add` still prints `priority` twice, but that output duplication is
+    pre-existing and unrelated to this task.'
+  files_changed: []
+  created_at: '2026-04-10T14:45:48+00:00'
+- role: reviewer
+  step: accepting
+  verdict: pass
+  message: 'PASS: Verified the new pipeline-mode contract and the live CLI entrypoint
+    for T-0265. What I verified:  persists ; default  and  persist ;  still preserves
+    independent  vs  task-record shaping; single-mode prompt framing tells the lone
+    implementing agent it owns the full task outcome, should use the goal and acceptance
+    criteria directly, should not assume later  or  stages, and may finish at  without
+    file changes; runner behavior remains correct for single mode ( only, then  with
+    no changes or  with changes) and full mode remains on the existing staged pipeline.
+    Code evidence:  repurposes  to  and adds ;  derives  from  with default  and keeps
+    record mode independent;  adds the single-mode end-to-end overlay;  still routes
+    single mode through one worker stage plus optional commit;  uses injected  for
+    the real  entrypoint so Created task T-0312 in /home/alexey/git/litehive/.litehive/worktrees/T-0265-add-single-agent-pipeline-for-non-implementation-tasks/.litehive/tasks/T-0312-task
+
+    priority: medium
+
+    retry_limit: default
+
+    priority: medium
+
+    mode: implementation
+
+    pipeline_mode: full
+
+    engine: codex
+
+    model: default
+
+    human_checkpoints: -
+
+    task_type: -
+
+    depends_on: -
+
+    pm_complexity: -
+
+    planned_effort: -
+
+    acceptance_criteria: 0 works on Typer 0.24.1. Tests run: ........                                                                 [100%]
+
+    8 passed, 113 deselected in 0.38s -> 8 passed; ......                                                                   [100%]
+
+    6 passed, 117 deselected in 0.47s -> 6 passed; All checks passed! -> passed. Direct
+    CLI evidence:  created a task whose  contains  and ;  created a task whose  contains  and
+    . Acceptance criteria status: all met. Note:  still prints  twice, but that output
+    duplication is pre-existing and unrelated to this task.'
+  files_changed: []
+  created_at: '2026-04-10T14:47:11+00:00'
+- role: reviewer
+  step: accepting
+  verdict: pass
+  message: 'PASS: Verified the new pipeline-mode contract and the live CLI entrypoint
+    for T-0265.
+
+
+    What I verified:
+
+    - `litehive add --mode single` persists `pipeline_mode: single`.
+
+    - Default `litehive add` and `litehive add --mode full` persist `pipeline_mode:
+    full`.
+
+    - `--record-mode` still preserves independent `implementation` vs `tasks` task-record
+    shaping.
+
+    - Single-mode prompt framing tells the lone implementing agent it owns the full
+    task outcome, should use the goal and acceptance criteria directly, should not
+    assume later `testing` or `accepting` stages, and may finish at `done` without
+    file changes.
+
+    - Runner behavior remains correct for single mode (`implementing` only, then `done`
+    with no changes or `commit_to_git` with changes) and full mode remains on the
+    existing staged pipeline.
+
+
+    Code evidence:
+
+    - `litehive/cli/parsers/add.py` repurposes `--mode` to `full|single` and adds
+    `--record-mode`.
+
+    - `litehive/cli/tasks.py` derives `pipeline_mode` from `args.mode` with default
+    `full` and keeps record mode independent.
+
+    - `litehive/agents/_prompts.py` adds the single-mode end-to-end overlay.
+
+    - `litehive/pipeline/core.py` still routes single mode through one worker stage
+    plus optional commit.
+
+    - `litehive/cli/__init__.py` uses injected `typer.Context` for the real `add`
+    entrypoint so `uv run litehive add ...` works on Typer 0.24.1.
+
+
+    Tests run:
+
+    - `uv run pytest -q tests/test_task_commands_and_daemon.py -k "add_command and
+    (pipeline_mode or record_mode or force_implementation_mode or persists_task_type
+    or persists_pm_sizing or lacks_acceptance_criteria or allows_future_task)"` ->
+    8 passed
+
+    - `uv run pytest -q tests/test_runner_workflow.py -k "full_mode_is_default_pipeline_mode
+    or single_mode"` -> 6 passed
+
+    - `uv run ruff check --select E402,F401 litehive tests` -> passed
+
+
+    Direct CLI evidence:
+
+    - `uv run litehive add "Research task" --workspace <tmpdir> --goal "Check docs"
+    --acceptance-criteria "Answer is backed by repo evidence" --mode single` created
+    a task whose `task.yaml` contains `mode: implementation` and `pipeline_mode: single`.
+
+    - `uv run litehive add "Full task" --workspace <tmpdir> --mode full --record-mode
+    tasks --task-type review` created a task whose `task.yaml` contains `mode: tasks`
+    and `pipeline_mode: full`.
+
+
+    Acceptance criteria status: all met.
+
+
+    Note: `litehive add` still prints `priority` twice, but that output duplication
+    is pre-existing and unrelated to this task.'
+  files_changed: []
+  created_at: '2026-04-10T14:47:23+00:00'
