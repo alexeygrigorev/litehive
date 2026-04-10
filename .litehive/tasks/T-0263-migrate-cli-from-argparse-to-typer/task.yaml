@@ -3,7 +3,7 @@ slug: migrate-cli-from-argparse-to-typer
 title: Migrate CLI from argparse to Typer
 depends_on:
 - T-0264
-task_type: null
+task_type: refactor
 model: null
 mode: implementation
 pipeline_mode: full
@@ -12,21 +12,44 @@ flag_reason: null
 flag_count: 0
 pipeline_status: implementing
 priority: low
-pm_complexity: null
-planned_effort: null
+pm_complexity: complex
+planned_effort: l
 created_at: '2026-04-09T14:52:45+00:00'
 updated_at: '2026-04-10T14:16:03+00:00'
-goal: Replace argparse with Typer for the CLI. Each command becomes a decorated function
-  with type-annotated arguments. Eliminates the separate parser module and dispatch
-  table. Modern, clean, auto-generated help.
+goal: Replace the argparse-based Litehive CLI with a Typer-based entrypoint that preserves
+  the current public command surface, aliases, help visibility, and validation behavior
+  while removing the dedicated parser module and dict-style dispatch wiring in favor
+  of decorated functions with type-annotated arguments and auto-generated help.
 acceptance_criteria:
-- All 39 CLI commands work with Typer
-- No separate parser.py or dispatch table needed
-- Help text and argument validation preserved
-- All existing CLI tests pass
-- typer added to dependencies
-constraints: []
-plan: []
+- '`litehive --help` and grouped help commands expose the same 39 public commands
+  as today, with internal-only commands remaining hidden.'
+- Representative invocations for top-level commands, grouped commands, and legacy
+  aliases continue to accept the same arguments/options and reject invalid input with
+  equivalent validation behavior.
+- The CLI entrypoint routes commands through Typer callbacks without relying on `litehive/cli/parser.py`
+  or dict-based dispatch tables in `litehive/cli/__init__.py`.
+- The existing CLI test suite passes after migrating parser-oriented tests to the
+  Typer entrypoint or an equivalent compatibility seam, and `uv run pytest -q` passes
+  with zero failures.
+- '`pyproject.toml` includes `typer` as a runtime dependency.'
+constraints:
+- Preserve current public command names, grouped subcommands, legacy aliases, and
+  no-argument fallback behavior.
+- Keep business logic in existing command handler modules unless a Typer-specific
+  extraction is required.
+- Keep the refactor scoped to CLI wiring, help output, argument parsing, and test/documentation
+  updates needed by that migration.
+plan:
+- Inventory each current parser builder and map it to a Typer app, subgroup, alias,
+  or hidden command so no public command is dropped during the migration.
+- Introduce a Typer root app and grouped sub-apps that call the existing handler functions,
+  using typed parameters/options to preserve current defaults and coercions.
+- Recreate current routing edge cases in Typer, including hidden/internal commands,
+  grouped command help filtering, and no-argument fallback behavior.
+- Remove `litehive/cli/parser.py` and the dict-based dispatch tables once Typer owns
+  registration and routing.
+- Update parser-focused tests and docs, then run focused CLI tests followed by `uv
+  run pytest -q`.
 human_checkpoints: []
 subagents:
 - id: SA-0001
