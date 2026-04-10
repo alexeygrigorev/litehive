@@ -11,7 +11,7 @@ pipeline_mode: full
 status: deferred
 flag_reason: 'History rewrite requires manual review and force-push. Tonight incident: codex force-pushed without human approval.'
 flag_count: 0
-pipeline_status: deferred
+pipeline_status: backlog
 priority: medium
 pm_complexity: complex
 planned_effort: m

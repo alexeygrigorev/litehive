@@ -1,0 +1,56 @@
+id: T-0290
+slug: resolve-workspace-from-task-id-or-env-config
+title: Resolve workspace from task ID or env/config instead of --workspace path
+depends_on: []
+task_type: null
+model: null
+mode: implementation
+pipeline_mode: full
+status: queued
+flag_reason: null
+flag_count: 0
+pipeline_status: backlog
+priority: high
+pm_complexity: null
+planned_effort: null
+created_at: '2026-04-10T06:15:31+00:00'
+updated_at: '2026-04-10T06:15:31+00:00'
+goal: 'Remove the ambiguity of --workspace path arguments. Agents should only need
+  to pass --task-id T-XXXX or rely on LITEHIVE_TASK_ID env var (which we already inject).
+  Workspace root is resolved by walking up from cwd until finding .litehive/ that
+  contains tasks/<task_id>-<slug>/. Also supports resolving via config: LITEHIVE_WORKSPACE_ROOT
+  env var, or ~/.litehive/workspaces.yaml registry, so agents can run from outside
+  the repo entirely. Prevents incidents like tonight where bad paths ($tmpdir, nested
+  .litehive, wrong worktree) caused duplicate workspace directories.'
+acceptance_criteria:
+- 'New helper resolve_workspace(task_id: str | None) that uses: explicit --task-id,
+  LITEHIVE_TASK_ID env, LITEHIVE_WORKSPACE_ROOT env, walk up from cwd, ~/.litehive/workspaces.yaml
+  registry'
+- Rejects paths where the parent of .litehive is itself inside another .litehive (nested
+  workspace)
+- Rejects paths starting with $ (unresolved shell variable)
+- litehive report defaults to LITEHIVE_TASK_ID env, fails clearly if no way to resolve
+- ensure_workspace() refuses to create .litehive inside another .litehive
+- Agent prompts use plain 'litehive report --verdict pass --role <role> --message
+  <msg>' without --workspace or --task-id
+- Works from outside the repo via ~/.litehive/workspaces.yaml registry
+- All existing tests pass
+constraints: []
+plan: []
+human_checkpoints: []
+subagents: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0290 resolve-workspace-from-task-id-or-env-config'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+  merge_agent_attempts: 0
+  worktree_path: null
+retry_policy:
+  max_retries: null
+  stage_retry_limit: null
+created_from: null
+upstream_origin: null
+github_origin: null
