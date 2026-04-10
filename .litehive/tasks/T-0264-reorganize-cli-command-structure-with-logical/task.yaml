@@ -3,7 +3,6 @@ slug: reorganize-cli-command-structure-with-logical
 title: Reorganize CLI command structure with logical groups and better names
 depends_on: []
 task_type: null
-engine: null
 model: null
 mode: implementation
 pipeline_mode: full
@@ -15,7 +14,7 @@ priority: medium
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-09T15:00:33+00:00'
-updated_at: '2026-04-10T00:30:00+00:00'
+updated_at: '2026-04-10T06:26:27+00:00'
 goal: Restructure the CLI for clarity. Group commands under task/queue/engine/worktree/archive/import.
   Rename daemon to start/stop/restart. Remove internal commands from public API. Keep
   backward compat aliases temporarily.
@@ -78,6 +77,13 @@ subagents:
   engine: codex
   status: completed
   path: subagents/SA-0005-merge-resolver
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0006
+  role: merge-resolver
+  engine: codex
+  status: running
+  path: subagents/SA-0006-merge-resolver
   sandboxed: false
   sandbox_summary: host
 git:

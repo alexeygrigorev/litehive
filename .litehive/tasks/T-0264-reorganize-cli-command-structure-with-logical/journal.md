@@ -39,3 +39,12 @@ CommitToGit failed: merge did not produce new commits on main.
 
 ## 2026-04-10T00:30:00+00:00
 Execution finished with status `merge_failed`.
+
+## 2026-04-10T06:25:57+00:00
+Recovered accepted task back to `queued/commit_to_git` because no final checkpoint commit was recorded.
+
+## 2026-04-10T06:26:25+00:00
+[worktree] Rebase onto 7a70ce1a failed. Launching merge agent.
+
+## 2026-04-10T06:26:26+00:00
+[worktree] Merge conflict on 86 file(s). Launching merge agent.

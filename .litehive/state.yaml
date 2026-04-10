@@ -18,10 +18,4 @@ queue:
 - T-0290
 pool_stop_reason: null
 next_task_number: 290
-unmerged_worktrees:
-- task_id: T-0234
-  worktree_path: .litehive/worktrees/T-0234-add-all-done-flag-to-litehive-archive-command
-- task_id: T-0223
-  worktree_path: .litehive/worktrees/T-0223-web-dashboard-daemon-control-api-start-stop
-- task_id: T-0264
-  worktree_path: .litehive/worktrees/T-0264-reorganize-cli-command-structure-with-logical
+unmerged_worktrees: []
