@@ -133,7 +133,7 @@ def test_merge_conflict_resolved_by_agent(tmp_path: Path) -> None:
             self.execution_root = worktree_path
 
         def run(self, task, *, role, engine_name, prompt, model=None):
-            from litehive.subagents import SubagentResult
+            from litehive.agents import SubagentResult
             from litehive.models import SubagentRef
             # Resolve the conflict by picking the worktree version
             conflict_file = tmp_path / "feature.py"
@@ -185,7 +185,7 @@ def test_merge_conflict_agent_fails_to_resolve(tmp_path: Path) -> None:
             self.execution_root = worktree_path
 
         def run(self, task, *, role, engine_name, prompt, model=None):
-            from litehive.subagents import SubagentResult
+            from litehive.agents import SubagentResult
             from litehive.models import SubagentRef
             # Agent runs but doesn't fix anything
             return SubagentResult(
@@ -237,7 +237,7 @@ class _CountingSubagents:
         self.launch_count = 0
 
     def run(self, task, *, role, engine_name, prompt, model=None):
-        from litehive.subagents import SubagentResult
+        from litehive.agents import SubagentResult
         from litehive.models import SubagentRef
         self.launch_count += 1
         return SubagentResult(

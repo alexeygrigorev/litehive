@@ -128,7 +128,7 @@ from litehive.pipeline import (
     run_single_task,
     run_task,
 )
-from litehive.subagents import (
+from litehive.agents import (
     EngineFailure,
     SubagentManager,
     SubagentResult,

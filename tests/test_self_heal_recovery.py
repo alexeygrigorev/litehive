@@ -11,7 +11,7 @@ from litehive.pipeline.recovery import (
     _attempt_stage_recovery,
     _classify_recovery_failure_owner,
 )
-from litehive.subagents import SubagentResult
+from litehive.agents import SubagentResult
 from litehive.tasks import create_task, save_task
 from litehive.tasks.crud import save_task_runtime
 from litehive.tasks.paths import task_dir

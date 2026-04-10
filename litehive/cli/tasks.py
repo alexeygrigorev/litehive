@@ -1,7 +1,7 @@
 from litehive.config import ensure_workspace, load_config
 from litehive.agents import get_engine
 from litehive.models import UpstreamContributionOrigin, UpstreamPatchProposal
-from litehive.subagents import intake_prompt
+from litehive.agents import intake_prompt
 from litehive.tasks.crud import create_task, discard_created_task, require_task
 from litehive.tasks.models import WorkspaceConflictError
 from litehive.tasks.normalization import missing_acceptance_criteria_cli_warning

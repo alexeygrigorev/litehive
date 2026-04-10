@@ -6,7 +6,7 @@ from litehive.config import ensure_workspace
 from litehive.models import RuntimeStageState, SubagentRef
 from litehive.pipeline import TaskExecutionRunner
 from litehive.pipeline import _attempt_commit_recovery
-from litehive.subagents import SubagentResult
+from litehive.agents import SubagentResult
 from litehive.tasks import create_task, get_task, save_task
 from litehive.tasks.crud import save_task_runtime
 from litehive.tasks.persistence import load_state, save_state
