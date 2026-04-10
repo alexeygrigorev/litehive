@@ -7,25 +7,44 @@ task_type: null
 engine: null
 model: null
 mode: implementation
+pipeline_mode: full
 status: queued
+flag_reason: null
+flag_count: 0
 pipeline_status: backlog
 priority: medium
-pm_complexity: null
-planned_effort: null
+pm_complexity: complex
+planned_effort: m
 created_at: '2026-04-04T16:38:25+00:00'
-updated_at: '2026-04-04T16:38:38+00:00'
+updated_at: '2026-04-10T00:44:24+00:00'
 goal: Rewrite git history to remove the subagent artifacts, event logs, and other
   execution residue that was tracked before the gitignore fix, so fresh clones are
   small (under 10MB)
 acceptance_criteria:
-- git filter-repo or BFG removes .litehive/tasks/*/subagents/ and .litehive/tasks/*/events.jsonl
-  from all historical commits
-- fresh git clone of the repo is under 10MB
-- force push to origin after cleanup
-- all current code and task metadata (task.yaml, reports, journals, threads) is preserved
-- worktrees and runtime directories are also cleaned from history if present
+- No reachable commit in the rewritten repository contains tracked execution-residue
+  paths under .litehive/tasks/*/subagents/, .litehive/tasks/*/events.jsonl, .litehive/worktrees/,
+  or .litehive/runtime/.
+- The rewritten repository still contains the current durable project and Litehive
+  state needed for normal use, including code plus tracked task metadata such as task.yaml,
+  journal.md, thread.yaml, reports, and recovery manifests.
+- After the rewrite is force-pushed to origin, a fresh full clone of the repository
+  has a .git object database under 10MB on disk.
+- Verification shows the largest historical blobs tied to prior Litehive execution
+  residue are gone from reachable history after repack/prune.
 constraints: []
-plan: []
+plan:
+- 'Measure the current repository: identify the largest reachable blobs and confirm
+  which transient Litehive paths must be removed from history while keeping durable
+  task records.'
+- Perform the history rewrite from a disposable mirror clone or other safe isolated
+  copy using git-filter-repo, removing the transient Litehive paths from all refs
+  and repacking the repository afterward.
+- Verify the rewritten history locally by checking that the targeted paths and blobs
+  are absent, that durable task metadata still exists at HEAD, and that the packed
+  object database meets the under-10MB target in a fresh clone.
+- Force-push the rewritten refs to origin only after local verification succeeds,
+  then record the exact verification commands and resulting size metrics in the task
+  report.
 human_checkpoints:
 - before_commit
 subagents: []
@@ -36,7 +55,11 @@ git:
   checkpoint_base_sha: null
   checkpoint_attempts: 0
   rolled_back_checkpoint_attempt: null
+  merge_agent_attempts: 0
   worktree_path: null
 retry_policy:
   max_retries: null
+  stage_retry_limit: null
 created_from: null
+upstream_origin: null
+github_origin: null
