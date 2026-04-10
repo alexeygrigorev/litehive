@@ -12,14 +12,37 @@ flag_reason: null
 flag_count: 0
 pipeline_status: backlog
 priority: medium
-pm_complexity: null
-planned_effort: null
+pm_complexity: moderate
+planned_effort: m
 created_at: '2026-04-01T15:05:41+00:00'
 updated_at: '2026-04-09T22:34:35+00:00'
-goal: ''
-acceptance_criteria: []
-constraints: []
-plan: []
+goal: >-
+  Add a post-merge integration verification stage to the parallel execution
+  pipeline. After all parallel tasks are merged to main (Phase 3), run a
+  configurable integration check (tests, lint, build) on the combined merged
+  state. If the check fails, report which tasks were in the batch, mark the
+  batch result as integration_failed, and leave actionable evidence for
+  recovery. The stage must be deterministic: same inputs produce same verdicts.
+acceptance_criteria:
+  - "After all parallel tasks merge to main, an integration verification step runs automatically on the combined merged state before the batch is marked complete."
+  - "The integration check is configurable via config.yaml (for example, `parallel_integration_check: 'uv run pytest -q'`) with a sensible default of no-op when unconfigured."
+  - "If the integration check passes, the ParallelRunSummary reports stop_reason `parallel_batch_complete` and all tasks remain done."
+  - "If the integration check fails, the ParallelRunSummary reports stop_reason `parallel_integration_failed`, the failure output is captured in a batch integration report, and the journal of each task in the batch records the integration failure."
+  - "The integration report includes batch task IDs, merge order, check command, exit code, stdout/stderr, and timestamp, enough for an operator or recovery agent to diagnose the failure."
+  - "Integration verification is idempotent: running the same check on the same merged state produces the same result."
+  - "Existing tests pass and new tests cover integration check passes, integration check fails, and no integration check configured."
+constraints:
+  - "Keep changes scoped to the parallel pipeline and its configuration; do not modify the sequential single-task flow."
+  - "Do not block on or require changes to the recovery pipeline; leave actionable evidence that recovery can consume later."
+  - "The integration check runs on the main worktree after merges, not in a separate worktree."
+plan:
+  - "Add `parallel_integration_check` to LitehiveConfig as an optional string with default None."
+  - "In `litehive/pipeline/_parallel.py`, add a Phase 4 integration check after the Phase 3 merge loop and before final stop_reason resolution."
+  - "Run the configured integration command on the main worktree only when configured and when at least one task merged successfully."
+  - "Capture exit code, stdout, stderr, timestamp, merged task IDs, and merge order, then write a batch report under `.litehive/logs/parallel-integration/`."
+  - "If the integration check fails, set stop_reason to `parallel_integration_failed` and append an integration-failure journal entry to each merged task."
+  - "Expose the integration-check result on ParallelRunSummary and document the new config field."
+  - "Add focused tests for pass, fail, and unconfigured integration-check scenarios."
 human_checkpoints: []
 subagents:
 - id: SA-0001
