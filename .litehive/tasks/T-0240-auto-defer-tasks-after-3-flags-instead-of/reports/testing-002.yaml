@@ -1,0 +1,67 @@
+task_id: T-0240
+step: testing
+verdict: pass
+source: agent
+summary: 'QA PASS for T-0240. Verified the implementation in the current worktree
+  and confirmed all acceptance criteria with independent code inspection plus test
+  execution. Evidence from code: TaskRecord now includes flag_count: int = 0 in litehive/models/task_models.py,
+  so the field persists in task.yaml through normal model serialization. Flag transitions
+  are handled by _apply_flag_count_auto_defer() in litehive/workspace/runtime_tracking.py:
+  when task.status is flagged it increments flag_count, and once flag_count >= 3 it
+  changes status to deferred and sets flag_reason to ''flagged 3 times - needs human
+  review''. litehive/tasks/crud.py preserves that flag_reason for auto-deferred tasks.
+  Requeue protection is enforced in litehive/workspace/task_status.py: requeue_task(...,
+  force=False) raises ValueError when flag_count >= 3, and litehive/cli/parsers/requeue.py
+  adds the --force flag for the CLI path. Evidence from tests: tests/test_flag_count_auto_defer.py
+  is focused and covers the required behaviors without oversized or monolithic tests:
+  incrementing on repeated flagged transitions, auto-deferring on the 3rd flag, blocking
+  requeue without --force, allowing forced requeue, and preserving flag_count across
+  requeue. Commands run: 1) uv run ruff check --select E402,F401 litehive tests ->
+  passed, confirming the earlier unused-import blocker is resolved. 2) uv run pytest
+  -q tests/test_flag_count_auto_defer.py -> 8 passed in 0.99s. 3) uv run pytest -q
+  -> 891 passed in 129.31s. Verdict: PASS. Acceptance criteria met: flag_count exists
+  with default 0 and persists, increments on each flagged transition, auto-defers
+  with the required reason after 3 flags, requeue requires --force at 3+ flags, requeue
+  does not reset the lifetime counter, and the existing test suite passes.'
+feedback: 'QA PASS for T-0240. Verified the implementation in the current worktree
+  and confirmed all acceptance criteria with independent code inspection plus test
+  execution. Evidence from code: TaskRecord now includes flag_count: int = 0 in litehive/models/task_models.py,
+  so the field persists in task.yaml through normal model serialization. Flag transitions
+  are handled by _apply_flag_count_auto_defer() in litehive/workspace/runtime_tracking.py:
+  when task.status is flagged it increments flag_count, and once flag_count >= 3 it
+  changes status to deferred and sets flag_reason to ''flagged 3 times - needs human
+  review''. litehive/tasks/crud.py preserves that flag_reason for auto-deferred tasks.
+  Requeue protection is enforced in litehive/workspace/task_status.py: requeue_task(...,
+  force=False) raises ValueError when flag_count >= 3, and litehive/cli/parsers/requeue.py
+  adds the --force flag for the CLI path. Evidence from tests: tests/test_flag_count_auto_defer.py
+  is focused and covers the required behaviors without oversized or monolithic tests:
+  incrementing on repeated flagged transitions, auto-deferring on the 3rd flag, blocking
+  requeue without --force, allowing forced requeue, and preserving flag_count across
+  requeue. Commands run: 1) uv run ruff check --select E402,F401 litehive tests ->
+  passed, confirming the earlier unused-import blocker is resolved. 2) uv run pytest
+  -q tests/test_flag_count_auto_defer.py -> 8 passed in 0.99s. 3) uv run pytest -q
+  -> 891 passed in 129.31s. Verdict: PASS. Acceptance criteria met: flag_count exists
+  with default 0 and persists, increments on each flagged transition, auto-defers
+  with the required reason after 3 flags, requeue requires --force at 3+ flags, requeue
+  does not reset the lifetime counter, and the existing test suite passes.'
+submitted_via_cli: true
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 186
+hook_results: []
+created_at: '2026-04-10T03:35:03+00:00'

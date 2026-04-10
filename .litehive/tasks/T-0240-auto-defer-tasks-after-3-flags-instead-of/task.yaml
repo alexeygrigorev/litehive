@@ -7,15 +7,15 @@ engine: null
 model: null
 mode: implementation
 pipeline_mode: full
-status: queued
+status: in_progress
 flag_reason: null
 flag_count: 0
-pipeline_status: implementing
+pipeline_status: commit_to_git
 priority: high
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-09T07:50:34+00:00'
-updated_at: '2026-04-09T21:06:38+00:00'
+updated_at: '2026-04-10T03:37:58+00:00'
 goal: "Tasks that repeatedly flag (implement\u2192reject\u2192flag\u2192requeue\u2192\
   repeat) waste tokens indefinitely. Add a lifetime flag_count to track how many times\
   \ a task has been flagged. After 3 flags, auto-defer instead of flagging. Block\
@@ -65,6 +65,34 @@ subagents:
   engine: claude
   status: completed
   path: subagents/SA-0005-recovery
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0006
+  role: merge-resolver
+  engine: codex
+  status: completed
+  path: subagents/SA-0006-merge-resolver
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0007
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0007-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0008
+  role: qa
+  engine: codex
+  status: completed
+  path: subagents/SA-0008-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0009
+  role: reviewer
+  engine: codex
+  status: completed
+  path: subagents/SA-0009-reviewer
   sandboxed: false
   sandbox_summary: host
 git:

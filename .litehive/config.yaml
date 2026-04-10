@@ -103,7 +103,8 @@ external_engine_sandbox:
   tmpfs:
   - /tmp
   engine_policies: {}
-engine_freeze: {}
+engine_freeze:
+  claude: '2026-04-10T09:00:00Z'
 engine_preference:
 - claude
 - codex

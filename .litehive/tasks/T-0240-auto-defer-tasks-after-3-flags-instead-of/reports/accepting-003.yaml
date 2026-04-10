@@ -1,0 +1,59 @@
+task_id: T-0240
+step: accepting
+verdict: pass
+source: agent
+summary: 'Acceptance PASS for T-0240. I verified the implementation directly in the
+  current worktree and confirmed each acceptance criterion. Code evidence: TaskRecord
+  now includes flag_count: int = 0 in litehive/models/task_models.py, so the lifetime
+  counter persists in task.yaml through normal serialization. Flag transitions are
+  handled by _apply_flag_count_auto_defer() in litehive/workspace/runtime_tracking.py:
+  when task.status is flagged it increments flag_count, and once flag_count >= 3 it
+  converts the task to deferred and sets flag_reason to ''flagged 3 times - needs
+  human review''. litehive/tasks/crud.py preserves that reason for the auto-deferred
+  state. Requeue protection is enforced in litehive/workspace/task_status.py: requeue_task(...,
+  force=False) raises ValueError when flag_count >= 3, and litehive/cli/parsers/requeue.py
+  adds the --force option for the CLI path. Verification run in this worktree: 1)
+  uv run ruff check --select E402,F401 litehive tests -> passed. 2) uv run pytest
+  -q tests/test_flag_count_auto_defer.py -> 8 passed in 1.02s. 3) uv run pytest -q
+  -> 891 passed in 129.11s. Reviewer judgment: the requested lifetime flag counter
+  exists, increments on flagged transitions, auto-defers after the third flag with
+  the required reason, requeue is blocked unless --force at 3+ flags, requeue does
+  not reset flag_count, and the existing test suite passes. Outcome: done.'
+feedback: 'Acceptance PASS for T-0240. I verified the implementation directly in the
+  current worktree and confirmed each acceptance criterion. Code evidence: TaskRecord
+  now includes flag_count: int = 0 in litehive/models/task_models.py, so the lifetime
+  counter persists in task.yaml through normal serialization. Flag transitions are
+  handled by _apply_flag_count_auto_defer() in litehive/workspace/runtime_tracking.py:
+  when task.status is flagged it increments flag_count, and once flag_count >= 3 it
+  converts the task to deferred and sets flag_reason to ''flagged 3 times - needs
+  human review''. litehive/tasks/crud.py preserves that reason for the auto-deferred
+  state. Requeue protection is enforced in litehive/workspace/task_status.py: requeue_task(...,
+  force=False) raises ValueError when flag_count >= 3, and litehive/cli/parsers/requeue.py
+  adds the --force option for the CLI path. Verification run in this worktree: 1)
+  uv run ruff check --select E402,F401 litehive tests -> passed. 2) uv run pytest
+  -q tests/test_flag_count_auto_defer.py -> 8 passed in 1.02s. 3) uv run pytest -q
+  -> 891 passed in 129.11s. Reviewer judgment: the requested lifetime flag counter
+  exists, increments on flagged transitions, auto-defers after the third flag with
+  the required reason, requeue is blocked unless --force at 3+ flags, requeue does
+  not reset flag_count, and the existing test suite passes. Outcome: done.'
+submitted_via_cli: true
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 175
+hook_results: []
+created_at: '2026-04-10T03:37:58+00:00'
