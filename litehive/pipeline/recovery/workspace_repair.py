@@ -698,7 +698,12 @@ def _recover_stale_runner_state(
                 prioritized_ids.append(task.id)
         if transitioned:
             if state.active_task_id is not None:
-                if summary is not None and summary.cleared_active_task_id is None:
+                active_task = tasks_by_id.get(state.active_task_id)
+                should_report_clear = not (
+                    active_task is not None
+                    and (_is_stranded_commit_task(active_task) or _should_requeue_commit_stage_task(active_task))
+                )
+                if summary is not None and summary.cleared_active_task_id is None and should_report_clear:
                     summary.cleared_active_task_id = state.active_task_id
                 state.active_task_id = None
             mutated = True
@@ -708,7 +713,12 @@ def _recover_stale_runner_state(
         if state.active_task_id is not None and (
             state.active_task_id not in tasks_by_id or state.active_task_id in prioritized_ids
         ):
-            if summary is not None and summary.cleared_active_task_id is None:
+            active_task = tasks_by_id.get(state.active_task_id)
+            should_report_clear = not (
+                active_task is not None
+                and (_is_stranded_commit_task(active_task) or _should_requeue_commit_stage_task(active_task))
+            )
+            if summary is not None and summary.cleared_active_task_id is None and should_report_clear:
                 summary.cleared_active_task_id = state.active_task_id
             state.active_task_id = None
             mutated = True
@@ -887,6 +897,8 @@ def _clear_stale_running_on_terminal_tasks(
             if task.status not in terminal_statuses:
                 continue
             if task.runtime.execution_status != "running":
+                continue
+            if _is_stranded_commit_task(task):
                 continue
             task.runtime.execution_status = "idle"
             task.runtime.run_started_at = None

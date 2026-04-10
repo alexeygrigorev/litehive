@@ -76,7 +76,7 @@ class SubagentManager(_SessionMixin):
 
         engine = get_engine(engine_name)
         execution_engine = engine
-        sandbox_summary = self.sandbox.policy_summary(engine_name)
+        sandbox_summary = self.sandbox.policy_summary(engine_name, role)
         ref = SubagentRef(
             id=subagent_id,
             role=role,
@@ -97,7 +97,7 @@ class SubagentManager(_SessionMixin):
                     f"Engine '{engine.name}' is unavailable: missing binary '{engine.binary}'"
                 )
             if isinstance(engine, ExternalCLIAdapter) and sandbox_summary.enabled:
-                execution_engine = _SandboxedAdapter(engine, self.sandbox, engine_name)
+                execution_engine = _SandboxedAdapter(engine, self.sandbox, engine_name, role)
             # Probe the wrapped adapter for capability preference. The sandbox wrapper
             # exposes both run and run_live, so inspecting the wrapper would hide
             # whether the underlying engine actually prefers a custom run override.
@@ -337,7 +337,7 @@ class SubagentManager(_SessionMixin):
                 "files_changed": report.files_changed,
                 "tests": report.tests,
                 "warnings": report.warnings,
-                "resource_control": self.sandbox.policy_summary(ref.engine).as_dict(),
+                "resource_control": self.sandbox.policy_summary(ref.engine, ref.role).as_dict(),
                 "interruption_reason": interruption_reason,
                 "resource_limit_event": (
                     None
@@ -440,7 +440,7 @@ class SubagentManager(_SessionMixin):
             "files_changed": [],
             "tests": {"added": 0, "passing": 0},
             "warnings": [],
-            "resource_control": self.sandbox.policy_summary(ref.engine).as_dict(),
+            "resource_control": self.sandbox.policy_summary(ref.engine, ref.role).as_dict(),
             "interruption_reason": None,
             "resource_limit_event": None,
         }
@@ -458,7 +458,7 @@ class SubagentManager(_SessionMixin):
                 "files_changed": report.files_changed,
                 "tests": report.tests,
                 "warnings": report.warnings,
-                "resource_control": self.sandbox.policy_summary(ref.engine).as_dict(),
+                "resource_control": self.sandbox.policy_summary(ref.engine, ref.role).as_dict(),
                 "resource_limit_event": (
                     None
                     if report.resource_limit_event is None

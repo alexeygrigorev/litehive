@@ -158,6 +158,14 @@ Per-engine policies can define:
 This is most useful when you want tighter isolation between Litehive and the
 external engine process.
 
+Git access is also role-gated at the sandbox filesystem boundary:
+
+- `merge-resolver` gets a wrapper-backed `git`
+- every other role gets the no-git profile by default
+
+See [sandboxing.md](sandboxing.md) for the role map, wrapper denylist, and
+manual audit flow.
+
 ## Adding A New Engine Adapter
 
 Adding an engine is a code change, not just a config change. The usual steps are:

@@ -212,6 +212,25 @@ def _task_worktree_path(root: Path, task: TaskRecord) -> Path:
     return root / ".litehive" / "worktrees" / f"{task.id}-{task.slug}"
 
 
+def _remove_origin_remote(worktree_path: Path) -> None:
+    remotes = subprocess.run(
+        ["git", "remote"],
+        cwd=worktree_path,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if remotes.returncode != 0 or "origin" not in remotes.stdout.split():
+        return
+    subprocess.run(
+        ["git", "remote", "remove", "origin"],
+        cwd=worktree_path,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
 def _run_worktree_merge_agent(
     root: Path, worktree_path: Path, task: TaskRecord, main_head: str,
     *, config: "LitehiveConfig | None" = None,
@@ -284,6 +303,7 @@ def _resolve_task_execution_root(root: Path, task: TaskRecord, *, config: "Liteh
                     # Rebase failed — launch merge agent to resolve
                     append_journal(root, task, f"[worktree] Rebase onto {main_head[:8]} failed. Launching merge agent.")
                     _run_worktree_merge_agent(root, worktree_path, task, main_head, config=config)
+            _remove_origin_remote(worktree_path)
             return worktree_path
 
     worktree_path = _task_worktree_path(root, task)  # noqa: E305
@@ -291,6 +311,7 @@ def _resolve_task_execution_root(root: Path, task: TaskRecord, *, config: "Liteh
     if worktree_path.exists():
         shutil.rmtree(worktree_path)
     add_worktree(root, worktree_path, ref=current_head(root) or "HEAD")
+    _remove_origin_remote(worktree_path)
     set_task_worktree_path(task, str(worktree_path.relative_to(root)))
     save_task(root, task)
     append_journal(root, task, f"Created task worktree at `{get_task_worktree_path(task)}`.")

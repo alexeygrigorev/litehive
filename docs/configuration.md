@@ -286,6 +286,14 @@ external_engine_sandbox:
 Per-engine policies can selectively allow environment variables, network
 settings, and mounted credentials.
 
+Litehive now applies a role-based git sandbox on top of that engine policy:
+
+- `merge-resolver` is the only role with a visible `git` command
+- all other roles fail closed to the no-git profile
+
+See [sandboxing.md](sandboxing.md) for the enforced profile map, denylist, and
+manual adversarial audit workflow.
+
 ## Agent Startup Guidance
 
 You can add role-specific instructions that become part of agent prompts:

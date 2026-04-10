@@ -1788,10 +1788,12 @@ def test_sandbox_launcher_wraps_selected_engine_with_bubblewrap_policy(
 
     assert wrapped.cwd == tmp_path
     assert wrapped.argv[0] == "bwrap"
-    assert "--unshare-all" in wrapped.argv
+    assert "--unshare-ipc" in wrapped.argv
+    assert "--unshare-pid" in wrapped.argv
+    assert "--unshare-uts" in wrapped.argv
     assert "--die-with-parent" in wrapped.argv
     assert "--clearenv" in wrapped.argv
-    assert "--share-net" not in wrapped.argv  # network_mode=none
+    assert "--unshare-net" in wrapped.argv  # network_mode=none
     assert f"--bind {tmp_path} {tmp_path}" in joined  # rw workspace
     assert f"--ro-bind /usr/bin/codex /usr/bin/codex" in joined  # engine binary
     assert "--setenv OPENAI_API_KEY secret" in joined
@@ -1853,7 +1855,7 @@ def test_sandbox_bubblewrap_shares_net_when_not_none(
 
     wrapped = launcher.wrap_invocation("codex", "codex", invocation)
 
-    assert "--share-net" in wrapped.argv
+    assert "--unshare-net" not in wrapped.argv
 
 
 def test_sandbox_bubblewrap_policy_summary_includes_backend_and_mounts(

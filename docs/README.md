@@ -26,6 +26,8 @@ linked pages as reference once your workspace is running.
   the state machine.
 - [engines.md](engines.md): supported adapters, model resolution, fallbacks, and
   adding a new engine.
+- [sandboxing.md](sandboxing.md): per-role sandbox profiles, git access policy,
+  wrapper denylist, and manual breakout auditing.
 - [recovery.md](recovery.md): repair, recovery agents, rollback, recover, and
   merge-conflict handling.
 - [workspace-layout.md](workspace-layout.md): what lives under `.litehive/` and
