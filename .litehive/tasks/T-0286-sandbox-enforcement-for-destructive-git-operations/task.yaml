@@ -6,7 +6,7 @@ task_type: null
 model: null
 mode: implementation
 pipeline_mode: full
-status: in_progress
+status: queued
 flag_reason: null
 flag_count: 0
 pipeline_status: backlog
@@ -14,23 +14,50 @@ priority: high
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-10T05:59:06+00:00'
-updated_at: '2026-04-10T07:38:27+00:00'
-goal: Agents running tasks that touch git history (filter-repo, filter-branch, force-push,
-  reset --hard, push -f) must run in a sandbox. The T-0266 incident had codex running
-  non-sandboxed with full host access, including the ability to force-push to origin.
-  Add a policy that detects these tool invocations in agent prompts or subagent args
-  and refuses to run outside sandbox.
+updated_at: '2026-04-10T07:45:27+00:00'
+goal: 'Prevent agents from running destructive git operations by intercepting git
+  itself at the PATH level with a role-aware shim. The T-0266 incident had codex
+  running non-sandboxed with full host access and force-pushed to origin/main.
+  Policy: only the merge-resolver role gets normal git access (and even it cannot
+  force-push or rewrite history); every other role has zero git access.'
 acceptance_criteria:
-- 'Deny-list of destructive commands hard-blocks subagent execution: git filter-repo,
-  filter-branch, push --force, push -f, reset --hard (without specific args), reflog
-  expire, gc --prune=now'
-- Deny-list is checked against the agent's raw command output BEFORE execution proceeds
-- Any attempted destructive operation routes to human_attention queue instead of running
-- Bypass requires human_checkpoint:before_implementation set on the task
+- 'A small git shim executable is installed into the per-subagent sandbox PATH ahead
+  of /usr/bin/git. When invoked, it reads LITEHIVE_SUBAGENT_ROLE from the environment
+  and applies role-based policy.'
+- 'Role policy: merge-resolver → denylist mode (all normal git allowed, destructive
+  subcommands rejected with non-zero exit). Any other role or unset → allowlist mode
+  with empty allowlist (every git invocation rejected).'
+- 'Denylist (applied only to merge-resolver): push --force, push -f, push --force-with-lease,
+  push --mirror, filter-repo, filter-branch, reflog expire, gc --prune=now, update-ref -d
+  on refs/remotes/*, reset --hard with origin/* target, rebase/cherry-pick onto protected
+  refs, remote set-url that changes origin URL.'
+- Rejection prints a clear message naming the blocked command and the current subagent
+  role, and logs to .litehive/runtime/attention.log so the operator sees it after the run.
+- LITEHIVE_SUBAGENT_ROLE is exported by SubagentManager when spawning each subagent (or
+  equivalent env-injection point), with value equal to the subagent's role field.
+- Task worktrees have origin removed (git remote remove origin) before the worktree is
+  handed to any non-merge-resolver subagent — defense in depth so even a bypassed shim
+  has nothing to push to.
+- Tests cover all role × operation combinations for the matrix above (merge-resolver
+  allowed commit/push/pull, merge-resolver blocked force-push/filter-repo, swe blocked
+  on everything, unset role blocked on everything).
+- README or docs/ section describing the policy and how to extend the denylist.
 constraints:
-- Do not allow any silent escape route - prefer false positive (flag for human) over
-  false negative (let destructive op run)
-plan: []
+- Do not rely on parsing agent output or prompt scanning — that is bypassable. Enforce
+  at the git invocation boundary only.
+- Merge-resolver is the only role that should ever need push access; do not add escape
+  hatches for other roles without changing this task's AC.
+- Fail closed on unknown roles and on shim internal errors.
+plan:
+- Add litehive/sandbox/git_shim.py (or a small shell script) that implements role-based
+  policy parsing argv and exec'ing /usr/bin/git on allow, exit 1 on deny.
+- Add ROLE_GIT_POLICY constant describing allowed/denied subcommands per role.
+- Wire SubagentManager (or whichever code spawns sandboxed subprocesses) to prepend the
+  shim directory to PATH and export LITEHIVE_SUBAGENT_ROLE=<role>.
+- In worktree setup (litehive/pipeline/_worktree.py or equivalent), run git remote remove
+  origin inside the worktree after creation, for all roles that are not merge-resolver.
+- Add tests under tests/test_git_shim.py exercising the role × command matrix.
+- Update docs/architecture or README with the policy.
 human_checkpoints: []
 subagents: []
 git:
