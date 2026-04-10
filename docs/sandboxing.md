@@ -3,6 +3,56 @@
 Litehive now applies git access policy at the sandbox filesystem boundary, not
 through prompt text, role env vars, or PATH-only tricks.
 
+## Host Prerequisites (Bubblewrap backend)
+
+Litehive supports two sandbox backends: `docker` and `bubblewrap`. Bubblewrap is
+the lighter-weight option (no daemon, namespace-based, near-zero startup cost)
+and is preferred for single-developer hosts.
+
+On Ubuntu 24.04 and other distributions that ship with the AppArmor userns
+restriction, unprivileged `bwrap` will fail at startup with:
+
+```
+bwrap: setting up uid map: Permission denied
+```
+
+This is caused by the kernel setting
+`kernel.apparmor_restrict_unprivileged_userns = 1`, which blocks unprivileged
+user namespace creation except for binaries with an approved AppArmor profile.
+Bubblewrap is not on the default allowlist.
+
+### Fix (one-time, requires sudo)
+
+Persist the setting and apply it live without rebooting:
+
+```bash
+echo 'kernel.apparmor_restrict_unprivileged_userns = 0' | \
+  sudo tee /etc/sysctl.d/60-bwrap.conf
+sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+```
+
+**Security impact.** This disables one layer of Ubuntu's user-namespace
+hardening system-wide. It is fine on a single-developer workstation that you
+control; it is *not* appropriate for shared multi-user hosts or production
+machines. If you cannot disable the restriction system-wide, either:
+
+1. Write an AppArmor profile that allows userns creation for just `/usr/bin/bwrap`.
+2. Switch `external_engine_sandbox.backend` to `docker` (heavier startup, but
+   does not depend on unprivileged user namespaces).
+
+### Verify
+
+After the sysctl change, a minimal bwrap invocation should succeed:
+
+```bash
+bwrap --unshare-pid --unshare-uts --unshare-ipc --die-with-parent \
+  --proc /proc --dev /dev --tmpfs /tmp \
+  --ro-bind /usr /usr --ro-bind /lib /lib --ro-bind /lib64 /lib64 \
+  -- /usr/bin/true && echo ok
+```
+
+If it prints `ok` without a `setting up uid map` error, bubblewrap is usable.
+
 ## Profiles
 
 Every subagent role is mapped through one audited code path in
