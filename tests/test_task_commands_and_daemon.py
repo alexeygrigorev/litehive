@@ -35,6 +35,7 @@ from tests.workspace_helpers import (
     _cmd_update,
     _cmd_worktree_clean,
     _cmd_worktree_ls,
+    _cmd_worktree_rescue,
     _commit_repo_state,
     _completed_subagent_result,
     _fail_atomic_write_on_path,
@@ -78,6 +79,27 @@ from tests.workspace_helpers import (
     time,
     yaml,
 )
+
+
+def _create_merge_failed_worktree(tmp_path: Path, title: str = "Merge failed rescue target") -> tuple[TaskRecord, Path]:
+    from litehive.models import UnmergedWorktree
+
+    task = create_task(tmp_path, title=title, auto_commit=False)
+    _commit_repo_state(tmp_path, "seed task metadata")
+    task.status = "merge_failed"
+    task.pipeline_status = "commit_to_git"
+    worktree_path = tmp_path / ".litehive" / "worktrees" / f"{task.id}-{task.slug}"
+    worktree_path.parent.mkdir(parents=True, exist_ok=True)
+    _run(["git", "worktree", "add", "--detach", str(worktree_path), "HEAD"], tmp_path)
+    task.git.worktree_path = str(worktree_path.relative_to(tmp_path))
+    save_task(tmp_path, task)
+
+    state = load_state(tmp_path)
+    state.unmerged_worktrees.append(
+        UnmergedWorktree(task_id=task.id, worktree_path=str(worktree_path.relative_to(tmp_path)))
+    )
+    save_state(tmp_path, state)
+    return task, worktree_path
 
 def test_add_command_persists_pm_sizing(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     ensure_workspace(tmp_path)
@@ -2876,6 +2898,120 @@ def test_worktree_clean_removes_closed_worktrees_and_skips_active(
     assert get_task_worktree_path(require_task(tmp_path, deferred.id)) is None
     assert get_task_worktree_path(require_task(tmp_path, duplicate.id)) is None
     assert get_task_worktree_path(require_task(tmp_path, active.id)) is not None
+
+
+def test_worktree_rescue_lists_merge_failed_tasks_and_worktree_commits(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    ensure_workspace(tmp_path)
+    _init_git_repo(tmp_path)
+    task, worktree_path = _create_merge_failed_worktree(tmp_path)
+
+    (worktree_path / "feature.py").write_text("print('rescued')\n", encoding="utf-8")
+    _run(["git", "add", "feature.py"], worktree_path)
+    _run(["git", "commit", "-m", "feature commit"], worktree_path)
+    worktree_head = _run(["git", "rev-parse", "HEAD"], worktree_path)
+
+    exit_code = _cmd_worktree_rescue(argparse.Namespace(workspace=tmp_path, apply=False))
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "candidate_count: 1" in output
+    assert f"task_id: {task.id}" in output
+    assert f"worktree_path: .litehive/worktrees/{task.id}-{task.slug}" in output
+    assert "commit_count: 1" in output
+    assert worktree_head in output
+
+
+def test_worktree_rescue_apply_cherry_picks_code_and_skips_task_metadata(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    ensure_workspace(tmp_path)
+    _init_git_repo(tmp_path)
+    task, worktree_path = _create_merge_failed_worktree(tmp_path)
+    original_task_text = (task_file(tmp_path, task)).read_text(encoding="utf-8")
+
+    (worktree_path / "feature.py").write_text("print('rescued')\n", encoding="utf-8")
+    worktree_task_file = task_file(worktree_path, task)
+    worktree_task_file.write_text(original_task_text + "\n# metadata drift\n", encoding="utf-8")
+    _run(["git", "add", "feature.py", str(worktree_task_file.relative_to(worktree_path))], worktree_path)
+    _run(["git", "commit", "-m", "feature plus metadata"], worktree_path)
+
+    exit_code = _cmd_worktree_rescue(argparse.Namespace(workspace=tmp_path, apply=True))
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert f"task_id: {task.id}" in output
+    assert "status: clean" in output
+    assert "clean_count: 1" in output
+    assert (tmp_path / "feature.py").read_text(encoding="utf-8") == "print('rescued')\n"
+    assert "# metadata drift" not in task_file(tmp_path, task).read_text(encoding="utf-8")
+
+    refreshed = require_task(tmp_path, task.id)
+    assert refreshed.status == "done"
+    assert refreshed.pipeline_status == "done"
+    assert refreshed.git.commit_sha == _run(["git", "rev-parse", "HEAD"], tmp_path)
+    assert get_task_worktree_path(refreshed) is None
+    assert load_state(tmp_path).unmerged_worktrees == []
+
+    preview_exit = _cmd_worktree_rescue(argparse.Namespace(workspace=tmp_path, apply=False))
+    preview_output = capsys.readouterr().out
+    assert preview_exit == 0
+    assert "candidate_count: 0" in preview_output
+    assert "rescues: none" in preview_output
+
+
+def test_worktree_rescue_apply_reports_already_landed_and_clears_pending_state(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    ensure_workspace(tmp_path)
+    _init_git_repo(tmp_path)
+    task, worktree_path = _create_merge_failed_worktree(tmp_path)
+
+    (worktree_path / "feature.py").write_text("print('already landed')\n", encoding="utf-8")
+    _run(["git", "add", "feature.py"], worktree_path)
+    _run(["git", "commit", "-m", "already landed"], worktree_path)
+    worktree_head = _run(["git", "rev-parse", "HEAD"], worktree_path)
+    _run(["git", "cherry-pick", worktree_head], tmp_path)
+    expected_head = _run(["git", "rev-parse", "HEAD"], tmp_path)
+
+    exit_code = _cmd_worktree_rescue(argparse.Namespace(workspace=tmp_path, apply=True))
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "status: already_landed" in output or "status: no_commits" in output
+    assert "already_landed_count: 1" in output or "no_commits_count: 1" in output
+    refreshed = require_task(tmp_path, task.id)
+    assert refreshed.status == "done"
+    assert refreshed.git.commit_sha == expected_head
+    assert load_state(tmp_path).unmerged_worktrees == []
+
+
+def test_worktree_rescue_apply_reports_manual_conflict(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    ensure_workspace(tmp_path)
+    _init_git_repo(tmp_path)
+    task, worktree_path = _create_merge_failed_worktree(tmp_path)
+
+    (worktree_path / "app.txt").write_text("from worktree\n", encoding="utf-8")
+    _run(["git", "add", "app.txt"], worktree_path)
+    _run(["git", "commit", "-m", "worktree change"], worktree_path)
+
+    (tmp_path / "app.txt").write_text("from main\n", encoding="utf-8")
+    _run(["git", "add", "app.txt"], tmp_path)
+    _run(["git", "commit", "-m", "main change"], tmp_path)
+
+    exit_code = _cmd_worktree_rescue(argparse.Namespace(workspace=tmp_path, apply=True))
+    output = capsys.readouterr().out
+
+    assert exit_code == 1
+    assert "status: manual_conflict" in output
+    assert "manual_conflict_count: 1" in output
+    refreshed = require_task(tmp_path, task.id)
+    assert refreshed.status == "merge_failed"
+    assert get_task_worktree_path(refreshed) is not None
+    assert load_state(tmp_path).unmerged_worktrees
 
 def test_queue_command_lists_parked_task_as_resumable_with_distinct_status(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]

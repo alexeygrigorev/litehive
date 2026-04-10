@@ -42,7 +42,7 @@ from litehive.cli.report import _cmd_report
 from litehive.cli.run import _cmd_run
 from litehive.cli.status import _cmd_list, _cmd_queue, _cmd_repair, _cmd_show, _cmd_status
 from litehive.cli.tasks import _cmd_add, _cmd_intake, _cmd_issue, _cmd_update
-from litehive.cli.worktree import _cmd_worktree_clean, _cmd_worktree_ls
+from litehive.cli.worktree import _cmd_worktree_clean, _cmd_worktree_ls, _cmd_worktree_rescue
 from litehive.cli.parser import build_parser
 
 
@@ -94,6 +94,7 @@ _DAEMON_COMMAND_HANDLERS = {
 _WORKTREE_COMMAND_HANDLERS = {
     "ls": _cmd_worktree_ls,
     "clean": _cmd_worktree_clean,
+    "rescue": _cmd_worktree_rescue,
 }
 
 _TASK_COMMAND_HANDLERS = {

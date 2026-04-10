@@ -24,3 +24,14 @@ def register_worktree_parser(subparsers):
         help="Show which worktrees would be removed without removing them",
     )
     add_workspace_argument(clean)
+
+    rescue = worktree_subparsers.add_parser(
+        "rescue",
+        help="List or rescue merge-failed worktree commits onto main",
+    )
+    rescue.add_argument(
+        "--apply",
+        action="store_true",
+        help="Cherry-pick eligible worktree commits onto main",
+    )
+    add_workspace_argument(rescue)
