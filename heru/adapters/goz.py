@@ -5,6 +5,7 @@ from pathlib import Path
 from heru.adapters._goz_impl import (
     extract_goz_errors,
     extract_goz_transcript,
+    goz_continuation,
     goz_extract_text,
     goz_error_details,
     goz_stream_event_adapter,
@@ -12,6 +13,7 @@ from heru.adapters._goz_impl import (
 )
 from heru.adapters.common import classify_execution_limit
 from heru.base import CLIExecutionResult, ExternalCLIAdapter, iter_jsonl_payloads
+from heru.types import RuntimeEngineContinuation
 
 _goz_extract_text = goz_extract_text
 
@@ -35,6 +37,8 @@ class GozCLIAdapter(ExternalCLIAdapter):
         resume_session_id: str | None = None,
     ) -> list[str]:
         command = [self.binary, "run", "--format", "json"]
+        if resume_session_id:
+            command.extend(["--resume-session", resume_session_id])
         if model:
             command.extend(["--model", model])
         command.append(prompt)
@@ -85,3 +89,9 @@ class GozCLIAdapter(ExternalCLIAdapter):
 
     def stream_event_adapter(self):
         return goz_stream_event_adapter()
+
+    def extract_continuation(
+        self,
+        execution: CLIExecutionResult | None,
+    ) -> RuntimeEngineContinuation | None:
+        return self.extract_continuation_from_payloads(execution, goz_continuation)

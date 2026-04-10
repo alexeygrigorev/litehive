@@ -2,10 +2,22 @@ import json
 import logging
 
 from heru.base import StreamEventAdapter, iter_jsonl_payloads
-from heru.types import EngineUsageWindow, LiveEvent
+from heru.types import EngineUsageWindow, LiveEvent, RuntimeEngineContinuation
 
 
 logger = logging.getLogger("litehive.agents.adapters.goz")
+
+
+def goz_session_id(payload: dict[str, object]) -> str | None:
+    session_id = payload.get("sessionID")
+    return session_id if isinstance(session_id, str) and session_id else None
+
+
+def goz_continuation(payload: dict[str, object]) -> RuntimeEngineContinuation | None:
+    if str(payload.get("type", "")).lower() != "step_finish":
+        return None
+    session_id = goz_session_id(payload)
+    return RuntimeEngineContinuation(session_id=session_id) if session_id else None
 
 
 def extract_goz_transcript(stdout: str) -> str:
