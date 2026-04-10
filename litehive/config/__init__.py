@@ -36,5 +36,6 @@ from litehive.config.startup_guidance import (
 )
 from litehive.config.workspace import (
     ensure_workspace as ensure_workspace,
+    resolve_workspace as resolve_workspace,
     render_workspace_gitignore as render_workspace_gitignore,
 )

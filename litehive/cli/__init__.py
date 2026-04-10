@@ -559,7 +559,10 @@ def intake(
 
 @app.command("report", help="Submit a stage verdict for the active task")
 def report_command(
-    workspace: WorkspaceOption = Path.cwd(),
+    workspace: Annotated[
+        Path | None,
+        typer.Option("--workspace", help="Repository root containing .litehive/"),
+    ] = None,
     verdict: Annotated[
         str, typer.Option(click_type=_choice(["pass", "fail", "reject", "comment"]))
     ] = ...,

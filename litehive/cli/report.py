@@ -1,31 +1,26 @@
 import os
-from pathlib import Path
 
+from litehive.config import resolve_workspace
 from litehive.models import TaskThreadComment
 from litehive.tasks.crud import get_task
 from litehive.tasks.persistence import load_state
 from litehive.tasks.reports import append_thread_comment
 
 
-def _resolve_workspace_root(workspace: Path) -> Path:
-    """Resolve back to the main workspace root if running inside a worktree."""
-    parts = workspace.resolve().parts
-    for i, part in enumerate(parts):
-        if part == ".litehive" and i + 2 < len(parts) and parts[i + 1] == "worktrees":
-            return Path(*parts[:i])
-    return workspace
-
-
 def _cmd_report(args):
-    root = _resolve_workspace_root(args.workspace)
     task_id = args.task_id
     if not task_id:
         task_id = os.environ.get("LITEHIVE_TASK_ID")
+    try:
+        root = resolve_workspace(task_id, workspace=args.workspace)
+    except ValueError as exc:
+        print(f"report failed: {exc}")
+        return 1
     if not task_id:
         state = load_state(root)
         task_id = state.active_task_id
     if not task_id:
-        print("report failed: no active task and --task-id not provided")
+        print("report failed: no task id provided, LITEHIVE_TASK_ID is unset, and no active task exists")
         return 1
     task = get_task(root, task_id)
     if task is None:

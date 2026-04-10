@@ -401,6 +401,70 @@ def test_report_command_from_task_worktree_writes_to_main_workspace(
     worktree_thread = worktree_task_dir / "thread.yaml"
     assert not worktree_thread.exists()
 
+
+def test_report_command_uses_registry_outside_repo(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Registry report target")
+    home = tmp_path / "home"
+    registry = home / ".litehive" / "workspaces.yaml"
+    registry.parent.mkdir(parents=True)
+    registry.write_text(
+        yaml.safe_dump({"workspaces": {"demo": str(tmp_path)}}, sort_keys=False),
+        encoding="utf-8",
+    )
+    outside = tmp_path / "outside"
+    outside.mkdir()
+
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("LITEHIVE_TASK_ID", task.id)
+    monkeypatch.delenv("LITEHIVE_WORKSPACE_ROOT", raising=False)
+    monkeypatch.chdir(outside)
+
+    exit_code = _cmd_report(
+        argparse.Namespace(
+            workspace=None,
+            task_id=None,
+            verdict="pass",
+            message="reported from registry lookup",
+            role="qa",
+            step="testing",
+        )
+    )
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "task: T-0001" in output
+    comments = yaml.safe_load((task_dir(tmp_path, task) / "thread.yaml").read_text(encoding="utf-8"))
+    assert comments[0]["message"] == "reported from registry lookup"
+    assert comments[0]["role"] == "qa"
+
+
+def test_report_command_fails_clearly_when_workspace_cannot_be_resolved(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    monkeypatch.chdir(outside)
+    monkeypatch.delenv("LITEHIVE_TASK_ID", raising=False)
+    monkeypatch.delenv("LITEHIVE_WORKSPACE_ROOT", raising=False)
+
+    exit_code = _cmd_report(
+        argparse.Namespace(
+            workspace=None,
+            task_id=None,
+            verdict="pass",
+            message="should fail",
+            role="swe",
+            step="implementing",
+        )
+    )
+    output = capsys.readouterr().out
+
+    assert exit_code == 1
+    assert "report failed: unable to resolve workspace" in output
+
 def test_update_command_replaces_and_clears_dependencies(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:

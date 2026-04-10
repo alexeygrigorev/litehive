@@ -1,4 +1,4 @@
-from litehive.cli.parsers._common import add_workspace_argument
+from pathlib import Path
 
 
 def register_report_parser(subparsers):
@@ -17,4 +17,8 @@ def register_report_parser(subparsers):
         help="Stage (grooming, implementing, testing, accepting). Defaults to the task's current pipeline_status.",
     )
     parser.add_argument("--task-id", help="Task ID. Defaults to the active task.")
-    add_workspace_argument(parser)
+    parser.add_argument(
+        "--workspace",
+        type=Path,
+        help="Repository root containing .litehive/. Optional when workspace resolution can use env, cwd, or the registry.",
+    )

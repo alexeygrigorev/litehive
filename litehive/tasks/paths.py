@@ -4,16 +4,29 @@ import gzip
 import re
 from pathlib import Path
 
-from litehive.config import ensure_workspace, workspace_dir
+from litehive.config import ensure_workspace, resolve_workspace, workspace_dir
 from litehive.models import TaskRecord
 
 
+def _worktree_workspace_dir(root: Path) -> Path | None:
+    resolved = root.resolve()
+    parts = resolved.parts
+    for i, part in enumerate(parts):
+        if part == ".litehive" and i + 2 < len(parts) and parts[i + 1] == "worktrees":
+            return Path(*parts[: i + 3]) / ".litehive"
+    return None
+
+
 def tasks_root(root: Path) -> Path:
+    worktree_workspace = _worktree_workspace_dir(root)
+    if worktree_workspace is not None:
+        return worktree_workspace / "tasks"
     ensure_workspace(root)
     return workspace_dir(root) / "tasks"
 
 
 def runner_lock_path(root: Path) -> Path:
+    root = resolve_workspace(None, workspace=root)
     ensure_workspace(root)
     return workspace_dir(root) / ".runner.lock"
 

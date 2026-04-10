@@ -297,7 +297,7 @@ def build_executor(
                     nudge_prompt = (
                         f"You did not submit your verdict for the {step} stage. "
                         f"Please submit it now by running:\n\n"
-                        f"  litehive report --task-id $LITEHIVE_TASK_ID --verdict <pass|fail|reject> --role {role_name} "
+                        f"  litehive report --verdict <pass|fail|reject> --role {role_name} "
                         f'--step {step} --message "<your detailed report>"'
                     )
                     result = subagents.run(

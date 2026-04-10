@@ -6,22 +6,25 @@ from pathlib import Path
 
 import yaml
 
-from litehive.config import load_config
+from litehive.config import load_config, resolve_workspace
 from litehive.pipeline.recovery import status_attention_findings
 
 
-def _resolve_workspace(argv: list[str]) -> Path:
-    workspace = Path.cwd()
+def _workspace_override_from_argv(argv: list[str]) -> Path | None:
     for index, arg in enumerate(argv):
         if arg == "--workspace" and index + 1 < len(argv):
-            workspace = Path(argv[index + 1])
+            return Path(argv[index + 1])
         elif arg.startswith("--workspace="):
-            workspace = Path(arg.split("=", 1)[1])
-    return workspace.resolve()
+            return Path(arg.split("=", 1)[1])
+    return None
 
 
 def _fast_status(argv: list[str]) -> int:
-    workspace = _resolve_workspace(argv)
+    try:
+        workspace = resolve_workspace(None, workspace=_workspace_override_from_argv(argv))
+    except ValueError as exc:
+        print(f"status failed: {exc}")
+        return 1
     state_path = workspace / ".litehive" / "state.yaml"
     monitoring_path = workspace / ".litehive" / "engine-monitoring.yaml"
 

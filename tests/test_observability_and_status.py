@@ -2405,6 +2405,35 @@ def test_build_parser_accepts_status_fast_flag(tmp_path: Path) -> None:
     assert args.workspace == tmp_path
     assert args.fast is True
 
+
+def test_fast_status_resolves_workspace_via_registry(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Registry status target")
+    home = tmp_path / "home"
+    registry = home / ".litehive" / "workspaces.yaml"
+    registry.parent.mkdir(parents=True)
+    registry.write_text(
+        yaml.safe_dump({"workspaces": {"demo": str(tmp_path)}}, sort_keys=False),
+        encoding="utf-8",
+    )
+    outside = tmp_path / "outside"
+    outside.mkdir()
+
+    from litehive.main import _fast_status
+
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("LITEHIVE_TASK_ID", task.id)
+    monkeypatch.delenv("LITEHIVE_WORKSPACE_ROOT", raising=False)
+    monkeypatch.chdir(outside)
+
+    exit_code = _fast_status([])
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert f"workspace: {tmp_path.resolve()}" in output
+
 def test_status_output_includes_external_engine_sandbox_settings(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:

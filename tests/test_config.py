@@ -73,6 +73,97 @@ def test_health_parser_accepts_workspace_arg() -> None:
     assert args.workspace == Path("/tmp/demo")
 
 
+def test_report_parser_allows_workspace_to_be_omitted() -> None:
+    parser = build_parser()
+
+    args = parser.parse_args(["report", "--verdict", "pass", "--message", "ok"])
+
+    assert args.command == "report"
+    assert args.workspace is None
+
+
+def test_resolve_workspace_uses_workspace_root_env(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ensure_workspace(tmp_path)
+
+    from litehive.config import resolve_workspace
+
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    monkeypatch.chdir(outside)
+    monkeypatch.setenv("LITEHIVE_WORKSPACE_ROOT", str(tmp_path))
+    monkeypatch.delenv("LITEHIVE_TASK_ID", raising=False)
+
+    assert resolve_workspace(None) == tmp_path.resolve()
+
+
+def test_resolve_workspace_walks_up_and_normalizes_worktree(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Walk up worktree")
+    nested = tmp_path / ".litehive" / "worktrees" / task.id / "src"
+    nested.mkdir(parents=True)
+    (nested.parent / ".litehive").mkdir(parents=True, exist_ok=True)
+
+    from litehive.config import resolve_workspace
+
+    monkeypatch.chdir(nested)
+    monkeypatch.setenv("LITEHIVE_TASK_ID", task.id)
+    monkeypatch.delenv("LITEHIVE_WORKSPACE_ROOT", raising=False)
+
+    assert resolve_workspace(None) == tmp_path.resolve()
+
+
+def test_resolve_workspace_uses_registry_from_outside_repo(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Registry lookup")
+    home = tmp_path / "home"
+    registry = home / ".litehive" / "workspaces.yaml"
+    registry.parent.mkdir(parents=True)
+    registry.write_text(
+        yaml.safe_dump({"workspaces": {"demo": str(tmp_path)}}, sort_keys=False),
+        encoding="utf-8",
+    )
+    outside = tmp_path / "outside"
+    outside.mkdir()
+
+    from litehive.config import resolve_workspace
+
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.chdir(outside)
+    monkeypatch.delenv("LITEHIVE_WORKSPACE_ROOT", raising=False)
+    monkeypatch.delenv("LITEHIVE_TASK_ID", raising=False)
+
+    assert resolve_workspace(task.id) == tmp_path.resolve()
+
+
+def test_resolve_workspace_rejects_unresolved_workspace_root_env(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ensure_workspace(tmp_path)
+
+    from litehive.config import resolve_workspace
+
+    monkeypatch.setenv("LITEHIVE_WORKSPACE_ROOT", "$tmpdir/project")
+    monkeypatch.delenv("LITEHIVE_TASK_ID", raising=False)
+
+    with pytest.raises(ValueError, match="unresolved shell variable"):
+        resolve_workspace(None)
+
+
+def test_ensure_workspace_rejects_nested_workspace_root(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    nested_root = tmp_path / ".litehive" / "worktrees" / "T-0001"
+    nested_root.mkdir(parents=True)
+
+    with pytest.raises(ValueError, match="nested inside another \\.litehive tree"):
+        ensure_workspace(nested_root)
+
+
 def _assert_engine_status_command_shows_all_monitored_engines(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
