@@ -3044,8 +3044,10 @@ def test_stage_prompt_guides_swe_for_preimplemented_or_obsolete_work(tmp_path: P
 
     prompt = stage_prompt(task, "implementing", workspace_context="")
 
-    assert "If the requested behavior is already implemented" in prompt
-    assert "submit `litehive report --verdict pass` with explicit evidence" in prompt
+    assert "run `git diff main...HEAD` in your worktree" in prompt
+    assert "If there are no changes, implement from scratch regardless of what prior stage reports claim." in prompt
+    assert "Only skip implementation and submit `litehive report --verdict pass` if `git diff main...HEAD` shows the expected changes and the acceptance criteria are met." in prompt
+    assert "If the requested behavior is already implemented" not in prompt
     assert "litehive report --task-id $LITEHIVE_TASK_ID" not in prompt
     assert "litehive report --verdict <pass|reject> --role swe --step implementing" in prompt
     assert "Never exit the stage without calling `litehive report`." in prompt
