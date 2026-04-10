@@ -3,7 +3,7 @@ revision = 3
 requires-python = ">=3.11"
 
 [options]
-exclude-newer = "2026-04-03T18:30:50.069522927Z"
+exclude-newer = "2026-04-03T19:29:49.534664111Z"
 exclude-newer-span = "P7D"
 
 [[package]]
@@ -51,12 +51,14 @@ version = "0.1.0"
 source = { editable = "../heru" }
 dependencies = [
     { name = "pydantic" },
+    { name = "typer" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "pydantic", specifier = ">=2.11.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.4.0" },
+    { name = "typer", specifier = ">=0.16.0" },
 ]
 provides-extras = ["dev"]
 
