@@ -1,0 +1,57 @@
+task_id: T-0276
+step: testing
+verdict: pass
+source: agent
+summary: 'Verified the goz adapter model-override path end to end at the adapter boundary.
+  Inspected litehive/agents/adapters/goz.py and confirmed GozCLIAdapter now advertises
+  supports_model_override=True while build_command already appends --model when a
+  model is provided. This is the required gate for litehive/pipeline/_models.py:resolve_model(),
+  which returns None for engines that do not support model overrides, so the capability
+  flip is what allows resolved workspace/task/run model values to flow through to
+  goz run. Focused verification: 1) uv run pytest -q tests/test_config.py -k ''resolve_model''
+  -> 3 passed, 36 deselected in 0.61s. Evidence: tests cover goz precedence for run
+  override, then task model, then workspace goz_model. 2) uv run pytest -q tests/test_engine_variants_and_timeline.py
+  -k ''goz_engine_in_registry or goz_build_invocation'' -> 2 passed, 49 deselected
+  in 0.61s. Evidence: registry coverage now asserts goz supports model override, and
+  invocation coverage asserts the built goz command includes both --model glm-5-run
+  and --resume-session goz-session-123. Test quality check: the added tests are focused,
+  non-duplicative, and each would fail if the goz override path were broken. Verdict:
+  acceptance criteria met for supports_model_override, passing --model to goz run
+  when a model resolves, and focused coverage for model resolution plus command building.'
+feedback: 'Verified the goz adapter model-override path end to end at the adapter
+  boundary. Inspected litehive/agents/adapters/goz.py and confirmed GozCLIAdapter
+  now advertises supports_model_override=True while build_command already appends
+  --model when a model is provided. This is the required gate for litehive/pipeline/_models.py:resolve_model(),
+  which returns None for engines that do not support model overrides, so the capability
+  flip is what allows resolved workspace/task/run model values to flow through to
+  goz run. Focused verification: 1) uv run pytest -q tests/test_config.py -k ''resolve_model''
+  -> 3 passed, 36 deselected in 0.61s. Evidence: tests cover goz precedence for run
+  override, then task model, then workspace goz_model. 2) uv run pytest -q tests/test_engine_variants_and_timeline.py
+  -k ''goz_engine_in_registry or goz_build_invocation'' -> 2 passed, 49 deselected
+  in 0.61s. Evidence: registry coverage now asserts goz supports model override, and
+  invocation coverage asserts the built goz command includes both --model glm-5-run
+  and --resume-session goz-session-123. Test quality check: the added tests are focused,
+  non-duplicative, and each would fail if the goz override path were broken. Verdict:
+  acceptance criteria met for supports_model_override, passing --model to goz run
+  when a model resolves, and focused coverage for model resolution plus command building.'
+submitted_via_cli: true
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 50
+hook_results: []
+created_at: '2026-04-10T04:32:07+00:00'

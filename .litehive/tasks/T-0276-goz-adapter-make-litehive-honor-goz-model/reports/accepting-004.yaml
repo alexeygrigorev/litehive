@@ -1,0 +1,55 @@
+task_id: T-0276
+step: accepting
+verdict: pass
+source: agent
+summary: 'Accepted. Verified the change at the adapter boundary and with focused tests.
+  In litehive/agents/adapters/goz.py, GozCLIAdapter now advertises supports_model_override=True,
+  which is the gating condition used by litehive/pipeline/_models.py:resolve_model().
+  Because goz build_command already appends --model when a model is provided, this
+  now allows resolved run/task/workspace model values to flow through to goz run.
+  I independently reran the focused verification: uv run pytest -q tests/test_config.py
+  -k ''resolve_model'' -> 3 passed, 36 deselected in 0.56s; uv run pytest -q tests/test_engine_variants_and_timeline.py
+  -k ''goz_engine_in_registry or goz_build_invocation'' -> 2 passed, 49 deselected
+  in 0.46s. Evidence from tests: tests/test_config.py covers goz precedence for run
+  override, then task model, then workspace goz_model; tests/test_engine_variants_and_timeline.py
+  asserts the goz engine registry entry has supports_model_override=True and that
+  the built goz command includes both --model glm-5-run and --resume-session goz-session-123.
+  Acceptance criteria met: 1) GozCLIAdapter advertises supports_model_override=True,
+  2) Litehive passes --model to goz run when a model is resolved, 3) focused tests
+  cover goz model override resolution and command building.'
+feedback: 'Accepted. Verified the change at the adapter boundary and with focused
+  tests. In litehive/agents/adapters/goz.py, GozCLIAdapter now advertises supports_model_override=True,
+  which is the gating condition used by litehive/pipeline/_models.py:resolve_model().
+  Because goz build_command already appends --model when a model is provided, this
+  now allows resolved run/task/workspace model values to flow through to goz run.
+  I independently reran the focused verification: uv run pytest -q tests/test_config.py
+  -k ''resolve_model'' -> 3 passed, 36 deselected in 0.56s; uv run pytest -q tests/test_engine_variants_and_timeline.py
+  -k ''goz_engine_in_registry or goz_build_invocation'' -> 2 passed, 49 deselected
+  in 0.46s. Evidence from tests: tests/test_config.py covers goz precedence for run
+  override, then task model, then workspace goz_model; tests/test_engine_variants_and_timeline.py
+  asserts the goz engine registry entry has supports_model_override=True and that
+  the built goz command includes both --model glm-5-run and --resume-session goz-session-123.
+  Acceptance criteria met: 1) GozCLIAdapter advertises supports_model_override=True,
+  2) Litehive passes --model to goz run when a model is resolved, 3) focused tests
+  cover goz model override resolution and command building.'
+submitted_via_cli: true
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 47
+hook_results: []
+created_at: '2026-04-10T04:32:54+00:00'

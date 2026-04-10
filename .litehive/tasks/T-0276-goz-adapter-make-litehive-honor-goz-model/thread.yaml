@@ -1,0 +1,129 @@
+- role: planner
+  step: grooming
+  verdict: pass
+  message: "Grooming pass. Scope and current state verified without code changes.\
+    \ Adapter surface:  is the external CLI seam for Run command usage:\n\n  goz run\
+    \ [options] <prompt>\n\nOptions:\n  --format, -f json        Output ExternalCLIAdapter-compatible\
+    \ JSONL (default: json)\n  --dir DIR                Working directory for file\
+    \ and shell tools\n  --model MODEL            Override chat model (use 'auto'\
+    \ for timeout-based fallback)\n  --model-chain MODELS     Comma-separated model\
+    \ chain for --model auto (default: glm-5.1,glm-5,glm-5-turbo)\n  --model-timeout\
+    \ SECS     Per-model timeout in seconds when using --model auto (default: 60)\n\
+    \  --resume-session ID      Resume a previously saved engine session\n  --system-prompt\
+    \ TEXT     Override the default coding agent system prompt\n  --no-system-prompt\
+    \       Disable the default system prompt entirely\n  --no-context           \
+    \  Disable auto-loading of project context files\n  --max-tokens-budget N    Stop\
+    \ the agent loop after N cumulative tokens (input+output)\n\nExamples:\n  goz\
+    \ run --format json \"Summarize this repo.\"\n  goz run --dir /tmp/project --model\
+    \ glm-5 \"Run pytest and explain failures.\"\n  goz run --model auto \"Fix the\
+    \ failing test.\"\n  goz run --model auto --model-timeout 30 \"Quick task with\
+    \ aggressive fallback.\"\n  goz run --model auto --model-chain \"glm-5.1,glm-4-long,glm-4-flash\"\
+    \ \"Custom chain.\"\n  goz run --resume-session abc123 \"Continue with the next\
+    \ step.\"\n  goz run --system-prompt 'You are a helpful assistant.' \"Hello\"\n\
+    \  goz run --no-system-prompt \"Just chat with me\"\n  goz run --no-context \"\
+    Skip project context loading\"; model resolution flows through  and stage execution\
+    \ passes the resolved model via  from . Current evidence:  already appends  when\
+    \ a model is provided, but  is still , so  returns  for goz and Litehive never\
+    \ passes a resolved goz model through. Task record is already populated and appropriately\
+    \ scoped; no follow-up task needed. Focused implementation plan: 1) flip goz capability\
+    \ to  at the adapter boundary, 2) add/adjust focused tests so goz is covered in\
+    \ both model resolution and invocation building, 3) keep changes isolated to goz\
+    \ adapter + focused tests only. Suggested verification for implementing/testing\
+    \ stages: ..                                                                 \
+    \      [100%]\n2 passed, 36 deselected in 0.54s plus a focused goz adapter subset\
+    \ such as ..                                                                 \
+    \      [100%]\n2 passed, 49 deselected in 0.48s and, if needed, the capability\
+    \ coverage in . Baseline tests run in grooming: ..                           \
+    \                                            [100%]\n2 passed, 36 deselected in\
+    \ 0.49s -> 2 passed; ..                                                      \
+    \                 [100%]\n2 passed, 49 deselected in 0.51s -> 2 passed. Acceptance\
+    \ criteria remain implementation targets for the next stage; grooming outcome\
+    \ is that the task is clear, narrowly scoped, and ready for implementation."
+  files_changed: []
+  created_at: '2026-04-10T04:29:30+00:00'
+- role: planner
+  step: grooming
+  verdict: pass
+  message: 'Grooming pass. Scope and current state verified without code changes.
+    Adapter surface: litehive/agents/adapters/goz.py is the external CLI seam for
+    goz run; model resolution flows through litehive/pipeline/_models.py:resolve_model()
+    and stage execution passes the resolved model via subagents.run(..., model=model_name)
+    from litehive/pipeline/_builder.py. Current evidence: GozCLIAdapter.build_command()
+    already appends --model <value> when a model is provided, but GozCLIAdapter.DEFAULT_CAPABILITIES.supports_model_override
+    is still False, so resolve_model() returns None for goz and Litehive never passes
+    a resolved goz model through. Task record is already populated and appropriately
+    scoped; no follow-up task needed. Focused implementation plan: 1) flip goz capability
+    to supports_model_override=True at the adapter boundary, 2) add or adjust focused
+    tests so goz is covered in both model resolution and invocation building, 3) keep
+    changes isolated to goz adapter and focused tests only. Suggested verification
+    for implementing/testing stages: uv run pytest -q tests/test_config.py -k resolve_model
+    plus a focused goz adapter subset such as uv run pytest -q tests/test_engine_variants_and_timeline.py
+    -k ''goz_engine_in_registry or goz_build_invocation'' and, if needed, the capability
+    coverage in tests/test_runner_workflow.py. Baseline tests run in grooming: uv
+    run pytest -q tests/test_config.py -k resolve_model -> 2 passed; uv run pytest
+    -q tests/test_engine_variants_and_timeline.py -k ''goz_engine_in_registry or goz_build_invocation_includes_resume_session''
+    -> 2 passed. Acceptance criteria remain implementation targets for the next stage;
+    grooming outcome is that the task is clear, narrowly scoped, and ready for implementation.'
+  files_changed: []
+  created_at: '2026-04-10T04:29:40+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Implemented the goz model-override path at the adapter boundary by changing
+    GozCLIAdapter.DEFAULT_CAPABILITIES.supports_model_override to true in litehive/agents/adapters/goz.py.
+    This allows litehive/pipeline/_models.py:resolve_model() to return run/task/workspace
+    model values for engine_name=''goz'', and goz command building already appends
+    --model when a model is provided. Added focused coverage in tests/test_config.py
+    for goz model resolution precedence (run override, then task model, then workspace
+    goz_model) and updated tests/test_engine_variants_and_timeline.py so goz registry
+    coverage now asserts supports_model_override=True and build_invocation includes
+    both --model glm-5-run and --resume-session goz-session-123. Verification run:
+    uv run pytest -q tests/test_config.py -k ''resolve_model'' -> 3 passed, 36 deselected
+    in 0.69s; uv run pytest -q tests/test_engine_variants_and_timeline.py -k ''goz_engine_in_registry
+    or goz_build_invocation'' -> 2 passed, 49 deselected in 0.58s; uv run ruff check
+    --select E402,F401 litehive tests -> All checks passed; forbidden noqa F401/F403
+    suppression check on changed paths passed.'
+  files_changed: []
+  created_at: '2026-04-10T04:31:06+00:00'
+- role: qa
+  step: testing
+  verdict: pass
+  message: 'Verified the goz adapter model-override path end to end at the adapter
+    boundary. Inspected litehive/agents/adapters/goz.py and confirmed GozCLIAdapter
+    now advertises supports_model_override=True while build_command already appends
+    --model when a model is provided. This is the required gate for litehive/pipeline/_models.py:resolve_model(),
+    which returns None for engines that do not support model overrides, so the capability
+    flip is what allows resolved workspace/task/run model values to flow through to
+    goz run. Focused verification: 1) uv run pytest -q tests/test_config.py -k ''resolve_model''
+    -> 3 passed, 36 deselected in 0.61s. Evidence: tests cover goz precedence for
+    run override, then task model, then workspace goz_model. 2) uv run pytest -q tests/test_engine_variants_and_timeline.py
+    -k ''goz_engine_in_registry or goz_build_invocation'' -> 2 passed, 49 deselected
+    in 0.61s. Evidence: registry coverage now asserts goz supports model override,
+    and invocation coverage asserts the built goz command includes both --model glm-5-run
+    and --resume-session goz-session-123. Test quality check: the added tests are
+    focused, non-duplicative, and each would fail if the goz override path were broken.
+    Verdict: acceptance criteria met for supports_model_override, passing --model
+    to goz run when a model resolves, and focused coverage for model resolution plus
+    command building.'
+  files_changed: []
+  created_at: '2026-04-10T04:31:58+00:00'
+- role: reviewer
+  step: accepting
+  verdict: pass
+  message: 'Accepted. Verified the change at the adapter boundary and with focused
+    tests. In litehive/agents/adapters/goz.py, GozCLIAdapter now advertises supports_model_override=True,
+    which is the gating condition used by litehive/pipeline/_models.py:resolve_model().
+    Because goz build_command already appends --model when a model is provided, this
+    now allows resolved run/task/workspace model values to flow through to goz run.
+    I independently reran the focused verification: uv run pytest -q tests/test_config.py
+    -k ''resolve_model'' -> 3 passed, 36 deselected in 0.56s; uv run pytest -q tests/test_engine_variants_and_timeline.py
+    -k ''goz_engine_in_registry or goz_build_invocation'' -> 2 passed, 49 deselected
+    in 0.46s. Evidence from tests: tests/test_config.py covers goz precedence for
+    run override, then task model, then workspace goz_model; tests/test_engine_variants_and_timeline.py
+    asserts the goz engine registry entry has supports_model_override=True and that
+    the built goz command includes both --model glm-5-run and --resume-session goz-session-123.
+    Acceptance criteria met: 1) GozCLIAdapter advertises supports_model_override=True,
+    2) Litehive passes --model to goz run when a model is resolved, 3) focused tests
+    cover goz model override resolution and command building.'
+  files_changed: []
+  created_at: '2026-04-10T04:32:44+00:00'
