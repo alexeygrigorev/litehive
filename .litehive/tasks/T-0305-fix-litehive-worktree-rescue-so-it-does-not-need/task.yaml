@@ -6,15 +6,15 @@ task_type: bugfix
 model: null
 mode: implementation
 pipeline_mode: full
-status: queued
+status: in_progress
 flag_reason: null
 flag_count: 0
-pipeline_status: backlog
+pipeline_status: commit_to_git
 priority: high
 pm_complexity: moderate
 planned_effort: m
 created_at: '2026-04-10T10:11:10+00:00'
-updated_at: '2026-04-10T11:58:26+00:00'
+updated_at: '2026-04-10T12:07:58+00:00'
 goal: 'When the daemon is running, ''litehive worktree rescue --apply'' successfully
   cherry-picks the worktree commits onto main but then fails to finalize task state
   because save_task tries to acquire the runner lock (held by the daemon). This leaves
@@ -45,7 +45,35 @@ plan:
   and refusal behavior.
 - Run targeted pytest coverage for worktree rescue and locking regressions.
 human_checkpoints: []
-subagents: []
+subagents:
+- id: SA-0001
+  role: planner
+  engine: codex
+  status: completed
+  path: subagents/SA-0001-planner
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0002
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0002-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0003
+  role: qa
+  engine: codex
+  status: completed
+  path: subagents/SA-0003-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0004
+  role: reviewer
+  engine: codex
+  status: completed
+  path: subagents/SA-0004-reviewer
+  sandboxed: false
+  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0305 fix-litehive-worktree-rescue-so-it-does-not-need'

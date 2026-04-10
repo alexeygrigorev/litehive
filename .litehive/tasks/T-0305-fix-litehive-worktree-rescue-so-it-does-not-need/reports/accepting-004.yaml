@@ -1,0 +1,57 @@
+task_id: T-0305
+step: accepting
+verdict: pass
+source: agent
+summary: Accepted. I independently reviewed the rescue-finalization change in litehive/cli/worktree.py
+  and verified that _finalize_rescue no longer persists through the global runner
+  guard. It now acquires the workspace file lock, reloads state under that lock, refuses
+  if the rescued task is still state.active_task_id, checks future-task mutation safety,
+  clears the rescued task from unmerged_worktrees, clears the recorded worktree path,
+  marks the task done, stores the main HEAD commit SHA, and persists task+state via
+  _persist_task_and_state_without_runner_guard. I also confirmed _cmd_worktree_rescue
+  treats that refusal as status active_task and exits nonzero.
+feedback: 'Accepted. I independently reviewed the rescue-finalization change in litehive/cli/worktree.py
+  and verified that _finalize_rescue no longer persists through the global runner
+  guard. It now acquires the workspace file lock, reloads state under that lock, refuses
+  if the rescued task is still state.active_task_id, checks future-task mutation safety,
+  clears the rescued task from unmerged_worktrees, clears the recorded worktree path,
+  marks the task done, stores the main HEAD commit SHA, and persists task+state via
+  _persist_task_and_state_without_runner_guard. I also confirmed _cmd_worktree_rescue
+  treats that refusal as status active_task and exits nonzero.
+
+
+  Verification run: uv run pytest -q tests/test_task_commands_and_daemon.py -k worktree_rescue
+  -> 6 passed, 115 deselected in 1.08s.
+
+
+  Evidence against the acceptance criteria: the new integration test test_worktree_rescue_apply_succeeds_while_daemon_holds_runner_lock
+  starts a fake daemon thread that holds workspace_runner_guard plus runner_heartbeat
+  for another active task, then runs worktree rescue --apply against a preconstructed
+  merge_failed task and verifies rescue completes successfully while the runner lock
+  is held, including the cherry-pick landing on main, task status/pipeline_status
+  becoming done, git.commit_sha matching main HEAD, worktree_path cleared, and state.unmerged_worktrees
+  emptied. The companion test test_worktree_rescue_apply_refuses_active_task_even_with_runner_lock_held
+  verifies that when the rescued task is state.active_task_id, rescue exits 1 with
+  the clear message worktree rescue refuses to race with the runner, does not advance
+  main HEAD, and leaves task/state unchanged. Acceptance criteria met.'
+submitted_via_cli: true
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 79
+hook_results: []
+created_at: '2026-04-10T12:07:58+00:00'
