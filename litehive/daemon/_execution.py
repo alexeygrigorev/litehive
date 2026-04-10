@@ -29,6 +29,7 @@ logger = logging.getLogger(__name__)
 
 _EXPLICIT_POOL_STOP_REASONS = {
     "dirty_git_state",
+    "diverged_from_origin",
     "max_tasks_reached",
     "failure_detected",
     "execution_limit_reached",
@@ -44,6 +45,70 @@ _EXPLICIT_POOL_STOP_REASONS = {
     "continue_or_rollback_required",
     "task_interrupted",
 }
+
+
+def _git(workspace: Path, *args: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        ["git", *args],
+        cwd=workspace,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+def _check_origin_divergence(workspace: Path) -> str | None:
+    """Return a human-readable reason if local main has diverged from origin/main.
+
+    - Not a git repo, no origin remote, or no main/origin/main ref: returns None (not our concern).
+    - Fetch failure: returns None (network issues shouldn't halt the pool).
+    - Fast-forward in either direction (including equal): returns None.
+    - True divergence (neither is ancestor of the other): returns the reason string.
+    """
+    if not (workspace / ".git").exists():
+        return None
+    remotes = _git(workspace, "remote")
+    if remotes.returncode != 0 or "origin" not in remotes.stdout.split():
+        return None
+    branch = _git(workspace, "rev-parse", "--abbrev-ref", "HEAD")
+    if branch.returncode != 0:
+        return None
+    local_branch = branch.stdout.strip()
+    if local_branch != "main":
+        return None
+    fetch = _git(workspace, "fetch", "origin", "main")
+    if fetch.returncode != 0:
+        logger.warning("git fetch origin main failed: %s", fetch.stderr.strip())
+        return None
+    local_rev = _git(workspace, "rev-parse", "main")
+    remote_rev = _git(workspace, "rev-parse", "origin/main")
+    if local_rev.returncode != 0 or remote_rev.returncode != 0:
+        return None
+    local_sha = local_rev.stdout.strip()
+    remote_sha = remote_rev.stdout.strip()
+    if local_sha == remote_sha:
+        return None
+    # Either side being an ancestor of the other is a fast-forward — not diverged.
+    local_is_ancestor = _git(workspace, "merge-base", "--is-ancestor", local_sha, remote_sha)
+    if local_is_ancestor.returncode == 0:
+        return None
+    remote_is_ancestor = _git(workspace, "merge-base", "--is-ancestor", remote_sha, local_sha)
+    if remote_is_ancestor.returncode == 0:
+        return None
+    return (
+        f"local main ({local_sha[:8]}) and origin/main ({remote_sha[:8]}) have diverged. "
+        "Manual reconciliation required: inspect `git log main..origin/main` and "
+        "`git log origin/main..main`, then rebase, reset, or merge as appropriate."
+    )
+
+
+def _write_pool_stop_reason(workspace: Path, reason: str) -> None:
+    sp = state_path(workspace)
+    state = yaml.safe_load(sp.read_text(encoding="utf-8")) if sp.exists() else {}
+    if not isinstance(state, dict):
+        state = {}
+    state["pool_stop_reason"] = reason
+    sp.write_text(yaml.safe_dump(state, sort_keys=False), encoding="utf-8")
 
 
 def _state_snapshot(workspace: Path) -> tuple[dict[str, object], str]:
@@ -166,6 +231,16 @@ def run_daemon_loop(
 
             _emit("", stream=output_stream)
             _emit(f"== iteration {iteration} ==", stream=output_stream)
+
+            divergence_reason = _check_origin_divergence(workspace)
+            if divergence_reason is not None:
+                _write_pool_stop_reason(workspace, "diverged_from_origin")
+                _emit(
+                    "!!! ATTENTION REQUIRED !!! Halting pool: diverged_from_origin",
+                    stream=output_stream,
+                )
+                _emit(divergence_reason, stream=output_stream)
+                return 0
 
             repair_rc = _run_logged_subprocess(
                 [*command_prefix, "repair", "--workspace", str(workspace)],

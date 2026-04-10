@@ -91,6 +91,11 @@ def _fast_status(argv: list[str]) -> int:
             elif tstatus == "flagged":
                 flagged.append((tid, ttitle))
         alerts: list[str] = []
+        if stop_reason == "diverged_from_origin":
+            alerts.append(
+                "pool halted: local main has diverged from origin/main — "
+                "manual reconciliation required"
+            )
         for tid, count in sorted(id_counts.items()):
             if count > 1:
                 alerts.append(

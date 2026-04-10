@@ -55,6 +55,7 @@ from tests.workspace_helpers import (
     get_task_worktree_path,
     load_config,
     load_state,
+    os,
     pytest,
     render_task_summary,
     requeue_task,
@@ -3652,6 +3653,111 @@ exit 1
     assert "20260404T100000Z" not in directories
     assert "20260404T100001Z" not in directories
     assert any(name.startswith("2026") for name in directories)
+
+def test_run_daemon_loop_halts_when_local_main_diverges_from_origin(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import litehive.daemon as daemon_module
+
+    def _git(cwd: Path, *args: str) -> None:
+        subprocess.run(
+            ["git", *args],
+            cwd=cwd,
+            check=True,
+            capture_output=True,
+            text=True,
+            env={
+                **os.environ,
+                "GIT_AUTHOR_NAME": "t",
+                "GIT_AUTHOR_EMAIL": "t@t",
+                "GIT_COMMITTER_NAME": "t",
+                "GIT_COMMITTER_EMAIL": "t@t",
+            },
+        )
+
+    # Bare remote
+    remote = tmp_path / "remote.git"
+    subprocess.run(["git", "init", "--bare", "-b", "main", str(remote)], check=True, capture_output=True)
+
+    # Workspace clone with one commit, pushed
+    workspace = tmp_path / "workspace"
+    subprocess.run(["git", "init", "-b", "main", str(workspace)], check=True, capture_output=True)
+    (workspace / "file.txt").write_text("base\n", encoding="utf-8")
+    _git(workspace, "add", ".")
+    _git(workspace, "commit", "-m", "base")
+    _git(workspace, "remote", "add", "origin", str(remote))
+    _git(workspace, "push", "-u", "origin", "main")
+
+    # Second clone force-pushes a rewritten history
+    hostile = tmp_path / "hostile"
+    subprocess.run(["git", "clone", str(remote), str(hostile)], check=True, capture_output=True)
+    (hostile / "file.txt").write_text("rewritten\n", encoding="utf-8")
+    _git(hostile, "add", ".")
+    _git(hostile, "commit", "--amend", "-m", "rewritten")
+    _git(hostile, "push", "--force", "origin", "main")
+
+    # Workspace now adds a local commit → divergence
+    (workspace / "file.txt").write_text("local change\n", encoding="utf-8")
+    _git(workspace, "add", ".")
+    _git(workspace, "commit", "-m", "local")
+
+    (workspace / ".litehive").mkdir()
+    (workspace / ".litehive" / "state.yaml").write_text(
+        "active_task_id: null\nqueue:\n  - T-0001\npool_stop_reason: null\n",
+        encoding="utf-8",
+    )
+
+    def _fail(*_a, **_k):
+        raise AssertionError("daemon should not have invoked subcommands after divergence halt")
+
+    monkeypatch.setattr(
+        "litehive.daemon._execution._run_logged_subprocess",
+        _fail,
+    )
+
+    exit_code = daemon_module.run_daemon_loop(workspace, output_stream=None)
+    assert exit_code == 0
+
+    state = yaml.safe_load((workspace / ".litehive" / "state.yaml").read_text(encoding="utf-8"))
+    assert state["pool_stop_reason"] == "diverged_from_origin"
+
+
+def test_check_origin_divergence_ignores_fast_forward(tmp_path: Path) -> None:
+    from litehive.daemon._execution import _check_origin_divergence
+
+    def _git(cwd: Path, *args: str) -> None:
+        subprocess.run(
+            ["git", *args],
+            cwd=cwd,
+            check=True,
+            capture_output=True,
+            text=True,
+            env={
+                **os.environ,
+                "GIT_AUTHOR_NAME": "t",
+                "GIT_AUTHOR_EMAIL": "t@t",
+                "GIT_COMMITTER_NAME": "t",
+                "GIT_COMMITTER_EMAIL": "t@t",
+            },
+        )
+
+    remote = tmp_path / "remote.git"
+    subprocess.run(["git", "init", "--bare", "-b", "main", str(remote)], check=True, capture_output=True)
+    workspace = tmp_path / "workspace"
+    subprocess.run(["git", "init", "-b", "main", str(workspace)], check=True, capture_output=True)
+    (workspace / "file.txt").write_text("a\n", encoding="utf-8")
+    _git(workspace, "add", ".")
+    _git(workspace, "commit", "-m", "a")
+    _git(workspace, "remote", "add", "origin", str(remote))
+    _git(workspace, "push", "-u", "origin", "main")
+
+    # Local ahead of origin (fast-forward push case) — not divergence
+    (workspace / "file.txt").write_text("b\n", encoding="utf-8")
+    _git(workspace, "add", ".")
+    _git(workspace, "commit", "-m", "b")
+
+    assert _check_origin_divergence(workspace) is None
+
 
 def test_run_task_skips_pre_acceptance_hook_when_not_configured(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
