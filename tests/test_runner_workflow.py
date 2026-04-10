@@ -214,6 +214,56 @@ def test_empty_swe_guard_rejects_when_no_prior_pass(tmp_path: Path) -> None:
     )
 
 
+def test_implementing_guard_rejects_claimed_file_changes_when_worktree_is_clean(tmp_path: Path) -> None:
+    _init_git_repo(tmp_path)
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Hallucinated completion", auto_commit=False)
+    task.pipeline_status = "implementing"  # type: ignore[assignment]
+    save_task(tmp_path, task)
+
+    def executor(task, step):  # type: ignore[no-untyped-def]
+        if step == "implementing":
+            return StageReport(
+                task_id=task.id,
+                step=step,
+                verdict="pass",
+                summary="Implemented foo.py and verified it.",
+                files_changed=["foo.py"],
+                tests={"added": 1, "passing": 1},
+            )
+        return StageReport(
+            task_id=task.id,
+            step=step,
+            verdict="pass",
+            summary=f"{step} ok",
+            files_changed=["app.txt"],
+            tests={"added": 1, "passing": 1},
+        )
+
+    runner = TaskExecutionRunner(tmp_path, executor, max_retries=1)
+    result = runner.run(task)
+
+    assert result.final_status == "queued"
+    refreshed = get_task(tmp_path, task.id)
+    assert refreshed is not None
+    assert refreshed.pipeline_status == "implementing"
+    assert refreshed.status == "queued"
+
+    reports_dir = task_dir(tmp_path, refreshed) / "reports"
+    implementing_report = yaml.safe_load(
+        sorted(reports_dir.glob("implementing-*.yaml"))[-1].read_text(encoding="utf-8")
+    )
+    assert implementing_report["verdict"] == "reject"
+    assert implementing_report["outcome_reason_code"] == "hallucinated_completion"
+    assert implementing_report["files_changed"] == []
+    assert "worktree is clean" in implementing_report["summary"]
+
+    journal = (task_dir(tmp_path, refreshed) / "journal.md").read_text(encoding="utf-8")
+    assert "Rejected hallucinated SWE completion" in journal
+    assert "worktree was clean" in journal
+    assert "foo.py" in journal
+
+
 def test_empty_swe_guard_allows_verified_preimplemented_cli_pass(tmp_path: Path) -> None:
     _init_git_repo(tmp_path)
     ensure_workspace(tmp_path)
@@ -3099,6 +3149,116 @@ def test_stage_report_from_subagent_marks_cli_verdict_source(tmp_path: Path) -> 
     assert report.source == "agent"
     assert report.submitted_via_cli is True
     assert report.feedback == "Already implemented and verified with pytest."
+    assert report.files_changed == []
+
+
+def test_stage_report_from_subagent_preserves_cli_claimed_files(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="CLI claimed files")
+    _write_cli_verdict(
+        tmp_path,
+        task,
+        "implementing",
+        verdict="pass",
+        message="Implemented foo.py and verified it.",
+        files_changed=["foo.py"],
+    )
+    result = SubagentResult(
+        ref=SubagentRef(
+            id="SA-implementing",
+            role="swe",
+            engine="codex",
+            status="completed",
+            path="subagents/SA-implementing",
+        ),
+        execution=CLIExecutionResult(
+            adapter="codex",
+            argv=("codex", "exec"),
+            cwd=tmp_path,
+            exit_code=0,
+            stdout="",
+            stderr="",
+        ),
+        transcript="ignored",
+        exit_code=0,
+    )
+
+    report = stage_report_from_subagent(task, "implementing", result, root=tmp_path)
+
+    assert report.submitted_via_cli is True
+    assert report.files_changed == ["foo.py"]
+
+
+def test_hallucinated_completion_guard_rejects_cli_claimed_files_on_clean_worktree(
+    tmp_path: Path,
+) -> None:
+    _init_git_repo(tmp_path)
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="CLI hallucinated completion", auto_commit=False)
+    task.pipeline_status = "implementing"  # type: ignore[assignment]
+    save_task(tmp_path, task)
+
+    def executor(task, step):  # type: ignore[no-untyped-def]
+        if step == "implementing":
+            _write_cli_verdict(
+                tmp_path,
+                task,
+                step,
+                verdict="pass",
+                message="Implemented foo.py and verified it.",
+                files_changed=["foo.py"],
+            )
+            result = SubagentResult(
+                ref=SubagentRef(
+                    id="SA-implementing",
+                    role="swe",
+                    engine="codex",
+                    status="completed",
+                    path="subagents/SA-implementing",
+                ),
+                execution=CLIExecutionResult(
+                    adapter="codex",
+                    argv=("codex", "exec"),
+                    cwd=tmp_path,
+                    exit_code=0,
+                    stdout="",
+                    stderr="",
+                ),
+                transcript="ignored",
+                exit_code=0,
+            )
+            return stage_report_from_subagent(task, step, result, root=tmp_path)
+        return StageReport(
+            task_id=task.id,
+            step=step,
+            verdict="pass",
+            summary=f"{step} ok",
+            files_changed=["app.txt"],
+            tests={"added": 1, "passing": 1},
+        )
+
+    runner = TaskExecutionRunner(tmp_path, executor, max_retries=1)
+    result = runner.run(task)
+
+    assert result.final_status == "queued"
+    refreshed = get_task(tmp_path, task.id)
+    assert refreshed is not None
+    assert refreshed.pipeline_status == "implementing"
+    assert refreshed.status == "queued"
+
+    reports_dir = task_dir(tmp_path, refreshed) / "reports"
+    implementing_report = yaml.safe_load(
+        sorted(reports_dir.glob("implementing-*.yaml"))[-1].read_text(encoding="utf-8")
+    )
+    assert implementing_report["verdict"] == "reject"
+    assert implementing_report["outcome_reason_code"] == "hallucinated_completion"
+    assert implementing_report["files_changed"] == []
+    assert "worktree is clean" in implementing_report["summary"]
+
+    journal = (task_dir(tmp_path, refreshed) / "journal.md").read_text(encoding="utf-8")
+    assert "Rejected hallucinated SWE completion" in journal
+    assert "worktree was clean" in journal
+    assert "foo.py" in journal
 
 
 def test_stage_prompt_uses_recovery_role_when_requested(tmp_path: Path) -> None:

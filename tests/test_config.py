@@ -82,6 +82,26 @@ def test_report_parser_allows_workspace_to_be_omitted() -> None:
     assert args.workspace is None
 
 
+def test_report_parser_accepts_repeated_files_changed() -> None:
+    parser = build_parser()
+
+    args = parser.parse_args(
+        [
+            "report",
+            "--verdict",
+            "pass",
+            "--message",
+            "ok",
+            "--files-changed",
+            "foo.py",
+            "--files-changed",
+            "tests/test_foo.py",
+        ]
+    )
+
+    assert args.files_changed == ["foo.py", "tests/test_foo.py"]
+
+
 def test_resolve_workspace_uses_workspace_root_env(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

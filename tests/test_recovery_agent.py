@@ -131,6 +131,8 @@ def test_runner_records_blocked_recovery_report_when_preflight_cannot_be_repaire
     def executor(task, step):  # type: ignore[no-untyped-def]
         from litehive.models import StageReport
 
+        if step == "implementing":
+            (tmp_path / "app.txt").write_text("implemented\n", encoding="utf-8")
         if step == "commit_to_git":
             task.status = "done"
             task.pipeline_status = "done"

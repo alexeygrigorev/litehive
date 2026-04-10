@@ -55,6 +55,7 @@ OutcomeReasonCode = Literal[
     "verdict_fail",
     "verdict_reject",
     "verdict_blocked",
+    "hallucinated_completion",
     "resource_limit",
     "missing_acceptance_criteria",
     "retry_limit_exhausted",

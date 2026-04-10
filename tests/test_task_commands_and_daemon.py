@@ -383,6 +383,7 @@ def test_report_command_from_task_worktree_writes_to_main_workspace(
             task_id=task.id,
             verdict="pass",
             message="reported from worktree",
+            files_changed=["foo.py"],
             role="planner",
             step="grooming",
         )
@@ -397,6 +398,7 @@ def test_report_command_from_task_worktree_writes_to_main_workspace(
     assert comments[0]["message"] == "reported from worktree"
     assert comments[0]["role"] == "planner"
     assert comments[0]["step"] == "grooming"
+    assert comments[0]["files_changed"] == ["foo.py"]
 
     worktree_thread = worktree_task_dir / "thread.yaml"
     assert not worktree_thread.exists()
@@ -428,6 +430,7 @@ def test_report_command_uses_registry_outside_repo(
             task_id=None,
             verdict="pass",
             message="reported from registry lookup",
+            files_changed=[],
             role="qa",
             step="testing",
         )
@@ -456,6 +459,7 @@ def test_report_command_fails_clearly_when_workspace_cannot_be_resolved(
             task_id=None,
             verdict="pass",
             message="should fail",
+            files_changed=[],
             role="swe",
             step="implementing",
         )

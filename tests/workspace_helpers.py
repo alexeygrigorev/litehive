@@ -344,9 +344,6 @@ def _write_cli_verdict(
     files_changed: list[str] | None = None,
 ) -> None:
     """Simulate a litehive report CLI invocation by writing a thread comment.
-
-    The ``files_changed`` parameter is accepted for backward compatibility but
-    ignored — git is the source of truth for changed files.
     """
     from litehive.models import TaskThreadComment
 
@@ -355,8 +352,6 @@ def _write_cli_verdict(
     task_dir = tasks_module.task_dir(ws_root, task)
     task_dir.mkdir(parents=True, exist_ok=True)
 
-    # files_changed is no longer passed by agents; it is populated from git diff
-    # at commit time. The parameter is kept for backward compatibility but ignored.
     tasks_module.append_thread_comment(
         ws_root,
         task,
@@ -365,6 +360,7 @@ def _write_cli_verdict(
             step=step,
             verdict=verdict,
             message=message or f"{step} {verdict}",
+            files_changed=list(files_changed or []),
         ),
     )
 
