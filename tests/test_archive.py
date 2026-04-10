@@ -1,3 +1,7 @@
+from typer.testing import CliRunner
+
+from litehive.cli import app
+
 from tests.workspace_helpers import (
     Path,
     TaskRecord,
@@ -9,7 +13,6 @@ from tests.workspace_helpers import (
     archive_root,
     archive_task,
     argparse,
-    build_parser,
     cleanup_archived_tasks,
     create_task,
     ensure_workspace,
@@ -258,18 +261,15 @@ def test_cmd_archive_all_done(
 
 
 def test_cmd_archive_no_args_prints_help(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path,
 ) -> None:
     ensure_workspace(tmp_path)
-    parser = build_parser()
-    args = parser.parse_args(["archive", "--workspace", str(tmp_path)])
+    result = CliRunner().invoke(app, ["archive", "--workspace", str(tmp_path)])
 
-    exit_code = _cmd_archive(args)
-    captured = capsys.readouterr()
-
-    assert exit_code == 2
-    assert "usage: litehive archive" in captured.out
-    assert "--all-done" in captured.out
+    assert result.exit_code == 2
+    assert "archive" in result.stdout
+    assert "--all-done" in result.stdout
+    assert "cleanup" in result.stdout
 
 
 def test_cmd_archive_all_done_logs_skipped_broken_task(
