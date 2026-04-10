@@ -10,12 +10,12 @@ pipeline_mode: full
 status: queued
 flag_reason: null
 flag_count: 0
-pipeline_status: backlog
+pipeline_status: implementing
 priority: medium
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-10T05:52:34+00:00'
-updated_at: '2026-04-10T05:52:34+00:00'
+updated_at: '2026-04-10T12:37:32+00:00'
 goal: Set supports_model_override=True on GozCLIAdapter in heru/ so litehive's resolve_model()
   uses the configured goz_model. Apply to heru/adapters/goz.py since litehive/agents/adapters/goz.py
   is a re-export.
@@ -26,7 +26,70 @@ acceptance_criteria:
 constraints: []
 plan: []
 human_checkpoints: []
-subagents: []
+subagents:
+- id: SA-0001
+  role: planner
+  engine: codex
+  status: completed
+  path: subagents/SA-0001-planner
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0002
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0002-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0003
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0003-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0004
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0004-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0005
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0005-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0006
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0006-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0007
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0007-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0008
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0008-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0009
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0009-swe
+  sandboxed: false
+  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0282 goz-adapter-make-litehive-honor-goz-model-config'

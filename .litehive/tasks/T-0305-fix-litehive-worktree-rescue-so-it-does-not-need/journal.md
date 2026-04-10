@@ -36,3 +36,18 @@ CommitToGit failed: merge conflict prevented integrating task worktree into main
 
 ## 2026-04-10T12:09:44+00:00
 Execution finished with status `merge_failed`.
+
+## 2026-04-10T12:37:40+00:00
+Recovered accepted task back to `queued/commit_to_git` because no final checkpoint commit was recorded.
+
+## 2026-04-10T12:37:52+00:00
+[worktree] Rebase onto 6940e1c8 failed. Launching merge agent.
+
+## 2026-04-10T12:37:53+00:00
+[worktree] Merge conflict on 1 file(s). Launching merge agent.
+
+## 2026-04-10T12:38:19+00:00
+[worktree] Merge agent resolved conflicts.
+
+## 2026-04-10T12:38:19+00:00
+Execution started with engine `codex`.

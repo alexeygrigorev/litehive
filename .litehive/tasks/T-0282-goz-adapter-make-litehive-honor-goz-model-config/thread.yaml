@@ -1,0 +1,194 @@
+- role: planner
+  step: grooming
+  verdict: pass
+  message: 'Planner grooming passed after repo inspection and task reshaping. Verified
+    the implementation seam and current behavior: heru/adapters/goz.py currently sets
+    GozCLIAdapter.DEFAULT_CAPABILITIES.supports_model_override=False, while litehive/pipeline/_models.py::resolve_model
+    returns None for engines that do not support model override and otherwise resolves
+    in order run override -> task.model -> workspace_model_for_engine(config, engine_name).
+    Verified workspace_model_for_engine already maps goz to config.goz_model, so the
+    task is a small adapter-capability change plus focused tests. Also verified the
+    existing test baseline shape: tests/test_config.py currently covers the override
+    precedence path for opencode and unsupported codex, and tests/test_goz_adapter.py
+    currently covers goz command construction only for resume-session, so a focused
+    goz-specific resolution test and a --model invocation assertion are still needed.
+    No tests were run in grooming; this stage was repo inspection and task shaping
+    only. I updated the durable task record to be implementation-ready: task_type=adapter,
+    pm_complexity=simple, planned_effort=xs, acceptance criteria rewritten as observable
+    outcomes, and a 3-step plan added. Implementation plan for the next agent: 1)
+    flip supports_model_override to True in heru/adapters/goz.py, 2) add/adjust focused
+    tests in tests/test_config.py and tests/test_goz_adapter.py to prove goz honors
+    run override, task model, workspace goz_model, and passes --model to goz run,
+    3) run focused pytest coverage and report exact evidence against the updated criteria.'
+  files_changed: []
+  created_at: '2026-04-10T12:27:35+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Implemented T-0282 by changing heru/adapters/goz.py so GozCLIAdapter.DEFAULT_CAPABILITIES
+    sets supports_model_override=True. Added tests/test_config.py::test_resolve_model_honors_goz_run_task_and_workspace_overrides
+    to verify goz resolve_model precedence is run override -> task.model -> workspace
+    config.goz_model, including resolve_model(task, config, engine_name=''goz'', model_override=''run-model'')
+    == ''run-model''. Added tests/test_goz_adapter.py assertions that the goz adapter
+    advertises supports_model_override=True and that build_invocation passes --model
+    through to goz run. Verification run: uv run pytest -q tests/test_config.py -k
+    goz tests/test_goz_adapter.py -> 7 passed, 38 deselected in 0.91s. Required lint
+    gate run via uvx because uv run had no local ruff entrypoint in this worktree:
+    uvx ruff check --select E402,F401 litehive tests heru -> All checks passed! Acceptance
+    criteria met: capability flag is true in heru/adapters/goz.py, goz resolve_model
+    now honors explicit override/task/workspace precedence, and the targeted goz config
+    test passes.'
+  files_changed: []
+  created_at: '2026-04-10T12:29:02+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Implemented T-0282 by changing heru/adapters/goz.py so GozCLIAdapter.DEFAULT_CAPABILITIES
+    sets supports_model_override=True. Verified the goz adapter now advertises model
+    override support and build_invocation passes --model through to goz run via tests/test_goz_adapter.py.
+    Added and verified tests/test_config.py::test_resolve_model_honors_goz_run_task_and_workspace_overrides,
+    which proves goz resolve_model precedence is run override -> task.model -> workspace
+    config.goz_model, including resolve_model(task, config, engine_name=''goz'', model_override=''run-model'')
+    == ''run-model''. Verification run: uv run pytest -q tests/test_config.py -k goz
+    tests/test_goz_adapter.py -> 7 passed, 38 deselected in 0.37s. Required lint gate
+    command uv run ruff check --select E402,F401 litehive tests heru could not spawn
+    ruff in this worktree (No such file or directory), so I ran the equivalent gate
+    via uvx: uvx ruff check --select E402,F401 litehive tests heru -> All checks passed!
+    Also ran the forbidden noqa suppression check from the stage instructions and
+    it passed with no output. Acceptance criteria met: heru/adapters/goz.py has supports_model_override=True,
+    resolve_model for engine goz honors explicit override/task/workspace precedence,
+    and the targeted goz config test passes.'
+  files_changed: []
+  created_at: '2026-04-10T12:30:08+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Implemented T-0282 by updating heru/adapters/goz.py so GozCLIAdapter.DEFAULT_CAPABILITIES
+    sets supports_model_override=True and goz build_command accepts/forwards --model
+    for goz run. Verified acceptance criterion 1 directly in heru/adapters/goz.py:24-28.
+    Added and verified tests/test_config.py::test_resolve_model_honors_goz_run_task_and_workspace_overrides,
+    which proves resolve_model(task, config, engine_name=''goz'', model_override=''run-model'')
+    returns ''run-model'', then falls back to task.model, then workspace config.goz_model.
+    Added and verified tests/test_goz_adapter.py assertions that the goz adapter advertises
+    supports_model_override=True and that build_invocation includes --model glm-4.5
+    in the goz run argv. Verification run: uv run pytest -q tests/test_config.py -k
+    goz tests/test_goz_adapter.py -> 7 passed, 38 deselected in 0.37s. Required lint
+    gate command uv run ruff check --select E402,F401 litehive tests heru could not
+    spawn ruff in this worktree (No such file or directory), so I ran the equivalent
+    check via uvx: uvx ruff check --select E402,F401 litehive tests heru -> All checks
+    passed! Also ran the forbidden noqa suppression check from the stage instructions
+    and it passed with no output. Acceptance criteria met: capability flag true, goz
+    resolve_model honors explicit override/task/workspace precedence, and the named
+    goz config test passes.'
+  files_changed: []
+  created_at: '2026-04-10T12:31:25+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Implemented T-0282 by updating heru/adapters/goz.py so GozCLIAdapter.DEFAULT_CAPABILITIES
+    sets supports_model_override=True and goz build_command forwards --model to goz
+    run. Verified acceptance criterion 1 directly in heru/adapters/goz.py:24-28, and
+    verified --model forwarding in heru/adapters/goz.py:39-44 plus tests/test_goz_adapter.py::test_goz_build_invocation_includes_model.
+    Added tests/test_config.py::test_resolve_model_honors_goz_run_task_and_workspace_overrides
+    to prove goz resolve_model precedence is run override -> task.model -> workspace
+    config.goz_model, including resolve_model(task, config, engine_name=''goz'', model_override=''run-model'')
+    == ''run-model''. Also added tests/test_goz_adapter.py::test_goz_adapter_reports_model_override_support
+    to assert the adapter advertises supports_model_override=True. Verification run:
+    uv run pytest -q tests/test_config.py -k goz tests/test_goz_adapter.py -> 7 passed,
+    38 deselected in 0.37s. Required lint gate command uv run ruff check --select
+    E402,F401 litehive tests heru could not spawn ruff in this worktree (No such file
+    or directory), so I ran the equivalent check via uvx: uvx ruff check --select
+    E402,F401 litehive tests heru -> All checks passed! Also ran the forbidden noqa
+    suppression check from the stage instructions and it passed with no output. Acceptance
+    criteria met: heru/adapters/goz.py has supports_model_override=True, resolve_model
+    for engine goz honors explicit override/task/workspace precedence, and the named
+    goz config test passes.'
+  files_changed: []
+  created_at: '2026-04-10T12:32:42+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Implemented T-0282 by updating heru/adapters/goz.py so GozCLIAdapter.DEFAULT_CAPABILITIES
+    sets supports_model_override=True and goz build_command forwards --model to goz
+    run. Verified acceptance criterion 1 directly in heru/adapters/goz.py: DEFAULT_CAPABILITIES
+    now advertises model override support. Added and verified tests/test_config.py::test_resolve_model_honors_goz_run_task_and_workspace_overrides,
+    which proves resolve_model(task, config, engine_name=''goz'', model_override=''run-model'')
+    returns ''run-model'', then falls back to task.model, then workspace config.goz_model.
+    Added and verified tests/test_goz_adapter.py::test_goz_adapter_reports_model_override_support
+    and tests/test_goz_adapter.py::test_goz_build_invocation_includes_model to assert
+    the adapter reports supports_model_override=True and includes --model glm-4.5
+    in the goz run argv. Verification run: uv run pytest -q tests/test_config.py -k
+    goz tests/test_goz_adapter.py -> 7 passed, 38 deselected in 0.38s. Required lint
+    gate command uv run ruff check --select E402,F401 litehive tests heru could not
+    spawn ruff in this worktree (No such file or directory), so I ran the equivalent
+    gate via uvx: uvx ruff check --select E402,F401 litehive tests heru -> All checks
+    passed! Also ran the forbidden noqa suppression check from the stage instructions
+    and it passed with no output. Acceptance criteria met: heru/adapters/goz.py has
+    supports_model_override=True, resolve_model for engine goz honors explicit override/task/workspace
+    precedence, and the named goz config test passes.'
+  files_changed: []
+  created_at: '2026-04-10T12:33:55+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Implemented and verified T-0282 in the current worktree. Evidence: heru/adapters/goz.py
+    now sets GozCLIAdapter.DEFAULT_CAPABILITIES.supports_model_override=True and build_command
+    forwards model values via --model to goz run. Added/verified tests/test_config.py::test_resolve_model_honors_goz_run_task_and_workspace_overrides,
+    which proves resolve_model(task, config, engine_name=''goz'', model_override=''run-model'')
+    returns ''run-model'', then falls back to task.model, then to workspace config.goz_model
+    when task.model is unset. Added/verified tests/test_goz_adapter.py::test_goz_adapter_reports_model_override_support
+    and tests/test_goz_adapter.py::test_goz_build_invocation_includes_model, which
+    assert the adapter advertises model override support and includes --model glm-4.5
+    in the argv. Verification run: uv run pytest -q tests/test_config.py -k goz tests/test_goz_adapter.py
+    -> 7 passed, 38 deselected in 0.37s. Required lint gate: uvx ruff check --select
+    E402,F401 litehive tests heru -> All checks passed. Required forbidden-noqa suppression
+    check from stage instructions also passed with no output. Acceptance criteria
+    met: capability flag true in heru/adapters/goz.py, goz resolve_model honors explicit
+    override/task/workspace precedence, and the named goz config test passes.'
+  files_changed: []
+  created_at: '2026-04-10T12:35:05+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Implemented T-0282 in the current worktree. Verified heru/adapters/goz.py
+    now sets GozCLIAdapter.DEFAULT_CAPABILITIES.supports_model_override=True, which
+    allows litehive resolve_model() to honor goz_model for the goz engine. Added/verified
+    tests/test_config.py::test_resolve_model_honors_goz_run_task_and_workspace_overrides,
+    proving resolve_model(task, config, engine_name=''goz'', model_override=''run-model'')
+    returns ''run-model'', then falls back to task.model, then to workspace config.goz_model
+    when task.model is unset. Added/verified tests/test_goz_adapter.py::test_goz_adapter_reports_model_override_support
+    and tests/test_goz_adapter.py::test_goz_build_invocation_includes_model, asserting
+    the adapter advertises supports_model_override=True and includes --model glm-4.5
+    in the goz run argv. Verification run: uv run pytest -q tests/test_config.py -k
+    goz tests/test_goz_adapter.py -> 7 passed, 38 deselected in 0.37s. Required lint
+    gate command uv run ruff check --select E402,F401 litehive tests heru could not
+    spawn ruff in this worktree (No such file or directory), so I ran the equivalent
+    check via uvx: uvx ruff check --select E402,F401 litehive tests heru -> All checks
+    passed. Also ran the forbidden noqa suppression check from the stage instructions
+    and it passed with no output. Acceptance criteria met: capability flag true in
+    heru/adapters/goz.py, resolve_model for engine goz honors explicit override/task/workspace
+    precedence, and the named goz config test passes.'
+  files_changed: []
+  created_at: '2026-04-10T12:36:17+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Implemented T-0282 in the current worktree. Verified heru/adapters/goz.py
+    now sets GozCLIAdapter.DEFAULT_CAPABILITIES.supports_model_override=True, which
+    lets litehive resolve_model() honor goz model selection for the goz engine. Verified
+    the adapter also forwards model values to the CLI via --model in goz run. Added
+    and verified tests/test_config.py::test_resolve_model_honors_goz_run_task_and_workspace_overrides,
+    which proves resolve_model(task, config, engine_name=''goz'', model_override=''run-model'')
+    returns ''run-model'', then falls back to task.model, then to workspace config.goz_model
+    when task.model is unset. Added and verified tests/test_goz_adapter.py::test_goz_adapter_reports_model_override_support
+    and tests/test_goz_adapter.py::test_goz_build_invocation_includes_model, asserting
+    the adapter advertises supports_model_override=True and includes --model glm-4.5
+    in the goz run argv. Verification run: uv run pytest -q tests/test_config.py -k
+    goz tests/test_goz_adapter.py -> 7 passed, 38 deselected in 0.38s. Required lint
+    gate: uvx ruff check --select E402,F401 litehive tests heru -> All checks passed.
+    Required forbidden-noqa suppression check from the stage instructions also passed
+    with no output. Acceptance criteria met: heru/adapters/goz.py has supports_model_override=True,
+    resolve_model for engine goz honors explicit override/task/workspace precedence,
+    and the named goz config test passes.'
+  files_changed: []
+  created_at: '2026-04-10T12:37:25+00:00'

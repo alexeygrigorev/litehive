@@ -6,15 +6,15 @@ task_type: null
 model: null
 mode: implementation
 pipeline_mode: full
-status: merge_failed
+status: in_progress
 flag_reason: null
 flag_count: 0
-pipeline_status: merge_failed
+pipeline_status: commit_to_git
 priority: high
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-10T10:11:10+00:00'
-updated_at: '2026-04-10T12:09:44+00:00'
+updated_at: '2026-04-10T12:38:19+00:00'
 goal: 'When the daemon is running, ''litehive worktree rescue --apply'' successfully
   cherry-picks the worktree commits onto main but then fails to finalize task state
   because save_task tries to acquire the runner lock (held by the daemon). This leaves
@@ -71,6 +71,13 @@ subagents:
   engine: codex
   status: completed
   path: subagents/SA-0005-merge-resolver
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0006
+  role: merge-resolver
+  engine: codex
+  status: completed
+  path: subagents/SA-0006-merge-resolver
   sandboxed: false
   sandbox_summary: host
 git:

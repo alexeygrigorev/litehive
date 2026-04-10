@@ -1,0 +1,11 @@
+step: implementing
+hook_point: after_implementing
+command: uv run ruff check --select E402,F401 litehive tests
+reject_on_failure: true
+description: null
+exit_code: 2
+stdout: ''
+stderr: "warning: `VIRTUAL_ENV=/home/alexey/git/litehive/.venv` does not match the\
+  \ project environment path `.venv` and will be ignored; use `--active` to target\
+  \ the active environment instead\nerror: Failed to spawn: `ruff`\n  Caused by: No\
+  \ such file or directory (os error 2)\n"
