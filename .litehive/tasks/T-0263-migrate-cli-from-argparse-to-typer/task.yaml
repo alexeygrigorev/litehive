@@ -4,19 +4,18 @@ title: Migrate CLI from argparse to Typer
 depends_on:
 - T-0264
 task_type: null
-engine: null
 model: null
 mode: implementation
 pipeline_mode: full
 status: queued
 flag_reason: null
 flag_count: 0
-pipeline_status: backlog
+pipeline_status: implementing
 priority: low
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-09T14:52:45+00:00'
-updated_at: '2026-04-09T14:52:45+00:00'
+updated_at: '2026-04-10T14:16:03+00:00'
 goal: Replace argparse with Typer for the CLI. Each command becomes a decorated function
   with type-annotated arguments. Eliminates the separate parser module and dispatch
   table. Modern, clean, auto-generated help.
@@ -29,7 +28,28 @@ acceptance_criteria:
 constraints: []
 plan: []
 human_checkpoints: []
-subagents: []
+subagents:
+- id: SA-0001
+  role: planner
+  engine: codex
+  status: completed
+  path: subagents/SA-0001-planner
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0002
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0002-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0003
+  role: qa
+  engine: codex
+  status: completed
+  path: subagents/SA-0003-qa
+  sandboxed: false
+  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0263 migrate-cli-from-argparse-to-typer'

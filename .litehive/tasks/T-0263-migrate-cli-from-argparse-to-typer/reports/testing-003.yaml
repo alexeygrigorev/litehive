@@ -1,0 +1,60 @@
+task_id: T-0263
+step: testing
+verdict: reject
+source: agent
+summary: 'EXPECTED behavior: the Typer migration should make the live CLI help/routing
+  independent of the legacy argparse compatibility builder, so invoking a public command
+  with its no-argument fallback should still stay on the Typer path and show Typer-owned
+  help.'
+feedback: 'EXPECTED behavior: the Typer migration should make the live CLI help/routing
+  independent of the legacy argparse compatibility builder, so invoking a public command
+  with its no-argument fallback should still stay on the Typer path and show Typer-owned
+  help.
+
+
+  OBSERVED behavior: running uv run litehive archive exits 2 after calling the legacy
+  argparse compatibility seam. It prints old-style help beginning with "usage: litehive
+  archive [-h] [--all-done] [--workspace WORKSPACE] [task_id] command ...", and the
+  runtime path in litehive/cli/queue.py:260-270 imports build_parser, while litehive/cli/__init__.py:29
+  and 995-1007 still construct the argparse command tree from COMMAND_PARSER_BUILDERS.
+
+
+  Steps to reproduce:
+
+  1. Run: uv run litehive archive
+
+  2. Observe exit code 2 and legacy argparse help output instead of Typer help.
+
+
+  Acceptance criteria status:
+
+  - Satisfied: typer is in runtime dependencies; litehive/cli/parser.py is removed;
+  the focused existing CLI suite passes (uv run pytest -q tests/test_run_cli.py tests/test_config.py
+  tests/test_logs_command.py tests/test_archive.py tests/test_engine_freeze.py tests/test_observability_and_status.py
+  -> 214 passed); public help surfaces expose the expected command groups when explicitly
+  asking for help.
+
+  - Not met: criterion 1 and criterion 3 are not fully met because at least one public
+  command still relies on the argparse compatibility builder at runtime rather than
+  Typer-owned help/routing.'
+submitted_via_cli: true
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 1
+retry_limit: 3
+retry_source: global
+retry_decision: retry
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 131
+hook_results: []
+created_at: '2026-04-10T14:16:03+00:00'

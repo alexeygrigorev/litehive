@@ -1,4 +1,4 @@
-active_task_id: T-0240
+active_task_id: T-0284
 active_task_ids: []
 mode: implementation
 queue:
@@ -21,6 +21,7 @@ queue:
 - T-0303
 - T-0304
 - T-0307
+- T-0240
 pool_stop_reason: null
 next_task_number: 307
 unmerged_worktrees:
@@ -30,3 +31,5 @@ unmerged_worktrees:
   worktree_path: .litehive/worktrees/T-0305-fix-litehive-worktree-rescue-so-it-does-not-need
 - task_id: T-0284
   worktree_path: .litehive/worktrees/T-0284-isolate-workspace-execution-from-inherited
+- task_id: T-0240
+  worktree_path: .litehive/worktrees/T-0240-auto-defer-tasks-after-3-flags-instead-of
