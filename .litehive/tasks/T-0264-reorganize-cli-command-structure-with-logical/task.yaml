@@ -7,15 +7,15 @@ engine: null
 model: null
 mode: implementation
 pipeline_mode: full
-status: queued
+status: in_progress
 flag_reason: null
 flag_count: 0
-pipeline_status: backlog
+pipeline_status: commit_to_git
 priority: medium
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-09T15:00:33+00:00'
-updated_at: '2026-04-09T15:00:33+00:00'
+updated_at: '2026-04-10T00:27:44+00:00'
 goal: Restructure the CLI for clarity. Group commands under task/queue/engine/worktree/archive/import.
   Rename daemon to start/stop/restart. Remove internal commands from public API. Keep
   backward compat aliases temporarily.
@@ -31,18 +31,48 @@ acceptance_criteria:
 - 'Agent-facing API is 4 commands: report, task update, task close, task add'
 - All existing tests pass
 - README.md updated with new command names and examples
-- Agent prompts updated to use new command names (litehive report, litehive task update, litehive task close, litehive task add)
+- Agent prompts updated to use new command names (litehive report, litehive task update,
+  litehive task close, litehive task add)
 - config.yaml agent_startup_guidance updated with new command names
 - context.md template updated if it references CLI commands
 - All docs/*.md files updated with new command names
-- Web dashboard API endpoints and UI labels match new CLI terminology (e.g. start/stop not daemon, task group names)
+- Web dashboard API endpoints and UI labels match new CLI terminology (e.g. start/stop
+  not daemon, task group names)
 - Web dashboard action buttons use same command names as CLI
 constraints:
 - Update all docs and prompts that reference CLI commands - no stale references
 - Web dashboard must use same terminology as CLI - no mismatch between web and terminal
 plan: []
 human_checkpoints: []
-subagents: []
+subagents:
+- id: SA-0001
+  role: planner
+  engine: codex
+  status: completed
+  path: subagents/SA-0001-planner
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0002
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0002-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0003
+  role: qa
+  engine: codex
+  status: completed
+  path: subagents/SA-0003-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0004
+  role: reviewer
+  engine: codex
+  status: completed
+  path: subagents/SA-0004-reviewer
+  sandboxed: false
+  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0264 reorganize-cli-command-structure-with-logical'

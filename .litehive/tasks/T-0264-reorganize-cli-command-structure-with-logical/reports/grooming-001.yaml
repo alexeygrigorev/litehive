@@ -1,0 +1,109 @@
+task_id: T-0264
+step: grooming
+verdict: pass
+source: agent
+summary: 'Grooming pass after reviewing the current task record, live CLI help, parser
+  wiring, web action routes, and doc/prompt references. Evidence: `uv run litehive
+  --help` still exposes a flat public surface with `daemon`, `dirty-worktree-gate`,
+  `recover`, `prioritize`, `switch`, `issue`, `intake`, `import-issue`, and `import-issues`;
+  `uv run litehive daemon --help` shows lifecycle still nested under `daemon`; parser
+  dispatch is still centered in `litehive/cli/__init__.py`, `litehive/cli/parser.py`,
+  and `litehive/cli/parsers/daemon.py`; web API/routes still use `/api/daemon/*`,
+  `/api/queue/prioritize`, and task-engine switching endpoints in `litehive/web/server.py`;
+  docs and prompts still reference legacy names across `README.md`, `docs/cli.md`,
+  `docs/configuration.md`, `docs/README.md`, `.litehive/context.md`, `litehive/agents/_prompts.py`,
+  and `litehive/config/startup_guidance.py`. This is a real cross-cutting refactor,
+  but it is now scoped well enough to implement. No code changes were made in grooming.
+  Tests run: `uv run pytest -q tests/test_config.py -q` passed.'
+feedback: "Grooming pass after reviewing the current task record, live CLI help, parser\
+  \ wiring, web action routes, and doc/prompt references. Evidence: `uv run litehive\
+  \ --help` still exposes a flat public surface with `daemon`, `dirty-worktree-gate`,\
+  \ `recover`, `prioritize`, `switch`, `issue`, `intake`, `import-issue`, and `import-issues`;\
+  \ `uv run litehive daemon --help` shows lifecycle still nested under `daemon`; parser\
+  \ dispatch is still centered in `litehive/cli/__init__.py`, `litehive/cli/parser.py`,\
+  \ and `litehive/cli/parsers/daemon.py`; web API/routes still use `/api/daemon/*`,\
+  \ `/api/queue/prioritize`, and task-engine switching endpoints in `litehive/web/server.py`;\
+  \ docs and prompts still reference legacy names across `README.md`, `docs/cli.md`,\
+  \ `docs/configuration.md`, `docs/README.md`, `.litehive/context.md`, `litehive/agents/_prompts.py`,\
+  \ and `litehive/config/startup_guidance.py`. This is a real cross-cutting refactor,\
+  \ but it is now scoped well enough to implement. No code changes were made in grooming.\
+  \ Tests run: `uv run pytest -q tests/test_config.py -q` passed.\n\nCritical assumption\
+  \ for implementation: the current `litehive issue` command is an upstream Litehive-task\
+  \ filing workflow, not a GitHub-import synonym. Do not silently change that behavior.\
+  \ If the public rename moves it under `import`, preserve the current observable\
+  \ behavior under the new path and keep `issue` as a hidden alias until docs/tests\
+  \ are updated.\n\nRecommended execution sequence: 1) rewire public parser groups\
+  \ and hidden aliases first; 2) move daemon lifecycle to top-level `start`/`stop`/`restart`\
+  \ while keeping `run` foreground-only; 3) group task/queue/import commands and map\
+  \ removed commands to supported replacements; 4) update web routes/labels/buttons\
+  \ to the new vocabulary; 5) update README, docs, prompts, config guidance, and context\
+  \ template; 6) run focused CLI/web tests, then `uv run pytest -q`.\n\nTASK_UPDATE:\n\
+  \  task_type: refactor\n  pm_complexity: complex\n  planned_effort: l\n  goal: Restructure\
+  \ the public Litehive CLI into logical command groups with consistent names, make\
+  \ `start`/`stop`/`restart` the public daemon lifecycle, keep legacy spellings only\
+  \ as hidden compatibility aliases, and align docs, prompts, config guidance, and\
+  \ web UI/API terminology with the new command surface.\n  acceptance_criteria:\n\
+  \    - \"`litehive --help` presents the new public command surface built around\
+  \ grouped commands such as `task`, `queue`, `engine`, `worktree`, `archive`, and\
+  \ `import`, and it no longer lists internal or deprecated names like `dirty-worktree-gate`,\
+  \ `recover`, `prioritize`, `switch`, `import-issue`, or `import-issues`.\"\n   \
+  \ - \"`litehive start`, `litehive stop`, and `litehive restart` provide the public\
+  \ background-runner lifecycle, while `litehive run` remains the foreground execution\
+  \ path and does not become a daemon alias.\"\n    - \"`litehive task --help` exposes\
+  \ the task-management actions `add`, `list`, `show`, `update`, `close`, `abandon`,\
+  \ `debug`, and `logs`, and those commands work from their grouped paths.\"\n   \
+  \ - \"`litehive queue` still shows queue state, and queue mutations are reachable\
+  \ through grouped commands such as `litehive queue move`, `litehive queue promote`,\
+  \ `litehive queue requeue`, and `litehive queue resume`; any removed legacy commands\
+  \ remain available only as hidden aliases during the compatibility window.\"\n \
+  \   - \"Import flows are regrouped under `litehive import`, with `litehive import\
+  \ spec` replacing `litehive intake` and GitHub import flows replacing `import-issue`\
+  \ and `import-issues`; if the current `litehive issue` workflow is renamed, the\
+  \ new public path preserves its existing upstream-filing behavior.\"\n    - \"Legacy\
+  \ command spellings that are kept for backward compatibility still execute the same\
+  \ behavior but are hidden from the public help output.\"\n    - \"Agent-facing operator\
+  \ guidance uses the reduced command vocabulary `litehive report`, `litehive task\
+  \ add`, `litehive task update`, and `litehive task close` across prompts, config\
+  \ startup guidance, and any context template references.\"\n    - \"`README.md`,\
+  \ every affected file under `docs/`, and any context/config templates use the new\
+  \ CLI names and examples with no stale public references to replaced commands.\"\
+  \n    - \"Web dashboard API routes, UI labels, and action buttons use the same terminology\
+  \ as the CLI for runner lifecycle and task/queue actions.\"\n    - \"Focused CLI/web\
+  \ regression tests are updated for the new surface, backward-compat aliases are\
+  \ covered where behavior is intentionally retained, and the full test suite passes.\"\
+  \n  constraints:\n    - Preserve observable behavior while renaming commands; this\
+  \ task is a CLI-surface reorganization, not a feature rewrite.\n    - Do not silently\
+  \ repurpose `litehive issue` into GitHub import behavior; preserve or explicitly\
+  \ remap the existing upstream-filing workflow.\n    - Keep docs, prompts, config\
+  \ guidance, and web terminology in sync so the same action is named the same way\
+  \ everywhere.\n  plan:\n    - Introduce the new public parser/group structure and\
+  \ register legacy spellings as hidden aliases that dispatch to the same handlers.\n\
+  \    - Move daemon lifecycle to public top-level `start`/`stop`/`restart` commands\
+  \ and keep `run` foreground-only.\n    - Rehome task, queue, and import commands\
+  \ under grouped paths and define the supported replacements for removed public commands.\n\
+  \    - Update web server routes, action handlers, and dashboard labels/buttons to\
+  \ match the new command terminology.\n    - Rewrite README, docs, prompts, startup\
+  \ guidance, and context/config templates to the grouped CLI vocabulary.\n    - Run\
+  \ focused parser/web/documentation regression checks, then `uv run pytest -q` before\
+  \ acceptance."
+submitted_via_cli: true
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 184
+hook_results: []
+created_at: '2026-04-10T00:01:24+00:00'

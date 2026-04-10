@@ -1,0 +1,151 @@
+- role: planner
+  step: grooming
+  verdict: pass
+  message: "Grooming pass after reviewing the current task record, live CLI help,\
+    \ parser wiring, web action routes, and doc/prompt references. Evidence: `uv run\
+    \ litehive --help` still exposes a flat public surface with `daemon`, `dirty-worktree-gate`,\
+    \ `recover`, `prioritize`, `switch`, `issue`, `intake`, `import-issue`, and `import-issues`;\
+    \ `uv run litehive daemon --help` shows lifecycle still nested under `daemon`;\
+    \ parser dispatch is still centered in `litehive/cli/__init__.py`, `litehive/cli/parser.py`,\
+    \ and `litehive/cli/parsers/daemon.py`; web API/routes still use `/api/daemon/*`,\
+    \ `/api/queue/prioritize`, and task-engine switching endpoints in `litehive/web/server.py`;\
+    \ docs and prompts still reference legacy names across `README.md`, `docs/cli.md`,\
+    \ `docs/configuration.md`, `docs/README.md`, `.litehive/context.md`, `litehive/agents/_prompts.py`,\
+    \ and `litehive/config/startup_guidance.py`. This is a real cross-cutting refactor,\
+    \ but it is now scoped well enough to implement. No code changes were made in\
+    \ grooming. Tests run: `uv run pytest -q tests/test_config.py -q` passed.\n\n\
+    Critical assumption for implementation: the current `litehive issue` command is\
+    \ an upstream Litehive-task filing workflow, not a GitHub-import synonym. Do not\
+    \ silently change that behavior. If the public rename moves it under `import`,\
+    \ preserve the current observable behavior under the new path and keep `issue`\
+    \ as a hidden alias until docs/tests are updated.\n\nRecommended execution sequence:\
+    \ 1) rewire public parser groups and hidden aliases first; 2) move daemon lifecycle\
+    \ to top-level `start`/`stop`/`restart` while keeping `run` foreground-only; 3)\
+    \ group task/queue/import commands and map removed commands to supported replacements;\
+    \ 4) update web routes/labels/buttons to the new vocabulary; 5) update README,\
+    \ docs, prompts, config guidance, and context template; 6) run focused CLI/web\
+    \ tests, then `uv run pytest -q`.\n\nTASK_UPDATE:\n  task_type: refactor\n  pm_complexity:\
+    \ complex\n  planned_effort: l\n  goal: Restructure the public Litehive CLI into\
+    \ logical command groups with consistent names, make `start`/`stop`/`restart`\
+    \ the public daemon lifecycle, keep legacy spellings only as hidden compatibility\
+    \ aliases, and align docs, prompts, config guidance, and web UI/API terminology\
+    \ with the new command surface.\n  acceptance_criteria:\n    - \"`litehive --help`\
+    \ presents the new public command surface built around grouped commands such as\
+    \ `task`, `queue`, `engine`, `worktree`, `archive`, and `import`, and it no longer\
+    \ lists internal or deprecated names like `dirty-worktree-gate`, `recover`, `prioritize`,\
+    \ `switch`, `import-issue`, or `import-issues`.\"\n    - \"`litehive start`, `litehive\
+    \ stop`, and `litehive restart` provide the public background-runner lifecycle,\
+    \ while `litehive run` remains the foreground execution path and does not become\
+    \ a daemon alias.\"\n    - \"`litehive task --help` exposes the task-management\
+    \ actions `add`, `list`, `show`, `update`, `close`, `abandon`, `debug`, and `logs`,\
+    \ and those commands work from their grouped paths.\"\n    - \"`litehive queue`\
+    \ still shows queue state, and queue mutations are reachable through grouped commands\
+    \ such as `litehive queue move`, `litehive queue promote`, `litehive queue requeue`,\
+    \ and `litehive queue resume`; any removed legacy commands remain available only\
+    \ as hidden aliases during the compatibility window.\"\n    - \"Import flows are\
+    \ regrouped under `litehive import`, with `litehive import spec` replacing `litehive\
+    \ intake` and GitHub import flows replacing `import-issue` and `import-issues`;\
+    \ if the current `litehive issue` workflow is renamed, the new public path preserves\
+    \ its existing upstream-filing behavior.\"\n    - \"Legacy command spellings that\
+    \ are kept for backward compatibility still execute the same behavior but are\
+    \ hidden from the public help output.\"\n    - \"Agent-facing operator guidance\
+    \ uses the reduced command vocabulary `litehive report`, `litehive task add`,\
+    \ `litehive task update`, and `litehive task close` across prompts, config startup\
+    \ guidance, and any context template references.\"\n    - \"`README.md`, every\
+    \ affected file under `docs/`, and any context/config templates use the new CLI\
+    \ names and examples with no stale public references to replaced commands.\"\n\
+    \    - \"Web dashboard API routes, UI labels, and action buttons use the same\
+    \ terminology as the CLI for runner lifecycle and task/queue actions.\"\n    -\
+    \ \"Focused CLI/web regression tests are updated for the new surface, backward-compat\
+    \ aliases are covered where behavior is intentionally retained, and the full test\
+    \ suite passes.\"\n  constraints:\n    - Preserve observable behavior while renaming\
+    \ commands; this task is a CLI-surface reorganization, not a feature rewrite.\n\
+    \    - Do not silently repurpose `litehive issue` into GitHub import behavior;\
+    \ preserve or explicitly remap the existing upstream-filing workflow.\n    - Keep\
+    \ docs, prompts, config guidance, and web terminology in sync so the same action\
+    \ is named the same way everywhere.\n  plan:\n    - Introduce the new public parser/group\
+    \ structure and register legacy spellings as hidden aliases that dispatch to the\
+    \ same handlers.\n    - Move daemon lifecycle to public top-level `start`/`stop`/`restart`\
+    \ commands and keep `run` foreground-only.\n    - Rehome task, queue, and import\
+    \ commands under grouped paths and define the supported replacements for removed\
+    \ public commands.\n    - Update web server routes, action handlers, and dashboard\
+    \ labels/buttons to match the new command terminology.\n    - Rewrite README,\
+    \ docs, prompts, startup guidance, and context/config templates to the grouped\
+    \ CLI vocabulary.\n    - Run focused parser/web/documentation regression checks,\
+    \ then `uv run pytest -q` before acceptance."
+  files_changed: []
+  created_at: '2026-04-10T00:01:13+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Implemented the CLI surface reorganization and aligned the web/docs/prompts
+    to it. Public parser now exposes grouped task, queue, and import commands plus
+    top-level start/stop/restart; legacy flat names remain available as hidden compatibility
+    parsers. queue requeue now covers completed-task recover semantics, run remains
+    foreground-only, daemon and other removed/internal names are no longer in public
+    help, and the web dashboard now uses /api/runner/*, /api/queue/requeue, and /api/queue/stop
+    on the public surface. Updated README, affected docs, and agent prompt guidance
+    to use litehive report, litehive task add, litehive task update, and litehive
+    task close terminology. Verification: uv run litehive --help, uv run litehive
+    task --help, uv run litehive queue --help, and uv run litehive import --help showed
+    the new grouped public surface; uv run ruff check --select E402,F401 litehive
+    tests passed; focused regressions passed for CLI/web/prompt coverage (uv run pytest
+    -q tests/test_run_cli.py tests/test_web_daemon_monitor.py tests/test_web_task_actions.py
+    tests/test_web_snapshot_and_verdicts.py tests/test_runner_workflow.py -q); full
+    suite passed with uv run pytest -q (910 passed).'
+  files_changed: []
+  created_at: '2026-04-10T00:19:57+00:00'
+- role: qa
+  step: testing
+  verdict: pass
+  message: 'Verified the CLI reorganization against the acceptance criteria. Public
+    help exposes grouped commands task, queue, import, worktree, and archive plus
+    top-level start, stop, and restart, while removed or internal names are absent
+    from top-level help. I checked uv run litehive --help, uv run litehive task --help,
+    uv run litehive queue --help, uv run litehive import --help, uv run litehive start
+    --help, uv run litehive stop --help, uv run litehive restart --help, and uv run
+    litehive run --help; run remains the foreground runner path. Backward-compat aliases
+    still execute directly through their hidden parsers, including daemon, import-issue,
+    prioritize, and switch, but they stay hidden from public help. Verified litehive
+    queue still reports queue state: on a fresh configured workspace it printed active_task_id
+    None, queue_length 0, and resumable_tasks 0; on the populated repo workspace it
+    returned the full queue listing in about 15 seconds. I scanned current user-facing
+    docs, prompts, config guidance, and web code for stale command references with
+    rg; remaining matches were internal compatibility routes such as /api/daemon and
+    /api/queue/prioritize or generic prose about daemon logs, not stale public CLI
+    commands. Focused regression slice passed with uv run pytest -q tests/test_run_cli.py
+    tests/test_web_daemon_monitor.py tests/test_web_task_actions.py tests/test_web_snapshot_and_verdicts.py
+    tests/test_runner_workflow.py -q. Full suite passed with uv run pytest -q: 910
+    passed in 133.89s. Evidence supports the acceptance criteria for grouped CLI names,
+    hidden legacy aliases, updated docs and prompts, aligned web terminology, and
+    passing tests.'
+  files_changed: []
+  created_at: '2026-04-10T00:25:45+00:00'
+- role: reviewer
+  step: accepting
+  verdict: pass
+  message: 'Accepted. I verified the current workspace directly against the acceptance
+    criteria. uv run litehive --help shows the reorganized public surface with grouped
+    task, queue, import, engine, worktree, and archive commands plus top-level start,
+    stop, restart, and foreground-only run; removed/internal names such as daemon,
+    dirty-worktree-gate, recover, prioritize, switch, import-issue, and import-issues
+    are not exposed in public help. uv run litehive task --help exposes add/list/show/update/close/abandon/debug/logs;
+    uv run litehive queue --help exposes move/promote/requeue/resume/stop; uv run
+    litehive import --help exposes github/spec/issue, preserving the upstream issue-filing
+    workflow under the new grouped path. I also checked uv run litehive start --help,
+    stop --help, restart --help, and run --help; run remains the foreground execution
+    path and is not a daemon alias. User-facing docs, prompts, config guidance, and
+    the context template now use the new vocabulary, including the agent-facing API
+    centered on litehive report, litehive task add, litehive task update, and litehive
+    task close. Web terminology is aligned: the implementation and tests use /api/runner/*,
+    queue/requeue, and queue/stop, while any /api/daemon/* handling remains only as
+    temporary compatibility aliases. Verification I ran locally: uv run litehive --help,
+    uv run litehive task --help, uv run litehive queue --help, uv run litehive import
+    --help, uv run litehive start --help, uv run litehive stop --help, uv run litehive
+    restart --help, uv run litehive run --help, rg checks over README/docs/.litehive/context.md/prompt/config
+    files for command references, and uv run pytest -q tests/test_run_cli.py tests/test_web_daemon_monitor.py
+    tests/test_web_task_actions.py tests/test_web_snapshot_and_verdicts.py tests/test_runner_workflow.py
+    -q, which passed. QA previously ran the full suite with uv run pytest -q and reported
+    910 passed; nothing I observed contradicts that evidence. Outcome: pass.'
+  files_changed: []
+  created_at: '2026-04-10T00:27:36+00:00'
