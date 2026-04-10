@@ -2,7 +2,6 @@ active_task_id: T-0282
 active_task_ids: []
 mode: implementation
 queue:
-- T-0306
 - T-0284
 - T-0240
 - T-0263

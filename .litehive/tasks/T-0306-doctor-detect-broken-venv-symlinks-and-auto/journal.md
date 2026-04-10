@@ -2,3 +2,6 @@
 
 ## 2026-04-10T13:18:31+00:00
 Task created.
+
+## 2026-04-10T13:19:16+00:00
+Task closed: wont_do. Obsoleted by T-0302 sandbox enforcement. Once subagents run inside containers with isolated venvs, host uv cache clean cannot break anything the agent sees — the broken-symlink hazard exists only because we currently run hooks on the host directly.
