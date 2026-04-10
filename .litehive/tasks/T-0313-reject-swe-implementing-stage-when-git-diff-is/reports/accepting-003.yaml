@@ -1,0 +1,71 @@
+task_id: T-0313
+step: accepting
+verdict: pass
+source: agent
+summary: 'Accepted. I verified the implementing-stage runner now checks the task worktree
+  with git status --porcelain before allowing an implementing pass through, and when
+  a pass claims files_changed on a clean worktree it is rewritten to verdict=reject
+  with outcome_reason_code=hallucinated_completion, clears files_changed so the self-report
+  is not trusted, appends journal text explaining the bogus prior completion claim,
+  and routes back to implementing. I also verified the real CLI submission path now
+  preserves claimed files_changed end-to-end: litehive/cli/parsers/report.py accepts
+  repeated --files-changed, litehive/cli/report.py persists them into TaskThreadComment.files_changed,
+  and litehive/agents/_parsing.py restores them into StageReport for CLI-submitted
+  reports. Focused verification run: uv run pytest -q tests/test_config.py -k report_parser
+  (2 passed); uv run pytest -q tests/test_task_commands_and_daemon.py -k ''report_command_from_task_worktree_writes_to_main_workspace
+  or report_command_uses_registry_outside_repo or report_command_fails_clearly_when_workspace_cannot_be_resolved''
+  (3 passed); uv run pytest -q tests/test_runner_workflow.py -k ''hallucinated_completion
+  or empty_swe_guard or stage_report_from_subagent_marks_cli_verdict_source or preserves_cli_claimed_files''
+  (8 passed); uv run pytest -q tests/test_recovery_agent.py::test_runner_records_blocked_recovery_report_when_preflight_cannot_be_repaired
+  (1 passed). Independent CLI-style repro now reconstructs StageReport with files_changed=[''foo.py''],
+  confirming the production report path no longer drops the claimed files and the
+  hallucinated_completion guard can classify the real failure mode this task targets.
+  Acceptance criteria met: implementing-stage git-status check is in place; clean
+  worktree plus claimed files is rejected and classified as hallucinated_completion;
+  legitimate no-op with empty files_changed remains allowed by the verified preimplemented
+  path; the journal records the bogus completion explanation; and the targeted regression
+  covers the clean-worktree claimed-file case.'
+feedback: 'Accepted. I verified the implementing-stage runner now checks the task
+  worktree with git status --porcelain before allowing an implementing pass through,
+  and when a pass claims files_changed on a clean worktree it is rewritten to verdict=reject
+  with outcome_reason_code=hallucinated_completion, clears files_changed so the self-report
+  is not trusted, appends journal text explaining the bogus prior completion claim,
+  and routes back to implementing. I also verified the real CLI submission path now
+  preserves claimed files_changed end-to-end: litehive/cli/parsers/report.py accepts
+  repeated --files-changed, litehive/cli/report.py persists them into TaskThreadComment.files_changed,
+  and litehive/agents/_parsing.py restores them into StageReport for CLI-submitted
+  reports. Focused verification run: uv run pytest -q tests/test_config.py -k report_parser
+  (2 passed); uv run pytest -q tests/test_task_commands_and_daemon.py -k ''report_command_from_task_worktree_writes_to_main_workspace
+  or report_command_uses_registry_outside_repo or report_command_fails_clearly_when_workspace_cannot_be_resolved''
+  (3 passed); uv run pytest -q tests/test_runner_workflow.py -k ''hallucinated_completion
+  or empty_swe_guard or stage_report_from_subagent_marks_cli_verdict_source or preserves_cli_claimed_files''
+  (8 passed); uv run pytest -q tests/test_recovery_agent.py::test_runner_records_blocked_recovery_report_when_preflight_cannot_be_repaired
+  (1 passed). Independent CLI-style repro now reconstructs StageReport with files_changed=[''foo.py''],
+  confirming the production report path no longer drops the claimed files and the
+  hallucinated_completion guard can classify the real failure mode this task targets.
+  Acceptance criteria met: implementing-stage git-status check is in place; clean
+  worktree plus claimed files is rejected and classified as hallucinated_completion;
+  legitimate no-op with empty files_changed remains allowed by the verified preimplemented
+  path; the journal records the bogus completion explanation; and the targeted regression
+  covers the clean-worktree claimed-file case.'
+submitted_via_cli: true
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 73
+hook_results: []
+created_at: '2026-04-10T15:50:58+00:00'

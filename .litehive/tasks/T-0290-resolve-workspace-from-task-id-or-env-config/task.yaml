@@ -6,10 +6,10 @@ task_type: null
 model: null
 mode: implementation
 pipeline_mode: full
-status: in_progress
+status: done
 flag_reason: null
 flag_count: 0
-pipeline_status: commit_to_git
+pipeline_status: done
 priority: high
 pm_complexity: null
 planned_effort: null
@@ -84,9 +84,9 @@ subagents:
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0290 resolve-workspace-from-task-id-or-env-config'
-  commit_sha: null
-  checkpoint_base_sha: null
-  checkpoint_attempts: 0
+  commit_sha: eff12208f1c495fce7d247a162f7e47fed1afd28
+  checkpoint_base_sha: f5f2739ad3e3b403a1e2cefdcc236cea3cc8b681
+  checkpoint_attempts: 1
   rolled_back_checkpoint_attempt: null
   merge_agent_attempts: 1
   worktree_path: null
