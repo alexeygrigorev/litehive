@@ -1,0 +1,55 @@
+id: T-0305
+slug: fix-litehive-worktree-rescue-so-it-does-not-need
+title: Fix litehive worktree rescue so it does not need the runner lock
+depends_on: []
+task_type: null
+model: null
+mode: implementation
+pipeline_mode: full
+status: queued
+flag_reason: null
+flag_count: 0
+pipeline_status: backlog
+priority: high
+pm_complexity: null
+planned_effort: null
+created_at: '2026-04-10T10:11:10+00:00'
+updated_at: '2026-04-10T10:11:10+00:00'
+goal: 'When the daemon is running, ''litehive worktree rescue --apply'' successfully
+  cherry-picks the worktree commits onto main but then fails to finalize task state
+  because save_task tries to acquire the runner lock (held by the daemon). This leaves
+  the rescue in a half-applied state where code landed but task.yaml still says merge_failed,
+  requiring manual cleanup. The runner lock is guarding the wrong thing here: the
+  task being rescued is in merge_failed state and is NOT being executed by the runner.
+  Rescue should be safe to run concurrently with the daemon as long as it is modifying
+  merge_failed tasks only.'
+acceptance_criteria:
+- _finalize_rescue (or the save_task call it makes) does not require the runner lock
+  when the task being finalized is in merge_failed state and is not state.active_task_id
+- 'Alternatively: introduce a lighter-weight per-task lock that rescue and the runner
+  both respect for the specific task being modified, instead of a global workspace-wide
+  runner lock'
+- 'Integration test: start a fake long-running daemon that holds the runner lock,
+  then run worktree rescue --apply against a pre-constructed merge_failed task, assert
+  that rescue completes successfully (both the cherry-pick AND the state finalization)'
+- If the task to be rescued happens to be state.active_task_id, rescue refuses with
+  a clear error rather than racing
+constraints: []
+plan: []
+human_checkpoints: []
+subagents: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0305 fix-litehive-worktree-rescue-so-it-does-not-need'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+  merge_agent_attempts: 0
+  worktree_path: null
+retry_policy:
+  max_retries: null
+  stage_retry_limit: null
+created_from: null
+upstream_origin: null
+github_origin: null

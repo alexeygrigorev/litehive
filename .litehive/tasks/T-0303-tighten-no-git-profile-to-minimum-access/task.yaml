@@ -1,0 +1,56 @@
+id: T-0303
+slug: tighten-no-git-profile-to-minimum-access
+title: 'Tighten no-git profile to minimum access: workspace + python + uv only'
+depends_on:
+- T-0302
+task_type: null
+model: null
+mode: implementation
+pipeline_mode: full
+status: queued
+flag_reason: null
+flag_count: 0
+pipeline_status: backlog
+priority: medium
+pm_complexity: null
+planned_effort: null
+created_at: '2026-04-10T10:10:31+00:00'
+updated_at: '2026-04-10T10:10:31+00:00'
+goal: "The current BWRAP_SYSTEM_RO_BINDS constant mounts all of /usr, /lib, /lib64,\
+  \ /bin, /sbin, /etc/alternatives, /etc/resolv.conf, /etc/ssl, /etc/ca-certificates,\
+  \ /etc/ld.so.cache \u2014 which gives the agent access to curl, ssh, wget, gh, apt,\
+  \ and hundreds of other tools beyond git. The no-git profile then only mirror-excludes\
+  \ git. The goal is the minimum-access model: the agent sees only the task worktree\
+  \ (rw), a python interpreter, uv, and whatever shared libraries those two binaries\
+  \ need to execute. No curl, no ssh, no gh, no wget. The image/bind list is the allowlist."
+acceptance_criteria:
+- "Define a minimal bind list for the no-git profile: python interpreter matching\
+  \ .venv/pyvenv.cfg, uv binary, ld-linux loader, libc, libm, libz, libexpat, and\
+  \ any other .so that ldd reports for python and uv \u2014 nothing else"
+- Non-merge-resolver agents running inside the sandbox cannot find curl, wget, ssh,
+  gh, apt, rm, or any tool other than python/uv/sh
+- 'Integration test spawns a real subprocess with the tightened profile and asserts:
+  python3 --version succeeds, uv --version succeeds, curl/wget/ssh/gh/git/apt all
+  fail with command-not-found'
+- The tight bind list is computed dynamically where possible (follow ldd output) rather
+  than hardcoding /lib/x86_64-linux-gnu paths, so it works across distros
+- Document the bind list in docs/sandboxing.md with the rationale for each entry
+constraints: []
+plan: []
+human_checkpoints: []
+subagents: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0303 tighten-no-git-profile-to-minimum-access'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+  merge_agent_attempts: 0
+  worktree_path: null
+retry_policy:
+  max_retries: null
+  stage_retry_limit: null
+created_from: null
+upstream_origin: null
+github_origin: null

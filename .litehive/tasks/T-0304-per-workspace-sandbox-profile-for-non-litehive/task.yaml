@@ -1,0 +1,61 @@
+id: T-0304
+slug: per-workspace-sandbox-profile-for-non-litehive
+title: Per-workspace sandbox profile for non-litehive projects
+depends_on:
+- T-0303
+task_type: null
+model: null
+mode: implementation
+pipeline_mode: full
+status: queued
+flag_reason: null
+flag_count: 0
+pipeline_status: backlog
+priority: medium
+pm_complexity: null
+planned_effort: null
+created_at: '2026-04-10T10:10:52+00:00'
+updated_at: '2026-04-10T10:10:52+00:00'
+goal: 'Litehive-on-litehive is easy: one image with python+uv covers every task because
+  the project itself is python+uv. Litehive-on-other-projects is harder because every
+  project has different toolchain needs (rust, node, go, java, c++, mixed). Build
+  a per-workspace sandbox profile mechanism so litehive can be used as the executor
+  for arbitrary projects. The project under management declares its own sandbox environment;
+  litehive builds or resolves it once per (workspace, profile) and reuses across tasks.'
+acceptance_criteria:
+- 'Litehive looks for a sandbox profile in the following order: (1) .litehive/Dockerfile
+  (full control), (2) .litehive/sandbox.yaml (declarative base image + apt packages
+  + setup commands), (3) .devcontainer/devcontainer.json (reuse existing VS Code /
+  Codespaces convention), (4) language auto-detect from pyproject.toml / Cargo.toml
+  / package.json / go.mod with sensible default images'
+- For bubblewrap backend, the profile is a bind list (tool binaries + their libs);
+  for docker backend, the profile is an image tag
+- Resolved profile is hashed; image is rebuilt / bind list recomputed only when the
+  profile changes
+- 'Per-workspace: the image is tagged litehive-agent:<workspace-id>:<profile-hash>,
+  so multiple workspaces don''t collide'
+- "Test: create a throwaway repo with a rust Cargo.toml, run a trivial litehive task\
+  \ that just runs 'cargo --version', assert success \u2014 proving the mechanism\
+  \ works for a non-python project"
+- 'Test: create a throwaway repo with a node package.json, same thing with ''node
+  --version'''
+- 'Docs update: how a project adopts litehive by dropping a .litehive/sandbox.yaml'
+constraints: []
+plan: []
+human_checkpoints: []
+subagents: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0304 per-workspace-sandbox-profile-for-non-litehive'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+  merge_agent_attempts: 0
+  worktree_path: null
+retry_policy:
+  max_retries: null
+  stage_retry_limit: null
+created_from: null
+upstream_origin: null
+github_origin: null

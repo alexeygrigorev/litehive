@@ -1,0 +1,57 @@
+id: T-0301
+slug: fix-bubblewrap-argv-0-rewrite-and-add-per-engine
+title: Fix bubblewrap argv[0] rewrite and add per-engine extra_ro_binds
+depends_on: []
+task_type: null
+model: null
+mode: implementation
+pipeline_mode: full
+status: queued
+flag_reason: null
+flag_count: 0
+pipeline_status: backlog
+priority: high
+pm_complexity: null
+planned_effort: null
+created_at: '2026-04-10T10:09:43+00:00'
+updated_at: '2026-04-10T10:09:43+00:00'
+goal: The bubblewrap sandbox path in SandboxLauncher._wrap_bubblewrap does not rewrite
+  argv[0] the way _wrap_docker does, so an engine binary that is not on PATH inside
+  the sandbox (e.g. codex installed via nvm at /home/alexey/.nvm/versions/node/v24.13.1/bin/codex)
+  fails at execvp. Additionally there is no mechanism to bind-mount a binary's package/runtime
+  directory (node + codex package under ~/.nvm), so even after fixing argv[0] the
+  Node shebang script cannot launch. Fix both so that codex and claude (both nvm-installed
+  on this host) can actually run inside the bubblewrap sandbox end-to-end. This is
+  the first blocker before we can enable sandbox mode.
+acceptance_criteria:
+- _wrap_bubblewrap rewrites invocation.argv[0] to the resolved absolute host binary
+  path (matching the behavior of _wrap_docker)
+- ExternalEngineSandboxPolicy gains an extra_ro_binds field (list of host paths) that
+  _wrap_bubblewrap adds as --ro-bind entries; engines with runtime dependency directories
+  (codex, claude) declare their required binds via config
+- 'Real spawned subprocess integration test: construct a SandboxLauncher, wrap a codex
+  --version call, actually execute it, assert exit=0 and stdout contains a version
+  string. Same for claude if claude is installed'
+- Similar test for a minimal python3 + uv invocation so the happy path is covered
+  even on hosts without codex
+- Graceful error if an engine's extra_ro_binds paths do not exist on the host (clear
+  message, fail closed)
+constraints: []
+plan: []
+human_checkpoints: []
+subagents: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0301 fix-bubblewrap-argv-0-rewrite-and-add-per-engine'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+  merge_agent_attempts: 0
+  worktree_path: null
+retry_policy:
+  max_retries: null
+  stage_retry_limit: null
+created_from: null
+upstream_origin: null
+github_origin: null
