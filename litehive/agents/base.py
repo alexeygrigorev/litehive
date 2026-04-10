@@ -2,6 +2,7 @@
 
 from collections import OrderedDict
 from dataclasses import dataclass, replace
+from functools import lru_cache
 import json
 import logging
 import os
@@ -547,22 +548,48 @@ def extract_stream_errors(stdout: str, *, adapter: StreamEventAdapter) -> list[s
     return errors
 
 
-def iter_jsonl_payloads(stdout: str) -> list[dict[str, object]]:
+@lru_cache(maxsize=128)
+def _parse_jsonl_payloads_cached(stdout: str) -> tuple[dict[str, object], ...]:
     payloads: list[dict[str, object]] = []
+    pending_unparseable: tuple[int, int, str, str] | None = None
+
+    def flush_unparseable_warning() -> None:
+        nonlocal pending_unparseable
+        if pending_unparseable is None:
+            return
+        line_number, line_count, error_text, content = pending_unparseable
+        if line_count == 1:
+            logger.warning(
+                "iter_jsonl_payloads: skipping unparseable line %d: %s (content: %.200s)",
+                line_number,
+                error_text,
+                content,
+            )
+        else:
+            logger.warning(
+                "iter_jsonl_payloads: skipping %d consecutive unparseable lines starting at %d: %s (content: %.200s)",
+                line_count,
+                line_number,
+                error_text,
+                content,
+            )
+        pending_unparseable = None
+
     for line_number, raw_line in enumerate(stdout.splitlines(), 1):
         line = raw_line.strip()
         if not line:
+            flush_unparseable_warning()
             continue
         try:
             payload = json.loads(line)
         except (json.JSONDecodeError, ValueError) as exc:
-            logger.warning(
-                "iter_jsonl_payloads: skipping unparseable line %d: %s (content: %.200s)",
-                line_number,
-                exc,
-                line,
-            )
+            if pending_unparseable is None:
+                pending_unparseable = (line_number, 1, str(exc), line)
+            else:
+                start_line, line_count, error_text, content = pending_unparseable
+                pending_unparseable = (start_line, line_count + 1, error_text, content)
             continue
+        flush_unparseable_warning()
         if isinstance(payload, dict):
             payloads.append(payload)
         else:
@@ -572,7 +599,12 @@ def iter_jsonl_payloads(stdout: str) -> list[dict[str, object]]:
                 type(payload).__name__,
                 line,
             )
-    return payloads
+    flush_unparseable_warning()
+    return tuple(payloads)
+
+
+def iter_jsonl_payloads(stdout: str) -> list[dict[str, object]]:
+    return list(_parse_jsonl_payloads_cached(stdout))
 
 
 def extract_jsonl_errors(stdout: str) -> list[str]:

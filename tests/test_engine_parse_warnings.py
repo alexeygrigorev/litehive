@@ -3,7 +3,7 @@
 import json
 import logging
 
-from litehive.agents.base import iter_jsonl_payloads
+from litehive.agents.base import extract_codex_messages, iter_jsonl_payloads
 
 
 def test_iter_jsonl_payloads_warns_on_invalid_json(caplog):
@@ -31,6 +31,42 @@ def test_iter_jsonl_payloads_no_warning_on_blank_lines(caplog):
         payloads = iter_jsonl_payloads(stdout)
     assert len(payloads) == 2
     assert not caplog.records
+
+
+def test_iter_jsonl_payloads_coalesces_repeated_multiline_codex_command_warnings(caplog):
+    """Malformed multiline command_execution payloads should warn once and keep valid events."""
+    stdout = "\n".join(
+        [
+            json.dumps(
+                {
+                    "type": "item.completed",
+                    "item": {"id": "msg_1", "type": "agent_message", "text": "before"},
+                }
+            ),
+            '{"type":"item.completed","item":{"id":"cmd_1","type":"command_execution","command":"python -c \\"print(1)',
+            'print(2)\\"","aggregated_output":"line 1',
+            'line 2","exit_code":1,"status":"failed"}}',
+            json.dumps(
+                {
+                    "type": "item.completed",
+                    "item": {"id": "msg_2", "type": "agent_message", "text": "after"},
+                }
+            ),
+        ]
+    )
+
+    with caplog.at_level(logging.WARNING, logger="litehive.agents.base"):
+        first_pass = iter_jsonl_payloads(stdout)
+        second_pass = iter_jsonl_payloads(stdout)
+        transcript = extract_codex_messages(stdout)
+
+    assert first_pass == second_pass
+    assert [payload["type"] for payload in first_pass] == ["item.completed", "item.completed"]
+    assert transcript == "before\nafter"
+    warnings = [rec.message for rec in caplog.records if "unparseable" in rec.message]
+    assert len(warnings) == 1
+    assert "skipping 3 consecutive unparseable lines starting at 2" in warnings[0]
+    assert '"type":"command_execution"' in warnings[0]
 
 
 def test_claude_delta_fallback_warns_on_decode_failure(caplog):
