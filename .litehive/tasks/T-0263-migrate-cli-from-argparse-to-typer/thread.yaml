@@ -127,3 +127,76 @@
     than Typer-owned help/routing.'
   files_changed: []
   created_at: '2026-04-10T14:15:51+00:00'
+- role: recovery
+  step: implementing
+  verdict: pass
+  message: 'Root cause: the Typer migration left the public ''archive'' no-argument
+    fallback on the legacy argparse compatibility seam. The runtime path was archive_app.callback
+    -> _cmd_archive(), and _cmd_archive() imported build_parser() when task_id was
+    missing and --all-done was false, so ''uv run litehive archive'' printed argparse
+    help and exited 2. Fix: moved the no-argument help/exit handling into the Typer
+    callback in litehive/cli/__init__.py using ctx.get_help() + typer.Exit(2), and
+    removed the lazy build_parser() fallback from litehive/cli/queue.py so runtime
+    archive help no longer depends on argparse. Updated tests/test_archive.py to assert
+    the real Typer entrypoint with CliRunner instead of the compatibility parser for
+    this behavior. Verification: reproduced the original failure before the fix with
+    ''uv run litehive archive''; after the fix the same command exits 2 with Typer-formatted
+    help (''Usage: litehive archive [OPTIONS] [TASK_ID] COMMAND [ARGS]...''). Ran
+    ''uv run pytest -q tests/test_archive.py tests/test_run_cli.py tests/test_config.py
+    tests/test_logs_command.py tests/test_engine_freeze.py tests/test_observability_and_status.py''
+    -> 214 passed. Ran ''uv run ruff check --select E402,F401 litehive tests'' ->
+    passed. Ran the forbidden noqa gate from the task instructions -> passed. Retry
+    guidance: re-run implementing/testing for T-0263; the archive public fallback
+    is now Typer-owned, which addresses the rejection on criteria 1 and 3 without
+    redoing unrelated task work.'
+  files_changed: []
+  created_at: '2026-04-10T14:20:23+00:00'
+- role: qa
+  step: testing
+  verdict: pass
+  message: 'Verified the Typer migration on the live CLI path and against the required
+    test suites. Reproduced the previously rejected public fallback with ''uv run
+    litehive archive'' and confirmed it now exits 2 with Typer-formatted help starting
+    ''Usage: litehive archive [OPTIONS] [TASK_ID] COMMAND [ARGS]...'' rather than
+    falling back to legacy argparse output. Confirmed the public help surface from
+    ''uv run litehive --help'' still exposes the expected top-level command groups,
+    that ''litehive/cli/parser.py'' is removed, and that ''pyproject.toml'' includes
+    runtime dependency ''typer>=0.16.0''. Searched the repo for ''build_parser|COMMAND_PARSER_BUILDERS|argparse''
+    and found the remaining argparse usage confined to the compatibility seam/tests
+    rather than the live archive runtime path that previously failed. Ran focused
+    regression coverage: ''uv run pytest -q tests/test_archive.py tests/test_run_cli.py
+    tests/test_config.py tests/test_logs_command.py tests/test_engine_freeze.py tests/test_observability_and_status.py''
+    -> 214 passed, 12 warnings. Ran required full suite: ''uv run pytest -q'' -> 976
+    passed, 12 warnings, 0 failures. Acceptance criteria are met from QA evidence:
+    Typer owns the verified public runtime/help path including the no-argument archive
+    fallback, parser.py is removed, existing CLI tests and full pytest pass, help/validation
+    behavior remains covered by the focused CLI regression set, and typer is present
+    in runtime dependencies. Residual note: pytest reports 12 Typer deprecation warnings
+    from tests/test_archive.py about unsupported ''is_flag''/''flag_value'' parameters
+    in Typer, but these did not cause behavioral failures in this task.'
+  files_changed: []
+  created_at: '2026-04-10T14:23:35+00:00'
+- role: reviewer
+  step: accepting
+  verdict: pass
+  message: 'Accepted. I verified the live CLI path now runs through Typer for the
+    previously rejected public fallback: ''uv run litehive archive'' exits 2 and prints
+    Typer-formatted help beginning ''Usage: litehive archive [OPTIONS] [TASK_ID] COMMAND
+    [ARGS]...'' instead of falling back to legacy argparse output. I also verified
+    ''uv run litehive --help'' still exposes the expected public top-level commands,
+    ''litehive/cli/parser.py'' is removed, and ''pyproject.toml'' includes runtime
+    dependency ''typer>=0.16.0''. Repo inspection shows the remaining argparse usage
+    is confined to the compatibility seam/tests, while the archive runtime path no
+    longer imports or depends on build_parser for no-arg help. Fresh verification
+    passed: ''uv run pytest -q tests/test_archive.py tests/test_run_cli.py tests/test_config.py
+    tests/test_logs_command.py tests/test_engine_freeze.py tests/test_observability_and_status.py''
+    -> 214 passed, 12 warnings; ''uv run pytest -q'' -> 976 passed, 12 warnings, 0
+    failures. Acceptance criteria met: Typer owns the verified public runtime/help
+    path including the no-argument archive behavior, the separate parser module is
+    removed from live routing, existing CLI tests and the full suite pass, help/validation
+    behavior remains covered by the focused regression set, and typer is present in
+    runtime dependencies. Residual note only: pytest reports 12 Typer deprecation
+    warnings from tests/test_archive.py about unsupported ''is_flag''/''flag_value''
+    parameters, but there is no functional failure tied to this task.'
+  files_changed: []
+  created_at: '2026-04-10T14:27:17+00:00'

@@ -1,0 +1,110 @@
+task_id: T-0263
+step: implementing
+verdict: pass
+source: agent
+summary: 'Root cause: the Typer migration left the public ''archive'' no-argument
+  fallback on the legacy argparse compatibility seam. The runtime path was archive_app.callback
+  -> _cmd_archive(), and _cmd_archive() imported build_parser() when task_id was missing
+  and --all-done was false, so ''uv run litehive archive'' printed argparse help and
+  exited 2. Fix: moved the no-argument help/exit handling into the Typer callback
+  in litehive/cli/__init__.py using ctx.get_help() + typer.Exit(2), and removed the
+  lazy build_parser() fallback from litehive/cli/queue.py so runtime archive help
+  no longer depends on argparse. Updated tests/test_archive.py to assert the real
+  Typer entrypoint with CliRunner instead of the compatibility parser for this behavior.
+  Verification: reproduced the original failure before the fix with ''uv run litehive
+  archive''; after the fix the same command exits 2 with Typer-formatted help (''Usage:
+  litehive archive [OPTIONS] [TASK_ID] COMMAND [ARGS]...''). Ran ''uv run pytest -q
+  tests/test_archive.py tests/test_run_cli.py tests/test_config.py tests/test_logs_command.py
+  tests/test_engine_freeze.py tests/test_observability_and_status.py'' -> 214 passed.
+  Ran ''uv run ruff check --select E402,F401 litehive tests'' -> passed. Ran the forbidden
+  noqa gate from the task instructions -> passed. Retry guidance: re-run implementing/testing
+  for T-0263; the archive public fallback is now Typer-owned, which addresses the
+  rejection on criteria 1 and 3 without redoing unrelated task work.'
+feedback: "Runner hook `after_implementing` `uv run ruff check --select E402,F401\
+  \ litehive tests` passed with exit code 0 (artifact: `artifacts/after_implementing-001.yaml`).\n\
+  \nRunner hook `after_implementing` `if [ -n \"${LITEHIVE_CHANGED_PATHS:-}\" ] \\\
+  \n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" | grep -q . \\\n  && printf '%s\\\
+  n' \"$LITEHIVE_CHANGED_PATHS\" \\\n    | xargs -r -d '\\n' git grep -nE 'noqa:.*F401|noqa:.*F403|ruff:\\\
+  s*noqa:\\s*F401|ruff:\\s*noqa:\\s*F403' --; then\n  echo 'Forbidden noqa F401/F403\
+  \ suppression found.'\n  exit 1\nfi` passed with exit code 0 (artifact: `artifacts/after_implementing-002.yaml`).\n\
+  \nRoot cause: the Typer migration left the public 'archive' no-argument fallback\
+  \ on the legacy argparse compatibility seam. The runtime path was archive_app.callback\
+  \ -> _cmd_archive(), and _cmd_archive() imported build_parser() when task_id was\
+  \ missing and --all-done was false, so 'uv run litehive archive' printed argparse\
+  \ help and exited 2. Fix: moved the no-argument help/exit handling into the Typer\
+  \ callback in litehive/cli/__init__.py using ctx.get_help() + typer.Exit(2), and\
+  \ removed the lazy build_parser() fallback from litehive/cli/queue.py so runtime\
+  \ archive help no longer depends on argparse. Updated tests/test_archive.py to assert\
+  \ the real Typer entrypoint with CliRunner instead of the compatibility parser for\
+  \ this behavior. Verification: reproduced the original failure before the fix with\
+  \ 'uv run litehive archive'; after the fix the same command exits 2 with Typer-formatted\
+  \ help ('Usage: litehive archive [OPTIONS] [TASK_ID] COMMAND [ARGS]...'). Ran 'uv\
+  \ run pytest -q tests/test_archive.py tests/test_run_cli.py tests/test_config.py\
+  \ tests/test_logs_command.py tests/test_engine_freeze.py tests/test_observability_and_status.py'\
+  \ -> 214 passed. Ran 'uv run ruff check --select E402,F401 litehive tests' -> passed.\
+  \ Ran the forbidden noqa gate from the task instructions -> passed. Retry guidance:\
+  \ re-run implementing/testing\n\n\u2026 [truncated \u2014 full transcript in subagent\
+  \ artifacts]"
+submitted_via_cli: true
+files_changed:
+- litehive/cli/__init__.py
+- litehive/cli/parser.py
+- litehive/cli/queue.py
+- pyproject.toml
+- tests/test_archive.py
+- tests/test_run_cli.py
+- uv.lock
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings:
+- 'runner hook passed: `after_implementing` `uv run ruff check --select E402,F401
+  litehive tests` (artifact: `artifacts/after_implementing-001.yaml`)'
+- "runner hook passed: `after_implementing` `if [ -n \"${LITEHIVE_CHANGED_PATHS:-}\"\
+  \ ] \\\n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" | grep -q . \\\n  && printf\
+  \ '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" \\\n    | xargs -r -d '\\n' git grep -nE 'noqa:.*F401|noqa:.*F403|ruff:\\\
+  s*noqa:\\s*F401|ruff:\\s*noqa:\\s*F403' --; then\n  echo 'Forbidden noqa F401/F403\
+  \ suppression found.'\n  exit 1\nfi` (artifact: `artifacts/after_implementing-002.yaml`)"
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 121
+hook_results:
+- point: after_implementing
+  command: uv run ruff check --select E402,F401 litehive tests
+  reject_on_failure: true
+  description: null
+  exit_code: 0
+  status: passed
+  artifact: artifacts/after_implementing-001.yaml
+  stdout: 'All checks passed!
+
+    '
+  stderr: 'warning: `VIRTUAL_ENV=/home/alexey/git/litehive/.venv` does not match the
+    project environment path `.venv` and will be ignored; use `--active` to target
+    the active environment instead
+
+    '
+- point: after_implementing
+  command: "if [ -n \"${LITEHIVE_CHANGED_PATHS:-}\" ] \\\n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\"\
+    \ | grep -q . \\\n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" \\\n    | xargs\
+    \ -r -d '\\n' git grep -nE 'noqa:.*F401|noqa:.*F403|ruff:\\s*noqa:\\s*F401|ruff:\\\
+    s*noqa:\\s*F403' --; then\n  echo 'Forbidden noqa F401/F403 suppression found.'\n\
+    \  exit 1\nfi"
+  reject_on_failure: true
+  description: null
+  exit_code: 0
+  status: passed
+  artifact: artifacts/after_implementing-002.yaml
+  stdout: ''
+  stderr: ''
+created_at: '2026-04-10T14:20:37+00:00'
