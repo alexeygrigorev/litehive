@@ -49,6 +49,7 @@ from litehive.cli import (
     _cmd_update,
     _cmd_worktree_clean,
     _cmd_worktree_ls,
+    _cmd_worktree_rescue,
     build_parser,
 )
 from litehive.config import (
@@ -664,6 +665,7 @@ __all__ = [
     "_cmd_update",
     "_cmd_worktree_clean",
     "_cmd_worktree_ls",
+    "_cmd_worktree_rescue",
     "build_parser",
     "ExternalEngineSandboxConfig",
     "ExternalEngineSandboxPolicy",

@@ -28,7 +28,7 @@ _PUBLIC_GROUP_COMMANDS = {
     "queue": {"move", "promote", "requeue", "resume", "stop"},
     "import": {"github", "issue", "spec"},
     "archive": {"cleanup"},
-    "worktree": {"ls", "clean"},
+    "worktree": {"ls", "clean", "rescue"},
 }
 
 
