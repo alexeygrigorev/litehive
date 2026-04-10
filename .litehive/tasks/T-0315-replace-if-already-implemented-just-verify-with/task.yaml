@@ -1,0 +1,60 @@
+id: T-0315
+slug: replace-if-already-implemented-just-verify-with
+title: Replace 'if already implemented just verify' with filesystem-grounded check
+depends_on:
+- T-0313
+task_type: null
+model: null
+mode: implementation
+pipeline_mode: full
+status: queued
+flag_reason: null
+flag_count: 0
+pipeline_status: backlog
+priority: medium
+pm_complexity: null
+planned_effort: null
+created_at: '2026-04-10T14:55:07+00:00'
+updated_at: '2026-04-10T14:55:07+00:00'
+goal: "The implementing stage prompt currently tells the SWE: 'If the requested behavior\
+  \ is already implemented, do not exit silently: run the relevant verification, confirm\
+  \ the acceptance criteria against the existing code, and submit litehive report\
+  \ --verdict pass with explicit evidence of what you verified.' This is a well-intentioned\
+  \ optimization (don't re-implement work that's already done) but it has no ground-truth\
+  \ predicate \u2014 the SWE decides 'is it already implemented?' based on thread\
+  \ context, which can be a lying prior report. In T-0240's case, the prompt told\
+  \ successive SWEs to trust a stale 'Implementation Complete' message from 2 days\
+  \ prior and just confirm it, and they did. Replace this clause with one that FIRST\
+  \ grounds the decision in filesystem evidence."
+acceptance_criteria:
+- 'The implementing stage prompt''s ''already implemented'' clause is rewritten to:
+  ''Before assuming the work is already implemented, run git diff main...HEAD in your
+  worktree. If there are no changes, implement from scratch regardless of what prior
+  stage reports claim. Only skip implementation and submit pass if git diff shows
+  the expected changes AND acceptance criteria are met.'''
+- 'The new clause is defensive by default: in the absence of filesystem evidence,
+  implement from scratch, do not trust prior reports'
+- Prompt scaffolding code (litehive/agents/_prompts.py or wherever the implementing
+  prompt is composed) is updated to emit the new wording
+- 'Test: render the implementing stage prompt for a sample task, assert the rendered
+  prompt contains ''run git diff main...HEAD'' and does NOT contain the old phrasing
+  that trusted thread history'
+constraints: []
+plan: []
+human_checkpoints: []
+subagents: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0315 replace-if-already-implemented-just-verify-with'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+  merge_agent_attempts: 0
+  worktree_path: null
+retry_policy:
+  max_retries: null
+  stage_retry_limit: null
+created_from: null
+upstream_origin: null
+github_origin: null

@@ -1,0 +1,65 @@
+id: T-0311
+slug: fix-typer-migration-regressions-task-add-queue-promote
+title: Fix Typer migration regressions — task add and queue promote are broken
+depends_on: []
+task_type: bugfix
+model: null
+mode: implementation
+pipeline_mode: full
+status: queued
+flag_reason: null
+flag_count: 0
+pipeline_status: backlog
+priority: high
+pm_complexity: simple
+planned_effort: s
+created_at: '2026-04-10T14:50:15+00:00'
+updated_at: '2026-04-10T14:50:15+00:00'
+goal: "T-0263's Typer migration introduced two user-visible regressions discovered\
+  \ immediately after landing: (1) 'litehive task add' accepts the title positional\
+  \ but silently drops --goal, --priority, --depends-on, --acceptance-criteria and\
+  \ every other option; the resulting task.yaml has title='...', slug='task', empty\
+  \ goal, empty acceptance_criteria, no depends_on, default priority. (2) 'litehive\
+  \ queue promote T-XXXX' crashes with AttributeError: module 'typer' has no attribute\
+  \ 'get_current_context' \u2014 the code is using a non-existent API. Both commands\
+  \ worked before T-0263. Investigate why options were lost during the argparse\u2192\
+  Typer conversion and fix them. Likely causes: argparse's add_argument specs weren't\
+  \ all translated to Typer Option/Argument decorators; the 'get_current_context'\
+  \ is probably meant to be 'click.get_current_context' or similar."
+acceptance_criteria:
+- "'litehive task add <title> --goal G --priority high --acceptance-criteria X' produces
+  a task.yaml with the correct title, goal, priority, and acceptance_criteria populated"
+- "'litehive task add <title> --depends-on T-0001,T-0002' produces a task.yaml with
+  depends_on: [T-0001, T-0002]"
+- "'litehive queue promote T-XXXX' moves the task to position 1 in the queue without
+  error"
+- "Regression test that invokes the typer app with the above command lines via CliRunner
+  or equivalent, asserts successful exit, and verifies the resulting task.yaml contents"
+- "All existing test_run_cli.py tests still pass after the fix"
+constraints:
+- Do not revert T-0263 — the Typer migration itself is wanted. Fix forward.
+- Both regressions are blockers for normal workspace operation and are high priority.
+plan:
+- Reproduce both regressions with a minimal test case
+- Inspect litehive/cli/__init__.py's task add handler and find where options are declared
+  versus where they're being read — likely a decorator/signature mismatch
+- Inspect the queue promote handler and find the AttributeError — replace get_current_context
+  with whatever Typer's actual API is (context: typer.Context = None parameter, most likely)
+- Add regression tests for both commands so this doesn't happen again
+human_checkpoints: []
+subagents: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0311 fix-typer-migration-regressions-task-add-queue-promote'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+  merge_agent_attempts: 0
+  worktree_path: null
+retry_policy:
+  max_retries: null
+  stage_retry_limit: null
+created_from: null
+upstream_origin: null
+github_origin: null
