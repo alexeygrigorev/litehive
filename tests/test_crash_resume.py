@@ -159,7 +159,7 @@ def test_run_task_crash_resume_triggers_session_resume_for_claude(
 ) -> None:
     """Unclassified crash with exit 1 on claude triggers one resume attempt with session ID."""
     ensure_workspace(tmp_path, LitehiveConfig(default_engine="claude"))
-    create_task(tmp_path, title="Crash resume task", engine="claude", auto_commit=False)
+    create_task(tmp_path, title="Crash resume task", auto_commit=False)
     _disable_quota_gates(monkeypatch)
     task = _set_task_to_implementing(tmp_path)
 
@@ -199,7 +199,7 @@ def test_run_task_crash_resume_only_once_per_crash(
 ) -> None:
     """If the resumed session also crashes, do not attempt another resume."""
     ensure_workspace(tmp_path, LitehiveConfig(default_engine="claude"))
-    create_task(tmp_path, title="Double crash task", engine="claude", auto_commit=False)
+    create_task(tmp_path, title="Double crash task", auto_commit=False)
     _disable_quota_gates(monkeypatch)
     task = _set_task_to_implementing(tmp_path)
 
@@ -247,7 +247,7 @@ def test_run_task_crash_resume_triggers_for_engines_with_resume_ids(
 ) -> None:
     """Unclassified crashes resume once for any engine that exposes a continuation ID."""
     ensure_workspace(tmp_path, LitehiveConfig(default_engine=engine_name))
-    create_task(tmp_path, title=f"{engine_name} crash task", engine=engine_name, auto_commit=False)
+    create_task(tmp_path, title=f"{engine_name} crash task", auto_commit=False)
     _disable_quota_gates(monkeypatch)
     task = _set_task_to_implementing(tmp_path)
 
@@ -289,7 +289,7 @@ def test_run_task_crash_resume_skipped_when_no_resume_id_is_available(
 ) -> None:
     """Unclassified crashes without a continuation ID should not trigger resume."""
     ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
-    create_task(tmp_path, title="Codex crash task", engine="codex", auto_commit=False)
+    create_task(tmp_path, title="Codex crash task", auto_commit=False)
     _disable_quota_gates(monkeypatch)
     task = _set_task_to_implementing(tmp_path)
 
@@ -350,7 +350,7 @@ def test_run_task_crash_resume_journal_entry(
 ) -> None:
     """Journal clearly logs the resume attempt with session ID and exit code."""
     ensure_workspace(tmp_path, LitehiveConfig(default_engine="claude"))
-    create_task(tmp_path, title="Journal crash task", engine="claude", auto_commit=False)
+    create_task(tmp_path, title="Journal crash task", auto_commit=False)
     _disable_quota_gates(monkeypatch)
     task = _set_task_to_implementing(tmp_path)
 
@@ -381,7 +381,7 @@ def test_stage_executor_crash_resume_triggers_session_resume_for_claude(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     ensure_workspace(tmp_path, LitehiveConfig(default_engine="claude"))
-    create_task(tmp_path, title="Crash resume task", engine="claude", auto_commit=False)
+    create_task(tmp_path, title="Crash resume task", auto_commit=False)
     task = require_task(tmp_path, "T-0001")
     executor = _build_stage_executor(tmp_path, task, "claude", monkeypatch)
 
@@ -411,7 +411,7 @@ def test_stage_executor_crash_resume_triggers_session_resume_for_codex(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
-    create_task(tmp_path, title="Codex crash resume task", engine="codex", auto_commit=False)
+    create_task(tmp_path, title="Codex crash resume task", auto_commit=False)
     task = require_task(tmp_path, "T-0001")
     executor = _build_stage_executor(tmp_path, task, "codex", monkeypatch)
 
@@ -442,7 +442,7 @@ def test_stage_executor_crash_resume_skips_engines_without_resume_id(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, engine_name: str
 ) -> None:
     ensure_workspace(tmp_path, LitehiveConfig(default_engine=engine_name))
-    create_task(tmp_path, title=f"{engine_name} crash task", engine=engine_name, auto_commit=False)
+    create_task(tmp_path, title=f"{engine_name} crash task", auto_commit=False)
     task = require_task(tmp_path, "T-0001")
     executor = _build_stage_executor(tmp_path, task, engine_name, monkeypatch)
 
@@ -468,7 +468,7 @@ def test_verdict_nudge_fires_on_timeout_when_resume_id_available(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     ensure_workspace(tmp_path, LitehiveConfig(default_engine="claude"))
-    create_task(tmp_path, title="Timeout nudge task", engine="claude", auto_commit=False)
+    create_task(tmp_path, title="Timeout nudge task", auto_commit=False)
     task = require_task(tmp_path, "T-0001")
     _disable_execution_retries(monkeypatch)
     executor = _build_stage_executor(tmp_path, task, "claude", monkeypatch)
@@ -499,7 +499,7 @@ def test_verdict_nudge_fires_on_clean_exit_without_verdict(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
-    create_task(tmp_path, title="Clean exit nudge task", engine="codex", auto_commit=False)
+    create_task(tmp_path, title="Clean exit nudge task", auto_commit=False)
     task = require_task(tmp_path, "T-0001")
     executor = _build_stage_executor(tmp_path, task, "codex", monkeypatch)
 
@@ -565,7 +565,7 @@ def test_timeout_nudge_result_replaces_original_result_for_report_parsing(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
-    create_task(tmp_path, title="Codex timeout nudge task", engine="codex", auto_commit=False)
+    create_task(tmp_path, title="Codex timeout nudge task", auto_commit=False)
     task = require_task(tmp_path, "T-0001")
     _disable_execution_retries(monkeypatch)
     executor = _build_stage_executor(tmp_path, task, "codex", monkeypatch)

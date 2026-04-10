@@ -14,6 +14,7 @@ from tests.workspace_helpers import (
     create_task,
     ensure_workspace,
     get_task,
+    load_config,
     load_state,
     set_active_task,
 )
@@ -75,7 +76,7 @@ def test_web_task_create_endpoint_persists_requested_fields(tmp_path: Path) -> N
         assert created_task.title == "Dashboard create"
         assert created_task.goal == "Ship POST endpoints"
         assert created_task.priority == "high"
-        assert created_task.engine == "codex"
+        assert load_config(tmp_path).default_engine == "codex"
     finally:
         server.shutdown()
         server.server_close()
@@ -94,7 +95,6 @@ def test_web_task_update_endpoint_replaces_editable_fields(tmp_path: Path) -> No
             {
                 "goal": "Updated goal",
                 "priority": "medium",
-                "engine": "gemini",
                 "acceptance_criteria": ["updated criterion"],
                 "constraints": ["keep scope tight"],
                 "plan_steps": ["wire endpoint", "add tests"],
@@ -106,7 +106,6 @@ def test_web_task_update_endpoint_replaces_editable_fields(tmp_path: Path) -> No
         assert updated_task is not None
         assert updated_task.goal == "Updated goal"
         assert updated_task.priority == "medium"
-        assert updated_task.engine == "gemini"
         assert updated_task.acceptance_criteria == ["updated criterion"]
         assert updated_task.constraints == ["keep scope tight"]
         assert updated_task.plan == ["wire endpoint", "add tests"]

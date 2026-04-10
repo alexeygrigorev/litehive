@@ -96,7 +96,7 @@ def test_run_next_task_falls_back_to_next_engine_on_execution_limit(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     ensure_workspace(tmp_path)
-    create_task(tmp_path, title="Fallback task", engine="codex", auto_commit=False)
+    create_task(tmp_path, title="Fallback task", auto_commit=False)
 
     def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None):  # type: ignore[no-untyped-def]
         if engine_name == "codex":
@@ -153,7 +153,7 @@ def test_run_next_task_flags_when_limit_fallbacks_are_exhausted(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     ensure_workspace(tmp_path)
-    create_task(tmp_path, title="Exhausted fallback task", engine="codex", auto_commit=False)
+    create_task(tmp_path, title="Exhausted fallback task", auto_commit=False)
 
     def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None):  # type: ignore[no-untyped-def]
         return SubagentResult(
@@ -204,7 +204,7 @@ def test_drain_task_pool_stops_by_default_when_limit_fallbacks_are_exhausted(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     ensure_workspace(tmp_path)
-    create_task(tmp_path, title="Exhausted fallback task", engine="codex", auto_commit=False)
+    create_task(tmp_path, title="Exhausted fallback task", auto_commit=False)
     create_task(tmp_path, title="Second task", auto_commit=False)
 
     def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None):  # type: ignore[no-untyped-def]
@@ -1158,7 +1158,7 @@ def test_drain_task_pool_stops_on_first_failure(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     ensure_workspace(tmp_path)
-    create_task(tmp_path, title="Failing task", engine="codex", auto_commit=False)
+    create_task(tmp_path, title="Failing task", auto_commit=False)
     create_task(tmp_path, title="Second task", auto_commit=False)
 
     def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None):  # type: ignore[no-untyped-def]
@@ -1203,7 +1203,7 @@ def test_drain_task_pool_stops_on_execution_limit(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     ensure_workspace(tmp_path)
-    create_task(tmp_path, title="Limit task", engine="codex", auto_commit=False)
+    create_task(tmp_path, title="Limit task", auto_commit=False)
     create_task(tmp_path, title="Second task", auto_commit=False)
 
     def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None):  # type: ignore[no-untyped-def]
@@ -1248,8 +1248,8 @@ def test_drain_task_pool_stops_on_quota_threshold(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     ensure_workspace(tmp_path)
-    create_task(tmp_path, title="First limit task", engine="codex", auto_commit=False)
-    create_task(tmp_path, title="Second limit task", engine="codex", auto_commit=False)
+    create_task(tmp_path, title="First limit task", auto_commit=False)
+    create_task(tmp_path, title="Second limit task", auto_commit=False)
     create_task(tmp_path, title="Third task", auto_commit=False)
 
     def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None):  # type: ignore[no-untyped-def]
@@ -1292,7 +1292,7 @@ def test_drain_task_pool_stops_on_budget_threshold(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     ensure_workspace(tmp_path)
-    create_task(tmp_path, title="Budget task", engine="codex", auto_commit=False)
+    create_task(tmp_path, title="Budget task", auto_commit=False)
     create_task(tmp_path, title="Second task", auto_commit=False)
 
     def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None):  # type: ignore[no-untyped-def]
@@ -1502,8 +1502,8 @@ def test_drain_task_pool_stops_on_pool_usage_cap(
 def test_drain_task_pool_stops_on_pool_cost_cap(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    ensure_workspace(tmp_path, LitehiveConfig())
-    create_task(tmp_path, title="First task", engine="claude", auto_commit=False)
+    ensure_workspace(tmp_path, LitehiveConfig(default_engine="claude"))
+    create_task(tmp_path, title="First task", auto_commit=False)
     create_task(tmp_path, title="Second task", auto_commit=False)
 
     monkeypatch.setattr(
@@ -1532,7 +1532,7 @@ def test_run_next_task_skips_engine_when_usage_cap_is_exhausted(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     ensure_workspace(tmp_path)
-    create_task(tmp_path, title="Fallback task", engine="codex", auto_commit=False)
+    create_task(tmp_path, title="Fallback task", auto_commit=False)
     calls: list[str] = []
 
     def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None):  # type: ignore[no-untyped-def]
@@ -1566,12 +1566,13 @@ def test_run_next_task_blocks_when_claude_budget_is_exhausted_before_invocation(
     ensure_workspace(
         tmp_path,
         LitehiveConfig(
+            default_engine="claude",
             engine_preference=["claude"],
             engine_budget_caps={"claude": 2},
             engine_costs={"claude": 3},
         ),
     )
-    create_task(tmp_path, title="Claude task", engine="claude", auto_commit=False)
+    create_task(tmp_path, title="Claude task", auto_commit=False)
 
     def fail_run(*args, **kwargs):  # type: ignore[no-untyped-def]
         raise AssertionError("SubagentManager.run should not be called when claude is over budget")

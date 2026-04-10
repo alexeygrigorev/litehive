@@ -180,7 +180,7 @@ def _cmd_status_full(args, root, config, state, monitoring):
             if active_task.runtime.active_subagent is not None
             else active_task.runtime.last_subagent.engine
             if active_task.runtime.last_subagent is not None
-            else active_task.engine or config.default_engine
+            else config.default_engine
         )
         active_stage = active_task.runtime.current_stage.step or active_task.pipeline_status or "-"
         print(f"active_task_title: {active_task.title}")
@@ -221,7 +221,7 @@ def _cmd_queue(args):
         active_task = require_task(args.workspace, state.active_task_id)
         print(
             f"active: {active_task.id} [{active_task.status}/{active_task.pipeline_status}] "
-            f"priority={active_task.priority} engine={_task_engine_label(active_task.engine, config.default_engine)} "
+            f"priority={active_task.priority} engine={_task_engine_label(None, config.default_engine)} "
             f"model={_task_model_label(active_task.model)} "
             f"title={active_task.title} depends_on={_task_dependencies_label(active_task.id, active_task.depends_on)}"
             f"{_task_interruption_label(active_task)}"
@@ -231,7 +231,7 @@ def _cmd_queue(args):
         task = require_task(args.workspace, task_id)
         print(
             f"{index}. {task.id} [{task.status}/{task.pipeline_status}] "
-            f"priority={task.priority} engine={_task_engine_label(task.engine, config.default_engine)} "
+            f"priority={task.priority} engine={_task_engine_label(None, config.default_engine)} "
             f"model={_task_model_label(task.model)} "
             f"title={task.title} depends_on={_task_dependencies_label(task.id, task.depends_on)}"
             f"{_task_interruption_label(task)}"
@@ -241,7 +241,7 @@ def _cmd_queue(args):
     for index, task in enumerate(resumable, start=1):
         print(
             f"resume {index}. {task.id} [{task.status}/{task.pipeline_status}] "
-            f"priority={task.priority} engine={_task_engine_label(task.engine, config.default_engine)} "
+            f"priority={task.priority} engine={_task_engine_label(None, config.default_engine)} "
             f"model={_task_model_label(task.model)} "
             f"title={task.title} depends_on={_task_dependencies_label(task.id, task.depends_on)}"
             f"{_task_interruption_label(task)}"
@@ -251,6 +251,7 @@ def _cmd_queue(args):
 
 def _cmd_list(args):
     ensure_workspace(args.workspace)
+    config = load_config(args.workspace)
     tasks = list_tasks(args.workspace)
     show_all = getattr(args, "show_all", False)
     filter_status = getattr(args, "filter_status", None)
@@ -265,7 +266,7 @@ def _cmd_list(args):
             continue
         if filter_pipeline and task.pipeline_status != filter_pipeline:
             continue
-        if filter_engine and (task.engine or "") != filter_engine:
+        if filter_engine and config.default_engine != filter_engine:
             continue
         filtered.append(task)
 
@@ -291,7 +292,7 @@ def _cmd_show(args):
     print(f"flag_reason: {_display_flag_reason(task)}")
     print(f"pipeline_status: {task.pipeline_status}")
     print(f"priority: {task.priority}")
-    print(f"engine: {task.engine or '-'}")
+    print(f"engine: {load_config(args.workspace).default_engine}")
     print(f"model: {task.model or '-'}")
     print(f"task_type: {task.task_type or '-'}")
     print(f"mode: {task.mode}")

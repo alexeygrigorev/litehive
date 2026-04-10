@@ -41,9 +41,8 @@ claude_max_turns: 100
 Litehive resolves engine order in this precedence:
 
 1. run override such as `litehive run --engine gemini`
-2. task-level engine on the task record
-3. `task_engine_routing` for the task type
-4. workspace `default_engine`
+2. `task_engine_routing` for the task type
+3. workspace `default_engine`
 
 Examples:
 
@@ -51,7 +50,6 @@ Examples:
 litehive engine codex
 litehive engine status
 litehive engine status codex
-litehive update T-0005 --engine opencode
 litehive run --engine gemini --model gemini-2.5-pro
 ```
 
@@ -96,8 +94,8 @@ Recovery and merge-resolution agents can use a dedicated engine:
 recovery_engine: claude
 ```
 
-If `recovery_engine` is not set, Litehive falls back to the task engine or the
-workspace default engine.
+If `recovery_engine` is not set, Litehive falls back to the workspace default
+engine.
 
 ## Limit And Usage Detection
 

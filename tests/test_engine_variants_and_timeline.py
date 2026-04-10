@@ -228,8 +228,8 @@ def test_claude_build_invocation_includes_max_turns(tmp_path: Path) -> None:
 def test_run_next_task_passes_configured_claude_max_turns(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    ensure_workspace(tmp_path, LitehiveConfig(claude_max_turns=7))
-    create_task(tmp_path, title="Claude max turns task", engine="claude", auto_commit=False)
+    ensure_workspace(tmp_path, LitehiveConfig(default_engine="claude", claude_max_turns=7))
+    create_task(tmp_path, title="Claude max turns task", auto_commit=False)
     calls: list[int | None] = []
 
     def fake_subagent_run(self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None):  # type: ignore[no-untyped-def]
@@ -338,10 +338,8 @@ def test_claude_renders_partial_stream_events_for_live_capture(tmp_path: Path) -
 def test_claude_live_progress_report_uses_adapter_summary_for_restart_snippet(
     tmp_path: Path,
 ) -> None:
-    ensure_workspace(tmp_path, LitehiveConfig())
-    task = create_task(
-        tmp_path, title="Claude live restart summary", engine="claude", auto_commit=False
-    )
+    ensure_workspace(tmp_path, LitehiveConfig(default_engine="claude"))
+    task = create_task(tmp_path, title="Claude live restart summary", auto_commit=False)
     manager = SubagentManager(tmp_path)
 
     ref = SubagentRef(
@@ -434,10 +432,9 @@ def test_claude_stage_report_uses_error_when_no_assistant_message(tmp_path: Path
 
 
 def test_resolve_engine_name_rejects_claude_when_not_enabled(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    ensure_workspace(tmp_path, LitehiveConfig(default_engine="claude"))
+    task = create_task(tmp_path, title="Claude task")
     config = load_config(tmp_path)
-
-    task = create_task(tmp_path, title="Claude task", engine="claude")
     assert resolve_engine_name(task, config) == "claude"
 
 
@@ -451,10 +448,9 @@ def test_resolve_engine_name_rejects_default_claude_when_not_enabled(tmp_path: P
 
 
 def test_resolve_engine_name_allows_claude_when_enabled(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path, LitehiveConfig())
+    ensure_workspace(tmp_path, LitehiveConfig(default_engine="claude"))
+    task = create_task(tmp_path, title="Claude task")
     config = load_config(tmp_path)
-
-    task = create_task(tmp_path, title="Claude task", engine="claude")
     assert resolve_engine_name(task, config) == "claude"
 
 
@@ -548,7 +544,7 @@ def test_goz_extract_usage_observation_reads_tokens_and_cost(tmp_path: Path) -> 
     assert observation.metadata["cost"] == "0.012300"
 
 
-def test_update_command_accepts_claude_engine(
+def test_update_command_rejects_removed_claude_engine_flag(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     ensure_workspace(tmp_path, LitehiveConfig())
@@ -568,14 +564,13 @@ def test_update_command_accepts_claude_engine(
     )
     output = capsys.readouterr().out
 
-    assert exit_code == 0
+    assert exit_code == 1
     updated = get_task(tmp_path, task.id)
     assert updated is not None
-    assert updated.engine == "claude"
-    assert "engine: claude" in output
+    assert "update failed: no changes requested" in output
 
 
-def test_update_command_accepts_goz_engine(
+def test_update_command_rejects_removed_goz_engine_flag(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     ensure_workspace(tmp_path)
@@ -595,11 +590,10 @@ def test_update_command_accepts_goz_engine(
     )
     output = capsys.readouterr().out
 
-    assert exit_code == 0
+    assert exit_code == 1
     updated = get_task(tmp_path, task.id)
     assert updated is not None
-    assert updated.engine == "goz"
-    assert "engine: goz" in output
+    assert "update failed: no changes requested" in output
 
 
 def test_configure_persists_claude_settings(tmp_path: Path) -> None:

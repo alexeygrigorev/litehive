@@ -540,7 +540,7 @@ def _resolve_recovery_engine(
         engine = selection.engine_name or config.default_engine or "codex"
         model = selection.model_name if selection.engine_name is not None else None
     else:
-        engine = task.engine or (config.default_engine if config else "codex")
+        engine = config.default_engine if config else "codex"
     if model is None:
         model = resolve_model(task, config, engine_name=engine) if config else None
     return engine, model

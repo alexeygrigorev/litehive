@@ -140,7 +140,7 @@ def _effective_task_engine(root: Path, task: TaskRecord) -> str:
         return task.runtime.active_subagent.engine
     if task.runtime.last_subagent is not None:
         return task.runtime.last_subagent.engine
-    return task.engine or load_config(root).default_engine
+    return load_config(root).default_engine
 
 
 def _switch_prior_work_paths(root: Path, task: TaskRecord) -> list[str]:
@@ -215,12 +215,6 @@ def switch_task_engine(root: Path, task_id: str, *, engine: str, reason: str) ->
         task = require_task(root, task_id)
 
     previous_engine = _effective_task_engine(root, task)
-    update_task(
-        root,
-        task.id,
-        engine=engine,
-    )
-    task = require_task(root, task.id)
     mark_engine_switch(
         root,
         task,
@@ -662,11 +656,6 @@ def update_task(
             if task_type is not None and task_type not in VALID_TASK_TYPES:
                 raise ValueError(f"Unsupported task type '{task_type}'")
             task.task_type = task_type
-
-        if engine is not ...:
-            if engine is not None and engine not in VALID_TASK_ENGINES:
-                raise ValueError(f"Unsupported engine '{engine}'")
-            task.engine = engine
 
         if model is not ...:
             task.model = model

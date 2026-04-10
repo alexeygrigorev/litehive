@@ -15,7 +15,6 @@ from litehive.cli._display import (
     _prepare_patch_branch,
     _resolve_litehive_source_root,
     _task_dependencies_label,
-    _task_engine_label,
     _task_model_label,
     _workspace_project_name,
 )
@@ -54,7 +53,6 @@ def _cmd_add(args):
             planned_effort=getattr(args, "planned_effort", None),
             human_checkpoints=None if human_checkpoints is ... else human_checkpoints,
             task_type=requested_task_type,
-            engine=args.engine,
             model=getattr(args, "model", None),
             retry_limit=getattr(args, "retry_limit", None),
             auto_commit=not args.no_auto_commit,
@@ -73,7 +71,7 @@ def _cmd_add(args):
     print(f"priority: {task.priority}")
     print(f"mode: {task.mode}")
     print(f"pipeline_mode: {task.pipeline_mode}")
-    print(f"engine: {_task_engine_label(task.engine, load_config(args.workspace).default_engine)}")
+    print(f"engine: {load_config(args.workspace).default_engine}")
     print(f"model: {_task_model_label(task.model)}")
     print(
         "human_checkpoints: "
@@ -270,7 +268,6 @@ def _cmd_intake(args):
             goal=task_goal,
             mode="tasks",
             task_type="intake",
-            engine=args.engine,
             model=args.model,
         )
         base = task_dir(args.workspace, task)
@@ -307,7 +304,6 @@ def _cmd_update(args):
         and getattr(args, "plan_step", None) is None
         and getattr(args, "human_checkpoint", None) is None
         and getattr(args, "task_type", None) is None
-        and getattr(args, "engine", None) is None
         and getattr(args, "model", None) is None
         and retry_limit_arg is None
         and getattr(args, "priority", None) is None
@@ -372,8 +368,6 @@ def _cmd_update(args):
                 if getattr(args, "task_type", None) == "default"
                 else getattr(args, "task_type", None)
             )
-        if getattr(args, "engine", None) is not None:
-            flag_updates["engine"] = None if args.engine == "default" else args.engine
         if getattr(args, "model", None) is not None:
             flag_updates["model"] = (
                 None if getattr(args, "model", None) == "default" else getattr(args, "model", None)
@@ -407,7 +401,6 @@ def _cmd_update(args):
             args.task_id,
             depends_on=updates.get("depends_on", ...),
             task_type=updates.get("task_type", ...),
-            engine=updates.get("engine", ...),
             model=updates.get("model", ...),
             retry_limit=updates.get("retry_limit", ...),
             priority=updates.get("priority", ...),
@@ -426,7 +419,7 @@ def _cmd_update(args):
         return 1
     config = load_config(args.workspace)
     print(f"task: {task.id} {task.title}")
-    print(f"engine: {_task_engine_label(task.engine, config.default_engine)}")
+    print(f"engine: {config.default_engine}")
     print(f"model: {_task_model_label(task.model)}")
     print(
         f"retry_limit: {task.retry_policy.max_retries if task.retry_policy.max_retries is not None else 'default'}"

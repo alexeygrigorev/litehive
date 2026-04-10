@@ -2293,7 +2293,7 @@ def test_queue_command_shows_active_and_queued_order(
 ) -> None:
     ensure_workspace(tmp_path)
     first = create_task(tmp_path, title="First task")
-    second = create_task(tmp_path, title="Second task", engine="opencode")
+    second = create_task(tmp_path, title="Second task")
     second.depends_on = [first.id]
     save_task(tmp_path, second)
 
@@ -2314,7 +2314,7 @@ def test_queue_command_shows_active_and_queued_order(
         "title=First task depends_on=-"
     ) in output
     assert (
-        f"1. {second.id} [queued/backlog] priority=medium engine=opencode model=default "
+        f"1. {second.id} [queued/backlog] priority=medium engine=codex (default) model=default "
         f"title=Second task depends_on={first.id}"
     ) in output
 

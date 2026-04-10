@@ -130,7 +130,6 @@ def _create_detailed_snapshot_task(tmp_path: Path):
         goal="Ship the detail panel",
         acceptance_criteria=["criterion 1", "criterion 2"],
         priority="high",
-        engine="codex",
     )
     task.constraints = ["keep scope tight"]
     task.plan = ["extend payload", "add editing"]
@@ -392,7 +391,6 @@ def test_build_workspace_snapshot_includes_recovery_reports_and_editable_fields(
 
     assert payload["recovery_reports"][0]["summary"] == "Recovered from a bad pass."
     assert snapshot["editable_fields"]["priority_options"]
-    assert snapshot["editable_fields"]["engine_options"]
 
 
 def test_render_index_includes_origin_metadata_sections() -> None:
@@ -627,7 +625,6 @@ def test_update_task_detail_persists_editable_fields(tmp_path: Path) -> None:
             "constraints": ["stay local"],
             "plan": ["edit", "verify"],
             "priority": "high",
-            "engine": "gemini",
         },
     )["task"]
 
@@ -638,10 +635,8 @@ def test_update_task_detail_persists_editable_fields(tmp_path: Path) -> None:
     assert updated["record"]["constraints"] == ["stay local"]
     assert updated["record"]["plan"] == ["edit", "verify"]
     assert updated["record"]["priority"] == "high"
-    assert updated["record"]["engine"] == "gemini"
     assert reloaded.goal == "Updated goal"
     assert reloaded.acceptance_criteria == ["one", "two"]
     assert reloaded.constraints == ["stay local"]
     assert reloaded.plan == ["edit", "verify"]
     assert reloaded.priority == "high"
-    assert reloaded.engine == "gemini"

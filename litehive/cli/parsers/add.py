@@ -1,4 +1,3 @@
-from litehive.agents import ENGINE_CHOICES
 from litehive.cli._parse import TASK_TYPE_CHOICES
 from litehive.cli.parsers._common import add_workspace_argument
 from litehive.tasks.constants import (
@@ -61,7 +60,6 @@ def register_add_parser(subparsers):
         choices=sorted(VALID_TASK_PRIORITIES),
         help="Task priority; defaults to medium when omitted",
     )
-    parser.add_argument("--engine", choices=ENGINE_CHOICES, help="Preferred engine for the task")
     parser.add_argument(
         "--model",
         help="Preferred model override for supported engines on this task",

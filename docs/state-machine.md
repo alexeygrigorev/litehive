@@ -145,8 +145,7 @@ git merge → conflict
 ## Engine Selection
 
 1. CLI `--engine` override (highest priority)
-2. Task-level `engine` override (if set)
-3. Workspace `default_engine` from config
+2. Workspace `default_engine` from config
 
 When engine fails, walk the `engine_preference` list skipping the failed engine.
 
