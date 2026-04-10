@@ -6,101 +6,141 @@ task_type: null
 model: null
 mode: implementation
 pipeline_mode: full
-status: queued
+status: in_progress
 flag_reason: null
 flag_count: 0
-pipeline_status: backlog
+pipeline_status: commit_to_git
 priority: high
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-10T05:59:06+00:00'
-updated_at: '2026-04-10T07:45:27+00:00'
-goal: 'Prevent agents from running destructive git operations by removing git from
-  the sandbox filesystem for every role except merge-resolver. The T-0266 incident
-  had codex running non-sandboxed with full host access and force-pushed to
-  origin/main. Policy: merge-resolver is the ONLY role whose sandbox exposes a git
-  binary, and even that binary is a wrapper that blocks destructive subcommands.
-  Every other role (planner, SWE, QA, reviewer, recovery) has no git binary
-  reachable at all — not at /usr/bin/git, not anywhere on PATH, not via absolute
-  path. Enforcement is at the filesystem/sandbox boundary, not via env vars or
-  role-checking logic (those are trivially bypassable by the agent itself).'
+updated_at: '2026-04-10T08:50:15+00:00'
+goal: "Prevent agents from running destructive git operations by removing git from\
+  \ the sandbox filesystem for every role except merge-resolver. The T-0266 incident\
+  \ had codex running non-sandboxed with full host access and force-pushed to origin/main.\
+  \ Policy: merge-resolver is the ONLY role whose sandbox exposes a git binary, and\
+  \ even that binary is a wrapper that blocks destructive subcommands. Every other\
+  \ role (planner, SWE, QA, reviewer, recovery) has no git binary reachable at all\
+  \ \u2014 not at /usr/bin/git, not anywhere on PATH, not via absolute path. Enforcement\
+  \ is at the filesystem/sandbox boundary, not via env vars or role-checking logic\
+  \ (those are trivially bypassable by the agent itself)."
 acceptance_criteria:
-- 'Sandbox profile per role. Non-merge-resolver roles (planner, swe, qa, reviewer,
+- Sandbox profile per role. Non-merge-resolver roles (planner, swe, qa, reviewer,
   recovery, grooming, etc.) launch with a sandbox whose filesystem view contains NO
   executable named "git" at any reachable path. Running `git`, `/usr/bin/git`, or
-  `which git` inside the sandbox yields command-not-found.'
-- 'Merge-resolver role launches with a sandbox that bind-mounts a single git wrapper
+  `which git` inside the sandbox yields command-not-found.
+- Merge-resolver role launches with a sandbox that bind-mounts a single git wrapper
   (e.g. /sandbox/bin/git) onto PATH. The real git binary is NOT directly reachable;
   only the wrapper is. The wrapper forwards safe subcommands to the real git (stored
-  at a path the agent cannot reach) and rejects a hardcoded denylist.'
-- 'Merge-resolver denylist: push --force, push -f, push --force-with-lease, push
-  --mirror, filter-repo, filter-branch, reflog expire, gc --prune=now, update-ref -d
-  on refs/remotes/*, reset --hard targeting origin/*, remote set-url on origin,
-  rebase or cherry-pick onto protected refs. Rejection is clear and logged to
-  .litehive/runtime/attention.log.'
-- Enforcement does not depend on any environment variable the agent could set or
-  unset. An agent setting PATH, LD_PRELOAD, LITEHIVE_*, etc. cannot gain git access
-  because the binary does not exist inside the sandbox filesystem namespace.
+  at a path the agent cannot reach) and rejects a hardcoded denylist.
+- 'Merge-resolver denylist: push --force, push -f, push --force-with-lease, push --mirror,
+  filter-repo, filter-branch, reflog expire, gc --prune=now, update-ref -d on refs/remotes/*,
+  reset --hard targeting origin/*, remote set-url on origin, rebase or cherry-pick
+  onto protected refs. Rejection is clear and logged to .litehive/runtime/attention.log.'
+- Enforcement does not depend on any environment variable the agent could set or unset.
+  An agent setting PATH, LD_PRELOAD, LITEHIVE_*, etc. cannot gain git access because
+  the binary does not exist inside the sandbox filesystem namespace.
 - Task worktrees have origin removed (`git remote remove origin`) before handoff to
-  any non-merge-resolver subagent. Belt-and-suspenders so that even if sandbox
-  isolation is somehow bypassed, there is nothing for `git push` to push to.
+  any non-merge-resolver subagent. Belt-and-suspenders so that even if sandbox isolation
+  is somehow bypassed, there is nothing for `git push` to push to.
 - Sandbox profile selection lives in a single code path so it can be audited, and
   the default (unknown role) is the no-git profile (fail closed).
-- 'In-CI integration tests spawn a REAL subprocess with the sandbox profile applied
-  (no mocks, no monkey-patching of the shim) and assert behavior directly:
-  - no-git profile: `git --version` exits non-zero / command-not-found; `which git`
-    finds nothing; absolute paths like `/usr/bin/git --version` also fail; setting
-    PATH or LITEHIVE_* env vars inside the subprocess does not make git reachable.
-  - merge-resolver profile: `git --version` succeeds; `git status` succeeds; `git
-    push --force origin main` is rejected by the wrapper with a clear error; `git
-    filter-repo --help` is rejected; `git reset --hard origin/main` is rejected.
-  These tests do NOT launch an LLM agent — they exercise the sandbox primitive
-  directly so they are fast, deterministic, and free to run.'
-- 'Separate out-of-band adversarial experiment directory (experiments/sandbox-breakout/
+- "In-CI integration tests spawn a REAL subprocess with the sandbox profile applied\
+  \ (no mocks, no monkey-patching of the shim) and assert behavior directly: - no-git\
+  \ profile: `git --version` exits non-zero / command-not-found; `which git` finds\
+  \ nothing; absolute paths like `/usr/bin/git --version` also fail; setting PATH\
+  \ or LITEHIVE_* env vars inside the subprocess does not make git reachable. - merge-resolver\
+  \ profile: `git --version` succeeds; `git status` succeeds; `git push --force origin\
+  \ main` is rejected by the wrapper with a clear error; `git filter-repo --help`\
+  \ is rejected; `git reset --hard origin/main` is rejected. These tests do NOT launch\
+  \ an LLM agent \u2014 they exercise the sandbox primitive directly so they are fast,\
+  \ deterministic, and free to run."
+- Separate out-of-band adversarial experiment directory (experiments/sandbox-breakout/
   or similar) containing a throwaway git repo, a runbook, and a driver script that
-  launches real codex (and optionally claude) inside the no-git sandbox and asks
-  them to commit and push a file. These experiments are NOT part of the default
-  pytest suite, are NOT wired into CI, and are only run manually when auditing the
-  sandbox. The runbook documents how to invoke them and how to interpret the output.
-  This catches the things the deterministic test did not think to probe (e.g. agent
-  finds a python subprocess trick, a gh CLI fallback, etc.).'
+  launches real codex (and optionally claude) inside the no-git sandbox and asks them
+  to commit and push a file. These experiments are NOT part of the default pytest
+  suite, are NOT wired into CI, and are only run manually when auditing the sandbox.
+  The runbook documents how to invoke them and how to interpret the output. This catches
+  the things the deterministic test did not think to probe (e.g. agent finds a python
+  subprocess trick, a gh CLI fallback, etc.).
 - README or docs/ section describing the per-role sandbox profile, the git wrapper
   denylist, and the location + purpose of the adversarial experiment directory.
 constraints:
-- Do not rely on env vars, role strings, or prompt-scanning for git gating — they
-  are bypassable by the very thing we are trying to restrict.
+- "Do not rely on env vars, role strings, or prompt-scanning for git gating \u2014\
+  \ they are bypassable by the very thing we are trying to restrict."
 - Do not rely on PATH manipulation alone; the binary must actually be absent from
   the sandbox filesystem view for non-merge-resolver roles.
 - Merge-resolver is the only role that may have git. Do not add per-task overrides
   without changing this task's AC.
 - Fail closed on unknown roles and on sandbox setup errors.
 plan:
-- Inventory the existing sandbox/execution layer (litehive/pipeline, heru adapters)
-  to find where subagent subprocesses are launched and what sandboxing primitives
-  are already available (codex sandbox modes, claude, etc.). The shim is built on
-  top of whatever sandbox primitive already exists — we do not need a new sandbox
-  runtime.
-- Define SandboxProfile enum with NO_GIT (default) and MERGE_RESOLVER. Map role →
-  profile in a single audited function.
-- For NO_GIT profile, use the sandbox primitive to either (a) launch in a mount
-  namespace / container where /usr/bin/git is not bind-mounted, or (b) in a chroot
-  with no git binary. The exact mechanism depends on what the existing sandbox
-  layer supports; document any gaps.
-- For MERGE_RESOLVER profile, build a small wrapper binary
-  (litehive/sandbox/git_wrapper.py compiled or kept as a script) that exec's a
-  hidden real git and enforces the denylist. Bind-mount it into the sandbox as the
-  only visible git.
-- Wire profile selection into subagent spawn path. Make sure every spawn goes
-  through the single entry point so no role can silently get a different profile.
+- "Inventory the existing sandbox/execution layer (litehive/pipeline, heru adapters)\
+  \ to find where subagent subprocesses are launched and what sandboxing primitives\
+  \ are already available (codex sandbox modes, claude, etc.). The shim is built on\
+  \ top of whatever sandbox primitive already exists \u2014 we do not need a new sandbox\
+  \ runtime."
+- "Define SandboxProfile enum with NO_GIT (default) and MERGE_RESOLVER. Map role \u2192\
+  \ profile in a single audited function."
+- For NO_GIT profile, use the sandbox primitive to either (a) launch in a mount namespace
+  / container where /usr/bin/git is not bind-mounted, or (b) in a chroot with no git
+  binary. The exact mechanism depends on what the existing sandbox layer supports;
+  document any gaps.
+- For MERGE_RESOLVER profile, build a small wrapper binary (litehive/sandbox/git_wrapper.py
+  compiled or kept as a script) that exec's a hidden real git and enforces the denylist.
+  Bind-mount it into the sandbox as the only visible git.
+- Wire profile selection into subagent spawn path. Make sure every spawn goes through
+  the single entry point so no role can silently get a different profile.
 - Strip origin from non-merge-resolver worktrees in the worktree setup code.
-- In-CI integration tests that spawn real subprocesses (not mocks) with each
-  sandbox profile and exercise the role × command matrix against the real sandbox.
-- Out-of-band adversarial experiment harness under experiments/sandbox-breakout/
-  with a runbook for manually auditing with real LLM agents (codex, claude). Wire
-  it so it is NOT picked up by the default pytest collection.
+- "In-CI integration tests that spawn real subprocesses (not mocks) with each sandbox\
+  \ profile and exercise the role \xD7 command matrix against the real sandbox."
+- Out-of-band adversarial experiment harness under experiments/sandbox-breakout/ with
+  a runbook for manually auditing with real LLM agents (codex, claude). Wire it so
+  it is NOT picked up by the default pytest collection.
 - Docs update describing the policy and how to audit it.
 human_checkpoints: []
-subagents: []
+subagents:
+- id: SA-0001
+  role: planner
+  engine: codex
+  status: completed
+  path: subagents/SA-0001-planner
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0002
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0002-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0003
+  role: qa
+  engine: codex
+  status: completed
+  path: subagents/SA-0003-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0004
+  role: recovery
+  engine: codex
+  status: completed
+  path: subagents/SA-0004-recovery
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0005
+  role: qa
+  engine: codex
+  status: completed
+  path: subagents/SA-0005-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0006
+  role: reviewer
+  engine: codex
+  status: completed
+  path: subagents/SA-0006-reviewer
+  sandboxed: false
+  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0286 sandbox-enforcement-for-destructive-git-operations'

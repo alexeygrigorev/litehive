@@ -14,7 +14,7 @@ priority: high
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-10T06:03:05+00:00'
-updated_at: '2026-04-10T06:03:05+00:00'
+updated_at: '2026-04-10T08:10:57+00:00'
 goal: 'Maintain a persistent list of items that need human (operator) attention. Items
   enter the queue when: destructive operation attempted, task hits human_checkpoint_before_commit,
   task flagged manually, origin/main diverged from local, duplicate task IDs detected,

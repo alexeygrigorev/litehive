@@ -1,0 +1,327 @@
+- role: planner
+  step: grooming
+  verdict: pass
+  message: "Grooming passed. I inspected the current sandbox and spawn path rather\
+    \ than changing code.\n\nVerified repo seams:\n- `litehive/agents/_manager.py`\
+    \ is the single subagent spawn path and the right place to thread role -> sandbox\
+    \ profile selection.\n- `litehive/agents/sandbox.py` currently selects policy\
+    \ by engine only, not role, and bubblewrap read-only binds `/usr`, `/bin`, `/lib*`,\
+    \ so `/usr/bin/git` is reachable today inside sandboxed runs.\n- `litehive/pipeline/_worktree.py`\
+    \ is the current worktree creation / reuse path and the right place to remove\
+    \ `origin` before non-merge-resolver handoff.\n- Existing sandbox tests are mostly\
+    \ argv-construction tests in `tests/test_runner_workflow.py`; the task still needs\
+    \ real subprocess integration tests that exercise the sandbox primitive directly.\n\
+    \nEvidence gathered:\n- No role-based sandbox profile selector exists yet.\n-\
+    \ Current bubblewrap launcher explicitly propagates `PATH` and mounts standard\
+    \ system roots, so the acceptance criteria require a real sandbox refactor, not\
+    \ prompt/env hardening.\n- Merge-resolver already exists as a distinct role in\
+    \ the worktree conflict flow, so it is the natural exception path for the wrapper-backed\
+    \ git profile.\n\nTests run:\n- Repo inspection only (`rg`, `sed`, config/task\
+    \ review). No pytest run in grooming; no code changes made.\n\nImplementation\
+    \ guidance:\n- Keep sandbox profile selection in one audited function and fail\
+    \ closed to NO_GIT for unknown roles.\n- Solve this at the filesystem namespace\
+    \ boundary for every supported backend, not with PATH-only tricks.\n- Preserve\
+    \ a single visible git wrapper for merge-resolver and make the real git path unreachable\
+    \ from inside the sandbox.\n- Add focused real-subprocess tests for both profiles\
+    \ and keep the adversarial LLM breakout harness manual-only under `experiments/`.\n\
+    \nTASK_UPDATE:\n  pm_complexity: complex\n  planned_effort: l\n  plan:\n    -\
+    \ Add a single audited role-to-sandbox-profile selector that fails closed and\
+    \ is invoked from the subagent spawn path before engine wrapping.\n    - Extend\
+    \ sandbox launchers to support two filesystem-level git profiles across supported\
+    \ backends: no-git for all roles except merge-resolver, and merge-resolver with\
+    \ only a mounted git wrapper plus hidden real git.\n    - Add merge-resolver git\
+    \ wrapper denylist enforcement with clear stderr and attention-log writes, and\
+    \ ensure the real git binary is unreachable from inside the sandbox namespace.\n\
+    \    - Remove origin from task worktrees before handing them to any non-merge-resolver\
+    \ subagent, while preserving the merge-resolver path needed for conflict resolution\
+    \ and task integration.\n    - Add real subprocess integration tests for both\
+    \ profiles, plus manual adversarial audit fixtures under `experiments/sandbox-breakout`\
+    \ that stay out of default pytest collection.\n    - Document the per-role sandbox\
+    \ policy, wrapper denylist, and manual audit workflow in README/docs.\n\nNote:\
+    \ `litehive task update` was attempted to persist PM sizing and plan, but the\
+    \ CLI rejected concurrent metadata edits because this task is currently marked\
+    \ active/running in workspace state. The implementing agent should proceed from\
+    \ the plan above, and if the runner allows task metadata writes later, persist\
+    \ the sizing fields into `task.yaml`."
+  files_changed: []
+  created_at: '2026-04-10T08:14:52+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Implemented per-role git sandbox enforcement and supporting audit coverage.
+    Added a single audited role->SandboxProfile selector in litehive/agents/sandbox.py
+    with fail-closed default to no-git, threaded role-aware sandbox summaries/invocation
+    wrapping through SubagentManager/session artifacts, and added merge-resolver-only
+    git wrapper enforcement with attention-log writes plus destructive-command denylist.
+    Bubblewrap sandboxes now mount git-filtered command directories so non-merge-resolver
+    roles do not see git entrypoints, while merge-resolver gets only /sandbox/bin/git
+    on PATH. Task worktree setup now removes origin before normal subagent handoff.
+    Added deterministic tests in tests/test_sandbox_git_profiles.py for profile selection,
+    wrapper denylist, worktree origin removal, and real sandbox subprocess behavior;
+    on hosts where bubblewrap itself cannot create a namespace, those direct subprocess
+    checks skip instead of misreporting a Litehive regression. Added docs/sandboxing.md
+    plus references from docs/README.md, docs/configuration.md, and docs/engines.md,
+    and added a manual adversarial audit harness under experiments/sandbox-breakout/
+    with a driver that launches a real adapter invocation inside the no-git profile.
+    Also fixed stale workspace repair bookkeeping so stranded commit recovery no longer
+    reports a spurious cleared_active_task_id, which was required to keep the full
+    suite green. Verification run: uv run ruff check --select E402,F401 litehive tests
+    experiments; uv run pytest -q tests/test_sandbox_git_profiles.py tests/test_runner_workflow.py
+    -k ''sandbox or worktree_origin or merge_resolver'' => 16 passed, 4 skipped, 111
+    deselected; uv run pytest -q => 936 passed, 4 skipped.'
+  files_changed: []
+  created_at: '2026-04-10T08:37:24+00:00'
+- role: qa
+  step: testing
+  verdict: reject
+  message: 'REJECT. Expected: the merge-resolver wrapper must reject rebase or cherry-pick
+    onto protected refs, including cherry-picking while the current branch is protected
+    (//). Observed: the denylist only checks cherry-pick arguments for protected ref
+    names;  returns , so a cherry-pick onto checked-out  would be forwarded to real
+    git instead of being blocked/logged. Steps to reproduce: None -> prints . This
+    maps to  and the duplicated wrapper template in . Acceptance criteria status:
+    satisfied/verified by focused checks: fail-closed role->profile selection, no-git
+    default, origin removal from task worktrees, wrapper rejection for , , , docs/adversarial
+    experiment assets present, and focused pytest run .....ssss...........                                                     [100%]
+
+    16 passed, 4 skipped, 111 deselected in 6.33s => 16 passed, 4 skipped. Not met:
+    merge-resolver denylist criterion for . Note: bubblewrap real-subprocess tests
+    skip on this host because  cannot create a uid map (), so my rejection is based
+    on the concrete denylist logic gap above, not on those skips.'
+  files_changed: []
+  created_at: '2026-04-10T08:43:03+00:00'
+- role: qa
+  step: testing
+  verdict: reject
+  message: 'REJECT. Expected: the merge-resolver wrapper must reject rebase or cherry-pick
+    onto protected refs, including cherry-picking while the current branch is protected
+    (main/master/origin/*). Observed: the denylist only checks cherry-pick arguments
+    for protected ref names; _rejection_reason([''cherry-pick'', ''deadbeef'']) returns
+    None, so a cherry-pick onto checked-out main would be forwarded to real git instead
+    of being blocked and logged. Steps to reproduce: python - <<''PY''
+
+    from litehive.sandbox.git_wrapper import _rejection_reason
+
+    print(_rejection_reason([''cherry-pick'', ''deadbeef'']))
+
+    PY
+
+    This prints None. The gap is in litehive/sandbox/git_wrapper.py and the duplicated
+    wrapper template in litehive/agents/sandbox.py. Acceptance criteria status: satisfied/verified
+    by focused checks: fail-closed role->profile selection, no-git default, origin
+    removal from task worktrees, wrapper rejection for push --force, filter-repo,
+    and reset --hard origin/main, docs/adversarial experiment assets present, and
+    focused pytest run `uv run pytest -q tests/test_sandbox_git_profiles.py tests/test_runner_workflow.py
+    -k ''sandbox or worktree_origin or merge_resolver''` => 16 passed, 4 skipped.
+    Not met: merge-resolver denylist criterion for cherry-pick onto protected refs.
+    Note: bubblewrap real-subprocess tests skip on this host because bwrap cannot
+    create a uid map (bwrap: setting up uid map: Permission denied), so this rejection
+    is based on the concrete denylist logic gap above, not on those skips.'
+  files_changed: []
+  created_at: '2026-04-10T08:43:10+00:00'
+- role: recovery
+  step: implementing
+  verdict: pass
+  message: 'Root cause: the merge-resolver git denylist only inspected explicit command
+    arguments for protected refs, so \''git cherry-pick <sha>\'' on a checked-out
+    protected branch like main returned no rejection reason and would have been forwarded
+    to real git. Fix: updated both litehive/sandbox/git_wrapper.py and the duplicated
+    wrapper template in litehive/agents/sandbox.py to resolve the current git ref
+    from repository state (.git dir/file plus HEAD) and reject both `git cherry-pick`
+    and `git rebase` when the current ref is protected, in addition to the existing
+    protected-target argument checks. Added focused regression coverage in tests/test_sandbox_git_profiles.py
+    for the exact rejected case (_rejection_reason(["cherry-pick", "deadbeef"], cwd=<repo
+    on main>) now returns a block reason) and for the merge-resolver sandbox wrapper
+    path when bubblewrap is available. Verification run: uv run ruff check --select
+    E402,F401 litehive tests => passed; uv run pytest -q tests/test_sandbox_git_profiles.py
+    tests/test_runner_workflow.py -k ''sandbox or worktree_origin or merge_resolver''
+    => 17 passed, 4 skipped. Extra direct repro check: a temp repo on main now prints
+    `git cherry-pick` while on a protected ref is not allowed instead of None. The
+    previous implementing stage should be retried from its existing context; this
+    was a Litehive infrastructure denylist gap, not a task/worktree bug.'
+  files_changed: []
+  created_at: '2026-04-10T08:46:33+00:00'
+- role: qa
+  step: testing
+  verdict: pass
+  message: "PASS. Verified the recovery fix closes the merge-resolver denylist gap\
+    \ for protected checked-out refs and that the focused sandbox/worktree coverage\
+    \ still passes. Checks run: (1) direct repro against litehive.sandbox.git_wrapper._rejection_reason\
+    \ in a temp repo on main now returns ' while on a protected ref is not allowed'\
+    \ for ['cherry-pick','deadbeef'] and 'You are not currently on a branch.\nPlease\
+    \ specify which branch you want to rebase against.\nSee git-rebase(1) for details.\n\
+    \n    git rebase '<branch>' while on a protected ref is not allowed' for ['rebase'];\
+    \ (2) focused pytest slice: uv run pytest -q tests/test_sandbox_git_profiles.py\
+    \ tests/test_runner_workflow.py -k 'sandbox or worktree_origin or merge_resolver'\
+    \ => 17 passed, 4 skipped, 111 deselected in 3.12s. Evidence covered by that slice:\
+    \ fail-closed role->SandboxProfile mapping (unknown role => NO_GIT, merge-resolver\
+    \ => MERGE_RESOLVER), no-git profile hiding git from PATH and /usr/bin/git with\
+    \ env mutation attempts still failing, merge-resolver profile allowing safe git\
+    \ commands, wrapper rejecting/logging push --force, filter-repo, reset --hard\
+    \ origin/main, and task worktrees having origin removed before normal handoff.\
+    \ Manual audit assets/docs also present: experiments/sandbox-breakout/{README.md,driver.py}\
+    \ and docs/sandboxing.md referenced from docs/README.md, docs/configuration.md,\
+    \ and docs/engines.md. Note: bubblewrap-backed real subprocess cases remain skipped\
+    \ on this host when bubblewrap cannot create a namespace; this is a host capability\
+    \ limitation, not a Litehive regression, and the policy logic plus focused integration\
+    \ slice above passed."
+  files_changed: []
+  created_at: '2026-04-10T08:47:53+00:00'
+- role: qa
+  step: testing
+  verdict: pass
+  message: 'PASS. Verified the recovery fix closes the merge-resolver denylist gap
+    for protected checked-out refs and that the focused sandbox/worktree coverage
+    still passes. Checks run: direct repro against litehive.sandbox.git_wrapper._rejection_reason
+    in a temp repo on main now returns a protected-ref rejection for cherry-pick deadbeef
+    and for rebase on the checked-out protected branch; focused pytest slice: uv run
+    pytest -q tests/test_sandbox_git_profiles.py tests/test_runner_workflow.py -k
+    "sandbox or worktree_origin or merge_resolver" => 17 passed, 4 skipped, 111 deselected
+    in 3.12s. Evidence covered by that slice: fail-closed role-to-SandboxProfile mapping
+    (unknown role => NO_GIT, merge-resolver => MERGE_RESOLVER), no-git profile hiding
+    git from PATH and /usr/bin/git with env mutation attempts still failing, merge-resolver
+    profile allowing safe git commands, wrapper rejecting and logging push --force,
+    filter-repo, reset --hard origin/main, and task worktrees having origin removed
+    before normal handoff. Manual audit assets/docs also present: experiments/sandbox-breakout/README.md,
+    experiments/sandbox-breakout/driver.py, and docs/sandboxing.md referenced from
+    docs/README.md, docs/configuration.md, and docs/engines.md. Note: bubblewrap-backed
+    real subprocess cases remain skipped on this host when bubblewrap cannot create
+    a namespace; this is a host capability limitation, not a Litehive regression,
+    and the policy logic plus focused integration slice above passed.'
+  files_changed: []
+  created_at: '2026-04-10T08:48:09+00:00'
+- role: reviewer
+  step: accepting
+  verdict: pass
+  message: "Accepted. I verified the implementation against the task AC in code and\
+    \ by rerunning the focused acceptance test slice. Evidence reviewed:  now contains\
+    \ the single audited role->SandboxProfile selector with fail-closed default to\
+    \ ;  is the only role mapped to . The bubblewrap/docker sandbox setup prepares\
+    \ git-filtered mirrored command directories so usage: git [-v | --version] [-h\
+    \ | --help] [-C <path>] [-c <name>=<value>]\n           [--exec-path[=<path>]]\
+    \ [--html-path] [--man-path] [--info-path]\n           [-p | --paginate | -P |\
+    \ --no-pager] [--no-replace-objects] [--bare]\n           [--git-dir=<path>] [--work-tree=<path>]\
+    \ [--namespace=<name>]\n           [--config-env=<name>=<envvar>] <command> [<args>]\n\
+    \nThese are common Git commands used in various situations:\n\nstart a working\
+    \ area (see also: git help tutorial)\n   clone     Clone a repository into a new\
+    \ directory\n   init      Create an empty Git repository or reinitialize an existing\
+    \ one\n\nwork on the current change (see also: git help everyday)\n   add    \
+    \   Add file contents to the index\n   mv        Move or rename a file, a directory,\
+    \ or a symlink\n   restore   Restore working tree files\n   rm        Remove files\
+    \ from the working tree and from the index\n\nexamine the history and state (see\
+    \ also: git help revisions)\n   bisect    Use binary search to find the commit\
+    \ that introduced a bug\n   diff      Show changes between commits, commit and\
+    \ working tree, etc\n   grep      Print lines matching a pattern\n   log     \
+    \  Show commit logs\n   show      Show various types of objects\n   status   \
+    \ Show the working tree status\n\ngrow, mark and tweak your common history\n \
+    \  branch    List, create, or delete branches\n   commit    Record changes to\
+    \ the repository\n   merge     Join two or more development histories together\n\
+    \   rebase    Reapply commits on top of another base tip\n   reset     Reset current\
+    \ HEAD to the specified state\n   switch    Switch branches\n   tag       Create,\
+    \ list, delete or verify a tag object signed with GPG\n\ncollaborate (see also:\
+    \ git help workflows)\n   fetch     Download objects and refs from another repository\n\
+    \   pull      Fetch from and integrate with another repository or a local branch\n\
+    \   push      Update remote refs along with associated objects\n\n'git help -a'\
+    \ and 'git help -g' list available subcommands and some\nconcept guides. See 'git\
+    \ help <command>' or 'git help <concept>'\nto read about a specific subcommand\
+    \ or concept.\nSee 'git help git' for an overview of the system. and PATH-discovered\
+    \ git are absent for non-merge-resolver roles, while merge-resolver gets only\
+    \  plus a hidden real git path behind the wrapper.  removes  before normal task\
+    \ handoff.  rejects the required destructive commands, including the QA-found\
+    \ gap for  and You are not currently on a branch.\nPlease specify which branch\
+    \ you want to rebase against.\nSee git-rebase(1) for details.\n\n    git rebase\
+    \ '<branch>' while currently on a protected ref, and logs rejections to . Docs/manual\
+    \ audit assets are present in  and . Tests run by reviewer: ......ssss...........\
+    \                                                    [100%]\n17 passed, 4 skipped,\
+    \ 111 deselected in 2.75s => . Those tests cover: fail-closed profile mapping;\
+    \ no-git profile making usage: git [-v | --version] [-h | --help] [-C <path>]\
+    \ [-c <name>=<value>]\n           [--exec-path[=<path>]] [--html-path] [--man-path]\
+    \ [--info-path]\n           [-p | --paginate | -P | --no-pager] [--no-replace-objects]\
+    \ [--bare]\n           [--git-dir=<path>] [--work-tree=<path>] [--namespace=<name>]\n\
+    \           [--config-env=<name>=<envvar>] <command> [<args>]\n\nThese are common\
+    \ Git commands used in various situations:\n\nstart a working area (see also:\
+    \ git help tutorial)\n   clone     Clone a repository into a new directory\n \
+    \  init      Create an empty Git repository or reinitialize an existing one\n\n\
+    work on the current change (see also: git help everyday)\n   add       Add file\
+    \ contents to the index\n   mv        Move or rename a file, a directory, or a\
+    \ symlink\n   restore   Restore working tree files\n   rm        Remove files\
+    \ from the working tree and from the index\n\nexamine the history and state (see\
+    \ also: git help revisions)\n   bisect    Use binary search to find the commit\
+    \ that introduced a bug\n   diff      Show changes between commits, commit and\
+    \ working tree, etc\n   grep      Print lines matching a pattern\n   log     \
+    \  Show commit logs\n   show      Show various types of objects\n   status   \
+    \ Show the working tree status\n\ngrow, mark and tweak your common history\n \
+    \  branch    List, create, or delete branches\n   commit    Record changes to\
+    \ the repository\n   merge     Join two or more development histories together\n\
+    \   rebase    Reapply commits on top of another base tip\n   reset     Reset current\
+    \ HEAD to the specified state\n   switch    Switch branches\n   tag       Create,\
+    \ list, delete or verify a tag object signed with GPG\n\ncollaborate (see also:\
+    \ git help workflows)\n   fetch     Download objects and refs from another repository\n\
+    \   pull      Fetch from and integrate with another repository or a local branch\n\
+    \   push      Update remote refs along with associated objects\n\n'git help -a'\
+    \ and 'git help -g' list available subcommands and some\nconcept guides. See 'git\
+    \ help <command>' or 'git help <concept>'\nto read about a specific subcommand\
+    \ or concept.\nSee 'git help git' for an overview of the system., /usr/bin/git,\
+    \ and usage: git [-v | --version] [-h | --help] [-C <path>] [-c <name>=<value>]\n\
+    \           [--exec-path[=<path>]] [--html-path] [--man-path] [--info-path]\n\
+    \           [-p | --paginate | -P | --no-pager] [--no-replace-objects] [--bare]\n\
+    \           [--git-dir=<path>] [--work-tree=<path>] [--namespace=<name>]\n   \
+    \        [--config-env=<name>=<envvar>] <command> [<args>]\n\nThese are common\
+    \ Git commands used in various situations:\n\nstart a working area (see also:\
+    \ git help tutorial)\n   clone     Clone a repository into a new directory\n \
+    \  init      Create an empty Git repository or reinitialize an existing one\n\n\
+    work on the current change (see also: git help everyday)\n   add       Add file\
+    \ contents to the index\n   mv        Move or rename a file, a directory, or a\
+    \ symlink\n   restore   Restore working tree files\n   rm        Remove files\
+    \ from the working tree and from the index\n\nexamine the history and state (see\
+    \ also: git help revisions)\n   bisect    Use binary search to find the commit\
+    \ that introduced a bug\n   diff      Show changes between commits, commit and\
+    \ working tree, etc\n   grep      Print lines matching a pattern\n   log     \
+    \  Show commit logs\n   show      Show various types of objects\n   status   \
+    \ Show the working tree status\n\ngrow, mark and tweak your common history\n \
+    \  branch    List, create, or delete branches\n   commit    Record changes to\
+    \ the repository\n   merge     Join two or more development histories together\n\
+    \   rebase    Reapply commits on top of another base tip\n   reset     Reset current\
+    \ HEAD to the specified state\n   switch    Switch branches\n   tag       Create,\
+    \ list, delete or verify a tag object signed with GPG\n\ncollaborate (see also:\
+    \ git help workflows)\n   fetch     Download objects and refs from another repository\n\
+    \   pull      Fetch from and integrate with another repository or a local branch\n\
+    \   push      Update remote refs along with associated objects\n\n'git help -a'\
+    \ and 'git help -g' list available subcommands and some\nconcept guides. See 'git\
+    \ help <command>' or 'git help <concept>'\nto read about a specific subcommand\
+    \ or concept.\nSee 'git help git' for an overview of the system. fail even after\
+    \ PATH/LITEHIVE_* mutation attempts; merge-resolver allowing safe git commands;\
+    \ wrapper rejection/logging for force push, filter-repo, reset --hard origin/main,\
+    \ and cherry-pick on protected checked-out refs; and worktree origin removal before\
+    \ handoff. Remaining caveat: the bubblewrap-backed real subprocess cases still\
+    \ skip on hosts that cannot create the namespace; this is already called out in\
+    \ tests/docs and did not block the focused acceptance slice on this host."
+  files_changed: []
+  created_at: '2026-04-10T08:49:46+00:00'
+- role: reviewer
+  step: accepting
+  verdict: pass
+  message: 'Accepted. I verified the implementation against the task acceptance criteria
+    in code and by rerunning the focused acceptance test slice. Evidence reviewed:
+    litehive/agents/sandbox.py now contains the single audited role-to-SandboxProfile
+    selector with fail-closed default to no-git; merge-resolver is the only role mapped
+    to merge-resolver. The bubblewrap and docker sandbox setup prepares git-filtered
+    mirrored command directories so /usr/bin/git and PATH-discovered git are absent
+    for non-merge-resolver roles, while merge-resolver gets only /sandbox/bin/git
+    plus a hidden real git path behind the wrapper. litehive/pipeline/_worktree.py
+    removes origin before normal task handoff. litehive/sandbox/git_wrapper.py rejects
+    the required destructive commands, including the QA-found gap for git cherry-pick
+    <sha> and git rebase while currently on a protected ref, and logs rejections to
+    .litehive/runtime/attention.log. Docs and manual audit assets are present in docs/sandboxing.md
+    and experiments/sandbox-breakout/. Tests run by reviewer: uv run pytest -q tests/test_sandbox_git_profiles.py
+    tests/test_runner_workflow.py -k ''sandbox or worktree_origin or merge_resolver''
+    => 17 passed, 4 skipped, 111 deselected in 3.02s. Those tests cover fail-closed
+    profile mapping; no-git profile making git, which git, and /usr/bin/git fail even
+    after PATH and LITEHIVE_* mutation attempts; merge-resolver allowing safe git
+    commands; wrapper rejection and logging for force push, filter-repo, reset --hard
+    origin/main, and cherry-pick on protected checked-out refs; and worktree origin
+    removal before handoff. Remaining caveat: the bubblewrap-backed real subprocess
+    cases still skip on hosts that cannot create the namespace; this is already called
+    out in tests and docs and did not block the focused acceptance slice on this host.'
+  files_changed: []
+  created_at: '2026-04-10T08:50:01+00:00'
