@@ -1,0 +1,51 @@
+id: T-0289
+slug: human-attention-queue-persistent-list-of-items
+title: 'Human attention queue: persistent list of items requiring operator review'
+depends_on: []
+task_type: null
+model: null
+mode: implementation
+pipeline_mode: full
+status: queued
+flag_reason: null
+flag_count: 0
+pipeline_status: backlog
+priority: high
+pm_complexity: null
+planned_effort: null
+created_at: '2026-04-10T06:03:05+00:00'
+updated_at: '2026-04-10T06:03:05+00:00'
+goal: 'Maintain a persistent list of items that need human (operator) attention. Items
+  enter the queue when: destructive operation attempted, task hits human_checkpoint_before_commit,
+  task flagged manually, origin/main diverged from local, duplicate task IDs detected,
+  stuck worktree. Items show in litehive status as ''waiting for you:'' with a clear
+  action. Items are dismissed only via explicit litehive attention resolve <id> or
+  by the operator running the suggested fix.'
+acceptance_criteria:
+- litehive attention list shows all pending attention items with title, created_at,
+  reason, suggested action
+- litehive attention resolve <id> dismisses an item
+- litehive status shows count of pending attention items prominently
+- 'New items are added when: subagent attempts denied destructive op, human_checkpoint
+  hit, origin diverged, duplicate IDs, merge_failed'
+- Pool pauses until zero attention items remain if pool_stop_on_attention is set
+- Attention items persisted in .litehive/attention/ as YAML files (one per item)
+constraints: []
+plan: []
+human_checkpoints: []
+subagents: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0289 human-attention-queue-persistent-list-of-items'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+  merge_agent_attempts: 0
+  worktree_path: null
+retry_policy:
+  max_retries: null
+  stage_retry_limit: null
+created_from: null
+upstream_origin: null
+github_origin: null

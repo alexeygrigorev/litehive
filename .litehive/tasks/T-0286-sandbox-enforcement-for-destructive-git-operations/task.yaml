@@ -1,0 +1,50 @@
+id: T-0286
+slug: sandbox-enforcement-for-destructive-git-operations
+title: Sandbox enforcement for destructive git operations
+depends_on: []
+task_type: null
+model: null
+mode: implementation
+pipeline_mode: full
+status: queued
+flag_reason: null
+flag_count: 0
+pipeline_status: backlog
+priority: high
+pm_complexity: null
+planned_effort: null
+created_at: '2026-04-10T05:59:06+00:00'
+updated_at: '2026-04-10T06:02:49+00:00'
+goal: Agents running tasks that touch git history (filter-repo, filter-branch, force-push,
+  reset --hard, push -f) must run in a sandbox. The T-0266 incident had codex running
+  non-sandboxed with full host access, including the ability to force-push to origin.
+  Add a policy that detects these tool invocations in agent prompts or subagent args
+  and refuses to run outside sandbox.
+acceptance_criteria:
+- 'Deny-list of destructive commands hard-blocks subagent execution: git filter-repo,
+  filter-branch, push --force, push -f, reset --hard (without specific args), reflog
+  expire, gc --prune=now'
+- Deny-list is checked against the agent's raw command output BEFORE execution proceeds
+- Any attempted destructive operation routes to human_attention queue instead of running
+- Bypass requires human_checkpoint:before_implementation set on the task
+constraints:
+- Do not allow any silent escape route - prefer false positive (flag for human) over
+  false negative (let destructive op run)
+plan: []
+human_checkpoints: []
+subagents: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0286 sandbox-enforcement-for-destructive-git-operations'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+  merge_agent_attempts: 0
+  worktree_path: null
+retry_policy:
+  max_retries: null
+  stage_retry_limit: null
+created_from: null
+upstream_origin: null
+github_origin: null

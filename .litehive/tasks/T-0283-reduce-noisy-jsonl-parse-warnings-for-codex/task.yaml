@@ -1,0 +1,43 @@
+id: T-0283
+slug: reduce-noisy-jsonl-parse-warnings-for-codex
+title: Reduce noisy JSONL parse warnings for Codex command_execution payloads
+depends_on: []
+task_type: null
+model: null
+mode: implementation
+pipeline_mode: full
+status: queued
+flag_reason: null
+flag_count: 0
+pipeline_status: backlog
+priority: low
+pm_complexity: null
+planned_effort: null
+created_at: '2026-04-10T05:52:45+00:00'
+updated_at: '2026-04-10T05:52:45+00:00'
+goal: Codex emits command_execution payloads that trip JSONL parse warnings. Filter
+  or normalize them in heru/adapters/_codex_impl.py so the warnings don't spam logs
+  during task execution.
+acceptance_criteria:
+- No parse warnings for normal codex command_execution payloads during test runs
+- Fix is in heru/adapters/_codex_impl.py (not the litehive shim)
+- All existing tests pass
+constraints: []
+plan: []
+human_checkpoints: []
+subagents: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0283 reduce-noisy-jsonl-parse-warnings-for-codex'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+  merge_agent_attempts: 0
+  worktree_path: null
+retry_policy:
+  max_retries: null
+  stage_retry_limit: null
+created_from: null
+upstream_origin: null
+github_origin: null

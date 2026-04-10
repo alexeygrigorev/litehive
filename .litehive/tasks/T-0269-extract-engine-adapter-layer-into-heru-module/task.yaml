@@ -7,10 +7,10 @@ engine: null
 model: null
 mode: implementation
 pipeline_mode: full
-status: queued
+status: done
 flag_reason: null
 flag_count: 0
-pipeline_status: backlog
+pipeline_status: done
 priority: medium
 pm_complexity: null
 planned_effort: null

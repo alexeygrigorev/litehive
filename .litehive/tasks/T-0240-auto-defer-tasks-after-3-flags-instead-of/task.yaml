@@ -10,7 +10,7 @@ pipeline_mode: full
 status: queued
 flag_reason: null
 flag_count: 0
-pipeline_status: implementing
+pipeline_status: backlog
 priority: high
 pm_complexity: null
 planned_effort: null

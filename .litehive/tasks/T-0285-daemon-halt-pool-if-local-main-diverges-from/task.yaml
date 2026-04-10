@@ -1,0 +1,48 @@
+id: T-0285
+slug: daemon-halt-pool-if-local-main-diverges-from
+title: 'Daemon: halt pool if local main diverges from origin/main'
+depends_on: []
+task_type: null
+model: null
+mode: implementation
+pipeline_mode: full
+status: queued
+flag_reason: null
+flag_count: 0
+pipeline_status: backlog
+priority: critical
+pm_complexity: null
+planned_effort: null
+created_at: '2026-04-10T05:58:51+00:00'
+updated_at: '2026-04-10T05:58:51+00:00'
+goal: "Before starting the pool, daemon should git fetch origin and check if local\
+  \ main and origin/main have diverged (not fast-forward). If so, halt the pool with\
+  \ a clear error \u2014 something went wrong and manual reconciliation is needed.\
+  \ Prevents the T-0266 incident where codex force-pushed origin and the daemon kept\
+  \ committing to a diverged local branch for hours."
+acceptance_criteria:
+- Daemon runs git fetch before each task pick
+- If local main and origin/main have diverged (neither is ancestor of the other),
+  halt pool with pool_stop_reason=diverged_from_origin
+- Clear error message points to the manual reconciliation steps
+- litehive status shows the divergence warning prominently (!!! ATTENTION REQUIRED
+  !!!)
+constraints: []
+plan: []
+human_checkpoints: []
+subagents: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0285 daemon-halt-pool-if-local-main-diverges-from'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+  merge_agent_attempts: 0
+  worktree_path: null
+retry_policy:
+  max_retries: null
+  stage_retry_limit: null
+created_from: null
+upstream_origin: null
+github_origin: null

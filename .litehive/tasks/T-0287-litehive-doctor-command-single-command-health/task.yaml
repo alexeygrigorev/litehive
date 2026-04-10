@@ -1,0 +1,46 @@
+id: T-0287
+slug: litehive-doctor-command-single-command-health
+title: 'litehive doctor command: single-command health check'
+depends_on: []
+task_type: null
+model: null
+mode: implementation
+pipeline_mode: full
+status: queued
+flag_reason: null
+flag_count: 0
+pipeline_status: backlog
+priority: medium
+pm_complexity: null
+planned_effort: null
+created_at: '2026-04-10T05:59:18+00:00'
+updated_at: '2026-04-10T05:59:18+00:00'
+goal: 'Add a ''litehive doctor'' command that runs a comprehensive workspace health
+  check: duplicate task IDs, merge_failed tasks, flagged tasks, local/origin divergence,
+  stale worktrees without active tasks, stuck tasks in commit_to_git, orphaned subagents,
+  and broken state.yaml. Each problem includes a one-line fix suggestion.'
+acceptance_criteria:
+- litehive doctor runs all health checks and reports findings
+- 'Detects: duplicate IDs, merge_failed, flagged, origin divergence, stale worktrees,
+  orphaned subagents, YAML conflicts'
+- Each finding includes a recommended fix command
+- --fix flag runs the automated fixes for non-destructive problems
+constraints: []
+plan: []
+human_checkpoints: []
+subagents: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0287 litehive-doctor-command-single-command-health'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+  merge_agent_attempts: 0
+  worktree_path: null
+retry_policy:
+  max_retries: null
+  stage_retry_limit: null
+created_from: null
+upstream_origin: null
+github_origin: null

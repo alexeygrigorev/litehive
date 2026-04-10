@@ -1,0 +1,45 @@
+id: T-0284
+slug: isolate-workspace-execution-from-inherited
+title: Isolate workspace execution from inherited VIRTUAL_ENV (on heru)
+depends_on: []
+task_type: null
+model: null
+mode: implementation
+pipeline_mode: full
+status: queued
+flag_reason: null
+flag_count: 0
+pipeline_status: backlog
+priority: medium
+pm_complexity: null
+planned_effort: null
+created_at: '2026-04-10T05:52:59+00:00'
+updated_at: '2026-04-10T05:52:59+00:00'
+goal: When the daemon runs on project A and an agent subprocess runs on project B,
+  the inherited VIRTUAL_ENV from A should not leak into B's subprocess. Strip VIRTUAL_ENV
+  (and similar vars) when the execution cwd differs from the caller's workspace. The
+  fix must be in heru/base.py since litehive/agents/base.py is a re-export.
+acceptance_criteria:
+- heru/base.py strips VIRTUAL_ENV when invocation cwd is outside the caller's workspace
+- Works for all adapters by default via ExternalCLIAdapter.build_invocation
+- Claude adapter still supports credential passthrough (CLAUDE_* vars not dropped)
+- test_engine_invocation_strips_inherited_virtual_env_for_other_project passes
+constraints: []
+plan: []
+human_checkpoints: []
+subagents: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0284 isolate-workspace-execution-from-inherited'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+  merge_agent_attempts: 0
+  worktree_path: null
+retry_policy:
+  max_retries: null
+  stage_retry_limit: null
+created_from: null
+upstream_origin: null
+github_origin: null
