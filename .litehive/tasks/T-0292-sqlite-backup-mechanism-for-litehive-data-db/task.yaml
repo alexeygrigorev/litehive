@@ -1,0 +1,50 @@
+id: T-0292
+slug: sqlite-backup-mechanism-for-litehive-data-db
+title: SQLite backup mechanism for litehive data.db
+depends_on:
+- T-0291
+task_type: null
+model: null
+mode: implementation
+pipeline_mode: full
+status: queued
+flag_reason: null
+flag_count: 0
+pipeline_status: backlog
+priority: medium
+pm_complexity: null
+planned_effort: null
+created_at: '2026-04-10T06:46:43+00:00'
+updated_at: '2026-04-10T06:46:43+00:00'
+goal: Back up the litehive workspace database regularly so operators can recover from
+  corruption, accidental deletes, or disk failure. Back ups should be automatic (daemon-driven),
+  compressed, rotated, and easily restorable via a CLI command.
+acceptance_criteria:
+- Daemon performs nightly SQLite backup using sqlite3 .backup API (online-safe, no
+  lock conflicts)
+- Backups written to $XDG_DATA_HOME/litehive/<wid>/backups/data-YYYY-MM-DDTHH.db.gz
+- 'Rotation: keep 7 daily + 4 weekly backups, auto-prune older'
+- litehive backup create - manual backup trigger
+- litehive backup list - show available backups with timestamp and size
+- litehive backup restore <timestamp> - restore a backup (warns before overwriting
+  current data.db)
+- All existing tests pass
+constraints: []
+plan: []
+human_checkpoints: []
+subagents: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0292 sqlite-backup-mechanism-for-litehive-data-db'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+  merge_agent_attempts: 0
+  worktree_path: null
+retry_policy:
+  max_retries: null
+  stage_retry_limit: null
+created_from: null
+upstream_origin: null
+github_origin: null

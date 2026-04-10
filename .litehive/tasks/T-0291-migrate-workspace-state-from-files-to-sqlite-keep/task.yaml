@@ -1,0 +1,70 @@
+id: T-0291
+slug: migrate-workspace-state-from-files-to-sqlite-keep
+title: Migrate workspace state from files to SQLite, keep only task intent and comments
+  in git
+depends_on: []
+task_type: null
+model: null
+mode: implementation
+pipeline_mode: full
+status: queued
+flag_reason: null
+flag_count: 0
+pipeline_status: backlog
+priority: high
+pm_complexity: null
+planned_effort: null
+created_at: '2026-04-10T06:46:28+00:00'
+updated_at: '2026-04-10T06:46:28+00:00'
+goal: Separate task intent (committed to git) from execution state (out of repo).
+  Git holds only config.yaml, context.md, tasks/<id>/task.yaml and tasks/<id>/comments.yaml.
+  Everything else (state, queue, journal, reports, runtime, engine monitoring, hook
+  artifacts, events, subagents metadata) moves to a SQLite database at $XDG_DATA_HOME/litehive/<workspace-id>/data.db.
+  Worktrees and logs also move to XDG paths outside the repo. On archive, task files
+  are removed from filesystem but the full record stays in the DB. Prevents accidental
+  commits of runtime state, enables queryability, and shrinks clone size.
+acceptance_criteria:
+- 'New SQLite schema with tables: pool_state, queue, task_state, task_journal, stage_reports,
+  hook_artifacts, subagent_sessions, events, engine_monitoring, attention, worktrees'
+- Workspace registry at ~/.config/litehive/workspaces.yaml maps workspace-id (hash
+  of repo path) to repo path
+- data.db lives at $XDG_DATA_HOME/litehive/<workspace-id>/data.db (default ~/.local/share/litehive/<wid>/data.db)
+- worktrees moved to ~/.local/state/litehive/<wid>/worktrees/ (outside the repo entirely)
+- logs/ moved to ~/.local/state/litehive/<wid>/logs/
+- subagent transcripts stored at ~/.local/share/litehive/<wid>/subagents/<task>/<subagent>/
+- tasks/<id>/task.yaml contains only intent fields (no status, pipeline_status, updated_at,
+  runtime, git commit_sha)
+- tasks/<id>/thread.yaml renamed to comments.yaml
+- tasks/<id>/journal.md removed from filesystem, journal becomes DB task_journal table
+- tasks/<id>/runtime.yaml, reports/, artifacts/, events.jsonl, recovery/ all removed
+  from filesystem, data in DB
+- state.yaml, engine-monitoring.yaml, pool-summary.txt removed from filesystem, data
+  in DB
+- 'On archive (close): rm -rf tasks/<id>/ and git commit; full task record remains
+  in DB'
+- litehive archive list/show/restore queries DB
+- 'Loading a task: if filesystem has it, read files and cross-check DB; else read
+  DB only (archived)'
+- ensure_workspace() refuses to create .litehive inside another .litehive
+- All existing tests pass after migration
+- Repo clone size drops significantly (committed .litehive/ shrinks to config + active
+  task intent + comments only)
+constraints: []
+plan: []
+human_checkpoints: []
+subagents: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0291 migrate-workspace-state-from-files-to-sqlite-keep'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+  merge_agent_attempts: 0
+  worktree_path: null
+retry_policy:
+  max_retries: null
+  stage_retry_limit: null
+created_from: null
+upstream_origin: null
+github_origin: null
