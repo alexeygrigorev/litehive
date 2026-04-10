@@ -2,29 +2,30 @@
 
 - Mode: tasks
 - Task type: bugfix
-- PM complexity: -
-- Planned effort: -
+- PM complexity: simple
+- Planned effort: s
 
 ## Goal
-Make commit_to_git reconcile tasks correctly when the intended changes are already present on the target branch and merge produces no new commit.
+Make commit_to_git treat already-landed/no-op integrations as successful reconciliation instead of routing the task into merge_failed.
 
 ## Acceptance Criteria
-- If merge produces no new commit because the patch is already present on main, Litehive does not leave the source task in merge_failed.
-- Task state is reconciled to a non-stuck outcome with a clear reason when merge work is already applied.
-- Operator-facing logs distinguish real merge conflicts from already-landed/no-op merges.
+- When the task worktree's intended patch is already present on main and final integration produces no new commit, commit_to_git finishes the task in a non-stuck success state instead of merge_failed.
+- The task record and operator-visible report/journal explain that the work was already landed or the merge was a no-op, and record the reconciled main commit SHA used to finish the task.
+- Real merge conflicts still surface as merge failures, and operator-facing output distinguishes conflict failures from already-landed/no-op reconciliation.
 
 ## Constraints
-- Prefer the smallest change that removes the failure mode.
-- Call out any remaining edge cases or follow-up risk explicitly.
+- Prefer the smallest change in commit_to_git/recovery paths that removes the stuck merge_failed outcome without broad workflow refactoring.
+- Call out any remaining edge cases where Git reports success but main/worktree divergence still needs explicit follow-up.
 
 ## Plan
-- Reproduce or localize the failing behavior.
-- Implement the minimal targeted fix.
-- Run focused regression coverage for the affected behavior.
+- Add a focused regression that reproduces a task worktree whose change is already present on main and currently risks being treated as a failed/no-op integration.
+- Update commit_to_git reconciliation logic to detect already-landed/no-op integration separately from real merge conflicts, then mark the task done with a clear reason and commit SHA.
+- Keep conflict behavior intact and add/adjust operator-facing summary or journal text so reviewers can tell no-op reconciliation from merge_conflict failures.
+- Run the affected pytest slice around commit_to_git, recovery, and merge-agent behavior to prove the new path and guard existing conflict handling.
 
 ## PM Sizing
-- Complexity: Not estimated.
-- Planned effort: Not sized.
+- Complexity: simple
+- Planned effort: s
 
 ## Template Guidance
 - Describe the broken behavior, trigger, and expected correct behavior before changing code.

@@ -1127,6 +1127,43 @@ def test_commit_to_git_treats_clean_task_worktree_as_done(tmp_path: Path) -> Non
     assert refreshed.runtime.git.worktree_path is None
 
 
+def test_commit_to_git_reconciles_no_op_merge_when_patch_is_already_on_main(
+    tmp_path: Path,
+) -> None:
+    _init_git_repo(tmp_path)
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Already landed worktree patch")
+
+    worktree_path = tmp_path / ".litehive" / "worktrees" / f"{task.id}-{task.slug}"
+    worktree_path.parent.mkdir(parents=True, exist_ok=True)
+    _run(["git", "worktree", "add", "--detach", str(worktree_path), "HEAD"], tmp_path)
+    (worktree_path / "app.txt").write_text("base\nfeature\n", encoding="utf-8")
+    _run(["git", "add", "app.txt"], worktree_path)
+    _run(["git", "commit", "-m", "worktree feature"], worktree_path)
+    wt_head = _run(["git", "rev-parse", "HEAD"], worktree_path)
+
+    task.git.worktree_path = str(worktree_path.relative_to(tmp_path))
+    save_task(tmp_path, task)
+
+    _run(["git", "cherry-pick", wt_head], tmp_path)
+
+    report = _commit_to_git_report(tmp_path, worktree_path, task, auto_commit_enabled=True)
+    reconciled_sha = _run(["git", "rev-parse", "HEAD"], tmp_path)
+
+    assert report.verdict == "pass"
+    assert report.summary == (
+        f"CommitToGit reconciled: work already landed on main; no-op merge at {reconciled_sha[:8]}"
+    )
+    assert task.status == "done"
+    assert task.pipeline_status == "done"
+    assert task.git.commit_sha == reconciled_sha
+    assert _run(["git", "rev-parse", "HEAD"], tmp_path) == reconciled_sha
+    assert task.runtime.git.worktree_path is None
+
+    journal = (task_dir(tmp_path, task) / "journal.md").read_text(encoding="utf-8")
+    assert "work already landed on main; no-op merge" in journal
+
+
 def test_commit_to_git_integrates_existing_litehive_checkpoint_from_clean_worktree(
     tmp_path: Path,
 ) -> None:

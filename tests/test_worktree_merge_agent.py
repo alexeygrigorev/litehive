@@ -184,6 +184,9 @@ def test_merge_conflict_agent_fails(tmp_path: Path) -> None:
     )
 
     assert report.verdict == "fail"
+    assert report.summary == (
+        "CommitToGit failed: merge conflict prevented integrating task worktree into main"
+    )
     assert report.failure_classification == "merge_conflict"
     assert task.status != "done"
     assert task.git.merge_agent_attempts == 1

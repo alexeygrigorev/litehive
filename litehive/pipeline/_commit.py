@@ -14,6 +14,24 @@ from litehive.config import LitehiveConfig
 from ._hooks import _run_runner_hooks_for_stage
 
 
+def _worktree_patch_already_on_main(root: Path, wt_head: str, main_head: str) -> bool:
+    """Return True when every worktree-only commit is already represented on main."""
+    try:
+        cherry = subprocess.run(
+            ["git", "cherry", main_head, wt_head],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except (subprocess.TimeoutExpired, OSError):
+        return False
+    if cherry.returncode != 0:
+        return False
+    lines = [line.strip() for line in cherry.stdout.splitlines() if line.strip()]
+    return not lines or all(line.startswith("-") for line in lines)
+
+
 def _commit_to_git_report(
     root: Path,
     execution_root: Path,
@@ -48,6 +66,7 @@ def _commit_to_git_report(
 
     head_before = current_head(root)
     commit_msg = checkpoint_message(task)
+    wt_head: str | None = None
 
     # Step 1: commit everything in the worktree
     if execution_root != root:
@@ -59,6 +78,7 @@ def _commit_to_git_report(
 
     # Step 2: merge worktree into main
     merge_ok = False
+    main_head_before_merge = head_before
     if execution_root != root:
         wt_head = current_head(execution_root)
         if wt_head:
@@ -66,6 +86,7 @@ def _commit_to_git_report(
             subprocess.run(["git", "add", "-A"], cwd=root, capture_output=True)
             subprocess.run(["git", "commit", "-m", "chore: sync workspace state"],
                            cwd=root, capture_output=True)
+            main_head_before_merge = current_head(root)
             merge = subprocess.run(
                 ["git", "merge", wt_head, "-m", commit_msg, "--no-edit"],
                 cwd=root, capture_output=True, text=True,
@@ -121,13 +142,26 @@ def _commit_to_git_report(
 
     # Step 3: verify new commits landed on main
     head_after = current_head(root)
+    no_op_reconciled = bool(
+        merge_ok
+        and execution_root != root
+        and wt_head
+        and main_head_before_merge
+        and head_after == main_head_before_merge
+        and wt_head != head_after
+        and _worktree_patch_already_on_main(root, wt_head, head_after)
+    )
     if not merge_ok:
-        append_journal(root, task, "CommitToGit failed: merge did not produce new commits on main.")
+        append_journal(
+            root,
+            task,
+            "CommitToGit failed: merge conflict prevented integrating task worktree into main.",
+        )
         return StageReport(
             task_id=task.id,
             step="commit_to_git",
             verdict="fail",
-            summary="CommitToGit failed: merge did not produce new commits on main",
+            summary="CommitToGit failed: merge conflict prevented integrating task worktree into main",
             failure_classification="merge_conflict",
         )
 
@@ -161,7 +195,11 @@ def _commit_to_git_report(
         task_id=task.id,
         step="commit_to_git",
         verdict="pass",
-        summary=f"CommitToGit complete. Commit: {head_after[:8]}",
+        summary=(
+            f"CommitToGit reconciled: work already landed on main; no-op merge at {head_after[:8]}"
+            if no_op_reconciled
+            else f"CommitToGit complete. Commit: {head_after[:8]}"
+        ),
         files_changed=files_changed,
     )
 
@@ -202,7 +240,14 @@ def _commit_to_git_report(
     task.git.checkpoint_base_sha = head_before
     set_task_commit_sha(task, head_after)
     save_task(root, task)
-    append_journal(root, task, f"CommitToGit complete. Commit: {head_after}")
+    if no_op_reconciled:
+        append_journal(
+            root,
+            task,
+            f"CommitToGit reconciled: work already landed on main; no-op merge at {head_after}.",
+        )
+    else:
+        append_journal(root, task, f"CommitToGit complete. Commit: {head_after}")
 
     # Push to remote
     push = subprocess.run(["git", "push"], cwd=root, capture_output=True, text=True)
