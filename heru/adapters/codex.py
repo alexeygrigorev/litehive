@@ -66,19 +66,25 @@ class CodexCLIAdapter(ExternalCLIAdapter):
         max_turns: int | None = None,
         resume_session_id: str | None = None,
     ) -> list[str]:
+        # Two shapes:
+        #   - fresh:  codex exec --json ... --cd <cwd> [--model M] <prompt>
+        #   - resume: codex exec resume --json ... [--model M] <session_id> <prompt>
+        # `codex exec resume` does not accept --cd — the subprocess cwd is
+        # already set to the worktree path by the caller, so codex inherits it.
+        command: list[str] = [self.binary, "exec"]
         if resume_session_id:
-            prompt = f"[Resuming prior session {resume_session_id}]\n\n{prompt}"
-        command = [
-            self.binary,
-            "exec",
+            command.append("resume")
+        command.extend([
             "--json",
             "--dangerously-bypass-approvals-and-sandbox",
-            "--cd",
-            str(cwd),
             "--skip-git-repo-check",
-        ]
+        ])
+        if not resume_session_id:
+            command.extend(["--cd", str(cwd)])
         if model:
             command.extend(["--model", model])
+        if resume_session_id:
+            command.append(resume_session_id)
         command.append(prompt)
         return command
 

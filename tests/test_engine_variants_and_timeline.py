@@ -170,8 +170,14 @@ def test_claude_build_invocation_uses_stdin_for_large_prompt(tmp_path: Path) -> 
     assert small_invocation.stdin_data is None
 
 
-def test_codex_build_invocation_uses_exec_for_resume_with_session_context(tmp_path: Path) -> None:
-    """codex resume is TUI-only, so resume falls back to exec with session context in prompt."""
+def test_codex_build_invocation_uses_exec_resume_subcommand(tmp_path: Path) -> None:
+    """codex exec resume <session_id> <prompt> really resumes the prior session.
+
+    The old adapter faked resume by prepending '[Resuming prior session ...]' to
+    the prompt and spawning a fresh `codex exec`. That discarded all conversation
+    state. The real `codex exec resume` subcommand takes a UUID and a prompt and
+    continues the session with full history preserved.
+    """
     engine = get_engine("codex")
 
     invocation = engine.build_invocation(
@@ -182,11 +188,14 @@ def test_codex_build_invocation_uses_exec_for_resume_with_session_context(tmp_pa
 
     assert invocation.cwd == tmp_path
     argv = list(invocation.argv)
-    assert argv[0] == "codex"
-    assert argv[1] == "exec"
+    assert argv[:3] == ["codex", "exec", "resume"]
     assert "--json" in argv
-    assert "[Resuming prior session abc-123]" in argv[-1]
-    assert "continue please" in argv[-1]
+    # `codex exec resume` does not accept --cd; the subprocess cwd is already set.
+    assert "--cd" not in argv
+    # Session id immediately before the prompt, and no fake-resume prefix.
+    assert argv[-2] == "abc-123"
+    assert argv[-1] == "continue please"
+    assert "[Resuming prior session" not in argv[-1]
 
 
 def test_engine_invocation_strips_inherited_virtual_env_for_other_project(
