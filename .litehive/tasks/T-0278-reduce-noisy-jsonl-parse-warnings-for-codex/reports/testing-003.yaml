@@ -1,0 +1,49 @@
+task_id: T-0278
+step: testing
+verdict: pass
+source: agent
+summary: 'Verified the T-0278 bugfix with focused independent checks. Reviewed the
+  change in litehive/agents/base.py and the regression in tests/test_engine_parse_warnings.py.
+  Ran: uv run pytest -q tests/test_engine_parse_warnings.py -> 13 passed in 0.49s.
+  Also ran an independent Python reproduction against iter_jsonl_payloads/extract_codex_messages
+  using a malformed multiline Codex item.completed command_execution payload bracketed
+  by valid agent_message events. Evidence: only the two valid item.completed events
+  were returned, transcript extraction still produced before/after, and repeated rescans
+  of identical stdout emitted one grouped warning: skipping 3 consecutive unparseable
+  lines starting at 2. This satisfies the acceptance criteria: warning flood is reduced,
+  valid events are not misclassified, and focused regression coverage exists for the
+  malformed command_execution shape. Residual behavior is intentional: the first parse
+  of a previously unseen malformed block still logs one grouped warning for visibility.'
+feedback: 'Verified the T-0278 bugfix with focused independent checks. Reviewed the
+  change in litehive/agents/base.py and the regression in tests/test_engine_parse_warnings.py.
+  Ran: uv run pytest -q tests/test_engine_parse_warnings.py -> 13 passed in 0.49s.
+  Also ran an independent Python reproduction against iter_jsonl_payloads/extract_codex_messages
+  using a malformed multiline Codex item.completed command_execution payload bracketed
+  by valid agent_message events. Evidence: only the two valid item.completed events
+  were returned, transcript extraction still produced before/after, and repeated rescans
+  of identical stdout emitted one grouped warning: skipping 3 consecutive unparseable
+  lines starting at 2. This satisfies the acceptance criteria: warning flood is reduced,
+  valid events are not misclassified, and focused regression coverage exists for the
+  malformed command_execution shape. Residual behavior is intentional: the first parse
+  of a previously unseen malformed block still logs one grouped warning for visibility.'
+submitted_via_cli: true
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 46
+hook_results: []
+created_at: '2026-04-10T04:39:01+00:00'

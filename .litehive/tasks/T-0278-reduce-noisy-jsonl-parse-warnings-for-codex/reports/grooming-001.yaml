@@ -1,0 +1,74 @@
+task_id: T-0278
+step: grooming
+verdict: pass
+source: agent
+summary: Grooming pass. I inspected .litehive/tasks/T-0278-reduce-noisy-jsonl-parse-warnings-for-codex/task.yaml,
+  litehive/agents/base.py, litehive/agents/adapters/codex.py, litehive/agents/adapters/_codex_impl.py,
+  and tests/test_engine_parse_warnings.py. No code changes or pytest runs in this
+  stage.
+feedback: 'Grooming pass. I inspected .litehive/tasks/T-0278-reduce-noisy-jsonl-parse-warnings-for-codex/task.yaml,
+  litehive/agents/base.py, litehive/agents/adapters/codex.py, litehive/agents/adapters/_codex_impl.py,
+  and tests/test_engine_parse_warnings.py. No code changes or pytest runs in this
+  stage.
+
+
+  Verified reproduction from source inspection plus ad hoc Python probes:
+
+  - A representative stdout stream containing valid Codex JSONL events before and
+  after one malformed multiline item.completed command_execution payload causes iter_jsonl_payloads
+  to keep the valid events and emit one warning per broken physical line.
+
+  - Running the normal Codex adapter path against that same stdout (render_transcript,
+  extract_usage_observation, extract_continuation) multiplied the noise to 15 warnings
+  from a single malformed command_execution block because iter_jsonl_payloads is called
+  repeatedly over the same stdout.
+
+
+  Root cause: litehive/agents/base.py iter_jsonl_payloads is strict line-by-line JSON
+  parsing and logs on every invalid fragment; Codex command_execution payloads can
+  become malformed when embedded command or aggregated_output strings contain unescaped
+  shell/newline content, and repeated rescans amplify the warning spam. Valid neighboring
+  events still parse and that behavior must remain unchanged.
+
+
+  Implementation contract:
+
+  1. Keep the fix tightly scoped to JSONL parsing / Codex consumption paths; do not
+  broaden engine behavior.
+
+  2. Preserve safety: valid object events surrounding malformed command_execution
+  fragments must still parse, and malformed fragments must not be misclassified as
+  real events.
+
+  3. Prefer the smallest change that collapses repeated warnings for this failure
+  mode, either by coalescing malformed-line warnings for one broken payload/scan or
+  by avoiding repeated warning-emitting rescans of identical stdout.
+
+  4. Add focused regression coverage using the observed malformed multiline command_execution
+  shape or an equivalent malformed-line fixture, and assert both that valid neighboring
+  events are still returned and warning volume is bounded.
+
+
+  Task record is already sufficiently defined for implementation; no follow-up task
+  needed. PM sizing remains moderate / m.'
+submitted_via_cli: true
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 154
+hook_results: []
+created_at: '2026-04-10T04:35:59+00:00'

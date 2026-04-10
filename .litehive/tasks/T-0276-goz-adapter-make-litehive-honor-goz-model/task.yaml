@@ -6,15 +6,15 @@ task_type: adapter
 model: null
 mode: tasks
 pipeline_mode: full
-status: in_progress
+status: done
 flag_reason: null
 flag_count: 0
-pipeline_status: commit_to_git
+pipeline_status: done
 priority: medium
 pm_complexity: simple
 planned_effort: s
 created_at: '2026-04-09T21:18:35+00:00'
-updated_at: '2026-04-10T04:32:54+00:00'
+updated_at: '2026-04-10T04:32:56+00:00'
 goal: Update Litehive's goz adapter so workspace and task model overrides are passed
   through to goz run.
 acceptance_criteria:
@@ -61,9 +61,9 @@ subagents:
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0276 goz-adapter-make-litehive-honor-goz-model'
-  commit_sha: null
-  checkpoint_base_sha: null
-  checkpoint_attempts: 0
+  commit_sha: ab305be15e429c62d39fd38064bcd1c2738718a2
+  checkpoint_base_sha: 15a4f4b2062dc7d6b5073db35f9e934e325352c3
+  checkpoint_attempts: 1
   rolled_back_checkpoint_attempt: null
   merge_agent_attempts: 0
   worktree_path: null

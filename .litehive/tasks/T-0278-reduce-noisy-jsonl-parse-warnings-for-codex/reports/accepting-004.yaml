@@ -1,0 +1,49 @@
+task_id: T-0278
+step: accepting
+verdict: pass
+source: agent
+summary: 'Accepted. I verified the implementation directly in litehive/agents/base.py
+  and the focused regression in tests/test_engine_parse_warnings.py. The change is
+  narrowly scoped to JSONL parsing: malformed consecutive physical lines are coalesced
+  into one warning, parsed payloads are cached by exact stdout, and only successfully
+  decoded JSON objects are returned. I reran the required focused check: uv run pytest
+  -q tests/test_engine_parse_warnings.py -> 13 passed in 0.45s. Diff review and test
+  evidence show the malformed multiline Codex command_execution shape is covered,
+  valid neighboring item.completed agent_message events still parse and feed transcript
+  extraction, and repeated rescans of the same stdout no longer flood logs with repeated
+  unparseable-line warnings. Acceptance criteria met: warning flood reduced for command_execution
+  malformed payloads, parser safety preserved for valid events, and focused regression
+  coverage added.'
+feedback: 'Accepted. I verified the implementation directly in litehive/agents/base.py
+  and the focused regression in tests/test_engine_parse_warnings.py. The change is
+  narrowly scoped to JSONL parsing: malformed consecutive physical lines are coalesced
+  into one warning, parsed payloads are cached by exact stdout, and only successfully
+  decoded JSON objects are returned. I reran the required focused check: uv run pytest
+  -q tests/test_engine_parse_warnings.py -> 13 passed in 0.45s. Diff review and test
+  evidence show the malformed multiline Codex command_execution shape is covered,
+  valid neighboring item.completed agent_message events still parse and feed transcript
+  extraction, and repeated rescans of the same stdout no longer flood logs with repeated
+  unparseable-line warnings. Acceptance criteria met: warning flood reduced for command_execution
+  malformed payloads, parser safety preserved for valid events, and focused regression
+  coverage added.'
+submitted_via_cli: true
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 35
+hook_results: []
+created_at: '2026-04-10T04:39:36+00:00'

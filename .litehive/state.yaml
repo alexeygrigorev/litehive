@@ -1,9 +1,8 @@
-active_task_id: T-0276
+active_task_id: T-0278
 active_task_ids: []
 mode: implementation
 queue:
 - T-0263
-- T-0278
 - T-0279
 - T-0280
 - T-0107
