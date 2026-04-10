@@ -1,12 +1,12 @@
 """Runner hook execution for stage boundaries."""
 
-import os
 import subprocess
 from pathlib import Path
 
 import yaml
 
 from litehive.config import LitehiveConfig
+from litehive.execution_env import build_child_process_env
 from litehive.models import StageReport, TaskRecord, cap_feedback
 from litehive.tasks.journal import append_journal
 from litehive.tasks.paths import task_dir
@@ -77,15 +77,17 @@ def _runner_hook_env(
     hook_point: str,
 ) -> dict[str, str]:
     changed_paths = _collect_changed_hook_paths(execution_root)
-    return {
-        **os.environ,
-        "LITEHIVE_TASK_ID": task.id,
-        "LITEHIVE_TASK_STEP": step,
-        "LITEHIVE_HOOK_POINT": hook_point,
-        "LITEHIVE_WORKSPACE_ROOT": str(root),
-        "LITEHIVE_EXECUTION_ROOT": str(execution_root),
-        "LITEHIVE_CHANGED_PATHS": "\n".join(changed_paths),
-    }
+    return build_child_process_env(
+        target_root=execution_root,
+        extra_env={
+            "LITEHIVE_TASK_ID": task.id,
+            "LITEHIVE_TASK_STEP": step,
+            "LITEHIVE_HOOK_POINT": hook_point,
+            "LITEHIVE_WORKSPACE_ROOT": str(root),
+            "LITEHIVE_EXECUTION_ROOT": str(execution_root),
+            "LITEHIVE_CHANGED_PATHS": "\n".join(changed_paths),
+        },
+    )
 
 
 def _run_runner_hooks_for_stage(

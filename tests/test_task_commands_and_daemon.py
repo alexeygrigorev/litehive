@@ -3653,6 +3653,53 @@ exit 1
     assert "20260404T100001Z" not in directories
     assert any(name.startswith("2026") for name in directories)
 
+
+def test_run_daemon_loop_workspace_commands_do_not_log_inherited_virtual_env_warning(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import litehive.daemon as daemon_module
+
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    (workspace / ".litehive").mkdir()
+    (workspace / ".litehive" / "state.yaml").write_text(
+        "active_task_id: null\nqueue: []\npool_stop_reason: null\n",
+        encoding="utf-8",
+    )
+    fake_uv = _write_fake_uv(
+        tmp_path,
+        """#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ -n "${VIRTUAL_ENV:-}" ]]; then
+  echo "warning: VIRTUAL_ENV leaked from parent: ${VIRTUAL_ENV}" >&2
+fi
+
+if [[ "${1:-}" == "run" && "${2:-}" == "litehive" && "${3:-}" == "repair" ]]; then
+  echo "repaired: no"
+  exit 0
+fi
+
+echo "unexpected uv invocation: $*" >&2
+exit 1
+""",
+    )
+    monkeypatch.setenv("VIRTUAL_ENV", "/caller/.venv")
+    monkeypatch.setattr(
+        "litehive.daemon._execution._default_command_prefix",
+        lambda: [str(fake_uv), "run", "litehive"],
+    )
+
+    exit_code = daemon_module.run_daemon_loop(workspace, output_stream=None)
+
+    assert exit_code == 0
+    logs_root = workspace / ".litehive" / "logs" / "run-all"
+    latest_log_dir = max(path for path in logs_root.iterdir() if path.is_dir())
+    repair_log = (latest_log_dir / "0001-repair.log").read_text(encoding="utf-8")
+    assert "warning: VIRTUAL_ENV leaked from parent" not in repair_log
+    assert "repaired: no" in repair_log
+
+
 def test_run_task_skips_pre_acceptance_hook_when_not_configured(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -3832,6 +3879,37 @@ def test_run_task_runs_pre_acceptance_hook_after_testing_passes(
     )
     assert implementing_report["hook_results"][0]["point"] == "after_implementing"
     assert "runner hook passed" in "\n".join(implementing_report["warnings"])
+
+
+def test_run_task_strips_inherited_virtual_env_from_runner_hook_env(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ensure_workspace(
+        tmp_path,
+        LitehiveConfig(runner_hooks={"before_implementing": [{"command": "echo hook"}]}),
+    )
+    create_task(tmp_path, title="Sanitize hook env", auto_commit=False)
+    monkeypatch.setenv("VIRTUAL_ENV", "/caller/.venv")
+
+    def fake_subagent_run(self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None):  # type: ignore[no-untyped-def]
+        return _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
+
+    def fake_hook(argv, cwd, capture_output, text, check, env=None):  # type: ignore[no-untyped-def]
+        if list(argv) == ["bash", "-lc", "echo hook"]:
+            assert env is not None
+            assert "VIRTUAL_ENV" not in env
+            assert env["LITEHIVE_TASK_ID"] == "T-0001"
+            assert env["LITEHIVE_EXECUTION_ROOT"] == str(tmp_path)
+            return subprocess.CompletedProcess(argv, 0, stdout="hook\n", stderr="")
+        return subprocess.CompletedProcess(argv, 0, stdout="", stderr="")
+
+    monkeypatch.setattr("litehive.pipeline.SubagentManager.run", fake_subagent_run)
+    monkeypatch.setattr("litehive.pipeline._hooks.subprocess.run", fake_hook)
+
+    summary = run_next_task(tmp_path)
+
+    assert summary.result is not None
+    assert summary.result.final_status == "done"
 
 
 def test_collect_changed_hook_paths_limits_scope_to_code_paths(tmp_path: Path) -> None:

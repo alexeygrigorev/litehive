@@ -190,6 +190,38 @@ def test_codex_build_invocation_uses_exec_for_resume_with_session_context(tmp_pa
     assert "continue please" in argv[-1]
 
 
+def test_engine_invocation_strips_inherited_virtual_env_for_other_project(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    engine = get_engine("codex")
+    caller_root = Path(__file__).resolve().parents[1]
+    other_root = tmp_path / "other-workspace"
+    other_root.mkdir()
+    (other_root / "pyproject.toml").write_text(
+        '[project]\nname = "other-workspace"\nversion = "0.1.0"\n',
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(caller_root)
+    monkeypatch.setenv("VIRTUAL_ENV", str(caller_root / ".venv"))
+
+    invocation = engine.build_invocation("ship it", other_root)
+
+    assert "VIRTUAL_ENV" not in invocation.env
+
+
+def test_engine_invocation_preserves_virtual_env_for_same_project(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    engine = get_engine("codex")
+    caller_root = Path(__file__).resolve().parents[1]
+    monkeypatch.chdir(caller_root)
+    monkeypatch.setenv("VIRTUAL_ENV", str(caller_root / ".venv"))
+
+    invocation = engine.build_invocation("ship it", caller_root)
+
+    assert invocation.env["VIRTUAL_ENV"] == str(caller_root / ".venv")
+
+
 def test_claude_no_max_turns_by_default(tmp_path: Path) -> None:
     from litehive.agents import ClaudeCLIAdapter
 

@@ -15,6 +15,7 @@ from typing import TextIO
 import yaml
 
 from litehive.config import ensure_workspace, state_path, workspace_dir
+from litehive.execution_env import build_child_process_env
 from litehive.workspace.locking import runner_status
 
 from ._logs import _latest_matching, _prune_run_all_log_dirs, latest_run_all_log_dir
@@ -94,6 +95,7 @@ def _run_logged_subprocess(
     command: list[str],
     *,
     cwd: Path,
+    target_root: Path | None = None,
     log_path: Path,
     output_stream: TextIO | None,
     current_child: dict[str, subprocess.Popen[str] | None],
@@ -102,6 +104,7 @@ def _run_logged_subprocess(
         process = subprocess.Popen(
             command,
             cwd=cwd,
+            env=build_child_process_env(target_root=target_root or cwd),
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
@@ -170,6 +173,7 @@ def run_daemon_loop(
             repair_rc = _run_logged_subprocess(
                 [*command_prefix, "repair", "--workspace", str(workspace)],
                 cwd=workspace,
+                target_root=workspace,
                 log_path=repair_file,
                 output_stream=None,
                 current_child=current_child,
@@ -201,6 +205,7 @@ def run_daemon_loop(
             run_rc = _run_logged_subprocess(
                 [*command_prefix, "run", "--workspace", str(workspace)],
                 cwd=workspace,
+                target_root=workspace,
                 log_path=run_file,
                 output_stream=output_stream,
                 current_child=current_child,
@@ -258,6 +263,7 @@ def start_background_daemon(workspace: Path) -> int:
             str(workspace),
         ],
         cwd=project_root,
+        env=build_child_process_env(target_root=workspace),
         stdin=subprocess.DEVNULL,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,

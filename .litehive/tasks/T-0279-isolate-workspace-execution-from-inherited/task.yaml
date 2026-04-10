@@ -11,26 +11,34 @@ flag_reason: null
 flag_count: 0
 pipeline_status: commit_to_git
 priority: high
-pm_complexity: null
-planned_effort: null
+pm_complexity: moderate
+planned_effort: s
 created_at: '2026-04-09T21:28:38+00:00'
-updated_at: '2026-04-10T04:54:05+00:00'
-goal: Prevent child workspace runs from inheriting the operator shell's active Python
-  virtual environment.
+updated_at: '2026-04-10T04:54:06+00:00'
+goal: Prevent Litehive child processes that execute in a task worktree or other target
+  workspace from inheriting an unrelated operator-shell Python virtual environment.
 acceptance_criteria:
-- Workspace-scoped commands sanitize inherited VIRTUAL_ENV when targeting another
-  repo.
-- Subagents and helper commands prefer the target workspace environment instead of
-  the caller's active venv.
-- Logs no longer show uv warnings about VIRTUAL_ENV from the parent repo leaking into
-  child workspace execution.
+- When Litehive launches subagents or runner hooks against a task worktree or other
+  execution root, the child process environment does not forward an unrelated parent
+  VIRTUAL_ENV from the caller shell.
+- Workspace-scoped helper commands continue to pass required Litehive metadata env
+  vars, but uv resolves the target workspace environment instead of warning about
+  the caller repo's active venv.
+- Focused regression coverage demonstrates cross-workspace execution no longer emits
+  the uv VIRTUAL_ENV mismatch warning in captured stderr/log artifacts.
 constraints:
 - Prefer the smallest change that removes the failure mode.
 - Call out any remaining edge cases or follow-up risk explicitly.
 plan:
-- Reproduce or localize the failing behavior.
-- Implement the minimal targeted fix.
-- Run focused regression coverage for the affected behavior.
+- Localize every child-process launch path that starts from os.environ.copy() and
+  can target a task worktree or alternate workspace execution root.
+- Add a shared environment-sanitizing helper so subagent adapters, runner hooks, and
+  daemon-launched workspace commands drop inherited VIRTUAL_ENV when executing outside
+  the caller workspace while preserving required Litehive env vars.
+- Add focused regression tests that simulate a parent-shell VIRTUAL_ENV and assert
+  the child env/logs use the target workspace without uv mismatch warnings.
+- Run the narrow affected pytest selection first, then any broader smoke command needed
+  to prove the fix did not break normal workspace execution.
 human_checkpoints: []
 subagents:
 - id: SA-0001
@@ -61,6 +69,13 @@ subagents:
   path: subagents/SA-0004-reviewer
   sandboxed: false
   sandbox_summary: host
+- id: SA-0005
+  role: merge-resolver
+  engine: codex
+  status: running
+  path: subagents/SA-0005-merge-resolver
+  sandboxed: false
+  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0279 isolate-workspace-execution-from-inherited'
@@ -68,7 +83,7 @@ git:
   checkpoint_base_sha: null
   checkpoint_attempts: 0
   rolled_back_checkpoint_attempt: null
-  merge_agent_attempts: 0
+  merge_agent_attempts: 1
   worktree_path: null
 retry_policy:
   max_retries: null
