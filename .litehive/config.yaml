@@ -102,7 +102,23 @@ external_engine_sandbox:
   no_new_privileges: true
   tmpfs:
   - /tmp
-  engine_policies: {}
+  engine_policies:
+    codex:
+      enabled: false
+      network_mode: null
+      workspace_mode: null
+      environment: []
+      credential_inputs: []
+      extra_ro_binds:
+      - /home/alexey/.nvm/versions/node/v24.13.1
+    claude:
+      enabled: false
+      network_mode: null
+      workspace_mode: null
+      environment: []
+      credential_inputs: []
+      extra_ro_binds:
+      - /home/alexey/.nvm/versions/node/v24.13.1
 engine_freeze:
   claude: '2026-04-10T09:00:00Z'
 engine_preference:

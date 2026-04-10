@@ -250,6 +250,7 @@ def _normalize_external_engine_sandbox_policy(
                 )
                 for index, item in enumerate(raw_policy.get("credential_inputs", []))
             ],
+            extra_ro_binds=[str(item).strip() for item in raw_policy.get("extra_ro_binds", [])],
         )
     for index, env_name in enumerate(policy.environment):
         if not re.fullmatch(r"[A-Z][A-Z0-9_]*", env_name):
@@ -265,6 +266,15 @@ def _normalize_external_engine_sandbox_policy(
     ):
         allowed = ", ".join(sorted(VALID_SANDBOX_WORKSPACE_MODES))
         raise ValueError(f"{field_name}.workspace_mode must be one of: {allowed}")
+    normalized_binds: list[str] = []
+    for index, raw_path in enumerate(policy.extra_ro_binds):
+        host_path = raw_path.strip()
+        if not host_path:
+            continue
+        if not host_path.startswith("/"):
+            raise ValueError(f"{field_name}.extra_ro_binds[{index}] must be an absolute host path")
+        normalized_binds.append(host_path)
+    policy.extra_ro_binds = normalized_binds
     return policy
 
 

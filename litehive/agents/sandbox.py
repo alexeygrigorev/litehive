@@ -269,6 +269,7 @@ class SandboxLauncher:
             if value is not None:
                 allowed_env[env_name] = value
         git_plan = self._prepare_git_filesystem(role)
+        extra_ro_binds = self._resolved_extra_ro_binds(engine_name, policy)
         if git_plan.prepend_path:
             existing_path = invocation.env.get("PATH", os.environ.get("PATH", ""))
             segments = [*git_plan.prepend_path]
@@ -277,6 +278,13 @@ class SandboxLauncher:
             allowed_env["PATH"] = ":".join(segments)
         for source, target in git_plan.extra_ro_binds:
             argv.extend(["--mount", self._bind_mount_spec(Path(source), PurePosixPath(target), read_only=True)])
+        for host_path in extra_ro_binds:
+            argv.extend(
+                [
+                    "--mount",
+                    self._bind_mount_spec(host_path, PurePosixPath(str(host_path)), read_only=True),
+                ]
+            )
         for credential in () if policy is None else policy.credential_inputs:
             raw_path = invocation.env.get(credential.env_var)
             if not raw_path:
@@ -347,6 +355,7 @@ class SandboxLauncher:
             argv.extend(["--tmpfs", tmpfs_path])
 
         git_plan = self._prepare_git_filesystem(role)
+        extra_ro_binds = self._resolved_extra_ro_binds(engine_name, policy)
 
         # Read-only system mounts (only existing paths).
         for sys_path in self.BWRAP_SYSTEM_RO_BINDS:
@@ -355,6 +364,9 @@ class SandboxLauncher:
 
         for source, target in git_plan.extra_ro_binds:
             argv.extend(["--ro-bind", source, target])
+        for host_path in extra_ro_binds:
+            host_path_str = str(host_path)
+            argv.extend(["--ro-bind", host_path_str, host_path_str])
 
         # Workspace mount.
         workspace_root = str(self.root)
@@ -402,14 +414,33 @@ class SandboxLauncher:
             argv.extend(["--setenv", env_name, value])
 
         # Working directory and command.
+        sandbox_argv = list(invocation.argv)
+        if sandbox_argv:
+            sandbox_argv[0] = resolved_binary
         argv.extend(["--chdir", workspace_root])
         argv.append("--")
-        argv.extend(invocation.argv)
+        argv.extend(sandbox_argv)
 
         return CLIInvocation(argv=tuple(argv), cwd=invocation.cwd, env=invocation.env)
 
     def _policy_for_engine(self, engine_name: str) -> ExternalEngineSandboxPolicy | None:
         return self.config.external_engine_sandbox.engine_policies.get(engine_name)
+
+    @staticmethod
+    def _resolved_extra_ro_binds(
+        engine_name: str,
+        policy: ExternalEngineSandboxPolicy | None,
+    ) -> tuple[Path, ...]:
+        resolved_paths: list[Path] = []
+        for raw_path in () if policy is None else policy.extra_ro_binds:
+            host_path = Path(raw_path).expanduser()
+            if not host_path.exists():
+                raise SandboxError(
+                    f"Sandbox policy for engine '{engine_name}' requires read-only bind path "
+                    f"'{host_path}', but it does not exist on the host."
+                )
+            resolved_paths.append(host_path.resolve())
+        return tuple(resolved_paths)
 
     def classify_resource_limit_event(
         self,

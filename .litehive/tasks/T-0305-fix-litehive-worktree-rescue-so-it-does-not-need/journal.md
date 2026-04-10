@@ -33,3 +33,9 @@ fi`.
 
 ## 2026-04-10T11:58:26+00:00
 Task metadata updated via CLI.
+
+## 2026-04-10T12:09:44+00:00
+CommitToGit failed: merge conflict prevented integrating task worktree into main.
+
+## 2026-04-10T12:09:44+00:00
+Execution finished with status `merge_failed`.
