@@ -1,4 +1,4 @@
-active_task_id: T-0290
+active_task_id: T-0263
 active_task_ids: []
 mode: implementation
 queue:
@@ -24,4 +24,6 @@ queue:
 - T-0240
 pool_stop_reason: null
 next_task_number: 315
-unmerged_worktrees: []
+unmerged_worktrees:
+- task_id: T-0290
+  worktree_path: .litehive/worktrees/T-0290-resolve-workspace-from-task-id-or-env-config

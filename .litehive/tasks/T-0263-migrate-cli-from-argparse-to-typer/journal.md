@@ -91,3 +91,12 @@ CommitToGit failed: merge conflict prevented integrating task worktree into main
 
 ## 2026-04-10T14:39:52+00:00
 Execution finished with status `merge_failed`.
+
+## 2026-04-10T15:17:40+00:00
+Recovered accepted task back to `queued/commit_to_git` because no final checkpoint commit was recorded.
+
+## 2026-04-10T15:17:53+00:00
+Created task worktree at `.litehive/worktrees/T-0263-migrate-cli-from-argparse-to-typer`.
+
+## 2026-04-10T15:17:53+00:00
+Execution started with engine `codex`.
