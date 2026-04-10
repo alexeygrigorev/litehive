@@ -452,6 +452,7 @@ def _add_command(
 @app.command("add", help="Create a queued task", hidden=True)
 @task_app.command("add", help="Create a queued task")
 def add(
+    ctx: typer.Context,
     title: Annotated[str, typer.Argument(help="Task title")] = ...,
     workspace: WorkspaceOption = Path.cwd(),
     goal: Annotated[str, typer.Option(help="Task goal text")] = "",
@@ -492,7 +493,7 @@ def add(
     ] = None,
     no_auto_commit: Annotated[bool, typer.Option(help="Disable auto-commit for this task")] = False,
 ) -> int:
-    command_name = "task" if typer.get_current_context().info_name == "add" and typer.get_current_context().parent and typer.get_current_context().parent.info_name == "task" else "add"
+    command_name = "task" if ctx.info_name == "add" and ctx.parent and ctx.parent.info_name == "task" else "add"
     return _add_command(command_name, workspace, title, goal, pm_complexity, planned_effort, acceptance_criteria, depends_on, human_checkpoint, task_type, mode, record_mode, priority, model, retry_limit, no_auto_commit)
 
 
