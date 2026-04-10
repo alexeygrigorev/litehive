@@ -2,7 +2,7 @@ id: T-0301
 slug: fix-bubblewrap-argv-0-rewrite-and-add-per-engine
 title: Fix bubblewrap argv[0] rewrite and add per-engine extra_ro_binds
 depends_on: []
-task_type: null
+task_type: bugfix
 model: null
 mode: implementation
 pipeline_mode: full
@@ -11,10 +11,10 @@ flag_reason: null
 flag_count: 0
 pipeline_status: backlog
 priority: high
-pm_complexity: null
-planned_effort: null
+pm_complexity: moderate
+planned_effort: s
 created_at: '2026-04-10T10:09:43+00:00'
-updated_at: '2026-04-10T10:09:43+00:00'
+updated_at: '2026-04-10T12:11:28+00:00'
 goal: The bubblewrap sandbox path in SandboxLauncher._wrap_bubblewrap does not rewrite
   argv[0] the way _wrap_docker does, so an engine binary that is not on PATH inside
   the sandbox (e.g. codex installed via nvm at /home/alexey/.nvm/versions/node/v24.13.1/bin/codex)
@@ -37,7 +37,18 @@ acceptance_criteria:
 - Graceful error if an engine's extra_ro_binds paths do not exist on the host (clear
   message, fail closed)
 constraints: []
-plan: []
+plan:
+- Update sandbox config model/normalization to support per-engine extra_ro_binds and
+  preserve round-trip formatting/status coverage.
+- Align bubblewrap wrapping with docker by rewriting argv[0] to the resolved absolute
+  host binary path before exec.
+- Extend bubblewrap mount planning to add engine-declared read-only binds and fail
+  closed with a clear SandboxError when any declared bind path is missing.
+- Add focused unit coverage for config normalization/formatting, bubblewrap argv[0]
+  rewriting, extra_ro_binds mount propagation, and missing-bind errors.
+- 'Add real subprocess integration coverage for bubblewrap-wrapped version checks:
+  python3+uv baseline always, codex mandatory on this host, claude conditional when
+  installed.'
 human_checkpoints: []
 subagents: []
 git:

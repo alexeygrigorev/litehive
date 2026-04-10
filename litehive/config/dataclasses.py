@@ -24,6 +24,7 @@ class ExternalEngineSandboxPolicy:
     workspace_mode: str | None = None
     environment: list[str] = field(default_factory=list)
     credential_inputs: list[SandboxCredentialInput] = field(default_factory=list)
+    extra_ro_binds: list[str] = field(default_factory=list)
 
 
 @dataclass(slots=True)

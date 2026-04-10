@@ -506,6 +506,7 @@ def test_load_config_round_trips_external_engine_sandbox(tmp_path: Path) -> None
                         network_mode="none",
                         workspace_mode="rw",
                         environment=["OPENAI_API_KEY"],
+                        extra_ro_binds=["/opt/runtime"],
                         credential_inputs=[
                             SandboxCredentialInput(
                                 env_var="GOOGLE_APPLICATION_CREDENTIALS",
@@ -528,6 +529,7 @@ def test_load_config_round_trips_external_engine_sandbox(tmp_path: Path) -> None
     assert policy.network_mode == "none"
     assert policy.workspace_mode == "rw"
     assert policy.environment == ["OPENAI_API_KEY"]
+    assert policy.extra_ro_binds == ["/opt/runtime"]
     assert [item.env_var for item in policy.credential_inputs] == ["GOOGLE_APPLICATION_CREDENTIALS"]
 
 

@@ -2367,6 +2367,7 @@ def test_format_external_engine_sandbox_renders_engine_policies() -> None:
                     network_mode="none",
                     workspace_mode="rw",
                     environment=["OPENAI_API_KEY"],
+                    extra_ro_binds=["/opt/runtime"],
                 )
             },
         )
@@ -2375,7 +2376,7 @@ def test_format_external_engine_sandbox_renders_engine_policies() -> None:
     rendered = format_external_engine_sandbox(config)
 
     assert "enabled backend:docker runtime:docker image:ghcr.io/example/litehive-sandbox:latest" in rendered
-    assert "codex=enabled:True net:none workspace:rw env:OPENAI_API_KEY creds:-" in rendered
+    assert "codex=enabled:True net:none workspace:rw env:OPENAI_API_KEY creds:- binds:/opt/runtime" in rendered
 
 def test_format_subagent_resource_limits_renders_effective_limits() -> None:
     rendered = format_subagent_resource_limits(LitehiveConfig(process_profile="rust"))
@@ -2419,6 +2420,7 @@ def test_status_output_includes_external_engine_sandbox_settings(
                         network_mode="none",
                         workspace_mode="rw",
                         environment=["OPENAI_API_KEY"],
+                        extra_ro_binds=["/opt/runtime"],
                     )
                 },
             )
@@ -2438,6 +2440,7 @@ def test_status_output_includes_external_engine_sandbox_settings(
     assert codex_policy.network_mode == "none"
     assert codex_policy.workspace_mode == "rw"
     assert "OPENAI_API_KEY" in codex_policy.environment
+    assert codex_policy.extra_ro_binds == ["/opt/runtime"]
 
 def test_status_output_includes_subagent_resource_limits(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]

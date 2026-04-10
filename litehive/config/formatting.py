@@ -12,9 +12,10 @@ def format_external_engine_sandbox(config: LitehiveConfig) -> str:
         policy = sandbox.engine_policies[engine_name]
         envs = ",".join(policy.environment) or "-"
         creds = ",".join(item.env_var for item in policy.credential_inputs) or "-"
+        binds = ",".join(policy.extra_ro_binds) or "-"
         policy_parts.append(
             f"{engine_name}=enabled:{policy.enabled} net:{policy.network_mode or sandbox.default_network_mode} "
-            f"workspace:{policy.workspace_mode or sandbox.default_workspace_mode} env:{envs} creds:{creds}"
+            f"workspace:{policy.workspace_mode or sandbox.default_workspace_mode} env:{envs} creds:{creds} binds:{binds}"
         )
     policies = "; ".join(policy_parts) if policy_parts else "no engine policies"
     return (

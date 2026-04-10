@@ -14,6 +14,16 @@ from litehive.tasks import create_task
 
 
 def _bubblewrap_launcher(root: Path) -> SandboxLauncher:
+    return _bubblewrap_launcher_with_policies(
+        root,
+        {"codex": ExternalEngineSandboxPolicy(enabled=True, network_mode="bridge")},
+    )
+
+
+def _bubblewrap_launcher_with_policies(
+    root: Path,
+    engine_policies: dict[str, ExternalEngineSandboxPolicy],
+) -> SandboxLauncher:
     runtime_binary = shutil.which("bwrap")
     if runtime_binary is None:
         pytest.skip("bubblewrap is required for sandbox integration tests")
@@ -30,7 +40,7 @@ def _bubblewrap_launcher(root: Path) -> SandboxLauncher:
             enabled=True,
             backend="bubblewrap",
             runtime_binary=runtime_binary,
-            engine_policies={"codex": ExternalEngineSandboxPolicy(enabled=True, network_mode="bridge")},
+            engine_policies=engine_policies,
         )
     )
     return SandboxLauncher(root, config)
@@ -47,6 +57,31 @@ def _run_in_sandbox(root: Path, role: str, script: str) -> subprocess.CompletedP
         },
     )
     wrapped = launcher.wrap_invocation("codex", "bash", invocation, role=role)
+    return subprocess.run(
+        wrapped.argv,
+        cwd=wrapped.cwd,
+        env=wrapped.env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+def _run_wrapped_invocation(
+    root: Path,
+    *,
+    engine_name: str,
+    binary_name: str,
+    argv: tuple[str, ...],
+    env: dict[str, str],
+    policy: ExternalEngineSandboxPolicy,
+) -> subprocess.CompletedProcess[str]:
+    launcher = _bubblewrap_launcher_with_policies(root, {engine_name: policy})
+    wrapped = launcher.wrap_invocation(
+        engine_name,
+        binary_name,
+        CLIInvocation(argv=argv, cwd=root, env=env),
+    )
     return subprocess.run(
         wrapped.argv,
         cwd=wrapped.cwd,
@@ -167,6 +202,89 @@ def test_merge_resolver_profile_rejects_filter_repo_and_reset_hard_origin(tmp_pa
     assert "reset --hard" in reset_hard.stderr
     assert cherry_pick.returncode == 2
     assert "cherry-pick" in cherry_pick.stderr
+
+
+def test_bubblewrap_executes_python3_and_uv_with_extra_runtime_bind(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    uv_path = shutil.which("uv")
+    if uv_path is None:
+        pytest.skip("uv is not installed on this host")
+    uv_dir = Path(uv_path).resolve().parent
+    env = {
+        "HOME": str(tmp_path),
+        "PATH": f"{uv_dir}:/usr/bin:/bin",
+    }
+    completed = _run_wrapped_invocation(
+        tmp_path,
+        engine_name="codex",
+        binary_name="bash",
+        argv=(
+            "bash",
+            "-lc",
+            "python3 --version && uv --version",
+        ),
+        env=env,
+        policy=ExternalEngineSandboxPolicy(
+            enabled=True,
+            extra_ro_binds=[str(uv_dir)],
+        ),
+    )
+
+    assert completed.returncode == 0
+    assert "Python 3." in completed.stdout
+    assert "uv " in completed.stdout
+
+
+def test_bubblewrap_executes_codex_version_with_nvm_runtime_bind(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    codex_path = shutil.which("codex")
+    if codex_path is None:
+        pytest.skip("codex is not installed on this host")
+    nvm_root = Path(codex_path).parent.parent
+    env = {
+        "HOME": str(tmp_path),
+        "PATH": f"{nvm_root / 'bin'}:/usr/bin:/bin",
+    }
+    completed = _run_wrapped_invocation(
+        tmp_path,
+        engine_name="codex",
+        binary_name="codex",
+        argv=("codex", "--version"),
+        env=env,
+        policy=ExternalEngineSandboxPolicy(
+            enabled=True,
+            extra_ro_binds=[str(nvm_root)],
+        ),
+    )
+
+    assert completed.returncode == 0
+    assert "codex" in completed.stdout.lower()
+
+
+def test_bubblewrap_executes_claude_version_with_nvm_runtime_bind(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    claude_path = shutil.which("claude")
+    if claude_path is None:
+        pytest.skip("claude is not installed on this host")
+    nvm_root = Path(claude_path).parent.parent
+    env = {
+        "HOME": str(tmp_path),
+        "PATH": f"{nvm_root / 'bin'}:/usr/bin:/bin",
+    }
+    completed = _run_wrapped_invocation(
+        tmp_path,
+        engine_name="claude",
+        binary_name="claude",
+        argv=("claude", "--version"),
+        env=env,
+        policy=ExternalEngineSandboxPolicy(
+            enabled=True,
+            extra_ro_binds=[str(nvm_root)],
+        ),
+    )
+
+    assert completed.returncode == 0
+    assert "claude" in completed.stdout.lower()
 
 
 def test_task_worktree_creation_does_not_strip_origin_from_shared_config(tmp_path: Path) -> None:
