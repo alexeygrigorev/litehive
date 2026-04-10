@@ -2,17 +2,17 @@ id: T-0305
 slug: fix-litehive-worktree-rescue-so-it-does-not-need
 title: Fix litehive worktree rescue so it does not need the runner lock
 depends_on: []
-task_type: bugfix
+task_type: null
 model: null
 mode: implementation
 pipeline_mode: full
-status: in_progress
+status: done
 flag_reason: null
 flag_count: 0
-pipeline_status: commit_to_git
+pipeline_status: done
 priority: high
-pm_complexity: moderate
-planned_effort: m
+pm_complexity: null
+planned_effort: null
 created_at: '2026-04-10T10:11:10+00:00'
 updated_at: '2026-04-10T12:38:19+00:00'
 goal: 'When the daemon is running, ''litehive worktree rescue --apply'' successfully
@@ -24,26 +24,18 @@ goal: 'When the daemon is running, ''litehive worktree rescue --apply'' successf
   Rescue should be safe to run concurrently with the daemon as long as it is modifying
   merge_failed tasks only.'
 acceptance_criteria:
-- With the daemon holding the runner lock, litehive worktree rescue --apply succeeds
-  for a merge_failed task that is not state.active_task_id, including both cherry-pick
-  onto main and task-state finalization.
-- After a successful rescue, the rescued task is persisted as done, its commit SHA
-  matches main HEAD, its worktree path is cleared, and the task is removed from unmerged_worktrees.
-- If the merge_failed task being rescued is state.active_task_id, the command exits
-  with a clear conflict error and leaves task/workspace state unchanged.
-- Automated coverage simulates a long-running daemon holding the runner lock during
-  rescue and verifies both the successful non-active merge_failed rescue path and
-  the active-task refusal path.
+- _finalize_rescue (or the save_task call it makes) does not require the runner lock
+  when the task being finalized is in merge_failed state and is not state.active_task_id
+- 'Alternatively: introduce a lighter-weight per-task lock that rescue and the runner
+  both respect for the specific task being modified, instead of a global workspace-wide
+  runner lock'
+- 'Integration test: start a fake long-running daemon that holds the runner lock,
+  then run worktree rescue --apply against a pre-constructed merge_failed task, assert
+  that rescue completes successfully (both the cherry-pick AND the state finalization)'
+- If the task to be rescued happens to be state.active_task_id, rescue refuses with
+  a clear error rather than racing
 constraints: []
-plan:
-- Inspect the rescue finalize path and workspace/task locking code to identify the
-  narrowest safe write path for merge_failed task finalization.
-- Implement a task-scoped conflict check that allows rescue to finalize non-active
-  merge_failed tasks without requiring the global runner lock, while preserving refusal
-  for the active task.
-- Add focused tests around worktree rescue with a held runner lock for both success
-  and refusal behavior.
-- Run targeted pytest coverage for worktree rescue and locking regressions.
+plan: []
 human_checkpoints: []
 subagents:
 - id: SA-0001
@@ -91,9 +83,9 @@ subagents:
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0305 fix-litehive-worktree-rescue-so-it-does-not-need'
-  commit_sha: null
-  checkpoint_base_sha: null
-  checkpoint_attempts: 0
+  commit_sha: f42e8bd21b12c63abc14046a24ec838d2d040db2
+  checkpoint_base_sha: 6940e1c855aaeb5ae87263648c2ef2be2399f5cc
+  checkpoint_attempts: 1
   rolled_back_checkpoint_attempt: null
   merge_agent_attempts: 1
   worktree_path: null

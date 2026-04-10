@@ -1,0 +1,55 @@
+task_id: T-0282
+step: testing
+verdict: pass
+source: agent
+summary: 'PASS. Verified the current worktree against the task acceptance criteria
+  and the prior QA rejection. Evidence: heru/adapters/goz.py sets GozCLIAdapter.DEFAULT_CAPABILITIES.supports_model_override=True,
+  tests/test_config.py::test_resolve_model_honors_goz_run_task_and_workspace_overrides
+  proves goz model resolution precedence is run override -> task.model -> workspace
+  config.goz_model including resolve_model(task, config, engine_name=''goz'', model_override=''run-model'')
+  == ''run-model'', tests/test_goz_adapter.py verifies the adapter advertises supports_model_override=True
+  and forwards --model to goz run, and tests/test_engine_variants_and_timeline.py::test_goz_engine_in_registry
+  now expects True so the engine registry is consistent with the adapter capability.
+  Verification run: uv run pytest -q tests/test_engine_variants_and_timeline.py -k
+  test_goz_engine_in_registry -> 1 passed, 48 deselected; uv run pytest -q tests/test_config.py
+  -k goz tests/test_goz_adapter.py -> 7 passed, 38 deselected; uvx ruff check --select
+  E402,F401 litehive tests heru -> All checks passed; uv run pytest -q -> 972 passed
+  in 171.97s. Acceptance criteria status: criterion 1 satisfied, criterion 2 satisfied,
+  criterion 3 satisfied because the named goz config test passes and the smoke suite
+  is clean.'
+feedback: 'PASS. Verified the current worktree against the task acceptance criteria
+  and the prior QA rejection. Evidence: heru/adapters/goz.py sets GozCLIAdapter.DEFAULT_CAPABILITIES.supports_model_override=True,
+  tests/test_config.py::test_resolve_model_honors_goz_run_task_and_workspace_overrides
+  proves goz model resolution precedence is run override -> task.model -> workspace
+  config.goz_model including resolve_model(task, config, engine_name=''goz'', model_override=''run-model'')
+  == ''run-model'', tests/test_goz_adapter.py verifies the adapter advertises supports_model_override=True
+  and forwards --model to goz run, and tests/test_engine_variants_and_timeline.py::test_goz_engine_in_registry
+  now expects True so the engine registry is consistent with the adapter capability.
+  Verification run: uv run pytest -q tests/test_engine_variants_and_timeline.py -k
+  test_goz_engine_in_registry -> 1 passed, 48 deselected; uv run pytest -q tests/test_config.py
+  -k goz tests/test_goz_adapter.py -> 7 passed, 38 deselected; uvx ruff check --select
+  E402,F401 litehive tests heru -> All checks passed; uv run pytest -q -> 972 passed
+  in 171.97s. Acceptance criteria status: criterion 1 satisfied, criterion 2 satisfied,
+  criterion 3 satisfied because the named goz config test passes and the smoke suite
+  is clean.'
+submitted_via_cli: true
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 224
+hook_results: []
+created_at: '2026-04-10T13:18:06+00:00'

@@ -7,15 +7,15 @@ task_type: null
 model: null
 mode: implementation
 pipeline_mode: full
-status: queued
+status: in_progress
 flag_reason: null
 flag_count: 0
-pipeline_status: implementing
+pipeline_status: commit_to_git
 priority: medium
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-10T05:52:34+00:00'
-updated_at: '2026-04-10T12:37:32+00:00'
+updated_at: '2026-04-10T13:22:04+00:00'
 goal: Set supports_model_override=True on GozCLIAdapter in heru/ so litehive's resolve_model()
   uses the configured goz_model. Apply to heru/adapters/goz.py since litehive/agents/adapters/goz.py
   is a re-export.
@@ -88,6 +88,195 @@ subagents:
   engine: codex
   status: completed
   path: subagents/SA-0009-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0010
+  role: merge-resolver
+  engine: codex
+  status: completed
+  path: subagents/SA-0010-merge-resolver
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0011
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0011-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0012
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0012-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0013
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0013-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0014
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0014-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0015
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0015-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0016
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0016-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0017
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0017-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0018
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0018-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0019
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0019-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0020
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0020-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0021
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0021-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0022
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0022-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0023
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0023-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0024
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0024-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0025
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0025-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0026
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0026-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0027
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0027-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0028
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0028-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0029
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0029-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0030
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0030-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0031
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0031-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0032
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0032-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0033
+  role: qa
+  engine: codex
+  status: completed
+  path: subagents/SA-0033-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0034
+  role: recovery
+  engine: codex
+  status: completed
+  path: subagents/SA-0034-recovery
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0035
+  role: qa
+  engine: codex
+  status: completed
+  path: subagents/SA-0035-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0036
+  role: reviewer
+  engine: codex
+  status: completed
+  path: subagents/SA-0036-reviewer
   sandboxed: false
   sandbox_summary: host
 git:

@@ -1,24 +1,62 @@
 task_id: T-0282
 step: implementing
-verdict: reject
-source: hook
-summary: 'implementing rejected by runner hook `after_implementing` (exit 2): uv run
-  ruff check --select E402,F401 litehive tests'
-feedback: "Runner hooks failed: 1\n\n1. Hook: `after_implementing`\nCommand: uv run\
-  \ ruff check --select E402,F401 litehive tests\nExit code: 2\nArtifact: artifacts/after_implementing-001.yaml\n\
-  \nstdout:\n(empty)\n\nstderr:\nwarning: `VIRTUAL_ENV=/home/alexey/git/litehive/.venv`\
-  \ does not match the project environment path `.venv` and will be ignored; use `--active`\
-  \ to target the active environment instead\nerror: Failed to spawn: `ruff`\n  Caused\
-  \ by: No such file or directory (os error 2)"
+verdict: pass
+source: agent
+summary: 'Recovery found a Litehive test expectation mismatch, not a remaining adapter
+  bug. Root cause: after GozCLIAdapter started advertising supports_model_override=True
+  in heru/adapters/goz.py, tests/test_engine_variants_and_timeline.py::test_goz_engine_in_registry
+  still asserted False, which caused the full smoke suite to fail even though the
+  adapter and focused goz tests were already correct. Fix made: updated tests/test_engine_variants_and_timeline.py
+  so the goz registry expectation matches the adapter capability and engine registry
+  behavior. Verification: uv run pytest -q tests/test_engine_variants_and_timeline.py
+  -k test_goz_engine_in_registry -> 1 passed, 48 deselected; uv run pytest -q tests/test_config.py
+  -k goz tests/test_goz_adapter.py -> 7 passed, 38 deselected; uvx ruff check --select
+  E402,F401 litehive tests heru -> All checks passed; forbidden noqa F401/F403 suppression
+  check passed with no output; uv run pytest -q -> 972 passed in 171.73s. Acceptance
+  criteria evidence: heru/adapters/goz.py DEFAULT_CAPABILITIES has supports_model_override=True,
+  tests/test_config.py::test_resolve_model_honors_goz_run_task_and_workspace_overrides
+  passes and covers model_override/task/workspace goz_model precedence including explicit
+  override returning the override, and the full relevant test suite now passes. The
+  implementing stage should be retried from the current worktree state or advanced,
+  since the blocking infrastructure-level failure was the stale Litehive registry
+  test expectation.'
+feedback: "Runner hook `after_implementing` `uv run ruff check --select E402,F401\
+  \ litehive tests` passed with exit code 0 (artifact: `artifacts/after_implementing-001.yaml`).\n\
+  \nRunner hook `after_implementing` `if [ -n \"${LITEHIVE_CHANGED_PATHS:-}\" ] \\\
+  \n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" | grep -q . \\\n  && printf '%s\\\
+  n' \"$LITEHIVE_CHANGED_PATHS\" \\\n    | xargs -r -d '\\n' git grep -nE 'noqa:.*F401|noqa:.*F403|ruff:\\\
+  s*noqa:\\s*F401|ruff:\\s*noqa:\\s*F403' --; then\n  echo 'Forbidden noqa F401/F403\
+  \ suppression found.'\n  exit 1\nfi` passed with exit code 0 (artifact: `artifacts/after_implementing-002.yaml`).\n\
+  \nRecovery found a Litehive test expectation mismatch, not a remaining adapter bug.\
+  \ Root cause: after GozCLIAdapter started advertising supports_model_override=True\
+  \ in heru/adapters/goz.py, tests/test_engine_variants_and_timeline.py::test_goz_engine_in_registry\
+  \ still asserted False, which caused the full smoke suite to fail even though the\
+  \ adapter and focused goz tests were already correct. Fix made: updated tests/test_engine_variants_and_timeline.py\
+  \ so the goz registry expectation matches the adapter capability and engine registry\
+  \ behavior. Verification: uv run pytest -q tests/test_engine_variants_and_timeline.py\
+  \ -k test_goz_engine_in_registry -> 1 passed, 48 deselected; uv run pytest -q tests/test_config.py\
+  \ -k goz tests/test_goz_adapter.py -> 7 passed, 38 deselected; uvx ruff check --select\
+  \ E402,F401 litehive tests heru -> All checks passed; forbidden noqa F401/F403 suppression\
+  \ check passed with no output; uv run pytest -q -> 972 passed in 171.73s. Acceptance\
+  \ criteria evidence: heru/adapters/goz.py DEFAULT_CAPABILITIES has supports_model_override=True,\
+  \ tests/test_config.py::test_resolve_model_honors_goz_run_task_and_workspace_overrides\
+  \ passes and covers model_override/task/workspace goz_model precedence including\
+  \ explicit override returning the override, and the full relevant test suite now\
+  \ passes. The implementing stag\n\n\u2026 [truncated \u2014 full transcript in subagent\
+  \ artifacts]"
 submitted_via_cli: true
-files_changed: []
+files_changed:
+- heru/adapters/goz.py
+- tests/test_config.py
+- tests/test_engine_variants_and_timeline.py
+- tests/test_goz_adapter.py
 created_follow_up_task_ids: []
 task_update: {}
 tests:
   added: 0
   passing: 0
 warnings:
-- 'runner hook failed: `after_implementing` `uv run ruff check --select E402,F401
+- 'runner hook passed: `after_implementing` `uv run ruff check --select E402,F401
   litehive tests` (artifact: `artifacts/after_implementing-001.yaml`)'
 - "runner hook passed: `after_implementing` `if [ -n \"${LITEHIVE_CHANGED_PATHS:-}\"\
   \ ] \\\n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" | grep -q . \\\n  && printf\
@@ -28,41 +66,30 @@ warnings:
 retry_count: 0
 retry_limit: 3
 retry_source: global
-retry_decision: retry
+retry_decision: continue
 outcome: null
 outcome_reason_code: null
 outcome_reason: ''
-failure_classification: runner_hook_failed
-failure_diagnostics:
-  hook_point: after_implementing
-  command: uv run ruff check --select E402,F401 litehive tests
-  description: null
-  exit_code: 2
-  artifact: artifacts/after_implementing-001.yaml
-  stdout: ''
-  stderr: "warning: `VIRTUAL_ENV=/home/alexey/git/litehive/.venv` does not match the\
-    \ project environment path `.venv` and will be ignored; use `--active` to target\
-    \ the active environment instead\nerror: Failed to spawn: `ruff`\n  Caused by:\
-    \ No such file or directory (os error 2)\n"
-  failed_hook_commands:
-  - uv run ruff check --select E402,F401 litehive tests
-  failed_hook_artifacts:
-  - artifacts/after_implementing-001.yaml
+failure_classification: null
+failure_diagnostics: {}
 resource_limit_event: null
-duration_seconds: 45
+duration_seconds: 229
 hook_results:
 - point: after_implementing
   command: uv run ruff check --select E402,F401 litehive tests
   reject_on_failure: true
   description: null
-  exit_code: 2
-  status: failed
+  exit_code: 0
+  status: passed
   artifact: artifacts/after_implementing-001.yaml
-  stdout: ''
-  stderr: "warning: `VIRTUAL_ENV=/home/alexey/git/litehive/.venv` does not match the\
-    \ project environment path `.venv` and will be ignored; use `--active` to target\
-    \ the active environment instead\nerror: Failed to spawn: `ruff`\n  Caused by:\
-    \ No such file or directory (os error 2)\n"
+  stdout: 'All checks passed!
+
+    '
+  stderr: 'warning: `VIRTUAL_ENV=/home/alexey/git/litehive/.venv` does not match the
+    project environment path `.venv` and will be ignored; use `--active` to target
+    the active environment instead
+
+    '
 - point: after_implementing
   command: "if [ -n \"${LITEHIVE_CHANGED_PATHS:-}\" ] \\\n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\"\
     \ | grep -q . \\\n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" \\\n    | xargs\
@@ -76,4 +103,4 @@ hook_results:
   artifact: artifacts/after_implementing-002.yaml
   stdout: ''
   stderr: ''
-created_at: '2026-04-10T12:37:31+00:00'
+created_at: '2026-04-10T13:14:22+00:00'
