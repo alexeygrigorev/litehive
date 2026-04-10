@@ -480,7 +480,7 @@ def test_claude_engine_in_registry() -> None:
 def test_goz_engine_in_registry() -> None:
     engine = get_engine("goz")
     assert engine.name == "goz"
-    assert engine.capabilities.supports_model_override is False
+    assert engine.capabilities.supports_model_override is True
     assert engine.capabilities.transcript_format == "jsonl"
 
 

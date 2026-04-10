@@ -2,6 +2,10 @@ from heru.adapters._goz_impl import goz_continuation, goz_session_id
 from tests.workspace_helpers import CLIExecutionResult, Path, RuntimeEngineContinuation, get_engine
 
 
+def test_goz_adapter_reports_model_override_support() -> None:
+    assert get_engine("goz").capabilities.supports_model_override is True
+
+
 def test_goz_build_invocation_includes_resume_session(tmp_path: Path) -> None:
     invocation = get_engine("goz").build_invocation(
         "continue please",
@@ -16,6 +20,24 @@ def test_goz_build_invocation_includes_resume_session(tmp_path: Path) -> None:
         "json",
         "--resume-session",
         "ses-123",
+        "continue please",
+    ]
+
+
+def test_goz_build_invocation_includes_model(tmp_path: Path) -> None:
+    invocation = get_engine("goz").build_invocation(
+        "continue please",
+        tmp_path,
+        model="glm-4.5",
+    )
+
+    assert list(invocation.argv) == [
+        "goz",
+        "run",
+        "--format",
+        "json",
+        "--model",
+        "glm-4.5",
         "continue please",
     ]
 
