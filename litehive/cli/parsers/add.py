@@ -47,15 +47,14 @@ def register_add_parser(subparsers):
         help="Explicit routing class for this task",
     )
     parser.add_argument(
-        "--single",
-        action="store_true",
-        default=False,
-        help="Use single-agent pipeline mode: one agent completes the task with no grooming, QA, or review stages",
+        "--mode",
+        choices=["full", "single"],
+        help="Task pipeline mode; defaults to `full`",
     )
     parser.add_argument(
-        "--mode",
+        "--record-mode",
         choices=["implementation", "tasks"],
-        help="Task creation mode; defaults to `tasks` when `--task-type` is set, otherwise `implementation`",
+        help="Task record mode; defaults to `tasks` when `--task-type` is set, otherwise `implementation`",
     )
     parser.add_argument(
         "--priority",

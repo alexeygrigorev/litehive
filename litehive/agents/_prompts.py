@@ -28,6 +28,7 @@ def stage_prompt(
     root: Path | None = None,
 ) -> str:
     """Build the prompt for a stage subagent."""
+    single_mode = getattr(task, "pipeline_mode", "full") == "single"
     profile = resolve_process_profile(process_profile)
     workspace_overlay = profile.get("workspace_overlay", [])
     stage_overlay = profile.get("stage_overlay", {}).get(step, [])
@@ -99,6 +100,15 @@ def stage_prompt(
         ]
     )
     lines.extend(stage_overlay)
+    if single_mode and step == "implementing":
+        lifecycle_verification_overlay.extend(
+            [
+                "- Pipeline mode is `single`: you are the only execution-stage agent for this task.",
+                "- Own the full task outcome yourself: use the goal and acceptance criteria as the contract, do the necessary implementation or research/docs/config work, and verify the result directly.",
+                "- Do not assume separate `testing` or `accepting` stages will clean this up later; your report must stand on its own.",
+                "- If you change files and the task passes, the runner may continue to `commit_to_git`. If you do not change files and the task passes, the task can finish at `done` immediately.",
+            ]
+        )
     lines.extend(lifecycle_verification_overlay)
     lines.extend(
         [
