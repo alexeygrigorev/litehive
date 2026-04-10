@@ -700,6 +700,57 @@ def _subagent_artifacts_exist_while_engine_is_running(
     assert monitoring.engines["codex"].invocation_count == 1
     assert monitoring.engines["codex"].success_count == 1
 
+
+def test_subagent_manager_passes_workspace_root_in_extra_env(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ensure_workspace(tmp_path)
+    execution_root = tmp_path / "other-project"
+    execution_root.mkdir()
+    task = create_task(tmp_path, title="Pass workspace root")
+    manager = SubagentManager(tmp_path, execution_root=execution_root)
+    captured: dict[str, object] = {}
+
+    class FakeEngine:
+        name = "codex"
+        binary = "codex"
+
+        def is_available(self) -> bool:
+            return True
+
+        def run(
+            self,
+            prompt: str,
+            cwd: Path,
+            model: str | None = None,
+            *,
+            extra_env: dict[str, str] | None = None,
+        ) -> CLIExecutionResult:
+            captured["cwd"] = cwd
+            captured["extra_env"] = extra_env
+            return CLIExecutionResult(
+                adapter="codex",
+                argv=("codex", "exec"),
+                cwd=cwd,
+                exit_code=0,
+                stdout="VERDICT: PASS\nSUMMARY: ok",
+                stderr="",
+                pid=4242,
+            )
+
+        def render_transcript(self, execution: CLIExecutionResult) -> str:
+            return execution.transcript
+
+    monkeypatch.setattr("litehive.subagents._manager.get_engine", lambda _: FakeEngine())
+
+    manager.run(task, role="swe", engine_name="codex", prompt="implement it")
+
+    assert captured["cwd"] == execution_root
+    assert captured["extra_env"] == {
+        "LITEHIVE_TASK_ID": task.id,
+        "LITEHIVE_WORKSPACE_ROOT": str(tmp_path),
+    }
+
 def _subagent_artifacts_exist_while_engine_is_running(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

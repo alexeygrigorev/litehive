@@ -189,6 +189,42 @@ def test_codex_build_invocation_uses_exec_for_resume_with_session_context(tmp_pa
     assert "continue please" in argv[-1]
 
 
+def test_engine_invocation_strips_inherited_virtual_env_for_other_project(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    caller_workspace = tmp_path / "project-a"
+    other_workspace = tmp_path / "project-b"
+    caller_workspace.mkdir()
+    other_workspace.mkdir()
+    monkeypatch.setenv("VIRTUAL_ENV", str(caller_workspace / ".venv"))
+
+    invocation = get_engine("codex").build_invocation(
+        "ship it",
+        other_workspace,
+        extra_env={"LITEHIVE_WORKSPACE_ROOT": str(caller_workspace)},
+    )
+
+    assert "VIRTUAL_ENV" not in invocation.env
+    assert invocation.env["LITEHIVE_WORKSPACE_ROOT"] == str(caller_workspace)
+
+
+def test_engine_invocation_preserves_virtual_env_within_caller_workspace(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    caller_workspace = tmp_path / "project-a"
+    nested_cwd = caller_workspace / "subdir"
+    nested_cwd.mkdir(parents=True)
+    monkeypatch.setenv("VIRTUAL_ENV", str(caller_workspace / ".venv"))
+
+    invocation = get_engine("codex").build_invocation(
+        "ship it",
+        nested_cwd,
+        extra_env={"LITEHIVE_WORKSPACE_ROOT": str(caller_workspace)},
+    )
+
+    assert invocation.env["VIRTUAL_ENV"] == str(caller_workspace / ".venv")
+
+
 def test_claude_no_max_turns_by_default(tmp_path: Path) -> None:
     from litehive.agents import ClaudeCLIAdapter
 
@@ -223,6 +259,37 @@ def test_claude_build_invocation_includes_max_turns(tmp_path: Path) -> None:
     assert "--max-turns" in invocation.argv
     idx = list(invocation.argv).index("--max-turns")
     assert list(invocation.argv)[idx + 1] == "7"
+
+
+def test_claude_invocation_preserves_claude_credentials_while_stripping_virtual_env_for_other_project(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from litehive.agents import ClaudeCLIAdapter
+
+    caller_workspace = tmp_path / "project-a"
+    other_workspace = tmp_path / "project-b"
+    caller_workspace.mkdir()
+    other_workspace.mkdir()
+    monkeypatch.setenv("VIRTUAL_ENV", str(caller_workspace / ".venv"))
+    monkeypatch.setenv("CLAUDE_API_KEY", "test-key")
+
+    adapter = ClaudeCLIAdapter(
+        name="claude",
+        binary="claude",
+        capabilities=AdapterCapabilities(
+            supports_model_override=True,
+            strips_environment=False,
+            transcript_format="jsonl",
+        ),
+    )
+    invocation = adapter.build_invocation(
+        "ship it",
+        other_workspace,
+        extra_env={"LITEHIVE_WORKSPACE_ROOT": str(caller_workspace)},
+    )
+
+    assert "VIRTUAL_ENV" not in invocation.env
+    assert invocation.env["CLAUDE_API_KEY"] == "test-key"
 
 
 def test_run_next_task_passes_configured_claude_max_turns(

@@ -14,6 +14,7 @@ from heru.base import (
     AdapterCapabilities,
     CLIExecutionResult,
     ExternalCLIAdapter,
+    build_invocation_env,
     extract_jsonl_errors,
     extract_stream_errors,
     extract_stream_transcript,
@@ -74,19 +75,17 @@ class ClaudeCLIAdapter(ExternalCLIAdapter):
         return command
 
     def build_invocation(self, prompt: str, cwd: Path, model: str | None = None, *, max_turns: int | None = None, resume_session_id: str | None = None, extra_env: dict[str, str] | None = None):
-        import os
         from heru.base import CLIInvocation
 
         use_stdin = len(prompt.encode("utf-8")) > self._MAX_ARG_PROMPT_BYTES
-        env = os.environ.copy()
-        for key in self.stripped_env_vars:
-            env.pop(key, None)
-        if extra_env:
-            env.update(extra_env)
         return CLIInvocation(
             argv=tuple(self.build_command(prompt, cwd, model=model, max_turns=max_turns, resume_session_id=resume_session_id, prompt_via_stdin=use_stdin)),
             cwd=cwd,
-            env=env,
+            env=build_invocation_env(
+                cwd=cwd,
+                stripped_env_vars=self.stripped_env_vars,
+                extra_env=extra_env,
+            ),
             stdin_data=prompt if use_stdin else None,
         )
 

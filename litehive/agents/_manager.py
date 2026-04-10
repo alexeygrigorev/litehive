@@ -103,7 +103,10 @@ class SubagentManager(_SessionMixin):
             # whether the underlying engine actually prefers a custom run override.
             live_execution_probe = engine if execution_engine is not engine else execution_engine
             callback_probe = live_execution_probe
-            task_env = {"LITEHIVE_TASK_ID": task.id}
+            task_env = {
+                "LITEHIVE_TASK_ID": task.id,
+                "LITEHIVE_WORKSPACE_ROOT": str(self.root),
+            }
             if _supports_live_execution(live_execution_probe):
                 run_live_callable = _effective_engine_callable(execution_engine, "run_live")
                 if not callable(run_live_callable):

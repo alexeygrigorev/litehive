@@ -32,6 +32,44 @@ logger = logging.getLogger("litehive.agents.base")
 
 
 TranscriptFormat = Literal["text", "jsonl"]
+_CALLER_WORKSPACE_ENV_VAR = "LITEHIVE_WORKSPACE_ROOT"
+_INHERITED_PYTHON_ENV_VARS = (
+    "VIRTUAL_ENV",
+    "CONDA_PREFIX",
+    "CONDA_DEFAULT_ENV",
+    "__PYVENV_LAUNCHER__",
+)
+
+
+def _is_within_workspace(path: Path, workspace_root: Path) -> bool:
+    try:
+        path.resolve().relative_to(workspace_root.resolve())
+        return True
+    except ValueError:
+        return False
+
+
+def build_invocation_env(
+    *,
+    cwd: Path,
+    stripped_env_vars: tuple[str, ...] = (),
+    extra_env: dict[str, str] | None = None,
+) -> dict[str, str]:
+    env = os.environ.copy()
+    caller_workspace = (extra_env or {}).get(_CALLER_WORKSPACE_ENV_VAR, env.get(_CALLER_WORKSPACE_ENV_VAR))
+    if caller_workspace:
+        try:
+            workspace_root = Path(caller_workspace)
+        except OSError:
+            workspace_root = None
+        if workspace_root is not None and not _is_within_workspace(cwd, workspace_root):
+            for key in _INHERITED_PYTHON_ENV_VARS:
+                env.pop(key, None)
+    for key in stripped_env_vars:
+        env.pop(key, None)
+    if extra_env:
+        env.update(extra_env)
+    return env
 
 
 @dataclass(frozen=True, slots=True)
@@ -171,18 +209,17 @@ class ExternalCLIAdapter:
         resume_session_id: str | None = None,
         extra_env: dict[str, str] | None = None,
     ) -> CLIInvocation:
-        env = os.environ.copy()
-        for key in self.stripped_env_vars:
-            env.pop(key, None)
-        if extra_env:
-            env.update(extra_env)
         return CLIInvocation(
             argv=tuple(self.build_command(
                 prompt, cwd, model=model, max_turns=max_turns,
                 resume_session_id=resume_session_id,
             )),
             cwd=cwd,
-            env=env,
+            env=build_invocation_env(
+                cwd=cwd,
+                stripped_env_vars=self.stripped_env_vars,
+                extra_env=extra_env,
+            ),
         )
 
     def finalize_invocation(self, invocation: CLIInvocation) -> CLIInvocation:

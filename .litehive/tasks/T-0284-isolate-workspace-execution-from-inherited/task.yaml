@@ -2,67 +2,51 @@ id: T-0284
 slug: isolate-workspace-execution-from-inherited
 title: Isolate workspace execution from inherited VIRTUAL_ENV (on heru)
 depends_on: []
-task_type: null
+task_type: bugfix
 model: null
 mode: implementation
 pipeline_mode: full
-status: merge_failed
+status: queued
 flag_reason: null
 flag_count: 0
-pipeline_status: merge_failed
+pipeline_status: backlog
 priority: medium
-pm_complexity: null
-planned_effort: null
+pm_complexity: simple
+planned_effort: s
 created_at: '2026-04-10T05:52:59+00:00'
-updated_at: '2026-04-10T13:38:01+00:00'
+updated_at: '2026-04-10T13:24:18+00:00'
 goal: When the daemon runs on project A and an agent subprocess runs on project B,
   the inherited VIRTUAL_ENV from A should not leak into B's subprocess. Strip VIRTUAL_ENV
   (and similar vars) when the execution cwd differs from the caller's workspace. The
   fix must be in heru/base.py since litehive/agents/base.py is a re-export.
 acceptance_criteria:
-- heru/base.py strips VIRTUAL_ENV when invocation cwd is outside the caller's workspace
-- Works for all adapters by default via ExternalCLIAdapter.build_invocation
-- Claude adapter still supports credential passthrough (CLAUDE_* vars not dropped)
-- test_engine_invocation_strips_inherited_virtual_env_for_other_project passes
-constraints: []
-plan: []
+- When ExternalCLIAdapter.build_invocation is invoked for a cwd outside the caller
+  workspace, the resulting invocation env excludes inherited Python virtualenv markers
+  such as VIRTUAL_ENV.
+- When the invocation cwd stays within the caller workspace, the inherited environment
+  is preserved; the sanitization only applies to cross-workspace execution.
+- The default ExternalCLIAdapter.build_invocation path covers the non-Claude adapters
+  without per-adapter patches.
+- Claude applies the same cross-workspace virtualenv stripping while preserving CLAUDE_*
+  credential and config passthrough.
+- A focused regression test named test_engine_invocation_strips_inherited_virtual_env_for_other_project
+  passes.
+constraints:
+- Keep the fix in heru/base.py; litehive/agents/base.py remains a re-export shim.
+- Preserve existing adapter-specific stripped_env_vars behavior and scope this task
+  to inherited virtualenv leakage only.
+plan:
+- Add a shared environment-sanitizing helper in heru/base.py that compares the caller
+  workspace with the invocation cwd and removes inherited virtualenv markers only
+  for cross-workspace execution.
+- Route ExternalCLIAdapter.build_invocation through that helper so codex, gemini,
+  copilot, goz, and opencode inherit the behavior automatically.
+- Update the Claude adapter to reuse the same helper while keeping its stdin/resume
+  behavior and CLAUDE_* passthrough unchanged.
+- Add focused regression coverage for cross-workspace stripping and same-workspace
+  preservation, then run the narrow pytest target covering the new behavior.
 human_checkpoints: []
-subagents:
-- id: SA-0001
-  role: planner
-  engine: codex
-  status: completed
-  path: subagents/SA-0001-planner
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0002
-  role: swe
-  engine: codex
-  status: completed
-  path: subagents/SA-0002-swe
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0003
-  role: qa
-  engine: codex
-  status: completed
-  path: subagents/SA-0003-qa
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0004
-  role: reviewer
-  engine: codex
-  status: completed
-  path: subagents/SA-0004-reviewer
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0005
-  role: merge-resolver
-  engine: codex
-  status: completed
-  path: subagents/SA-0005-merge-resolver
-  sandboxed: false
-  sandbox_summary: host
+subagents: []
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0284 isolate-workspace-execution-from-inherited'
@@ -70,7 +54,7 @@ git:
   checkpoint_base_sha: null
   checkpoint_attempts: 0
   rolled_back_checkpoint_attempt: null
-  merge_agent_attempts: 1
+  merge_agent_attempts: 0
   worktree_path: null
 retry_policy:
   max_retries: null
