@@ -445,6 +445,30 @@ def test_report_command_uses_registry_outside_repo(
     assert comments[0]["role"] == "qa"
 
 
+def test_report_command_defaults_missing_files_changed_arg(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Report defaults files changed")
+
+    exit_code = _cmd_report(
+        argparse.Namespace(
+            workspace=tmp_path,
+            task_id=task.id,
+            verdict="pass",
+            message="reported without explicit files_changed",
+            role="recovery",
+            step="implementing",
+        )
+    )
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "task: T-0001" in output
+    comments = yaml.safe_load((task_dir(tmp_path, task) / "thread.yaml").read_text(encoding="utf-8"))
+    assert comments[0]["files_changed"] == []
+
+
 def test_report_command_fails_clearly_when_workspace_cannot_be_resolved(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:

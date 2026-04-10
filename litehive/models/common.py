@@ -25,11 +25,13 @@ from heru.types import (
     SubagentStatus,
     TaskComplexity,
     TaskMode,
-    _TRUNCATION_MARKER,
     cap_feedback,
     utcnow,
+    _TRUNCATION_MARKER as HERU_TRUNCATION_MARKER,
 )
 
+
+_TRUNCATION_MARKER = HERU_TRUNCATION_MARKER
 
 PipelineMode = Literal["single", "full"]
 TaskStatus = Literal[
@@ -84,6 +86,7 @@ __all__ = [
     "TaskMode",
     "TaskStatus",
     "UpstreamContributionKind",
+    "_TRUNCATION_MARKER",
     "cap_feedback",
     "utcnow",
 ]

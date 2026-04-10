@@ -4,6 +4,7 @@ from pathlib import Path
 
 from litehive.config import state_path
 from litehive.models import TaskRecord, WorkspaceState, utcnow
+from litehive.storage import runtime_store
 
 from litehive.workspace.locking import workspace_mutation_guard
 from litehive.tasks.paths import task_dir, task_file, task_runtime_file
@@ -233,6 +234,17 @@ def persist_tasks_and_state(
     )
     with workspace_mutation_guard(root):
         _write_atomic_files(writes)
+        from litehive.tasks.crud import _task_runtime_for_storage
+
+        store = runtime_store(root)
+        for task in tasks:
+            store.save_task_runtime(task.id, _task_runtime_for_storage(task))
+        merged_state = _merged_state_for_runner_owned_write(
+            root,
+            state=state,
+            protected_task_ids=[task.id for task in tasks],
+        )
+        store.save_workspace_state(merged_state)
         _ensure_runtime_ignored(root)
 
 
@@ -254,6 +266,17 @@ def _persist_tasks_and_state_without_runner_guard(
         journal_messages=journal_messages,
     )
     _write_atomic_files(writes)
+    from litehive.tasks.crud import _task_runtime_for_storage
+
+    store = runtime_store(root)
+    for task in tasks:
+        store.save_task_runtime(task.id, _task_runtime_for_storage(task))
+    merged_state = _merged_state_for_runner_owned_write(
+        root,
+        state=state,
+        protected_task_ids=[task.id for task in tasks],
+    )
+    store.save_workspace_state(merged_state)
     _ensure_runtime_ignored(root)
 
 

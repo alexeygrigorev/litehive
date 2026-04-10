@@ -141,8 +141,8 @@ def test_resolve_workspace_uses_registry_from_outside_repo(
 ) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Registry lookup")
-    home = tmp_path / "home"
-    registry = home / ".litehive" / "workspaces.yaml"
+    config_home = tmp_path / "xdg-config"
+    registry = config_home / "litehive" / "workspaces.yaml"
     registry.parent.mkdir(parents=True)
     registry.write_text(
         yaml.safe_dump({"workspaces": {"demo": str(tmp_path)}}, sort_keys=False),
@@ -153,7 +153,7 @@ def test_resolve_workspace_uses_registry_from_outside_repo(
 
     from litehive.config import resolve_workspace
 
-    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(config_home))
     monkeypatch.chdir(outside)
     monkeypatch.delenv("LITEHIVE_WORKSPACE_ROOT", raising=False)
     monkeypatch.delenv("LITEHIVE_TASK_ID", raising=False)
