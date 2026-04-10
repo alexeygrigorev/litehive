@@ -7,15 +7,15 @@ engine: null
 model: null
 mode: implementation
 pipeline_mode: full
-status: in_progress
+status: done
 flag_reason: null
 flag_count: 0
-pipeline_status: commit_to_git
+pipeline_status: done
 priority: low
 pm_complexity: moderate
 planned_effort: m
 created_at: '2026-04-09T21:17:58+00:00'
-updated_at: '2026-04-10T04:18:57+00:00'
+updated_at: '2026-04-10T04:18:59+00:00'
 goal: Remove the --engine flag from task add/update CLI and the engine field from
   TaskRecord. Engine selection should be fully handled by the global select_engine()
   function based on preference, availability, and quota. Per-task engine override
@@ -74,9 +74,9 @@ subagents:
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0274 remove-per-task-engine-override-from-task-creation'
-  commit_sha: null
-  checkpoint_base_sha: null
-  checkpoint_attempts: 0
+  commit_sha: 91e7bebf5d60ae45d5296bccc81f0cb7b108b4c6
+  checkpoint_base_sha: b32c380b4ef0dfd98d717ae7faa735b8de10a979
+  checkpoint_attempts: 1
   rolled_back_checkpoint_attempt: null
   merge_agent_attempts: 0
   worktree_path: null

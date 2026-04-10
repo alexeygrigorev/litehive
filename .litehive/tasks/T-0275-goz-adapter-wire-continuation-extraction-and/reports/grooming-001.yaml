@@ -1,0 +1,54 @@
+task_id: T-0275
+step: grooming
+verdict: pass
+source: agent
+summary: Grooming PASS. Repo inspection confirms the task is well scoped and ready
+  for implementation.
+feedback: "Grooming PASS. Repo inspection confirms the task is well scoped and ready\
+  \ for implementation.\n\nWhat I verified:\n- litehive/agents/adapters/goz.py currently\
+  \ builds goz run --format json but ignores resume_session_id and does not implement\
+  \ extract_continuation.\n- litehive/pipeline/_builder.py already threads resume_session_id\
+  \ through retry/crash-recovery paths and reuses extract_engine_continuation generically,\
+  \ so the main missing behavior is isolated to the goz adapter seam.\n- Existing\
+  \ engine patterns are clear in litehive/agents/adapters/gemini.py, litehive/agents/adapters/opencode.py,\
+  \ and litehive/agents/adapters/_opencode_impl.py; focused test patterns already\
+  \ exist in tests/test_crash_resume.py and tests/test_engine_variants_and_timeline.py.\n\
+  \nTests run:\n- No implementation tests run in grooming. I only inspected code paths\
+  \ and existing tests to validate scope and acceptance criteria quality.\n\nImplementation\
+  \ plan for the SWE:\n1. Add a goz continuation extractor in litehive/agents/adapters/_goz_impl.py\
+  \ that reads the step_finish payload and extracts the resumable session identifier\
+  \ from the continuation/session fields into RuntimeEngineContinuation(session_id=...).\n\
+  2. Update GozCLIAdapter in litehive/agents/adapters/goz.py to:\n   - pass --resume-session\
+  \ <id> to goz run when resume_session_id is provided\n   - expose extract_continuation(...)\
+  \ by delegating to the new goz extractor\n3. Add focused unit coverage for:\n  \
+  \ - goz continuation extraction from representative JSONL step_finish output\n \
+  \  - goz command building with and without resume_session_id\n\nAcceptance criteria\
+  \ status after grooming:\n- Criterion 1 is not implemented yet, but the exact adapter\
+  \ seam is identified.\n- Criterion 2 is not implemented yet, but the invocation\
+  \ seam is identified.\n- Criterion 3 is not implemented yet, but the target test\
+  \ files/patterns are identified.\n\nScope guidance:\n- Keep this task adapter-local.\
+  \ Do not broaden into generic pipeline retry/recovery changes unless a test proves\
+  \ goz-specific adapter work is insufficient.\n- A broader crash-resume test expansion\
+  \ for goz is optional follow-up, not required for this task, because the shared\
+  \ pipeline already consumes resume_session_id once the adapter exposes it."
+submitted_via_cli: true
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 124
+hook_results: []
+created_at: '2026-04-10T04:21:32+00:00'

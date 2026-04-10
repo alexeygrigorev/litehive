@@ -1,0 +1,65 @@
+task_id: T-0275
+step: testing
+verdict: pass
+source: agent
+summary: 'Verified the goz adapter seam end to end at the adapter boundary. I inspected
+  litehive/agents/adapters/goz.py and litehive/agents/adapters/_goz_impl.py and confirmed
+  two behaviors: (1) GozCLIAdapter.build_command now appends --resume-session <id>
+  when resume_session_id is provided, and (2) GozCLIAdapter.extract_continuation delegates
+  to goz_continuation(), which returns RuntimeEngineContinuation(session_id=...) only
+  for step_finish payloads carrying continuation/session data. Focused tests are short
+  and discriminating: tests/test_engine_variants_and_timeline.py::test_goz_build_invocation_includes_resume_session
+  asserts the exact goz argv with --resume-session; tests/test_engine_variants_and_timeline.py::test_goz_extract_continuation_reads_step_finish_continuation_session
+  asserts extraction from representative JSONL step_finish output; tests/test_crash_resume.py
+  now includes goz in the resumable-engine matrix and verifies the pipeline retries
+  once with the extracted resume_session_id and the continue-where-you-left-off prompt.
+  Commands run: uv run pytest -q tests/test_engine_variants_and_timeline.py -k ''goz
+  and (build_invocation or extract_continuation or engine_in_registry or render_transcript
+  or extract_usage_observation)'' -> 5 passed, 46 deselected; uv run pytest -q tests/test_crash_resume.py
+  -k goz -> 1 passed, 13 deselected; uv run pytest -q tests/test_engine_variants_and_timeline.py
+  -k ''goz_build_invocation_includes_resume_session or goz_extract_continuation_reads_step_finish_continuation_session''
+  -> 2 passed. Evidence supports all acceptance criteria: continuation extraction
+  is implemented for goz step_finish continuation/session fields, --resume-session
+  is wired into goz run when resume_session_id is available, and focused tests cover
+  continuation extraction and resume command building.'
+feedback: 'Verified the goz adapter seam end to end at the adapter boundary. I inspected
+  litehive/agents/adapters/goz.py and litehive/agents/adapters/_goz_impl.py and confirmed
+  two behaviors: (1) GozCLIAdapter.build_command now appends --resume-session <id>
+  when resume_session_id is provided, and (2) GozCLIAdapter.extract_continuation delegates
+  to goz_continuation(), which returns RuntimeEngineContinuation(session_id=...) only
+  for step_finish payloads carrying continuation/session data. Focused tests are short
+  and discriminating: tests/test_engine_variants_and_timeline.py::test_goz_build_invocation_includes_resume_session
+  asserts the exact goz argv with --resume-session; tests/test_engine_variants_and_timeline.py::test_goz_extract_continuation_reads_step_finish_continuation_session
+  asserts extraction from representative JSONL step_finish output; tests/test_crash_resume.py
+  now includes goz in the resumable-engine matrix and verifies the pipeline retries
+  once with the extracted resume_session_id and the continue-where-you-left-off prompt.
+  Commands run: uv run pytest -q tests/test_engine_variants_and_timeline.py -k ''goz
+  and (build_invocation or extract_continuation or engine_in_registry or render_transcript
+  or extract_usage_observation)'' -> 5 passed, 46 deselected; uv run pytest -q tests/test_crash_resume.py
+  -k goz -> 1 passed, 13 deselected; uv run pytest -q tests/test_engine_variants_and_timeline.py
+  -k ''goz_build_invocation_includes_resume_session or goz_extract_continuation_reads_step_finish_continuation_session''
+  -> 2 passed. Evidence supports all acceptance criteria: continuation extraction
+  is implemented for goz step_finish continuation/session fields, --resume-session
+  is wired into goz run when resume_session_id is available, and focused tests cover
+  continuation extraction and resume command building.'
+submitted_via_cli: true
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 90
+hook_results: []
+created_at: '2026-04-10T04:26:32+00:00'

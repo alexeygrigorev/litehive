@@ -1,0 +1,146 @@
+- role: planner
+  step: grooming
+  verdict: pass
+  message: "Grooming PASS. Repo inspection confirms the task is well scoped and ready\
+    \ for implementation.\n\nWhat I verified:\n-  currently builds  but ignores  and\
+    \ does not implement .\n-  already threads  through retry/crash-recovery paths\
+    \ and reuses  generically, so the main missing behavior is isolated to the goz\
+    \ adapter seam.\n- Existing engine patterns are clear in , , and ; focused test\
+    \ patterns already exist in  and .\n\nTests run:\n- No implementation tests run\
+    \ in grooming. I only inspected code paths and existing tests to validate scope\
+    \ and acceptance criteria quality.\n\nImplementation plan for the SWE:\n1. Add\
+    \ a goz continuation extractor in  that reads the  payload and extracts the resumable\
+    \ session identifier from the continuation/session fields into .\n2. Update  in\
+    \  to:\n   - pass  to Run command usage:\n\n  goz run [options] <prompt>\n\nOptions:\n\
+    \  --format, -f json        Output ExternalCLIAdapter-compatible JSONL (default:\
+    \ json)\n  --dir DIR                Working directory for file and shell tools\n\
+    \  --model MODEL            Override chat model (use 'auto' for timeout-based\
+    \ fallback)\n  --model-chain MODELS     Comma-separated model chain for --model\
+    \ auto (default: glm-5.1,glm-5,glm-5-turbo)\n  --model-timeout SECS     Per-model\
+    \ timeout in seconds when using --model auto (default: 60)\n  --resume-session\
+    \ ID      Resume a previously saved engine session\n  --system-prompt TEXT   \
+    \  Override the default coding agent system prompt\n  --no-system-prompt     \
+    \  Disable the default system prompt entirely\n  --no-context             Disable\
+    \ auto-loading of project context files\n  --max-tokens-budget N    Stop the agent\
+    \ loop after N cumulative tokens (input+output)\n\nExamples:\n  goz run --format\
+    \ json \"Summarize this repo.\"\n  goz run --dir /tmp/project --model glm-5 \"\
+    Run pytest and explain failures.\"\n  goz run --model auto \"Fix the failing test.\"\
+    \n  goz run --model auto --model-timeout 30 \"Quick task with aggressive fallback.\"\
+    \n  goz run --model auto --model-chain \"glm-5.1,glm-4-long,glm-4-flash\" \"Custom\
+    \ chain.\"\n  goz run --resume-session abc123 \"Continue with the next step.\"\
+    \n  goz run --system-prompt 'You are a helpful assistant.' \"Hello\"\n  goz run\
+    \ --no-system-prompt \"Just chat with me\"\n  goz run --no-context \"Skip project\
+    \ context loading\" when  is provided\n   - expose  by delegating to the new goz\
+    \ extractor\n3. Add focused unit coverage for:\n   - goz continuation extraction\
+    \ from representative JSONL  output\n   - goz command building with and without\
+    \ \n\nAcceptance criteria status after grooming:\n- Criterion 1 is not implemented\
+    \ yet, but the exact adapter seam is identified.\n- Criterion 2 is not implemented\
+    \ yet, but the invocation seam is identified.\n- Criterion 3 is not implemented\
+    \ yet, but the target test files/patterns are identified.\n\nScope guidance:\n\
+    - Keep this task adapter-local. Do not broaden into generic pipeline retry/recovery\
+    \ changes unless a test proves goz-specific adapter work is insufficient.\n- A\
+    \ broader crash-resume test expansion for goz is optional follow-up, not required\
+    \ for this task, because the shared pipeline already consumes  once the adapter\
+    \ exposes it."
+  files_changed: []
+  created_at: '2026-04-10T04:21:05+00:00'
+- role: planner
+  step: grooming
+  verdict: pass
+  message: "Grooming PASS. Repo inspection confirms the task is well scoped and ready\
+    \ for implementation.\n\nWhat I verified:\n- litehive/agents/adapters/goz.py currently\
+    \ builds goz run --format json but ignores resume_session_id and does not implement\
+    \ extract_continuation.\n- litehive/pipeline/_builder.py already threads resume_session_id\
+    \ through retry/crash-recovery paths and reuses extract_engine_continuation generically,\
+    \ so the main missing behavior is isolated to the goz adapter seam.\n- Existing\
+    \ engine patterns are clear in litehive/agents/adapters/gemini.py, litehive/agents/adapters/opencode.py,\
+    \ and litehive/agents/adapters/_opencode_impl.py; focused test patterns already\
+    \ exist in tests/test_crash_resume.py and tests/test_engine_variants_and_timeline.py.\n\
+    \nTests run:\n- No implementation tests run in grooming. I only inspected code\
+    \ paths and existing tests to validate scope and acceptance criteria quality.\n\
+    \nImplementation plan for the SWE:\n1. Add a goz continuation extractor in litehive/agents/adapters/_goz_impl.py\
+    \ that reads the step_finish payload and extracts the resumable session identifier\
+    \ from the continuation/session fields into RuntimeEngineContinuation(session_id=...).\n\
+    2. Update GozCLIAdapter in litehive/agents/adapters/goz.py to:\n   - pass --resume-session\
+    \ <id> to goz run when resume_session_id is provided\n   - expose extract_continuation(...)\
+    \ by delegating to the new goz extractor\n3. Add focused unit coverage for:\n\
+    \   - goz continuation extraction from representative JSONL step_finish output\n\
+    \   - goz command building with and without resume_session_id\n\nAcceptance criteria\
+    \ status after grooming:\n- Criterion 1 is not implemented yet, but the exact\
+    \ adapter seam is identified.\n- Criterion 2 is not implemented yet, but the invocation\
+    \ seam is identified.\n- Criterion 3 is not implemented yet, but the target test\
+    \ files/patterns are identified.\n\nScope guidance:\n- Keep this task adapter-local.\
+    \ Do not broaden into generic pipeline retry/recovery changes unless a test proves\
+    \ goz-specific adapter work is insufficient.\n- A broader crash-resume test expansion\
+    \ for goz is optional follow-up, not required for this task, because the shared\
+    \ pipeline already consumes resume_session_id once the adapter exposes it."
+  files_changed: []
+  created_at: '2026-04-10T04:21:19+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Implemented the goz adapter resume seam. In litehive/agents/adapters/_goz_impl.py
+    I added goz_continuation() to extract RuntimeEngineContinuation(session_id=...)
+    from step_finish payloads by reading continuation/session fields, and in litehive/agents/adapters/goz.py
+    I wired extract_continuation() plus --resume-session <id> in goz run command construction.
+    Focused coverage now includes goz command building and continuation extraction
+    in tests/test_engine_variants_and_timeline.py, and crash-resume coverage now treats
+    goz as an engine with a resumable session in tests/test_crash_resume.py. Verified
+    with: uv run pytest -q tests/test_engine_variants_and_timeline.py -k goz (7 passed),
+    uv run pytest -q tests/test_crash_resume.py -k goz (1 passed), uv run ruff check
+    --select E402,F401 litehive tests (passed), and the required forbidden noqa F401/F403
+    scan (passed with no findings). Acceptance criteria met: goz extracts RuntimeEngineContinuation
+    from step_finish continuation/session data, Litehive passes --resume-session when
+    resume_session_id is available, and focused tests cover both extraction and command
+    building.'
+  files_changed: []
+  created_at: '2026-04-10T04:24:45+00:00'
+- role: qa
+  step: testing
+  verdict: pass
+  message: 'Verified the goz adapter seam end to end at the adapter boundary. I inspected
+    litehive/agents/adapters/goz.py and litehive/agents/adapters/_goz_impl.py and
+    confirmed two behaviors: (1) GozCLIAdapter.build_command now appends --resume-session
+    <id> when resume_session_id is provided, and (2) GozCLIAdapter.extract_continuation
+    delegates to goz_continuation(), which returns RuntimeEngineContinuation(session_id=...)
+    only for step_finish payloads carrying continuation/session data. Focused tests
+    are short and discriminating: tests/test_engine_variants_and_timeline.py::test_goz_build_invocation_includes_resume_session
+    asserts the exact goz argv with --resume-session; tests/test_engine_variants_and_timeline.py::test_goz_extract_continuation_reads_step_finish_continuation_session
+    asserts extraction from representative JSONL step_finish output; tests/test_crash_resume.py
+    now includes goz in the resumable-engine matrix and verifies the pipeline retries
+    once with the extracted resume_session_id and the continue-where-you-left-off
+    prompt. Commands run: uv run pytest -q tests/test_engine_variants_and_timeline.py
+    -k ''goz and (build_invocation or extract_continuation or engine_in_registry or
+    render_transcript or extract_usage_observation)'' -> 5 passed, 46 deselected;
+    uv run pytest -q tests/test_crash_resume.py -k goz -> 1 passed, 13 deselected;
+    uv run pytest -q tests/test_engine_variants_and_timeline.py -k ''goz_build_invocation_includes_resume_session
+    or goz_extract_continuation_reads_step_finish_continuation_session'' -> 2 passed.
+    Evidence supports all acceptance criteria: continuation extraction is implemented
+    for goz step_finish continuation/session fields, --resume-session is wired into
+    goz run when resume_session_id is available, and focused tests cover continuation
+    extraction and resume command building.'
+  files_changed: []
+  created_at: '2026-04-10T04:26:23+00:00'
+- role: reviewer
+  step: accepting
+  verdict: pass
+  message: 'Accepted. I independently verified the goz adapter seam against the acceptance
+    criteria. In litehive/agents/adapters/goz.py, GozCLIAdapter.build_command now
+    appends --resume-session <id> to ''goz run --format json'' when resume_session_id
+    is present, and extract_continuation delegates through extract_continuation_from_payloads(goz_continuation).
+    In litehive/agents/adapters/_goz_impl.py, goz_continuation only accepts step_finish
+    payloads and extracts a resumable session id from continuation/session fields,
+    including the representative part.continuation.session shape required by this
+    task. I also confirmed the shared adapter base already threads resume_session_id
+    through build_invocation/run, so the goz adapter wiring is the correct integration
+    seam and no broader pipeline change was required. Focused verification run by
+    me: uv run pytest -q tests/test_engine_variants_and_timeline.py -k ''goz_build_invocation_includes_resume_session
+    or goz_extract_continuation_reads_step_finish_continuation_session'' -> 2 passed;
+    uv run pytest -q tests/test_crash_resume.py -k ''triggers_for_engines_with_resume_ids
+    and goz'' -> 1 passed. Evidence: the first test proves exact goz argv construction
+    with --resume-session, the second proves RuntimeEngineContinuation(session_id=...)
+    extraction from step_finish continuation/session data, and the crash-resume test
+    proves goz now participates in the resumable-engine retry path when a continuation
+    id is exposed. Acceptance criteria met.'
+  files_changed: []
+  created_at: '2026-04-10T04:27:18+00:00'

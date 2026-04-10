@@ -1,0 +1,59 @@
+task_id: T-0275
+step: accepting
+verdict: pass
+source: agent
+summary: 'Accepted. I independently verified the goz adapter seam against the acceptance
+  criteria. In litehive/agents/adapters/goz.py, GozCLIAdapter.build_command now appends
+  --resume-session <id> to ''goz run --format json'' when resume_session_id is present,
+  and extract_continuation delegates through extract_continuation_from_payloads(goz_continuation).
+  In litehive/agents/adapters/_goz_impl.py, goz_continuation only accepts step_finish
+  payloads and extracts a resumable session id from continuation/session fields, including
+  the representative part.continuation.session shape required by this task. I also
+  confirmed the shared adapter base already threads resume_session_id through build_invocation/run,
+  so the goz adapter wiring is the correct integration seam and no broader pipeline
+  change was required. Focused verification run by me: uv run pytest -q tests/test_engine_variants_and_timeline.py
+  -k ''goz_build_invocation_includes_resume_session or goz_extract_continuation_reads_step_finish_continuation_session''
+  -> 2 passed; uv run pytest -q tests/test_crash_resume.py -k ''triggers_for_engines_with_resume_ids
+  and goz'' -> 1 passed. Evidence: the first test proves exact goz argv construction
+  with --resume-session, the second proves RuntimeEngineContinuation(session_id=...)
+  extraction from step_finish continuation/session data, and the crash-resume test
+  proves goz now participates in the resumable-engine retry path when a continuation
+  id is exposed. Acceptance criteria met.'
+feedback: 'Accepted. I independently verified the goz adapter seam against the acceptance
+  criteria. In litehive/agents/adapters/goz.py, GozCLIAdapter.build_command now appends
+  --resume-session <id> to ''goz run --format json'' when resume_session_id is present,
+  and extract_continuation delegates through extract_continuation_from_payloads(goz_continuation).
+  In litehive/agents/adapters/_goz_impl.py, goz_continuation only accepts step_finish
+  payloads and extracts a resumable session id from continuation/session fields, including
+  the representative part.continuation.session shape required by this task. I also
+  confirmed the shared adapter base already threads resume_session_id through build_invocation/run,
+  so the goz adapter wiring is the correct integration seam and no broader pipeline
+  change was required. Focused verification run by me: uv run pytest -q tests/test_engine_variants_and_timeline.py
+  -k ''goz_build_invocation_includes_resume_session or goz_extract_continuation_reads_step_finish_continuation_session''
+  -> 2 passed; uv run pytest -q tests/test_crash_resume.py -k ''triggers_for_engines_with_resume_ids
+  and goz'' -> 1 passed. Evidence: the first test proves exact goz argv construction
+  with --resume-session, the second proves RuntimeEngineContinuation(session_id=...)
+  extraction from step_finish continuation/session data, and the crash-resume test
+  proves goz now participates in the resumable-engine retry path when a continuation
+  id is exposed. Acceptance criteria met.'
+submitted_via_cli: true
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 56
+hook_results: []
+created_at: '2026-04-10T04:27:28+00:00'
