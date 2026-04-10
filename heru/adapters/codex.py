@@ -8,6 +8,9 @@ from heru.adapters._codex_impl import (
     classify_codex_usage_limit as _classify_codex_usage_limit,
     codex_continuation,
     codex_error_details,
+    extract_codex_errors,
+    extract_codex_messages,
+    iter_codex_payloads,
     codex_stderr_limit,
     codex_stream_event_adapter,
     codex_usage_window,
@@ -15,9 +18,6 @@ from heru.adapters._codex_impl import (
 from heru.base import (
     CLIExecutionResult,
     ExternalCLIAdapter,
-    extract_codex_errors,
-    extract_codex_messages,
-    iter_jsonl_payloads,
     parse_stage_report_text,
 )
 from heru.types import RuntimeEngineContinuation
@@ -28,7 +28,7 @@ logger = logging.getLogger("litehive.agents.adapters.codex")
 
 def _extract_codex_transcript(stdout: str) -> str:
     messages: dict[str, str] = {}
-    for payload in iter_jsonl_payloads(stdout):
+    for payload in iter_codex_payloads(stdout):
         if payload.get("type") not in {"item.completed", "item.updated"}:
             continue
         item = payload.get("item")
@@ -83,12 +83,16 @@ class CodexCLIAdapter(ExternalCLIAdapter):
         return command
 
     def render_transcript(self, execution: CLIExecutionResult) -> str:
-        return self.render_transcript_from_parts(
-            execution,
-            assistant_text=extract_codex_messages(execution.stdout),
-            error_text="\n".join(extract_codex_errors(execution.stdout)).strip(),
-            empty_on_parsed_payloads=True,
-        )
+        assistant_text = extract_codex_messages(execution.stdout)
+        error_text = "\n".join(extract_codex_errors(execution.stdout)).strip()
+        if assistant_text or error_text:
+            parts = [part for part in (assistant_text, error_text) if part]
+            if execution.stderr.strip():
+                parts.append(f"[stderr]\n{execution.stderr.strip()}")
+            return "\n\n".join(parts)
+        if iter_codex_payloads(execution.stdout):
+            return f"[stderr]\n{execution.stderr.strip()}" if execution.stderr.strip() else ""
+        return execution.transcript
 
     def parse_stage_report(self, *, task_id: str, step: str, execution: CLIExecutionResult, subagent_status: str):
         transcript = self.render_transcript(execution)
@@ -97,7 +101,7 @@ class CodexCLIAdapter(ExternalCLIAdapter):
         return parse_stage_report_text(task_id=task_id, step=step, transcript=transcript, subagent_status=subagent_status)
 
     def extract_usage_observation(self, execution: CLIExecutionResult):
-        payloads = iter_jsonl_payloads(execution.stdout)
+        payloads = iter_codex_payloads(execution.stdout)
         metadata: dict[str, str | int | bool | None] = {}
         usage = None
         limit_reason = None
@@ -133,4 +137,10 @@ class CodexCLIAdapter(ExternalCLIAdapter):
         self,
         execution: CLIExecutionResult | None,
     ) -> RuntimeEngineContinuation | None:
-        return self.extract_continuation_from_payloads(execution, codex_continuation)
+        if execution is None or not execution.stdout.strip():
+            return None
+        for payload in iter_codex_payloads(execution.stdout):
+            continuation = codex_continuation(payload)
+            if continuation is not None:
+                return continuation
+        return None
