@@ -1,0 +1,106 @@
+task_id: T-0313
+step: implementing
+verdict: pass
+source: agent
+summary: 'Implemented an implementing-stage hallucination guard in litehive/pipeline/core.py.
+  Before allowing implementing -> testing, the runner now checks git status --porcelain
+  in the task worktree; if the SWE report claims non-empty files_changed but the worktree
+  is clean, the report is rewritten to verdict=reject with outcome_reason_code=hallucinated_completion,
+  files_changed is cleared so the self-report is not trusted, a clear guard explanation
+  is appended to the task journal, and the task is routed back to implementing. Legitimate
+  no-op/preimplemented passes with empty files_changed are still allowed through by
+  the existing verified-preimplemented path. I also added hallucinated_completion
+  to the allowed outcome reason codes in litehive/models/common.py and extended the
+  implementing retry routing so implementing-stage rejects requeue cleanly instead
+  of spinning inside the same run. Added regression coverage in tests/test_runner_workflow.py
+  for files_changed=[''foo.py''] with a clean git worktree, asserting reject routing,
+  hallucinated_completion persistence, cleared files_changed, and journal evidence.
+  Updated tests/test_recovery_agent.py so its git-backed fake executor now creates
+  a real implementing-stage worktree change instead of falsely claiming one. Verification:
+  uv run pytest -q tests/test_runner_workflow.py -k ''hallucinated_completion or empty_swe_guard''
+  tests/test_recovery_agent.py::test_runner_records_blocked_recovery_report_when_preflight_cannot_be_repaired
+  ; uv run ruff check --select E402,F401 litehive tests ; uv run pytest -q (979 passed).'
+feedback: "Runner hook `after_implementing` `uv run ruff check --select E402,F401\
+  \ litehive tests` passed with exit code 0 (artifact: `artifacts/after_implementing-001.yaml`).\n\
+  \nRunner hook `after_implementing` `if [ -n \"${LITEHIVE_CHANGED_PATHS:-}\" ] \\\
+  \n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" | grep -q . \\\n  && printf '%s\\\
+  n' \"$LITEHIVE_CHANGED_PATHS\" \\\n    | xargs -r -d '\\n' git grep -nE 'noqa:.*F401|noqa:.*F403|ruff:\\\
+  s*noqa:\\s*F401|ruff:\\s*noqa:\\s*F403' --; then\n  echo 'Forbidden noqa F401/F403\
+  \ suppression found.'\n  exit 1\nfi` passed with exit code 0 (artifact: `artifacts/after_implementing-002.yaml`).\n\
+  \nImplemented an implementing-stage hallucination guard in litehive/pipeline/core.py.\
+  \ Before allowing implementing -> testing, the runner now checks git status --porcelain\
+  \ in the task worktree; if the SWE report claims non-empty files_changed but the\
+  \ worktree is clean, the report is rewritten to verdict=reject with outcome_reason_code=hallucinated_completion,\
+  \ files_changed is cleared so the self-report is not trusted, a clear guard explanation\
+  \ is appended to the task journal, and the task is routed back to implementing.\
+  \ Legitimate no-op/preimplemented passes with empty files_changed are still allowed\
+  \ through by the existing verified-preimplemented path. I also added hallucinated_completion\
+  \ to the allowed outcome reason codes in litehive/models/common.py and extended\
+  \ the implementing retry routing so implementing-stage rejects requeue cleanly instead\
+  \ of spinning inside the same run. Added regression coverage in tests/test_runner_workflow.py\
+  \ for files_changed=['foo.py'] with a clean git worktree, asserting reject routing,\
+  \ hallucinated_completion persistence, cleared files_changed, and journal evidence.\
+  \ Updated tests/test_recovery_agent.py so its git-backed fake executor now creates\
+  \ a real implementing-stage worktree change instead of falsely claiming one. Verification:\
+  \ uv run pytest -q tests/test_runner_workflow.py -k 'hall\n\n\u2026 [truncated \u2014\
+  \ full transcript in subagent artifacts]"
+submitted_via_cli: true
+files_changed:
+- litehive/models/common.py
+- litehive/pipeline/core.py
+- tests/test_recovery_agent.py
+- tests/test_runner_workflow.py
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings:
+- 'runner hook passed: `after_implementing` `uv run ruff check --select E402,F401
+  litehive tests` (artifact: `artifacts/after_implementing-001.yaml`)'
+- "runner hook passed: `after_implementing` `if [ -n \"${LITEHIVE_CHANGED_PATHS:-}\"\
+  \ ] \\\n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" | grep -q . \\\n  && printf\
+  \ '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" \\\n    | xargs -r -d '\\n' git grep -nE 'noqa:.*F401|noqa:.*F403|ruff:\\\
+  s*noqa:\\s*F401|ruff:\\s*noqa:\\s*F403' --; then\n  echo 'Forbidden noqa F401/F403\
+  \ suppression found.'\n  exit 1\nfi` (artifact: `artifacts/after_implementing-002.yaml`)"
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 576
+hook_results:
+- point: after_implementing
+  command: uv run ruff check --select E402,F401 litehive tests
+  reject_on_failure: true
+  description: null
+  exit_code: 0
+  status: passed
+  artifact: artifacts/after_implementing-001.yaml
+  stdout: 'All checks passed!
+
+    '
+  stderr: 'warning: `VIRTUAL_ENV=/home/alexey/git/litehive/.venv` does not match the
+    project environment path `.venv` and will be ignored; use `--active` to target
+    the active environment instead
+
+    '
+- point: after_implementing
+  command: "if [ -n \"${LITEHIVE_CHANGED_PATHS:-}\" ] \\\n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\"\
+    \ | grep -q . \\\n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" \\\n    | xargs\
+    \ -r -d '\\n' git grep -nE 'noqa:.*F401|noqa:.*F403|ruff:\\s*noqa:\\s*F401|ruff:\\\
+    s*noqa:\\s*F403' --; then\n  echo 'Forbidden noqa F401/F403 suppression found.'\n\
+    \  exit 1\nfi"
+  reject_on_failure: true
+  description: null
+  exit_code: 0
+  status: passed
+  artifact: artifacts/after_implementing-002.yaml
+  stdout: ''
+  stderr: ''
+created_at: '2026-04-10T15:40:12+00:00'

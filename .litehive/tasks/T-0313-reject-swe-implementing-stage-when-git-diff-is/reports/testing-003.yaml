@@ -1,0 +1,124 @@
+task_id: T-0313
+step: testing
+verdict: reject
+source: agent
+summary: 'EXPECTED behavior: For real implementing-stage SWE submissions, the runner
+  must compare the SWE''s claimed `files_changed` against `git status --porcelain`;
+  if the report claims changed files but the worktree is clean, the saved implementing
+  report must be rewritten with `verdict=reject` and `outcome_reason_code=hallucinated_completion`,
+  and the journal must record that the prior completion claim was bogus.'
+feedback: 'EXPECTED behavior: For real implementing-stage SWE submissions, the runner
+  must compare the SWE''s claimed `files_changed` against `git status --porcelain`;
+  if the report claims changed files but the worktree is clean, the saved implementing
+  report must be rewritten with `verdict=reject` and `outcome_reason_code=hallucinated_completion`,
+  and the journal must record that the prior completion claim was bogus.
+
+
+  OBSERVED behavior: The new guard in `litehive/pipeline/core.py` only triggers when
+  `StageReport.files_changed` is populated. The real CLI submission path still drops
+  that field: `litehive/cli/parsers/report.py` exposes no `--files-changed` option,
+  `litehive/cli/report.py` writes `TaskThreadComment` with only role/step/verdict/message,
+  and `litehive/agents/_parsing.py` reconstructs CLI-submitted `StageReport`s without
+  copying `latest.files_changed`. Reproduction showed a real CLI-style parsed report
+  of `{''verdict'': ''pass'', ''summary'': ''Implemented foo.py and verified it.'',
+  ''files_changed'': [], ''submitted_via_cli'': True}`. That means a hallucinated
+  completion from the real agent path is still treated as a generic empty pass instead
+  of the required `hallucinated_completion` classification.
+
+
+  Steps to reproduce:
+
+  1. Inspect the production path: `sed -n ''1,120p'' litehive/cli/parsers/report.py
+  && nl -ba litehive/cli/report.py | sed -n ''19,41p'' && nl -ba litehive/agents/_parsing.py
+  | sed -n ''17,34p''`
+
+  2. Run the parsing repro:
+
+  `uv run python - <<''PY''
+
+  from pathlib import Path
+
+  import tempfile
+
+  from subprocess import run
+
+  from litehive.tasks.crud import create_task, get_task, save_task
+
+  from litehive.models import TaskThreadComment, SubagentRef
+
+  from litehive.tasks.reports import append_thread_comment
+
+  from litehive.agents._models import SubagentResult
+
+  from litehive.agents._parsing import stage_report_from_subagent
+
+  from litehive.config.workspace import ensure_workspace
+
+  root = Path(tempfile.mkdtemp(prefix=''lh-qa-''))
+
+  run([''git'',''init''], cwd=root, check=True, capture_output=True)
+
+  run([''git'',''config'',''user.email'',''qa@example.com''], cwd=root, check=True)
+
+  run([''git'',''config'',''user.name'',''QA''], cwd=root, check=True)
+
+  (root/''README.md'').write_text(''x\n'', encoding=''utf-8'')
+
+  run([''git'',''add'',''README.md''], cwd=root, check=True)
+
+  run([''git'',''commit'',''-m'',''init''], cwd=root, check=True, capture_output=True)
+
+  ensure_workspace(root)
+
+  task = create_task(root, title=''cli parsing repro'', auto_commit=False)
+
+  task.pipeline_status = ''implementing''
+
+  save_task(root, task)
+
+  append_thread_comment(root, task, TaskThreadComment(role=''swe'', step=''implementing'',
+  verdict=''pass'', message=''Implemented foo.py and verified it.''))
+
+  result = SubagentResult(ref=SubagentRef(id=''SA-1'', role=''swe'', engine=''codex'',
+  path=''/tmp/sa-1''), execution=None, transcript=''stub'', exit_code=0, failure=None)
+
+  report = stage_report_from_subagent(get_task(root, task.id), ''implementing'', result,
+  root=root)
+
+  print({''verdict'': report.verdict, ''summary'': report.summary, ''files_changed'':
+  report.files_changed, ''submitted_via_cli'': report.submitted_via_cli})
+
+  PY`
+
+
+  Acceptance criteria status: Criterion 1 is met in the runner guard, criterion 3
+  appears met, and criterion 5 is met by the new focused test. Criteria 2 and 4 are
+  not met for real CLI-submitted implementing passes, because the production report
+  path does not preserve claimed `files_changed`, so the runner cannot record `hallucinated_completion`
+  and its journal evidence for the actual failure mode this task is meant to stop.
+
+
+  Verification run: `uv run pytest -q tests/test_runner_workflow.py -k ''hallucinated_completion
+  or empty_swe_guard''` (5 passed); `uv run pytest -q tests/test_recovery_agent.py::test_runner_records_blocked_recovery_report_when_preflight_cannot_be_repaired`
+  (1 passed).'
+submitted_via_cli: true
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 1
+retry_limit: 3
+retry_source: global
+retry_decision: retry
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 205
+hook_results: []
+created_at: '2026-04-10T15:43:37+00:00'

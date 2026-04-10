@@ -39,3 +39,12 @@ CommitToGit failed: merge conflict prevented integrating task worktree into main
 
 ## 2026-04-10T15:17:31+00:00
 Execution finished with status `merge_failed`.
+
+## 2026-04-10T15:43:46+00:00
+Recovered accepted task back to `queued/commit_to_git` because no final checkpoint commit was recorded.
+
+## 2026-04-10T15:43:59+00:00
+Created task worktree at `.litehive/worktrees/T-0290-resolve-workspace-from-task-id-or-env-config`.
+
+## 2026-04-10T15:43:59+00:00
+Execution started with engine `codex`.

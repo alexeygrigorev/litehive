@@ -6,10 +6,10 @@ task_type: bugfix
 model: null
 mode: implementation
 pipeline_mode: full
-status: in_progress
+status: done
 flag_reason: null
 flag_count: 0
-pipeline_status: commit_to_git
+pipeline_status: done
 priority: high
 pm_complexity: simple
 planned_effort: s
@@ -81,9 +81,9 @@ subagents:
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0311 fix-typer-migration-regressions-task-add-queue-promote'
-  commit_sha: null
-  checkpoint_base_sha: null
-  checkpoint_attempts: 0
+  commit_sha: 576f5d0e3e3c118b5c9b321df97c00ffc9f58d28
+  checkpoint_base_sha: d3521e583bfe2de23233526c690b8d6d9a52781a
+  checkpoint_attempts: 1
   rolled_back_checkpoint_attempt: null
   merge_agent_attempts: 0
   worktree_path: null
