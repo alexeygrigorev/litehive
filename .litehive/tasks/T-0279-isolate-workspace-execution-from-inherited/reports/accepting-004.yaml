@@ -1,0 +1,61 @@
+task_id: T-0279
+step: accepting
+verdict: pass
+source: agent
+summary: 'Accepted. I verified the implementation uses a shared child-process env
+  sanitizer in litehive/execution_env.py and routes cross-workspace launches through
+  it from subagent invocation, runner hooks, daemon repair/run commands, and background
+  daemon startup. The helper preserves Litehive metadata env vars while stripping
+  inherited VIRTUAL_ENV only when the target workspace/project root differs from the
+  caller checkout. I reran the focused regressions under an intentionally poisoned
+  parent shell: env VIRTUAL_ENV=/tmp/caller-venv uv run pytest -q tests/test_engine_variants_and_timeline.py
+  -k ''virtual_env or build_invocation'' -> 7 passed, and env VIRTUAL_ENV=/tmp/caller-venv
+  uv run pytest -q tests/test_task_commands_and_daemon.py -k ''virtual_env or daemon_loop_workspace_commands_do_not_log_inherited_virtual_env_warning''
+  -> 2 passed. Evidence tied to the acceptance criteria: engine/subagent invocation
+  tests prove another project does not inherit VIRTUAL_ENV while same-project launches
+  still preserve it; runner-hook coverage proves helper commands still receive required
+  LITEHIVE_* metadata while VIRTUAL_ENV is absent for cross-workspace execution; daemon
+  log coverage proves the child workspace repair command no longer records the leaked-parent
+  VIRTUAL_ENV warning. The outer uv invocation used to run pytest still warns because
+  the reviewer deliberately set a foreign VIRTUAL_ENV in this shell, but the targeted
+  child workspace commands and captured logs are clean, which is the required end-user
+  outcome.'
+feedback: 'Accepted. I verified the implementation uses a shared child-process env
+  sanitizer in litehive/execution_env.py and routes cross-workspace launches through
+  it from subagent invocation, runner hooks, daemon repair/run commands, and background
+  daemon startup. The helper preserves Litehive metadata env vars while stripping
+  inherited VIRTUAL_ENV only when the target workspace/project root differs from the
+  caller checkout. I reran the focused regressions under an intentionally poisoned
+  parent shell: env VIRTUAL_ENV=/tmp/caller-venv uv run pytest -q tests/test_engine_variants_and_timeline.py
+  -k ''virtual_env or build_invocation'' -> 7 passed, and env VIRTUAL_ENV=/tmp/caller-venv
+  uv run pytest -q tests/test_task_commands_and_daemon.py -k ''virtual_env or daemon_loop_workspace_commands_do_not_log_inherited_virtual_env_warning''
+  -> 2 passed. Evidence tied to the acceptance criteria: engine/subagent invocation
+  tests prove another project does not inherit VIRTUAL_ENV while same-project launches
+  still preserve it; runner-hook coverage proves helper commands still receive required
+  LITEHIVE_* metadata while VIRTUAL_ENV is absent for cross-workspace execution; daemon
+  log coverage proves the child workspace repair command no longer records the leaked-parent
+  VIRTUAL_ENV warning. The outer uv invocation used to run pytest still warns because
+  the reviewer deliberately set a foreign VIRTUAL_ENV in this shell, but the targeted
+  child workspace commands and captured logs are clean, which is the required end-user
+  outcome.'
+submitted_via_cli: true
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 69
+hook_results: []
+created_at: '2026-04-10T04:54:05+00:00'

@@ -1,0 +1,87 @@
+task_id: T-0279
+step: grooming
+verdict: pass
+source: agent
+summary: 'Grooming passed after source inspection and task shaping; no code changes
+  and no pytest runs in this stage. I updated T-0279 directly via litehive update:
+  PM_COMPLEXITY=moderate, PLANNED_EFFORT=s, tightened goal, rewrote acceptance criteria
+  around observable cross-workspace behavior, and replaced the plan with a 4-step
+  implementation/testing sequence.'
+feedback: 'Grooming passed after source inspection and task shaping; no code changes
+  and no pytest runs in this stage. I updated T-0279 directly via litehive update:
+  PM_COMPLEXITY=moderate, PLANNED_EFFORT=s, tightened goal, rewrote acceptance criteria
+  around observable cross-workspace behavior, and replaced the plan with a 4-step
+  implementation/testing sequence.
+
+
+  What I verified from the repo:
+
+  - Prior task artifacts already capture the real failure mode: uv warnings like "VIRTUAL_ENV=/home/alexey/git/litehive/.venv
+  does not match the project environment path ... and will be ignored" are present
+  in historical worktree/subagent stderr, so this is a recurring bug rather than a
+  hypothetical cleanup.
+
+  - The likely root cause is inherited process environment forwarding on child launches.
+  Subagent adapters build child env from os.environ.copy() in litehive/agents/base.py,
+  Claude duplicates that pattern in litehive/agents/adapters/claude.py, runner hooks
+  do the same in litehive/pipeline/_hooks.py, and daemon-launched workspace commands
+  inherit the parent env because litehive/daemon/_execution.py uses subprocess.Popen(...)
+  without an explicit sanitized env.
+
+  - Task worktree execution is already centralized through execution_root / SubagentManager
+  and _resolve_task_execution_root, so the fix should stay small if implemented as
+  shared environment sanitization rather than one-off pops at every callsite.
+
+
+  Implementation contract for the SWE:
+
+  1. Localize all child-process launch paths that may execute in a task worktree or
+  alternate workspace and identify where inherited VIRTUAL_ENV should be stripped.
+
+  2. Add one shared helper for child-process env construction/sanitization, then route
+  subagent adapters, runner hooks, and daemon child commands through it.
+
+  3. Preserve required Litehive metadata env vars such as LITEHIVE_TASK_ID and hook
+  metadata; only remove the unrelated inherited venv signal when the execution target
+  is outside the caller workspace.
+
+  4. Add focused regression coverage that simulates a parent-shell VIRTUAL_ENV and
+  proves the child execution path no longer emits the uv mismatch warning in stderr/log
+  artifacts.
+
+  5. Run the narrow affected pytest selection first, then any broader smoke command
+  needed for confidence.
+
+
+  Recommended regression targets:
+
+  - tests around SubagentManager / adapter invocation env propagation.
+
+  - tests around runner hook env construction in litehive/pipeline/_hooks.py.
+
+  - tests around daemon foreground child execution with fake uv, since that path currently
+  shells into workspace-scoped run/repair commands.
+
+
+  Current task record is no longer blank and is ready for implementation.'
+submitted_via_cli: true
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 207
+hook_results: []
+created_at: '2026-04-10T04:43:35+00:00'
