@@ -69,7 +69,7 @@ class _SessionMixin:
                 "files_changed": [],
                 "tests": {"added": 0, "passing": 0},
                 "warnings": [],
-                "resource_control": self.sandbox.policy_summary(ref.engine).as_dict(),
+                "resource_control": self.sandbox.policy_summary(ref.engine, ref.role).as_dict(),
                 "resource_limit_event": None,
             },
             exit_code=None,
@@ -91,7 +91,7 @@ class _SessionMixin:
     ) -> None:
         created_at = utcnow()
         session_path = base / "session.yaml"
-        resource_control = self.sandbox.policy_summary(ref.engine).as_dict()
+        resource_control = self.sandbox.policy_summary(ref.engine, ref.role).as_dict()
         if session_path.exists():
             existing = yaml.safe_load(session_path.read_text(encoding="utf-8")) or {}
             if isinstance(existing, dict) and isinstance(existing.get("created_at"), str):
@@ -211,7 +211,7 @@ class _SessionMixin:
     ) -> None:
         created_at = utcnow()
         session_path = base / "session.yaml"
-        resource_control = self.sandbox.policy_summary(ref.engine).as_dict()
+        resource_control = self.sandbox.policy_summary(ref.engine, ref.role).as_dict()
         if session_path.exists():
             existing = yaml.safe_load(session_path.read_text(encoding="utf-8")) or {}
             if isinstance(existing, dict) and isinstance(existing.get("created_at"), str):

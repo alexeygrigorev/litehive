@@ -15,7 +15,7 @@ from litehive.agents._engine_detection import (
 
 class _SandboxedAdapter(ExternalCLIAdapter):
     def __init__(
-        self, adapter: ExternalCLIAdapter, launcher: SandboxLauncher, engine_name: str
+        self, adapter: ExternalCLIAdapter, launcher: SandboxLauncher, engine_name: str, role: str
     ) -> None:
         super().__init__(
             name=adapter.name,
@@ -26,7 +26,8 @@ class _SandboxedAdapter(ExternalCLIAdapter):
         self._adapter = adapter
         self._launcher = launcher
         self._engine_name = engine_name
-        self._summary = launcher.policy_summary(engine_name)
+        self._role = role
+        self._summary = launcher.policy_summary(engine_name, role)
 
     def build_command(
         self,
@@ -49,7 +50,12 @@ class _SandboxedAdapter(ExternalCLIAdapter):
         return self._adapter.detect_capabilities()
 
     def finalize_invocation(self, invocation):
-        return self._launcher.wrap_invocation(self._engine_name, self.binary, invocation)
+        return self._launcher.wrap_invocation(
+            self._engine_name,
+            self.binary,
+            invocation,
+            role=self._role,
+        )
 
     def sandbox_details(self) -> tuple[bool, str]:
         return (self._summary.enabled, self._summary.summary)
