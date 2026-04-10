@@ -1,0 +1,65 @@
+task_id: T-0266
+step: testing
+verdict: pass
+source: agent
+summary: Independent QA verification passed against the rewritten remote history.
+  I first confirmed the force-push landed by running `git ls-remote --heads origin
+  main` in the workspace, which returned `refs/heads/main -> b1c2d3e2866ca4905726cc2228339b9a9f6a5af0`;
+  after `git fetch origin main`, the local `origin/main` ref updated from `bec1ce7d`
+  to `b1c2d3e2` (forced update). I then performed validation from a fresh full clone
+  at `/tmp/litehive-t0266-qa` instead of trusting the existing detached worktree,
+  which still sits at the pre-rewrite commit with local task-file edits.
+feedback: 'Independent QA verification passed against the rewritten remote history.
+  I first confirmed the force-push landed by running `git ls-remote --heads origin
+  main` in the workspace, which returned `refs/heads/main -> b1c2d3e2866ca4905726cc2228339b9a9f6a5af0`;
+  after `git fetch origin main`, the local `origin/main` ref updated from `bec1ce7d`
+  to `b1c2d3e2` (forced update). I then performed validation from a fresh full clone
+  at `/tmp/litehive-t0266-qa` instead of trusting the existing detached worktree,
+  which still sits at the pre-rewrite commit with local task-file edits.
+
+
+  In that fresh clone, `git rev-parse HEAD` returned `b1c2d3e2866ca4905726cc2228339b9a9f6a5af0`.
+  Targeted history cleanup check: `git rev-list --objects --all | rg ''(^| )\.litehive/(tasks/.*/subagents/|tasks/.*/events\.jsonl$|worktrees/|runtime/)''`
+  returned no matches, which independently verifies the reachable history no longer
+  contains tracked `.litehive/tasks/*/subagents/`, `.litehive/tasks/*/events.jsonl`,
+  `.litehive/worktrees/`, or `.litehive/runtime/` paths.
+
+
+  Size check from the fresh clone: `du -sh .git/objects` reported `5.3M` and `git
+  count-objects -vH` reported `size-pack: 5.22 MiB`, satisfying the current acceptance
+  target of a fresh clone `.git` object database under 10MB. Remaining-large-blob
+  check: `git verify-pack -v .git/objects/pack/*.idx | sort -k3 -n | tail -10` showed
+  the largest reachable blob at `1,242,428` bytes, and mapping the top blob SHAs with
+  `git rev-list --objects --all` showed they are durable files such as `.litehive/tasks/.../recovery/recovery-003.yaml`,
+  archived reports, and `tests/test_workspace.py` rather than the removed execution-residue
+  files.
+
+
+  Durable state preservation check: in the fresh clone, `.litehive/tasks/T-0266-clean-up-git-history-to-remove-large-tracked-artifacts-and-reduce-repo-clone-size`
+  contains `task.yaml` and `journal.md`, and `.litehive/tasks/T-0072-add-explicit-parked-task-state-for-work-that-should-resume-later`
+  still contains `task.yaml`, `journal.md`, `thread.yaml`, `recovery/`, and `reports/`,
+  confirming current durable task metadata remains present at HEAD. No code-level
+  regression tests were necessary for this task because the change is a repository-history
+  rewrite rather than a runtime behavior change; verification was focused on git history,
+  clone size, and metadata preservation.'
+submitted_via_cli: true
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 106
+hook_results: []
+created_at: '2026-04-10T00:50:19+00:00'

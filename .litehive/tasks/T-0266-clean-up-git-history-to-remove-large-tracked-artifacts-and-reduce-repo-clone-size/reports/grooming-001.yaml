@@ -1,0 +1,69 @@
+task_id: T-0266
+step: grooming
+verdict: pass
+source: agent
+summary: 'Grooming passed. I inspected the repo and updated T-0266 with PM sizing
+  and a concrete 4-step plan via litehive update. Key evidence: git-filter-repo is
+  installed at /home/alexey/.local/bin/git-filter-repo; origin remote exists; git
+  count-objects -vH shows current reachable pack size is 120.08 MiB; the largest reachable
+  blobs are historical Litehive execution residue such as archived events.jsonl and
+  subagent transcripts/stderr (examples: 6.9 MB .litehive/tasks/archive/T-0191.../events.jsonl,
+  5.9 MB .../subagents/.../transcript.md, 4.5 MB .../events.jsonl). I also checked
+  the current checkout and those transient paths are no longer present live, which
+  confirms this is a history-cleanup task rather than a working-tree cleanup task.
+  Important shaping fix: the original acceptance criterion ''fresh git clone under
+  10MB'' was not physically achievable while preserving current tracked task metadata,
+  because git ls-files totals about 16.78 MB at HEAD. I rewrote the acceptance criteria
+  to target a fresh clone''s .git object database under 10MB after the force-push,
+  while preserving current durable state (code plus task.yaml, journal.md, thread.yaml,
+  reports, recovery manifests) and verifying the targeted historical residue paths
+  are gone from reachable history. No tests were run in grooming; verification was
+  repository inspection only. Implementation guidance: do the rewrite from a disposable
+  mirror clone or similarly isolated copy, not from this active linked worktree, then
+  repack/prune, verify path absence and retained durable metadata, measure the fresh
+  clone .git size, and only then force-push origin. Note: task metadata still contains
+  a stale auto-commit message string and journal title mentioning T-0143; that did
+  not block grooming but should be corrected if it matters later.'
+feedback: 'Grooming passed. I inspected the repo and updated T-0266 with PM sizing
+  and a concrete 4-step plan via litehive update. Key evidence: git-filter-repo is
+  installed at /home/alexey/.local/bin/git-filter-repo; origin remote exists; git
+  count-objects -vH shows current reachable pack size is 120.08 MiB; the largest reachable
+  blobs are historical Litehive execution residue such as archived events.jsonl and
+  subagent transcripts/stderr (examples: 6.9 MB .litehive/tasks/archive/T-0191.../events.jsonl,
+  5.9 MB .../subagents/.../transcript.md, 4.5 MB .../events.jsonl). I also checked
+  the current checkout and those transient paths are no longer present live, which
+  confirms this is a history-cleanup task rather than a working-tree cleanup task.
+  Important shaping fix: the original acceptance criterion ''fresh git clone under
+  10MB'' was not physically achievable while preserving current tracked task metadata,
+  because git ls-files totals about 16.78 MB at HEAD. I rewrote the acceptance criteria
+  to target a fresh clone''s .git object database under 10MB after the force-push,
+  while preserving current durable state (code plus task.yaml, journal.md, thread.yaml,
+  reports, recovery manifests) and verifying the targeted historical residue paths
+  are gone from reachable history. No tests were run in grooming; verification was
+  repository inspection only. Implementation guidance: do the rewrite from a disposable
+  mirror clone or similarly isolated copy, not from this active linked worktree, then
+  repack/prune, verify path absence and retained durable metadata, measure the fresh
+  clone .git size, and only then force-push origin. Note: task metadata still contains
+  a stale auto-commit message string and journal title mentioning T-0143; that did
+  not block grooming but should be corrected if it matters later.'
+submitted_via_cli: true
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 151
+hook_results: []
+created_at: '2026-04-10T00:45:00+00:00'

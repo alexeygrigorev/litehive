@@ -1,0 +1,45 @@
+task_id: T-0268
+step: testing
+verdict: pass
+source: agent
+summary: 'Verified focused crash-resume and verdict-nudge coverage in tests/test_crash_resume.py
+  with no production-file changes. Independent QA run: uv run pytest -q tests/test_crash_resume.py
+  -> 14 passed in 2.75s. Evidence against acceptance criteria: existing executor tests
+  still prove crash resume for claude via session_id and crash resume for codex via
+  exec-derived thread_id; existing timeout coverage proves verdict nudge fires on
+  timeout and codex nudge/report parsing uses the exec thread.started fallback; the
+  newly added test proves a clean codex exit with no submitted verdict triggers exactly
+  one nudge using resume_session_id=thread-clean-123 from exec output and that the
+  nudged result is the one parsed into the stage report. git diff --name-only shows
+  the change is limited to tests/test_crash_resume.py.'
+feedback: 'Verified focused crash-resume and verdict-nudge coverage in tests/test_crash_resume.py
+  with no production-file changes. Independent QA run: uv run pytest -q tests/test_crash_resume.py
+  -> 14 passed in 2.75s. Evidence against acceptance criteria: existing executor tests
+  still prove crash resume for claude via session_id and crash resume for codex via
+  exec-derived thread_id; existing timeout coverage proves verdict nudge fires on
+  timeout and codex nudge/report parsing uses the exec thread.started fallback; the
+  newly added test proves a clean codex exit with no submitted verdict triggers exactly
+  one nudge using resume_session_id=thread-clean-123 from exec output and that the
+  nudged result is the one parsed into the stage report. git diff --name-only shows
+  the change is limited to tests/test_crash_resume.py.'
+submitted_via_cli: true
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 43
+hook_results: []
+created_at: '2026-04-10T02:39:16+00:00'

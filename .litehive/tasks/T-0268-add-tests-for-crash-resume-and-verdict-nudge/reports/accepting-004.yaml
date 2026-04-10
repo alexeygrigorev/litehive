@@ -1,0 +1,38 @@
+task_id: T-0268
+step: accepting
+verdict: pass
+source: agent
+summary: Accepted. I verified the change is test-only (tests/test_crash_resume.py
+  shows only ) and reran the focused suite with ..............                                                           [100%]
+feedback: 'Accepted. I verified the change is test-only (tests/test_crash_resume.py
+  shows only ) and reran the focused suite with ..............                                                           [100%]
+
+  14 passed in 2.35s, which passed: 14 passed in 2.78s. Evidence against the acceptance
+  criteria is present in : executor-level crash resume for claude via , executor-level
+  crash resume for codex via exec-derived , timeout-triggered verdict nudge, and codex
+  exec-fallback nudge/report replacement were already covered and still pass; the
+  newly added  covers the previously missing clean-exit/no-verdict branch by asserting
+  a successful codex exec with  triggers exactly one follow-up nudge on that resume
+  id and that the nudged result is the one parsed into the stage report. Acceptance
+  criteria are met and the scope stayed within test files.'
+submitted_via_cli: true
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 36
+hook_results: []
+created_at: '2026-04-10T02:39:52+00:00'

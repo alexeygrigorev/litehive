@@ -1,0 +1,90 @@
+- role: planner
+  step: grooming
+  verdict: pass
+  message: "Reviewed existing coverage in tests/test_crash_resume.py and the nudge/resume\
+    \ logic in litehive/pipeline/_builder.py. Focused baseline: `uv run pytest -q\
+    \ tests/test_crash_resume.py` -> 13 passed in 3.62s. Evidence from current branch:\
+    \ crash resume for claude is already covered at tests/test_crash_resume.py:384,\
+    \ crash resume for codex at tests/test_crash_resume.py:414, timeout nudge at tests/test_crash_resume.py:471,\
+    \ and codex nudge/result replacement via exec thread id at tests/test_crash_resume.py:502.\
+    \ Builder behavior confirms the missing path to cover is the clean-exit-without-verdict\
+    \ branch: `_builder.py` nudges when `new_verdicts == 0` and `(result.failure is\
+    \ None or timeout)` at litehive/pipeline/_builder.py:325.\n\nTASK_UPDATE:\n```yaml\n\
+    goal: Add targeted unit coverage for crash-resume and verdict-nudge behavior in\
+    \ `litehive/pipeline/_builder.py`, keeping the work test-only and scoped to observable\
+    \ engine behavior.\nacceptance_criteria:\n  - An executor-level test proves a\
+    \ claude crash with `session_id` triggers exactly one resumed run using that session\
+    \ id.\n  - An executor-level test proves a codex crash with `thread_id` from exec\
+    \ output triggers exactly one resumed run using that thread id.\n  - An executor-level\
+    \ test proves a clean exit with no submitted verdict triggers a verdict nudge\
+    \ when a resume id is available.\n  - An executor-level test proves a timeout\
+    \ with no submitted verdict triggers a verdict nudge when a resume id is available.\n\
+    \  - An executor-level test proves the codex verdict nudge uses the exec-derived\
+    \ `thread_id` and the nudged result is the one parsed into the stage report.\n\
+    \  - Implementation changes are limited to test files.\nconstraints:\n  - Tests\
+    \ only; no refactor or production-code changes in this task.\nplan:\n  - Review\
+    \ `tests/test_crash_resume.py` helpers and extend that file rather than creating\
+    \ a second overlapping suite.\n  - Keep the existing claude and codex crash-resume\
+    \ executor tests unless they need only minor tightening.\n  - Add one focused\
+    \ executor test for the clean-exit/no-verdict nudge path by returning a successful\
+    \ subagent result with exec continuation metadata and asserting the follow-up\
+    \ run receives the resume id plus nudge prompt.\n  - Keep the timeout nudge coverage\
+    \ focused on timeout-specific behavior; avoid folding clean-exit and timeout into\
+    \ one monolithic test.\n  - Preserve the existing codex timeout/nudged-result\
+    \ parsing assertion or tighten it so it explicitly documents that the fallback\
+    \ comes from exec `thread.started` output.\npm_complexity: simple\nplanned_effort:\
+    \ s\npriority: low\n```\n\nImplementation guidance: do not redo coverage that\
+    \ already exists in this branch. The likely delta is one additional clean-exit\
+    \ nudge test and possibly a small rename/assertion-tightening pass in `tests/test_crash_resume.py`\
+    \ so the codex fallback criterion is explicit."
+  files_changed: []
+  created_at: '2026-04-10T02:36:51+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Added one focused test in tests/test_crash_resume.py for the missing clean-exit/no-verdict
+    nudge path, with no production-code changes. Verified existing executor coverage
+    still proves crash resume for claude via session_id, crash resume for codex via
+    exec-derived thread_id, timeout-triggered nudge, and codex nudge/result replacement
+    using exec thread.started output. The new test simulates a successful codex exec
+    that exposes thread-clean-123 but submits no verdict, then asserts the executor
+    sends exactly one verdict nudge on that same resume_session_id and that the nudged
+    result is what stage report parsing receives. Checks run: uv run pytest -q tests/test_crash_resume.py
+    -> 14 passed in 2.31s; uv run ruff check --select E402,F401 litehive tests ->
+    passed; forbidden noqa guard snippet -> passed. Evidence that acceptance criteria
+    are met: tests at tests/test_crash_resume.py cover claude crash resume, codex
+    crash resume via exec thread_id, clean-exit nudge without verdict, timeout nudge,
+    and codex exec-fallback nudge parsing. Diff is limited to tests/test_crash_resume.py.'
+  files_changed: []
+  created_at: '2026-04-10T02:38:26+00:00'
+- role: qa
+  step: testing
+  verdict: pass
+  message: 'Verified focused crash-resume and verdict-nudge coverage in tests/test_crash_resume.py
+    with no production-file changes. Independent QA run: uv run pytest -q tests/test_crash_resume.py
+    -> 14 passed in 2.75s. Evidence against acceptance criteria: existing executor
+    tests still prove crash resume for claude via session_id and crash resume for
+    codex via exec-derived thread_id; existing timeout coverage proves verdict nudge
+    fires on timeout and codex nudge/report parsing uses the exec thread.started fallback;
+    the newly added test proves a clean codex exit with no submitted verdict triggers
+    exactly one nudge using resume_session_id=thread-clean-123 from exec output and
+    that the nudged result is the one parsed into the stage report. git diff --name-only
+    shows the change is limited to tests/test_crash_resume.py.'
+  files_changed: []
+  created_at: '2026-04-10T02:39:10+00:00'
+- role: reviewer
+  step: accepting
+  verdict: pass
+  message: 'Accepted. I verified the change is test-only (tests/test_crash_resume.py
+    shows only ) and reran the focused suite with ..............                                                           [100%]
+
+    14 passed in 2.35s, which passed: 14 passed in 2.78s. Evidence against the acceptance
+    criteria is present in : executor-level crash resume for claude via , executor-level
+    crash resume for codex via exec-derived , timeout-triggered verdict nudge, and
+    codex exec-fallback nudge/report replacement were already covered and still pass;
+    the newly added  covers the previously missing clean-exit/no-verdict branch by
+    asserting a successful codex exec with  triggers exactly one follow-up nudge on
+    that resume id and that the nudged result is the one parsed into the stage report.
+    Acceptance criteria are met and the scope stayed within test files.'
+  files_changed: []
+  created_at: '2026-04-10T02:39:46+00:00'

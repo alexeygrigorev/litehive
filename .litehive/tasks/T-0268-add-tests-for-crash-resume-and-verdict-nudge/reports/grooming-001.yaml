@@ -1,0 +1,67 @@
+task_id: T-0268
+step: grooming
+verdict: pass
+source: agent
+summary: 'Reviewed existing coverage in tests/test_crash_resume.py and the nudge/resume
+  logic in litehive/pipeline/_builder.py. Focused baseline: `uv run pytest -q tests/test_crash_resume.py`
+  -> 13 passed in 3.62s. Evidence from current branch: crash resume for claude is
+  already covered at tests/test_crash_resume.py:384, crash resume for codex at tests/test_crash_resume.py:414,
+  timeout nudge at tests/test_crash_resume.py:471, and codex nudge/result replacement
+  via exec thread id at tests/test_crash_resume.py:502. Builder behavior confirms
+  the missing path to cover is the clean-exit-without-verdict branch: `_builder.py`
+  nudges when `new_verdicts == 0` and `(result.failure is None or timeout)` at litehive/pipeline/_builder.py:325.'
+feedback: "Reviewed existing coverage in tests/test_crash_resume.py and the nudge/resume\
+  \ logic in litehive/pipeline/_builder.py. Focused baseline: `uv run pytest -q tests/test_crash_resume.py`\
+  \ -> 13 passed in 3.62s. Evidence from current branch: crash resume for claude is\
+  \ already covered at tests/test_crash_resume.py:384, crash resume for codex at tests/test_crash_resume.py:414,\
+  \ timeout nudge at tests/test_crash_resume.py:471, and codex nudge/result replacement\
+  \ via exec thread id at tests/test_crash_resume.py:502. Builder behavior confirms\
+  \ the missing path to cover is the clean-exit-without-verdict branch: `_builder.py`\
+  \ nudges when `new_verdicts == 0` and `(result.failure is None or timeout)` at litehive/pipeline/_builder.py:325.\n\
+  \nTASK_UPDATE:\n```yaml\ngoal: Add targeted unit coverage for crash-resume and verdict-nudge\
+  \ behavior in `litehive/pipeline/_builder.py`, keeping the work test-only and scoped\
+  \ to observable engine behavior.\nacceptance_criteria:\n  - An executor-level test\
+  \ proves a claude crash with `session_id` triggers exactly one resumed run using\
+  \ that session id.\n  - An executor-level test proves a codex crash with `thread_id`\
+  \ from exec output triggers exactly one resumed run using that thread id.\n  - An\
+  \ executor-level test proves a clean exit with no submitted verdict triggers a verdict\
+  \ nudge when a resume id is available.\n  - An executor-level test proves a timeout\
+  \ with no submitted verdict triggers a verdict nudge when a resume id is available.\n\
+  \  - An executor-level test proves the codex verdict nudge uses the exec-derived\
+  \ `thread_id` and the nudged result is the one parsed into the stage report.\n \
+  \ - Implementation changes are limited to test files.\nconstraints:\n  - Tests only;\
+  \ no refactor or production-code changes in this task.\nplan:\n  - Review `tests/test_crash_resume.py`\
+  \ helpers and extend that file rather than creating a second overlapping suite.\n\
+  \  - Keep the existing claude and codex crash-resume executor tests unless they\
+  \ need only minor tightening.\n  - Add one focused executor test for the clean-exit/no-verdict\
+  \ nudge path by returning a successful subagent result with exec continuation metadata\
+  \ and asserting the follow-up run receives the resume id plus nudge prompt.\n  -\
+  \ Keep the timeout nudge coverage focused on timeout-specific behavior; avoid folding\
+  \ clean-exit and timeout into one monolithic test.\n  - Preserve the existing codex\
+  \ timeout/nudged-result parsing assertion or tighten it so it explicitly documents\
+  \ that the fallback comes from exec `thread.started` output.\npm_complexity: simple\n\
+  planned_effort: s\npriority: low\n```\n\nImplementation guidance: do not redo coverage\
+  \ that already exists in this branch. The likely delta is one additional clean-exit\
+  \ nudge test and possibly a small rename/assertion-tightening pass in `tests/test_crash_resume.py`\
+  \ so the codex fallback criterion is explicit."
+submitted_via_cli: true
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 110
+hook_results: []
+created_at: '2026-04-10T02:37:03+00:00'

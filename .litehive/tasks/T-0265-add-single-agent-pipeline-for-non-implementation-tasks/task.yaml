@@ -7,15 +7,15 @@ engine: null
 model: null
 mode: implementation
 pipeline_mode: full
-status: in_progress
+status: done
 flag_reason: null
 flag_count: 0
-pipeline_status: commit_to_git
+pipeline_status: done
 priority: medium
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-04T18:14:37+00:00'
-updated_at: '2026-04-10T00:41:57+00:00'
+updated_at: '2026-04-10T00:42:00+00:00'
 goal: 'Add two pipeline modes: ''full'' (grooming, implementing, testing, accepting,
   commit_to_git) and ''single'' (one agent executes, then done). Tasks default to
   full. Use --mode single for simple work like research, docs, config changes.'
@@ -60,9 +60,9 @@ subagents:
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0143 add-single-agent-pipeline-for-non-implementation-tasks'
-  commit_sha: null
-  checkpoint_base_sha: null
-  checkpoint_attempts: 0
+  commit_sha: bec1ce7d1ba43dc1ae6804298d4502ca9b1f1bfb
+  checkpoint_base_sha: 74a4ab063cce22f42f5edeb3fe0cf5c21cfd28da
+  checkpoint_attempts: 1
   rolled_back_checkpoint_attempt: null
   merge_agent_attempts: 0
   worktree_path: null
