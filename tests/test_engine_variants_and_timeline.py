@@ -10,6 +10,7 @@ from tests.workspace_helpers import (
     SubagentManager,
     SubagentRef,
     TaskExecutionRunner,
+    RuntimeEngineContinuation,
     _cmd_run,
     _cmd_update,
     _completed_subagent_result,
@@ -484,6 +485,25 @@ def test_goz_engine_in_registry() -> None:
     assert engine.capabilities.transcript_format == "jsonl"
 
 
+def test_goz_build_invocation_includes_resume_session(tmp_path: Path) -> None:
+    invocation = get_engine("goz").build_invocation(
+        "continue please",
+        tmp_path,
+        resume_session_id="goz-session-123",
+    )
+
+    assert invocation.cwd == tmp_path
+    assert list(invocation.argv) == [
+        "goz",
+        "run",
+        "--format",
+        "json",
+        "--resume-session",
+        "goz-session-123",
+        "continue please",
+    ]
+
+
 def test_goz_render_transcript_joins_streaming_text_and_formats_tool_blocks(tmp_path: Path) -> None:
     adapter = get_engine("goz")
     execution = CLIExecutionResult(
@@ -542,6 +562,28 @@ def test_goz_extract_usage_observation_reads_tokens_and_cost(tmp_path: Path) -> 
     assert observation.metadata["total_tokens"] == 150
     assert observation.metadata["model"] == "glm-4.5"
     assert observation.metadata["cost"] == "0.012300"
+
+
+def test_goz_extract_continuation_reads_step_finish_continuation_session(tmp_path: Path) -> None:
+    adapter = get_engine("goz")
+
+    continuation = adapter.extract_continuation(
+        CLIExecutionResult(
+            adapter="goz",
+            argv=("goz", "run", "--format", "json"),
+            cwd=tmp_path,
+            exit_code=0,
+            stdout="\n".join(
+                [
+                    '{"type":"message","role":"assistant","content":"working"}',
+                    '{"type":"step_finish","part":{"reason":"stop","continuation":{"session":"goz-session-456"}}}',
+                ]
+            ),
+            stderr="",
+        )
+    )
+
+    assert continuation == RuntimeEngineContinuation(session_id="goz-session-456")
 
 
 def test_update_command_rejects_removed_claude_engine_flag(
