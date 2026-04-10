@@ -2,7 +2,7 @@ import json
 import logging
 
 from litehive.agents.base import StreamEventAdapter, iter_jsonl_payloads
-from litehive.models import EngineUsageWindow, LiveEvent
+from litehive.models import EngineUsageWindow, LiveEvent, RuntimeEngineContinuation
 
 
 logger = logging.getLogger("litehive.agents.adapters.goz")
@@ -111,6 +111,13 @@ def goz_stream_event_adapter() -> StreamEventAdapter:
     return StreamEventAdapter(live_events=live_events)
 
 
+def goz_continuation(payload: dict[str, object]) -> RuntimeEngineContinuation | None:
+    if payload.get("type") != "step_finish":
+        return None
+    session_id = _goz_continuation_session_id(payload)
+    return RuntimeEngineContinuation(session_id=session_id) if isinstance(session_id, str) and session_id else None
+
+
 def live_events(payload: dict[str, object]) -> list[LiveEvent]:
     events: list[LiveEvent] = []
     event_type = str(payload.get("type", "")).lower()
@@ -212,6 +219,30 @@ def goz_extract_text(value: object) -> str | None:
                 list(value.keys()),
                 json.dumps(value, default=str),
             )
+    return None
+
+
+def _goz_continuation_session_id(payload: dict[str, object]) -> str | None:
+    part = payload.get("part")
+    candidates: list[object] = [payload.get("continuation"), part]
+    if isinstance(part, dict):
+        candidates.append(part.get("continuation"))
+    for candidate in candidates:
+        session_id = _goz_session_id(candidate)
+        if session_id:
+            return session_id
+    return _goz_session_id(payload.get("session"))
+
+
+def _goz_session_id(value: object) -> str | None:
+    if isinstance(value, str) and value:
+        return value
+    if not isinstance(value, dict):
+        return None
+    for key in ("session", "session_id", "sessionID", "id"):
+        raw = value.get(key)
+        if isinstance(raw, str) and raw:
+            return raw
     return None
 
 

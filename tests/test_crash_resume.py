@@ -37,6 +37,8 @@ def _continuation_stdout(engine_name: str, session_id: str) -> str:
         payload = {"type": "init", "session_id": session_id}
     elif engine_name == "opencode":
         payload = {"type": "step_start", "sessionID": session_id}
+    elif engine_name == "goz":
+        payload = {"type": "step_finish", "part": {"continuation": {"session": session_id}}}
     else:
         raise ValueError(f"Unsupported engine for continuation fixture: {engine_name}")
     return json.dumps(payload) + "\n"
@@ -240,6 +242,7 @@ def test_run_task_crash_resume_only_once_per_crash(
         ("codex", "thread-codex-123"),
         ("gemini", "session-gemini-123"),
         ("opencode", "session-opencode-123"),
+        ("goz", "session-goz-123"),
     ],
 )
 def test_run_task_crash_resume_triggers_for_engines_with_resume_ids(
@@ -437,7 +440,7 @@ def test_stage_executor_crash_resume_triggers_session_resume_for_codex(
     assert "continue where you left off" in (calls[1]["prompt"] or "")
 
 
-@pytest.mark.parametrize("engine_name", ["copilot", "goz"])
+@pytest.mark.parametrize("engine_name", ["copilot"])
 def test_stage_executor_crash_resume_skips_engines_without_resume_id(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, engine_name: str
 ) -> None:

@@ -5,6 +5,7 @@ from pathlib import Path
 from litehive.agents.adapters._goz_impl import (
     extract_goz_errors,
     extract_goz_transcript,
+    goz_continuation,
     goz_extract_text,
     goz_error_details,
     goz_stream_event_adapter,
@@ -12,6 +13,7 @@ from litehive.agents.adapters._goz_impl import (
 )
 from litehive.agents.adapters.common import classify_execution_limit
 from litehive.agents.base import CLIExecutionResult, ExternalCLIAdapter, iter_jsonl_payloads
+from litehive.models import RuntimeEngineContinuation
 
 _goz_extract_text = goz_extract_text
 
@@ -37,6 +39,8 @@ class GozCLIAdapter(ExternalCLIAdapter):
         command = [self.binary, "run", "--format", "json"]
         if model:
             command.extend(["--model", model])
+        if resume_session_id:
+            command.extend(["--resume-session", resume_session_id])
         command.append(prompt)
         return command
 
@@ -85,3 +89,9 @@ class GozCLIAdapter(ExternalCLIAdapter):
 
     def stream_event_adapter(self):
         return goz_stream_event_adapter()
+
+    def extract_continuation(
+        self,
+        execution: CLIExecutionResult | None,
+    ) -> RuntimeEngineContinuation | None:
+        return self.extract_continuation_from_payloads(execution, goz_continuation)
