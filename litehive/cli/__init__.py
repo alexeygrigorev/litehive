@@ -671,6 +671,9 @@ def archive_group(
 ) -> int | None:
     if ctx.invoked_subcommand is not None:
         return None
+    if task_id is None and not all_done:
+        typer.echo(ctx.get_help())
+        raise typer.Exit(2)
     return _cmd_archive(_ns(command="archive", task_id=task_id, workspace=workspace, all_done=all_done))
 
 

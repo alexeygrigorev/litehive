@@ -261,12 +261,8 @@ def _cmd_archive(args):
     ensure_workspace(args.workspace)
     if args.task_id is None and not getattr(args, "all_done", False):
         parser = getattr(args, "command_parser", None)
-        if parser is None:
-            from litehive.cli import build_parser
-
-            root_parser = build_parser()
-            parser = root_parser._subparsers._group_actions[0].choices["archive"]
-        parser.print_help()
+        if parser is not None:
+            parser.print_help()
         return 2
     try:
         if args.task_id is not None:
