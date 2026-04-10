@@ -1,0 +1,61 @@
+id: T-0331
+slug: replace-execution-retry-policy-selectors-with
+title: Replace execution retry policy selectors with flat config
+depends_on: []
+task_type: null
+model: null
+mode: implementation
+pipeline_mode: full
+status: queued
+flag_reason: null
+flag_count: 0
+pipeline_status: backlog
+priority: medium
+pm_complexity: null
+planned_effort: null
+created_at: '2026-04-10T20:33:41+00:00'
+updated_at: '2026-04-10T20:33:41+00:00'
+goal: "The execution_retry_policies selector system (~150 LOC) walks a priority chain\
+  \ (model_family > engine > category > default) to resolve retry behavior per engine/model.\
+  \ Multi-tenant SaaS assumption \u2014 not needed for single-user.\n\n### Delete\n\
+  - ExecutionRetryPolicy class (litehive/config/retry.py or wherever defined)\n- _normalize_execution_retry_policies\n\
+  - resolve_execution_retry_policy(engine, model) selector walker\n- _execution_retry_model_family\
+  \ helper\n- VALID_EXECUTION_RETRY_CLASSIFICATIONS constant\n- execution_retry_policies\
+  \ config field on LitehiveConfig\n- Normalization entries in config/normalization.py\
+  \ for the above\n- Tests that exercise the selector priority chain\n\n### Replace\
+  \ with\nTwo flat config fields on LitehiveConfig:\n- default_retry_limit: int (already\
+  \ exists, keep)\n- retry_on: list[str] (which failure kinds trigger retry \u2014\
+  \ e.g. [rate_limit, inactivity_timeout, budget_limit])\n\nCall site in the pipeline\
+  \ becomes: `if failure_kind in config.retry_on and attempts < config.default_retry_limit:\
+  \ retry()`. Ten lines.\n\n### Preserve\n- Per-task retry_limit override (task.yaml\
+  \ can still set retry_limit: 5)\n- Engine fallback on frozen engines (different\
+  \ subsystem)\n- Inactivity timeout handling\n\n### Verification\n- Retries still\
+  \ fire on rate limits and inactivity timeouts\n- Per-task retry_limit still honored\n\
+  - All tests pass; selector-specific tests deleted"
+acceptance_criteria:
+- ExecutionRetryPolicy, resolve_execution_retry_policy, _normalize_execution_retry_policies,
+  _execution_retry_model_family all deleted
+- execution_retry_policies config field removed from LitehiveConfig
+- retry_on flat list field added to LitehiveConfig; call sites use simple `failure_kind
+  in config.retry_on` check
+- Per-task retry_limit override still works
+- All tests pass; selector priority tests deleted
+constraints: []
+plan: []
+human_checkpoints: []
+subagents: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0331 replace-execution-retry-policy-selectors-with'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+  merge_agent_attempts: 0
+  worktree_path: null
+retry_policy:
+  max_retries: null
+  stage_retry_limit: null
+created_from: null
+upstream_origin: null
+github_origin: null

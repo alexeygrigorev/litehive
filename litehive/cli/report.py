@@ -33,7 +33,7 @@ def _cmd_report(args):
         step=step,
         verdict=normalized_verdict,
         message=args.message,
-        files_changed=list(args.files_changed or []),
+        files_changed=list(getattr(args, "files_changed", []) or []),
     )
     append_thread_comment(root, task, comment)
     print(f"task: {task.id}")

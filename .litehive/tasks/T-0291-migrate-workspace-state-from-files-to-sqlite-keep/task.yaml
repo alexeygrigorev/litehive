@@ -10,12 +10,12 @@ pipeline_mode: full
 status: in_progress
 flag_reason: null
 flag_count: 0
-pipeline_status: implementing
+pipeline_status: commit_to_git
 priority: high
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-10T06:46:28+00:00'
-updated_at: '2026-04-10T18:03:39+00:00'
+updated_at: '2026-04-10T23:11:09+00:00'
 goal: Separate task intent (committed to git) from execution state (out of repo).
   Git holds only config.yaml, context.md, tasks/<id>/task.yaml and tasks/<id>/comments.yaml.
   Everything else (state, queue, journal, reports, runtime, engine monitoring, hook
@@ -112,8 +112,197 @@ subagents:
 - id: SA-0009
   role: recovery
   engine: codex
-  status: running
+  status: interrupted
   path: subagents/SA-0009-recovery
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0010
+  role: recovery
+  engine: codex
+  status: completed
+  path: subagents/SA-0010-recovery
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0011
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0011-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0012
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0012-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0013
+  role: merge-resolver
+  engine: codex
+  status: completed
+  path: subagents/SA-0013-merge-resolver
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0014
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0014-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0015
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0015-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0016
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0016-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0017
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0017-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0018
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0018-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0019
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0019-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0020
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0020-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0021
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0021-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0022
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0022-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0023
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0023-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0024
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0024-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0025
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0025-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0026
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0026-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0027
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0027-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0028
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0028-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0029
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0029-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0030
+  role: swe
+  engine: codex
+  status: failed
+  path: subagents/SA-0030-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0031
+  role: recovery
+  engine: codex
+  status: failed
+  path: subagents/SA-0031-recovery
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0032
+  role: recovery
+  engine: codex
+  status: failed
+  path: subagents/SA-0032-recovery
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0033
+  role: recovery
+  engine: claude
+  status: interrupted
+  path: subagents/SA-0033-recovery
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0034
+  role: recovery
+  engine: codex
+  status: completed
+  path: subagents/SA-0034-recovery
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0035
+  role: qa
+  engine: codex
+  status: completed
+  path: subagents/SA-0035-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0036
+  role: reviewer
+  engine: codex
+  status: completed
+  path: subagents/SA-0036-reviewer
   sandboxed: false
   sandbox_summary: host
 git:

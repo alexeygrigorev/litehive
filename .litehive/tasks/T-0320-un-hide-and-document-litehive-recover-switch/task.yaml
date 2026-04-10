@@ -1,0 +1,54 @@
+id: T-0320
+slug: un-hide-and-document-litehive-recover-switch
+title: Un-hide and document litehive recover, switch, prioritize commands
+depends_on:
+- T-0317
+task_type: null
+model: null
+mode: implementation
+pipeline_mode: full
+status: queued
+flag_reason: null
+flag_count: 0
+pipeline_status: backlog
+priority: low
+pm_complexity: null
+planned_effort: null
+created_at: '2026-04-10T20:03:01+00:00'
+updated_at: '2026-04-10T20:03:01+00:00'
+goal: "These three commands are hidden=True in the typer app, so they don't show up\
+  \ in `litehive --help`. They are all legitimately useful and I want to keep them\
+  \ \u2014 they just aren't discoverable.\n\n- `litehive recover <task_id>`: requeue\
+  \ a completed task without reverting code (useful when an accepted task needs a\
+  \ follow-up pass without git rollback).\n- `litehive switch <task_id> <engine> --reason\
+  \ \"...\"`: stop a task, record an engine switch in its thread comment, requeue\
+  \ it for the next iteration with the new engine.\n- `litehive prioritize <task_id>\
+  \ [task_id ...]`: bulk-promote multiple queued tasks to the front in the requested\
+  \ order.\n\nWork:\n1. Remove hidden=True from all three in litehive/cli/ after the\
+  \ T-0317 rewrite.\n2. Add a section to README.md under Usage explaining when to\
+  \ use each, with example invocations.\n3. Mention them in CLAUDE.md's CLI overview\
+  \ if it has one.\n\nDependency: should land after T-0317 to avoid merge conflicts\
+  \ with the CLI rewrite."
+acceptance_criteria:
+- recover, switch, prioritize are visible in `litehive --help`
+- README.md has a section documenting all three with example usage
+- Each command has a clear --help one-liner explaining when to use it
+constraints: []
+plan: []
+human_checkpoints: []
+subagents: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0320 un-hide-and-document-litehive-recover-switch'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+  merge_agent_attempts: 0
+  worktree_path: null
+retry_policy:
+  max_retries: null
+  stage_retry_limit: null
+created_from: null
+upstream_origin: null
+github_origin: null

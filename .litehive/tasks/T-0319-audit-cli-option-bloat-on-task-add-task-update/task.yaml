@@ -1,0 +1,66 @@
+id: T-0319
+slug: audit-cli-option-bloat-on-task-add-task-update
+title: Audit CLI option bloat on task add / task update / issue commands
+depends_on: []
+task_type: null
+model: null
+mode: implementation
+pipeline_mode: full
+status: queued
+flag_reason: null
+flag_count: 0
+pipeline_status: backlog
+priority: low
+pm_complexity: null
+planned_effort: null
+created_at: '2026-04-10T19:57:40+00:00'
+updated_at: '2026-04-10T19:57:40+00:00'
+goal: "After the T-0317 cleanup, `task add` still has 14 options and `task update`\
+  \ has 17. Some are load-bearing for daily use (title, goal, acceptance-criteria,\
+  \ priority, depends-on). Others are YAGNI flags that I rarely set at creation time\
+  \ and would edit in task.yaml directly or via a follow-up `task update`.\n\nCandidate\
+  \ flags to audit (may or may not be cuttable \u2014 grep usage first):\n- --model\
+  \ (how often do I override per-task engine model at creation? usually it's workspace\
+  \ default)\n- --retry-limit (same \u2014 per-task override is rare)\n- --record-mode\
+  \ (derived from --task-type; probably redundant)\n- --mode (single/full \u2014 rarely\
+  \ used)\n- --task-type (adapter/bugfix/docs/intake/refactor/research/review \u2014\
+  \ how many of these do I actually use?)\n- --pm-complexity, --planned-effort (PM\
+  \ estimates \u2014 do I set these at creation or let grooming estimate?)\n- --auto-commit\
+  \ (per-task override of global flag)\n- --human-checkpoints (rarely used)\n- --from-file\
+  \ (on update \u2014 bulk JSON update; do I ever use this?)\n- --edit (opens yaml\
+  \ \u2014 should stay if yaml editing is supported)\n\nMethodology:\n1. Grep journals/threads\
+  \ for which of these flags I've actually passed in practice: `grep -rE 'litehive\
+  \ task (add|update).*--(flag)' .litehive/tasks/*/thread.yaml` and similar. Any flag\
+  \ used 0 or 1 times in >300 tasks is a candidate for removal.\n2. For flags that\
+  \ stay, consider: should they become interactive prompts instead? (probably not\
+  \ \u2014 CLI should be scriptable.)\n3. Cut the unused flags. Anyone who truly needs\
+  \ them can edit task.yaml directly.\n\nDo NOT remove:\n- title (positional), goal,\
+  \ acceptance-criteria, constraint, plan-step, priority, depends-on, --edit, --from-file\
+  \ unless grep proves they're unused.\n\nScope: task add, task update, import spec\
+  \ (intake), import issue. Not configure (handled by T-0317)."
+acceptance_criteria:
+- Grep-based usage report for each flag across .litehive/tasks/ history produced as
+  first step of the task
+- Flags used 0 times in workspace history are removed from the CLI
+- task add, task update, import spec, import issue work unchanged for their surviving
+  flags
+- CLI tests updated to match new option surface
+constraints: []
+plan: []
+human_checkpoints: []
+subagents: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0319 audit-cli-option-bloat-on-task-add-task-update'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+  merge_agent_attempts: 0
+  worktree_path: null
+retry_policy:
+  max_retries: null
+  stage_retry_limit: null
+created_from: null
+upstream_origin: null
+github_origin: null

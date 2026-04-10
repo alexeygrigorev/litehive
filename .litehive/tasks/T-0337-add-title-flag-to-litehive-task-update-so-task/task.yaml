@@ -1,0 +1,51 @@
+id: T-0337
+slug: add-title-flag-to-litehive-task-update-so-task
+title: Add --title flag to 'litehive task update' so task titles can be renamed in
+  place
+depends_on: []
+task_type: adapter
+model: null
+mode: tasks
+pipeline_mode: full
+status: queued
+flag_reason: null
+flag_count: 0
+pipeline_status: backlog
+priority: low
+pm_complexity: simple
+planned_effort: xs
+created_at: '2026-04-10T20:51:08+00:00'
+updated_at: '2026-04-10T20:52:15+00:00'
+goal: '''litehive task update'' should support renaming a task''s title in place.
+  Today there is no way to change a title after creation, which forces close-and-recreate
+  workflows that burn task ids and fragment history. The task id must be preserved
+  across the rename.'
+acceptance_criteria:
+- '''litehive task update <id> --title "new title"'' replaces the stored title'
+- '''litehive task show <id>'' reflects the new title'
+- Task id is preserved across the rename
+- tests/ passes
+constraints:
+- Keep provider-specific behavior isolated to the adapter boundary.
+- Preserve deterministic workspace state and execution flow.
+plan:
+- Inspect the existing adapter interface, config wiring, and invocation flow.
+- Implement the adapter change close to the integration seam.
+- Verify the adapter path with a focused test or representative run.
+human_checkpoints: []
+subagents: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0337 add-title-flag-to-litehive-task-update-so-task'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+  merge_agent_attempts: 0
+  worktree_path: null
+retry_policy:
+  max_retries: null
+  stage_retry_limit: null
+created_from: null
+upstream_origin: null
+github_origin: null

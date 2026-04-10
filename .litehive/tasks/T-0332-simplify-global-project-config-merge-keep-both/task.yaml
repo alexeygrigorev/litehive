@@ -1,0 +1,75 @@
+id: T-0332
+slug: simplify-global-project-config-merge-keep-both
+title: Simplify global+project config merge (keep both layers, kill registry archeology)
+depends_on: []
+task_type: null
+model: null
+mode: implementation
+pipeline_mode: full
+status: queued
+flag_reason: null
+flag_count: 0
+pipeline_status: backlog
+priority: low
+pm_complexity: null
+planned_effort: null
+created_at: '2026-04-10T20:34:00+00:00'
+updated_at: '2026-04-10T20:34:00+00:00'
+goal: "litehive is used from multiple project directories, so global + project config\
+  \ is the right model. But the current implementation has schema archeology and multiple\
+  \ code paths that are not needed.\n\n### Keep\n- Two-layer config merge: defaults\
+  \ + ~/.config/litehive/config.yaml (global) + ./.litehive/config.yaml (project)\n\
+  - Deep merge behavior so project config can override any global setting\n- Walking\
+  \ up from cwd to find .litehive/ (so `litehive` works from subdirectories of a project)\n\
+  \n### Simplify or delete\n- **Workspace registry** (~/.litehive/workspaces.yaml\
+  \ + $XDG_CONFIG_HOME/litehive/workspaces.yaml): two possible locations, entries\
+  \ can be strings OR dicts with four possible key names (path / root / workspace\
+  \ / repo_path). Schema archeology. Pick ONE location ($XDG_CONFIG_HOME/litehive/workspaces.yaml\
+  \ is the XDG-compliant choice) and ONE schema (list of strings \u2014 each is a\
+  \ workspace path). Delete _workspace_registry_paths and _iter_registry_workspace_roots\
+  \ helpers in favor of a single ~10-line function.\n- **Registry discovery**: if\
+  \ the simplified registry has 0 or 1 entries for most users, consider whether the\
+  \ registry is even needed. If `litehive --workspace <path>` and cwd-walkup cover\
+  \ 95% of cases, the registry may be cuttable. Decide during the task.\n- **Global\
+  \ config merge**: keep the concept, simplify the code. Load defaults, load global\
+  \ (if exists), load project (if exists), deep merge in order. ~20 lines instead\
+  \ of the current spread across loading.py / paths.py / workspace.py.\n\n### Method\n\
+  1. Enumerate every function in config/loading.py and config/workspace.py that touches\
+  \ config or registry discovery.\n2. For each: classify as essential (covers a real\
+  \ use case I will have with multi-project) or incidental (covers a schema variant\
+  \ or fallback that never fires).\n3. Delete incidentals. Collapse essentials into\
+  \ a few short functions.\n4. Update tests to match; delete tests for deleted fallbacks.\n\
+  \n### Target\nFrom ~120 LOC of merge+registry ceremony down to ~40 LOC total. Keep\
+  \ both config layers, kill the fallback maze.\n\n### Preserve\n- ~/.config/litehive/config.yaml\
+  \ for global defaults (real use case for future multi-project usage)\n- Project-local\
+  \ .litehive/config.yaml always wins\n- `litehive --workspace /path` explicit override\n\
+  - cwd-walkup to find .litehive/ automatically"
+acceptance_criteria:
+- Two-layer config merge (global + project) preserved and still deep-merges correctly
+- Workspace registry simplified to ONE location (~/.config/litehive/workspaces.yaml
+  or $XDG_CONFIG_HOME equivalent) and ONE schema (list of paths)
+- Multi-key dict schema (path/root/workspace/repo_path) and multiple registry locations
+  removed
+- config/loading.py merge ceremony reduced to roughly 40 LOC total
+- '`litehive --workspace <path>` explicit override still works'
+- cwd-walkup discovery still works
+- All tests pass; tests for deleted fallback schemas removed
+constraints: []
+plan: []
+human_checkpoints: []
+subagents: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0332 simplify-global-project-config-merge-keep-both'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+  merge_agent_attempts: 0
+  worktree_path: null
+retry_policy:
+  max_retries: null
+  stage_retry_limit: null
+created_from: null
+upstream_origin: null
+github_origin: null

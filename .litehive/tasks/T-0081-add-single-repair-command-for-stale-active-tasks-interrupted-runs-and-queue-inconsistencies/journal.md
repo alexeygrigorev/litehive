@@ -40,3 +40,6 @@ Task closed: deferred. Stale interrupted task, superseded by newer tasks
 
 ## 2026-04-09T21:31:05+00:00
 Task closed: duplicate. Covered by repair command improvements already landed
+
+## 2026-04-10T20:41:17+00:00
+Task closed: duplicate. Already marked status=duplicate; formally closing to remove from active listing.

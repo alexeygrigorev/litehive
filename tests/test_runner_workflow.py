@@ -3191,6 +3191,46 @@ def test_stage_report_from_subagent_preserves_cli_claimed_files(tmp_path: Path) 
     assert report.files_changed == ["foo.py"]
 
 
+def test_subagent_manager_parse_execution_report_prefers_cli_verdict(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="CLI verdict in session report")
+    _write_cli_verdict(
+        tmp_path,
+        task,
+        "implementing",
+        verdict="reject",
+        message="Expected behavior is not implemented yet.",
+    )
+    manager = SubagentManager(tmp_path)
+    ref = SubagentRef(
+        id="SA-implementing",
+        role="swe",
+        engine="codex",
+        status="completed",
+        path="subagents/SA-implementing",
+    )
+    execution = CLIExecutionResult(
+        adapter="codex",
+        argv=("codex", "exec"),
+        cwd=tmp_path,
+        exit_code=0,
+        stdout="",
+        stderr="",
+    )
+
+    report = manager._parse_execution_report(
+        task=task,
+        step="implementing",
+        ref=ref,
+        execution=execution,
+        transcript="Implemented and verified.",
+    )
+
+    assert report.submitted_via_cli is True
+    assert report.verdict == "reject"
+    assert report.summary == "Expected behavior is not implemented yet."
+
+
 def test_hallucinated_completion_guard_rejects_cli_claimed_files_on_clean_worktree(
     tmp_path: Path,
 ) -> None:

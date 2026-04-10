@@ -1,0 +1,83 @@
+id: T-0328
+slug: remove-duplicate-taskruntime-fields
+title: Remove duplicate TaskRuntime fields
+depends_on:
+- T-0324
+- T-0325
+task_type: null
+model: null
+mode: implementation
+pipeline_mode: full
+status: queued
+flag_reason: null
+flag_count: 0
+pipeline_status: backlog
+priority: low
+pm_complexity: null
+planned_effort: null
+created_at: '2026-04-10T20:27:30+00:00'
+updated_at: '2026-04-10T20:27:30+00:00'
+goal: 'TaskRuntime has 14 fields tracking engine/stage/subagent state, several of
+  which duplicate other fields or serve features being cut.
+
+
+  ### Fields to remove
+
+  - last_stage: duplicates current_stage history (only the current stage matters;
+  history is in the journal)
+
+  - last_subagent: duplicates active_subagent history (same reasoning)
+
+  - continuation_handoff: duplicates last_engine_switch
+
+  - self_heal_traceback_fingerprints: only used by the recovery empire paths being
+  simplified in T-0325. If the self-heal agent still needs fingerprints, keep this
+  field; otherwise delete.
+
+
+  ### Verify before deleting
+
+  - Grep for each field name in litehive/ and tests/
+
+  - Check if web dashboard reads them (if T-0324 web removal has landed, web is gone)
+
+  - Check if status output references them
+
+
+  ### Preserve
+
+  - current_stage, active_subagent, last_engine_switch, last_outcome, stage_retry_counts,
+  retry_source, run_started_at, updated_at, execution_status, interruption
+
+
+  ### Coordination
+
+  Runs after T-0324 (web removal) and coordinates with T-0325 (recovery simplify).
+  If the self-heal agent genuinely uses self_heal_traceback_fingerprints, T-0325 will
+  keep it and this task drops it from the delete list.'
+acceptance_criteria:
+- last_stage, last_subagent, continuation_handoff removed from TaskRuntime and all
+  callers
+- self_heal_traceback_fingerprints removed unless T-0325 determines it's load-bearing
+  for self-heal
+- All tests pass
+- litehive status output unchanged for fields that remain
+constraints: []
+plan: []
+human_checkpoints: []
+subagents: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0328 remove-duplicate-taskruntime-fields'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+  merge_agent_attempts: 0
+  worktree_path: null
+retry_policy:
+  max_retries: null
+  stage_retry_limit: null
+created_from: null
+upstream_origin: null
+github_origin: null

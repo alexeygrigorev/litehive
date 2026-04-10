@@ -37,6 +37,7 @@ from litehive.agents._engine_detection import (
     _supports_on_started,
 )
 from litehive.agents._models import EngineFailure, SubagentInactivityTimeout, SubagentResult
+from litehive.agents._parsing import stage_report_from_subagent
 from litehive.agents._sandbox import _SandboxedAdapter
 from litehive.agents._session import _SessionMixin
 from litehive.tasks.crud import save_task
@@ -497,6 +498,19 @@ class SubagentManager(_SessionMixin):
         execution: CLIExecutionResult | None,
         transcript: str,
     ) -> StageReport:
+        cli_report = stage_report_from_subagent(
+            task,
+            step,
+            SubagentResult(
+                ref=ref,
+                execution=execution,
+                transcript=transcript,
+                exit_code=0 if execution is None else execution.exit_code,
+            ),
+            root=self.root,
+        )
+        if cli_report.submitted_via_cli:
+            return cli_report
         if execution is not None:
             engine = get_engine(ref.engine)
             if hasattr(engine, "parse_stage_report"):

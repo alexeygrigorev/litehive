@@ -1,0 +1,77 @@
+task_id: T-0291
+step: accepting
+verdict: pass
+source: agent
+summary: 'Accepted against the narrowed T-0291 storage-foundation contract from grooming.
+  I verified directly in litehive/config/paths.py and litehive/config/workspace.py
+  that Litehive now derives a stable workspace id from the canonical repo path, resolves
+  XDG config/data/state roots plus the workspace registry at ~/.config/litehive/workspaces.yaml
+  (or XDG equivalent), registers the workspace during bootstrap/resolve, bootstraps
+  ~/.local/share/litehive/<workspace-id>/data.db, and rejects ensure_workspace() roots
+  nested inside another .litehive tree. I verified in litehive/storage/runtime.py
+  that the storage-layer entry point exists and bootstraps the initial SQLite schema
+  with tables pool_state, queue, task_state, task_journal, stage_reports, hook_artifacts,
+  subagent_sessions, events, engine_monitoring, attention, and worktrees. I verified
+  in litehive/tasks/persistence.py, litehive/tasks/crud.py, litehive/workspace/workflow.py,
+  and litehive/pipeline/recovery/execution_recovery.py that task intent still reads
+  from filesystem files while workspace/task runtime reads and writes through SQLite,
+  with legacy file-backed fallback/import preserved so pre-migration workspaces still
+  load. I also verified the reporting guard in litehive/cli/report.py for missing
+  files_changed remains in place. Reviewer-run verification from /home/alexey/git/litehive
+  with PYTHONPATH pointed at this worktree: uv run pytest tests/test_workspace_bootstrap.py
+  tests/test_task_commands_and_daemon.py tests/test_config.py -q -> 194 passed, 3
+  warnings in 14.24s; uv run pytest tests/test_runtime_pool.py::test_drain_task_pool_allows_future_queue_mutation_during_active_run
+  -q -> 1 passed, 3 warnings in 1.39s; uv run pytest -q -> 985 passed, 3 warnings
+  in 110.30s. Test evidence includes DB bootstrap/schema assertions, registry/XDG
+  resolution, nested-workspace rejection, legacy state import into DB, DB-backed task
+  runtime loading without runtime.yaml, and the report-command regression for absent
+  files_changed. Acceptance verdict: pass for the narrowed storage foundation; the
+  broader epic items intentionally deferred to follow-up tasks remain out of scope
+  for T-0291.'
+feedback: 'Accepted against the narrowed T-0291 storage-foundation contract from grooming.
+  I verified directly in litehive/config/paths.py and litehive/config/workspace.py
+  that Litehive now derives a stable workspace id from the canonical repo path, resolves
+  XDG config/data/state roots plus the workspace registry at ~/.config/litehive/workspaces.yaml
+  (or XDG equivalent), registers the workspace during bootstrap/resolve, bootstraps
+  ~/.local/share/litehive/<workspace-id>/data.db, and rejects ensure_workspace() roots
+  nested inside another .litehive tree. I verified in litehive/storage/runtime.py
+  that the storage-layer entry point exists and bootstraps the initial SQLite schema
+  with tables pool_state, queue, task_state, task_journal, stage_reports, hook_artifacts,
+  subagent_sessions, events, engine_monitoring, attention, and worktrees. I verified
+  in litehive/tasks/persistence.py, litehive/tasks/crud.py, litehive/workspace/workflow.py,
+  and litehive/pipeline/recovery/execution_recovery.py that task intent still reads
+  from filesystem files while workspace/task runtime reads and writes through SQLite,
+  with legacy file-backed fallback/import preserved so pre-migration workspaces still
+  load. I also verified the reporting guard in litehive/cli/report.py for missing
+  files_changed remains in place. Reviewer-run verification from /home/alexey/git/litehive
+  with PYTHONPATH pointed at this worktree: uv run pytest tests/test_workspace_bootstrap.py
+  tests/test_task_commands_and_daemon.py tests/test_config.py -q -> 194 passed, 3
+  warnings in 14.24s; uv run pytest tests/test_runtime_pool.py::test_drain_task_pool_allows_future_queue_mutation_during_active_run
+  -q -> 1 passed, 3 warnings in 1.39s; uv run pytest -q -> 985 passed, 3 warnings
+  in 110.30s. Test evidence includes DB bootstrap/schema assertions, registry/XDG
+  resolution, nested-workspace rejection, legacy state import into DB, DB-backed task
+  runtime loading without runtime.yaml, and the report-command regression for absent
+  files_changed. Acceptance verdict: pass for the narrowed storage foundation; the
+  broader epic items intentionally deferred to follow-up tasks remain out of scope
+  for T-0291.'
+submitted_via_cli: true
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 197
+hook_results: []
+created_at: '2026-04-10T23:11:09+00:00'

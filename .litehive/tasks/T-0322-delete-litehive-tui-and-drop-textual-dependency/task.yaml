@@ -1,0 +1,53 @@
+id: T-0322
+slug: delete-litehive-tui-and-drop-textual-dependency
+title: Delete litehive/tui/ and drop textual dependency
+depends_on: []
+task_type: null
+model: null
+mode: implementation
+pipeline_mode: full
+status: queued
+flag_reason: null
+flag_count: 0
+pipeline_status: backlog
+priority: medium
+pm_complexity: null
+planned_effort: null
+created_at: '2026-04-10T20:13:56+00:00'
+updated_at: '2026-04-10T20:13:56+00:00'
+goal: "litehive/tui/app.py is a 54-line Textual dashboard that prints workspace path,\
+  \ mode, active_task_id, and a task list with 1-second auto-refresh. No input, no\
+  \ actions, no tests. It pulls in textual>=3.2.0 as a runtime dependency for zero\
+  \ functional value \u2014 `litehive status` covers this.\n\nWork:\n1. Delete litehive/tui/\
+  \ directory.\n2. Remove textual from pyproject.toml [project.dependencies].\n3.\
+  \ Find the caller that launches the TUI as a fallback (probably when `litehive`\
+  \ is invoked with no subcommand and no active task) and replace with an inline print\
+  \ of workspace status.\n4. Remove the `litehive tasks` command that opens the TUI\
+  \ (already proposed for deletion in T-0317 but do it here explicitly if T-0317 hasn't\
+  \ landed).\n5. Refresh uv.lock.\n\nThis is cut #10 from the simplification audit\
+  \ \u2014 small LOC but removes a fat dependency from the CLI startup path."
+acceptance_criteria:
+- litehive/tui/ directory deleted
+- textual removed from pyproject.toml dependencies
+- uv.lock refreshed; textual no longer in the lock file
+- litehive with no subcommand prints status inline instead of launching the TUI
+- All tests pass
+constraints: []
+plan: []
+human_checkpoints: []
+subagents: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0322 delete-litehive-tui-and-drop-textual-dependency'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+  merge_agent_attempts: 0
+  worktree_path: null
+retry_policy:
+  max_retries: null
+  stage_retry_limit: null
+created_from: null
+upstream_origin: null
+github_origin: null

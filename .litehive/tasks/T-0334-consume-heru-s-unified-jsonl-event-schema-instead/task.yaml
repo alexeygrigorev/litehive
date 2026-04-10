@@ -1,0 +1,60 @@
+id: T-0334
+slug: consume-heru-s-unified-jsonl-event-schema-instead
+title: Consume heru's unified JSONL event schema instead of per-engine parsing
+depends_on: []
+task_type: refactor
+model: null
+mode: tasks
+pipeline_mode: full
+status: queued
+flag_reason: null
+flag_count: 0
+pipeline_status: backlog
+priority: high
+pm_complexity: complex
+planned_effort: l
+created_at: '2026-04-10T20:48:10+00:00'
+updated_at: '2026-04-10T20:48:10+00:00'
+goal: "heru T-0001 shipped a unified JSONL event output schema across all engine adapters\
+  \ (codex, claude, copilot, gemini, opencode, goz). Each engine now emits the same\
+  \ event shape via heru's stream reader. litehive currently has per-engine event\
+  \ parsing scattered across litehive/agents/*. Migrate litehive to read heru's unified\
+  \ event stream directly, deleting the per-engine parsing layers where possible.\
+  \ Keep engine-specific logic only where heru genuinely cannot normalize (e.g. provider-specific\
+  \ quota fields). The public API surface heru exposes is documented in heru's README\
+  \ (shipped in heru T-0006) \u2014 use that as the contract. Bump the heru dependency\
+  \ pin to whatever version includes T-0001. Run litehive's full test suite including\
+  \ tests_integration/ after the migration."
+acceptance_criteria:
+- litehive/agents/ no longer contains per-engine JSONL parsing code paths that heru's
+  unified schema already covers
+- litehive consumes heru's unified event types (imported from heru) for all adapters
+- heru dependency pin in litehive's pyproject.toml bumped to a version including T-0001
+- tests/ passes in litehive
+- tests_integration/ passes in litehive for at least codex + one other engine
+- 'No behavioral regression: nudge flow, verdict submission, and continuation handoff
+  still work end-to-end'
+constraints:
+- Avoid broad opportunistic cleanup outside the chosen seam.
+- Preserve existing behavior unless the task explicitly includes functional changes.
+plan:
+- Identify the narrow seam to refactor and the behavior that must stay stable.
+- Restructure the code in small, reviewable steps.
+- Run focused verification to confirm behavior is preserved.
+human_checkpoints: []
+subagents: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0334 consume-heru-s-unified-jsonl-event-schema-instead'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+  merge_agent_attempts: 0
+  worktree_path: null
+retry_policy:
+  max_retries: null
+  stage_retry_limit: null
+created_from: null
+upstream_origin: null
+github_origin: null

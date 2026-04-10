@@ -1,0 +1,50 @@
+id: T-0336
+slug: migrate-litehive-s-heru-cli-invocations-to
+title: Migrate litehive's heru CLI invocations to positional engine argument form
+depends_on: []
+task_type: refactor
+model: null
+mode: tasks
+pipeline_mode: full
+status: queued
+flag_reason: null
+flag_count: 0
+pipeline_status: backlog
+priority: low
+pm_complexity: simple
+planned_effort: xs
+created_at: '2026-04-10T20:48:22+00:00'
+updated_at: '2026-04-10T20:48:22+00:00'
+goal: 'heru T-0002 shipped a positional engine argument for the heru CLI: ''heru codex
+  "prompt"'' is now the preferred form. Update any place in litehive that shells out
+  to heru (scripts, docs, tests_integration helpers) to use the new positional form
+  instead of any legacy flag-based form. Small mechanical change; bundled as its own
+  task so it does not get lost in the larger T-0001/T-0003 adoption work.'
+acceptance_criteria:
+- grep for 'heru ' across litehive shows only positional-engine invocations
+- tests/ passes
+- Any docs/README snippets showing heru CLI usage are updated
+constraints:
+- Avoid broad opportunistic cleanup outside the chosen seam.
+- Preserve existing behavior unless the task explicitly includes functional changes.
+plan:
+- Identify the narrow seam to refactor and the behavior that must stay stable.
+- Restructure the code in small, reviewable steps.
+- Run focused verification to confirm behavior is preserved.
+human_checkpoints: []
+subagents: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0336 migrate-litehive-s-heru-cli-invocations-to'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+  merge_agent_attempts: 0
+  worktree_path: null
+retry_policy:
+  max_retries: null
+  stage_retry_limit: null
+created_from: null
+upstream_origin: null
+github_origin: null

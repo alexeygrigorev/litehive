@@ -70,3 +70,6 @@ Execution finished with status `merge_failed`.
 
 ## 2026-04-09T21:31:01+00:00
 Task closed: deferred. Worktree too stale to merge, recreate when web dashboard work resumes
+
+## 2026-04-10T20:41:15+00:00
+Task closed: wont_do. Superseded by T-0324 (delete litehive/web/ entirely). The whole web subsystem is being removed, so the daemon control API isn't needed.

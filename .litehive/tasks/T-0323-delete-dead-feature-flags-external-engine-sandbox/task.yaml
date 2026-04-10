@@ -1,0 +1,87 @@
+id: T-0323
+slug: delete-dead-feature-flags-external-engine-sandbox
+title: 'Delete dead feature flags: external_engine_sandbox, subagent_resource_limits,
+  budget/cost ledger'
+depends_on: []
+task_type: null
+model: null
+mode: implementation
+pipeline_mode: full
+status: queued
+flag_reason: null
+flag_count: 0
+pipeline_status: backlog
+priority: high
+pm_complexity: null
+planned_effort: null
+created_at: '2026-04-10T20:17:02+00:00'
+updated_at: '2026-04-10T20:17:51+00:00'
+goal: "Two dead feature flags to delete. Sandbox stays \u2014 only removing the resource-limits\
+  \ branch inside it and the separate budget ledger.\n\n### 1. Engine budget / cost\
+  \ / usage cap ledger (~230 LOC) \u2014 fully independent\nClient-side rate limiter.\
+  \ Config has engine_costs={codex:1, opencode:1, gemini:1} (all 1s, weighted costs\
+  \ unused) and all caps/thresholds null. Ledger runs every tick, calculates nothing\
+  \ actionable, never stops the pool.\n\nDelete:\n- litehive/pipeline/_budget.py (EngineBudgetLedger)\
+  \ ~92 LOC\n- _budget_ledger_from_conditions, _budget_ledger_from_config helpers\n\
+  - Config fields: pool_usage_cap, pool_cost_cap, engine_usage_caps, engine_budget_caps,\
+  \ engine_costs, pool_quota_threshold, pool_budget_threshold, pool_stop_on_execution_limit\n\
+  - Normalization in config/normalization.py for each of the above\n- Ledger-tripped\
+  \ stop reasons in _pool_control.py (_pool_stop_reason discriminators that emit budget_cap_exceeded\
+  \ variants)\n- Tests for the ledger behavior\n- Any --pool-usage-cap / --pool-cost-cap\
+  \ / --engine-usage-cap / --engine-budget-cap / --engine-cost / --pool-quota-threshold\
+  \ / --pool-budget-threshold CLI flags\n- Corresponding keys from .litehive/config.yaml\n\
+  \n### 2. subagent_resource_limits (~80 LOC) \u2014 touches sandbox\nContainer memory/CPU/process\
+  \ caps. Config has subagent_resource_limits.enabled: false. Never applied. Keep\
+  \ the sandbox machinery itself; only remove the resource-limits branch inside it.\n\
+  \nDelete:\n- SubagentResourceLimitsConfig dataclass (litehive/config/dataclasses.py)\n\
+  - subagent_resource_limits field on LitehiveConfig\n- _normalize_subagent_resource_limits\
+  \ (or similar) helper\n- Usage in litehive/agents/sandbox.py: remove the branch\
+  \ at sandbox.py:125, sandbox.py:456, sandbox.py:533 that reads self.config.subagent_resource_limits\
+  \ and applies memory/CPU/process caps. Patch the sandbox code to run containers\
+  \ WITHOUT resource caps.\n- CLI flags --subagent-resource-limits, --subagent-memory-mb,\
+  \ --subagent-cpu-count, --subagent-process-limit (T-0317 deletes the configure command\
+  \ which will also remove these, but double-check no other command uses them)\n-\
+  \ Tests that exercised the resource-limits path\n\n### What stays \u2014 non-negotiable\n\
+  - external_engine_sandbox config block and the entire litehive/agents/sandbox.py\
+  \ module machinery (sandbox itself stays)\n- litehive/sandbox/git_wrapper.py\n-\
+  \ engine_freeze config field and active_engine_freezes / is_engine_frozen (real\
+  \ quota handling)\n- Engine fallback order on quota rejection\n- inactivity_timeout_seconds\n\
+  \n### Order of operations\n1. Delete the budget ledger first (most self-contained,\
+  \ does not touch sandbox). Run full tests.\n2. Patch sandbox.py to remove the resource-limits\
+  \ branch. Delete SubagentResourceLimitsConfig. Run full tests.\n3. Update .litehive/config.yaml\
+  \ to drop now-deleted keys.\n\nSingle-user justification: if you ever want 'stop\
+  \ after N invocations' back, it is a ten-line counter in the pool run loop, not\
+  \ a ledger. Resource caps inside a container that nobody activates are speculative\
+  \ infrastructure."
+acceptance_criteria:
+- litehive/pipeline/_budget.py deleted
+- EngineBudgetLedger, budget ledger helpers, and budget-related stop reasons removed
+- 'Config fields removed: pool_usage_cap, pool_cost_cap, engine_usage_caps, engine_budget_caps,
+  engine_costs, pool_quota_threshold, pool_budget_threshold, pool_stop_on_execution_limit,
+  subagent_resource_limits'
+- SubagentResourceLimitsConfig dataclass deleted; litehive/agents/sandbox.py patched
+  to no longer read resource limits (sandbox machinery otherwise unchanged)
+- external_engine_sandbox config block, ExternalEngineSandboxConfig, litehive/agents/sandbox.py
+  module, and litehive/sandbox/git_wrapper.py ARE preserved
+- engine_freeze, is_engine_frozen, inactivity_timeout_seconds preserved unchanged
+- .litehive/config.yaml updated to drop the now-deleted fields
+- All tests pass; tests exercising the deleted features are deleted, not ported
+constraints: []
+plan: []
+human_checkpoints: []
+subagents: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0323 delete-dead-feature-flags-external-engine-sandbox'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+  merge_agent_attempts: 0
+  worktree_path: null
+retry_policy:
+  max_retries: null
+  stage_retry_limit: null
+created_from: null
+upstream_origin: null
+github_origin: null

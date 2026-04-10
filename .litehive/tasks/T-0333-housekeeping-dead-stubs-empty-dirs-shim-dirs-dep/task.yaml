@@ -1,0 +1,64 @@
+id: T-0333
+slug: housekeeping-dead-stubs-empty-dirs-shim-dirs-dep
+title: 'Housekeeping: dead stubs, empty dirs, shim dirs, dep audit'
+depends_on: []
+task_type: null
+model: null
+mode: implementation
+pipeline_mode: full
+status: queued
+flag_reason: null
+flag_count: 0
+pipeline_status: backlog
+priority: low
+pm_complexity: null
+planned_effort: null
+created_at: '2026-04-10T20:34:52+00:00'
+updated_at: '2026-04-10T20:34:52+00:00'
+goal: "Grab-bag of small, zero-risk deletions identified by the simplification audit.\
+  \ Do them together in one pass.\n\n### 1. Dead stub files in litehive/tasks/\nShort\
+  \ (1-2 line) files that are leftover re-exports from when code moved to litehive/workspace/:\n\
+  - litehive/tasks/runtime_tracking.py (2 lines)\n- litehive/tasks/workflow.py (2\
+  \ lines)\n- litehive/tasks/task_status.py (1 line)\n- litehive/tasks/recovery.py\
+  \ (1 line)\n- litehive/tasks/journal.py (16 lines) \u2014 verify first, may have\
+  \ real content\n\nFor each: grep for importers, rewrite them to point at the real\
+  \ module, delete the stub.\n\n### 2. litehive/engines/ shim\nlitehive/engines/__init__.py\
+  \ is `from litehive.agents import *` (3 lines). Used only by tests/test_engine_variants_and_timeline.py.\
+  \ Rewrite the test import to `from litehive.agents import ENGINE_REGISTRY, get_engine`\
+  \ and delete the directory.\n\n### 3. Empty directories\n- litehive/runner/\n- litehive/runtime/\n\
+  Delete if truly empty.\n\n### 4. Dependency audit\n- jinja2: grep `import jinja2`\
+  \ across litehive/. If it's only used in one place for a single template render,\
+  \ replace with str.format and drop the dep.\n- pytest-timeout: currently in [project.dependencies]\
+  \ (runtime). Move to [project.optional-dependencies.dev].\n- Any other deps in pyproject.toml\
+  \ with zero grep hits.\n- Refresh uv.lock after changes.\n\n### Order of operations\n\
+  1. Dead stubs (section 1)\n2. engines shim (section 2)\n3. Empty dirs (section 3)\n\
+  4. Dep audit (section 4)\n5. Run full test suite\n6. Refresh uv.lock\n\n### Verification\n\
+  - grep confirms no imports reference deleted files\n- All tests pass\n- pyproject.toml\
+  \ still parses\n- litehive CLI still launches"
+acceptance_criteria:
+- Dead stub files in litehive/tasks/ deleted and importers rewritten
+- litehive/engines/ shim deleted; test_engine_variants_and_timeline.py imports updated
+- Empty litehive/runner/ and litehive/runtime/ directories removed
+- jinja2 usage audited; dropped if single-use and replaceable
+- pytest-timeout moved from [project.dependencies] to [project.optional-dependencies.dev]
+- uv.lock refreshed
+- All tests pass
+constraints: []
+plan: []
+human_checkpoints: []
+subagents: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0333 housekeeping-dead-stubs-empty-dirs-shim-dirs-dep'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+  merge_agent_attempts: 0
+  worktree_path: null
+retry_policy:
+  max_retries: null
+  stage_retry_limit: null
+created_from: null
+upstream_origin: null
+github_origin: null

@@ -18,8 +18,28 @@ queue:
 - T-0307
 - T-0240
 - T-0316
+- T-0317
+- T-0318
+- T-0319
+- T-0320
+- T-0321
+- T-0322
+- T-0323
+- T-0324
+- T-0325
+- T-0326
+- T-0327
+- T-0328
+- T-0329
+- T-0330
+- T-0331
+- T-0332
+- T-0333
+- T-0334
+- T-0335
+- T-0336
+- T-0337
+- T-0338
 pool_stop_reason: null
-next_task_number: 316
-unmerged_worktrees:
-- task_id: T-0290
-  worktree_path: .litehive/worktrees/T-0290-resolve-workspace-from-task-id-or-env-config
+next_task_number: 338
+unmerged_worktrees: []

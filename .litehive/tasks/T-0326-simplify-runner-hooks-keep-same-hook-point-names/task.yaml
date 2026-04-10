@@ -1,0 +1,62 @@
+id: T-0326
+slug: simplify-runner-hooks-keep-same-hook-point-names
+title: 'Simplify runner hooks: keep same hook point names, cut execution-mode matrix'
+depends_on: []
+task_type: null
+model: null
+mode: implementation
+pipeline_mode: full
+status: queued
+flag_reason: null
+flag_count: 0
+pipeline_status: backlog
+priority: medium
+pm_complexity: null
+planned_effort: null
+created_at: '2026-04-10T20:27:08+00:00'
+updated_at: '2026-04-10T20:27:08+00:00'
+goal: "Runner hooks today are ~386 LOC in pipeline/_hooks.py + config + normalization.\
+  \ The complexity is a 3-phase execution mode system (RunnerHookConfig.hook_point,\
+  \ execution_mode with 'run_all' / 'stop_on_failure', reject-on-failure plumbing,\
+  \ _attach_runner_hook_results, _flatten_runner_hook_feedback, _flatten_runner_hook_warnings).\
+  \ I use exactly one hook point (after_implementing) with two ruff commands.\n\n\
+  ### Keep\n- All 9 hook point names: before_grooming, after_grooming, before_implementing,\
+  \ after_implementing, before_testing, after_testing, before_accepting, after_accepting,\
+  \ after_commit\n- The config schema `runner_hooks: {after_implementing: [cmd1, cmd2]}`\
+  \ (same shape as today)\n- Commands run in sequence per hook point\n- Command failure\
+  \ surfaces as a stage warning (not a hard stop)\n\n### Cut\n- execution_mode (run_all\
+  \ vs stop_on_failure) \u2014 always run_all\n- reject_on_failure plumbing \u2014\
+  \ if a hook command fails, log it, continue\n- _attach_runner_hook_results result\
+  \ aggregation layer\n- _flatten_runner_hook_feedback / _flatten_runner_hook_warnings\
+  \ helpers\n- RunnerHookConfig nested dataclass \u2014 flat dict is enough\n- Normalization\
+  \ of hook_point field (no longer needed, key IS the hook point)\n- RUNNER_HOOK_EXECUTION_MODES\
+  \ constant\n\n### Target size\n~80 LOC: a function that takes (hook_point, workspace,\
+  \ config) -> None that runs the commands in sequence with subprocess.run and logs\
+  \ results.\n\n### Integration\nCalled from the stage loop in _builder.py at each\
+  \ phase boundary. Replaces the current 3-phase dispatcher with a direct call."
+acceptance_criteria:
+- pipeline/_hooks.py reduced to ~80 LOC
+- All 9 hook point names still supported
+- 'Config shape runner_hooks: {<hook_point>: [commands]} unchanged'
+- execution_mode, reject_on_failure, hook result aggregation removed
+- RunnerHookConfig dataclass deleted in favor of flat dict
+- Existing after_implementing ruff hooks in .litehive/config.yaml keep working unchanged
+constraints: []
+plan: []
+human_checkpoints: []
+subagents: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0326 simplify-runner-hooks-keep-same-hook-point-names'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+  merge_agent_attempts: 0
+  worktree_path: null
+retry_policy:
+  max_retries: null
+  stage_retry_limit: null
+created_from: null
+upstream_origin: null
+github_origin: null
