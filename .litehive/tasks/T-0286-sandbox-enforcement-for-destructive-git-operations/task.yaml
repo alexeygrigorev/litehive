@@ -46,12 +46,26 @@ acceptance_criteria:
   isolation is somehow bypassed, there is nothing for `git push` to push to.
 - Sandbox profile selection lives in a single code path so it can be audited, and
   the default (unknown role) is the no-git profile (fail closed).
-- Tests exercise each role's profile by spawning a real subagent process with the
-  profile applied and asserting that `git --version` succeeds or fails as expected,
-  plus that the merge-resolver wrapper denylist actually rejects force-push and
-  filter-repo.
-- README or docs/ section describing the per-role sandbox profile and the git
-  wrapper denylist.
+- 'In-CI integration tests spawn a REAL subprocess with the sandbox profile applied
+  (no mocks, no monkey-patching of the shim) and assert behavior directly:
+  - no-git profile: `git --version` exits non-zero / command-not-found; `which git`
+    finds nothing; absolute paths like `/usr/bin/git --version` also fail; setting
+    PATH or LITEHIVE_* env vars inside the subprocess does not make git reachable.
+  - merge-resolver profile: `git --version` succeeds; `git status` succeeds; `git
+    push --force origin main` is rejected by the wrapper with a clear error; `git
+    filter-repo --help` is rejected; `git reset --hard origin/main` is rejected.
+  These tests do NOT launch an LLM agent — they exercise the sandbox primitive
+  directly so they are fast, deterministic, and free to run.'
+- 'Separate out-of-band adversarial experiment directory (experiments/sandbox-breakout/
+  or similar) containing a throwaway git repo, a runbook, and a driver script that
+  launches real codex (and optionally claude) inside the no-git sandbox and asks
+  them to commit and push a file. These experiments are NOT part of the default
+  pytest suite, are NOT wired into CI, and are only run manually when auditing the
+  sandbox. The runbook documents how to invoke them and how to interpret the output.
+  This catches the things the deterministic test did not think to probe (e.g. agent
+  finds a python subprocess trick, a gh CLI fallback, etc.).'
+- README or docs/ section describing the per-role sandbox profile, the git wrapper
+  denylist, and the location + purpose of the adversarial experiment directory.
 constraints:
 - Do not rely on env vars, role strings, or prompt-scanning for git gating — they
   are bypassable by the very thing we are trying to restrict.
@@ -79,7 +93,11 @@ plan:
 - Wire profile selection into subagent spawn path. Make sure every spawn goes
   through the single entry point so no role can silently get a different profile.
 - Strip origin from non-merge-resolver worktrees in the worktree setup code.
-- Tests exercising role × command matrix against the real sandbox.
+- In-CI integration tests that spawn real subprocesses (not mocks) with each
+  sandbox profile and exercise the role × command matrix against the real sandbox.
+- Out-of-band adversarial experiment harness under experiments/sandbox-breakout/
+  with a runbook for manually auditing with real LLM agents (codex, claude). Wire
+  it so it is NOT picked up by the default pytest collection.
 - Docs update describing the policy and how to audit it.
 human_checkpoints: []
 subagents: []
