@@ -1719,6 +1719,57 @@ def test_repair_workspace_state_recovers_flagged_commit_stage_after_failed_commi
     assert "Recovered flagged accepted task back to `queued/commit_to_git`" in journal
 
 
+def test_repair_clears_stale_running_runtime_on_terminal_tasks(tmp_path: Path) -> None:
+    """A task marked done but with runtime.execution_status=running is an obvious
+    inconsistency (e.g. from a killed daemon or manual task.yaml edit during rescue).
+    Repair should clear the runtime so the next daemon start doesn't refuse with
+    'workspace has multiple active tasks'."""
+    ensure_workspace(tmp_path)
+    done_task = create_task(tmp_path, title="Already done", auto_commit=False)
+
+    done_task.status = "done"
+    done_task.pipeline_status = "done"
+    done_task.runtime.execution_status = "running"
+    done_task.runtime.run_started_at = "2026-04-10T00:00:00+00:00"
+    if done_task.runtime.current_stage is not None:
+        done_task.runtime.current_stage.step = "commit_to_git"
+        done_task.runtime.current_stage.status = "running"
+    save_task(tmp_path, done_task)
+    save_task_runtime(tmp_path, done_task)
+
+    # Also exercise the CLOSED_TASK_STATUSES branch with an unrelated deferred task.
+    deferred = create_task(tmp_path, title="Deferred leftover", auto_commit=False)
+    deferred.status = "deferred"
+    deferred.runtime.execution_status = "running"
+    save_task(tmp_path, deferred)
+    save_task_runtime(tmp_path, deferred)
+
+    # Point active_task_id at the done task to simulate the exact rescue scenario.
+    state = load_state(tmp_path)
+    state.active_task_id = done_task.id
+    save_state(tmp_path, state)
+
+    summary = repair_workspace_state(tmp_path)
+
+    assert summary.mutated is True
+    assert summary.cleared_active_task_id == done_task.id
+
+    refreshed_done = get_task(tmp_path, done_task.id)
+    assert refreshed_done is not None
+    assert refreshed_done.status == "done"  # untouched
+    assert refreshed_done.runtime.execution_status == "idle"
+    assert refreshed_done.runtime.run_started_at is None
+
+    refreshed_deferred = get_task(tmp_path, deferred.id)
+    assert refreshed_deferred is not None
+    assert refreshed_deferred.runtime.execution_status == "idle"
+
+    assert load_state(tmp_path).active_task_id is None
+
+    journal = (task_dir(tmp_path, refreshed_done) / "journal.md").read_text(encoding="utf-8")
+    assert "Cleared stale runtime.execution_status=running on terminal task" in journal
+
+
 def test_rollback_completed_task_restores_state_when_rollback_commit_fails(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

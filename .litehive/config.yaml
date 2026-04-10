@@ -106,8 +106,8 @@ external_engine_sandbox:
 engine_freeze:
   claude: '2026-04-10T09:00:00Z'
 engine_preference:
-- claude
 - codex
+- claude
 - copilot
 - goz
 agent_startup_guidance: {}

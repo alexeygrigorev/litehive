@@ -862,6 +862,66 @@ def _repair_duplicate_task_ids(root: Path, summary: WorkspaceRepairSummary) -> N
         _save_state_without_runner_guard(root, state)
 
 
+def _clear_stale_running_on_terminal_tasks(
+    root: Path, summary: WorkspaceRepairSummary
+) -> bool:
+    """Clear runtime.execution_status=running on tasks whose task.yaml status is terminal.
+
+    A task marked done, cancelled, wont_do, deferred, duplicate, or abandoned cannot
+    possibly still be "running" — that's a leftover from a crash, a manual edit, or a
+    killed daemon. Clear the runtime so the next daemon startup doesn't trip on
+    `workspace has multiple active tasks` and refuse to start.
+    """
+    from litehive.tasks.constants import CLOSED_TASK_STATUSES
+    from litehive.tasks.crud import list_tasks
+    from litehive.tasks.persistence import load_state
+    from litehive.workspace.locking import _workspace_lock
+    from litehive.workspace.workflow import _persist_tasks_and_state_without_runner_guard
+
+    terminal_statuses = {"done", "abandoned", *CLOSED_TASK_STATUSES}
+    touched: list[TaskRecord] = []
+    journal_messages: dict[str, str] = {}
+    with _workspace_lock(root):
+        state = load_state(root)
+        for task in list_tasks(root):
+            if task.status not in terminal_statuses:
+                continue
+            if task.runtime.execution_status != "running":
+                continue
+            task.runtime.execution_status = "idle"
+            task.runtime.run_started_at = None
+            task.runtime.updated_at = utcnow()
+            if task.runtime.current_stage is not None:
+                task.runtime.current_stage.step = None
+                task.runtime.current_stage.status = "idle"
+                task.runtime.current_stage.started_at = None
+                task.runtime.current_stage.completed_at = None
+                task.runtime.current_stage.updated_at = utcnow()
+                task.runtime.current_stage.duration_seconds = 0
+                task.runtime.current_stage.verdict = None
+                task.runtime.current_stage.summary = ""
+            touched.append(task)
+            journal_messages[task.id] = (
+                f"Cleared stale runtime.execution_status=running on terminal task "
+                f"(status={task.status})."
+            )
+        if state.active_task_id is not None:
+            active = next((t for t in touched if t.id == state.active_task_id), None)
+            if active is not None:
+                state.active_task_id = None
+                summary.cleared_active_task_id = active.id
+        if touched:
+            _persist_tasks_and_state_without_runner_guard(
+                root,
+                tasks=touched,
+                state=state,
+                journal_messages=journal_messages,
+            )
+            summary.mutated = True
+            return True
+    return False
+
+
 def repair_workspace_state(root: Path) -> WorkspaceRepairSummary:
     from litehive.tasks.crud import list_tasks
     from litehive.tasks.persistence import _save_state_without_runner_guard, load_state
@@ -870,6 +930,7 @@ def repair_workspace_state(root: Path) -> WorkspaceRepairSummary:
 
     summary = WorkspaceRepairSummary()
     _repair_duplicate_task_ids(root, summary)
+    _clear_stale_running_on_terminal_tasks(root, summary)
     summary.stale_runner_recovered = _recover_stale_runner_state(root, summary=summary)
     summary.mutated = summary.mutated or summary.stale_runner_recovered
     with workspace_mutation_guard(root), _workspace_lock(root):
