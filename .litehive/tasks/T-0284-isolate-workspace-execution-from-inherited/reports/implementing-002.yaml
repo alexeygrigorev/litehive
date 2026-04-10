@@ -1,0 +1,107 @@
+task_id: T-0284
+step: implementing
+verdict: pass
+source: agent
+summary: 'Implemented cross-workspace virtualenv sanitization in heru/base.py via
+  a shared build_invocation_env helper. ExternalCLIAdapter.build_invocation now routes
+  through that helper, which removes inherited Python env markers (VIRTUAL_ENV, CONDA_PREFIX,
+  CONDA_DEFAULT_ENV, __PYVENV_LAUNCHER__) only when invocation cwd is outside LITEHIVE_WORKSPACE_ROOT;
+  same-workspace invocations keep the inherited env. Updated heru/adapters/claude.py
+  to reuse the same helper so Claude gets the same cross-workspace stripping without
+  dropping CLAUDE_* passthrough. Updated litehive/agents/_manager.py to pass LITEHIVE_WORKSPACE_ROOT
+  alongside LITEHIVE_TASK_ID in extra_env so daemon/manager-launched subprocesses
+  can distinguish caller workspace from target cwd. Added focused regression coverage:
+  tests/test_engine_variants_and_timeline.py::test_engine_invocation_strips_inherited_virtual_env_for_other_project,
+  ::test_engine_invocation_preserves_virtual_env_within_caller_workspace, and ::test_claude_invocation_preserves_claude_credentials_while_stripping_virtual_env_for_other_project;
+  plus tests/test_tasks_and_subagents.py::test_subagent_manager_passes_workspace_root_in_extra_env
+  to lock the integration point. Verification run: uv run pytest -q tests/test_engine_variants_and_timeline.py
+  -k ''virtual_env or claude_invocation_preserves or codex_build_invocation_uses_exec_for_resume_with_session_context
+  or claude_build_invocation'' -> 7 passed; uv run pytest -q tests/test_tasks_and_subagents.py
+  -k ''workspace_root_in_extra_env'' -> 1 passed; uv run ruff check --select E402,F401
+  litehive tests -> passed; forbidden noqa F401/F403 grep gate -> passed. Acceptance
+  evidence: shared base adapter path now owns the sanitization, non-Claude adapters
+  inherit it by default, same-workspace preservation is tested, and Claude credential
+  passthrough remains intact while VIRTUAL_ENV is stripped for other-project execution.'
+feedback: "Runner hook `after_implementing` `uv run ruff check --select E402,F401\
+  \ litehive tests` passed with exit code 0 (artifact: `artifacts/after_implementing-001.yaml`).\n\
+  \nRunner hook `after_implementing` `if [ -n \"${LITEHIVE_CHANGED_PATHS:-}\" ] \\\
+  \n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" | grep -q . \\\n  && printf '%s\\\
+  n' \"$LITEHIVE_CHANGED_PATHS\" \\\n    | xargs -r -d '\\n' git grep -nE 'noqa:.*F401|noqa:.*F403|ruff:\\\
+  s*noqa:\\s*F401|ruff:\\s*noqa:\\s*F403' --; then\n  echo 'Forbidden noqa F401/F403\
+  \ suppression found.'\n  exit 1\nfi` passed with exit code 0 (artifact: `artifacts/after_implementing-002.yaml`).\n\
+  \nImplemented cross-workspace virtualenv sanitization in heru/base.py via a shared\
+  \ build_invocation_env helper. ExternalCLIAdapter.build_invocation now routes through\
+  \ that helper, which removes inherited Python env markers (VIRTUAL_ENV, CONDA_PREFIX,\
+  \ CONDA_DEFAULT_ENV, __PYVENV_LAUNCHER__) only when invocation cwd is outside LITEHIVE_WORKSPACE_ROOT;\
+  \ same-workspace invocations keep the inherited env. Updated heru/adapters/claude.py\
+  \ to reuse the same helper so Claude gets the same cross-workspace stripping without\
+  \ dropping CLAUDE_* passthrough. Updated litehive/agents/_manager.py to pass LITEHIVE_WORKSPACE_ROOT\
+  \ alongside LITEHIVE_TASK_ID in extra_env so daemon/manager-launched subprocesses\
+  \ can distinguish caller workspace from target cwd. Added focused regression coverage:\
+  \ tests/test_engine_variants_and_timeline.py::test_engine_invocation_strips_inherited_virtual_env_for_other_project,\
+  \ ::test_engine_invocation_preserves_virtual_env_within_caller_workspace, and ::test_claude_invocation_preserves_claude_credentials_while_stripping_virtual_env_for_other_project;\
+  \ plus tests/test_tasks_and_subagents.py::test_subagent_manager_passes_workspace_root_in_extra_env\
+  \ to lock the integration point. Verification run: uv run pytest -q tests/test_engine_variants_and_timeline.py\
+  \ -k 'virtual_env or claude_invocation_preserves or codex_build_i\n\n\u2026 [truncated\
+  \ \u2014 full transcript in subagent artifacts]"
+submitted_via_cli: true
+files_changed:
+- heru/adapters/claude.py
+- heru/base.py
+- litehive/agents/_manager.py
+- tests/test_engine_variants_and_timeline.py
+- tests/test_tasks_and_subagents.py
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings:
+- 'runner hook passed: `after_implementing` `uv run ruff check --select E402,F401
+  litehive tests` (artifact: `artifacts/after_implementing-001.yaml`)'
+- "runner hook passed: `after_implementing` `if [ -n \"${LITEHIVE_CHANGED_PATHS:-}\"\
+  \ ] \\\n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" | grep -q . \\\n  && printf\
+  \ '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" \\\n    | xargs -r -d '\\n' git grep -nE 'noqa:.*F401|noqa:.*F403|ruff:\\\
+  s*noqa:\\s*F401|ruff:\\s*noqa:\\s*F403' --; then\n  echo 'Forbidden noqa F401/F403\
+  \ suppression found.'\n  exit 1\nfi` (artifact: `artifacts/after_implementing-002.yaml`)"
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 229
+hook_results:
+- point: after_implementing
+  command: uv run ruff check --select E402,F401 litehive tests
+  reject_on_failure: true
+  description: null
+  exit_code: 0
+  status: passed
+  artifact: artifacts/after_implementing-001.yaml
+  stdout: 'All checks passed!
+
+    '
+  stderr: 'warning: `VIRTUAL_ENV=/home/alexey/git/litehive/.venv` does not match the
+    project environment path `.venv` and will be ignored; use `--active` to target
+    the active environment instead
+
+    '
+- point: after_implementing
+  command: "if [ -n \"${LITEHIVE_CHANGED_PATHS:-}\" ] \\\n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\"\
+    \ | grep -q . \\\n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" \\\n    | xargs\
+    \ -r -d '\\n' git grep -nE 'noqa:.*F401|noqa:.*F403|ruff:\\s*noqa:\\s*F401|ruff:\\\
+    s*noqa:\\s*F403' --; then\n  echo 'Forbidden noqa F401/F403 suppression found.'\n\
+    \  exit 1\nfi"
+  reject_on_failure: true
+  description: null
+  exit_code: 0
+  status: passed
+  artifact: artifacts/after_implementing-002.yaml
+  stdout: ''
+  stderr: ''
+created_at: '2026-04-10T13:28:45+00:00'

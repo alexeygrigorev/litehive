@@ -1,0 +1,116 @@
+- role: planner
+  step: grooming
+  verdict: pass
+  message: "Grooming pass. I verified the scope and updated the task record to task_type=bugfix,\
+    \ pm_complexity=simple, and planned_effort=s. Repo inspection shows the shared\
+    \ adapter path is in heru/base.py:164-179, where ExternalCLIAdapter.build_invocation\
+    \ currently copies os.environ and only removes adapter-specific stripped_env_vars.\
+    \ litehive/agents/base.py is only a re-export shim, so the fix belongs in heru/base.py.\
+    \ Claude currently overrides build_invocation in heru/adapters/claude.py:76-89\
+    \ and duplicates the same env-copy pattern, so implementation must route Claude\
+    \ through the same sanitizing helper rather than patching only the base adapter.\
+    \ I also verified existing adapter capabilities/coverage sites in tests/test_engine_variants_and_timeline.py\
+    \ and tests/test_runner_workflow.py, and confirmed there is not yet a regression\
+    \ test for inherited VIRTUAL_ENV leakage.\n\nTests run in grooming: none. This\
+    \ stage was limited to task shaping and repo inspection.\n\nImplementation plan:\n\
+    1. Add a shared helper in heru/base.py that compares the caller workspace with\
+    \ the invocation cwd and strips inherited Python virtualenv markers only when\
+    \ execution crosses workspace boundaries.\n2. Use that helper from ExternalCLIAdapter.build_invocation\
+    \ so codex, gemini, copilot, goz, and opencode inherit the behavior by default.\n\
+    3. Update the Claude adapter to reuse the same helper while preserving its stdin/resume\
+    \ behavior and keeping CLAUDE_* passthrough intact.\n4. Add focused regression\
+    \ coverage for cross-workspace stripping and same-workspace preservation, then\
+    \ run the narrow pytest target covering the new behavior.\n\nTASK_UPDATE:\n  task_type:\
+    \ bugfix\n  pm_complexity: simple\n  planned_effort: s\n  acceptance_criteria:\n\
+    \    - When ExternalCLIAdapter.build_invocation is invoked for a cwd outside the\
+    \ caller workspace, the resulting invocation env excludes inherited Python virtualenv\
+    \ markers such as VIRTUAL_ENV.\n    - When the invocation cwd stays within the\
+    \ caller workspace, the inherited environment is preserved; the sanitization only\
+    \ applies to cross-workspace execution.\n    - The default ExternalCLIAdapter.build_invocation\
+    \ path covers the non-Claude adapters without per-adapter patches.\n    - Claude\
+    \ applies the same cross-workspace virtualenv stripping while preserving CLAUDE_*\
+    \ credential and config passthrough.\n    - A focused regression test named test_engine_invocation_strips_inherited_virtual_env_for_other_project\
+    \ passes.\n  constraints:\n    - Keep the fix in heru/base.py; litehive/agents/base.py\
+    \ remains a re-export shim.\n    - Preserve existing adapter-specific stripped_env_vars\
+    \ behavior and scope this task to inherited virtualenv leakage only.\n  plan:\n\
+    \    - Add a shared environment-sanitizing helper in heru/base.py that compares\
+    \ the caller workspace with the invocation cwd and removes inherited virtualenv\
+    \ markers only for cross-workspace execution.\n    - Route ExternalCLIAdapter.build_invocation\
+    \ through that helper so codex, gemini, copilot, goz, and opencode inherit the\
+    \ behavior automatically.\n    - Update the Claude adapter to reuse the same helper\
+    \ while keeping its stdin/resume behavior and CLAUDE_* passthrough unchanged.\n\
+    \    - Add focused regression coverage for cross-workspace stripping and same-workspace\
+    \ preservation, then run the narrow pytest target covering the new behavior."
+  files_changed: []
+  created_at: '2026-04-10T13:24:42+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Implemented cross-workspace virtualenv sanitization in heru/base.py via
+    a shared build_invocation_env helper. ExternalCLIAdapter.build_invocation now
+    routes through that helper, which removes inherited Python env markers (VIRTUAL_ENV,
+    CONDA_PREFIX, CONDA_DEFAULT_ENV, __PYVENV_LAUNCHER__) only when invocation cwd
+    is outside LITEHIVE_WORKSPACE_ROOT; same-workspace invocations keep the inherited
+    env. Updated heru/adapters/claude.py to reuse the same helper so Claude gets the
+    same cross-workspace stripping without dropping CLAUDE_* passthrough. Updated
+    litehive/agents/_manager.py to pass LITEHIVE_WORKSPACE_ROOT alongside LITEHIVE_TASK_ID
+    in extra_env so daemon/manager-launched subprocesses can distinguish caller workspace
+    from target cwd. Added focused regression coverage: tests/test_engine_variants_and_timeline.py::test_engine_invocation_strips_inherited_virtual_env_for_other_project,
+    ::test_engine_invocation_preserves_virtual_env_within_caller_workspace, and ::test_claude_invocation_preserves_claude_credentials_while_stripping_virtual_env_for_other_project;
+    plus tests/test_tasks_and_subagents.py::test_subagent_manager_passes_workspace_root_in_extra_env
+    to lock the integration point. Verification run: uv run pytest -q tests/test_engine_variants_and_timeline.py
+    -k ''virtual_env or claude_invocation_preserves or codex_build_invocation_uses_exec_for_resume_with_session_context
+    or claude_build_invocation'' -> 7 passed; uv run pytest -q tests/test_tasks_and_subagents.py
+    -k ''workspace_root_in_extra_env'' -> 1 passed; uv run ruff check --select E402,F401
+    litehive tests -> passed; forbidden noqa F401/F403 grep gate -> passed. Acceptance
+    evidence: shared base adapter path now owns the sanitization, non-Claude adapters
+    inherit it by default, same-workspace preservation is tested, and Claude credential
+    passthrough remains intact while VIRTUAL_ENV is stripped for other-project execution.'
+  files_changed: []
+  created_at: '2026-04-10T13:28:32+00:00'
+- role: qa
+  step: testing
+  verdict: pass
+  message: 'Verified the cross-workspace env sanitization in the shared adapter path.
+    I inspected heru/base.py and confirmed ExternalCLIAdapter.build_invocation now
+    delegates env construction to build_invocation_env, which removes inherited Python
+    virtualenv markers (VIRTUAL_ENV, CONDA_PREFIX, CONDA_DEFAULT_ENV, __PYVENV_LAUNCHER__)
+    only when the invocation cwd is outside LITEHIVE_WORKSPACE_ROOT, then preserves
+    extra_env values. I inspected heru/adapters/claude.py and confirmed Claude reuses
+    the same helper, so CLAUDE_* passthrough remains intact while inherited virtualenv
+    state is stripped for cross-workspace runs. I inspected litehive/agents/_manager.py
+    and confirmed the manager now passes LITEHIVE_WORKSPACE_ROOT in extra_env, which
+    is the integration point needed for daemon-on-project-A / subprocess-on-project-B
+    behavior. Verification run: uv run pytest -q tests/test_engine_variants_and_timeline.py
+    -k ''virtual_env or claude_invocation_preserves or codex_build_invocation_uses_exec_for_resume_with_session_context
+    or claude_build_invocation'' -> 7 passed; uv run pytest -q tests/test_tasks_and_subagents.py
+    -k ''workspace_root_in_extra_env'' -> 1 passed; uv run pytest -q -> 976 passed.
+    Acceptance criteria evidence: heru/base.py owns the stripping logic, non-Claude
+    adapters inherit it through ExternalCLIAdapter.build_invocation, Claude keeps
+    credential passthrough while stripping VIRTUAL_ENV for other-project execution,
+    and test_engine_invocation_strips_inherited_virtual_env_for_other_project passes.'
+  files_changed: []
+  created_at: '2026-04-10T13:31:52+00:00'
+- role: reviewer
+  step: accepting
+  verdict: pass
+  message: 'Accepted. I verified that heru/base.py now owns cross-workspace environment
+    sanitization through build_invocation_env, and ExternalCLIAdapter.build_invocation
+    routes all default adapters through that helper. The helper preserves inherited
+    env within the caller workspace but strips inherited Python virtualenv markers
+    (including VIRTUAL_ENV, CONDA_PREFIX, CONDA_DEFAULT_ENV, and __PYVENV_LAUNCHER__)
+    when the invocation cwd is outside LITEHIVE_WORKSPACE_ROOT. I also verified heru/adapters/claude.py
+    reuses the same helper, so Claude keeps CLAUDE_* credential passthrough while
+    still dropping inherited virtualenv state for other-project execution. Finally,
+    litehive/agents/_manager.py now passes LITEHIVE_WORKSPACE_ROOT in extra_env, which
+    is the required integration point for daemon-on-project-A to subprocess-on-project-B
+    behavior. Tests I ran: uv run pytest -q tests/test_engine_variants_and_timeline.py
+    -k ''virtual_env or claude_invocation_preserves or codex_build_invocation_uses_exec_for_resume_with_session_context
+    or claude_build_invocation'' -> 7 passed; uv run pytest -q tests/test_tasks_and_subagents.py
+    -k ''workspace_root_in_extra_env'' -> 1 passed; uv run pytest -q -> 976 passed.
+    Acceptance criteria evidence: heru/base.py contains the fix, default adapters
+    inherit it via ExternalCLIAdapter.build_invocation, Claude credential passthrough
+    remains intact, and test_engine_invocation_strips_inherited_virtual_env_for_other_project
+    passes.'
+  files_changed: []
+  created_at: '2026-04-10T13:35:43+00:00'

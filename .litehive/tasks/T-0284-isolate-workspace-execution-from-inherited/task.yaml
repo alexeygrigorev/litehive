@@ -6,15 +6,15 @@ task_type: null
 model: null
 mode: implementation
 pipeline_mode: full
-status: queued
+status: in_progress
 flag_reason: null
 flag_count: 0
-pipeline_status: backlog
+pipeline_status: commit_to_git
 priority: medium
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-10T05:52:59+00:00'
-updated_at: '2026-04-10T05:52:59+00:00'
+updated_at: '2026-04-10T13:35:57+00:00'
 goal: When the daemon runs on project A and an agent subprocess runs on project B,
   the inherited VIRTUAL_ENV from A should not leak into B's subprocess. Strip VIRTUAL_ENV
   (and similar vars) when the execution cwd differs from the caller's workspace. The
@@ -27,7 +27,35 @@ acceptance_criteria:
 constraints: []
 plan: []
 human_checkpoints: []
-subagents: []
+subagents:
+- id: SA-0001
+  role: planner
+  engine: codex
+  status: completed
+  path: subagents/SA-0001-planner
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0002
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0002-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0003
+  role: qa
+  engine: codex
+  status: completed
+  path: subagents/SA-0003-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0004
+  role: reviewer
+  engine: codex
+  status: completed
+  path: subagents/SA-0004-reviewer
+  sandboxed: false
+  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0284 isolate-workspace-execution-from-inherited'

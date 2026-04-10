@@ -3,38 +3,28 @@ slug: goz-adapter-make-litehive-honor-goz-model-config
 title: 'Goz adapter: make litehive honor goz_model config'
 depends_on:
 - T-0281
-task_type: adapter
+task_type: null
 model: null
 mode: implementation
 pipeline_mode: full
-status: in_progress
+status: done
 flag_reason: null
 flag_count: 0
-pipeline_status: commit_to_git
+pipeline_status: done
 priority: medium
-pm_complexity: simple
-planned_effort: xs
+pm_complexity: null
+planned_effort: null
 created_at: '2026-04-10T05:52:34+00:00'
 updated_at: '2026-04-10T13:22:04+00:00'
 goal: Set supports_model_override=True on GozCLIAdapter in heru/ so litehive's resolve_model()
   uses the configured goz_model. Apply to heru/adapters/goz.py since litehive/agents/adapters/goz.py
   is a re-export.
 acceptance_criteria:
-- The goz engine advertises model override support through GozCLIAdapter.DEFAULT_CAPABILITIES
-  in heru/adapters/goz.py.
-- resolve_model(task, config, engine_name='goz', model_override='X') returns 'X',
-  and without a run override it resolves task.model before workspace goz_model.
-- Focused pytest coverage passes for the goz model-resolution path and goz command
-  building, including a test that proves goz honors run, task, and workspace model
-  selection.
+- heru/adapters/goz.py GozCLIAdapter DEFAULT_CAPABILITIES has supports_model_override=True
+- resolve_model(task, config, engine_name='goz', model_override='X') returns 'X'
+- Tests pass including test_config.test_resolve_model_honors_goz_run_task_and_workspace_overrides
 constraints: []
-plan:
-- Update heru/adapters/goz.py so the goz adapter reports supports_model_override=True.
-- Add or adjust focused tests in tests/test_config.py and tests/test_goz_adapter.py
-  to cover goz run override, task model fallback, workspace goz_model fallback, and
-  --model command wiring.
-- Run focused pytest coverage for the touched behavior and confirm the acceptance
-  criteria with test evidence.
+plan: []
 human_checkpoints: []
 subagents:
 - id: SA-0001
@@ -292,9 +282,9 @@ subagents:
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0282 goz-adapter-make-litehive-honor-goz-model-config'
-  commit_sha: null
-  checkpoint_base_sha: null
-  checkpoint_attempts: 0
+  commit_sha: 2346d2830480921ac5fa2d627d12f08b407bd2db
+  checkpoint_base_sha: 888404fe9d6977c3a96784c170f23a65cfbf5633
+  checkpoint_attempts: 1
   rolled_back_checkpoint_attempt: null
   merge_agent_attempts: 0
   worktree_path: null

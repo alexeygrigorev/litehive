@@ -1,0 +1,61 @@
+task_id: T-0284
+step: accepting
+verdict: pass
+source: agent
+summary: 'Accepted. I verified that heru/base.py now owns cross-workspace environment
+  sanitization through build_invocation_env, and ExternalCLIAdapter.build_invocation
+  routes all default adapters through that helper. The helper preserves inherited
+  env within the caller workspace but strips inherited Python virtualenv markers (including
+  VIRTUAL_ENV, CONDA_PREFIX, CONDA_DEFAULT_ENV, and __PYVENV_LAUNCHER__) when the
+  invocation cwd is outside LITEHIVE_WORKSPACE_ROOT. I also verified heru/adapters/claude.py
+  reuses the same helper, so Claude keeps CLAUDE_* credential passthrough while still
+  dropping inherited virtualenv state for other-project execution. Finally, litehive/agents/_manager.py
+  now passes LITEHIVE_WORKSPACE_ROOT in extra_env, which is the required integration
+  point for daemon-on-project-A to subprocess-on-project-B behavior. Tests I ran:
+  uv run pytest -q tests/test_engine_variants_and_timeline.py -k ''virtual_env or
+  claude_invocation_preserves or codex_build_invocation_uses_exec_for_resume_with_session_context
+  or claude_build_invocation'' -> 7 passed; uv run pytest -q tests/test_tasks_and_subagents.py
+  -k ''workspace_root_in_extra_env'' -> 1 passed; uv run pytest -q -> 976 passed.
+  Acceptance criteria evidence: heru/base.py contains the fix, default adapters inherit
+  it via ExternalCLIAdapter.build_invocation, Claude credential passthrough remains
+  intact, and test_engine_invocation_strips_inherited_virtual_env_for_other_project
+  passes.'
+feedback: 'Accepted. I verified that heru/base.py now owns cross-workspace environment
+  sanitization through build_invocation_env, and ExternalCLIAdapter.build_invocation
+  routes all default adapters through that helper. The helper preserves inherited
+  env within the caller workspace but strips inherited Python virtualenv markers (including
+  VIRTUAL_ENV, CONDA_PREFIX, CONDA_DEFAULT_ENV, and __PYVENV_LAUNCHER__) when the
+  invocation cwd is outside LITEHIVE_WORKSPACE_ROOT. I also verified heru/adapters/claude.py
+  reuses the same helper, so Claude keeps CLAUDE_* credential passthrough while still
+  dropping inherited virtualenv state for other-project execution. Finally, litehive/agents/_manager.py
+  now passes LITEHIVE_WORKSPACE_ROOT in extra_env, which is the required integration
+  point for daemon-on-project-A to subprocess-on-project-B behavior. Tests I ran:
+  uv run pytest -q tests/test_engine_variants_and_timeline.py -k ''virtual_env or
+  claude_invocation_preserves or codex_build_invocation_uses_exec_for_resume_with_session_context
+  or claude_build_invocation'' -> 7 passed; uv run pytest -q tests/test_tasks_and_subagents.py
+  -k ''workspace_root_in_extra_env'' -> 1 passed; uv run pytest -q -> 976 passed.
+  Acceptance criteria evidence: heru/base.py contains the fix, default adapters inherit
+  it via ExternalCLIAdapter.build_invocation, Claude credential passthrough remains
+  intact, and test_engine_invocation_strips_inherited_virtual_env_for_other_project
+  passes.'
+submitted_via_cli: true
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 230
+hook_results: []
+created_at: '2026-04-10T13:35:57+00:00'
