@@ -1,0 +1,57 @@
+task_id: T-0280
+step: accepting
+verdict: pass
+source: agent
+summary: 'Accepted. I verified in litehive/pipeline/_commit.py that commit_to_git
+  now treats a successful merge that leaves main unchanged as a reconciled success
+  only when git cherry shows the worktree-only patch is already represented on main.
+  In that path the task is marked done, pipeline_status becomes done, task.git.commit_sha
+  is set to the reconciled main SHA, the worktree path is cleared, and operator-facing
+  summary/journal text explicitly says the work already landed on main and the merge
+  was a no-op. I also verified the failure path still reports a real merge conflict
+  distinctly with failure_classification=merge_conflict and the summary ''CommitToGit
+  failed: merge conflict prevented integrating task worktree into main''. Independent
+  checks run: uv run pytest -q tests/test_recovery_and_rollback.py -k no_op_merge_when_patch_is_already_on_main
+  -vv -> 1 passed, 48 deselected; uv run pytest -q tests/test_worktree_merge_agent.py
+  -k merge_conflict_agent_fails -vv -> 1 passed, 9 deselected. The regression test
+  demonstrates the exact stuck-state scenario is reconciled to a non-stuck done outcome
+  when the patch is already on main, and the merge-agent test confirms operator-visible
+  logs still distinguish real conflicts from already-landed/no-op merges. Acceptance
+  criteria are met.'
+feedback: 'Accepted. I verified in litehive/pipeline/_commit.py that commit_to_git
+  now treats a successful merge that leaves main unchanged as a reconciled success
+  only when git cherry shows the worktree-only patch is already represented on main.
+  In that path the task is marked done, pipeline_status becomes done, task.git.commit_sha
+  is set to the reconciled main SHA, the worktree path is cleared, and operator-facing
+  summary/journal text explicitly says the work already landed on main and the merge
+  was a no-op. I also verified the failure path still reports a real merge conflict
+  distinctly with failure_classification=merge_conflict and the summary ''CommitToGit
+  failed: merge conflict prevented integrating task worktree into main''. Independent
+  checks run: uv run pytest -q tests/test_recovery_and_rollback.py -k no_op_merge_when_patch_is_already_on_main
+  -vv -> 1 passed, 48 deselected; uv run pytest -q tests/test_worktree_merge_agent.py
+  -k merge_conflict_agent_fails -vv -> 1 passed, 9 deselected. The regression test
+  demonstrates the exact stuck-state scenario is reconciled to a non-stuck done outcome
+  when the patch is already on main, and the merge-agent test confirms operator-visible
+  logs still distinguish real conflicts from already-landed/no-op merges. Acceptance
+  criteria are met.'
+submitted_via_cli: true
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 51
+hook_results: []
+created_at: '2026-04-10T05:07:21+00:00'

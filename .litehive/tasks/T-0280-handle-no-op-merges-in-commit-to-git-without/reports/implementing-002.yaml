@@ -1,0 +1,101 @@
+task_id: T-0280
+step: implementing
+verdict: pass
+source: agent
+summary: 'Implemented a scoped commit_to_git reconciliation fix for already-landed/no-op
+  merges. In litehive/pipeline/_commit.py, commit_to_git now detects when a worktree-only
+  patch is already represented on main by comparing the worktree tip against the pre-merge
+  main head with git cherry; if merge succeeds without advancing main, the task is
+  finished as done with task.git.commit_sha set to the reconciled main SHA and an
+  explicit success summary/journal message saying the work was already landed and
+  the merge was a no-op. Real merge failures now emit a distinct merge-conflict summary
+  instead of the old generic ''did not produce new commits'' text. Added regression
+  coverage in tests/test_recovery_and_rollback.py for a worktree commit whose patch
+  was cherry-picked onto main before commit_to_git, asserting pass verdict, done status,
+  reconciled commit SHA, worktree cleanup, and operator-facing journal text. Updated
+  tests/test_worktree_merge_agent.py to assert conflict failures keep the explicit
+  merge-conflict summary. Verification run: uv run pytest -q tests/test_recovery_and_rollback.py
+  tests/test_worktree_merge_agent.py -> 59 passed in 17.02s. Required checks run:
+  uv run ruff check --select E402,F401 litehive tests -> passed; forbidden noqa suppression
+  scan -> passed. Acceptance evidence: already-landed/no-op integrations no longer
+  route into merge_failed, task/report/journal record the reconciled main SHA with
+  a clear reason, and real conflicts still fail with distinct operator-facing wording.'
+feedback: "Runner hook `after_implementing` `uv run ruff check --select E402,F401\
+  \ litehive tests` passed with exit code 0 (artifact: `artifacts/after_implementing-001.yaml`).\n\
+  \nRunner hook `after_implementing` `if [ -n \"${LITEHIVE_CHANGED_PATHS:-}\" ] \\\
+  \n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" | grep -q . \\\n  && printf '%s\\\
+  n' \"$LITEHIVE_CHANGED_PATHS\" \\\n    | xargs -r -d '\\n' git grep -nE 'noqa:.*F401|noqa:.*F403|ruff:\\\
+  s*noqa:\\s*F401|ruff:\\s*noqa:\\s*F403' --; then\n  echo 'Forbidden noqa F401/F403\
+  \ suppression found.'\n  exit 1\nfi` passed with exit code 0 (artifact: `artifacts/after_implementing-002.yaml`).\n\
+  \nImplemented a scoped commit_to_git reconciliation fix for already-landed/no-op\
+  \ merges. In litehive/pipeline/_commit.py, commit_to_git now detects when a worktree-only\
+  \ patch is already represented on main by comparing the worktree tip against the\
+  \ pre-merge main head with git cherry; if merge succeeds without advancing main,\
+  \ the task is finished as done with task.git.commit_sha set to the reconciled main\
+  \ SHA and an explicit success summary/journal message saying the work was already\
+  \ landed and the merge was a no-op. Real merge failures now emit a distinct merge-conflict\
+  \ summary instead of the old generic 'did not produce new commits' text. Added regression\
+  \ coverage in tests/test_recovery_and_rollback.py for a worktree commit whose patch\
+  \ was cherry-picked onto main before commit_to_git, asserting pass verdict, done\
+  \ status, reconciled commit SHA, worktree cleanup, and operator-facing journal text.\
+  \ Updated tests/test_worktree_merge_agent.py to assert conflict failures keep the\
+  \ explicit merge-conflict summary. Verification run: uv run pytest -q tests/test_recovery_and_rollback.py\
+  \ tests/test_worktree_merge_agent.py -> 59 passed in 17.02s. Required checks run:\
+  \ uv run ruff check --select E402,F401 litehive tests -> passed; forbidden noqa\
+  \ suppression scan -> passed. Acceptance evidence: already-landed/no-op integrations\
+  \ no longer\n\n\u2026 [truncated \u2014 full transcript in subagent artifacts]"
+submitted_via_cli: true
+files_changed:
+- litehive/pipeline/_commit.py
+- tests/test_recovery_and_rollback.py
+- tests/test_worktree_merge_agent.py
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings:
+- 'runner hook passed: `after_implementing` `uv run ruff check --select E402,F401
+  litehive tests` (artifact: `artifacts/after_implementing-001.yaml`)'
+- "runner hook passed: `after_implementing` `if [ -n \"${LITEHIVE_CHANGED_PATHS:-}\"\
+  \ ] \\\n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" | grep -q . \\\n  && printf\
+  \ '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" \\\n    | xargs -r -d '\\n' git grep -nE 'noqa:.*F401|noqa:.*F403|ruff:\\\
+  s*noqa:\\s*F401|ruff:\\s*noqa:\\s*F403' --; then\n  echo 'Forbidden noqa F401/F403\
+  \ suppression found.'\n  exit 1\nfi` (artifact: `artifacts/after_implementing-002.yaml`)"
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 318
+hook_results:
+- point: after_implementing
+  command: uv run ruff check --select E402,F401 litehive tests
+  reject_on_failure: true
+  description: null
+  exit_code: 0
+  status: passed
+  artifact: artifacts/after_implementing-001.yaml
+  stdout: 'All checks passed!
+
+    '
+  stderr: ''
+- point: after_implementing
+  command: "if [ -n \"${LITEHIVE_CHANGED_PATHS:-}\" ] \\\n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\"\
+    \ | grep -q . \\\n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" \\\n    | xargs\
+    \ -r -d '\\n' git grep -nE 'noqa:.*F401|noqa:.*F403|ruff:\\s*noqa:\\s*F401|ruff:\\\
+    s*noqa:\\s*F403' --; then\n  echo 'Forbidden noqa F401/F403 suppression found.'\n\
+    \  exit 1\nfi"
+  reject_on_failure: true
+  description: null
+  exit_code: 0
+  status: passed
+  artifact: artifacts/after_implementing-002.yaml
+  stdout: ''
+  stderr: ''
+created_at: '2026-04-10T05:05:00+00:00'

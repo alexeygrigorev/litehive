@@ -1,0 +1,49 @@
+task_id: T-0280
+step: testing
+verdict: pass
+source: agent
+summary: 'Verified commit_to_git no-op reconciliation independently. Inspected litehive/pipeline/_commit.py
+  and confirmed the new path only reconciles to pass when merge returns success, main
+  stays at the pre-merge SHA, and git cherry shows the worktree patch is already represented
+  on main; that path marks the task done, records task.git.commit_sha as the reconciled
+  main SHA, removes the worktree, and appends explicit already-landed/no-op operator
+  messaging. Confirmed real merge conflicts still fail with failure_classification=merge_conflict
+  and distinct conflict wording. Tests run: uv run pytest -q tests/test_recovery_and_rollback.py
+  tests/test_worktree_merge_agent.py -> 59 passed in 16.97s; uv run pytest -q tests/test_recovery_and_rollback.py
+  -k no_op_merge_when_patch_is_already_on_main -vv -> 1 passed. Evidence: the new
+  regression proves already-landed work no longer leaves the task stuck in merge_failed
+  and instead reconciles to done with the main SHA and clear reason; the updated merge-agent
+  test proves operator-facing logs still distinguish real merge conflicts.'
+feedback: 'Verified commit_to_git no-op reconciliation independently. Inspected litehive/pipeline/_commit.py
+  and confirmed the new path only reconciles to pass when merge returns success, main
+  stays at the pre-merge SHA, and git cherry shows the worktree patch is already represented
+  on main; that path marks the task done, records task.git.commit_sha as the reconciled
+  main SHA, removes the worktree, and appends explicit already-landed/no-op operator
+  messaging. Confirmed real merge conflicts still fail with failure_classification=merge_conflict
+  and distinct conflict wording. Tests run: uv run pytest -q tests/test_recovery_and_rollback.py
+  tests/test_worktree_merge_agent.py -> 59 passed in 16.97s; uv run pytest -q tests/test_recovery_and_rollback.py
+  -k no_op_merge_when_patch_is_already_on_main -vv -> 1 passed. Evidence: the new
+  regression proves already-landed work no longer leaves the task stuck in merge_failed
+  and instead reconciles to done with the main SHA and clear reason; the updated merge-agent
+  test proves operator-facing logs still distinguish real merge conflicts.'
+submitted_via_cli: true
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 89
+hook_results: []
+created_at: '2026-04-10T05:06:30+00:00'

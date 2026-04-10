@@ -3,19 +3,18 @@ slug: handle-no-op-merges-in-commit-to-git-without
 title: Handle no-op merges in commit_to_git without leaving tasks stuck in merge_failed
 depends_on: []
 task_type: bugfix
-engine: null
 model: null
 mode: tasks
 pipeline_mode: full
-status: queued
+status: in_progress
 flag_reason: null
 flag_count: 0
-pipeline_status: backlog
+pipeline_status: commit_to_git
 priority: medium
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-09T21:39:19+00:00'
-updated_at: '2026-04-09T21:39:19+00:00'
+updated_at: '2026-04-10T05:07:21+00:00'
 goal: Make commit_to_git reconcile tasks correctly when the intended changes are already
   present on the target branch and merge produces no new commit.
 acceptance_criteria:
@@ -33,7 +32,35 @@ plan:
 - Implement the minimal targeted fix.
 - Run focused regression coverage for the affected behavior.
 human_checkpoints: []
-subagents: []
+subagents:
+- id: SA-0001
+  role: planner
+  engine: codex
+  status: completed
+  path: subagents/SA-0001-planner
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0002
+  role: swe
+  engine: codex
+  status: completed
+  path: subagents/SA-0002-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0003
+  role: qa
+  engine: codex
+  status: completed
+  path: subagents/SA-0003-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0004
+  role: reviewer
+  engine: codex
+  status: completed
+  path: subagents/SA-0004-reviewer
+  sandboxed: false
+  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0280 handle-no-op-merges-in-commit-to-git-without'

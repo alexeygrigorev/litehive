@@ -1,0 +1,65 @@
+task_id: T-0280
+step: grooming
+verdict: pass
+source: agent
+summary: Grooming passed after repo inspection and direct task shaping via `litehive
+  update`; no code changes were made in this stage. I updated T-0280 to `PM_COMPLEXITY=simple`,
+  `PLANNED_EFFORT=s`, rewrote the goal around already-landed/no-op reconciliation,
+  tightened the acceptance criteria to require a successful non-stuck terminal outcome
+  plus distinct operator messaging, and replaced the plan with a 4-step implementation/testing
+  sequence focused on `commit_to_git`.
+feedback: "Grooming passed after repo inspection and direct task shaping via `litehive\
+  \ update`; no code changes were made in this stage. I updated T-0280 to `PM_COMPLEXITY=simple`,\
+  \ `PLANNED_EFFORT=s`, rewrote the goal around already-landed/no-op reconciliation,\
+  \ tightened the acceptance criteria to require a successful non-stuck terminal outcome\
+  \ plus distinct operator messaging, and replaced the plan with a 4-step implementation/testing\
+  \ sequence focused on `commit_to_git`.\n\nWhat I verified:\n- The active implementation\
+  \ path is `litehive/pipeline/_commit.py::_commit_to_git_report`. Today it only distinguishes\
+  \ `merge_ok` vs failure and emits the generic failure text `CommitToGit failed:\
+  \ merge did not produce new commits on main`, while `commit_to_git fail/reject/blocked`\
+  \ routes to `merge_failed` in `litehive/pipeline/states.py`.\n- Existing regression\
+  \ coverage already handles adjacent cases: clean worktree reconciliation and existing\
+  \ checkpoint reconciliation pass in `tests/test_recovery_and_rollback.py`, and real\
+  \ merge-conflict behavior is covered in `tests/test_worktree_merge_agent.py`.\n\
+  - There is still no focused regression for the task-specific case where final integration\
+  \ is effectively a no-op because the requested work is already present on `main`,\
+  \ which is the gap this task should close.\n- Focused test run executed in grooming:\
+  \ `pytest -q tests/test_recovery_and_rollback.py -k 'clean_task_worktree or existing_checkpoint_commit_without_duplicate_retry\
+  \ or commit_recovery_bug'` -> `2 passed, 46 deselected`.\n- I also ran a throwaway\
+  \ raw-git reproduction of a simple \u201Csame patch already on main\u201D scenario.\
+  \ In that setup, plain `git merge` created a merge commit rather than no-oping,\
+  \ so the SWE should not assume every equivalent patch reproduces the bug. The first\
+  \ implementation step should be to localize the exact Git state that produces the\
+  \ already-landed/no-op path inside Litehive and then codify that as a regression\
+  \ test.\n\nImplementation contract for the SWE:\n1. Reproduce the exact no-op/already-landed\
+  \ integration state with a focused test near `tests/test_recovery_and_rollback.py`\
+  \ or related commit-stage coverage, using `_commit_to_git_report` rather than only\
+  \ raw git commands.\n2. Adjust `commit_to_git` reconciliation so already-landed/no-op\
+  \ integration is treated as a successful completion path, recording the reconciled\
+  \ `main` SHA and a clear summary/journal reason, instead of falling through to merge-failure\
+  \ handling.\n3. Preserve the current real-conflict behavior and prove the operator-visible\
+  \ text distinguishes conflict failures from already-landed/no-op reconciliation.\n\
+  4. Run the narrow affected pytest slice around commit/recovery/merge-agent behavior\
+  \ before handing off to QA.\n\nCurrent task record is no longer blank and is ready\
+  \ for implementation."
+submitted_via_cli: true
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 188
+hook_results: []
+created_at: '2026-04-10T04:59:43+00:00'
