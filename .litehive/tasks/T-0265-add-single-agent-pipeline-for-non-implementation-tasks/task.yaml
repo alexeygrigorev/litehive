@@ -6,10 +6,10 @@ task_type: null
 model: null
 mode: implementation
 pipeline_mode: full
-status: in_progress
+status: done
 flag_reason: null
 flag_count: 0
-pipeline_status: commit_to_git
+pipeline_status: done
 priority: medium
 pm_complexity: null
 planned_effort: null
@@ -87,9 +87,9 @@ subagents:
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0143 add-single-agent-pipeline-for-non-implementation-tasks'
-  commit_sha: 7facf376b4451ac6d72e7197b76db7629cea7bcd
-  checkpoint_base_sha: null
-  checkpoint_attempts: 0
+  commit_sha: 6b5c5a93cceae447f1bfe20cf2e963f3d8e45cc0
+  checkpoint_base_sha: a87bf92e6d57287a7b5600ba9418b14dee6f5440
+  checkpoint_attempts: 1
   rolled_back_checkpoint_attempt: null
   merge_agent_attempts: 0
   worktree_path: null

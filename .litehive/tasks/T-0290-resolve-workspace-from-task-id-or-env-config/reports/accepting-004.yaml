@@ -1,0 +1,55 @@
+task_id: T-0290
+step: accepting
+verdict: pass
+source: agent
+summary: 'Accepted after code inspection and independent verification. Verified shared
+  resolve_workspace(task_id, workspace=...) resolves via explicit task id or LITEHIVE_TASK_ID,
+  uses LITEHIVE_WORKSPACE_ROOT when it matches the target task, walks up from cwd
+  and worktree paths, and falls back to both ~/.litehive/workspaces.yaml and XDG registry
+  paths. Verified invalid-root guards reject unresolved shell-variable paths and nested
+  .litehive roots, and ensure_workspace() refuses creating a workspace inside another
+  .litehive tree. Verified litehive report no longer requires --workspace, defaults
+  task id from env, fails clearly when resolution is impossible, and fast status uses
+  the same shared resolver. Verified agent prompts and verdict nudges now use plain
+  litehive report --verdict ... --role ... --step ... --message ... without --workspace
+  or --task-id. Independent tests run: tests/test_config.py resolver/report parser/nested-workspace
+  cases 6 passed; tests/test_task_commands_and_daemon.py registry report plus clear
+  failure cases 2 passed; tests/test_observability_and_status.py fast status registry
+  case 1 passed; tests/test_runner_workflow.py prompt guidance case 1 passed; full
+  smoke suite uv run pytest -q 985 passed, 12 warnings. Acceptance criteria satisfied.'
+feedback: 'Accepted after code inspection and independent verification. Verified shared
+  resolve_workspace(task_id, workspace=...) resolves via explicit task id or LITEHIVE_TASK_ID,
+  uses LITEHIVE_WORKSPACE_ROOT when it matches the target task, walks up from cwd
+  and worktree paths, and falls back to both ~/.litehive/workspaces.yaml and XDG registry
+  paths. Verified invalid-root guards reject unresolved shell-variable paths and nested
+  .litehive roots, and ensure_workspace() refuses creating a workspace inside another
+  .litehive tree. Verified litehive report no longer requires --workspace, defaults
+  task id from env, fails clearly when resolution is impossible, and fast status uses
+  the same shared resolver. Verified agent prompts and verdict nudges now use plain
+  litehive report --verdict ... --role ... --step ... --message ... without --workspace
+  or --task-id. Independent tests run: tests/test_config.py resolver/report parser/nested-workspace
+  cases 6 passed; tests/test_task_commands_and_daemon.py registry report plus clear
+  failure cases 2 passed; tests/test_observability_and_status.py fast status registry
+  case 1 passed; tests/test_runner_workflow.py prompt guidance case 1 passed; full
+  smoke suite uv run pytest -q 985 passed, 12 warnings. Acceptance criteria satisfied.'
+submitted_via_cli: true
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 271
+hook_results: []
+created_at: '2026-04-10T15:14:42+00:00'

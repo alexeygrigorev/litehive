@@ -1,0 +1,100 @@
+task_id: T-0290
+step: grooming
+verdict: pass
+source: agent
+summary: Grooming passed after source inspection of workspace resolution touchpoints
+  in litehive/main.py, litehive/cli/report.py, litehive/config/workspace.py, litehive/cli/parsers/_common.py,
+  litehive/agents/_prompts.py, litehive/pipeline/_builder.py, and related tests/docs.
+  No code changes or test runs were performed in this stage.
+feedback: "Grooming passed after source inspection of workspace resolution touchpoints\
+  \ in litehive/main.py, litehive/cli/report.py, litehive/config/workspace.py, litehive/cli/parsers/_common.py,\
+  \ litehive/agents/_prompts.py, litehive/pipeline/_builder.py, and related tests/docs.\
+  \ No code changes or test runs were performed in this stage.\n\nCurrent state verified:\n\
+  - Workspace resolution is fragmented today: fast status parses --workspace in litehive/main.py;\
+  \ report falls back from args.workspace to LITEHIVE_TASK_ID then active state; most\
+  \ CLI commands default args.workspace to cwd.\n- ensure_workspace() currently creates\
+  \ .litehive blindly and has no guard against nested workspaces, worktree paths,\
+  \ or unresolved shell variables.\n- Agent prompts and verdict nudges still hardcode\
+  \ `litehive report --task-id $LITEHIVE_TASK_ID ...`, so prompt generation must change\
+  \ with the resolver or agents will keep depending on explicit task/workspace wiring.\n\
+  - The repo already injects both LITEHIVE_TASK_ID and LITEHIVE_WORKSPACE_ROOT into\
+  \ agent environments, so this task can reuse existing env plumbing instead of adding\
+  \ new orchestration state.\n- There is a path-policy mismatch to handle deliberately:\
+  \ this task record says `~/.litehive/workspaces.yaml`, while docs/plans/sqlite-migration.md\
+  \ describes `~/.config/litehive/workspaces.yaml`. Implementation should either support\
+  \ both read locations or explicitly choose one and update docs/tests in the same\
+  \ change.\n\nRecommended implementation plan:\n1. Add a single workspace-resolution\
+  \ helper in the config/path layer and use it everywhere agent-facing commands currently\
+  \ assume cwd or explicit --workspace. Inputs should be: explicit --workspace override\
+  \ if present, explicit task_id parameter, LITEHIVE_TASK_ID env, LITEHIVE_WORKSPACE_ROOT\
+  \ env, cwd walk-up, then registry lookup.\n2. Add shared path validation for invalid\
+  \ workspace roots before any bootstrap/read path is used: reject unresolved shell-variable\
+  \ paths (leading `$` or unresolved variable segments), reject roots under `.litehive/worktrees/`,\
+  \ and reject any root whose `.litehive` would be nested inside another `.litehive`\
+  \ tree.\n3. Update `litehive report` to resolve its workspace without requiring\
+  \ `--workspace`, default task id from env, and fail with a clear error when neither\
+  \ task id nor workspace can be resolved.\n4. Update agent prompt builders and verdict\
+  \ nudge text to use plain `litehive report --verdict ... --role ... --step ... --message\
+  \ ...` guidance, relying on injected env/resolution instead of explicit `--workspace`/`--task-id`.\n\
+  5. Cover the resolver with focused tests: cwd walk-up from repo/worktree, env-root\
+  \ resolution, registry lookup from outside repo, invalid nested/unresolved-variable\
+  \ paths, report failure messaging, and guard coverage for ensure_workspace().\n\
+  6. Run the existing focused/unit coverage around CLI/workspace/report/prompt behavior,\
+  \ then run the smoke suite `uv run pytest -q` before acceptance.\n\nScope decision:\n\
+  - Keep `--workspace` as a supported explicit override for operator-facing commands\
+  \ unless implementation proves a safe broader cleanup. This task is about removing\
+  \ ambiguity for agents and safe default resolution, not a full CLI flag removal.\n\
+  - If registry-path compatibility (`~/.litehive` vs XDG config) cannot be handled\
+  \ cheaply in this task, create a follow-up and document the chosen canonical path\
+  \ explicitly.\n\nTASK_UPDATE:\n  acceptance_criteria:\n    - \"Agent-facing commands\
+  \ can resolve the correct workspace without `--workspace` when `LITEHIVE_TASK_ID`\
+  \ and/or `LITEHIVE_WORKSPACE_ROOT` are present, and `litehive report` succeeds from\
+  \ the task worktree with only verdict/role/step/message arguments.\"\n    - \"When\
+  \ run from inside a repo or task worktree, Litehive walks up from the current directory\
+  \ and picks the workspace whose `.litehive/tasks/` contains the target task instead\
+  \ of creating or using a duplicate nested workspace.\"\n    - \"When run from outside\
+  \ the repo, Litehive can still find the workspace for the target task via the configured\
+  \ workspace registry and submit/report against the correct task.\"\n    - \"Litehive\
+  \ rejects invalid workspace roots with clear errors instead of creating `.litehive/`\
+  \ directories for unresolved shell-variable paths, roots under `.litehive/worktrees/`,\
+  \ or roots nested inside another `.litehive` tree.\"\n    - \"`ensure_workspace()`\
+  \ refuses unsafe roots that would create a nested or invalid workspace, and the\
+  \ rejection explains what path was rejected and why.\"\n    - \"Agent prompts and\
+  \ verdict nudges instruct agents to use plain `litehive report --verdict ... --role\
+  \ ... --step ... --message ...` without `--workspace` or `--task-id`.\"\n    - \"\
+  Targeted resolver/report/workspace tests pass, and `uv run pytest -q` passes with\
+  \ zero failures.\"\n  constraints:\n    - \"Keep `--workspace` as a compatibility\
+  \ override for operator-facing CLI flows unless a broader removal is explicitly\
+  \ scoped.\"\n    - \"Use one shared resolver/validator path for CLI entrypoints\
+  \ instead of duplicating lookup rules in report, fast status, and bootstrap helpers.\"\
+  \n    - \"Resolve the registry-path mismatch (`~/.litehive/workspaces.yaml` vs XDG\
+  \ config path) in the same change, either by compatibility reads or by updating\
+  \ docs/tests to one canonical location.\"\n  plan:\n    - \"Design and implement\
+  \ a shared workspace resolver plus shared path validation helpers in the config/path\
+  \ layer.\"\n    - \"Wire the resolver into `litehive report`, fast status, and parser/default\
+  \ command paths that currently assume cwd or explicit `--workspace`.\"\n    - \"\
+  Update agent prompt/nudge generation to remove explicit `--workspace` and `--task-id`\
+  \ guidance for report submission.\"\n    - \"Add focused tests for cwd/env/registry\
+  \ resolution and invalid-root rejection, then run the smoke suite.\"\n  pm_complexity:\
+  \ moderate\n  planned_effort: m"
+submitted_via_cli: true
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 132
+hook_results: []
+created_at: '2026-04-10T14:50:09+00:00'
