@@ -1,0 +1,65 @@
+id: T-0316
+slug: finish-heru-extraction-move-shared-types-to-heru
+title: 'Finish heru extraction: move shared types to heru, delete litehive compat
+  shims'
+depends_on: []
+task_type: null
+model: null
+mode: implementation
+pipeline_mode: full
+status: queued
+flag_reason: null
+flag_count: 0
+pipeline_status: backlog
+priority: medium
+pm_complexity: moderate
+planned_effort: m
+created_at: '2026-04-10T17:48:27+00:00'
+updated_at: '2026-04-10T17:48:27+00:00'
+goal: "The T-0269 heru extraction physically moved engine adapters out of litehive/agents/\
+  \ into heru/, but two loose ends remain that keep heru coupled to litehive and prevent\
+  \ it from being a real standalone package. First, heru/types.py reaches up into\
+  \ litehive.models for 16 shared types (EngineLimitKind, StageReport, RuntimeEngineContinuation,\
+  \ SubagentRef, etc.) \u2014 this inverts the layering (lower layer depends on higher)\
+  \ and means heru cannot be installed without litehive. Second, 16 compatibility\
+  \ shim files still live under litehive/agents/adapters/ and litehive/agents/quota/\
+  \ that just do 'from heru.adapters.X import *' \u2014 they exist so old import paths\
+  \ keep working, but they are dead weight and create near-cyclic import risk. Close\
+  \ both gaps so heru becomes a standalone package that litehive depends on in one\
+  \ direction only."
+acceptance_criteria:
+- The 16 shared types currently defined in litehive/models and re-exported via heru/types.py
+  are moved into heru (either into heru/types.py directly or a new heru/models.py),
+  so litehive.models imports them from heru instead of the reverse
+- "heru/types.py has zero 'from litehive.*' imports \u2014 heru is fully self-contained"
+- The 16 compatibility shim files under litehive/agents/adapters/ and litehive/agents/quota/
+  are deleted, and every importer in litehive is updated to import directly from heru.adapters.*
+  or heru.quota.*
+- heru has its own pyproject.toml (or is added as a member of a workspace) so it can
+  be installed standalone with 'uv pip install heru' without needing litehive to be
+  present
+- 'Regression: all existing tests under tests/ pass after the move, no cyclic import
+  warnings, no runtime ImportError, and the daemon can still spawn all six engines
+  (codex, claude, opencode, copilot, gemini, goz) using the new import paths'
+- Add a simple import-direction test that asserts 'import heru' does not transitively
+  import any litehive module (can be implemented with sys.modules inspection after
+  a clean import)
+constraints: []
+plan: []
+human_checkpoints: []
+subagents: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0316 finish-heru-extraction-move-shared-types-to-heru'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+  merge_agent_attempts: 0
+  worktree_path: null
+retry_policy:
+  max_retries: null
+  stage_retry_limit: null
+created_from: null
+upstream_origin: null
+github_origin: null
