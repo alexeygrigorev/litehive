@@ -1,0 +1,63 @@
+id: T-0306
+slug: doctor-detect-broken-venv-symlinks-and-auto
+title: 'Doctor: detect broken .venv symlinks and auto-repair after uv cache clean'
+depends_on: []
+task_type: null
+model: null
+mode: implementation
+pipeline_mode: full
+status: queued
+flag_reason: null
+flag_count: 0
+pipeline_status: backlog
+priority: high
+pm_complexity: null
+planned_effort: null
+created_at: '2026-04-10T13:18:31+00:00'
+updated_at: '2026-04-10T13:18:31+00:00'
+goal: "When 'uv cache clean' runs, it removes cached packages that every existing\
+  \ .venv on the host symlinks into. Those symlinks become broken: ls .venv/bin/ruff\
+  \ succeeds (the symlink exists) but executing it fails with 'Failed to spawn' because\
+  \ the target is gone. 'uv sync' alone does NOT detect or repair this \u2014 it only\
+  \ checks package metadata, reports 'Checked N packages', and moves on. The broken\
+  \ symlink is silently left in place. Every subsequent daemon hook that needs the\
+  \ affected binary (e.g. after_implementing ruff check) fails spuriously with a runtime\
+  \ error, not a code error, and the SWE retries in a loop burning tokens. This bit\
+  \ us today after the disk-full recovery required a cache clean. Fix: make 'litehive\
+  \ doctor' detect broken venv symlinks (both in the main workspace and in every active\
+  \ task worktree) and either auto-repair them or report them loudly so the operator\
+  \ fixes them before the daemon runs."
+acceptance_criteria:
+- litehive doctor probes .venv/bin/ for broken symlinks by actually attempting to
+  exec each binary (not just ls) and flags any that fail with clear output naming
+  the binary, the venv, and the suggested fix
+- Probe covers both the main workspace .venv and every .venv found under .litehive/worktrees/*/.venv
+- "Doctor either auto-runs 'uv sync --extra dev' on detection (safe, idempotent) OR\
+  \ reports the finding and blocks pool start until the operator fixes it \u2014 design\
+  \ choice, document the tradeoff in the implementation"
+- Daemon startup / repair runs the doctor probe and refuses to start the pool if any
+  active worktree has a broken venv (fail loud, not silent retry loop)
+- 'Test: manually delete a file under ~/.cache/uv that a venv symlink points to (simulating
+  cache clean), run doctor, assert detection and fix'
+- 'Test: start daemon with a broken-venv worktree, assert pool refuses to start with
+  a clear actionable error (not a cryptic ruff-not-found stack trace from inside a
+  hook retry)'
+constraints: []
+plan: []
+human_checkpoints: []
+subagents: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0306 doctor-detect-broken-venv-symlinks-and-auto'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+  merge_agent_attempts: 0
+  worktree_path: null
+retry_policy:
+  max_retries: null
+  stage_retry_limit: null
+created_from: null
+upstream_origin: null
+github_origin: null
