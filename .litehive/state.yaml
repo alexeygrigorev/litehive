@@ -1,8 +1,7 @@
-active_task_id: T-0282
+active_task_id: T-0284
 active_task_ids: []
 mode: implementation
 queue:
-- T-0284
 - T-0240
 - T-0263
 - T-0107
@@ -22,8 +21,9 @@ queue:
 - T-0302
 - T-0303
 - T-0304
+- T-0307
 pool_stop_reason: null
-next_task_number: 306
+next_task_number: 307
 unmerged_worktrees:
 - task_id: T-0281
   worktree_path: .litehive/worktrees/T-0281-goz-adapter-wire-continuation-extraction-and
