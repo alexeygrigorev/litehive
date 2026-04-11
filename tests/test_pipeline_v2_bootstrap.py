@@ -114,6 +114,31 @@ def test_run_task_v2_happy_path_against_real_workspace(live_workspace: Path) -> 
 # ── all engines blocked → failed ────────────────────────────────────────
 
 
+def test_run_task_v2_full_mode_walks_every_stage(live_workspace: Path) -> None:
+    """Full-mode task: grooming → implementing → testing → accepting → done."""
+    task = create_task(
+        live_workspace,
+        title="full-mode smoke",
+        goal="walk every agent stage",
+        pipeline_mode="full",
+    )
+
+    calls: list = []
+    result = run_task_v2(
+        live_workspace,
+        task,
+        engine_factory=_stub_factory(_auto_pass_behavior(calls)),
+    )
+
+    assert result.final_stage == "done", (
+        f"expected done, got {result.final_stage!r} "
+        f"(reason={result.failed_reason!r}, msg={result.failed_message!r})"
+    )
+    # Every agent stage must have run at least once
+    stages_called = {stage for _, stage in calls}
+    assert stages_called >= {"grooming", "implementing", "testing", "accepting"}
+
+
 def test_run_task_v2_all_engines_blocked_lands_in_failed(live_workspace: Path) -> None:
     task = create_task(
         live_workspace,

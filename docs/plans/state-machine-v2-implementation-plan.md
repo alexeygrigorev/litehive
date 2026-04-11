@@ -204,6 +204,14 @@ item lands.
   the stub engine and the agent verdict path don't write it. Need a
   way for agents to report files/tests changed so the zero-change
   shortcut guard sees real data instead of defaults.
+- 2026-04-12: bootstrap integration tests landed
+  (`tests/test_pipeline_v2_bootstrap.py`). They drive `run_task_v2`
+  against a real tmp_path workspace with SqlitePersistence, SqliteJournal,
+  SqliteSessionStore, SubprocessHookRunner, and the full node registry
+  — only the engine factory is injected. Exposed and fixed the first
+  real bug: `GitWorktreeSyncNode` crashed `git fetch origin` in
+  workspaces without a remote. Now no-ops gracefully via a `_has_origin`
+  check. 124 v2 tests green.
 - 2026-04-11: M1 step 4 done — ``GitCommitNode``,
   ``SubprocessHookRunner``, retry backoff, nudge-on-missing-verdict.
   ``NudgeRequired`` exception added to the agent error taxonomy.
