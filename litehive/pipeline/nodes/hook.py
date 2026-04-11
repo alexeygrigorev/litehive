@@ -1,5 +1,8 @@
+import os
+import subprocess
 from dataclasses import dataclass
 from enum import Enum
+from pathlib import Path
 
 from ..events import Event, HookOk, Reject
 from ..persistence import TaskState
@@ -31,6 +34,49 @@ class HookRunner:
 
     def run(self, spec: HookSpec, state: TaskState) -> HookResult:
         raise NotImplementedError
+
+
+class SubprocessHookRunner(HookRunner):
+    """Runs each hook as a shell command in the workspace root.
+
+    Injects ``LITEHIVE_TASK_ID`` / ``LITEHIVE_STAGE`` / ``LITEHIVE_WORKSPACE``
+    into the environment so hooks can key off the task under execution. On
+    ``subprocess.TimeoutExpired`` the result is reported as ``ok=False`` with
+    a timeout marker in the output — the node then emits ``Reject`` via the
+    usual path.
+    """
+
+    def __init__(self, workspace_root: Path, *, extra_env: dict[str, str] | None = None) -> None:
+        self.workspace_root = Path(workspace_root)
+        self.extra_env = dict(extra_env or {})
+
+    def run(self, spec: HookSpec, state: TaskState) -> HookResult:
+        env = {
+            **os.environ,
+            **self.extra_env,
+            "LITEHIVE_TASK_ID": state.task_id,
+            "LITEHIVE_STAGE": state.stage,
+            "LITEHIVE_WORKSPACE": str(self.workspace_root),
+        }
+        try:
+            proc = subprocess.run(
+                spec.command,
+                shell=True,
+                cwd=str(self.workspace_root),
+                timeout=spec.timeout_seconds,
+                capture_output=True,
+                text=True,
+                env=env,
+                check=False,
+            )
+        except subprocess.TimeoutExpired as exc:
+            output = f"[timeout after {spec.timeout_seconds}s]\n{exc.stdout or ''}\n{exc.stderr or ''}"
+            return HookResult(spec=spec, ok=False, output=output.strip())
+        except FileNotFoundError as exc:
+            return HookResult(spec=spec, ok=False, output=f"[hook binary missing] {exc}")
+
+        output = (proc.stdout or "") + (proc.stderr or "")
+        return HookResult(spec=spec, ok=proc.returncode == 0, output=output.strip())
 
 
 class HookNode(Node):

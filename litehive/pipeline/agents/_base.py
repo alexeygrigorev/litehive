@@ -62,6 +62,8 @@ class RoleAgent(AgentNode):
         *,
         prompt_context: PromptContext | None = None,
         retry_budget: int = 3,
+        retry_backoff_seconds: float = 0.0,
+        retry_backoff_multiplier: float = 2.0,
         grace_period_seconds: int | None = None,
     ) -> None:
         if not self.NODE_NAME or not self.ROLE:
@@ -73,6 +75,8 @@ class RoleAgent(AgentNode):
             selector=selector,
             session_provider=session_provider,
             retry_budget=retry_budget,
+            retry_backoff_seconds=retry_backoff_seconds,
+            retry_backoff_multiplier=retry_backoff_multiplier,
             grace_period_seconds=grace_period_seconds,
         )
         self.prompt_context = prompt_context or PromptContext()

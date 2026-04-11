@@ -1,5 +1,6 @@
+import time
 from dataclasses import dataclass, field
-from typing import Any, Protocol
+from typing import Any, Callable, Protocol
 
 from ..events import Blocked, Crash, Event, Pass, Reject
 from ..persistence import TaskState
@@ -10,7 +11,7 @@ from .base import Node
 # ── Error taxonomy ───────────────────────────────────────────────────────
 #
 # Engine adapters raise one of these to tell the AgentNode what to do next.
-# No "tier 1 / 2 / 3" jargon — each class says what response it wants.
+# Each class name is the response the node takes.
 
 
 class TransientError(Exception):
@@ -50,6 +51,18 @@ class UnrecoverableError(Exception):
     engine will fix: a bug in the prompt, a broken task config, an assertion
     failure inside the adapter. The state machine routes this through the
     normal ``Crash → recovering`` path.
+    """
+
+
+class NudgeRequired(Exception):
+    """Agent finished its turn without submitting a verdict — nudge it.
+
+    The adapter raises this when the agent exited cleanly but never called
+    ``litehive report``. The AgentNode reissues the turn on the same session
+    (so the engine can resume via --continue) with a prompt that reminds the
+    agent to submit a verdict. A separate ``nudge_budget`` applies; nudges
+    do not consume the retry budget. If nudges run out the stage crashes
+    with ``NudgeBudgetExhausted``.
     """
 
 
@@ -138,17 +151,47 @@ class AgentNode(Node):
         session_provider: SessionProvider,
         *,
         retry_budget: int = 3,
+        retry_backoff_seconds: float = 0.0,
+        retry_backoff_multiplier: float = 2.0,
+        nudge_budget: int = 1,
+        sleep_fn: Callable[[float], None] | None = None,
         grace_period_seconds: int | None = None,
     ) -> None:
         self.name = name
         self.selector = selector
         self.sessions = session_provider
         self.retry_budget = retry_budget
+        self.retry_backoff_seconds = retry_backoff_seconds
+        self.retry_backoff_multiplier = retry_backoff_multiplier
+        # Default is 1 and that's almost always the right choice: if the agent
+        # ignores the first reminder to submit a verdict, a second reminder is
+        # unlikely to land any better. Exposed as a parameter so tests and
+        # unusual deployments can tune it.
+        self.nudge_budget = nudge_budget
+        self._sleep = sleep_fn or time.sleep
         if grace_period_seconds is not None:
             self.grace_period_seconds = grace_period_seconds
 
     def build_prompt(self, state: TaskState) -> Any:
         raise NotImplementedError
+
+    def build_nudge_prompt(self, state: TaskState, original_prompt: Any) -> Any:
+        """Return a variant of the original prompt that reminds the agent to report.
+
+        The default implementation works for dict-shaped prompts produced by
+        ``RoleAgent.build_prompt``: it sets a ``nudge`` flag the serializer
+        can surface. Subclasses with non-dict prompts must override.
+        """
+        if isinstance(original_prompt, dict):
+            nudged = dict(original_prompt)
+            nudged["nudge"] = True
+            nudged["nudge_message"] = (
+                "You finished your last turn without submitting a verdict via "
+                "`litehive report --verdict <pass|reject|blocked>`. Please "
+                "review your work and submit your verdict now."
+            )
+            return nudged
+        return original_prompt
 
     def run(self, state: TaskState) -> Event:
         prompt = self.build_prompt(state)
@@ -189,21 +232,50 @@ class AgentNode(Node):
 
         Returns an ``Event`` when the outcome is resolved (verdict or
         ``UnrecoverableError`` → Crash), or an ``EngineBlockedError`` when the
-        caller should ask the selector for a replacement engine. Retry-budget
-        exhaustion on ``TransientError`` is folded into the engine-switch path
-        — a persistently flaky engine is, in effect, blocked.
+        caller should ask the selector for a replacement engine.
+
+        - ``TransientError`` retries the same session up to ``retry_budget``
+          times, with exponential backoff between attempts. If the budget
+          exhausts, the engine is treated as blocked and the caller switches.
+        - ``NudgeRequired`` reissues the turn with a nudge-variant prompt
+          and does NOT count against ``retry_budget``. Nudges use their own
+          ``nudge_budget``. Exhaustion produces a ``Crash``.
+        - ``EngineBlockedError`` is propagated for an immediate engine
+          switch, no retry.
+        - ``UnrecoverableError`` is escalated as a ``Crash``.
         """
         last_exc: Exception | None = None
-        for _ in range(self.retry_budget):
+        attempts_used = 0
+        nudges_used = 0
+        current_prompt = prompt
+
+        while attempts_used < self.retry_budget:
+            if attempts_used > 0 and self.retry_backoff_seconds > 0:
+                delay = self.retry_backoff_seconds * (
+                    self.retry_backoff_multiplier ** (attempts_used - 1)
+                )
+                self._sleep(delay)
             try:
-                verdict = engine.run_turn(session, prompt, state)
+                verdict = engine.run_turn(session, current_prompt, state)
                 self.sessions.persist(state.task_id, self.name, engine.name, session)
                 return self._verdict_to_event(verdict)
+            except NudgeRequired as exc:
+                if nudges_used >= self.nudge_budget:
+                    return Crash(
+                        exc_type="NudgeBudgetExhausted",
+                        message=f"agent did not submit a verdict after {nudges_used} nudges: {exc}",
+                    )
+                nudges_used += 1
+                current_prompt = self.build_nudge_prompt(state, current_prompt)
+                # Nudge reuses the same session (so the adapter emits
+                # --continue) but does not consume a retry attempt.
+                continue
             except TransientError as exc:
                 last_exc = exc
-                continue  # retry same engine, same session (adapter uses --continue)
+                attempts_used += 1
+                continue
             except EngineBlockedError as exc:
-                return exc  # caller asks selector for next engine
+                return exc
             except UnrecoverableError as exc:
                 return Crash(exc_type=type(exc).__name__, message=str(exc))
         return EngineBlockedError(

@@ -22,8 +22,8 @@ class StateMachineRunner:
       4. persists the state and records the transition in the journal
 
     All logging lives inside the journal — the runner never calls ``logger``
-    directly. Complexity for agent execution (tier-1/tier-2, session handling,
-    engine fallback) lives inside the node subclasses. Routing complexity
+    directly. Complexity for agent execution (retry / engine switch / session
+    handling / nudges) lives inside the node subclasses. Routing complexity
     lives inside the rules (guards, effects). The runner itself is the loop.
     """
 

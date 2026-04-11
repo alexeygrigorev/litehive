@@ -68,6 +68,8 @@ def build_registry(
     hook_specs: dict[NodeName, list[HookSpec]] | None = None,
     hook_execution_mode: ExecutionMode = ExecutionMode.FAIL_FAST,
     retry_budget: int = 3,
+    retry_backoff_seconds: float = 0.0,
+    retry_backoff_multiplier: float = 2.0,
 ) -> NodeRegistry:
     """Assemble every node the v2 state machine can route to.
 

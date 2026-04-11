@@ -1,8 +1,16 @@
 from .agent import AgentNode
 from .base import Node, NodeRegistry
-from .hook import ExecutionMode, HookNode, HookResult, HookRunner, HookSpec
+from .hook import (
+    ExecutionMode,
+    HookNode,
+    HookResult,
+    HookRunner,
+    HookSpec,
+    SubprocessHookRunner,
+)
 from .system import (
     CommitNode,
+    GitCommitNode,
     PreExecRecoveryNode,
     ReadyNode,
     StubCommitNode,
@@ -18,9 +26,11 @@ __all__ = [
     "HookSpec",
     "HookRunner",
     "HookResult",
+    "SubprocessHookRunner",
     "ExecutionMode",
     "SystemNode",
     "CommitNode",
+    "GitCommitNode",
     "StubCommitNode",
     "ReadyNode",
     "PreExecRecoveryNode",

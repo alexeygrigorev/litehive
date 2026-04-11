@@ -43,18 +43,29 @@ through `ready → done` with stub engines, real persistence, real journal.
   scripted `AgentVerdict` sequence and raises scripted exceptions.
 - [ ] `StaticEngineSelector` — returns engines from a fixed list,
   honoring `excluded`. Used by M1 tests only.
-- [ ] `CommitNode._merge_worktree` — real git merge with delegation to
-  `MergeAgent` on conflict. Takes a `git` helper injected in tests.
+- [x] `GitCommitNode` — real git merge with one-shot delegation to
+  ``MergeAgent`` on conflict. Injects a ``worktree_resolver`` callable
+  and a merge_agent. Populates ``state.failure_context`` with the
+  conflict file list before invoking the agent. Covered by
+  ``test_pipeline_v2_hooks_and_commit.py``.
 - [x] `build_registry(selector, session_store, hook_runner, commit_node,
   prompt_context, hook_specs) -> NodeRegistry` — assembles all 20 nodes
   (ready, pre-exec-recovery, 10 hook phases, 4 agent stages, commit,
   recovering, done, failed). Lives in `litehive/pipeline/registry.py`.
 - [x] `ReadyNode` + `PreExecRecoveryNode` placeholder system nodes so
   the entry/resume path can be exercised end-to-end.
-- [ ] `HookRunner` subprocess implementation + a `FakeHookRunner` for
-  tests.
-- [ ] Retry backoff inside `AgentNode._run_with_retries` (exponential,
-  bounded, configurable via `retry_backoff_seconds`).
+- [x] `SubprocessHookRunner` — runs each hook as a shell command in the
+  workspace root with ``LITEHIVE_TASK_ID`` / ``LITEHIVE_STAGE`` /
+  ``LITEHIVE_WORKSPACE`` injected into the env. Timeout-expiry reported
+  as ``ok=False`` with a marker in the output.
+- [x] Retry backoff inside `AgentNode._run_with_retries`, exponential,
+  bounded, configurable via ``retry_backoff_seconds`` +
+  ``retry_backoff_multiplier``. ``sleep_fn`` is injectable for tests.
+- [x] Nudge-on-missing-verdict: engine adapter raises
+  ``NudgeRequired`` when the agent finished without submitting a
+  verdict. ``AgentNode`` reissues the turn on the same session with a
+  nudge-variant prompt. ``nudge_budget`` (default 1) is separate from
+  ``retry_budget``. Exhaustion produces ``Crash(NudgeBudgetExhausted)``.
 - [x] Five end-to-end tests (`tests/test_pipeline_v2_end_to_end.py`):
   full-mode happy path, single-mode zero-change shortcut, single-mode
   with changes routing through commit, persistence round-trip across
@@ -146,4 +157,11 @@ item lands.
   the stub engine and the agent verdict path don't write it. Need a
   way for agents to report files/tests changed so the zero-change
   shortcut guard sees real data instead of defaults.
+- 2026-04-11: M1 step 4 done — ``GitCommitNode``,
+  ``SubprocessHookRunner``, retry backoff, nudge-on-missing-verdict.
+  ``NudgeRequired`` exception added to the agent error taxonomy.
+  ``AgentNode._run_with_retries`` rewritten with a while loop so nudges
+  don't consume retries. 19 new tests: agent retry paths (9) + hooks /
+  commit including real git merge with MergeAgent (10). 109 v2 tests
+  green total.
 - …
