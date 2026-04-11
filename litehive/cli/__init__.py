@@ -9,6 +9,7 @@ import typer
 
 from litehive.agents import ENGINE_CHOICES
 from litehive.cli._parse import TASK_TYPE_CHOICES
+from litehive.cli.backup import _cmd_backup_create, _cmd_backup_list, _cmd_backup_restore
 from litehive.cli.configure import _cmd_configure
 from litehive.cli.debug import _cmd_debug
 from litehive.cli.doctor import _cmd_doctor
@@ -93,6 +94,12 @@ import_app = typer.Typer(
     no_args_is_help=False,
 )
 archive_app = typer.Typer(
+    add_completion=False,
+    context_settings={"help_option_names": ["-h", "--help"]},
+    invoke_without_command=True,
+    no_args_is_help=False,
+)
+backup_app = typer.Typer(
     add_completion=False,
     context_settings={"help_option_names": ["-h", "--help"]},
     invoke_without_command=True,
@@ -697,6 +704,11 @@ def archive_group(
     return _cmd_archive(_ns(command="archive", task_id=task_id, workspace=workspace, all_done=all_done))
 
 
+@backup_app.callback()
+def backup_group(ctx: typer.Context) -> None:
+    _require_subcommand(ctx)
+
+
 @queue_app.command("move", help="Move a queued task to a 1-based position")
 @app.command("move", help="Move a queued task to a 1-based position", hidden=True)
 def move(
@@ -950,6 +962,29 @@ def cleanup(
     )
 
 
+@backup_app.command("create", help="Create a compressed backup of the workspace runtime database")
+def backup_create(workspace: WorkspaceOption = Path.cwd()) -> int:
+    return _cmd_backup_create(_ns(command="backup", backup_command="create", workspace=workspace))
+
+
+@backup_app.command("list", help="List available workspace runtime database backups")
+def backup_list(workspace: WorkspaceOption = Path.cwd()) -> int:
+    return _cmd_backup_list(_ns(command="backup", backup_command="list", workspace=workspace))
+
+
+@backup_app.command("restore", help="Restore a workspace runtime database backup")
+def backup_restore(
+    timestamp: Annotated[str, typer.Argument(help="Backup timestamp shown by `litehive backup list`")] = ...,
+    workspace: WorkspaceOption = Path.cwd(),
+    yes: Annotated[
+        bool, typer.Option("--yes", help="Skip the overwrite confirmation prompt")
+    ] = False,
+) -> int:
+    return _cmd_backup_restore(
+        _ns(command="backup", backup_command="restore", timestamp=timestamp, workspace=workspace, yes=yes)
+    )
+
+
 @worktree_app.command("ls", help="List Litehive-managed task worktrees with task status and change count")
 def worktree_ls(workspace: WorkspaceOption = Path.cwd()) -> int:
     return _cmd_worktree_ls(_ns(command="worktree", worktree_command="ls", workspace=workspace))
@@ -979,6 +1014,7 @@ app.add_typer(queue_app, name="queue", help="Show the active task and queued ord
 app.add_typer(task_app, name="task", help="Manage Litehive tasks")
 app.add_typer(import_app, name="import", help="Import or file tasks from external inputs")
 app.add_typer(archive_app, name="archive", help="Move done tasks to the archive directory")
+app.add_typer(backup_app, name="backup", help="Create, list, and restore workspace database backups")
 app.add_typer(worktree_app, name="worktree", help="Inspect and clean Litehive-managed task worktrees")
 app.add_typer(daemon_app, name="daemon", help="Manage the Litehive pool daemon", hidden=True)
 
@@ -1002,6 +1038,7 @@ _PUBLIC_TOP_LEVEL_COMMANDS = {
     "report",
     "worktree",
     "archive",
+    "backup",
 }
 
 _PUBLIC_GROUP_COMMANDS = {
@@ -1009,6 +1046,7 @@ _PUBLIC_GROUP_COMMANDS = {
     "queue": {"move", "promote", "requeue", "resume", "stop"},
     "import": {"github", "issue", "spec"},
     "archive": {"cleanup"},
+    "backup": {"create", "list", "restore"},
     "worktree": {"ls", "clean", "rescue"},
 }
 

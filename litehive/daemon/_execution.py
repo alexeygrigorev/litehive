@@ -15,6 +15,7 @@ from typing import TextIO
 import yaml
 
 from litehive.config import ensure_workspace, state_path, workspace_dir
+from litehive.storage import create_scheduled_workspace_backup
 from litehive.workspace.locking import runner_status
 
 from ._logs import _latest_matching, _prune_run_all_log_dirs, latest_run_all_log_dir
@@ -195,6 +196,17 @@ def _emit(message: str, *, stream: TextIO | None) -> None:
     stream.flush()
 
 
+def _maybe_run_workspace_backup(
+    workspace: Path,
+    *,
+    now: datetime | None = None,
+    stream: TextIO | None,
+) -> None:
+    backup = create_scheduled_workspace_backup(workspace, now=now)
+    if backup is not None:
+        _emit(f"backup_created: {backup.timestamp}", stream=stream)
+
+
 def _run_logged_subprocess(
     command: list[str],
     *,
@@ -271,6 +283,13 @@ def run_daemon_loop(
 
             _emit("", stream=output_stream)
             _emit(f"== iteration {iteration} ==", stream=output_stream)
+
+            try:
+                _maybe_run_workspace_backup(workspace, stream=output_stream)
+            except Exception as exc:
+                logger.exception("scheduled workspace backup failed")
+                _append_attention_log(workspace, f"scheduled backup failed: {exc}")
+                _emit(f"backup_failed: {exc}", stream=output_stream)
 
             divergence_reason = _check_origin_divergence(workspace)
             if divergence_reason is not None:

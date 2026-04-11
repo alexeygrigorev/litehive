@@ -1,6 +1,7 @@
 from litehive.cli.parsers.abandon import register_abandon_parser
 from litehive.cli.parsers.add import register_add_parser
 from litehive.cli.parsers.archive import register_archive_parser
+from litehive.cli.parsers.backup import register_backup_parser
 from litehive.cli.parsers.cleanup import register_cleanup_parser
 from litehive.cli.parsers.close import register_close_parser
 from litehive.cli.parsers.configure import register_configure_parser
@@ -85,5 +86,6 @@ COMMAND_PARSER_BUILDERS = (
     register_list_parser,
     register_show_parser,
     register_archive_parser,
+    register_backup_parser,
     register_cleanup_parser,
 )

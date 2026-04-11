@@ -67,6 +67,10 @@ def workspace_database_path(root: Path) -> Path:
     return workspace_data_dir(root) / "data.db"
 
 
+def workspace_backups_dir(root: Path) -> Path:
+    return workspace_data_dir(root) / "backups"
+
+
 def workspace_logs_dir(root: Path) -> Path:
     return workspace_state_root(root) / "logs"
 
