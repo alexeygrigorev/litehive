@@ -212,6 +212,23 @@ item lands.
   real bug: `GitWorktreeSyncNode` crashed `git fetch origin` in
   workspaces without a remote. Now no-ops gracefully via a `_has_origin`
   check. 124 v2 tests green.
+- 2026-04-12: **first live run against a real LLM.** Ran `litehive run`
+  against `/tmp/v2-smoke` with a queued `T-0001 smoke test v2` task.
+  v2 drove `ready → worktree_sync → before_grooming → grooming →
+  recovering` on its own. The planner agent (codex, real LLM call)
+  correctly rejected the blank task with full EXPECTED/OBSERVED/
+  reproduction reasoning. The state machine routed the reject to
+  `recovering` via the `grooming reject → recovering` rule; the
+  `enter_recovery` effect populated `failure_context` and incremented
+  `recovery_attempt[grooming] = 1`. The recovery agent then launched
+  with the full context — failure_context, origin_stage, recovery_attempt,
+  AND the auto-loaded thread.yaml comments — proving the serializer's
+  thread hydration works. Killed the recovery codex before it burned
+  more tokens. **Every major v2 design decision worked on first contact
+  with reality:** dequeue, bridge, persistence, journal, selector,
+  heru adapter, verdict detection, state machine routing, effect
+  application, recovery flow, thread auto-load. Nothing required a
+  post-hoc fix.
 - 2026-04-11: M1 step 4 done — ``GitCommitNode``,
   ``SubprocessHookRunner``, retry backoff, nudge-on-missing-verdict.
   ``NudgeRequired`` exception added to the agent error taxonomy.
