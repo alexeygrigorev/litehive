@@ -48,11 +48,17 @@ ToSpec = NodeName | ToFn
 
 @dataclass(frozen=True)
 class Rule:
-    from_: NodeName | frozenset[NodeName]
-    event: type[Event]
-    to: ToSpec
+    """One row of the transition table.
+
+    Reads like English: "from <from_state> on <on_event> transition_to
+    <transition_to> when <when> with_effect <with_effect>".
+    """
+
+    from_state: NodeName | frozenset[NodeName]
+    on_event: type[Event]
+    transition_to: ToSpec
     when: Guard | None = None
-    effect: EffectFn | None = None
+    with_effect: EffectFn | None = None
     description: str = ""
 
 
@@ -91,14 +97,20 @@ def evaluate(
     directly without any runner, registry, or persistence.
     """
     for rule in rules:
-        if not _matches_from(rule.from_, current):
+        if not _matches_from(rule.from_state, current):
             continue
-        if not _matches_event(rule.event, event):
+        if not _matches_event(rule.on_event, event):
             continue
         if rule.when is not None and not rule.when(state, event):
             continue
-        target = rule.to(state, event) if callable(rule.to) else rule.to
-        delta = rule.effect(state, event) if rule.effect is not None else EMPTY_DELTA
+        target = (
+            rule.transition_to(state, event)
+            if callable(rule.transition_to)
+            else rule.transition_to
+        )
+        delta = (
+            rule.with_effect(state, event) if rule.with_effect is not None else EMPTY_DELTA
+        )
         return Transition(next=target, delta=delta, rule=rule)
     raise NoTransitionError(current, event)
 
@@ -124,21 +136,21 @@ def _retry_epoch_rules(epoch_stage: NodeName, phases: Iterable[NodeName]) -> lis
     for phase in phases:
         rules.append(
             Rule(
-                phase,
-                Reject,
-                "implementing",
+                from_state=phase,
+                on_event=Reject,
+                transition_to="implementing",
                 when=stage_retries_remaining(epoch_stage),
-                effect=inc_stage_retry(epoch_stage),
+                with_effect=inc_stage_retry(epoch_stage),
                 description=f"{phase} reject → implementing (retry {epoch_stage})",
             )
         )
         rules.append(
             Rule(
-                phase,
-                Reject,
-                "recovering",
+                from_state=phase,
+                on_event=Reject,
+                transition_to="recovering",
                 when=stage_retries_exhausted(epoch_stage),
-                effect=enter_recovery,
+                with_effect=enter_recovery,
                 description=f"{phase} reject → recovering ({epoch_stage} exhausted)",
             )
         )
@@ -154,63 +166,64 @@ COMMIT_EPOCH        = ("before_commit",        "commit",        "after_commit")
 
 RULES: list[Rule] = [
     # ── pre-execution entry ─────────────────────────────────────────────
-    Rule("ready", CleanState, "before_grooming",
+    Rule(from_state="ready", on_event=CleanState, transition_to="before_grooming",
          when=mode("full"),
          description="ready → grooming entry (full mode)"),
-    Rule("ready", CleanState, "before_implementing",
+    Rule(from_state="ready", on_event=CleanState, transition_to="before_implementing",
          when=mode("single"),
          description="ready → implementing entry (single mode)"),
-    Rule("ready", NeedsPreExecRecovery, "recovering_pre_exec",
-         effect=enter_pre_exec_recovery,
+    Rule(from_state="ready", on_event=NeedsPreExecRecovery, transition_to="recovering_pre_exec",
+         with_effect=enter_pre_exec_recovery,
          description="ready → pre-exec recovery"),
 
     # ── pre-execution recovery exits ────────────────────────────────────
-    Rule("recovering_pre_exec", PreExecRecoverySucceeded, resume_from_pre_exec,
+    Rule(from_state="recovering_pre_exec", on_event=PreExecRecoverySucceeded, transition_to=resume_from_pre_exec,
          description="pre-exec recovery resumes at origin"),
-    Rule("recovering_pre_exec", PreExecRecoveryFailed, "failed",
-         effect=fail("pre_exec_recovery_failed")),
-    Rule("recovering_pre_exec", PreExecRecoveryBudgetHit, "failed",
-         effect=fail("pre_exec_recovery_failed")),
-    Rule("recovering_pre_exec", Crash, "failed",
-         effect=fail("recovery_crashed")),
-    Rule("recovering_pre_exec", Timeout, "failed",
-         effect=fail("recovery_crashed")),
+    Rule(from_state="recovering_pre_exec", on_event=PreExecRecoveryFailed, transition_to="failed",
+         with_effect=fail("pre_exec_recovery_failed")),
+    Rule(from_state="recovering_pre_exec", on_event=PreExecRecoveryBudgetHit, transition_to="failed",
+         with_effect=fail("pre_exec_recovery_failed")),
+    Rule(from_state="recovering_pre_exec", on_event=Crash, transition_to="failed",
+         with_effect=fail("recovery_crashed")),
+    Rule(from_state="recovering_pre_exec", on_event=Timeout, transition_to="failed",
+         with_effect=fail("recovery_crashed")),
 
     # ── happy path: grooming ────────────────────────────────────────────
-    Rule("before_grooming",    HookOk, "grooming"),
-    Rule("grooming",           Pass,   "after_grooming"),
-    Rule("after_grooming",     HookOk, "before_implementing"),
+    Rule(from_state="before_grooming", on_event=HookOk, transition_to="grooming"),
+    Rule(from_state="grooming",        on_event=Pass,   transition_to="after_grooming"),
+    Rule(from_state="after_grooming",  on_event=HookOk, transition_to="before_implementing"),
 
     # ── happy path: implementing ────────────────────────────────────────
-    Rule("before_implementing", HookOk, "implementing"),
-    Rule("implementing",        Pass,   "after_implementing"),
+    Rule(from_state="before_implementing", on_event=HookOk, transition_to="implementing"),
+    Rule(from_state="implementing",        on_event=Pass,   transition_to="after_implementing"),
 
     # after_implementing: mode-gated exits, most specific first
-    Rule("after_implementing", HookOk, "done",
+    Rule(from_state="after_implementing", on_event=HookOk, transition_to="done",
          when=mode("single") & zero_change_shortcut(),
          description="single mode + no diff → skip commit"),
-    Rule("after_implementing", HookOk, "before_commit",
+    Rule(from_state="after_implementing", on_event=HookOk, transition_to="before_commit",
          when=mode("single")),
-    Rule("after_implementing", HookOk, "before_testing",
+    Rule(from_state="after_implementing", on_event=HookOk, transition_to="before_testing",
          when=mode("full")),
 
     # ── happy path: testing ─────────────────────────────────────────────
-    Rule("before_testing", HookOk, "testing"),
-    Rule("testing",        Pass,   "after_testing"),
-    Rule("after_testing",  HookOk, "before_accepting"),
+    Rule(from_state="before_testing", on_event=HookOk, transition_to="testing"),
+    Rule(from_state="testing",        on_event=Pass,   transition_to="after_testing"),
+    Rule(from_state="after_testing",  on_event=HookOk, transition_to="before_accepting"),
 
     # ── happy path: accepting ───────────────────────────────────────────
-    Rule("before_accepting", HookOk, "accepting"),
-    Rule("accepting",        Pass,   "after_accepting"),
-    Rule("after_accepting",  HookOk, "before_commit"),
+    Rule(from_state="before_accepting", on_event=HookOk, transition_to="accepting"),
+    Rule(from_state="accepting",        on_event=Pass,   transition_to="after_accepting"),
+    Rule(from_state="after_accepting",  on_event=HookOk, transition_to="before_commit"),
 
     # ── happy path: commit ──────────────────────────────────────────────
-    Rule("before_commit", HookOk, "commit"),
-    Rule("commit",        Pass,   "after_commit"),
-    Rule("after_commit",  HookOk, "done"),
+    Rule(from_state="before_commit", on_event=HookOk, transition_to="commit"),
+    Rule(from_state="commit",        on_event=Pass,   transition_to="after_commit"),
+    Rule(from_state="after_commit",  on_event=HookOk, transition_to="done"),
 
     # ── rejections: grooming epoch (no self-retry) ──────────────────────
-    *[Rule(p, Reject, "recovering", effect=enter_recovery,
+    *[Rule(from_state=p, on_event=Reject, transition_to="recovering",
+           with_effect=enter_recovery,
            description=f"{p} reject → recovering") for p in GROOMING_EPOCH],
 
     # ── rejections: implementing / testing / accepting epochs ───────────
@@ -219,44 +232,57 @@ RULES: list[Rule] = [
     *_retry_epoch_rules("accepting",    ACCEPTING_EPOCH),
 
     # ── commit: merge conflict → merge agent (one shot) ─────────────────
-    Rule("commit", MergeConflictDetected, "merge_resolving",
-         effect=stash_conflict_files,
+    Rule(from_state="commit", on_event=MergeConflictDetected, transition_to="merge_resolving",
+         with_effect=stash_conflict_files,
          description="commit conflict → merge_resolving (MergeAgent)"),
-    Rule("merge_resolving", Pass, "after_commit",
+    Rule(from_state="merge_resolving", on_event=Pass, transition_to="after_commit",
          description="merge agent resolved + committed → continue"),
-    Rule("merge_resolving", Reject, "recovering", effect=enter_recovery,
+    Rule(from_state="merge_resolving", on_event=Reject, transition_to="recovering",
+         with_effect=enter_recovery,
          description="merge agent gave up → recovering"),
-    Rule("merge_resolving", Blocked, "recovering", effect=enter_recovery),
-    Rule("merge_resolving", Crash, "recovering", effect=enter_recovery),
-    Rule("merge_resolving", Timeout, "recovering", effect=enter_recovery),
+    Rule(from_state="merge_resolving", on_event=Blocked, transition_to="recovering",
+         with_effect=enter_recovery),
+    Rule(from_state="merge_resolving", on_event=Crash, transition_to="recovering",
+         with_effect=enter_recovery),
+    Rule(from_state="merge_resolving", on_event=Timeout, transition_to="recovering",
+         with_effect=enter_recovery),
 
     # ── rejections: commit epoch (no self-retry) ────────────────────────
-    *[Rule(p, Reject, "recovering", effect=enter_recovery,
+    *[Rule(from_state=p, on_event=Reject, transition_to="recovering",
+           with_effect=enter_recovery,
            description=f"{p} reject → recovering") for p in COMMIT_EPOCH],
 
     # ── blocked from any agent stage ────────────────────────────────────
-    Rule("grooming",     Blocked, "recovering", effect=enter_recovery),
-    Rule("implementing", Blocked, "recovering", effect=enter_recovery),
-    Rule("testing",      Blocked, "recovering", effect=enter_recovery),
-    Rule("accepting",    Blocked, "recovering", effect=enter_recovery),
+    Rule(from_state="grooming",     on_event=Blocked, transition_to="recovering", with_effect=enter_recovery),
+    Rule(from_state="implementing", on_event=Blocked, transition_to="recovering", with_effect=enter_recovery),
+    Rule(from_state="testing",      on_event=Blocked, transition_to="recovering", with_effect=enter_recovery),
+    Rule(from_state="accepting",    on_event=Blocked, transition_to="recovering", with_effect=enter_recovery),
 
     # ── runner-emitted escalations ──────────────────────────────────────
-    Rule(ANY_STAGE_PHASE, StageRetryLimitHit,   "recovering", effect=enter_recovery),
-    Rule(ANY_STAGE_PHASE, OverallRetryLimitHit, "recovering", effect=enter_recovery),
+    Rule(from_state=ANY_STAGE_PHASE, on_event=StageRetryLimitHit,   transition_to="recovering",
+         with_effect=enter_recovery),
+    Rule(from_state=ANY_STAGE_PHASE, on_event=OverallRetryLimitHit, transition_to="recovering",
+         with_effect=enter_recovery),
 
     # ── recovering: exits (specific first, so wildcards below don't win) ─
-    Rule("recovering", RecoverySucceeded, resume_from_origin,
-         effect=clear_recovery_attempt,
+    Rule(from_state="recovering", on_event=RecoverySucceeded, transition_to=resume_from_origin,
+         with_effect=clear_recovery_attempt,
          description="recovery succeeded → resume at origin or target"),
-    Rule("recovering", RecoveryFailed,    "failed", effect=fail("recovery_exhausted")),
-    Rule("recovering", RecoveryBudgetHit, "failed", effect=fail("recovery_budget_hit")),
-    Rule("recovering", Crash,             "failed", effect=fail("recovery_crashed")),
-    Rule("recovering", Timeout,           "failed", effect=fail("recovery_crashed")),
+    Rule(from_state="recovering", on_event=RecoveryFailed,    transition_to="failed",
+         with_effect=fail("recovery_exhausted")),
+    Rule(from_state="recovering", on_event=RecoveryBudgetHit, transition_to="failed",
+         with_effect=fail("recovery_budget_hit")),
+    Rule(from_state="recovering", on_event=Crash,             transition_to="failed",
+         with_effect=fail("recovery_crashed")),
+    Rule(from_state="recovering", on_event=Timeout,           transition_to="failed",
+         with_effect=fail("recovery_crashed")),
 
     # ── tier-3 wildcards ────────────────────────────────────────────────
-    Rule(ANY_STAGE_PHASE, Crash,   "recovering", effect=enter_recovery,
+    Rule(from_state=ANY_STAGE_PHASE, on_event=Crash,   transition_to="recovering",
+         with_effect=enter_recovery,
          description="crash in any stage phase → recovering"),
-    Rule(ANY_STAGE_PHASE, Timeout, "recovering", effect=enter_recovery,
+    Rule(from_state=ANY_STAGE_PHASE, on_event=Timeout, transition_to="recovering",
+         with_effect=enter_recovery,
          description="timeout in any stage phase → recovering"),
 ]
 

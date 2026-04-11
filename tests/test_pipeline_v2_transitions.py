@@ -248,8 +248,10 @@ def test_pre_exec_failed_goes_to_failed_terminal():
 
 def test_no_rule_leaves_recovering_looping_to_recovering():
     for rule in list_transitions():
-        if rule.from_ == "recovering" and not callable(rule.to):
-            assert rule.to != "recovering", f"self-loop on recovering: {rule.description}"
+        if rule.from_state == "recovering" and not callable(rule.transition_to):
+            assert rule.transition_to != "recovering", (
+                f"self-loop on recovering: {rule.description}"
+            )
 
 
 def test_every_stage_phase_has_crash_route():
@@ -266,17 +268,19 @@ def test_unmatched_event_raises_no_transition():
 
 def test_terminal_nodes_have_no_outgoing_rules():
     for rule in list_transitions():
-        from_nodes = rule.from_ if isinstance(rule.from_, frozenset) else {rule.from_}
+        from_nodes = (
+            rule.from_state if isinstance(rule.from_state, frozenset) else {rule.from_state}
+        )
         assert not (from_nodes & TERMINAL_NODES), f"terminal outgoing: {rule.description}"
 
 
 def test_all_stages_referenced_in_rules():
     refs: set[str] = set()
     for rule in list_transitions():
-        if isinstance(rule.from_, frozenset):
-            refs.update(rule.from_)
+        if isinstance(rule.from_state, frozenset):
+            refs.update(rule.from_state)
         else:
-            refs.add(rule.from_)
+            refs.add(rule.from_state)
     for stage in STAGES:
         assert f"before_{stage}" in refs
         assert stage in refs
