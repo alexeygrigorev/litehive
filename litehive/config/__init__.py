@@ -26,6 +26,7 @@ from litehive.config.paths import (
     litehive_data_home as litehive_data_home,
     litehive_state_home as litehive_state_home,
     state_path as state_path,
+    workspace_backups_dir as workspace_backups_dir,
     workspace_database_path as workspace_database_path,
     workspace_data_dir as workspace_data_dir,
     workspace_dir as workspace_dir,

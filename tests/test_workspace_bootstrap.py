@@ -70,6 +70,7 @@ def test_ensure_workspace_bootstraps_runtime_db_and_registry(
     monkeypatch.setenv("XDG_STATE_HOME", str(state_home))
 
     from litehive.config import (
+        workspace_backups_dir,
         workspace_database_path,
         workspace_id,
         workspace_logs_dir,
@@ -83,6 +84,7 @@ def test_ensure_workspace_bootstraps_runtime_db_and_registry(
 
     wid = workspace_id(tmp_path)
     assert workspace_database_path(tmp_path) == data_home / "litehive" / wid / "data.db"
+    assert workspace_backups_dir(tmp_path) == data_home / "litehive" / wid / "backups"
     assert workspace_logs_dir(tmp_path) == state_home / "litehive" / wid / "logs"
     assert workspace_worktrees_dir(tmp_path) == state_home / "litehive" / wid / "worktrees"
     assert workspace_subagents_dir(tmp_path, "T-0001", "agent-1") == (
