@@ -107,6 +107,23 @@ def _resolve_same_repo(repo: Path):
     return _resolver
 
 
+def test_commit_node_no_worktree_path_is_already_up_to_date(git_repo_with_branch) -> None:
+    """When the task has no dedicated worktree, _resolve_worktree returns the
+    repo root. ``_worktree_head`` then returns main's current HEAD sha, and
+    ``git merge <sha>`` is a no-op ("Already up to date") — Pass.
+    """
+    main_repo, _ = git_repo_with_branch
+
+    node = GitCommitNode(
+        main_repo,
+        worktree_resolver=lambda state: main_repo,
+    )
+    # No monkey-patch here: _worktree_head returns the real HEAD sha.
+    state = make_state(stage="commit")
+    event = node.run(state)
+    assert isinstance(event, Pass), event
+
+
 def test_commit_node_clean_merge_returns_pass(git_repo_with_branch) -> None:
     main_repo, _ = git_repo_with_branch
 

@@ -209,6 +209,12 @@ item lands.
   agent submits verdict → thread.yaml comment → adapter →
   `AgentVerdict.metadata` → `Pass.metadata` → `state.last_report` →
   `zero_change_shortcut` guard sees real numbers.
+- 2026-04-12: verified `GitCommitNode` is safe when the task has no
+  dedicated worktree. `_resolve_worktree` falls back to the repo root;
+  `_worktree_head` returns the current main HEAD sha; `git merge <sha>`
+  is "Already up to date" → returncode 0 → Pass. No guard needed —
+  git semantics already handle the no-op case. Test added to
+  `test_pipeline_v2_hooks_and_commit.py` to document the contract.
 - 2026-04-12: bootstrap integration tests landed
   (`tests/test_pipeline_v2_bootstrap.py`). They drive `run_task_v2`
   against a real tmp_path workspace with SqlitePersistence, SqliteJournal,

@@ -301,6 +301,9 @@ class GitCommitNode(CommitNode):
 
         result = self._git_merge(branch_ref)
         if result.returncode == 0:
+            # Clean merge or "Already up to date" (which is the case when
+            # the task has no dedicated worktree and branch_ref == current
+            # HEAD). Either way, commit stage passes.
             return
 
         unresolved = self._unresolved_conflicts()
