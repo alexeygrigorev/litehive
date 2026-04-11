@@ -30,7 +30,7 @@ from litehive.tasks.crud import get_task_worktree_path
 from litehive.workspace.locking import runner_heartbeat, workspace_runner_guard
 
 from .agents._base import PromptContext
-from .engines import ConfigBackedEngineSelector
+from .engines import ConfigBackedEngineSelector, EngineFactory
 from .heru_factory import heru_engine_factory
 from .journal import SqliteJournal
 from .nodes import GitCommitNode, GitWorktreeSyncNode, SubprocessHookRunner
@@ -81,12 +81,21 @@ def _build_worktree_sync_node(root: Path) -> GitWorktreeSyncNode:
     )
 
 
-def run_task_v2(root: Path, task: TaskRecord) -> ExecutionResultV2:
+def run_task_v2(
+    root: Path,
+    task: TaskRecord,
+    *,
+    engine_factory: EngineFactory | None = None,
+) -> ExecutionResultV2:
     """Run a single task through the v2 state machine.
 
     Takes the workspace runner guard and publishes a heartbeat so other
     tools see the task as active. Always uses the real ``GitCommitNode``
     — v2 is the executor, not a dry run.
+
+    ``engine_factory`` is an injection point for tests: pass a callable
+    that produces fake ``Engine`` instances and v2 will use it in place
+    of the real ``heru_engine_factory``.
     """
     root = root.resolve()
     config = load_config(root)
@@ -98,7 +107,8 @@ def run_task_v2(root: Path, task: TaskRecord) -> ExecutionResultV2:
         # 2. Build dependencies. Engine selector + heru factory wire up
         #    the real engines via the existing SubagentManager; the rest
         #    are the sqlite stores we land in M1.
-        selector = ConfigBackedEngineSelector(config, heru_engine_factory(root))
+        factory = engine_factory or heru_engine_factory(root)
+        selector = ConfigBackedEngineSelector(config, factory)
         sessions = SqliteSessionStore(root)
         persistence = SqlitePersistence(root)
         journal = SqliteJournal(root)
