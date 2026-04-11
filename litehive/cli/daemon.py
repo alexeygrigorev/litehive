@@ -1,6 +1,7 @@
 import sys
 
 from litehive.config import ensure_workspace
+from litehive.db import apply_pending_migrations
 from litehive.daemon import (
     daemon_status_lines,
     list_daemon_instances,
@@ -12,6 +13,7 @@ from litehive.daemon import (
 
 def _cmd_daemon_run(args):
     ensure_workspace(args.workspace)
+    apply_pending_migrations(args.workspace)
     if getattr(args, "foreground", False):
         return run_daemon_loop(args.workspace, output_stream=sys.stdout)
     try:
@@ -74,4 +76,5 @@ def _cmd_daemon_instances(_):
 
 def _cmd_daemon_worker(args):
     ensure_workspace(args.workspace)
+    apply_pending_migrations(args.workspace)
     return run_daemon_loop(args.workspace, output_stream=None)

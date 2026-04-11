@@ -1,5 +1,7 @@
 """Storage helpers for Litehive runtime state."""
 
+from litehive.db import connect_workspace_db
+
 from .backup import (
     WorkspaceBackup,
     create_scheduled_workspace_backup,
@@ -8,7 +10,7 @@ from .backup import (
     prune_workspace_backups,
     restore_workspace_backup,
 )
-from .runtime import RuntimeStore, connect_workspace_db, runtime_store
+from .runtime import RuntimeStore, runtime_store
 
 __all__ = [
     "RuntimeStore",
