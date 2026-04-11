@@ -1,6 +1,7 @@
 """Lightweight CLI entrypoint with a fast status path."""
 
 
+import os
 import sys
 from pathlib import Path
 
@@ -8,6 +9,41 @@ import yaml
 
 from litehive.config import load_config, resolve_workspace
 from litehive.pipeline.recovery import status_attention_findings
+
+
+def _fast_runner_status(workspace: Path) -> dict:
+    """Return runner liveness inferred from the lock file, without importing locking.py."""
+    lock_path = workspace / ".litehive" / ".runner.lock"
+    result: dict = {
+        "state": "never_started",
+        "pid": None,
+        "started_at": None,
+        "heartbeat_at": None,
+    }
+    if not lock_path.exists():
+        return result
+    try:
+        data = yaml.safe_load(lock_path.read_text(encoding="utf-8")) or {}
+    except (OSError, yaml.YAMLError):
+        data = {}
+    if not isinstance(data, dict) or not data:
+        result["state"] = "stopped"
+        return result
+    result["pid"] = data.get("pid")
+    result["started_at"] = data.get("started_at")
+    result["heartbeat_at"] = data.get("heartbeat_at")
+    pid = result["pid"]
+    if pid is None:
+        result["state"] = "stopped"
+        return result
+    try:
+        os.kill(int(pid), 0)
+        result["state"] = "running"
+    except (ProcessLookupError, ValueError, TypeError):
+        result["state"] = "dead"
+    except PermissionError:
+        result["state"] = "running"
+    return result
 
 
 def _workspace_override_from_argv(argv: list[str]) -> Path | None:
@@ -45,6 +81,15 @@ def _fast_status(argv: list[str]) -> int:
     print(f"pool_stop_reason: {stop_reason if stop_reason is not None else 'None'}")
     if queue:
         print(f"queue_head: {queue[0]}")
+
+    runner = _fast_runner_status(workspace)
+    print(f"runner_status: {runner['state']}")
+    if runner["pid"] is not None:
+        print(f"runner_pid: {runner['pid']}")
+    if runner["started_at"]:
+        print(f"runner_started_at: {runner['started_at']}")
+    if runner["heartbeat_at"]:
+        print(f"runner_heartbeat_at: {runner['heartbeat_at']}")
 
     if active_task_id is not None:
         tasks_root = workspace / ".litehive" / "tasks"

@@ -70,7 +70,9 @@ from tests.workspace_helpers import (
     yaml,
 )
 from litehive.tasks.reports import collect_recovery_evidence
+import os
 import shutil
+import yaml
 from types import SimpleNamespace
 
 def test_dequeue_next_task_selection_rejects_multiple_active_tasks(tmp_path: Path) -> None:
@@ -2433,6 +2435,93 @@ def test_fast_status_resolves_workspace_via_registry(
 
     assert exit_code == 0
     assert f"workspace: {tmp_path.resolve()}" in output
+
+
+def test_fast_status_reports_runner_never_started_when_no_lock(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    ensure_workspace(tmp_path)
+    from litehive.main import _fast_status
+
+    exit_code = _fast_status(["--workspace", str(tmp_path)])
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "runner_status: never_started" in output
+    assert "runner_pid:" not in output
+
+
+def test_fast_status_reports_runner_stopped_when_lock_empty(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    ensure_workspace(tmp_path)
+    lock_path = tmp_path / ".litehive" / ".runner.lock"
+    lock_path.write_text("", encoding="utf-8")
+    from litehive.main import _fast_status
+
+    exit_code = _fast_status(["--workspace", str(tmp_path)])
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "runner_status: stopped" in output
+    assert "runner_pid:" not in output
+
+
+def test_fast_status_reports_runner_dead_when_pid_not_alive(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    ensure_workspace(tmp_path)
+    lock_path = tmp_path / ".litehive" / ".runner.lock"
+    # PID 0x7FFFFFFF (max int32) is practically guaranteed not to exist.
+    lock_path.write_text(
+        yaml.safe_dump(
+            {
+                "status": "running",
+                "pid": 2147483646,
+                "started_at": "2026-04-11T00:00:00+00:00",
+                "heartbeat_at": "2026-04-11T00:00:00+00:00",
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+    from litehive.main import _fast_status
+
+    exit_code = _fast_status(["--workspace", str(tmp_path)])
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "runner_status: dead" in output
+    assert "runner_pid: 2147483646" in output
+    assert "runner_started_at: 2026-04-11T00:00:00+00:00" in output
+
+
+def test_fast_status_reports_runner_running_when_pid_alive(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    ensure_workspace(tmp_path)
+    lock_path = tmp_path / ".litehive" / ".runner.lock"
+    lock_path.write_text(
+        yaml.safe_dump(
+            {
+                "status": "running",
+                "pid": os.getpid(),
+                "started_at": "2026-04-11T00:00:00+00:00",
+                "heartbeat_at": "2026-04-11T00:00:00+00:00",
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+    from litehive.main import _fast_status
+
+    exit_code = _fast_status(["--workspace", str(tmp_path)])
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "runner_status: running" in output
+    assert f"runner_pid: {os.getpid()}" in output
+
 
 def test_status_output_includes_external_engine_sandbox_settings(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
