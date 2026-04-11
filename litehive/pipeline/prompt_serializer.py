@@ -37,12 +37,18 @@ def serialize_prompt(
 
     ``task_record`` is optional so tests don't need to construct one;
     if ``None``, the goal/acceptance/plan/constraints sections are
-    omitted with placeholders. ``workspace_root`` is optional and only
-    used to fall back to ``get_task()`` if the caller didn't already
-    resolve the TaskRecord.
+    omitted with placeholders. ``workspace_root`` is optional and used
+    for two things: (1) fall back to ``get_task()`` if the caller
+    didn't already resolve the TaskRecord, and (2) load the task's
+    discussion thread so the next agent visit sees previous stage
+    verdicts.
     """
     if task_record is None and workspace_root is not None:
         task_record = get_task(workspace_root, prompt["task_id"])
+
+    thread = prompt.get("thread") or []
+    if not thread and workspace_root is not None and task_record is not None:
+        thread = _load_task_thread_comments(workspace_root, task_record)
 
     sections: list[str] = []
     sections.append(_header_section(prompt, task_record))
@@ -64,12 +70,32 @@ def serialize_prompt(
     if conflict_files:
         sections.append(_merge_conflict_section(conflict_files, prompt.get("merge_attempt")))
 
-    thread = prompt.get("thread") or []
     if thread:
         sections.append(_thread_section(thread))
 
     sections.append(_verdict_instructions_section(prompt))
     return (SECTION_SEP * 2).join(s for s in sections if s).strip() + "\n"
+
+
+def _load_task_thread_comments(
+    workspace_root: Path, task_record: TaskRecord
+) -> list[dict[str, Any]]:
+    """Read the task's discussion thread (thread.yaml) if available."""
+    try:
+        from litehive.tasks.reports import load_task_thread
+
+        comments = load_task_thread(workspace_root, task_record)
+    except Exception:
+        return []
+    return [
+        {
+            "role": c.role,
+            "step": c.step,
+            "verdict": c.verdict,
+            "message": c.message,
+        }
+        for c in comments
+    ]
 
 
 # ── section builders ────────────────────────────────────────────────────
