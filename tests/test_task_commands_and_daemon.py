@@ -408,6 +408,7 @@ def test_report_command_from_task_worktree_writes_to_main_workspace(
 def test_report_command_uses_registry_outside_repo(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    monkeypatch.delenv("LITEHIVE_SKIP_REGISTRY", raising=False)
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Registry report target")
     home = tmp_path / "home"

@@ -1,0 +1,69 @@
+id: T-0346
+slug: hook-reject-circuit-breaker-pause-task-after-n
+title: 'Hook-reject circuit breaker: pause task after N same-stage rejections instead
+  of requeueing forever'
+depends_on: []
+task_type: null
+model: null
+mode: implementation
+pipeline_mode: full
+status: queued
+flag_reason: null
+flag_count: 0
+pipeline_status: backlog
+priority: medium
+pm_complexity: moderate
+planned_effort: s
+created_at: '2026-04-11T17:05:51+00:00'
+updated_at: '2026-04-11T17:05:51+00:00'
+goal: "When a runner hook (e.g. after_implementing pytest) repeatedly rejects the\
+  \ same stage, the daemon currently requeues the task forever and burns engine calls.\
+  \ Add a same-stage hook-reject circuit breaker.\n\n### Trigger\n- A task has been\
+  \ rejected by the SAME runner hook at the SAME stage N times in a row (suggest N=3)\
+  \ without any intervening progress (no commit, no stage transition).\n\n### Action\n\
+  - Pause the task: set status to 'flagged' with flag_reason='hook_reject_loop'\n\
+  - Record the specific hook that rejected (point, command, description) on the task\
+  \ record\n- Invoke the recovery agent ONCE (delegates to T-0325/T-0341 recovery\
+  \ infra) \u2014 the recovery agent should diagnose whether:\n  (a) the hook check\
+  \ itself is broken (e.g. pytest regression unrelated to task)\n  (b) the task cannot\
+  \ pass the hook (too slow, failing test the task can't fix)\n  (c) an environmental\
+  \ issue (stale cache, lockfile drift)\n- If recovery fixes it, unflag and let the\
+  \ task retry\n- If recovery can't fix it, leave flagged with a clear attention banner\n\
+  - Move the daemon on to the next task in the queue \u2014 never wedge the whole\
+  \ pool on one stuck task\n\n### Tracking\n- State needed: task.runtime tracks consecutive_same_hook_rejects\
+  \ per-task + last rejected hook fingerprint\n- Reset counter on any successful stage\
+  \ transition (commit_to_git pass, stage advance)\n\n### Why\n- Today, a task stuck\
+  \ in after_implementing pytest timeout burns codex calls indefinitely\n- The user\
+  \ wakes up to find 8 hours of the same rejection, no progress, lots of attention_log\
+  \ noise but no actionable state\n- Circuit breaker gives the system a chance to\
+  \ notice its own failure mode and apply bounded recovery\n\n### Verification\n-\
+  \ Simulate 3 consecutive pytest-timeout rejections on a mock task \u2192 task flagged,\
+  \ recovery invoked, daemon moves to next task\n- Successful stage transition resets\
+  \ the counter"
+acceptance_criteria:
+- Task tracks consecutive_same_hook_rejects and last hook fingerprint
+- After N=3 same-hook rejects, task is flagged with flag_reason=hook_reject_loop
+- Recovery agent is invoked once when the circuit breaker trips
+- Daemon moves to the next queued task instead of wedging on the flagged one
+- Counter resets on any successful stage transition
+- Simulated integration test covers all three outcomes (recovery fixes, recovery fails,
+  successful reset)
+constraints: []
+plan: []
+human_checkpoints: []
+subagents: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0346 hook-reject-circuit-breaker-pause-task-after-n'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+  merge_agent_attempts: 0
+  worktree_path: null
+retry_policy:
+  max_retries: null
+  stage_retry_limit: null
+created_from: null
+upstream_origin: null
+github_origin: null

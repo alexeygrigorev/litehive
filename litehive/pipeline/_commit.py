@@ -94,47 +94,70 @@ def _commit_to_git_report(
             if merge.returncode == 0:
                 merge_ok = True
             else:
-                # Merge failed - try agent resolution (exactly once)
+                # Merge failed - try agent resolution (up to MERGE_AGENT_MAX_ATTEMPTS,
+                # swapping engines between attempts so a codex plan-without-execute
+                # failure gets a second chance on claude).
+                MERGE_AGENT_MAX_ATTEMPTS = 2
                 if subagents is not None:
                     conflict_proc = subprocess.run(
                         ["git", "diff", "--name-only", "--diff-filter=U"],
                         cwd=root, capture_output=True, text=True,
                     )
                     conflicts = [f.strip() for f in conflict_proc.stdout.splitlines() if f.strip()]
-                    if conflicts:
-                        if task.git.merge_agent_attempts >= 1:
-                            append_journal(root, task,
-                                f"Merge conflict on {len(conflicts)} file(s). "
-                                f"Merge agent already attempted ({task.git.merge_agent_attempts} time(s)) — skipping.")
-                        else:
-                            task.git.merge_agent_attempts += 1
-                            save_task(root, task)
-                            append_journal(root, task,
-                                f"Merge conflict on {len(conflicts)} file(s). Launching merge agent (attempt {task.git.merge_agent_attempts}).")
-                            from litehive.pipeline.recovery import _resolve_recovery_engine
+                    while conflicts and task.git.merge_agent_attempts < MERGE_AGENT_MAX_ATTEMPTS:
+                        task.git.merge_agent_attempts += 1
+                        save_task(root, task)
+                        # Attempt 1: recovery engine (codex). Attempt 2: force claude.
+                        from litehive.pipeline.recovery import _resolve_recovery_engine
+                        if task.git.merge_agent_attempts == 1:
                             engine_name, model = _resolve_recovery_engine(root, task, config)
-                            subagents.run(
-                                task, role="merge-resolver", engine_name=engine_name, model=model,
-                                prompt=(
-                                    f"Git merge conflict while merging task {task.id} worktree into main.\n"
-                                    f"Conflicting files: {', '.join(conflicts)}\n\n"
-                                    f"Resolution rules:\n"
-                                    f"- You must preserve BOTH sides' intent — combine the changes, don't just pick one side.\n"
-                                    f"- The main branch has the latest infrastructure state (config, gitignore, imports). Prefer main for infrastructure files.\n"
-                                    f"- The worktree has the task's feature changes. Preserve the feature code.\n"
-                                    f"- For code conflicts (e.g. both sides added parameters to the same function), include ALL additions.\n"
-                                    f"- For .gitignore or config conflicts, merge all entries from both sides.\n"
-                                    f"- Never silently drop changes from either side.\n\n"
-                                    f"After resolving, run: git add the resolved files, then git commit --no-edit.\n"
-                                ),
-                            )
-                            # Check if agent resolved it
-                            remaining = subprocess.run(
-                                ["git", "diff", "--name-only", "--diff-filter=U"],
-                                cwd=root, capture_output=True, text=True,
-                            )
-                            if not remaining.stdout.strip():
-                                merge_ok = True
+                        else:
+                            engine_name, model = "claude", None
+                        append_journal(root, task,
+                            f"Merge conflict on {len(conflicts)} file(s). "
+                            f"Launching merge agent attempt {task.git.merge_agent_attempts}/"
+                            f"{MERGE_AGENT_MAX_ATTEMPTS} on {engine_name}.")
+                        subagents.run(
+                            task, role="merge-resolver", engine_name=engine_name, model=model,
+                            prompt=(
+                                f"EXECUTE the merge resolution. Do not just describe it.\n"
+                                f"A prior attempt returned after only printing a plan — the runner "
+                                f"will verify `git diff --name-only --diff-filter=U` is empty before "
+                                f"accepting your session. If it is not empty, your attempt is a failure "
+                                f"regardless of what you said.\n\n"
+                                f"Context: merging task {task.id} worktree into main hit a conflict.\n"
+                                f"Conflicting files ({len(conflicts)}): {', '.join(conflicts)}\n\n"
+                                f"Required steps, in order:\n"
+                                f"1. For each conflicting file, open it, read both <<<<<<< HEAD and =======/>>>>>>>  sides.\n"
+                                f"2. Edit the file to combine both sides' intent. Never silently drop either side.\n"
+                                f"   - main has the latest infrastructure state (config, gitignore, imports) — prefer main there.\n"
+                                f"   - The worktree has the task's feature changes — preserve the feature code.\n"
+                                f"   - For code conflicts (same function modified on both sides), include ALL additions.\n"
+                                f"   - For .gitignore/config conflicts, merge all entries from both sides.\n"
+                                f"   - For lockfiles (uv.lock, package-lock.json), re-run the tool that generates them\n"
+                                f"     (e.g. `uv sync`) rather than hand-merging.\n"
+                                f"3. After editing, run: git add <every resolved file>\n"
+                                f"4. Run: git diff --name-only --diff-filter=U\n"
+                                f"   - If any files remain in that output, you are not done. Go back to step 1 for those files.\n"
+                                f"5. Only when step 4 is empty, run: git commit --no-edit\n"
+                                f"6. Verify with: git status (should show 'nothing to commit, working tree clean' or similar)\n\n"
+                                f"Self-check before exiting: run `git diff --name-only --diff-filter=U` one more time. "
+                                f"If it prints anything, you have NOT finished the task — fix it or report failure with "
+                                f"a concrete reason.\n"
+                            ),
+                        )
+                        # Check if agent actually resolved the conflicts on disk.
+                        remaining_proc = subprocess.run(
+                            ["git", "diff", "--name-only", "--diff-filter=U"],
+                            cwd=root, capture_output=True, text=True,
+                        )
+                        conflicts = [f.strip() for f in remaining_proc.stdout.splitlines() if f.strip()]
+                        if not conflicts:
+                            merge_ok = True
+                            break
+                        append_journal(root, task,
+                            f"Merge agent attempt {task.git.merge_agent_attempts} "
+                            f"returned but {len(conflicts)} file(s) still conflict.")
                 if not merge_ok:
                     subprocess.run(["git", "merge", "--abort"], cwd=root, capture_output=True)
     else:

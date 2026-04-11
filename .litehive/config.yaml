@@ -84,6 +84,26 @@ runner_hooks:
     timeout_seconds: 300
     reject_on_failure: true
     description: "Run full suite before QA; reject if > 5 minutes"
+    instructions_on_failure: |
+      The full test suite either failed OR exceeded the 5-minute budget.
+
+      If the suite TIMED OUT (exit code 124):
+      - The suite used to run in ~2 minutes; something slowed it down drastically.
+      - Run `uv run pytest -q --durations=20` to find the slowest tests.
+      - Likely culprits: tests doing real subprocess calls, real SQLite file I/O,
+        network calls, `time.sleep`, or expensive fixtures.
+      - The T-0291 SQLite migration is a recent change — suspect fixtures that
+        build a new workspace/DB per test. Share a session-scoped DB where safe.
+      - Do NOT mark tests with `@pytest.mark.skip` or delete tests to pass this hook.
+      - Do NOT raise the 300s budget — fix the root cause.
+
+      If the suite FAILED (non-zero exit, not timeout):
+      - Read the pytest stdout above for the failing tests and fix them.
+      - If the failures are unrelated to your change, still fix them —
+        you cannot leave the tree in a broken state.
+
+      After fixing, re-run `uv run pytest -q` locally and confirm it completes
+      in under 5 minutes before submitting.
 subagent_inactivity_timeout_seconds: 360.0
 inactivity_timeout_seconds: null
 subagent_resource_limits:

@@ -189,8 +189,9 @@ def test_merge_conflict_agent_fails(tmp_path: Path) -> None:
     )
     assert report.failure_classification == "merge_conflict"
     assert task.status != "done"
-    assert task.git.merge_agent_attempts == 1
-    assert len(subagents.calls) == 1
+    assert task.git.merge_agent_attempts == 2
+    assert len(subagents.calls) == 2
+    assert subagents.calls[1]["engine"] == "claude"
     assert worktree_path.exists(), "Worktree must survive failed merge"
     assert (worktree_path / "feature.py").read_text() == "def f(): return 'wt'\n"
 

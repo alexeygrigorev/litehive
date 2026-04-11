@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import UTC, datetime
 import importlib.resources
+import os
 import sqlite3
 from pathlib import Path
 
@@ -74,6 +75,12 @@ def _open_connection(db_path: Path) -> sqlite3.Connection:
     connection = sqlite3.connect(db_path)
     connection.row_factory = sqlite3.Row
     connection.execute("PRAGMA foreign_keys = ON")
+    # In tests (LITEHIVE_SKIP_FSYNC set), trade durability for speed. Saves
+    # tens of ms per transaction which compounds into minutes across 986 tests.
+    if os.environ.get("LITEHIVE_SKIP_FSYNC"):
+        connection.execute("PRAGMA synchronous = OFF")
+        connection.execute("PRAGMA journal_mode = MEMORY")
+        connection.execute("PRAGMA temp_store = MEMORY")
     return connection
 
 
@@ -147,9 +154,19 @@ def apply_pending_migrations(root: Path, *, dry_run: bool = False) -> MigrationP
     return MigrationPlan(applied_migrations=applied, pending_migrations=pending, dry_run=False)
 
 
+_MIGRATED_DB_PATHS: set[str] = set()
+
+
 def connect_workspace_db(root: Path, *, migrate: bool = True) -> sqlite3.Connection:
+    db_path = workspace_database_path(root)
     if migrate:
-        apply_pending_migrations(root)
-    connection = _open_connection(workspace_database_path(root))
+        # In-process cache keyed on the absolute db_path (not root), because
+        # XDG_DATA_HOME changes can move the db even when root stays the same.
+        # Cuts repeated sqlite opens from ~5ms to <1ms across a test suite.
+        key = str(db_path.resolve())
+        if key not in _MIGRATED_DB_PATHS:
+            apply_pending_migrations(root)
+            _MIGRATED_DB_PATHS.add(key)
+    connection = _open_connection(db_path)
     _ensure_schema_migrations_table(connection)
     return connection

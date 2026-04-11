@@ -51,3 +51,8 @@ extend-select = ["E402", "F401"]
 
 [tool.uv.sources]
 heru = { path = "/home/alexey/git/heru", editable = true }
+
+[dependency-groups]
+dev = [
+    "pytest-xdist>=3.8.0",
+]

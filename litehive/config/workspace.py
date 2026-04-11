@@ -1,10 +1,15 @@
 """Workspace bootstrap helpers."""
 
+import fcntl
+import logging
 import os
+import tempfile
 from dataclasses import asdict
 from pathlib import Path
 
 import yaml
+
+log = logging.getLogger(__name__)
 
 from litehive.config.model import LitehiveConfig
 from litehive.config.paths import (
@@ -99,7 +104,15 @@ def _iter_registry_workspace_roots() -> list[Path]:
     for registry_path in _workspace_registry_paths():
         if not registry_path.exists():
             continue
-        data = yaml.safe_load(registry_path.read_text(encoding="utf-8")) or {}
+        try:
+            data = yaml.safe_load(registry_path.read_text(encoding="utf-8")) or {}
+        except (yaml.YAMLError, OSError) as exc:
+            log.warning(
+                "workspaces registry %s was unreadable (%s); skipping",
+                registry_path,
+                exc,
+            )
+            continue
         workspaces = data.get("workspaces", data) if isinstance(data, dict) else {}
         if not isinstance(workspaces, dict):
             continue
@@ -170,22 +183,67 @@ def resolve_workspace(
 
 
 def _register_workspace(root: Path) -> None:
+    # Tests don't need the user-global registry. Skipping the read-modify-write
+    # cycle per test avoids ~0.5s of lock+yaml overhead per ensure_workspace call
+    # (the main reason the pytest suite grew from 2min to 15min after T-0291).
+    if os.environ.get("LITEHIVE_SKIP_REGISTRY"):
+        return
     registry_path = workspace_registry_path()
     registry_path.parent.mkdir(parents=True, exist_ok=True)
-    existing = yaml.safe_load(registry_path.read_text(encoding="utf-8")) if registry_path.exists() else {}
-    if not isinstance(existing, dict):
-        existing = {}
-    workspaces = existing.get("workspaces")
-    if not isinstance(workspaces, dict):
-        workspaces = {}
     from litehive.config.paths import workspace_id
 
-    workspaces[workspace_id(root)] = str(root.resolve())
-    registry_payload = {**existing, "workspaces": dict(sorted(workspaces.items()))}
-    registry_path.write_text(
-        yaml.safe_dump(registry_payload, sort_keys=False),
-        encoding="utf-8",
-    )
+    lock_path = registry_path.with_suffix(registry_path.suffix + ".lock")
+    # fcntl.flock serializes concurrent writers across processes (e.g. multiple
+    # pytest workers + a running daemon). Without this, read-modify-write races
+    # truncate the yaml mid-flight and crash every future reader.
+    with open(lock_path, "w", encoding="utf-8") as lock_file:
+        fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+        try:
+            if registry_path.exists():
+                try:
+                    raw = registry_path.read_text(encoding="utf-8")
+                    existing = yaml.safe_load(raw) or {}
+                except (yaml.YAMLError, OSError) as exc:
+                    # Registry is a cache — losing it is fine. Log and rebuild.
+                    log.warning(
+                        "workspaces registry %s was unreadable (%s); rebuilding",
+                        registry_path,
+                        exc,
+                    )
+                    existing = {}
+            else:
+                existing = {}
+            if not isinstance(existing, dict):
+                existing = {}
+            workspaces = existing.get("workspaces")
+            if not isinstance(workspaces, dict):
+                workspaces = {}
+            workspaces[workspace_id(root)] = str(root.resolve())
+            registry_payload = {**existing, "workspaces": dict(sorted(workspaces.items()))}
+            # Atomic write: tmp file in same dir + os.replace. No partial files,
+            # no reader ever sees a truncated document.
+            payload = yaml.safe_dump(registry_payload, sort_keys=False)
+            tmp_fd, tmp_name = tempfile.mkstemp(
+                prefix=".workspaces.yaml.",
+                suffix=".tmp",
+                dir=str(registry_path.parent),
+            )
+            try:
+                skip_fsync = bool(os.environ.get("LITEHIVE_SKIP_FSYNC"))
+                with os.fdopen(tmp_fd, "w", encoding="utf-8") as tmp_file:
+                    tmp_file.write(payload)
+                    tmp_file.flush()
+                    if not skip_fsync:
+                        os.fsync(tmp_file.fileno())
+                os.replace(tmp_name, registry_path)
+            except Exception:
+                try:
+                    os.unlink(tmp_name)
+                except OSError:
+                    pass
+                raise
+        finally:
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
 
 
 def ensure_workspace(root: Path, config: LitehiveConfig | None = None) -> Path:

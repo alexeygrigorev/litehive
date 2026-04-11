@@ -248,33 +248,33 @@ class _CountingSubagents:
         )
 
 
-def test_merge_agent_launches_exactly_once(tmp_path: Path) -> None:
-    """Merge agent must launch at most once per conflict, even across multiple attempts."""
+def test_merge_agent_bounded_to_two_attempts(tmp_path: Path) -> None:
+    """Merge agent attempts are bounded to 2 total across any number of commit_to_git calls."""
     task, worktree_path = _setup_conflict(tmp_path)
     fake = _CountingSubagents(worktree_path)
 
-    # First attempt: merge agent should launch
+    # First call: agent runs up to MERGE_AGENT_MAX_ATTEMPTS=2 times internally
     report1 = _commit_to_git_report(
         tmp_path, worktree_path, task, auto_commit_enabled=True,
         subagents=fake, config=LitehiveConfig(),
     )
     assert report1.verdict == "fail"
-    assert fake.launch_count == 1
-    assert task.git.merge_agent_attempts == 1
+    assert fake.launch_count == 2
+    assert task.git.merge_agent_attempts == 2
 
-    # Reset git state for second attempt (re-create the conflict)
+    # Reset git state for second commit_to_git attempt
     (tmp_path / "feature.py").write_text("def feature(): return 'main'\n")
     _run(["git", "add", "feature.py"], tmp_path)
     _run(["git", "commit", "-m", "re-create conflict"], tmp_path)
 
-    # Second attempt: merge agent must NOT launch again
+    # Second call: budget already spent, merge agent must NOT launch again
     report2 = _commit_to_git_report(
         tmp_path, worktree_path, task, auto_commit_enabled=True,
         subagents=fake, config=LitehiveConfig(),
     )
     assert report2.verdict == "fail"
-    assert fake.launch_count == 1, "Merge agent launched more than once!"
-    assert task.git.merge_agent_attempts == 1
+    assert fake.launch_count == 2, "Merge agent launched beyond budget!"
+    assert task.git.merge_agent_attempts == 2
 
 
 def test_recovery_failed_blocks_repair_requeue(tmp_path: Path) -> None:

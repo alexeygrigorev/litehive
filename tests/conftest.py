@@ -9,6 +9,11 @@ import litehive.agents.quota.codex_quota as _codex_quota_mod
 # Skip fsync in tests — saves ~70% of file write time
 os.environ["LITEHIVE_SKIP_FSYNC"] = "1"
 
+# Skip the user-global workspace registry in tests. Tests don't need it,
+# and writing to it on every ensure_workspace() call made the suite 15x slower
+# and polluted ~/.config/litehive/workspaces.yaml with thousands of tmpdirs.
+os.environ["LITEHIVE_SKIP_REGISTRY"] = "1"
+
 
 def _noop_block_reason(**kw):
     return None

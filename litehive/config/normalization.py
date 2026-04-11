@@ -113,6 +113,8 @@ def _normalize_runner_hook_config(
         raise ValueError(f"{field_name}.command must not be empty")
     if hook.description is not None:
         hook.description = hook.description.strip() or None
+    if hook.instructions_on_failure is not None:
+        hook.instructions_on_failure = hook.instructions_on_failure.strip() or None
     if hook.timeout_seconds is not None:
         hook.timeout_seconds = float(hook.timeout_seconds)
         if hook.timeout_seconds <= 0:

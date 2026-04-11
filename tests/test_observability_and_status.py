@@ -2405,6 +2405,7 @@ def test_build_parser_accepts_status_fast_flag(tmp_path: Path) -> None:
 def test_fast_status_resolves_workspace_via_registry(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    monkeypatch.delenv("LITEHIVE_SKIP_REGISTRY", raising=False)
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Registry status target")
     home = tmp_path / "home"

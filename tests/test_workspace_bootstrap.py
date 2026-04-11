@@ -68,6 +68,9 @@ def test_ensure_workspace_bootstraps_runtime_db_and_registry(
     monkeypatch.setenv("XDG_CONFIG_HOME", str(config_home))
     monkeypatch.setenv("XDG_DATA_HOME", str(data_home))
     monkeypatch.setenv("XDG_STATE_HOME", str(state_home))
+    # This test specifically exercises the registry write — opt out of the
+    # session-wide LITEHIVE_SKIP_REGISTRY optimization.
+    monkeypatch.delenv("LITEHIVE_SKIP_REGISTRY", raising=False)
 
     from litehive.config import (
         workspace_backups_dir,

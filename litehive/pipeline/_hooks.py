@@ -120,6 +120,7 @@ def _run_runner_hooks_for_stage(
             reject_on_failure=hook.reject_on_failure,
             description=hook.description,
             timeout_seconds=hook.timeout_seconds,
+            instructions_on_failure=hook.instructions_on_failure,
             ordinal=index,
         )
         hook_results.append(hook_result)
@@ -205,6 +206,7 @@ def _execute_runner_hook(
     reject_on_failure: bool,
     description: str | None,
     timeout_seconds: float | None,
+    instructions_on_failure: str | None,
     ordinal: int,
 ) -> dict[str, str | int | bool | None]:
     env = _runner_hook_env(
@@ -250,6 +252,7 @@ def _execute_runner_hook(
         "exit_code": exit_code,
         "stdout": stdout,
         "stderr": stderr,
+        "instructions_on_failure": instructions_on_failure,
     }
     artifact_content = yaml.safe_dump(artifact_payload, sort_keys=False)
     if len(artifact_content.encode("utf-8")) >= _COMPRESS_HOOK_ARTIFACT_MIN_BYTES:
@@ -285,6 +288,7 @@ def _execute_runner_hook(
         "artifact": artifact_label,
         "stdout": stdout,
         "stderr": stderr,
+        "instructions_on_failure": instructions_on_failure,
     }
 
 
@@ -341,6 +345,15 @@ def _hook_failure_feedback(failed_hook_results: list[dict[str, str | int | bool 
         description = hook_result.get("description")
         if description:
             lines.append(f"Check: {description}")
+        instructions = str(hook_result.get("instructions_on_failure") or "").rstrip()
+        if instructions:
+            lines.extend(
+                [
+                    "",
+                    "Instructions for fixing this hook failure:",
+                    instructions,
+                ]
+            )
         lines.extend(
             [
                 "",

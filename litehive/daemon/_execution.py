@@ -269,6 +269,12 @@ def run_daemon_loop(
         _emit(f"workspace: {workspace}", stream=output_stream)
         _emit(f"logs: {log_root}", stream=output_stream)
         iteration = 0
+        consecutive_iteration_failures = 0
+        # Daemon-level resilience: an individual iteration crashing (e.g. a
+        # corrupt user-global yaml, a stuck lock, a transient subprocess
+        # failure) must not kill the whole daemon. Bounded retry with backoff
+        # so we don't spin forever on a permanent failure.
+        MAX_CONSECUTIVE_FAILURES = 5
         while True:
             if stop_requested:
                 _emit("Daemon stop requested. Stopping.", stream=output_stream)
@@ -290,6 +296,9 @@ def run_daemon_loop(
                 logger.exception("scheduled workspace backup failed")
                 _append_attention_log(workspace, f"scheduled backup failed: {exc}")
                 _emit(f"backup_failed: {exc}", stream=output_stream)
+
+            iteration_failed = False
+            iteration_failure_reason: str | None = None
 
             divergence_reason = _check_origin_divergence(workspace)
             if divergence_reason is not None:
@@ -317,18 +326,62 @@ def run_daemon_loop(
                     _emit(str(exc), stream=output_stream)
                     return 0
 
-            repair_rc = _run_logged_subprocess(
-                [*command_prefix, "repair", "--workspace", str(workspace)],
-                cwd=workspace,
-                log_path=repair_file,
-                output_stream=None,
-                current_child=current_child,
-            )
-            if repair_rc != 0:
-                _emit(f"litehive repair failed; see {repair_file}", stream=output_stream)
-                return 1
+            try:
+                repair_rc = _run_logged_subprocess(
+                    [*command_prefix, "repair", "--workspace", str(workspace)],
+                    cwd=workspace,
+                    log_path=repair_file,
+                    output_stream=None,
+                    current_child=current_child,
+                )
+            except Exception as exc:
+                logger.exception("repair subprocess raised")
+                _emit(f"repair raised: {exc}", stream=output_stream)
+                iteration_failed = True
+                iteration_failure_reason = f"repair raised: {exc}"
+                repair_rc = -1
+            if repair_rc != 0 and not iteration_failed:
+                _emit(f"litehive repair failed (rc={repair_rc}); see {repair_file}",
+                      stream=output_stream)
+                iteration_failed = True
+                iteration_failure_reason = f"repair exited {repair_rc}"
 
-            pre_state, pre_snapshot = _state_snapshot(workspace)
+            if not iteration_failed:
+                try:
+                    pre_state, pre_snapshot = _state_snapshot(workspace)
+                except Exception as exc:
+                    logger.exception("pre-status snapshot raised")
+                    _emit(f"pre-status raised: {exc}", stream=output_stream)
+                    iteration_failed = True
+                    iteration_failure_reason = f"pre-status raised: {exc}"
+                    pre_state, pre_snapshot = {}, ""
+            else:
+                pre_state, pre_snapshot = {}, ""
+
+            if iteration_failed:
+                consecutive_iteration_failures += 1
+                _append_attention_log(
+                    workspace,
+                    f"daemon iteration {iteration} failed: {iteration_failure_reason}",
+                )
+                _emit(
+                    f"!!! ATTENTION !!! iteration {iteration} failed "
+                    f"({consecutive_iteration_failures}/{MAX_CONSECUTIVE_FAILURES}): "
+                    f"{iteration_failure_reason}",
+                    stream=output_stream,
+                )
+                if consecutive_iteration_failures >= MAX_CONSECUTIVE_FAILURES:
+                    _emit(
+                        f"Too many consecutive iteration failures "
+                        f"({consecutive_iteration_failures}). Halting pool.",
+                        stream=output_stream,
+                    )
+                    _write_pool_stop_reason(workspace, "daemon_iteration_failures")
+                    return 0
+                # Short backoff before the next attempt
+                time.sleep(min(5 * consecutive_iteration_failures, 30))
+                continue
+
             pre_status_file.write_text(pre_snapshot, encoding="utf-8")
             _emit(pre_snapshot, stream=output_stream)
 
@@ -348,18 +401,58 @@ def run_daemon_loop(
                 _emit(f"Pool already stopped: {stop_reason_before}", stream=output_stream)
                 return 0
 
-            run_rc = _run_logged_subprocess(
-                [*command_prefix, "run", "--workspace", str(workspace)],
-                cwd=workspace,
-                log_path=run_file,
-                output_stream=output_stream,
-                current_child=current_child,
-            )
-            if run_rc != 0:
-                _emit(f"litehive run failed; see {run_file}", stream=output_stream)
-                return 1
+            try:
+                run_rc = _run_logged_subprocess(
+                    [*command_prefix, "run", "--workspace", str(workspace)],
+                    cwd=workspace,
+                    log_path=run_file,
+                    output_stream=output_stream,
+                    current_child=current_child,
+                )
+            except Exception as exc:
+                logger.exception("run subprocess raised")
+                _emit(f"run raised: {exc}", stream=output_stream)
+                iteration_failed = True
+                iteration_failure_reason = f"run raised: {exc}"
+                run_rc = -1
+            if run_rc != 0 and not iteration_failed:
+                _emit(f"litehive run failed (rc={run_rc}); see {run_file}",
+                      stream=output_stream)
+                iteration_failed = True
+                iteration_failure_reason = f"run exited {run_rc}"
 
-            post_state, post_snapshot = _state_snapshot(workspace)
+            if iteration_failed:
+                consecutive_iteration_failures += 1
+                _append_attention_log(
+                    workspace,
+                    f"daemon iteration {iteration} failed: {iteration_failure_reason}",
+                )
+                _emit(
+                    f"!!! ATTENTION !!! iteration {iteration} failed "
+                    f"({consecutive_iteration_failures}/{MAX_CONSECUTIVE_FAILURES}): "
+                    f"{iteration_failure_reason}",
+                    stream=output_stream,
+                )
+                if consecutive_iteration_failures >= MAX_CONSECUTIVE_FAILURES:
+                    _emit(
+                        f"Too many consecutive iteration failures "
+                        f"({consecutive_iteration_failures}). Halting pool.",
+                        stream=output_stream,
+                    )
+                    _write_pool_stop_reason(workspace, "daemon_iteration_failures")
+                    return 0
+                time.sleep(min(5 * consecutive_iteration_failures, 30))
+                continue
+
+            # Reset the failure counter after a successful iteration
+            consecutive_iteration_failures = 0
+
+            try:
+                post_state, post_snapshot = _state_snapshot(workspace)
+            except Exception as exc:
+                logger.exception("post-status snapshot raised")
+                _emit(f"post-status raised: {exc}", stream=output_stream)
+                continue
             post_status_file.write_text(post_snapshot, encoding="utf-8")
             _emit(post_snapshot, stream=output_stream)
 
