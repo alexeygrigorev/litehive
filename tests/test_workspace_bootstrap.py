@@ -103,6 +103,7 @@ def test_ensure_workspace_bootstraps_runtime_db_and_registry(
             ).fetchall()
         }
     assert {
+        "schema_migrations",
         "pool_state",
         "queue",
         "task_state",

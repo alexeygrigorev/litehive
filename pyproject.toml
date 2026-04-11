@@ -30,7 +30,7 @@ heru = "heru.main:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["litehive", "heru"]
-include = ["litehive/config/profiles/*.yaml"]
+include = ["litehive/config/profiles/*.yaml", "litehive/db/migrations/*.sql"]
 
 [tool.hatch.version]
 path = "litehive/__version__.py"

@@ -10,6 +10,7 @@ import typer
 from litehive.agents import ENGINE_CHOICES
 from litehive.cli._parse import TASK_TYPE_CHOICES
 from litehive.cli.backup import _cmd_backup_create, _cmd_backup_list, _cmd_backup_restore
+from litehive.cli.db import _cmd_db_migrate, _cmd_db_status
 from litehive.cli.configure import _cmd_configure
 from litehive.cli.debug import _cmd_debug
 from litehive.cli.doctor import _cmd_doctor
@@ -100,6 +101,12 @@ archive_app = typer.Typer(
     no_args_is_help=False,
 )
 backup_app = typer.Typer(
+    add_completion=False,
+    context_settings={"help_option_names": ["-h", "--help"]},
+    invoke_without_command=True,
+    no_args_is_help=False,
+)
+db_app = typer.Typer(
     add_completion=False,
     context_settings={"help_option_names": ["-h", "--help"]},
     invoke_without_command=True,
@@ -985,6 +992,28 @@ def backup_restore(
     )
 
 
+@db_app.callback()
+def db_group(ctx: typer.Context, workspace: WorkspaceOption = Path.cwd()) -> None:
+    if ctx.invoked_subcommand is not None:
+        return
+    _require_subcommand(ctx)
+
+
+@db_app.command("status", help="Show workspace database schema version and pending migrations")
+def db_status(workspace: WorkspaceOption = Path.cwd()) -> int:
+    return _cmd_db_status(_ns(command="db", db_command="status", workspace=workspace))
+
+
+@db_app.command("migrate", help="Apply pending workspace database migrations")
+def db_migrate(
+    workspace: WorkspaceOption = Path.cwd(),
+    dry_run: Annotated[
+        bool, typer.Option("--dry-run", help="Show pending migrations without applying them")
+    ] = False,
+) -> int:
+    return _cmd_db_migrate(_ns(command="db", db_command="migrate", workspace=workspace, dry_run=dry_run))
+
+
 @worktree_app.command("ls", help="List Litehive-managed task worktrees with task status and change count")
 def worktree_ls(workspace: WorkspaceOption = Path.cwd()) -> int:
     return _cmd_worktree_ls(_ns(command="worktree", worktree_command="ls", workspace=workspace))
@@ -1015,6 +1044,7 @@ app.add_typer(task_app, name="task", help="Manage Litehive tasks")
 app.add_typer(import_app, name="import", help="Import or file tasks from external inputs")
 app.add_typer(archive_app, name="archive", help="Move done tasks to the archive directory")
 app.add_typer(backup_app, name="backup", help="Create, list, and restore workspace database backups")
+app.add_typer(db_app, name="db", help="Inspect and migrate the workspace database schema")
 app.add_typer(worktree_app, name="worktree", help="Inspect and clean Litehive-managed task worktrees")
 app.add_typer(daemon_app, name="daemon", help="Manage the Litehive pool daemon", hidden=True)
 
@@ -1039,6 +1069,7 @@ _PUBLIC_TOP_LEVEL_COMMANDS = {
     "worktree",
     "archive",
     "backup",
+    "db",
 }
 
 _PUBLIC_GROUP_COMMANDS = {
@@ -1047,6 +1078,7 @@ _PUBLIC_GROUP_COMMANDS = {
     "import": {"github", "issue", "spec"},
     "archive": {"cleanup"},
     "backup": {"create", "list", "restore"},
+    "db": {"status", "migrate"},
     "worktree": {"ls", "clean", "rescue"},
 }
 
