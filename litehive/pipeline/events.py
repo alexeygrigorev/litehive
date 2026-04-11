@@ -36,6 +36,21 @@ class Reject(Event):
 
 
 @dataclass(frozen=True)
+class MergeConflictDetected(Event):
+    """Automatic git merge hit conflicts — hand off to the merge agent.
+
+    Emitted by the ``commit`` system node when ``git merge`` leaves files
+    in an unresolved state. The state machine routes this to
+    ``merge_resolving``, where ``MergeAgent`` takes a single shot at
+    cleaning it up. The conflicting file list rides on the event so the
+    transition effect can stash it in ``state.failure_context`` for the
+    agent's prompt.
+    """
+
+    conflict_files: tuple[str, ...]
+
+
+@dataclass(frozen=True)
 class Blocked(Event):
     reason: str
 

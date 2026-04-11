@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import Any, Callable
 
-from .events import Event, Reject
+from .events import Event, MergeConflictDetected, Reject
 from .persistence import LastRejection, TaskState
 from .types import FailedReason, NodeName
 
@@ -82,6 +82,23 @@ def inc_stage_retry(stage: NodeName) -> EffectFn:
         return StateDelta(inc_stage_retry=stage, set_last_rejection=set_rej)
 
     return _effect
+
+
+def stash_conflict_files(state: TaskState, event: Event) -> StateDelta:
+    """Effect for ``commit → merge_resolving``.
+
+    Copies the conflict file list from the ``MergeConflictDetected`` event
+    into ``state.failure_context`` so the ``MergeAgent`` can read it from
+    its prompt context.
+    """
+    if not isinstance(event, MergeConflictDetected):
+        return StateDelta()
+    ctx = {
+        **state.failure_context,
+        "conflict_files": list(event.conflict_files),
+        "merge_attempt": state.failure_context.get("merge_attempt", 0) + 1,
+    }
+    return StateDelta(set_failure_context=ctx)
 
 
 def fail(reason: FailedReason) -> EffectFn:

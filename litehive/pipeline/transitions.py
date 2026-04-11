@@ -10,6 +10,7 @@ from .deltas import (
     enter_recovery,
     fail,
     inc_stage_retry,
+    stash_conflict_files,
 )
 from .events import (
     Blocked,
@@ -17,6 +18,7 @@ from .events import (
     Crash,
     Event,
     HookOk,
+    MergeConflictDetected,
     NeedsPreExecRecovery,
     OverallRetryLimitHit,
     Pass,
@@ -215,6 +217,18 @@ RULES: list[Rule] = [
     *_retry_epoch_rules("implementing", IMPLEMENTING_EPOCH),
     *_retry_epoch_rules("testing",      TESTING_EPOCH),
     *_retry_epoch_rules("accepting",    ACCEPTING_EPOCH),
+
+    # ── commit: merge conflict → merge agent (one shot) ─────────────────
+    Rule("commit", MergeConflictDetected, "merge_resolving",
+         effect=stash_conflict_files,
+         description="commit conflict → merge_resolving (MergeAgent)"),
+    Rule("merge_resolving", Pass, "after_commit",
+         description="merge agent resolved + committed → continue"),
+    Rule("merge_resolving", Reject, "recovering", effect=enter_recovery,
+         description="merge agent gave up → recovering"),
+    Rule("merge_resolving", Blocked, "recovering", effect=enter_recovery),
+    Rule("merge_resolving", Crash, "recovering", effect=enter_recovery),
+    Rule("merge_resolving", Timeout, "recovering", effect=enter_recovery),
 
     # ── rejections: commit epoch (no self-retry) ────────────────────────
     *[Rule(p, Reject, "recovering", effect=enter_recovery,

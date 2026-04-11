@@ -7,6 +7,7 @@ from ..events import (
     CleanState,
     Crash,
     Event,
+    MergeConflictDetected,
     NeedsPreExecRecovery,
     Pass,
     PreExecRecoverySucceeded,
@@ -18,7 +19,13 @@ from .base import Node
 
 
 class MergeConflict(Exception):
-    pass
+    """Raised by ``CommitNode._merge_worktree`` when git merge leaves files
+    in an unresolved state. ``conflict_files`` is the list of paths that
+    ``git diff --name-only --diff-filter=U`` reported."""
+
+    def __init__(self, conflict_files: list[str]) -> None:
+        super().__init__(f"{len(conflict_files)} unresolved file(s)")
+        self.conflict_files = conflict_files
 
 
 class GitError(Exception):
@@ -75,9 +82,20 @@ class PreExecRecoveryNode(SystemNode):
 
 
 class CommitNode(SystemNode):
-    """Merges the task worktree into main.
+    """Automatic git merge — no agents involved.
 
-    Subclass and override ``_merge_worktree`` to bind to the real git plumbing.
+    Tries to merge the task's worktree branch into main. There are exactly
+    three outcomes, which the state machine routes on:
+
+    - clean merge           → ``Pass``
+    - merge conflict        → ``MergeConflictDetected(conflict_files=...)``,
+                              routed by the rule table to ``merge_resolving``
+                              where ``MergeAgent`` takes one shot at cleanup
+    - any other git error   → ``Crash``
+
+    Subclass and override ``_merge_worktree`` to bind to real git plumbing.
+    The base ``MergeConflict`` exception carries the list of unresolved
+    files so the node can surface them in the event.
     """
 
     def __init__(self) -> None:
@@ -88,7 +106,7 @@ class CommitNode(SystemNode):
             self._merge_worktree(state)
             return Pass()
         except MergeConflict as exc:
-            return Reject(source="system", reason=f"merge conflict: {exc}")
+            return MergeConflictDetected(conflict_files=tuple(exc.conflict_files))
         except GitError as exc:
             return Crash(exc_type="GitError", message=str(exc))
 
@@ -110,21 +128,18 @@ WorktreeResolver = Callable[[TaskState], Path]
 
 
 class GitCommitNode(CommitNode):
-    """Real commit node: merge the task worktree into main.
+    """Real ``commit`` node — plain automatic merge, no agents.
 
-    Execution flow:
-      1. Resolve the task's worktree path via ``worktree_resolver(state)``.
-      2. Run ``git merge <worktree_branch> --no-edit`` in ``main_repo_root``.
-      3. If the merge succeeds → ``Pass``.
-      4. If the merge hits conflicts → delegate to ``merge_agent`` (one
-         attempt only). If the agent clears ``git diff --diff-filter=U``,
-         commit the resolution and return ``Pass``. If conflicts remain,
-         abort the merge and return ``Reject``.
-      5. Any other git error → ``Crash``.
+    Resolves the task's worktree, runs ``git merge --no-edit``, and:
 
-    The merge agent is injected rather than built here so the state machine
-    can reuse the same ``MergeAgent`` singleton across all commit attempts,
-    and so tests can pass a stub.
+    - returns on clean merge → ``Pass`` via the base class
+    - raises ``MergeConflict(conflict_files)`` on unresolved files → the
+      base class converts it to ``MergeConflictDetected`` and the state
+      machine routes to ``merge_resolving`` (MergeAgent)
+    - raises ``GitError`` on any other failure → ``Crash``
+
+    No merge agent is invoked from this class — that's a separate state
+    machine node.
     """
 
     def __init__(
@@ -132,12 +147,10 @@ class GitCommitNode(CommitNode):
         main_repo_root: Path,
         *,
         worktree_resolver: WorktreeResolver,
-        merge_agent: "Node | None" = None,
     ) -> None:
         super().__init__()
         self.main_repo_root = Path(main_repo_root)
         self.worktree_resolver = worktree_resolver
-        self.merge_agent = merge_agent
 
     def _merge_worktree(self, state: TaskState) -> None:
         worktree = self.worktree_resolver(state)
@@ -149,41 +162,20 @@ class GitCommitNode(CommitNode):
 
         unresolved = self._unresolved_conflicts()
         if not unresolved:
+            # git merge failed for a reason other than conflicts (e.g. bad
+            # ref, missing commit). Leave nothing half-applied.
+            self._abort_merge()
             raise GitError(
                 f"git merge failed with no conflict files: {result.stderr.strip() or result.stdout.strip()}"
             )
 
-        if self.merge_agent is None:
-            self._abort_merge()
-            raise MergeConflict(
-                f"{len(unresolved)} conflicting files and no merge agent configured"
-            )
-
-        # Populate failure_context so MergeAgent sees the conflict files in its prompt.
-        state.failure_context = {
-            **state.failure_context,
-            "conflict_files": unresolved,
-            "merge_attempt": 1,
-        }
-        self.merge_agent.run(state)
-
-        remaining = self._unresolved_conflicts()
-        if remaining:
-            self._abort_merge()
-            raise MergeConflict(
-                f"merge agent left {len(remaining)} unresolved files: {', '.join(remaining)}"
-            )
-        # Commit the agent's resolution
-        commit = subprocess.run(
-            ["git", "commit", "--no-edit"],
-            cwd=str(self.main_repo_root),
-            capture_output=True,
-            text=True,
-        )
-        if commit.returncode != 0:
-            raise GitError(
-                f"post-resolve commit failed: {commit.stderr.strip() or commit.stdout.strip()}"
-            )
+        # Leave the worktree in the unresolved state. The state machine
+        # routes MergeConflictDetected → merge_resolving (MergeAgent), which
+        # edits the conflicting files in place, runs git add + git commit,
+        # and emits Pass. If the agent fails, its prompt instructs it to
+        # leave the worktree as-is and report — the recovery agent then
+        # decides whether to abort the merge or keep investigating.
+        raise MergeConflict(unresolved)
 
     def _worktree_head(self, worktree: Path) -> str:
         proc = subprocess.run(

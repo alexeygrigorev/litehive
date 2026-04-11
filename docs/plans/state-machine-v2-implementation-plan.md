@@ -43,11 +43,17 @@ through `ready → done` with stub engines, real persistence, real journal.
   scripted `AgentVerdict` sequence and raises scripted exceptions.
 - [ ] `StaticEngineSelector` — returns engines from a fixed list,
   honoring `excluded`. Used by M1 tests only.
-- [x] `GitCommitNode` — real git merge with one-shot delegation to
-  ``MergeAgent`` on conflict. Injects a ``worktree_resolver`` callable
-  and a merge_agent. Populates ``state.failure_context`` with the
-  conflict file list before invoking the agent. Covered by
-  ``test_pipeline_v2_hooks_and_commit.py``.
+- [x] **Two-node commit flow** — `GitCommitNode` does plain automatic
+  git merge only. On conflict it raises `MergeConflict(conflict_files)`
+  which the base class converts to a new
+  `MergeConflictDetected(conflict_files)` event. The rule table routes
+  `commit + MergeConflictDetected → merge_resolving` with an effect
+  (`stash_conflict_files`) that copies the file list into
+  `state.failure_context`. `merge_resolving` is registered as the
+  existing `MergeAgent` singleton. Its Pass routes to `after_commit`;
+  its Reject/Crash routes to `recovering`. Worktree is left in the
+  unresolved state across the hand-off so the agent has conflict
+  markers to edit.
 - [x] `build_registry(selector, session_store, hook_runner, commit_node,
   prompt_context, hook_specs) -> NodeRegistry` — assembles all 20 nodes
   (ready, pre-exec-recovery, 10 hook phases, 4 agent stages, commit,
@@ -164,4 +170,15 @@ item lands.
   don't consume retries. 19 new tests: agent retry paths (9) + hooks /
   commit including real git merge with MergeAgent (10). 109 v2 tests
   green total.
+- 2026-04-11: commit flow refactored to **two nodes**. ``GitCommitNode``
+  now does plain automatic merge only; on conflict it raises
+  ``MergeConflict(conflict_files)`` which becomes a new
+  ``MergeConflictDetected`` event. The rule table routes
+  ``commit + MergeConflictDetected → merge_resolving`` (the
+  ``MergeAgent`` singleton, now registered) and from there to
+  ``after_commit`` on Pass or ``recovering`` on Reject/Crash/Timeout.
+  New ``stash_conflict_files`` effect copies the file list into
+  ``state.failure_context``. No more merge-agent delegation hack inside
+  a SystemNode. Registry now has 21 nodes. New e2e test covers the
+  conflict → merge_resolving → after_commit → done path end to end.
 - …

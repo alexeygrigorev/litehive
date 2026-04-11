@@ -23,8 +23,10 @@ import pytest
 
 from litehive.pipeline import SqliteJournal, StateMachineRunner, build_registry
 from litehive.pipeline.agents._base import PromptContext
-from litehive.pipeline.nodes import HookResult, HookRunner, StubCommitNode
+from litehive.pipeline.events import MergeConflictDetected, Pass
+from litehive.pipeline.nodes import CommitNode, HookResult, HookRunner, StubCommitNode
 from litehive.pipeline.nodes.agent import AgentVerdict, Engine, EngineSelector
+from litehive.pipeline.nodes.system import MergeConflict
 from litehive.pipeline.persistence import SqlitePersistence
 from litehive.pipeline.sessions import InMemorySessionStore
 from litehive.pipeline.types import PipelineMode
@@ -214,6 +216,53 @@ def test_persistence_state_survives_load_after_run(workspace: Path) -> None:
 
 
 # ── recovery flow ────────────────────────────────────────────────────────
+
+
+class _OneShotConflictCommit(CommitNode):
+    """Commit node that raises MergeConflict on its first call, then passes."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.calls = 0
+
+    def _merge_worktree(self, state) -> None:
+        self.calls += 1
+        if self.calls == 1:
+            raise MergeConflict(["a.txt"])
+        return None
+
+
+def test_merge_conflict_routes_to_merge_agent_then_back_to_after_commit(
+    workspace: Path,
+) -> None:
+    """commit → MergeConflictDetected → merge_resolving (MergeAgent Pass) → after_commit → done."""
+    persistence = SqlitePersistence(workspace)
+    journal = SqliteJournal(workspace)
+
+    commit_node = _OneShotConflictCommit()
+    registry = build_registry(
+        selector=_FixedSelector(_PassEngine()),
+        session_store=InMemorySessionStore(),
+        hook_runner=_NoopHookRunner(),
+        commit_node=commit_node,
+    )
+    runner = StateMachineRunner(registry, persistence, journal=journal)
+
+    state = persistence.initialize("T-E2E-MERGE", pipeline_mode=PipelineMode.SINGLE)
+    state.last_report.files_changed = 1
+    persistence.save(state)
+
+    final_state = runner.run_task("T-E2E-MERGE")
+
+    assert final_state.stage == "done"
+
+    transitions = journal.load_transitions("T-E2E-MERGE")
+    event_types = [row["event_type"] for row in transitions]
+    from_to_pairs = [(row["from_stage"], row["to_stage"]) for row in transitions]
+
+    assert "MergeConflictDetected" in event_types
+    assert ("commit", "merge_resolving") in from_to_pairs
+    assert ("merge_resolving", "after_commit") in from_to_pairs
 
 
 def test_reject_from_testing_triggers_retry_then_recovery(workspace: Path) -> None:

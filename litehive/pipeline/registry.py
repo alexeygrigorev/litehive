@@ -19,6 +19,7 @@ plumbing.
 """
 
 from .agents import (
+    MergeAgent,
     PlannerAgent,
     QAAgent,
     RecoveryAgent,
@@ -78,8 +79,10 @@ def build_registry(
     ``HookNode`` that immediately returns ``HookOk``.
 
     ``commit_node`` must be a ``CommitNode`` subclass whose
-    ``_merge_worktree`` is wired to real git (or a stub in tests). Tests
-    typically pass ``StubCommitNode``; production passes a real subclass.
+    ``_merge_worktree`` is wired to real git (or a stub in tests). It does
+    automatic merges only — on conflict it raises ``MergeConflict`` and
+    the state machine routes the task to ``merge_resolving`` where the
+    ``MergeAgent`` (also registered here) takes one shot at cleanup.
     """
     hook_specs = hook_specs or {}
     registry = NodeRegistry()
@@ -124,8 +127,16 @@ def build_registry(
             )
         )
 
-    # Commit and recovery
+    # Commit (automatic merge) and its conflict-resolver partner
     registry.register(commit_node)
+    registry.register(
+        MergeAgent(
+            selector=selector,
+            session_provider=session_store,
+            prompt_context=prompt_context,
+            retry_budget=retry_budget,
+        )
+    )
     registry.register(
         RecoveryAgent(
             selector=selector,

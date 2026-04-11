@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from litehive.pipeline.events import Crash, HookOk, Pass, Reject
+from litehive.pipeline.events import Crash, HookOk, MergeConflictDetected, Pass, Reject
 from litehive.pipeline.nodes import (
     GitCommitNode,
     HookNode,
@@ -108,18 +108,14 @@ def _resolve_same_repo(repo: Path):
 
 
 def test_commit_node_clean_merge_returns_pass(git_repo_with_branch) -> None:
-    main_repo, worktree = git_repo_with_branch
-
-    # Resolver returns HEAD of worktree branch 'feature'
-    def resolver(state):
-        return main_repo  # same repo
+    main_repo, _ = git_repo_with_branch
 
     node = GitCommitNode(
         main_repo,
-        worktree_resolver=resolver,
-        merge_agent=None,
+        worktree_resolver=lambda state: main_repo,
     )
-    # We need to point the merge at 'feature' — hack: rewrite _worktree_head
+    # Point the merge at 'feature' — simple override so we don't need a
+    # separate worktree path for this smoke test
     node._worktree_head = lambda wt: "feature"
 
     state = make_state(stage="commit")
@@ -127,9 +123,12 @@ def test_commit_node_clean_merge_returns_pass(git_repo_with_branch) -> None:
     assert isinstance(event, Pass), event
 
 
-def test_commit_node_with_conflict_and_no_merge_agent_emits_reject(
+def test_commit_node_with_conflict_emits_merge_conflict_detected(
     git_repo_with_branch,
 ) -> None:
+    """GitCommitNode no longer delegates to the merge agent — it emits
+    ``MergeConflictDetected`` and the state machine routes the task to
+    the ``merge_resolving`` node on the next step."""
     main_repo, _ = git_repo_with_branch
 
     # Create a conflict: modify a.txt on both feature and main
@@ -144,50 +143,23 @@ def test_commit_node_with_conflict_and_no_merge_agent_emits_reject(
     node = GitCommitNode(
         main_repo,
         worktree_resolver=lambda state: main_repo,
-        merge_agent=None,
     )
     node._worktree_head = lambda wt: "feature"
 
     state = make_state(stage="commit")
     event = node.run(state)
-    assert isinstance(event, Reject)
-    assert "merge conflict" in event.reason.lower()
+    assert isinstance(event, MergeConflictDetected)
+    assert "a.txt" in event.conflict_files
 
-
-def test_commit_node_with_merge_agent_resolving_conflict_emits_pass(
-    git_repo_with_branch,
-) -> None:
-    main_repo, _ = git_repo_with_branch
-
-    # Set up a conflict
-    subprocess.run(["git", "checkout", "-q", "feature"], cwd=main_repo, check=True)
-    (main_repo / "a.txt").write_text("feature_change\n")
-    subprocess.run(["git", "commit", "-qam", "feature change"], cwd=main_repo, check=True)
-    subprocess.run(["git", "checkout", "-q", "main"], cwd=main_repo, check=True)
-    (main_repo / "a.txt").write_text("main_change\n")
-    subprocess.run(["git", "commit", "-qam", "main change"], cwd=main_repo, check=True)
-
-    class FakeMergeAgent:
-        name = "merge_resolving"
-
-        def run(self, state):
-            # Simulate the merge agent editing the conflict markers out of the file
-            (main_repo / "a.txt").write_text("merged\n")
-            subprocess.run(
-                ["git", "add", "a.txt"], cwd=main_repo, check=True, capture_output=True
-            )
-            return Pass()
-
-    node = GitCommitNode(
-        main_repo,
-        worktree_resolver=lambda state: main_repo,
-        merge_agent=FakeMergeAgent(),
+    # Leaves the worktree in the unresolved state so the merge agent can
+    # still see the conflict markers
+    unresolved = subprocess.run(
+        ["git", "diff", "--name-only", "--diff-filter=U"],
+        cwd=main_repo,
+        capture_output=True,
+        text=True,
     )
-    node._worktree_head = lambda wt: "feature"
-
-    state = make_state(stage="commit")
-    event = node.run(state)
-    assert isinstance(event, Pass), event
+    assert "a.txt" in unresolved.stdout
 
 
 # ── StubCommitNode still works (sanity) ─────────────────────────────────
