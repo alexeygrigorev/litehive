@@ -1,0 +1,72 @@
+id: T-0339
+slug: fix-workspaces-yaml-race-condition-atomic-write
+title: "Fix workspaces.yaml race condition \u2014 atomic write + don't pollute from\
+  \ tests"
+depends_on: []
+task_type: null
+model: null
+mode: implementation
+pipeline_mode: full
+status: queued
+flag_reason: null
+flag_count: 0
+pipeline_status: backlog
+priority: critical
+pm_complexity: null
+planned_effort: null
+created_at: '2026-04-11T05:20:36+00:00'
+updated_at: '2026-04-11T05:20:36+00:00'
+goal: "Root cause of 4-hour overnight daemon outage. When T-0291 ran, its test stage\
+  \ triggered pytest which called ensure_workspace(tmp_path) hundreds of times, each\
+  \ call did read-modify-write on ~/.config/litehive/workspaces.yaml with NO locking/atomic\
+  \ rename. Concurrent writes truncated each other, one landed mid-':', corrupting\
+  \ line 3. Next daemon cycle yaml.safe_load crashed and the daemon exited without\
+  \ recovering.\n\n### Immediate fix\n1. Make `_register_workspace` in litehive/config/workspace.py:172\
+  \ atomic: write to temp file in same directory, os.replace to target. Prevents partial\
+  \ writes.\n2. Add a file lock (fcntl.flock) around the read-modify-write block so\
+  \ concurrent processes serialize.\n\n### Structural fix\n3. Tests should NOT be\
+  \ writing to the real ~/.config/litehive/workspaces.yaml. Either:\n   a. Monkeypatch\
+  \ workspace_registry_path() in conftest.py to return a tmp path per test, OR\n \
+  \  b. Set $XDG_CONFIG_HOME to a tmpdir for the whole test session (clean sandbox),\
+  \ OR\n   c. Skip registry writes entirely when running under pytest (detect via\
+  \ sys.modules or env var)\n4. Preferred: option (b) \u2014 set XDG_CONFIG_HOME in\
+  \ conftest.py's session fixture. Most isolated.\n\n### Resilience fix\n5. Daemon\
+  \ should survive a corrupt workspaces.yaml instead of crashing the whole run loop.\
+  \ Wrap `yaml.safe_load` in `_register_workspace` in a try/except \u2014 if parse\
+  \ fails, rewrite the file with an empty registry and log a warning. Registry is\
+  \ just a cache, losing it is fine.\n6. Daemon's pool run loop should catch unhandled\
+  \ exceptions and restart the cycle (bounded retry) instead of exiting silently.\n\
+  \n### Why this matters\n- An overnight daemon that dies from one corrupted user-global\
+  \ file makes the whole 38-task backlog moot\n- The corruption is pure test pollution\
+  \ \u2014 no real user action could cause it\n- Related T-0332 will simplify the\
+  \ config merge + registry, but this atomic-write fix is load-bearing even if we\
+  \ keep the registry\n\n### Verification\n- Run pytest in parallel (xdist -n 4) and\
+  \ confirm workspaces.yaml stays valid\n- Kill a pytest run mid-write and confirm\
+  \ no partial file\n- Run the daemon for 30+ minutes through multiple task cycles\
+  \ without the file corrupting"
+acceptance_criteria:
+- _register_workspace uses atomic write (temp file + os.replace)
+- _register_workspace uses an exclusive file lock around read-modify-write
+- Tests no longer write to real ~/.config/litehive/workspaces.yaml (conftest session
+  fixture sets XDG_CONFIG_HOME to tmp)
+- Daemon handles a corrupt workspaces.yaml gracefully (rewrite + warning, not crash)
+- Parallel pytest run (xdist -n 4) completes without corrupting workspaces.yaml
+constraints: []
+plan: []
+human_checkpoints: []
+subagents: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0339 fix-workspaces-yaml-race-condition-atomic-write'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+  merge_agent_attempts: 0
+  worktree_path: null
+retry_policy:
+  max_retries: null
+  stage_retry_limit: null
+created_from: null
+upstream_origin: null
+github_origin: null

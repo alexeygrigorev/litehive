@@ -1,0 +1,88 @@
+task_id: T-0292
+step: grooming
+verdict: pass
+source: agent
+summary: Repo inspection only; no code changes made and no tests were run in grooming.
+feedback: "Repo inspection only; no code changes made and no tests were run in grooming.\n\
+  \nWhat I verified:\n- `litehive/config/paths.py` already defines the per-workspace\
+  \ XDG data root and `workspace_database_path(root) -> .../data.db`, so backups should\
+  \ be modeled as another per-workspace data artifact under the same directory family.\n\
+  - `litehive/storage/runtime.py` is the single SQLite entry point today (`connect_workspace_db`\
+  \ / `RuntimeStore`), which makes it the right place to add a small backup helper\
+  \ instead of scattering raw sqlite3 calls across CLI and daemon code.\n- `litehive/daemon/_execution.py`\
+  \ already has the repeating daemon loop and status/logging behavior, but it has\
+  \ no scheduler or database-backup logic yet. The natural integration point is a\
+  \ once-per-iteration check that creates at most one backup per calendar day instead\
+  \ of requiring an exact nightly wake-up time.\n- `litehive/cli/__init__.py` and\
+  \ `litehive/cli/daemon.py` show a Typer-based CLI with no existing `backup` command\
+  \ group, so this task needs new CLI surface for `create`, `list`, and `restore`.\n\
+  - Current tests cover workspace bootstrap and daemon loop behavior (`tests/test_workspace_bootstrap.py`,\
+  \ `tests/test_task_commands_and_daemon.py`), but there is no SQLite backup coverage\
+  \ yet.\n\nPlanning judgment:\n- Scope is appropriate for one implementation task\
+  \ if kept focused on workspace `data.db` backup/restore only.\n- Main product risk\
+  \ is operator safety during restore. The implementer should not guess here: restore\
+  \ should warn before overwrite and avoid racing with an active daemon or runner.\n\
+  - \"Nightly\" should be interpreted as automatic once-per-day backup creation when\
+  \ the daemon is running, not as dependence on starting at a specific wall-clock\
+  \ minute.\n\nRecommended implementation plan:\n1. Add backup path helpers near the\
+  \ existing workspace data.db path logic so archive storage remains under the per-workspace\
+  \ XDG data root.\n2. Implement a small backup module around the SQLite backup API\
+  \ plus gzip compression, timestamp parsing, archive listing, and deterministic retention\
+  \ pruning.\n3. Integrate automatic once-per-day backup checks into the daemon loop\
+  \ in an idempotent way.\n4. Add a Typer `backup` command group with `create`, `list`,\
+  \ and `restore`; restore must surface the overwrite warning and avoid active-runner\
+  \ races.\n5. Add focused tests for backup creation, rotation, listing, restore,\
+  \ and daemon automation, then run targeted regressions plus `uv run pytest -q`.\n\
+  \nPM_COMPLEXITY: moderate\nPLANNED_EFFORT: m\n\nTASK_UPDATE:\n  pm_complexity: moderate\n\
+  \  planned_effort: m\n  acceptance_criteria:\n    - When the workspace daemon runs\
+  \ across a new calendar day, it creates at most one online-safe SQLite backup of\
+  \ the current workspace database using SQLite backup API without breaking normal\
+  \ workspace reads or writes.\n    - Backup archives are stored at `XDG_DATA_HOME/litehive/<workspace-id>/backups/data-YYYY-MM-DDTHH.db.gz`\
+  \ and contain a restorable copy of `data.db`.\n    - Backup retention keeps the\
+  \ newest 7 daily restore points plus 4 older weekly restore points and prunes older\
+  \ archives automatically.\n    - `litehive backup create` writes a new backup archive\
+  \ for the selected workspace and reports the created file path or timestamp.\n \
+  \   - `litehive backup list` shows available backups for the workspace with a stable\
+  \ timestamp identifier and archive size.\n    - `litehive backup restore <timestamp>`\
+  \ warns before replacing the current `data.db` and restores the selected backup\
+  \ when the operator confirms or explicitly bypasses the prompt.\n    - Focused backup,\
+  \ restore, rotation, and daemon automation tests pass, and the existing Litehive\
+  \ test suite still passes.\n  constraints:\n    - Keep this task scoped to workspace\
+  \ `data.db` backup and restore behavior. Do not absorb schema migration framework\
+  \ work, one-time data import, or broader XDG path moves already tracked by adjacent\
+  \ tasks.\n  plan:\n    - Add backup path and metadata helpers near the existing\
+  \ workspace data.db path logic so backup storage stays under the per-workspace XDG\
+  \ data root.\n    - Implement a small storage or backup module that creates gzip-compressed\
+  \ SQLite backups via the sqlite3 backup API, enumerates archives, parses timestamps,\
+  \ and prunes retention windows deterministically.\n    - Integrate automatic once-per-day\
+  \ backup checks into the daemon loop in a way that is safe to run repeatedly and\
+  \ does not require the daemon to start at an exact wall-clock time.\n    - Add a\
+  \ Typer backup command group with create, list, and restore; restore should surface\
+  \ the overwrite warning and avoid racing with an active daemon or runner.\n    -\
+  \ Add focused tests for backup creation, listing, restore, rotation, and daemon-driven\
+  \ automation, then run the targeted regressions plus the existing smoke suite with\
+  \ `uv run pytest -q`.\n\nNote: I attempted to persist the task shaping directly\
+  \ with `litehive update T-0292 --workspace /home/alexey/git/litehive`, but Litehive\
+  \ rejected the mutation because the active task is locked while running (`runtime.execution_status=running`).\
+  \ The YAML above is the intended shaping update for the next stage."
+submitted_via_cli: true
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 178
+hook_results: []
+created_at: '2026-04-11T05:20:29+00:00'

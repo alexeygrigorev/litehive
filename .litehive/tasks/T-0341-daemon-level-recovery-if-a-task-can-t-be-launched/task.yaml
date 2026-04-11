@@ -1,0 +1,81 @@
+id: T-0341
+slug: daemon-level-recovery-if-a-task-can-t-be-launched
+title: 'Daemon-level recovery: if a task can''t be launched, attempt one recovery
+  session'
+depends_on:
+- T-0325
+task_type: null
+model: null
+mode: implementation
+pipeline_mode: full
+status: queued
+flag_reason: null
+flag_count: 0
+pipeline_status: backlog
+priority: high
+pm_complexity: null
+planned_effort: null
+created_at: '2026-04-11T05:38:12+00:00'
+updated_at: '2026-04-11T05:38:12+00:00'
+goal: "Recovery agent today only fires from INSIDE a running stage loop (core.py:382,\
+  \ 738, 891). If the daemon tries to start a task but cannot even enter the stage\
+  \ loop \u2014 worktree broken, venv broken, registry corrupt, lock stuck, heru link\
+  \ broken, uv sync failure, git checkout conflict \u2014 there's no recovery attempt.\
+  \ The daemon either crashes (yesterday's overnight failure) or silently skips the\
+  \ task.\n\nFix: extend the recovery loop to the daemon-cycle level. Before each\
+  \ task launch, if something blocks the launch, invoke the recovery agent ONCE with\
+  \ the failure details, then retry the launch.\n\n### Trigger points (add to daemon\
+  \ cycle)\n1. **Before worktree checkout** \u2014 if git worktree add fails (conflict,\
+  \ stale ref), run recovery with context 'worktree_setup_failed'\n2. **Before venv\
+  \ sync** \u2014 if `uv sync` fails in the worktree (e.g. heru path broken, dep resolution\
+  \ error), run recovery with context 'venv_sync_failed' and the uv stderr attached\n\
+  3. **Before stage loop entry** \u2014 if any of the pre-stage repair checks throw\
+  \ (corrupt state.yaml, corrupt workspaces.yaml, stuck lock), run recovery with context\
+  \ 'pre_stage_setup_failed'\n4. **On daemon cycle start** \u2014 if startup repair\
+  \ fails, run recovery with context 'cycle_start_failed' BEFORE the daemon exits.\
+  \ This is the overnight-outage case.\n\n### Recovery behavior\n- One attempt per\
+  \ cycle. If it succeeds (returns 'fixed'), retry the launch once.\n- If it fails\
+  \ or the relaunch also fails, mark the task flagged/recovery_failed with a clear\
+  \ reason and continue to the NEXT task in the queue. Do NOT wedge the whole pool\
+  \ on one broken task.\n- Record the recovery session in the task thread the same\
+  \ way stage-level recovery does (role=recovery).\n\n### What recovery agent needs\
+  \ to handle\n- Corrupt ~/.config/litehive/workspaces.yaml (today's yaml ScannerError\
+  \ case)\n- Corrupt .litehive/state.yaml\n- Stuck runner lock from a killed prior\
+  \ daemon\n- Broken heru editable path after extraction or worktree rebase\n- Broken\
+  \ venv (reinstall from scratch)\n- Stale worktree that git refuses to reuse\n\n\
+  ### Integration with T-0339 (atomic registry writes)\nT-0339 prevents the ORIGINAL\
+  \ corruption. This task (T-0341) handles the case where corruption DID happen anyway\
+  \ (bugs happen). Defense in depth.\n\n### Integration with T-0340 (status surfaces\
+  \ broken state)\nT-0340 makes the user visible to brokenness. This task (T-0341)\
+  \ makes the daemon auto-recover from it."
+acceptance_criteria:
+- "Daemon cycle catches worktree setup failures, venv sync failures, pre-stage setup\
+  \ failures, and startup repair failures \u2014 does NOT exit"
+- Each failure type triggers one recovery agent session with a clear failure context
+- On recovery success, the launch retries once; on recovery failure, task is flagged
+  and pool continues with next task
+- Recovery session is recorded in the task thread with role=recovery, same as stage-level
+  recovery
+- Simulated corrupt workspaces.yaml at daemon startup triggers recovery + fix, not
+  crash
+- Simulated uv sync failure in worktree triggers recovery + fix, not task skip
+- "Bounded to one recovery attempt per cycle \u2014 no infinite recovery loops"
+constraints: []
+plan: []
+human_checkpoints: []
+subagents: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0341 daemon-level-recovery-if-a-task-can-t-be-launched'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+  merge_agent_attempts: 0
+  worktree_path: null
+retry_policy:
+  max_retries: null
+  stage_retry_limit: null
+created_from: null
+upstream_origin: null
+github_origin: null

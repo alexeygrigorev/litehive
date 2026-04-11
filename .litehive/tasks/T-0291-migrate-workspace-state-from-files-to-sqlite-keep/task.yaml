@@ -7,15 +7,15 @@ task_type: null
 model: null
 mode: implementation
 pipeline_mode: full
-status: in_progress
+status: done
 flag_reason: null
 flag_count: 0
-pipeline_status: commit_to_git
+pipeline_status: done
 priority: high
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-10T06:46:28+00:00'
-updated_at: '2026-04-10T23:11:09+00:00'
+updated_at: '2026-04-11T05:17:22+00:00'
 goal: Separate task intent (committed to git) from execution state (out of repo).
   Git holds only config.yaml, context.md, tasks/<id>/task.yaml and tasks/<id>/comments.yaml.
   Everything else (state, queue, journal, reports, runtime, engine monitoring, hook
@@ -305,14 +305,21 @@ subagents:
   path: subagents/SA-0036-reviewer
   sandboxed: false
   sandbox_summary: host
+- id: SA-0037
+  role: merge-resolver
+  engine: codex
+  status: completed
+  path: subagents/SA-0037-merge-resolver
+  sandboxed: false
+  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0291 migrate-workspace-state-from-files-to-sqlite-keep'
-  commit_sha: null
-  checkpoint_base_sha: null
-  checkpoint_attempts: 0
+  commit_sha: fc49c59d4db51d8a5301e7b43eccee89baa96367
+  checkpoint_base_sha: 0aeb4399b58b4bf7bc2bc47111270a14bfe62d82
+  checkpoint_attempts: 1
   rolled_back_checkpoint_attempt: null
-  merge_agent_attempts: 0
+  merge_agent_attempts: 1
   worktree_path: null
 retry_policy:
   max_retries: null

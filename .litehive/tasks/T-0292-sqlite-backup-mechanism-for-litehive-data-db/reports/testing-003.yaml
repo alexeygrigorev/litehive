@@ -1,0 +1,57 @@
+task_id: T-0292
+step: testing
+verdict: pass
+source: agent
+summary: 'Validated T-0292 independently in the testing stage. I inspected the implementation
+  in litehive/storage/backup.py, litehive/cli/backup.py, litehive/daemon/_execution.py,
+  and litehive/config/paths.py and confirmed the workspace DB backup flow uses sqlite3
+  Connection.backup(), writes compressed archives under the per-workspace XDG data
+  root at backups/data-YYYY-MM-DDTHH.db.gz, prunes retention to 7 daily plus 4 weekly
+  restore points, and restores by decompressing the selected archive back to data.db
+  while cleaning stale -wal/-shm files. I also confirmed the CLI surface exists for
+  backup create/list/restore and that restore refuses to proceed while the workspace
+  daemon or runner is active unless the operator explicitly confirms overwrite. Focused
+  verification run: uv run pytest -q tests/test_backup.py tests/test_workspace_bootstrap.py
+  tests/test_task_commands_and_daemon.py -> 158 passed, 3 existing Typer deprecation
+  warnings. These tests provide evidence for manual create, list output with timestamp
+  and size, restore prompt and overwrite behavior, refusal when daemon/runner is active,
+  retention pruning, and daemon-driven scheduled backup creation. Full regression
+  run: uv run pytest -q -> 995 passed, 3 existing Typer deprecation warnings. Verdict:
+  pass; acceptance criteria are met and the existing suite still passes.'
+feedback: 'Validated T-0292 independently in the testing stage. I inspected the implementation
+  in litehive/storage/backup.py, litehive/cli/backup.py, litehive/daemon/_execution.py,
+  and litehive/config/paths.py and confirmed the workspace DB backup flow uses sqlite3
+  Connection.backup(), writes compressed archives under the per-workspace XDG data
+  root at backups/data-YYYY-MM-DDTHH.db.gz, prunes retention to 7 daily plus 4 weekly
+  restore points, and restores by decompressing the selected archive back to data.db
+  while cleaning stale -wal/-shm files. I also confirmed the CLI surface exists for
+  backup create/list/restore and that restore refuses to proceed while the workspace
+  daemon or runner is active unless the operator explicitly confirms overwrite. Focused
+  verification run: uv run pytest -q tests/test_backup.py tests/test_workspace_bootstrap.py
+  tests/test_task_commands_and_daemon.py -> 158 passed, 3 existing Typer deprecation
+  warnings. These tests provide evidence for manual create, list output with timestamp
+  and size, restore prompt and overwrite behavior, refusal when daemon/runner is active,
+  retention pruning, and daemon-driven scheduled backup creation. Full regression
+  run: uv run pytest -q -> 995 passed, 3 existing Typer deprecation warnings. Verdict:
+  pass; acceptance criteria are met and the existing suite still passes.'
+submitted_via_cli: true
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 779
+hook_results: []
+created_at: '2026-04-11T06:03:35+00:00'

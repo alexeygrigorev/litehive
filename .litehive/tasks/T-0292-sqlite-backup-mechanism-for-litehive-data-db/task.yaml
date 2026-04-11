@@ -7,15 +7,15 @@ task_type: null
 model: null
 mode: implementation
 pipeline_mode: full
-status: queued
+status: in_progress
 flag_reason: null
 flag_count: 0
-pipeline_status: backlog
+pipeline_status: commit_to_git
 priority: medium
-pm_complexity: null
-planned_effort: null
+pm_complexity: moderate
+planned_effort: m
 created_at: '2026-04-10T06:46:43+00:00'
-updated_at: '2026-04-10T06:46:43+00:00'
+updated_at: '2026-04-11T06:16:12+00:00'
 goal: Back up the litehive workspace database regularly so operators can recover from
   corruption, accidental deletes, or disk failure. Back ups should be automatic (daemon-driven),
   compressed, rotated, and easily restorable via a CLI command.
@@ -32,7 +32,49 @@ acceptance_criteria:
 constraints: []
 plan: []
 human_checkpoints: []
-subagents: []
+subagents:
+- id: SA-0001
+  role: planner
+  engine: codex
+  status: completed
+  path: subagents/SA-0001-planner
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0002
+  role: swe
+  engine: codex
+  status: failed
+  path: subagents/SA-0002-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0003
+  role: recovery
+  engine: codex
+  status: completed
+  path: subagents/SA-0003-recovery
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0004
+  role: qa
+  engine: codex
+  status: completed
+  path: subagents/SA-0004-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0005
+  role: reviewer
+  engine: codex
+  status: failed
+  path: subagents/SA-0005-reviewer
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0006
+  role: recovery
+  engine: codex
+  status: completed
+  path: subagents/SA-0006-recovery
+  sandboxed: false
+  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0292 sqlite-backup-mechanism-for-litehive-data-db'

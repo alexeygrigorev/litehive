@@ -1,0 +1,4 @@
+# T-0339 Fix workspaces.yaml race condition — atomic write + don't pollute from tests
+
+## 2026-04-11T05:20:36+00:00
+Task created.
