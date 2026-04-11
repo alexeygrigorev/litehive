@@ -113,6 +113,10 @@ def _normalize_runner_hook_config(
         raise ValueError(f"{field_name}.command must not be empty")
     if hook.description is not None:
         hook.description = hook.description.strip() or None
+    if hook.timeout_seconds is not None:
+        hook.timeout_seconds = float(hook.timeout_seconds)
+        if hook.timeout_seconds <= 0:
+            raise ValueError(f"{field_name}.timeout_seconds must be greater than 0")
     if hook.reject_on_failure and point not in REJECTABLE_HOOK_POINTS:
         allowed = ", ".join(sorted(REJECTABLE_HOOK_POINTS))
         raise ValueError(

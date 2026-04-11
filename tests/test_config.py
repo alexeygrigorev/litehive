@@ -192,25 +192,23 @@ def _assert_engine_status_command_shows_all_monitored_engines(
     from litehive.models import EngineUsageRecord, EngineUsageWindow, WorkspaceEngineMonitoring
     from litehive.observability._engine_monitoring import save_engine_monitoring
     from litehive.cli import _cmd_engine
-    from litehive.agents.quota.claude_quota import ClaudeQuotaStatus
-    from litehive.agents.quota.copilot_quota import CopilotQuotaStatus
-    from litehive.agents.quota.zai_quota import ZaiQuotaStatus
+    from litehive.agents.quota import UsageStatus
 
     monkeypatch.setattr(
         "litehive.cli.engine.check_codex_quota",
-        lambda: _codex_quota_mod.CodexQuotaStatus(error="test-disabled"),
+        lambda: _codex_quota_mod.UsageStatus(error="test-disabled"),
     )
     monkeypatch.setattr(
         "litehive.agents.quota.claude_quota.check_claude_quota",
-        lambda: ClaudeQuotaStatus(error="no-credentials"),
+        lambda: UsageStatus(error="no-credentials"),
     )
     monkeypatch.setattr(
         "litehive.agents.quota.copilot_quota.check_copilot_quota",
-        lambda: CopilotQuotaStatus(error="gh not on PATH"),
+        lambda: UsageStatus(error="gh not on PATH"),
     )
     monkeypatch.setattr(
         "litehive.agents.quota.zai_quota.check_zai_quota",
-        lambda: ZaiQuotaStatus(error="goz not on PATH"),
+        lambda: UsageStatus(error="goz not on PATH"),
     )
 
     save_engine_monitoring(
@@ -291,19 +289,13 @@ def test_engine_status_command_scopes_to_single_engine_and_shows_codex_quota(
     ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
 
     from litehive.cli import _cmd_engine
-    from litehive.agents.quota.codex_quota import CodexQuotaStatus, CodexQuotaWindow
+    from litehive.agents.quota import UsageStatus, UsageWindow
 
     def fake_check_codex_quota():
-        return CodexQuotaStatus(
+        return UsageStatus(
             limit_reached=True,
-            primary_window=CodexQuotaWindow(
-                used_percent=100.0,
-                reset_at="2026-04-09T05:00:00Z",
-            ),
-            secondary_window=CodexQuotaWindow(
-                used_percent=34.0,
-                reset_at="2026-04-14T00:00:00Z",
-            ),
+            short_term=UsageWindow(percent_remaining=100.0),
+            long_term=UsageWindow(percent_remaining=66.0, reset_at="2026-04-14T00:00:00Z"),
             checked_at=1.0,
         )
 
@@ -320,12 +312,9 @@ def test_engine_status_command_scopes_to_single_engine_and_shows_codex_quota(
 
     assert exit_code == 0
     assert "engine: codex" in output
-    assert "available: no" in output
-    assert "usage_used: 100" in output
-    assert "usage_limit: 100" in output
-    assert "used_percent: 100.0" in output
+    assert "short_term_percent_remaining: 100.0" in output
     assert "limit_reached: yes" in output
-    assert "reset_at: 2026-04-14T00:00:00Z" in output
+    assert "long_term_reset_at: 2026-04-14T00:00:00Z" in output
 
 
 def test_engine_status_command_shows_claude_quota_without_monitoring_data(
@@ -334,19 +323,13 @@ def test_engine_status_command_shows_claude_quota_without_monitoring_data(
     ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
 
     from litehive.cli import _cmd_engine
-    from litehive.agents.quota.claude_quota import ClaudeQuotaStatus, ClaudeQuotaWindow
+    from litehive.agents.quota import UsageStatus, UsageWindow
 
     def fake_check_claude_quota():
-        return ClaudeQuotaStatus(
+        return UsageStatus(
             limit_reached=False,
-            five_hour=ClaudeQuotaWindow(
-                used_percent=42.0,
-                reset_at="2026-04-09T17:00:00Z",
-            ),
-            seven_day=ClaudeQuotaWindow(
-                used_percent=63.0,
-                reset_at="2026-04-15T00:00:00Z",
-            ),
+            short_term=UsageWindow(percent_remaining=58.0, reset_at="2026-04-09T17:00:00Z"),
+            long_term=UsageWindow(percent_remaining=37.0, reset_at="2026-04-15T00:00:00Z"),
             checked_at=1.0,
         )
 
@@ -367,10 +350,10 @@ def test_engine_status_command_shows_claude_quota_without_monitoring_data(
     assert exit_code == 0
     assert "engine_status: no monitoring data for claude" in output
     assert "engine: claude" in output
-    assert "5h_used: 42%" in output
-    assert "7d_used: 63%" in output
-    assert "5h_resets: 2026-04-09T17:00:00Z" in output
-    assert "7d_resets: 2026-04-15T00:00:00Z" in output
+    assert "short_term_percent_remaining: 58.0" in output
+    assert "long_term_percent_remaining: 37.0" in output
+    assert "short_term_reset_at: 2026-04-09T17:00:00Z" in output
+    assert "long_term_reset_at: 2026-04-15T00:00:00Z" in output
 
 
 def test_engine_status_command_shows_copilot_quota_without_monitoring_data(
@@ -379,15 +362,13 @@ def test_engine_status_command_shows_copilot_quota_without_monitoring_data(
     ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
 
     from litehive.cli import _cmd_engine
-    from litehive.agents.quota.copilot_quota import CopilotQuotaStatus
+    from litehive.agents.quota import UsageStatus, UsageWindow
 
     def fake_check_copilot_quota():
-        return CopilotQuotaStatus(
+        return UsageStatus(
             limit_reached=False,
-            premium_remaining=37,
-            premium_entitlement=100,
-            premium_percent_remaining=37.0,
-            quota_reset_date="2026-05-01",
+            short_term=UsageWindow(percent_remaining=100.0),
+            long_term=UsageWindow(percent_remaining=37.0, reset_at="2026-05-01T00:00:00Z"),
             checked_at=1.0,
         )
 
@@ -408,9 +389,9 @@ def test_engine_status_command_shows_copilot_quota_without_monitoring_data(
     assert exit_code == 0
     assert "engine_status: no monitoring data for copilot" in output
     assert "engine: copilot" in output
-    assert "premium_remaining: 37/100" in output
-    assert "percent_remaining: 37%" in output
-    assert "resets: 2026-05-01" in output
+    assert "short_term_percent_remaining: 100.0" in output
+    assert "long_term_percent_remaining: 37.0" in output
+    assert "long_term_reset_at: 2026-05-01T00:00:00Z" in output
 
 
 def test_engine_status_command_shows_zai_quota_without_monitoring_data(
@@ -419,13 +400,13 @@ def test_engine_status_command_shows_zai_quota_without_monitoring_data(
     ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
 
     from litehive.cli import _cmd_engine
-    from litehive.agents.quota.zai_quota import ZaiQuotaStatus, ZaiQuotaWindow
+    from litehive.agents.quota import UsageStatus, UsageWindow
 
     def fake_check_zai_quota():
-        return ZaiQuotaStatus(
-            limit_reached=True,
-            api_calls=ZaiQuotaWindow(used_percent=81.0, window_hours=24, remaining=19, limit=100),
-            tokens=ZaiQuotaWindow(used_percent=64.0, window_hours=24, remaining=360, limit=1000),
+        return UsageStatus(
+            limit_reached=False,
+            short_term=UsageWindow(percent_remaining=36.0),
+            long_term=UsageWindow(percent_remaining=100.0),
             checked_at=1.0,
         )
 
@@ -446,9 +427,9 @@ def test_engine_status_command_shows_zai_quota_without_monitoring_data(
     assert exit_code == 0
     assert "engine_status: no monitoring data for opencode" in output
     assert "engine: opencode" in output
-    assert "api_calls_used: 81%" in output
-    assert "tokens_used: 64%" in output
-    assert "limit_reached: yes" in output
+    assert "short_term_percent_remaining: 36.0" in output
+    assert "long_term_percent_remaining: 100.0" in output
+    assert "limit_reached: no" in output
 
 
 def test_engine_status_command_handles_live_quota_errors_gracefully(

@@ -238,9 +238,8 @@ def test_health_command_reports_healthy_workspace(
         lambda: SimpleNamespace(
             error=None,
             limit_reached=False,
-            primary_window=SimpleNamespace(used_percent=42.0),
-            secondary_window=SimpleNamespace(used_percent=61.0),
-            earliest_reset_at="2026-04-15T00:00:00Z",
+            short_term=SimpleNamespace(percent_remaining=58.0, reset_at=None),
+            long_term=SimpleNamespace(percent_remaining=39.0, reset_at="2026-04-15T00:00:00Z"),
         ),
     )
     monkeypatch.setattr(
@@ -248,8 +247,8 @@ def test_health_command_reports_healthy_workspace(
         lambda: SimpleNamespace(
             error=None,
             limit_reached=False,
-            five_hour=SimpleNamespace(used_percent=37.5, reset_at="2026-04-09T04:00:00Z"),
-            seven_day=SimpleNamespace(used_percent=58.0, reset_at="2026-04-12T00:00:00Z"),
+            short_term=SimpleNamespace(percent_remaining=62.5, reset_at="2026-04-09T04:00:00Z"),
+            long_term=SimpleNamespace(percent_remaining=42.0, reset_at="2026-04-12T00:00:00Z"),
         ),
     )
     monkeypatch.setattr(
@@ -257,10 +256,8 @@ def test_health_command_reports_healthy_workspace(
         lambda: SimpleNamespace(
             error=None,
             limit_reached=False,
-            used_percent=25.0,
-            premium_remaining=75,
-            premium_entitlement=100,
-            quota_reset_date="2026-04-10",
+            short_term=SimpleNamespace(percent_remaining=100.0, reset_at=None),
+            long_term=SimpleNamespace(percent_remaining=75.0, reset_at="2026-04-10T00:00:00Z"),
         ),
     )
     monkeypatch.setattr(
@@ -268,8 +265,8 @@ def test_health_command_reports_healthy_workspace(
         lambda: SimpleNamespace(
             error=None,
             limit_reached=False,
-            api_calls=SimpleNamespace(used_percent=33.0),
-            tokens=SimpleNamespace(used_percent=48.0),
+            short_term=SimpleNamespace(percent_remaining=52.0, reset_at=None),
+            long_term=SimpleNamespace(percent_remaining=100.0, reset_at=None),
         ),
     )
     monkeypatch.setattr(
@@ -289,7 +286,7 @@ def test_health_command_reports_healthy_workspace(
     assert "flagged_count: 0" in output
     assert f"worktree: {active.id} status=queued changes=1 active=yes" in output
     assert "ownership=task-owned-worktree" in output
-    assert "quota: codex status=ok summary=5h=42.0% weekly=61.0% reset=2026-04-15T00:00:00Z" in output
+    assert "quota: codex status=ok summary=short=58.0% remaining long=39.0% remaining reset=2026-04-15T00:00:00Z" in output
     assert "quota: gemini status=unsupported summary=no proactive quota check" in output
     assert "daemon_status: running" in output
     assert "daemon_pid: 4242" in output
@@ -327,9 +324,8 @@ def test_health_command_reports_unhealthy_workspace_and_exit_code(
         lambda: SimpleNamespace(
             error=None,
             limit_reached=True,
-            primary_window=SimpleNamespace(used_percent=95.0),
-            secondary_window=SimpleNamespace(used_percent=40.0),
-            earliest_reset_at="2026-04-10T05:00:00Z",
+            short_term=SimpleNamespace(percent_remaining=100.0, reset_at=None),
+            long_term=SimpleNamespace(percent_remaining=5.0, reset_at="2026-04-10T05:00:00Z"),
         ),
     )
     monkeypatch.setattr(
@@ -337,8 +333,8 @@ def test_health_command_reports_unhealthy_workspace_and_exit_code(
         lambda: SimpleNamespace(
             error=None,
             limit_reached=False,
-            five_hour=SimpleNamespace(used_percent=10.0, reset_at="2026-04-09T04:00:00Z"),
-            seven_day=SimpleNamespace(used_percent=20.0, reset_at="2026-04-12T00:00:00Z"),
+            short_term=SimpleNamespace(percent_remaining=90.0, reset_at="2026-04-09T04:00:00Z"),
+            long_term=SimpleNamespace(percent_remaining=80.0, reset_at="2026-04-12T00:00:00Z"),
         ),
     )
     monkeypatch.setattr(
@@ -346,10 +342,8 @@ def test_health_command_reports_unhealthy_workspace_and_exit_code(
         lambda: SimpleNamespace(
             error=None,
             limit_reached=False,
-            used_percent=15.0,
-            premium_remaining=85,
-            premium_entitlement=100,
-            quota_reset_date="2026-04-10",
+            short_term=SimpleNamespace(percent_remaining=100.0, reset_at=None),
+            long_term=SimpleNamespace(percent_remaining=85.0, reset_at="2026-04-10T00:00:00Z"),
         ),
     )
     monkeypatch.setattr(
@@ -357,8 +351,8 @@ def test_health_command_reports_unhealthy_workspace_and_exit_code(
         lambda: SimpleNamespace(
             error=None,
             limit_reached=False,
-            api_calls=SimpleNamespace(used_percent=10.0),
-            tokens=SimpleNamespace(used_percent=20.0),
+            short_term=SimpleNamespace(percent_remaining=80.0, reset_at=None),
+            long_term=SimpleNamespace(percent_remaining=100.0, reset_at=None),
         ),
     )
     monkeypatch.setattr(
@@ -380,7 +374,7 @@ def test_health_command_reports_unhealthy_workspace_and_exit_code(
     ) in output
     assert "finding: location=task-worktree ownership=missing-recorded-worktree" in output
     assert "path=.litehive/worktrees/missing-worktree" in output
-    assert "quota: codex status=warning summary=5h=95.0% weekly=40.0% reset=2026-04-10T05:00:00Z" in output
+    assert "quota: codex status=warning summary=short=100.0% remaining long=5.0% remaining reset=2026-04-10T05:00:00Z" in output
     assert "daemon_status: stopped" in output
 
 

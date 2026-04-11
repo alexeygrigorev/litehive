@@ -237,27 +237,11 @@ def _print_live_quota(engine_name: str) -> None:
         return
 
     print("quota: proactive")
-    if engine_name == "codex":
-        print(f"used_percent: {status.primary_window.used_percent:.1f}")
-        print(f"reset_at: {status.secondary_window.reset_at or '-'}")
-        print(f"5h_used: {status.primary_window.used_percent:.0f}%")
-        print(f"weekly_used: {status.secondary_window.used_percent:.0f}%")
-        print(f"limit_reached: {'yes' if status.limit_reached else 'no'}")
-    elif engine_name == "claude":
-        print(f"5h_used: {status.five_hour.used_percent:.0f}%")
-        print(f"7d_used: {status.seven_day.used_percent:.0f}%")
-        print(f"5h_resets: {status.five_hour.reset_at or '-'}")
-        print(f"7d_resets: {status.seven_day.reset_at or '-'}")
-        print(f"limit_reached: {'yes' if status.limit_reached else 'no'}")
-    elif engine_name == "copilot":
-        print(f"premium_remaining: {status.premium_remaining}/{status.premium_entitlement}")
-        print(f"percent_remaining: {status.premium_percent_remaining:.0f}%")
-        print(f"resets: {status.quota_reset_date or '-'}")
-        print(f"limit_reached: {'yes' if status.limit_reached else 'no'}")
-    elif engine_name in ("goz", "opencode"):
-        print(f"api_calls_used: {status.api_calls.used_percent:.0f}%")
-        print(f"tokens_used: {status.tokens.used_percent:.0f}%")
-        print(f"limit_reached: {'yes' if status.limit_reached else 'no'}")
+    print(f"short_term_percent_remaining: {status.short_term.percent_remaining:.1f}")
+    print(f"short_term_reset_at: {status.short_term.reset_at or '-'}")
+    print(f"long_term_percent_remaining: {status.long_term.percent_remaining:.1f}")
+    print(f"long_term_reset_at: {status.long_term.reset_at or '-'}")
+    print(f"limit_reached: {'yes' if status.limit_reached else 'no'}")
 
 
 def _cmd_engine_set(workspace, engine_name):

@@ -174,9 +174,9 @@ def _codex_quota_health() -> _QuotaHealth:
     if status.error is not None:
         return _QuotaHealth("codex", "unavailable", status.error)
     summary = (
-        f"5h={status.primary_window.used_percent:.1f}% "
-        f"weekly={status.secondary_window.used_percent:.1f}% "
-        f"reset={status.earliest_reset_at or '-'}"
+        f"short={status.short_term.percent_remaining:.1f}% remaining "
+        f"long={status.long_term.percent_remaining:.1f}% remaining "
+        f"reset={status.long_term.reset_at or '-'}"
     )
     return _QuotaHealth("codex", "warning" if status.limit_reached else "ok", summary, status.limit_reached)
 
@@ -185,10 +185,10 @@ def _claude_quota_health() -> _QuotaHealth:
     status = check_claude_quota()
     if status.error is not None:
         return _QuotaHealth("claude", "unavailable", status.error)
-    reset_at = status.five_hour.reset_at or status.seven_day.reset_at or "-"
+    reset_at = status.long_term.reset_at or status.short_term.reset_at or "-"
     summary = (
-        f"5h={status.five_hour.used_percent:.1f}% "
-        f"7d={status.seven_day.used_percent:.1f}% "
+        f"short={status.short_term.percent_remaining:.1f}% remaining "
+        f"long={status.long_term.percent_remaining:.1f}% remaining "
         f"reset={reset_at}"
     )
     return _QuotaHealth("claude", "warning" if status.limit_reached else "ok", summary, status.limit_reached)
@@ -199,9 +199,9 @@ def _copilot_quota_health() -> _QuotaHealth:
     if status.error is not None:
         return _QuotaHealth("copilot", "unavailable", status.error)
     summary = (
-        f"used={status.used_percent:.1f}% "
-        f"remaining={status.premium_remaining}/{status.premium_entitlement} "
-        f"reset={status.quota_reset_date or '-'}"
+        f"short={status.short_term.percent_remaining:.1f}% remaining "
+        f"long={status.long_term.percent_remaining:.1f}% remaining "
+        f"reset={status.long_term.reset_at or '-'}"
     )
     return _QuotaHealth("copilot", "warning" if status.limit_reached else "ok", summary, status.limit_reached)
 
@@ -210,7 +210,7 @@ def _zai_quota_health(engine: str, status) -> _QuotaHealth:
     if status.error is not None:
         return _QuotaHealth(engine, "unavailable", status.error)
     summary = (
-        f"api_calls={status.api_calls.used_percent:.1f}% "
-        f"tokens={status.tokens.used_percent:.1f}%"
+        f"short={status.short_term.percent_remaining:.1f}% remaining "
+        f"long={status.long_term.percent_remaining:.1f}% remaining"
     )
     return _QuotaHealth(engine, "warning" if status.limit_reached else "ok", summary, status.limit_reached)

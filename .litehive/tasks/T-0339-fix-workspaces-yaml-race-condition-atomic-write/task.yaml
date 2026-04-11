@@ -1,7 +1,6 @@
 id: T-0339
 slug: fix-workspaces-yaml-race-condition-atomic-write
-title: "Fix workspaces.yaml race condition \u2014 atomic write + don't pollute from\
-  \ tests"
+title: "Move workspace registry to SQLite and stop tests writing to it"
 depends_on: []
 task_type: null
 model: null
@@ -15,49 +14,71 @@ priority: critical
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-11T05:20:36+00:00'
-updated_at: '2026-04-11T05:20:36+00:00'
-goal: "Root cause of 4-hour overnight daemon outage. When T-0291 ran, its test stage\
-  \ triggered pytest which called ensure_workspace(tmp_path) hundreds of times, each\
-  \ call did read-modify-write on ~/.config/litehive/workspaces.yaml with NO locking/atomic\
-  \ rename. Concurrent writes truncated each other, one landed mid-':', corrupting\
-  \ line 3. Next daemon cycle yaml.safe_load crashed and the daemon exited without\
-  \ recovering.\n\n### Immediate fix\n1. Make `_register_workspace` in litehive/config/workspace.py:172\
-  \ atomic: write to temp file in same directory, os.replace to target. Prevents partial\
-  \ writes.\n2. Add a file lock (fcntl.flock) around the read-modify-write block so\
-  \ concurrent processes serialize.\n\n### Structural fix\n3. Tests should NOT be\
-  \ writing to the real ~/.config/litehive/workspaces.yaml. Either:\n   a. Monkeypatch\
-  \ workspace_registry_path() in conftest.py to return a tmp path per test, OR\n \
-  \  b. Set $XDG_CONFIG_HOME to a tmpdir for the whole test session (clean sandbox),\
-  \ OR\n   c. Skip registry writes entirely when running under pytest (detect via\
-  \ sys.modules or env var)\n4. Preferred: option (b) \u2014 set XDG_CONFIG_HOME in\
-  \ conftest.py's session fixture. Most isolated.\n\n### Resilience fix\n5. Daemon\
-  \ should survive a corrupt workspaces.yaml instead of crashing the whole run loop.\
-  \ Wrap `yaml.safe_load` in `_register_workspace` in a try/except \u2014 if parse\
-  \ fails, rewrite the file with an empty registry and log a warning. Registry is\
-  \ just a cache, losing it is fine.\n6. Daemon's pool run loop should catch unhandled\
-  \ exceptions and restart the cycle (bounded retry) instead of exiting silently.\n\
-  \n### Why this matters\n- An overnight daemon that dies from one corrupted user-global\
-  \ file makes the whole 38-task backlog moot\n- The corruption is pure test pollution\
-  \ \u2014 no real user action could cause it\n- Related T-0332 will simplify the\
-  \ config merge + registry, but this atomic-write fix is load-bearing even if we\
-  \ keep the registry\n\n### Verification\n- Run pytest in parallel (xdist -n 4) and\
-  \ confirm workspaces.yaml stays valid\n- Kill a pytest run mid-write and confirm\
-  \ no partial file\n- Run the daemon for 30+ minutes through multiple task cycles\
-  \ without the file corrupting"
+updated_at: '2026-04-11T08:00:00+00:00'
+goal: |
+  Root cause of repeated daemon outages: `_register_workspace` in
+  litehive/config/workspace.py:172 does read-modify-write on
+  ~/.config/litehive/workspaces.yaml with no locking, no atomic rename.
+  Concurrent pytest processes corrupt it regularly — yesterday's 4-hour
+  outage, and again today after compaction. Tests call
+  `ensure_workspace(tmp_path)` hundreds of times, each one polluting the real
+  global registry with pytest tmpdirs and racing each other.
+
+  Two problems, one task:
+
+  ### 1. Kill the yaml registry, put it in SQLite
+  The registry is structured data that is read and written concurrently by
+  multiple processes. That is exactly what SQLite is for. yaml + fcntl +
+  os.replace is the wrong solution — SQLite already handles concurrent writes,
+  atomic commits, and crash safety. One `workspaces` table, columns
+  (workspace_id, path, last_seen). Reads and writes go through a single
+  connection per process. No file lock, no atomic-write dance.
+
+  Location: one global SQLite DB at `~/.local/share/litehive/litehive.db`
+  (coordinates with T-0342). Per-workspace `data.db` stays as-is — this is
+  the CROSS-workspace registry only.
+
+  Delete `~/.config/litehive/workspaces.yaml` and the yaml read/write code
+  entirely. One-time migration on first run: if the old yaml exists, import
+  its entries into SQLite, then remove the file.
+
+  ### 2. Tests must not touch the global registry
+  Even with SQLite, tests should NOT be writing to the user's real global DB.
+  Every `ensure_workspace(tmp_path)` call in a test registers that tmpdir as
+  a workspace, polluting the user's registry and eventually filling it with
+  thousands of dead pytest paths.
+
+  Fix: conftest.py session fixture sets `LITEHIVE_HOME=<tmp>` (or
+  `XDG_DATA_HOME=<tmp>`) so tests get a fully isolated global root. No
+  monkeypatching individual path helpers — one env var, whole test session.
+
+  ### Resilience
+  - Daemon should survive a corrupt/missing global DB by rebuilding it from
+    the CWD workspace marker, not by crashing. But with SQLite this becomes
+    a much rarer failure mode than the yaml version.
+  - Daemon's pool run loop should catch unhandled exceptions and restart the
+    cycle (bounded retry) instead of exiting silently — corruption in one
+    global file should not kill a 40-task backlog.
+
+  ### Verification
+  - Parallel pytest run (xdist -n 4) completes without touching the user's
+    real `~/.local/share/litehive/litehive.db`
+  - Grep confirms no remaining code path reads or writes `workspaces.yaml`
+  - Daemon runs through 30+ task cycles without any global-state corruption
 acceptance_criteria:
-- _register_workspace uses atomic write (temp file + os.replace)
-- _register_workspace uses an exclusive file lock around read-modify-write
-- Tests no longer write to real ~/.config/litehive/workspaces.yaml (conftest session
-  fixture sets XDG_CONFIG_HOME to tmp)
-- Daemon handles a corrupt workspaces.yaml gracefully (rewrite + warning, not crash)
-- Parallel pytest run (xdist -n 4) completes without corrupting workspaces.yaml
+- "Workspace registry lives in a SQLite table, not yaml"
+- "workspaces.yaml read/write code is deleted"
+- "One-time migration on first run: if ~/.config/litehive/workspaces.yaml exists, import into SQLite and remove the old file"
+- "conftest.py sets LITEHIVE_HOME (or XDG_DATA_HOME) to a tmp dir so tests never touch the user's real global registry"
+- "Parallel pytest run (xdist -n 4) completes with the user's real registry untouched"
+- "Daemon survives a corrupt/missing global DB without exiting the run loop"
 constraints: []
 plan: []
 human_checkpoints: []
 subagents: []
 git:
   auto_commit: true
-  commit_message: 'litehive: complete T-0339 fix-workspaces-yaml-race-condition-atomic-write'
+  commit_message: 'litehive: complete T-0339 move-workspace-registry-to-sqlite'
   commit_sha: null
   checkpoint_base_sha: null
   checkpoint_attempts: 0

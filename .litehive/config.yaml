@@ -80,6 +80,10 @@ runner_hooks:
       s*noqa:\\s*F401|ruff:\\s*noqa:\\s*F403' --; then\n  echo 'Forbidden noqa F401/F403\
       \ suppression found.'\n  exit 1\nfi"
     reject_on_failure: true
+  - command: uv run pytest -q
+    timeout_seconds: 300
+    reject_on_failure: true
+    description: "Run full suite before QA; reject if > 5 minutes"
 subagent_inactivity_timeout_seconds: 360.0
 inactivity_timeout_seconds: null
 subagent_resource_limits:

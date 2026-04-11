@@ -128,31 +128,36 @@ def _engine_quota_block(
         _record_codex_quota_monitoring(root, status)
         if status.error is not None or not status.limit_reached:
             return None, None
-        reset_at = _parse_datetime_utc(status.earliest_reset_at)
-        reset_info = f", resets at {status.earliest_reset_at}" if status.earliest_reset_at else ""
-        return f"codex quota exhausted (used {status.max_used_percent:.0f}%{reset_info})", reset_at
+        reset_at = _parse_datetime_utc(status.long_term.reset_at)
+        reset_info = f", resets {status.long_term.reset_at}" if status.long_term.reset_at else ""
+        return (
+            f"codex quota exhausted (long-term window at {status.long_term.used_percent:.0f}%{reset_info})",
+            reset_at,
+        )
     if engine_name == "claude":
         status = claude_quota_mod.check_claude_quota()
         if status.error or not status.limit_reached:
             return None, None
-        window = "5h" if status.five_hour.used_percent >= 80 else "7d"
-        pct = status.five_hour.used_percent if window == "5h" else status.seven_day.used_percent
-        reset = status.five_hour.reset_at if window == "5h" else status.seven_day.reset_at
-        return f"claude usage limit reached ({window} window at {pct:.0f}%, resets {reset})", _parse_datetime_utc(reset)
+        return (
+            f"claude usage limit reached (long-term window at {status.long_term.used_percent:.0f}%, resets {status.long_term.reset_at})",
+            _parse_datetime_utc(status.long_term.reset_at),
+        )
     if engine_name == "copilot":
         status = copilot_quota_mod.check_copilot_quota()
         if status.error or not status.limit_reached:
             return None, None
         return (
-            f"copilot premium requests low ({status.premium_remaining}/{status.premium_entitlement} "
-            f"remaining, {status.premium_percent_remaining:.0f}%, resets {status.quota_reset_date})",
-            _parse_datetime_utc(status.quota_reset_date),
+            f"copilot premium requests low ({status.long_term.percent_remaining:.0f}% remaining, resets {status.long_term.reset_at})",
+            _parse_datetime_utc(status.long_term.reset_at),
         )
     if engine_name in ("goz", "opencode"):
         status = zai_quota_mod.check_zai_quota()
         if status.error or not status.limit_reached:
             return None, None
-        return f"zai usage limit reached ({status.max_used_percent:.0f}% used)", None
+        return (
+            f"zai usage limit reached (long-term window at {status.long_term.used_percent:.0f}%)",
+            _parse_datetime_utc(status.long_term.reset_at),
+        )
     return None, None
 
 

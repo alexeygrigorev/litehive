@@ -6,15 +6,15 @@ task_type: null
 model: null
 mode: implementation
 pipeline_mode: full
-status: queued
+status: in_progress
 flag_reason: null
 flag_count: 0
-pipeline_status: backlog
+pipeline_status: commit_to_git
 priority: medium
 pm_complexity: null
 planned_effort: null
 created_at: '2026-04-10T06:48:26+00:00'
-updated_at: '2026-04-10T06:48:26+00:00'
+updated_at: '2026-04-11T10:22:24+00:00'
 goal: Rename the per-task agent review file from thread.yaml to comments.yaml for
   clearer terminology (matches GitHub PR comment mental model). Update all code references,
   all tests, and all docs. Backward compat for reading old thread.yaml files during
@@ -28,7 +28,91 @@ acceptance_criteria:
 constraints: []
 plan: []
 human_checkpoints: []
-subagents: []
+subagents:
+- id: SA-0001
+  role: planner
+  engine: codex
+  status: completed
+  path: subagents/SA-0001-planner
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0002
+  role: swe
+  engine: codex
+  status: interrupted
+  path: subagents/SA-0002-swe
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0003
+  role: recovery
+  engine: codex
+  status: completed
+  path: subagents/SA-0003-recovery
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0004
+  role: qa
+  engine: codex
+  status: completed
+  path: subagents/SA-0004-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0005
+  role: recovery
+  engine: codex
+  status: interrupted
+  path: subagents/SA-0005-recovery
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0006
+  role: recovery
+  engine: codex
+  status: failed
+  path: subagents/SA-0006-recovery
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0007
+  role: recovery
+  engine: codex
+  status: failed
+  path: subagents/SA-0007-recovery
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0008
+  role: recovery
+  engine: codex
+  status: failed
+  path: subagents/SA-0008-recovery
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0009
+  role: recovery
+  engine: claude
+  status: completed
+  path: subagents/SA-0009-recovery
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0010
+  role: qa
+  engine: claude
+  status: interrupted
+  path: subagents/SA-0010-qa
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0011
+  role: recovery
+  engine: codex
+  status: completed
+  path: subagents/SA-0011-recovery
+  sandboxed: false
+  sandbox_summary: host
+- id: SA-0012
+  role: reviewer
+  engine: codex
+  status: completed
+  path: subagents/SA-0012-reviewer
+  sandboxed: false
+  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0294 rename-thread-yaml-to-comments-yaml'

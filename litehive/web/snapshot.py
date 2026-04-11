@@ -166,122 +166,50 @@ def _read_engine_quota_snapshot() -> dict[str, dict[str, Any]]:
         "claude": _serialize_claude_quota(check_claude_quota()),
         "codex": _serialize_codex_quota(check_codex_quota()),
         "copilot": _serialize_copilot_quota(check_copilot_quota()),
-        "goz": _serialize_zai_quota(zai_status),
-        "opencode": _serialize_zai_quota(zai_status),
+        "goz": _serialize_zai_quota("goz", zai_status),
+        "opencode": _serialize_zai_quota("opencode", zai_status),
     }
     return {engine_name: snapshots[engine_name] for engine_name in sorted(snapshots)}
 
 
 def _serialize_codex_quota(status: Any) -> dict[str, Any]:
-    error = getattr(status, "error", None)
-    primary_window = getattr(status, "primary_window", None)
-    secondary_window = getattr(status, "secondary_window", None)
-    windows = [
-        _build_percent_window(
-            "5h",
-            getattr(primary_window, "used_percent", None),
-            getattr(primary_window, "reset_at", None),
-        ),
-        _build_percent_window(
-            "weekly",
-            getattr(secondary_window, "used_percent", None),
-            getattr(secondary_window, "reset_at", None),
-        ),
-    ]
-    return {
-        "engine": "codex",
-        "provider": "openai",
-        "status": "unavailable" if error else "ok",
-        "error": error,
-        "summary": "unavailable" if error else _max_window_summary(windows),
-        "windows": windows,
-    }
+    return _serialize_unified_quota(status, engine="codex", provider="openai")
 
 
 def _serialize_claude_quota(status: Any) -> dict[str, Any]:
-    error = getattr(status, "error", None)
-    five_hour = getattr(status, "five_hour", None)
-    seven_day = getattr(status, "seven_day", None)
-    windows = [
-        _build_percent_window(
-            "5h",
-            getattr(five_hour, "used_percent", None),
-            getattr(five_hour, "reset_at", None),
-        ),
-        _build_percent_window(
-            "7d",
-            getattr(seven_day, "used_percent", None),
-            getattr(seven_day, "reset_at", None),
-        ),
-    ]
-    return {
-        "engine": "claude",
-        "provider": "anthropic",
-        "status": "unavailable" if error else "ok",
-        "error": error,
-        "summary": "unavailable" if error else _max_window_summary(windows),
-        "windows": windows,
-    }
+    return _serialize_unified_quota(status, engine="claude", provider="anthropic")
 
 
 def _serialize_copilot_quota(status: Any) -> dict[str, Any]:
-    error = getattr(status, "error", None)
-    remaining = getattr(status, "premium_remaining", None)
-    entitlement = getattr(status, "premium_entitlement", None)
-    used_percent = getattr(status, "used_percent", None)
-    reset_at = getattr(status, "quota_reset_date", None)
-    return {
-        "engine": "copilot",
-        "provider": "github",
-        "status": "unavailable" if error else "ok",
-        "error": error,
-        "summary": (
-            "unavailable"
-            if error
-            else (
-                f"{_format_percent(used_percent)} used, "
-                f"{_format_ratio(remaining, entitlement)} premium requests remaining"
-            )
-        ),
-        "windows": [
-            {
-                "label": "premium",
-                "used_percent": _round_float(used_percent),
-                "remaining": remaining,
-                "limit": entitlement,
-                "remaining_display": _format_ratio(remaining, entitlement),
-                "reset_at": reset_at,
-            }
-        ],
-    }
+    return _serialize_unified_quota(status, engine="copilot", provider="github")
 
 
-def _serialize_zai_quota(status: Any) -> dict[str, Any]:
+def _serialize_zai_quota(engine: str, status: Any) -> dict[str, Any]:
+    return _serialize_unified_quota(status, engine=engine, provider="z.ai")
+
+
+def _serialize_unified_quota(status: Any, *, engine: str, provider: str) -> dict[str, Any]:
     error = getattr(status, "error", None)
-    api_calls = getattr(status, "api_calls", None)
-    tokens = getattr(status, "tokens", None)
+    short_term = getattr(status, "short_term", None)
+    long_term = getattr(status, "long_term", None)
     windows = [
-        _build_usage_window(
-            "api calls",
-            getattr(api_calls, "used_percent", None),
-            getattr(api_calls, "remaining", None),
-            getattr(api_calls, "limit", None),
-            f"{getattr(api_calls, 'window_hours', 0)}h" if getattr(api_calls, "window_hours", 0) else None,
+        _build_percent_window(
+            "short_term",
+            None if short_term is None else 100.0 - getattr(short_term, "percent_remaining", 100.0),
+            getattr(short_term, "reset_at", None),
         ),
-        _build_usage_window(
-            "tokens",
-            getattr(tokens, "used_percent", None),
-            getattr(tokens, "remaining", None),
-            getattr(tokens, "limit", None),
-            f"{getattr(tokens, 'window_hours', 0)}h" if getattr(tokens, "window_hours", 0) else None,
+        _build_percent_window(
+            "long_term",
+            None if long_term is None else 100.0 - getattr(long_term, "percent_remaining", 100.0),
+            getattr(long_term, "reset_at", None),
         ),
     ]
-    summary = _max_window_summary(windows)
     return {
-        "provider": "z.ai",
+        "engine": engine,
+        "provider": provider,
         "status": "unavailable" if error else "ok",
         "error": error,
-        "summary": "unavailable" if error else summary,
+        "summary": "unavailable" if error else _max_window_summary(windows),
         "windows": windows,
     }
 
@@ -294,24 +222,6 @@ def _build_percent_window(label: str, used_percent: Any, reset_at: str | None) -
         "used_percent": rounded_used,
         "remaining_percent": remaining_percent,
         "reset_at": reset_at,
-    }
-
-
-def _build_usage_window(
-    label: str,
-    used_percent: Any,
-    remaining: Any,
-    limit: Any,
-    window: str | None,
-) -> dict[str, Any]:
-    rounded_used = _round_float(used_percent)
-    return {
-        "label": label,
-        "window": window,
-        "used_percent": rounded_used,
-        "remaining": remaining,
-        "limit": limit,
-        "remaining_display": _format_ratio(remaining, limit),
     }
 
 

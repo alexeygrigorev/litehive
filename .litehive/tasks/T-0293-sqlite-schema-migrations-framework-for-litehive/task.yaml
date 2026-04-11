@@ -7,10 +7,10 @@ task_type: null
 model: null
 mode: implementation
 pipeline_mode: full
-status: in_progress
+status: done
 flag_reason: null
 flag_count: 0
-pipeline_status: commit_to_git
+pipeline_status: done
 priority: medium
 pm_complexity: moderate
 planned_effort: m
@@ -88,9 +88,9 @@ subagents:
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0293 sqlite-schema-migrations-framework-for-litehive'
-  commit_sha: null
-  checkpoint_base_sha: null
-  checkpoint_attempts: 0
+  commit_sha: 84d2d105259a3b653f2b72bbf21fa116f6b00e02
+  checkpoint_base_sha: e49d9a1f1bc1f63c76989d07851b9dfa575dcf29
+  checkpoint_attempts: 1
   rolled_back_checkpoint_attempt: null
   merge_agent_attempts: 0
   worktree_path: null

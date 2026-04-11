@@ -1,0 +1,59 @@
+task_id: T-0294
+step: accepting
+verdict: pass
+source: agent
+summary: 'Validated T-0294 in the current worktree and acceptance criteria are met.
+  Verified the code paths directly: canonical task discussion writes now target comments.yaml
+  via litehive/tasks/paths.py and litehive/tasks/reports.py (task_thread_file() resolves
+  to comments.yaml; save_task_thread/append_thread_comment write there), reads remain
+  backward-compatible by falling back to legacy thread.yaml only when comments.yaml
+  is absent via load_task_thread(), and workspace repair migrates legacy thread.yaml
+  files to comments.yaml via _migrate_legacy_thread_files() in litehive/pipeline/recovery/workspace_repair.py.
+  Verified exposed surfaces were updated to the new terminology/file name in active
+  product code and docs, including litehive/web/snapshot.py, litehive/web/common.py,
+  litehive/cli/debug.py, litehive/web/templates/index.html, README.md, docs/recovery.md,
+  and docs/workspace-layout.md. Verified focused regression coverage exists for the
+  rename behavior, including tests/test_task_commands_and_daemon.py (report writes
+  comments.yaml and legacy fallback read), tests/test_observability_and_status.py
+  (repair migrates legacy thread.yaml to comments.yaml), and tests/test_web_snapshot_and_verdicts.py
+  (snapshot exposes comments_file). Ran the required smoke suite in this workspace:
+  uv run pytest -q -> 1005 passed, 3 existing Typer deprecation warnings, exit 0.
+  Acceptance decision: pass.'
+feedback: 'Validated T-0294 in the current worktree and acceptance criteria are met.
+  Verified the code paths directly: canonical task discussion writes now target comments.yaml
+  via litehive/tasks/paths.py and litehive/tasks/reports.py (task_thread_file() resolves
+  to comments.yaml; save_task_thread/append_thread_comment write there), reads remain
+  backward-compatible by falling back to legacy thread.yaml only when comments.yaml
+  is absent via load_task_thread(), and workspace repair migrates legacy thread.yaml
+  files to comments.yaml via _migrate_legacy_thread_files() in litehive/pipeline/recovery/workspace_repair.py.
+  Verified exposed surfaces were updated to the new terminology/file name in active
+  product code and docs, including litehive/web/snapshot.py, litehive/web/common.py,
+  litehive/cli/debug.py, litehive/web/templates/index.html, README.md, docs/recovery.md,
+  and docs/workspace-layout.md. Verified focused regression coverage exists for the
+  rename behavior, including tests/test_task_commands_and_daemon.py (report writes
+  comments.yaml and legacy fallback read), tests/test_observability_and_status.py
+  (repair migrates legacy thread.yaml to comments.yaml), and tests/test_web_snapshot_and_verdicts.py
+  (snapshot exposes comments_file). Ran the required smoke suite in this workspace:
+  uv run pytest -q -> 1005 passed, 3 existing Typer deprecation warnings, exit 0.
+  Acceptance decision: pass.'
+submitted_via_cli: true
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 573
+hook_results: []
+created_at: '2026-04-11T10:22:24+00:00'

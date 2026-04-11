@@ -39,8 +39,10 @@ goal: "Recovery agent today only fires from INSIDE a running stage loop (core.py
   \ reason and continue to the NEXT task in the queue. Do NOT wedge the whole pool\
   \ on one broken task.\n- Record the recovery session in the task thread the same\
   \ way stage-level recovery does (role=recovery).\n\n### What recovery agent needs\
-  \ to handle\n- Corrupt ~/.config/litehive/workspaces.yaml (today's yaml ScannerError\
-  \ case)\n- Corrupt .litehive/state.yaml\n- Stuck runner lock from a killed prior\
+  \ to handle\n- Corrupt ~/.config/litehive/workspaces.yaml (yaml ScannerError)\n\
+  - Corrupt .litehive/tasks/T-XXXX/task.yaml from a hand-edit (concrete case: unquoted\
+  \ colon inside acceptance_criteria list item crashed the daemon mid-cycle when\
+  \ it loaded the queue)\n- Corrupt .litehive/state.yaml\n- Stuck runner lock from a killed prior\
   \ daemon\n- Broken heru editable path after extraction or worktree rebase\n- Broken\
   \ venv (reinstall from scratch)\n- Stale worktree that git refuses to reuse\n\n\
   ### Integration with T-0339 (atomic registry writes)\nT-0339 prevents the ORIGINAL\

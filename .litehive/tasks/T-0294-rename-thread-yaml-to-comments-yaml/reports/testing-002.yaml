@@ -1,0 +1,65 @@
+task_id: T-0294
+step: testing
+verdict: reject
+source: agent
+summary: 'Expected: T-0294 should write task discussion to comments.yaml, read legacy
+  thread.yaml only as a fallback when comments.yaml is missing, migrate legacy thread.yaml
+  to comments.yaml during repair, update active docs/UI references, and leave the
+  workspace with the current smoke suite passing via uv run pytest -q. Observed: the
+  task-focused validation passed, but the required smoke suite fails during collection
+  in an unrelated quota module before completion. Exact failure from uv run pytest
+  -q: ImportError while importing tests/test_codex_quota.py; cannot import name ''CodexQuotaStatus''
+  from ''litehive.agents.quota.codex_quota'' (/home/alexey/git/litehive/.litehive/worktrees/T-0294-rename-thread-yaml-to-comments-yaml/litehive/agents/quota/codex_quota.py).
+  Steps to reproduce: 1) cd /home/alexey/git/litehive/.litehive/worktrees/T-0294-rename-thread-yaml-to-comments-yaml
+  2) run uv run pytest -q 3) observe collection error in tests/test_codex_quota.py.
+  What is already satisfied: focused verification for the rename passed with uv run
+  pytest -q tests/test_task_commands_and_daemon.py tests/test_observability_and_status.py
+  tests/test_web_snapshot_and_verdicts.py -> 237 passed in 125.32s; diff inspection
+  confirms writes target comments.yaml, reads fall back to legacy thread.yaml, repair
+  migrates legacy files, and active docs/UI surfaces were updated. What is not met:
+  the acceptance criterion that updated tests pass / smoke suite passes is not currently
+  satisfied in this worktree because uv run pytest -q exits with the quota import
+  error above. This failure appears unrelated to T-0294 itself: git diff shows no
+  changes in litehive/agents/quota/codex_quota.py or tests/test_codex_quota.py, but
+  the workspace is not in a passing state for testing.'
+feedback: 'Expected: T-0294 should write task discussion to comments.yaml, read legacy
+  thread.yaml only as a fallback when comments.yaml is missing, migrate legacy thread.yaml
+  to comments.yaml during repair, update active docs/UI references, and leave the
+  workspace with the current smoke suite passing via uv run pytest -q. Observed: the
+  task-focused validation passed, but the required smoke suite fails during collection
+  in an unrelated quota module before completion. Exact failure from uv run pytest
+  -q: ImportError while importing tests/test_codex_quota.py; cannot import name ''CodexQuotaStatus''
+  from ''litehive.agents.quota.codex_quota'' (/home/alexey/git/litehive/.litehive/worktrees/T-0294-rename-thread-yaml-to-comments-yaml/litehive/agents/quota/codex_quota.py).
+  Steps to reproduce: 1) cd /home/alexey/git/litehive/.litehive/worktrees/T-0294-rename-thread-yaml-to-comments-yaml
+  2) run uv run pytest -q 3) observe collection error in tests/test_codex_quota.py.
+  What is already satisfied: focused verification for the rename passed with uv run
+  pytest -q tests/test_task_commands_and_daemon.py tests/test_observability_and_status.py
+  tests/test_web_snapshot_and_verdicts.py -> 237 passed in 125.32s; diff inspection
+  confirms writes target comments.yaml, reads fall back to legacy thread.yaml, repair
+  migrates legacy files, and active docs/UI surfaces were updated. What is not met:
+  the acceptance criterion that updated tests pass / smoke suite passes is not currently
+  satisfied in this worktree because uv run pytest -q exits with the quota import
+  error above. This failure appears unrelated to T-0294 itself: git diff shows no
+  changes in litehive/agents/quota/codex_quota.py or tests/test_codex_quota.py, but
+  the workspace is not in a passing state for testing.'
+submitted_via_cli: true
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 1
+retry_limit: 3
+retry_source: global
+retry_decision: retry
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 218
+hook_results: []
+created_at: '2026-04-11T07:51:15+00:00'

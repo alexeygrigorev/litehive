@@ -119,6 +119,7 @@ def _run_runner_hooks_for_stage(
             command=hook.command,
             reject_on_failure=hook.reject_on_failure,
             description=hook.description,
+            timeout_seconds=hook.timeout_seconds,
             ordinal=index,
         )
         hook_results.append(hook_result)
@@ -203,6 +204,7 @@ def _execute_runner_hook(
     command: str,
     reject_on_failure: bool,
     description: str | None,
+    timeout_seconds: float | None,
     ordinal: int,
 ) -> dict[str, str | int | bool | None]:
     env = _runner_hook_env(
@@ -212,14 +214,29 @@ def _execute_runner_hook(
         step=step,
         hook_point=hook_point,
     )
-    completed = subprocess.run(
-        ["bash", "-lc", command],
-        cwd=execution_root,
-        env=env,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    timed_out = False
+    run_kwargs: dict[str, object] = {
+        "cwd": execution_root,
+        "env": env,
+        "capture_output": True,
+        "text": True,
+        "check": False,
+    }
+    if timeout_seconds is not None:
+        run_kwargs["timeout"] = timeout_seconds
+    try:
+        completed = subprocess.run(["bash", "-lc", command], **run_kwargs)  # type: ignore[arg-type]
+        exit_code = completed.returncode
+        stdout = completed.stdout
+        stderr = completed.stderr
+    except subprocess.TimeoutExpired as exc:
+        timed_out = True
+        exit_code = 124
+        raw_out = exc.stdout or ""
+        raw_err = exc.stderr or ""
+        stdout = raw_out.decode("utf-8", errors="replace") if isinstance(raw_out, (bytes, bytearray)) else raw_out
+        stderr_tail = raw_err.decode("utf-8", errors="replace") if isinstance(raw_err, (bytes, bytearray)) else raw_err
+        stderr = f"{stderr_tail}\n[litehive] runner hook timed out after {timeout_seconds}s".strip()
     artifact_name = f"{hook_point}-{ordinal:03d}.yaml"
     artifact_path = task_dir(root, task) / "artifacts" / artifact_name
     artifact_payload = {
@@ -228,9 +245,11 @@ def _execute_runner_hook(
         "command": command,
         "reject_on_failure": reject_on_failure,
         "description": description,
-        "exit_code": completed.returncode,
-        "stdout": completed.stdout,
-        "stderr": completed.stderr,
+        "timeout_seconds": timeout_seconds,
+        "timed_out": timed_out,
+        "exit_code": exit_code,
+        "stdout": stdout,
+        "stderr": stderr,
     }
     artifact_content = yaml.safe_dump(artifact_payload, sort_keys=False)
     if len(artifact_content.encode("utf-8")) >= _COMPRESS_HOOK_ARTIFACT_MIN_BYTES:
@@ -239,7 +258,7 @@ def _execute_runner_hook(
     else:
         _atomic_write_text(artifact_path, artifact_content)
     artifact_label = artifact_path.relative_to(task_dir(root, task)).as_posix()
-    status = "passed" if completed.returncode == 0 else "failed"
+    status = "passed" if exit_code == 0 else "failed"
     append_journal(
         root,
         task,
@@ -249,7 +268,8 @@ def _execute_runner_hook(
                 f"- step: `{step}`",
                 f"- reject_on_failure: `{reject_on_failure}`",
                 f"- description: `{description or '-'}`",
-                f"- exit_code: `{completed.returncode}`",
+                f"- exit_code: `{exit_code}`"
+                + (f" (timed out after {timeout_seconds}s)" if timed_out else ""),
                 f"- artifact: `{artifact_label}`",
             ]
         ),
@@ -259,11 +279,12 @@ def _execute_runner_hook(
         "command": command,
         "reject_on_failure": reject_on_failure,
         "description": description,
-        "exit_code": completed.returncode,
+        "timed_out": timed_out,
+        "exit_code": exit_code,
         "status": status,
         "artifact": artifact_label,
-        "stdout": completed.stdout,
-        "stderr": completed.stderr,
+        "stdout": stdout,
+        "stderr": stderr,
     }
 
 

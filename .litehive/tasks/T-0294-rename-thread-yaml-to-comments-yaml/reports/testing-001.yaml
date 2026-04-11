@@ -1,0 +1,55 @@
+task_id: T-0294
+step: testing
+verdict: pass
+source: agent
+summary: 'Verified the current worktree directly from testing after the stale-runner
+  handoff. First rechecked the prior blocker: uv run pytest -q tests/test_codex_quota.py
+  now passes (17 passed), so the earlier ImportError for CodexQuotaStatus no longer
+  reproduces in this workspace. Then ran the task-focused validation for T-0294 with
+  uv run pytest -q tests/test_task_commands_and_daemon.py tests/test_observability_and_status.py
+  tests/test_web_snapshot_and_verdicts.py -> 237 passed in 145.54s. Code/doc inspection
+  confirms active references now target comments.yaml for writes and UI/docs, while
+  legacy thread.yaml remains only in read-fallback/migration paths and related tests:
+  litehive/tasks/paths.py, litehive/tasks/reports.py, litehive/web/common.py, litehive/web/snapshot.py,
+  litehive/cli/debug.py, README.md, docs/recovery.md, docs/workspace-layout.md. Finally
+  ran the requested smoke suite: uv run pytest -q -> 1005 passed, 3 existing Typer
+  deprecation warnings, exit 0. Recovery conclusion: no new Litehive infrastructure
+  bug remained to fix in testing; the prior rejection was based on a stale workspace
+  state that has since been repaired. Acceptance criteria are now evidenced in the
+  current worktree, and the task can proceed from testing with a pass.'
+feedback: 'Verified the current worktree directly from testing after the stale-runner
+  handoff. First rechecked the prior blocker: uv run pytest -q tests/test_codex_quota.py
+  now passes (17 passed), so the earlier ImportError for CodexQuotaStatus no longer
+  reproduces in this workspace. Then ran the task-focused validation for T-0294 with
+  uv run pytest -q tests/test_task_commands_and_daemon.py tests/test_observability_and_status.py
+  tests/test_web_snapshot_and_verdicts.py -> 237 passed in 145.54s. Code/doc inspection
+  confirms active references now target comments.yaml for writes and UI/docs, while
+  legacy thread.yaml remains only in read-fallback/migration paths and related tests:
+  litehive/tasks/paths.py, litehive/tasks/reports.py, litehive/web/common.py, litehive/web/snapshot.py,
+  litehive/cli/debug.py, README.md, docs/recovery.md, docs/workspace-layout.md. Finally
+  ran the requested smoke suite: uv run pytest -q -> 1005 passed, 3 existing Typer
+  deprecation warnings, exit 0. Recovery conclusion: no new Litehive infrastructure
+  bug remained to fix in testing; the prior rejection was based on a stale workspace
+  state that has since been repaired. Acceptance criteria are now evidenced in the
+  current worktree, and the task can proceed from testing with a pass.'
+submitted_via_cli: true
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 832
+hook_results: []
+created_at: '2026-04-11T10:12:50+00:00'

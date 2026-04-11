@@ -118,34 +118,32 @@ def _install_normalized_quota_readers(monkeypatch: pytest.MonkeyPatch) -> None:
         "litehive.web.snapshot.check_codex_quota",
         lambda: SimpleNamespace(
             error=None,
-            primary_window=SimpleNamespace(used_percent=42.0, reset_at="2026-04-09T05:00:00Z"),
-            secondary_window=SimpleNamespace(used_percent=61.0, reset_at="2026-04-15T00:00:00Z"),
+            short_term=SimpleNamespace(percent_remaining=58.0, reset_at="2026-04-09T05:00:00Z"),
+            long_term=SimpleNamespace(percent_remaining=39.0, reset_at="2026-04-15T00:00:00Z"),
         ),
     )
     monkeypatch.setattr(
         "litehive.web.snapshot.check_claude_quota",
         lambda: SimpleNamespace(
             error=None,
-            five_hour=SimpleNamespace(used_percent=37.5, reset_at="2026-04-09T04:00:00Z"),
-            seven_day=SimpleNamespace(used_percent=58.0, reset_at="2026-04-12T00:00:00Z"),
+            short_term=SimpleNamespace(percent_remaining=62.5, reset_at="2026-04-09T04:00:00Z"),
+            long_term=SimpleNamespace(percent_remaining=42.0, reset_at="2026-04-12T00:00:00Z"),
         ),
     )
     monkeypatch.setattr(
         "litehive.web.snapshot.check_copilot_quota",
         lambda: SimpleNamespace(
             error=None,
-            premium_remaining=125,
-            premium_entitlement=500,
-            used_percent=75.0,
-            quota_reset_date="2026-05-01",
+            short_term=SimpleNamespace(percent_remaining=100.0, reset_at=None),
+            long_term=SimpleNamespace(percent_remaining=25.0, reset_at="2026-05-01T00:00:00Z"),
         ),
     )
     monkeypatch.setattr(
         "litehive.web.snapshot.check_zai_quota",
         lambda: SimpleNamespace(
             error=None,
-            api_calls=SimpleNamespace(used_percent=33.0, remaining=67, limit=100, window_hours=24),
-            tokens=SimpleNamespace(used_percent=48.0, remaining=52000, limit=100000, window_hours=24),
+            short_term=SimpleNamespace(percent_remaining=52.0, reset_at=None),
+            long_term=SimpleNamespace(percent_remaining=100.0, reset_at=None),
         ),
     )
 
@@ -206,24 +204,23 @@ def test_read_engine_dashboard_includes_normalized_engine_quota(tmp_path: Path, 
 
     assert quota["codex"]["windows"] == [
         {
-            "label": "5h",
+            "label": "short_term",
             "used_percent": 42.0,
             "remaining_percent": 58.0,
             "reset_at": "2026-04-09T05:00:00Z",
         },
         {
-            "label": "weekly",
+            "label": "long_term",
             "used_percent": 61.0,
             "remaining_percent": 39.0,
             "reset_at": "2026-04-15T00:00:00Z",
         },
     ]
-    assert quota["claude"]["summary"] == "7d 58% used"
-    assert quota["copilot"]["windows"][0]["remaining_display"] == "125/500"
-    assert quota["copilot"]["windows"][0]["reset_at"] == "2026-05-01"
-    assert quota["goz"]["windows"][0]["window"] == "24h"
-    assert quota["goz"]["windows"][0]["remaining_display"] == "67/100"
-    assert quota["opencode"]["windows"][1]["remaining_display"] == "52000/100000"
+    assert quota["claude"]["summary"] == "long_term 58% used"
+    assert quota["copilot"]["windows"][1]["remaining_percent"] == 25.0
+    assert quota["copilot"]["windows"][1]["reset_at"] == "2026-05-01T00:00:00Z"
+    assert quota["goz"]["windows"][0]["remaining_percent"] == 52.0
+    assert quota["opencode"]["windows"][1]["remaining_percent"] == 100.0
 
 
 def test_read_engine_dashboard_marks_unavailable_quota_readers_fail_open(
@@ -234,25 +231,23 @@ def test_read_engine_dashboard_marks_unavailable_quota_readers_fail_open(
 
     monkeypatch.setattr(
         "litehive.web.snapshot.check_codex_quota",
-        lambda: SimpleNamespace(error="no auth token", primary_window=None, secondary_window=None),
+        lambda: SimpleNamespace(error="no auth token", short_term=None, long_term=None),
     )
     monkeypatch.setattr(
         "litehive.web.snapshot.check_claude_quota",
-        lambda: SimpleNamespace(error="no-credentials", five_hour=None, seven_day=None),
+        lambda: SimpleNamespace(error="no-credentials", short_term=None, long_term=None),
     )
     monkeypatch.setattr(
         "litehive.web.snapshot.check_copilot_quota",
         lambda: SimpleNamespace(
             error="gh not on PATH",
-            premium_remaining=0,
-            premium_entitlement=0,
-            used_percent=None,
-            quota_reset_date=None,
+            short_term=None,
+            long_term=None,
         ),
     )
     monkeypatch.setattr(
         "litehive.web.snapshot.check_zai_quota",
-        lambda: SimpleNamespace(error="goz not on PATH", api_calls=None, tokens=None),
+        lambda: SimpleNamespace(error="goz not on PATH", short_term=None, long_term=None),
     )
 
     payload = read_engine_dashboard(tmp_path)
@@ -261,7 +256,7 @@ def test_read_engine_dashboard_marks_unavailable_quota_readers_fail_open(
     assert quota["codex"]["status"] == "unavailable"
     assert quota["codex"]["summary"] == "unavailable"
     assert quota["claude"]["error"] == "no-credentials"
-    assert quota["copilot"]["windows"][0]["remaining_display"] == "0/0"
+    assert quota["copilot"]["windows"][0]["remaining_percent"] is None
     assert quota["goz"]["status"] == "unavailable"
     assert quota["opencode"]["error"] == "goz not on PATH"
 
