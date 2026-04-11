@@ -108,7 +108,7 @@ from litehive.observability import (
     record_engine_execution,
     render_task_summary,
 )
-from litehive.pipeline import (
+from litehive.pipeline_old import (
     EngineBudgetLedger,
     TaskPoolStopConditions,
     TaskExecutionRunner,
@@ -171,7 +171,7 @@ from litehive.tasks.queue_ops import (
 )
 from litehive.tasks.reports import append_thread_comment, load_task_thread
 from litehive.workspace.locking import runner_heartbeat, runner_status, workspace_runner_guard
-from litehive.pipeline.recovery import (
+from litehive.pipeline_old.recovery import (
     _mark_interrupted_subagent,
     _prepare_interrupted_task,
     recover_stale_runner_state,

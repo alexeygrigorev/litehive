@@ -12,9 +12,9 @@ from pathlib import Path
 
 from litehive.config import LitehiveConfig, ensure_workspace
 from litehive.git_ops import current_head
-from litehive.pipeline import _commit_to_git_report
+from litehive.pipeline_old import _commit_to_git_report
 from litehive.tasks import create_task, save_task
-from litehive.pipeline.recovery import _should_recover_flagged_commit_stage_task
+from litehive.pipeline_old.recovery import _should_recover_flagged_commit_stage_task
 
 
 def _init_git_repo(path: Path) -> str:

@@ -16,9 +16,12 @@ from tests.workspace_helpers import Path, ensure_workspace, pytest
 def test_embedded_initial_migration_is_discoverable() -> None:
     migrations = available_migrations()
 
-    assert [migration.name for migration in migrations] == ["0001_initial.sql"]
+    names = [migration.name for migration in migrations]
+    assert names == ["0001_initial.sql", "0002_pipeline_journal.sql"]
     assert migrations[0].version == 1
+    assert migrations[1].version == 2
     assert "CREATE TABLE IF NOT EXISTS pool_state" in migrations[0].sql
+    assert "CREATE TABLE IF NOT EXISTS pipeline_transitions" in migrations[1].sql
 
 
 def test_db_status_and_dry_run_report_pending_migrations(
@@ -27,7 +30,7 @@ def test_db_status_and_dry_run_report_pending_migrations(
     ensure_workspace(tmp_path)
     staged = (
         *available_migrations(),
-        Migration(version=2, name="0002_add_marker.sql", sql="CREATE TABLE marker (id INTEGER PRIMARY KEY);"),
+        Migration(version=3, name="0003_add_marker.sql", sql="CREATE TABLE marker (id INTEGER PRIMARY KEY);"),
     )
     monkeypatch.setattr("litehive.db.schema.available_migrations", lambda: staged)
 
@@ -35,13 +38,13 @@ def test_db_status_and_dry_run_report_pending_migrations(
     dry_run = CliRunner().invoke(app, ["db", "migrate", "--dry-run", "--workspace", str(tmp_path)])
 
     assert status.exit_code == 0, status.output
-    assert "schema_version: 1" in status.output
+    assert "schema_version: 2" in status.output
     assert "pending_migrations: 1" in status.output
-    assert "pending: 0002_add_marker.sql" in status.output
+    assert "pending: 0003_add_marker.sql" in status.output
 
     assert dry_run.exit_code == 0, dry_run.output
     assert "dry_run: yes" in dry_run.output
-    assert "would_apply: 0002_add_marker.sql" in dry_run.output
+    assert "would_apply: 0003_add_marker.sql" in dry_run.output
 
     with sqlite3.connect(workspace_database_path(tmp_path)) as connection:
         marker = connection.execute(
@@ -57,8 +60,8 @@ def test_apply_pending_migrations_rolls_back_failed_migration(
     staged = (
         *available_migrations(),
         Migration(
-            version=2,
-            name="0002_broken.sql",
+            version=3,
+            name="0003_broken.sql",
             sql=(
                 "CREATE TABLE broken_marker (id INTEGER PRIMARY KEY);"
                 "INSERT INTO missing_table(value) VALUES (1);"
@@ -81,7 +84,7 @@ def test_apply_pending_migrations_rolls_back_failed_migration(
             "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'broken_marker'"
         ).fetchone()
 
-    assert applied_versions == [1]
+    assert applied_versions == [1, 2]
     assert broken_marker is None
 
 
@@ -92,8 +95,8 @@ def test_daemon_run_applies_pending_migrations_before_start(
     staged = (
         *available_migrations(),
         Migration(
-            version=2,
-            name="0002_daemon_marker.sql",
+            version=3,
+            name="0003_daemon_marker.sql",
             sql="CREATE TABLE daemon_marker (id INTEGER PRIMARY KEY);",
         ),
     )
@@ -115,5 +118,5 @@ def test_daemon_run_applies_pending_migrations_before_start(
         daemon_marker = connection.execute(
             "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'daemon_marker'"
         ).fetchone()
-    assert applied_versions == [1, 2]
+    assert applied_versions == [1, 2, 3]
     assert daemon_marker is not None

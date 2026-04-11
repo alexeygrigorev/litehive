@@ -155,7 +155,7 @@ def test_apply_task_updates_with_action_park(tmp_path):
 
 
 def test_runner_exits_cleanly_when_grooming_report_closes_task(tmp_path):
-    from litehive.pipeline import TaskExecutionRunner
+    from litehive.pipeline_old import TaskExecutionRunner
     from litehive.tasks import save_task
 
     root = ensure_workspace(tmp_path)
@@ -189,7 +189,7 @@ def test_runner_exits_cleanly_when_grooming_report_closes_task(tmp_path):
 
 
 def test_runner_exits_cleanly_when_grooming_report_parks_task(tmp_path):
-    from litehive.pipeline import TaskExecutionRunner
+    from litehive.pipeline_old import TaskExecutionRunner
     from litehive.tasks import save_task
 
     root = ensure_workspace(tmp_path)

@@ -1,4 +1,4 @@
-from litehive.pipeline import (
+from litehive.pipeline_old import (
     EngineBudgetLedger,
     select_engine,
 )
@@ -32,7 +32,7 @@ def _plan_pool_dry_run(
     engine_override,
     model_override,
 ):
-    from litehive.pipeline import _git_worktree_blocks_pool
+    from litehive.pipeline_old import _git_worktree_blocks_pool
 
     if stop_conditions.stop_on_dirty_git and _git_worktree_blocks_pool(root):
         return [], "dirty_git_state"
@@ -97,7 +97,7 @@ def _plan_single_task_dry_run(
     engine_override,
     model_override,
 ):
-    from litehive.pipeline import _git_worktree_blocks_pool
+    from litehive.pipeline_old import _git_worktree_blocks_pool
 
     if stop_conditions.stop_on_dirty_git and _git_worktree_blocks_pool(root):
         return [], "dirty_git_state"

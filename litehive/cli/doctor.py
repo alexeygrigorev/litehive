@@ -1,5 +1,5 @@
 from litehive.config import ensure_workspace
-from litehive.pipeline.recovery import apply_doctor_fixes, scan_workspace_doctor
+from litehive.pipeline_old.recovery import apply_doctor_fixes, scan_workspace_doctor
 
 
 def _render_finding(prefix: str, finding) -> None:

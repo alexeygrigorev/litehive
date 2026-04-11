@@ -8,9 +8,9 @@ import pytest
 from litehive.agents._models import EngineFailure
 from litehive.config import ExecutionRetryPolicy, load_config
 from litehive.models import StageReport
-from litehive.pipeline import EngineBudgetLedger, SubagentManager
-from litehive.pipeline._builder import build_executor
-from litehive.pipeline._types import ResolvedExecutionRetryPolicy
+from litehive.pipeline_old import EngineBudgetLedger, SubagentManager
+from litehive.pipeline_old._builder import build_executor
+from litehive.pipeline_old._types import ResolvedExecutionRetryPolicy
 from tests.workspace_helpers import (
     CLIExecutionResult,
     LitehiveConfig,
@@ -41,7 +41,7 @@ def _continuation_stdout(engine_name: str, session_id: str) -> str:
 
 
 def _disable_quota_gates(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("litehive.pipeline._models._engine_quota_block", lambda *args, **kwargs: (None, None))
+    monkeypatch.setattr("litehive.pipeline_old._models._engine_quota_block", lambda *args, **kwargs: (None, None))
 
 
 def _set_task_to_implementing(tmp_path: Path):
@@ -144,7 +144,7 @@ def _build_stage_executor(
 
 def _disable_execution_retries(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "litehive.pipeline._builder.resolve_execution_retry_policy",
+        "litehive.pipeline_old._builder.resolve_execution_retry_policy",
         lambda config, engine_name, model_name: ResolvedExecutionRetryPolicy(
             selector=engine_name,
             policy=ExecutionRetryPolicy(max_retries=0, retry_on=[]),
@@ -177,7 +177,7 @@ def test_run_task_crash_resume_triggers_session_resume_for_claude(
             return _crash_result("implementing", engine_name="claude", resume_id="ses-abc-789")
         return _completed_subagent_result(tmp_path, task_arg.pipeline_status, task=task_arg)
 
-    monkeypatch.setattr("litehive.pipeline._orchestration.SubagentManager.run", fake_run)
+    monkeypatch.setattr("litehive.pipeline_old._orchestration.SubagentManager.run", fake_run)
     summary = run_task(tmp_path, task)
 
     assert summary.result is not None
@@ -218,7 +218,7 @@ def test_run_task_crash_resume_only_once_per_crash(
             return _crash_result("implementing", engine_name="claude", resume_id="ses-double-crash")
         return _completed_subagent_result(tmp_path, task_arg.pipeline_status, task=task_arg)
 
-    monkeypatch.setattr("litehive.pipeline._orchestration.SubagentManager.run", fake_run)
+    monkeypatch.setattr("litehive.pipeline_old._orchestration.SubagentManager.run", fake_run)
     run_task(tmp_path, task)
 
     resume_calls = [
@@ -266,7 +266,7 @@ def test_run_task_crash_resume_triggers_for_engines_with_resume_ids(
             return _crash_result("implementing", engine_name=engine_name, resume_id=resume_id)
         return _completed_subagent_result(tmp_path, task_arg.pipeline_status, task=task_arg)
 
-    monkeypatch.setattr("litehive.pipeline._orchestration.SubagentManager.run", fake_run)
+    monkeypatch.setattr("litehive.pipeline_old._orchestration.SubagentManager.run", fake_run)
     summary = run_task(tmp_path, task)
 
     assert summary.result is not None
@@ -329,7 +329,7 @@ def test_run_task_crash_resume_skipped_when_no_resume_id_is_available(
             )
         return _completed_subagent_result(tmp_path, task_arg.pipeline_status, task=task_arg)
 
-    monkeypatch.setattr("litehive.pipeline._orchestration.SubagentManager.run", fake_run)
+    monkeypatch.setattr("litehive.pipeline_old._orchestration.SubagentManager.run", fake_run)
     run_task(tmp_path, task)
 
     resume_calls = [
@@ -364,7 +364,7 @@ def test_run_task_crash_resume_journal_entry(
                 return _crash_result("implementing", engine_name="claude", resume_id="ses-journal-456")
         return _completed_subagent_result(tmp_path, task_arg.pipeline_status, task=task_arg)
 
-    monkeypatch.setattr("litehive.pipeline._orchestration.SubagentManager.run", fake_run)
+    monkeypatch.setattr("litehive.pipeline_old._orchestration.SubagentManager.run", fake_run)
     run_task(tmp_path, task)
 
     task_folder = tmp_path / ".litehive" / "tasks" / f"{task.id}-{task.slug}"
@@ -395,7 +395,7 @@ def test_stage_executor_crash_resume_triggers_session_resume_for_claude(
             tmp_path, "implementing", engine_name=engine_name, task=task_arg
         )
 
-    monkeypatch.setattr("litehive.pipeline._builder.SubagentManager.run", fake_run)
+    monkeypatch.setattr("litehive.pipeline_old._builder.SubagentManager.run", fake_run)
 
     report = executor(task, "implementing")
 
@@ -425,7 +425,7 @@ def test_stage_executor_crash_resume_triggers_session_resume_for_codex(
             tmp_path, "implementing", engine_name=engine_name, task=task_arg
         )
 
-    monkeypatch.setattr("litehive.pipeline._builder.SubagentManager.run", fake_run)
+    monkeypatch.setattr("litehive.pipeline_old._builder.SubagentManager.run", fake_run)
 
     report = executor(task, "implementing")
 
@@ -453,7 +453,7 @@ def test_stage_executor_crash_resume_skips_engines_without_resume_id(
         calls.append({"resume_session_id": resume_session_id})
         return _crash_result(engine_name=engine_name, resume_id=None)
 
-    monkeypatch.setattr("litehive.pipeline._builder.SubagentManager.run", fake_run)
+    monkeypatch.setattr("litehive.pipeline_old._builder.SubagentManager.run", fake_run)
 
     report = executor(task, "implementing")
 
@@ -483,7 +483,7 @@ def test_verdict_nudge_fires_on_timeout_when_resume_id_available(
             tmp_path, "implementing", engine_name=engine_name, task=task_arg
         )
 
-    monkeypatch.setattr("litehive.pipeline._builder.SubagentManager.run", fake_run)
+    monkeypatch.setattr("litehive.pipeline_old._builder.SubagentManager.run", fake_run)
 
     report = executor(task, "implementing")
 
@@ -545,8 +545,8 @@ def test_verdict_nudge_fires_on_clean_exit_without_verdict(
             tests={"added": 1, "passing": 1},
         )
 
-    monkeypatch.setattr("litehive.pipeline._builder.SubagentManager.run", fake_run)
-    monkeypatch.setattr("litehive.pipeline._builder.stage_report_from_subagent", fake_stage_report)
+    monkeypatch.setattr("litehive.pipeline_old._builder.SubagentManager.run", fake_run)
+    monkeypatch.setattr("litehive.pipeline_old._builder.stage_report_from_subagent", fake_stage_report)
 
     report = executor(task, "implementing")
 
@@ -614,8 +614,8 @@ def test_timeout_nudge_result_replaces_original_result_for_report_parsing(
             tests={"added": 1, "passing": 1},
         )
 
-    monkeypatch.setattr("litehive.pipeline._builder.SubagentManager.run", fake_run)
-    monkeypatch.setattr("litehive.pipeline._builder.stage_report_from_subagent", fake_stage_report)
+    monkeypatch.setattr("litehive.pipeline_old._builder.SubagentManager.run", fake_run)
+    monkeypatch.setattr("litehive.pipeline_old._builder.stage_report_from_subagent", fake_stage_report)
 
     report = executor(task, "implementing")
 

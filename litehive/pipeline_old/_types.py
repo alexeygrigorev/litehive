@@ -5,7 +5,7 @@ from pathlib import Path
 
 from litehive.config import ExecutionRetryPolicy
 from litehive.models import TaskRecord
-from litehive.pipeline.core import RunResult
+from litehive.pipeline_old.core import RunResult
 from litehive.tasks.models import BlockedTask
 
 

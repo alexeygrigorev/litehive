@@ -1,0 +1,283 @@
+"""Invariant + happy-path tests for the pipeline v2 state machine.
+
+These only exercise the pure rule layer via ``evaluate`` — no engines, no
+runner, no persistence.
+"""
+from __future__ import annotations
+
+import pytest
+
+from litehive.pipeline import RULES, evaluate, list_transitions
+from litehive.pipeline.events import (
+    Blocked,
+    CleanState,
+    Crash,
+    HookOk,
+    NeedsPreExecRecovery,
+    Pass,
+    PreExecRecoveryFailed,
+    PreExecRecoverySucceeded,
+    RecoveryFailed,
+    RecoverySucceeded,
+    Reject,
+    Timeout,
+)
+from litehive.pipeline.persistence import LastReport, Limits, TaskState
+from litehive.pipeline.transitions import NoTransitionError
+from litehive.pipeline.types import (
+    ANY_STAGE_PHASE,
+    STAGES,
+    TERMINAL_NODES,
+    PipelineMode,
+)
+
+
+def make_state(
+    stage: str,
+    *,
+    mode: PipelineMode = PipelineMode.FULL,
+    stage_retry: dict[str, int] | None = None,
+    recovery_attempt: dict[str, int] | None = None,
+    pre_exec_recovery_attempt: int = 0,
+    origin_stage: str | None = None,
+    files_changed: int = 1,
+    tests_added: int = 0,
+    stage_retry_limit: int = 3,
+) -> TaskState:
+    return TaskState(
+        task_id="T-0001",
+        stage=stage,
+        pipeline_mode=mode,
+        stage_retry=stage_retry or {},
+        recovery_attempt=recovery_attempt or {},
+        pre_exec_recovery_attempt=pre_exec_recovery_attempt,
+        origin_stage=origin_stage,
+        last_report=LastReport(files_changed=files_changed, tests_added=tests_added),
+        limits=Limits(stage_retry_limit=stage_retry_limit),
+    )
+
+
+def step(stage: str, event, state: TaskState):
+    return evaluate(RULES, stage, event, state)
+
+
+# ── happy path ────────────────────────────────────────────────────────────
+
+
+FULL_HAPPY_PATH = [
+    ("ready",                  CleanState(),  "before_grooming"),
+    ("before_grooming",        HookOk(),      "grooming"),
+    ("grooming",               Pass(),        "after_grooming"),
+    ("after_grooming",         HookOk(),      "before_implementing"),
+    ("before_implementing",    HookOk(),      "implementing"),
+    ("implementing",           Pass(),        "after_implementing"),
+    ("after_implementing",     HookOk(),      "before_testing"),
+    ("before_testing",         HookOk(),      "testing"),
+    ("testing",                Pass(),        "after_testing"),
+    ("after_testing",          HookOk(),      "before_accepting"),
+    ("before_accepting",       HookOk(),      "accepting"),
+    ("accepting",              Pass(),        "after_accepting"),
+    ("after_accepting",        HookOk(),      "before_commit"),
+    ("before_commit",          HookOk(),      "commit"),
+    ("commit",                 Pass(),        "after_commit"),
+    ("after_commit",           HookOk(),      "done"),
+]
+
+
+@pytest.mark.parametrize("stage,event,expected", FULL_HAPPY_PATH)
+def test_full_mode_happy_path(stage, event, expected):
+    state = make_state(stage, mode=PipelineMode.FULL)
+    assert step(stage, event, state).next == expected
+
+
+def test_single_mode_entry_skips_grooming_testing_accepting():
+    state = make_state("ready", mode=PipelineMode.SINGLE)
+    assert step("ready", CleanState(), state).next == "before_implementing"
+
+
+def test_single_mode_after_implementing_goes_to_commit():
+    state = make_state("after_implementing", mode=PipelineMode.SINGLE, files_changed=5)
+    assert step("after_implementing", HookOk(), state).next == "before_commit"
+
+
+def test_single_mode_zero_change_shortcut_to_done():
+    state = make_state(
+        "after_implementing",
+        mode=PipelineMode.SINGLE,
+        files_changed=0,
+        tests_added=0,
+    )
+    assert step("after_implementing", HookOk(), state).next == "done"
+
+
+def test_full_mode_does_not_use_zero_change_shortcut():
+    state = make_state(
+        "after_implementing",
+        mode=PipelineMode.FULL,
+        files_changed=0,
+        tests_added=0,
+    )
+    assert step("after_implementing", HookOk(), state).next == "before_testing"
+
+
+# ── rejections ────────────────────────────────────────────────────────────
+
+
+def test_grooming_reject_goes_straight_to_recovering():
+    state = make_state("grooming")
+    trans = step("grooming", Reject(source="agent", reason="x"), state)
+    assert trans.next == "recovering"
+    assert trans.delta.inc_recovery_attempt == "grooming"
+    assert trans.delta.set_origin_stage == "grooming"
+
+
+def test_implementing_reject_retries_with_counter_bump():
+    state = make_state("implementing", stage_retry={"implementing": 0})
+    trans = step("implementing", Reject(source="agent", reason="x"), state)
+    assert trans.next == "implementing"
+    assert trans.delta.inc_stage_retry == "implementing"
+
+
+def test_implementing_reject_routes_to_recovering_when_exhausted():
+    state = make_state("implementing", stage_retry={"implementing": 3})
+    trans = step("implementing", Reject(source="agent", reason="x"), state)
+    assert trans.next == "recovering"
+
+
+def test_testing_reject_routes_back_to_implementing():
+    state = make_state("testing", stage_retry={"testing": 0})
+    trans = step("testing", Reject(source="agent", reason="x"), state)
+    assert trans.next == "implementing"
+    assert trans.delta.inc_stage_retry == "testing"
+
+
+def test_commit_reject_goes_to_recovering():
+    state = make_state("commit")
+    trans = step("commit", Reject(source="system", reason="merge conflict"), state)
+    assert trans.next == "recovering"
+
+
+# ── blocked ───────────────────────────────────────────────────────────────
+
+
+@pytest.mark.parametrize("stage", ["grooming", "implementing", "testing", "accepting"])
+def test_blocked_routes_to_recovering(stage):
+    state = make_state(stage)
+    assert step(stage, Blocked(reason="x"), state).next == "recovering"
+
+
+# ── tier-3 crash / timeout wildcards ──────────────────────────────────────
+
+
+@pytest.mark.parametrize("phase", list(ANY_STAGE_PHASE))
+def test_crash_in_any_stage_phase_routes_to_recovering(phase):
+    state = make_state(phase)
+    assert step(phase, Crash(exc_type="E", message="m"), state).next == "recovering"
+
+
+@pytest.mark.parametrize("phase", list(ANY_STAGE_PHASE))
+def test_timeout_in_any_stage_phase_routes_to_recovering(phase):
+    state = make_state(phase)
+    assert step(phase, Timeout(), state).next == "recovering"
+
+
+# ── recovering exit ───────────────────────────────────────────────────────
+
+
+def test_recovery_succeeded_resume_origin_stage_name():
+    state = make_state("recovering", origin_stage="testing")
+    trans = step("recovering", RecoverySucceeded(resume="testing"), state)
+    assert trans.next == "before_testing"
+    assert trans.delta.clear_origin_stage is True
+
+
+def test_recovery_succeeded_resume_done():
+    state = make_state("recovering", origin_stage="commit")
+    assert step("recovering", RecoverySucceeded(resume="done"), state).next == "done"
+
+
+def test_recovery_failed_goes_to_failed_terminal_with_reason():
+    state = make_state("recovering", origin_stage="implementing")
+    trans = step("recovering", RecoveryFailed(reason="x"), state)
+    assert trans.next == "failed"
+    assert trans.delta.failed_reason == "recovery_exhausted"
+
+
+def test_recovery_crash_routes_to_failed_with_recovery_crashed():
+    state = make_state("recovering", origin_stage="implementing")
+    trans = step("recovering", Crash(exc_type="E", message="boom"), state)
+    assert trans.next == "failed"
+    assert trans.delta.failed_reason == "recovery_crashed"
+
+
+def test_recovering_wildcard_does_not_route_recovering_back_to_itself():
+    """Specific recovering-rule must beat the wildcard Crash→recovering."""
+    state = make_state("recovering")
+    assert step("recovering", Timeout(), state).next == "failed"
+
+
+# ── pre-exec recovery ─────────────────────────────────────────────────────
+
+
+def test_ready_needs_pre_exec_routes_to_pre_exec_node():
+    state = make_state("ready")
+    trans = step("ready", NeedsPreExecRecovery(), state)
+    assert trans.next == "recovering_pre_exec"
+    assert trans.delta.inc_pre_exec_recovery_attempt is True
+
+
+def test_pre_exec_success_resumes_origin_stage():
+    state = make_state("recovering_pre_exec")
+    trans = step(
+        "recovering_pre_exec",
+        PreExecRecoverySucceeded(resume_stage="implementing"),
+        state,
+    )
+    assert trans.next == "before_implementing"
+
+
+def test_pre_exec_failed_goes_to_failed_terminal():
+    state = make_state("recovering_pre_exec", pre_exec_recovery_attempt=1)
+    trans = step("recovering_pre_exec", PreExecRecoveryFailed(reason="x"), state)
+    assert trans.next == "failed"
+    assert trans.delta.failed_reason == "pre_exec_recovery_failed"
+
+
+# ── invariants over the whole rule set ───────────────────────────────────
+
+
+def test_no_rule_leaves_recovering_looping_to_recovering():
+    for rule in list_transitions():
+        if rule.from_ == "recovering" and not callable(rule.to):
+            assert rule.to != "recovering", f"self-loop on recovering: {rule.description}"
+
+
+def test_every_stage_phase_has_crash_route():
+    for phase in ANY_STAGE_PHASE:
+        state = make_state(phase)
+        assert step(phase, Crash(exc_type="E", message="m"), state).next == "recovering"
+
+
+def test_unmatched_event_raises_no_transition():
+    state = make_state("grooming")
+    with pytest.raises(NoTransitionError):
+        step("grooming", HookOk(), state)
+
+
+def test_terminal_nodes_have_no_outgoing_rules():
+    for rule in list_transitions():
+        from_nodes = rule.from_ if isinstance(rule.from_, frozenset) else {rule.from_}
+        assert not (from_nodes & TERMINAL_NODES), f"terminal outgoing: {rule.description}"
+
+
+def test_all_stages_referenced_in_rules():
+    refs: set[str] = set()
+    for rule in list_transitions():
+        if isinstance(rule.from_, frozenset):
+            refs.update(rule.from_)
+        else:
+            refs.add(rule.from_)
+    for stage in STAGES:
+        assert f"before_{stage}" in refs
+        assert stage in refs
+        assert f"after_{stage}" in refs

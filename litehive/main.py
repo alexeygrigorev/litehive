@@ -8,7 +8,7 @@ from pathlib import Path
 import yaml
 
 from litehive.config import load_config, resolve_workspace
-from litehive.pipeline.recovery import status_attention_findings
+from litehive.pipeline_old.recovery import status_attention_findings
 
 
 def _fast_runner_status(workspace: Path) -> dict:

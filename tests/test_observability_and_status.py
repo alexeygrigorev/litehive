@@ -110,7 +110,7 @@ def test_cmd_run_default_executes_single_task_and_reports_summary(
     create_task(tmp_path, title="Second task", auto_commit=False)
 
     monkeypatch.setattr(
-        "litehive.pipeline.SubagentManager.run",
+        "litehive.pipeline_old.SubagentManager.run",
         lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
             _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
         ),
@@ -518,7 +518,7 @@ def test_doctor_command_reports_origin_divergence(
     _init_git_repo(tmp_path)
 
     monkeypatch.setattr(
-        "litehive.pipeline.recovery.doctor._check_origin_divergence",
+        "litehive.pipeline_old.recovery.doctor._check_origin_divergence",
         lambda root: "local main and origin/main have diverged",
     )
 
@@ -620,7 +620,7 @@ def test_doctor_fix_repairs_stranded_commit_and_orphaned_subagent(
     orphaned_subagent = _create_orphaned_subagent_task(tmp_path)
 
     monkeypatch.setattr(
-        "litehive.pipeline.recovery.doctor._check_origin_divergence",
+        "litehive.pipeline_old.recovery.doctor._check_origin_divergence",
         lambda root: None,
     )
 
@@ -667,7 +667,7 @@ def test_cmd_run_drains_task_pool_and_reports_summary(
     create_task(tmp_path, title="Second task", auto_commit=False)
 
     monkeypatch.setattr(
-        "litehive.pipeline.SubagentManager.run",
+        "litehive.pipeline_old.SubagentManager.run",
         lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
             _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
         ),
@@ -897,7 +897,7 @@ def test_cmd_run_reports_resumable_interrupted_tasks(
             raise KeyboardInterrupt()
         return _completed_subagent_result(tmp_path, current_task.pipeline_status, task=current_task)
 
-    monkeypatch.setattr("litehive.pipeline.SubagentManager.run", fake_run)
+    monkeypatch.setattr("litehive.pipeline_old.SubagentManager.run", fake_run)
 
     exit_code = _cmd_run(argparse.Namespace(workspace=tmp_path, dry_run=False, drain=False))
     output = capsys.readouterr().out
@@ -931,7 +931,7 @@ def test_run_next_task_marks_subagent_termination_as_interrupted(tmp_path: Path)
         )
 
     monkeypatch = pytest.MonkeyPatch()
-    monkeypatch.setattr("litehive.pipeline.SubagentManager.run", fake_run)
+    monkeypatch.setattr("litehive.pipeline_old.SubagentManager.run", fake_run)
     try:
         summary = run_next_task(tmp_path)
     finally:
@@ -964,7 +964,7 @@ def test_cmd_run_reports_remaining_tasks_when_pool_stops_early(
     create_task(tmp_path, title="Second task", auto_commit=False)
 
     monkeypatch.setattr(
-        "litehive.pipeline.SubagentManager.run",
+        "litehive.pipeline_old.SubagentManager.run",
         lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
             _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
         ),
@@ -1050,7 +1050,7 @@ def test_cmd_run_drain_reports_no_useful_progress_after_requeue_when_only_blocke
             )
         return _completed_subagent_result(tmp_path, task.pipeline_status, engine_name=engine_name, task=task)
 
-    monkeypatch.setattr("litehive.pipeline.SubagentManager.run", fake_run)
+    monkeypatch.setattr("litehive.pipeline_old.SubagentManager.run", fake_run)
 
     exit_code = _cmd_run(argparse.Namespace(workspace=tmp_path, dry_run=False, drain=True))
     output = capsys.readouterr().out
@@ -1084,7 +1084,7 @@ def test_cmd_run_reports_human_checkpoint_stop_without_marking_failure(
     create_task(tmp_path, title="Second task", auto_commit=False)
 
     monkeypatch.setattr(
-        "litehive.pipeline.SubagentManager.run",
+        "litehive.pipeline_old.SubagentManager.run",
         lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
             _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
         ),
@@ -1132,7 +1132,7 @@ def test_cmd_run_reports_requeued_task_even_when_other_tasks_are_blocked(
             )
         return _completed_subagent_result(tmp_path, task.pipeline_status, engine_name=engine_name, task=task)
 
-    monkeypatch.setattr("litehive.pipeline.SubagentManager.run", fake_run)
+    monkeypatch.setattr("litehive.pipeline_old.SubagentManager.run", fake_run)
 
     exit_code = _cmd_run(argparse.Namespace(workspace=tmp_path, dry_run=False, drain=False))
     output = capsys.readouterr().out
@@ -1191,7 +1191,7 @@ def test_cmd_run_reports_stage_outcomes_for_remaining_task_with_prior_reports(
     )
 
     monkeypatch.setattr(
-        "litehive.pipeline.SubagentManager.run",
+        "litehive.pipeline_old.SubagentManager.run",
         lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
             _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
         ),
@@ -1246,7 +1246,7 @@ def test_cmd_run_reports_failed_task_summary_with_stage_outcomes(
             files_changed=[], tests_added=0, tests_passing=0, task=task,
         )
 
-    monkeypatch.setattr("litehive.pipeline.SubagentManager.run", fake_run)
+    monkeypatch.setattr("litehive.pipeline_old.SubagentManager.run", fake_run)
 
     exit_code = _cmd_run(argparse.Namespace(workspace=tmp_path, dry_run=False, drain=False))
     output = capsys.readouterr().out
@@ -3533,7 +3533,7 @@ def test_pool_summary_flow_stats_in_durable_report(
         )
 
     monkeypatch.setattr(
-        "litehive.pipeline.SubagentManager.run",
+        "litehive.pipeline_old.SubagentManager.run",
         lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
             _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
         ),

@@ -22,7 +22,7 @@ from litehive.tasks.journal import append_journal
 from litehive.tasks.normalization import missing_acceptance_criteria_reason, needs_normalization
 from litehive.tasks.paths import task_dir
 from litehive.tasks.reports import record_recovery_report
-from litehive.pipeline.recovery import _prepare_interrupted_task, interruption_journal_message
+from litehive.pipeline_old.recovery import _prepare_interrupted_task, interruption_journal_message
 from litehive.workspace.runtime_tracking import (
     _apply_stage_finished,
     _apply_task_outcome,
@@ -34,7 +34,7 @@ from litehive.workspace.runtime_tracking import (
     mark_stage_started,
     set_task_retry_state,
 )
-from litehive.pipeline.states import _ROUTES, _SINGLE_ROUTES, _SINGLE_STEPS_FROM, _STEPS_FROM
+from litehive.pipeline_old.states import _ROUTES, _SINGLE_ROUTES, _SINGLE_STEPS_FROM, _STEPS_FROM
 
 
 class StageExecutor(Protocol):
@@ -51,7 +51,7 @@ class RunResult:
 class TaskExecutionRunner:
     """Drive one task through the fixed pipeline using a deterministic router.
 
-    The runner uses the transition table in ``litehive.pipeline.states._ROUTES`` to
+    The runner uses the transition table in ``litehive.pipeline_old.states._ROUTES`` to
     decide the next stage after each executor call.  All routing is local and
     deterministic; the executor (a subagent or test stub) only produces reports.
     """
@@ -217,7 +217,7 @@ class TaskExecutionRunner:
                 traceback_text = traceback.format_exc()
                 # Try recovery agent before flagging
                 if self.subagents is not None:
-                    from litehive.pipeline import _attempt_stage_recovery
+                    from litehive.pipeline_old import _attempt_stage_recovery
                     from litehive.models import StageReport as _SR
 
                     append_journal(self.root, task, f"{reason}. Launching recovery agent.")
@@ -945,7 +945,7 @@ class TaskExecutionRunner:
     ) -> StageReport | None:
         if self.subagents is None:
             return None
-        from litehive.pipeline import _attempt_stage_recovery
+        from litehive.pipeline_old import _attempt_stage_recovery
 
         engine_name = self.config.default_engine if self.config else "codex"
         try:

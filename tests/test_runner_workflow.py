@@ -560,7 +560,7 @@ def test_runner_accepts_workflow_testing_with_real_lifecycle_evidence(
             self.execution_root, current_task.pipeline_status, engine_name=engine_name, task=current_task
         )
 
-    monkeypatch.setattr("litehive.pipeline.SubagentManager.run", fake_run)
+    monkeypatch.setattr("litehive.pipeline_old.SubagentManager.run", fake_run)
 
     assert _cmd_run(argparse.Namespace(workspace=commit_workspace, dry_run=False, drain=False)) == 0
     commit_output = capsys.readouterr().out
@@ -1455,7 +1455,7 @@ def test_run_next_task_uses_task_retry_override(
                 )
         return _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
 
-    monkeypatch.setattr("litehive.pipeline.SubagentManager.run", fake_run)
+    monkeypatch.setattr("litehive.pipeline_old.SubagentManager.run", fake_run)
 
     summary = run_next_task(tmp_path)
 
@@ -1512,7 +1512,7 @@ def test_run_next_task_requeues_after_qa_rejection(
             )
         return _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
 
-    monkeypatch.setattr("litehive.pipeline.SubagentManager.run", fake_run)
+    monkeypatch.setattr("litehive.pipeline_old.SubagentManager.run", fake_run)
 
     summary = run_next_task(tmp_path)
 
@@ -1600,7 +1600,7 @@ def test_cli_run_end_to_end_requeues_after_qa_failure_then_commits_in_temp_git_r
             task=current_task,
         )
 
-    monkeypatch.setattr("litehive.pipeline.SubagentManager.run", fake_run)
+    monkeypatch.setattr("litehive.pipeline_old.SubagentManager.run", fake_run)
 
     assert _cmd_run(argparse.Namespace(workspace=tmp_path, dry_run=False, drain=False)) == 0
     first_output = capsys.readouterr().out

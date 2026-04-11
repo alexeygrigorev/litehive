@@ -8,11 +8,11 @@ import yaml
 from litehive.config import ensure_workspace, state_path
 from litehive.daemon._execution import _check_origin_divergence
 from litehive.models import TaskRecord, WorkspaceState
-from litehive.pipeline.recovery.detection import (
+from litehive.pipeline_old.recovery.detection import (
     _is_orphaned_commit_stage_task,
     _is_stranded_commit_task,
 )
-from litehive.pipeline.recovery.workspace_repair import repair_workspace_state
+from litehive.pipeline_old.recovery.workspace_repair import repair_workspace_state
 from litehive.tasks.crud import list_tasks, save_task_runtime
 from litehive.tasks.persistence import load_state
 from litehive.tasks.queue_ops import _is_task_eligible_for_execution

@@ -16,7 +16,7 @@ from tests.workspace_helpers import (
 from datetime import datetime, timedelta, timezone
 
 from litehive.cli.engine import _parse_local_datetime
-from litehive.pipeline import EngineSelection
+from litehive.pipeline_old import EngineSelection
 
 
 def test_parse_local_datetime_date_only():
@@ -157,7 +157,7 @@ def test_engine_set_subcommand(tmp_path: Path, capsys) -> None:
 
 def test_frozen_engine_skipped_in_attempt_order(tmp_path: Path) -> None:
     """Frozen engines are removed from the attempt order."""
-    from litehive.pipeline import resolve_engine_attempt_order
+    from litehive.pipeline_old import resolve_engine_attempt_order
 
     future = (datetime.now(timezone.utc) + timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
     config = LitehiveConfig(
@@ -174,7 +174,7 @@ def test_frozen_engine_skipped_in_attempt_order(tmp_path: Path) -> None:
 
 def test_expired_freeze_not_skipped(tmp_path: Path) -> None:
     """Engines with expired freezes are not skipped."""
-    from litehive.pipeline import resolve_engine_attempt_order
+    from litehive.pipeline_old import resolve_engine_attempt_order
 
     past = (datetime.now(timezone.utc) - timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
     config = LitehiveConfig(
@@ -188,7 +188,7 @@ def test_expired_freeze_not_skipped(tmp_path: Path) -> None:
 
 
 def test_is_engine_frozen_and_active_freezes() -> None:
-    from litehive.pipeline import is_engine_frozen, active_engine_freezes
+    from litehive.pipeline_old import is_engine_frozen, active_engine_freezes
 
     future = (datetime.now(timezone.utc) + timedelta(hours=2)).strftime("%Y-%m-%dT%H:%M:%SZ")
     past = (datetime.now(timezone.utc) - timedelta(hours=2)).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -272,7 +272,7 @@ def test_parser_accepts_set_subcommand() -> None:
 
 def test_frozen_engine_in_fallback_chain_skipped(tmp_path: Path) -> None:
     """When a fallback engine is frozen, it's skipped but others remain."""
-    from litehive.pipeline import resolve_engine_attempt_order
+    from litehive.pipeline_old import resolve_engine_attempt_order
 
     future = (datetime.now(timezone.utc) + timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
     config = LitehiveConfig(
@@ -292,7 +292,7 @@ def test_select_engine_records_quota_freeze_and_falls_back(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from litehive.pipeline import select_engine
+    from litehive.pipeline_old import select_engine
 
     freeze_until = datetime(2099, 1, 2, 3, 4, 5, tzinfo=timezone.utc)
     ensure_workspace(
@@ -307,7 +307,7 @@ def test_select_engine_records_quota_freeze_and_falls_back(
             return "codex quota exhausted (used 100%, resets at 2099-01-02T03:04:05Z)", freeze_until
         return None, None
 
-    monkeypatch.setattr("litehive.pipeline._models._engine_quota_block", fake_quota_block)
+    monkeypatch.setattr("litehive.pipeline_old._models._engine_quota_block", fake_quota_block)
 
     selection = select_engine(tmp_path, task, config)
 
@@ -320,7 +320,7 @@ def test_select_engine_skips_active_freeze_without_quota_call(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from litehive.pipeline import select_engine
+    from litehive.pipeline_old import select_engine
 
     future = (datetime.now(timezone.utc) + timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
     ensure_workspace(
@@ -339,7 +339,7 @@ def test_select_engine_skips_active_freeze_without_quota_call(
         quota_calls.append(engine_name)
         return None, None
 
-    monkeypatch.setattr("litehive.pipeline._models._engine_quota_block", fake_quota_block)
+    monkeypatch.setattr("litehive.pipeline_old._models._engine_quota_block", fake_quota_block)
 
     selection = select_engine(tmp_path, task, config)
 
@@ -351,7 +351,7 @@ def test_select_engine_rechecks_expired_freeze_before_refreshing(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from litehive.pipeline import select_engine
+    from litehive.pipeline_old import select_engine
 
     past = (datetime.now(timezone.utc) - timedelta(minutes=5)).strftime("%Y-%m-%dT%H:%M:%SZ")
     refreshed = datetime(2099, 2, 3, 4, 5, 6, tzinfo=timezone.utc)
@@ -373,7 +373,7 @@ def test_select_engine_rechecks_expired_freeze_before_refreshing(
             return "codex quota exhausted (used 100%, resets at 2099-02-03T04:05:06Z)", refreshed
         return None, None
 
-    monkeypatch.setattr("litehive.pipeline._models._engine_quota_block", fake_quota_block)
+    monkeypatch.setattr("litehive.pipeline_old._models._engine_quota_block", fake_quota_block)
 
     selection = select_engine(tmp_path, task, config)
 
@@ -386,7 +386,7 @@ def test_select_engine_rechecks_expired_freeze_and_allows_recovered_engine(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from litehive.pipeline import select_engine
+    from litehive.pipeline_old import select_engine
 
     past = (datetime.now(timezone.utc) - timedelta(minutes=5)).strftime("%Y-%m-%dT%H:%M:%SZ")
     ensure_workspace(
@@ -405,7 +405,7 @@ def test_select_engine_rechecks_expired_freeze_and_allows_recovered_engine(
         quota_calls.append(engine_name)
         return None, None
 
-    monkeypatch.setattr("litehive.pipeline._models._engine_quota_block", fake_quota_block)
+    monkeypatch.setattr("litehive.pipeline_old._models._engine_quota_block", fake_quota_block)
 
     selection = select_engine(tmp_path, task, config)
 
@@ -414,7 +414,7 @@ def test_select_engine_rechecks_expired_freeze_and_allows_recovered_engine(
 
 
 def test_builder_uses_shared_select_engine(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    from litehive.pipeline._builder import build_executor
+    from litehive.pipeline_old._builder import build_executor
 
     class DummySubagents:
         def run(self, *args, **kwargs):
@@ -424,7 +424,7 @@ def test_builder_uses_shared_select_engine(tmp_path: Path, monkeypatch: pytest.M
     task = create_task(tmp_path, title="Selection test")
     config = load_config(tmp_path)
     monkeypatch.setattr(
-        "litehive.pipeline._builder.select_engine",
+        "litehive.pipeline_old._builder.select_engine",
         lambda *args, **kwargs: EngineSelection(
             engine_name=None,
             model_name=None,
@@ -454,7 +454,7 @@ def test_builder_uses_shared_select_engine(tmp_path: Path, monkeypatch: pytest.M
 
 def test_dry_run_uses_shared_select_engine(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     from litehive.cli._dry_run import _plan_single_task_dry_run
-    from litehive.pipeline import TaskPoolStopConditions
+    from litehive.pipeline_old import TaskPoolStopConditions
 
     ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
     task = create_task(tmp_path, title="Dry run selection")
@@ -487,7 +487,7 @@ def test_recovery_auto_engine_uses_shared_select_engine(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from litehive.pipeline.recovery.execution_recovery import _resolve_recovery_engine
+    from litehive.pipeline_old.recovery.execution_recovery import _resolve_recovery_engine
 
     ensure_workspace(
         tmp_path,
@@ -500,7 +500,7 @@ def test_recovery_auto_engine_uses_shared_select_engine(
     task = create_task(tmp_path, title="Recovery selection")
     config = load_config(tmp_path)
     monkeypatch.setattr(
-        "litehive.pipeline._models.select_engine",
+        "litehive.pipeline_old._models.select_engine",
         lambda *args, **kwargs: EngineSelection(
             engine_name="gemini",
             model_name="gemini-2.5-pro",

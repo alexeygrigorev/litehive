@@ -44,7 +44,7 @@ from tests.workspace_helpers import (
     update_task_metadata,
     yaml,
 )
-from litehive.pipeline import _attempt_stage_recovery, _classify_recovery_failure_owner
+from litehive.pipeline_old import _attempt_stage_recovery, _classify_recovery_failure_owner
 
 
 def _litehive_traceback_report(task_id: str, traceback_path: str) -> StageReport:
@@ -270,7 +270,7 @@ def test_attempt_stage_recovery_launches_agent_for_litehive_traceback_with_no_so
         run_called = True
         raise AssertionError("recovery agent should not start without a Litehive source repo")
 
-    monkeypatch.setattr("litehive.pipeline.SubagentManager.run", fake_run)
+    monkeypatch.setattr("litehive.pipeline_old.SubagentManager.run", fake_run)
 
     report = _attempt_stage_recovery(
         tmp_path,
@@ -351,7 +351,7 @@ def test_attempt_stage_recovery_launches_recovery_agent_for_litehive_traceback(
         )
         return _completed_recovery_subagent_result(role, engine_name)
 
-    monkeypatch.setattr("litehive.pipeline.SubagentManager.run", fake_run)
+    monkeypatch.setattr("litehive.pipeline_old.SubagentManager.run", fake_run)
 
     report = _attempt_stage_recovery(
         tmp_path,
@@ -406,7 +406,7 @@ def test_attempt_stage_recovery_returns_none_when_recovery_agent_fails(
             failure=None,
         )
 
-    monkeypatch.setattr("litehive.pipeline.SubagentManager.run", fake_run)
+    monkeypatch.setattr("litehive.pipeline_old.SubagentManager.run", fake_run)
 
     report = _attempt_stage_recovery(
         tmp_path,
@@ -441,7 +441,7 @@ def test_runner_requeues_same_stage_after_successful_litehive_self_heal(
         raise RuntimeError("boom")
 
     monkeypatch.setattr(
-        "litehive.pipeline._attempt_stage_recovery",
+        "litehive.pipeline_old._attempt_stage_recovery",
         lambda *args, **kwargs: StageReport(
             task_id=task.id,
             step="implementing",
@@ -474,7 +474,7 @@ def test_run_next_task_skips_commit_stage_when_auto_commit_disabled(
     (tmp_path / "app.txt").write_text("updated\n", encoding="utf-8")
 
     monkeypatch.setattr(
-        "litehive.pipeline.SubagentManager.run",
+        "litehive.pipeline_old.SubagentManager.run",
         lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
             _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
         ),
@@ -502,7 +502,7 @@ def test_run_next_task_skips_commit_stage_when_workspace_auto_commit_disabled(
     (tmp_path / "app.txt").write_text("updated\n", encoding="utf-8")
 
     monkeypatch.setattr(
-        "litehive.pipeline.SubagentManager.run",
+        "litehive.pipeline_old.SubagentManager.run",
         lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
             _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
         ),
@@ -531,7 +531,7 @@ def test_run_next_task_flags_task_when_repo_has_unrelated_dirty_changes(
     (tmp_path / "notes.txt").write_text("unrelated\n", encoding="utf-8")
 
     monkeypatch.setattr(
-        "litehive.pipeline.SubagentManager.run",
+        "litehive.pipeline_old.SubagentManager.run",
         lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
             _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
         ),
@@ -558,7 +558,7 @@ def test_run_next_task_flags_task_when_other_task_state_is_dirty(
     (tmp_path / "app.txt").write_text("updated\n", encoding="utf-8")
 
     monkeypatch.setattr(
-        "litehive.pipeline.SubagentManager.run",
+        "litehive.pipeline_old.SubagentManager.run",
         lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
             _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
         ),
@@ -597,7 +597,7 @@ def test_rollback_command_requeues_checkpointed_task(
     (tmp_path / "app.txt").write_text("broken\n", encoding="utf-8")
 
     monkeypatch.setattr(
-        "litehive.pipeline.SubagentManager.run",
+        "litehive.pipeline_old.SubagentManager.run",
         lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
             _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
         ),
@@ -638,7 +638,7 @@ def test_recover_command_requeues_completed_task_without_revert(
     (tmp_path / "app.txt").write_text("ship-again\n", encoding="utf-8")
 
     monkeypatch.setattr(
-        "litehive.pipeline.SubagentManager.run",
+        "litehive.pipeline_old.SubagentManager.run",
         lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
             _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
         ),
@@ -672,7 +672,7 @@ def test_recover_completed_task_clears_checkpoint_pointer_and_next_run_uses_next
     (tmp_path / "app.txt").write_text("first-pass\n", encoding="utf-8")
 
     monkeypatch.setattr(
-        "litehive.pipeline.SubagentManager.run",
+        "litehive.pipeline_old.SubagentManager.run",
         lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
             _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
         ),
@@ -714,7 +714,7 @@ def test_drain_task_pool_requires_continue_or_rollback_before_unrelated_checkpoi
     (tmp_path / "app.txt").write_text("first-pass\n", encoding="utf-8")
 
     monkeypatch.setattr(
-        "litehive.pipeline.SubagentManager.run",
+        "litehive.pipeline_old.SubagentManager.run",
         lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
             _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
         ),
@@ -768,7 +768,7 @@ def test_cmd_run_drain_reports_continue_or_rollback_guidance_after_checkpoint_co
     (tmp_path / "app.txt").write_text("first-pass\n", encoding="utf-8")
 
     monkeypatch.setattr(
-        "litehive.pipeline.SubagentManager.run",
+        "litehive.pipeline_old.SubagentManager.run",
         lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
             _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
         ),
@@ -900,7 +900,7 @@ def test_drain_task_pool_recovers_stranded_commit_stage_before_new_work(
     _set_queue_state(tmp_path)
 
     monkeypatch.setattr(
-        "litehive.pipeline.SubagentManager.run",
+        "litehive.pipeline_old.SubagentManager.run",
         lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
             _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
         ),
@@ -1779,7 +1779,7 @@ def test_rollback_completed_task_restores_state_when_rollback_commit_fails(
     (tmp_path / "app.txt").write_text("broken\n", encoding="utf-8")
 
     monkeypatch.setattr(
-        "litehive.pipeline.SubagentManager.run",
+        "litehive.pipeline_old.SubagentManager.run",
         lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
             _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
         ),
@@ -1792,7 +1792,7 @@ def test_rollback_completed_task_restores_state_when_rollback_commit_fails(
             raise GitError("git rollback commit failed")
         return None
 
-    monkeypatch.setattr("litehive.pipeline.recovery.execution_recovery.commit_task", fail_rollback_commit)
+    monkeypatch.setattr("litehive.pipeline_old.recovery.execution_recovery.commit_task", fail_rollback_commit)
 
     with pytest.raises(GitError, match="git rollback commit failed"):
         rollback_completed_task(tmp_path, "T-0001")
@@ -1819,7 +1819,7 @@ def test_rollback_completed_task_restores_state_when_atomic_state_persist_fails(
     (tmp_path / "app.txt").write_text("broken\n", encoding="utf-8")
 
     monkeypatch.setattr(
-        "litehive.pipeline.SubagentManager.run",
+        "litehive.pipeline_old.SubagentManager.run",
         lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
             _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
         ),
@@ -1860,7 +1860,7 @@ def test_rollback_completed_task_restores_state_when_task_persist_fails(
     (tmp_path / "app.txt").write_text("broken\n", encoding="utf-8")
 
     monkeypatch.setattr(
-        "litehive.pipeline.SubagentManager.run",
+        "litehive.pipeline_old.SubagentManager.run",
         lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
             _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
         ),
@@ -1899,7 +1899,7 @@ def test_rollback_completed_task_restores_state_when_runtime_persist_fails(
     (tmp_path / "app.txt").write_text("broken\n", encoding="utf-8")
 
     monkeypatch.setattr(
-        "litehive.pipeline.SubagentManager.run",
+        "litehive.pipeline_old.SubagentManager.run",
         lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
             _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
         ),
@@ -1945,7 +1945,7 @@ def test_recover_command_reroutes_large_task_without_acceptance_criteria_to_groo
     (tmp_path / "app.txt").write_text("ship-again\n", encoding="utf-8")
 
     monkeypatch.setattr(
-        "litehive.pipeline.SubagentManager.run",
+        "litehive.pipeline_old.SubagentManager.run",
         lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
             _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
         ),

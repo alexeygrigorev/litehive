@@ -6,7 +6,7 @@ from pathlib import Path
 from litehive.config import LitehiveConfig
 from litehive.agents import extract_engine_continuation
 from litehive.models import StageReport, TaskRecord, cap_feedback
-from litehive.pipeline.core import StageExecutor
+from litehive.pipeline_old.core import StageExecutor
 from litehive.agents import SubagentManager, stage_prompt, stage_report_from_subagent
 from litehive.tasks.journal import append_journal
 from litehive.workspace.runtime_tracking import mark_engine_switch

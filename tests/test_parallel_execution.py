@@ -26,7 +26,7 @@ from tests.workspace_helpers import (
     yaml,
 )
 
-from litehive.pipeline._parallel import (
+from litehive.pipeline_old._parallel import (
     IntegrationResult,
     _clear_parallel_active_tasks,
     _integrate_completed_task,
@@ -34,8 +34,8 @@ from litehive.pipeline._parallel import (
     _select_parallel_tasks,
     run_parallel_tasks,
 )
-from litehive.pipeline._types import ExecutionSummary, TaskPoolStopConditions
-from litehive.pipeline.core import RunResult
+from litehive.pipeline_old._types import ExecutionSummary, TaskPoolStopConditions
+from litehive.pipeline_old.core import RunResult
 from litehive.observability._status import render_active_tasks_section
 
 
@@ -181,7 +181,7 @@ def test_run_parallel_tasks_with_mock_executor(tmp_path: Path, monkeypatch: pyte
         )
 
     monkeypatch.setattr(
-        "litehive.pipeline._parallel._run_single_parallel_task",
+        "litehive.pipeline_old._parallel._run_single_parallel_task",
         mock_run_parallel_task,
     )
 
@@ -380,7 +380,7 @@ def test_integration_order_is_deterministic(tmp_path: Path, monkeypatch: pytest.
         return IntegrationResult(task_id=execution.task.id, success=True)
 
     monkeypatch.setattr(
-        "litehive.pipeline._parallel._integrate_completed_task",
+        "litehive.pipeline_old._parallel._integrate_completed_task",
         tracking_integrate,
     )
 
@@ -392,7 +392,7 @@ def test_integration_order_is_deterministic(tmp_path: Path, monkeypatch: pytest.
         )
 
     monkeypatch.setattr(
-        "litehive.pipeline._parallel._run_single_parallel_task",
+        "litehive.pipeline_old._parallel._run_single_parallel_task",
         mock_run,
     )
 
@@ -445,8 +445,8 @@ def _mock_parallel_run_and_integrate(monkeypatch, *, integration_success=True):
             commit_sha="abc1234" if integration_success else None,
         )
 
-    monkeypatch.setattr("litehive.pipeline._parallel._run_single_parallel_task", mock_run)
-    monkeypatch.setattr("litehive.pipeline._parallel._integrate_completed_task", mock_integrate)
+    monkeypatch.setattr("litehive.pipeline_old._parallel._run_single_parallel_task", mock_run)
+    monkeypatch.setattr("litehive.pipeline_old._parallel._integrate_completed_task", mock_integrate)
 
 
 def test_integration_check_passes(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

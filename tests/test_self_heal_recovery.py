@@ -7,7 +7,7 @@ import yaml
 
 from litehive.config import LitehiveConfig, ensure_workspace
 from litehive.models import StageReport, SubagentRef, TaskThreadComment
-from litehive.pipeline.recovery import (
+from litehive.pipeline_old.recovery import (
     _attempt_stage_recovery,
     _classify_recovery_failure_owner,
 )
@@ -163,7 +163,7 @@ class TestSelfHealRecovery:
         mock_subagents = MagicMock()
         mock_subagents.run = fake_run
 
-        with patch("litehive.pipeline.recovery.execution_recovery.SubagentManager.__init__", fake_manager_init):
+        with patch("litehive.pipeline_old.recovery.execution_recovery.SubagentManager.__init__", fake_manager_init):
             result = _attempt_stage_recovery(
                 root,
                 root,  # execution_root (project worktree)
@@ -219,7 +219,7 @@ class TestSelfHealRecovery:
         )
 
         # Pre-populate the fingerprint
-        from litehive.pipeline.recovery import _traceback_fingerprint
+        from litehive.pipeline_old.recovery import _traceback_fingerprint
         fp = _traceback_fingerprint(traceback, "litehive bug")
         task.runtime.self_heal_traceback_fingerprints.append(fp)
         save_task_runtime(root, task)
@@ -287,7 +287,7 @@ class TestSelfHealRecovery:
         mock_subagents = MagicMock()
         mock_subagents.run = fake_run
 
-        with patch("litehive.pipeline.recovery.execution_recovery.SubagentManager.__init__", fake_manager_init):
+        with patch("litehive.pipeline_old.recovery.execution_recovery.SubagentManager.__init__", fake_manager_init):
             result = _attempt_stage_recovery(
                 root,
                 root,
@@ -344,7 +344,7 @@ class TestSelfHealRecovery:
         mock_subagents = MagicMock()
         mock_subagents.run = fake_run
 
-        with patch("litehive.pipeline.recovery.execution_recovery.SubagentManager.__init__", fake_manager_init):
+        with patch("litehive.pipeline_old.recovery.execution_recovery.SubagentManager.__init__", fake_manager_init):
             result = _attempt_stage_recovery(
                 root,
                 root,

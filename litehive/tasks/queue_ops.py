@@ -41,7 +41,7 @@ def peek_next_task(root: Path) -> TaskRecord | None:
 def peek_next_task_selection(root: Path) -> TaskSelection:
     from litehive.workspace.locking import _workspace_lock, workspace_mutation_guard
     from .persistence import load_state, save_state
-    from litehive.pipeline.recovery import _reconcile_stale_runner_tasks, recover_stale_runner_state
+    from litehive.pipeline_old.recovery import _reconcile_stale_runner_tasks, recover_stale_runner_state
 
     recover_stale_runner_state(root)
     with workspace_mutation_guard(root), _workspace_lock(root):
@@ -58,7 +58,7 @@ def plan_task_selections(root: Path) -> TaskPlan:
     from .crud import list_tasks
     from litehive.workspace.locking import _workspace_lock, workspace_mutation_guard
     from .persistence import load_state
-    from litehive.pipeline.recovery import _reconcile_stale_runner_tasks, recover_stale_runner_state
+    from litehive.pipeline_old.recovery import _reconcile_stale_runner_tasks, recover_stale_runner_state
 
     recover_stale_runner_state(root)
     with workspace_mutation_guard(root), _workspace_lock(root):
@@ -97,7 +97,7 @@ def dequeue_next_task_selection(root: Path) -> TaskSelection:
     from litehive.workspace.locking import _workspace_lock, workspace_mutation_guard
     from .persistence import load_state, save_state
     from .queue_management import _reset_task_for_recovery
-    from litehive.pipeline.recovery import _reconcile_stale_runner_tasks, recover_stale_runner_state
+    from litehive.pipeline_old.recovery import _reconcile_stale_runner_tasks, recover_stale_runner_state
     from .reports import record_recovery_report
     from litehive.workspace.workflow import persist_task_and_state
 
@@ -295,7 +295,7 @@ def _resolve_next_task_from_state(
     root: Path, state: WorkspaceState
 ) -> tuple[TaskRecord | None, list[BlockedTask], bool]:
     from .crud import list_tasks
-    from litehive.pipeline.recovery import _recover_stranded_commit_tasks
+    from litehive.pipeline_old.recovery import _recover_stranded_commit_tasks
 
     mutated = _recover_stranded_commit_tasks(root, state)
     tasks_by_id = {task.id: task for task in list_tasks(root)}
@@ -411,7 +411,7 @@ def restore_untouched_active_task(root: Path) -> WorkspaceState:
     from litehive.workspace.locking import _workspace_lock, workspace_mutation_guard
     from .persistence import load_state, save_state
     from .queue_management import _enqueue_recovered_task
-    from litehive.pipeline.recovery import (
+    from litehive.pipeline_old.recovery import (
         _is_stranded_commit_task,
         _prepare_interrupted_task,
         _recover_existing_checkpoint_commit,

@@ -312,7 +312,7 @@ def test_run_next_task_passes_configured_claude_max_turns(
         calls.append(max_turns)
         return _completed_subagent_result(tmp_path, task.pipeline_status, engine_name="claude", task=task)
 
-    monkeypatch.setattr("litehive.pipeline.SubagentManager.run", fake_subagent_run)
+    monkeypatch.setattr("litehive.pipeline_old.SubagentManager.run", fake_subagent_run)
 
     summary = run_next_task(tmp_path)
 
@@ -768,7 +768,7 @@ def test_configure_updates_existing_workspace_budget_settings(tmp_path: Path) ->
 
 
 def test_claude_model_resolved_from_workspace_defaults() -> None:
-    from litehive.pipeline import workspace_model_for_engine
+    from litehive.pipeline_old import workspace_model_for_engine
 
     config = LitehiveConfig(claude_model="claude-sonnet-4-20250514")
     assert workspace_model_for_engine(config, "claude") == "claude-sonnet-4-20250514"

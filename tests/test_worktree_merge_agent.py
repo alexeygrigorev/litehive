@@ -21,8 +21,8 @@ from litehive.config import LitehiveConfig, ensure_workspace
 from litehive.git_ops import current_head
 from litehive.models import SubagentRef
 from litehive.observability import render_task_summary
-from litehive.pipeline import _commit_to_git_report
-from litehive.pipeline.states import PipelineState, _ROUTES, _SINGLE_ROUTES
+from litehive.pipeline_old import _commit_to_git_report
+from litehive.pipeline_old.states import PipelineState, _ROUTES, _SINGLE_ROUTES
 from litehive.agents import SubagentResult
 from litehive.tasks import create_task, save_task
 from litehive.tasks.crud import set_task_worktree_path
@@ -218,7 +218,7 @@ def test_merge_failed_routing() -> None:
 
 def test_unmerged_worktree_recorded_in_state(tmp_path: Path) -> None:
     """When merge fails, the worktree is recorded in state.yaml via _record_unmerged_worktree."""
-    from litehive.pipeline.core import _record_unmerged_worktree
+    from litehive.pipeline_old.core import _record_unmerged_worktree
 
     _init_git_repo(tmp_path)
     ensure_workspace(tmp_path)
@@ -236,7 +236,7 @@ def test_unmerged_worktree_recorded_in_state(tmp_path: Path) -> None:
 
 def test_unmerged_worktree_no_duplicate(tmp_path: Path) -> None:
     """Recording the same task twice doesn't create a duplicate entry."""
-    from litehive.pipeline.core import _record_unmerged_worktree
+    from litehive.pipeline_old.core import _record_unmerged_worktree
 
     _init_git_repo(tmp_path)
     ensure_workspace(tmp_path)
@@ -253,7 +253,7 @@ def test_unmerged_worktree_no_duplicate(tmp_path: Path) -> None:
 
 def test_unmerged_worktree_persisted_to_yaml(tmp_path: Path) -> None:
     """Raw YAML file contains the unmerged_worktrees field."""
-    from litehive.pipeline.core import _record_unmerged_worktree
+    from litehive.pipeline_old.core import _record_unmerged_worktree
 
     _init_git_repo(tmp_path)
     ensure_workspace(tmp_path)

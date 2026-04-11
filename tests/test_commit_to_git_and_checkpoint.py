@@ -31,7 +31,7 @@ def test_run_next_task_creates_checkpoint_commit_and_persists_policy(
     (tmp_path / "app.txt").write_text("updated\n", encoding="utf-8")
 
     monkeypatch.setattr(
-        "litehive.pipeline.SubagentManager.run",
+        "litehive.pipeline_old.SubagentManager.run",
         lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
             _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
         ),
@@ -87,7 +87,7 @@ def test_run_next_task_executes_stage_in_task_worktree(
             (self.execution_root / "app.txt").write_text("worktree-only\n", encoding="utf-8")
         return result
 
-    monkeypatch.setattr("litehive.pipeline.SubagentManager.run", fake_run)
+    monkeypatch.setattr("litehive.pipeline_old.SubagentManager.run", fake_run)
 
     summary = run_next_task(tmp_path)
 
@@ -118,7 +118,7 @@ def test_run_next_task_keeps_using_task_worktree_when_main_checkout_is_dirty(
             (self.execution_root / "app.txt").write_text("worktree-only\n", encoding="utf-8")
         return result
 
-    monkeypatch.setattr("litehive.pipeline.SubagentManager.run", fake_run)
+    monkeypatch.setattr("litehive.pipeline_old.SubagentManager.run", fake_run)
 
     summary = run_next_task(tmp_path)
 
@@ -146,7 +146,7 @@ def test_run_next_task_cherry_picks_task_commit_back_to_main(
             (self.execution_root / "app.txt").write_text("integrated\n", encoding="utf-8")
         return result
 
-    monkeypatch.setattr("litehive.pipeline.SubagentManager.run", fake_run)
+    monkeypatch.setattr("litehive.pipeline_old.SubagentManager.run", fake_run)
 
     summary = run_next_task(tmp_path)
 
@@ -185,7 +185,7 @@ def test_run_next_task_appends_attempt_suffix_after_rollback(
     (tmp_path / "app.txt").write_text("updated-once\n", encoding="utf-8")
 
     monkeypatch.setattr(
-        "litehive.pipeline.SubagentManager.run",
+        "litehive.pipeline_old.SubagentManager.run",
         lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
             _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
         ),
@@ -221,7 +221,7 @@ def test_run_next_task_preserves_future_task_added_during_commit_failure(
     (tmp_path / "app.txt").write_text("updated\n", encoding="utf-8")
 
     monkeypatch.setattr(
-        "litehive.pipeline.SubagentManager.run",
+        "litehive.pipeline_old.SubagentManager.run",
         lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
             _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
         ),
@@ -239,7 +239,7 @@ def test_run_next_task_preserves_future_task_added_during_commit_failure(
         )
 
     monkeypatch.setattr(
-        "litehive.pipeline._builder._commit_to_git_report", fail_commit_with_concurrent_add
+        "litehive.pipeline_old._builder._commit_to_git_report", fail_commit_with_concurrent_add
     )
 
     summary = run_next_task(tmp_path)
@@ -266,7 +266,7 @@ def test_run_next_task_skips_commit_when_not_a_git_repo(
     (tmp_path / "app.txt").write_text("updated\n", encoding="utf-8")
 
     monkeypatch.setattr(
-        "litehive.pipeline.SubagentManager.run",
+        "litehive.pipeline_old.SubagentManager.run",
         lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
             _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
         ),
@@ -295,7 +295,7 @@ def test_run_next_task_commits_successfully_with_git_repo(
     (tmp_path / "app.txt").write_text("updated\n", encoding="utf-8")
 
     monkeypatch.setattr(
-        "litehive.pipeline.SubagentManager.run",
+        "litehive.pipeline_old.SubagentManager.run",
         lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
             _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
         ),
@@ -328,7 +328,7 @@ def test_run_next_task_completes_when_task_worktree_path_is_missing(
             task.runtime.git.worktree_path = "../missing-preflight-worktree"
         return _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
 
-    monkeypatch.setattr("litehive.pipeline.SubagentManager.run", fake_run)
+    monkeypatch.setattr("litehive.pipeline_old.SubagentManager.run", fake_run)
 
     summary = run_next_task(tmp_path)
 
@@ -357,7 +357,7 @@ def test_run_next_task_completes_when_worktree_has_unexpected_commit(
             _run(["git", "commit", "--allow-empty", "-m", "manual worktree commit"], worktree_path)
         return _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
 
-    monkeypatch.setattr("litehive.pipeline.SubagentManager.run", fake_run)
+    monkeypatch.setattr("litehive.pipeline_old.SubagentManager.run", fake_run)
 
     summary = run_next_task(tmp_path)
 
@@ -398,7 +398,7 @@ def _assert_run_next_task_records_blocked_outcome_when_fallbacks_are_exhausted(
             failure=EngineFailure(kind="execution_limit", reason="quota exceeded"),
         )
 
-    monkeypatch.setattr("litehive.pipeline.SubagentManager.run", fake_run)
+    monkeypatch.setattr("litehive.pipeline_old.SubagentManager.run", fake_run)
 
     summary = run_next_task(tmp_path)
 
@@ -439,7 +439,7 @@ def test_run_next_task_preserves_git_commit_failure_diagnostics(
     (tmp_path / "app.txt").write_text("updated\n", encoding="utf-8")
 
     monkeypatch.setattr(
-        "litehive.pipeline.SubagentManager.run",
+        "litehive.pipeline_old.SubagentManager.run",
         lambda self, task, role, engine_name, prompt, model=None, max_turns=None, resume_session_id=None: (
             _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
         ),
@@ -453,7 +453,7 @@ def test_run_next_task_preserves_git_commit_failure_diagnostics(
         )
 
     monkeypatch.setattr(
-        "litehive.pipeline._builder._commit_to_git_report", fail_commit
+        "litehive.pipeline_old._builder._commit_to_git_report", fail_commit
     )
 
     summary = run_next_task(tmp_path)

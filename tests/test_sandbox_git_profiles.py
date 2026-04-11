@@ -8,7 +8,7 @@ import pytest
 from litehive.agents.base import CLIInvocation
 from litehive.agents.sandbox import SandboxLauncher, SandboxProfile, sandbox_profile_for_role
 from litehive.config import ExternalEngineSandboxConfig, ExternalEngineSandboxPolicy, LitehiveConfig, ensure_workspace
-from litehive.pipeline._worktree import _resolve_task_execution_root
+from litehive.pipeline_old._worktree import _resolve_task_execution_root
 from litehive.sandbox.git_wrapper import _rejection_reason
 from litehive.tasks import create_task
 

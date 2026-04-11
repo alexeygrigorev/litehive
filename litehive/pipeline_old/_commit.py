@@ -108,7 +108,7 @@ def _commit_to_git_report(
                         task.git.merge_agent_attempts += 1
                         save_task(root, task)
                         # Attempt 1: recovery engine (codex). Attempt 2: force claude.
-                        from litehive.pipeline.recovery import _resolve_recovery_engine
+                        from litehive.pipeline_old.recovery import _resolve_recovery_engine
                         if task.git.merge_agent_attempts == 1:
                             engine_name, model = _resolve_recovery_engine(root, task, config)
                         else:

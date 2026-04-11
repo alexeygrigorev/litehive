@@ -190,7 +190,7 @@ def test_run_next_task_uses_routing_plan_before_global_fallbacks_when_budget_blo
         assert engine_name == "codex"
         return _completed_subagent_result(tmp_path, task.pipeline_status, task=task)
 
-    monkeypatch.setattr("litehive.pipeline.SubagentManager.run", fake_run)
+    monkeypatch.setattr("litehive.pipeline_old.SubagentManager.run", fake_run)
 
     summary = run_task(
         tmp_path,
@@ -705,7 +705,7 @@ def _run_next_task_retries_retryable_execution_failure_before_continuing(
         tmp_path, title="Retry transient engine failure", engine="opencode", auto_commit=False
     )
 
-    monkeypatch.setattr("litehive.pipeline.time.sleep", lambda _seconds: None)
+    monkeypatch.setattr("litehive.pipeline_old.time.sleep", lambda _seconds: None)
 
     attempts: list[tuple[str, str]] = []
     grooming_attempts = 0
@@ -745,7 +745,7 @@ def _run_next_task_retries_retryable_execution_failure_before_continuing(
                 )
         return _completed_subagent_result(tmp_path, step, task=task)
 
-    monkeypatch.setattr("litehive.pipeline.SubagentManager.run", fake_run)
+    monkeypatch.setattr("litehive.pipeline_old.SubagentManager.run", fake_run)
 
     summary = run_next_task(tmp_path)
 
@@ -846,7 +846,7 @@ def _run_next_task_reuses_structured_continuation_handoff_on_retry(
                 )
         return _completed_subagent_result(tmp_path, step, engine_name=engine_name, task=task)
 
-    monkeypatch.setattr("litehive.pipeline.SubagentManager.run", fake_run)
+    monkeypatch.setattr("litehive.pipeline_old.SubagentManager.run", fake_run)
 
     summary = run_next_task(tmp_path)
 
@@ -916,7 +916,7 @@ def _run_next_task_passes_structured_continuation_handoff_across_engine_switch(
             )
         return _completed_subagent_result(tmp_path, step, engine_name=engine_name, task=task)
 
-    monkeypatch.setattr("litehive.pipeline.SubagentManager.run", fake_run)
+    monkeypatch.setattr("litehive.pipeline_old.SubagentManager.run", fake_run)
 
     summary = run_next_task(tmp_path)
 
@@ -950,7 +950,7 @@ def _run_next_task_uses_default_opencode_retry_policy_and_records_journal(
         auto_commit=False,
     )
 
-    monkeypatch.setattr("litehive.pipeline.time.sleep", lambda _seconds: None)
+    monkeypatch.setattr("litehive.pipeline_old.time.sleep", lambda _seconds: None)
 
     attempts: list[tuple[str, str]] = []
     grooming_attempts = 0
@@ -990,7 +990,7 @@ def _run_next_task_uses_default_opencode_retry_policy_and_records_journal(
                 )
         return _completed_subagent_result(tmp_path, step, engine_name=engine_name, task=task)
 
-    monkeypatch.setattr("litehive.pipeline.SubagentManager.run", fake_run)
+    monkeypatch.setattr("litehive.pipeline_old.SubagentManager.run", fake_run)
 
     summary = run_next_task(tmp_path)
 
@@ -1041,7 +1041,7 @@ def _run_next_task_uses_default_gemini_retry_policy_and_records_journal(
         tmp_path, title="Retry transient gemini network failure", engine="gemini", auto_commit=False
     )
 
-    monkeypatch.setattr("litehive.pipeline.time.sleep", lambda _seconds: None)
+    monkeypatch.setattr("litehive.pipeline_old.time.sleep", lambda _seconds: None)
 
     attempts: list[tuple[str, str]] = []
     grooming_attempts = 0
@@ -1087,7 +1087,7 @@ def _run_next_task_uses_default_gemini_retry_policy_and_records_journal(
                 )
         return _completed_subagent_result(tmp_path, step, engine_name=engine_name, task=task)
 
-    monkeypatch.setattr("litehive.pipeline.SubagentManager.run", fake_run)
+    monkeypatch.setattr("litehive.pipeline_old.SubagentManager.run", fake_run)
 
     summary = run_next_task(tmp_path)
 
@@ -1138,7 +1138,7 @@ def _run_next_task_uses_default_claude_retry_policy_and_records_journal(
         tmp_path, title="Retry transient claude service failure", engine="claude", auto_commit=False
     )
 
-    monkeypatch.setattr("litehive.pipeline.time.sleep", lambda _seconds: None)
+    monkeypatch.setattr("litehive.pipeline_old.time.sleep", lambda _seconds: None)
 
     attempts: list[tuple[str, str]] = []
     grooming_attempts = 0
@@ -1181,7 +1181,7 @@ def _run_next_task_uses_default_claude_retry_policy_and_records_journal(
                 )
         return _completed_subagent_result(tmp_path, step, engine_name=engine_name, task=task)
 
-    monkeypatch.setattr("litehive.pipeline.SubagentManager.run", fake_run)
+    monkeypatch.setattr("litehive.pipeline_old.SubagentManager.run", fake_run)
 
     summary = run_next_task(tmp_path)
 
@@ -1249,7 +1249,7 @@ def _run_next_task_uses_codex_retry_policy_before_external_cli_fallback(
     )
     create_task(tmp_path, title="Codex retry policy task", auto_commit=False)
 
-    monkeypatch.setattr("litehive.pipeline.time.sleep", lambda _seconds: None)
+    monkeypatch.setattr("litehive.pipeline_old.time.sleep", lambda _seconds: None)
 
     attempts: list[tuple[str, str]] = []
     codex_attempts = 0
@@ -1290,7 +1290,7 @@ def _run_next_task_uses_codex_retry_policy_before_external_cli_fallback(
             )
         return _completed_subagent_result(tmp_path, step, engine_name=engine_name, task=task)
 
-    monkeypatch.setattr("litehive.pipeline.SubagentManager.run", fake_run)
+    monkeypatch.setattr("litehive.pipeline_old.SubagentManager.run", fake_run)
 
     summary = run_next_task(tmp_path)
 
@@ -1353,7 +1353,7 @@ def _run_next_task_falls_back_after_retry_exhaustion(
         tmp_path, title="Fallback after transient retries", engine="codex", auto_commit=False
     )
 
-    monkeypatch.setattr("litehive.pipeline.time.sleep", lambda _seconds: None)
+    monkeypatch.setattr("litehive.pipeline_old.time.sleep", lambda _seconds: None)
 
     attempts: list[tuple[str, str]] = []
 
@@ -1389,7 +1389,7 @@ def _run_next_task_falls_back_after_retry_exhaustion(
             ),
         )
 
-    monkeypatch.setattr("litehive.pipeline.SubagentManager.run", fake_run)
+    monkeypatch.setattr("litehive.pipeline_old.SubagentManager.run", fake_run)
 
     summary = run_next_task(tmp_path)
 
@@ -1491,7 +1491,7 @@ def _run_next_task_does_not_retry_codex_usage_limit_when_codex_policy_is_configu
             failure=EngineFailure(kind="execution_limit", reason="usage limit reached"),
         )
 
-    monkeypatch.setattr("litehive.pipeline.SubagentManager.run", fake_run)
+    monkeypatch.setattr("litehive.pipeline_old.SubagentManager.run", fake_run)
 
     summary = run_next_task(tmp_path)
 
@@ -1570,7 +1570,7 @@ def _run_next_task_skips_retries_for_non_retryable_failure(
             failure=None,
         )
 
-    monkeypatch.setattr("litehive.pipeline.SubagentManager.run", fake_run)
+    monkeypatch.setattr("litehive.pipeline_old.SubagentManager.run", fake_run)
 
     summary = run_next_task(tmp_path)
 

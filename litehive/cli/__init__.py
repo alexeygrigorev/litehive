@@ -51,7 +51,7 @@ from litehive.cli.status import _cmd_list, _cmd_queue, _cmd_repair, _cmd_show, _
 from litehive.cli.tasks import _cmd_add, _cmd_intake, _cmd_issue, _cmd_update
 from litehive.cli.worktree import _cmd_worktree_clean, _cmd_worktree_ls, _cmd_worktree_rescue
 from litehive.config import VALID_POOL_SELECTION_POLICIES, available_process_profiles
-from litehive.pipeline import run_next_task
+from litehive.pipeline_old import run_next_task
 from litehive.tasks.constants import (
     VALID_HUMAN_CHECKPOINTS,
     VALID_PM_COMPLEXITIES,

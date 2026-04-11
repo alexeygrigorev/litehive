@@ -41,7 +41,7 @@ def _neutralize_codex_quota(request, monkeypatch):
     except (ImportError, AttributeError):
         pass
     try:
-        import litehive.pipeline._models as models_mod
+        import litehive.pipeline_old._models as models_mod
 
         monkeypatch.setattr(models_mod, "_engine_quota_block", _noop_engine_quota_block)
     except (ImportError, AttributeError):
