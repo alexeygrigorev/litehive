@@ -82,26 +82,25 @@ through `ready → done` with stub engines, real persistence, real journal.
 ### M2 — Real single-task run via daemon
 
 Criterion: the daemon picks up a real task and runs it through v2 with
-real engines. No cutover yet; v1 still handles everything except the
-specific tasks we route to v2.
+real engines, replacing `pipeline_old.TaskExecutionRunner`.
 
-- [ ] `ConfigBackedEngineSelector` — reads `LitehiveConfig.engine_preference`
-  + honors `engine_freeze`. Integrates with the existing freeze auto-
-  persistence on quota hit.
-- [ ] `HeruEngineAdapter` — wraps `heru.get_engine("codex")` etc. to
-  match the v2 `Engine` protocol. Translates heru exceptions into
-  `TransientError` / `EngineBlockedError` / `UnrecoverableError`.
-- [ ] V2 prompt serializer — takes the `build_prompt()` dict and
-  produces the string the engine adapter wants. All four instruction
-  layers, task context, thread, plan, acceptance criteria, last
-  rejection, continuation handoff. Matches v1's information content
-  without importing from `pipeline_old`.
-- [ ] Daemon integration point — find where the current daemon invokes
-  `pipeline_old.TaskExecutionRunner` and add a feature-flagged switch
-  to `StateMachineRunner` instead. Flag lives in workspace config.
-- [ ] Journal / TaskState translation from `TaskRecord` — an adapter
-  that loads a v1 `TaskRecord` and produces a v2 `TaskState`, then
-  persists back. Needed so v1 and v2 can round-trip the same task.
+- [x] `ConfigBackedEngineSelector` — reads `LitehiveConfig.engine_preference`
+  + honors `engine_freeze`. Lives in `litehive/pipeline/engines.py`.
+- [x] `HeruEngineAdapter` skeleton — translates exception names into
+  the v2 error taxonomy, reads a `verdict_reader` callback, updates
+  Session.engine_session_id after each turn. Raises `NudgeRequired`
+  if no verdict landed. Needs the factory wired up (see T-0349).
+
+**Remaining items handed off to litehive tasks** (see T-0347–T-0350
+below). These are all small/medium and can run through the v1 pipeline
+while v2 finishes bootstrapping:
+
+- T-0347 — v1 TaskRecord ↔ v2 TaskState bridge
+- T-0348 — v2 prompt serializer (no `pipeline_old` imports)
+- T-0349 — HeruEngineFactory + verdict reader (depends on T-0347)
+- T-0350 — daemon entry point swap (depends on T-0347, T-0348, T-0349)
+
+Once T-0350 lands, v2 is the executor.
 
 ### M3 — Resilience features
 
