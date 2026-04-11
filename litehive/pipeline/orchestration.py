@@ -26,12 +26,15 @@ from pathlib import Path
 
 from litehive.config import load_config
 from litehive.models import TaskRecord
+from litehive.tasks.crud import get_task_worktree_path
+from litehive.workspace.locking import runner_heartbeat, workspace_runner_guard
 
 from .agents._base import PromptContext
 from .engines import ConfigBackedEngineSelector
 from .heru_factory import heru_engine_factory
 from .journal import SqliteJournal
-from .nodes import StubCommitNode, SubprocessHookRunner
+from .nodes import GitCommitNode, StubCommitNode, SubprocessHookRunner
+from .nodes.system import CommitNode
 from .persistence import SqlitePersistence, TaskState
 from .registry import build_registry
 from .runner import StateMachineRunner
@@ -50,54 +53,86 @@ class ExecutionResultV2:
     failed_message: str | None = None
 
 
-def run_task_v2(root: Path, task: TaskRecord) -> ExecutionResultV2:
+def _build_commit_node(root: Path, *, stub: bool) -> CommitNode:
+    """Return a commit node for the runner.
+
+    ``stub=True`` → always-pass ``StubCommitNode`` (safe for dry runs or
+    first-time smoke testing of v2 against real tasks). Default is the
+    real ``GitCommitNode`` which performs an actual ``git merge``.
+    """
+    if stub:
+        return StubCommitNode()
+
+    from litehive.tasks.crud import get_task as _get_task
+
+    def _resolve_worktree(state: TaskState) -> Path:
+        task = _get_task(root, state.task_id)
+        if task is None:
+            return root
+        wt = get_task_worktree_path(task)
+        if not wt:
+            return root
+        path = Path(wt)
+        if not path.is_absolute():
+            path = root / path
+        return path
+
+    return GitCommitNode(root, worktree_resolver=_resolve_worktree)
+
+
+def run_task_v2(
+    root: Path,
+    task: TaskRecord,
+    *,
+    stub_commit: bool = False,
+) -> ExecutionResultV2:
     """Run a single task through the v2 state machine.
 
-    Caller is responsible for dequeueing the task and applying the
-    workspace runner guard. This function only runs the task and syncs
-    state back; it does not own the queue or the lock.
+    Takes the workspace runner guard (same lock v1 uses) and publishes
+    a heartbeat so other tools see the task as active.
+
+    ``stub_commit=True`` swaps the real git merge for ``StubCommitNode``
+    — use it for dry runs and early smoke testing before we're confident
+    v2 won't wreck a worktree.
     """
     root = root.resolve()
     config = load_config(root)
 
-    # 1. Make sure the v2 state row exists for this task.
-    state = load_or_initialize(task.id, root)
+    with workspace_runner_guard(root):
+        # 1. Make sure the v2 state row exists for this task.
+        load_or_initialize(task.id, root)
 
-    # 2. Build dependencies. Engine selector + heru factory wire up the
-    #    real engines via the existing SubagentManager; the rest are the
-    #    sqlite stores we land in M1.
-    selector = ConfigBackedEngineSelector(config, heru_engine_factory(root))
-    sessions = SqliteSessionStore(root)
-    persistence = SqlitePersistence(root)
-    journal = SqliteJournal(root)
-    hook_runner = SubprocessHookRunner(root)
+        # 2. Build dependencies. Engine selector + heru factory wire up
+        #    the real engines via the existing SubagentManager; the rest
+        #    are the sqlite stores we land in M1.
+        selector = ConfigBackedEngineSelector(config, heru_engine_factory(root))
+        sessions = SqliteSessionStore(root)
+        persistence = SqlitePersistence(root)
+        journal = SqliteJournal(root)
+        hook_runner = SubprocessHookRunner(root)
+        commit_node = _build_commit_node(root, stub=stub_commit)
+        prompt_context = PromptContext(workspace_root=root)
 
-    # Commit node — for now, the safe choice is StubCommitNode so we don't
-    # accidentally merge during early v2 testing. Real GitCommitNode wiring
-    # will follow once we've watched a few tasks run end-to-end.
-    commit_node = StubCommitNode()
+        registry = build_registry(
+            selector=selector,
+            session_store=sessions,
+            hook_runner=hook_runner,
+            commit_node=commit_node,
+            prompt_context=prompt_context,
+        )
 
-    prompt_context = PromptContext(workspace_root=root)
+        runner = StateMachineRunner(
+            registry,
+            persistence,
+            journal=journal,
+        )
 
-    registry = build_registry(
-        selector=selector,
-        session_store=sessions,
-        hook_runner=hook_runner,
-        commit_node=commit_node,
-        prompt_context=prompt_context,
-    )
+        # 3. Run under the heartbeat so `litehive status` sees the active task.
+        with runner_heartbeat(root, active_task_id=task.id):
+            final_state = runner.run_task(task.id)
 
-    runner = StateMachineRunner(
-        registry,
-        persistence,
-        journal=journal,
-    )
-
-    # 3. Run.
-    final_state = runner.run_task(task.id)
-
-    # 4. Mirror terminal state back to the v1 TaskRecord.
-    updated_task = sync_back_to_task_record(final_state, root) or task
+        # 4. Mirror terminal state back to the v1 TaskRecord.
+        updated_task = sync_back_to_task_record(final_state, root) or task
 
     return ExecutionResultV2(
         task=updated_task,

@@ -141,31 +141,46 @@ def _require_subcommand(ctx: typer.Context) -> None:
     raise typer.Exit(2)
 
 
-def _v2_pipeline_enabled() -> bool:
-    """True when ``LITEHIVE_PIPELINE_V2=1`` (or ``true``/``yes``) is set in env."""
+def _v2_pipeline_mode() -> str | None:
+    """Return ``"real"``, ``"stub"``, or ``None`` depending on ``LITEHIVE_PIPELINE_V2``.
+
+    Values:
+      - ``1`` / ``true`` / ``yes`` / ``on`` → ``"real"`` (full v2 with GitCommitNode)
+      - ``stub`` / ``stub_commit`` / ``dry`` → ``"stub"`` (v2 with StubCommitNode, safe)
+      - unset / anything else → ``None`` (stay on v1)
+    """
     raw = os.environ.get("LITEHIVE_PIPELINE_V2", "").strip().lower()
-    return raw in {"1", "true", "yes", "on"}
+    if raw in {"1", "true", "yes", "on"}:
+        return "real"
+    if raw in {"stub", "stub_commit", "dry"}:
+        return "stub"
+    return None
 
 
-def _run_next_task_v2(root: Path):
+def _v2_pipeline_enabled() -> bool:
+    """Back-compat helper — True if v2 is active in any mode."""
+    return _v2_pipeline_mode() is not None
+
+
+def _run_next_task_v2(root: Path, *, stub_commit: bool):
     """v2 entry point. Dequeues the next task and runs it through the v2 state machine."""
     from litehive.pipeline.orchestration import run_task_v2
-    from litehive.pipeline_old import run_next_task as _v1  # for the dequeue helper only
     from litehive.tasks.queue_ops import dequeue_next_task
 
     task = dequeue_next_task(root)
     if task is None:
         return None
-    result = run_task_v2(root, task)
-    return result
+    return run_task_v2(root, task, stub_commit=stub_commit)
 
 
 @app.callback(invoke_without_command=True)
 def root(ctx: typer.Context) -> int | None:
     if ctx.invoked_subcommand is not None:
         return None
-    if _v2_pipeline_enabled():
-        result = _run_next_task_v2(Path.cwd())
+
+    v2_mode = _v2_pipeline_mode()
+    if v2_mode is not None:
+        result = _run_next_task_v2(Path.cwd(), stub_commit=(v2_mode == "stub"))
         if result is not None and result.task is not None:
             print(f"{result.task.id}: {result.final_stage}")
             return 0
