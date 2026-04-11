@@ -45,17 +45,22 @@ through `ready → done` with stub engines, real persistence, real journal.
   honoring `excluded`. Used by M1 tests only.
 - [ ] `CommitNode._merge_worktree` — real git merge with delegation to
   `MergeAgent` on conflict. Takes a `git` helper injected in tests.
-- [ ] `build_registry(config, selector, sessions, hook_runner) -> NodeRegistry`
-  — assembles all phases (before/after × grooming/implementing/testing/
-  accepting/commit), agent stages, system nodes, terminals, recovery and
-  pre-exec recovery.
+- [x] `build_registry(selector, session_store, hook_runner, commit_node,
+  prompt_context, hook_specs) -> NodeRegistry` — assembles all 20 nodes
+  (ready, pre-exec-recovery, 10 hook phases, 4 agent stages, commit,
+  recovering, done, failed). Lives in `litehive/pipeline/registry.py`.
+- [x] `ReadyNode` + `PreExecRecoveryNode` placeholder system nodes so
+  the entry/resume path can be exercised end-to-end.
 - [ ] `HookRunner` subprocess implementation + a `FakeHookRunner` for
   tests.
 - [ ] Retry backoff inside `AgentNode._run_with_retries` (exponential,
   bounded, configurable via `retry_backoff_seconds`).
-- [ ] One end-to-end test that runs a task through every agent stage,
-  asserts the journal contains the expected sequence of transitions,
-  and confirms final `state.stage == "done"`.
+- [x] Five end-to-end tests (`tests/test_pipeline_v2_end_to_end.py`):
+  full-mode happy path, single-mode zero-change shortcut, single-mode
+  with changes routing through commit, persistence round-trip across
+  runner invocations, and a reject-retry-recover flow exercising the
+  RecoveryAgent. Stub engine, stub selector, stub hook runner, real
+  SqlitePersistence + SqliteJournal.
 
 ### M2 — Real single-task run via daemon
 
@@ -129,4 +134,16 @@ item lands.
   `SessionProvider` protocol now requires `task_id` so persistent stores
   can't leak session handles across tasks. 9 new round-trip tests +
   updated db_migrations tests for the new embedded migration.
+- 2026-04-11: M1 steps 2+3 done — `build_registry` factory in
+  `litehive/pipeline/registry.py` assembles all 20 nodes. `ReadyNode`
+  and `PreExecRecoveryNode` added as placeholder system nodes.
+  `tests/test_pipeline_v2_end_to_end.py` drives a synthetic task
+  through the full machine via real SqlitePersistence + SqliteJournal
+  and covers full mode, single mode (zero-change shortcut and
+  with-changes routes), persistence round-trip, and a reject→retry→
+  recover loop. 90 v2 tests green total.
+- Known gap for M2: nothing populates `state.last_report` today —
+  the stub engine and the agent verdict path don't write it. Need a
+  way for agents to report files/tests changed so the zero-change
+  shortcut guard sees real data instead of defaults.
 - …

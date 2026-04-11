@@ -8,7 +8,7 @@ INSTRUCTIONS = """\
 - If there are no changes, implement from scratch regardless of what prior stage reports claim.
 - Only skip implementation and submit `litehive report --verdict pass` if `git diff main...HEAD` shows the expected changes and the acceptance criteria are met.
 - Never exit the stage without calling `litehive report`.
-- If the task needs scope correction rather than code changes, use `litehive task update` to narrow scope or adjust the acceptance criteria so the task re-enters the pipeline with the corrected contract.
+- You do NOT edit acceptance criteria or the task goal — only the planner (PM) can change scope. If the task contract is wrong or ambiguous, reject the stage with a precise note so grooming can fix it.
 - If the task is genuinely obsolete or duplicated, use `litehive task close --outcome wont_do` or `litehive task close --outcome duplicate` with a concrete reason instead of exiting silently.
 """
 
