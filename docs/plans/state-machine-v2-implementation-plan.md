@@ -32,10 +32,13 @@ into the actual executor, replacing `litehive/pipeline_old/`.
 Criterion: `pytest -k "e2e and pipeline_v2"` drives a synthetic task
 through `ready → done` with stub engines, real persistence, real journal.
 
-- [ ] `SqlitePersistence` — reads/writes `TaskState` against a new
-  sqlite table. Schema lives in migration 0003.
-- [ ] `SqliteSessionStore` — reads/writes `Session` keyed by
-  `(task_id, node_name, engine_name)`. Migration 0003 table.
+- [x] `SqlitePersistence` — reads/writes `TaskState` against
+  `pipeline_task_state` (migration 0003). Round-trip covered in
+  `tests/test_pipeline_v2_sqlite_adapters.py`.
+- [x] `SqliteSessionStore` — reads/writes `Session` keyed by
+  `(task_id, node_name, engine_name)` in `pipeline_sessions`.
+  `SessionProvider` protocol + `AgentNode.run` updated to thread
+  `task_id` through.
 - [ ] `StubEngine` — deterministic engine for tests that returns a
   scripted `AgentVerdict` sequence and raises scripted exceptions.
 - [ ] `StaticEngineSelector` — returns engines from a fixed list,
@@ -121,4 +124,9 @@ item lands.
 
 - 2026-04-11: plan written, v2 core committed
   (`litehive: add pipeline state machine v2 (clean-slate)`).
+- 2026-04-11: M1 step 1 done — `SqlitePersistence` + `SqliteSessionStore`
+  landed with migration 0003 (`pipeline_task_state`, `pipeline_sessions`).
+  `SessionProvider` protocol now requires `task_id` so persistent stores
+  can't leak session handles across tasks. 9 new round-trip tests +
+  updated db_migrations tests for the new embedded migration.
 - …

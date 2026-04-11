@@ -1,20 +1,25 @@
+import json
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Protocol
+
+from litehive.db.schema import connect_workspace_db
+from litehive.models import utcnow
 
 from .types import NodeName
 
 
 @dataclass
 class Session:
-    """One agent conversation with one engine.
+    """One agent conversation with one engine for one task.
 
     ``engine_session_id`` is filled in by the engine adapter after the first
     turn. Subsequent turns use it to resume (e.g. ``codex --continue <id>``,
-    ``claude --resume <id>``, etc.). A session belongs to exactly one engine
-    — if the agent needs to switch engines (the current one is blocked), the
+    ``claude --resume <id>``). A session belongs to exactly one engine — if
+    the agent needs to switch engines (the current one is blocked), the
     ``SessionStore`` hands back a brand-new empty ``Session`` for the new
-    engine. Retries on the same engine reuse the same session so the
-    adapter can emit its continue flag.
+    engine. Retries on the same engine reuse the same session so the adapter
+    can emit its continue flag.
     """
 
     engine_session_id: str | None = None
@@ -27,24 +32,100 @@ class Session:
 
 
 class SessionStore(Protocol):
-    """Keyed by ``(node_name, engine_name)`` — one session per engine per node.
+    """Keyed by ``(task_id, node_name, engine_name)``.
 
     The AgentNode looks up a session for the engine it's about to call; same
     engine, same session across retries; different engine, different session.
+    The task_id key prevents session handles from leaking across tasks in a
+    shared persistent store.
     """
 
-    def get_or_create(self, node_name: NodeName, engine_name: str) -> Session: ...
-    def persist(self, node_name: NodeName, engine_name: str, session: Session) -> None: ...
+    def get_or_create(
+        self, task_id: str, node_name: NodeName, engine_name: str
+    ) -> Session: ...
+
+    def persist(
+        self, task_id: str, node_name: NodeName, engine_name: str, session: Session
+    ) -> None: ...
 
 
 class InMemorySessionStore:
-    """Reference implementation; real store reads/writes under .litehive/tasks/.../sessions/."""
+    """Reference implementation for tests; keeps everything in a dict."""
 
     def __init__(self) -> None:
-        self._sessions: dict[tuple[NodeName, str], Session] = {}
+        self._sessions: dict[tuple[str, NodeName, str], Session] = {}
 
-    def get_or_create(self, node_name: NodeName, engine_name: str) -> Session:
-        return self._sessions.setdefault((node_name, engine_name), Session())
+    def get_or_create(
+        self, task_id: str, node_name: NodeName, engine_name: str
+    ) -> Session:
+        return self._sessions.setdefault((task_id, node_name, engine_name), Session())
 
-    def persist(self, node_name: NodeName, engine_name: str, session: Session) -> None:
-        self._sessions[(node_name, engine_name)] = session
+    def persist(
+        self, task_id: str, node_name: NodeName, engine_name: str, session: Session
+    ) -> None:
+        self._sessions[(task_id, node_name, engine_name)] = session
+
+
+class SqliteSessionStore:
+    """Persists ``Session`` rows to the ``pipeline_sessions`` sqlite table.
+
+    Each row is one ``(task_id, node_name, engine_name)`` tuple. ``metadata``
+    is stored as a JSON blob. ``get_or_create`` returns a fresh ``Session``
+    when the row doesn't exist yet, without writing; the adapter writes on
+    ``persist`` after the first turn fills in ``engine_session_id``.
+    """
+
+    def __init__(self, workspace_root: Path) -> None:
+        self.workspace_root = workspace_root
+
+    def get_or_create(
+        self, task_id: str, node_name: NodeName, engine_name: str
+    ) -> Session:
+        with connect_workspace_db(self.workspace_root) as connection:
+            row = connection.execute(
+                """
+                SELECT engine_session_id, conversation_id, turn_count, metadata
+                FROM pipeline_sessions
+                WHERE task_id = ? AND node_name = ? AND engine_name = ?
+                """,
+                (task_id, node_name, engine_name),
+            ).fetchone()
+        if row is None:
+            return Session()
+        return Session(
+            engine_session_id=row["engine_session_id"],
+            conversation_id=row["conversation_id"],
+            turn_count=row["turn_count"],
+            metadata=json.loads(row["metadata"] or "{}"),
+        )
+
+    def persist(
+        self, task_id: str, node_name: NodeName, engine_name: str, session: Session
+    ) -> None:
+        metadata_json = json.dumps(session.metadata, sort_keys=True)
+        with connect_workspace_db(self.workspace_root) as connection:
+            connection.execute(
+                """
+                INSERT INTO pipeline_sessions (
+                    task_id, node_name, engine_name,
+                    engine_session_id, conversation_id, turn_count, metadata, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(task_id, node_name, engine_name) DO UPDATE SET
+                    engine_session_id = excluded.engine_session_id,
+                    conversation_id = excluded.conversation_id,
+                    turn_count = excluded.turn_count,
+                    metadata = excluded.metadata,
+                    updated_at = excluded.updated_at
+                """,
+                (
+                    task_id,
+                    node_name,
+                    engine_name,
+                    session.engine_session_id,
+                    session.conversation_id,
+                    session.turn_count,
+                    metadata_json,
+                    utcnow(),
+                ),
+            )
+            connection.commit()

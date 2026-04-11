@@ -84,8 +84,13 @@ class EngineSelector(Protocol):
 
 
 class SessionProvider(Protocol):
-    def get_or_create(self, node_name: NodeName, engine_name: str) -> Any: ...
-    def persist(self, node_name: NodeName, engine_name: str, session: Any) -> None: ...
+    def get_or_create(
+        self, task_id: str, node_name: NodeName, engine_name: str
+    ) -> Any: ...
+
+    def persist(
+        self, task_id: str, node_name: NodeName, engine_name: str, session: Any
+    ) -> None: ...
 
 
 class AgentNode(Node):
@@ -158,10 +163,12 @@ class AgentNode(Node):
                     message=str(last_exc) if last_exc else "no engine eligible",
                 )
 
-            # One session per (node, engine). Retries on the same engine reuse
-            # it so the adapter can emit --continue; switching engines gets a
-            # fresh one so we don't carry a dead session id across providers.
-            session = self.sessions.get_or_create(self.name, engine.name)
+            # One session per (task, node, engine). Retries on the same engine
+            # reuse it so the adapter can emit --continue; switching engines
+            # gets a fresh one so we don't carry a dead session id across
+            # providers. The task_id key prevents sharing across tasks in a
+            # persistent store.
+            session = self.sessions.get_or_create(state.task_id, self.name, engine.name)
             outcome = self._run_with_retries(engine, session, prompt, state)
             if isinstance(outcome, Event):
                 return outcome
@@ -190,7 +197,7 @@ class AgentNode(Node):
         for _ in range(self.retry_budget):
             try:
                 verdict = engine.run_turn(session, prompt, state)
-                self.sessions.persist(self.name, engine.name, session)
+                self.sessions.persist(state.task_id, self.name, engine.name, session)
                 return self._verdict_to_event(verdict)
             except TransientError as exc:
                 last_exc = exc
