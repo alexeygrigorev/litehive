@@ -1,8 +1,46 @@
+import os
+from pathlib import Path
+
 from litehive.config import ensure_workspace, load_config
 from litehive.pipeline_old import TaskPoolStopConditions, drain_task_pool, run_single_task
 from litehive.pipeline_old._parallel import run_parallel_tasks
 from litehive.tasks.models import WorkspaceConflictError
-from litehive.tasks.queue_ops import peek_next_task_selection, plan_task_selections
+from litehive.tasks.queue_ops import dequeue_next_task, peek_next_task_selection, plan_task_selections
+
+
+def _v2_pipeline_mode() -> str | None:
+    raw = os.environ.get("LITEHIVE_PIPELINE_V2", "").strip().lower()
+    if raw in {"1", "true", "yes", "on"}:
+        return "real"
+    if raw in {"stub", "stub_commit", "dry"}:
+        return "stub"
+    return None
+
+
+def _maybe_run_single_v2(workspace: Path) -> int | None:
+    """Run one task through v2 if the env var is set. Returns rc or None to fall through."""
+    mode = _v2_pipeline_mode()
+    if mode is None:
+        return None
+    from litehive.pipeline.orchestration import run_task_v2
+
+    try:
+        task = dequeue_next_task(workspace)
+    except WorkspaceConflictError as exc:
+        print(f"run failed: {exc}")
+        return 1
+    if task is None:
+        print("No queued task.")
+        return 0
+    result = run_task_v2(workspace, task, stub_commit=(mode == "stub"))
+    if result.task is not None:
+        print(f"task: {result.task.id} {result.task.title}")
+    print(f"final_stage: {result.final_stage}")
+    if result.failed_reason:
+        print(f"failed_reason: {result.failed_reason}")
+    if result.failed_message:
+        print(f"failed_message: {result.failed_message}")
+    return 0 if result.final_stage == "done" else 1
 
 from litehive.cli._pool import (
     _pool_summary_report_data,
@@ -151,6 +189,13 @@ def _cmd_run_drain(
         )
         return 0
 
+    # v2 pipeline opt-in: route drain to v2 one-task-at-a-time.
+    # We don't run a whole pool in v2 yet — each "drain" tick runs a single
+    # task and returns, letting the daemon loop handle iteration.
+    v2_rc = _maybe_run_single_v2(args.workspace)
+    if v2_rc is not None:
+        return v2_rc
+
     try:
         summary = drain_task_pool(
             args.workspace,
@@ -276,6 +321,12 @@ def _cmd_run_single(
             predicted_stop_reason=predicted_stop_reason,
         )
         return 0
+
+    # v2 pipeline opt-in via LITEHIVE_PIPELINE_V2 env var.
+    # This short-circuits the v1 run_single_task path entirely.
+    v2_rc = _maybe_run_single_v2(args.workspace)
+    if v2_rc is not None:
+        return v2_rc
 
     try:
         summary = run_single_task(

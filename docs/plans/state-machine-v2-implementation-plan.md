@@ -117,12 +117,28 @@ real engines, replacing `pipeline_old.TaskExecutionRunner`.
 **To enable v2 on the live daemon:**
 
 ```bash
-LITEHIVE_PIPELINE_V2=1 litehive
+# Safe dry run — v2 state machine + real engines, but commit stage
+# is stubbed so nothing is merged into main.
+LITEHIVE_PIPELINE_V2=stub litehive daemon run
+
+# Full v2 with real git merge (GitCommitNode).
+LITEHIVE_PIPELINE_V2=1 litehive daemon run
 ```
 
-Run with the env var to flip the daemon root command onto v2. Watch
-`litehive logs <task_id>` and the `pipeline_journal` / `pipeline_transitions`
-sqlite tables for what's happening.
+The env var is picked up by both the root ``litehive`` callback and by
+``litehive run --drain`` / ``litehive run`` (which the daemon invokes
+as a subprocess). When set, the CLI short-circuits the v1 path and
+calls ``run_task_v2`` which:
+
+  - takes the workspace runner guard + heartbeat (same lock v1 uses)
+  - initializes the v2 state row via the v1 bridge
+  - wires the real engines via ``heru_engine_factory``
+  - uses ``StubCommitNode`` in ``stub`` mode or ``GitCommitNode`` in
+    ``real`` mode
+  - syncs the terminal stage back to the v1 TaskRecord
+
+Watch `litehive logs <task_id>` and the `pipeline_journal` /
+`pipeline_transitions` sqlite tables for what's happening.
 
 ### M3 — Resilience features
 
