@@ -200,10 +200,15 @@ item lands.
   and covers full mode, single mode (zero-change shortcut and
   with-changes routes), persistence round-trip, and a reject→retry→
   recover loop. 90 v2 tests green total.
-- Known gap for M2: nothing populates `state.last_report` today —
-  the stub engine and the agent verdict path don't write it. Need a
-  way for agents to report files/tests changed so the zero-change
-  shortcut guard sees real data instead of defaults.
+- ~~Known gap for M2: nothing populates `state.last_report` today~~
+  **Fixed 2026-04-12.** `Pass.metadata` carries the verdict's
+  `files_changed` / `tests_added` through AgentNode → Runner →
+  `state.last_report` via a new `_apply_event_side_effects` hook.
+  `HeruEngineAdapter` already populates the metadata from the
+  thread.yaml comment, so the end-to-end path is now:
+  agent submits verdict → thread.yaml comment → adapter →
+  `AgentVerdict.metadata` → `Pass.metadata` → `state.last_report` →
+  `zero_change_shortcut` guard sees real numbers.
 - 2026-04-12: bootstrap integration tests landed
   (`tests/test_pipeline_v2_bootstrap.py`). They drive `run_task_v2`
   against a real tmp_path workspace with SqlitePersistence, SqliteJournal,

@@ -1,6 +1,7 @@
 from typing import Callable
 
 from .deltas import StateDelta
+from .events import Event, Pass
 from .journal import NullJournal, PipelineJournal
 from .nodes.base import NodeRegistry
 from .persistence import Persistence, TaskState
@@ -51,6 +52,7 @@ class StateMachineRunner:
             event = node.run(state)
             trans = evaluate(self.rules, from_stage, event, state)
             self._apply_delta(state, trans.delta)
+            self._apply_event_side_effects(state, event)
             state.stage = trans.next
             self.persistence.save(state)
             self.journal.transition(
@@ -66,6 +68,27 @@ class StateMachineRunner:
                 return state
         self.journal.task_finished(task_id, state.stage)
         return state
+
+    @staticmethod
+    def _apply_event_side_effects(state: TaskState, event: Event) -> None:
+        """Apply metadata that rides on the event rather than a StateDelta.
+
+        Currently only ``Pass.metadata`` is consulted: agents report
+        ``files_changed`` / ``tests_added`` via the verdict submission,
+        and the Runner keeps ``state.last_report`` in sync so guards
+        like ``zero_change_shortcut`` see real numbers.
+        """
+        if not isinstance(event, Pass):
+            return
+        meta = event.metadata or {}
+        files_changed = meta.get("files_changed")
+        if isinstance(files_changed, list):
+            state.last_report.files_changed = len(files_changed)
+        elif isinstance(files_changed, int):
+            state.last_report.files_changed = files_changed
+        tests_added = meta.get("tests_added")
+        if isinstance(tests_added, int):
+            state.last_report.tests_added = tests_added
 
     @staticmethod
     def _apply_delta(state: TaskState, delta: StateDelta) -> None:

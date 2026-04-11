@@ -10,8 +10,8 @@ Each docstring answers **who fires this event and when**. Read it before
 adding a new rule that matches an event, or before inventing a new event.
 """
 
-from dataclasses import dataclass
-from typing import Literal
+from dataclasses import dataclass, field
+from typing import Any, Literal
 
 from .types import NodeName
 
@@ -39,7 +39,15 @@ class Pass(Event):
 
     Never fired by hook nodes — they use ``HookOk`` instead so the rules
     can distinguish an agent pass from a hook phase completing.
+
+    ``metadata`` carries the verdict's ``files_changed`` / ``tests_added``
+    details from the submitted ``litehive report`` comment. The Runner
+    reads it after each transition and updates ``state.last_report`` so
+    downstream guards (``zero_change_shortcut``, etc.) see real numbers
+    instead of defaults.
     """
+
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)

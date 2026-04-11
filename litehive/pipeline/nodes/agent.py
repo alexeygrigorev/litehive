@@ -285,7 +285,7 @@ class AgentNode(Node):
     def _verdict_to_event(self, verdict: AgentVerdict) -> Event:
         outcome = verdict.outcome.lower()
         if outcome == "pass":
-            return Pass()
+            return Pass(metadata=dict(verdict.metadata or {}))
         if outcome == "reject":
             return Reject(source="agent", reason=verdict.reason)
         if outcome == "blocked":
