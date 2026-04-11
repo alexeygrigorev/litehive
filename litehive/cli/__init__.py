@@ -51,7 +51,9 @@ from litehive.cli.status import _cmd_list, _cmd_queue, _cmd_repair, _cmd_show, _
 from litehive.cli.tasks import _cmd_add, _cmd_intake, _cmd_issue, _cmd_update
 from litehive.cli.worktree import _cmd_worktree_clean, _cmd_worktree_ls, _cmd_worktree_rescue
 from litehive.config import VALID_POOL_SELECTION_POLICIES, available_process_profiles
-from litehive.pipeline_old import run_next_task
+import os
+
+from litehive.pipeline_old import run_next_task as _run_next_task_v1
 from litehive.tasks.constants import (
     VALID_HUMAN_CHECKPOINTS,
     VALID_PM_COMPLEXITIES,
@@ -139,11 +141,37 @@ def _require_subcommand(ctx: typer.Context) -> None:
     raise typer.Exit(2)
 
 
+def _v2_pipeline_enabled() -> bool:
+    """True when ``LITEHIVE_PIPELINE_V2=1`` (or ``true``/``yes``) is set in env."""
+    raw = os.environ.get("LITEHIVE_PIPELINE_V2", "").strip().lower()
+    return raw in {"1", "true", "yes", "on"}
+
+
+def _run_next_task_v2(root: Path):
+    """v2 entry point. Dequeues the next task and runs it through the v2 state machine."""
+    from litehive.pipeline.orchestration import run_task_v2
+    from litehive.pipeline_old import run_next_task as _v1  # for the dequeue helper only
+    from litehive.tasks.queue_ops import dequeue_next_task
+
+    task = dequeue_next_task(root)
+    if task is None:
+        return None
+    result = run_task_v2(root, task)
+    return result
+
+
 @app.callback(invoke_without_command=True)
 def root(ctx: typer.Context) -> int | None:
     if ctx.invoked_subcommand is not None:
         return None
-    summary = run_next_task(Path.cwd())
+    if _v2_pipeline_enabled():
+        result = _run_next_task_v2(Path.cwd())
+        if result is not None and result.task is not None:
+            print(f"{result.task.id}: {result.final_stage}")
+            return 0
+        return _launch_app(Path.cwd(), default_mode="implementation")
+
+    summary = _run_next_task_v1(Path.cwd())
     if summary.task is not None:
         if summary.result is not None:
             print(f"{summary.task.id}: {summary.result.final_status}")

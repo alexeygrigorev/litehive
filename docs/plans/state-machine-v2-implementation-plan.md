@@ -91,16 +91,38 @@ real engines, replacing `pipeline_old.TaskExecutionRunner`.
   Session.engine_session_id after each turn. Raises `NudgeRequired`
   if no verdict landed. Needs the factory wired up (see T-0349).
 
-**Remaining items handed off to litehive tasks** (see T-0347–T-0350
-below). These are all small/medium and can run through the v1 pipeline
-while v2 finishes bootstrapping:
+- [x] **T-0347 v1 bridge** — `litehive/pipeline/v1_bridge.py`. Reads
+  pipeline_mode from TaskRecord on v2 row creation; mirrors v2 terminal
+  stage back to TaskRecord status / pipeline_status (with the
+  merge_failed distinction).
+- [x] **T-0348 prompt serializer** — `litehive/pipeline/prompt_serializer.py`.
+  Renders the structured RoleAgent dict into the engine-facing string
+  with all the standard sections (header / instructions / goal /
+  acceptance / plan / constraints / last_rejection / failure_context /
+  conflict_files / thread / verdict instructions). No imports from
+  pipeline_old.
+- [x] **T-0349 HeruEngineFactory** — `litehive/pipeline/heru_factory.py`.
+  HeruEngineAdapter delegates to SubagentManager.run, captures the
+  before-turn timestamp, reads thread.yaml after the turn for fresh
+  verdicts, raises NudgeRequired if none landed. heru exceptions
+  translated into the v2 taxonomy.
+- [x] **T-0350 daemon entry point** — `litehive/pipeline/orchestration.py`
+  with `run_task_v2(root, task)` that wires up the full v2 stack
+  (selector + sessions + persistence + journal + hook runner +
+  registry) and calls `StateMachineRunner.run_task`. CLI root command
+  checks the `LITEHIVE_PIPELINE_V2=1` env var and routes through v2
+  when set; default behavior (env var unset) is unchanged so existing
+  daemon flows are not disturbed.
 
-- T-0347 — v1 TaskRecord ↔ v2 TaskState bridge
-- T-0348 — v2 prompt serializer (no `pipeline_old` imports)
-- T-0349 — HeruEngineFactory + verdict reader (depends on T-0347)
-- T-0350 — daemon entry point swap (depends on T-0347, T-0348, T-0349)
+**To enable v2 on the live daemon:**
 
-Once T-0350 lands, v2 is the executor.
+```bash
+LITEHIVE_PIPELINE_V2=1 litehive
+```
+
+Run with the env var to flip the daemon root command onto v2. Watch
+`litehive logs <task_id>` and the `pipeline_journal` / `pipeline_transitions`
+sqlite tables for what's happening.
 
 ### M3 — Resilience features
 
