@@ -1,0 +1,75 @@
+task_id: T-0293
+step: testing
+verdict: pass
+source: agent
+summary: 'Recovery/testing pass. I did not find a Litehive infrastructure bug to fix;
+  the prior recovery retries stopped because long-running verification was interrupted
+  before a report was submitted. I continued from the existing implementation and
+  verified the task outcome independently. Focused verification: uv run pytest -q
+  tests/test_db_migrations.py tests/test_workspace_bootstrap.py tests/test_backup.py
+  tests/test_task_commands_and_daemon.py -> 162 passed, 3 Typer deprecation warnings.
+  Full smoke verification: uv run pytest -q -> 999 passed, 3 Typer deprecation warnings.
+  Manual operator check on a temporary workspace created via ensure_workspace() confirmed
+  litehive db status reports schema_version: 1, applied_migrations: 1, pending_migrations:
+  0 and litehive db migrate --dry-run exits cleanly without applying anything. Evidence
+  against the acceptance criteria: schema_migrations is created and tracked in the
+  workspace bootstrap path; embedded migrations are loaded from litehive/db/migrations/0001_initial.sql
+  and included in pyproject packaging; daemon startup applies pending migrations before
+  normal DB use; dry-run and status commands report pending state through the shared
+  migration engine; rollback behavior is covered by the broken-migration test asserting
+  the failing migration leaves no partial table behind; 0001_initial.sql contains
+  the full baseline runtime schema expected by storage; the model remains forward-only
+  with rollback relying on backups from T-0292. I also reviewed the new migration
+  tests for QA fit: they are focused, non-duplicative, and their assertions would
+  fail if migration discovery, dry-run, transactional rollback, or daemon auto-apply
+  were broken. This stage can proceed; no recovery-only code change was required.'
+feedback: "Stage `testing` retrying `codex` after attempt 1/3 due to transient timeout\
+  \ (classification: timeout, policy: codex, backoff: 0.25s).\n\nStage `testing` retrying\
+  \ `codex` after attempt 2/3 due to transient timeout (classification: timeout, policy:\
+  \ codex, backoff: 0.50s).\n\nRecovery/testing pass. I did not find a Litehive infrastructure\
+  \ bug to fix; the prior recovery retries stopped because long-running verification\
+  \ was interrupted before a report was submitted. I continued from the existing implementation\
+  \ and verified the task outcome independently. Focused verification: uv run pytest\
+  \ -q tests/test_db_migrations.py tests/test_workspace_bootstrap.py tests/test_backup.py\
+  \ tests/test_task_commands_and_daemon.py -> 162 passed, 3 Typer deprecation warnings.\
+  \ Full smoke verification: uv run pytest -q -> 999 passed, 3 Typer deprecation warnings.\
+  \ Manual operator check on a temporary workspace created via ensure_workspace()\
+  \ confirmed litehive db status reports schema_version: 1, applied_migrations: 1,\
+  \ pending_migrations: 0 and litehive db migrate --dry-run exits cleanly without\
+  \ applying anything. Evidence against the acceptance criteria: schema_migrations\
+  \ is created and tracked in the workspace bootstrap path; embedded migrations are\
+  \ loaded from litehive/db/migrations/0001_initial.sql and included in pyproject\
+  \ packaging; daemon startup applies pending migrations before normal DB use; dry-run\
+  \ and status commands report pending state through the shared migration engine;\
+  \ rollback behavior is covered by the broken-migration test asserting the failing\
+  \ migration leaves no partial table behind; 0001_initial.sql contains the full baseline\
+  \ runtime schema expected by storage; the model remains forward-only with rollback\
+  \ relying on backups from T-0292. I also reviewed the new migration tests for QA\
+  \ fit: they are focused, non-duplicative, and their assertions would fail if migration\
+  \ discovery, dry-run, transactional rollback, or daemon au\n\n\u2026 [truncated\
+  \ \u2014 full transcript in subagent artifacts]"
+submitted_via_cli: true
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings:
+- 'Stage `testing` retrying `codex` after attempt 1/3 due to transient timeout (classification:
+  timeout, policy: codex, backoff: 0.25s).'
+- 'Stage `testing` retrying `codex` after attempt 2/3 due to transient timeout (classification:
+  timeout, policy: codex, backoff: 0.50s).'
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 1563
+hook_results: []
+created_at: '2026-04-11T07:09:35+00:00'

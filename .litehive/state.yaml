@@ -1,8 +1,7 @@
-active_task_id: T-0292
+active_task_id: T-0293
 active_task_ids: []
 mode: implementation
 queue:
-- T-0293
 - T-0294
 - T-0295
 - T-0296
@@ -44,5 +43,5 @@ queue:
 - T-0341
 - T-0342
 pool_stop_reason: null
-next_task_number: 342
+next_task_number: 343
 unmerged_worktrees: []

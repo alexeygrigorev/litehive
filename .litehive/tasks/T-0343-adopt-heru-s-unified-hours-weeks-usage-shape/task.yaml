@@ -1,0 +1,61 @@
+id: T-0343
+slug: adopt-heru-s-unified-hours-weeks-usage-shape
+title: Adopt heru's unified (hours, weeks) usage shape
+depends_on: []
+task_type: refactor
+model: null
+mode: tasks
+pipeline_mode: full
+status: wont_do
+flag_reason: null
+flag_count: 0
+pipeline_status: backlog
+priority: high
+pm_complexity: moderate
+planned_effort: m
+created_at: '2026-04-11T07:01:22+00:00'
+updated_at: '2026-04-11T07:02:41+00:00'
+goal: heru is normalizing its quota/usage output to a single unified shape with exactly
+  two windows (hours and weeks) and collapsing the per-provider dataclasses (see the
+  corresponding heru task). litehive currently consumes the old per-provider shapes
+  (CodexQuotaStatus.primary_window/secondary_window, ClaudeQuotaStatus.five_hour/seven_day,
+  CopilotQuotaStatus.premium_remaining/premium_entitlement/percent_remaining, ZaiQuotaStatus.api_calls/tokens/window_hours,
+  plus fields like quota_reset_date and max_used_percent). Migrate every litehive
+  call site to the new unified shape. Delete now-dead per-provider handling. Any UI
+  or monitoring code that showed provider-specific windows should switch to showing
+  'hours remaining' and 'weeks remaining'. Bump the heru dependency pin to a version
+  that includes the unified shape.
+acceptance_criteria:
+- No references to CodexQuotaWindow, ClaudeQuotaWindow, ZaiQuotaWindow, CopilotQuotaStatus.premium_*,
+  primary_window, secondary_window, five_hour, seven_day, api_calls, tokens window_hours,
+  or max_used_percent remain in litehive/
+- litehive consumes heru's unified usage dataclass and its (hours, weeks) windows
+- Engine monitoring, health, dashboard, and dry-run code paths all render the new
+  shape without provider-specific branches where heru already normalizes
+- heru dependency pin in litehive's pyproject.toml bumped to include the unified shape
+- tests/ passes in litehive
+- tests_integration/ passes in litehive for at least codex
+constraints:
+- Avoid broad opportunistic cleanup outside the chosen seam.
+- Preserve existing behavior unless the task explicitly includes functional changes.
+plan:
+- Identify the narrow seam to refactor and the behavior that must stay stable.
+- Restructure the code in small, reviewable steps.
+- Run focused verification to confirm behavior is preserved.
+human_checkpoints: []
+subagents: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0343 adopt-heru-s-unified-hours-weeks-usage-shape'
+  commit_sha: null
+  checkpoint_base_sha: null
+  checkpoint_attempts: 0
+  rolled_back_checkpoint_attempt: null
+  merge_agent_attempts: 0
+  worktree_path: null
+retry_policy:
+  max_retries: null
+  stage_retry_limit: null
+created_from: null
+upstream_origin: null
+github_origin: null
