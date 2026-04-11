@@ -114,28 +114,32 @@ real engines, replacing `pipeline_old.TaskExecutionRunner`.
   when set; default behavior (env var unset) is unchanged so existing
   daemon flows are not disturbed.
 
-**To enable v2 on the live daemon:**
+**v2 is now the unconditional executor.** No env var, no opt-in — the
+CLI root, `litehive run`, and `litehive run --drain` all route through
+`run_task_v2` directly. To run:
 
 ```bash
-# Safe dry run — v2 state machine + real engines, but commit stage
-# is stubbed so nothing is merged into main.
-LITEHIVE_PIPELINE_V2=stub litehive daemon run
-
-# Full v2 with real git merge (GitCommitNode).
-LITEHIVE_PIPELINE_V2=1 litehive daemon run
+litehive              # runs the next queued task via v2
+litehive run          # same (explicit)
+litehive daemon run   # starts the daemon loop, which subprocess-invokes
+                      # litehive run per drain tick
 ```
 
-The env var is picked up by both the root ``litehive`` callback and by
-``litehive run --drain`` / ``litehive run`` (which the daemon invokes
-as a subprocess). When set, the CLI short-circuits the v1 path and
-calls ``run_task_v2`` which:
+Each call:
 
-  - takes the workspace runner guard + heartbeat (same lock v1 uses)
-  - initializes the v2 state row via the v1 bridge
-  - wires the real engines via ``heru_engine_factory``
-  - uses ``StubCommitNode`` in ``stub`` mode or ``GitCommitNode`` in
-    ``real`` mode
-  - syncs the terminal stage back to the v1 TaskRecord
+  - Dequeues the next task from the v1 queue (task.yaml is still the
+    source of truth for task intent).
+  - Takes `workspace_runner_guard` + `runner_heartbeat` so
+    `litehive status` shows the task as active and no two runners
+    trample each other.
+  - Initializes the v2 state row via the v1 bridge.
+  - Wires real engines via `heru_engine_factory` with
+    `ConfigBackedEngineSelector`.
+  - Routes `ready → worktree_sync → before_<stage>` so parked-then-
+    unparked tasks pick up current main before the SWE sees them.
+  - Uses `GitCommitNode` for real merges (no stub mode).
+  - Syncs the terminal stage back to the v1 TaskRecord so
+    `litehive status` keeps working.
 
 Watch `litehive logs <task_id>` and the `pipeline_journal` /
 `pipeline_transitions` sqlite tables for what's happening.
