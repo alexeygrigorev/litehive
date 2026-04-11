@@ -11,10 +11,13 @@ from .hook import (
 from .system import (
     CommitNode,
     GitCommitNode,
+    GitWorktreeSyncNode,
+    NoopWorktreeSyncNode,
     PreExecRecoveryNode,
     ReadyNode,
     StubCommitNode,
     SystemNode,
+    WorktreeSyncNode,
 )
 from .terminal import TerminalNode
 
@@ -32,6 +35,9 @@ __all__ = [
     "CommitNode",
     "GitCommitNode",
     "StubCommitNode",
+    "WorktreeSyncNode",
+    "GitWorktreeSyncNode",
+    "NoopWorktreeSyncNode",
     "ReadyNode",
     "PreExecRecoveryNode",
     "TerminalNode",

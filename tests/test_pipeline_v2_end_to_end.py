@@ -126,7 +126,8 @@ def test_full_mode_task_runs_end_to_end_to_done(workspace: Path) -> None:
 
     # Transitions: must include the full full-mode sequence
     from_to_pairs = [(row["from_stage"], row["to_stage"]) for row in transitions]
-    assert ("ready", "before_grooming") in from_to_pairs
+    assert ("ready", "worktree_sync") in from_to_pairs
+    assert ("worktree_sync", "before_grooming") in from_to_pairs
     assert ("grooming", "after_grooming") in from_to_pairs
     assert ("implementing", "after_implementing") in from_to_pairs
     assert ("testing", "after_testing") in from_to_pairs

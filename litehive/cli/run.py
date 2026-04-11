@@ -1,29 +1,15 @@
-import os
 from pathlib import Path
 
 from litehive.config import ensure_workspace, load_config
-from litehive.pipeline_old import TaskPoolStopConditions, drain_task_pool, run_single_task
+from litehive.pipeline.orchestration import run_task_v2
+from litehive.pipeline_old import TaskPoolStopConditions
 from litehive.pipeline_old._parallel import run_parallel_tasks
 from litehive.tasks.models import WorkspaceConflictError
 from litehive.tasks.queue_ops import dequeue_next_task, peek_next_task_selection, plan_task_selections
 
 
-def _v2_pipeline_mode() -> str | None:
-    raw = os.environ.get("LITEHIVE_PIPELINE_V2", "").strip().lower()
-    if raw in {"1", "true", "yes", "on"}:
-        return "real"
-    if raw in {"stub", "stub_commit", "dry"}:
-        return "stub"
-    return None
-
-
-def _maybe_run_single_v2(workspace: Path) -> int | None:
-    """Run one task through v2 if the env var is set. Returns rc or None to fall through."""
-    mode = _v2_pipeline_mode()
-    if mode is None:
-        return None
-    from litehive.pipeline.orchestration import run_task_v2
-
+def _run_single_v2(workspace: Path) -> int:
+    """Dequeue one task and run it through the v2 state machine."""
     try:
         task = dequeue_next_task(workspace)
     except WorkspaceConflictError as exc:
@@ -32,7 +18,7 @@ def _maybe_run_single_v2(workspace: Path) -> int | None:
     if task is None:
         print("No queued task.")
         return 0
-    result = run_task_v2(workspace, task, stub_commit=(mode == "stub"))
+    result = run_task_v2(workspace, task)
     if result.task is not None:
         print(f"task: {result.task.id} {result.task.title}")
     print(f"final_stage: {result.final_stage}")
@@ -189,23 +175,9 @@ def _cmd_run_drain(
         )
         return 0
 
-    # v2 pipeline opt-in: route drain to v2 one-task-at-a-time.
-    # We don't run a whole pool in v2 yet — each "drain" tick runs a single
-    # task and returns, letting the daemon loop handle iteration.
-    v2_rc = _maybe_run_single_v2(args.workspace)
-    if v2_rc is not None:
-        return v2_rc
-
-    try:
-        summary = drain_task_pool(
-            args.workspace,
-            engine_override=engine_override,
-            model_override=model_override,
-            stop_conditions=stop_conditions,
-        )
-    except WorkspaceConflictError as exc:
-        print(f"run failed: {exc}")
-        return 1
+    # Drain mode: v2 runs one task per tick and returns; the daemon loop
+    # handles iteration. Pool-wide orchestration is M4 work.
+    return _run_single_v2(args.workspace)
     if not summary.executions:
         report = _pool_summary_report_data(
             args.workspace,
@@ -322,22 +294,7 @@ def _cmd_run_single(
         )
         return 0
 
-    # v2 pipeline opt-in via LITEHIVE_PIPELINE_V2 env var.
-    # This short-circuits the v1 run_single_task path entirely.
-    v2_rc = _maybe_run_single_v2(args.workspace)
-    if v2_rc is not None:
-        return v2_rc
-
-    try:
-        summary = run_single_task(
-            args.workspace,
-            engine_override=engine_override,
-            model_override=model_override,
-            stop_conditions=stop_conditions,
-        )
-    except WorkspaceConflictError as exc:
-        print(f"run failed: {exc}")
-        return 1
+    return _run_single_v2(args.workspace)
     stop_reason = summary.stop_reason
     execution = summary.execution
     blocked = summary.blocked

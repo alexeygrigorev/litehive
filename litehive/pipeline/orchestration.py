@@ -33,7 +33,7 @@ from .agents._base import PromptContext
 from .engines import ConfigBackedEngineSelector
 from .heru_factory import heru_engine_factory
 from .journal import SqliteJournal
-from .nodes import GitCommitNode, StubCommitNode, SubprocessHookRunner
+from .nodes import GitCommitNode, GitWorktreeSyncNode, SubprocessHookRunner
 from .nodes.system import CommitNode
 from .persistence import SqlitePersistence, TaskState
 from .registry import build_registry
@@ -53,47 +53,40 @@ class ExecutionResultV2:
     failed_message: str | None = None
 
 
-def _build_commit_node(root: Path, *, stub: bool) -> CommitNode:
-    """Return a commit node for the runner.
-
-    ``stub=True`` → always-pass ``StubCommitNode`` (safe for dry runs or
-    first-time smoke testing of v2 against real tasks). Default is the
-    real ``GitCommitNode`` which performs an actual ``git merge``.
-    """
-    if stub:
-        return StubCommitNode()
-
+def _resolve_worktree(root: Path, state: TaskState) -> Path:
+    """Look up the on-disk worktree path for a task, falling back to root."""
     from litehive.tasks.crud import get_task as _get_task
 
-    def _resolve_worktree(state: TaskState) -> Path:
-        task = _get_task(root, state.task_id)
-        if task is None:
-            return root
-        wt = get_task_worktree_path(task)
-        if not wt:
-            return root
-        path = Path(wt)
-        if not path.is_absolute():
-            path = root / path
-        return path
-
-    return GitCommitNode(root, worktree_resolver=_resolve_worktree)
+    task = _get_task(root, state.task_id)
+    if task is None:
+        return root
+    wt = get_task_worktree_path(task)
+    if not wt:
+        return root
+    path = Path(wt)
+    if not path.is_absolute():
+        path = root / path
+    return path
 
 
-def run_task_v2(
-    root: Path,
-    task: TaskRecord,
-    *,
-    stub_commit: bool = False,
-) -> ExecutionResultV2:
+def _build_commit_node(root: Path) -> CommitNode:
+    """Return the production ``GitCommitNode`` bound to this workspace."""
+    return GitCommitNode(root, worktree_resolver=lambda state: _resolve_worktree(root, state))
+
+
+def _build_worktree_sync_node(root: Path) -> GitWorktreeSyncNode:
+    """Return the production ``GitWorktreeSyncNode`` bound to this workspace."""
+    return GitWorktreeSyncNode(
+        worktree_resolver=lambda state: _resolve_worktree(root, state),
+    )
+
+
+def run_task_v2(root: Path, task: TaskRecord) -> ExecutionResultV2:
     """Run a single task through the v2 state machine.
 
-    Takes the workspace runner guard (same lock v1 uses) and publishes
-    a heartbeat so other tools see the task as active.
-
-    ``stub_commit=True`` swaps the real git merge for ``StubCommitNode``
-    — use it for dry runs and early smoke testing before we're confident
-    v2 won't wreck a worktree.
+    Takes the workspace runner guard and publishes a heartbeat so other
+    tools see the task as active. Always uses the real ``GitCommitNode``
+    — v2 is the executor, not a dry run.
     """
     root = root.resolve()
     config = load_config(root)
@@ -110,7 +103,8 @@ def run_task_v2(
         persistence = SqlitePersistence(root)
         journal = SqliteJournal(root)
         hook_runner = SubprocessHookRunner(root)
-        commit_node = _build_commit_node(root, stub=stub_commit)
+        commit_node = _build_commit_node(root)
+        worktree_sync_node = _build_worktree_sync_node(root)
         prompt_context = PromptContext(workspace_root=root)
 
         registry = build_registry(
@@ -118,6 +112,7 @@ def run_task_v2(
             session_store=sessions,
             hook_runner=hook_runner,
             commit_node=commit_node,
+            worktree_sync_node=worktree_sync_node,
             prompt_context=prompt_context,
         )
 

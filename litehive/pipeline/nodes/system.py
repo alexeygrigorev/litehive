@@ -63,6 +63,132 @@ class ReadyNode(SystemNode):
         return False
 
 
+class WorktreeSyncNode(SystemNode):
+    """Pull main into the task worktree before the pipeline runs.
+
+    Runs after ``ReadyNode`` and before the task's first agent stage. The
+    point is to handle tasks that were parked (or otherwise sat idle)
+    while main advanced — the agent needs to see the current HEAD of
+    main, not whatever main looked like when the task was queued.
+
+    Outcomes:
+
+    - worktree doesn't exist yet (first run of the task) → ``Pass``
+      (nothing to sync; the worktree will be created by the SWE flow).
+    - worktree up to date with ``origin/main`` → ``Pass``.
+    - clean merge of main into worktree → ``Pass``.
+    - merge conflict → ``Reject(source="system")`` — the state machine
+      routes to ``recovering`` and the recovery agent decides what to
+      do (abort, requeue, delegate to merge-resolve, etc.).
+    - git error → ``Crash(GitError)`` → recovering via the wildcard
+      rule.
+
+    M1 placeholder subclass (``_NoopWorktreeSyncNode``) always returns
+    ``Pass`` so the default pipeline doesn't block on this node when
+    worktrees aren't wired up. Production callers inject a real
+    subclass with a ``worktree_resolver`` callable.
+    """
+
+    def __init__(self) -> None:
+        super().__init__("worktree_sync")
+
+    def run(self, state: TaskState) -> Event:
+        try:
+            changed = self._sync(state)
+        except MergeConflict as exc:
+            return Reject(
+                source="system",
+                reason=f"worktree_sync merge conflict on {len(exc.conflict_files)} file(s): {', '.join(exc.conflict_files[:5])}",
+            )
+        except GitError as exc:
+            return Crash(exc_type="GitError", message=str(exc))
+        # Whether or not main moved, a clean run emits Pass; the rule
+        # table routes that to the first stage phase based on mode.
+        return Pass()
+
+    def _sync(self, state: TaskState) -> bool:
+        """Return True if anything was merged, False if already up-to-date
+        or the worktree isn't available yet. Subclasses override to call git."""
+        return False
+
+
+class NoopWorktreeSyncNode(WorktreeSyncNode):
+    """Always-pass variant — use when worktrees aren't in play (tests, dry runs)."""
+
+    def _sync(self, state: TaskState) -> bool:
+        return False
+
+
+class GitWorktreeSyncNode(WorktreeSyncNode):
+    """Real worktree sync — runs ``git fetch origin`` then ``git merge origin/main``.
+
+    Takes a ``worktree_resolver`` callable that returns the worktree path
+    for a given task, and a ``main_ref`` (default ``origin/main``) naming
+    the upstream branch to merge from. If the resolved worktree path
+    doesn't exist yet (first time a task runs), this is a no-op.
+    """
+
+    def __init__(
+        self,
+        *,
+        worktree_resolver: "WorktreeResolver",
+        main_ref: str = "origin/main",
+    ) -> None:
+        super().__init__()
+        self.worktree_resolver = worktree_resolver
+        self.main_ref = main_ref
+
+    def _sync(self, state: TaskState) -> bool:
+        worktree = self.worktree_resolver(state)
+        if not Path(worktree).exists():
+            return False
+
+        fetch = subprocess.run(
+            ["git", "fetch", "origin"],
+            cwd=str(worktree),
+            capture_output=True,
+            text=True,
+        )
+        if fetch.returncode != 0:
+            raise GitError(f"git fetch failed: {fetch.stderr.strip() or fetch.stdout.strip()}")
+
+        merge = subprocess.run(
+            ["git", "merge", self.main_ref, "--no-edit"],
+            cwd=str(worktree),
+            capture_output=True,
+            text=True,
+        )
+        if merge.returncode == 0:
+            return "Already up to date" not in merge.stdout
+
+        unresolved = self._unresolved(worktree)
+        if unresolved:
+            # Leave the worktree in the unresolved state so operator tooling
+            # can inspect it; recovery agent decides what to do next.
+            raise MergeConflict(unresolved)
+
+        # Merge failed for a non-conflict reason; abort and crash.
+        subprocess.run(
+            ["git", "merge", "--abort"],
+            cwd=str(worktree),
+            capture_output=True,
+            text=True,
+        )
+        raise GitError(f"worktree_sync merge failed: {merge.stderr.strip() or merge.stdout.strip()}")
+
+    @staticmethod
+    def _unresolved(worktree: Path) -> list[str]:
+        proc = subprocess.run(
+            ["git", "diff", "--name-only", "--diff-filter=U"],
+            cwd=str(worktree),
+            capture_output=True,
+            text=True,
+        )
+        if proc.returncode != 0:
+            return []
+        return [line.strip() for line in proc.stdout.splitlines() if line.strip()]
+
+
 class PreExecRecoveryNode(SystemNode):
     """Runs pre-execution recovery before the task enters the pipeline proper.
 

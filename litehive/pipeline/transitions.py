@@ -166,15 +166,26 @@ COMMIT_EPOCH        = ("before_commit",        "commit",        "after_commit")
 
 RULES: list[Rule] = [
     # ── pre-execution entry ─────────────────────────────────────────────
-    Rule(from_state="ready", on_event=CleanState, transition_to="before_grooming",
-         when=mode("full"),
-         description="ready → grooming entry (full mode)"),
-    Rule(from_state="ready", on_event=CleanState, transition_to="before_implementing",
-         when=mode("single"),
-         description="ready → implementing entry (single mode)"),
+    Rule(from_state="ready", on_event=CleanState, transition_to="worktree_sync",
+         description="ready → worktree_sync (merge main before stages run)"),
     Rule(from_state="ready", on_event=NeedsPreExecRecovery, transition_to="recovering_pre_exec",
          with_effect=enter_pre_exec_recovery,
          description="ready → pre-exec recovery"),
+
+    # ── worktree_sync exits ─────────────────────────────────────────────
+    Rule(from_state="worktree_sync", on_event=Pass, transition_to="before_grooming",
+         when=mode("full"),
+         description="worktree_sync → grooming entry (full mode)"),
+    Rule(from_state="worktree_sync", on_event=Pass, transition_to="before_implementing",
+         when=mode("single"),
+         description="worktree_sync → implementing entry (single mode)"),
+    Rule(from_state="worktree_sync", on_event=Reject, transition_to="recovering",
+         with_effect=enter_recovery,
+         description="worktree_sync merge conflict → recovering"),
+    Rule(from_state="worktree_sync", on_event=Crash, transition_to="recovering",
+         with_effect=enter_recovery),
+    Rule(from_state="worktree_sync", on_event=Timeout, transition_to="recovering",
+         with_effect=enter_recovery),
 
     # ── pre-execution recovery exits ────────────────────────────────────
     Rule(from_state="recovering_pre_exec", on_event=PreExecRecoverySucceeded, transition_to=resume_from_pre_exec,

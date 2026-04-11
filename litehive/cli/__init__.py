@@ -51,9 +51,8 @@ from litehive.cli.status import _cmd_list, _cmd_queue, _cmd_repair, _cmd_show, _
 from litehive.cli.tasks import _cmd_add, _cmd_intake, _cmd_issue, _cmd_update
 from litehive.cli.worktree import _cmd_worktree_clean, _cmd_worktree_ls, _cmd_worktree_rescue
 from litehive.config import VALID_POOL_SELECTION_POLICIES, available_process_profiles
-import os
-
-from litehive.pipeline_old import run_next_task as _run_next_task_v1
+from litehive.pipeline.orchestration import run_task_v2
+from litehive.tasks.queue_ops import dequeue_next_task
 from litehive.tasks.constants import (
     VALID_HUMAN_CHECKPOINTS,
     VALID_PM_COMPLEXITIES,
@@ -141,36 +140,12 @@ def _require_subcommand(ctx: typer.Context) -> None:
     raise typer.Exit(2)
 
 
-def _v2_pipeline_mode() -> str | None:
-    """Return ``"real"``, ``"stub"``, or ``None`` depending on ``LITEHIVE_PIPELINE_V2``.
-
-    Values:
-      - ``1`` / ``true`` / ``yes`` / ``on`` → ``"real"`` (full v2 with GitCommitNode)
-      - ``stub`` / ``stub_commit`` / ``dry`` → ``"stub"`` (v2 with StubCommitNode, safe)
-      - unset / anything else → ``None`` (stay on v1)
-    """
-    raw = os.environ.get("LITEHIVE_PIPELINE_V2", "").strip().lower()
-    if raw in {"1", "true", "yes", "on"}:
-        return "real"
-    if raw in {"stub", "stub_commit", "dry"}:
-        return "stub"
-    return None
-
-
-def _v2_pipeline_enabled() -> bool:
-    """Back-compat helper — True if v2 is active in any mode."""
-    return _v2_pipeline_mode() is not None
-
-
-def _run_next_task_v2(root: Path, *, stub_commit: bool):
-    """v2 entry point. Dequeues the next task and runs it through the v2 state machine."""
-    from litehive.pipeline.orchestration import run_task_v2
-    from litehive.tasks.queue_ops import dequeue_next_task
-
+def _run_next_task(root: Path):
+    """Dequeue the next task and run it through the v2 state machine."""
     task = dequeue_next_task(root)
     if task is None:
         return None
-    return run_task_v2(root, task, stub_commit=stub_commit)
+    return run_task_v2(root, task)
 
 
 @app.callback(invoke_without_command=True)
@@ -178,18 +153,9 @@ def root(ctx: typer.Context) -> int | None:
     if ctx.invoked_subcommand is not None:
         return None
 
-    v2_mode = _v2_pipeline_mode()
-    if v2_mode is not None:
-        result = _run_next_task_v2(Path.cwd(), stub_commit=(v2_mode == "stub"))
-        if result is not None and result.task is not None:
-            print(f"{result.task.id}: {result.final_stage}")
-            return 0
-        return _launch_app(Path.cwd(), default_mode="implementation")
-
-    summary = _run_next_task_v1(Path.cwd())
-    if summary.task is not None:
-        if summary.result is not None:
-            print(f"{summary.task.id}: {summary.result.final_status}")
+    result = _run_next_task(Path.cwd())
+    if result is not None and result.task is not None:
+        print(f"{result.task.id}: {result.final_stage}")
         return 0
     return _launch_app(Path.cwd(), default_mode="implementation")
 

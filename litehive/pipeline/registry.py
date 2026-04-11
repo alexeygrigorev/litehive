@@ -34,9 +34,11 @@ from .nodes import (
     HookRunner,
     HookSpec,
     NodeRegistry,
+    NoopWorktreeSyncNode,
     PreExecRecoveryNode,
     ReadyNode,
     TerminalNode,
+    WorktreeSyncNode,
 )
 from .nodes.agent import EngineSelector, SessionProvider
 from .types import NodeName
@@ -65,6 +67,7 @@ def build_registry(
     session_store: SessionProvider,
     hook_runner: HookRunner,
     commit_node: CommitNode,
+    worktree_sync_node: WorktreeSyncNode | None = None,
     prompt_context: PromptContext | None = None,
     hook_specs: dict[NodeName, list[HookSpec]] | None = None,
     hook_execution_mode: ExecutionMode = ExecutionMode.FAIL_FAST,
@@ -87,9 +90,10 @@ def build_registry(
     hook_specs = hook_specs or {}
     registry = NodeRegistry()
 
-    # Entry + pre-exec probes
+    # Entry + pre-exec probes + worktree sync
     registry.register(ReadyNode())
     registry.register(PreExecRecoveryNode())
+    registry.register(worktree_sync_node or NoopWorktreeSyncNode())
 
     # 10 hook phases (before/after × 5 stages)
     for before_name, after_name in PHASES:

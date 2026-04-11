@@ -65,7 +65,8 @@ def step(stage: str, event, state: TaskState):
 
 
 FULL_HAPPY_PATH = [
-    ("ready",                  CleanState(),  "before_grooming"),
+    ("ready",                  CleanState(),  "worktree_sync"),
+    ("worktree_sync",          Pass(),        "before_grooming"),
     ("before_grooming",        HookOk(),      "grooming"),
     ("grooming",               Pass(),        "after_grooming"),
     ("after_grooming",         HookOk(),      "before_implementing"),
@@ -92,7 +93,11 @@ def test_full_mode_happy_path(stage, event, expected):
 
 def test_single_mode_entry_skips_grooming_testing_accepting():
     state = make_state("ready", mode=PipelineMode.SINGLE)
-    assert step("ready", CleanState(), state).next == "before_implementing"
+    # ready now routes through worktree_sync; from there Pass → single mode
+    # entry hits before_implementing.
+    assert step("ready", CleanState(), state).next == "worktree_sync"
+    sync_state = make_state("worktree_sync", mode=PipelineMode.SINGLE)
+    assert step("worktree_sync", Pass(), sync_state).next == "before_implementing"
 
 
 def test_single_mode_after_implementing_goes_to_commit():
