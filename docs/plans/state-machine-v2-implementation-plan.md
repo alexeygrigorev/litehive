@@ -348,4 +348,19 @@ item lands.
   import chain broken. Root cause: agent ran a destructive file
   operation on runtime state. Operator reverted incomplete changes,
   reset T-0317, and restarted the daemon.
+- 2026-04-12: **T-0318 completed — underscore prefix removal.**
+  25 transitions, 30 min. Demonstrated full self-correction:
+  after_implementing hook rejected (ruff E402) → SWE retry →
+  QA rejected (`_types` import regression) → SWE retry → pass.
+  157 files changed, 21 module renames.
+- 2026-04-12: **T-0319 completed — CLI option audit.**
+  25 transitions, 27 min. QA rejected twice over grep scope
+  correctness in the audit report. 3rd SWE attempt finally got
+  the rg glob patterns right. Parser cleanup + usage documentation.
+- 2026-04-12: **Session totals.** 3 tasks completed (T-0316, T-0318,
+  T-0319), 1 crashed/reset (T-0317). 545 tests passing. Pipeline
+  demonstrated hook rejection, QA rejection, and multi-retry
+  self-correction all working autonomously. Known gap: commit node
+  doesn't `git add+commit` when task runs in main worktree (operator
+  must commit manually).
 - …
