@@ -7,7 +7,12 @@ from pathlib import Path
 
 import yaml
 
-from litehive.config import load_config, resolve_workspace
+from litehive.config import resolve_workspace
+from litehive.observability.status_diagnostics import (
+    collect_status_snapshot,
+    render_health_summary,
+    status_has_problems,
+)
 from litehive.recovery import status_attention_findings
 
 
@@ -61,17 +66,15 @@ def _fast_status(argv: list[str]) -> int:
     except ValueError as exc:
         print(f"status failed: {exc}")
         return 1
-    state_path = workspace / ".litehive" / "state.yaml"
-    monitoring_path = workspace / ".litehive" / "engine-monitoring.yaml"
-
-    state = yaml.safe_load(state_path.read_text()) if state_path.exists() else {}
-    monitoring = yaml.safe_load(monitoring_path.read_text()) if monitoring_path.exists() else {}
+    snapshot = collect_status_snapshot(workspace)
+    state = snapshot.state.model_dump(mode="python")
+    monitoring = snapshot.monitoring.model_dump(mode="python")
 
     active_task_id = state.get("active_task_id")
     queue = state.get("queue", []) or []
     stop_reason = state.get("pool_stop_reason")
     mode = state.get("mode", "implementation")
-    default_engine = load_config(workspace).default_engine
+    default_engine = snapshot.config.default_engine
 
     print(f"workspace: {workspace}")
     print(f"default_engine: {default_engine}")
@@ -96,9 +99,18 @@ def _fast_status(argv: list[str]) -> int:
         matches = sorted(tasks_root.glob(f"{active_task_id}-*/task.yaml"))
         if matches:
             task_path = matches[0]
-            task_data = yaml.safe_load(task_path.read_text()) or {}
+            try:
+                task_data = yaml.safe_load(task_path.read_text(encoding="utf-8")) or {}
+            except (OSError, yaml.YAMLError):
+                task_data = {}
             runtime_path = task_path.with_name("runtime.yaml")
-            runtime = yaml.safe_load(runtime_path.read_text()) if runtime_path.exists() else {}
+            if runtime_path.exists():
+                try:
+                    runtime = yaml.safe_load(runtime_path.read_text(encoding="utf-8")) or {}
+                except (OSError, yaml.YAMLError):
+                    runtime = {}
+            else:
+                runtime = {}
             current_stage = (runtime.get("current_stage") or {}).get("step")
             last_subagent = runtime.get("last_subagent") or {}
             active_subagent = runtime.get("active_subagent") or {}
@@ -171,6 +183,12 @@ def _fast_status(argv: list[str]) -> int:
         if record.get("observed_at"):
             parts.append(f"observed_at={record['observed_at']}")
         print(" ".join(parts))
+    if status_has_problems(snapshot.issues):
+        print()
+        for issue in snapshot.issues:
+            print(issue.render())
+        print(render_health_summary(snapshot.issues))
+        return 1
     return 0
 
 

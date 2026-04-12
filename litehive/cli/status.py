@@ -4,7 +4,6 @@ from litehive.config import ensure_workspace, load_config
 from litehive.observability import (
     collect_recent_activity,
     find_last_completed_task,
-    load_engine_monitoring,
     render_active_task_section,
     render_engine_health_section,
     render_engine_monitoring_lines,
@@ -13,12 +12,16 @@ from litehive.observability import (
     render_recent_activity_section,
     render_task_summary,
 )
+from litehive.observability.status_diagnostics import (
+    collect_status_snapshot,
+    render_health_summary,
+    status_has_problems,
+)
 from litehive.config.engine_models import active_engine_freezes
 from litehive.tasks.archive import archive_root
 from litehive.tasks.crud import list_tasks, list_tasks_state_first, require_task
 from litehive.tasks.models import WorkspaceConflictError
 from litehive.tasks.persistence import load_state
-from litehive.workspace.locking import runner_status
 from litehive.recovery import recover_stale_runner_state, repair_workspace_state
 
 from litehive.cli.display import (
@@ -96,20 +99,39 @@ def _show_dependency_label(root, task) -> str:
     return ", ".join(labels)
 
 
+def _safe_active_task(root, task_id):
+    if not task_id:
+        return None
+    try:
+        return require_task(root, task_id)
+    except Exception:
+        return None
+
+
+def _print_status_issues(issues) -> int:
+    if not status_has_problems(issues):
+        return 0
+    print()
+    for issue in issues:
+        print(issue.render())
+    print(render_health_summary(issues))
+    return 1
+
+
 def cmd_status(args):
     root = args.workspace.resolve()
-    config = load_config(args.workspace)
-    state = load_state(args.workspace)
-    monitoring = load_engine_monitoring(args.workspace)
+    snapshot = collect_status_snapshot(root)
+    config = snapshot.config
+    state = snapshot.state
+    runner = snapshot.runner
+    monitoring = snapshot.monitoring
     full_mode = bool(getattr(args, "full", False))
 
     if full_mode:
-        return _cmd_status_full(args, root, config, state, monitoring)
+        return _cmd_status_full(args, root, config, state, runner, monitoring, snapshot.issues)
 
     # --- Dashboard mode (default) ---
-    active_task = (
-        require_task(args.workspace, state.active_task_id) if state.active_task_id else None
-    )
+    active_task = _safe_active_task(args.workspace, state.active_task_id)
 
     # Active Task section
     for line in render_active_task_section(active_task, config.default_engine):
@@ -143,10 +165,10 @@ def cmd_status(args):
     # Warnings
     _print_duplicate_id_warnings(root)
 
-    return 0
+    return _print_status_issues(snapshot.issues)
 
 
-def _cmd_status_full(args, root, config, state, monitoring):
+def _cmd_status_full(args, root, config, state, runner, monitoring, issues):
     """Full verbose status output (--full flag)."""
     print(f"workspace: {args.workspace}")
     print("status_read_mode: full")
@@ -159,21 +181,18 @@ def _cmd_status_full(args, root, config, state, monitoring):
     print(f"litehive_source_path: {config.litehive_source_path or '-'}")
     print(f"mode: {state.mode}")
     print(f"active_task_id: {state.active_task_id}")
-    current_runner = runner_status(root)
     print(
         "runner_status: "
-        f"{current_runner.status} pid={current_runner.pid or '-'} "
-        f"started_at={current_runner.started_at or '-'} "
-        f"heartbeat_at={current_runner.heartbeat_at or '-'} "
-        f"active_task_id={current_runner.active_task_id or '-'}"
+        f"{runner.status} pid={runner.pid or '-'} "
+        f"started_at={runner.started_at or '-'} "
+        f"heartbeat_at={runner.heartbeat_at or '-'} "
+        f"active_task_id={runner.active_task_id or '-'}"
     )
     print(f"queued_tasks: {len(state.queue)}")
     print(f"pool_stop_reason: {state.pool_stop_reason}")
     if state.queue:
         print(f"queue_head: {state.queue[0]}")
-    active_task = (
-        require_task(args.workspace, state.active_task_id) if state.active_task_id else None
-    )
+    active_task = _safe_active_task(args.workspace, state.active_task_id)
     if active_task is not None:
         active_engine = (
             active_task.runtime.active_subagent.engine
@@ -205,7 +224,7 @@ def _cmd_status_full(args, root, config, state, monitoring):
                 task, active=task.id == state.active_task_id, root=root
             ):
                 print(line)
-    return 0
+    return _print_status_issues(issues)
 
 
 def cmd_queue(args):
