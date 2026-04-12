@@ -10,6 +10,7 @@ from ..events import (
     MergeConflictDetected,
     NeedsPreExecRecovery,
     Pass,
+    PreExecRecoveryBudgetHit,
     PreExecRecoverySucceeded,
     Reject,
 )
@@ -45,22 +46,35 @@ class SystemNode(Node):
 class ReadyNode(SystemNode):
     """Entry probe for a task. Decides between clean entry and pre-exec recovery.
 
-    M1 placeholder: always emits ``CleanState``. Real implementation will
-    check for a stale lock file / missing worktree / corrupted state row
-    and emit ``NeedsPreExecRecovery`` in those cases.
+    The node takes a list of ``probe`` callables, each of which inspects
+    the ``TaskState`` and returns ``True`` when something is broken. If
+    any probe fires, ``NeedsPreExecRecovery`` is emitted and the state
+    machine routes to ``recovering_pre_exec`` for cleanup. Otherwise
+    ``CleanState`` advances the pipeline.
+
+    Callers can register their own probes; the default is an empty list
+    (always clean). Production callers typically inject a probe that
+    checks the task's recorded worktree_path actually exists on disk.
     """
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        probes: "list[Callable[[TaskState], bool]] | None" = None,
+    ) -> None:
         super().__init__("ready")
+        self.probes = list(probes or [])
 
     def run(self, state: TaskState) -> Event:
-        if self._needs_recovery(state):
-            return NeedsPreExecRecovery()
+        for probe in self.probes:
+            try:
+                if probe(state):
+                    return NeedsPreExecRecovery()
+            except Exception:
+                # A probe should never crash the pipeline; treat raised
+                # exceptions as "needs recovery" so the pre-exec node has
+                # a chance to investigate.
+                return NeedsPreExecRecovery()
         return CleanState()
-
-    def _needs_recovery(self, state: TaskState) -> bool:
-        # Hook: subclasses override to detect actual trouble.
-        return False
 
 
 class WorktreeSyncNode(SystemNode):
@@ -209,17 +223,37 @@ class GitWorktreeSyncNode(WorktreeSyncNode):
 class PreExecRecoveryNode(SystemNode):
     """Runs pre-execution recovery before the task enters the pipeline proper.
 
-    M1 placeholder: always reports success and routes the task to the same
-    stage it would have entered on a clean start. Real implementation will
-    clear stale locks, abort partial rebases, and repair missing worktrees.
+    Takes a list of ``repair`` callables that each get a chance to fix
+    the workspace. Repairs are best-effort: a repair that raises doesn't
+    abort the node — it logs to stderr and moves on. When all repairs
+    have run, the node emits ``PreExecRecoverySucceeded`` and the state
+    machine resumes at the entry stage (``grooming`` for full mode,
+    ``implementing`` for single mode).
+
+    If the pre-exec recovery budget is already exhausted, emits
+    ``PreExecRecoveryBudgetHit`` instead, which routes to ``failed``.
     """
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        repairs: "list[Callable[[TaskState], None]] | None" = None,
+    ) -> None:
         super().__init__("recovering_pre_exec")
+        self.repairs = list(repairs or [])
 
     def run(self, state: TaskState) -> Event:
-        # M1 placeholder: nothing to fix, resume at grooming (full) /
-        # implementing (single) via the transition table.
+        if state.pre_exec_recovery_attempt > 1:
+            return PreExecRecoveryBudgetHit()
+        for repair in self.repairs:
+            try:
+                repair(state)
+            except Exception as exc:
+                import sys
+
+                print(
+                    f"[pre-exec repair] ignored error: {type(exc).__name__}: {exc}",
+                    file=sys.stderr,
+                )
         resume_stage = "implementing" if state.pipeline_mode.value == "single" else "grooming"
         return PreExecRecoverySucceeded(resume_stage=resume_stage)
 

@@ -245,6 +245,19 @@ item lands.
   a readable `from --[event]--> to  # description` row. New
   `pipeline_app` typer subcommand group in `litehive/cli/__init__.py`.
   Operators can now visualize v2 without opening the source.
+- 2026-04-12: real pre-exec probe + repair. `ReadyNode` now takes a
+  list of `probe(state) → bool` callables; any probe returning True
+  (or raising) flips to `NeedsPreExecRecovery`. `PreExecRecoveryNode`
+  takes a list of `repair(state)` callables and runs them best-effort
+  before emitting `PreExecRecoverySucceeded`. Budget-exhausted path
+  emits `PreExecRecoveryBudgetHit` → `failed`. `run_task_v2` wires up
+  a concrete `_missing_worktree_probe` that fires when the task's
+  recorded worktree_path no longer exists on disk, plus a
+  `_clear_stale_worktree_repair` that clears the stale path so the
+  next run starts fresh. 2 tests in
+  `test_pipeline_v2_pre_exec_probe.py` cover probe injection,
+  exception safety, repair execution, and the budget short-circuit.
+  135 v2 tests green.
 - 2026-04-12: bootstrap integration tests landed
   (`tests/test_pipeline_v2_bootstrap.py`). They drive `run_task_v2`
   against a real tmp_path workspace with SqlitePersistence, SqliteJournal,

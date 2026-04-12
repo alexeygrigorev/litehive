@@ -68,6 +68,8 @@ def build_registry(
     hook_runner: HookRunner,
     commit_node: CommitNode,
     worktree_sync_node: WorktreeSyncNode | None = None,
+    ready_node: ReadyNode | None = None,
+    pre_exec_recovery_node: PreExecRecoveryNode | None = None,
     prompt_context: PromptContext | None = None,
     hook_specs: dict[NodeName, list[HookSpec]] | None = None,
     hook_execution_mode: ExecutionMode = ExecutionMode.FAIL_FAST,
@@ -91,8 +93,8 @@ def build_registry(
     registry = NodeRegistry()
 
     # Entry + pre-exec probes + worktree sync
-    registry.register(ReadyNode())
-    registry.register(PreExecRecoveryNode())
+    registry.register(ready_node or ReadyNode())
+    registry.register(pre_exec_recovery_node or PreExecRecoveryNode())
     registry.register(worktree_sync_node or NoopWorktreeSyncNode())
 
     # 10 hook phases (before/after × 5 stages)

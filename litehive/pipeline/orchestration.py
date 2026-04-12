@@ -33,7 +33,14 @@ from .agents._base import PromptContext
 from .engines import ConfigBackedEngineSelector, EngineFactory
 from .heru_factory import heru_engine_factory
 from .journal import SqliteJournal
-from .nodes import GitCommitNode, GitWorktreeSyncNode, HookSpec, SubprocessHookRunner
+from .nodes import (
+    GitCommitNode,
+    GitWorktreeSyncNode,
+    HookSpec,
+    PreExecRecoveryNode,
+    ReadyNode,
+    SubprocessHookRunner,
+)
 from .nodes.system import CommitNode
 from .persistence import SqlitePersistence, TaskState
 from .registry import build_registry
@@ -79,6 +86,50 @@ def _build_worktree_sync_node(root: Path) -> GitWorktreeSyncNode:
     return GitWorktreeSyncNode(
         worktree_resolver=lambda state: _resolve_worktree(root, state),
     )
+
+
+def _missing_worktree_probe(root: Path):
+    """Return a probe callable that flags tasks whose worktree_path is gone."""
+
+    from litehive.tasks.crud import get_task as _get_task
+
+    def _probe(state) -> bool:
+        task = _get_task(root, state.task_id)
+        if task is None:
+            return False
+        wt = get_task_worktree_path(task)
+        if not wt:
+            return False
+        path = Path(wt)
+        if not path.is_absolute():
+            path = root / path
+        return not path.exists()
+
+    return _probe
+
+
+def _clear_stale_worktree_repair(root: Path):
+    """Return a repair callable that clears a stale worktree_path on the task."""
+
+    from litehive.tasks.crud import get_task as _get_task
+    from litehive.tasks.crud import set_task_worktree_path, save_task
+
+    def _repair(state) -> None:
+        task = _get_task(root, state.task_id)
+        if task is None:
+            return
+        wt = get_task_worktree_path(task)
+        if not wt:
+            return
+        path = Path(wt)
+        if not path.is_absolute():
+            path = root / path
+        if path.exists():
+            return
+        set_task_worktree_path(task, None)
+        save_task(root, task)
+
+    return _repair
 
 
 def _hook_specs_from_config(config) -> dict[str, list[HookSpec]]:
@@ -142,6 +193,10 @@ def run_task_v2(
         hook_runner = SubprocessHookRunner(root)
         commit_node = _build_commit_node(root)
         worktree_sync_node = _build_worktree_sync_node(root)
+        ready_node = ReadyNode(probes=[_missing_worktree_probe(root)])
+        pre_exec_recovery_node = PreExecRecoveryNode(
+            repairs=[_clear_stale_worktree_repair(root)],
+        )
         prompt_context = PromptContext(workspace_root=root)
         hook_specs = _hook_specs_from_config(config)
 
@@ -151,6 +206,8 @@ def run_task_v2(
             hook_runner=hook_runner,
             commit_node=commit_node,
             worktree_sync_node=worktree_sync_node,
+            ready_node=ready_node,
+            pre_exec_recovery_node=pre_exec_recovery_node,
             prompt_context=prompt_context,
             hook_specs=hook_specs,
         )
