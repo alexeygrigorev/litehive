@@ -42,6 +42,23 @@ def make_state(task_id: str, stage: str = "implementing", **overrides) -> TaskSt
     )
 
 
+def _discussion_lines(text: str) -> list[str]:
+    marker = "Discussion thread:\n"
+    if marker not in text:
+        return []
+    tail = text.split(marker, 1)[1]
+    end_markers = (
+        "\n\nChecks that will reject your work if they fail:",
+        "\n\nIMPORTANT: when you are done, submit your verdict by running:",
+    )
+    end = len(tail)
+    for candidate in end_markers:
+        idx = tail.find(candidate)
+        if idx != -1:
+            end = min(end, idx)
+    return [line for line in tail[:end].splitlines() if line.strip()]
+
+
 def test_serialize_includes_header_goal_acceptance_plan(workspace: Path) -> None:
     task = create_task(
         workspace,
@@ -147,3 +164,112 @@ def test_serialize_includes_nudge_message_when_present(workspace: Path) -> None:
     assert "this is a nudge" in text
     assert "without a verdict submission" in text
     assert "Please review your work and submit your verdict now." in text
+
+
+def test_implementing_retry_thread_keeps_only_grooming_and_dedups_last_rejection_by_source_and_reason(
+    workspace: Path,
+) -> None:
+    task = create_task(workspace, title="t", goal="g")
+    agent = SWEAgent(_NullSelector(), _NullSessions(), prompt_context=PromptContext())
+    state = make_state(task.id)
+    state.stage_retry["implementing"] = 1
+    state.last_rejection_by_stage["implementing"] = LastRejection(
+        source="qa",
+        reason="tests fail",
+        raised_at_phase="testing",
+    )
+    prompt = agent.build_prompt(state)
+    prompt["thread"] = [
+        {"role": "planner", "step": "grooming", "verdict": "pass", "message": "scope " + ("x" * 600)},
+        {"role": "recovery", "step": "recovering", "verdict": "comment", "message": "bookkeeping"},
+        {"role": "swe", "step": "implementing", "verdict": "pass", "message": "old swe pass"},
+        {"role": "qa", "step": "testing", "verdict": "reject", "message": "older reject"},
+        {"role": "qa", "step": "testing", "verdict": "reject", "message": "tests fail"},
+    ]
+
+    text = serialize_prompt(prompt, task_record=task)
+
+    assert _discussion_lines(text) == [
+        f"[grooming] planner (pass): {'scope ' + ('x' * 494)}…(truncated)"
+    ]
+    assert "- Source: qa" in text
+    assert "- Reason: tests fail" in text
+    assert "bookkeeping" not in text
+    assert "old swe pass" not in text
+    assert "older reject" not in text
+
+
+def test_thread_does_not_dedup_reject_when_source_differs(workspace: Path) -> None:
+    task = create_task(workspace, title="t", goal="g")
+    prompt = {
+        "task_id": task.id,
+        "stage": "custom",
+        "role": "swe",
+        "pipeline_mode": PipelineMode.FULL.value,
+        "instruction_layers": [],
+        "last_rejection": {
+            "source": "qa",
+            "reason": "same reason",
+            "raised_at_phase": "testing",
+        },
+        "thread": [
+            {"role": "planner", "step": "grooming", "verdict": "pass", "message": "scope"},
+            {"role": "reviewer", "step": "accepting", "verdict": "reject", "message": "same reason"},
+        ],
+    }
+
+    text = serialize_prompt(prompt, task_record=task)
+
+    assert _discussion_lines(text) == [
+        "[grooming] planner (pass): scope",
+        "[accepting] reviewer (reject): same reason",
+    ]
+
+
+def test_testing_thread_keeps_only_last_implementing_pass(workspace: Path) -> None:
+    task = create_task(workspace, title="t", goal="g")
+    prompt = {
+        "task_id": task.id,
+        "stage": "testing",
+        "role": "qa",
+        "pipeline_mode": PipelineMode.FULL.value,
+        "instruction_layers": [],
+        "thread": [
+            {"role": "planner", "step": "grooming", "verdict": "pass", "message": "scope"},
+            {"role": "swe", "step": "implementing", "verdict": "pass", "message": "first impl"},
+            {"role": "qa", "step": "testing", "verdict": "reject", "message": "old reject"},
+            {"role": "swe", "step": "implementing", "verdict": "pass", "message": "latest impl"},
+        ],
+    }
+
+    text = serialize_prompt(prompt, task_record=task)
+
+    assert _discussion_lines(text) == [
+        "[implementing] swe (pass): latest impl",
+    ]
+
+
+def test_accepting_thread_keeps_only_last_implementing_and_testing_passes(workspace: Path) -> None:
+    task = create_task(workspace, title="t", goal="g")
+    prompt = {
+        "task_id": task.id,
+        "stage": "accepting",
+        "role": "reviewer",
+        "pipeline_mode": PipelineMode.FULL.value,
+        "instruction_layers": [],
+        "thread": [
+            {"role": "planner", "step": "grooming", "verdict": "pass", "message": "scope"},
+            {"role": "swe", "step": "implementing", "verdict": "pass", "message": "first impl"},
+            {"role": "qa", "step": "testing", "verdict": "pass", "message": "first qa"},
+            {"role": "qa", "step": "testing", "verdict": "reject", "message": "old reject"},
+            {"role": "swe", "step": "implementing", "verdict": "pass", "message": "latest impl"},
+            {"role": "qa", "step": "testing", "verdict": "pass", "message": "latest qa"},
+        ],
+    }
+
+    text = serialize_prompt(prompt, task_record=task)
+
+    assert _discussion_lines(text) == [
+        "[implementing] swe (pass): latest impl",
+        "[testing] qa (pass): latest qa",
+    ]

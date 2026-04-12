@@ -253,9 +253,14 @@ def _trim_thread_for_prompt(
     # Skip entries that duplicate last_rejection
     if last_rejection:
         rej_reason = last_rejection.get("reason", "")
+        rej_source = last_rejection.get("source", "")
         thread = [
             e for e in thread
-            if not (e.get("verdict") == "reject" and e.get("message", "") == rej_reason)
+            if not (
+                e.get("verdict") == "reject"
+                and (e.get("source") or e.get("role", "")) == rej_source
+                and e.get("message", "") == rej_reason
+            )
         ]
 
     def _last_where(**match: str) -> dict[str, Any] | None:
@@ -273,13 +278,15 @@ def _trim_thread_for_prompt(
         g = _last_where(step="grooming", verdict="pass")
         if g:
             kept.append(g)
-        # Last reject that routed us back (from testing, accepting, or hook)
-        for e in reversed(thread):
-            if e.get("verdict") == "reject" and e.get("step") in (
-                "testing", "accepting", "implementing",
-            ):
-                kept.append(e)
-                break
+        # On retry, the rejection is rendered in the dedicated last_rejection
+        # section; do not repeat older reject entries in the thread.
+        if not last_rejection:
+            for e in reversed(thread):
+                if e.get("verdict") == "reject" and e.get("step") in (
+                    "testing", "accepting", "implementing",
+                ):
+                    kept.append(e)
+                    break
 
     elif current_stage == "testing":
         p = _last_where(step="implementing", verdict="pass")
