@@ -14,6 +14,8 @@ from typing import Annotated
 
 import typer
 
+from litehive.pipeline.persistence import SqlitePersistence, TaskNotFound
+
 from litehive.config import resolve_workspace
 from litehive.models import TaskThreadComment
 from litehive.tasks.crud import get_task
@@ -87,9 +89,6 @@ def agent_report_command(
     if task is None:
         print(f"report failed: task {tid} not found")
         raise typer.Exit(1)
-
-    # Read the current stage from the v2 pipeline state (not the stale v1 pipeline_status)
-    from litehive.pipeline.persistence import SqlitePersistence, TaskNotFound
 
     try:
         pipeline_state = SqlitePersistence(root).load(tid)

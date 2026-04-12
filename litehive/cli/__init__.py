@@ -1133,6 +1133,21 @@ def pipeline_set_state_command(
     print(f"stage: {old_stage} → {stage}")
 
 
+@pipeline_app.command("reset", help="Clear all v2 pipeline state for a task so it starts fresh")
+def pipeline_reset_command(
+    task_id: Annotated[str, typer.Argument(help="Task id")],
+    workspace: Annotated[Path, typer.Option("--workspace", help="Workspace root")] = Path.cwd(),
+) -> None:
+    from litehive.db.schema import connect_workspace_db
+
+    with connect_workspace_db(workspace) as conn:
+        for table in ["pipeline_task_state", "pipeline_sessions", "pipeline_transitions", "pipeline_journal"]:
+            conn.execute(f"DELETE FROM {table} WHERE task_id = ?", (task_id,))
+        conn.commit()
+    print(f"task: {task_id}")
+    print("reset: ok")
+
+
 @pipeline_app.command(
     "journal", help="Dump the v2 pipeline journal + transitions for one task"
 )
