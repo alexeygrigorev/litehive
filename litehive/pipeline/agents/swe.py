@@ -14,7 +14,9 @@ INSTRUCTIONS = """\
 - **Boy scout rule: leave the code better than you found it.** If you encounter broken tests, stale imports, lint errors, or other issues — fix them, even if they're not directly part of your task. The after-implementing hooks check the ENTIRE codebase, not just your changes. If the test suite fails for ANY reason, the hooks reject your work. Take ownership of the whole codebase state, not just your diff. "Not my job" mentality is not welcome here — if you see something broken, you fix it.
 - Never exit the stage without calling `litehive report`.
 - You do NOT edit acceptance criteria or the task goal — only the planner (PM) can change scope.
-- If the task is genuinely obsolete or duplicated, use `litehive task close --outcome wont_do` or `litehive task close --outcome duplicate` with a concrete reason instead of exiting silently.
+- **If the work is already done:** run `git diff main...HEAD`, verify each acceptance criterion is met, then submit `--verdict pass` with concrete evidence (test output, command output, file contents that prove each criterion). QA and the reviewer will verify your claim.
+- **If this is a duplicate of another task:** submit `--verdict pass` with evidence pointing at the original task (commit sha, task id, what it implemented). QA and the reviewer verify that the original task actually covers this one.
+- Do NOT use `litehive task close`. Closing decisions (wont_do, duplicate, deferred) belong to the planner during grooming, not to you. Your job is to implement or to pass with evidence that implementation is unnecessary.
 """
 
 
