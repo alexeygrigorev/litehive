@@ -233,8 +233,10 @@ def _rejecting_hooks_section(hooks: list[dict[str, Any]]) -> str:
 def _verdict_instructions_section(prompt: dict[str, Any]) -> str:
     return (
         "IMPORTANT: when you are done, submit your verdict by running:\n"
-        '  litehive agent report --verdict <pass|reject|blocked> --message "<your report>"\n\n'
-        "Your --message is the primary signal the next agent receives — write it as if it's the only thing they read.\n"
+        "  echo 'your report text' > /tmp/verdict_msg.txt\n"
+        "  litehive agent report --verdict <pass|reject|blocked> --message-file /tmp/verdict_msg.txt\n\n"
+        "Always use --message-file to avoid shell quoting issues with backticks or special characters.\n"
+        "Your message is the primary signal the next agent receives — write it as if it's the only thing they read.\n"
         "On reject: include EXPECTED behavior, OBSERVED behavior, reproduction steps, and which acceptance criteria are not met."
     )
 

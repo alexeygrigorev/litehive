@@ -9,6 +9,7 @@ commands call at the top to prevent agents from using them.
 """
 
 import os
+import sys
 from pathlib import Path
 from typing import Annotated
 
@@ -54,13 +55,19 @@ def block_if_agent() -> None:
 @agent_app.command("report", help="Submit your stage verdict")
 def agent_report_command(
     verdict: Annotated[str, typer.Option("--verdict", help="pass, reject, or blocked")],
-    message: Annotated[str, typer.Option("--message", help="Your report text")] = "",
+    message: Annotated[str, typer.Option("--message", help="Your report text (use - for stdin)")] = "",
+    message_file: Annotated[Path | None, typer.Option("--message-file", help="Read message from file")] = None,
     role: Annotated[str | None, typer.Option("--role", help="Override role (default: from env)")] = None,
     step: Annotated[str | None, typer.Option("--step", help="Override step (default: from task)")] = None,
     task_id: Annotated[str | None, typer.Option("--task-id", help="Override task id")] = None,
     workspace: Annotated[Path, typer.Option("--workspace", help="Workspace root")] = Path.cwd(),
     files_changed: Annotated[list[str] | None, typer.Option("--files-changed", help="Changed file paths")] = None,
 ) -> None:
+    if message == "-":
+        message = sys.stdin.read()
+    elif message_file is not None:
+        message = message_file.read_text(encoding="utf-8")
+
     agent_role = role or _current_role()
     if not agent_role:
         print("report failed: LITEHIVE_AGENT_ROLE not set and --role not provided")
