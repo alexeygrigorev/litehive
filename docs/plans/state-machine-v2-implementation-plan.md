@@ -223,6 +223,17 @@ item lands.
   actually run through `SubprocessHookRunner` during the corresponding
   pipeline phase. 2 translator tests in
   `test_pipeline_v2_hook_config_wiring.py`. 129 v2 tests green.
+- 2026-04-12: grooming `TASK_UPDATE:` parsing wired up.
+  `litehive/pipeline/task_updates.py` extracts a YAML block from the
+  planner's verdict message and delegates to v1's
+  `apply_task_updates_from_report` (which also handles the text-based
+  fallback sections: ACCEPTANCE_CRITERIA / PLAN / CONSTRAINTS /
+  PM_COMPLEXITY / PLANNED_EFFORT). `HeruEngineAdapter.run_turn` calls
+  it after the verdict reader fires for the `grooming` step, so
+  downstream stages see the updated TaskRecord. Errors are swallowed
+  with a stderr warning — a malformed update shouldn't fail the
+  pipeline. 2 tests in `test_pipeline_v2_task_updates.py`. 131 v2
+  tests green.
 - 2026-04-12: bootstrap integration tests landed
   (`tests/test_pipeline_v2_bootstrap.py`). They drive `run_task_v2`
   against a real tmp_path workspace with SqlitePersistence, SqliteJournal,
