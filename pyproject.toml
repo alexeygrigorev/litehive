@@ -43,7 +43,7 @@ markers = [
 ]
 
 [tool.ruff]
-line-length = 140
+line-length = 120
 target-version = "py311"
 
 [tool.ruff.lint]
@@ -58,4 +58,3 @@ dev = [
 ]
 
 [tool.ruff.format]
-skip-magic-trailing-comma = true
