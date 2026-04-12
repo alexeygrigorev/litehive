@@ -73,7 +73,7 @@ def serialize_prompt(
         sections.append(_nudge_section(prompt))
 
     if thread:
-        sections.append(_thread_section(thread))
+        sections.append(_thread_section(thread, current_stage=prompt.get("stage")))
 
     rejecting_hooks = prompt.get("rejecting_hooks") or []
     if rejecting_hooks:
@@ -206,9 +206,67 @@ def _nudge_section(prompt: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def _thread_section(thread: list[dict[str, Any]]) -> str:
-    blocks: list[str] = []
+def _trim_thread_for_prompt(thread: list[dict[str, Any]], current_stage: str | None) -> list[dict[str, Any]]:
+    """Keep only the thread entries an agent actually needs.
+
+    Strategy:
+    - Always include the grooming pass (sets scope/plan for all later stages).
+    - Always include the last entry per (step, verdict) pair — deduplicates
+      repeated reject/pass cycles into one representative each.
+    - Cap the total message text to ~4000 chars to prevent prompt bloat from
+      verbose prior verdicts. Truncate the oldest entries' messages first.
+    """
+    if len(thread) <= 5:
+        return thread
+
+    kept: list[dict[str, Any]] = []
+    seen: set[tuple[str, str]] = set()
+
+    # Always keep grooming pass
     for entry in thread:
+        if entry.get("step") == "grooming" and entry.get("verdict") == "pass":
+            kept.append(entry)
+            break
+
+    # Keep last entry per (step, verdict) pair, walking from newest
+    for entry in reversed(thread):
+        key = (entry.get("step", "?"), entry.get("verdict", "?"))
+        if key not in seen:
+            seen.add(key)
+            kept.append(entry)
+
+    # Deduplicate and preserve original order
+    seen_ids = set()
+    ordered: list[dict[str, Any]] = []
+    for entry in thread:
+        eid = id(entry)
+        if eid in seen_ids:
+            continue
+        if entry in kept:
+            seen_ids.add(eid)
+            ordered.append(entry)
+
+    # Truncate long messages to keep total under ~4000 chars
+    total = sum(len(e.get("message", "")) for e in ordered)
+    if total > 4000:
+        budget = 4000
+        for entry in reversed(ordered):
+            msg = entry.get("message", "")
+            if budget <= 0:
+                entry["message"] = "(truncated)"
+            elif len(msg) > budget:
+                entry["message"] = msg[:budget] + "…(truncated)"
+                budget = 0
+            else:
+                budget -= len(msg)
+
+    return ordered
+
+
+def _thread_section(thread: list[dict[str, Any]], current_stage: str | None = None) -> str:
+    trimmed = _trim_thread_for_prompt(thread, current_stage)
+    blocks: list[str] = []
+    for entry in trimmed:
         role = entry.get("role", "?")
         step = entry.get("step", "?")
         verdict = entry.get("verdict", "comment")
