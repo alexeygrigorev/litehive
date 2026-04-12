@@ -335,4 +335,17 @@ item lands.
      `orchestration.py` already set it but the model rejected it on load.
   522 tests passing, 5 stale v1 tests skipped. Daemon now runs through
   grooming → implementing without crashes.
+- 2026-04-12: **T-0316 completed — first full pipeline lifecycle.**
+  Task ran `ready → done` in 14 minutes through all 4 agent stages
+  (planner, SWE, QA, reviewer) with real codex LLM. 17 transitions,
+  524 tests green. Operator committed the code changes manually
+  (`5b1b06dc`) because the commit node no-ops when running in the
+  main worktree (no dedicated worktree). Known issue to fix: commit
+  node needs to `git add + git commit` when task has no worktree.
+- 2026-04-12: **T-0317 SWE agent crashed mid-refactoring.** The codex
+  agent truncated `db.sqlite` and `state.db` to 0 bytes during its
+  implementation of the cli/__init__.py split, then left the CLI
+  import chain broken. Root cause: agent ran a destructive file
+  operation on runtime state. Operator reverted incomplete changes,
+  reset T-0317, and restarted the daemon.
 - …
