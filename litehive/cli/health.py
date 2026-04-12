@@ -9,7 +9,7 @@ from litehive.agents.quota import (
 )
 from litehive.config import ensure_workspace
 from litehive.daemon import daemon_status_lines
-from litehive.pipeline_old import inspect_dirty_worktree_gate
+from litehive.workspace.worktree_inspection import inspect_dirty_worktree_gate
 from litehive.tasks import list_tasks_state_first, load_state, require_task
 
 from litehive.cli.worktree import _collect_managed_worktrees

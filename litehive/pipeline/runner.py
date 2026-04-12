@@ -5,8 +5,8 @@ from .events import Event, Pass
 from .journal import NullJournal, PipelineJournal
 from .nodes.base import NodeRegistry
 from .persistence import Persistence, TaskState
-from .transitions import RULES, Rule, Transition, evaluate
-from .types import NodeName, TERMINAL_NODES
+from .transitions import RULES, Rule, evaluate
+from .types import TERMINAL_NODES
 
 
 StopPredicate = Callable[[], bool]

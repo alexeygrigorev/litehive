@@ -169,38 +169,50 @@ class GitWorktreeSyncNode(WorktreeSyncNode):
             # agent resume on the existing state.
             return False
 
-        fetch = subprocess.run(
-            ["git", "fetch", "origin"],
-            cwd=str(worktree),
-            capture_output=True,
-            text=True,
-        )
-        if fetch.returncode != 0:
-            raise GitError(f"git fetch failed: {fetch.stderr.strip() or fetch.stdout.strip()}")
+        stash_ref = self._stash_local_changes(worktree)
+        restored_stash = False
+        try:
+            fetch = subprocess.run(
+                ["git", "fetch", "origin"],
+                cwd=str(worktree),
+                capture_output=True,
+                text=True,
+            )
+            if fetch.returncode != 0:
+                raise GitError(f"git fetch failed: {fetch.stderr.strip() or fetch.stdout.strip()}")
 
-        merge = subprocess.run(
-            ["git", "merge", self.main_ref, "--no-edit"],
-            cwd=str(worktree),
-            capture_output=True,
-            text=True,
-        )
-        if merge.returncode == 0:
-            return "Already up to date" not in merge.stdout
+            merge = subprocess.run(
+                ["git", "merge", self.main_ref, "--no-edit"],
+                cwd=str(worktree),
+                capture_output=True,
+                text=True,
+            )
+            if merge.returncode == 0:
+                changed = "Already up to date" not in merge.stdout
+                self._restore_local_changes(worktree, stash_ref)
+                restored_stash = True
+                return changed
 
-        unresolved = self._unresolved(worktree)
-        if unresolved:
-            # Leave the worktree in the unresolved state so operator tooling
-            # can inspect it; recovery agent decides what to do next.
-            raise MergeConflict(unresolved)
+            unresolved = self._unresolved(worktree)
+            if unresolved:
+                # Leave the worktree in the unresolved state so operator tooling
+                # can inspect it; recovery agent decides what to do next.
+                raise MergeConflict(unresolved)
 
-        # Merge failed for a non-conflict reason; abort and crash.
-        subprocess.run(
-            ["git", "merge", "--abort"],
-            cwd=str(worktree),
-            capture_output=True,
-            text=True,
-        )
-        raise GitError(f"worktree_sync merge failed: {merge.stderr.strip() or merge.stdout.strip()}")
+            # Merge failed for a non-conflict reason; abort and crash.
+            subprocess.run(
+                ["git", "merge", "--abort"],
+                cwd=str(worktree),
+                capture_output=True,
+                text=True,
+            )
+            self._restore_local_changes(worktree, stash_ref)
+            restored_stash = True
+            raise GitError(f"worktree_sync merge failed: {merge.stderr.strip() or merge.stdout.strip()}")
+        except Exception:
+            if stash_ref and not restored_stash and not self._unresolved(worktree):
+                self._restore_local_changes(worktree, stash_ref)
+            raise
 
     @staticmethod
     def _is_dirty(worktree: Path) -> bool:
@@ -233,6 +245,60 @@ class GitWorktreeSyncNode(WorktreeSyncNode):
         if proc.returncode != 0:
             return []
         return [line.strip() for line in proc.stdout.splitlines() if line.strip()]
+
+    @staticmethod
+    def _stash_local_changes(worktree: Path) -> str | None:
+        status = subprocess.run(
+            ["git", "status", "--porcelain", "--untracked-files=all"],
+            cwd=str(worktree),
+            capture_output=True,
+            text=True,
+        )
+        if status.returncode != 0 or not status.stdout.strip():
+            return None
+        before = subprocess.run(
+            ["git", "rev-parse", "-q", "--verify", "refs/stash"],
+            cwd=str(worktree),
+            capture_output=True,
+            text=True,
+        )
+        stash = subprocess.run(
+            ["git", "stash", "push", "-u", "-m", "litehive-worktree-sync"],
+            cwd=str(worktree),
+            capture_output=True,
+            text=True,
+        )
+        if stash.returncode != 0:
+            raise GitError(f"git stash push failed: {stash.stderr.strip() or stash.stdout.strip()}")
+        after = subprocess.run(
+            ["git", "rev-parse", "-q", "--verify", "refs/stash"],
+            cwd=str(worktree),
+            capture_output=True,
+            text=True,
+        )
+        before_ref = before.stdout.strip()
+        after_ref = after.stdout.strip()
+        if not after_ref or after_ref == before_ref:
+            return None
+        return after_ref
+
+    def _restore_local_changes(self, worktree: Path, stash_ref: str | None) -> None:
+        if not stash_ref:
+            return
+        restored = subprocess.run(
+            ["git", "stash", "pop", "--index", stash_ref],
+            cwd=str(worktree),
+            capture_output=True,
+            text=True,
+        )
+        if restored.returncode == 0:
+            return
+        unresolved = self._unresolved(worktree)
+        if unresolved:
+            raise MergeConflict(unresolved)
+        raise GitError(
+            f"git stash pop failed: {restored.stderr.strip() or restored.stdout.strip()}"
+        )
 
 
 class PreExecRecoveryNode(SystemNode):

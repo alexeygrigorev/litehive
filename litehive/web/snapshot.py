@@ -11,7 +11,7 @@ from litehive.agents.quota import (
 )
 from litehive.models import TaskRecord
 from litehive.observability import load_engine_monitoring
-from litehive.pipeline_old import active_engine_freezes
+from litehive.config.engine_models import active_engine_freezes
 from litehive.events import read_events
 from litehive.tasks.constants import VALID_TASK_ENGINES, VALID_TASK_PRIORITIES, VALID_TASK_TYPES
 from litehive.tasks.crud import list_tasks_state_first

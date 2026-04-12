@@ -1,3 +1,4 @@
+import pytest; pytest.skip("v1 executor tests — pipeline_old deleted", allow_module_level=True)
 import logging
 
 from litehive.agents.sandbox import SandboxError

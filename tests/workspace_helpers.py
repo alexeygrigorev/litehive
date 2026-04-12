@@ -67,6 +67,7 @@ from litehive.config import (
     render_context_template,
     resolve_process_profile,
     state_path,
+    worktree_root,
 )
 from litehive.agents import (
     classify_execution_interruption,
@@ -108,26 +109,29 @@ from litehive.observability import (
     record_engine_execution,
     render_task_summary,
 )
-from litehive.pipeline_old import (
-    EngineBudgetLedger,
-    TaskPoolStopConditions,
-    TaskExecutionRunner,
-    _allowed_commit_paths,
-    _commit_to_git_report,
-    _role_for_step,
-    _unexpected_dirty_paths,
-    drain_task_pool,
-    recover_completed_task,
-    resolve_engine_name,
+from litehive.config.pool_types import EngineBudgetLedger, TaskPoolStopConditions
+from litehive.recovery.execution_recovery import recover_completed_task, rollback_completed_task
+from litehive.config.engine_models import (
     resolve_engine_plan,
     resolve_execution_retry_policy,
-    resolve_model,
-    resolve_next_task,
-    rollback_completed_task,
-    run_next_task,
-    run_single_task,
-    run_task,
 )
+
+# v1 executor stubs — these functions no longer exist but some test files
+# import them from workspace_helpers. Tests that use them are already
+# skipped at module level.
+def _noop(*a, **kw): raise RuntimeError("v1 executor deleted")
+TaskExecutionRunner = _noop
+_allowed_commit_paths = _noop
+_commit_to_git_report = _noop
+_role_for_step = _noop
+_unexpected_dirty_paths = _noop
+drain_task_pool = _noop
+resolve_engine_name = _noop
+resolve_model = _noop
+resolve_next_task = _noop
+run_next_task = _noop
+run_single_task = _noop
+run_task = _noop
 from litehive.agents import (
     EngineFailure,
     SubagentManager,
@@ -171,7 +175,7 @@ from litehive.tasks.queue_ops import (
 )
 from litehive.tasks.reports import append_thread_comment, load_task_thread
 from litehive.workspace.locking import runner_heartbeat, runner_status, workspace_runner_guard
-from litehive.pipeline_old.recovery import (
+from litehive.recovery import (
     _mark_interrupted_subagent,
     _prepare_interrupted_task,
     recover_stale_runner_state,
@@ -326,13 +330,30 @@ def _commit_repo_state(cwd: Path, message: str = "baseline") -> str:
 
 def _resolve_workspace_root(path: Path) -> Path:
     """Resolve back to the main workspace root if path is inside a worktree."""
-    # Check if path is inside a .litehive/worktrees/<task>/ directory.
-    parts = path.parts
+    resolved = path.resolve()
+    parts = resolved.parts
     for i, part in enumerate(parts):
         if part == ".litehive" and i + 2 < len(parts) and parts[i + 1] == "worktrees":
             # Main workspace root is the parent of .litehive/
             return Path(*parts[:i])
-    return path
+    git_common_dir = subprocess.run(
+        ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
+        cwd=resolved,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if git_common_dir.returncode == 0:
+        common_dir_text = git_common_dir.stdout.strip()
+        if common_dir_text:
+            common_dir = Path(common_dir_text).resolve()
+            if common_dir.name == ".git":
+                return common_dir.parent
+    return resolved
+
+
+def _task_worktree_path(root: Path, task: "TaskRecord") -> Path:
+    return worktree_root(root) / f"{task.id}-{task.slug}"
 
 
 def _write_cli_verdict(
@@ -342,6 +363,7 @@ def _write_cli_verdict(
     verdict: str = "pass",
     message: str | None = None,
     files_changed: list[str] | None = None,
+    role: str = "swe",
 ) -> None:
     """Simulate a litehive report CLI invocation by writing a thread comment.
     """
@@ -356,7 +378,7 @@ def _write_cli_verdict(
         ws_root,
         task,
         TaskThreadComment(
-            role="swe",
+            role=role,
             step=step,
             verdict=verdict,
             message=message or f"{step} {verdict}",
@@ -368,8 +390,9 @@ def _write_cli_verdict(
 def _completed_subagent_result(
     tmp_path: Path, step: str, *, engine_name: str = "codex", task: "TaskRecord | None" = None
 ) -> SubagentResult:
-    worktrees_root = tmp_path / ".litehive" / "worktrees"
-    if step == "implementing" and worktrees_root.exists():
+    effective_step = "grooming" if step == "backlog" else step
+    worktrees_root = worktree_root(tmp_path)
+    if effective_step == "implementing" and worktrees_root.exists():
         wrote_to_worktree = False
         main_app = tmp_path / "app.txt"
         for worktree in sorted(worktrees_root.iterdir()):
@@ -398,19 +421,21 @@ def _completed_subagent_result(
             # No worktree — write a change in the main repo so the git-based guard detects it.
             app_file = tmp_path / "app.txt"
             app_file.write_text("implemented\n", encoding="utf-8")
-    elif step == "implementing":
+    elif effective_step == "implementing":
         # No worktrees dir — write a change in the main repo so the git-based guard detects it.
         app_file = tmp_path / "app.txt"
         app_file.write_text("implemented\n", encoding="utf-8")
 
     # Simulate CLI verdict submission via thread comment.
     if task is not None:
+        report_role = "planner" if effective_step == "grooming" else "swe"
         _write_cli_verdict(
             tmp_path,
             task,
-            step,
+            effective_step,
             verdict="pass",
             message=f"{step} complete via {engine_name}",
+            role=report_role,
         )
 
     return SubagentResult(

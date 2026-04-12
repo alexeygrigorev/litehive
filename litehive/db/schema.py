@@ -1,6 +1,5 @@
 """SQLite schema migration runtime for Litehive workspace databases."""
 
-from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import UTC, datetime

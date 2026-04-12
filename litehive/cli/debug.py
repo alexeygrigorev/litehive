@@ -7,13 +7,14 @@ import yaml
 
 from litehive.config import ensure_workspace
 from litehive.git.ops import current_head
-from litehive.tasks.crud import get_task_worktree_path, require_task
+from litehive.tasks.crud import get_task_worktree_path, require_task, save_task
 from litehive.tasks.paths import (
     _read_text_artifact,
     _resolve_artifact_path,
     task_dir,
 )
 from litehive.tasks.reports import load_task_thread
+from litehive.tasks.worktrees import migrate_legacy_worktree
 
 
 def _cmd_debug(args):
@@ -133,8 +134,11 @@ def _debug_worktree(root: Path, task):
         print("worktree: no worktree")
         return 0
 
-    worktree_path = (root / worktree_rel).resolve()
-    if not worktree_path.exists():
+    worktree_path, changed = migrate_legacy_worktree(root, task)
+    if changed:
+        save_task(root, task)
+        worktree_rel = get_task_worktree_path(task) or worktree_rel
+    if worktree_path is None or not worktree_path.exists():
         print(f"worktree: {worktree_rel}")
         print("exists: no")
         print("no worktree")

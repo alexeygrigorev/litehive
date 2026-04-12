@@ -27,7 +27,7 @@ from litehive.tasks.crud import (
 )
 from litehive.tasks.journal import append_journal
 
-from ._types import DirtyWorktreeFinding, DirtyWorktreeGateReport
+from litehive.config.pool_types import DirtyWorktreeFinding, DirtyWorktreeGateReport
 
 
 def _git_worktree_is_dirty(root: Path) -> bool:
@@ -252,7 +252,7 @@ def _run_worktree_merge_agent(
 
     append_journal(root, task, f"[worktree] Merge conflict on {len(conflicts)} file(s). Launching merge agent.")
     cfg = config or load_config(root)
-    from litehive.pipeline_old.recovery import _resolve_recovery_engine
+    from litehive.recovery import _resolve_recovery_engine
     engine_name, model = _resolve_recovery_engine(root, task, cfg)
     subagents = SubagentManager(root, execution_root=worktree_path)
     subagents.run(

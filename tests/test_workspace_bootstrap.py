@@ -73,6 +73,7 @@ def test_ensure_workspace_bootstraps_runtime_db_and_registry(
     monkeypatch.delenv("LITEHIVE_SKIP_REGISTRY", raising=False)
 
     from litehive.config import (
+        worktree_root,
         workspace_backups_dir,
         workspace_database_path,
         workspace_id,
@@ -90,6 +91,7 @@ def test_ensure_workspace_bootstraps_runtime_db_and_registry(
     assert workspace_backups_dir(tmp_path) == data_home / "litehive" / wid / "backups"
     assert workspace_logs_dir(tmp_path) == state_home / "litehive" / wid / "logs"
     assert workspace_worktrees_dir(tmp_path) == state_home / "litehive" / wid / "worktrees"
+    assert worktree_root(tmp_path) == state_home / "litehive" / wid / "worktrees"
     assert workspace_subagents_dir(tmp_path, "T-0001", "agent-1") == (
         data_home / "litehive" / wid / "subagents" / "T-0001" / "agent-1"
     )

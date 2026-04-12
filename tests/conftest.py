@@ -41,10 +41,18 @@ def _neutralize_codex_quota(request, monkeypatch):
     except (ImportError, AttributeError):
         pass
     try:
-        import litehive.pipeline_old._models as models_mod
+        import litehive.config.engine_models as models_mod
 
         monkeypatch.setattr(models_mod, "_engine_quota_block", _noop_engine_quota_block)
     except (ImportError, AttributeError):
         pass
     yield
     _codex_quota_mod.reset_cache()
+
+
+@pytest.fixture(autouse=True)
+def _use_tmp_xdg_dirs(tmp_path, monkeypatch):
+    xdg_root = tmp_path.parent / f"{tmp_path.name}-xdg"
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(xdg_root / "config"))
+    monkeypatch.setenv("XDG_DATA_HOME", str(xdg_root / "data"))
+    monkeypatch.setenv("XDG_STATE_HOME", str(xdg_root / "state"))

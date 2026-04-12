@@ -11,7 +11,7 @@ from typer.testing import CliRunner
 
 from litehive.cli import app
 from litehive.pipeline.deltas import StateDelta
-from litehive.pipeline.events import CleanState, Pass, Reject
+from litehive.pipeline.events import CleanState, Reject
 from litehive.pipeline.journal import SqliteJournal
 from litehive.pipeline.persistence import SqlitePersistence
 from litehive.pipeline.types import PipelineMode

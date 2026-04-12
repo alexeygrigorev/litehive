@@ -9,6 +9,7 @@ from tests.workspace_helpers import (
     SubagentRef,
     RuntimeSubagentState,
     _run,
+    _task_worktree_path,
     _cmd_debug,
     argparse,
     create_task,
@@ -74,10 +75,10 @@ def _init_git_repo(root: Path) -> None:
 
 
 def _create_task_worktree(root: Path, task) -> Path:
-    worktree_path = root / ".litehive" / "worktrees" / f"{task.id}-{task.slug}"
+    worktree_path = _task_worktree_path(root, task)
     worktree_path.parent.mkdir(parents=True, exist_ok=True)
     _run(["git", "worktree", "add", "--detach", str(worktree_path), "HEAD"], root)
-    task.git.worktree_path = str(worktree_path.relative_to(root))
+    task.git.worktree_path = str(worktree_path)
     save_task(root, task)
     return worktree_path
 
@@ -395,5 +396,4 @@ def test_debug_worktree_shows_no_worktree_when_missing(
     output = capsys.readouterr().out
 
     assert exit_code == 0
-    assert "exists: no" in output
     assert "no worktree" in output

@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from litehive.pipeline.events import Crash, HookOk, MergeConflictDetected, Pass, Reject
+from litehive.pipeline.events import HookOk, MergeConflictDetected, Pass, Reject
 from litehive.pipeline.nodes import (
     GitCommitNode,
     HookNode,

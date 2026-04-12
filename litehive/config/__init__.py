@@ -37,6 +37,7 @@ from litehive.config.paths import (
     workspace_state_root as workspace_state_root,
     workspace_subagents_dir as workspace_subagents_dir,
     workspace_worktrees_dir as workspace_worktrees_dir,
+    worktree_root as worktree_root,
 )
 from litehive.config.profiles import *
 from litehive.config.retry import (

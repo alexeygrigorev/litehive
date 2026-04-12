@@ -13,13 +13,13 @@ from litehive.observability import (
     render_recent_activity_section,
     render_task_summary,
 )
-from litehive.pipeline_old._models import active_engine_freezes
+from litehive.config.engine_models import active_engine_freezes
 from litehive.tasks.archive import archive_root
 from litehive.tasks.crud import list_tasks, list_tasks_state_first, require_task
 from litehive.tasks.models import WorkspaceConflictError
 from litehive.tasks.persistence import load_state
 from litehive.workspace.locking import runner_status
-from litehive.pipeline_old.recovery import recover_stale_runner_state, repair_workspace_state
+from litehive.recovery import recover_stale_runner_state, repair_workspace_state
 
 from litehive.cli._display import (
     _format_execution_retry_policies,

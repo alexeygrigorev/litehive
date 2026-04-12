@@ -5,7 +5,7 @@ import yaml
 
 from litehive.config import config_path, load_config
 from litehive.models import StageReport, TaskRecord, TaskThreadComment
-from litehive.pipeline_old.states import _ROUTES
+from litehive.config.pipeline_states import _ROUTES
 from litehive.tasks.constants import VALID_TASK_ENGINES
 from litehive.tasks.crud import create_task, require_task
 from litehive.tasks.paths import task_dir

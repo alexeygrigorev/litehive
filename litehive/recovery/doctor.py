@@ -1,28 +1,26 @@
 """Workspace doctor checks and narrow automated fixes."""
 
 from dataclasses import dataclass, field
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 
 import yaml
 
 from litehive.config import ensure_workspace, state_path
 from litehive.daemon._execution import _check_origin_divergence
 from litehive.models import TaskRecord, WorkspaceState
-from litehive.pipeline_old.recovery.detection import (
+from litehive.recovery.detection import (
     _is_orphaned_commit_stage_task,
     _is_stranded_commit_task,
 )
-from litehive.pipeline_old.recovery.workspace_repair import repair_workspace_state
+from litehive.recovery.workspace_repair import repair_workspace_state
 from litehive.tasks.crud import list_tasks, save_task_runtime
 from litehive.tasks.persistence import load_state
 from litehive.tasks.queue_ops import _is_task_eligible_for_execution
-
-
-def _is_litehive_managed_worktree(worktree_rel: str | None) -> bool:
-    if not worktree_rel:
-        return False
-    path = PurePosixPath(worktree_rel)
-    return not path.is_absolute() and path.parts[:2] == (".litehive", "worktrees")
+from litehive.tasks.worktrees import (
+    is_managed_worktree_path,
+    legacy_worktree_root,
+    migrate_legacy_worktree,
+)
 
 
 @dataclass(slots=True)
@@ -141,10 +139,17 @@ def _stale_worktree_findings(root: Path, tasks: list[TaskRecord], state: Workspa
     active_task_id = None if state is None else state.active_task_id
     for task in tasks:
         worktree_rel = task.runtime.git.worktree_path or task.git.worktree_path
-        if not _is_litehive_managed_worktree(worktree_rel):
+        if not is_managed_worktree_path(root, worktree_rel):
+            continue
+        worktree_path, changed = migrate_legacy_worktree(root, task)
+        if changed:
+            save_task_runtime(root, task)
+            worktree_rel = task.runtime.git.worktree_path or task.git.worktree_path
+        if worktree_rel is None:
             continue
         managed_by_path[worktree_rel] = task
-        worktree_path = root / worktree_rel
+        if worktree_path is None:
+            continue
         if not worktree_path.exists():
             continue
         is_active = active_task_id == task.id
@@ -156,7 +161,7 @@ def _stale_worktree_findings(root: Path, tasks: list[TaskRecord], state: Workspa
                     fix_command="litehive worktree clean --dry-run && litehive worktree clean",
                 )
             )
-    worktrees_root = root / ".litehive" / "worktrees"
+    worktrees_root = legacy_worktree_root(root)
     if worktrees_root.exists():
         for child in sorted(worktrees_root.iterdir()):
             if not child.is_dir():

@@ -81,6 +81,18 @@ def add_worktree(root: Path, path: Path, *, ref: str = "HEAD") -> None:
         raise GitError(proc.stderr.strip() or "git worktree add failed")
 
 
+def move_worktree(root: Path, source: Path, destination: Path) -> None:
+    proc = _run_git(root, "worktree", "move", str(source), str(destination))
+    if proc.returncode != 0:
+        raise GitError(proc.stderr.strip() or "git worktree move failed")
+
+
+def prune_worktrees(root: Path) -> None:
+    proc = _run_git(root, "worktree", "prune")
+    if proc.returncode != 0:
+        raise GitError(proc.stderr.strip() or "git worktree prune failed")
+
+
 def merge_commit(root: Path, commit_sha: str) -> str:
     proc = _run_git(root, "merge", "--ff-only", commit_sha)
     if proc.returncode != 0:

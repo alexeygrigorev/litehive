@@ -1,3 +1,4 @@
+import pytest; pytest.skip("v1 executor tests — pipeline_old deleted", allow_module_level=True)
 from tests.workspace_helpers import (
     AdapterCapabilities,
     CLIExecutionResult,

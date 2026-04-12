@@ -79,7 +79,7 @@ def _cmd_run_drain_dry_run(args, *, config):
         else None,
         config.engine_costs,
     )
-    from litehive.pipeline_old import TaskPoolStopConditions
+    from litehive.config.pool_types import TaskPoolStopConditions
 
     stop_conditions = TaskPoolStopConditions(
         max_tasks=getattr(args, "max_tasks", None),
@@ -162,7 +162,7 @@ def _cmd_run_single_dry_run(args, *, config):
         else None,
         config.engine_costs,
     )
-    from litehive.pipeline_old import TaskPoolStopConditions
+    from litehive.config.pool_types import TaskPoolStopConditions
 
     stop_conditions = TaskPoolStopConditions(
         max_tasks=getattr(args, "max_tasks", None),

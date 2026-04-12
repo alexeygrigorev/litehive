@@ -23,9 +23,8 @@ import pytest
 
 from litehive.pipeline import SqliteJournal, StateMachineRunner, build_registry
 from litehive.pipeline.agents._base import PromptContext
-from litehive.pipeline.events import MergeConflictDetected, Pass
 from litehive.pipeline.nodes import CommitNode, HookResult, HookRunner, StubCommitNode
-from litehive.pipeline.nodes.agent import AgentVerdict, Engine, EngineSelector
+from litehive.pipeline.nodes.agent import AgentVerdict, Engine
 from litehive.pipeline.nodes.system import MergeConflict
 from litehive.pipeline.persistence import SqlitePersistence
 from litehive.pipeline.sessions import InMemorySessionStore

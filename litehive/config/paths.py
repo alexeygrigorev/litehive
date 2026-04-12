@@ -79,6 +79,10 @@ def workspace_worktrees_dir(root: Path) -> Path:
     return workspace_state_root(root) / "worktrees"
 
 
+def worktree_root(root: Path) -> Path:
+    return workspace_worktrees_dir(root)
+
+
 def workspace_subagents_dir(
     root: Path,
     task_id: str | None = None,

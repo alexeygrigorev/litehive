@@ -17,8 +17,18 @@ from litehive.models import RuntimeContinuationHandoff, TaskRecord
 from litehive.workspace.runtime_tracking import set_task_continuation_handoff
 from litehive.config.paths import config_path
 
-from ._budget import _engine_attempt_order
-from ._types import ResolvedExecutionRetryPolicy
+def _engine_attempt_order(
+    initial_engine_names: list[str], engine_preference: list[str]
+) -> list[str]:
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for engine_name in list(initial_engine_names) + engine_preference:
+        if engine_name in seen:
+            continue
+        seen.add(engine_name)
+        ordered.append(engine_name)
+    return ordered
+from litehive.config.pool_types import ResolvedExecutionRetryPolicy
 
 
 @dataclass(frozen=True)

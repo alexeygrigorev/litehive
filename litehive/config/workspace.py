@@ -9,8 +9,6 @@ from pathlib import Path
 
 import yaml
 
-log = logging.getLogger(__name__)
-
 from litehive.config.model import LitehiveConfig
 from litehive.config.paths import (
     config_path,
@@ -21,6 +19,8 @@ from litehive.config.paths import (
     workspace_gitignore_path,
 )
 from litehive.config.profiles import render_context_template
+
+log = logging.getLogger(__name__)
 
 
 def render_workspace_gitignore() -> str:

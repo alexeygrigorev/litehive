@@ -1,11 +1,8 @@
 from litehive.config import ensure_workspace
 from litehive.git_ops import GitError, checkpoint_message
-from litehive.pipeline_old import (
-    recover_completed_task,
-    inspect_dirty_worktree_gate,
-    rollback_completed_task,
-)
+from litehive.recovery.execution_recovery import recover_completed_task, rollback_completed_task
 from litehive.tasks.archive import archive_done_tasks, archive_task, cleanup_archived_tasks
+from litehive.workspace.worktree_inspection import inspect_dirty_worktree_gate
 from litehive.tasks.crud import require_task
 from litehive.tasks.models import WorkspaceConflictError
 from litehive.tasks.normalization import missing_acceptance_criteria_reason

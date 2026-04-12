@@ -40,6 +40,7 @@ def collect_recovery_evidence(
     from litehive.observability import engine_monitoring_file, load_engine_monitoring
 
     from .crud import get_task_worktree_path
+    from .worktrees import migrate_legacy_worktree
 
     evidence: list[RecoveryEvidenceItem] = []
     task_path = task_file(root, task)
@@ -157,8 +158,8 @@ def collect_recovery_evidence(
     )
 
     if is_git_repo(root):
+        worktree_path, _ = migrate_legacy_worktree(root, task)
         worktree_rel = get_task_worktree_path(task)
-        worktree_path = root / worktree_rel if worktree_rel else None
         try:
             root_status = status_porcelain(root)
         except GitError:

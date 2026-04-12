@@ -6,13 +6,10 @@ exercised without the full state machine.
 
 from typing import Any
 
-import pytest
-
 from litehive.pipeline.events import Crash, Pass
 from litehive.pipeline.nodes.agent import (
     AgentNode,
     AgentVerdict,
-    EngineBlockedError,
     NudgeRequired,
     TransientError,
     UnrecoverableError,

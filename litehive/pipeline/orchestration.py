@@ -63,6 +63,7 @@ class ExecutionResultV2:
 def _resolve_worktree(root: Path, state: TaskState) -> Path:
     """Look up the on-disk worktree path for a task, falling back to root."""
     from litehive.tasks.crud import get_task as _get_task
+    from litehive.tasks.worktrees import resolve_recorded_worktree_path
 
     task = _get_task(root, state.task_id)
     if task is None:
@@ -70,10 +71,7 @@ def _resolve_worktree(root: Path, state: TaskState) -> Path:
     wt = get_task_worktree_path(task)
     if not wt:
         return root
-    path = Path(wt)
-    if not path.is_absolute():
-        path = root / path
-    return path
+    return resolve_recorded_worktree_path(root, wt) or root
 
 
 def _build_commit_node(root: Path) -> CommitNode:
@@ -92,6 +90,7 @@ def _missing_worktree_probe(root: Path):
     """Return a probe callable that flags tasks whose worktree_path is gone."""
 
     from litehive.tasks.crud import get_task as _get_task
+    from litehive.tasks.worktrees import resolve_recorded_worktree_path
 
     def _probe(state) -> bool:
         task = _get_task(root, state.task_id)
@@ -100,9 +99,9 @@ def _missing_worktree_probe(root: Path):
         wt = get_task_worktree_path(task)
         if not wt:
             return False
-        path = Path(wt)
-        if not path.is_absolute():
-            path = root / path
+        path = resolve_recorded_worktree_path(root, wt)
+        if path is None:
+            return False
         return not path.exists()
 
     return _probe
@@ -113,6 +112,7 @@ def _clear_stale_worktree_repair(root: Path):
 
     from litehive.tasks.crud import get_task as _get_task
     from litehive.tasks.crud import set_task_worktree_path, save_task
+    from litehive.tasks.worktrees import resolve_recorded_worktree_path
 
     def _repair(state) -> None:
         task = _get_task(root, state.task_id)
@@ -121,10 +121,8 @@ def _clear_stale_worktree_repair(root: Path):
         wt = get_task_worktree_path(task)
         if not wt:
             return
-        path = Path(wt)
-        if not path.is_absolute():
-            path = root / path
-        if path.exists():
+        path = resolve_recorded_worktree_path(root, wt)
+        if path is not None and path.exists():
             return
         set_task_worktree_path(task, None)
         save_task(root, task)

@@ -1,7 +1,7 @@
 """Inspect and clean Litehive-managed task worktrees."""
 
 from dataclasses import dataclass
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 import subprocess
 
 from litehive.config import ensure_workspace
@@ -22,6 +22,7 @@ from litehive.tasks.crud import (
 )
 from litehive.tasks.models import WorkspaceConflictError
 from litehive.tasks.persistence import load_state, save_state
+from litehive.tasks.worktrees import is_managed_worktree_path, migrate_legacy_worktree
 
 _CLEANABLE_STATUSES = {"done", "deferred", "wont_do", "duplicate"}
 
@@ -186,10 +187,13 @@ def _collect_managed_worktrees(root: Path) -> list[_ManagedWorktree]:
     worktrees: list[_ManagedWorktree] = []
     for task in list_tasks(root):
         worktree_rel = get_task_worktree_path(task)
-        if not _is_litehive_managed_worktree(worktree_rel):
+        if not is_managed_worktree_path(root, worktree_rel):
             continue
-        worktree_path = (root / worktree_rel).resolve()
-        if not worktree_path.exists():
+        worktree_path, changed = migrate_legacy_worktree(root, task)
+        if changed:
+            save_task(root, task)
+            worktree_rel = get_task_worktree_path(task)
+        if worktree_path is None or not worktree_path.exists() or worktree_rel is None:
             continue
         try:
             change_count = len(status_porcelain(worktree_path))
@@ -214,9 +218,14 @@ def _collect_rescue_candidates(root: Path) -> list[_RescueCandidate]:
         if task.status != "merge_failed":
             continue
         worktree_rel = get_task_worktree_path(task)
-        if not _is_litehive_managed_worktree(worktree_rel):
+        if not is_managed_worktree_path(root, worktree_rel):
             continue
-        worktree_path = (root / worktree_rel).resolve()
+        worktree_path, changed = migrate_legacy_worktree(root, task)
+        if changed:
+            save_task(root, task)
+            worktree_rel = get_task_worktree_path(task)
+        if worktree_path is None or worktree_rel is None:
+            continue
         commit_shas = _worktree_commits_ahead_of_main(root, worktree_path) if worktree_path.exists() else []
         candidates.append(
             _RescueCandidate(
@@ -459,15 +468,6 @@ def _apply_rescue_candidate(root: Path, candidate: _RescueCandidate) -> _RescueR
         head_sha=head_sha,
         message="rescued onto main",
     )
-
-
-def _is_litehive_managed_worktree(worktree_rel: str | None) -> bool:
-    if not worktree_rel:
-        return False
-    path = PurePosixPath(worktree_rel)
-    return not path.is_absolute() and path.parts[:2] == (".litehive", "worktrees")
-
-
 def _worktree_commits_ahead_of_main(root: Path, worktree_path: Path) -> list[str]:
     main_head = current_head(root) or "HEAD"
     fork_point = _git_stdout(worktree_path, "merge-base", main_head, "HEAD")

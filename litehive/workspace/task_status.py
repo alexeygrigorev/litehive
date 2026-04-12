@@ -49,7 +49,7 @@ def _active_task_id_for_stop(root: Path, state: WorkspaceState) -> str:
 def _stop_active_task_without_runner_guard(root: Path, task_id: str) -> TaskRecord:
     from litehive.tasks.crud import require_task
     from litehive.tasks.persistence import load_state
-    from litehive.pipeline_old.recovery import _prepare_interrupted_task, interruption_journal_message
+    from litehive.recovery import _prepare_interrupted_task, interruption_journal_message
     from .workflow import _persist_task_and_state_without_runner_guard
 
     with _workspace_lock(root):
@@ -100,7 +100,7 @@ def stop_current_task(
         _runner_lock_is_held,
         _runner_pid_is_alive,
     )
-    from litehive.pipeline_old.recovery import recover_stale_runner_state
+    from litehive.recovery import recover_stale_runner_state
 
     state = load_state(root)
     active_task_id = _active_task_id_for_stop(root, state)
@@ -280,14 +280,15 @@ def requeue_task(root: Path, task_id: str, *, front: bool = False, force: bool =
         retract_thread_comment,
         save_task_thread,
     )
+    from litehive.tasks.worktrees import migrate_legacy_worktree
     from .workflow import _persist_task_and_state_without_runner_guard
 
     def _task_checkout_path(task: TaskRecord) -> Path:
-        relative = task.git.worktree_path
-        if relative:
-            worktree_path = root / relative
-            if worktree_path.exists():
-                return worktree_path
+        worktree_path, changed = migrate_legacy_worktree(root, task)
+        if changed:
+            save_task(root, task)
+        if worktree_path is not None and worktree_path.exists():
+            return worktree_path
         return root
 
     def _path_differs_from_main(checkout_path: Path, main_ref: str, relative_path: str) -> bool:

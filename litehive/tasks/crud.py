@@ -151,22 +151,39 @@ def save_task_runtime(root: Path, task: TaskRecord) -> None:
 
 
 def _load_task_runtime(root: Path, task: TaskRecord) -> TaskRecord:
+    from .worktrees import migrate_legacy_worktree
+
     store = runtime_store(root)
     runtime = store.load_task_runtime(task.id)
     if runtime is not None:
         task.runtime = runtime
         set_task_commit_sha(task, task.runtime.git.commit_sha)
         _normalize_task_worktree_state(task)
+        _, changed = migrate_legacy_worktree(root, task)
+        if changed:
+            store.save_task_runtime(task.id, _task_runtime_for_storage(task))
+            _atomic_write_text(task_file(root, task), _serialize_task_record(task))
+            _atomic_write_text(task_runtime_file(root, task), _serialize_task_runtime(task))
         return task
     runtime_file = task_runtime_file(root, task)
     if not runtime_file.exists():
         _normalize_task_worktree_state(task)
+        _, changed = migrate_legacy_worktree(root, task)
+        if changed:
+            store.save_task_runtime(task.id, _task_runtime_for_storage(task))
+            _atomic_write_text(task_file(root, task), _serialize_task_record(task))
+            _atomic_write_text(task_runtime_file(root, task), _serialize_task_runtime(task))
         return task
     data = yaml.safe_load(runtime_file.read_text(encoding="utf-8")) or {}
     task.runtime = TaskRuntime(**data)
     store.save_task_runtime(task.id, task.runtime)
     set_task_commit_sha(task, task.runtime.git.commit_sha)
     _normalize_task_worktree_state(task)
+    _, changed = migrate_legacy_worktree(root, task)
+    if changed:
+        store.save_task_runtime(task.id, _task_runtime_for_storage(task))
+        _atomic_write_text(task_file(root, task), _serialize_task_record(task))
+        _atomic_write_text(task_runtime_file(root, task), _serialize_task_runtime(task))
     return task
 
 

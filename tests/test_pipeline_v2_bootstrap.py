@@ -19,9 +19,6 @@ import pytest
 from litehive.pipeline.nodes.agent import AgentVerdict, EngineBlockedError
 from litehive.pipeline.orchestration import run_task_v2
 from litehive.tasks.crud import create_task, save_task
-from litehive.tasks.reports import append_thread_comment
-from litehive.models.report_models import TaskThreadComment
-from litehive.models import utcnow
 
 from tests.workspace_helpers import ensure_workspace
 
