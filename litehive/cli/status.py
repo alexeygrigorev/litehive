@@ -343,6 +343,10 @@ def cmd_repair(args):
     print(f"stale_runner_recovered: {'yes' if summary.stale_runner_recovered else 'no'}")
     print(f"cleared_active_task_id: {summary.cleared_active_task_id or '-'}")
     print(
+        "migrated_comment_tasks: "
+        + (" ".join(summary.migrated_comment_task_ids) if summary.migrated_comment_task_ids else "-")
+    )
+    print(
         "requeued_tasks: "
         + (" ".join(summary.requeued_task_ids) if summary.requeued_task_ids else "-")
     )

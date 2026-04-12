@@ -33,13 +33,10 @@ def merge_config_layers(base: Mapping[str, Any], overlay: Mapping[str, Any]) -> 
 
 
 def load_effective_config_data(root: Path) -> dict[str, Any]:
-    default_data = asdict(LitehiveConfig())
-    global_data = read_config_mapping(global_config_path())
-    local_data = read_config_mapping(config_path(root))
-    return merge_config_layers(
-        merge_config_layers(default_data, global_data),
-        local_data,
-    )
+    data = asdict(LitehiveConfig())
+    for path in (global_config_path(), config_path(root)):
+        data = merge_config_layers(data, read_config_mapping(path))
+    return data
 
 
 def load_config(root: Path) -> LitehiveConfig:

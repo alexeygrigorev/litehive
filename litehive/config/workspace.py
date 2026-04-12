@@ -91,49 +91,27 @@ def _task_exists(root: Path, task_id: str) -> bool:
     return any(tasks_root.glob(f"{task_id}-*"))
 
 
-def _workspace_registry_paths() -> list[Path]:
-    return [
-        workspace_registry_path(),
-        Path.home() / ".litehive" / "workspaces.yaml",
-    ]
-
-
-def _iter_registry_workspace_roots() -> list[Path]:
+def _registered_workspace_roots() -> list[Path]:
+    registry_path = workspace_registry_path()
+    if not registry_path.exists():
+        return []
+    try:
+        data = yaml.safe_load(registry_path.read_text(encoding="utf-8")) or []
+    except (yaml.YAMLError, OSError) as exc:
+        log.warning("workspaces registry %s was unreadable (%s); skipping", registry_path, exc)
+        return []
+    if not isinstance(data, list):
+        return []
     roots: list[Path] = []
     seen: set[Path] = set()
-    for registry_path in _workspace_registry_paths():
-        if not registry_path.exists():
+    for entry in data:
+        if not isinstance(entry, str):
             continue
         try:
-            data = yaml.safe_load(registry_path.read_text(encoding="utf-8")) or {}
-        except (yaml.YAMLError, OSError) as exc:
-            log.warning(
-                "workspaces registry %s was unreadable (%s); skipping",
-                registry_path,
-                exc,
-            )
+            resolved = _validate_workspace_root(Path(entry), source=str(registry_path))
+        except ValueError:
             continue
-        workspaces = data.get("workspaces", data) if isinstance(data, dict) else {}
-        if not isinstance(workspaces, dict):
-            continue
-        for payload in workspaces.values():
-            candidate: str | None = None
-            if isinstance(payload, str):
-                candidate = payload
-            elif isinstance(payload, dict):
-                for key in ("path", "root", "workspace", "repo_path"):
-                    value = payload.get(key)
-                    if isinstance(value, str):
-                        candidate = value
-                        break
-            if not candidate:
-                continue
-            try:
-                resolved = _validate_workspace_root(Path(candidate), source=str(registry_path))
-            except ValueError:
-                continue
-            if resolved in seen:
-                continue
+        if resolved not in seen:
             seen.add(resolved)
             roots.append(resolved)
     return roots
@@ -171,7 +149,7 @@ def resolve_workspace(
         return resolved
 
     if effective_task_id:
-        for root in _iter_registry_workspace_roots():
+        for root in _registered_workspace_roots():
             if _task_exists(root, effective_task_id):
                 _register_workspace(root)
                 return root
@@ -190,8 +168,6 @@ def _register_workspace(root: Path) -> None:
         return
     registry_path = workspace_registry_path()
     registry_path.parent.mkdir(parents=True, exist_ok=True)
-    from litehive.config.paths import workspace_id
-
     lock_path = registry_path.with_suffix(registry_path.suffix + ".lock")
     # fcntl.flock serializes concurrent writers across processes (e.g. multiple
     # pytest workers + a running daemon). Without this, read-modify-write races
@@ -202,7 +178,7 @@ def _register_workspace(root: Path) -> None:
             if registry_path.exists():
                 try:
                     raw = registry_path.read_text(encoding="utf-8")
-                    existing = yaml.safe_load(raw) or {}
+                    existing = yaml.safe_load(raw) or []
                 except (yaml.YAMLError, OSError) as exc:
                     # Registry is a cache — losing it is fine. Log and rebuild.
                     log.warning(
@@ -210,19 +186,24 @@ def _register_workspace(root: Path) -> None:
                         registry_path,
                         exc,
                     )
-                    existing = {}
+                    existing = []
             else:
-                existing = {}
-            if not isinstance(existing, dict):
-                existing = {}
-            workspaces = existing.get("workspaces")
-            if not isinstance(workspaces, dict):
-                workspaces = {}
-            workspaces[workspace_id(root)] = str(root.resolve())
-            registry_payload = {**existing, "workspaces": dict(sorted(workspaces.items()))}
+                existing = []
+            if not isinstance(existing, list):
+                existing = []
+            workspaces = {str(root.resolve())}
+            for entry in existing:
+                if not isinstance(entry, str):
+                    continue
+                try:
+                    workspaces.add(
+                        str(_validate_workspace_root(Path(entry), source=str(registry_path)))
+                    )
+                except ValueError:
+                    continue
             # Atomic write: tmp file in same dir + os.replace. No partial files,
             # no reader ever sees a truncated document.
-            payload = yaml.safe_dump(registry_payload, sort_keys=False)
+            payload = yaml.safe_dump(sorted(workspaces), sort_keys=False)
             tmp_fd, tmp_name = tempfile.mkstemp(
                 prefix=".workspaces.yaml.",
                 suffix=".tmp",

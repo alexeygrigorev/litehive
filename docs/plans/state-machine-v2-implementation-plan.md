@@ -103,7 +103,7 @@ real engines, replacing `pipeline_old.TaskExecutionRunner`.
   pipeline_old.
 - [x] **T-0349 HeruEngineFactory** — `litehive/pipeline/heru_factory.py`.
   HeruEngineAdapter delegates to SubagentManager.run, captures the
-  before-turn timestamp, reads thread.yaml after the turn for fresh
+  before-turn timestamp, reads comments.yaml after the turn for fresh
   verdicts, raises NudgeRequired if none landed. heru exceptions
   translated into the v2 taxonomy.
 - [x] **T-0350 daemon entry point** — `litehive/pipeline/orchestration.py`
@@ -205,8 +205,8 @@ item lands.
   `files_changed` / `tests_added` through AgentNode → Runner →
   `state.last_report` via a new `_apply_event_side_effects` hook.
   `HeruEngineAdapter` already populates the metadata from the
-  thread.yaml comment, so the end-to-end path is now:
-  agent submits verdict → thread.yaml comment → adapter →
+  comments.yaml comment, so the end-to-end path is now:
+  agent submits verdict → comments.yaml comment → adapter →
   `AgentVerdict.metadata` → `Pass.metadata` → `state.last_report` →
   `zero_change_shortcut` guard sees real numbers.
 - 2026-04-12: verified `GitCommitNode` is safe when the task has no
@@ -295,7 +295,7 @@ item lands.
   `enter_recovery` effect populated `failure_context` and incremented
   `recovery_attempt[grooming] = 1`. The recovery agent then launched
   with the full context — failure_context, origin_stage, recovery_attempt,
-  AND the auto-loaded thread.yaml comments — proving the serializer's
+  AND the auto-loaded comments.yaml comments — proving the serializer's
   thread hydration works. Killed the recovery codex before it burned
   more tokens. **Every major v2 design decision worked on first contact
   with reality:** dequeue, bridge, persistence, journal, selector,

@@ -59,7 +59,7 @@ The recovery agent:
 - reports whether the task is runnable again or still blocked
 
 Recovery artifacts are stored under the task's `recovery/` directory alongside
-the normal reports and thread history.
+the normal reports and comment history.
 
 ## What Evidence A Recovery Agent Sees
 
@@ -67,7 +67,7 @@ Litehive gathers recovery evidence from task-local artifacts such as:
 
 - latest stage report
 - `runtime.yaml`
-- `thread.yaml`
+- `comments.yaml` (`thread.yaml` is legacy fallback during migration)
 - `events.jsonl`
 - latest subagent `session.yaml`
 - latest subagent `report.yaml`

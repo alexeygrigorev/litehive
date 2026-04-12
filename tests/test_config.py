@@ -366,6 +366,21 @@ def test_resolve_workspace_walks_up_and_normalizes_worktree(
     assert resolve_workspace(None) == tmp_path.resolve()
 
 
+def test_resolve_workspace_prefers_explicit_override(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ensure_workspace(tmp_path)
+    outside = tmp_path / "outside"
+    outside.mkdir()
+
+    from litehive.config import resolve_workspace
+
+    monkeypatch.chdir(outside)
+    monkeypatch.setenv("LITEHIVE_WORKSPACE_ROOT", str(outside))
+
+    assert resolve_workspace(None, workspace=tmp_path) == tmp_path.resolve()
+
+
 def test_resolve_workspace_uses_registry_from_outside_repo(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -375,7 +390,7 @@ def test_resolve_workspace_uses_registry_from_outside_repo(
     registry = config_home / "litehive" / "workspaces.yaml"
     registry.parent.mkdir(parents=True)
     registry.write_text(
-        yaml.safe_dump({"workspaces": {"demo": str(tmp_path)}}, sort_keys=False),
+        yaml.safe_dump([str(tmp_path)], sort_keys=False),
         encoding="utf-8",
     )
     outside = tmp_path / "outside"
@@ -577,6 +592,46 @@ def test_load_config_applies_workspace_overrides_on_top_of_global_defaults(
 
     assert config.default_engine == "codex"
     assert config.pool_max_tasks == 2
+
+
+def test_load_config_deep_merges_global_and_workspace_mappings(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config_home = tmp_path / "xdg"
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(config_home))
+    global_path = global_config_path()
+    global_path.parent.mkdir(parents=True, exist_ok=True)
+    global_path.write_text(
+        yaml.safe_dump(
+            {
+                "engine_freeze": {"gemini": "2099-01-01T00:00:00Z"},
+                "agent_startup_guidance": {"swe": ["global guidance"]},
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+
+    workspace = tmp_path / "workspace"
+    ensure_workspace(workspace)
+    (workspace / ".litehive" / "config.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "engine_freeze": {"codex": "2099-02-02T00:00:00Z"},
+                "agent_startup_guidance": {"swe": ["project guidance"]},
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+
+    config = load_config(workspace)
+
+    assert config.engine_freeze == {
+        "gemini": "2099-01-01T00:00:00Z",
+        "codex": "2099-02-02T00:00:00Z",
+    }
+    assert config.agent_startup_guidance == {"swe": ["project guidance"]}
 
 
 def test_resolve_engine_name_prefers_run_override_then_workspace_default(

@@ -773,7 +773,7 @@ def test_subagent_manager_uses_runtime_current_stage_for_cli_verdict_lookup(
             *,
             extra_env: dict[str, str] | None = None,
         ) -> CLIExecutionResult:
-            comment_path = task_dir(tmp_path, task) / "thread.yaml"
+            comment_path = task_dir(tmp_path, task) / "comments.yaml"
             comment_path.write_text(
                 yaml.safe_dump(
                     [

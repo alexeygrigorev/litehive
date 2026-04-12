@@ -33,7 +33,7 @@ from tests.workspace_helpers import (
 
 
 def test_engine_registry_uses_adapter_defaults_and_public_lookup_api() -> None:
-    from litehive.engines import ENGINE_REGISTRY, get_engine
+    from litehive.agents import ENGINE_REGISTRY, get_engine
 
     assert list(ENGINE_REGISTRY) == ["codex", "opencode", "goz", "gemini", "copilot", "claude"]
 

@@ -53,8 +53,17 @@ def task_runtime_file(root: Path, task: TaskRecord) -> Path:
     return task_dir(root, task) / "runtime.yaml"
 
 
-def task_thread_file(root: Path, task: TaskRecord) -> Path:
+def task_comments_file(root: Path, task: TaskRecord) -> Path:
+    return task_dir(root, task) / "comments.yaml"
+
+
+def legacy_task_thread_file(root: Path, task: TaskRecord) -> Path:
     return task_dir(root, task) / "thread.yaml"
+
+
+def task_thread_file(root: Path, task: TaskRecord) -> Path:
+    """Backward-compatible alias for the canonical task discussion file."""
+    return task_comments_file(root, task)
 
 
 def task_recovery_dir(root: Path, task: TaskRecord) -> Path:

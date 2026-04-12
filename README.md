@@ -205,7 +205,7 @@ This generates a context template you can customize. Available profiles: generic
       brief.md         # structured task brief
       reports/         # stage verdicts (gitignored)
       subagents/       # execution artifacts (gitignored)
-      thread.yaml      # agent discussion history (gitignored)
+      comments.yaml    # agent discussion history (gitignored)
       journal.md       # event log (gitignored)
   worktrees/           # git worktrees for task isolation (gitignored)
   logs/                # daemon and run-all logs (gitignored)
@@ -216,7 +216,7 @@ Each task runs in its own git worktree. When it passes all stages, the worktree 
 
 ## Artifact retention
 
-Litehive keeps `task.yaml`, `runtime.yaml`, stage reports, `thread.yaml`, `journal.md`, `events.jsonl`, `session.yaml`, and `report.yaml` as the durable evidence surface for status, repair, recovery, and handoff.
+Litehive keeps `task.yaml`, `runtime.yaml`, stage reports, `comments.yaml`, `journal.md`, `events.jsonl`, `session.yaml`, and `report.yaml` as the durable evidence surface for status, repair, recovery, and handoff.
 
 High-volume raw execution artifacts are treated as disposable support data:
 

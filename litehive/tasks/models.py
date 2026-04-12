@@ -41,6 +41,7 @@ class WorkspaceRepairSummary:
     mutated: bool = False
     stale_runner_recovered: bool = False
     cleared_active_task_id: str | None = None
+    migrated_comment_task_ids: list[str] = field(default_factory=list)
     requeued_task_ids: list[str] = field(default_factory=list)
     removed_queue_entries: list[str] = field(default_factory=list)
     deduped_queue_entries: list[str] = field(default_factory=list)

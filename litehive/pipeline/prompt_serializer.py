@@ -86,7 +86,7 @@ def serialize_prompt(
 def _load_task_thread_comments(
     workspace_root: Path, task_record: TaskRecord
 ) -> list[dict[str, Any]]:
-    """Read the task's discussion thread (thread.yaml) if available."""
+    """Read the task's discussion comments (comments.yaml with legacy fallback)."""
     try:
         from litehive.tasks.reports import load_task_thread
 

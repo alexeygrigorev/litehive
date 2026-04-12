@@ -1,4 +1,4 @@
-"""Recovery evidence, thread comments, and report helpers."""
+"""Recovery evidence, task discussion comments, and report helpers."""
 
 from pathlib import Path
 from typing import Iterable
@@ -14,15 +14,16 @@ from litehive.models import (
 )
 
 from .paths import (
+    legacy_task_thread_file,
     latest_path,
     latest_run_all_log_path,
     latest_subagent_base,
     resolve_artifact_path,
     status_entry_paths,
+    task_comments_file,
     task_dir,
     task_file,
     task_runtime_file,
-    task_thread_file,
     task_recovery_dir,
 )
 
@@ -45,7 +46,9 @@ def collect_recovery_evidence(
     evidence: list[RecoveryEvidenceItem] = []
     task_path = task_file(root, task)
     runtime_path = task_runtime_file(root, task)
-    thread_path = task_thread_file(root, task)
+    comments_path = task_comments_file(root, task)
+    legacy_thread_path = legacy_task_thread_file(root, task)
+    discussion_path = comments_path if comments_path.exists() or not legacy_thread_path.exists() else legacy_thread_path
     events_path = task_dir(root, task) / "events.jsonl"
     latest_report_path = latest_path(sorted((task_dir(root, task) / "reports").glob("*.yaml")))
     latest_run_log = latest_run_all_log_path(root)
@@ -85,9 +88,9 @@ def collect_recovery_evidence(
     evidence.append(
         RecoveryEvidenceItem(
             kind="thread",
-            label="thread.yaml",
-            path=str(thread_path.relative_to(root)),
-            exists=thread_path.exists(),
+            label="comments.yaml",
+            path=str(discussion_path.relative_to(root)),
+            exists=comments_path.exists() or legacy_thread_path.exists(),
             summary=f"discussion entries={len(load_task_thread(root, task))}",
         )
     )
@@ -258,13 +261,8 @@ def record_recovery_report(
 
 
 def append_thread_comment(root: Path, task: TaskRecord, comment: "TaskThreadComment") -> None:
-
-    path = task_thread_file(root, task)
-    existing: list[dict] = []
-    if path.exists():
-        loaded = yaml.safe_load(path.read_text(encoding="utf-8"))
-        if isinstance(loaded, list):
-            existing = loaded
+    path = task_comments_file(root, task)
+    existing = [entry.model_dump(mode="python") for entry in load_task_thread(root, task)]
     existing.append(comment.model_dump(mode="python"))
     path.write_text(yaml.safe_dump(existing, sort_keys=False), encoding="utf-8")
 
@@ -305,7 +303,9 @@ def retract_thread_comment(comment: "TaskThreadComment") -> bool:
 def load_task_thread(root: Path, task: TaskRecord) -> list["TaskThreadComment"]:
     from litehive.models import TaskThreadComment
 
-    path = task_thread_file(root, task)
+    path = task_comments_file(root, task)
+    if not path.exists():
+        path = legacy_task_thread_file(root, task)
     if not path.exists():
         return []
     loaded = yaml.safe_load(path.read_text(encoding="utf-8"))
@@ -315,7 +315,7 @@ def load_task_thread(root: Path, task: TaskRecord) -> list["TaskThreadComment"]:
 
 
 def save_task_thread(root: Path, task: TaskRecord, thread: list["TaskThreadComment"]) -> None:
-    path = task_thread_file(root, task)
+    path = task_comments_file(root, task)
     path.write_text(
         yaml.safe_dump([comment.model_dump(mode="python") for comment in thread], sort_keys=False),
         encoding="utf-8",

@@ -3,7 +3,7 @@ revision = 3
 requires-python = ">=3.11"
 
 [options]
-exclude-newer = "2026-04-05T11:29:07.062007715Z"
+exclude-newer = "2026-04-05T13:08:35.110685456Z"
 exclude-newer-span = "P7D"
 
 [[package]]
@@ -86,7 +86,6 @@ source = { editable = "." }
 dependencies = [
     { name = "heru" },
     { name = "pydantic" },
-    { name = "pytest-timeout" },
     { name = "pyyaml" },
     { name = "typer" },
 ]
@@ -94,6 +93,7 @@ dependencies = [
 [package.optional-dependencies]
 dev = [
     { name = "pytest" },
+    { name = "pytest-timeout" },
     { name = "ruff" },
 ]
 
@@ -107,7 +107,7 @@ requires-dist = [
     { name = "heru", editable = "/home/alexey/git/heru" },
     { name = "pydantic", specifier = ">=2.11.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.4.0" },
-    { name = "pytest-timeout", specifier = ">=2.4.0" },
+    { name = "pytest-timeout", marker = "extra == 'dev'", specifier = ">=2.4.0" },
     { name = "pyyaml", specifier = ">=6.0.2" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.12.0" },
     { name = "typer", specifier = ">=0.16.0" },

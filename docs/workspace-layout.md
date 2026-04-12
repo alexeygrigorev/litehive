@@ -24,7 +24,7 @@ Typical structure:
       brief.md
       runtime.yaml
       journal.md
-      thread.yaml
+      comments.yaml
       events.jsonl
       reports/
       recovery/
@@ -57,7 +57,7 @@ That means the main tracked Litehive files are:
 - task `brief.md`
 - most stage reports under `reports/`
 - task `journal.md`
-- task `thread.yaml`
+- task `comments.yaml`
 - task `events.jsonl`
 - recovery reports under `recovery/`
 
@@ -80,7 +80,7 @@ Tracked artifacts answer:
 - what task exists?
 - what was the plan and acceptance target?
 - what did each stage report?
-- what recovery evidence and thread history were recorded?
+- what recovery evidence and comment history were recorded?
 
 Ignored artifacts answer:
 
@@ -134,7 +134,7 @@ Ignored because it is volatile.
 
 Human-readable task history and lifecycle notes.
 
-### Task `thread.yaml`
+### Task `comments.yaml`
 
 Structured comments and reports written by agents or operator actions.
 
@@ -204,7 +204,7 @@ For a specific task, the highest-signal files are usually:
 1. `task.yaml`
 2. latest file in `reports/`
 3. latest file in `recovery/`, if present
-4. `thread.yaml`
+4. `comments.yaml`
 5. `journal.md`
 6. `runtime.yaml` for current live state
 

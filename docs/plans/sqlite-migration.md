@@ -112,7 +112,7 @@ DB. To see pre-archive state from git: `git show <commit>^:.litehive/tasks/...`.
 | T-0291 | Migrate workspace state from files to SQLite             | —                     |
 | T-0292 | SQLite backup mechanism                                  | T-0291                |
 | T-0293 | SQLite schema migrations framework                       | T-0291                |
-| T-0294 | Rename `thread.yaml` → `comments.yaml`                   | —                     |
+| T-0294 | Rename task discussion storage to `comments.yaml`        | —                     |
 | T-0295 | Split `task.yaml` into intent + runtime state            | T-0291                |
 | T-0296 | Move worktrees to `~/.local/state/litehive/<wid>/worktrees/` | T-0291            |
 | T-0297 | Move run-all logs to `~/.local/state/litehive/<wid>/logs/`   | T-0291            |

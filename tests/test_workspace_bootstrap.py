@@ -97,7 +97,7 @@ def test_ensure_workspace_bootstraps_runtime_db_and_registry(
     assert workspace_database_path(tmp_path).exists()
 
     registry = yaml.safe_load(workspace_registry_path().read_text(encoding="utf-8"))
-    assert registry["workspaces"][wid] == str(tmp_path.resolve())
+    assert registry == [str(tmp_path.resolve())]
 
     with connect_workspace_db(tmp_path) as connection:
         tables = {

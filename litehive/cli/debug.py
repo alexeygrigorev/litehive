@@ -168,7 +168,7 @@ def _read_exit_code(base: Path) -> int | None:
 
 
 def _print_verdict(root, task, role):
-    """Cross-reference thread.yaml for the latest non-comment verdict matching the role."""
+    """Cross-reference task comments for the latest non-comment verdict matching the role."""
     thread = load_task_thread(root, task)
     verdict_entry = None
     for entry in reversed(thread):

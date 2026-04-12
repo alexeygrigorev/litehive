@@ -15,7 +15,13 @@ from litehive.models import (
     utcnow,
 )
 from litehive.tasks.models import WorkspaceRepairSummary
-from litehive.tasks.paths import read_text_artifact, resolve_artifact_path, task_dir
+from litehive.tasks.paths import (
+    legacy_task_thread_file,
+    read_text_artifact,
+    resolve_artifact_path,
+    task_comments_file,
+    task_dir,
+)
 from litehive.workspace.runtime_tracking import (
     apply_task_outcome,
     duration_seconds,
@@ -865,6 +871,25 @@ def _repair_duplicate_task_ids(root: Path, summary: WorkspaceRepairSummary) -> N
         save_state_without_runner_guard(root, state)
 
 
+def _migrate_legacy_thread_files(
+    root: Path,
+    tasks_by_id: dict[str, TaskRecord],
+    summary: WorkspaceRepairSummary,
+) -> None:
+    for task in tasks_by_id.values():
+        comments_path = task_comments_file(root, task)
+        legacy_path = legacy_task_thread_file(root, task)
+        if not legacy_path.exists():
+            continue
+        if comments_path.exists():
+            legacy_path.unlink()
+        else:
+            legacy_path.replace(comments_path)
+        if task.id not in summary.migrated_comment_task_ids:
+            summary.migrated_comment_task_ids.append(task.id)
+        summary.mutated = True
+
+
 def _clear_stale_running_on_terminal_tasks(
     root: Path, summary: WorkspaceRepairSummary
 ) -> bool:
@@ -941,6 +966,7 @@ def repair_workspace_state(root: Path) -> WorkspaceRepairSummary:
     with workspace_mutation_guard(root), workspace_lock(root):
         state = load_state(root)
         tasks_by_id = {task.id: task for task in list_tasks(root)}
+        _migrate_legacy_thread_files(root, tasks_by_id, summary)
         touched_tasks: list[TaskRecord] = []
         journal_messages: dict[str, str] = {}
         if state.active_task_id is not None and state.active_task_id not in tasks_by_id:

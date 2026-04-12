@@ -61,6 +61,6 @@ Read the journal to trace what happened. Common causes:
 
 ## Known issues to watch for
 
-1. **Wrong step on verdict** — fixed in `83ee87bf` but older running agents may still use stale v1 `pipeline_status`. Symptom: verdict in thread.yaml has wrong step, NudgeRequired fires, crash.
+1. **Wrong step on verdict** — fixed in `83ee87bf` but older running agents may still use stale v1 `pipeline_status`. Symptom: verdict in comments.yaml has wrong step, NudgeRequired fires, crash.
 2. **Ruff hook rejects** — the `after_implementing` hook runs `ruff check` on the entire codebase. If any file has lint errors (even ones the SWE didn't touch), the hook rejects. SWE should fix them (boy scout rule) but sometimes can't.
 3. **Dirty worktree on sync** — `worktree_sync` skips merge when worktree has uncommitted changes. If the SWE's prior run left WIP, the task resumes on the stale base.
