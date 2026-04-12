@@ -363,4 +363,10 @@ item lands.
   self-correction all working autonomously. Known gap: commit node
   doesn't `git add+commit` when task runs in main worktree (operator
   must commit manually).
+- 2026-04-12: **T-0321..T-0324 completed — major cleanup wave.**
+  All clean first-pass runs: deleted parallel execution subsystem,
+  TUI + textual dep, dead feature flags, and entire web dashboard.
+  6800 lines removed. 503 tests passing.
+- 2026-04-12: **T-0326 failed at grooming** — planner rejected,
+  recovery exhausted. Expected behavior for unactionable task scope.
 - …
