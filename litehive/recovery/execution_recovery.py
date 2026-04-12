@@ -2,11 +2,13 @@
 
 from pathlib import Path
 
-from litehive.config import LitehiveConfig
-from litehive.git import GitError
+from litehive.config import LitehiveConfig, state_path
+from litehive.git import GitError, abort_revert, commit_task, has_changes, rollback_message, rollback_task
 from litehive.models import TaskRecord
+from litehive.storage import runtime_store
+from litehive.tasks.paths import task_dir, task_file, task_runtime_file
+from litehive.tasks.persistence import atomic_write_text, load_state
 from litehive.tasks.normalization import implementation_entry_stage
-from litehive.tasks.persistence import load_state
 from litehive.tasks.queue_management import prepare_completed_task_for_recovery
 from litehive.workspace.locking import workspace_lock, workspace_mutation_guard
 from litehive.workspace.workflow import persist_task_and_state
@@ -49,6 +51,60 @@ def require_completed_task(task: TaskRecord, action: str) -> None:
         raise GitError(f"Task {task.id} is not completed; cannot {action}")
 
 
+def rollback_completed_task(root: Path, task_id: str):
+    from litehive.config.pool_types import RollbackSummary
+    from litehive.tasks.crud import get_task
+
+    root = root.resolve()
+    with workspace_mutation_guard(root), workspace_lock(root):
+        task = get_task(root, task_id)
+        if task is None:
+            raise GitError(f"Task {task_id} not found")
+        require_completed_task(task, action="rollback")
+        attempt = task.git.checkpoint_attempts
+        recovery_stage = implementation_entry_stage(task)
+        state = load_state(root)
+        file_snapshot = _capture_persisted_files(
+            [
+                task_file(root, task),
+                task_runtime_file(root, task),
+                state_path(root),
+                task_dir(root, task) / "journal.md",
+            ]
+        )
+        runtime_snapshot = _capture_runtime_snapshot(root, task.id)
+        rollback = None
+        try:
+            rollback = rollback_task(root, task)
+            prepare_completed_task_for_recovery(task, recovery_stage=recovery_stage)
+            task.git.rolled_back_checkpoint_attempt = attempt
+            state.active_task_id = None
+            state.queue = [item for item in state.queue if item != task.id]
+            state.queue.append(task.id)
+            persist_task_and_state(
+                root,
+                task=task,
+                state=state,
+                journal_message="Checkpoint rollback requested.\n"
+                f"- rolled_back_attempt: `{attempt}`\n"
+                f"- recovery_stage: `{recovery_stage}`",
+            )
+            rollback_checkpoint = commit_task(root, rollback_message(task, attempt))
+            if rollback_checkpoint is None:
+                raise GitError("git rollback commit failed")
+        except Exception:
+            if rollback is not None and has_changes(root):
+                abort_revert(root)
+            _restore_persisted_files(file_snapshot)
+            _restore_runtime_snapshot(root, task_id=task.id, runtime_snapshot=runtime_snapshot)
+            raise
+        return RollbackSummary(
+            task=task,
+            rollback_sha=rollback_checkpoint.commit_sha,
+            rolled_back_sha=rollback.rolled_back_sha,
+        )
+
+
 def recover_completed_task(root: Path, task_id: str) -> TaskRecord:
     root = root.resolve()
     with workspace_mutation_guard(root), workspace_lock(root):
@@ -71,3 +127,33 @@ def recover_completed_task(root: Path, task_id: str) -> TaskRecord:
             journal_message="Task recovered for another implementation pass.",
         )
         return task
+
+
+def _capture_persisted_files(paths: list[Path]) -> dict[Path, str | None]:
+    snapshot: dict[Path, str | None] = {}
+    for path in paths:
+        snapshot[path] = path.read_text(encoding="utf-8") if path.exists() else None
+    return snapshot
+
+
+def _restore_persisted_files(snapshot: dict[Path, str | None]) -> None:
+    for path, content in snapshot.items():
+        if content is None:
+            if path.exists():
+                path.unlink()
+            continue
+        atomic_write_text(path, content)
+
+
+def _capture_runtime_snapshot(root: Path, task_id: str):
+    store = runtime_store(root)
+    return store.load_workspace_state(), store.load_task_state(task_id)
+
+
+def _restore_runtime_snapshot(root: Path, *, task_id: str, runtime_snapshot) -> None:
+    workspace_state, task_state = runtime_snapshot
+    store = runtime_store(root)
+    if workspace_state is not None:
+        store.save_workspace_state(workspace_state)
+    if task_state is not None:
+        store.save_task_state(task_id, task_state)

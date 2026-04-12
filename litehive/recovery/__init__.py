@@ -7,6 +7,7 @@ from .detection import (
 )
 from .execution_recovery import (
     recover_completed_task,
+    rollback_completed_task,
     require_completed_task,
     resolve_recovery_engine,
 )
@@ -30,6 +31,7 @@ __all__ = [
     "recover_completed_task",
     "recover_stale_runner_state",
     "repair_workspace_state",
+    "rollback_completed_task",
     "require_completed_task",
     "resolve_recovery_engine",
     "should_requeue_commit_stage_task",
