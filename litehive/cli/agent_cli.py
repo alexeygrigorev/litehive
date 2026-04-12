@@ -88,7 +88,14 @@ def agent_report_command(
         print(f"report failed: task {tid} not found")
         raise typer.Exit(1)
 
-    actual_step = step or task.pipeline_status
+    # Read the current stage from the v2 pipeline state (not the stale v1 pipeline_status)
+    from litehive.pipeline.persistence import SqlitePersistence, TaskNotFound
+
+    try:
+        pipeline_state = SqlitePersistence(root).load(tid)
+        actual_step = step or pipeline_state.stage
+    except TaskNotFound:
+        actual_step = step or task.pipeline_status
     comment = TaskThreadComment(
         role=agent_role,
         step=actual_step,
