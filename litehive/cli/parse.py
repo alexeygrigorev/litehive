@@ -149,6 +149,7 @@ def parse_text_list_option(
 
 
 _RICH_TASK_UPDATE_KEYS = {
+    "title",
     "goal",
     "acceptance_criteria",
     "constraints",
@@ -197,6 +198,12 @@ def parse_rich_task_update_document(data, *, source):
         )
 
     updates = {}
+
+    if "title" in data:
+        title = data["title"]
+        if not isinstance(title, str):
+            raise ValueError(f"{source} field 'title' must be a string")
+        updates["title"] = title.strip()
 
     if "goal" in data:
         goal = data["goal"]
@@ -325,6 +332,7 @@ def parse_rich_task_update_document(data, *, source):
 
 def _editable_task_update_payload(task):
     return {
+        "title": task.title,
         "goal": task.goal,
         "acceptance_criteria": list(task.acceptance_criteria),
         "constraints": list(task.constraints),

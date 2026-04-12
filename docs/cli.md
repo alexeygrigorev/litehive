@@ -174,13 +174,14 @@ litehive import issue \
 Update task metadata after creation.
 
 ```bash
-litehive update T-0002 --priority high
+litehive task update T-0002 --title "Clarify queue recovery state machine"
 ```
 
 Replace durable shaping fields:
 
 ```bash
 litehive task update T-0002 \
+  --title "Clarify final queue recovery behavior." \
   --goal "Clarify final done-state for queue recovery." \
   --acceptance-criteria "Interrupted tasks resume at the preserved stage." \
   --constraint "Keep changes scoped to queue state handling." \

@@ -542,6 +542,7 @@ def update_task(
     root: Path,
     task_id: str,
     *,
+    title: str | object = ...,
     depends_on: list[str] | object = ...,
     task_type: str | None | object = ...,
     engine: str | None | object = ...,
@@ -697,6 +698,9 @@ def update_task(
         if depends_on is not ...:
             validate_task_dependencies(root, task_id=task.id, depends_on=list(depends_on))
             task.depends_on = list(depends_on)
+
+        if title is not ...:
+            task.title = str(title)
 
         if task_type is not ...:
             if task_type is not None and task_type not in VALID_TASK_TYPES:

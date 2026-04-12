@@ -4,11 +4,13 @@ from tests.workspace_helpers import (
     LitehiveConfig,
     Path,
     _cmd_list,
+    _cmd_update,
     _cmd_show,
     argparse,
     archive_task,
     create_task,
     ensure_workspace,
+    get_task,
     pytest,
     save_task,
 )
@@ -189,6 +191,46 @@ def test_show_prints_task_details(
     assert "  - keep it simple" in output
     assert "  - step one" in output
     assert "  - step two" in output
+
+
+def test_task_update_renames_title_in_place(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("LITEHIVE_AGENT_ROLE", raising=False)
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Original title", auto_commit=False)
+
+    exit_code = _cmd_update(
+        argparse.Namespace(
+            workspace=tmp_path,
+            task_id=task.id,
+            title="Renamed title",
+            priority=None,
+            goal=None,
+            depends_on=None,
+            acceptance_criteria=None,
+            constraint=None,
+            plan_step=None,
+            from_file=None,
+            edit=False,
+        )
+    )
+    update_output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert f"task: {task.id} Renamed title" in update_output
+
+    updated = get_task(tmp_path, task.id)
+    assert updated is not None
+    assert updated.id == task.id
+    assert updated.title == "Renamed title"
+
+    exit_code = _cmd_show(argparse.Namespace(workspace=tmp_path, task_id=task.id))
+    show_output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert f"id: {task.id}" in show_output
+    assert "title: Renamed title" in show_output
 
 
 def test_show_displays_dependency_statuses(

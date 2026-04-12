@@ -64,11 +64,11 @@ default_engine: codex
 codex_model: gpt-5.4-high
 ```
 
-You can also set engines per task:
+You can update task metadata in place:
 
 ```bash
-litehive task add "Refactor the database layer" --engine claude
-litehive task update T-0005 --engine copilot
+litehive task add "Refactor the database layer"
+litehive task update T-0005 --title "Refactor the database access layer"
 ```
 
 When an engine hits its quota limit, litehive can fall back to another engine automatically.
@@ -80,7 +80,7 @@ Task management:
 ```bash
 litehive task add "Task title" --goal "What needs to happen"
 litehive task add "Research task" --task-type research --mode tasks
-litehive task update T-0001 --engine opencode --priority high
+litehive task update T-0001 --title "Sharper task title" --priority high
 litehive queue move T-0003 1                    # move to position 1
 litehive queue promote T-0005                   # move to front
 litehive queue requeue T-0002 --front           # requeue a flagged task

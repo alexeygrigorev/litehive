@@ -733,6 +733,7 @@ def update(
     ctx: typer.Context,
     task_id: Annotated[str, typer.Argument(help="Task id to update")] = ...,
     workspace: WorkspaceOption = Path.cwd(),
+    title: Annotated[str | None, typer.Option(help="Replace the task title")] = None,
     priority: Annotated[
         str | None, typer.Option(click_type=_choice(VALID_TASK_PRIORITIES), help="Set task priority")
     ] = None,

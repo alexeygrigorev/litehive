@@ -286,7 +286,8 @@ def cmd_update(args):
         print("update failed: use either --from-file or --edit, not both")
         return 1
     if (
-        getattr(args, "depends_on", None) is None
+        getattr(args, "title", None) is None
+        and getattr(args, "depends_on", None) is None
         and getattr(args, "acceptance_criteria", None) is None
         and getattr(args, "constraint", None) is None
         and getattr(args, "plan_step", None) is None
@@ -332,6 +333,8 @@ def cmd_update(args):
             flag_updates["plan"] = plan
         if getattr(args, "priority", None) is not None:
             flag_updates["priority"] = args.priority
+        if getattr(args, "title", None) is not None:
+            flag_updates["title"] = args.title
         if getattr(args, "goal", None) is not None:
             flag_updates["goal"] = args.goal
 
@@ -339,6 +342,7 @@ def cmd_update(args):
         task = update_task_metadata(
             args.workspace,
             args.task_id,
+            title=updates.get("title", ...),
             depends_on=updates.get("depends_on", ...),
             task_type=updates.get("task_type", ...),
             model=updates.get("model", ...),

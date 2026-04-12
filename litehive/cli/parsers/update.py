@@ -7,6 +7,7 @@ from litehive.tasks.constants import VALID_TASK_PRIORITIES
 def register_update_parser(subparsers):
     parser = subparsers.add_parser("update", help="Update task metadata")
     parser.add_argument("task_id", help="Task id to update")
+    parser.add_argument("--title", help="Replace the task title")
     parser.add_argument(
         "--priority",
         choices=sorted(VALID_TASK_PRIORITIES),

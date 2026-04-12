@@ -669,6 +669,7 @@ def close_command(
 def update(
     task_id: Annotated[str, typer.Argument(help="Task id to update")] = ...,
     workspace: WorkspaceOption = Path.cwd(),
+    title: Annotated[str | None, typer.Option(help="Replace the task title")] = None,
     priority: Annotated[
         str | None, typer.Option(click_type=_choice(VALID_TASK_PRIORITIES), help="Set task priority")
     ] = None,
@@ -701,6 +702,7 @@ def update(
         SimpleNamespace(
             task_id=task_id,
             workspace=workspace,
+            title=title,
             priority=priority,
             goal=goal,
             depends_on=depends_on,

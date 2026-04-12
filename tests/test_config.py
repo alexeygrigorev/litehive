@@ -173,6 +173,8 @@ def test_task_update_parser_accepts_surviving_shaping_flags() -> None:
             "task",
             "update",
             "T-0001",
+            "--title",
+            "Renamed task title",
             "--goal",
             "Clarify desired outcome.",
             "--acceptance-criteria",
@@ -195,6 +197,7 @@ def test_task_update_parser_accepts_surviving_shaping_flags() -> None:
     assert args.command == "task"
     assert args.task_command == "update"
     assert args.task_id == "T-0001"
+    assert args.title == "Renamed task title"
     assert args.goal == "Clarify desired outcome."
     assert args.acceptance_criteria == ["State the done condition."]
     assert args.constraint == ["Keep scope local."]
@@ -305,6 +308,7 @@ def test_update_command_from_file_still_supports_rich_backdoor_fields(
         argparse.Namespace(
             workspace=tmp_path,
             task_id=task.id,
+            title=None,
             priority=None,
             goal=None,
             depends_on=None,
