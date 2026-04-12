@@ -45,7 +45,7 @@ from litehive.cli.queue import (
     _cmd_switch_task,
     _launch_app,
 )
-from litehive.cli.agent_cli import agent_app, block_if_agent
+from litehive.cli.agent_cli import agent_app
 from litehive.cli.report import _cmd_report
 from litehive.cli.run import _cmd_run
 from litehive.cli.status import _cmd_list, _cmd_queue, _cmd_repair, _cmd_show, _cmd_status

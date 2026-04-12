@@ -9,7 +9,6 @@ commands call at the top to prevent agents from using them.
 """
 
 import os
-import sys
 from pathlib import Path
 from typing import Annotated
 
@@ -44,12 +43,9 @@ def _current_role() -> str | None:
 
 
 def block_if_agent() -> None:
-    """Call at the top of any command agents should not use.
-
-    If ``LITEHIVE_AGENT_ROLE`` is set, exits silently with code 1.
-    No message, no hint about roles or alternatives.
-    """
+    """Call at the top of any command agents should not use."""
     if _current_role() is not None:
+        print("You are not authorized to perform this command.")
         raise typer.Exit(1)
 
 
@@ -72,6 +68,7 @@ def agent_report_command(
 
     allowed = VERDICT_ALLOWLIST.get(agent_role, {"pass", "reject", "blocked"})
     if normalized_verdict not in allowed:
+        print("You are not authorized to perform this command.")
         raise typer.Exit(1)
 
     tid = task_id or os.environ.get("LITEHIVE_TASK_ID")
@@ -107,9 +104,10 @@ def agent_report_command(
 
 
 def _require_role(allowed: set[str]) -> str:
-    """Exit silently if the current role is not in ``allowed``."""
+    """Exit if the current role is not in ``allowed``."""
     role = _current_role()
     if role is None or role not in allowed:
+        print("You are not authorized to perform this command.")
         raise typer.Exit(1)
     return role
 

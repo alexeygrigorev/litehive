@@ -124,7 +124,7 @@ def test_serialize_works_without_task_record() -> None:
     assert "Task: T-XYZ" in text
     assert "Goal:\n(task record not loaded)" in text
     assert "Acceptance criteria:\n- (none defined)" in text
-    assert "litehive report" in text
+    assert "litehive agent report" in text
 
 
 def test_serialize_verdict_instructions_match_role_and_stage(workspace: Path) -> None:
@@ -132,6 +132,4 @@ def test_serialize_verdict_instructions_match_role_and_stage(workspace: Path) ->
     agent = SWEAgent(_NullSelector(), _NullSessions(), prompt_context=PromptContext())
     text = serialize_prompt(agent.build_prompt(make_state(task.id)), task_record=task)
 
-    assert "litehive report --verdict <pass|reject|blocked>" in text
-    assert "--role swe" in text
-    assert "--step implementing" in text
+    assert "litehive agent report --verdict <pass|reject|blocked>" in text

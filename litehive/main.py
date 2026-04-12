@@ -176,6 +176,17 @@ def _fast_status(argv: list[str]) -> int:
 
 def main() -> int:
     argv = sys.argv[1:]
+
+    if os.environ.get("LITEHIVE_AGENT_ROLE"):
+        cmd = argv[0] if argv else None
+        if cmd is None or cmd in ("--help", "-h"):
+            print("Usage: litehive agent [report|update|close]")
+            print("\nRun 'litehive agent --help' for details.")
+            return 0
+        if cmd != "agent":
+            print("You are not authorized to perform this command.")
+            return 1
+
     if argv and argv[0] == "status" and "--full" not in argv:
         return _fast_status(argv[1:])
 
