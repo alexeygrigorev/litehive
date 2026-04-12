@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 
 from litehive.agents.base import CLIExecutionResult
+from heru.types import RuntimeEngineContinuation
 from litehive.models import ResourceLimitEvent, SubagentRef
 
 
@@ -21,6 +22,7 @@ class SubagentResult:
     transcript: str
     exit_code: int
     failure: EngineFailure | None = None
+    continuation: RuntimeEngineContinuation | None = None
 
 
 class SubagentInactivityTimeout(RuntimeError):

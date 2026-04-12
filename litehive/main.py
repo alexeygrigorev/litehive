@@ -183,6 +183,10 @@ def main() -> int:
             print("Usage: litehive agent [report|update|close]")
             print("\nRun 'litehive agent --help' for details.")
             return 0
+        if cmd in {"report", "update", "close"}:
+            argv = ["agent", *argv]
+            sys.argv = [sys.argv[0], *argv]
+            cmd = "agent"
         if cmd != "agent":
             print("You are not authorized to perform this command.")
             return 1

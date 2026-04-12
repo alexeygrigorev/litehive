@@ -38,6 +38,7 @@ from heru.types import (
     LiveEvent,
     LiveTimeline,
     RuntimeEngineContinuation,
+    UnifiedEvent,
 )
 
 from heru import (
@@ -49,6 +50,7 @@ from heru import (
     get_engine,
     get_stream_event_adapter,
 )
+from litehive.agents.unified_events import parse_unified_execution
 
 if TYPE_CHECKING:
     from litehive.agents.manager import SubagentManager
@@ -102,6 +104,7 @@ __all__ = [
     "SubagentInactivityTimeout",
     "SubagentManager",
     "SubagentResult",
+    "UnifiedEvent",
     "_ENGINE_LIMIT_PATTERNS",
     "_EXECUTION_INTERRUPTION_PATTERNS",
     "_RETRYABLE_EXECUTION_PATTERNS",
@@ -119,6 +122,7 @@ __all__ = [
     "get_stream_event_adapter",
     "intake_prompt",
     "iter_jsonl_payloads",
+    "parse_unified_execution",
     "parse_stage_report_text",
     "stage_prompt",
     "stage_report_from_subagent",

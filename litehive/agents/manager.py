@@ -10,7 +10,6 @@ from litehive.agents import (
     classify_execution_interruption,
     classify_execution_limit,
     classify_retryable_execution_failure,
-    extract_engine_continuation,
     get_engine,
 )
 from litehive.agents.base import CLIExecutionResult, ExternalCLIAdapter, parse_stage_report_text
@@ -123,6 +122,7 @@ class SubagentManager(SessionMixin):
                 live_kwargs: dict[str, object] = {
                     "cwd": self.execution_root,
                     "model": model,
+                    "emit_unified": True,
                     "extra_env": task_env,
                     "on_update": lambda execution: self._write_session_progress(
                         task,
@@ -155,6 +155,7 @@ class SubagentManager(SessionMixin):
                 run_kwargs: dict[str, object] = {
                     "cwd": self.execution_root,
                     "model": model,
+                    "emit_unified": True,
                     "extra_env": task_env,
                 }
                 if resume_session_id:
@@ -169,8 +170,12 @@ class SubagentManager(SessionMixin):
                     prompt,
                     **filter_supported_kwargs(run_callable, run_kwargs),
                 )
-            transcript = execution_engine.render_transcript(proc)
-            continuation = extract_engine_continuation(ref.engine, proc)
+            transcript = self._render_execution_transcript(
+                ref.engine,
+                proc,
+                fallback_renderer=execution_engine.render_transcript,
+            )
+            continuation = self._extract_execution_continuation(ref.engine, proc)
             ref.status = "completed" if proc.exit_code == 0 else "failed"
             if proc.exit_code != 0:
                 resource_limit_event = self.sandbox.classify_resource_limit_event(
@@ -215,8 +220,12 @@ class SubagentManager(SessionMixin):
             if timeout_note not in stderr:
                 stderr = f"{stderr.rstrip()}\n{timeout_note}".strip()
             proc = replace(exc.execution, exit_code=124, stderr=stderr)
-            transcript = execution_engine.render_transcript(proc)
-            continuation = extract_engine_continuation(ref.engine, proc)
+            transcript = self._render_execution_transcript(
+                ref.engine,
+                proc,
+                fallback_renderer=execution_engine.render_transcript,
+            )
+            continuation = self._extract_execution_continuation(ref.engine, proc)
             ref.status = "failed"
             failure = EngineFailure(
                 kind="retryable_execution_error",
@@ -279,6 +288,7 @@ class SubagentManager(SessionMixin):
             transcript=transcript,
             exit_code=0 if proc is None else proc.exit_code,
             failure=failure,
+            continuation=continuation,
         )
 
     def _next_subagent_id(self, task: TaskRecord) -> str:
@@ -394,8 +404,12 @@ class SubagentManager(SessionMixin):
         execution: CLIExecutionResult,
     ) -> None:
         engine = get_engine(ref.engine)
-        transcript = engine.render_transcript(execution)
-        continuation = extract_engine_continuation(ref.engine, execution)
+        transcript = self._render_execution_transcript(
+            ref.engine,
+            execution,
+            fallback_renderer=engine.render_transcript,
+        )
+        continuation = self._extract_execution_continuation(ref.engine, execution)
         if isinstance(engine, ExternalCLIAdapter):
             record_engine_observation(
                 self.root,

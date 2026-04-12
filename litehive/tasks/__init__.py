@@ -17,6 +17,7 @@ _EXPORTS = {
     "load_state": (".persistence", "load_state"), "load_task_thread": (".reports", "load_task_thread"),
     "render_task_thread": (".reports", "render_task_thread"), "require_task": (".crud", "require_task"),
     "save_state": (".persistence", "save_state"), "save_task": (".crud", "save_task"),
+    "set_active_task": (".queue_ops", "set_active_task"),
     "slugify": (".paths", "slugify"), "task_dir": (".paths", "task_dir"), "task_file": (".paths", "task_file"),
 }
 __all__ = list(_EXPORTS)

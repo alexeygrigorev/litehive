@@ -156,6 +156,9 @@ class HeruEngineAdapter:
 
         if not isinstance(result, SubagentResult):
             return fallback
+        continuation = result.continuation
+        if continuation is not None:
+            return continuation.resume_id or fallback
         execution = result.execution
         if execution is None:
             return fallback

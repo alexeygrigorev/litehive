@@ -45,22 +45,23 @@ def test_heru_cli_runs_selected_engine(monkeypatch, capsys, tmp_path: Path) -> N
 
     exit_code = main(
         [
-            "ship it",
-            "--engine",
             "claude",
+            "ship it",
             "--cwd",
             str(tmp_path),
             "--model",
             "claude-sonnet-4-20250514",
             "--max-turns",
             "3",
-            "--resume-session-id",
+            "--resume",
             "session-123",
         ]
     )
 
     assert exit_code == 0
-    assert capsys.readouterr().out == "done\n"
+    captured = capsys.readouterr()
+    assert captured.out == "done\n"
+    assert captured.err == ""
     assert calls == {
         "prompt": "ship it",
         "cwd": tmp_path.resolve(),

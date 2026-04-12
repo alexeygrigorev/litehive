@@ -4,10 +4,12 @@ import os
 from pathlib import Path
 import signal
 import time
+from typing import Callable
 
 import yaml
 
-from litehive.agents import extract_engine_timeline
+from litehive.agents import extract_engine_timeline, parse_unified_execution
+from litehive.agents._continuation import extract_execution_continuation
 from litehive.agents.base import CLIExecutionResult
 from litehive.observability.events import append_event, append_session_log, ensure_session_log
 from litehive.models import ResourceLimitEvent, SubagentRef, TaskRecord, utcnow
@@ -25,6 +27,51 @@ class SessionMixin:
 
     Subclasses must provide: self.root, self.sandbox, self.config, self._stream_offsets.
     """
+
+    @staticmethod
+    def _render_execution_transcript(
+        engine_name: str,
+        execution: CLIExecutionResult | None,
+        *,
+        fallback_renderer: Callable[[CLIExecutionResult], str] | None = None,
+    ) -> str:
+        if execution is None:
+            return ""
+        unified = parse_unified_execution(execution.stdout)
+        if unified is not None:
+            return unified.transcript(stderr=execution.stderr)
+        if fallback_renderer is not None:
+            return fallback_renderer(execution)
+        return execution.transcript
+
+    @staticmethod
+    def _extract_execution_continuation(
+        engine_name: str,
+        execution: CLIExecutionResult | None,
+    ):
+        return extract_execution_continuation(engine_name, execution)
+
+    @staticmethod
+    def _extract_execution_timeline(
+        engine_name: str,
+        stdout: str,
+        *,
+        task_id: str | None = None,
+        subagent_id: str | None = None,
+    ):
+        unified = parse_unified_execution(stdout)
+        if unified is not None:
+            return unified.timeline(
+                engine_name=engine_name,
+                task_id=task_id,
+                subagent_id=subagent_id,
+            )
+        return extract_engine_timeline(
+            engine_name,
+            stdout,
+            task_id=task_id,
+            subagent_id=subagent_id,
+        )
 
     def _append_stream_delta(
         self, base: Path, ref: SubagentRef, stream: str, full_content: str
@@ -177,7 +224,7 @@ class SessionMixin:
         task: TaskRecord,
         stdout: str,
     ) -> None:
-        timeline = extract_engine_timeline(
+        timeline = self._extract_execution_timeline(
             ref.engine,
             stdout,
             task_id=task.id,

@@ -7,6 +7,7 @@ import litehive.tasks.persistence as tasks_persistence
 import litehive.tasks.templates as tasks_templates
 import litehive.workspace.task_status as task_status_module
 import litehive.workspace.workflow as workflow_module
+from litehive.pipeline.heru_factory import HeruEngineAdapter
 from tests.workspace_helpers import (
     AdapterCapabilities,
     CLIExecutionResult,
@@ -811,6 +812,80 @@ def test_subagent_manager_uses_runtime_current_stage_for_cli_verdict_lookup(
 
     assert report["summary"] == "REJECT"
     assert report["warnings"] == []
+
+
+def test_subagent_manager_consumes_unified_stdout_for_reports_and_continuation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Consume unified stdout")
+    manager = SubagentManager(tmp_path)
+    captured: dict[str, object] = {}
+
+    class FakeEngine:
+        name = "codex"
+        binary = "codex"
+
+        def is_available(self) -> bool:
+            return True
+
+        def run(
+            self,
+            prompt: str,
+            cwd: Path,
+            model: str | None = None,
+            *,
+            emit_unified: bool = False,
+            extra_env: dict[str, str] | None = None,
+        ) -> CLIExecutionResult:
+            del prompt, model, extra_env
+            captured["emit_unified"] = emit_unified
+            return CLIExecutionResult(
+                adapter="codex",
+                argv=("codex", "exec"),
+                cwd=cwd,
+                exit_code=0,
+                stdout=(
+                    '{"kind":"message","engine":"codex","sequence":0,'
+                    '"role":"assistant","content":"implemented via unified events",'
+                    '"timestamp":"2026-04-12T00:00:00+00:00","usage_delta":{},'
+                    '"raw":{},"metadata":{}}\n'
+                    '{"kind":"continuation","engine":"codex","sequence":1,'
+                    '"timestamp":"2026-04-12T00:00:01+00:00",'
+                    '"continuation_id":"session-42","usage_delta":{},'
+                    '"raw":{},"metadata":{}}\n'
+                ),
+                stderr="",
+                pid=4242,
+            )
+
+        def render_transcript(self, execution: CLIExecutionResult) -> str:
+            return "fallback transcript should not be used"
+
+    monkeypatch.setattr("litehive.agents.manager.get_engine", lambda _: FakeEngine())
+
+    result = manager.run(task, role="swe", engine_name="codex", prompt="implement it")
+
+    assert captured["emit_unified"] is True
+    assert result.transcript == "implemented via unified events"
+
+    base = task_dir(tmp_path, task) / "subagents" / "SA-0001-swe"
+    report = yaml.safe_load((base / "report.yaml").read_text(encoding="utf-8"))
+    session = yaml.safe_load((base / "session.yaml").read_text(encoding="utf-8"))
+    timeline = yaml.safe_load((base / "timeline.yaml").read_text(encoding="utf-8"))
+
+    assert report["summary"] == "implemented via unified events"
+    assert session["continuation"]["session_id"] == "session-42"
+    assert timeline["event_counts"] == {"message": 1, "continuation": 1}
+
+    refreshed = get_task(tmp_path, task.id)
+    assert refreshed is not None
+    assert refreshed.runtime.last_subagent is not None
+    assert refreshed.runtime.last_subagent.continuation is not None
+    assert refreshed.runtime.last_subagent.continuation.session_id == "session-42"
+    assert result.continuation is not None
+    assert result.continuation.resume_id == "session-42"
+    assert HeruEngineAdapter._extract_continuation_id(result, None) == "session-42"
 
 def _subagent_artifacts_exist_while_engine_is_running(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
