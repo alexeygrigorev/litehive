@@ -220,7 +220,7 @@ def _verdict_instructions_section(prompt: dict[str, Any]) -> str:
     stage = prompt["stage"]
     return (
         "IMPORTANT: when you are done, submit your verdict by running:\n"
-        f'  litehive report --verdict <pass|reject|blocked> --role {role} --step {stage} --message "<your report>"\n\n'
+        f'  litehive agent report --verdict <pass|reject|blocked> --message "<your report>"\n\n'
         "Your --message is the primary signal the next agent receives — write it as if it's the only thing they read.\n"
         "On reject: include EXPECTED behavior, OBSERVED behavior, reproduction steps, and which acceptance criteria are not met."
     )

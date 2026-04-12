@@ -45,6 +45,7 @@ from litehive.cli.queue import (
     _cmd_switch_task,
     _launch_app,
 )
+from litehive.cli.agent_cli import agent_app, block_if_agent
 from litehive.cli.report import _cmd_report
 from litehive.cli.run import _cmd_run
 from litehive.cli.status import _cmd_list, _cmd_queue, _cmd_repair, _cmd_show, _cmd_status
@@ -1063,6 +1064,7 @@ app.add_typer(db_app, name="db", help="Inspect and migrate the workspace databas
 app.add_typer(worktree_app, name="worktree", help="Inspect and clean Litehive-managed task worktrees")
 app.add_typer(daemon_app, name="daemon", help="Manage the Litehive pool daemon", hidden=True)
 app.add_typer(pipeline_app, name="pipeline", help="Inspect the v2 pipeline state machine")
+app.add_typer(agent_app, name="agent", help="Agent-restricted commands (verdict submission)")
 
 
 @pipeline_app.command("graph", help="Print a Mermaid stateDiagram-v2 of the v2 pipeline rules")

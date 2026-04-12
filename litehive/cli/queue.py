@@ -236,6 +236,9 @@ def _cmd_switch_task(args):
 
 
 def _cmd_close_task(args):
+    from litehive.cli.agent_cli import block_if_agent
+
+    block_if_agent()
     ensure_workspace(args.workspace)
     try:
         task = close_task(

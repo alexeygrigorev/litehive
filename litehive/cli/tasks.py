@@ -290,6 +290,9 @@ def _cmd_intake(args):
 
 
 def _cmd_update(args):
+    from litehive.cli.agent_cli import block_if_agent
+
+    block_if_agent()
     ensure_workspace(args.workspace)
     retry_limit_arg = getattr(args, "retry_limit", None)
     rich_file = getattr(args, "from_file", None)

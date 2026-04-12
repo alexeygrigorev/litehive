@@ -8,6 +8,9 @@ from litehive.tasks.reports import append_thread_comment
 
 
 def _cmd_report(args):
+    from litehive.cli.agent_cli import block_if_agent
+
+    block_if_agent()
     task_id = args.task_id
     if not task_id:
         task_id = os.environ.get("LITEHIVE_TASK_ID")
