@@ -56,6 +56,7 @@ PipelineStatus = Literal[
     "commit_to_git",
     "done",
     "merge_failed",
+    "flagged",
 ]
 RunnerExecutionStatus = Literal["idle", "running", "late", "stale"]
 UpstreamContributionKind = Literal[
