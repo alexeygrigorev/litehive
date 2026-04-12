@@ -348,7 +348,7 @@ def _duplicate_id_items(root: Path) -> list[AttentionItem]:
                 kind="duplicate_task_id",
                 title=f"Duplicate task id detected for {task_id}",
                 reason=f"{count} task directories claim the same id.",
-                suggested_action="Run `litehive doctor --fix` to reconcile duplicate task ids.",
+                suggested_action="Resolve the duplicate task directories manually before running the daemon again.",
                 dedupe_key=f"duplicate_task_id:{task_id}",
                 metadata={"count": count},
             )
@@ -390,31 +390,61 @@ def _flagged_and_merge_failed_items(tasks: list[TaskRecord]) -> list[AttentionIt
 
 
 def _stale_worktree_items(root: Path, tasks: list[TaskRecord], state) -> list[AttentionItem]:
-    from litehive.recovery.doctor import _stale_worktree_findings
+    from litehive.config import worktree_root
+    from litehive.tasks.queue_ops import is_task_eligible_for_execution
+    from litehive.tasks.worktrees import (
+        is_managed_worktree_path,
+        legacy_worktree_root,
+        migrate_legacy_worktree,
+    )
 
     items: list[AttentionItem] = []
-    for finding in _stale_worktree_findings(root, tasks, state):
-        metadata = {"summary": finding.summary}
-        task_id = None
-        for part in finding.summary.split():
-            if part.startswith("task_id="):
-                value = part.split("=", 1)[1]
-                if value and value != "missing":
-                    task_id = value
-            elif part.startswith("path="):
-                metadata["path"] = part.split("=", 1)[1]
-        key = metadata.get("path") or task_id or finding.summary
+    managed_paths: dict[str, str | None] = {}
+    active_task_id = None if state is None else state.active_task_id
+    for task in tasks:
+        worktree_rel = task.runtime.git.worktree_path or task.git.worktree_path
+        if not is_managed_worktree_path(root, worktree_rel):
+            continue
+        worktree_path, _changed = migrate_legacy_worktree(root, task)
+        worktree_rel = task.runtime.git.worktree_path or task.git.worktree_path
+        if worktree_rel is None:
+            continue
+        managed_paths[worktree_rel] = task.id
+        if worktree_path is None or not worktree_path.exists():
+            continue
+        if active_task_id == task.id or is_task_eligible_for_execution(task):
+            continue
         items.append(
             AttentionItem(
-                task_id=task_id,
+                task_id=task.id,
                 kind="stale_worktree",
                 title="Managed worktree needs cleanup",
-                reason=finding.summary,
+                reason=f"task_id={task.id} status={task.status} path={worktree_rel}",
                 suggested_action="Run `litehive worktree clean --dry-run` and then `litehive worktree clean`.",
-                dedupe_key=f"stale_worktree:{key}",
-                metadata=metadata,
+                dedupe_key=f"stale_worktree:{worktree_rel}",
+                metadata={"path": worktree_rel},
             )
         )
+    for worktrees_root in (worktree_root(root), legacy_worktree_root(root)):
+        if not worktrees_root.exists():
+            continue
+        for child in sorted(worktrees_root.iterdir()):
+            if not child.is_dir():
+                continue
+            rel = str(child) if worktrees_root == worktree_root(root) else str(child.relative_to(root))
+            if rel in managed_paths:
+                continue
+            items.append(
+                AttentionItem(
+                    task_id=None,
+                    kind="stale_worktree",
+                    title="Managed worktree needs cleanup",
+                    reason=f"task_id=missing path={rel}",
+                    suggested_action="Run `litehive worktree clean --dry-run` and then `litehive worktree clean`.",
+                    dedupe_key=f"stale_worktree:{rel}",
+                    metadata={"path": rel},
+                )
+            )
     return items
 
 

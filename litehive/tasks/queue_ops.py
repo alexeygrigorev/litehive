@@ -41,13 +41,12 @@ def peek_next_task(root: Path) -> TaskRecord | None:
 def peek_next_task_selection(root: Path) -> TaskSelection:
     from litehive.workspace.locking import workspace_lock, workspace_mutation_guard
     from .persistence import load_state, save_state
-    from litehive.recovery import reconcile_stale_runner_tasks, recover_stale_runner_state
+    from litehive.recovery import recover_stale_runner_state
 
     recover_stale_runner_state(root)
     with workspace_mutation_guard(root), workspace_lock(root):
         state = load_state(root)
         validate_single_active_task(root, state)
-        reconcile_stale_runner_tasks(root, state)
         next_task, blocked, mutated = _resolve_next_task_from_state(root, state)
         if mutated:
             save_state(root, state)
@@ -58,13 +57,12 @@ def plan_task_selections(root: Path) -> TaskPlan:
     from .crud import list_tasks
     from litehive.workspace.locking import workspace_lock, workspace_mutation_guard
     from .persistence import load_state
-    from litehive.recovery import reconcile_stale_runner_tasks, recover_stale_runner_state
+    from litehive.recovery import recover_stale_runner_state
 
     recover_stale_runner_state(root)
     with workspace_mutation_guard(root), workspace_lock(root):
         state = load_state(root)
         validate_single_active_task(root, state)
-        reconcile_stale_runner_tasks(root, state)
         tasks_by_id = {task.id: task.model_copy(deep=True) for task in list_tasks(root)}
         policy = load_config(root).pool_selection_policy
         if policy not in VALID_POOL_SELECTION_POLICIES:
@@ -97,7 +95,7 @@ def dequeue_next_task_selection(root: Path) -> TaskSelection:
     from litehive.workspace.locking import workspace_lock, workspace_mutation_guard
     from .persistence import load_state, save_state
     from .queue_management import reset_task_for_recovery
-    from litehive.recovery import reconcile_stale_runner_tasks, recover_stale_runner_state
+    from litehive.recovery import recover_stale_runner_state
     from .reports import record_recovery_report
     from litehive.workspace.workflow import persist_task_and_state
 
@@ -105,7 +103,6 @@ def dequeue_next_task_selection(root: Path) -> TaskSelection:
     with workspace_mutation_guard(root), workspace_lock(root):
         state = load_state(root)
         validate_single_active_task(root, state)
-        reconcile_stale_runner_tasks(root, state)
         next_task, blocked, mutated = _resolve_next_task_from_state(root, state)
         if next_task is None:
             if mutated:
@@ -295,9 +292,7 @@ def _resolve_next_task_from_state(
     root: Path, state: WorkspaceState
 ) -> tuple[TaskRecord | None, list[BlockedTask], bool]:
     from .crud import list_tasks
-    from litehive.recovery import recover_stranded_commit_tasks
 
-    mutated = recover_stranded_commit_tasks(root, state)
     tasks_by_id = {task.id: task for task in list_tasks(root)}
     policy = load_config(root).pool_selection_policy
     if policy not in VALID_POOL_SELECTION_POLICIES:
@@ -305,7 +300,7 @@ def _resolve_next_task_from_state(
     next_task, blocked, snapshot_mutated = _resolve_next_task_from_snapshot(
         state, tasks_by_id, policy=policy
     )
-    return next_task, blocked, mutated or snapshot_mutated
+    return next_task, blocked, snapshot_mutated
 
 
 def restore_missing_queued_tasks(
@@ -412,10 +407,7 @@ def restore_untouched_active_task(root: Path) -> WorkspaceState:
     from .persistence import load_state, save_state
     from .queue_management import enqueue_recovered_task
     from litehive.recovery import (
-        is_stranded_commit_task,
         prepare_interrupted_task,
-        recover_existing_checkpoint_commit,
-        reconcile_stale_runner_tasks,
         should_requeue_commit_stage_task,
         stale_interruption_reason,
         interruption_journal_message,
@@ -425,53 +417,11 @@ def restore_untouched_active_task(root: Path) -> WorkspaceState:
     with workspace_mutation_guard(root), workspace_lock(root):
         state = load_state(root)
         validate_single_active_task(root, state)
-        reconcile_stale_runner_tasks(root, state)
         if state.active_task_id is None:
             return state
 
         task = get_task(root, state.active_task_id)
-        if task is not None and is_stranded_commit_task(task):
-            journal_message = recover_existing_checkpoint_commit(root, task)
-            state.active_task_id = None
-            state.queue = [item for item in state.queue if item != task.id]
-            if journal_message is None:
-                prepare_interrupted_task(
-                    root,
-                    task,
-                    stage="commit_to_git",
-                    summary="Interrupted `commit_to_git` run recovered. Resume from `commit_to_git`.",
-                    reason=stale_interruption_reason(task, "commit_to_git"),
-                )
-                task.status = "queued"
-                enqueue_recovered_task(state, task.id)
-                persist_task_and_state(
-                    root,
-                    task=task,
-                    state=state,
-                    journal_message=interruption_journal_message(task),
-                )
-                return state
-
-            persist_task_and_state(
-                root,
-                task=task,
-                state=state,
-                journal_message=journal_message,
-            )
-            return state
-
         if task is not None and should_requeue_commit_stage_task(task):
-            journal_message = recover_existing_checkpoint_commit(root, task)
-            if journal_message is not None:
-                state.active_task_id = None
-                state.queue = [item for item in state.queue if item != task.id]
-                persist_task_and_state(
-                    root,
-                    task=task,
-                    state=state,
-                    journal_message=journal_message,
-                )
-                return state
             prepare_interrupted_task(
                 root,
                 task,

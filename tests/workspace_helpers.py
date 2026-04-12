@@ -17,7 +17,6 @@ import yaml
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from litehive.cli.debug import cmd_debug
-from litehive.cli.doctor import cmd_doctor
 from litehive.cli.health import cmd_health
 from litehive.cli.logs import cmd_logs
 from litehive.cli.queue import (
@@ -31,7 +30,6 @@ from litehive.cli.queue import (
     cmd_recover,
     cmd_requeue_task,
     cmd_resume_task,
-    cmd_rollback,
     cmd_stop_task,
     cmd_switch_task,
 )
@@ -96,7 +94,7 @@ from litehive.observability import (
     render_task_summary,
 )
 from litehive.config.pool_types import TaskPoolStopConditions
-from litehive.recovery.execution_recovery import recover_completed_task, rollback_completed_task
+from litehive.recovery.execution_recovery import recover_completed_task
 from litehive.config.engine_models import (
     resolve_engine_name,
     resolve_engine_plan,
@@ -151,7 +149,6 @@ from litehive.recovery import (
     mark_interrupted_subagent,
     prepare_interrupted_task,
     recover_stale_runner_state,
-    repair_workspace_state,
 )
 from litehive.workspace.runtime_tracking import (
     finish_task_run_transition,
@@ -179,7 +176,6 @@ _cmd_archive = lambda args: cmd_archive(args.workspace, task_id=args.task_id, al
 _cmd_cleanup = lambda args: cmd_cleanup(args.workspace, args.older_than)
 _cmd_close_task = lambda args: cmd_close_task(args.task_id, args.workspace, args.outcome, getattr(args, "reason", None), getattr(args, "follow_up_task", None))
 _cmd_debug = lambda args: cmd_debug(args.task_id, args.workspace, all=getattr(args, "all", False), worktree=getattr(args, "worktree", False))
-_cmd_doctor = lambda args: cmd_doctor(args.workspace, fix=getattr(args, "fix", False))
 _cmd_health = lambda args: cmd_health(args.workspace)
 _cmd_intake = lambda args: cmd_intake(args.file, args.workspace, getattr(args, "engine", "opencode"), getattr(args, "model", None))
 _cmd_issue = lambda args: cmd_issue(args.workspace, args.upstream, getattr(args, "type", "runtime_bug"), getattr(args, "details", ""), getattr(args, "acceptance_criteria", None), getattr(args, "source_task", None), getattr(args, "source_stage", None), getattr(args, "source_role", "recovery"), getattr(args, "source_project", None), getattr(args, "litehive_workspace", None), getattr(args, "patch_branch", None), getattr(args, "patch_base", "HEAD"), getattr(args, "prepare_patch_branch", False))
@@ -194,7 +190,6 @@ _cmd_repair = lambda args: cmd_repair(args.workspace)
 _cmd_report = lambda args: cmd_report(args.workspace, args.verdict, args.message, getattr(args, "role", "swe"), getattr(args, "step", None), getattr(args, "task_id", None), getattr(args, "files_changed", None))
 _cmd_requeue_task = lambda args: cmd_requeue_task(args.task_id, args.workspace, getattr(args, "front", False), getattr(args, "force", False))
 _cmd_resume_task = lambda args: cmd_resume_task(args.task_id, args.workspace, getattr(args, "front", False))
-_cmd_rollback = lambda args: cmd_rollback(args.task_id, args.workspace)
 _cmd_run = lambda args: cmd_run(args.workspace, getattr(args, "dry_run", False), getattr(args, "drain", False), getattr(args, "engine", None), getattr(args, "model", None), getattr(args, "stop_on_failure", None), getattr(args, "max_tasks", None), getattr(args, "stop_on_dirty_git", None))
 _cmd_show = lambda args: cmd_show(args.workspace, args.task_id)
 _cmd_status = lambda args: cmd_status(args.workspace, getattr(args, "fast", False), getattr(args, "full", False))
@@ -687,7 +682,6 @@ __all__ = [
     "cmd_repair",
     "cmd_requeue_task",
     "cmd_resume_task",
-    "cmd_rollback",
     "cmd_run",
     "cmd_show",
     "cmd_status",
@@ -754,7 +748,6 @@ __all__ = [
     "resolve_engine_plan",
     "resolve_model",
     "resolve_next_task",
-    "rollback_completed_task",
     "run_next_task",
     "run_single_task",
     "run_task",
@@ -787,7 +780,6 @@ __all__ = [
     "peek_next_task_selection",
     "recover_stale_runner_state",
     "requeue_task",
-    "repair_workspace_state",
     "require_task",
     "reroute_stage_for_acceptance_criteria",
     "restore_untouched_active_task",

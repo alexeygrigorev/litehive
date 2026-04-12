@@ -1,6 +1,6 @@
 from litehive.config import ensure_workspace
 from litehive.git_ops import GitError, checkpoint_message
-from litehive.recovery.execution_recovery import recover_completed_task, rollback_completed_task
+from litehive.recovery.execution_recovery import recover_completed_task
 from litehive.tasks.archive import archive_done_tasks, archive_task, cleanup_archived_tasks
 from litehive.tasks.crud import require_task
 from litehive.tasks.models import WorkspaceConflictError
@@ -15,27 +15,6 @@ from litehive.workspace.task_status import (
     stop_current_task,
     switch_task_engine,
 )
-
-
-def cmd_rollback(task_id, workspace):
-    ensure_workspace(workspace)
-    try:
-        summary = rollback_completed_task(workspace, task_id)
-    except (GitError, WorkspaceConflictError) as exc:
-        print(f"rollback failed: {exc}")
-        return 1
-
-    print(f"task: {summary.task.id} {summary.task.title}")
-    print(f"rollback_of: {summary.rolled_back_sha}")
-    print(f"rollback_commit: {summary.rollback_sha}")
-    print("status: queued")
-    print(f"pipeline_status: {summary.task.pipeline_status}")
-    print("recovery_policy: rollback reverted the checkpoint and requeued the task")
-    print(f"next_commit_message: {checkpoint_message(summary.task)}")
-    missing_criteria_reason = missing_acceptance_criteria_reason(summary.task)
-    if missing_criteria_reason is not None:
-        print(f"warning: {missing_criteria_reason}")
-    return 0
 
 
 def cmd_recover(task_id, workspace):

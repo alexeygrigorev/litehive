@@ -97,6 +97,8 @@ def test_serialize_recovery_includes_failure_context(workspace: Path) -> None:
     assert "trigger_event: Crash" in text
     assert "origin_stage: implementing" in text
     assert "## Recovery startup guidance" in text  # the four built-in recovery bullets
+    assert "litehive pipeline journal <task_id>" in text
+    assert "litehive task logs <task_id> --agent" in text
 
 
 def test_serialize_includes_last_rejection(workspace: Path) -> None:

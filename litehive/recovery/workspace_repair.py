@@ -11,54 +11,17 @@ from litehive.models import (
     RuntimeInterruptionState,
     RuntimeSubagentState,
     TaskRecord,
-    WorkspaceState,
     utcnow,
 )
 from litehive.tasks.models import WorkspaceRepairSummary
-from litehive.tasks.paths import (
-    legacy_task_thread_file,
-    read_text_artifact,
-    resolve_artifact_path,
-    task_comments_file,
-    task_dir,
-)
+from litehive.tasks.paths import read_text_artifact, resolve_artifact_path, task_dir
 from litehive.workspace.runtime_tracking import (
     apply_task_outcome,
     duration_seconds,
     summarize_transcript,
 )
 
-from .detection import (
-    find_existing_checkpoint_commit,
-    has_inactive_running_tasks,
-    is_orphaned_commit_stage_task,
-    is_stranded_commit_task,
-    should_recover_flagged_commit_stage_task,
-    should_requeue_commit_stage_task,
-    should_resume_done_task_at_commit_stage,
-)
-
-
-def prepare_recovered_commit_task(task: TaskRecord) -> None:
-    now = utcnow()
-    task.status = "queued"
-    task.pipeline_status = "commit_to_git"
-    task.runtime.execution_status = "idle"
-    task.runtime.run_started_at = None
-    task.runtime.active_subagent = None
-    task.runtime.updated_at = now
-    task.runtime.current_stage = task.runtime.current_stage.model_copy(
-        update={
-            "step": None,
-            "status": "idle",
-            "started_at": None,
-            "completed_at": None,
-            "updated_at": now,
-            "duration_seconds": 0,
-            "verdict": None,
-            "summary": "",
-        }
-    )
+from .detection import has_inactive_running_tasks, is_stranded_commit_task, should_requeue_commit_stage_task
 
 
 def prepare_interrupted_task_for_requeue(task: TaskRecord) -> None:
@@ -356,138 +319,6 @@ def stale_interruption_reason(task: TaskRecord, stage: str, *, stale_pid: bool =
     return f"Stale runner detected while `{stage}` was still marked running."
 
 
-def recover_commit_task(root: Path, task: TaskRecord) -> str:
-    summary = "Interrupted `commit_to_git` run recovered. Resume from `commit_to_git`."
-    prepare_interrupted_task(
-        root,
-        task,
-        stage="commit_to_git",
-        summary=summary,
-        reason=stale_interruption_reason(task, "commit_to_git"),
-    )
-    task.status = "queued"
-    return interruption_journal_message(task)
-
-
-def recover_flagged_commit_task(task: TaskRecord) -> str:
-    prepare_recovered_commit_task(task)
-    return "Recovered flagged accepted task back to `queued/commit_to_git` for final checkpoint commit."
-
-
-def finalize_recovered_commit_task(task: TaskRecord, *, commit_sha: str) -> str:
-    from litehive.tasks.crud import set_task_commit_sha
-
-    now = utcnow()
-    started_at = task.runtime.current_stage.started_at
-    task.status = "done"
-    task.pipeline_status = "done"
-    set_task_commit_sha(task, commit_sha)
-    task.runtime.execution_status = "done"
-    task.runtime.run_started_at = None
-    task.runtime.active_subagent = None
-    task.runtime.updated_at = now
-    task.runtime.last_stage = task.runtime.last_stage.model_copy(
-        update={
-            "step": "commit_to_git",
-            "status": "completed",
-            "started_at": started_at,
-            "completed_at": now,
-            "updated_at": now,
-            "duration_seconds": duration_seconds(started_at, now),
-            "verdict": "pass",
-            "summary": "Recovered existing checkpoint commit after interrupted `commit_to_git`.",
-        }
-    )
-    task.runtime.current_stage = task.runtime.current_stage.model_copy(
-        update={
-            "step": None,
-            "status": "idle",
-            "started_at": None,
-            "completed_at": None,
-            "updated_at": now,
-            "duration_seconds": 0,
-            "verdict": None,
-            "summary": "",
-        }
-    )
-    return (
-        "Recovered existing checkpoint commit after interrupted `commit_to_git` "
-        f"and finalized the task at `{commit_sha}`."
-    )
-
-
-def recover_existing_checkpoint_commit(root: Path, task: TaskRecord) -> str | None:
-    commit_sha = find_existing_checkpoint_commit(root, task)
-    if commit_sha is None:
-        return None
-    return finalize_recovered_commit_task(task, commit_sha=commit_sha)
-
-
-def _collect_commit_recovery_candidates(
-    root: Path, tasks: list[TaskRecord], state: WorkspaceState
-) -> tuple[list[TaskRecord], dict[str, TaskRecord], list[TaskRecord], dict[str, TaskRecord]]:
-    stranded = [task for task in tasks if is_stranded_commit_task(task)]
-    accepted_without_commit = {
-        task.id: task for task in tasks if should_resume_done_task_at_commit_stage(root, task)
-    }
-    orphaned = [task for task in tasks if is_orphaned_commit_stage_task(task, state)]
-    flagged_commit_ready = {
-        task.id: task for task in tasks if should_recover_flagged_commit_stage_task(root, task)
-    }
-    return stranded, accepted_without_commit, orphaned, flagged_commit_ready
-
-
-def recover_stranded_commit_tasks(root: Path, state: WorkspaceState) -> bool:
-    from litehive.tasks.crud import list_tasks
-    from litehive.workspace.workflow import persist_tasks_and_state_without_runner_guard
-
-    tasks = list_tasks(root)
-    stranded, accepted_without_commit, orphaned, flagged_commit_ready = (
-        _collect_commit_recovery_candidates(root, tasks, state)
-    )
-    completed_ids: set[str] = set()
-    recovered: list[TaskRecord] = []
-    transitioned: list[TaskRecord] = []
-    journal_messages: dict[str, str] = {}
-    for task in stranded:
-        journal_message = recover_existing_checkpoint_commit(root, task)
-        if journal_message is not None:
-            completed_ids.add(task.id)
-            transitioned.append(task)
-            journal_messages[task.id] = journal_message
-            continue
-        recovered.append(task)
-    recovered.extend(task for task_id, task in accepted_without_commit.items() if task_id not in completed_ids)
-    recovered.extend(orphaned)
-    recovered.extend(flagged_commit_ready.values())
-    resolved_ids = {task.id for task in recovered} | completed_ids
-    state.queue = [task_id for task_id in state.queue if task_id not in resolved_ids]
-    for task in recovered:
-        if task.id in accepted_without_commit:
-            journal_messages[task.id] = (
-                "Recovered accepted task back to `queued/commit_to_git` because no final checkpoint commit was recorded."
-            )
-            prepare_recovered_commit_task(task)
-        elif task.id in flagged_commit_ready:
-            journal_messages[task.id] = recover_flagged_commit_task(task)
-        else:
-            journal_messages[task.id] = recover_commit_task(root, task)
-        transitioned.append(task)
-    if recovered:
-        state.queue = [*(task.id for task in recovered), *state.queue]
-    if state.active_task_id in resolved_ids:
-        state.active_task_id = None
-    if not transitioned:
-        return False
-    persist_tasks_and_state_without_runner_guard(
-        root,
-        tasks=transitioned,
-        state=state,
-        journal_messages=journal_messages,
-    )
-    return True
-
-
 def _can_attempt_stale_runner_recovery(
     root: Path, tasks_by_id: dict[str, TaskRecord], running_task_ids: list[str]
 ) -> bool:
@@ -509,59 +340,38 @@ def _can_attempt_stale_runner_recovery(
     return True
 
 
-def _sync_commit_recovery_summary(
-    root: Path,
-    previous_tasks: dict[str, TaskRecord],
-    *,
-    summary: WorkspaceRepairSummary | None,
-    commit_mutated: bool,
-) -> None:
-    from litehive.tasks.crud import list_tasks
-
-    if summary is None or not commit_mutated:
-        return
-    refreshed_tasks = {task.id: task for task in list_tasks(root)}
-    finalized_ids = [
-        task_id
-        for task_id, task in refreshed_tasks.items()
-        if is_stranded_commit_task(previous_tasks.get(task_id, task))
-        and task.runtime.execution_status == "done"
-    ]
-    for task_id in sorted(finalized_ids):
-        if task_id not in summary.finalized_commit_task_ids:
-            summary.finalized_commit_task_ids.append(task_id)
-    for task_id, task in refreshed_tasks.items():
-        previous = previous_tasks.get(task_id)
-        if previous is None:
-            continue
-        if (
-            should_recover_flagged_commit_stage_task(root, previous)
-            and task.pipeline_status == "commit_to_git"
-            and task.status == "queued"
-            and task.id not in summary.requeued_task_ids
-        ):
-            summary.requeued_task_ids.append(task.id)
-            continue
-        if (
-            is_stranded_commit_task(previous)
-            and not is_stranded_commit_task(task)
-            and task.pipeline_status == "commit_to_git"
-            and task.id not in summary.requeued_task_ids
-        ):
-            summary.requeued_task_ids.append(task.id)
-
-
 def _record_commit_stale_recovery(
     root: Path,
     task: TaskRecord,
     *,
     journal_message: str,
-    stale_pid: bool,
     finalized: bool,
     summary: WorkspaceRepairSummary | None,
+    stale_pid: bool,
 ) -> None:
     from litehive.tasks.reports import record_recovery_report
 
+    record_recovery_report(
+        root,
+        task,
+        trigger="stale_runner_recovery",
+        stage="commit_to_git",
+        summary=journal_message,
+        runnable_state="runnable",
+        failure_classification="stale_runner",
+        actions=_commit_stale_recovery_actions(task, finalized=finalized),
+        warnings=["stale subagent pid detected"] if stale_pid else [],
+    )
+    if finalized:
+        if summary is not None and task.id not in summary.finalized_commit_task_ids:
+            summary.finalized_commit_task_ids.append(task.id)
+    elif summary is not None and task.id not in summary.requeued_task_ids:
+        summary.requeued_task_ids.append(task.id)
+    if stale_pid and summary is not None and task.id not in summary.stale_process_task_ids:
+        summary.stale_process_task_ids.append(task.id)
+
+
+def _commit_stale_recovery_actions(task: TaskRecord, *, finalized: bool) -> list[RecoveryAction]:
     actions = [RecoveryAction(action="clear_stale_active_state", summary="Cleared stale active runner state for the task.")]
     if finalized:
         actions.append(
@@ -571,31 +381,15 @@ def _record_commit_stale_recovery(
                 metadata={"commit_sha": task.git.commit_sha},
             )
         )
-        if summary is not None and task.id not in summary.finalized_commit_task_ids:
-            summary.finalized_commit_task_ids.append(task.id)
-    else:
-        actions.append(
-            RecoveryAction(
-                action="requeue_stage",
-                summary="Requeued the task at commit_to_git.",
-                metadata={"stage": "commit_to_git"},
-            )
+        return actions
+    actions.append(
+        RecoveryAction(
+            action="requeue_stage",
+            summary="Requeued the task at commit_to_git.",
+            metadata={"stage": "commit_to_git"},
         )
-        if summary is not None and task.id not in summary.requeued_task_ids:
-            summary.requeued_task_ids.append(task.id)
-    record_recovery_report(
-        root,
-        task,
-        trigger="stale_runner_recovery",
-        stage="commit_to_git",
-        summary=journal_message,
-        runnable_state="runnable",
-        failure_classification="stale_runner",
-        actions=actions,
-        warnings=["stale subagent pid detected"] if stale_pid else [],
     )
-    if stale_pid and summary is not None and task.id not in summary.stale_process_task_ids:
-        summary.stale_process_task_ids.append(task.id)
+    return actions
 
 
 def _recover_stale_running_task(
@@ -606,33 +400,41 @@ def _recover_stale_running_task(
 ) -> tuple[bool, str | None, bool]:
     from litehive.tasks.queue_ops import is_task_eligible_for_execution
     from litehive.workspace.locking import subagent_process_is_stale
-    from litehive.tasks.reports import record_recovery_report
 
+    if not is_task_eligible_for_execution(task):
+        return False, None, False
     stale_pid = subagent_process_is_stale(task)
     if is_stranded_commit_task(task):
         return False, None, stale_pid
+    stage = task.pipeline_status
     if should_requeue_commit_stage_task(task):
-        journal_message = recover_existing_checkpoint_commit(root, task)
-        if journal_message is None:
-            journal_message = recover_commit_task(root, task)
+        prepare_interrupted_task(
+            root,
+            task,
+            stage="commit_to_git",
+            summary="Interrupted `commit_to_git` run recovered. Resume from `commit_to_git`.",
+            reason=stale_interruption_reason(task, "commit_to_git", stale_pid=stale_pid),
+        )
+        task.status = "queued"
+        journal_message = interruption_journal_message(task)
         _record_commit_stale_recovery(
             root,
             task,
             journal_message=journal_message,
-            stale_pid=stale_pid,
             finalized=task.pipeline_status == "done",
             summary=summary,
+            stale_pid=stale_pid,
         )
         return True, journal_message, task.status == "queued"
-    if not is_task_eligible_for_execution(task):
-        return False, None, stale_pid
     prepare_interrupted_task(
         root,
         task,
-        stage=task.pipeline_status,
-        summary=f"Interrupted run recovered after stale runner detection. Resume from `{task.pipeline_status}`.",
-        reason=stale_interruption_reason(task, task.pipeline_status, stale_pid=stale_pid),
+        stage=stage,
+        summary=f"Interrupted run recovered after stale runner detection. Resume from `{stage}`.",
+        reason=stale_interruption_reason(task, stage, stale_pid=stale_pid),
     )
+    from litehive.tasks.reports import record_recovery_report
+
     record_recovery_report(
         root,
         task,
@@ -726,13 +528,6 @@ def recover_stale_runner_state(
                 summary.cleared_active_task_id = state.active_task_id
             state.active_task_id = None
             mutated = True
-        commit_mutated = recover_stranded_commit_tasks(root, state)
-        _sync_commit_recovery_summary(
-            root,
-            tasks_by_id,
-            summary=summary,
-            commit_mutated=commit_mutated,
-        )
         if transitioned:
             persist_tasks_and_state_without_runner_guard(
                 root,
@@ -742,341 +537,11 @@ def recover_stale_runner_state(
             )
         elif mutated:
             save_state_without_runner_guard(root, state)
-        return mutated or commit_mutated
-
-def _repair_active_task(
-    root: Path,
-    state: WorkspaceState,
-    task: TaskRecord,
-    *,
-    summary: WorkspaceRepairSummary,
-) -> tuple[bool, str | None]:
-    from litehive.tasks.queue_management import enqueue_recovered_task
-    from litehive.tasks.queue_ops import is_task_eligible_for_execution
-
-    if task.runtime.execution_status == "running":
-        return False, None
-    state.active_task_id = None
-    summary.cleared_active_task_id = task.id
-    if is_stranded_commit_task(task):
-        journal_message = recover_existing_checkpoint_commit(root, task)
-        if journal_message is None:
-            journal_message = recover_commit_task(root, task)
-            enqueue_recovered_task(state, task.id)
-            if task.id not in summary.requeued_task_ids:
-                summary.requeued_task_ids.append(task.id)
-        elif task.id not in summary.finalized_commit_task_ids:
-            summary.finalized_commit_task_ids.append(task.id)
-        return True, journal_message
-    if should_requeue_commit_stage_task(task):
-        prepare_recovered_commit_task(task)
-        enqueue_recovered_task(state, task.id)
-        if task.id not in summary.requeued_task_ids:
-            summary.requeued_task_ids.append(task.id)
-        return True, "Recovered interrupted `commit_to_git` attempt and requeued the task at `commit_to_git`."
-    if is_task_eligible_for_execution(task):
-        prepare_interrupted_task_for_requeue(task)
-        enqueue_recovered_task(state, task.id)
-        if task.id not in summary.requeued_task_ids:
-            summary.requeued_task_ids.append(task.id)
-        return True, f"Recovered interrupted run and requeued the task at `{task.pipeline_status}`."
-    return False, None
-
-
-def _normalize_queue(
-    state: WorkspaceState,
-    tasks_by_id: dict[str, TaskRecord],
-    *,
-    summary: WorkspaceRepairSummary,
-) -> None:
-    from litehive.tasks.queue_ops import is_task_eligible_for_execution, restore_missing_queued_tasks
-
-    seen: set[str] = set()
-    normalized_queue: list[str] = []
-    for task_id in state.queue:
-        task = tasks_by_id.get(task_id)
-        if task is None or not is_task_eligible_for_execution(task):
-            summary.removed_queue_entries.append(task_id)
-            summary.mutated = True
-            continue
-        if task_id in seen:
-            summary.deduped_queue_entries.append(task_id)
-            summary.mutated = True
-            continue
-        seen.add(task_id)
-        normalized_queue.append(task_id)
-    state.queue = normalized_queue
-    restored = restore_missing_queued_tasks(state, tasks_by_id)
-    if restored:
-        summary.restored_queue_entries.extend(restored)
-        summary.mutated = True
-
-
-def _repair_duplicate_task_ids(root: Path, summary: WorkspaceRepairSummary) -> None:
-    """Find task dirs sharing the same ID, assign new unique IDs to duplicates."""
-    import shutil
-
-    from litehive.tasks.crud import load_task_record_file, serialize_task_record
-    from litehive.tasks.paths import slugify, tasks_root
-    from litehive.tasks.persistence import load_state, save_state_without_runner_guard
-
-    troot = tasks_root(root)
-    if not troot.exists():
-        return
-
-    dirs_by_id: dict[str, list[Path]] = {}
-    for child in sorted(troot.iterdir()):
-        if not child.is_dir():
-            continue
-        task_path = child / "task.yaml"
-        if not task_path.exists():
-            continue
-        task = load_task_record_file(task_path)
-        dirs_by_id.setdefault(task.id, []).append(child)
-
-    duplicates = {tid: dirs for tid, dirs in dirs_by_id.items() if len(dirs) > 1}
-    if not duplicates:
-        return
-
-    state = load_state(root)
-    id_remap: dict[str, str] = {}  # old_dir_name -> new_task_id
-
-    for _tid, dirs in sorted(duplicates.items()):
-        # Keep the first directory with the original ID; reassign the rest
-        for dup_dir in dirs[1:]:
-            task = load_task_record_file(dup_dir / "task.yaml")
-            old_id = task.id
-            new_number = state.next_task_number + 1
-            state.next_task_number = new_number
-            new_id = f"T-{new_number:04d}"
-            new_slug = slugify(task.title)
-            new_dir = troot / f"{new_id}-{new_slug}"
-
-            task.id = new_id
-            task.slug = new_slug
-            (dup_dir / "task.yaml").write_text(
-                serialize_task_record(task), encoding="utf-8"
-            )
-            shutil.move(str(dup_dir), str(new_dir))
-
-            # Update queue references
-            state.queue = [new_id if q == old_id else q for q in state.queue]
-            if state.active_task_id == old_id:
-                state.active_task_id = new_id
-
-            summary.reassigned_duplicate_ids.append(f"{old_id}->{new_id}")
-            summary.mutated = True
-
-    if summary.reassigned_duplicate_ids:
-        save_state_without_runner_guard(root, state)
-
-
-def _migrate_legacy_thread_files(
-    root: Path,
-    tasks_by_id: dict[str, TaskRecord],
-    summary: WorkspaceRepairSummary,
-) -> None:
-    for task in tasks_by_id.values():
-        comments_path = task_comments_file(root, task)
-        legacy_path = legacy_task_thread_file(root, task)
-        if not legacy_path.exists():
-            continue
-        if comments_path.exists():
-            legacy_path.unlink()
-        else:
-            legacy_path.replace(comments_path)
-        if task.id not in summary.migrated_comment_task_ids:
-            summary.migrated_comment_task_ids.append(task.id)
-        summary.mutated = True
-
-
-def _clear_stale_running_on_terminal_tasks(
-    root: Path, summary: WorkspaceRepairSummary
-) -> bool:
-    """Clear runtime.execution_status=running on tasks whose task.yaml status is terminal.
-
-    A task marked done, cancelled, wont_do, deferred, duplicate, or abandoned cannot
-    possibly still be "running" — that's a leftover from a crash, a manual edit, or a
-    killed daemon. Clear the runtime so the next daemon startup doesn't trip on
-    `workspace has multiple active tasks` and refuse to start.
-    """
-    from litehive.tasks.constants import CLOSED_TASK_STATUSES
-    from litehive.tasks.crud import list_tasks
-    from litehive.tasks.persistence import load_state
-    from litehive.workspace.locking import workspace_lock
-    from litehive.workspace.workflow import persist_tasks_and_state_without_runner_guard
-
-    terminal_statuses = {"done", "abandoned", *CLOSED_TASK_STATUSES}
-    touched: list[TaskRecord] = []
-    journal_messages: dict[str, str] = {}
-    with workspace_lock(root):
-        state = load_state(root)
-        for task in list_tasks(root):
-            if task.status not in terminal_statuses:
-                continue
-            if task.runtime.execution_status != "running":
-                continue
-            if is_stranded_commit_task(task):
-                continue
-            task.runtime.execution_status = "idle"
-            task.runtime.run_started_at = None
-            task.runtime.updated_at = utcnow()
-            if task.runtime.current_stage is not None:
-                task.runtime.current_stage.step = None
-                task.runtime.current_stage.status = "idle"
-                task.runtime.current_stage.started_at = None
-                task.runtime.current_stage.completed_at = None
-                task.runtime.current_stage.updated_at = utcnow()
-                task.runtime.current_stage.duration_seconds = 0
-                task.runtime.current_stage.verdict = None
-                task.runtime.current_stage.summary = ""
-            touched.append(task)
-            journal_messages[task.id] = (
-                f"Cleared stale runtime.execution_status=running on terminal task "
-                f"(status={task.status})."
-            )
-        if state.active_task_id is not None:
-            active = next((t for t in touched if t.id == state.active_task_id), None)
-            if active is not None:
-                state.active_task_id = None
-                summary.cleared_active_task_id = active.id
-        if touched:
-            persist_tasks_and_state_without_runner_guard(
-                root,
-                tasks=touched,
-                state=state,
-                journal_messages=journal_messages,
-            )
-            summary.mutated = True
-            return True
-    return False
+        return mutated
 
 
 def repair_workspace_state(root: Path) -> WorkspaceRepairSummary:
-    from litehive.tasks.crud import list_tasks
-    from litehive.tasks.persistence import save_state_without_runner_guard, load_state
-    from litehive.workspace.locking import workspace_lock, workspace_mutation_guard
-    from litehive.workspace.workflow import persist_tasks_and_state_without_runner_guard
-
     summary = WorkspaceRepairSummary()
-    _repair_duplicate_task_ids(root, summary)
-    _clear_stale_running_on_terminal_tasks(root, summary)
     summary.stale_runner_recovered = recover_stale_runner_state(root, summary=summary)
-    summary.mutated = summary.mutated or summary.stale_runner_recovered
-    with workspace_mutation_guard(root), workspace_lock(root):
-        state = load_state(root)
-        tasks_by_id = {task.id: task for task in list_tasks(root)}
-        _migrate_legacy_thread_files(root, tasks_by_id, summary)
-        touched_tasks: list[TaskRecord] = []
-        journal_messages: dict[str, str] = {}
-        if state.active_task_id is not None and state.active_task_id not in tasks_by_id:
-            summary.cleared_active_task_id = state.active_task_id
-            state.active_task_id = None
-            summary.mutated = True
-        active_task = tasks_by_id.get(state.active_task_id) if state.active_task_id else None
-        if active_task is not None:
-            touched, journal_message = _repair_active_task(root, state, active_task, summary=summary)
-            if touched:
-                touched_tasks.append(active_task)
-                summary.mutated = True
-                if journal_message is not None:
-                    journal_messages[active_task.id] = journal_message
-        recovered_flagged_commit_ids: list[str] = []
-        for task in tasks_by_id.values():
-            if not should_recover_flagged_commit_stage_task(root, task):
-                continue
-            journal_messages[task.id] = recover_flagged_commit_task(task)
-            touched_tasks.append(task)
-            recovered_flagged_commit_ids.append(task.id)
-            if task.id not in summary.requeued_task_ids:
-                summary.requeued_task_ids.append(task.id)
-            summary.mutated = True
-        if recovered_flagged_commit_ids:
-            state.queue = [task_id for task_id in state.queue if task_id not in recovered_flagged_commit_ids]
-            state.queue = [*recovered_flagged_commit_ids, *state.queue]
-        _normalize_queue(state, tasks_by_id, summary=summary)
-        if touched_tasks:
-            persist_tasks_and_state_without_runner_guard(
-                root,
-                tasks=touched_tasks,
-                state=state,
-                journal_messages=journal_messages,
-            )
-        elif summary.mutated:
-            save_state_without_runner_guard(root, state)
+    summary.mutated = summary.stale_runner_recovered
     return summary
-
-
-def _reconcile_task_for_stale_runner(
-    root: Path,
-    task: TaskRecord,
-    *,
-    queue: list[str],
-) -> tuple[bool, list[str], str | None]:
-    from litehive.tasks.queue_ops import is_task_eligible_for_execution
-
-    if is_stranded_commit_task(task) or should_requeue_commit_stage_task(task):
-        queue = [item for item in queue if item != task.id]
-        journal_message = recover_existing_checkpoint_commit(root, task) or recover_commit_task(root, task)
-        if task.status == "queued":
-            queue.insert(0, task.id)
-        return True, queue, journal_message
-    if not is_task_eligible_for_execution(task):
-        return False, queue, None
-    prepare_interrupted_task_for_requeue(task)
-    queue = [item for item in queue if item != task.id]
-    queue.insert(0, task.id)
-    return True, queue, f"Reconciled stale runner state and requeued the task at `{task.pipeline_status}`."
-
-
-def reconcile_stale_runner_tasks(root: Path, state: WorkspaceState) -> bool:
-    from litehive.tasks.crud import list_tasks
-    from litehive.tasks.queue_ops import is_task_eligible_for_execution
-    from litehive.workspace.locking import runner_lock_is_held
-    from litehive.workspace.workflow import persist_tasks_and_state_without_runner_guard
-
-    tasks = list_tasks(root)
-    tasks_by_id = {task.id: task for task in tasks}
-    transitioned: list[TaskRecord] = []
-    journal_messages: dict[str, str] = {}
-    queue = list(state.queue)
-    if state.active_task_id is not None and state.active_task_id not in tasks_by_id:
-        state.active_task_id = None
-    running_tasks = [t for t in tasks if t.runtime.execution_status == "running"]
-    if len(running_tasks) > 1:
-        return False
-    for task in tasks:
-        if task.runtime.execution_status != "running" or task.id == state.active_task_id:
-            continue
-        touched, queue, journal_message = _reconcile_task_for_stale_runner(root, task, queue=queue)
-        if touched:
-            transitioned.append(task)
-            if journal_message is not None:
-                journal_messages[task.id] = journal_message
-    active_task = tasks_by_id.get(state.active_task_id) if state.active_task_id else None
-    if active_task and active_task.runtime.execution_status == "running" and not runner_lock_is_held(root):
-        if is_stranded_commit_task(active_task) or should_requeue_commit_stage_task(active_task):
-            queue = [item for item in queue if item != active_task.id]
-            journal_messages[active_task.id] = recover_existing_checkpoint_commit(root, active_task) or recover_commit_task(root, active_task)
-            if active_task.status == "queued":
-                queue.insert(0, active_task.id)
-            transitioned.append(active_task)
-        elif is_task_eligible_for_execution(active_task):
-            prepare_interrupted_task_for_requeue(active_task)
-            queue = [item for item in queue if item != active_task.id]
-            queue.insert(0, active_task.id)
-            journal_messages[active_task.id] = (
-                f"Reconciled stale active task and requeued at `{active_task.pipeline_status}`."
-            )
-            transitioned.append(active_task)
-        if active_task in transitioned:
-            state.active_task_id = None
-    if transitioned:
-        state.queue = queue
-        persist_tasks_and_state_without_runner_guard(
-            root,
-            tasks=transitioned,
-            state=state,
-            journal_messages=journal_messages,
-        )
-    return bool(transitioned)

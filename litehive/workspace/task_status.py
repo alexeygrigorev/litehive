@@ -106,13 +106,18 @@ def stop_current_task(
     active_task_id = _active_task_id_for_stop(root, state)
     runner_pid: int | None = None
     if runner_lock_is_held(root):
+        deadline = time.monotonic() + max(wait_timeout_seconds, 0.0)
+        sleep_interval = max(poll_interval_seconds, 0.01)
         metadata = read_runner_lock_metadata(root)
         pid = metadata.pid
+        while runner_lock_is_held(root) and not runner_pid_is_alive(pid) and time.monotonic() < deadline:
+            time.sleep(sleep_interval)
+            metadata = read_runner_lock_metadata(root)
+            pid = metadata.pid
         if runner_pid_is_alive(pid):
             runner_pid = int(pid)
             os.kill(runner_pid, signal.SIGINT)
             deadline = time.monotonic() + max(wait_timeout_seconds, 0.0)
-            sleep_interval = max(poll_interval_seconds, 0.01)
             while runner_lock_is_held(root) and time.monotonic() < deadline:
                 time.sleep(sleep_interval)
             if runner_lock_is_held(root):

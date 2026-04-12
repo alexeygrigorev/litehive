@@ -36,9 +36,7 @@ from litehive.observability.status_diagnostics import (
     status_has_problems,
 )
 from litehive.recovery import (
-    apply_doctor_fixes,
     repair_workspace_state,
-    scan_workspace_doctor,
 )
 from litehive.tasks import list_tasks_state_first, load_state, require_task
 from litehive.tasks.crud import list_tasks
@@ -51,49 +49,9 @@ from litehive.cli.worktree import collect_managed_worktrees
 
 def register_root_commands(app: typer.Typer) -> None:
     app.command("status", help="Show workspace status")(status_command)
-    app.command("doctor", help="Run workspace integrity checks and optional safe fixes")(doctor_command)
     app.command("health", help="Show workspace health diagnostics")(health_command)
     app.command("engine", help="Manage engine freezes and status")(engine_command)
     app.command("repair", help="Repair stale active tasks, interrupted runs, and queue inconsistencies")(repair_command)
-
-
-def _render_finding(prefix: str, finding) -> None:
-    print(f"{prefix}: {finding.code} {finding.summary} fix={finding.fix_command}")
-
-
-def doctor_command(
-    workspace: WorkspaceOption = Path.cwd(),
-    fix: Annotated[bool, typer.Option("--fix", help="Apply deterministic non-destructive fixes")] = False,
-) -> int:
-    ensure_workspace(workspace)
-    root = workspace.resolve()
-    if fix:
-        result = apply_doctor_fixes(root)
-        if result.stale_unmerged_worktrees_removed:
-            print(
-                "doctor_cleanup: "
-                f"stale_unmerged_worktrees_removed={result.stale_unmerged_worktrees_removed}"
-            )
-        for finding in result.fixed:
-            _render_finding("fixed", finding)
-        for finding in result.remaining:
-            _render_finding("finding", finding)
-        print(f"doctor_summary: fixed={len(result.fixed)} remaining={len(result.remaining)}")
-        return 0 if not result.remaining else 1
-
-    report = scan_workspace_doctor(root)
-    if report.stale_unmerged_worktrees_removed:
-        print(
-            "doctor_cleanup: "
-            f"stale_unmerged_worktrees_removed={report.stale_unmerged_worktrees_removed}"
-        )
-    if not report.findings:
-        print(f"doctor: clean workspace={root}")
-        return 0
-    for finding in report.findings:
-        _render_finding("finding", finding)
-    print(f"doctor_summary: findings={len(report.findings)}")
-    return 1
 
 
 def _config(root):

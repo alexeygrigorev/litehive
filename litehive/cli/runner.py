@@ -20,14 +20,11 @@ from litehive.daemon import (
     stop_workspace_daemon,
 )
 from litehive.db import MigrationApplyError, apply_pending_migrations, migration_status
-from litehive.git_ops import GitError, checkpoint_message
 from litehive.models import TaskThreadComment
 from litehive.pipeline.orchestration import run_task
-from litehive.recovery.execution_recovery import rollback_completed_task
 from litehive.storage import create_workspace_backup, list_workspace_backups, restore_workspace_backup
 from litehive.tasks.crud import get_task
 from litehive.tasks.models import WorkspaceConflictError
-from litehive.tasks.normalization import missing_acceptance_criteria_reason
 from litehive.tasks.persistence import load_state
 from litehive.tasks.queue_ops import dequeue_next_task, peek_next_task_selection, plan_task_selections
 from litehive.tasks.reports import append_thread_comment
@@ -39,7 +36,6 @@ def register_root_commands(app: typer.Typer, backup_app: typer.Typer, db_app: ty
     app.command("stop", help="Stop the background Litehive runner")(stop)
     app.command("restart", help="Restart the background Litehive runner")(restart)
     app.command("run", help="Run the next task once")(run_command)
-    app.command("rollback", help="Revert a task checkpoint commit and requeue the task")(rollback)
     app.command("report", help="Submit a stage verdict for the active task")(report_command)
     backup_app.callback()(backup_group)
     backup_app.command("create", help="Create a compressed backup of the workspace runtime database")(backup_create)
@@ -222,29 +218,6 @@ def run_single_dry_run(workspace, *, config, engine=None, model=None, stop_on_fa
         stop_conditions=stop_conditions,
         predicted_stop_reason=predicted_stop_reason,
     )
-    return 0
-
-
-def rollback(
-    task_id: Annotated[str, typer.Argument(help="Task id to roll back")],
-    workspace: WorkspaceOption = Path.cwd(),
-) -> int:
-    ensure_workspace(workspace)
-    try:
-        summary = rollback_completed_task(workspace, task_id)
-    except (GitError, WorkspaceConflictError) as exc:
-        print(f"rollback failed: {exc}")
-        return 1
-    print(f"task: {summary.task.id} {summary.task.title}")
-    print(f"rollback_of: {summary.rolled_back_sha}")
-    print(f"rollback_commit: {summary.rollback_sha}")
-    print("status: queued")
-    print(f"pipeline_status: {summary.task.pipeline_status}")
-    print("recovery_policy: rollback reverted the checkpoint and requeued the task")
-    print(f"next_commit_message: {checkpoint_message(summary.task)}")
-    missing_criteria_reason = missing_acceptance_criteria_reason(summary.task)
-    if missing_criteria_reason is not None:
-        print(f"warning: {missing_criteria_reason}")
     return 0
 
 

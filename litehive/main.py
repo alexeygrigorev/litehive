@@ -16,6 +16,19 @@ from litehive.observability.status_diagnostics import (
 )
 
 
+def _agent_command_is_allowed(role: str, argv: list[str]) -> bool:
+    """Return whether an agent role may invoke a non-`agent` command."""
+    if not argv:
+        return False
+    if role != "recovery":
+        return False
+    return tuple(argv[:2]) in {
+        ("pipeline", "journal"),
+        ("pipeline", "rules"),
+        ("task", "logs"),
+    }
+
+
 def _fast_runner_status(workspace: Path) -> dict:
     """Return runner liveness inferred from the lock file, without importing locking.py."""
     lock_path = workspace / ".litehive" / ".runner.lock"
@@ -161,7 +174,8 @@ def _fast_status(argv: list[str]) -> int:
 def main() -> int:
     argv = sys.argv[1:]
 
-    if os.environ.get("LITEHIVE_AGENT_ROLE"):
+    agent_role = os.environ.get("LITEHIVE_AGENT_ROLE")
+    if agent_role:
         cmd = argv[0] if argv else None
         if cmd is None or cmd in ("--help", "-h"):
             print("Usage: litehive agent [report|update|close]")
@@ -171,7 +185,7 @@ def main() -> int:
             argv = ["agent", *argv]
             sys.argv = [sys.argv[0], *argv]
             cmd = "agent"
-        if cmd != "agent":
+        if cmd != "agent" and not _agent_command_is_allowed(agent_role, argv):
             print("You are not authorized to perform this command.")
             return 1
 

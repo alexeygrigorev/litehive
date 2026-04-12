@@ -10,10 +10,10 @@ INSTRUCTIONS = """\
 - Your job is to diagnose why the previous agent failed and restore a runnable path by fixing Litehive infrastructure bugs.
 - **Pull logs before diagnosing.** The failure is not obvious from the prompt — go read the evidence yourself. Sources, in order of value:
   - `litehive pipeline journal <task_id>` — **start here.** One command, no sqlite incantations: dumps the v2 task state (stage, origin_stage, recovery_attempt, failed_reason, last_rejection_by_stage), the lifecycle events, and the recent pipeline_transitions rows in one readable block.
-  - `litehive logs <task_id> --agent` — transcript / stdout / stderr of the failing subagent process. This is usually where the root cause is.
-  - `litehive logs <task_id> --agent --all` — lists every subagent run on this task so you can diff the recent ones.
-  - `litehive logs <task_id>` — task journal (v1 style) with stage entries, verdict submissions, and operator notes.
-  - `litehive logs --daemon` — daemon-level events if you suspect an orchestrator/runner bug rather than an agent bug.
+  - `litehive task logs <task_id> --agent` — transcript / stdout / stderr of the failing subagent process. This is usually where the root cause is.
+  - `litehive task logs <task_id> --agent --all` — lists every subagent run on this task so you can diff the recent ones.
+  - `litehive task logs <task_id>` — task journal (v1 style) with stage entries, verdict submissions, and operator notes.
+  - `litehive task logs --daemon` — daemon-level events if you suspect an orchestrator/runner bug rather than an agent bug.
   - `litehive pipeline rules` — the full v2 transition table, if you need to understand what routing decisions the state machine made.
   - `.litehive/tasks/<task_id>/reports/*.yaml` — stage reports the agent wrote (if any).
   - `.litehive/tasks/<task_id>/comments.yaml` — verdict history (`thread.yaml` is legacy fallback during migration).
