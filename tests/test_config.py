@@ -17,10 +17,10 @@ from tests.workspace_helpers import (
     yaml,
 )
 
-import heru.quota.codex_quota as _codex_quota_mod
+from litehive.agents import ENGINE_CHOICES
 
 
-def test_engine_command_switches_workspace_default_engine(
+def test_engine_command_freezes_engine(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
@@ -30,39 +30,46 @@ def test_engine_command_switches_workspace_default_engine(
     exit_code = cmd_engine(
         argparse.Namespace(
             workspace=tmp_path,
-            engine="gemini",
+            engine_action="freeze",
+            engine_name="gemini",
+            until="2099-01-02",
+            reason=None,
         )
     )
     output = capsys.readouterr().out
 
     assert exit_code == 0
     config = load_config(tmp_path)
-    assert config.default_engine == "gemini"
+    assert config.default_engine == "codex"
     raw_config = yaml.safe_load(
         (tmp_path / ".litehive" / "config.yaml").read_text(encoding="utf-8")
     )
-    assert raw_config["default_engine"] == "gemini"
-    assert "default_engine: codex -> gemini" in output
+    assert raw_config["engine_freeze"]["gemini"] == "2099-01-02T00:00:00Z"
+    assert "engine_frozen: gemini until 2099-01-02T00:00:00Z" in output
 
 
-def test_engine_command_parser_accepts_workspace_switch_args() -> None:
+def test_engine_command_parser_accepts_workspace_freeze_args() -> None:
     parser = build_parser()
 
-    args = parser.parse_args(["engine", "opencode", "--workspace", "/tmp/demo"])
+    args = parser.parse_args(
+        ["engine", "freeze", "opencode", "--until", "2099-01-02", "--workspace", "/tmp/demo"]
+    )
 
     assert args.command == "engine"
-    assert args.engine_action == "opencode"
+    assert args.engine_action == "freeze"
+    assert args.engine_name == "opencode"
+    assert args.until == "2099-01-02"
     assert args.workspace == Path("/tmp/demo")
 
 
-def test_engine_status_parser_accepts_optional_engine_name() -> None:
+def test_engine_status_parser_accepts_no_engine_name() -> None:
     parser = build_parser()
 
-    args = parser.parse_args(["engine", "status", "codex", "--workspace", "/tmp/demo"])
+    args = parser.parse_args(["engine", "status", "--workspace", "/tmp/demo"])
 
     assert args.command == "engine"
     assert args.engine_action == "status"
-    assert args.engine_name == "codex"
+    assert args.engine_name is None
     assert args.workspace == Path("/tmp/demo")
 
 
@@ -408,68 +415,18 @@ def test_ensure_workspace_rejects_nested_workspace_root(tmp_path: Path) -> None:
         ensure_workspace(nested_root)
 
 
-def _assert_engine_status_command_shows_all_monitored_engines(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+def test_engine_status_command_shows_compact_summary(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
-
-    from litehive.models import EngineUsageRecord, EngineUsageWindow, WorkspaceEngineMonitoring
-    from litehive.observability.engine_monitoring import save_engine_monitoring
-    from litehive.cli import cmd_engine
-    from heru.quota import UsageStatus
-
-    monkeypatch.setattr(
-        "litehive.cli.engine.check_codex_quota",
-        lambda: _codex_quota_mod.UsageStatus(error="test-disabled"),
-    )
-    monkeypatch.setattr(
-        "litehive.cli.engine.check_claude_quota",
-        lambda: UsageStatus(error="no-credentials"),
-    )
-    monkeypatch.setattr(
-        "litehive.cli.engine.check_copilot_quota",
-        lambda: UsageStatus(error="gh not on PATH"),
-    )
-    monkeypatch.setattr(
-        "litehive.cli.engine.check_zai_quota",
-        lambda: UsageStatus(error="goz not on PATH"),
-    )
-
-    save_engine_monitoring(
+    ensure_workspace(
         tmp_path,
-        WorkspaceEngineMonitoring(
-            engines={
-                "codex": EngineUsageRecord(
-                    engine="codex",
-                    source="provider",
-                    provider="openai",
-                    observed_at="2026-04-08T22:10:00Z",
-                    invocation_count=7,
-                    success_count=6,
-                    failure_count=1,
-                    limit_event_count=1,
-                    last_limit_kind="quota",
-                    usage=EngineUsageWindow(
-                        used=82,
-                        limit=100,
-                        remaining=18,
-                        unit="percent",
-                        reset_at="2026-04-09T06:00:00Z",
-                    ),
-                ),
-                "gemini": EngineUsageRecord(
-                    engine="gemini",
-                    source="local",
-                    observed_at="2026-04-08T21:00:00Z",
-                    last_invoked_at="2026-04-08T21:00:00Z",
-                    invocation_count=3,
-                    success_count=2,
-                    failure_count=1,
-                    limit_event_count=0,
-                ),
-            }
+        LitehiveConfig(
+            default_engine="codex",
+            engine_freeze={"gemini": "2099-06-15T00:00:00Z"},
         ),
     )
+
+    from litehive.cli import cmd_engine
 
     exit_code = cmd_engine(
         argparse.Namespace(
@@ -478,230 +435,12 @@ def _assert_engine_status_command_shows_all_monitored_engines(
             engine_name=None,
         )
     )
-    output = capsys.readouterr().out
+    output = capsys.readouterr().out.strip()
 
     assert exit_code == 0
-    for expected in (
-        "workspace: ",
-        "engine: codex",
-        "invocations: 7",
-        "successes: 6",
-        "failures: 1",
-        "limits: 1",
-        "last_used: 2026-04-08T22:10:00Z",
-        "engine: gemini",
-        "invocations: 3",
-        "last_used: 2026-04-08T21:00:00Z",
-        "=== live quota ===",
-        "quota: unavailable (test-disabled)",
-        "quota: unavailable (no-credentials)",
-        "quota: unavailable (gh not on PATH)",
-        "quota: unavailable (goz not on PATH)",
-    ):
-        assert expected in output
-
-
-def test_engine_status_command_shows_all_monitored_engines(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
-) -> None:
-    _assert_engine_status_command_shows_all_monitored_engines(tmp_path, capsys, monkeypatch)
-
-
-def test_engine_status_command_scopes_to_single_engine_and_shows_codex_quota(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
-) -> None:
-    ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
-
-    from litehive.cli import cmd_engine
-    from heru.quota import UsageStatus, UsageWindow
-
-    def fake_check_codex_quota():
-        return UsageStatus(
-            limit_reached=True,
-            short_term=UsageWindow(percent_remaining=100.0),
-            long_term=UsageWindow(percent_remaining=66.0, reset_at="2026-04-14T00:00:00Z"),
-            checked_at=1.0,
-        )
-
-    monkeypatch.setattr("litehive.cli.engine.check_codex_quota", fake_check_codex_quota)
-
-    exit_code = cmd_engine(
-        argparse.Namespace(
-            workspace=tmp_path,
-            engine_action="status",
-            engine_name="codex",
-        )
-    )
-    output = capsys.readouterr().out
-
-    assert exit_code == 0
-    assert "engine: codex" in output
-    assert "short_term_percent_remaining: 100.0" in output
-    assert "limit_reached: yes" in output
-    assert "long_term_reset_at: 2026-04-14T00:00:00Z" in output
-
-
-def test_engine_status_command_shows_claude_quota_without_monitoring_data(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
-) -> None:
-    ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
-
-    from litehive.cli import cmd_engine
-    from heru.quota import UsageStatus, UsageWindow
-
-    def fake_check_claude_quota():
-        return UsageStatus(
-            limit_reached=False,
-            short_term=UsageWindow(percent_remaining=58.0, reset_at="2026-04-09T17:00:00Z"),
-            long_term=UsageWindow(percent_remaining=37.0, reset_at="2026-04-15T00:00:00Z"),
-            checked_at=1.0,
-        )
-
-    monkeypatch.setattr(
-        "litehive.cli.engine.check_claude_quota",
-        fake_check_claude_quota,
-    )
-
-    exit_code = cmd_engine(
-        argparse.Namespace(
-            workspace=tmp_path,
-            engine_action="status",
-            engine_name="claude",
-        )
-    )
-    output = capsys.readouterr().out
-
-    assert exit_code == 0
-    assert "engine_status: no monitoring data for claude" in output
-    assert "engine: claude" in output
-    assert "short_term_percent_remaining: 58.0" in output
-    assert "long_term_percent_remaining: 37.0" in output
-    assert "short_term_reset_at: 2026-04-09T17:00:00Z" in output
-    assert "long_term_reset_at: 2026-04-15T00:00:00Z" in output
-
-
-def test_engine_status_command_shows_copilot_quota_without_monitoring_data(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
-) -> None:
-    ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
-
-    from litehive.cli import cmd_engine
-    from heru.quota import UsageStatus, UsageWindow
-
-    def fake_check_copilot_quota():
-        return UsageStatus(
-            limit_reached=False,
-            short_term=UsageWindow(percent_remaining=100.0),
-            long_term=UsageWindow(percent_remaining=37.0, reset_at="2026-05-01T00:00:00Z"),
-            checked_at=1.0,
-        )
-
-    monkeypatch.setattr(
-        "litehive.cli.engine.check_copilot_quota",
-        fake_check_copilot_quota,
-    )
-
-    exit_code = cmd_engine(
-        argparse.Namespace(
-            workspace=tmp_path,
-            engine_action="status",
-            engine_name="copilot",
-        )
-    )
-    output = capsys.readouterr().out
-
-    assert exit_code == 0
-    assert "engine_status: no monitoring data for copilot" in output
-    assert "engine: copilot" in output
-    assert "short_term_percent_remaining: 100.0" in output
-    assert "long_term_percent_remaining: 37.0" in output
-    assert "long_term_reset_at: 2026-05-01T00:00:00Z" in output
-
-
-def test_engine_status_command_shows_zai_quota_without_monitoring_data(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
-) -> None:
-    ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
-
-    from litehive.cli import cmd_engine
-    from heru.quota import UsageStatus, UsageWindow
-
-    def fake_check_zai_quota():
-        return UsageStatus(
-            limit_reached=False,
-            short_term=UsageWindow(percent_remaining=36.0),
-            long_term=UsageWindow(percent_remaining=100.0),
-            checked_at=1.0,
-        )
-
-    monkeypatch.setattr(
-        "litehive.cli.engine.check_zai_quota",
-        fake_check_zai_quota,
-    )
-
-    exit_code = cmd_engine(
-        argparse.Namespace(
-            workspace=tmp_path,
-            engine_action="status",
-            engine_name="opencode",
-        )
-    )
-    output = capsys.readouterr().out
-
-    assert exit_code == 0
-    assert "engine_status: no monitoring data for opencode" in output
-    assert "engine: opencode" in output
-    assert "short_term_percent_remaining: 36.0" in output
-    assert "long_term_percent_remaining: 100.0" in output
-    assert "limit_reached: no" in output
-
-
-def test_engine_status_command_handles_live_quota_errors_gracefully(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
-) -> None:
-    ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
-
-    from litehive.cli import cmd_engine
-
-    def fake_check_copilot_quota():
-        raise RuntimeError("boom")
-
-    monkeypatch.setattr(
-        "litehive.cli.engine.check_copilot_quota",
-        fake_check_copilot_quota,
-    )
-
-    exit_code = cmd_engine(
-        argparse.Namespace(
-            workspace=tmp_path,
-            engine_action="status",
-            engine_name="copilot",
-        )
-    )
-    output = capsys.readouterr().out
-
-    assert exit_code == 0
-    assert "quota: unavailable (boom)" in output
-
-
-def test_engine_status_command_reports_no_data_for_requested_scope(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
-    ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
-
-    from litehive.cli import cmd_engine
-
-    exit_code = cmd_engine(
-        argparse.Namespace(
-            workspace=tmp_path,
-            engine_action="status",
-            engine_name="gemini",
-        )
-    )
-    output = capsys.readouterr().out
-
-    assert exit_code == 0
-    assert "engine_status: no monitoring data for gemini" in output
+    assert output.startswith("default_engine: codex | engine_freeze: gemini=2099-06-15T00:00:00Z | engines: ")
+    for engine_name in ENGINE_CHOICES:
+        assert f"{engine_name}(available=" in output
 
 
 def test_switch_command_parser_accepts_task_engine_reason_and_workspace() -> None:

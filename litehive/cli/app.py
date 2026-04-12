@@ -195,22 +195,26 @@ def health_command(workspace: WorkspaceOption = Path.cwd()) -> int:
     return health_handler(SimpleNamespace(workspace=workspace))
 
 
-@app.command("engine", help="Manage the workspace default engine")
+@app.command("engine", help="Manage engine freezes and status")
 def engine_command(
     workspace: WorkspaceOption = Path.cwd(),
     engine_action: Annotated[
         str,
         typer.Argument(
-            click_type=_choice([*ENGINE_CHOICES, "set", "freeze", "unfreeze", "status"]),
-            help="Engine name (shorthand for 'set') or subcommand: set, freeze, unfreeze, status",
+            click_type=_choice(["freeze", "unfreeze", "status"]),
+            help="Subcommand: freeze, unfreeze, status",
         ),
     ] = ...,
     engine_name: Annotated[
-        str | None, typer.Argument(help="Engine name (required for set/freeze/unfreeze subcommands)")
+        str | None, typer.Argument(click_type=_choice(ENGINE_CHOICES), help="Engine name (required for freeze/unfreeze)")
     ] = None,
     until: Annotated[
         str | None,
-        typer.Option(help="Freeze until this date/datetime (local timezone, e.g. 2026-04-08 or '2026-04-08 09:47')"),
+        typer.Option(help="Freeze until this ISO date (YYYY-MM-DD)"),
+    ] = None,
+    reason: Annotated[
+        str | None,
+        typer.Option(help="Optional operator note echoed in command output"),
     ] = None,
 ) -> int:
     return engine_handler(
@@ -219,6 +223,7 @@ def engine_command(
             engine_action=engine_action,
             engine_name=engine_name,
             until=until,
+            reason=reason,
         )
     )
 

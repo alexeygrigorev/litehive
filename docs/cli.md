@@ -91,20 +91,19 @@ litehive web --host 127.0.0.1 --port 8765
 
 ### `litehive engine`
 
-Persist the workspace default engine or inspect engine monitoring and quota status.
+Manage engine freezes and print a compact engine summary.
 
 ```bash
-litehive engine codex
-litehive engine gemini
+litehive engine freeze codex --until 2026-04-08
+litehive engine unfreeze codex
 litehive engine status
-litehive engine status codex
 ```
 
-`litehive engine status` prints one summary block per engine recorded in
-`.litehive/engine-monitoring.yaml`, including invocation counts, successes,
-failures, limit events, availability, and the latest observed or used timestamp.
-`litehive engine status codex` also shows the proactive Codex quota snapshot,
-including used percent, whether quota is exhausted, and reset times when available.
+`litehive engine freeze` stores `engine_freeze.<name>` in `.litehive/config.yaml`
+using a UTC ISO timestamp derived from the provided `YYYY-MM-DD` date.
+`litehive engine status` prints one compact line with the workspace
+`default_engine`, current `engine_freeze` entries, and a per-engine capability
+summary.
 
 ## Task Creation
 

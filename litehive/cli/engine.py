@@ -1,328 +1,48 @@
-from datetime import datetime, timezone
-
-from litehive.config import load_config, ensure_workspace, config_path
-from litehive.agents import ENGINE_CHOICES
-from heru.quota.claude_quota import check_claude_quota
-from heru.quota.codex_quota import check_codex_quota
-from heru.quota.copilot_quota import check_copilot_quota
-from heru.quota.zai_quota import check_zai_quota
-from litehive.observability import load_engine_monitoring
-from litehive.observability.engine_monitoring import record_codex_quota_check
-
+from datetime import UTC, datetime
 import yaml
-
-
-_LIVE_QUOTA_ENGINES = ("claude", "codex", "copilot", "goz", "opencode")
-
-
-def parse_local_datetime(value: str) -> datetime:
-    """Parse a date or datetime string as local timezone, return UTC datetime."""
-    value = value.strip()
-    for fmt in ("%Y-%m-%d %H:%M", "%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M", "%Y-%m-%dT%H:%M:%S"):
-        try:
-            local_dt = datetime.strptime(value, fmt)
-            local_dt = local_dt.astimezone()  # attach local timezone
-            return local_dt.astimezone(timezone.utc)
-        except ValueError:
-            continue
-    # Date-only: treat as start of day in local timezone
-    try:
-        local_dt = datetime.strptime(value, "%Y-%m-%d")
-        local_dt = local_dt.astimezone()  # attach local timezone
-        return local_dt.astimezone(timezone.utc)
-    except ValueError:
-        pass
-    raise ValueError(
-        f"Cannot parse '{value}' as date or datetime. "
-        "Expected format: YYYY-MM-DD or 'YYYY-MM-DD HH:MM'"
-    )
-
-
-def _read_raw_config(path):
-    raw_data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-    if not isinstance(raw_data, dict):
-        return None
-    return raw_data
-
-
-def _write_raw_config(path, raw_data):
-    path.write_text(yaml.safe_dump(raw_data, sort_keys=False), encoding="utf-8")
-
-
-def _resolve_engine_action(args):
-    """Resolve the engine subcommand and engine name from args.
-
-    Supports both:
-      litehive engine codex          (backward compat, treated as 'set codex')
-      litehive engine set codex
-      litehive engine freeze codex --until ...
-      litehive engine unfreeze codex
-    """
-    action = args.engine_action
-    engine_name = getattr(args, "engine_name", None)
-
-    if action in ("set", "freeze", "unfreeze"):
-        if engine_name is None:
-            return action, None  # will be caught as error in handler
-        if engine_name not in ENGINE_CHOICES:
-            return action, None
-        return action, engine_name
-
-    # Backward compat: `litehive engine codex` -> set codex
-    if action in ENGINE_CHOICES:
-        return "set", action
-
-    return action, engine_name
-
-
+from litehive.agents import ENGINE_CHOICES, get_engine
+from litehive.config import config_path, ensure_workspace, load_config
+def _config(root):
+    ensure_workspace(root)
+    path = config_path(root)
+    data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    return load_config(root), path, data if isinstance(data, dict) else {}
 def cmd_engine(args):
-    # Backward compat: old-style args have args.engine instead of engine_action
-    if hasattr(args, "engine") and not hasattr(args, "engine_action"):
-        args.engine_action = args.engine
-        args.engine_name = None
-
-    action, engine_name = _resolve_engine_action(args)
-
-    if action == "set":
-        return _cmd_engine_set(args.workspace, engine_name)
-    if action == "freeze":
-        until = getattr(args, "until", None)
-        return _cmd_engine_freeze(args.workspace, engine_name, until)
-    if action == "unfreeze":
-        return _cmd_engine_unfreeze(args.workspace, engine_name)
-    if action == "status":
-        return _cmd_engine_status(args.workspace, engine_name)
-
-    print(f"engine: unknown subcommand '{action}'")
-    return 1
-
-
-def _engine_last_seen(record) -> str:
-    return record.last_invoked_at or record.observed_at or "-"
-
-
-def _engine_available(record) -> bool | None:
-    usage = record.usage
-    if usage is not None and usage.remaining is not None:
-        return usage.remaining > 0
-    if record.last_limit_kind in ("quota", "rate", "budget", "capacity"):
-        return False
-    if record.observed_at or record.last_invoked_at or record.invocation_count:
-        return True
-    return None
-
-
-def _format_engine_record(engine_name, record) -> list[str]:
-    available = _engine_available(record)
-    available_label = (
-        "yes" if available is True else "no" if available is False else "unknown"
-    )
-    lines = [
-        f"engine: {engine_name}",
-        f"available: {available_label}",
-        f"source: {record.source}",
-        f"invocations: {record.invocation_count}",
-        f"successes: {record.success_count}",
-        f"failures: {record.failure_count}",
-        f"limits: {record.limit_event_count}",
-        f"last_used: {_engine_last_seen(record)}",
-    ]
-    if record.provider:
-        lines.append(f"provider: {record.provider}")
-    if record.last_limit_kind:
-        lines.append(f"last_limit_kind: {record.last_limit_kind}")
-    if record.last_limit_reason:
-        lines.append(f"last_limit_reason: {record.last_limit_reason}")
-    if record.last_task_id:
-        lines.append(f"last_task: {record.last_task_id}")
-    if record.usage is not None:
-        usage = record.usage
-        if usage.used is not None:
-            lines.append(f"usage_used: {usage.used}")
-        if usage.limit is not None:
-            lines.append(f"usage_limit: {usage.limit}")
-        if usage.remaining is not None:
-            lines.append(f"usage_remaining: {usage.remaining}")
-        if usage.unit:
-            lines.append(f"usage_unit: {usage.unit}")
-        if usage.reset_at:
-            lines.append(f"usage_reset_at: {usage.reset_at}")
-    return lines
-
-
-def _print_engine_records(records) -> None:
-    for index, (engine_name, record) in enumerate(records):
-        if index:
-            print()
-        for line in _format_engine_record(engine_name, record):
-            print(line)
-
-
-def _cmd_engine_status(workspace, engine_name):
-    ensure_workspace(workspace)
-    if engine_name is not None and engine_name not in ENGINE_CHOICES:
-        print(f"engine status: unknown engine '{engine_name}'")
-        return 1
-
-    monitoring = load_engine_monitoring(workspace)
-    print(f"workspace: {workspace}")
-
-    if engine_name is None:
-        if monitoring.engines:
-            _print_engine_records(sorted(monitoring.engines.items()))
-        else:
-            print("engine_status: no monitoring data recorded")
-        print()
-        print("=== live quota ===")
-        for name in _engines_for_live_quota(monitoring.engines.keys()):
-            _print_live_quota(name)
+    if args.engine_action == "status":
+        if getattr(args, "engine_name", None):
+            print("engine status: does not take an engine name")
+            return 1
+        config, _, _ = _config(args.workspace)
+        frozen = ", ".join(f"{k}={v}" for k, v in sorted(config.engine_freeze.items())) or "-"
+        engines = ", ".join(
+            f"{name}(available={'yes' if c.available else 'no'}, model_override={'yes' if c.supports_model_override else 'no'}, strips_env={'yes' if c.strips_environment else 'no'})"
+            for name in ENGINE_CHOICES
+            for c in [get_engine(name).capabilities]
+        )
+        print(f"default_engine: {config.default_engine} | engine_freeze: {frozen} | engines: {engines}")
         return 0
-
-    if engine_name == "codex":
-        quota_status = check_codex_quota()
-        if quota_status.error is None:
-            record_codex_quota_check(workspace, status=quota_status)
-            monitoring = load_engine_monitoring(workspace)
-
-    record = monitoring.engines.get(engine_name)
-    if record is None:
-        print(f"engine_status: no monitoring data for {engine_name}")
-    else:
-        _print_engine_records([(engine_name, record)])
-
-    _print_live_quota(engine_name)
-    return 0
-
-
-def _engines_for_live_quota(monitored_engines) -> list[str]:
-    names = set(monitored_engines)
-    names.update(_LIVE_QUOTA_ENGINES)
-    return sorted(names)
-
-
-def _supports_live_quota(engine_name: str) -> bool:
-    return engine_name in _LIVE_QUOTA_ENGINES
-
-
-def _load_live_quota(engine_name: str):
-    if engine_name == "codex":
-        return check_codex_quota()
-    if engine_name == "claude":
-        return check_claude_quota()
-    if engine_name == "copilot":
-        return check_copilot_quota()
-    if engine_name in ("goz", "opencode"):
-        return check_zai_quota()
-    return None
-
-
-def _print_live_quota(engine_name: str) -> None:
-    if not _supports_live_quota(engine_name):
-        return
-
-    print()
-    print(f"engine: {engine_name}")
-    try:
-        status = _load_live_quota(engine_name)
-    except Exception as exc:
-        print(f"quota: unavailable ({exc})")
-        return
-
-    if status is None or status.error is not None:
-        error = getattr(status, "error", None) or "unknown"
-        print(f"quota: unavailable ({error})")
-        return
-
-    print("quota: proactive")
-    print(f"short_term_percent_remaining: {status.short_term.percent_remaining:.1f}")
-    print(f"short_term_reset_at: {status.short_term.reset_at or '-'}")
-    print(f"long_term_percent_remaining: {status.long_term.percent_remaining:.1f}")
-    print(f"long_term_reset_at: {status.long_term.reset_at or '-'}")
-    print(f"limit_reached: {'yes' if status.limit_reached else 'no'}")
-
-
-def _cmd_engine_set(workspace, engine_name):
-    if engine_name is None:
-        print("engine set: engine name required")
+    name = getattr(args, "engine_name", None)
+    if name not in ENGINE_CHOICES:
+        print(f"engine {args.engine_action}: unknown engine '{name}'")
         return 1
-    ensure_workspace(workspace)
-    config = load_config(workspace)
-    path = config_path(workspace)
-    raw_data = _read_raw_config(path)
-    if raw_data is None:
-        print(f"engine failed: workspace config must be a mapping: {path}")
+    _, path, raw = _config(args.workspace)
+    frozen = raw.get("engine_freeze") if isinstance(raw.get("engine_freeze"), dict) else {}
+    if args.engine_action == "freeze":
+        try:
+            until = datetime.strptime(args.until, "%Y-%m-%d").replace(tzinfo=UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+        except (TypeError, ValueError):
+            print("engine freeze: --until must be ISO date YYYY-MM-DD")
+            return 1
+        raw["engine_freeze"] = frozen | {name: until}
+        path.write_text(yaml.safe_dump(raw, sort_keys=False), encoding="utf-8")
+        print(f"engine_frozen: {name} until {until}" + (f" reason={args.reason}" if getattr(args, "reason", None) else ""))
+        return 0
+    if name not in frozen:
+        print(f"engine unfreeze: {name} is not frozen")
         return 1
-
-    previous_engine = config.default_engine
-    raw_data["default_engine"] = engine_name
-    _write_raw_config(path, raw_data)
-
-    print(f"workspace: {workspace}")
-    print(f"default_engine: {previous_engine} -> {engine_name}")
-    print(f"config: {path}")
-    return 0
-
-
-def _cmd_engine_freeze(workspace, engine_name, until_str):
-    if engine_name is None:
-        print("engine freeze: engine name required")
-        return 1
-    if until_str is None:
-        print("engine freeze: --until is required")
-        return 1
-    ensure_workspace(workspace)
-    path = config_path(workspace)
-    raw_data = _read_raw_config(path)
-    if raw_data is None:
-        print(f"engine failed: workspace config must be a mapping: {path}")
-        return 1
-
-    try:
-        freeze_utc = parse_local_datetime(until_str)
-    except ValueError as exc:
-        print(f"engine freeze: {exc}")
-        return 1
-
-    freeze_map = raw_data.get("engine_freeze", {})
-    if not isinstance(freeze_map, dict):
-        freeze_map = {}
-    freeze_map[engine_name] = freeze_utc.strftime("%Y-%m-%dT%H:%M:%SZ")
-    raw_data["engine_freeze"] = freeze_map
-    _write_raw_config(path, raw_data)
-
-    local_display = freeze_utc.astimezone().strftime("%Y-%m-%d %H:%M %Z")
-    print(f"workspace: {workspace}")
-    print(f"engine_frozen: {engine_name} until {local_display}")
-    print(f"config: {path}")
-    return 0
-
-
-def _cmd_engine_unfreeze(workspace, engine_name):
-    if engine_name is None:
-        print("engine unfreeze: engine name required")
-        return 1
-    ensure_workspace(workspace)
-    path = config_path(workspace)
-    raw_data = _read_raw_config(path)
-    if raw_data is None:
-        print(f"engine failed: workspace config must be a mapping: {path}")
-        return 1
-
-    freeze_map = raw_data.get("engine_freeze", {})
-    if not isinstance(freeze_map, dict):
-        freeze_map = {}
-    if engine_name not in freeze_map:
-        print(f"engine unfreeze: {engine_name} is not frozen")
-        return 1
-
-    del freeze_map[engine_name]
-    if freeze_map:
-        raw_data["engine_freeze"] = freeze_map
-    else:
-        raw_data.pop("engine_freeze", None)
-    _write_raw_config(path, raw_data)
-
-    print(f"workspace: {workspace}")
-    print(f"engine_unfrozen: {engine_name}")
-    print(f"config: {path}")
+    frozen.pop(name)
+    raw["engine_freeze"] = frozen
+    raw.pop("engine_freeze", None) if not frozen else None
+    path.write_text(yaml.safe_dump(raw, sort_keys=False), encoding="utf-8")
+    print(f"engine_unfrozen: {name}")
     return 0

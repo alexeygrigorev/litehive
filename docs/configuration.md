@@ -84,10 +84,10 @@ Supported engines are:
 - `claude`
 - `goz`
 
-Set the workspace default engine:
+Set the workspace default engine during configuration:
 
 ```bash
-litehive engine gemini
+litehive configure --default-engine gemini
 ```
 
 Switch a task to a different engine mid-stream and record the reason:

@@ -47,9 +47,9 @@ Litehive resolves engine order in this precedence:
 Examples:
 
 ```bash
-litehive engine codex
+litehive engine freeze codex --until 2026-04-08
+litehive engine unfreeze codex
 litehive engine status
-litehive engine status codex
 litehive run --engine gemini --model gemini-2.5-pro
 ```
 
