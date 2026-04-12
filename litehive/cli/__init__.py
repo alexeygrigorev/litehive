@@ -119,6 +119,12 @@ worktree_app = typer.Typer(
     invoke_without_command=True,
     no_args_is_help=False,
 )
+pipeline_app = typer.Typer(
+    add_completion=False,
+    context_settings={"help_option_names": ["-h", "--help"]},
+    invoke_without_command=True,
+    no_args_is_help=False,
+)
 
 
 def _choice(values: list[str] | tuple[str, ...] | set[str]) -> click.Choice:
@@ -1056,6 +1062,50 @@ app.add_typer(backup_app, name="backup", help="Create, list, and restore workspa
 app.add_typer(db_app, name="db", help="Inspect and migrate the workspace database schema")
 app.add_typer(worktree_app, name="worktree", help="Inspect and clean Litehive-managed task worktrees")
 app.add_typer(daemon_app, name="daemon", help="Manage the Litehive pool daemon", hidden=True)
+app.add_typer(pipeline_app, name="pipeline", help="Inspect the v2 pipeline state machine")
+
+
+@pipeline_app.command("graph", help="Print a Mermaid stateDiagram-v2 of the v2 pipeline rules")
+def pipeline_graph_command(
+    output: Annotated[
+        Path | None,
+        typer.Option(
+            "--output",
+            "-o",
+            help="Write the Markdown-wrapped diagram to this file instead of stdout",
+        ),
+    ] = None,
+) -> int:
+    from litehive.pipeline.diagram import render_markdown
+
+    content = render_markdown()
+    if output is None:
+        print(content)
+    else:
+        output.write_text(content)
+        print(f"wrote {output}")
+    return 0
+
+
+@pipeline_app.command("rules", help="List the v2 transition rules as readable rows")
+def pipeline_rules_command() -> int:
+    from litehive.pipeline.transitions import list_transitions
+
+    for rule in list_transitions():
+        from_state = (
+            "|".join(sorted(rule.from_state))
+            if isinstance(rule.from_state, frozenset)
+            else rule.from_state
+        )
+        to = (
+            rule.transition_to
+            if not callable(rule.transition_to)
+            else f"<{rule.transition_to.__name__}>"
+        )
+        event_name = rule.on_event.__name__
+        desc = f"  # {rule.description}" if rule.description else ""
+        print(f"{from_state:25s} --[{event_name:25s}]--> {to}{desc}")
+    return 0
 
 
 _PUBLIC_TOP_LEVEL_COMMANDS = {

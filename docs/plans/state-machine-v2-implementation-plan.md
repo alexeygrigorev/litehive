@@ -239,7 +239,12 @@ item lands.
   `stateDiagram-v2` block. Committed a generated snapshot at
   `docs/state-machine-diagram.md` that ops can open in any Mermaid
   viewer. 2 tests confirm the output shape. 133 v2 tests green.
-  Hook for a future `litehive pipeline graph` CLI command.
+- 2026-04-12: `litehive pipeline graph` and `litehive pipeline rules`
+  CLI commands. `graph` prints the Mermaid diagram to stdout (or
+  `--output FILE` for a snapshot file). `rules` prints every rule as
+  a readable `from --[event]--> to  # description` row. New
+  `pipeline_app` typer subcommand group in `litehive/cli/__init__.py`.
+  Operators can now visualize v2 without opening the source.
 - 2026-04-12: bootstrap integration tests landed
   (`tests/test_pipeline_v2_bootstrap.py`). They drive `run_task_v2`
   against a real tmp_path workspace with SqlitePersistence, SqliteJournal,
