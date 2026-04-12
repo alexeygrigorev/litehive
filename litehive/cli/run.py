@@ -1,9 +1,14 @@
 from pathlib import Path
 
+from litehive.cli._display import _cli_override_or_default
+from litehive.cli._dry_run import (
+    _plan_pool_dry_run,
+    _plan_single_task_dry_run,
+    _print_pool_dry_run_plan,
+)
+from litehive.cli._parse import _parse_engine_int_map
 from litehive.config import ensure_workspace, load_config
 from litehive.pipeline.orchestration import run_task_v2
-from litehive.pipeline_old import TaskPoolStopConditions
-from litehive.pipeline_old._parallel import run_parallel_tasks
 from litehive.tasks.models import WorkspaceConflictError
 from litehive.tasks.queue_ops import dequeue_next_task, peek_next_task_selection, plan_task_selections
 
@@ -28,452 +33,181 @@ def _run_single_v2(workspace: Path) -> int:
         print(f"failed_message: {result.failed_message}")
     return 0 if result.final_stage == "done" else 1
 
-from litehive.cli._pool import (
-    _pool_summary_report_data,
-    _pool_task_report_entry,
-    _print_pool_summary_report,
-    _task_stage_outcomes,
-    _write_pool_summary_report,
-)
-from litehive.cli._dry_run import (
-    _plan_pool_dry_run,
-    _plan_single_task_dry_run,
-    _print_pool_dry_run_plan,
-)
-from litehive.cli._display import _cli_override_or_default
-from litehive.cli._parse import _parse_engine_int_map
-
 
 def _cmd_run(args):
     ensure_workspace(args.workspace)
-    engine_override = getattr(args, "engine", None)
-    model_override = getattr(args, "model", None)
-    config = load_config(args.workspace)
+
+    if args.dry_run:
+        config = load_config(args.workspace)
+        if bool(getattr(args, "drain", False)):
+            return _cmd_run_drain_dry_run(args, config=config)
+        return _cmd_run_single_dry_run(args, config=config)
+
+    return _run_single_v2(args.workspace)
+
+
+def _cmd_run_drain_dry_run(args, *, config):
     try:
-        engine_usage_caps = _cli_override_or_default(
-            _parse_engine_int_map(
-                getattr(args, "engine_usage_cap", None),
-                option_name="--engine-usage-cap",
-            )
-            if getattr(args, "engine_usage_cap", None) is not None
-            else None,
-            config.engine_usage_caps,
-        )
-        engine_budget_caps = _cli_override_or_default(
-            _parse_engine_int_map(
-                getattr(args, "engine_budget_cap", None),
-                option_name="--engine-budget-cap",
-            )
-            if getattr(args, "engine_budget_cap", None) is not None
-            else None,
-            config.engine_budget_caps,
-        )
-        engine_costs = _cli_override_or_default(
-            _parse_engine_int_map(
-                getattr(args, "engine_cost", None),
-                option_name="--engine-cost",
-            )
-            if getattr(args, "engine_cost", None) is not None
-            else None,
-            config.engine_costs,
-        )
-    except ValueError as exc:
+        plan = plan_task_selections(args.workspace)
+    except WorkspaceConflictError as exc:
         print(f"run failed: {exc}")
         return 1
+
+    engine_override = getattr(args, "engine", None)
+    model_override = getattr(args, "model", None)
+    engine_usage_caps = _cli_override_or_default(
+        _parse_engine_int_map(
+            getattr(args, "engine_usage_cap", None), option_name="--engine-usage-cap"
+        )
+        if getattr(args, "engine_usage_cap", None) is not None
+        else None,
+        config.engine_usage_caps,
+    )
+    engine_budget_caps = _cli_override_or_default(
+        _parse_engine_int_map(
+            getattr(args, "engine_budget_cap", None), option_name="--engine-budget-cap"
+        )
+        if getattr(args, "engine_budget_cap", None) is not None
+        else None,
+        config.engine_budget_caps,
+    )
+    engine_costs = _cli_override_or_default(
+        _parse_engine_int_map(
+            getattr(args, "engine_cost", None), option_name="--engine-cost"
+        )
+        if getattr(args, "engine_cost", None) is not None
+        else None,
+        config.engine_costs,
+    )
+    from litehive.pipeline_old import TaskPoolStopConditions
+
     stop_conditions = TaskPoolStopConditions(
+        max_tasks=getattr(args, "max_tasks", None),
         stop_on_failure=_cli_override_or_default(
-            getattr(args, "stop_on_failure", None),
-            config.pool_stop_on_failure,
-        ),
-        max_tasks=_cli_override_or_default(
-            getattr(args, "max_tasks", None),
-            config.pool_max_tasks,
+            getattr(args, "stop_on_failure", None), config.pool_stop_on_failure
         ),
         stop_on_execution_limit=_cli_override_or_default(
-            getattr(args, "stop_on_limit", None),
+            getattr(args, "stop_on_execution_limit", None),
             config.pool_stop_on_execution_limit,
         ),
         quota_threshold=_cli_override_or_default(
-            getattr(args, "quota_threshold", None),
-            config.pool_quota_threshold,
+            getattr(args, "quota_threshold", None), config.pool_quota_threshold
         ),
         budget_threshold=_cli_override_or_default(
-            getattr(args, "budget_threshold", None),
-            config.pool_budget_threshold,
+            getattr(args, "budget_threshold", None), config.pool_budget_threshold
         ),
         pool_usage_cap=_cli_override_or_default(
-            getattr(args, "pool_usage_cap", None),
-            config.pool_usage_cap,
+            getattr(args, "pool_usage_cap", None), config.pool_usage_cap
         ),
         pool_cost_cap=_cli_override_or_default(
-            getattr(args, "pool_cost_cap", None),
-            config.pool_cost_cap,
+            getattr(args, "pool_cost_cap", None), config.pool_cost_cap
         ),
         engine_usage_caps=engine_usage_caps,
         engine_budget_caps=engine_budget_caps,
         engine_costs=engine_costs,
         stop_on_dirty_git=_cli_override_or_default(
-            getattr(args, "stop_on_dirty_git", None),
-            config.pool_stop_on_dirty_git,
+            getattr(args, "stop_on_dirty_git", None), config.pool_stop_on_dirty_git
         ),
     )
-    if bool(getattr(args, "parallel", False)):
-        return _cmd_run_parallel(
-            args,
-            config=config,
-            stop_conditions=stop_conditions,
-            engine_override=engine_override,
-            model_override=model_override,
-        )
-    if bool(getattr(args, "drain", False)):
-        return _cmd_run_drain(
-            args,
-            config=config,
-            stop_conditions=stop_conditions,
-            engine_override=engine_override,
-            model_override=model_override,
-        )
-    return _cmd_run_single(
-        args,
+    runnable_tasks, predicted_stop_reason = _plan_pool_dry_run(
+        args.workspace,
+        planned_tasks=plan.tasks,
+        blocked_count=len(plan.blocked),
         config=config,
         stop_conditions=stop_conditions,
         engine_override=engine_override,
         model_override=model_override,
     )
-
-
-def _cmd_run_drain(
-    args,
-    *,
-    config,
-    stop_conditions,
-    engine_override,
-    model_override,
-):
-    if args.dry_run:
-        try:
-            plan = plan_task_selections(args.workspace)
-        except WorkspaceConflictError as exc:
-            print(f"run failed: {exc}")
-            return 1
-        runnable_tasks, predicted_stop_reason = _plan_pool_dry_run(
-            args.workspace,
-            planned_tasks=plan.tasks,
-            blocked_count=len(plan.blocked),
-            config=config,
-            stop_conditions=stop_conditions,
-            engine_override=engine_override,
-            model_override=model_override,
-        )
-        _print_pool_dry_run_plan(
-            args.workspace,
-            planned_tasks=runnable_tasks,
-            blocked=plan.blocked,
-            config=config,
-            stop_conditions=stop_conditions,
-            predicted_stop_reason=predicted_stop_reason,
-        )
-        return 0
-
-    # Drain mode: v2 runs one task per tick and returns; the daemon loop
-    # handles iteration. Pool-wide orchestration is M4 work.
-    return _run_single_v2(args.workspace)
-    if not summary.executions:
-        report = _pool_summary_report_data(
-            args.workspace,
-            completed=[],
-            flagged=[],
-            stop_reason=summary.stop_reason,
-            tasks_run=0,
-        )
-        if summary.blocked:
-            print("No runnable task.")
-            for blocked in summary.blocked:
-                print(
-                    f"blocked: {blocked.task_id} {blocked.title} "
-                    f"blocked_by={', '.join(blocked.blocked_by)}"
-                )
-            _write_pool_summary_report(root=args.workspace, report=report)
-            _print_pool_summary_report(report=report)
-            return 0
-        if summary.stop_reason != "queue_exhausted":
-            print("No task executed.")
-            _write_pool_summary_report(root=args.workspace, report=report)
-            _print_pool_summary_report(report=report)
-            return 0
-        print("No queued task.")
-        _write_pool_summary_report(root=args.workspace, report=report)
-        _print_pool_summary_report(report=report)
-        return 0
-    completed = []
-    flagged = []
-    for execution in summary.executions:
-        if execution.task is None:
-            continue
-        print(f"task: {execution.task.id} {execution.task.title}")
-        if execution.result is not None:
-            print(f"status: {execution.result.final_status}")
-            print(f"steps: {execution.result.steps_executed}")
-            print(f"last_verdict: {execution.result.last_verdict}")
-            if execution.result.final_status == "done":
-                completed.append(
-                    _pool_task_report_entry(
-                        args.workspace,
-                        task_id=execution.task.id,
-                        title=execution.task.title,
-                        status=execution.task.status,
-                        pipeline_status=execution.task.pipeline_status,
-                        slug=execution.task.slug,
-                    )
-                )
-            elif execution.result.final_status not in {"paused", "queued", "interrupted"}:
-                flagged.append(
-                    _pool_task_report_entry(
-                        args.workspace,
-                        task_id=execution.task.id,
-                        title=execution.task.title,
-                        status=execution.task.status,
-                        pipeline_status=execution.task.pipeline_status,
-                        slug=execution.task.slug,
-                    )
-                )
-        stage_outcomes = _task_stage_outcomes(
-            args.workspace, execution.task.id, execution.task.slug
-        )
-        if stage_outcomes:
-            print(f"stage_outcomes: {', '.join(stage_outcomes)}")
-        if execution.commit_sha:
-            print(f"commit: {execution.commit_sha}")
-    for blocked in summary.blocked:
-        print(
-            f"blocked: {blocked.task_id} {blocked.title} blocked_by={', '.join(blocked.blocked_by)}"
-        )
-    report = _pool_summary_report_data(
+    _print_pool_dry_run_plan(
         args.workspace,
-        completed=completed,
-        flagged=flagged,
-        stop_reason=summary.stop_reason,
-        tasks_run=len(summary.executions),
+        planned_tasks=runnable_tasks,
+        blocked=plan.blocked,
+        config=config,
+        stop_conditions=stop_conditions,
+        predicted_stop_reason=predicted_stop_reason,
     )
-    _write_pool_summary_report(root=args.workspace, report=report)
-    _print_pool_summary_report(report=report)
     return 0
 
 
-def _cmd_run_single(
-    args,
-    *,
-    config,
-    stop_conditions,
-    engine_override,
-    model_override,
-):
-    if args.dry_run:
-        try:
-            selection = peek_next_task_selection(args.workspace)
-        except WorkspaceConflictError as exc:
-            print(f"run failed: {exc}")
-            return 1
-        planned_tasks = [selection.task] if selection.task is not None else []
-        runnable_tasks, predicted_stop_reason = _plan_single_task_dry_run(
-            args.workspace,
-            planned_tasks=planned_tasks,
-            blocked_count=len(selection.blocked),
-            config=config,
-            stop_conditions=stop_conditions,
-            engine_override=engine_override,
-            model_override=model_override,
-        )
-        _print_pool_dry_run_plan(
-            args.workspace,
-            planned_tasks=runnable_tasks,
-            blocked=selection.blocked,
-            config=config,
-            stop_conditions=stop_conditions,
-            predicted_stop_reason=predicted_stop_reason,
-        )
-        return 0
-
-    return _run_single_v2(args.workspace)
-    stop_reason = summary.stop_reason
-    execution = summary.execution
-    blocked = summary.blocked
-    if stop_reason is not None and (execution is None or execution.task is None):
-        report = _pool_summary_report_data(
-            args.workspace,
-            completed=[],
-            flagged=[],
-            stop_reason=stop_reason,
-            tasks_run=0,
-        )
-        if blocked:
-            print("No runnable task.")
-            for blocked_task in blocked:
-                print(
-                    f"blocked: {blocked_task.task_id} {blocked_task.title} "
-                    f"blocked_by={', '.join(blocked_task.blocked_by)}"
-                )
-            _write_pool_summary_report(root=args.workspace, report=report)
-            _print_pool_summary_report(report=report)
-            return 0
-        if stop_reason == "queue_exhausted":
-            print("No queued task.")
-        else:
-            print("No task executed.")
-        _write_pool_summary_report(root=args.workspace, report=report)
-        _print_pool_summary_report(report=report)
-        return 0
-
-    completed = []
-    flagged = []
-    task = execution.task
-    result = execution.result
-    print(f"task: {task.id} {task.title}")
-    if result is not None:
-        print(f"status: {result.final_status}")
-        print(f"steps: {result.steps_executed}")
-        print(f"last_verdict: {result.last_verdict}")
-        if result.final_status == "done":
-            completed.append(
-                _pool_task_report_entry(
-                    args.workspace,
-                    task_id=task.id,
-                    title=task.title,
-                    status=task.status,
-                    pipeline_status=task.pipeline_status,
-                    slug=task.slug,
-                )
-            )
-        elif result.final_status not in {"paused", "queued", "interrupted"}:
-            flagged.append(
-                _pool_task_report_entry(
-                    args.workspace,
-                    task_id=task.id,
-                    title=task.title,
-                    status=task.status,
-                    pipeline_status=task.pipeline_status,
-                    slug=task.slug,
-                )
-            )
-    stage_outcomes = _task_stage_outcomes(args.workspace, task.id, task.slug)
-    if stage_outcomes:
-        print(f"stage_outcomes: {', '.join(stage_outcomes)}")
-    if execution.commit_sha:
-        print(f"commit: {execution.commit_sha}")
-
-    report = _pool_summary_report_data(
-        args.workspace,
-        completed=completed,
-        flagged=flagged,
-        stop_reason=stop_reason,
-        tasks_run=1,
-    )
-    _write_pool_summary_report(root=args.workspace, report=report)
-    _print_pool_summary_report(report=report)
-    return 0
-
-
-def _cmd_run_parallel(
-    args,
-    *,
-    config,
-    stop_conditions,
-    engine_override,
-    model_override,
-):
-    """Run multiple independent tasks in parallel using separate worktrees.
-
-    This is task-level parallelism: each task gets its own isolated worktree,
-    not multiple worker slices of a parent task.
-    """
-    if config.parallel_capacity <= 1:
-        print(
-            "Parallel execution requires parallel_capacity > 1 in config. "
-            "Set it in .litehive/config.yaml."
-        )
-        return 1
-
+def _cmd_run_single_dry_run(args, *, config):
     try:
-        summary = run_parallel_tasks(
-            args.workspace,
-            engine_override=engine_override,
-            model_override=model_override,
-            stop_conditions=stop_conditions,
-        )
+        selection = peek_next_task_selection(args.workspace)
     except WorkspaceConflictError as exc:
         print(f"run failed: {exc}")
         return 1
-    except ValueError as exc:
-        print(f"run failed: {exc}")
-        return 1
 
-    if not summary.executions:
-        if summary.blocked:
-            print("No runnable tasks for parallel execution.")
-            for blocked in summary.blocked:
-                print(
-                    f"blocked: {blocked.task_id} {blocked.title} "
-                    f"blocked_by={', '.join(blocked.blocked_by)}"
-                )
-        elif summary.stop_reason == "queue_exhausted":
-            print("No queued tasks.")
-        else:
-            print("No task executed.")
-        return 0
-
-    completed = []
-    flagged = []
-    for execution in summary.executions:
-        if execution.task is None:
-            continue
-        status = execution.result.final_status if execution.result else "unknown"
-        print(f"task: {execution.task.id} {execution.task.title} status={status}")
-
-    if summary.integration_results:
-        print(f"\n--- Integration Results ({len(summary.integration_results)} tasks) ---")
-        for result in summary.integration_results:
-            status_label = "ok" if result.success else "FAILED"
-            if result.merge_conflict and result.conflict_resolved:
-                status_label = "ok (conflict resolved by agent)"
-            elif result.merge_conflict and not result.conflict_resolved:
-                status_label = "FAILED (unresolved merge conflict)"
-            commit_label = f" commit={result.commit_sha[:8]}" if result.commit_sha else ""
-            print(f"  {result.task_id}: {status_label}{commit_label}")
-            if result.error:
-                print(f"    error: {result.error}")
-
-            if result.success:
-                completed.append(
-                    _pool_task_report_entry(
-                        args.workspace,
-                        task_id=result.task_id,
-                        title=result.task_id,
-                        status="done",
-                        pipeline_status="done",
-                        slug="",
-                    )
-                )
-            else:
-                flagged.append(
-                    _pool_task_report_entry(
-                        args.workspace,
-                        task_id=result.task_id,
-                        title=result.task_id,
-                        status="merge_failed",
-                        pipeline_status="commit_to_git",
-                        slug="",
-                    )
-                )
-
-    print(f"\nstop_reason: {summary.stop_reason}")
-
-    report = _pool_summary_report_data(
-        args.workspace,
-        completed=completed,
-        flagged=flagged,
-        stop_reason=summary.stop_reason,
-        tasks_run=len(summary.executions),
+    engine_override = getattr(args, "engine", None)
+    model_override = getattr(args, "model", None)
+    engine_usage_caps = _cli_override_or_default(
+        _parse_engine_int_map(
+            getattr(args, "engine_usage_cap", None), option_name="--engine-usage-cap"
+        )
+        if getattr(args, "engine_usage_cap", None) is not None
+        else None,
+        config.engine_usage_caps,
     )
-    _write_pool_summary_report(root=args.workspace, report=report)
-    _print_pool_summary_report(report=report)
+    engine_budget_caps = _cli_override_or_default(
+        _parse_engine_int_map(
+            getattr(args, "engine_budget_cap", None), option_name="--engine-budget-cap"
+        )
+        if getattr(args, "engine_budget_cap", None) is not None
+        else None,
+        config.engine_budget_caps,
+    )
+    engine_costs = _cli_override_or_default(
+        _parse_engine_int_map(
+            getattr(args, "engine_cost", None), option_name="--engine-cost"
+        )
+        if getattr(args, "engine_cost", None) is not None
+        else None,
+        config.engine_costs,
+    )
+    from litehive.pipeline_old import TaskPoolStopConditions
+
+    stop_conditions = TaskPoolStopConditions(
+        max_tasks=getattr(args, "max_tasks", None),
+        stop_on_failure=_cli_override_or_default(
+            getattr(args, "stop_on_failure", None), config.pool_stop_on_failure
+        ),
+        stop_on_execution_limit=_cli_override_or_default(
+            getattr(args, "stop_on_execution_limit", None),
+            config.pool_stop_on_execution_limit,
+        ),
+        quota_threshold=_cli_override_or_default(
+            getattr(args, "quota_threshold", None), config.pool_quota_threshold
+        ),
+        budget_threshold=_cli_override_or_default(
+            getattr(args, "budget_threshold", None), config.pool_budget_threshold
+        ),
+        pool_usage_cap=_cli_override_or_default(
+            getattr(args, "pool_usage_cap", None), config.pool_usage_cap
+        ),
+        pool_cost_cap=_cli_override_or_default(
+            getattr(args, "pool_cost_cap", None), config.pool_cost_cap
+        ),
+        engine_usage_caps=engine_usage_caps,
+        engine_budget_caps=engine_budget_caps,
+        engine_costs=engine_costs,
+        stop_on_dirty_git=_cli_override_or_default(
+            getattr(args, "stop_on_dirty_git", None), config.pool_stop_on_dirty_git
+        ),
+    )
+    planned_tasks = [selection.task] if selection.task is not None else []
+    runnable_tasks, predicted_stop_reason = _plan_single_task_dry_run(
+        args.workspace,
+        planned_tasks=planned_tasks,
+        blocked_count=len(selection.blocked),
+        config=config,
+        stop_conditions=stop_conditions,
+        engine_override=engine_override,
+        model_override=model_override,
+    )
+    _print_pool_dry_run_plan(
+        args.workspace,
+        planned_tasks=runnable_tasks,
+        blocked=selection.blocked,
+        config=config,
+        stop_conditions=stop_conditions,
+        predicted_stop_reason=predicted_stop_reason,
+    )
     return 0
