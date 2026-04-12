@@ -99,8 +99,35 @@ class RoleAgent(AgentNode):
                 if last_rejection is not None
                 else None
             ),
+            "rejecting_hooks": self._rejecting_hooks_for_stage(),
             "thread": state.failure_context.get("thread", []),
         }
+
+    def _rejecting_hooks_for_stage(self) -> list[dict[str, Any]]:
+        """Return the after-stage hooks that reject on failure for this node.
+
+        Loads from workspace config so the agent knows what automated
+        checks will run on its output and can pre-check before submitting.
+        """
+        after_phase = f"after_{self.NODE_NAME}"
+        root = self.prompt_context.workspace_root
+        if root is None:
+            return []
+        try:
+            from litehive.config import load_config
+
+            config = load_config(root)
+        except Exception:
+            return []
+        raw_hooks = getattr(config, "runner_hooks", {}).get(after_phase, [])
+        return [
+            {
+                "command": hook.command,
+                "description": getattr(hook, "description", "") or "",
+            }
+            for hook in raw_hooks
+            if getattr(hook, "reject_on_failure", True)
+        ]
 
     def _assemble_instruction_layers(self) -> list[tuple[str, str]]:
         layers: list[tuple[str, str]] = [("role", self.INSTRUCTIONS.strip())]

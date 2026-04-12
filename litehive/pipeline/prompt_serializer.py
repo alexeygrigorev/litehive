@@ -73,6 +73,10 @@ def serialize_prompt(
     if thread:
         sections.append(_thread_section(thread))
 
+    rejecting_hooks = prompt.get("rejecting_hooks") or []
+    if rejecting_hooks:
+        sections.append(_rejecting_hooks_section(rejecting_hooks))
+
     sections.append(_verdict_instructions_section(prompt))
     return (SECTION_SEP * 2).join(s for s in sections if s).strip() + "\n"
 
@@ -196,6 +200,19 @@ def _thread_section(thread: list[dict[str, Any]]) -> str:
         message = entry.get("message", "")
         blocks.append(f"[{step}] {role} ({verdict}): {message}")
     return "Discussion thread:\n" + "\n".join(blocks)
+
+
+def _rejecting_hooks_section(hooks: list[dict[str, Any]]) -> str:
+    lines = ["Checks that will reject your work if they fail:"]
+    for hook in hooks:
+        cmd = hook.get("command", "")
+        desc = hook.get("description", "")
+        if desc:
+            lines.append(f"- {cmd} ({desc})")
+        else:
+            lines.append(f"- {cmd}")
+    lines.append("Run these checks yourself before submitting your verdict. If they fail, the after-stage hook will reject your work and you will need to fix it.")
+    return "\n".join(lines)
 
 
 def _verdict_instructions_section(prompt: dict[str, Any]) -> str:
