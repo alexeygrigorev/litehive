@@ -61,7 +61,7 @@ class SandboxPolicySummary:
             return "host"
         if self.backend == "bubblewrap":
             details = [
-                f"bwrap",
+                "bwrap",
                 f"profile={self.profile}",
                 f"net={self.network_mode}",
                 f"workspace={self.workspace_mode}",

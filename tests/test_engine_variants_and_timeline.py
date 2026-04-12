@@ -1,4 +1,4 @@
-import pytest; pytest.skip("v1 executor tests — pipeline_old deleted", allow_module_level=True)
+import pytest
 from tests.workspace_helpers import (
     AdapterCapabilities,
     CLIExecutionResult,
@@ -10,7 +10,6 @@ from tests.workspace_helpers import (
     StageReport,
     SubagentManager,
     SubagentRef,
-    TaskExecutionRunner,
     _cmd_run,
     _cmd_update,
     _completed_subagent_result,
@@ -769,7 +768,7 @@ def test_configure_updates_existing_workspace_budget_settings(tmp_path: Path) ->
 
 
 def test_claude_model_resolved_from_workspace_defaults() -> None:
-    from litehive.pipeline_old import workspace_model_for_engine
+    from litehive.config.engine_models import workspace_model_for_engine
 
     config = LitehiveConfig(claude_model="claude-sonnet-4-20250514")
     assert workspace_model_for_engine(config, "claude") == "claude-sonnet-4-20250514"
@@ -1140,6 +1139,7 @@ def test_runner_persists_duration_seconds_in_report_yaml(tmp_path: Path) -> None
     def executor(task, step):  # type: ignore[no-untyped-def]
         return StageReport(task_id=task.id, step=step, verdict="pass", summary=f"{step} ok", files_changed=["app.txt"], tests={"added": 1, "passing": 1})
 
+        pytest.skip("v1 executor deleted")
     runner = TaskExecutionRunner(tmp_path, executor)
     runner.run(task)
 

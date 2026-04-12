@@ -1,6 +1,6 @@
 """Apply grooming-stage TASK_UPDATE changes from an agent's verdict comment.
 
-v1 grooming agents can emit either:
+Grooming agents can emit either:
 
 1. A structured ``TASK_UPDATE:`` YAML block in their report message, or
 2. Plain-text ``ACCEPTANCE_CRITERIA: / PLAN: / CONSTRAINTS: /
@@ -10,7 +10,7 @@ Both paths funnel into ``litehive.workspace.workflow.apply_task_updates_from_rep
 which expects a ``StageReport``-shaped object with ``task_update`` (dict)
 and ``feedback`` (text) fields.
 
-v2 agents submit via ``litehive report``, which writes a ``TaskThreadComment``
+Agents submit via ``litehive report``, which writes a ``TaskThreadComment``
 with only a plain ``message`` string — no structured ``task_update``
 field. So this module constructs a shim object carrying the comment's
 message as ``feedback`` (letting the text-section extractors run) and
@@ -79,7 +79,7 @@ def apply_task_updates_from_comment(
     """Apply any task field updates embedded in an agent's verdict message.
 
     Returns True if anything was applied, False otherwise. Errors from
-    the underlying v1 apply path are swallowed and logged to stderr —
+    the underlying apply path are swallowed and logged to stderr —
     a malformed TASK_UPDATE shouldn't fail the pipeline.
     """
     from litehive.workspace.workflow import apply_task_updates_from_report
@@ -94,7 +94,7 @@ def apply_task_updates_from_comment(
         import sys
 
         print(
-            f"[v2 task_updates] ignored error applying task update: {exc}",
+            f"[task_updates] ignored error applying task update: {exc}",
             file=sys.stderr,
         )
         return False

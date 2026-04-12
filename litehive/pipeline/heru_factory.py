@@ -1,4 +1,4 @@
-"""HeruEngineFactory — produces v2 ``Engine`` instances backed by heru.
+"""HeruEngineFactory — produces ``Engine`` instances backed by heru.
 
 The factory takes a workspace root and returns a callable
 ``Callable[[str], Engine]`` suitable for the ``ConfigBackedEngineSelector``.
@@ -14,7 +14,7 @@ translating to/from the v2 contract:
   - SubagentResult → ``AgentVerdict`` via the verdict reader, which checks
     whether a fresh ``litehive report`` submission landed in the workspace
     journal during this turn
-  - heru exceptions → v2 error taxonomy
+  - heru exceptions → error taxonomy
 """
 
 from datetime import UTC, datetime
@@ -87,7 +87,7 @@ def _parse_iso(value: str) -> datetime:
 
 
 class HeruEngineAdapter:
-    """v2 ``Engine`` that delegates to ``SubagentManager`` for one turn."""
+    """``Engine`` that delegates to ``SubagentManager`` for one turn."""
 
     def __init__(self, engine_name: str, workspace_root: Path) -> None:
         self.name = engine_name
@@ -121,7 +121,7 @@ class HeruEngineAdapter:
             self._reraise(exc)
             raise  # unreachable
 
-        # Update the v2 session with the new heru continuation id (if any).
+        # Update the session with the new heru continuation id (if any).
         new_session_id = self._extract_continuation_id(result, session.engine_session_id)
         if new_session_id:
             session.engine_session_id = new_session_id
@@ -136,7 +136,7 @@ class HeruEngineAdapter:
 
         # If this was a grooming verdict, the planner may have embedded a
         # TASK_UPDATE block (or text sections like ACCEPTANCE_CRITERIA /
-        # PLAN / CONSTRAINTS) in its message. Apply those to the v1 task
+        # PLAN / CONSTRAINTS) in its message. Apply those to the task
         # record so downstream stages see the updated intent.
         if step == "grooming" and task is not None:
             from .task_updates import apply_task_updates_from_comment
@@ -161,7 +161,7 @@ class HeruEngineAdapter:
 
     @staticmethod
     def _reraise(exc: Exception) -> None:
-        """Translate heru exceptions into the v2 error taxonomy."""
+        """Translate heru exceptions into the error taxonomy."""
         # heru.RetryableExecutionFailure carries a kind that we can refine.
         kind = getattr(exc, "kind", None)
         message = str(exc)

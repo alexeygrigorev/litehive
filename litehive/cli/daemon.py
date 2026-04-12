@@ -22,7 +22,7 @@ def _cmd_daemon_run(args):
         print(f"daemon run failed: {exc}")
         return 1
     print(f"workspace: {args.workspace.resolve()}")
-    print(f"daemon_status: running")
+    print("daemon_status: running")
     print(f"pid: {pid}")
     return 0
 

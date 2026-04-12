@@ -16,6 +16,8 @@ import litehive.agents.quota.zai_quota as zai_quota_mod
 from litehive.models import RuntimeContinuationHandoff, TaskRecord
 from litehive.workspace.runtime_tracking import set_task_continuation_handoff
 from litehive.config.paths import config_path
+from litehive.config.pool_types import ResolvedExecutionRetryPolicy
+
 
 def _engine_attempt_order(
     initial_engine_names: list[str], engine_preference: list[str]
@@ -28,7 +30,6 @@ def _engine_attempt_order(
         seen.add(engine_name)
         ordered.append(engine_name)
     return ordered
-from litehive.config.pool_types import ResolvedExecutionRetryPolicy
 
 
 @dataclass(frozen=True)

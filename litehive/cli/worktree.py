@@ -91,7 +91,7 @@ def _cmd_worktree_clean(args):
         print(f"skipped_active: {item.task_id} {item.status} {item.worktree_rel}")
 
     if args.dry_run:
-        print(f"removed_count: 0")
+        print("removed_count: 0")
         print(f"would_remove_count: {len(candidates)}")
         return 0
 

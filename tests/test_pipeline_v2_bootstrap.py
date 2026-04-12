@@ -1,8 +1,8 @@
-"""Full-bootstrap integration test: run_task_v2 against a real workspace.
+"""Full-bootstrap integration test: run_task against a real workspace.
 
 Exercises the real stack — ``SqlitePersistence``, ``SqliteSessionStore``,
 ``SqliteJournal``, ``SubprocessHookRunner``, ``GitCommitNode`` via
-``run_task_v2`` — only stubbing the engine factory so we don't invoke
+``run_task`` — only stubbing the engine factory so we don't invoke
 real LLM CLIs. Every other wiring layer is exactly what prod uses.
 
 Two tests: one that drives a task straight to ``done`` by making every
@@ -17,7 +17,7 @@ from typing import Any
 import pytest
 
 from litehive.pipeline.nodes.agent import AgentVerdict, EngineBlockedError
-from litehive.pipeline.orchestration import run_task_v2
+from litehive.pipeline.orchestration import run_task
 from litehive.tasks.crud import create_task, save_task
 
 from tests.workspace_helpers import ensure_workspace
@@ -82,7 +82,7 @@ def _stub_factory(behavior):
 # ── happy path ───────────────────────────────────────────────────────────
 
 
-def test_run_task_v2_happy_path_against_real_workspace(live_workspace: Path) -> None:
+def test_run_task_happy_path_against_real_workspace(live_workspace: Path) -> None:
     task = create_task(
         live_workspace,
         title="v2 bootstrap smoke",
@@ -95,7 +95,7 @@ def test_run_task_v2_happy_path_against_real_workspace(live_workspace: Path) -> 
     save_task(live_workspace, task)
 
     calls: list = []
-    result = run_task_v2(
+    result = run_task(
         live_workspace,
         task,
         engine_factory=_stub_factory(_auto_pass_behavior(calls)),
@@ -111,7 +111,7 @@ def test_run_task_v2_happy_path_against_real_workspace(live_workspace: Path) -> 
 # ── all engines blocked → failed ────────────────────────────────────────
 
 
-def test_run_task_v2_full_mode_walks_every_stage(live_workspace: Path) -> None:
+def test_run_task_full_mode_walks_every_stage(live_workspace: Path) -> None:
     """Full-mode task: grooming → implementing → testing → accepting → done."""
     task = create_task(
         live_workspace,
@@ -121,7 +121,7 @@ def test_run_task_v2_full_mode_walks_every_stage(live_workspace: Path) -> None:
     )
 
     calls: list = []
-    result = run_task_v2(
+    result = run_task(
         live_workspace,
         task,
         engine_factory=_stub_factory(_auto_pass_behavior(calls)),
@@ -136,7 +136,7 @@ def test_run_task_v2_full_mode_walks_every_stage(live_workspace: Path) -> None:
     assert stages_called >= {"grooming", "implementing", "testing", "accepting"}
 
 
-def test_run_task_v2_all_engines_blocked_lands_in_failed(live_workspace: Path) -> None:
+def test_run_task_all_engines_blocked_lands_in_failed(live_workspace: Path) -> None:
     task = create_task(
         live_workspace,
         title="v2 bootstrap failure",
@@ -144,7 +144,7 @@ def test_run_task_v2_all_engines_blocked_lands_in_failed(live_workspace: Path) -
         pipeline_mode="single",
     )
 
-    result = run_task_v2(
+    result = run_task(
         live_workspace,
         task,
         engine_factory=_stub_factory(_always_block_behavior),

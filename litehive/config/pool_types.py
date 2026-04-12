@@ -5,12 +5,14 @@ from pathlib import Path
 
 from litehive.config import ExecutionRetryPolicy
 from litehive.models import TaskRecord
+from litehive.tasks.models import BlockedTask
+
+
 @dataclass(slots=True)
 class RunResult:
     final_status: str
     steps_executed: int = 0
     last_verdict: str | None = None
-from litehive.tasks.models import BlockedTask
 
 
 @dataclass(slots=True)

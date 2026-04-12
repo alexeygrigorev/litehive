@@ -52,7 +52,7 @@ from litehive.cli.status import _cmd_list, _cmd_queue, _cmd_repair, _cmd_show, _
 from litehive.cli.tasks import _cmd_add, _cmd_intake, _cmd_issue, _cmd_update
 from litehive.cli.worktree import _cmd_worktree_clean, _cmd_worktree_ls, _cmd_worktree_rescue
 from litehive.config import VALID_POOL_SELECTION_POLICIES, available_process_profiles
-from litehive.pipeline.orchestration import run_task_v2
+from litehive.pipeline.orchestration import run_task
 from litehive.tasks.queue_ops import dequeue_next_task
 from litehive.tasks.constants import (
     VALID_HUMAN_CHECKPOINTS,
@@ -152,7 +152,7 @@ def _run_next_task(root: Path):
     task = dequeue_next_task(root)
     if task is None:
         return None
-    return run_task_v2(root, task)
+    return run_task(root, task)
 
 
 @app.callback(invoke_without_command=True)

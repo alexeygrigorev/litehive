@@ -1,4 +1,4 @@
-"""Factory that assembles a full ``NodeRegistry`` for the v2 state machine.
+"""Factory that assembles a full ``NodeRegistry`` for the state machine.
 
 Takes the injectable dependencies (engine selector, session store, hook
 runner, commit node, prompt context, per-phase hook specs) and registers
@@ -77,7 +77,7 @@ def build_registry(
     retry_backoff_seconds: float = 0.0,
     retry_backoff_multiplier: float = 2.0,
 ) -> NodeRegistry:
-    """Assemble every node the v2 state machine can route to.
+    """Assemble every node the state machine can route to.
 
     ``hook_specs`` maps phase name (e.g. ``"before_implementing"``) to a list
     of ``HookSpec``. Missing phases default to an empty list, producing a

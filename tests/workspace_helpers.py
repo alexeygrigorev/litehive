@@ -19,7 +19,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from litehive.cli import (
     _cmd_abandon_task,
     _cmd_add,
-    _cmd_debug,
     _cmd_doctor,
     _cmd_archive,
     _cmd_cleanup,
@@ -112,26 +111,21 @@ from litehive.observability import (
 from litehive.config.pool_types import EngineBudgetLedger, TaskPoolStopConditions
 from litehive.recovery.execution_recovery import recover_completed_task, rollback_completed_task
 from litehive.config.engine_models import (
+    resolve_engine_name,
     resolve_engine_plan,
     resolve_execution_retry_policy,
+    resolve_model,
 )
+from litehive.pipeline.orchestration import run_task, ExecutionResult
+from litehive.tasks.queue_ops import dequeue_next_task
 
-# v1 executor stubs — these functions no longer exist but some test files
-# import them from workspace_helpers. Tests that use them are already
-# skipped at module level.
-def _noop(*a, **kw): raise RuntimeError("v1 executor deleted")
-TaskExecutionRunner = _noop
-_allowed_commit_paths = _noop
-_commit_to_git_report = _noop
-_role_for_step = _noop
-_unexpected_dirty_paths = _noop
-drain_task_pool = _noop
-resolve_engine_name = _noop
-resolve_model = _noop
-resolve_next_task = _noop
-run_next_task = _noop
-run_single_task = _noop
-run_task = _noop
+
+def run_next_task(root, **kwargs):
+    """v2 replacement for the deleted v1 run_next_task."""
+    task = dequeue_next_task(root)
+    if task is None:
+        return ExecutionResult(task=None, final_state=None, final_stage="none")
+    return run_task(root, task, **kwargs)
 from litehive.agents import (
     EngineFailure,
     SubagentManager,

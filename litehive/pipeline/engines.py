@@ -7,7 +7,7 @@ Two things live here:
    engine that isn't frozen and isn't in the caller's ``excluded`` set.
 2. ``HeruEngineAdapter`` — wraps a heru engine adapter so it matches the v2
    ``Engine`` protocol (``run_turn(session, prompt, state) → AgentVerdict``)
-   and translates heru exceptions into the v2 error taxonomy.
+   and translates heru exceptions into the error taxonomy.
 
 The selector never imports heru directly; it receives an ``engine_factory``
 callable that turns an engine name into an ``Engine`` instance. Tests can
@@ -130,16 +130,16 @@ _NUDGE_EXCEPTION_NAMES = {
 
 
 class HeruEngineAdapter:
-    """Wraps a heru engine adapter as a v2 ``Engine``.
+    """Wraps a heru engine adapter as a ``Engine``.
 
     Provides the ``run_turn(session, prompt, state) → AgentVerdict`` contract
     by:
 
-    1. Calling into the underlying ``heru`` adapter with the v2 session id
+    1. Calling into the underlying ``heru`` adapter with the session id
        (if present, via ``--continue``).
     2. Translating heru's result into an ``AgentVerdict`` via the task's
        structured ``litehive report`` submission, read back from sqlite.
-    3. Translating heru's exceptions into the v2 taxonomy
+    3. Translating heru's exceptions into the error taxonomy
        (``TransientError`` / ``QuotaExceeded`` / ``EngineOverloaded`` /
        ``ModelUnavailable`` / ``NudgeRequired`` / ``UnrecoverableError``).
 

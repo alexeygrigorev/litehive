@@ -8,7 +8,7 @@ from litehive.cli._dry_run import (
 )
 from litehive.cli._parse import _parse_engine_int_map
 from litehive.config import ensure_workspace, load_config
-from litehive.pipeline.orchestration import run_task_v2
+from litehive.pipeline.orchestration import run_task
 from litehive.tasks.models import WorkspaceConflictError
 from litehive.tasks.queue_ops import dequeue_next_task, peek_next_task_selection, plan_task_selections
 
@@ -23,7 +23,7 @@ def _run_single_v2(workspace: Path) -> int:
     if task is None:
         print("No queued task.")
         return 0
-    result = run_task_v2(workspace, task)
+    result = run_task(workspace, task)
     if result.task is not None:
         print(f"task: {result.task.id} {result.task.title}")
     print(f"final_stage: {result.final_stage}")

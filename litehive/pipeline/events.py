@@ -1,4 +1,4 @@
-"""Sealed event hierarchy for the v2 pipeline state machine.
+"""Sealed event hierarchy for the pipeline state machine.
 
 Every node in the state machine returns an ``Event`` from its ``run()``
 method; the transition table then matches on the event's concrete type

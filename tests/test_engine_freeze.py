@@ -1,4 +1,3 @@
-import pytest; pytest.skip("v1 executor tests — pipeline_old deleted", allow_module_level=True)
 """Tests for engine freeze/unfreeze CLI and runtime filtering."""
 from tests.workspace_helpers import (
     EngineBudgetLedger,
@@ -17,7 +16,7 @@ from tests.workspace_helpers import (
 from datetime import datetime, timedelta, timezone
 
 from litehive.cli.engine import _parse_local_datetime
-from litehive.pipeline_old import EngineSelection
+from litehive.config.engine_models import EngineSelection
 
 
 def test_parse_local_datetime_date_only():
@@ -158,7 +157,7 @@ def test_engine_set_subcommand(tmp_path: Path, capsys) -> None:
 
 def test_frozen_engine_skipped_in_attempt_order(tmp_path: Path) -> None:
     """Frozen engines are removed from the attempt order."""
-    from litehive.pipeline_old import resolve_engine_attempt_order
+    from litehive.config.engine_models import resolve_engine_attempt_order
 
     future = (datetime.now(timezone.utc) + timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
     config = LitehiveConfig(
@@ -175,7 +174,7 @@ def test_frozen_engine_skipped_in_attempt_order(tmp_path: Path) -> None:
 
 def test_expired_freeze_not_skipped(tmp_path: Path) -> None:
     """Engines with expired freezes are not skipped."""
-    from litehive.pipeline_old import resolve_engine_attempt_order
+    from litehive.config.engine_models import resolve_engine_attempt_order
 
     past = (datetime.now(timezone.utc) - timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
     config = LitehiveConfig(
@@ -273,7 +272,7 @@ def test_parser_accepts_set_subcommand() -> None:
 
 def test_frozen_engine_in_fallback_chain_skipped(tmp_path: Path) -> None:
     """When a fallback engine is frozen, it's skipped but others remain."""
-    from litehive.pipeline_old import resolve_engine_attempt_order
+    from litehive.config.engine_models import resolve_engine_attempt_order
 
     future = (datetime.now(timezone.utc) + timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
     config = LitehiveConfig(
@@ -293,7 +292,7 @@ def test_select_engine_records_quota_freeze_and_falls_back(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from litehive.pipeline_old import select_engine
+    from litehive.config.engine_models import select_engine
 
     freeze_until = datetime(2099, 1, 2, 3, 4, 5, tzinfo=timezone.utc)
     ensure_workspace(
@@ -321,7 +320,7 @@ def test_select_engine_skips_active_freeze_without_quota_call(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from litehive.pipeline_old import select_engine
+    from litehive.config.engine_models import select_engine
 
     future = (datetime.now(timezone.utc) + timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
     ensure_workspace(
@@ -352,7 +351,7 @@ def test_select_engine_rechecks_expired_freeze_before_refreshing(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from litehive.pipeline_old import select_engine
+    from litehive.config.engine_models import select_engine
 
     past = (datetime.now(timezone.utc) - timedelta(minutes=5)).strftime("%Y-%m-%dT%H:%M:%SZ")
     refreshed = datetime(2099, 2, 3, 4, 5, 6, tzinfo=timezone.utc)
@@ -387,7 +386,7 @@ def test_select_engine_rechecks_expired_freeze_and_allows_recovered_engine(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from litehive.pipeline_old import select_engine
+    from litehive.config.engine_models import select_engine
 
     past = (datetime.now(timezone.utc) - timedelta(minutes=5)).strftime("%Y-%m-%dT%H:%M:%SZ")
     ensure_workspace(
@@ -415,7 +414,7 @@ def test_select_engine_rechecks_expired_freeze_and_allows_recovered_engine(
 
 
 def test_builder_uses_shared_select_engine(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    from litehive.pipeline_old._builder import build_executor
+    pass  # build_executor deleted
 
     class DummySubagents:
         def run(self, *args, **kwargs):

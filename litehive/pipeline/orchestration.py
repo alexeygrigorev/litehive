@@ -1,14 +1,14 @@
 """v2 task orchestration entry point.
 
-One function — ``run_task_v2(root, task)`` — that wires up the v2 pipeline
+One function — ``run_task(root, task)`` — that wires up the pipeline
 end-to-end and drives one task through the state machine. It is the
-v2-equivalent of ``pipeline_old._orchestration.run_task`` and exists so the
-daemon (or any caller) can flip a single line to opt in to v2.
+
+
 
 What it does, in order:
 
 1. Loads workspace config.
-2. Initializes (or loads) the v2 ``TaskState`` via the v1 bridge so the
+2. Initializes (or loads) the ``TaskState`` via the bridge so the
    sqlite row exists with the right pipeline mode.
 3. Constructs the engine selector / session store / persistence /
    journal / hook runner / commit node.
@@ -17,7 +17,7 @@ What it does, in order:
 6. Syncs the v2 terminal state back to the v1 ``TaskRecord`` so
    ``litehive status`` and the queue stay coherent.
 
-Returns a small ``ExecutionResultV2`` named-tuple-ish dataclass the
+Returns a small ``ExecutionResult`` named-tuple-ish dataclass the
 caller can render.
 """
 
@@ -26,7 +26,7 @@ from pathlib import Path
 
 from litehive.config import load_config
 from litehive.models import TaskRecord
-from litehive.tasks.crud import get_task_worktree_path
+from litehive.tasks.crud import get_task, get_task_worktree_path, save_task
 from litehive.workspace.locking import runner_heartbeat, workspace_runner_guard
 
 from .agents._base import PromptContext
@@ -46,12 +46,56 @@ from .persistence import SqlitePersistence, TaskState
 from .registry import build_registry
 from .runner import StateMachineRunner
 from .sessions import SqliteSessionStore
-from .v1_bridge import load_or_initialize, sync_back_to_task_record
+from .types import PipelineMode as _PipelineMode
+
+
+def _load_or_initialize(task_id: str, workspace_root: Path, persistence: SqlitePersistence) -> TaskState:
+    """Return a ``TaskState`` for ``task_id``, creating the row if needed."""
+    task_record = get_task(workspace_root, task_id)
+    if task_record is None:
+        raise LookupError(f"no task record for {task_id!r}")
+    raw = getattr(task_record, "pipeline_mode", None)
+    mode = _PipelineMode(raw) if isinstance(raw, str) and raw else _PipelineMode.FULL
+    return persistence.initialize(task_id, pipeline_mode=mode)
+
+
+_STAGE_TO_PIPELINE_STATUS: dict[str, str] = {
+    "ready": "backlog", "recovering_pre_exec": "backlog",
+    "before_grooming": "grooming", "grooming": "grooming", "after_grooming": "grooming",
+    "before_implementing": "implementing", "implementing": "implementing", "after_implementing": "implementing",
+    "before_testing": "testing", "testing": "testing", "after_testing": "testing",
+    "before_accepting": "accepting", "accepting": "accepting", "after_accepting": "accepting",
+    "before_commit": "commit_to_git", "commit": "commit_to_git", "after_commit": "commit_to_git",
+    "merge_resolving": "commit_to_git", "recovering": "grooming",
+}
+
+
+def _sync_back(state: TaskState, workspace_root: Path) -> TaskRecord | None:
+    """Mirror the pipeline stage back to the TaskRecord so litehive status stays accurate."""
+    task_record = get_task(workspace_root, state.task_id)
+    if task_record is None:
+        return None
+    if state.stage == "done":
+        task_record.status = "done"
+        task_record.pipeline_status = "done"
+    elif state.stage == "failed":
+        commit_stages = {"commit", "before_commit", "after_commit", "merge_resolving"}
+        if state.origin_stage in commit_stages:
+            task_record.status = "merge_failed"
+            task_record.pipeline_status = "merge_failed"
+        else:
+            task_record.status = "flagged"
+            task_record.pipeline_status = "flagged"
+    else:
+        task_record.status = "in_progress"
+        task_record.pipeline_status = _STAGE_TO_PIPELINE_STATUS.get(state.stage, task_record.pipeline_status)
+    save_task(workspace_root, task_record)
+    return task_record
 
 
 @dataclass
-class ExecutionResultV2:
-    """Result of running one task through the v2 state machine."""
+class ExecutionResult:
+    """Result of running one task through the pipeline state machine."""
 
     task: TaskRecord | None
     final_state: TaskState | None
@@ -131,9 +175,9 @@ def _clear_stale_worktree_repair(root: Path):
 
 
 def _hook_specs_from_config(config) -> dict[str, list[HookSpec]]:
-    """Translate ``LitehiveConfig.runner_hooks`` into v2 ``HookSpec`` lists.
+    """Translate ``LitehiveConfig.runner_hooks`` into ``HookSpec`` lists.
 
-    v1 config stores runner hooks as ``dict[phase_name, list[HookConfig]]``
+    Config stores runner hooks as ``dict[phase_name, list[HookConfig]]``
     where HookConfig has ``command``, ``reject_on_failure``,
     ``timeout_seconds``, ``description``, ``instructions_on_failure``. v2
     HookSpec is a strict subset — just command / reject_on_failure /
@@ -157,36 +201,32 @@ def _hook_specs_from_config(config) -> dict[str, list[HookSpec]]:
     return out
 
 
-def run_task_v2(
+def run_task(
     root: Path,
     task: TaskRecord,
     *,
     engine_factory: EngineFactory | None = None,
-) -> ExecutionResultV2:
-    """Run a single task through the v2 state machine.
+) -> ExecutionResult:
+    """Run a single task through the state machine.
 
     Takes the workspace runner guard and publishes a heartbeat so other
     tools see the task as active. Always uses the real ``GitCommitNode``
-    — v2 is the executor, not a dry run.
+    — 
 
     ``engine_factory`` is an injection point for tests: pass a callable
-    that produces fake ``Engine`` instances and v2 will use it in place
+    that produces fake ``Engine`` instances and the pipeline will use it in place
     of the real ``heru_engine_factory``.
     """
     root = root.resolve()
     config = load_config(root)
 
     with workspace_runner_guard(root):
-        # 1. Make sure the v2 state row exists for this task.
-        load_or_initialize(task.id, root)
+        persistence = SqlitePersistence(root)
+        _load_or_initialize(task.id, root, persistence)
 
-        # 2. Build dependencies. Engine selector + heru factory wire up
-        #    the real engines via the existing SubagentManager; the rest
-        #    are the sqlite stores we land in M1.
         factory = engine_factory or heru_engine_factory(root)
         selector = ConfigBackedEngineSelector(config, factory)
         sessions = SqliteSessionStore(root)
-        persistence = SqlitePersistence(root)
         journal = SqliteJournal(root)
         hook_runner = SubprocessHookRunner(root)
         commit_node = _build_commit_node(root)
@@ -221,9 +261,9 @@ def run_task_v2(
             final_state = runner.run_task(task.id)
 
         # 4. Mirror terminal state back to the v1 TaskRecord.
-        updated_task = sync_back_to_task_record(final_state, root) or task
+        updated_task = _sync_back(final_state, root) or task
 
-    return ExecutionResultV2(
+    return ExecutionResult(
         task=updated_task,
         final_state=final_state,
         final_stage=final_state.stage,
