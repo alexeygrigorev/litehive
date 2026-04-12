@@ -54,7 +54,7 @@ def _load_or_initialize(task_id: str, workspace_root: Path, persistence: SqliteP
     task_record = get_task(workspace_root, task_id)
     if task_record is None:
         raise LookupError(f"no task record for {task_id!r}")
-    raw = getattr(task_record, "pipeline_mode", None)
+    raw = task_record.pipeline_mode
     mode = _PipelineMode(raw) if isinstance(raw, str) and raw else _PipelineMode.FULL
     return persistence.initialize(task_id, pipeline_mode=mode)
 
@@ -185,15 +185,15 @@ def _hook_specs_from_config(config) -> dict[str, list[HookSpec]]:
     ``after_implementing``, …), so this is a straight per-phase rewrite.
     """
     out: dict[str, list[HookSpec]] = {}
-    raw = getattr(config, "runner_hooks", None) or {}
+    raw = config.runner_hooks or {}
     for phase, hooks in raw.items():
         specs: list[HookSpec] = []
         for hook in hooks or []:
             specs.append(
                 HookSpec(
                     command=hook.command,
-                    reject_on_failure=bool(getattr(hook, "reject_on_failure", True)),
-                    timeout_seconds=int(getattr(hook, "timeout_seconds", 60) or 60),
+                    reject_on_failure=bool(hook.reject_on_failure),
+                    timeout_seconds=int(hook.timeout_seconds or 60),
                 )
             )
         if specs:

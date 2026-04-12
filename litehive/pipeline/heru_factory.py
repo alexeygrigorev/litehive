@@ -147,23 +147,24 @@ class HeruEngineAdapter:
         return verdict
 
     @staticmethod
-    def _extract_continuation_id(result: Any, fallback: str | None) -> str | None:
-        # SubagentResult exposes a `ref` and an `execution`; the continuation
-        # id lives on `execution.continuation.resume_id` if heru extracted one.
-        execution = getattr(result, "execution", None)
+    def _extract_continuation_id(result, fallback: str | None) -> str | None:
+        from litehive.agents._models import SubagentResult
+
+        if not isinstance(result, SubagentResult):
+            return fallback
+        execution = result.execution
         if execution is None:
             return fallback
-        continuation = getattr(execution, "continuation", None)
-        if continuation is None:
+        if execution.continuation is None:
             return fallback
-        resume_id = getattr(continuation, "resume_id", None)
-        return resume_id or fallback
+        return execution.continuation.resume_id or fallback
 
     @staticmethod
     def _reraise(exc: Exception) -> None:
         """Translate heru exceptions into the error taxonomy."""
-        # heru.RetryableExecutionFailure carries a kind that we can refine.
-        kind = getattr(exc, "kind", None)
+        from heru import RetryableExecutionFailure
+
+        kind = exc.kind if isinstance(exc, RetryableExecutionFailure) else None
         message = str(exc)
 
         if kind in {"quota_exhausted", "rate_limited"}:

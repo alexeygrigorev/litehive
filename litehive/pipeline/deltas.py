@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import Any, Callable
 
-from .events import Event, MergeConflictDetected, Reject
+from .events import Blocked, Crash, Event, MergeConflictDetected, Reject
 from .persistence import LastRejection, TaskState
 from .types import FailedReason, NodeName
 
@@ -42,10 +42,19 @@ def _rejection_from_event(state: TaskState, event: Event) -> LastRejection | Non
 
 
 def _failure_context_from_event(state: TaskState, event: Event) -> dict[str, Any]:
+    source = event.source if isinstance(event, Reject) else None
+    if isinstance(event, Reject):
+        reason = event.reason
+    elif isinstance(event, Crash):
+        reason = event.message
+    elif isinstance(event, Blocked):
+        reason = event.reason
+    else:
+        reason = None
     return {
         "trigger_event": type(event).__name__,
-        "source": getattr(event, "source", None),
-        "reason": getattr(event, "reason", None) or getattr(event, "message", None),
+        "source": source,
+        "reason": reason,
         "raised_at_phase": state.stage,
     }
 
@@ -103,7 +112,12 @@ def stash_conflict_files(state: TaskState, event: Event) -> StateDelta:
 
 def fail(reason: FailedReason) -> EffectFn:
     def _effect(state: TaskState, event: Event) -> StateDelta:
-        message = getattr(event, "reason", None) or getattr(event, "message", "")
+        if isinstance(event, (Reject, Blocked)):
+            message = event.reason
+        elif isinstance(event, Crash):
+            message = event.message
+        else:
+            message = ""
         return StateDelta(failed_reason=reason, failed_message=message)
 
     return _effect

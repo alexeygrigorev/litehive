@@ -119,14 +119,14 @@ class RoleAgent(AgentNode):
             config = load_config(root)
         except Exception:
             return []
-        raw_hooks = getattr(config, "runner_hooks", {}).get(after_phase, [])
+        raw_hooks = (config.runner_hooks or {}).get(after_phase, [])
         return [
             {
                 "command": hook.command,
-                "description": getattr(hook, "description", "") or "",
+                "description": hook.description or "",
             }
             for hook in raw_hooks
-            if getattr(hook, "reject_on_failure", True)
+            if hook.reject_on_failure
         ]
 
     def _assemble_instruction_layers(self) -> list[tuple[str, str]]:
