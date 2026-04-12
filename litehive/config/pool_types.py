@@ -40,6 +40,7 @@ class TaskPoolStopConditions:
     stop_on_failure: bool = False
     max_tasks: int | None = None
     stop_on_dirty_git: bool = False
+    stop_on_attention: bool = False
 
 
 @dataclass(slots=True)

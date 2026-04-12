@@ -1,10 +1,10 @@
 """Git wrapper used by the merge-resolver sandbox profile."""
 
-from datetime import UTC, datetime
 import os
 from pathlib import Path
 import sys
 
+from litehive.attention import record_attention
 
 _PROTECTED_REFS = {"main", "master", "origin/main", "origin/master"}
 
@@ -12,7 +12,19 @@ _PROTECTED_REFS = {"main", "master", "origin/main", "origin/master"}
 def main(argv: list[str], *, real_git_path: str, workspace_root: str) -> int:
     reason = rejection_reason(argv)
     if reason is not None:
-        _append_attention_log(Path(workspace_root), f"merge-resolver git wrapper rejected `{_format_cmd(argv)}`: {reason}")
+        record_attention(
+            Path(workspace_root),
+            kind="destructive_git_denied",
+            title="Destructive git command was blocked",
+            reason=f"`{_format_cmd(argv)}` was rejected: {reason}",
+            suggested_action=(
+                "Use a non-destructive git recovery path instead. Once reviewed,"
+                " clear the queue item with `litehive attention resolve <id>`."
+            ),
+            dedupe_key=f"destructive_git_denied:{_format_cmd(argv)}:{reason}",
+            metadata={"command": _format_cmd(argv), "rejection_reason": reason},
+            log_message=f"merge-resolver git wrapper rejected `{_format_cmd(argv)}`: {reason}",
+        )
         print(f"litehive git wrapper: blocked destructive git command: {reason}", file=sys.stderr)
         return 2
     os.execv(real_git_path, [real_git_path, *argv])
@@ -105,11 +117,3 @@ def _resolve_git_dir(cwd: Path) -> Path | None:
 
 def _format_cmd(argv: list[str]) -> str:
     return "git" if not argv else "git " + " ".join(argv)
-
-
-def _append_attention_log(workspace: Path, message: str) -> None:
-    timestamp = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
-    path = workspace / ".litehive" / "runtime" / "attention.log"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("a", encoding="utf-8") as handle:
-        handle.write(f"{timestamp}\t{message}\n")

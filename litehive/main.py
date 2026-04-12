@@ -7,13 +7,13 @@ from pathlib import Path
 
 import yaml
 
+from litehive.attention import waiting_for_you_lines
 from litehive.config import resolve_workspace
 from litehive.observability.status_diagnostics import (
     collect_status_snapshot,
     render_health_summary,
     status_has_problems,
 )
-from litehive.recovery import status_attention_findings
 
 
 def _fast_runner_status(workspace: Path) -> dict:
@@ -82,6 +82,8 @@ def _fast_status(argv: list[str]) -> int:
     print(f"active_task_id: {active_task_id if active_task_id is not None else 'None'}")
     print(f"queued_tasks: {len(queue)}")
     print(f"pool_stop_reason: {stop_reason if stop_reason is not None else 'None'}")
+    for line in waiting_for_you_lines(workspace):
+        print(line)
     if queue:
         print(f"queue_head: {queue[0]}")
 
@@ -111,26 +113,6 @@ def _fast_status(argv: list[str]) -> int:
             print(f"active_task_status: {task.status}/{task.pipeline_status}")
             print(f"active_stage: {stage}")
             print(f"active_engine: {engine}")
-    alerts = status_attention_findings(workspace, pool_stop_reason=stop_reason)
-    attention_log = workspace / ".litehive" / "runtime" / "attention.log"
-    if attention_log.exists():
-        try:
-            entries = [
-                line.strip()
-                for line in attention_log.read_text(encoding="utf-8").splitlines()
-                if line.strip()
-            ]
-        except Exception:
-            entries = []
-        for entry in entries[-5:]:
-            alerts.append(f"attention: {entry}")
-    if alerts:
-        print()
-        print("!!! ATTENTION REQUIRED !!!")
-        for alert in alerts:
-            print(f"  ⚠ {alert}")
-        print()
-
     for engine_name in sorted((monitoring.get("engines") or {}).keys()):
         record = monitoring["engines"][engine_name] or {}
         parts = [

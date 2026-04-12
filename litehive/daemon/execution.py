@@ -14,7 +14,8 @@ from typing import TextIO
 
 import yaml
 
-from litehive.config import ensure_workspace, state_path, workspace_logs_dir
+from litehive.attention import list_attention, record_attention
+from litehive.config import ensure_workspace, load_config, state_path, workspace_logs_dir
 from litehive.storage import create_scheduled_workspace_backup
 from litehive.workspace.locking import runner_status
 
@@ -29,6 +30,7 @@ from .registry import (
 logger = logging.getLogger(__name__)
 
 _EXPLICIT_POOL_STOP_REASONS = {
+    "attention_required",
     "dirty_git_state",
     "diverged_from_origin",
     "max_tasks_reached",
@@ -309,14 +311,23 @@ def run_daemon_loop(
                     _emit(recovery_summary, stream=output_stream)
                 except Exception as exc:
                     logger.exception("auto-recovery from divergence failed")
-                    _append_attention_log(
+                    record_attention(
                         workspace,
-                        f"divergence auto-recovery FAILED: {exc}",
+                        kind="origin_divergence",
+                        title="Local main has diverged from origin/main",
+                        reason=divergence_reason,
+                        suggested_action=(
+                            "Run `git fetch origin main && git log --oneline --left-right main...origin/main`,"
+                            " then reconcile local and remote main before restarting the pool."
+                        ),
+                        dedupe_key="origin_divergence:main",
+                        metadata={"auto_recovery_error": str(exc)},
+                        log_message=f"divergence auto-recovery FAILED: {exc}",
                     )
-                    _write_pool_stop_reason(workspace, "diverged_from_origin")
+                    _write_pool_stop_reason(workspace, "attention_required")
                     _emit(
                         "!!! ATTENTION REQUIRED !!! Auto-recovery failed. "
-                        "Halting pool: diverged_from_origin",
+                        "Halting pool: attention_required",
                         stream=output_stream,
                     )
                     _emit(str(exc), stream=output_stream)
@@ -396,6 +407,15 @@ def run_daemon_loop(
             ):
                 _emit(f"Pool already stopped: {stop_reason_before}", stream=output_stream)
                 return 0
+            if load_config(workspace).pool_stop_on_attention:
+                unresolved_attention = list_attention(workspace)
+                if unresolved_attention:
+                    _write_pool_stop_reason(workspace, "attention_required")
+                    _emit(
+                        f"Pool stopped: attention_required ({len(unresolved_attention)} unresolved item(s))",
+                        stream=output_stream,
+                    )
+                    return 0
 
             try:
                 run_rc = _run_logged_subprocess(

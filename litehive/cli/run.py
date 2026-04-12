@@ -64,6 +64,7 @@ def _cmd_run_drain_dry_run(args, *, config):
         stop_on_dirty_git=cli_override_or_default(
             getattr(args, "stop_on_dirty_git", None), config.pool_stop_on_dirty_git
         ),
+        stop_on_attention=config.pool_stop_on_attention,
     )
     runnable_tasks, predicted_stop_reason = plan_pool_dry_run(
         args.workspace,
@@ -104,6 +105,7 @@ def _cmd_run_single_dry_run(args, *, config):
         stop_on_dirty_git=cli_override_or_default(
             getattr(args, "stop_on_dirty_git", None), config.pool_stop_on_dirty_git
         ),
+        stop_on_attention=config.pool_stop_on_attention,
     )
     planned_tasks = [selection.task] if selection.task is not None else []
     runnable_tasks, predicted_stop_reason = plan_single_task_dry_run(

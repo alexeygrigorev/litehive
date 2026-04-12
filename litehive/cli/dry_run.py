@@ -1,4 +1,5 @@
 from litehive.config.engine_models import select_engine
+from litehive.attention import list_attention
 
 from litehive.cli.pool import pool_stop_condition_label
 
@@ -25,6 +26,8 @@ def plan_pool_dry_run(
 
     if stop_conditions.stop_on_dirty_git and git_worktree_blocks_pool(root):
         return [], "dirty_git_state"
+    if stop_conditions.stop_on_attention and list_attention(root):
+        return [], "attention_required"
     runnable_tasks = []
 
     for task in planned_tasks:
@@ -73,6 +76,8 @@ def plan_single_task_dry_run(
 
     if stop_conditions.stop_on_dirty_git and git_worktree_blocks_pool(root):
         return [], "dirty_git_state"
+    if stop_conditions.stop_on_attention and list_attention(root):
+        return [], "attention_required"
     if not planned_tasks:
         if blocked_count:
             return [], "blocked_tasks_remaining"
@@ -135,3 +140,4 @@ def print_pool_dry_run_plan(
     print(f"stop_on_failure: {stop_conditions.stop_on_failure}")
     print(f"max_tasks: {stop_conditions.max_tasks}")
     print(f"stop_on_dirty_git: {stop_conditions.stop_on_dirty_git}")
+    print(f"stop_on_attention: {stop_conditions.stop_on_attention}")

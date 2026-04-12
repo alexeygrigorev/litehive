@@ -11,6 +11,11 @@ def cmd_doctor(args) -> int:
     root = args.workspace.resolve()
     if getattr(args, "fix", False):
         result = apply_doctor_fixes(root)
+        if result.stale_unmerged_worktrees_removed:
+            print(
+                "doctor_cleanup: "
+                f"stale_unmerged_worktrees_removed={result.stale_unmerged_worktrees_removed}"
+            )
         for finding in result.fixed:
             _render_finding("fixed", finding)
         for finding in result.remaining:
@@ -19,6 +24,11 @@ def cmd_doctor(args) -> int:
         return 0 if not result.remaining else 1
 
     report = scan_workspace_doctor(root)
+    if report.stale_unmerged_worktrees_removed:
+        print(
+            "doctor_cleanup: "
+            f"stale_unmerged_worktrees_removed={report.stale_unmerged_worktrees_removed}"
+        )
     if not report.findings:
         print(f"doctor: clean workspace={root}")
         return 0

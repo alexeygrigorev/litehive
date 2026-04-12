@@ -12,9 +12,11 @@ from litehive.recovery.detection import (
     is_orphaned_commit_stage_task,
     is_stranded_commit_task,
 )
+from litehive.tasks.constants import CLOSED_TASK_STATUSES
 from litehive.recovery.workspace_repair import repair_workspace_state
 from litehive.tasks.crud import list_tasks, save_task_runtime
-from litehive.tasks.persistence import load_state
+from litehive.tasks.paths import tasks_root
+from litehive.tasks.persistence import load_state, save_state_without_runner_guard
 from litehive.tasks.queue_ops import is_task_eligible_for_execution
 from litehive.tasks.worktrees import (
     is_managed_worktree_path,
@@ -37,16 +39,61 @@ class DoctorReport:
     findings: list[DoctorFinding] = field(default_factory=list)
     state_error: str | None = None
     state_conflicted: bool = False
+    stale_unmerged_worktrees_removed: int = 0
 
 
 @dataclass(slots=True)
 class DoctorFixResult:
     fixed: list[DoctorFinding] = field(default_factory=list)
     remaining: list[DoctorFinding] = field(default_factory=list)
+    stale_unmerged_worktrees_removed: int = 0
 
 
 def _state_edit_command() -> str:
     return "cp .litehive/state.yaml .litehive/state.yaml.bak && ${EDITOR:-vi} .litehive/state.yaml"
+
+
+_TERMINAL_UNMERGED_WORKTREE_TASK_STATUSES = {"done", "abandoned", *CLOSED_TASK_STATUSES}
+
+
+def _resolve_unmerged_worktree_path(root: Path, worktree_path: str) -> Path:
+    candidate = Path(worktree_path)
+    return candidate if candidate.is_absolute() else root / candidate
+
+
+def _raw_task_status(root: Path, task_id: str) -> str | None:
+    for path in sorted(tasks_root(root).glob(f"{task_id}-*/task.yaml")):
+        try:
+            payload = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        except yaml.YAMLError:
+            continue
+        if not isinstance(payload, dict):
+            continue
+        status = payload.get("status")
+        if isinstance(status, str) and status.strip():
+            return status.strip().lower()
+    return None
+
+
+def _prune_stale_unmerged_worktrees(root: Path, state: WorkspaceState) -> int:
+    if not state.unmerged_worktrees:
+        return 0
+
+    task_statuses = {task.id: task.status for task in list_tasks(root)}
+    kept = []
+    removed = 0
+    for entry in state.unmerged_worktrees:
+        task_status = task_statuses.get(entry.task_id) or _raw_task_status(root, entry.task_id)
+        missing_worktree = not _resolve_unmerged_worktree_path(root, entry.worktree_path).exists()
+        if task_status in _TERMINAL_UNMERGED_WORKTREE_TASK_STATUSES or missing_worktree:
+            removed += 1
+            continue
+        kept.append(entry)
+
+    if removed:
+        state.unmerged_worktrees = kept
+        save_state_without_runner_guard(root, state)
+    return removed
 
 
 def _duplicate_id_findings(tasks: list[TaskRecord]) -> list[DoctorFinding]:
@@ -231,6 +278,7 @@ def scan_workspace_doctor(root: Path) -> DoctorReport:
                 if not isinstance(payload, dict):
                     raise ValueError("top-level YAML value must be a mapping")
                 state = WorkspaceState(**payload)
+                report.stale_unmerged_worktrees_removed = _prune_stale_unmerged_worktrees(root, state)
             except (yaml.YAMLError, ValueError, TypeError) as exc:
                 report.state_error = str(exc)
                 report.findings.append(
@@ -242,6 +290,7 @@ def scan_workspace_doctor(root: Path) -> DoctorReport:
                 )
     else:
         state = load_state(root)
+        report.stale_unmerged_worktrees_removed = _prune_stale_unmerged_worktrees(root, state)
 
     tasks = list_tasks(root)
     report.findings.extend(_duplicate_id_findings(tasks))
@@ -283,4 +332,8 @@ def apply_doctor_fixes(root: Path) -> DoctorFixResult:
     fixed = [
         finding for finding in initial.findings if (finding.code, finding.summary) not in remaining_keys
     ]
-    return DoctorFixResult(fixed=fixed, remaining=final.findings)
+    return DoctorFixResult(
+        fixed=fixed,
+        remaining=final.findings,
+        stale_unmerged_worktrees_removed=initial.stale_unmerged_worktrees_removed,
+    )

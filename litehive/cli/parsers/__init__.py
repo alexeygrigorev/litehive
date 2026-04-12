@@ -1,3 +1,4 @@
+from litehive.cli.parsers.attention import register_attention_parser
 from litehive.cli.parsers.abandon import register_abandon_parser
 from litehive.cli.parsers.add import register_add_parser
 from litehive.cli.parsers.archive import register_archive_parser
@@ -45,6 +46,7 @@ from litehive.cli.parsers.worktree import register_worktree_parser
 
 COMMAND_PARSER_BUILDERS = (
     register_configure_parser,
+    register_attention_parser,
     register_status_parser,
     register_doctor_parser,
     register_health_parser,

@@ -37,6 +37,7 @@ class LitehiveConfig:
     pool_stop_on_failure: bool = False
     pool_max_tasks: int | None = None
     pool_stop_on_dirty_git: bool = False
+    pool_stop_on_attention: bool = False
     pool_selection_policy: str = "dependency_aware"
     runner_hook_execution_mode: str = "run_all"
     runner_hooks: dict[str, list[RunnerHookConfig]] = field(default_factory=dict)

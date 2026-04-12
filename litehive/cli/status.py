@@ -1,5 +1,6 @@
 import csv
 
+from litehive.attention import waiting_for_you_lines
 from litehive.config import ensure_workspace, load_config
 from litehive.observability import (
     collect_recent_activity,
@@ -149,6 +150,10 @@ def cmd_status(args):
     for line in render_queue_section(state.queue, all_tasks):
         print(line)
 
+    print()
+    for line in waiting_for_you_lines(root):
+        print(line)
+
     # Engine Health section
     print()
     for line in render_engine_health_section(monitoring):
@@ -161,9 +166,6 @@ def cmd_status(args):
     events = collect_recent_activity(root)
     for line in render_recent_activity_section(events):
         print(line)
-
-    # Warnings
-    _print_duplicate_id_warnings(root)
 
     return _print_status_issues(snapshot.issues)
 
@@ -190,6 +192,8 @@ def _cmd_status_full(args, root, config, state, runner, monitoring, issues):
     )
     print(f"queued_tasks: {len(state.queue)}")
     print(f"pool_stop_reason: {state.pool_stop_reason}")
+    for line in waiting_for_you_lines(root):
+        print(line)
     if state.queue:
         print(f"queue_head: {state.queue[0]}")
     active_task = _safe_active_task(args.workspace, state.active_task_id)
@@ -213,9 +217,9 @@ def _cmd_status_full(args, root, config, state, runner, monitoring, issues):
     print(f"pool_stop_on_failure: {config.pool_stop_on_failure}")
     print(f"pool_max_tasks: {config.pool_max_tasks}")
     print(f"pool_stop_on_dirty_git: {config.pool_stop_on_dirty_git}")
+    print(f"pool_stop_on_attention: {config.pool_stop_on_attention}")
     print(f"pool_selection_policy: {config.pool_selection_policy}")
     print(f"process_profile: {config.process_profile}")
-    _print_duplicate_id_warnings(root)
     tasks = list_tasks(args.workspace)
     if tasks:
         print()

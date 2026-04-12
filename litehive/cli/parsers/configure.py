@@ -73,6 +73,11 @@ def register_configure_parser(subparsers):
         help="Default pool behavior: stop when the git worktree is dirty before starting another task",
     )
     parser.add_argument(
+        "--pool-stop-on-attention",
+        action="store_true",
+        help="Default pool behavior: stop before starting more work when unresolved attention items exist",
+    )
+    parser.add_argument(
         "--pool-selection-policy",
         choices=sorted(VALID_POOL_SELECTION_POLICIES),
         default="dependency_aware",

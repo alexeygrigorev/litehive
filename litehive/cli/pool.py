@@ -247,6 +247,7 @@ def pool_stop_condition_label(stop_reason):
         "execution_limit_reached": "execution limit reached",
         "execution_limit_fallbacks_exhausted": "execution-limit fallbacks exhausted",
         "dirty_git_state": "dirty git state",
+        "attention_required": "attention required",
         "human_checkpoint_before_acceptance": "human checkpoint before acceptance",
         "human_checkpoint_before_commit": "human checkpoint before commit",
         "human_checkpoint_reached": "human checkpoint reached",
@@ -271,6 +272,10 @@ def _pool_no_useful_progress_report(stop_reason):
         "continue_or_rollback_required": (
             "operator_action_required",
             "Pool stopped after a checkpoint commit. Continue with a new run or roll back the checkpoint before unrelated queued work proceeds.",
+        ),
+        "attention_required": (
+            "operator_action_required",
+            "Pool stopped because unresolved attention items require operator action before more work starts.",
         ),
         "execution_limit_fallbacks_exhausted": (
             "no_useful_progress",

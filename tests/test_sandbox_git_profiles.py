@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from litehive.attention import list_attention
 from litehive.agents.base import CLIInvocation
 from litehive.agents.sandbox import SandboxLauncher, SandboxProfile, sandbox_profile_for_role
 from litehive.config import ExternalEngineSandboxConfig, ExternalEngineSandboxPolicy, LitehiveConfig, ensure_workspace
@@ -186,6 +187,10 @@ def test_merge_resolver_profile_rejects_force_push_and_logs_attention(tmp_path: 
     attention_log = tmp_path / ".litehive" / "runtime" / "attention.log"
     assert attention_log.exists()
     assert "push --force origin main" in attention_log.read_text(encoding="utf-8")
+    items = list_attention(tmp_path)
+    assert len(items) == 1
+    assert items[0].kind == "destructive_git_denied"
+    assert "push --force origin main" in items[0].reason
 
 
 def test_merge_resolver_profile_rejects_filter_repo_and_reset_hard_origin(tmp_path: Path) -> None:

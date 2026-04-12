@@ -8,6 +8,7 @@ import click
 import typer
 
 from litehive.agents import ENGINE_CHOICES
+from litehive.cli.attention import cmd_attention_list, cmd_attention_resolve
 from litehive.cli.parse import TASK_TYPE_CHOICES
 from litehive.cli.backup import cmd_backup_create, cmd_backup_list, cmd_backup_restore
 from litehive.cli.db import cmd_db_migrate, cmd_db_status
@@ -78,6 +79,12 @@ task_app = typer.Typer(
     no_args_is_help=False,
 )
 queue_app = typer.Typer(
+    add_completion=False,
+    context_settings={"help_option_names": ["-h", "--help"]},
+    invoke_without_command=True,
+    no_args_is_help=False,
+)
+attention_app = typer.Typer(
     add_completion=False,
     context_settings={"help_option_names": ["-h", "--help"]},
     invoke_without_command=True,
@@ -207,6 +214,10 @@ def configure_command(
         bool,
         typer.Option("--pool-stop-on-dirty-git", help="Default pool behavior: stop when the git worktree is dirty before starting another task"),
     ] = False,
+    pool_stop_on_attention: Annotated[
+        bool,
+        typer.Option("--pool-stop-on-attention", help="Default pool behavior: stop before starting more work when unresolved attention items exist"),
+    ] = False,
     pool_selection_policy: Annotated[
         str,
         typer.Option(
@@ -239,6 +250,35 @@ def status_command(
     ] = False,
 ) -> int:
     return cmd_status(_ns(command="status", **locals()))
+
+
+@attention_app.callback()
+def attention_group(ctx: typer.Context) -> int | None:
+    if ctx.invoked_subcommand is not None:
+        return None
+    return None
+
+
+@attention_app.command("list", help="Show unresolved operator-attention items")
+def attention_list_command(workspace: WorkspaceOption = Path.cwd()) -> int:
+    return cmd_attention_list(
+        _ns(command="attention", attention_command="list", workspace=workspace)
+    )
+
+
+@attention_app.command("resolve", help="Resolve one operator-attention item")
+def attention_resolve_command(
+    attention_id: Annotated[int, typer.Argument(help="Stable attention item id")],
+    workspace: WorkspaceOption = Path.cwd(),
+) -> int:
+    return cmd_attention_resolve(
+        _ns(
+            command="attention",
+            attention_command="resolve",
+            attention_id=attention_id,
+            workspace=workspace,
+        )
+    )
 
 
 @app.command("doctor", help="Run workspace integrity checks and optional safe fixes")
@@ -906,6 +946,7 @@ def worktree_rescue(
 
 
 app.add_typer(queue_app, name="queue", help="Show the active task and queued order")
+app.add_typer(attention_app, name="attention", help="List and resolve operator-attention items")
 app.add_typer(task_app, name="task", help="Manage Litehive tasks")
 app.add_typer(import_app, name="import", help="Import or file tasks from external inputs")
 app.add_typer(archive_app, name="archive", help="Move done tasks to the archive directory")
@@ -1060,6 +1101,7 @@ def pipeline_journal_command(
 
 
 _PUBLIC_TOP_LEVEL_COMMANDS = {
+    "attention",
     "configure",
     "status",
     "doctor",
@@ -1082,6 +1124,7 @@ _PUBLIC_TOP_LEVEL_COMMANDS = {
 }
 
 _PUBLIC_GROUP_COMMANDS = {
+    "attention": {"list", "resolve"},
     "task": {"add", "list", "show", "update", "close", "abandon", "debug", "logs"},
     "queue": {"move", "promote", "requeue", "resume", "stop"},
     "import": {"github", "issue", "spec"},

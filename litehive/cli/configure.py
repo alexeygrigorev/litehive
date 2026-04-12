@@ -36,6 +36,7 @@ def cmd_configure(args):
             pool_stop_on_failure=getattr(args, "pool_stop_on_failure", False),
             pool_max_tasks=getattr(args, "pool_max_tasks", None),
             pool_stop_on_dirty_git=getattr(args, "pool_stop_on_dirty_git", False),
+            pool_stop_on_attention=getattr(args, "pool_stop_on_attention", False),
             pool_selection_policy=getattr(args, "pool_selection_policy", "dependency_aware"),
             runner_hooks=runner_hooks,
         )
