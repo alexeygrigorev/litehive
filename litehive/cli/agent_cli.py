@@ -43,21 +43,14 @@ def _current_role() -> str | None:
     return os.environ.get("LITEHIVE_AGENT_ROLE")
 
 
-def block_if_agent(allowed_roles: set[str] | None = None) -> None:
+def block_if_agent() -> None:
     """Call at the top of any command agents should not use.
 
-    If ``LITEHIVE_AGENT_ROLE`` is set and the role is not in
-    ``allowed_roles``, prints a terse rejection and exits. Pass
-    ``allowed_roles={"planner"}`` to let the planner through while
-    blocking everyone else.
+    If ``LITEHIVE_AGENT_ROLE`` is set, exits silently with code 1.
+    No message, no hint about roles or alternatives.
     """
-    role = _current_role()
-    if role is None:
-        return
-    if allowed_roles is not None and role in allowed_roles:
-        return
-    print("You cannot use this command.")
-    raise typer.Exit(1)
+    if _current_role() is not None:
+        raise typer.Exit(1)
 
 
 @agent_app.command("report", help="Submit your stage verdict")
@@ -79,8 +72,6 @@ def agent_report_command(
 
     allowed = VERDICT_ALLOWLIST.get(agent_role, {"pass", "reject", "blocked"})
     if normalized_verdict not in allowed:
-        allowed_str = ", ".join(sorted(allowed))
-        print(f"You cannot submit verdict '{normalized_verdict}' as {agent_role}. Allowed: {allowed_str}")
         raise typer.Exit(1)
 
     tid = task_id or os.environ.get("LITEHIVE_TASK_ID")
@@ -113,3 +104,75 @@ def agent_report_command(
     print(f"step: {actual_step}")
     print(f"verdict: {normalized_verdict}")
     print(f"role: {agent_role}")
+
+
+def _require_role(allowed: set[str]) -> str:
+    """Exit silently if the current role is not in ``allowed``."""
+    role = _current_role()
+    if role is None or role not in allowed:
+        raise typer.Exit(1)
+    return role
+
+
+@agent_app.command("update", help="Update task fields (planner/reviewer only)")
+def agent_update_command(
+    task_id: Annotated[str | None, typer.Option("--task-id")] = None,
+    workspace: Annotated[Path, typer.Option("--workspace")] = Path.cwd(),
+    goal: Annotated[str | None, typer.Option("--goal")] = None,
+    acceptance_criteria: Annotated[list[str] | None, typer.Option("--acceptance-criteria")] = None,
+    plan: Annotated[list[str] | None, typer.Option("--plan-step")] = None,
+    constraints: Annotated[list[str] | None, typer.Option("--constraint")] = None,
+    pm_complexity: Annotated[str | None, typer.Option("--pm-complexity")] = None,
+    planned_effort: Annotated[str | None, typer.Option("--planned-effort")] = None,
+    priority: Annotated[str | None, typer.Option("--priority")] = None,
+) -> None:
+    _require_role({"planner", "reviewer"})
+
+    from litehive.workspace.task_status import update_task
+
+    tid = task_id or os.environ.get("LITEHIVE_TASK_ID")
+    if not tid:
+        raise typer.Exit(1)
+    try:
+        root = resolve_workspace(tid, workspace=workspace)
+    except ValueError:
+        raise typer.Exit(1)
+
+    sentinel = ...
+    update_task(
+        root,
+        tid,
+        goal=goal if goal is not None else sentinel,
+        acceptance_criteria=acceptance_criteria if acceptance_criteria is not None else sentinel,
+        plan=plan if plan is not None else sentinel,
+        constraints=constraints if constraints is not None else sentinel,
+        pm_complexity=pm_complexity if pm_complexity is not None else sentinel,
+        planned_effort=planned_effort if planned_effort is not None else sentinel,
+        priority=priority if priority is not None else sentinel,
+    )
+    print(f"task: {tid}")
+    print("updated: ok")
+
+
+@agent_app.command("close", help="Close a task (planner/reviewer only)")
+def agent_close_command(
+    task_id: Annotated[str | None, typer.Option("--task-id")] = None,
+    workspace: Annotated[Path, typer.Option("--workspace")] = Path.cwd(),
+    outcome: Annotated[str, typer.Option("--outcome", help="duplicate, deferred, or wont_do")] = "duplicate",
+    reason: Annotated[str, typer.Option("--reason")] = "",
+) -> None:
+    _require_role({"planner", "reviewer"})
+
+    from litehive.workspace.task_status import close_task
+
+    tid = task_id or os.environ.get("LITEHIVE_TASK_ID")
+    if not tid:
+        raise typer.Exit(1)
+    try:
+        root = resolve_workspace(tid, workspace=workspace)
+    except ValueError:
+        raise typer.Exit(1)
+
+    close_task(root, tid, outcome=outcome, reason=reason)
+    print(f"task: {tid}")
+    print(f"outcome: {outcome}")
