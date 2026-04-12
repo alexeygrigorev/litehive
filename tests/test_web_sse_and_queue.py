@@ -31,7 +31,7 @@ from litehive.tasks.paths import runner_lock_path
 from litehive.web import (
     LitehiveWebHandler,
     WorkspaceStreamMonitor,
-    _render_index,
+    render_index,
     update_task_detail,
 )
 
@@ -111,7 +111,7 @@ def _post_json_error(url: str, payload: dict[str, object]) -> tuple[int, dict[st
 
 
 def test_render_index_prefers_sse_with_polling_fallback() -> None:
-    html = _render_index()
+    html = render_index()
 
     assert "EventSource" in html
     assert "/api/stream" in html
@@ -336,7 +336,7 @@ def test_queue_prioritize_endpoint_reorders_tasks_and_rejects_duplicates(tmp_pat
 
 
 def test_render_index_includes_queue_controls_and_refresh_wiring() -> None:
-    html = _render_index()
+    html = render_index()
 
     assert "Move Up" in html
     assert "Move Down" in html

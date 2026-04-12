@@ -11,7 +11,7 @@ from litehive.daemon import (
 )
 
 
-def _cmd_daemon_run(args):
+def cmd_daemon_run(args):
     ensure_workspace(args.workspace)
     apply_pending_migrations(args.workspace)
     if getattr(args, "foreground", False):
@@ -27,14 +27,14 @@ def _cmd_daemon_run(args):
     return 0
 
 
-def _cmd_daemon_status(args):
+def cmd_daemon_status(args):
     ensure_workspace(args.workspace)
     for line in daemon_status_lines(args.workspace):
         print(line)
     return 0
 
 
-def _cmd_daemon_stop(args):
+def cmd_daemon_stop(args):
     ensure_workspace(args.workspace)
     entry = stop_workspace_daemon(args.workspace)
     print(f"workspace: {args.workspace.resolve()}")
@@ -48,7 +48,7 @@ def _cmd_daemon_stop(args):
     return 0
 
 
-def _cmd_daemon_restart(args):
+def cmd_daemon_restart(args):
     ensure_workspace(args.workspace)
     previous = stop_workspace_daemon(args.workspace)
     try:
@@ -63,7 +63,7 @@ def _cmd_daemon_restart(args):
     return 0
 
 
-def _cmd_daemon_instances(_):
+def cmd_daemon_instances(_):
     instances = list_daemon_instances()
     print(f"instances: {len(instances)}")
     for index, entry in enumerate(instances, start=1):
@@ -74,7 +74,7 @@ def _cmd_daemon_instances(_):
     return 0
 
 
-def _cmd_daemon_worker(args):
+def cmd_daemon_worker(args):
     ensure_workspace(args.workspace)
     apply_pending_migrations(args.workspace)
     return run_daemon_loop(args.workspace, output_stream=None)

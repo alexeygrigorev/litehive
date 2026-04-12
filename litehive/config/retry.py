@@ -19,5 +19,5 @@ def _make_default_retry_policy() -> ExecutionRetryPolicy:
     )
 
 
-def _default_execution_retry_policies() -> dict[str, ExecutionRetryPolicy]:
+def default_execution_retry_policies() -> dict[str, ExecutionRetryPolicy]:
     return {engine: _make_default_retry_policy() for engine in _DEFAULT_RETRY_POLICY_ENGINES}

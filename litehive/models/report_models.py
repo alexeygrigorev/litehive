@@ -19,7 +19,7 @@ from heru.types import (
 
 from .common import (
     FEEDBACK_CAP,
-    _TRUNCATION_MARKER,
+    TRUNCATION_MARKER,
     cap_feedback,
     utcnow,
 )
@@ -109,6 +109,6 @@ __all__ = [
     "StageResultTests",
     "TaskThreadComment",
     "TaskUpdateSubmission",
-    "_TRUNCATION_MARKER",
+    "TRUNCATION_MARKER",
     "cap_feedback",
 ]

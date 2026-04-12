@@ -26,7 +26,7 @@ from .agents import (
     ReviewerAgent,
     SWEAgent,
 )
-from .agents._base import PromptContext, RoleAgent
+from .agents.base import PromptContext, RoleAgent
 from .nodes import (
     CommitNode,
     ExecutionMode,

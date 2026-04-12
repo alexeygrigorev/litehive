@@ -14,12 +14,12 @@ from tests.workspace_helpers import (
 
 from datetime import datetime, timedelta, timezone
 
-from litehive.cli.engine import _parse_local_datetime
+from litehive.cli.engine import parse_local_datetime
 from litehive.config.engine_models import EngineSelection
 
 
 def test_parse_local_datetime_date_only():
-    dt = _parse_local_datetime("2026-04-08")
+    dt = parse_local_datetime("2026-04-08")
     assert dt.tzinfo is not None
     assert dt.tzinfo == timezone.utc
     # Should be start of day in local TZ converted to UTC
@@ -29,7 +29,7 @@ def test_parse_local_datetime_date_only():
 
 
 def test_parse_local_datetime_with_time():
-    dt = _parse_local_datetime("2026-04-08 09:47")
+    dt = parse_local_datetime("2026-04-08 09:47")
     assert dt.tzinfo == timezone.utc
     local_dt = datetime(2026, 4, 8, 9, 47).astimezone()
     expected_utc = local_dt.astimezone(timezone.utc)
@@ -38,17 +38,17 @@ def test_parse_local_datetime_with_time():
 
 def test_parse_local_datetime_invalid():
     with pytest.raises(ValueError, match="Cannot parse"):
-        _parse_local_datetime("not-a-date")
+        parse_local_datetime("not-a-date")
 
 
 def test_engine_freeze_cli_roundtrip(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     """CLI: freeze an engine, verify config, then unfreeze."""
     ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
 
-    from litehive.cli import _cmd_engine
+    from litehive.cli import cmd_engine
 
     # Freeze codex until far future
-    exit_code = _cmd_engine(
+    exit_code = cmd_engine(
         argparse.Namespace(
             workspace=tmp_path,
             engine_action="freeze",
@@ -65,7 +65,7 @@ def test_engine_freeze_cli_roundtrip(tmp_path: Path, capsys: pytest.CaptureFixtu
     assert "2099" in config.engine_freeze["codex"]
 
     # Unfreeze
-    exit_code = _cmd_engine(
+    exit_code = cmd_engine(
         argparse.Namespace(
             workspace=tmp_path,
             engine_action="unfreeze",
@@ -83,9 +83,9 @@ def test_engine_freeze_cli_roundtrip(tmp_path: Path, capsys: pytest.CaptureFixtu
 def test_engine_freeze_with_datetime(tmp_path: Path) -> None:
     ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
 
-    from litehive.cli import _cmd_engine
+    from litehive.cli import cmd_engine
 
-    exit_code = _cmd_engine(
+    exit_code = cmd_engine(
         argparse.Namespace(
             workspace=tmp_path,
             engine_action="freeze",
@@ -103,9 +103,9 @@ def test_engine_freeze_with_datetime(tmp_path: Path) -> None:
 def test_unfreeze_not_frozen_engine_returns_error(tmp_path: Path, capsys) -> None:
     ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
 
-    from litehive.cli import _cmd_engine
+    from litehive.cli import cmd_engine
 
-    exit_code = _cmd_engine(
+    exit_code = cmd_engine(
         argparse.Namespace(
             workspace=tmp_path,
             engine_action="unfreeze",
@@ -120,9 +120,9 @@ def test_engine_set_backward_compat(tmp_path: Path, capsys) -> None:
     """litehive engine codex still works (backward compat)."""
     ensure_workspace(tmp_path, LitehiveConfig(default_engine="opencode"))
 
-    from litehive.cli import _cmd_engine
+    from litehive.cli import cmd_engine
 
-    exit_code = _cmd_engine(
+    exit_code = cmd_engine(
         argparse.Namespace(
             workspace=tmp_path,
             engine_action="codex",
@@ -139,9 +139,9 @@ def test_engine_set_subcommand(tmp_path: Path, capsys) -> None:
     """litehive engine set gemini works."""
     ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
 
-    from litehive.cli import _cmd_engine
+    from litehive.cli import cmd_engine
 
-    exit_code = _cmd_engine(
+    exit_code = cmd_engine(
         argparse.Namespace(
             workspace=tmp_path,
             engine_action="set",
@@ -417,14 +417,14 @@ def test_builder_uses_shared_select_engine(tmp_path: Path, monkeypatch: pytest.M
 
 
 def test_dry_run_uses_shared_select_engine(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    from litehive.cli._dry_run import _plan_single_task_dry_run
+    from litehive.cli.dry_run import plan_single_task_dry_run
     from litehive.config.pool_types import TaskPoolStopConditions
 
     ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
     task = create_task(tmp_path, title="Dry run selection")
     config = load_config(tmp_path)
     monkeypatch.setattr(
-        "litehive.cli._dry_run.select_engine",
+        "litehive.cli.dry_run.select_engine",
         lambda *args, **kwargs: EngineSelection(
             engine_name="gemini",
             model_name="gemini-2.5-pro",
@@ -433,7 +433,7 @@ def test_dry_run_uses_shared_select_engine(tmp_path: Path, monkeypatch: pytest.M
         ),
     )
 
-    planned, reason = _plan_single_task_dry_run(
+    planned, reason = plan_single_task_dry_run(
         tmp_path,
         planned_tasks=[task],
         blocked_count=0,
@@ -451,7 +451,7 @@ def test_recovery_auto_engine_uses_shared_select_engine(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from litehive.recovery.execution_recovery import _resolve_recovery_engine
+    from litehive.recovery.execution_recovery import resolve_recovery_engine
 
     ensure_workspace(
         tmp_path,
@@ -473,7 +473,7 @@ def test_recovery_auto_engine_uses_shared_select_engine(
         ),
     )
 
-    engine_name, model_name = _resolve_recovery_engine(tmp_path, task, config)
+    engine_name, model_name = resolve_recovery_engine(tmp_path, task, config)
 
     assert engine_name == "gemini"
     assert model_name == "gemini-2.5-pro"

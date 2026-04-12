@@ -4,7 +4,7 @@ from pathlib import Path
 
 from litehive.models import StageReport, TaskRecord, cap_feedback
 
-from litehive.agents._models import SubagentResult
+from litehive.agents.models import SubagentResult
 
 
 def stage_report_from_subagent(

@@ -31,7 +31,7 @@ from heru.types import (
 )
 
 
-_TRUNCATION_MARKER = HERU_TRUNCATION_MARKER
+TRUNCATION_MARKER = HERU_TRUNCATION_MARKER
 
 PipelineMode = Literal["single", "full"]
 TaskStatus = Literal[
@@ -87,7 +87,7 @@ __all__ = [
     "TaskMode",
     "TaskStatus",
     "UpstreamContributionKind",
-    "_TRUNCATION_MARKER",
+    "TRUNCATION_MARKER",
     "cap_feedback",
     "utcnow",
 ]

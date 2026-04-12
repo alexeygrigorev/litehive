@@ -1,8 +1,8 @@
 from litehive.config.engine_models import select_engine
 from litehive.config.pool_types import EngineBudgetLedger
 
-from litehive.cli._pool import _pool_stop_condition_label
-from litehive.cli._display import _format_engine_int_map
+from litehive.cli.pool import pool_stop_condition_label
+from litehive.cli.display import format_engine_int_map
 
 
 def _determine_dry_run_stop_reason(
@@ -20,7 +20,7 @@ def _determine_dry_run_stop_reason(
     return "execution_limit_fallbacks_exhausted"
 
 
-def _plan_pool_dry_run(
+def plan_pool_dry_run(
     root,
     *,
     planned_tasks,
@@ -30,9 +30,9 @@ def _plan_pool_dry_run(
     engine_override,
     model_override,
 ):
-    from litehive.workspace.worktree_inspection import _git_worktree_blocks_pool
+    from litehive.workspace.worktree_inspection import git_worktree_blocks_pool
 
-    if stop_conditions.stop_on_dirty_git and _git_worktree_blocks_pool(root):
+    if stop_conditions.stop_on_dirty_git and git_worktree_blocks_pool(root):
         return [], "dirty_git_state"
 
     budget_ledger = EngineBudgetLedger(
@@ -85,7 +85,7 @@ def _plan_pool_dry_run(
     return runnable_tasks, "queue_exhausted"
 
 
-def _plan_single_task_dry_run(
+def plan_single_task_dry_run(
     root,
     *,
     planned_tasks,
@@ -95,9 +95,9 @@ def _plan_single_task_dry_run(
     engine_override,
     model_override,
 ):
-    from litehive.workspace.worktree_inspection import _git_worktree_blocks_pool
+    from litehive.workspace.worktree_inspection import git_worktree_blocks_pool
 
-    if stop_conditions.stop_on_dirty_git and _git_worktree_blocks_pool(root):
+    if stop_conditions.stop_on_dirty_git and git_worktree_blocks_pool(root):
         return [], "dirty_git_state"
     if not planned_tasks:
         if blocked_count:
@@ -129,7 +129,7 @@ def _plan_single_task_dry_run(
     ], "single_task_complete"
 
 
-def _print_pool_dry_run_plan(
+def print_pool_dry_run_plan(
     root,
     *,
     planned_tasks,
@@ -158,7 +158,7 @@ def _print_pool_dry_run_plan(
             f"blocked: {blocked_task.task_id} {blocked_task.title} "
             f"blocked_by={', '.join(blocked_task.blocked_by)}"
         )
-    print(f"predicted_stop_condition: {_pool_stop_condition_label(predicted_stop_reason)}")
+    print(f"predicted_stop_condition: {pool_stop_condition_label(predicted_stop_reason)}")
     print(f"predicted_stop_reason: {predicted_stop_reason}")
     print(f"stop_on_failure: {stop_conditions.stop_on_failure}")
     print(f"max_tasks: {stop_conditions.max_tasks}")
@@ -167,9 +167,9 @@ def _print_pool_dry_run_plan(
     print(f"budget_threshold: {stop_conditions.budget_threshold}")
     print(f"pool_usage_cap: {stop_conditions.pool_usage_cap}")
     print(f"pool_cost_cap: {stop_conditions.pool_cost_cap}")
-    print(f"engine_usage_caps: {_format_engine_int_map(stop_conditions.engine_usage_caps)}")
-    print(f"engine_budget_caps: {_format_engine_int_map(stop_conditions.engine_budget_caps)}")
-    print(f"engine_costs: {_format_engine_int_map(stop_conditions.engine_costs)}")
+    print(f"engine_usage_caps: {format_engine_int_map(stop_conditions.engine_usage_caps)}")
+    print(f"engine_budget_caps: {format_engine_int_map(stop_conditions.engine_budget_caps)}")
+    print(f"engine_costs: {format_engine_int_map(stop_conditions.engine_costs)}")
     print(f"stop_on_dirty_git: {stop_conditions.stop_on_dirty_git}")
 
 

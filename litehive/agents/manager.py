@@ -24,22 +24,22 @@ from litehive.models import (
     cap_feedback,
 )
 from litehive.observability import record_engine_execution, record_engine_observation
-from litehive.agents._artifacts import (
-    _prune_superseded_subagent_artifacts,
-    _write_stream_artifact,
-    _write_text_if_changed,
+from litehive.agents.artifacts import (
+    prune_superseded_subagent_artifacts,
+    write_stream_artifact,
+    write_text_if_changed,
 )
-from litehive.agents._engine_detection import (
-    _effective_engine_callable,
-    _filter_supported_kwargs,
-    _supports_live_execution,
-    _supports_live_on_started,
-    _supports_on_started,
+from litehive.agents.engine_detection import (
+    effective_engine_callable,
+    filter_supported_kwargs,
+    supports_live_execution,
+    supports_live_on_started,
+    supports_on_started,
 )
-from litehive.agents._models import EngineFailure, SubagentInactivityTimeout, SubagentResult
-from litehive.agents._parsing import stage_report_from_subagent
-from litehive.agents._sandbox import _SandboxedAdapter
-from litehive.agents._session import _SessionMixin
+from litehive.agents.models import EngineFailure, SubagentInactivityTimeout, SubagentResult
+from litehive.agents.parsing import stage_report_from_subagent
+from litehive.agents.sandbox import SandboxedAdapter
+from litehive.agents.session import SessionMixin
 from litehive.tasks.crud import save_task
 from litehive.tasks.paths import task_dir
 from litehive.workspace.runtime_tracking import (
@@ -49,7 +49,7 @@ from litehive.workspace.runtime_tracking import (
 )
 
 
-class SubagentManager(_SessionMixin):
+class SubagentManager(SessionMixin):
     """Run external CLI subagents inside a task-scoped folder."""
 
     def __init__(self, root: Path, *, execution_root: Path | None = None) -> None:
@@ -98,7 +98,7 @@ class SubagentManager(_SessionMixin):
                     f"Engine '{engine.name}' is unavailable: missing binary '{engine.binary}'"
                 )
             if isinstance(engine, ExternalCLIAdapter) and sandbox_summary.enabled:
-                execution_engine = _SandboxedAdapter(engine, self.sandbox, engine_name, role)
+                execution_engine = SandboxedAdapter(engine, self.sandbox, engine_name, role)
             # Probe the wrapped adapter for capability preference. The sandbox wrapper
             # exposes both run and run_live, so inspecting the wrapper would hide
             # whether the underlying engine actually prefers a custom run override.
@@ -109,8 +109,8 @@ class SubagentManager(_SessionMixin):
                 "LITEHIVE_WORKSPACE_ROOT": str(self.root),
                 "LITEHIVE_AGENT_ROLE": role,
             }
-            if _supports_live_execution(live_execution_probe):
-                run_live_callable = _effective_engine_callable(execution_engine, "run_live")
+            if supports_live_execution(live_execution_probe):
+                run_live_callable = effective_engine_callable(execution_engine, "run_live")
                 if not callable(run_live_callable):
                     run_live_callable = execution_engine.run_live
                 live_kwargs: dict[str, object] = {
@@ -127,7 +127,7 @@ class SubagentManager(_SessionMixin):
                 }
                 if resume_session_id:
                     live_kwargs["resume_session_id"] = resume_session_id
-                if _supports_live_on_started(callback_probe):
+                if supports_live_on_started(callback_probe):
                     live_kwargs["on_started"] = lambda pid: self._record_subagent_pid(
                         task, base, ref, pid
                     )
@@ -139,10 +139,10 @@ class SubagentManager(_SessionMixin):
                     )
                 proc = run_live_callable(
                     prompt,
-                    **_filter_supported_kwargs(run_live_callable, live_kwargs),
+                    **filter_supported_kwargs(run_live_callable, live_kwargs),
                 )
             else:
-                run_callable = _effective_engine_callable(execution_engine, "run")
+                run_callable = effective_engine_callable(execution_engine, "run")
                 if not callable(run_callable):
                     run_callable = execution_engine.run
                 run_kwargs: dict[str, object] = {
@@ -154,13 +154,13 @@ class SubagentManager(_SessionMixin):
                     run_kwargs["resume_session_id"] = resume_session_id
                 if max_turns is not None:
                     run_kwargs["max_turns"] = max_turns
-                if _supports_on_started(callback_probe):
+                if supports_on_started(callback_probe):
                     run_kwargs["on_started"] = lambda pid: self._record_subagent_pid(
                         task, base, ref, pid
                     )
                 proc = run_callable(
                     prompt,
-                    **_filter_supported_kwargs(run_callable, run_kwargs),
+                    **filter_supported_kwargs(run_callable, run_kwargs),
                 )
             transcript = execution_engine.render_transcript(proc)
             continuation = extract_engine_continuation(ref.engine, proc)
@@ -255,7 +255,7 @@ class SubagentManager(_SessionMixin):
             resource_limit_event=None if failure is None else failure.resource_limit_event,
             continuation=continuation,
         )
-        _prune_superseded_subagent_artifacts(task_dir(self.root, task), keep_subagent_id=ref.id)
+        prune_superseded_subagent_artifacts(task_dir(self.root, task), keep_subagent_id=ref.id)
         if proc is not None:
             record_engine_execution(
                 self.root,
@@ -359,10 +359,10 @@ class SubagentManager(_SessionMixin):
             resource_limit_event=resource_limit_event,
             continuation=continuation,
         )
-        _write_stream_artifact(
+        write_stream_artifact(
             base, "stdout", "" if execution is None else execution.stdout, compress=True
         )
-        _write_stream_artifact(
+        write_stream_artifact(
             base, "stderr", "" if execution is None else execution.stderr, compress=True
         )
         if execution is not None:
@@ -418,10 +418,10 @@ class SubagentManager(_SessionMixin):
             interruption_reason=None,
             continuation=continuation,
         )
-        _write_text_if_changed(base / "prompt.txt", prompt)
-        _write_text_if_changed(base / "transcript.md", transcript)
-        _write_text_if_changed(base / "stdout.txt", execution.stdout)
-        _write_text_if_changed(base / "stderr.txt", execution.stderr)
+        write_text_if_changed(base / "prompt.txt", prompt)
+        write_text_if_changed(base / "transcript.md", transcript)
+        write_text_if_changed(base / "stdout.txt", execution.stdout)
+        write_text_if_changed(base / "stderr.txt", execution.stderr)
         self._append_stream_delta(base, ref, "stdout", execution.stdout)
         self._append_stream_delta(base, ref, "stderr", execution.stderr)
         append_event(

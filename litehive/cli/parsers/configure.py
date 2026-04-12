@@ -1,4 +1,4 @@
-from litehive.cli.parsers._common import add_workspace_argument
+from litehive.cli.parsers.common import add_workspace_argument
 from litehive.config import available_process_profiles, VALID_POOL_SELECTION_POLICIES
 
 

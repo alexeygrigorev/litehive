@@ -51,20 +51,20 @@ from heru import (
 )
 
 if TYPE_CHECKING:
-    from litehive.agents._manager import SubagentManager
-    from litehive.agents._models import EngineFailure, SubagentInactivityTimeout, SubagentResult
-    from litehive.agents._parsing import stage_report_from_subagent
-    from litehive.agents._prompts import intake_prompt, stage_prompt
+    from litehive.agents.manager import SubagentManager
+    from litehive.agents.models import EngineFailure, SubagentInactivityTimeout, SubagentResult
+    from litehive.agents.parsing import stage_report_from_subagent
+    from litehive.agents.prompts import intake_prompt, stage_prompt
 
 
 _LAZY_EXPORTS = {
-    "SubagentManager": ("litehive.agents._manager", "SubagentManager"),
-    "EngineFailure": ("litehive.agents._models", "EngineFailure"),
-    "SubagentInactivityTimeout": ("litehive.agents._models", "SubagentInactivityTimeout"),
-    "SubagentResult": ("litehive.agents._models", "SubagentResult"),
-    "stage_report_from_subagent": ("litehive.agents._parsing", "stage_report_from_subagent"),
-    "intake_prompt": ("litehive.agents._prompts", "intake_prompt"),
-    "stage_prompt": ("litehive.agents._prompts", "stage_prompt"),
+    "SubagentManager": ("litehive.agents.manager", "SubagentManager"),
+    "EngineFailure": ("litehive.agents.models", "EngineFailure"),
+    "SubagentInactivityTimeout": ("litehive.agents.models", "SubagentInactivityTimeout"),
+    "SubagentResult": ("litehive.agents.models", "SubagentResult"),
+    "stage_report_from_subagent": ("litehive.agents.parsing", "stage_report_from_subagent"),
+    "intake_prompt": ("litehive.agents.prompts", "intake_prompt"),
+    "stage_prompt": ("litehive.agents.prompts", "stage_prompt"),
 }
 
 

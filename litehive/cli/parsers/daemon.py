@@ -1,6 +1,6 @@
 import argparse
 
-from litehive.cli.parsers._common import add_workspace_argument
+from litehive.cli.parsers.common import add_workspace_argument
 
 
 def register_daemon_parser(subparsers):

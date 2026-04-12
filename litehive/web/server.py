@@ -16,15 +16,15 @@ from litehive.tasks.persistence import load_state
 from litehive.tasks.queue_management import move_queued_task, prioritize_queued_tasks
 from litehive.workspace.task_status import resume_task
 from litehive.web.common import (
-    _STREAM_KEEPALIVE_SECONDS,
-    _STREAM_RETRY_MS,
-    _STREAM_SCAN_INTERVAL_SECONDS,
-    _render_index,
-    _iter_stream_paths,
-    _relative_to_root,
-    _session_payload_diff,
-    _stable_signature,
-    _workspace_snapshot_diff,
+    STREAM_KEEPALIVE_SECONDS,
+    STREAM_RETRY_MS,
+    STREAM_SCAN_INTERVAL_SECONDS,
+    render_index,
+    iter_stream_paths,
+    relative_to_root,
+    session_payload_diff,
+    stable_signature,
+    workspace_snapshot_diff,
 )
 import litehive.web as _web_pkg
 
@@ -57,7 +57,7 @@ class LitehiveWebHandler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:  # noqa: N802
         parsed = urlparse(self.path)
         if parsed.path == "/":
-            return self._send_html(_render_index())
+            return self._send_html(render_index())
         if parsed.path in {"/api/runner/status", "/api/daemon/status"}:
             return self._send_json(_web_pkg.build_daemon_status_payload(self.workspace_root))
         if parsed.path == "/api/snapshot":
@@ -196,12 +196,12 @@ class LitehiveWebHandler(BaseHTTPRequestHandler):
             return self._send_json(response)
         try:
             if parsed.path == "/api/queue/move":
-                task_id = self._require_string(payload, "task_id")
+                task_id = self.require_string(payload, "task_id")
                 position = self._require_int(payload, "position")
                 state = move_queued_task(self.workspace_root, task_id, position)
                 return self._send_queue_mutation_json(state.queue)
             if parsed.path == "/api/queue/promote":
-                task_id = self._require_string(payload, "task_id")
+                task_id = self.require_string(payload, "task_id")
                 self._promote_task(task_id)
                 return self._send_queue_mutation_json(load_state(self.workspace_root).queue)
             if parsed.path == "/api/queue/prioritize":
@@ -213,7 +213,7 @@ class LitehiveWebHandler(BaseHTTPRequestHandler):
                 state = prioritize_queued_tasks(self.workspace_root, task_ids)
                 return self._send_queue_mutation_json(state.queue)
             if parsed.path == "/api/queue/requeue":
-                task_id = self._require_string(payload, "task_id")
+                task_id = self.require_string(payload, "task_id")
                 return self._handle_task_mutation(
                     lambda: _web_pkg.requeue_task_via_web(self.workspace_root, task_id, payload)
                 )
@@ -337,7 +337,7 @@ class LitehiveWebHandler(BaseHTTPRequestHandler):
             raise ValueError("JSON body must be an object")
         return payload
 
-    def _require_string(self, payload: dict[str, Any], field: str) -> str:
+    def require_string(self, payload: dict[str, Any], field: str) -> str:
         value = payload.get(field)
         if not isinstance(value, str) or not value.strip():
             raise ValueError(f"{field} is required")
@@ -374,7 +374,7 @@ class LitehiveWebHandler(BaseHTTPRequestHandler):
             self.send_header("Connection", "keep-alive")
             self.end_headers()
             self.close_connection = True
-            self.wfile.write(f"retry: {_STREAM_RETRY_MS}\n\n".encode("utf-8"))
+            self.wfile.write(f"retry: {STREAM_RETRY_MS}\n\n".encode("utf-8"))
             self.wfile.flush()
 
             state = monitor.build_initial_state(selection)
@@ -393,7 +393,7 @@ class LitehiveWebHandler(BaseHTTPRequestHandler):
             last_revision = state.revision
             last_emit = time.monotonic()
             while True:
-                revision = monitor.wait_for_change(last_revision, timeout=_STREAM_KEEPALIVE_SECONDS)
+                revision = monitor.wait_for_change(last_revision, timeout=STREAM_KEEPALIVE_SECONDS)
                 if revision == last_revision:
                     self._write_sse_comment("keepalive")
                     last_emit = time.monotonic()
@@ -414,7 +414,7 @@ class LitehiveWebHandler(BaseHTTPRequestHandler):
                         event_id=str(state.revision),
                     )
                     last_emit = time.monotonic()
-                if time.monotonic() - last_emit >= _STREAM_KEEPALIVE_SECONDS:
+                if time.monotonic() - last_emit >= STREAM_KEEPALIVE_SECONDS:
                     self._write_sse_comment("keepalive")
                     last_emit = time.monotonic()
                 last_revision = state.revision
@@ -484,7 +484,7 @@ class WorkspaceStreamMonitor:
                     self._workspace_signature = signature
                     self._revision += 1
                     self._condition.notify_all()
-            time.sleep(_STREAM_SCAN_INTERVAL_SECONDS)
+            time.sleep(STREAM_SCAN_INTERVAL_SECONDS)
 
     def _build_state(
         self,
@@ -497,12 +497,12 @@ class WorkspaceStreamMonitor:
         key = (selection.task_id, selection.subagent_id)
         previous = self._states.get(key)
         snapshot = _web_pkg.build_workspace_snapshot(self.root)
-        snapshot_signature = _stable_signature(snapshot)
+        snapshot_signature = stable_signature(snapshot)
         snapshot_event: dict[str, Any] | None = None
         if force_snapshot or previous is None or previous.snapshot_signature != snapshot_signature:
             snapshot_event = {
                 "snapshot": snapshot,
-                "diff": _workspace_snapshot_diff(
+                "diff": workspace_snapshot_diff(
                     None if previous is None else previous.snapshot_event["snapshot"],
                     snapshot,
                 ),
@@ -518,13 +518,13 @@ class WorkspaceStreamMonitor:
                 )
             except FileNotFoundError:
                 session_payload = None
-            session_signature = _stable_signature(session_payload)
+            session_signature = stable_signature(session_payload)
             if force_session or previous is None or previous.session_signature != session_signature:
                 session_event = {
                     "task_id": selection.task_id,
                     "subagent_id": selection.subagent_id,
                     "session": session_payload,
-                    "diff": _session_payload_diff(
+                    "diff": session_payload_diff(
                         None
                         if previous is None
                         else None
@@ -560,8 +560,8 @@ class WorkspaceStreamMonitor:
 
     def _compute_workspace_signature(self) -> str:
         digest = hashlib.sha256()
-        for path in _iter_stream_paths(self.root):
-            digest.update(str(_relative_to_root(self.root, path)).encode("utf-8"))
+        for path in iter_stream_paths(self.root):
+            digest.update(str(relative_to_root(self.root, path)).encode("utf-8"))
             try:
                 stat = path.stat()
             except FileNotFoundError:

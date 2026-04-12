@@ -460,7 +460,7 @@ def test_claude_live_progress_report_uses_adapter_summary_for_restart_snippet(
 
     refreshed = get_task(tmp_path, task.id)
     assert refreshed is not None
-    interrupted = tasks_module._mark_interrupted_subagent(
+    interrupted = tasks_module.mark_interrupted_subagent(
         tmp_path,
         refreshed,
         reason="runner interrupted before subagent completion",
@@ -676,7 +676,7 @@ def test_update_command_rejects_removed_goz_engine_flag(
 
 
 def test_configure_persists_claude_settings(tmp_path: Path) -> None:
-    from litehive.cli import _cmd_configure
+    from litehive.cli import cmd_configure
 
     parser = argparse.Namespace(
         workspace=tmp_path,
@@ -701,7 +701,7 @@ def test_configure_persists_claude_settings(tmp_path: Path) -> None:
         pool_stop_on_dirty_git=False,
     )
 
-    assert _cmd_configure(parser) == 0
+    assert cmd_configure(parser) == 0
     config = load_config(tmp_path)
     assert config.claude_model == "claude-sonnet-4-20250514"
     assert config.claude_max_turns == 20
@@ -713,7 +713,7 @@ def test_configure_persists_claude_settings(tmp_path: Path) -> None:
 
 
 def test_configure_updates_existing_workspace_budget_settings(tmp_path: Path) -> None:
-    from litehive.cli import _cmd_configure
+    from litehive.cli import cmd_configure
 
     ensure_workspace(
         tmp_path,
@@ -752,7 +752,7 @@ def test_configure_updates_existing_workspace_budget_settings(tmp_path: Path) ->
         pool_selection_policy="dependency_aware",
     )
 
-    assert _cmd_configure(parser) == 0
+    assert cmd_configure(parser) == 0
 
     config = load_config(tmp_path)
     assert config.process_profile == "python"
@@ -1012,7 +1012,7 @@ def test_subagent_writes_timeline_on_finish(
         def render_transcript(self, execution):
             return execution.stdout
 
-    monkeypatch.setattr("litehive.agents._manager.get_engine", lambda _: FakeEngine())
+    monkeypatch.setattr("litehive.agents.manager.get_engine", lambda _: FakeEngine())
 
     result = manager.run(task, role="swe", engine_name="opencode", prompt="do it")
 
@@ -1088,7 +1088,7 @@ def test_subagent_writes_timeline_during_live_progress(
         def render_transcript(self, execution):
             return execution.transcript
 
-    monkeypatch.setattr("litehive.agents._manager.get_engine", lambda _: FakeStreamingEngine())
+    monkeypatch.setattr("litehive.agents.manager.get_engine", lambda _: FakeStreamingEngine())
 
     result = manager.run(task, role="swe", engine_name="opencode", prompt="stream it")
     assert result.ref.status == "completed"
@@ -1129,7 +1129,7 @@ def test_subagent_skips_timeline_when_no_events(
         def render_transcript(self, execution):
             return execution.stdout
 
-    monkeypatch.setattr("litehive.agents._manager.get_engine", lambda _: FakeEngine())
+    monkeypatch.setattr("litehive.agents.manager.get_engine", lambda _: FakeEngine())
 
     result = manager.run(task, role="swe", engine_name="codex", prompt="no events")
     assert result.ref.status == "completed"

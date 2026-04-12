@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from litehive.pipeline.agents import PlannerAgent, RecoveryAgent, SWEAgent
-from litehive.pipeline.agents._base import PromptContext
+from litehive.pipeline.agents.base import PromptContext
 from litehive.pipeline.persistence import LastRejection, TaskState
 from litehive.pipeline.prompt_serializer import serialize_prompt
 from litehive.pipeline.types import PipelineMode

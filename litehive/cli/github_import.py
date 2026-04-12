@@ -190,7 +190,7 @@ def import_single_issue(root: Path, repo: str, issue_number: int, cwd: Path | No
 # ── CLI command handlers ─────────────────────────────────────────────────
 
 
-def _cmd_import_issue(args) -> int:
+def cmd_import_issue(args) -> int:
     ensure_workspace(args.workspace)
     try:
         check_gh_auth(cwd=args.workspace)
@@ -221,7 +221,7 @@ def _cmd_import_issue(args) -> int:
     return 0
 
 
-def _cmd_import_issues(args) -> int:
+def cmd_import_issues(args) -> int:
     ensure_workspace(args.workspace)
     try:
         check_gh_auth(cwd=args.workspace)
@@ -280,10 +280,10 @@ def _cmd_import_issues(args) -> int:
     return 0 if errors == 0 else 1
 
 
-def _cmd_import_github(args) -> int:
+def cmd_import_github(args) -> int:
     if getattr(args, "all", False):
-        return _cmd_import_issues(args)
+        return cmd_import_issues(args)
     if not getattr(args, "issue_ref", None):
         print("import github failed: provide an issue reference or use --all")
         return 1
-    return _cmd_import_issue(args)
+    return cmd_import_issue(args)

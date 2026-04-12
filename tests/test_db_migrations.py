@@ -6,7 +6,7 @@ import sqlite3
 from typer.testing import CliRunner
 
 from litehive.cli import app
-from litehive.cli.daemon import _cmd_daemon_run
+from litehive.cli.daemon import cmd_daemon_run
 from litehive.config import workspace_database_path
 from litehive.db.schema import Migration, MigrationApplyError, apply_pending_migrations, available_migrations
 
@@ -109,7 +109,7 @@ def test_daemon_run_applies_pending_migrations_before_start(
     monkeypatch.setattr("litehive.db.schema.available_migrations", lambda: staged)
     monkeypatch.setattr("litehive.cli.daemon.start_background_daemon", lambda root: 4321)
 
-    exit_code = _cmd_daemon_run(argparse.Namespace(workspace=tmp_path, foreground=False))
+    exit_code = cmd_daemon_run(argparse.Namespace(workspace=tmp_path, foreground=False))
     output = capsys.readouterr().out
 
     assert exit_code == 0

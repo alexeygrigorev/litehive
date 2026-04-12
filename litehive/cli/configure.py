@@ -10,27 +10,27 @@ from litehive.config import (
     ensure_workspace,
     render_context_template,
 )
-from litehive.cli._parse import (
-    _parse_engine_int_map,
-    _parse_runner_hooks,
+from litehive.cli.parse import (
+    parse_engine_int_map,
+    parse_runner_hooks,
 )
 
 
-def _cmd_configure(args):
+def cmd_configure(args):
     try:
-        engine_usage_caps = _parse_engine_int_map(
+        engine_usage_caps = parse_engine_int_map(
             getattr(args, "engine_usage_cap", None),
             option_name="--engine-usage-cap",
         )
-        engine_budget_caps = _parse_engine_int_map(
+        engine_budget_caps = parse_engine_int_map(
             getattr(args, "engine_budget_cap", None),
             option_name="--engine-budget-cap",
         )
-        engine_costs = _parse_engine_int_map(
+        engine_costs = parse_engine_int_map(
             getattr(args, "engine_cost", None),
             option_name="--engine-cost",
         )
-        runner_hooks = _parse_runner_hooks(
+        runner_hooks = parse_runner_hooks(
             getattr(args, "hook", None),
             option_name="--hook",
         )

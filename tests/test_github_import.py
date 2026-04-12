@@ -17,8 +17,8 @@ from litehive.tasks import create_task, list_tasks
 from litehive.cli.github_import import (
     GhAuthError,
     GhNotFoundError,
-    _cmd_import_issue,
-    _cmd_import_issues,
+    cmd_import_issue,
+    cmd_import_issues,
     check_gh_auth,
     detect_repo_from_remote,
     find_existing_task_for_issue,
@@ -308,7 +308,7 @@ def test_cmd_import_issue_from_url(workspace, capsys):
             args = _make_import_issue_args(
                 workspace, "https://github.com/owner/repo/issues/5"
             )
-            ret = _cmd_import_issue(args)
+            ret = cmd_import_issue(args)
 
     assert ret == 0
     out = capsys.readouterr().out
@@ -327,7 +327,7 @@ def test_cmd_import_issue_from_number(workspace, capsys):
     with patch("litehive.cli.github_import.check_gh_auth"):
         with patch("litehive.cli.github_import.fetch_issue", return_value=issue_data):
             args = _make_import_issue_args(workspace, "3", repo="owner/repo")
-            ret = _cmd_import_issue(args)
+            ret = cmd_import_issue(args)
 
     assert ret == 0
     out = capsys.readouterr().out
@@ -350,7 +350,7 @@ def test_cmd_import_issue_duplicate(workspace, capsys):
             args = _make_import_issue_args(
                 workspace, "https://github.com/owner/repo/issues/5"
             )
-            ret = _cmd_import_issue(args)
+            ret = cmd_import_issue(args)
 
     assert ret == 0
     out = capsys.readouterr().out
@@ -365,7 +365,7 @@ def test_cmd_import_issue_gh_missing(workspace, capsys):
         side_effect=GhNotFoundError("gh CLI not found. Install it from https://cli.github.com/"),
     ):
         args = _make_import_issue_args(workspace, "1", repo="owner/repo")
-        ret = _cmd_import_issue(args)
+        ret = cmd_import_issue(args)
 
     assert ret == 1
     out = capsys.readouterr().out
@@ -409,7 +409,7 @@ def test_cmd_import_issues_bulk(workspace, capsys):
     with patch("litehive.cli.github_import.check_gh_auth"):
         with patch("litehive.cli.github_import.fetch_open_issues", return_value=issues):
             args = _make_import_issues_args(workspace, repo="owner/repo")
-            ret = _cmd_import_issues(args)
+            ret = cmd_import_issues(args)
 
     assert ret == 0
     out = capsys.readouterr().out
@@ -456,7 +456,7 @@ def test_cmd_import_issues_skips_existing(workspace, capsys):
     with patch("litehive.cli.github_import.check_gh_auth"):
         with patch("litehive.cli.github_import.fetch_open_issues", return_value=issues):
             args = _make_import_issues_args(workspace, repo="owner/repo")
-            ret = _cmd_import_issues(args)
+            ret = cmd_import_issues(args)
 
     assert ret == 0
     out = capsys.readouterr().out
@@ -470,7 +470,7 @@ def test_cmd_import_issues_gh_not_authenticated(workspace, capsys):
         side_effect=GhAuthError("gh CLI is not authenticated. Run 'gh auth login' first."),
     ):
         args = _make_import_issues_args(workspace, repo="owner/repo")
-        ret = _cmd_import_issues(args)
+        ret = cmd_import_issues(args)
 
     assert ret == 1
     out = capsys.readouterr().out

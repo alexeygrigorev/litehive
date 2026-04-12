@@ -205,8 +205,7 @@ If the same review stage keeps rejecting:
 Tasks can pause before important boundaries:
 
 ```bash
-litehive task update T-0007 --human-checkpoint before_acceptance
-litehive task update T-0007 --human-checkpoint before_commit
+litehive task update T-0007 --edit
 ```
 
 When a checkpoint is reached, the pool stops cleanly and leaves the task queued

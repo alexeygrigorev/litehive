@@ -34,7 +34,7 @@ def _git_worktree_is_dirty(root: Path) -> bool:
     return is_git_repo(root) and has_changes(root)
 
 
-def _git_worktree_blocks_pool(root: Path) -> bool:
+def git_worktree_blocks_pool(root: Path) -> bool:
     return inspect_dirty_worktree_gate(root).blocks_pool
 
 
@@ -252,8 +252,8 @@ def _run_worktree_merge_agent(
 
     append_journal(root, task, f"[worktree] Merge conflict on {len(conflicts)} file(s). Launching merge agent.")
     cfg = config or load_config(root)
-    from litehive.recovery import _resolve_recovery_engine
-    engine_name, model = _resolve_recovery_engine(root, task, cfg)
+    from litehive.recovery import resolve_recovery_engine
+    engine_name, model = resolve_recovery_engine(root, task, cfg)
     subagents = SubagentManager(root, execution_root=worktree_path)
     subagents.run(
         task, role="merge-resolver", engine_name=engine_name, model=model,
@@ -279,7 +279,7 @@ def _run_worktree_merge_agent(
         append_journal(root, task, "[worktree] Merge agent could not resolve. Worktree kept as-is.")
 
 
-def _resolve_task_execution_root(root: Path, task: TaskRecord, *, config: "LitehiveConfig | None" = None) -> Path:
+def resolve_task_execution_root(root: Path, task: TaskRecord, *, config: "LitehiveConfig | None" = None) -> Path:
     if not is_git_repo(root):
         return root
 

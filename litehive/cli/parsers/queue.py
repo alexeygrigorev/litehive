@@ -1,4 +1,4 @@
-from litehive.cli.parsers._common import add_workspace_argument
+from litehive.cli.parsers.common import add_workspace_argument
 from litehive.cli.parsers.move import register_move_parser
 from litehive.cli.parsers.promote import register_promote_parser
 from litehive.cli.parsers.requeue import register_requeue_parser

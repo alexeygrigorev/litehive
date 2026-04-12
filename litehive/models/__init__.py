@@ -1,6 +1,6 @@
 """Core YAML-backed models for litehive."""
 
-from heru.types import SubagentRef, _TRUNCATION_MARKER
+from heru.types import SubagentRef
 
 from .common import (
     EngineLimitKind,
@@ -20,6 +20,7 @@ from .common import (
     TaskComplexity,
     TaskMode,
     TaskStatus,
+    TRUNCATION_MARKER,
     UpstreamContributionKind,
     cap_feedback,
     utcnow,
@@ -125,7 +126,7 @@ __all__ = [
     "UpstreamPatchProposal",
     "WorkspaceEngineMonitoring",
     "WorkspaceState",
-    "_TRUNCATION_MARKER",
+    "TRUNCATION_MARKER",
     "cap_feedback",
     "utcnow",
 ]

@@ -10,7 +10,7 @@ _PROTECTED_REFS = {"main", "master", "origin/main", "origin/master"}
 
 
 def main(argv: list[str], *, real_git_path: str, workspace_root: str) -> int:
-    reason = _rejection_reason(argv)
+    reason = rejection_reason(argv)
     if reason is not None:
         _append_attention_log(Path(workspace_root), f"merge-resolver git wrapper rejected `{_format_cmd(argv)}`: {reason}")
         print(f"litehive git wrapper: blocked destructive git command: {reason}", file=sys.stderr)
@@ -19,7 +19,7 @@ def main(argv: list[str], *, real_git_path: str, workspace_root: str) -> int:
     return 1
 
 
-def _rejection_reason(argv: list[str], *, cwd: Path | None = None) -> str | None:
+def rejection_reason(argv: list[str], *, cwd: Path | None = None) -> str | None:
     if not argv:
         return None
     command = argv[0]

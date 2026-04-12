@@ -131,23 +131,6 @@ Litehive has two distinct retry layers:
 
 ### Task And Stage Retry Limits
 
-Per-task override at creation time:
-
-```bash
-litehive task add "Stabilize flaky API test" \
-  --goal "..." \
-  --acceptance-criteria "..." \
-  --retry-limit 5 \
- 
-```
-
-Per-task override after creation:
-
-```bash
-litehive task update T-0004 --retry-limit 5
-litehive task update T-0004 --retry-limit default
-```
-
 Behavior:
 
 - `default_retry_limit` controls how many `testing` or `accepting` rejections a

@@ -1,7 +1,7 @@
 from typing import Any
 
 from ..persistence import TaskState
-from ._base import RoleAgent
+from .base import RoleAgent
 
 INSTRUCTIONS = """\
 - EXECUTE the merge resolution. Do not just describe it.

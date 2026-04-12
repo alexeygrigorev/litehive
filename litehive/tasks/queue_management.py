@@ -5,8 +5,8 @@ from pathlib import Path
 from litehive.models import TaskRecord, TaskOutcomeState, WorkspaceState, utcnow
 
 from .crud import set_task_commit_sha
-from litehive.workspace.locking import _workspace_lock, _ensure_future_task_mutation_allowed
-from .persistence import _save_state_without_runner_guard, load_state
+from litehive.workspace.locking import workspace_lock, ensure_future_task_mutation_allowed
+from .persistence import save_state_without_runner_guard, load_state
 
 
 def enqueue_task(root: Path, task_id: str) -> WorkspaceState:
@@ -18,31 +18,31 @@ def enqueue_task_front(root: Path, task_id: str) -> WorkspaceState:
 
 
 def _enqueue_task(root: Path, task_id: str, *, front: bool) -> WorkspaceState:
-    with _workspace_lock(root):
+    with workspace_lock(root):
         state = load_state(root)
-        _ensure_future_task_mutation_allowed(root, [task_id], state=state)
+        ensure_future_task_mutation_allowed(root, [task_id], state=state)
         state.queue = [item for item in state.queue if item != task_id]
         if front:
             state.queue.insert(0, task_id)
         else:
             state.queue.append(task_id)
-        _save_state_without_runner_guard(root, state)
+        save_state_without_runner_guard(root, state)
         return state
 
 
 def move_queued_task(root: Path, task_id: str, position: int) -> WorkspaceState:
     if position < 1:
         raise ValueError("Queue position must be 1 or greater")
-    with _workspace_lock(root):
+    with workspace_lock(root):
         state = load_state(root)
-        _ensure_future_task_mutation_allowed(root, [task_id], state=state)
+        ensure_future_task_mutation_allowed(root, [task_id], state=state)
         if task_id not in state.queue:
             raise ValueError(f"Task {task_id} is not queued")
         queue = [item for item in state.queue if item != task_id]
         target_index = min(position - 1, len(queue))
         queue.insert(target_index, task_id)
         state.queue = queue
-        _save_state_without_runner_guard(root, state)
+        save_state_without_runner_guard(root, state)
         return state
 
 
@@ -59,20 +59,20 @@ def prioritize_queued_tasks(root: Path, task_ids: list[str]) -> WorkspaceState:
     if duplicates:
         joined = ", ".join(sorted(duplicates))
         raise ValueError(f"Task ids must be unique: {joined}")
-    with _workspace_lock(root):
+    with workspace_lock(root):
         state = load_state(root)
-        _ensure_future_task_mutation_allowed(root, task_ids, state=state)
+        ensure_future_task_mutation_allowed(root, task_ids, state=state)
         missing = [task_id for task_id in task_ids if task_id not in state.queue]
         if missing:
             joined = ", ".join(missing)
             raise ValueError(f"Tasks are not queued: {joined}")
         remaining = [queued_id for queued_id in state.queue if queued_id not in task_ids]
         state.queue = [*task_ids, *remaining]
-        _save_state_without_runner_guard(root, state)
+        save_state_without_runner_guard(root, state)
         return state
 
 
-def _reset_task_for_recovery(
+def reset_task_for_recovery(
     task: TaskRecord,
     *,
     status: str,
@@ -111,13 +111,13 @@ def _reset_task_for_recovery(
         task.runtime.last_outcome.stage = pipeline_status
 
 
-def _enqueue_recovered_task(state: WorkspaceState, task_id: str) -> None:
+def enqueue_recovered_task(state: WorkspaceState, task_id: str) -> None:
     state.queue = [queued_id for queued_id in state.queue if queued_id != task_id]
     state.queue.append(task_id)
 
 
 def prepare_completed_task_for_recovery(task: TaskRecord, *, recovery_stage: str) -> None:
-    _reset_task_for_recovery(
+    reset_task_for_recovery(
         task,
         status="queued",
         pipeline_status=recovery_stage,

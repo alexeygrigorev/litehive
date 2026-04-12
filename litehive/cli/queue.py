@@ -19,7 +19,7 @@ from litehive.workspace.task_status import (
 from litehive.tui.app import LitehiveApp
 
 
-def _cmd_dirty_worktree_gate(args):
+def cmd_dirty_worktree_gate(args):
     report = inspect_dirty_worktree_gate(args.workspace)
     print(f"workspace: {args.workspace}")
     print(f"dirty_worktree_gate: {'blocked' if report.blocks_pool else 'open'}")
@@ -39,7 +39,7 @@ def _cmd_dirty_worktree_gate(args):
     return 1 if report.blocks_pool else 0
 
 
-def _cmd_rollback(args):
+def cmd_rollback(args):
     ensure_workspace(args.workspace)
     try:
         summary = rollback_completed_task(args.workspace, args.task_id)
@@ -60,7 +60,7 @@ def _cmd_rollback(args):
     return 0
 
 
-def _cmd_recover(args):
+def cmd_recover(args):
     ensure_workspace(args.workspace)
     try:
         task = recover_completed_task(args.workspace, args.task_id)
@@ -79,7 +79,7 @@ def _cmd_recover(args):
     return 0
 
 
-def _cmd_move(args):
+def cmd_move(args):
     ensure_workspace(args.workspace)
     try:
         state = move_queued_task(args.workspace, args.task_id, args.position)
@@ -91,7 +91,7 @@ def _cmd_move(args):
     return 0
 
 
-def _cmd_promote(args):
+def cmd_promote(args):
     ensure_workspace(args.workspace)
     try:
         task = require_task(args.workspace, args.task_id)
@@ -122,7 +122,7 @@ def _cmd_promote(args):
     return 0
 
 
-def _cmd_prioritize(args):
+def cmd_prioritize(args):
     ensure_workspace(args.workspace)
     try:
         state = prioritize_queued_tasks(args.workspace, args.task_ids)
@@ -136,7 +136,7 @@ def _cmd_prioritize(args):
     return 0
 
 
-def _cmd_requeue_task(args):
+def cmd_requeue_task(args):
     ensure_workspace(args.workspace)
     try:
         task = requeue_task(args.workspace, args.task_id, front=args.front, force=getattr(args, "force", False))
@@ -154,15 +154,15 @@ def _cmd_requeue_task(args):
     return 0
 
 
-def _cmd_queue_requeue(args):
+def cmd_queue_requeue(args):
     ensure_workspace(args.workspace)
     task = require_task(args.workspace, args.task_id)
     if task.pipeline_status == "done" or task.status == "done":
-        return _cmd_recover(args)
-    return _cmd_requeue_task(args)
+        return cmd_recover(args)
+    return cmd_requeue_task(args)
 
 
-def _cmd_resume_task(args):
+def cmd_resume_task(args):
     ensure_workspace(args.workspace)
     try:
         task = resume_task(args.workspace, args.task_id, front=args.front)
@@ -180,7 +180,7 @@ def _cmd_resume_task(args):
     return 0
 
 
-def _cmd_abandon_task(args):
+def cmd_abandon_task(args):
     ensure_workspace(args.workspace)
     try:
         task = abandon_task(args.workspace, args.task_id)
@@ -193,7 +193,7 @@ def _cmd_abandon_task(args):
     return 0
 
 
-def _cmd_stop_task(args):
+def cmd_stop_task(args):
     ensure_workspace(args.workspace)
     try:
         summary = stop_current_task(args.workspace)
@@ -208,7 +208,7 @@ def _cmd_stop_task(args):
     return 0
 
 
-def _cmd_switch_task(args):
+def cmd_switch_task(args):
     ensure_workspace(args.workspace)
     try:
         summary = switch_task_engine(
@@ -232,7 +232,7 @@ def _cmd_switch_task(args):
     return 0
 
 
-def _cmd_close_task(args):
+def cmd_close_task(args):
     from litehive.cli.agent_cli import block_if_agent
 
     block_if_agent()
@@ -257,7 +257,7 @@ def _cmd_close_task(args):
     return 0
 
 
-def _cmd_archive(args):
+def cmd_archive(args):
     ensure_workspace(args.workspace)
     if args.task_id is None and not getattr(args, "all_done", False):
         parser = getattr(args, "command_parser", None)
@@ -285,7 +285,7 @@ def _cmd_archive(args):
     return 0
 
 
-def _cmd_cleanup(args):
+def cmd_cleanup(args):
     ensure_workspace(args.workspace)
     try:
         deleted = cleanup_archived_tasks(args.workspace, args.older_than)
@@ -298,7 +298,7 @@ def _cmd_cleanup(args):
     return 0
 
 
-def _launch_app(workspace, default_mode):
+def launch_app(workspace, default_mode):
     app = LitehiveApp(workspace=workspace, default_mode=default_mode)
     app.run()
     return 0

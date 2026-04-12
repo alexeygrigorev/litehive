@@ -14,11 +14,11 @@ from litehive.models import (
 )
 
 from .paths import (
-    _latest_path,
-    _latest_run_all_log_path,
-    _latest_subagent_base,
-    _resolve_artifact_path,
-    _status_entry_paths,
+    latest_path,
+    latest_run_all_log_path,
+    latest_subagent_base,
+    resolve_artifact_path,
+    status_entry_paths,
     task_dir,
     task_file,
     task_runtime_file,
@@ -47,8 +47,8 @@ def collect_recovery_evidence(
     runtime_path = task_runtime_file(root, task)
     thread_path = task_thread_file(root, task)
     events_path = task_dir(root, task) / "events.jsonl"
-    latest_report_path = _latest_path(sorted((task_dir(root, task) / "reports").glob("*.yaml")))
-    latest_run_log = _latest_run_all_log_path(root)
+    latest_report_path = latest_path(sorted((task_dir(root, task) / "reports").glob("*.yaml")))
+    latest_run_log = latest_run_all_log_path(root)
     monitoring_path = engine_monitoring_file(root)
     monitoring = load_engine_monitoring(root)
     engine_name = (
@@ -59,7 +59,7 @@ def collect_recovery_evidence(
         else None
     )
     engine_record = monitoring.engines.get(engine_name or "")
-    subagent_base = _latest_subagent_base(root, task)
+    subagent_base = latest_subagent_base(root, task)
 
     evidence.append(
         RecoveryEvidenceItem(
@@ -119,7 +119,7 @@ def collect_recovery_evidence(
             ("stderr.txt", "latest subagent stderr"),
             ("timeline.yaml", "latest subagent events timeline"),
         ):
-            path = _resolve_artifact_path(subagent_base, name)
+            path = resolve_artifact_path(subagent_base, name)
             display_path = path if path is not None else subagent_base / name
             evidence.append(
                 RecoveryEvidenceItem(
@@ -176,7 +176,7 @@ def collect_recovery_evidence(
                 label="main checkout git state",
                 exists=True,
                 summary=f"head={current_head(root) or 'missing'} dirty={len(root_status)}",
-                metadata={"dirty_paths": _status_entry_paths(root_status)},
+                metadata={"dirty_paths": status_entry_paths(root_status)},
             )
         )
         evidence.append(
@@ -190,7 +190,7 @@ def collect_recovery_evidence(
                     if worktree_path is None
                     else f"dirty={len(worktree_status)}"
                 ),
-                metadata={"dirty_paths": _status_entry_paths(worktree_status), "stage": stage},
+                metadata={"dirty_paths": status_entry_paths(worktree_status), "stage": stage},
             )
         )
     return evidence
@@ -269,7 +269,7 @@ def append_thread_comment(root: Path, task: TaskRecord, comment: "TaskThreadComm
     path.write_text(yaml.safe_dump(existing, sort_keys=False), encoding="utf-8")
 
 
-def _normalized_files_changed(paths: Iterable[str]) -> list[str]:
+def normalized_files_changed(paths: Iterable[str]) -> list[str]:
     normalized: list[str] = []
     seen: set[str] = set()
     for raw_path in paths:
@@ -291,7 +291,7 @@ def is_retractable_pass_comment(comment: "TaskThreadComment") -> bool:
     return (
         comment.verdict == "pass"
         and comment.step in _RETRACTABLE_STEPS
-        and bool(_normalized_files_changed(comment.files_changed))
+        and bool(normalized_files_changed(comment.files_changed))
     )
 
 
@@ -334,7 +334,7 @@ def render_task_thread(root: Path, task: TaskRecord, *, for_prompt: bool = False
             lines.append(
                 "Prior pass report withheld from prompt context after requeue-time filesystem validation."
             )
-            claimed_files = _normalized_files_changed(c.files_changed)
+            claimed_files = normalized_files_changed(c.files_changed)
             if claimed_files:
                 lines.append(f"Claimed files: {', '.join(claimed_files)}")
             continue

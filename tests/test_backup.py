@@ -6,7 +6,7 @@ import sqlite3
 from typer.testing import CliRunner
 
 from litehive.cli import app
-from litehive.cli.backup import _cmd_backup_create, _cmd_backup_list, _cmd_backup_restore
+from litehive.cli.backup import cmd_backup_create, cmd_backup_list, cmd_backup_restore
 from litehive.config import workspace_backups_dir, workspace_database_path
 from litehive.models import RunnerStatusState
 from litehive.storage import create_workspace_backup, list_workspace_backups
@@ -54,7 +54,7 @@ def test_backup_list_command_reports_timestamp_and_size(tmp_path: Path, capsys: 
     _seed_workspace_db(tmp_path, ["one"])
     create_workspace_backup(tmp_path, when=datetime(2026, 4, 11, 3, tzinfo=UTC))
 
-    exit_code = _cmd_backup_list(argparse.Namespace(workspace=tmp_path))
+    exit_code = cmd_backup_list(argparse.Namespace(workspace=tmp_path))
     output = capsys.readouterr().out
 
     assert exit_code == 0
@@ -68,7 +68,7 @@ def test_backup_create_command_reports_created_archive(tmp_path: Path, capsys: p
     ensure_workspace(tmp_path)
     _seed_workspace_db(tmp_path, ["one"])
 
-    exit_code = _cmd_backup_create(argparse.Namespace(workspace=tmp_path))
+    exit_code = cmd_backup_create(argparse.Namespace(workspace=tmp_path))
     output = capsys.readouterr().out
 
     assert exit_code == 0
@@ -85,7 +85,7 @@ def test_restore_command_refuses_when_daemon_running(
 
     monkeypatch.setattr("litehive.cli.backup.get_workspace_daemon", lambda root: {"pid": 123})
 
-    exit_code = _cmd_backup_restore(
+    exit_code = cmd_backup_restore(
         argparse.Namespace(workspace=tmp_path, timestamp="2026-04-11T02", yes=True)
     )
     output = capsys.readouterr().out
@@ -105,7 +105,7 @@ def test_restore_command_refuses_when_runner_active(
         lambda root: RunnerStatusState(status="running", pid=321),
     )
 
-    exit_code = _cmd_backup_restore(
+    exit_code = cmd_backup_restore(
         argparse.Namespace(workspace=tmp_path, timestamp="2026-04-11T02", yes=True)
     )
     output = capsys.readouterr().out
@@ -183,7 +183,7 @@ def test_daemon_loop_creates_scheduled_backup(tmp_path: Path, monkeypatch: pytes
     fake_uv.chmod(0o755)
 
     monkeypatch.setattr(
-        "litehive.daemon._execution._default_command_prefix",
+        "litehive.daemon.execution._default_command_prefix",
         lambda: [str(fake_uv), "run", "litehive"],
     )
 

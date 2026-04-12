@@ -41,7 +41,7 @@ from litehive.workspace.locking import runner_status_readonly
 from litehive.web import (
     LitehiveWebHandler,
     WorkspaceStreamMonitor,
-    _render_index,
+    render_index,
     submit_stage_verdict_via_web,
     update_task_detail,
 )
@@ -394,7 +394,7 @@ def test_build_workspace_snapshot_includes_recovery_reports_and_editable_fields(
 
 
 def test_render_index_includes_origin_metadata_sections() -> None:
-    html = _render_index()
+    html = render_index()
 
     assert "Created From" in html
     assert "Upstream Origin" in html

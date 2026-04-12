@@ -13,7 +13,7 @@ from litehive.models import (
     WorkspaceEngineMonitoring,
     utcnow,
 )
-from litehive.tasks.persistence import _atomic_write_text
+from litehive.tasks.persistence import atomic_write_text
 from litehive.workspace.locking import workspace_mutation_guard
 
 
@@ -31,7 +31,7 @@ def load_engine_monitoring(root: Path) -> WorkspaceEngineMonitoring:
 
 def save_engine_monitoring(root: Path, monitoring: WorkspaceEngineMonitoring) -> None:
     with workspace_mutation_guard(root):
-        _atomic_write_text(
+        atomic_write_text(
             engine_monitoring_file(root),
             yaml.safe_dump(monitoring.model_dump(mode="python"), sort_keys=False),
         )

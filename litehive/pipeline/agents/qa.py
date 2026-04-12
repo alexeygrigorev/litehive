@@ -1,4 +1,4 @@
-from ._base import RoleAgent
+from .base import RoleAgent
 
 INSTRUCTIONS = """\
 - You are the QA verifier responsible for focused independent validation.

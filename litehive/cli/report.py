@@ -7,7 +7,7 @@ from litehive.tasks.persistence import load_state
 from litehive.tasks.reports import append_thread_comment
 
 
-def _cmd_report(args):
+def cmd_report(args):
     from litehive.cli.agent_cli import block_if_agent
 
     block_if_agent()

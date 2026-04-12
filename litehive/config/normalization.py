@@ -42,7 +42,7 @@ def _normalize_execution_retry_selector(selector: str) -> str:
     )
 
 
-def _normalize_engine_sequence(engines: Sequence[str], *, field_name: str) -> list[str]:
+def normalize_engine_sequence(engines: Sequence[str], *, field_name: str) -> list[str]:
     normalized: list[str] = []
     seen: set[str] = set()
     for engine_name in engines:
@@ -56,7 +56,7 @@ def _normalize_engine_sequence(engines: Sequence[str], *, field_name: str) -> li
     return normalized
 
 
-def _normalize_engine_int_map(
+def normalize_engine_int_map(
     values: Mapping[str, int] | None,
     *,
     field_name: str,
@@ -77,7 +77,7 @@ def _normalize_engine_int_map(
     return normalized
 
 
-def _normalize_agent_startup_guidance(
+def normalize_agent_startup_guidance(
     guidance: Mapping[str, Sequence[str]] | None,
 ) -> dict[str, list[str]]:
     if guidance is None:
@@ -127,7 +127,7 @@ def _normalize_runner_hook_config(
     return hook
 
 
-def _normalize_runner_hooks(
+def normalize_runner_hooks(
     raw_hooks: Mapping[str, Sequence[RunnerHookConfig | Mapping[str, object]]] | None,
 ) -> dict[str, list[RunnerHookConfig]]:
     if raw_hooks is None:
@@ -165,7 +165,7 @@ _PROFILE_RESOURCE_LIMIT_DEFAULTS: dict[str, SubagentResourceLimitsConfig] = {
 }
 
 
-def _normalize_subagent_resource_limits(
+def normalize_subagent_resource_limits(
     raw_limits: SubagentResourceLimitsConfig | Mapping[str, object] | None,
     *,
     process_profile: str,
@@ -284,7 +284,7 @@ def _normalize_external_engine_sandbox_policy(
     return policy
 
 
-def _normalize_external_engine_sandbox_config(
+def normalize_external_engine_sandbox_config(
     raw_config: ExternalEngineSandboxConfig | Mapping[str, object] | None,
 ) -> ExternalEngineSandboxConfig:
     if raw_config is None:
@@ -381,7 +381,7 @@ def _normalize_execution_retry_policy(
     return policy
 
 
-def _normalize_execution_retry_policies(
+def normalize_execution_retry_policies(
     raw_policies: Mapping[str, ExecutionRetryPolicy | Mapping[str, object]] | None,
 ) -> dict[str, ExecutionRetryPolicy]:
     if raw_policies is None:

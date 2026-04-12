@@ -8,7 +8,7 @@ from litehive.models import RunnerStatusState, TaskRecord
 
 
 @dataclass(slots=True)
-class _RunnerLockState:
+class RunnerLockState:
     handle: TextIO
     depth: int
     status: RunnerStatusState

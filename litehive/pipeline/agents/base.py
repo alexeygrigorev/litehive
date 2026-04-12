@@ -5,7 +5,7 @@ from typing import Any
 from ..nodes.agent import AgentNode, EngineSelector, SessionProvider
 from ..persistence import TaskState
 from ..types import NodeName
-from ._global import default_startup_guidance
+from .guidance import default_startup_guidance
 
 
 @dataclass

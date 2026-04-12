@@ -1,6 +1,6 @@
 """Workspace observability: task status rendering and engine usage monitoring."""
 
-from litehive.observability._engine_monitoring import (
+from litehive.observability.engine_monitoring import (
     engine_monitoring_file,
     load_engine_monitoring,
     save_engine_monitoring,
@@ -8,7 +8,7 @@ from litehive.observability._engine_monitoring import (
     record_engine_observation,
     render_engine_monitoring_lines,
 )
-from litehive.observability._status import (
+from litehive.observability.status import (
     collect_recent_activity,
     estimate_task_execution,
     find_last_completed_task,

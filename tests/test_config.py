@@ -1,11 +1,13 @@
 from tests.workspace_helpers import (
     LitehiveConfig,
     Path,
+    _cmd_update,
     argparse,
     build_parser,
     create_task,
     ensure_workspace,
     global_config_path,
+    get_task,
     load_config,
     pytest,
     resolve_engine_name,
@@ -23,9 +25,9 @@ def test_engine_command_switches_workspace_default_engine(
 ) -> None:
     ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
 
-    from litehive.cli import _cmd_engine
+    from litehive.cli import cmd_engine
 
-    exit_code = _cmd_engine(
+    exit_code = cmd_engine(
         argparse.Namespace(
             workspace=tmp_path,
             engine="gemini",
@@ -100,6 +102,228 @@ def test_report_parser_accepts_repeated_files_changed() -> None:
     )
 
     assert args.files_changed == ["foo.py", "tests/test_foo.py"]
+
+
+def test_task_add_parser_accepts_surviving_shaping_flags() -> None:
+    parser = build_parser()
+
+    args = parser.parse_args(
+        [
+            "task",
+            "add",
+            "Audit CLI surface",
+            "--goal",
+            "Trim noisy options.",
+            "--acceptance-criteria",
+            "Keep load-bearing flags.",
+            "--depends-on",
+            "T-0001,T-0002",
+            "--task-type",
+            "docs",
+            "--mode",
+            "single",
+            "--priority",
+            "high",
+            "--workspace",
+            "/tmp/demo",
+        ]
+    )
+
+    assert args.command == "task"
+    assert args.task_command == "add"
+    assert args.title == "Audit CLI surface"
+    assert args.goal == "Trim noisy options."
+    assert args.acceptance_criteria == ["Keep load-bearing flags."]
+    assert args.depends_on == ["T-0001,T-0002"]
+    assert args.task_type == "docs"
+    assert args.mode == "single"
+    assert args.priority == "high"
+
+
+@pytest.mark.parametrize(
+    "flag",
+    [
+        "--model",
+        "--retry-limit",
+        "--record-mode",
+        "--pm-complexity",
+        "--planned-effort",
+        "--no-auto-commit",
+        "--human-checkpoint",
+    ],
+)
+def test_task_add_parser_rejects_removed_bloat_flags(flag: str) -> None:
+    parser = build_parser()
+
+    with pytest.raises(SystemExit):
+        parser.parse_args(["task", "add", "Trim CLI", flag, "value"])
+
+
+def test_task_update_parser_accepts_surviving_shaping_flags() -> None:
+    parser = build_parser()
+
+    args = parser.parse_args(
+        [
+            "task",
+            "update",
+            "T-0001",
+            "--goal",
+            "Clarify desired outcome.",
+            "--acceptance-criteria",
+            "State the done condition.",
+            "--constraint",
+            "Keep scope local.",
+            "--plan-step",
+            "Update parser tests.",
+            "--depends-on",
+            "none",
+            "--priority",
+            "medium",
+            "--from-file",
+            "/tmp/task-shape.yaml",
+            "--workspace",
+            "/tmp/demo",
+        ]
+    )
+
+    assert args.command == "task"
+    assert args.task_command == "update"
+    assert args.task_id == "T-0001"
+    assert args.goal == "Clarify desired outcome."
+    assert args.acceptance_criteria == ["State the done condition."]
+    assert args.constraint == ["Keep scope local."]
+    assert args.plan_step == ["Update parser tests."]
+    assert args.depends_on == ["none"]
+    assert args.priority == "medium"
+    assert args.from_file == Path("/tmp/task-shape.yaml")
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["task", "update", "T-0001", "--model", "gpt-5"],
+        ["task", "update", "T-0001", "--retry-limit", "5"],
+        ["task", "update", "T-0001", "--pm-complexity", "moderate"],
+        ["task", "update", "T-0001", "--planned-effort", "m"],
+        ["task", "update", "T-0001", "--human-checkpoint", "before_acceptance"],
+        ["task", "update", "T-0001", "--task-type", "docs"],
+        ["task", "update", "T-0001", "--mode", "tasks"],
+        ["task", "update", "T-0001", "--auto-commit"],
+        ["task", "update", "T-0001", "--no-auto-commit"],
+    ],
+)
+def test_task_update_parser_rejects_removed_bloat_flags(argv: list[str]) -> None:
+    parser = build_parser()
+
+    with pytest.raises(SystemExit):
+        parser.parse_args(argv)
+
+
+def test_import_spec_parser_keeps_engine_and_model_flags() -> None:
+    parser = build_parser()
+
+    args = parser.parse_args(
+        [
+            "import",
+            "spec",
+            "spec.md",
+            "--engine",
+            "gemini",
+            "--model",
+            "gemini-2.5-pro",
+            "--workspace",
+            "/tmp/demo",
+        ]
+    )
+
+    assert args.command == "import"
+    assert args.import_command == "spec"
+    assert args.engine == "gemini"
+    assert args.model == "gemini-2.5-pro"
+    assert args.file == Path("spec.md")
+
+
+def test_import_issue_parser_keeps_surviving_flags() -> None:
+    parser = build_parser()
+
+    args = parser.parse_args(
+        [
+            "import",
+            "issue",
+            "--upstream",
+            "Fix upstream timeout handling",
+            "--type",
+            "engine_adapter_fix",
+            "--patch-branch",
+            "recover/timeout-fix",
+            "--prepare-patch-branch",
+            "--workspace",
+            "/tmp/demo",
+        ]
+    )
+
+    assert args.command == "import"
+    assert args.import_command == "issue"
+    assert args.upstream == "Fix upstream timeout handling"
+    assert args.type == "engine_adapter_fix"
+    assert args.patch_branch == "recover/timeout-fix"
+    assert args.prepare_patch_branch is True
+
+
+def test_update_command_from_file_still_supports_rich_backdoor_fields(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("LITEHIVE_AGENT_ROLE", raising=False)
+    ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
+    task = create_task(tmp_path, title="Rich update fallback")
+    payload = tmp_path / "task-shape.yaml"
+    payload.write_text(
+        yaml.safe_dump(
+            {
+                "goal": "Route through the rich update backdoor.",
+                "task_type": "docs",
+                "mode": "tasks",
+                "model": "gpt-5",
+                "retry_limit": 4,
+                "pm_complexity": "moderate",
+                "planned_effort": "m",
+                "human_checkpoints": ["before_acceptance"],
+                "auto_commit": False,
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+
+    exit_code = _cmd_update(
+        argparse.Namespace(
+            workspace=tmp_path,
+            task_id=task.id,
+            priority=None,
+            goal=None,
+            depends_on=None,
+            acceptance_criteria=None,
+            constraint=None,
+            plan_step=None,
+            from_file=payload,
+            edit=False,
+        )
+    )
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "task_type: docs" in output
+    updated = get_task(tmp_path, task.id)
+    assert updated is not None
+    assert updated.goal == "Route through the rich update backdoor."
+    assert updated.task_type == "docs"
+    assert updated.mode == "tasks"
+    assert updated.model == "gpt-5"
+    assert updated.retry_policy.max_retries == 4
+    assert updated.pm_complexity == "moderate"
+    assert updated.planned_effort == "m"
+    assert updated.human_checkpoints == ["before_acceptance"]
+    assert updated.git.auto_commit is False
 
 
 def test_resolve_workspace_uses_workspace_root_env(
@@ -190,8 +414,8 @@ def _assert_engine_status_command_shows_all_monitored_engines(
     ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
 
     from litehive.models import EngineUsageRecord, EngineUsageWindow, WorkspaceEngineMonitoring
-    from litehive.observability._engine_monitoring import save_engine_monitoring
-    from litehive.cli import _cmd_engine
+    from litehive.observability.engine_monitoring import save_engine_monitoring
+    from litehive.cli import cmd_engine
     from heru.quota import UsageStatus
 
     monkeypatch.setattr(
@@ -247,7 +471,7 @@ def _assert_engine_status_command_shows_all_monitored_engines(
         ),
     )
 
-    exit_code = _cmd_engine(
+    exit_code = cmd_engine(
         argparse.Namespace(
             workspace=tmp_path,
             engine_action="status",
@@ -288,7 +512,7 @@ def test_engine_status_command_scopes_to_single_engine_and_shows_codex_quota(
 ) -> None:
     ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
 
-    from litehive.cli import _cmd_engine
+    from litehive.cli import cmd_engine
     from heru.quota import UsageStatus, UsageWindow
 
     def fake_check_codex_quota():
@@ -301,7 +525,7 @@ def test_engine_status_command_scopes_to_single_engine_and_shows_codex_quota(
 
     monkeypatch.setattr("litehive.cli.engine.check_codex_quota", fake_check_codex_quota)
 
-    exit_code = _cmd_engine(
+    exit_code = cmd_engine(
         argparse.Namespace(
             workspace=tmp_path,
             engine_action="status",
@@ -322,7 +546,7 @@ def test_engine_status_command_shows_claude_quota_without_monitoring_data(
 ) -> None:
     ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
 
-    from litehive.cli import _cmd_engine
+    from litehive.cli import cmd_engine
     from heru.quota import UsageStatus, UsageWindow
 
     def fake_check_claude_quota():
@@ -338,7 +562,7 @@ def test_engine_status_command_shows_claude_quota_without_monitoring_data(
         fake_check_claude_quota,
     )
 
-    exit_code = _cmd_engine(
+    exit_code = cmd_engine(
         argparse.Namespace(
             workspace=tmp_path,
             engine_action="status",
@@ -361,7 +585,7 @@ def test_engine_status_command_shows_copilot_quota_without_monitoring_data(
 ) -> None:
     ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
 
-    from litehive.cli import _cmd_engine
+    from litehive.cli import cmd_engine
     from heru.quota import UsageStatus, UsageWindow
 
     def fake_check_copilot_quota():
@@ -377,7 +601,7 @@ def test_engine_status_command_shows_copilot_quota_without_monitoring_data(
         fake_check_copilot_quota,
     )
 
-    exit_code = _cmd_engine(
+    exit_code = cmd_engine(
         argparse.Namespace(
             workspace=tmp_path,
             engine_action="status",
@@ -399,7 +623,7 @@ def test_engine_status_command_shows_zai_quota_without_monitoring_data(
 ) -> None:
     ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
 
-    from litehive.cli import _cmd_engine
+    from litehive.cli import cmd_engine
     from heru.quota import UsageStatus, UsageWindow
 
     def fake_check_zai_quota():
@@ -415,7 +639,7 @@ def test_engine_status_command_shows_zai_quota_without_monitoring_data(
         fake_check_zai_quota,
     )
 
-    exit_code = _cmd_engine(
+    exit_code = cmd_engine(
         argparse.Namespace(
             workspace=tmp_path,
             engine_action="status",
@@ -437,7 +661,7 @@ def test_engine_status_command_handles_live_quota_errors_gracefully(
 ) -> None:
     ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
 
-    from litehive.cli import _cmd_engine
+    from litehive.cli import cmd_engine
 
     def fake_check_copilot_quota():
         raise RuntimeError("boom")
@@ -447,7 +671,7 @@ def test_engine_status_command_handles_live_quota_errors_gracefully(
         fake_check_copilot_quota,
     )
 
-    exit_code = _cmd_engine(
+    exit_code = cmd_engine(
         argparse.Namespace(
             workspace=tmp_path,
             engine_action="status",
@@ -465,9 +689,9 @@ def test_engine_status_command_reports_no_data_for_requested_scope(
 ) -> None:
     ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
 
-    from litehive.cli import _cmd_engine
+    from litehive.cli import cmd_engine
 
-    exit_code = _cmd_engine(
+    exit_code = cmd_engine(
         argparse.Namespace(
             workspace=tmp_path,
             engine_action="status",
@@ -503,9 +727,9 @@ def test_configure_persists_gemini_model(tmp_path: Path) -> None:
         gemini_model="gemini-2.5-pro",
     )
 
-    from litehive.cli import _cmd_configure
+    from litehive.cli import cmd_configure
 
-    assert _cmd_configure(parser) == 0
+    assert cmd_configure(parser) == 0
     config = load_config(tmp_path)
     assert config.default_engine == "gemini"
     assert config.gemini_model == "gemini-2.5-pro"
@@ -521,9 +745,9 @@ def test_configure_persists_copilot_model(tmp_path: Path) -> None:
         copilot_model="gpt-5",
     )
 
-    from litehive.cli import _cmd_configure
+    from litehive.cli import cmd_configure
 
-    assert _cmd_configure(parser) == 0
+    assert cmd_configure(parser) == 0
     config = load_config(tmp_path)
     assert config.default_engine == "copilot"
     assert config.copilot_model == "gpt-5"
@@ -545,9 +769,9 @@ def test_configure_persists_process_profile(tmp_path: Path) -> None:
         pool_stop_on_dirty_git=False,
     )
 
-    from litehive.cli import _cmd_configure
+    from litehive.cli import cmd_configure
 
-    assert _cmd_configure(parser) == 0
+    assert cmd_configure(parser) == 0
     config = load_config(tmp_path)
     context = (tmp_path / ".litehive" / "context.md").read_text(encoding="utf-8")
 
@@ -574,9 +798,9 @@ def test_configure_persists_pool_stop_defaults(tmp_path: Path) -> None:
         pool_selection_policy="priority_first",
     )
 
-    from litehive.cli import _cmd_configure
+    from litehive.cli import cmd_configure
 
-    assert _cmd_configure(parser) == 0
+    assert cmd_configure(parser) == 0
     config = load_config(tmp_path)
     assert config.pool_stop_on_failure is True
     assert config.pool_max_tasks == 2
@@ -933,7 +1157,7 @@ def test_resolve_engine_name_uses_default_engine_without_task_override(
 
 
 def test_configure_no_longer_has_task_engine_routing(tmp_path: Path) -> None:
-    from litehive.cli import _cmd_configure
+    from litehive.cli import cmd_configure
 
     parser = argparse.Namespace(
         workspace=tmp_path,
@@ -959,7 +1183,7 @@ def test_configure_no_longer_has_task_engine_routing(tmp_path: Path) -> None:
         pool_selection_policy="dependency_aware",
     )
 
-    assert _cmd_configure(parser) == 0
+    assert cmd_configure(parser) == 0
     config = load_config(tmp_path)
     assert config.default_engine == "codex"
 
@@ -979,7 +1203,7 @@ def test_load_config_rejects_legacy_pre_acceptance_command(tmp_path: Path) -> No
 
 
 def test_configure_persists_runner_hooks(tmp_path: Path) -> None:
-    from litehive.cli import _cmd_configure
+    from litehive.cli import cmd_configure
 
     parser = argparse.Namespace(
         workspace=tmp_path,
@@ -1014,7 +1238,7 @@ def test_configure_persists_runner_hooks(tmp_path: Path) -> None:
         ],
     )
 
-    assert _cmd_configure(parser) == 0
+    assert cmd_configure(parser) == 0
     config = load_config(tmp_path)
 
     assert config.runner_hooks["before_implementing"][0].reject_on_failure is False
@@ -1081,7 +1305,7 @@ def test_load_config_rejects_invalid_runner_hook_execution_mode(tmp_path: Path) 
 def test_configure_rejects_invalid_runner_hook_point(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    from litehive.cli import _cmd_configure
+    from litehive.cli import cmd_configure
 
     parser = argparse.Namespace(
         workspace=tmp_path,
@@ -1114,7 +1338,7 @@ def test_configure_rejects_invalid_runner_hook_point(
         subagent_process_limit=None,
     )
 
-    assert _cmd_configure(parser) == 1
+    assert cmd_configure(parser) == 1
     output = capsys.readouterr().out
 
     assert "configure failed: runner_hooks key must be one of:" in output

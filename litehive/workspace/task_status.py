@@ -19,10 +19,10 @@ from litehive.tasks.constants import (
     VALID_TASK_ENGINES,
     VALID_TASK_PRIORITIES,
     VALID_TASK_TYPES,
-    _RUNNER_LOCKS,
-    _RUNNER_LOCKS_MUTEX,
+    RUNNER_LOCKS,
+    RUNNER_LOCKS_MUTEX,
 )
-from litehive.workspace.locking import _workspace_lock
+from litehive.workspace.locking import workspace_lock
 from litehive.tasks.models import StopTaskSummary, SwitchTaskSummary, WorkspaceConflictError
 from litehive.tasks.normalization import (
     missing_acceptance_criteria_reason,
@@ -32,27 +32,27 @@ from litehive.tasks.normalization import (
     reroute_stage_for_acceptance_criteria,
     implementation_entry_stage,
 )
-from litehive.tasks.paths import _latest_subagent_base, task_dir
+from litehive.tasks.paths import latest_subagent_base, task_dir
 
 
 def _active_task_id_for_stop(root: Path, state: WorkspaceState) -> str:
-    from litehive.tasks.queue_ops import _validate_single_active_task, active_task_markers
+    from litehive.tasks.queue_ops import validate_single_active_task, active_task_markers
 
     markers = active_task_markers(root, state)
     if not markers:
         raise ValueError("No active task to stop")
     if len(markers) > 1:
-        _validate_single_active_task(root, state)
+        validate_single_active_task(root, state)
     return next(iter(sorted(markers)))
 
 
 def _stop_active_task_without_runner_guard(root: Path, task_id: str) -> TaskRecord:
     from litehive.tasks.crud import require_task
     from litehive.tasks.persistence import load_state
-    from litehive.recovery import _prepare_interrupted_task, interruption_journal_message
-    from .workflow import _persist_task_and_state_without_runner_guard
+    from litehive.recovery import prepare_interrupted_task, interruption_journal_message
+    from .workflow import persist_task_and_state_without_runner_guard
 
-    with _workspace_lock(root):
+    with workspace_lock(root):
         state = load_state(root)
         active_task_id = _active_task_id_for_stop(root, state)
         if active_task_id != task_id:
@@ -63,7 +63,7 @@ def _stop_active_task_without_runner_guard(root: Path, task_id: str) -> TaskReco
         if task.pipeline_status == "done":
             raise ValueError(f"Task {task.id} is already done")
         stage = task.runtime.current_stage.step or task.pipeline_status
-        _prepare_interrupted_task(
+        prepare_interrupted_task(
             root,
             task,
             stage=stage,
@@ -77,7 +77,7 @@ def _stop_active_task_without_runner_guard(root: Path, task_id: str) -> TaskReco
         state.queue = [item for item in state.queue if item != task.id]
         if task.status == "queued" and task.pipeline_status != "done":
             state.queue.insert(0, task.id)
-        _persist_task_and_state_without_runner_guard(
+        persist_task_and_state_without_runner_guard(
             root,
             task=task,
             state=state,
@@ -96,26 +96,26 @@ def stop_current_task(
     from litehive.tasks.persistence import load_state
     from litehive.tasks.queue_ops import active_task_markers
     from litehive.workspace.locking import (
-        _read_runner_lock_metadata,
-        _runner_lock_is_held,
-        _runner_pid_is_alive,
+        read_runner_lock_metadata,
+        runner_lock_is_held,
+        runner_pid_is_alive,
     )
     from litehive.recovery import recover_stale_runner_state
 
     state = load_state(root)
     active_task_id = _active_task_id_for_stop(root, state)
     runner_pid: int | None = None
-    if _runner_lock_is_held(root):
-        metadata = _read_runner_lock_metadata(root)
+    if runner_lock_is_held(root):
+        metadata = read_runner_lock_metadata(root)
         pid = metadata.pid
-        if _runner_pid_is_alive(pid):
+        if runner_pid_is_alive(pid):
             runner_pid = int(pid)
             os.kill(runner_pid, signal.SIGINT)
             deadline = time.monotonic() + max(wait_timeout_seconds, 0.0)
             sleep_interval = max(poll_interval_seconds, 0.01)
-            while _runner_lock_is_held(root) and time.monotonic() < deadline:
+            while runner_lock_is_held(root) and time.monotonic() < deadline:
                 time.sleep(sleep_interval)
-            if _runner_lock_is_held(root):
+            if runner_lock_is_held(root):
                 raise WorkspaceConflictError(
                     f"runner for task {active_task_id} did not stop cleanly after SIGINT (pid={runner_pid})"
                 )
@@ -157,7 +157,7 @@ def _switch_prior_work_paths(root: Path, task: TaskRecord) -> list[str]:
     ):
         if candidate and candidate not in paths:
             paths.append(candidate)
-    base = _latest_subagent_base(root, task)
+    base = latest_subagent_base(root, task)
     if base is not None:
         rel_path = str(base.relative_to(task_dir(root, task)))
         if rel_path not in paths:
@@ -270,18 +270,18 @@ def switch_task_engine(root: Path, task_id: str, *, engine: str, reason: str) ->
 
 def requeue_task(root: Path, task_id: str, *, front: bool = False, force: bool = False) -> TaskRecord:
     from litehive.tasks.crud import require_task
-    from .locking import _ensure_future_task_mutation_allowed, _workspace_lock
+    from .locking import ensure_future_task_mutation_allowed, workspace_lock
     from litehive.tasks.persistence import load_state
-    from litehive.tasks.queue_management import _reset_task_for_recovery
+    from litehive.tasks.queue_management import reset_task_for_recovery
     from litehive.tasks.reports import (
-        _normalized_files_changed,
+        normalized_files_changed,
         is_retractable_pass_comment,
         load_task_thread,
         retract_thread_comment,
         save_task_thread,
     )
     from litehive.tasks.worktrees import migrate_legacy_worktree
-    from .workflow import _persist_task_and_state_without_runner_guard
+    from .workflow import persist_task_and_state_without_runner_guard
 
     def _task_checkout_path(task: TaskRecord) -> Path:
         worktree_path, changed = migrate_legacy_worktree(root, task)
@@ -305,7 +305,7 @@ def requeue_task(root: Path, task_id: str, *, front: bool = False, force: bool =
             return False
         raise ValueError(proc.stderr.strip() or f"git diff failed for {relative_path}")
 
-    with _workspace_lock(root):
+    with workspace_lock(root):
         task = require_task(root, task_id)
         if task.flag_count >= 3 and not force:
             raise ValueError(
@@ -313,7 +313,7 @@ def requeue_task(root: Path, task_id: str, *, front: bool = False, force: bool =
                 "Use --force to requeue anyway."
             )
         state = load_state(root)
-        _ensure_future_task_mutation_allowed(root, [task.id], state=state)
+        ensure_future_task_mutation_allowed(root, [task.id], state=state)
         if task.status not in {"flagged", "merge_failed", "parked", *CLOSED_TASK_STATUSES}:
             raise ValueError(f"Task {task.id} is not flagged, merge_failed, parked, or closed")
         main_ref = current_head(root)
@@ -324,13 +324,13 @@ def requeue_task(root: Path, task_id: str, *, front: bool = False, force: bool =
             for comment in thread:
                 if not is_retractable_pass_comment(comment):
                     continue
-                claimed_paths = _normalized_files_changed(comment.files_changed)
+                claimed_paths = normalized_files_changed(comment.files_changed)
                 if any(_path_differs_from_main(checkout_path, main_ref, path) for path in claimed_paths):
                     continue
                 changed = retract_thread_comment(comment) or changed
             if changed:
                 save_task_thread(root, task, thread)
-        _reset_task_for_recovery(
+        reset_task_for_recovery(
             task,
             status="queued",
             pipeline_status=implementation_entry_stage(task),
@@ -341,7 +341,7 @@ def requeue_task(root: Path, task_id: str, *, front: bool = False, force: bool =
             state.queue.insert(0, task.id)
         else:
             state.queue.append(task.id)
-        _persist_task_and_state_without_runner_guard(
+        persist_task_and_state_without_runner_guard(
             root,
             task=task,
             state=state,
@@ -352,15 +352,15 @@ def requeue_task(root: Path, task_id: str, *, front: bool = False, force: bool =
 
 def resume_task(root: Path, task_id: str, *, front: bool = False) -> TaskRecord:
     from litehive.tasks.crud import require_task
-    from .locking import _ensure_future_task_mutation_allowed, _workspace_lock
+    from .locking import ensure_future_task_mutation_allowed, workspace_lock
     from litehive.tasks.persistence import load_state
-    from litehive.tasks.queue_management import _reset_task_for_recovery
-    from .workflow import _persist_task_and_state_without_runner_guard
+    from litehive.tasks.queue_management import reset_task_for_recovery
+    from .workflow import persist_task_and_state_without_runner_guard
 
-    with _workspace_lock(root):
+    with workspace_lock(root):
         task = require_task(root, task_id)
         state = load_state(root)
-        _ensure_future_task_mutation_allowed(root, [task.id], state=state)
+        ensure_future_task_mutation_allowed(root, [task.id], state=state)
         if task.status not in {"flagged", "merge_failed", *CLOSED_TASK_STATUSES, *RESUMABLE_TASK_STATUSES}:
             raise ValueError(f"Task {task.id} is not interrupted, parked, flagged, merge_failed, or closed")
         if task.pipeline_status in {"backlog", "done"}:
@@ -370,7 +370,7 @@ def resume_task(root: Path, task_id: str, *, front: bool = False) -> TaskRecord:
             resumed_stage = "commit_to_git"
         if resumed_stage in {"implementing", "testing", "accepting"}:
             resumed_stage = reroute_stage_for_acceptance_criteria(task)
-        _reset_task_for_recovery(
+        reset_task_for_recovery(
             task,
             status="queued",
             pipeline_status=resumed_stage,
@@ -382,7 +382,7 @@ def resume_task(root: Path, task_id: str, *, front: bool = False) -> TaskRecord:
             state.queue.insert(0, task.id)
         else:
             state.queue.append(task.id)
-        _persist_task_and_state_without_runner_guard(
+        persist_task_and_state_without_runner_guard(
             root,
             task=task,
             state=state,
@@ -393,14 +393,14 @@ def resume_task(root: Path, task_id: str, *, front: bool = False) -> TaskRecord:
 
 def abandon_task(root: Path, task_id: str) -> TaskRecord:
     from litehive.tasks.crud import require_task
-    from .locking import _ensure_future_task_mutation_allowed, _workspace_lock
+    from .locking import ensure_future_task_mutation_allowed, workspace_lock
     from litehive.tasks.persistence import load_state
-    from .workflow import _persist_task_and_state_without_runner_guard
+    from .workflow import persist_task_and_state_without_runner_guard
 
-    with _workspace_lock(root):
+    with workspace_lock(root):
         task = require_task(root, task_id)
         state = load_state(root)
-        _ensure_future_task_mutation_allowed(root, [task.id], state=state)
+        ensure_future_task_mutation_allowed(root, [task.id], state=state)
         if task.status not in {"flagged", "merge_failed", *CLOSED_TASK_STATUSES, *RESUMABLE_TASK_STATUSES}:
             raise ValueError(f"Task {task.id} is not interrupted, parked, flagged, merge_failed, or closed")
         task.status = "cancelled"
@@ -419,7 +419,7 @@ def abandon_task(root: Path, task_id: str) -> TaskRecord:
         if state.active_task_id == task.id:
             state.active_task_id = None
         state.queue = [item for item in state.queue if item != task.id]
-        _persist_task_and_state_without_runner_guard(
+        persist_task_and_state_without_runner_guard(
             root,
             task=task,
             state=state,
@@ -447,9 +447,9 @@ def close_task(
     follow_up_task_id: str | None = None,
 ) -> TaskRecord:
     from litehive.tasks.crud import require_task
-    from .locking import _ensure_future_task_mutation_allowed, _workspace_lock
+    from .locking import ensure_future_task_mutation_allowed, workspace_lock
     from litehive.tasks.persistence import load_state
-    from .workflow import _persist_task_and_state_without_runner_guard
+    from .workflow import persist_task_and_state_without_runner_guard
 
     """Mark a task as explicitly closed with a non-implementation outcome.
 
@@ -459,7 +459,7 @@ def close_task(
     if outcome not in _CLOSE_OUTCOME_REASON_CODES:
         allowed = ", ".join(sorted(_CLOSE_OUTCOME_REASON_CODES))
         raise ValueError(f"Unsupported close outcome '{outcome}'. Expected one of: {allowed}")
-    with _workspace_lock(root):
+    with workspace_lock(root):
         task = require_task(root, task_id)
         if follow_up_task_id is not None:
             follow_up_task_id = follow_up_task_id.strip()
@@ -469,7 +469,7 @@ def close_task(
                 raise ValueError(f"Task {task.id} cannot reference itself as a follow-up task")
             require_task(root, follow_up_task_id)
         state = load_state(root)
-        _ensure_future_task_mutation_allowed(root, [task.id], state=state)
+        ensure_future_task_mutation_allowed(root, [task.id], state=state)
         if task.status == "done":
             raise ValueError(f"Task {task.id} is already done and cannot be closed")
         now = utcnow()
@@ -495,7 +495,7 @@ def close_task(
             journal_message += f" {reason}"
         if follow_up_task_id is not None:
             journal_message += f" Follow-up task: {follow_up_task_id}."
-        _persist_task_and_state_without_runner_guard(
+        persist_task_and_state_without_runner_guard(
             root,
             task=task,
             state=state,
@@ -506,18 +506,18 @@ def close_task(
 
 def park_task(root: Path, task_id: str) -> TaskRecord:
     from litehive.tasks.crud import require_task
-    from .locking import _ensure_future_task_mutation_allowed, _workspace_lock
+    from .locking import ensure_future_task_mutation_allowed, workspace_lock
     from litehive.tasks.persistence import load_state
-    from .workflow import _persist_task_and_state_without_runner_guard
+    from .workflow import persist_task_and_state_without_runner_guard
 
     """Mark a task as parked.
 
     The task is removed from the queue and set to status 'parked'.
     """
-    with _workspace_lock(root):
+    with workspace_lock(root):
         task = require_task(root, task_id)
         state = load_state(root)
-        _ensure_future_task_mutation_allowed(root, [task.id], state=state)
+        ensure_future_task_mutation_allowed(root, [task.id], state=state)
         if task.status == "done":
             raise ValueError(f"Task {task.id} is already done and cannot be parked")
         now = utcnow()
@@ -529,7 +529,7 @@ def park_task(root: Path, task_id: str) -> TaskRecord:
         if state.active_task_id == task.id:
             state.active_task_id = None
         state.queue = [item for item in state.queue if item != task.id]
-        _persist_task_and_state_without_runner_guard(
+        persist_task_and_state_without_runner_guard(
             root,
             task=task,
             state=state,
@@ -563,24 +563,24 @@ def update_task(
     journal_message: str | None = None,
 ) -> TaskRecord:
     from litehive.tasks.crud import require_task
-    from .locking import _ensure_future_task_mutation_allowed, _persist_future_task_update, _workspace_lock
+    from .locking import ensure_future_task_mutation_allowed, persist_future_task_update, workspace_lock
     from litehive.tasks.persistence import load_state
-    from litehive.tasks.queue_management import _reset_task_for_recovery
-    from litehive.tasks.queue_ops import _validate_task_dependencies
+    from litehive.tasks.queue_management import reset_task_for_recovery
+    from litehive.tasks.queue_ops import validate_task_dependencies
     from litehive.tasks.templates import apply_task_template_defaults
-    from .workflow import _persist_task_and_state_without_runner_guard
+    from .workflow import persist_task_and_state_without_runner_guard
 
-    with _workspace_lock(root):
+    with workspace_lock(root):
         state = load_state(root)
         task = require_task(root, task_id)
         # Skip the conflict guard when the current thread is the runner
         # (e.g., apply_task_updates_from_report during grooming).
         owner_thread_id = threading.get_ident()
-        with _RUNNER_LOCKS_MUTEX:
-            runner_state = _RUNNER_LOCKS.get(root.resolve())
+        with RUNNER_LOCKS_MUTEX:
+            runner_state = RUNNER_LOCKS.get(root.resolve())
         is_runner_thread = runner_state is not None and runner_state.owner_thread_id == owner_thread_id
         if not is_runner_thread:
-            _ensure_future_task_mutation_allowed(root, [task.id], state=state)
+            ensure_future_task_mutation_allowed(root, [task.id], state=state)
 
         if outcome is not ... and outcome is not None:
             outcome_str = str(outcome)
@@ -619,7 +619,7 @@ def update_task(
             close_msg = f"Task closed: {outcome_str}."
             if reason_str:
                 close_msg += f" {reason_str}"
-            _persist_task_and_state_without_runner_guard(
+            persist_task_and_state_without_runner_guard(
                 root,
                 task=task,
                 state=state,
@@ -640,7 +640,7 @@ def update_task(
                 if state.active_task_id == task.id:
                     state.active_task_id = None
                 state.queue = [item for item in state.queue if item != task.id]
-                _persist_task_and_state_without_runner_guard(
+                persist_task_and_state_without_runner_guard(
                     root,
                     task=task,
                     state=state,
@@ -650,7 +650,7 @@ def update_task(
             if action == "requeue":
                 if task.status not in {"flagged", "merge_failed", "parked", *CLOSED_TASK_STATUSES}:
                     raise ValueError(f"Task {task.id} is not flagged, merge_failed, parked, or closed")
-                _reset_task_for_recovery(
+                reset_task_for_recovery(
                     task,
                     status="queued",
                     pipeline_status=implementation_entry_stage(task),
@@ -658,7 +658,7 @@ def update_task(
                 )
                 state.queue = [item for item in state.queue if item != task.id]
                 state.queue.append(task.id)
-                _persist_task_and_state_without_runner_guard(
+                persist_task_and_state_without_runner_guard(
                     root,
                     task=task,
                     state=state,
@@ -685,7 +685,7 @@ def update_task(
                 if state.active_task_id == task.id:
                     state.active_task_id = None
                 state.queue = [item for item in state.queue if item != task.id]
-                _persist_task_and_state_without_runner_guard(
+                persist_task_and_state_without_runner_guard(
                     root,
                     task=task,
                     state=state,
@@ -695,7 +695,7 @@ def update_task(
             raise ValueError(f"Unsupported action '{action}'")
 
         if depends_on is not ...:
-            _validate_task_dependencies(root, task_id=task.id, depends_on=list(depends_on))
+            validate_task_dependencies(root, task_id=task.id, depends_on=list(depends_on))
             task.depends_on = list(depends_on)
 
         if task_type is not ...:
@@ -761,7 +761,7 @@ def update_task(
             journal_message += (
                 " Rerouted to `grooming` until structured acceptance criteria are added."
             )
-        _persist_future_task_update(root, task, journal_message=journal_message)
+        persist_future_task_update(root, task, journal_message=journal_message)
         return task
 
 

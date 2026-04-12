@@ -6,16 +6,16 @@ from pathlib import Path
 import yaml
 
 from litehive.config import ensure_workspace, state_path
-from litehive.daemon._execution import _check_origin_divergence
+from litehive.daemon.execution import check_origin_divergence
 from litehive.models import TaskRecord, WorkspaceState
 from litehive.recovery.detection import (
-    _is_orphaned_commit_stage_task,
-    _is_stranded_commit_task,
+    is_orphaned_commit_stage_task,
+    is_stranded_commit_task,
 )
 from litehive.recovery.workspace_repair import repair_workspace_state
 from litehive.tasks.crud import list_tasks, save_task_runtime
 from litehive.tasks.persistence import load_state
-from litehive.tasks.queue_ops import _is_task_eligible_for_execution
+from litehive.tasks.queue_ops import is_task_eligible_for_execution
 from litehive.tasks.worktrees import (
     is_managed_worktree_path,
     legacy_worktree_root,
@@ -89,7 +89,7 @@ def _task_status_findings(tasks: list[TaskRecord]) -> list[DoctorFinding]:
 def _commit_findings(tasks: list[TaskRecord], state: WorkspaceState | None) -> list[DoctorFinding]:
     findings: list[DoctorFinding] = []
     for task in tasks:
-        if _is_stranded_commit_task(task):
+        if is_stranded_commit_task(task):
             findings.append(
                 DoctorFinding(
                     code="commit_to_git_stuck",
@@ -99,7 +99,7 @@ def _commit_findings(tasks: list[TaskRecord], state: WorkspaceState | None) -> l
                 )
             )
             continue
-        if state is not None and _is_orphaned_commit_stage_task(task, state):
+        if state is not None and is_orphaned_commit_stage_task(task, state):
             findings.append(
                 DoctorFinding(
                     code="commit_to_git_stuck",
@@ -153,7 +153,7 @@ def _stale_worktree_findings(root: Path, tasks: list[TaskRecord], state: Workspa
         if not worktree_path.exists():
             continue
         is_active = active_task_id == task.id
-        if not is_active and not _is_task_eligible_for_execution(task):
+        if not is_active and not is_task_eligible_for_execution(task):
             findings.append(
                 DoctorFinding(
                     code="stale_worktree",
@@ -180,7 +180,7 @@ def _stale_worktree_findings(root: Path, tasks: list[TaskRecord], state: Workspa
 
 
 def _origin_divergence_finding(root: Path) -> DoctorFinding | None:
-    message = _check_origin_divergence(root)
+    message = check_origin_divergence(root)
     if message is None:
         return None
     return DoctorFinding(

@@ -14,7 +14,7 @@ from litehive.models import utcnow
 logger = logging.getLogger(__name__)
 
 
-def _pid_is_alive(pid: int) -> bool:
+def pid_is_alive(pid: int) -> bool:
     if pid <= 0:
         return False
     try:
@@ -65,7 +65,7 @@ def _prune_registry_in_place(data: dict[str, object]) -> None:
             stale.append(workspace)
             continue
         pid = payload.get("pid")
-        if not isinstance(pid, int) or not _pid_is_alive(pid):
+        if not isinstance(pid, int) or not pid_is_alive(pid):
             stale.append(workspace)
     for workspace in stale:
         daemons.pop(workspace, None)
@@ -98,7 +98,7 @@ def register_daemon(workspace: Path, *, pid: int, log_dir: Path) -> None:
         existing = daemons.get(workspace_key)
         if isinstance(existing, dict):
             existing_pid = existing.get("pid")
-            if isinstance(existing_pid, int) and existing_pid != pid and _pid_is_alive(existing_pid):
+            if isinstance(existing_pid, int) and existing_pid != pid and pid_is_alive(existing_pid):
                 raise RuntimeError(f"daemon already running for {workspace_key}: pid={existing_pid}")
         daemons[workspace_key] = {
             "workspace": workspace_key,

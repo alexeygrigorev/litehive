@@ -29,7 +29,7 @@ from litehive.models import TaskRecord
 from litehive.tasks.crud import get_task, get_task_worktree_path, save_task
 from litehive.workspace.locking import runner_heartbeat, workspace_runner_guard
 
-from .agents._base import PromptContext
+from .agents.base import PromptContext
 from .engines import ConfigBackedEngineSelector, EngineFactory
 from .heru_factory import heru_engine_factory
 from .journal import SqliteJournal
@@ -174,7 +174,7 @@ def _clear_stale_worktree_repair(root: Path):
     return _repair
 
 
-def _hook_specs_from_config(config) -> dict[str, list[HookSpec]]:
+def hook_specs_from_config(config) -> dict[str, list[HookSpec]]:
     """Translate ``LitehiveConfig.runner_hooks`` into ``HookSpec`` lists.
 
     Config stores runner hooks as ``dict[phase_name, list[HookConfig]]``
@@ -236,7 +236,7 @@ def run_task(
             repairs=[_clear_stale_worktree_repair(root)],
         )
         prompt_context = PromptContext(workspace_root=root)
-        hook_specs = _hook_specs_from_config(config)
+        hook_specs = hook_specs_from_config(config)
 
         registry = build_registry(
             selector=selector,

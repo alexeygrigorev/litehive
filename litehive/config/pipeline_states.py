@@ -7,7 +7,7 @@ Pipeline stages flow in a fixed order:
 Rejections and failures from testing and accepting route back to implementing.
 Commit failures route to flagged for operator recovery.
 
-The canonical transition table is ``_ROUTES``: ``(stage, verdict) -> next_stage``.
+The canonical transition table is ``ROUTES``: ``(stage, verdict) -> next_stage``.
 ``_STEPS_FROM`` maps a task's ``pipeline_status`` to the stage that should execute next.
 """
 
@@ -80,7 +80,7 @@ _STEPS_FROM: dict[str, str] = {
 # Omitted (stage, verdict) pairs are handled by the runner as:
 #   - "reject" outside commit_to_git → retry (requeue same stage)
 #   - anything else → flagged (unknown transition)
-_ROUTES: dict[tuple[str, str], str] = {
+ROUTES: dict[tuple[str, str], str] = {
     # grooming ──► implementing (on success)
     ("grooming", "pass"): "implementing",
     ("grooming", "accept"): "implementing",

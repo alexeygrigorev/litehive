@@ -13,7 +13,7 @@ from litehive.config.profiles import PROCESS_PROFILES
 from litehive.config.workspace import ensure_workspace
 
 
-def _read_config_mapping(path: Path) -> dict[str, Any]:
+def read_config_mapping(path: Path) -> dict[str, Any]:
     if not path.exists():
         return {}
     data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
@@ -22,11 +22,11 @@ def _read_config_mapping(path: Path) -> dict[str, Any]:
     return dict(data)
 
 
-def _merge_config_layers(base: Mapping[str, Any], overlay: Mapping[str, Any]) -> dict[str, Any]:
+def merge_config_layers(base: Mapping[str, Any], overlay: Mapping[str, Any]) -> dict[str, Any]:
     merged = dict(base)
     for key, value in overlay.items():
         if isinstance(value, Mapping) and isinstance(merged.get(key), Mapping):
-            merged[key] = _merge_config_layers(dict(merged[key]), value)
+            merged[key] = merge_config_layers(dict(merged[key]), value)
             continue
         merged[key] = value
     return merged
@@ -34,10 +34,10 @@ def _merge_config_layers(base: Mapping[str, Any], overlay: Mapping[str, Any]) ->
 
 def load_effective_config_data(root: Path) -> dict[str, Any]:
     default_data = asdict(LitehiveConfig())
-    global_data = _read_config_mapping(global_config_path())
-    local_data = _read_config_mapping(config_path(root))
-    return _merge_config_layers(
-        _merge_config_layers(default_data, global_data),
+    global_data = read_config_mapping(global_config_path())
+    local_data = read_config_mapping(config_path(root))
+    return merge_config_layers(
+        merge_config_layers(default_data, global_data),
         local_data,
     )
 

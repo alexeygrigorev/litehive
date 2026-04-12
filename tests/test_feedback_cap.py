@@ -1,6 +1,6 @@
 """Tests for report feedback capping (T-0143)."""
 
-from litehive.models import cap_feedback, FEEDBACK_CAP, _TRUNCATION_MARKER
+from litehive.models import cap_feedback, FEEDBACK_CAP, TRUNCATION_MARKER
 from litehive.agents.base import parse_stage_report_text
 
 
@@ -18,13 +18,13 @@ def test_cap_feedback_truncates_long_text() -> None:
     long_text = "x" * 5000
     result = cap_feedback(long_text)
     assert len(result) <= FEEDBACK_CAP
-    assert result.endswith(_TRUNCATION_MARKER)
+    assert result.endswith(TRUNCATION_MARKER)
 
 
 def test_cap_feedback_custom_limit() -> None:
     result = cap_feedback("a" * 200, limit=100)
     assert len(result) <= 100
-    assert result.endswith(_TRUNCATION_MARKER)
+    assert result.endswith(TRUNCATION_MARKER)
 
 
 def test_parse_stage_report_text_caps_feedback_structured() -> None:

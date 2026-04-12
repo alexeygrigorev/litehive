@@ -1,4 +1,4 @@
-from litehive.cli.parsers._common import add_workspace_argument
+from litehive.cli.parsers.common import add_workspace_argument
 from litehive.cli.parsers.abandon import register_abandon_parser
 from litehive.cli.parsers.add import register_add_parser
 from litehive.cli.parsers.close import register_close_parser

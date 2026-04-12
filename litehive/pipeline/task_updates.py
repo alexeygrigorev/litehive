@@ -51,7 +51,7 @@ class _ReportShim:
     verdict: str = "pass"
 
 
-def _extract_yaml_block(message: str) -> dict[str, Any] | None:
+def extract_yaml_block(message: str) -> dict[str, Any] | None:
     """Pull a ``TASK_UPDATE:`` YAML block out of the message if present."""
     if not message:
         return None
@@ -85,7 +85,7 @@ def apply_task_updates_from_comment(
     from litehive.workspace.workflow import apply_task_updates_from_report
 
     shim = _ReportShim(
-        task_update=_extract_yaml_block(message),
+        task_update=extract_yaml_block(message),
         feedback=message or "",
     )
     try:

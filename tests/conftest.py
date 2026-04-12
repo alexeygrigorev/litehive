@@ -35,7 +35,7 @@ def _neutralize_codex_quota(request, monkeypatch):
     monkeypatch.setattr(_codex_quota_mod, "codex_quota_block_reason", _noop_block_reason)
     # Patch at import sites that did `from ... import codex_quota_block_reason`
     try:
-        import litehive.cli._dry_run as dry_run_mod
+        import litehive.cli.dry_run as dry_run_mod
 
         monkeypatch.setattr(dry_run_mod, "codex_quota_block_reason", _noop_block_reason)
     except (ImportError, AttributeError):

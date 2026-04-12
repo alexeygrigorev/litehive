@@ -10,15 +10,15 @@ from litehive.config.dataclasses import (
     SubagentResourceLimitsConfig,
 )
 from litehive.config.normalization import (
-    _normalize_agent_startup_guidance,
-    _normalize_engine_int_map,
-    _normalize_engine_sequence,
-    _normalize_execution_retry_policies,
-    _normalize_external_engine_sandbox_config,
-    _normalize_runner_hooks,
-    _normalize_subagent_resource_limits,
+    normalize_agent_startup_guidance,
+    normalize_engine_int_map,
+    normalize_engine_sequence,
+    normalize_execution_retry_policies,
+    normalize_external_engine_sandbox_config,
+    normalize_runner_hooks,
+    normalize_subagent_resource_limits,
 )
-from litehive.config.retry import _default_execution_retry_policies
+from litehive.config.retry import default_execution_retry_policies
 
 
 @dataclass(slots=True)
@@ -53,7 +53,7 @@ class LitehiveConfig:
     default_retry_limit: int = 3
     default_stage_retry_limit: int = 2
     execution_retry_policies: dict[str, ExecutionRetryPolicy] = field(
-        default_factory=_default_execution_retry_policies
+        default_factory=default_execution_retry_policies
     )
     pool_stop_on_failure: bool = False
     pool_max_tasks: int | None = None
@@ -84,25 +84,25 @@ class LitehiveConfig:
     implementation_mode_name: str = "implementation"
 
     def __post_init__(self) -> None:
-        self.engine_usage_caps = _normalize_engine_int_map(
+        self.engine_usage_caps = normalize_engine_int_map(
             self.engine_usage_caps,
             field_name="engine_usage_caps",
         )
-        self.engine_budget_caps = _normalize_engine_int_map(
+        self.engine_budget_caps = normalize_engine_int_map(
             self.engine_budget_caps,
             field_name="engine_budget_caps",
         )
-        self.engine_costs = _normalize_engine_int_map(
+        self.engine_costs = normalize_engine_int_map(
             self.engine_costs,
             field_name="engine_costs",
         )
         self.engine_freeze = {str(k): str(v) for k, v in self.engine_freeze.items()}
-        self.engine_preference = _normalize_engine_sequence(
+        self.engine_preference = normalize_engine_sequence(
             list(self.engine_preference),
             field_name="engine_preference",
         )
-        self.agent_startup_guidance = _normalize_agent_startup_guidance(self.agent_startup_guidance)
-        self.execution_retry_policies = _normalize_execution_retry_policies(
+        self.agent_startup_guidance = normalize_agent_startup_guidance(self.agent_startup_guidance)
+        self.execution_retry_policies = normalize_execution_retry_policies(
             self.execution_retry_policies
         )
         self.runner_hook_execution_mode = str(self.runner_hook_execution_mode).strip().lower()
@@ -111,7 +111,7 @@ class LitehiveConfig:
             raise ValueError(
                 f"runner_hook_execution_mode must be one of: {allowed}"
             )
-        self.runner_hooks = _normalize_runner_hooks(self.runner_hooks)
+        self.runner_hooks = normalize_runner_hooks(self.runner_hooks)
         self.subagent_inactivity_timeout_seconds = float(self.subagent_inactivity_timeout_seconds)
         if self.subagent_inactivity_timeout_seconds <= 0:
             raise ValueError("subagent_inactivity_timeout_seconds must be greater than 0")
@@ -121,11 +121,11 @@ class LitehiveConfig:
                 raise ValueError("inactivity_timeout_seconds must be greater than 0 when set")
         if self.litehive_source_path is not None:
             self.litehive_source_path = self.litehive_source_path.strip() or None
-        self.subagent_resource_limits = _normalize_subagent_resource_limits(
+        self.subagent_resource_limits = normalize_subagent_resource_limits(
             self.subagent_resource_limits,
             process_profile=self.process_profile,
         )
-        self.external_engine_sandbox = _normalize_external_engine_sandbox_config(
+        self.external_engine_sandbox = normalize_external_engine_sandbox_config(
             self.external_engine_sandbox
         )
         self.parallel_capacity = int(self.parallel_capacity)

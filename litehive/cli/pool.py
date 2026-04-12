@@ -233,7 +233,7 @@ def _format_pool_task_report_line(
     return line
 
 
-def _pool_stop_condition_label(stop_reason):
+def pool_stop_condition_label(stop_reason):
     labels = {
         "single_task_complete": "single task complete",
         "queue_exhausted": "queue exhausted",
@@ -310,7 +310,7 @@ def _pool_summary_report_data(
         "created_at": utcnow(),
         "summary": summary,
         "progress_status": progress_status,
-        "stop_condition": _pool_stop_condition_label(stop_reason),
+        "stop_condition": pool_stop_condition_label(stop_reason),
         "stop_reason": stop_reason,
         "tasks_run": tasks_run if tasks_run is not None else len(completed) + len(flagged),
         "completed_count": len(completed),

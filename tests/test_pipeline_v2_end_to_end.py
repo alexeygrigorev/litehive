@@ -22,7 +22,7 @@ from typing import Any
 import pytest
 
 from litehive.pipeline import SqliteJournal, StateMachineRunner, build_registry
-from litehive.pipeline.agents._base import PromptContext
+from litehive.pipeline.agents.base import PromptContext
 from litehive.pipeline.nodes import CommitNode, HookResult, HookRunner, StubCommitNode
 from litehive.pipeline.nodes.agent import AgentVerdict, Engine
 from litehive.pipeline.nodes.system import MergeConflict

@@ -1,5 +1,5 @@
 from litehive.agents import ENGINE_CHOICES
-from litehive.cli.parsers._common import add_workspace_argument
+from litehive.cli.parsers.common import add_workspace_argument
 
 
 def register_engine_parser(subparsers):

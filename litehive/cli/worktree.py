@@ -59,9 +59,9 @@ class _RescueResult:
     message: str | None = None
 
 
-def _cmd_worktree_ls(args):
+def cmd_worktree_ls(args):
     ensure_workspace(args.workspace)
-    worktrees = _collect_managed_worktrees(args.workspace)
+    worktrees = collect_managed_worktrees(args.workspace)
     print(f"workspace: {args.workspace}")
     print(f"worktree_count: {len(worktrees)}")
     if not worktrees:
@@ -77,9 +77,9 @@ def _cmd_worktree_ls(args):
     return 0
 
 
-def _cmd_worktree_clean(args):
+def cmd_worktree_clean(args):
     ensure_workspace(args.workspace)
-    worktrees = _collect_managed_worktrees(args.workspace)
+    worktrees = collect_managed_worktrees(args.workspace)
     candidates = [item for item in worktrees if item.cleanable]
     skipped_active = [item for item in worktrees if item.active]
 
@@ -118,7 +118,7 @@ def _cmd_worktree_clean(args):
     return 1 if failures else 0
 
 
-def _cmd_worktree_rescue(args):
+def cmd_worktree_rescue(args):
     ensure_workspace(args.workspace)
     candidates = _collect_rescue_candidates(args.workspace)
 
@@ -179,7 +179,7 @@ def _cmd_worktree_rescue(args):
     return 1 if manual_conflict_count or missing_worktree_count or active_task_count else 0
 
 
-def _collect_managed_worktrees(root: Path) -> list[_ManagedWorktree]:
+def collect_managed_worktrees(root: Path) -> list[_ManagedWorktree]:
     state = load_state(root)
     active_task = get_task(root, state.active_task_id) if state.active_task_id else None
     active_path = get_task_worktree_path(active_task) if active_task is not None else None
@@ -539,8 +539,8 @@ def _drop_task_metadata_changes(root: Path, task_id: str) -> None:
 
 
 def _finalize_rescue(root: Path, task, *, outcome: str, head_sha: str | None) -> None:
-    from litehive.workspace.locking import _ensure_future_task_mutation_allowed, _workspace_lock
-    from litehive.workspace.workflow import _persist_task_and_state_without_runner_guard
+    from litehive.workspace.locking import ensure_future_task_mutation_allowed, workspace_lock
+    from litehive.workspace.workflow import persist_task_and_state_without_runner_guard
 
     journal_message = "Worktree rescue found no commits ahead of main; cleared pending rescue state."
     if outcome == "rescued" and head_sha:
@@ -548,14 +548,14 @@ def _finalize_rescue(root: Path, task, *, outcome: str, head_sha: str | None) ->
     elif outcome == "already-landed" and head_sha:
         journal_message = f"Worktree rescue reconciled: patch already landed on main at {head_sha}."
 
-    with _workspace_lock(root):
+    with workspace_lock(root):
         state = load_state(root)
         if state.active_task_id == task.id:
             raise WorkspaceConflictError(
                 f"task {task.id} is still state.active_task_id; "
                 "worktree rescue refuses to race with the runner"
             )
-        _ensure_future_task_mutation_allowed(root, [task.id], state=state)
+        ensure_future_task_mutation_allowed(root, [task.id], state=state)
 
         state.unmerged_worktrees = [
             entry for entry in state.unmerged_worktrees if entry.task_id != task.id
@@ -565,7 +565,7 @@ def _finalize_rescue(root: Path, task, *, outcome: str, head_sha: str | None) ->
             task.status = "done"
             task.pipeline_status = "done"
             set_task_commit_sha(task, head_sha)
-        _persist_task_and_state_without_runner_guard(
+        persist_task_and_state_without_runner_guard(
             root,
             task=task,
             state=state,

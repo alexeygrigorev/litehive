@@ -16,18 +16,18 @@ from litehive.models import RunnerStatusState, TaskRecord, WorkspaceState, utcno
 
 from litehive.tasks.constants import (
     HEARTBEAT_LATE_THRESHOLD_SECONDS,
-    _MISSING,
-    _RUNNER_LOCKS,
-    _RUNNER_LOCKS_MUTEX,
+    MISSING,
+    RUNNER_LOCKS,
+    RUNNER_LOCKS_MUTEX,
 )
-from litehive.tasks.models import WorkspaceConflictError, _RunnerLockState
+from litehive.tasks.models import WorkspaceConflictError, RunnerLockState
 from litehive.tasks.paths import runner_lock_path, task_dir, task_file, task_runtime_file
 
 logger = logging.getLogger(__name__)
 
 
 @contextmanager
-def _workspace_lock(root: Path):
+def workspace_lock(root: Path):
     lock_path = workspace_dir(root) / ".lock"
     lock_path.parent.mkdir(parents=True, exist_ok=True)
     with lock_path.open("w", encoding="utf-8") as handle:
@@ -38,14 +38,14 @@ def _workspace_lock(root: Path):
             fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
 
 
-def _write_runner_lock_metadata(handle: TextIO, status: RunnerStatusState) -> None:
+def write_runner_lock_metadata(handle: TextIO, status: RunnerStatusState) -> None:
     handle.seek(0)
     handle.truncate()
     handle.write(yaml.safe_dump(status.model_dump(mode="python"), sort_keys=False))
     handle.flush()
 
 
-def _read_runner_lock_metadata(root: Path) -> RunnerStatusState:
+def read_runner_lock_metadata(root: Path) -> RunnerStatusState:
     lock_path = runner_lock_path(root)
     if not lock_path.exists():
         return RunnerStatusState()
@@ -55,7 +55,7 @@ def _read_runner_lock_metadata(root: Path) -> RunnerStatusState:
     return RunnerStatusState(**data)
 
 
-def _runner_metadata_present(status: RunnerStatusState) -> bool:
+def runner_metadata_present(status: RunnerStatusState) -> bool:
     return any(
         (
             status.pid is not None,
@@ -68,9 +68,9 @@ def _runner_metadata_present(status: RunnerStatusState) -> bool:
     )
 
 
-def _runner_lock_is_active(root: Path) -> bool:
+def runner_lock_is_active(root: Path) -> bool:
     root = root.resolve()
-    if root in _RUNNER_LOCKS:
+    if root in RUNNER_LOCKS:
         return True
     lock_path = runner_lock_path(root)
     lock_path.parent.mkdir(parents=True, exist_ok=True)
@@ -83,7 +83,7 @@ def _runner_lock_is_active(root: Path) -> bool:
         return False
 
 
-def _runner_status_needs_reconciliation(root: Path) -> bool:
+def runner_status_needs_reconciliation(root: Path) -> bool:
     from litehive.tasks.crud import list_tasks
     from litehive.tasks.persistence import load_state
 
@@ -93,9 +93,9 @@ def _runner_status_needs_reconciliation(root: Path) -> bool:
     return any(task.runtime.execution_status == "running" for task in list_tasks(root))
 
 
-def _clear_runner_lock_metadata(root: Path) -> None:
+def clear_runner_lock_metadata(root: Path) -> None:
     root = root.resolve()
-    if root in _RUNNER_LOCKS:
+    if root in RUNNER_LOCKS:
         return
     lock_path = runner_lock_path(root)
     if not lock_path.exists():
@@ -111,7 +111,7 @@ def _clear_runner_lock_metadata(root: Path) -> None:
         fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
 
 
-def _heartbeat_is_late(heartbeat_at: str | None) -> bool:
+def heartbeat_is_late(heartbeat_at: str | None) -> bool:
     if heartbeat_at is None:
         return False
     try:
@@ -127,11 +127,11 @@ def _heartbeat_is_late(heartbeat_at: str | None) -> bool:
 def runner_status_readonly(root: Path) -> RunnerStatusState:
     """Return runner status using only file reads and PID liveness — no fcntl.flock."""
     root = root.resolve()
-    status = _read_runner_lock_metadata(root)
-    if not _runner_metadata_present(status):
+    status = read_runner_lock_metadata(root)
+    if not runner_metadata_present(status):
         return RunnerStatusState()
-    if _runner_pid_is_alive(status.pid):
-        if _heartbeat_is_late(status.heartbeat_at):
+    if runner_pid_is_alive(status.pid):
+        if heartbeat_is_late(status.heartbeat_at):
             return status.model_copy(update={"status": "late"})
         return status.model_copy(update={"status": "running"})
     return status.model_copy(update={"status": "stale"})
@@ -139,16 +139,16 @@ def runner_status_readonly(root: Path) -> RunnerStatusState:
 
 def runner_status(root: Path) -> RunnerStatusState:
     root = root.resolve()
-    status = _read_runner_lock_metadata(root)
-    if _runner_lock_is_active(root):
-        if _heartbeat_is_late(status.heartbeat_at):
+    status = read_runner_lock_metadata(root)
+    if runner_lock_is_active(root):
+        if heartbeat_is_late(status.heartbeat_at):
             return status.model_copy(update={"status": "late"})
         return status.model_copy(update={"status": "running"})
-    if not _runner_metadata_present(status):
+    if not runner_metadata_present(status):
         return RunnerStatusState()
-    if _runner_status_needs_reconciliation(root):
+    if runner_status_needs_reconciliation(root):
         return status.model_copy(update={"status": "stale"})
-    _clear_runner_lock_metadata(root)
+    clear_runner_lock_metadata(root)
     return RunnerStatusState()
 
 
@@ -159,33 +159,33 @@ def runner_status_readonly(root: Path) -> RunnerStatusState:
     on the runner lock.
     """
     root = root.resolve()
-    status = _read_runner_lock_metadata(root)
-    if not _runner_metadata_present(status):
+    status = read_runner_lock_metadata(root)
+    if not runner_metadata_present(status):
         return RunnerStatusState()
     # If the recorded PID is alive, the runner is (or was recently) active.
-    if _runner_pid_is_alive(status.pid):
-        if _heartbeat_is_late(status.heartbeat_at):
+    if runner_pid_is_alive(status.pid):
+        if heartbeat_is_late(status.heartbeat_at):
             return status.model_copy(update={"status": "late"})
         return status.model_copy(update={"status": "running"})
     # PID is gone — metadata is stale.
     return status.model_copy(update={"status": "stale"})
 
 
-def _touch_runner_status(
+def touch_runner_status(
     root: Path,
     *,
-    active_task_id: str | None | object = _MISSING,
+    active_task_id: str | None | object = MISSING,
 ) -> None:
     root = root.resolve()
-    lock_state = _RUNNER_LOCKS.get(root)
+    lock_state = RUNNER_LOCKS.get(root)
     if lock_state is None:
         return
     with lock_state.metadata_lock:
         lock_state.status.heartbeat_at = utcnow()
         lock_state.status.status = "running"
-        if active_task_id is not _MISSING:
+        if active_task_id is not MISSING:
             lock_state.status.active_task_id = active_task_id
-        _write_runner_lock_metadata(lock_state.handle, lock_state.status)
+        write_runner_lock_metadata(lock_state.handle, lock_state.status)
 
 
 @contextmanager
@@ -199,9 +199,9 @@ def runner_heartbeat(
 
     def _heartbeat_loop() -> None:
         while not stop_event.wait(interval_seconds):
-            _touch_runner_status(root, active_task_id=active_task_id)
+            touch_runner_status(root, active_task_id=active_task_id)
 
-    _touch_runner_status(root, active_task_id=active_task_id)
+    touch_runner_status(root, active_task_id=active_task_id)
     thread = threading.Thread(target=_heartbeat_loop, name="litehive-runner-heartbeat", daemon=True)
     thread.start()
     try:
@@ -209,18 +209,18 @@ def runner_heartbeat(
     finally:
         stop_event.set()
         thread.join(timeout=max(interval_seconds, 0.1) * 2)
-        _touch_runner_status(root, active_task_id=None)
+        touch_runner_status(root, active_task_id=None)
 
 
-def _current_thread_owns_runner_guard(root: Path) -> bool:
+def current_thread_owns_runner_guard(root: Path) -> bool:
     root = root.resolve()
     owner_thread_id = threading.get_ident()
-    with _RUNNER_LOCKS_MUTEX:
-        existing = _RUNNER_LOCKS.get(root)
+    with RUNNER_LOCKS_MUTEX:
+        existing = RUNNER_LOCKS.get(root)
     return existing is not None and existing.owner_thread_id == owner_thread_id
 
 
-def _runner_pid_is_alive(pid: object) -> bool:
+def runner_pid_is_alive(pid: object) -> bool:
     try:
         candidate = int(pid)
     except (TypeError, ValueError):
@@ -236,27 +236,27 @@ def _runner_pid_is_alive(pid: object) -> bool:
     return True
 
 
-def _subagent_process_is_stale(task: "TaskRecord") -> bool:
+def subagent_process_is_stale(task: "TaskRecord") -> bool:
     """Return True if the task has a recorded subagent PID that is no longer alive."""
     if task.runtime.execution_status != "running":
         return False
     active = task.runtime.active_subagent
     if active is None or active.pid is None:
         return False
-    return not _runner_pid_is_alive(active.pid)
+    return not runner_pid_is_alive(active.pid)
 
 
-def _runner_lock_pid_is_stale(root: Path) -> bool:
+def runner_lock_pid_is_stale(root: Path) -> bool:
     """Return True if the runner lock metadata records a PID that is no longer alive."""
-    metadata = _read_runner_lock_metadata(root)
+    metadata = read_runner_lock_metadata(root)
     pid = metadata.pid
     if pid is None:
         return False
-    return not _runner_pid_is_alive(pid)
+    return not runner_pid_is_alive(pid)
 
 
-def _runner_lock_is_held(root: Path) -> bool:
-    if _current_thread_owns_runner_guard(root):
+def runner_lock_is_held(root: Path) -> bool:
+    if current_thread_owns_runner_guard(root):
         return True
     lock_path = runner_lock_path(root)
     lock_path.parent.mkdir(parents=True, exist_ok=True)
@@ -269,8 +269,8 @@ def _runner_lock_is_held(root: Path) -> bool:
         return False
 
 
-def _runner_conflict_message(root: Path) -> str:
-    metadata = _read_runner_lock_metadata(root)
+def runner_conflict_message(root: Path) -> str:
+    metadata = read_runner_lock_metadata(root)
     pid = metadata.pid
     started_at = metadata.started_at
     heartbeat_at = metadata.heartbeat_at
@@ -295,20 +295,20 @@ def _runner_conflict_message(root: Path) -> str:
 def workspace_runner_guard(root: Path):
     root = root.resolve()
     owner_thread_id = threading.get_ident()
-    with _RUNNER_LOCKS_MUTEX:
-        existing = _RUNNER_LOCKS.get(root)
+    with RUNNER_LOCKS_MUTEX:
+        existing = RUNNER_LOCKS.get(root)
         if existing is not None:
             if existing.owner_thread_id != owner_thread_id:
-                raise WorkspaceConflictError(_runner_conflict_message(root))
+                raise WorkspaceConflictError(runner_conflict_message(root))
             existing.depth += 1
     if existing is not None:
         try:
             yield
         finally:
-            with _RUNNER_LOCKS_MUTEX:
-                lock_state = _RUNNER_LOCKS[root]
+            with RUNNER_LOCKS_MUTEX:
+                lock_state = RUNNER_LOCKS[root]
                 if lock_state.depth <= 1:
-                    _RUNNER_LOCKS.pop(root, None)
+                    RUNNER_LOCKS.pop(root, None)
                     should_close = True
                 else:
                     lock_state.depth -= 1
@@ -329,7 +329,7 @@ def workspace_runner_guard(root: Path):
         try:
             fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError as exc:
-            raise WorkspaceConflictError(_runner_conflict_message(root)) from exc
+            raise WorkspaceConflictError(runner_conflict_message(root)) from exc
         now = utcnow()
         status = RunnerStatusState(
             status="running",
@@ -339,9 +339,9 @@ def workspace_runner_guard(root: Path):
             started_at=now,
             heartbeat_at=now,
         )
-        _write_runner_lock_metadata(handle, status)
-        with _RUNNER_LOCKS_MUTEX:
-            _RUNNER_LOCKS[root] = _RunnerLockState(
+        write_runner_lock_metadata(handle, status)
+        with RUNNER_LOCKS_MUTEX:
+            RUNNER_LOCKS[root] = RunnerLockState(
                 handle=handle, depth=1, status=status, owner_thread_id=owner_thread_id
             )
     except Exception:
@@ -351,8 +351,8 @@ def workspace_runner_guard(root: Path):
     try:
         yield
     finally:
-        with _RUNNER_LOCKS_MUTEX:
-            _RUNNER_LOCKS.pop(root, None)
+        with RUNNER_LOCKS_MUTEX:
+            RUNNER_LOCKS.pop(root, None)
         handle.seek(0)
         handle.truncate()
         handle.flush()
@@ -364,8 +364,8 @@ def workspace_runner_guard(root: Path):
 def workspace_mutation_guard(root: Path):
     root = root.resolve()
     owner_thread_id = threading.get_ident()
-    with _RUNNER_LOCKS_MUTEX:
-        existing = _RUNNER_LOCKS.get(root)
+    with RUNNER_LOCKS_MUTEX:
+        existing = RUNNER_LOCKS.get(root)
     if existing is not None and existing.owner_thread_id == owner_thread_id:
         yield
         return
@@ -373,14 +373,14 @@ def workspace_mutation_guard(root: Path):
         yield
 
 
-def _ensure_future_task_mutation_allowed(
+def ensure_future_task_mutation_allowed(
     root: Path,
     task_ids: list[str],
     *,
     state: WorkspaceState | None = None,
 ) -> None:
     from litehive.tasks.crud import get_task
-    from litehive.tasks.queue_ops import _is_task_eligible_for_execution, active_task_markers
+    from litehive.tasks.queue_ops import is_task_eligible_for_execution, active_task_markers
 
     markers = active_task_markers(root, state)
     conflicts: list[str] = []
@@ -392,7 +392,7 @@ def _ensure_future_task_mutation_allowed(
         if (
             marker_set == {"workspace.active_task_id"}
             and task is not None
-            and not _is_task_eligible_for_execution(task)
+            and not is_task_eligible_for_execution(task)
             and task.runtime.execution_status != "running"
         ):
             continue
@@ -404,20 +404,20 @@ def _ensure_future_task_mutation_allowed(
         )
 
 
-def _persist_future_task_update(
+def persist_future_task_update(
     root: Path,
     task: TaskRecord,
     *,
     journal_message: str | None = None,
 ) -> None:
-    from litehive.tasks.crud import _ensure_runtime_ignored, _serialize_task_record, _serialize_task_runtime
-    from litehive.tasks.persistence import _write_atomic_files
+    from litehive.tasks.crud import ensure_runtime_ignored, serialize_task_record, serialize_task_runtime
+    from litehive.tasks.persistence import write_atomic_files
     from litehive.tasks.templates import render_task_brief, task_brief_file
 
     task.updated_at = utcnow()
     writes = {
-        task_file(root, task): _serialize_task_record(task),
-        task_runtime_file(root, task): _serialize_task_runtime(task),
+        task_file(root, task): serialize_task_record(task),
+        task_runtime_file(root, task): serialize_task_runtime(task),
     }
     if journal_message is not None:
         journal_path = task_dir(root, task) / "journal.md"
@@ -425,5 +425,5 @@ def _persist_future_task_update(
         writes[journal_path] = f"{existing}\n## {utcnow()}\n{journal_message}\n"
     if task.mode == "tasks":
         writes[task_brief_file(root, task)] = render_task_brief(task)
-    _write_atomic_files(writes)
-    _ensure_runtime_ignored(root)
+    write_atomic_files(writes)
+    ensure_runtime_ignored(root)

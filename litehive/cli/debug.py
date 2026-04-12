@@ -9,15 +9,15 @@ from litehive.config import ensure_workspace
 from litehive.git.ops import current_head
 from litehive.tasks.crud import get_task_worktree_path, require_task, save_task
 from litehive.tasks.paths import (
-    _read_text_artifact,
-    _resolve_artifact_path,
+    read_text_artifact,
+    resolve_artifact_path,
     task_dir,
 )
 from litehive.tasks.reports import load_task_thread
 from litehive.tasks.worktrees import migrate_legacy_worktree
 
 
-def _cmd_debug(args):
+def cmd_debug(args):
     ensure_workspace(args.workspace)
     try:
         task = require_task(args.workspace, args.task_id)
@@ -79,10 +79,10 @@ def _debug_latest(root: Path, task):
             print(f"completed_at: {runtime_sa.completed_at}")
     else:
         # Fall back to session.yaml if it exists
-        session_path = _resolve_artifact_path(sa_base, "session.yaml") if sa_base.exists() else None
+        session_path = resolve_artifact_path(sa_base, "session.yaml") if sa_base.exists() else None
         if session_path is not None:
             try:
-                session_text = _read_text_artifact(session_path)
+                session_text = read_text_artifact(session_path)
                 session_data = yaml.safe_load(session_text)
                 if isinstance(session_data, dict):
                     ec = session_data.get("exit_code")
@@ -101,10 +101,10 @@ def _debug_latest(root: Path, task):
 
     # -- Report summary --
     if sa_base.exists():
-        report_path = _resolve_artifact_path(sa_base, "report.yaml")
+        report_path = resolve_artifact_path(sa_base, "report.yaml")
         if report_path is not None:
             try:
-                report_text = _read_text_artifact(report_path)
+                report_text = read_text_artifact(report_path)
                 report_data = yaml.safe_load(report_text)
                 if isinstance(report_data, dict) and report_data.get("verdict"):
                     print(f"report_verdict: {report_data['verdict']}")
@@ -156,11 +156,11 @@ def _debug_worktree(root: Path, task):
 
 def _read_exit_code(base: Path) -> int | None:
     """Read exit_code from session.yaml in a subagent artifact directory."""
-    session_path = _resolve_artifact_path(base, "session.yaml") if base.exists() else None
+    session_path = resolve_artifact_path(base, "session.yaml") if base.exists() else None
     if session_path is None:
         return None
     try:
-        text = _read_text_artifact(session_path)
+        text = read_text_artifact(session_path)
         data = yaml.safe_load(text)
         return data.get("exit_code") if isinstance(data, dict) else None
     except Exception:
@@ -188,12 +188,12 @@ def _print_verdict(root, task, role):
 
 def _print_transcript(sa_base):
     """Print first 200 chars of the transcript."""
-    path = _resolve_artifact_path(sa_base, "transcript.md")
+    path = resolve_artifact_path(sa_base, "transcript.md")
     if path is None:
         print("transcript: (not found)")
         return
     try:
-        content = _read_text_artifact(path)
+        content = read_text_artifact(path)
         total_len = len(content)
         preview = content[:200]
         if total_len > 200:
@@ -207,12 +207,12 @@ def _print_transcript(sa_base):
 
 def _print_stream_tail(sa_base, filename, label):
     """Print last 500 chars of a stream artifact."""
-    path = _resolve_artifact_path(sa_base, filename)
+    path = resolve_artifact_path(sa_base, filename)
     if path is None:
         print(f"{label}: (not found)")
         return
     try:
-        content = _read_text_artifact(path)
+        content = read_text_artifact(path)
         total_len = len(content)
         if total_len == 0:
             print(f"{label}: (empty)")

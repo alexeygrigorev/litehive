@@ -148,7 +148,7 @@ class HeruEngineAdapter:
 
     @staticmethod
     def _extract_continuation_id(result, fallback: str | None) -> str | None:
-        from litehive.agents._models import SubagentResult
+        from litehive.agents.models import SubagentResult
 
         if not isinstance(result, SubagentResult):
             return fallback

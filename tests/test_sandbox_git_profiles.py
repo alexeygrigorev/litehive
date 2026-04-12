@@ -8,8 +8,8 @@ import pytest
 from litehive.agents.base import CLIInvocation
 from litehive.agents.sandbox import SandboxLauncher, SandboxProfile, sandbox_profile_for_role
 from litehive.config import ExternalEngineSandboxConfig, ExternalEngineSandboxPolicy, LitehiveConfig, ensure_workspace
-from litehive.workspace.worktree_inspection import _resolve_task_execution_root
-from litehive.sandbox.git_wrapper import _rejection_reason
+from litehive.workspace.worktree_inspection import resolve_task_execution_root
+from litehive.sandbox.git_wrapper import rejection_reason
 from litehive.tasks import create_task
 
 
@@ -117,7 +117,7 @@ def test_sandbox_profile_defaults_closed() -> None:
     ],
 )
 def test_git_wrapper_rejects_destructive_commands(argv: list[str], snippet: str) -> None:
-    reason = _rejection_reason(argv)
+    reason = rejection_reason(argv)
     assert reason is not None
     assert snippet in reason
 
@@ -126,7 +126,7 @@ def test_git_wrapper_rejects_cherry_pick_on_protected_checked_out_branch(tmp_pat
     ensure_workspace(tmp_path)
     _init_repo(tmp_path)
 
-    reason = _rejection_reason(["cherry-pick", "deadbeef"], cwd=tmp_path)
+    reason = rejection_reason(["cherry-pick", "deadbeef"], cwd=tmp_path)
 
     assert reason is not None
     assert "protected ref" in reason
@@ -295,7 +295,7 @@ def test_task_worktree_creation_does_not_strip_origin_from_shared_config(tmp_pat
     subprocess.run(["git", "remote", "add", "origin", str(remote)], cwd=tmp_path, capture_output=True, text=True, check=True)
     task = create_task(tmp_path, title="Strip origin")
 
-    worktree_root = _resolve_task_execution_root(tmp_path, task)
+    worktree_root = resolve_task_execution_root(tmp_path, task)
     remotes = subprocess.run(
         ["git", "remote"],
         cwd=worktree_root,

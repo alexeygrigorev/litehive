@@ -1,16 +1,16 @@
 """Daemon lifecycle helpers for Litehive pool execution."""
 
-from litehive.daemon._execution import (
+from litehive.daemon.execution import (
     daemon_status_lines,
     run_daemon_loop,
     start_background_daemon,
     stop_workspace_daemon,
 )
-from litehive.daemon._logs import (
-    _prune_run_all_log_dirs,
+from litehive.daemon.logs import (
+    prune_run_all_log_dirs,
     latest_run_all_log_dir,
 )
-from litehive.daemon._registry import (
+from litehive.daemon.registry import (
     get_workspace_daemon,
     list_daemon_instances,
     register_daemon,
@@ -27,5 +27,5 @@ __all__ = [
     "start_background_daemon",
     "stop_workspace_daemon",
     "unregister_daemon",
-    "_prune_run_all_log_dirs",
+    "prune_run_all_log_dirs",
 ]

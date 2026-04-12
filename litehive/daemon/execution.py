@@ -18,9 +18,9 @@ from litehive.config import ensure_workspace, state_path, workspace_dir
 from litehive.storage import create_scheduled_workspace_backup
 from litehive.workspace.locking import runner_status
 
-from ._logs import _latest_matching, _prune_run_all_log_dirs, latest_run_all_log_dir
-from ._registry import (
-    _pid_is_alive,
+from .logs import latest_matching, prune_run_all_log_dirs, latest_run_all_log_dir
+from .registry import (
+    pid_is_alive,
     get_workspace_daemon,
     register_daemon,
     unregister_daemon,
@@ -58,7 +58,7 @@ def _git(workspace: Path, *args: str) -> subprocess.CompletedProcess[str]:
     )
 
 
-def _check_origin_divergence(workspace: Path) -> str | None:
+def check_origin_divergence(workspace: Path) -> str | None:
     """Return a human-readable reason if local main has diverged from origin/main.
 
     - Not a git repo, no origin remote, or no main/origin/main ref: returns None (not our concern).
@@ -250,7 +250,7 @@ def run_daemon_loop(
     log_base = workspace_dir(workspace) / "logs" / "run-all"
     log_root = session_dir or (log_base / timestamp)
     log_root.mkdir(parents=True, exist_ok=True)
-    _prune_run_all_log_dirs(log_base)
+    prune_run_all_log_dirs(log_base)
     register_daemon(workspace, pid=os.getpid(), log_dir=log_root)
 
     stop_requested = False
@@ -300,7 +300,7 @@ def run_daemon_loop(
             iteration_failed = False
             iteration_failure_reason: str | None = None
 
-            divergence_reason = _check_origin_divergence(workspace)
+            divergence_reason = check_origin_divergence(workspace)
             if divergence_reason is not None:
                 _emit(
                     "!!! ATTENTION !!! Detected divergence from origin/main. "
@@ -529,7 +529,7 @@ def stop_workspace_daemon(workspace: Path) -> dict[str, object] | None:
     os.kill(pid, signal.SIGTERM)
     deadline = time.time() + 5
     while time.time() < deadline:
-        if not _pid_is_alive(pid):
+        if not pid_is_alive(pid):
             unregister_daemon(workspace, pid=pid)
             return entry
         time.sleep(0.1)
@@ -557,8 +557,8 @@ def daemon_status_lines(workspace: Path) -> list[str]:
     )
     latest_dir = latest_run_all_log_dir(workspace)
     lines.append(f"latest_run_all_dir: {latest_dir if latest_dir is not None else '-'}")
-    latest_post = _latest_matching(latest_dir, "*-post-status.log")
+    latest_post = latest_matching(latest_dir, "*-post-status.log")
     lines.append(f"latest_post_status: {latest_post if latest_post is not None else '-'}")
-    latest_run = _latest_matching(latest_dir, "*-run.log")
+    latest_run = latest_matching(latest_dir, "*-run.log")
     lines.append(f"latest_run_log: {latest_run if latest_run is not None else '-'}")
     return lines

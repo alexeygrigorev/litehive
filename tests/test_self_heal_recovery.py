@@ -8,8 +8,8 @@ import yaml
 from litehive.config import LitehiveConfig, ensure_workspace
 from litehive.models import StageReport, SubagentRef, TaskThreadComment
 from litehive.recovery import (
-    _attempt_stage_recovery,
-    _classify_recovery_failure_owner,
+    attempt_stage_recovery,
+    classify_recovery_failure_owner,
 )
 from litehive.agents import SubagentResult
 from litehive.tasks import create_task, save_task
@@ -65,7 +65,7 @@ class TestClassifyFailureOwner:
             summary="crash",
             failure_diagnostics={"traceback": _make_litehive_traceback(str(source))},
         )
-        owner, tb, src_root = _classify_recovery_failure_owner(tmp_path, report, config=config)
+        owner, tb, src_root = classify_recovery_failure_owner(tmp_path, report, config=config)
         assert owner == "litehive"
         assert src_root == source.resolve()
         assert "RuntimeError" in tb
@@ -79,7 +79,7 @@ class TestClassifyFailureOwner:
             summary="crash",
             failure_diagnostics={"traceback": _make_project_traceback(str(tmp_path))},
         )
-        owner, tb, _ = _classify_recovery_failure_owner(tmp_path, report, config=config)
+        owner, tb, _ = classify_recovery_failure_owner(tmp_path, report, config=config)
         assert owner == "project"
 
 
@@ -164,7 +164,7 @@ class TestSelfHealRecovery:
         mock_subagents.run = fake_run
 
         with patch("litehive.recovery.execution_recovery.SubagentManager.__init__", fake_manager_init):
-            result = _attempt_stage_recovery(
+            result = attempt_stage_recovery(
                 root,
                 root,  # execution_root (project worktree)
                 task,
@@ -219,14 +219,14 @@ class TestSelfHealRecovery:
         )
 
         # Pre-populate the fingerprint
-        from litehive.recovery import _traceback_fingerprint
-        fp = _traceback_fingerprint(traceback, "litehive bug")
+        from litehive.recovery import traceback_fingerprint
+        fp = traceback_fingerprint(traceback, "litehive bug")
         task.runtime.self_heal_traceback_fingerprints.append(fp)
         save_task_runtime(root, task)
 
         mock_subagents = MagicMock()
 
-        result = _attempt_stage_recovery(
+        result = attempt_stage_recovery(
             root,
             root,
             task,
@@ -288,7 +288,7 @@ class TestSelfHealRecovery:
         mock_subagents.run = fake_run
 
         with patch("litehive.recovery.execution_recovery.SubagentManager.__init__", fake_manager_init):
-            result = _attempt_stage_recovery(
+            result = attempt_stage_recovery(
                 root,
                 root,
                 task,
@@ -345,7 +345,7 @@ class TestSelfHealRecovery:
         mock_subagents.run = fake_run
 
         with patch("litehive.recovery.execution_recovery.SubagentManager.__init__", fake_manager_init):
-            result = _attempt_stage_recovery(
+            result = attempt_stage_recovery(
                 root,
                 root,
                 task,

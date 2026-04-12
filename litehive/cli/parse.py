@@ -22,7 +22,7 @@ from litehive.tasks.normalization import (
 TASK_TYPE_CHOICES = sorted(VALID_TASK_TYPES)
 
 
-def _parse_dependency_ids(
+def parse_dependency_ids(
     raw_values,
     *,
     task_id=None,
@@ -56,7 +56,7 @@ def _parse_dependency_ids(
     return normalized
 
 
-def _parse_engine_int_map(raw_values, *, option_name):
+def parse_engine_int_map(raw_values, *, option_name):
     if not raw_values:
         return {}
 
@@ -79,7 +79,7 @@ def _parse_engine_int_map(raw_values, *, option_name):
     return mapping
 
 
-def _parse_runner_hooks(
+def parse_runner_hooks(
     raw_values,
     *,
     option_name,
@@ -111,7 +111,7 @@ def _parse_runner_hooks(
     return hooks
 
 
-def _parse_acceptance_criteria(
+def parse_acceptance_criteria(
     raw_values,
     *,
     allow_clear=False,
@@ -129,7 +129,7 @@ def _parse_acceptance_criteria(
     return normalized
 
 
-def _parse_text_list_option(
+def parse_text_list_option(
     raw_values,
     *,
     option_name,
@@ -182,7 +182,7 @@ def _normalize_yaml_text_list(value, *, key):
     return normalize_task_text_list(value)
 
 
-def _parse_rich_task_update_document(data, *, source):
+def parse_rich_task_update_document(data, *, source):
     if data is None:
         raise ValueError(f"{source} is empty")
     if not isinstance(data, dict):
@@ -359,12 +359,12 @@ def _render_task_update_template(task):
     return "\n".join(lines)
 
 
-def _load_rich_task_update_file(path):
+def load_rich_task_update_file(path):
     try:
         data = yaml.safe_load(path.read_text(encoding="utf-8"))
     except yaml.YAMLError as exc:
         raise ValueError(f"{path} is not valid YAML: {exc}") from exc
-    return _parse_rich_task_update_document(data, source=str(path))
+    return parse_rich_task_update_document(data, source=str(path))
 
 
 def _resolve_editor_command():
@@ -374,7 +374,7 @@ def _resolve_editor_command():
     return shlex.split(raw)
 
 
-def _collect_editor_task_updates(workspace, task_id):
+def collect_editor_task_updates(workspace, task_id):
     task = require_task(workspace, task_id)
     editor_cmd = _resolve_editor_command()
     fd, raw_path = tempfile.mkstemp(prefix=f"litehive-{task.id.lower()}-", suffix=".yaml")
@@ -385,12 +385,12 @@ def _collect_editor_task_updates(workspace, task_id):
         proc = subprocess.run([*editor_cmd, str(edit_path)], check=False)
         if proc.returncode != 0:
             raise ValueError(f"Editor exited with status {proc.returncode}")
-        return _load_rich_task_update_file(edit_path)
+        return load_rich_task_update_file(edit_path)
     finally:
         edit_path.unlink(missing_ok=True)
 
 
-def _merge_task_updates(
+def merge_task_updates(
     base_updates,
     overlay_updates,
     *,
@@ -406,7 +406,7 @@ def _merge_task_updates(
     return merged
 
 
-def _parse_human_checkpoints(
+def parse_human_checkpoints(
     raw_values,
     *,
     allow_clear=False,

@@ -21,12 +21,12 @@ from litehive.tasks.persistence import load_state
 from litehive.workspace.locking import runner_status
 from litehive.recovery import recover_stale_runner_state, repair_workspace_state
 
-from litehive.cli._display import (
-    _format_execution_retry_policies,
-    _task_dependencies_label,
-    _task_engine_label,
-    _task_interruption_label,
-    _task_model_label,
+from litehive.cli.display import (
+    format_execution_retry_policies,
+    task_dependencies_label,
+    task_engine_label,
+    task_interruption_label,
+    task_model_label,
 )
 
 
@@ -96,7 +96,7 @@ def _show_dependency_label(root, task) -> str:
     return ", ".join(labels)
 
 
-def _cmd_status(args):
+def cmd_status(args):
     root = args.workspace.resolve()
     config = load_config(args.workspace)
     state = load_state(args.workspace)
@@ -190,7 +190,7 @@ def _cmd_status_full(args, root, config, state, monitoring):
     for line in render_engine_monitoring_lines(monitoring):
         print(line)
     print(f"default_retry_limit: {config.default_retry_limit}")
-    print(f"execution_retry_policies: {_format_execution_retry_policies(config)}")
+    print(f"execution_retry_policies: {format_execution_retry_policies(config)}")
     print(f"pool_stop_on_failure: {config.pool_stop_on_failure}")
     print(f"pool_max_tasks: {config.pool_max_tasks}")
     print(f"pool_stop_on_execution_limit: {config.pool_stop_on_execution_limit}")
@@ -211,7 +211,7 @@ def _cmd_status_full(args, root, config, state, monitoring):
     return 0
 
 
-def _cmd_queue(args):
+def cmd_queue(args):
     config = load_config(args.workspace)
     recover_stale_runner_state(args.workspace)
     state = load_state(args.workspace)
@@ -221,35 +221,35 @@ def _cmd_queue(args):
         active_task = require_task(args.workspace, state.active_task_id)
         print(
             f"active: {active_task.id} [{active_task.status}/{active_task.pipeline_status}] "
-            f"priority={active_task.priority} engine={_task_engine_label(None, config.default_engine)} "
-            f"model={_task_model_label(active_task.model)} "
-            f"title={active_task.title} depends_on={_task_dependencies_label(active_task.id, active_task.depends_on)}"
-            f"{_task_interruption_label(active_task)}"
+            f"priority={active_task.priority} engine={task_engine_label(None, config.default_engine)} "
+            f"model={task_model_label(active_task.model)} "
+            f"title={active_task.title} depends_on={task_dependencies_label(active_task.id, active_task.depends_on)}"
+            f"{task_interruption_label(active_task)}"
         )
     print(f"queue_length: {len(state.queue)}")
     for index, task_id in enumerate(state.queue, start=1):
         task = require_task(args.workspace, task_id)
         print(
             f"{index}. {task.id} [{task.status}/{task.pipeline_status}] "
-            f"priority={task.priority} engine={_task_engine_label(None, config.default_engine)} "
-            f"model={_task_model_label(task.model)} "
-            f"title={task.title} depends_on={_task_dependencies_label(task.id, task.depends_on)}"
-            f"{_task_interruption_label(task)}"
+            f"priority={task.priority} engine={task_engine_label(None, config.default_engine)} "
+            f"model={task_model_label(task.model)} "
+            f"title={task.title} depends_on={task_dependencies_label(task.id, task.depends_on)}"
+            f"{task_interruption_label(task)}"
         )
     resumable = [task for task in tasks if task.status in {"interrupted", "parked"}]
     print(f"resumable_tasks: {len(resumable)}")
     for index, task in enumerate(resumable, start=1):
         print(
             f"resume {index}. {task.id} [{task.status}/{task.pipeline_status}] "
-            f"priority={task.priority} engine={_task_engine_label(None, config.default_engine)} "
-            f"model={_task_model_label(task.model)} "
-            f"title={task.title} depends_on={_task_dependencies_label(task.id, task.depends_on)}"
-            f"{_task_interruption_label(task)}"
+            f"priority={task.priority} engine={task_engine_label(None, config.default_engine)} "
+            f"model={task_model_label(task.model)} "
+            f"title={task.title} depends_on={task_dependencies_label(task.id, task.depends_on)}"
+            f"{task_interruption_label(task)}"
         )
     return 0
 
 
-def _cmd_list(args):
+def cmd_list(args):
     ensure_workspace(args.workspace)
     config = load_config(args.workspace)
     tasks = list_tasks(args.workspace)
@@ -278,7 +278,7 @@ def _cmd_list(args):
     return 0
 
 
-def _cmd_show(args):
+def cmd_show(args):
     ensure_workspace(args.workspace)
     try:
         task = require_task(args.workspace, args.task_id)
@@ -334,7 +334,7 @@ def _cmd_show(args):
     return 0
 
 
-def _cmd_repair(args):
+def cmd_repair(args):
     ensure_workspace(args.workspace)
     try:
         summary = repair_workspace_state(args.workspace)

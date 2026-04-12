@@ -12,7 +12,7 @@ from litehive.storage import (
 from litehive.workspace.locking import runner_status
 
 
-def _cmd_backup_create(args):
+def cmd_backup_create(args):
     ensure_workspace(args.workspace)
     try:
         backup = create_workspace_backup(args.workspace)
@@ -25,7 +25,7 @@ def _cmd_backup_create(args):
     return 0
 
 
-def _cmd_backup_list(args):
+def cmd_backup_list(args):
     ensure_workspace(args.workspace)
     backups = list_workspace_backups(args.workspace)
     print(f"backups: {len(backups)}")
@@ -36,7 +36,7 @@ def _cmd_backup_list(args):
     return 0
 
 
-def _cmd_backup_restore(args):
+def cmd_backup_restore(args):
     ensure_workspace(args.workspace)
     daemon = get_workspace_daemon(args.workspace)
     if daemon is not None:

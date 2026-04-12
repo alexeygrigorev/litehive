@@ -3,7 +3,7 @@ from typing import Any
 from ..events import Event, RecoveryBudgetHit, RecoveryFailed, RecoverySucceeded
 from ..nodes.agent import AgentVerdict
 from ..persistence import TaskState
-from ._base import RoleAgent
+from .base import RoleAgent
 
 INSTRUCTIONS = """\
 - You are the recovery agent responsible for diagnosing why this task stopped making progress and restoring a runnable path.

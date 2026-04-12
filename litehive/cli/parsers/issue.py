@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from litehive.cli.parsers._common import add_workspace_argument
+from litehive.cli.parsers.common import add_workspace_argument
 
 UPSTREAM_CONTRIBUTION_CHOICES = [
     "runtime_bug",

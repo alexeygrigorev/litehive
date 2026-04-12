@@ -9,37 +9,37 @@ from litehive.storage import runtime_store
 from litehive.workspace.locking import workspace_mutation_guard
 from litehive.tasks.paths import task_dir, task_file, task_runtime_file
 from litehive.tasks.persistence import (
-    _serialize_state,
-    _write_atomic_files,
+    serialize_state,
+    write_atomic_files,
     load_state,
 )
 
 
-def _workspace_transition_writes(
+def workspace_transition_writes(
     root: Path,
     *,
     tasks: list[TaskRecord] | tuple[TaskRecord, ...] = (),
     state: WorkspaceState | None = None,
     journal_messages: dict[str, str] | None = None,
 ) -> dict[Path, str]:
-    from litehive.tasks.crud import _serialize_task_record, _serialize_task_runtime
+    from litehive.tasks.crud import serialize_task_record, serialize_task_runtime
 
     writes: dict[Path, str] = {}
     for task in tasks:
-        writes[task_file(root, task)] = _serialize_task_record(task)
-        writes[task_runtime_file(root, task)] = _serialize_task_runtime(task)
+        writes[task_file(root, task)] = serialize_task_record(task)
+        writes[task_runtime_file(root, task)] = serialize_task_runtime(task)
         if journal_messages is None or task.id not in journal_messages:
             continue
         journal_path = task_dir(root, task) / "journal.md"
         existing = journal_path.read_text(encoding="utf-8") if journal_path.exists() else ""
         writes[journal_path] = f"{existing}\n## {utcnow()}\n{journal_messages[task.id]}\n"
     if state is not None:
-        state = _merged_state_for_runner_owned_write(
+        state = merged_state_for_runner_owned_write(
             root,
             state=state,
             protected_task_ids=[task.id for task in tasks],
         )
-        writes[state_path(root)] = _serialize_state(state)
+        writes[state_path(root)] = serialize_state(state)
     return writes
 
 
@@ -85,7 +85,7 @@ def _merge_queue_preserving_future_changes(
     return merged
 
 
-def _merged_state_for_runner_owned_write(
+def merged_state_for_runner_owned_write(
     root: Path,
     *,
     state: WorkspaceState,
@@ -104,7 +104,7 @@ def _merged_state_for_runner_owned_write(
 
 def apply_task_updates_from_report(root: Path, task: TaskRecord, report: "object") -> bool:
     """Apply structured and text-based task updates from a stage report."""
-    from litehive.cli._parse import _parse_rich_task_update_document
+    from litehive.cli.parse import parse_rich_task_update_document
 
     from litehive.tasks.constants import VALID_PLANNED_EFFORTS, VALID_PM_COMPLEXITIES
     from litehive.tasks.journal import append_journal
@@ -122,7 +122,7 @@ def apply_task_updates_from_report(root: Path, task: TaskRecord, report: "object
     # Preferred: structured task_update from STAGE_RESULT or TASK_UPDATE YAML block.
     if report.task_update:
         try:
-            updates = _parse_rich_task_update_document(
+            updates = parse_rich_task_update_document(
                 report.task_update, source="report task_update"
             )
         except ValueError as exc:
@@ -222,72 +222,72 @@ def persist_tasks_and_state(
     state: WorkspaceState,
     journal_messages: dict[str, str] | None = None,
 ) -> None:
-    from litehive.tasks.crud import _ensure_runtime_ignored
+    from litehive.tasks.crud import ensure_runtime_ignored
 
     for task in tasks:
         task.updated_at = utcnow()
-    writes = _workspace_transition_writes(
+    writes = workspace_transition_writes(
         root,
         tasks=tasks,
         state=state,
         journal_messages=journal_messages,
     )
     with workspace_mutation_guard(root):
-        _write_atomic_files(writes)
-        from litehive.tasks.crud import _task_runtime_for_storage
+        write_atomic_files(writes)
+        from litehive.tasks.crud import task_runtime_for_storage
 
         store = runtime_store(root)
         for task in tasks:
-            store.save_task_runtime(task.id, _task_runtime_for_storage(task))
-        merged_state = _merged_state_for_runner_owned_write(
+            store.save_task_runtime(task.id, task_runtime_for_storage(task))
+        merged_state = merged_state_for_runner_owned_write(
             root,
             state=state,
             protected_task_ids=[task.id for task in tasks],
         )
         store.save_workspace_state(merged_state)
-        _ensure_runtime_ignored(root)
+        ensure_runtime_ignored(root)
 
 
-def _persist_tasks_and_state_without_runner_guard(
+def persist_tasks_and_state_without_runner_guard(
     root: Path,
     *,
     tasks: list[TaskRecord] | tuple[TaskRecord, ...],
     state: WorkspaceState,
     journal_messages: dict[str, str] | None = None,
 ) -> None:
-    from litehive.tasks.crud import _ensure_runtime_ignored
+    from litehive.tasks.crud import ensure_runtime_ignored
 
     for task in tasks:
         task.updated_at = utcnow()
-    writes = _workspace_transition_writes(
+    writes = workspace_transition_writes(
         root,
         tasks=tasks,
         state=state,
         journal_messages=journal_messages,
     )
-    _write_atomic_files(writes)
-    from litehive.tasks.crud import _task_runtime_for_storage
+    write_atomic_files(writes)
+    from litehive.tasks.crud import task_runtime_for_storage
 
     store = runtime_store(root)
     for task in tasks:
-        store.save_task_runtime(task.id, _task_runtime_for_storage(task))
-    merged_state = _merged_state_for_runner_owned_write(
+        store.save_task_runtime(task.id, task_runtime_for_storage(task))
+    merged_state = merged_state_for_runner_owned_write(
         root,
         state=state,
         protected_task_ids=[task.id for task in tasks],
     )
     store.save_workspace_state(merged_state)
-    _ensure_runtime_ignored(root)
+    ensure_runtime_ignored(root)
 
 
-def _persist_task_and_state_without_runner_guard(
+def persist_task_and_state_without_runner_guard(
     root: Path,
     *,
     task: TaskRecord,
     state: WorkspaceState,
     journal_message: str | None = None,
 ) -> None:
-    _persist_tasks_and_state_without_runner_guard(
+    persist_tasks_and_state_without_runner_guard(
         root,
         tasks=[task],
         state=state,

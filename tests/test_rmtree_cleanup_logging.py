@@ -8,7 +8,7 @@ from unittest.mock import patch
 import pytest
 
 from litehive.config import ensure_workspace
-from litehive.daemon import _prune_run_all_log_dirs
+from litehive.daemon import prune_run_all_log_dirs
 from litehive.tasks import create_task
 from litehive.tasks.crud import discard_created_task
 from litehive.tasks.paths import task_dir
@@ -42,9 +42,9 @@ def test_prune_log_dirs_logs_on_failure(tmp_path: Path, caplog: pytest.LogCaptur
     for name in ("2026-01-01", "2026-01-02", "2026-01-03"):
         (log_base / name).mkdir()
 
-    with patch("litehive.daemon._logs.shutil.rmtree", side_effect=OSError("permission denied")):
-        with caplog.at_level(logging.WARNING, logger="litehive.daemon._logs"):
-            _prune_run_all_log_dirs(log_base, keep=1)
+    with patch("litehive.daemon.logs.shutil.rmtree", side_effect=OSError("permission denied")):
+        with caplog.at_level(logging.WARNING, logger="litehive.daemon.logs"):
+            prune_run_all_log_dirs(log_base, keep=1)
 
     # Two dirs should have been attempted for pruning (keep=1 means remove 2)
     assert caplog.text.count("Failed to prune log dir") == 2
@@ -58,7 +58,7 @@ def test_prune_log_dirs_removes_old(tmp_path: Path) -> None:
     for name in ("2026-01-01", "2026-01-02", "2026-01-03"):
         (log_base / name).mkdir()
 
-    _prune_run_all_log_dirs(log_base, keep=1)
+    prune_run_all_log_dirs(log_base, keep=1)
 
     remaining = sorted(p.name for p in log_base.iterdir())
     assert remaining == ["2026-01-03"]

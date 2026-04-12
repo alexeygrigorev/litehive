@@ -11,16 +11,16 @@ from litehive.agents import extract_engine_timeline
 from litehive.agents.base import CLIExecutionResult
 from litehive.observability.events import append_event, append_session_log, ensure_session_log
 from litehive.models import ResourceLimitEvent, SubagentRef, TaskRecord, utcnow
-from litehive.agents._artifacts import (
-    _write_stream_artifact,
-    _write_text_artifact,
+from litehive.agents.artifacts import (
+    write_stream_artifact,
+    write_text_artifact,
 )
-from litehive.agents._models import SubagentInactivityTimeout
-from litehive.tasks.persistence import _write_atomic_files
+from litehive.agents.models import SubagentInactivityTimeout
+from litehive.tasks.persistence import write_atomic_files
 from litehive.workspace.runtime_tracking import mark_subagent_pid
 
 
-class _SessionMixin:
+class SessionMixin:
     """Session I/O methods extracted from SubagentManager.
 
     Subclasses must provide: self.root, self.sandbox, self.config, self._stream_offsets.
@@ -96,7 +96,7 @@ class _SessionMixin:
             existing = yaml.safe_load(session_path.read_text(encoding="utf-8")) or {}
             if isinstance(existing, dict) and isinstance(existing.get("created_at"), str):
                 created_at = existing["created_at"]
-        _write_atomic_files(
+        write_atomic_files(
             {
                 session_path: yaml.safe_dump(
                     {
@@ -185,7 +185,7 @@ class _SessionMixin:
         )
         if timeline is None:
             return
-        _write_text_artifact(
+        write_text_artifact(
             base,
             "timeline",
             ".yaml",
@@ -216,7 +216,7 @@ class _SessionMixin:
             existing = yaml.safe_load(session_path.read_text(encoding="utf-8")) or {}
             if isinstance(existing, dict) and isinstance(existing.get("created_at"), str):
                 created_at = existing["created_at"]
-        _write_atomic_files(
+        write_atomic_files(
             {
                 session_path: yaml.safe_dump(
                     {
@@ -246,13 +246,13 @@ class _SessionMixin:
                 base / "report.yaml": yaml.safe_dump(report_payload, sort_keys=False),
             }
         )
-        _write_text_artifact(base, "prompt", ".txt", prompt, compress=False)
-        _write_text_artifact(
+        write_text_artifact(base, "prompt", ".txt", prompt, compress=False)
+        write_text_artifact(
             base,
             "transcript",
             ".md",
             transcript,
             compress=ref.status != "running",
         )
-        _write_stream_artifact(base, "stdout", stdout, compress=False)
-        _write_stream_artifact(base, "stderr", stderr, compress=False)
+        write_stream_artifact(base, "stdout", stdout, compress=False)
+        write_stream_artifact(base, "stderr", stderr, compress=False)

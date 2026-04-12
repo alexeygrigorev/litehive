@@ -6,7 +6,7 @@ def _render_finding(prefix: str, finding) -> None:
     print(f"{prefix}: {finding.code} {finding.summary} fix={finding.fix_command}")
 
 
-def _cmd_doctor(args) -> int:
+def cmd_doctor(args) -> int:
     ensure_workspace(args.workspace)
     root = args.workspace.resolve()
     if getattr(args, "fix", False):

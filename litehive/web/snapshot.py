@@ -22,20 +22,20 @@ from litehive.tasks.reports import load_task_thread
 from litehive.workspace.locking import runner_status_readonly
 
 from litehive.web.common import (
-    _MAX_ARTIFACT_BYTES,
-    _RUN_ALL_LOG_LIMIT,
-    _RUN_ALL_PREVIEW_BYTES,
-    _SESSION_LIMIT,
-    _WEB_REVIEWABLE_STAGES,
+    MAX_ARTIFACT_BYTES,
+    RUN_ALL_LOG_LIMIT,
+    RUN_ALL_PREVIEW_BYTES,
+    SESSION_LIMIT,
+    WEB_REVIEWABLE_STAGES,
     SessionArtifact,
-    _engine_attempt_order,
-    _load_yaml_file,
-    _mtime,
-    _read_iso_now,
-    _read_text_file,
-    _relative_to_root,
-    _resolve_artifact_path,
-    _serialize_engine_record,
+    engine_attempt_order,
+    load_yaml_file,
+    mtime,
+    read_iso_now,
+    read_text_file,
+    relative_to_root,
+    resolve_artifact_path,
+    serialize_engine_record,
 )
 
 
@@ -44,11 +44,11 @@ def build_workspace_snapshot(root: Path) -> dict[str, Any]:
     state = load_state(root)
     runner = runner_status_readonly(root)
     tasks = list_tasks_state_first(root, state=state, include_runtime=True)
-    tasks_payload = [_serialize_task(root, task, state.active_task_id) for task in tasks]
+    tasks_payload = [serialize_task(root, task, state.active_task_id) for task in tasks]
     active_task = next((task for task in tasks if task.id == state.active_task_id), None)
     return {
         "workspace": str(root),
-        "generated_at": _read_iso_now(),
+        "generated_at": read_iso_now(),
         "runner": runner.model_dump(mode="python"),
         "daemon": build_daemon_status_payload(root),
         "state": state.model_dump(mode="python"),
@@ -59,7 +59,7 @@ def build_workspace_snapshot(root: Path) -> dict[str, Any]:
         "active_task_id": state.active_task_id,
         "active_task": None
         if active_task is None
-        else _serialize_task(root, active_task, state.active_task_id),
+        else serialize_task(root, active_task, state.active_task_id),
         "tasks": tasks_payload,
         "run_all_logs": list_recent_run_all_logs(root),
     }
@@ -90,7 +90,7 @@ def read_engine_dashboard(root: Path) -> dict[str, Any]:
     config = load_config(root)
     monitoring = load_engine_monitoring(root)
     active_freezes = active_engine_freezes(config)
-    default_fallback_order = _engine_attempt_order(config.default_engine, config.engine_preference)
+    default_fallback_order = engine_attempt_order(config.default_engine, config.engine_preference)
     return {
         "config": {
             "default_engine": config.default_engine,
@@ -150,7 +150,7 @@ def read_engine_dashboard(root: Path) -> dict[str, Any]:
         },
         "monitoring": {
             "engines": {
-                engine_name: _serialize_engine_record(record.model_dump(mode="python"))
+                engine_name: serialize_engine_record(record.model_dump(mode="python"))
                 for engine_name, record in sorted(monitoring.engines.items())
             }
         },
@@ -256,7 +256,7 @@ def _max_window_summary(windows: list[dict[str, Any]]) -> str:
 
 
 def list_recent_run_all_logs(
-    root: Path, *, limit: int = _RUN_ALL_LOG_LIMIT
+    root: Path, *, limit: int = RUN_ALL_LOG_LIMIT
 ) -> list[dict[str, Any]]:
     logs_root = root / ".litehive" / "logs" / "run-all"
     if not logs_root.exists():
@@ -267,13 +267,13 @@ def list_recent_run_all_logs(
     ]:
         files: list[dict[str, Any]] = []
         for file_path in sorted((path for path in directory.iterdir() if path.is_file())):
-            preview = _read_text_file(file_path, max_bytes=_RUN_ALL_PREVIEW_BYTES)
+            preview = read_text_file(file_path, max_bytes=RUN_ALL_PREVIEW_BYTES)
             files.append(
                 {
                     "name": file_path.name,
-                    "path": _relative_to_root(root, file_path),
+                    "path": relative_to_root(root, file_path),
                     "size": file_path.stat().st_size,
-                    "modified_at": _mtime(file_path),
+                    "modified_at": mtime(file_path),
                     "preview": preview["content"],
                     "truncated": preview["truncated"],
                 }
@@ -281,8 +281,8 @@ def list_recent_run_all_logs(
         entries.append(
             {
                 "name": directory.name,
-                "path": _relative_to_root(root, directory),
-                "modified_at": _mtime(directory),
+                "path": relative_to_root(root, directory),
+                "modified_at": mtime(directory),
                 "files": files,
             }
         )
@@ -302,7 +302,7 @@ def read_session_view(root: Path, task_id: str, subagent_id: str) -> dict[str, A
         raise FileNotFoundError(f"Subagent {subagent_id} not found for task {task_id}")
 
     base = task_dir(root, task) / ref.path
-    session = _load_yaml_file(base / "session.yaml")
+    session = load_yaml_file(base / "session.yaml")
     active_subagent = task.runtime.active_subagent
     is_active = bool(active_subagent and active_subagent.id == subagent_id)
     status = str(session.get("status") or ("running" if is_active else ref.status))
@@ -319,21 +319,21 @@ def read_session_view(root: Path, task_id: str, subagent_id: str) -> dict[str, A
         "engine": ref.engine,
         "status": status,
         "is_active": is_active,
-        "session_path": _relative_to_root(root, base / "session.yaml"),
+        "session_path": relative_to_root(root, base / "session.yaml"),
         "session": session,
         "artifacts": [asdict(artifact) for artifact in artifacts],
     }
 
 
-def _serialize_task(root: Path, task: TaskRecord, active_task_id: str | None) -> dict[str, Any]:
+def serialize_task(root: Path, task: TaskRecord, active_task_id: str | None) -> dict[str, Any]:
     base = task_dir(root, task)
     session_entries: list[dict[str, Any]] = []
-    sorted_refs = sorted(task.subagents, key=lambda item: item.id, reverse=True)[:_SESSION_LIMIT]
+    sorted_refs = sorted(task.subagents, key=lambda item: item.id, reverse=True)[:SESSION_LIMIT]
     active_subagent = task.runtime.active_subagent
     last_subagent = task.runtime.last_subagent
     for ref in sorted_refs:
         session_base = base / ref.path
-        session = _load_yaml_file(session_base / "session.yaml")
+        session = load_yaml_file(session_base / "session.yaml")
         is_active = bool(active_subagent and active_subagent.id == ref.id)
         artifact_sources = {
             "transcript": _artifact_path(root, session_base, "transcript", active=is_active),
@@ -380,7 +380,7 @@ def _serialize_task(root: Path, task: TaskRecord, active_task_id: str | None) ->
         "plan": list(task.plan),
         "constraints": list(task.constraints),
         "can_submit_verdict": task.id == active_task_id
-        and task.pipeline_status in _WEB_REVIEWABLE_STAGES,
+        and task.pipeline_status in WEB_REVIEWABLE_STAGES,
         "is_active_task": task.id == active_task_id,
         "runtime": task.runtime.model_dump(mode="python"),
         "current_stage": task.runtime.current_stage.model_dump(mode="python"),
@@ -389,13 +389,13 @@ def _serialize_task(root: Path, task: TaskRecord, active_task_id: str | None) ->
         if active_subagent is None
         else active_subagent.model_dump(mode="python"),
         "last_subagent": None if last_subagent is None else last_subagent.model_dump(mode="python"),
-        "task_path": _relative_to_root(root, base),
-        "task_file": _relative_to_root(root, base / "task.yaml"),
-        "runtime_file": _relative_to_root(root, base / "runtime.yaml"),
-        "thread_file": _relative_to_root(root, base / "thread.yaml"),
-        "events_file": _relative_to_root(root, base / "events.jsonl"),
-        "reports_dir": _relative_to_root(root, base / "reports"),
-        "recovery_dir": _relative_to_root(root, base / "recovery"),
+        "task_path": relative_to_root(root, base),
+        "task_file": relative_to_root(root, base / "task.yaml"),
+        "runtime_file": relative_to_root(root, base / "runtime.yaml"),
+        "thread_file": relative_to_root(root, base / "thread.yaml"),
+        "events_file": relative_to_root(root, base / "events.jsonl"),
+        "reports_dir": relative_to_root(root, base / "reports"),
+        "recovery_dir": relative_to_root(root, base / "recovery"),
         "record": record,
         "reports": reports,
         "events": events,
@@ -411,11 +411,11 @@ def _load_stage_reports(root: Path, base: Path) -> list[dict[str, Any]]:
     if not reports_dir.exists():
         return reports
     for report_path in sorted(reports_dir.glob("*.yaml")):
-        payload = _load_yaml_file(report_path)
+        payload = load_yaml_file(report_path)
         reports.append(
             {
                 "name": report_path.name,
-                "path": _relative_to_root(root, report_path),
+                "path": relative_to_root(root, report_path),
                 "step": payload.get("step"),
                 "verdict": payload.get("verdict"),
                 "summary": payload.get("summary"),
@@ -432,11 +432,11 @@ def _load_recovery_reports(root: Path, base: Path) -> list[dict[str, Any]]:
     if not recovery_dir.exists():
         return reports
     for report_path in sorted(recovery_dir.glob("*.yaml")):
-        payload = _load_yaml_file(report_path)
+        payload = load_yaml_file(report_path)
         reports.append(
             {
                 "name": report_path.name,
-                "path": _relative_to_root(root, report_path),
+                "path": relative_to_root(root, report_path),
                 "summary": payload.get("summary"),
                 "trigger": payload.get("trigger"),
                 "stage": payload.get("stage"),
@@ -461,13 +461,13 @@ def _load_task_events(root: Path, task: TaskRecord) -> list[dict[str, Any]]:
 
 def _read_session_artifact(root: Path, base: Path, kind: str, *, active: bool) -> SessionArtifact:
     if kind == "transcript":
-        path = _resolve_artifact_path(base, "transcript.md")
+        path = resolve_artifact_path(base, "transcript.md")
         display_path = path if path is not None else base / "transcript.md"
-        payload = _read_text_file(path, max_bytes=_MAX_ARTIFACT_BYTES)
+        payload = read_text_file(path, max_bytes=MAX_ARTIFACT_BYTES)
         return SessionArtifact(
             kind=kind,
             label="Transcript",
-            path=_relative_to_root(root, display_path),
+            path=relative_to_root(root, display_path),
             source="rewrite",
             content=payload["content"],
             size=payload["size"],
@@ -489,11 +489,11 @@ def _read_session_artifact(root: Path, base: Path, kind: str, *, active: bool) -
             source_type = "compressed final snapshot"
         else:
             source_path = preferred
-    payload = _read_text_file(source_path, max_bytes=_MAX_ARTIFACT_BYTES)
+    payload = read_text_file(source_path, max_bytes=MAX_ARTIFACT_BYTES)
     return SessionArtifact(
         kind=kind,
         label=kind.upper(),
-        path=_relative_to_root(root, source_path),
+        path=relative_to_root(root, source_path),
         source=source_type,
         content=payload["content"],
         size=payload["size"],
@@ -502,9 +502,9 @@ def _read_session_artifact(root: Path, base: Path, kind: str, *, active: bool) -
     )
 
 
-def _serialize_task_with_queue_metadata(root: Path, task: TaskRecord) -> dict[str, Any]:
+def serialize_task_with_queue_metadata(root: Path, task: TaskRecord) -> dict[str, Any]:
     state = load_state(root)
-    payload = _serialize_task(root, task, state.active_task_id)
+    payload = serialize_task(root, task, state.active_task_id)
     payload["queue_position"] = (
         None if task.id not in state.queue else state.queue.index(task.id) + 1
     )
@@ -513,8 +513,8 @@ def _serialize_task_with_queue_metadata(root: Path, task: TaskRecord) -> dict[st
 
 def _artifact_path(root: Path, base: Path, kind: str, *, active: bool) -> str:
     if kind == "transcript":
-        path = _resolve_artifact_path(base, "transcript.md")
-        return _relative_to_root(root, path if path is not None else base / "transcript.md")
+        path = resolve_artifact_path(base, "transcript.md")
+        return relative_to_root(root, path if path is not None else base / "transcript.md")
     candidates = (
         [base / f"{kind}.log", base / f"{kind}.txt", base / f"{kind}.txt.gz"]
         if active
@@ -522,8 +522,8 @@ def _artifact_path(root: Path, base: Path, kind: str, *, active: bool) -> str:
     )
     for candidate in candidates:
         if candidate.exists():
-            return _relative_to_root(root, candidate)
-    return _relative_to_root(root, candidates[0])
+            return relative_to_root(root, candidate)
+    return relative_to_root(root, candidates[0])
 
 
 def _uptime_seconds(started_at: str | None) -> int | None:

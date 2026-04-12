@@ -7,7 +7,7 @@ from heru.quota.codex_quota import check_codex_quota
 from heru.quota.copilot_quota import check_copilot_quota
 from heru.quota.zai_quota import check_zai_quota
 from litehive.observability import load_engine_monitoring
-from litehive.observability._engine_monitoring import record_codex_quota_check
+from litehive.observability.engine_monitoring import record_codex_quota_check
 
 import yaml
 
@@ -15,7 +15,7 @@ import yaml
 _LIVE_QUOTA_ENGINES = ("claude", "codex", "copilot", "goz", "opencode")
 
 
-def _parse_local_datetime(value: str) -> datetime:
+def parse_local_datetime(value: str) -> datetime:
     """Parse a date or datetime string as local timezone, return UTC datetime."""
     value = value.strip()
     for fmt in ("%Y-%m-%d %H:%M", "%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M", "%Y-%m-%dT%H:%M:%S"):
@@ -75,7 +75,7 @@ def _resolve_engine_action(args):
     return action, engine_name
 
 
-def _cmd_engine(args):
+def cmd_engine(args):
     # Backward compat: old-style args have args.engine instead of engine_action
     if hasattr(args, "engine") and not hasattr(args, "engine_action"):
         args.engine_action = args.engine
@@ -278,7 +278,7 @@ def _cmd_engine_freeze(workspace, engine_name, until_str):
         return 1
 
     try:
-        freeze_utc = _parse_local_datetime(until_str)
+        freeze_utc = parse_local_datetime(until_str)
     except ValueError as exc:
         print(f"engine freeze: {exc}")
         return 1

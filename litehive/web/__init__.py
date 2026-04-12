@@ -17,7 +17,7 @@ from litehive.web.actions import (
     update_task_detail,
     update_task_via_web,
 )
-from litehive.web.common import _render_index
+from litehive.web.common import render_index
 from litehive.web.server import LitehiveWebHandler, WorkspaceStreamMonitor, serve_monitor
 from litehive.web.snapshot import (
     build_daemon_status_payload,
@@ -28,7 +28,7 @@ from litehive.web.snapshot import (
 )
 
 __all__ = [
-    "_render_index",
+    "render_index",
     "LitehiveWebHandler",
     "WorkspaceStreamMonitor",
     "serve_monitor",

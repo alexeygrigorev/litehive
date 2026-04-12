@@ -11,7 +11,7 @@ from litehive.config import ensure_workspace, state_path
 from litehive.models import WorkspaceState
 from litehive.storage import runtime_store
 
-from .constants import _MISSING
+from .constants import MISSING
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +35,7 @@ def load_state(root: Path) -> WorkspaceState:
     return state
 
 
-def _atomic_write_text(path: Path, content: str) -> None:
+def atomic_write_text(path: Path, content: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temp_path = path.with_name(f".{path.name}.tmp-{os.getpid()}")
     try:
@@ -50,7 +50,7 @@ def _atomic_write_text(path: Path, content: str) -> None:
             temp_path.unlink()
 
 
-def _atomic_write_gzip_text(path: Path, content: str) -> None:
+def atomic_write_gzip_text(path: Path, content: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temp_path = path.with_name(f".{path.name}.tmp-{os.getpid()}")
     try:
@@ -62,10 +62,10 @@ def _atomic_write_gzip_text(path: Path, content: str) -> None:
             temp_path.unlink()
 
 
-def _write_atomic_files(writes: dict[Path, str]) -> None:
-    _write = _atomic_write_text
+def write_atomic_files(writes: dict[Path, str]) -> None:
+    _write = atomic_write_text
     snapshots = {
-        path: path.read_text(encoding="utf-8") if path.exists() else _MISSING for path in writes
+        path: path.read_text(encoding="utf-8") if path.exists() else MISSING for path in writes
     }
     applied: list[Path] = []
     try:
@@ -75,7 +75,7 @@ def _write_atomic_files(writes: dict[Path, str]) -> None:
     except Exception:
         for path in reversed(applied):
             previous = snapshots[path]
-            if previous is _MISSING:
+            if previous is MISSING:
                 if path.exists():
                     path.unlink()
                 continue
@@ -83,7 +83,7 @@ def _write_atomic_files(writes: dict[Path, str]) -> None:
         raise
 
 
-def _serialize_state(state: WorkspaceState) -> str:
+def serialize_state(state: WorkspaceState) -> str:
     return yaml.safe_dump(state.model_dump(mode="python"), sort_keys=False)
 
 
@@ -92,18 +92,18 @@ def save_state(root: Path, state: WorkspaceState) -> None:
 
     with workspace_mutation_guard(root):
         runtime_store(root).save_workspace_state(state)
-        _atomic_write_text(state_path(root), _serialize_state(state))
+        atomic_write_text(state_path(root), serialize_state(state))
 
 
-def _save_state_without_runner_guard(root: Path, state: WorkspaceState) -> None:
+def save_state_without_runner_guard(root: Path, state: WorkspaceState) -> None:
     runtime_store(root).save_workspace_state(state)
-    _atomic_write_text(state_path(root), _serialize_state(state))
+    atomic_write_text(state_path(root), serialize_state(state))
 
 
 def set_pool_stop_reason(root: Path, stop_reason: str | None) -> WorkspaceState:
-    from litehive.workspace.locking import _workspace_lock
+    from litehive.workspace.locking import workspace_lock
 
-    with _workspace_lock(root):
+    with workspace_lock(root):
         state = load_state(root)
         state.pool_stop_reason = stop_reason
         save_state(root, state)

@@ -3,7 +3,7 @@
 from types import SimpleNamespace
 
 from litehive.pipeline.nodes import HookSpec
-from litehive.pipeline.orchestration import _hook_specs_from_config
+from litehive.pipeline.orchestration import hook_specs_from_config
 
 
 def _fake_hook(command: str, *, reject: bool = True, timeout: int = 60) -> SimpleNamespace:
@@ -24,7 +24,7 @@ def test_hook_specs_from_config_copies_known_fields() -> None:
         }
     )
 
-    out = _hook_specs_from_config(config)
+    out = hook_specs_from_config(config)
 
     assert set(out.keys()) == {"before_grooming", "after_implementing"}
     assert isinstance(out["before_grooming"][0], HookSpec)
@@ -38,8 +38,8 @@ def test_hook_specs_from_config_copies_known_fields() -> None:
 
 def test_hook_specs_from_config_skips_empty_phases_and_missing_attr() -> None:
     # Missing runner_hooks entirely
-    assert _hook_specs_from_config(SimpleNamespace()) == {}
+    assert hook_specs_from_config(SimpleNamespace()) == {}
 
     # Empty per-phase lists are dropped (no empty-list pollution in registry)
     config = SimpleNamespace(runner_hooks={"before_grooming": [], "after_testing": None})
-    assert _hook_specs_from_config(config) == {}
+    assert hook_specs_from_config(config) == {}

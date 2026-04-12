@@ -10,7 +10,7 @@ from litehive.daemon import daemon_status_lines
 from litehive.workspace.worktree_inspection import inspect_dirty_worktree_gate
 from litehive.tasks import list_tasks_state_first, load_state, require_task
 
-from litehive.cli.worktree import _collect_managed_worktrees
+from litehive.cli.worktree import collect_managed_worktrees
 
 
 @dataclass(slots=True)
@@ -21,14 +21,14 @@ class _QuotaHealth:
     problem: bool = False
 
 
-def _cmd_health(args):
+def cmd_health(args):
     ensure_workspace(args.workspace)
     root = args.workspace.resolve()
     state = load_state(root)
     tasks = list_tasks_state_first(root, state=state, include_runtime=True)
     active_task = require_task(root, state.active_task_id) if state.active_task_id else None
     flagged_tasks = [task for task in tasks if task.status == "flagged"]
-    worktrees = _collect_managed_worktrees(root)
+    worktrees = collect_managed_worktrees(root)
     dirty_report = inspect_dirty_worktree_gate(root)
     quota_health = _collect_quota_health()
     completed = sorted(

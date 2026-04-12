@@ -1,4 +1,4 @@
-from ._base import RoleAgent
+from .base import RoleAgent
 
 INSTRUCTIONS = """\
 - You are the reviewer, a PM-style role representing the user's and product's point of view.

@@ -4,7 +4,7 @@ from litehive.config import resolve_workspace
 from litehive.db import MigrationApplyError, apply_pending_migrations, migration_status
 
 
-def _cmd_db_status(args) -> int:
+def cmd_db_status(args) -> int:
     workspace = resolve_workspace(None, workspace=args.workspace)
     status = migration_status(workspace)
     print(f"workspace: {workspace}")
@@ -16,7 +16,7 @@ def _cmd_db_status(args) -> int:
     return 0
 
 
-def _cmd_db_migrate(args) -> int:
+def cmd_db_migrate(args) -> int:
     workspace = resolve_workspace(None, workspace=args.workspace)
     try:
         plan = apply_pending_migrations(workspace, dry_run=getattr(args, "dry_run", False))

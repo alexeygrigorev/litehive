@@ -123,7 +123,7 @@ def _persist_engine_freeze(
 
 def _record_codex_quota_monitoring(root: Path, status: object) -> None:
     try:
-        from litehive.observability._engine_monitoring import record_codex_quota_check
+        from litehive.observability.engine_monitoring import record_codex_quota_check
 
         record_codex_quota_check(root, status=status)
     except Exception:  # noqa: BLE001

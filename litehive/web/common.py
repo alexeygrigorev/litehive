@@ -9,21 +9,21 @@ import yaml
 from jinja2 import Environment, FileSystemLoader
 
 _POLL_INTERVAL_MS = 1500
-_MAX_ARTIFACT_BYTES = 64 * 1024
-_RUN_ALL_PREVIEW_BYTES = 32 * 1024
-_RUN_ALL_LOG_LIMIT = 8
-_SESSION_LIMIT = 12
-_STREAM_KEEPALIVE_SECONDS = 15.0
-_STREAM_RETRY_MS = 2000
-_STREAM_SCAN_INTERVAL_SECONDS = 0.25
-_WEB_REVIEWABLE_STAGES = {"testing", "accepting"}
-_WEB_VERDICT_OPTIONS = ("pass", "reject", "comment")
+MAX_ARTIFACT_BYTES = 64 * 1024
+RUN_ALL_PREVIEW_BYTES = 32 * 1024
+RUN_ALL_LOG_LIMIT = 8
+SESSION_LIMIT = 12
+STREAM_KEEPALIVE_SECONDS = 15.0
+STREAM_RETRY_MS = 2000
+STREAM_SCAN_INTERVAL_SECONDS = 0.25
+WEB_REVIEWABLE_STAGES = {"testing", "accepting"}
+WEB_VERDICT_OPTIONS = ("pass", "reject", "comment")
 
 _TEMPLATES_DIR = Path(__file__).parent / "templates"
 _jinja_env = Environment(loader=FileSystemLoader(str(_TEMPLATES_DIR)), autoescape=False)
 
 
-def _render_index() -> str:
+def render_index() -> str:
     template = _jinja_env.get_template("index.html")
     return template.render(
         poll_interval_ms=_POLL_INTERVAL_MS,
@@ -43,7 +43,7 @@ class SessionArtifact:
     available: bool
 
 
-def _read_text_file(path: Path | None, *, max_bytes: int) -> dict[str, Any]:
+def read_text_file(path: Path | None, *, max_bytes: int) -> dict[str, Any]:
     if path is None or not path.exists():
         return {"content": "", "size": 0, "truncated": False, "available": False}
     if path.suffix == ".gz":
@@ -75,28 +75,28 @@ def _read_text_file(path: Path | None, *, max_bytes: int) -> dict[str, Any]:
     }
 
 
-def _load_yaml_file(path: Path) -> dict[str, Any]:
+def load_yaml_file(path: Path) -> dict[str, Any]:
     if not path.exists():
         return {}
     loaded = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
     return loaded if isinstance(loaded, dict) else {}
 
 
-def _relative_to_root(root: Path, path: Path) -> str:
+def relative_to_root(root: Path, path: Path) -> str:
     try:
         return str(path.resolve().relative_to(root.resolve()))
     except ValueError:
         return str(path.resolve())
 
 
-def _mtime(path: Path) -> str | None:
+def mtime(path: Path) -> str | None:
     try:
-        return _read_iso_now(path.stat().st_mtime)
+        return read_iso_now(path.stat().st_mtime)
     except FileNotFoundError:
         return None
 
 
-def _read_iso_now(timestamp: float | None = None) -> str:
+def read_iso_now(timestamp: float | None = None) -> str:
     from datetime import UTC, datetime
 
     if timestamp is None:
@@ -104,7 +104,7 @@ def _read_iso_now(timestamp: float | None = None) -> str:
     return datetime.fromtimestamp(timestamp, UTC).replace(microsecond=0).isoformat()
 
 
-def _resolve_artifact_path(base: Path, name: str) -> Path | None:
+def resolve_artifact_path(base: Path, name: str) -> Path | None:
     direct = base / name
     if direct.exists():
         return direct
@@ -114,12 +114,12 @@ def _resolve_artifact_path(base: Path, name: str) -> Path | None:
     return None
 
 
-def _stable_signature(payload: Any) -> str:
+def stable_signature(payload: Any) -> str:
     encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str)
     return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
 
 
-def _workspace_snapshot_diff(
+def workspace_snapshot_diff(
     previous: dict[str, Any] | None, current: dict[str, Any]
 ) -> dict[str, Any]:
     previous_task_ids = {item["id"] for item in previous["tasks"]} if previous else set()
@@ -144,7 +144,7 @@ def _workspace_snapshot_diff(
     }
 
 
-def _session_payload_diff(
+def session_payload_diff(
     previous: dict[str, Any] | None, current: dict[str, Any] | None
 ) -> dict[str, Any]:
     if previous is None and current is None:
@@ -166,7 +166,7 @@ def _session_payload_diff(
     return {"status": status, "changed_artifacts": changed_artifacts}
 
 
-def _iter_stream_paths(root: Path) -> list[Path]:
+def iter_stream_paths(root: Path) -> list[Path]:
     candidates: list[Path] = []
     state_path = root / ".litehive" / "state.yaml"
     if state_path.exists():
@@ -206,7 +206,7 @@ def _iter_stream_paths(root: Path) -> list[Path]:
     return candidates
 
 
-def _serialize_engine_record(record: dict[str, Any]) -> dict[str, Any]:
+def serialize_engine_record(record: dict[str, Any]) -> dict[str, Any]:
     usage = record.get("usage")
     metadata = record.get("metadata") or {}
     token_cost_keys = [
@@ -222,7 +222,7 @@ def _serialize_engine_record(record: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _engine_attempt_order(default_engine: str, preference: list[str]) -> list[str]:
+def engine_attempt_order(default_engine: str, preference: list[str]) -> list[str]:
     seen: set[str] = set()
     order: list[str] = []
     for engine_name in [default_engine, *preference]:
@@ -233,7 +233,7 @@ def _engine_attempt_order(default_engine: str, preference: list[str]) -> list[st
     return order
 
 
-def _coerce_text_list(field: str, value: Any) -> list[str]:
+def coerce_text_list(field: str, value: Any) -> list[str]:
     if not isinstance(value, list) or any(not isinstance(item, str) for item in value):
         raise ValueError(f"{field} must be a list of strings")
     return list(value)
@@ -244,14 +244,14 @@ def _coerce_text_list(field: str, value: Any) -> list[str]:
 # ---------------------------------------------------------------------------
 
 
-def _require_string(payload: dict[str, Any], key: str) -> str:
-    value = _optional_string(payload, key)
+def require_string(payload: dict[str, Any], key: str) -> str:
+    value = optional_string(payload, key)
     if value is None or not value.strip():
         raise ValueError(f"'{key}' is required")
     return value
 
 
-def _optional_string(payload: dict[str, Any], key: str) -> str | None:
+def optional_string(payload: dict[str, Any], key: str) -> str | None:
     if key not in payload:
         return None
     value = payload[key]
@@ -262,31 +262,31 @@ def _optional_string(payload: dict[str, Any], key: str) -> str | None:
     return value
 
 
-def _optional_string_list(payload: dict[str, Any], key: str) -> list[str] | None:
+def optional_string_list(payload: dict[str, Any], key: str) -> list[str] | None:
     if key not in payload:
         return None
-    return _coerce_text_list(key, payload[key])
+    return coerce_text_list(key, payload[key])
 
 
-def _field_or_missing(payload: dict[str, Any], key: str) -> object:
+def field_or_missing(payload: dict[str, Any], key: str) -> object:
     if key not in payload:
         return ...
     return payload[key]
 
 
-def _list_field_or_missing(payload: dict[str, Any], key: str) -> object:
+def list_field_or_missing(payload: dict[str, Any], key: str) -> object:
     if key not in payload:
         return ...
-    return _coerce_text_list(key, payload[key])
+    return coerce_text_list(key, payload[key])
 
 
-def _list_or_missing(value: object, key: str) -> object:
+def list_or_missing(value: object, key: str) -> object:
     if value is ...:
         return ...
-    return _coerce_text_list(key, value)
+    return coerce_text_list(key, value)
 
 
-def _optional_bool(payload: dict[str, Any], key: str, *, default: bool) -> bool:
+def optional_bool(payload: dict[str, Any], key: str, *, default: bool) -> bool:
     if key not in payload:
         return default
     value = payload[key]
@@ -295,7 +295,7 @@ def _optional_bool(payload: dict[str, Any], key: str, *, default: bool) -> bool:
     return value
 
 
-def _optional_update_priority(payload: dict[str, Any]) -> object:
+def optional_update_priority(payload: dict[str, Any]) -> object:
     if "priority" not in payload:
         return ...
     value = payload["priority"]

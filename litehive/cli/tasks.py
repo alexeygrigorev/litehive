@@ -8,38 +8,33 @@ from litehive.tasks.normalization import missing_acceptance_criteria_cli_warning
 from litehive.tasks.persistence import load_state
 from litehive.workspace.task_status import update_task_metadata
 
-from litehive.cli._display import (
-    _fallback_intake_goal,
-    _fallback_intake_title,
-    _link_intake_brief_to_source,
-    _prepare_patch_branch,
-    _resolve_litehive_source_root,
-    _task_dependencies_label,
-    _task_model_label,
-    _workspace_project_name,
+from litehive.cli.display import (
+    fallback_intake_goal,
+    fallback_intake_title,
+    link_intake_brief_to_source,
+    prepare_patch_branch,
+    resolve_litehive_source_root,
+    task_dependencies_label,
+    task_model_label,
+    workspace_project_name,
 )
-from litehive.cli._parse import (
-    _collect_editor_task_updates,
-    _load_rich_task_update_file,
-    _merge_task_updates,
-    _parse_acceptance_criteria,
-    _parse_dependency_ids,
-    _parse_human_checkpoints,
-    _parse_text_list_option,
+from litehive.cli.parse import (
+    collect_editor_task_updates,
+    load_rich_task_update_file,
+    merge_task_updates,
+    parse_acceptance_criteria,
+    parse_dependency_ids,
+    parse_text_list_option,
 )
 
 
-def _cmd_add(args):
+def cmd_add(args):
     ensure_workspace(args.workspace)
     try:
-        depends_on = _parse_dependency_ids(getattr(args, "depends_on", None))
-        acceptance_criteria = _parse_acceptance_criteria(getattr(args, "acceptance_criteria", None))
-        human_checkpoints = _parse_human_checkpoints(getattr(args, "human_checkpoint", None))
+        depends_on = parse_dependency_ids(getattr(args, "depends_on", None))
+        acceptance_criteria = parse_acceptance_criteria(getattr(args, "acceptance_criteria", None))
         requested_task_type = getattr(args, "task_type", None)
-        requested_record_mode = getattr(args, "record_mode", None)
-        mode = requested_record_mode or (
-            "tasks" if requested_task_type is not None else "implementation"
-        )
+        mode = "tasks" if requested_task_type is not None else "implementation"
         pipeline_mode = getattr(args, "mode", None) or "full"
         task = create_task(
             args.workspace,
@@ -49,13 +44,7 @@ def _cmd_add(args):
             pipeline_mode=pipeline_mode,
             goal=args.goal,
             acceptance_criteria=None if acceptance_criteria is ... else acceptance_criteria,
-            pm_complexity=getattr(args, "pm_complexity", None),
-            planned_effort=getattr(args, "planned_effort", None),
-            human_checkpoints=None if human_checkpoints is ... else human_checkpoints,
             task_type=requested_task_type,
-            model=getattr(args, "model", None),
-            retry_limit=getattr(args, "retry_limit", None),
-            auto_commit=not args.no_auto_commit,
             priority=getattr(args, "priority", None),
         )
     except (ValueError, WorkspaceConflictError) as exc:
@@ -72,13 +61,10 @@ def _cmd_add(args):
     print(f"mode: {task.mode}")
     print(f"pipeline_mode: {task.pipeline_mode}")
     print(f"engine: {load_config(args.workspace).default_engine}")
-    print(f"model: {_task_model_label(task.model)}")
-    print(
-        "human_checkpoints: "
-        + (", ".join(task.human_checkpoints) if task.human_checkpoints else "-")
-    )
+    print(f"model: {task_model_label(task.model)}")
+    print("human_checkpoints: " + (", ".join(task.human_checkpoints) if task.human_checkpoints else "-"))
     print(f"task_type: {task.task_type or '-'}")
-    print(f"depends_on: {_task_dependencies_label(task.id, task.depends_on)}")
+    print(f"depends_on: {task_dependencies_label(task.id, task.depends_on)}")
     print(f"pm_complexity: {task.pm_complexity or '-'}")
     print(f"planned_effort: {task.planned_effort or '-'}")
     print(f"acceptance_criteria: {len(task.acceptance_criteria)}")
@@ -88,12 +74,12 @@ def _cmd_add(args):
     return 0
 
 
-def _cmd_issue(args):
+def cmd_issue(args):
     ensure_workspace(args.workspace)
     try:
-        litehive_root = _resolve_litehive_source_root(args)
+        litehive_root = resolve_litehive_source_root(args)
         ensure_workspace(litehive_root)
-        acceptance_criteria = _parse_acceptance_criteria(getattr(args, "acceptance_criteria", None))
+        acceptance_criteria = parse_acceptance_criteria(getattr(args, "acceptance_criteria", None))
     except ValueError as exc:
         print(f"issue failed: {exc}")
         return 1
@@ -108,7 +94,7 @@ def _cmd_issue(args):
             print(f"issue failed: {exc}")
             return 1
 
-    source_project = args.source_project or _workspace_project_name(args.workspace)
+    source_project = args.source_project or workspace_project_name(args.workspace)
     source_stage = args.source_stage or (
         source_task.pipeline_status if source_task is not None else None
     )
@@ -123,7 +109,7 @@ def _cmd_issue(args):
         )
         if args.prepare_patch_branch:
             try:
-                patch = _prepare_patch_branch(
+                patch = prepare_patch_branch(
                     litehive_root,
                     branch=args.patch_branch,
                     base_ref=args.patch_base,
@@ -197,7 +183,7 @@ def _cmd_issue(args):
     return 0
 
 
-def _cmd_intake(args):
+def cmd_intake(args):
     ensure_workspace(args.workspace)
     brain_dump = ""
     if args.file:
@@ -228,7 +214,7 @@ def _cmd_intake(args):
     prompt = intake_prompt(brain_dump)
     print(f"Analyzing brain dump with {engine_name}...")
 
-    raw_title = _fallback_intake_title(brain_dump)
+    raw_title = fallback_intake_title(brain_dump)
     raw_goal = ""
 
     try:
@@ -259,7 +245,7 @@ def _cmd_intake(args):
         from litehive.tasks.paths import task_dir
         from litehive.tasks.templates import task_brief_file
 
-        task_goal = raw_goal.strip() if raw_goal.strip() else _fallback_intake_goal(brain_dump)
+        task_goal = raw_goal.strip() if raw_goal.strip() else fallback_intake_goal(brain_dump)
         task_goal += "\n\n(See intake.md for the original brain dump)"
 
         task = create_task(
@@ -274,7 +260,7 @@ def _cmd_intake(args):
         (base / "intake.md").write_text(brain_dump, encoding="utf-8")
 
         brief_file = task_brief_file(args.workspace, task)
-        _link_intake_brief_to_source(brief_file)
+        link_intake_brief_to_source(brief_file)
 
     except Exception as exc:
         if task is not None:
@@ -289,12 +275,11 @@ def _cmd_intake(args):
     return 0
 
 
-def _cmd_update(args):
+def cmd_update(args):
     from litehive.cli.agent_cli import block_if_agent
 
     block_if_agent()
     ensure_workspace(args.workspace)
-    retry_limit_arg = getattr(args, "retry_limit", None)
     rich_file = getattr(args, "from_file", None)
     edit_mode = bool(getattr(args, "edit", False))
     if rich_file is not None and edit_mode:
@@ -305,16 +290,8 @@ def _cmd_update(args):
         and getattr(args, "acceptance_criteria", None) is None
         and getattr(args, "constraint", None) is None
         and getattr(args, "plan_step", None) is None
-        and getattr(args, "human_checkpoint", None) is None
-        and getattr(args, "task_type", None) is None
-        and getattr(args, "model", None) is None
-        and retry_limit_arg is None
         and getattr(args, "priority", None) is None
-        and getattr(args, "pm_complexity", None) is None
-        and getattr(args, "planned_effort", None) is None
         and getattr(args, "goal", None) is None
-        and getattr(args, "mode", None) is None
-        and args.auto_commit is None
         and rich_file is None
         and not edit_mode
     ):
@@ -323,37 +300,27 @@ def _cmd_update(args):
     try:
         rich_updates = {}
         if rich_file is not None:
-            rich_updates = _load_rich_task_update_file(rich_file)
+            rich_updates = load_rich_task_update_file(rich_file)
         elif edit_mode:
-            rich_updates = _collect_editor_task_updates(args.workspace, args.task_id)
+            rich_updates = collect_editor_task_updates(args.workspace, args.task_id)
 
-        depends_on = _parse_dependency_ids(
+        depends_on = parse_dependency_ids(
             getattr(args, "depends_on", None), task_id=args.task_id, allow_clear=True
         )
-        acceptance_criteria = _parse_acceptance_criteria(
+        acceptance_criteria = parse_acceptance_criteria(
             getattr(args, "acceptance_criteria", None),
             allow_clear=True,
         )
-        constraints = _parse_text_list_option(
+        constraints = parse_text_list_option(
             getattr(args, "constraint", None),
             option_name="Constraints",
             allow_clear=True,
         )
-        plan = _parse_text_list_option(
+        plan = parse_text_list_option(
             getattr(args, "plan_step", None),
             option_name="Plan steps",
             allow_clear=True,
         )
-        human_checkpoints = _parse_human_checkpoints(
-            getattr(args, "human_checkpoint", None),
-            allow_clear=True,
-        )
-        if retry_limit_arg is None:
-            retry_limit = ...
-        elif retry_limit_arg == "default":
-            retry_limit = None
-        else:
-            retry_limit = int(retry_limit_arg)
         flag_updates = {}
         if depends_on is not ...:
             flag_updates["depends_on"] = depends_on
@@ -363,42 +330,12 @@ def _cmd_update(args):
             flag_updates["constraints"] = constraints
         if plan is not ...:
             flag_updates["plan"] = plan
-        if human_checkpoints is not ...:
-            flag_updates["human_checkpoints"] = human_checkpoints
-        if getattr(args, "task_type", None) is not None:
-            flag_updates["task_type"] = (
-                None
-                if getattr(args, "task_type", None) == "default"
-                else getattr(args, "task_type", None)
-            )
-        if getattr(args, "model", None) is not None:
-            flag_updates["model"] = (
-                None if getattr(args, "model", None) == "default" else getattr(args, "model", None)
-            )
-        if retry_limit is not ...:
-            flag_updates["retry_limit"] = retry_limit
         if getattr(args, "priority", None) is not None:
             flag_updates["priority"] = args.priority
-        if getattr(args, "pm_complexity", None) is not None:
-            flag_updates["pm_complexity"] = (
-                None
-                if getattr(args, "pm_complexity", None) == "none"
-                else getattr(args, "pm_complexity", None)
-            )
-        if getattr(args, "planned_effort", None) is not None:
-            flag_updates["planned_effort"] = (
-                None
-                if getattr(args, "planned_effort", None) == "none"
-                else getattr(args, "planned_effort", None)
-            )
         if getattr(args, "goal", None) is not None:
             flag_updates["goal"] = args.goal
-        if getattr(args, "mode", None) is not None:
-            flag_updates["mode"] = args.mode
-        if args.auto_commit is not None:
-            flag_updates["auto_commit"] = args.auto_commit
 
-        updates = _merge_task_updates(rich_updates, flag_updates, overlay_source="CLI flags")
+        updates = merge_task_updates(rich_updates, flag_updates, overlay_source="CLI flags")
         task = update_task_metadata(
             args.workspace,
             args.task_id,
@@ -423,7 +360,7 @@ def _cmd_update(args):
     config = load_config(args.workspace)
     print(f"task: {task.id} {task.title}")
     print(f"engine: {config.default_engine}")
-    print(f"model: {_task_model_label(task.model)}")
+    print(f"model: {task_model_label(task.model)}")
     print(
         f"retry_limit: {task.retry_policy.max_retries if task.retry_policy.max_retries is not None else 'default'}"
     )
@@ -437,7 +374,7 @@ def _cmd_update(args):
         + (", ".join(task.human_checkpoints) if task.human_checkpoints else "-")
     )
     print(f"task_type: {task.task_type or '-'}")
-    print(f"depends_on: {_task_dependencies_label(task.id, task.depends_on)}")
+    print(f"depends_on: {task_dependencies_label(task.id, task.depends_on)}")
     print(f"goal: {task.goal}")
     print(f"acceptance_criteria: {len(task.acceptance_criteria)}")
     print(f"constraints: {len(task.constraints)}")

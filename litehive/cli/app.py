@@ -1,7 +1,7 @@
 """CLI entrypoint for litehive."""
 
-import argparse
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Annotated
 
 import click
@@ -9,49 +9,66 @@ import typer
 
 from litehive.agents import ENGINE_CHOICES
 from litehive.cli.parse import TASK_TYPE_CHOICES
-from litehive.cli.backup import cmd_backup_create, cmd_backup_list, cmd_backup_restore
-from litehive.cli.db import cmd_db_migrate, cmd_db_status
-from litehive.cli.configure import cmd_configure
-from litehive.cli.debug import cmd_debug
-from litehive.cli.doctor import cmd_doctor
-from litehive.cli.daemon import (
-    cmd_daemon_instances,
-    cmd_daemon_restart,
-    cmd_daemon_run,
-    cmd_daemon_status,
-    cmd_daemon_stop,
-    cmd_daemon_worker,
+from litehive.cli.backup import (
+    backup_create as backup_create_handler,
+    backup_list as backup_list_handler,
+    backup_restore as backup_restore_handler,
 )
-from litehive.cli.engine import cmd_engine
-from litehive.cli.github_import import cmd_import_github, cmd_import_issue, cmd_import_issues
-from litehive.cli.health import cmd_health
-from litehive.cli.logs import cmd_logs
-from litehive.cli.parsers import COMMAND_PARSER_BUILDERS
+from litehive.cli.db import db_migrate as db_migrate_handler, db_status as db_status_handler
+from litehive.cli.debug import debug as debug_handler
+from litehive.cli.doctor import doctor as doctor_handler
+from litehive.cli.daemon import (
+    daemon_instances as daemon_instances_handler,
+    daemon_restart as daemon_restart_handler,
+    daemon_run as daemon_run_handler,
+    daemon_status as daemon_status_handler,
+    daemon_stop as daemon_stop_handler,
+    daemon_worker as daemon_worker_handler,
+)
+from litehive.cli.engine import engine as engine_handler
+from litehive.cli.github_import import (
+    import_github as import_github_handler,
+)
+from litehive.cli.health import health as health_handler
+from litehive.cli.logs import logs as logs_handler
 from litehive.cli.queue import (
-    cmd_abandon_task,
-    cmd_archive,
-    cmd_cleanup,
-    cmd_close_task,
-    cmd_dirty_worktree_gate,
-    cmd_move,
-    cmd_prioritize,
-    cmd_promote,
-    cmd_queue_requeue,
-    cmd_recover,
-    cmd_requeue_task,
-    cmd_resume_task,
-    cmd_rollback,
-    cmd_stop_task,
-    cmd_switch_task,
+    abandon_task_command as abandon_task_handler,
+    archive as archive_handler,
+    cleanup as cleanup_handler,
+    close_task_command as close_task_handler,
+    dirty_worktree_gate as dirty_worktree_gate_handler,
+    move as move_handler,
+    prioritize as prioritize_handler,
+    promote as promote_handler,
+    queue_requeue as queue_requeue_handler,
+    recover as recover_handler,
+    resume_task_command as resume_task_handler,
+    rollback as rollback_handler,
+    stop_task as stop_task_handler,
+    switch_task as switch_task_handler,
     launch_app,
 )
 from litehive.cli.agent_cli import agent_app
-from litehive.cli.report import cmd_report
-from litehive.cli.run import cmd_run
-from litehive.cli.status import cmd_list, cmd_queue, cmd_repair, cmd_show, cmd_status
-from litehive.cli.tasks import cmd_add, cmd_intake, cmd_issue, cmd_update
-from litehive.cli.worktree import cmd_worktree_clean, cmd_worktree_ls, cmd_worktree_rescue
-from litehive.config import VALID_POOL_SELECTION_POLICIES, available_process_profiles
+from litehive.cli.report import report as report_handler
+from litehive.cli.run import run as run_handler
+from litehive.cli.status import (
+    list_tasks as list_tasks_handler,
+    queue as queue_handler,
+    repair as repair_handler,
+    show_task as show_task_handler,
+    status as status_handler,
+)
+from litehive.cli.tasks import (
+    add_task as add_task_handler,
+    intake_task as intake_task_handler,
+    issue_task as issue_task_handler,
+    update_task_command as update_task_handler,
+)
+from litehive.cli.worktree import (
+    worktree_clean as worktree_clean_handler,
+    worktree_ls as worktree_ls_handler,
+    worktree_rescue as worktree_rescue_handler,
+)
 from litehive.pipeline.orchestration import run_task
 from litehive.tasks.queue_ops import dequeue_next_task
 from litehive.tasks.constants import VALID_TASK_PRIORITIES
@@ -127,14 +144,6 @@ def _choice(values: list[str] | tuple[str, ...] | set[str]) -> click.Choice:
     return click.Choice(sorted(values), case_sensitive=True)
 
 
-def _ns(**kwargs: object) -> argparse.Namespace:
-    return argparse.Namespace(**kwargs)
-
-
-def _ctx_command(ctx: typer.Context) -> str:
-    return ctx.info_name or ""
-
-
 def _require_subcommand(ctx: typer.Context) -> None:
     if ctx.invoked_subcommand is not None:
         return
@@ -162,122 +171,6 @@ def root(ctx: typer.Context) -> int | None:
     return launch_app(Path.cwd(), default_mode="implementation")
 
 
-@app.command("configure", help="Initialize litehive workspace config")
-def configure_command(
-    workspace: Annotated[
-        Path, typer.Option("--workspace", help="Repository root where .litehive/ should be created")
-    ] = Path.cwd(),
-    default_engine: Annotated[str, typer.Option(help="Default engine adapter name")] = "codex",
-    process_profile: Annotated[
-        str,
-        typer.Option(
-            click_type=_choice(available_process_profiles()),
-            help="Prompt/process overlay preset for workspace initialization",
-        ),
-    ] = "generic",
-    default_retry_limit: Annotated[
-        int, typer.Option(help="Default retry limit for tasks without a task-specific override")
-    ] = 3,
-    litehive_source_path: Annotated[
-        str | None,
-        typer.Option(help="Path to the Litehive source repo/workspace used for upstream issue filing and patch handoff"),
-    ] = None,
-    opencode_model: Annotated[
-        str, typer.Option(help="Default model identifier when using the opencode adapter")
-    ] = "zai-coding-plan/glm-5.1",
-    gemini_model: Annotated[
-        str | None, typer.Option(help="Default model identifier when using the gemini adapter")
-    ] = None,
-    copilot_model: Annotated[
-        str | None, typer.Option(help="Default model identifier when using the copilot adapter")
-    ] = None,
-    claude_model: Annotated[
-        str, typer.Option(help="Default model identifier when using the claude adapter")
-    ] = "claude-sonnet-4-20250514",
-    claude_max_turns: Annotated[
-        int,
-        typer.Option(help="Maximum conversation turns per claude invocation (guardrail against accidental quota burn)"),
-    ] = 30,
-    pool_usage_cap: Annotated[
-        int | None,
-        typer.Option(help="Default pool behavior: stop before starting another engine invocation once this many invocations have run"),
-    ] = None,
-    pool_cost_cap: Annotated[
-        int | None,
-        typer.Option(help="Default pool behavior: stop before starting another engine invocation once this many cost units have been spent"),
-    ] = None,
-    engine_usage_cap: Annotated[
-        list[str] | None,
-        typer.Option(help="Per-engine invocation cap as ENGINE=COUNT; repeat to set multiple engines"),
-    ] = None,
-    engine_budget_cap: Annotated[
-        list[str] | None,
-        typer.Option(help="Per-engine budget cap in cost units as ENGINE=UNITS; repeat to set multiple engines"),
-    ] = None,
-    engine_cost: Annotated[
-        list[str] | None,
-        typer.Option(help="Per-engine cost per invocation as ENGINE=UNITS; repeat to override defaults"),
-    ] = None,
-    pool_stop_on_failure: Annotated[
-        bool,
-        typer.Option("--pool-stop-on-failure", help="Default pool behavior: stop after the first task that does not finish successfully"),
-    ] = False,
-    pool_max_tasks: Annotated[
-        int | None, typer.Option(help="Default pool behavior: stop after completing this many tasks")
-    ] = None,
-    pool_stop_on_limit: Annotated[
-        bool,
-        typer.Option("--pool-stop-on-limit", help="Default pool behavior: stop after a quota, budget, rate, credit, or similar execution limit is hit"),
-    ] = False,
-    pool_quota_threshold: Annotated[
-        int | None, typer.Option(help="Default pool behavior: stop after this many quota-like limit outcomes in a run")
-    ] = None,
-    pool_budget_threshold: Annotated[
-        int | None, typer.Option(help="Default pool behavior: stop after this many budget-like limit outcomes in a run")
-    ] = None,
-    pool_stop_on_dirty_git: Annotated[
-        bool,
-        typer.Option("--pool-stop-on-dirty-git", help="Default pool behavior: stop when the git worktree is dirty before starting another task"),
-    ] = False,
-    pool_selection_policy: Annotated[
-        str,
-        typer.Option(
-            click_type=_choice(VALID_POOL_SELECTION_POLICIES),
-            help="Default pool task ordering policy",
-        ),
-    ] = "dependency_aware",
-    hook: Annotated[
-        list[str] | None,
-        typer.Option(
-            help=(
-                "Add a runner hook as HOOK_POINT=reject|run:COMMAND. "
-                "Supported points: before_grooming, after_grooming, before_implementing, "
-                "after_implementing, before_testing, after_testing, before_accepting, "
-                "after_accepting, after_commit. "
-                "reject_on_failure only valid for after_implementing and after_testing."
-            )
-        ),
-    ] = None,
-    subagent_resource_limits_enabled: Annotated[
-        bool | None,
-        typer.Option(
-            "--subagent-resource-limits/--no-subagent-resource-limits",
-            help="Enable container-level memory/CPU/process caps for subagent execution",
-        ),
-    ] = None,
-    subagent_memory_mb: Annotated[
-        int | None, typer.Option(help="Container memory cap in MiB for subagent execution")
-    ] = None,
-    subagent_cpu_count: Annotated[
-        float | None, typer.Option(help="Container CPU cap for subagent execution")
-    ] = None,
-    subagent_process_limit: Annotated[
-        int | None, typer.Option(help="Container process-count cap for subagent execution")
-    ] = None,
-) -> int:
-    return cmd_configure(_ns(**locals()))
-
-
 @app.command("status", help="Show workspace status")
 def status_command(
     workspace: WorkspaceOption = Path.cwd(),
@@ -286,7 +179,7 @@ def status_command(
         bool, typer.Option(help="Deprecated compatibility alias; fast status is now the default")
     ] = False,
 ) -> int:
-    return cmd_status(_ns(command="status", **locals()))
+    return status_handler(SimpleNamespace(workspace=workspace, fast=fast, full=full))
 
 
 @app.command("doctor", help="Run workspace integrity checks and optional safe fixes")
@@ -296,12 +189,12 @@ def doctor_command(
         bool, typer.Option("--fix", help="Apply deterministic non-destructive fixes where available")
     ] = False,
 ) -> int:
-    return cmd_doctor(_ns(command="doctor", **locals()))
+    return doctor_handler(SimpleNamespace(workspace=workspace, fix=fix))
 
 
 @app.command("health", help="Show workspace health diagnostics")
 def health_command(workspace: WorkspaceOption = Path.cwd()) -> int:
-    return cmd_health(_ns(command="health", workspace=workspace))
+    return health_handler(SimpleNamespace(workspace=workspace))
 
 
 @app.command("engine", help="Manage the workspace default engine")
@@ -322,19 +215,26 @@ def engine_command(
         typer.Option(help="Freeze until this date/datetime (local timezone, e.g. 2026-04-08 or '2026-04-08 09:47')"),
     ] = None,
 ) -> int:
-    return cmd_engine(_ns(command="engine", **locals()))
+    return engine_handler(
+        SimpleNamespace(
+            workspace=workspace,
+            engine_action=engine_action,
+            engine_name=engine_name,
+            until=until,
+        )
+    )
 
 
 @queue_app.callback()
 def queue_group(ctx: typer.Context, workspace: WorkspaceOption = Path.cwd()) -> int | None:
     if ctx.invoked_subcommand is not None:
         return None
-    return cmd_queue(_ns(command="queue", workspace=workspace, queue_command=None))
+    return queue_handler(SimpleNamespace(workspace=workspace))
 
 
 @app.command("repair", help="Repair stale active tasks, interrupted runs, and queue inconsistencies")
 def repair_command(workspace: WorkspaceOption = Path.cwd()) -> int:
-    return cmd_repair(_ns(command="repair", workspace=workspace))
+    return repair_handler(SimpleNamespace(workspace=workspace))
 
 
 @app.command("tasks", help="Open the task view", hidden=True)
@@ -360,17 +260,17 @@ def daemon_group(ctx: typer.Context) -> None:
 
 @app.command("start", help="Start the background Litehive runner")
 def start(workspace: WorkspaceOption = Path.cwd()) -> int:
-    return cmd_daemon_run(_ns(command="start", workspace=workspace, foreground=False))
+    return daemon_run_handler(SimpleNamespace(workspace=workspace, foreground=False))
 
 
 @app.command("stop", help="Stop the background Litehive runner")
 def stop_daemon(workspace: WorkspaceOption = Path.cwd()) -> int:
-    return cmd_daemon_stop(_ns(command="stop", workspace=workspace))
+    return daemon_stop_handler(SimpleNamespace(workspace=workspace))
 
 
 @app.command("restart", help="Restart the background Litehive runner")
 def restart(workspace: WorkspaceOption = Path.cwd()) -> int:
-    return cmd_daemon_restart(_ns(command="restart", workspace=workspace))
+    return daemon_restart_handler(SimpleNamespace(workspace=workspace))
 
 
 @app.command("run", help="Run the next task once")
@@ -431,12 +331,31 @@ def run_command(
         typer.Option("--stop-on-dirty-git", flag_value=True, help="Stop the pool when the git worktree is dirty before starting another task"),
     ] = None,
 ) -> int:
-    return cmd_run(_ns(command="run", **locals()))
+    return run_handler(
+        SimpleNamespace(
+            workspace=workspace,
+            dry_run=dry_run,
+            drain=drain,
+            engine=engine,
+            model=model,
+            max_tasks=max_tasks,
+            stop_on_failure=stop_on_failure,
+            stop_on_execution_limit=stop_on_execution_limit,
+            quota_threshold=quota_threshold,
+            budget_threshold=budget_threshold,
+            pool_usage_cap=pool_usage_cap,
+            pool_cost_cap=pool_cost_cap,
+            engine_usage_cap=engine_usage_cap,
+            engine_budget_cap=engine_budget_cap,
+            engine_cost=engine_cost,
+            stop_on_dirty_git=stop_on_dirty_git,
+        )
+    )
 
 
 @app.command("dirty-worktree-gate", help="Report whether dirty git state should block the workspace and explain ownership", hidden=True)
 def dirty_worktree_gate(workspace: WorkspaceOption = Path.cwd()) -> int:
-    return cmd_dirty_worktree_gate(_ns(command="dirty-worktree-gate", workspace=workspace))
+    return dirty_worktree_gate_handler(SimpleNamespace(workspace=workspace))
 
 
 @app.command("rollback", help="Revert a task checkpoint commit and requeue the task")
@@ -444,7 +363,7 @@ def rollback(
     task_id: Annotated[str, typer.Argument(help="Task id to roll back")] = ...,
     workspace: WorkspaceOption = Path.cwd(),
 ) -> int:
-    return cmd_rollback(_ns(command="rollback", task_id=task_id, workspace=workspace))
+    return rollback_handler(SimpleNamespace(task_id=task_id, workspace=workspace))
 
 
 @app.command("recover", help="Requeue a completed task without reverting code", hidden=True)
@@ -452,27 +371,11 @@ def recover(
     task_id: Annotated[str, typer.Argument(help="Task id to recover")] = ...,
     workspace: WorkspaceOption = Path.cwd(),
 ) -> int:
-    return cmd_recover(_ns(command="recover", task_id=task_id, workspace=workspace))
+    return recover_handler(SimpleNamespace(task_id=task_id, workspace=workspace))
 
 
-def _add_command(
-    command: str,
-    workspace: Path,
-    title: str,
-    goal: str,
-    acceptance_criteria: list[str] | None,
-    depends_on: list[str] | None,
-    task_type: str | None,
-    mode: str | None,
-    priority: str | None,
-) -> int:
-    return cmd_add(_ns(**locals()))
-
-
-@app.command("add", help="Create a queued task", hidden=True)
 @task_app.command("add", help="Create a queued task")
 def add(
-    ctx: typer.Context,
     title: Annotated[str, typer.Argument(help="Task title")] = ...,
     workspace: WorkspaceOption = Path.cwd(),
     goal: Annotated[str, typer.Option(help="Task goal text")] = "",
@@ -492,14 +395,22 @@ def add(
         str | None, typer.Option(click_type=_choice(VALID_TASK_PRIORITIES), help="Task priority; defaults to medium when omitted")
     ] = None,
 ) -> int:
-    command_name = "task" if ctx.info_name == "add" and ctx.parent and ctx.parent.info_name == "task" else "add"
-    return _add_command(command_name, workspace, title, goal, acceptance_criteria, depends_on, task_type, mode, priority)
+    return add_task_handler(
+        SimpleNamespace(
+            workspace=workspace,
+            title=title,
+            goal=goal,
+            acceptance_criteria=acceptance_criteria,
+            depends_on=depends_on,
+            task_type=task_type,
+            mode=mode,
+            priority=priority,
+        )
+    )
 
 
-@app.command("issue", help="File an upstream Litehive issue/task from the current project", hidden=True)
 @import_app.command("issue", help="File an upstream Litehive issue/task from the current project")
 def issue(
-    ctx: typer.Context,
     workspace: WorkspaceOption = Path.cwd(),
     upstream: Annotated[str, typer.Option(help="Upstream Litehive issue title or short summary")] = ...,
     type: Annotated[
@@ -531,13 +442,27 @@ def issue(
         bool, typer.Option(help="Create the patch branch in the Litehive repo before filing the task")
     ] = False,
 ) -> int:
-    return cmd_issue(_ns(command=_ctx_command(ctx), **locals()))
+    return issue_task_handler(
+        SimpleNamespace(
+            workspace=workspace,
+            upstream=upstream,
+            type=type,
+            details=details,
+            acceptance_criteria=acceptance_criteria,
+            source_task=source_task,
+            source_stage=source_stage,
+            source_role=source_role,
+            source_project=source_project,
+            litehive_workspace=litehive_workspace,
+            patch_branch=patch_branch,
+            patch_base=patch_base,
+            prepare_patch_branch=prepare_patch_branch,
+        )
+    )
 
 
-@app.command("intake", help="Create a rough task from a freeform brain dump using an LLM", hidden=True)
 @import_app.command("spec", help="Create a rough task from a freeform spec using an LLM")
 def intake(
-    ctx: typer.Context,
     file: Annotated[
         Path | None, typer.Argument(help="File containing the brain dump; omit to read from stdin")
     ] = None,
@@ -547,8 +472,8 @@ def intake(
     ] = "opencode",
     model: Annotated[str | None, typer.Option(help="Model override for the selected engine")] = None,
 ) -> int:
-    return cmd_intake(
-        _ns(command=_ctx_command(ctx), file=file, workspace=workspace, engine=engine, model=model)
+    return intake_task_handler(
+        SimpleNamespace(file=file, workspace=workspace, engine=engine, model=model)
     )
 
 
@@ -573,36 +498,20 @@ def report_command(
     ] = None,
     task_id: Annotated[str | None, typer.Option(help="Task ID. Defaults to the active task.")] = None,
 ) -> int:
-    return cmd_report(_ns(command="report", **locals()))
+    return report_handler(
+        SimpleNamespace(
+            workspace=workspace,
+            verdict=verdict,
+            message=message,
+            role=role,
+            step=step,
+            task_id=task_id,
+        )
+    )
 
 
-@app.command("import-issue", help="Import a single GitHub issue as a litehive task", hidden=True)
-def import_issue(
-    issue_ref: Annotated[
-        str, typer.Argument(help="GitHub issue URL (https://github.com/owner/repo/issues/N) or issue number")
-    ] = ...,
-    workspace: WorkspaceOption = Path.cwd(),
-    repo: Annotated[
-        str | None, typer.Option(help="GitHub repo as owner/repo; auto-detected from git remote if omitted")
-    ] = None,
-) -> int:
-    return cmd_import_issue(_ns(command="import-issue", issue_ref=issue_ref, workspace=workspace, repo=repo))
-
-
-@app.command("import-issues", help="Import all open GitHub issues that don't already have litehive tasks", hidden=True)
-def import_issues(
-    workspace: WorkspaceOption = Path.cwd(),
-    repo: Annotated[
-        str | None, typer.Option(help="GitHub repo as owner/repo; auto-detected from git remote if omitted")
-    ] = None,
-) -> int:
-    return cmd_import_issues(_ns(command="import-issues", workspace=workspace, repo=repo))
-
-
-@app.command("debug", help="Inspect subagent artifacts for a task", hidden=True)
 @task_app.command("debug", help="Inspect subagent artifacts for a task")
 def debug_command(
-    ctx: typer.Context,
     task_id: Annotated[str, typer.Argument(help="Task ID (e.g. T-0001)")] = ...,
     workspace: WorkspaceOption = Path.cwd(),
     all_: Annotated[
@@ -612,15 +521,13 @@ def debug_command(
         bool, typer.Option(help="Show whether the task worktree exists plus uncommitted and committed changes")
     ] = False,
 ) -> int:
-    return cmd_debug(
-        _ns(command=_ctx_command(ctx), task_id=task_id, workspace=workspace, all=all_, worktree=worktree)
+    return debug_handler(
+        SimpleNamespace(task_id=task_id, workspace=workspace, all=all_, worktree=worktree)
     )
 
 
-@app.command("logs", help="Show daemon, task journal, and subagent logs", hidden=True)
 @task_app.command("logs", help="Show daemon, task journal, and subagent logs")
 def logs_command(
-    ctx: typer.Context,
     task_id: Annotated[str | None, typer.Argument(help="Optional task ID (e.g. T-0001)")] = None,
     workspace: WorkspaceOption = Path.cwd(),
     daemon: Annotated[bool, typer.Option(help="List the latest daemon run-all sessions")] = False,
@@ -634,8 +541,15 @@ def logs_command(
         bool, typer.Option(help="Follow the currently running subagent stdout in real time")
     ] = False,
 ) -> int:
-    return cmd_logs(
-        _ns(command=_ctx_command(ctx), task_id=task_id, workspace=workspace, daemon=daemon, agent=agent, all=all_, follow=follow)
+    return logs_handler(
+        SimpleNamespace(
+            task_id=task_id,
+            workspace=workspace,
+            daemon=daemon,
+            agent=agent,
+            all=all_,
+            follow=follow,
+        )
     )
 
 
@@ -644,10 +558,8 @@ def worktree_group(ctx: typer.Context) -> None:
     _require_subcommand(ctx)
 
 
-@app.command("list", help="Compact task listing with optional filters", hidden=True)
 @task_app.command("list", help="Compact task listing with optional filters")
-def list_tasks(
-    ctx: typer.Context,
+def list_tasks_command(
     workspace: WorkspaceOption = Path.cwd(),
     show_all: Annotated[
         bool, typer.Option("--all", help="Include done tasks (excluded by default)")
@@ -662,19 +574,23 @@ def list_tasks(
         str | None, typer.Option("--engine", help="Filter by engine name")
     ] = None,
 ) -> int:
-    return cmd_list(
-        _ns(command=_ctx_command(ctx), workspace=workspace, show_all=show_all, filter_status=filter_status, filter_pipeline_status=filter_pipeline_status, filter_engine=filter_engine)
+    return list_tasks_handler(
+        SimpleNamespace(
+            workspace=workspace,
+            show_all=show_all,
+            filter_status=filter_status,
+            filter_pipeline_status=filter_pipeline_status,
+            filter_engine=filter_engine,
+        )
     )
 
 
-@app.command("show", help="Print full details for a single task", hidden=True)
 @task_app.command("show", help="Print full details for a single task")
 def show(
-    ctx: typer.Context,
     task_id: Annotated[str, typer.Argument(help="Task ID (e.g. T-0001)")] = ...,
     workspace: WorkspaceOption = Path.cwd(),
 ) -> int:
-    return cmd_show(_ns(command=_ctx_command(ctx), task_id=task_id, workspace=workspace))
+    return show_task_handler(SimpleNamespace(task_id=task_id, workspace=workspace))
 
 
 @archive_app.callback()
@@ -691,7 +607,7 @@ def archive_group(
     if task_id is None and not all_done:
         typer.echo(ctx.get_help())
         raise typer.Exit(2)
-    return cmd_archive(_ns(command="archive", task_id=task_id, workspace=workspace, all_done=all_done))
+    return archive_handler(SimpleNamespace(task_id=task_id, workspace=workspace, all_done=all_done))
 
 
 @backup_app.callback()
@@ -700,16 +616,13 @@ def backup_group(ctx: typer.Context) -> None:
 
 
 @queue_app.command("move", help="Move a queued task to a 1-based position")
-@app.command("move", help="Move a queued task to a 1-based position", hidden=True)
-def move(
-    ctx: typer.Context,
+@queue_app.command("move", help="Move a queued task to a 1-based position")
+def move_command(
     task_id: Annotated[str, typer.Argument(help="Queued task id to move")] = ...,
     position: Annotated[int, typer.Argument(help="Target queue position (1-based)")] = ...,
     workspace: WorkspaceOption = Path.cwd(),
 ) -> int:
-    return cmd_move(
-        _ns(command=_ctx_command(ctx), task_id=task_id, position=position, workspace=workspace)
-    )
+    return move_handler(SimpleNamespace(task_id=task_id, position=position, workspace=workspace))
 
 
 @app.command("prioritize", help="Move multiple queued tasks to the front in the requested order", hidden=True)
@@ -717,17 +630,15 @@ def prioritize(
     task_ids: Annotated[list[str], typer.Argument(help="Queued task ids to move to the front, in the requested order")] = ...,
     workspace: WorkspaceOption = Path.cwd(),
 ) -> int:
-    return cmd_prioritize(_ns(command="prioritize", task_ids=task_ids, workspace=workspace))
+    return prioritize_handler(SimpleNamespace(task_ids=task_ids, workspace=workspace))
 
 
 @queue_app.command("promote", help="Move a queued task to the front of the queue")
-@app.command("promote", help="Move a queued task to the front of the queue", hidden=True)
-def promote(
-    ctx: typer.Context,
+def promote_command(
     task_id: Annotated[str, typer.Argument(help="Queued task id to promote")] = ...,
     workspace: WorkspaceOption = Path.cwd(),
 ) -> int:
-    return cmd_promote(_ns(command=_ctx_command(ctx), task_id=task_id, workspace=workspace))
+    return promote_handler(SimpleNamespace(task_id=task_id, workspace=workspace))
 
 
 @queue_app.command("requeue", help="Requeue a flagged or closed task")
@@ -739,49 +650,31 @@ def queue_requeue(
         bool, typer.Option(help="Force requeue even if the task has been flagged 3+ times")
     ] = False,
 ) -> int:
-    return cmd_queue_requeue(_ns(command="queue", queue_command="requeue", task_id=task_id, workspace=workspace, front=front, force=force))
-
-
-@app.command("requeue", help="Requeue a flagged or closed task", hidden=True)
-def requeue_task(
-    task_id: Annotated[str, typer.Argument(help="Task id to requeue")] = ...,
-    workspace: WorkspaceOption = Path.cwd(),
-    front: Annotated[bool, typer.Option(help="Insert the task at the front of the queue")] = False,
-    force: Annotated[
-        bool, typer.Option(help="Force requeue even if the task has been flagged 3+ times")
-    ] = False,
-) -> int:
-    return cmd_requeue_task(_ns(command="requeue", task_id=task_id, workspace=workspace, front=front, force=force))
+    return queue_requeue_handler(
+        SimpleNamespace(task_id=task_id, workspace=workspace, front=front, force=force)
+    )
 
 
 @queue_app.command("resume", help="Resume an interrupted, parked, flagged, or closed task from its current stage")
-@app.command("resume", help="Resume an interrupted, parked, flagged, or closed task from its current stage", hidden=True)
-def resume(
-    ctx: typer.Context,
+def resume_command(
     task_id: Annotated[str, typer.Argument(help="Task id to resume")] = ...,
     workspace: WorkspaceOption = Path.cwd(),
     front: Annotated[bool, typer.Option(help="Insert the task at the front of the queue")] = False,
 ) -> int:
-    return cmd_resume_task(
-        _ns(command=_ctx_command(ctx), task_id=task_id, workspace=workspace, front=front)
-    )
+    return resume_task_handler(SimpleNamespace(task_id=task_id, workspace=workspace, front=front))
 
 
-@app.command("abandon", help="Cancel a flagged or closed task and remove it from the queue", hidden=True)
 @task_app.command("abandon", help="Cancel a flagged or closed task and remove it from the queue")
-def abandon(
-    ctx: typer.Context,
+def abandon_command(
     task_id: Annotated[str, typer.Argument(help="Task id to abandon")] = ...,
     workspace: WorkspaceOption = Path.cwd(),
 ) -> int:
-    return cmd_abandon_task(
-        _ns(command=_ctx_command(ctx), task_id=task_id, workspace=workspace)
-    )
+    return abandon_task_handler(SimpleNamespace(task_id=task_id, workspace=workspace))
 
 
 @queue_app.command("stop", help="Stop the current active task cleanly")
 def queue_stop(workspace: WorkspaceOption = Path.cwd()) -> int:
-    return cmd_stop_task(_ns(command="queue", queue_command="stop", workspace=workspace))
+    return stop_task_handler(SimpleNamespace(workspace=workspace))
 
 
 @app.command("switch", help="Stop or resume a task, record an engine switch request, and queue it for the next iteration", hidden=True)
@@ -795,13 +688,13 @@ def switch(
         str, typer.Option(help="Why the engine switch happened; recorded in the task thread comment")
     ] = ...,
 ) -> int:
-    return cmd_switch_task(_ns(command="switch", task_id=task_id, engine=engine, workspace=workspace, reason=reason))
+    return switch_task_handler(
+        SimpleNamespace(task_id=task_id, engine=engine, workspace=workspace, reason=reason)
+    )
 
 
-@app.command("close", help="Close a task with an explicit non-implementation outcome (wont_do, deferred, duplicate)", hidden=True)
 @task_app.command("close", help="Close a task with an explicit non-implementation outcome (wont_do, deferred, duplicate)")
-def close(
-    ctx: typer.Context,
+def close_command(
     task_id: Annotated[str, typer.Argument(help="Task id to close")] = ...,
     workspace: WorkspaceOption = Path.cwd(),
     outcome: Annotated[
@@ -814,15 +707,19 @@ def close(
         str | None, typer.Option(help="Optional existing task id linked as the follow-up for this close decision")
     ] = None,
 ) -> int:
-    return cmd_close_task(
-        _ns(command=_ctx_command(ctx), task_id=task_id, workspace=workspace, outcome=outcome, reason=reason, follow_up_task=follow_up_task)
+    return close_task_handler(
+        SimpleNamespace(
+            task_id=task_id,
+            workspace=workspace,
+            outcome=outcome,
+            reason=reason,
+            follow_up_task=follow_up_task,
+        )
     )
 
 
-@app.command("update", help="Update task metadata", hidden=True)
 @task_app.command("update", help="Update task metadata")
 def update(
-    ctx: typer.Context,
     task_id: Annotated[str, typer.Argument(help="Task id to update")] = ...,
     workspace: WorkspaceOption = Path.cwd(),
     priority: Annotated[
@@ -853,7 +750,20 @@ def update(
         bool, typer.Option(help="Open the current task shaping fields in $VISUAL or $EDITOR and persist the edited YAML")
     ] = False,
 ) -> int:
-    return cmd_update(_ns(command=_ctx_command(ctx), **locals()))
+    return update_task_handler(
+        SimpleNamespace(
+            task_id=task_id,
+            workspace=workspace,
+            priority=priority,
+            goal=goal,
+            depends_on=depends_on,
+            acceptance_criteria=acceptance_criteria,
+            constraint=constraint,
+            plan_step=plan_step,
+            from_file=from_file,
+            edit=edit,
+        )
+    )
 
 
 @daemon_app.command("run", help="Start the workspace daemon")
@@ -861,32 +771,32 @@ def daemon_run(
     workspace: WorkspaceOption = Path.cwd(),
     foreground: Annotated[bool, typer.Option(hidden=True)] = False,
 ) -> int:
-    return cmd_daemon_run(_ns(command="daemon", daemon_command="run", workspace=workspace, foreground=foreground))
+    return daemon_run_handler(SimpleNamespace(workspace=workspace, foreground=foreground))
 
 
 @daemon_app.command("status", help="Show daemon state for a workspace")
 def daemon_status(workspace: WorkspaceOption = Path.cwd()) -> int:
-    return cmd_daemon_status(_ns(command="daemon", daemon_command="status", workspace=workspace))
+    return daemon_status_handler(SimpleNamespace(workspace=workspace))
 
 
 @daemon_app.command("stop", help="Stop the workspace daemon")
 def daemon_stop(workspace: WorkspaceOption = Path.cwd()) -> int:
-    return cmd_daemon_stop(_ns(command="daemon", daemon_command="stop", workspace=workspace))
+    return daemon_stop_handler(SimpleNamespace(workspace=workspace))
 
 
 @daemon_app.command("restart", help="Restart the workspace daemon")
 def daemon_restart(workspace: WorkspaceOption = Path.cwd()) -> int:
-    return cmd_daemon_restart(_ns(command="daemon", daemon_command="restart", workspace=workspace))
+    return daemon_restart_handler(SimpleNamespace(workspace=workspace))
 
 
 @daemon_app.command("instances", help="List all live Litehive daemons")
 def daemon_instances() -> int:
-    return cmd_daemon_instances(_ns(command="daemon", daemon_command="instances"))
+    return daemon_instances_handler(SimpleNamespace())
 
 
 @daemon_app.command("worker", hidden=True)
 def daemon_worker(workspace: WorkspaceOption = Path.cwd()) -> int:
-    return cmd_daemon_worker(_ns(command="daemon", daemon_command="worker", workspace=workspace))
+    return daemon_worker_handler(SimpleNamespace(workspace=workspace))
 
 
 @import_app.callback()
@@ -909,31 +819,29 @@ def import_github(
         bool, typer.Option("--all", help="Import all open GitHub issues that do not already have Litehive tasks")
     ] = False,
 ) -> int:
-    return cmd_import_github(_ns(command="import", import_command="github", workspace=workspace, issue_ref=issue_ref, repo=repo, all=all_))
+    return import_github_handler(
+        SimpleNamespace(workspace=workspace, issue_ref=issue_ref, repo=repo, all=all_)
+    )
 
 
 @archive_app.command("cleanup", help="Delete archived tasks older than a given duration")
-@app.command("cleanup", help="Delete archived tasks older than a given duration", hidden=True)
-def cleanup(
-    ctx: typer.Context,
+def cleanup_command(
     workspace: WorkspaceOption = Path.cwd(),
     older_than: Annotated[
         str, typer.Option(help="Duration threshold (e.g. 30d, 24h, 60m)")
     ] = ...,
 ) -> int:
-    return cmd_cleanup(
-        _ns(command=_ctx_command(ctx), workspace=workspace, older_than=older_than)
-    )
+    return cleanup_handler(SimpleNamespace(workspace=workspace, older_than=older_than))
 
 
 @backup_app.command("create", help="Create a compressed backup of the workspace runtime database")
 def backup_create(workspace: WorkspaceOption = Path.cwd()) -> int:
-    return cmd_backup_create(_ns(command="backup", backup_command="create", workspace=workspace))
+    return backup_create_handler(SimpleNamespace(workspace=workspace))
 
 
 @backup_app.command("list", help="List available workspace runtime database backups")
 def backup_list(workspace: WorkspaceOption = Path.cwd()) -> int:
-    return cmd_backup_list(_ns(command="backup", backup_command="list", workspace=workspace))
+    return backup_list_handler(SimpleNamespace(workspace=workspace))
 
 
 @backup_app.command("restore", help="Restore a workspace runtime database backup")
@@ -944,9 +852,7 @@ def backup_restore(
         bool, typer.Option("--yes", help="Skip the overwrite confirmation prompt")
     ] = False,
 ) -> int:
-    return cmd_backup_restore(
-        _ns(command="backup", backup_command="restore", timestamp=timestamp, workspace=workspace, yes=yes)
-    )
+    return backup_restore_handler(SimpleNamespace(timestamp=timestamp, workspace=workspace, yes=yes))
 
 
 @db_app.callback()
@@ -958,7 +864,7 @@ def db_group(ctx: typer.Context, workspace: WorkspaceOption = Path.cwd()) -> Non
 
 @db_app.command("status", help="Show workspace database schema version and pending migrations")
 def db_status(workspace: WorkspaceOption = Path.cwd()) -> int:
-    return cmd_db_status(_ns(command="db", db_command="status", workspace=workspace))
+    return db_status_handler(SimpleNamespace(workspace=workspace))
 
 
 @db_app.command("migrate", help="Apply pending workspace database migrations")
@@ -968,12 +874,12 @@ def db_migrate(
         bool, typer.Option("--dry-run", help="Show pending migrations without applying them")
     ] = False,
 ) -> int:
-    return cmd_db_migrate(_ns(command="db", db_command="migrate", workspace=workspace, dry_run=dry_run))
+    return db_migrate_handler(SimpleNamespace(workspace=workspace, dry_run=dry_run))
 
 
 @worktree_app.command("ls", help="List Litehive-managed task worktrees with task status and change count")
 def worktree_ls(workspace: WorkspaceOption = Path.cwd()) -> int:
-    return cmd_worktree_ls(_ns(command="worktree", worktree_command="ls", workspace=workspace))
+    return worktree_ls_handler(SimpleNamespace(workspace=workspace))
 
 
 @worktree_app.command("clean", help="Remove Litehive-managed worktrees for closed tasks")
@@ -983,7 +889,7 @@ def worktree_clean(
         bool, typer.Option("--dry-run", help="Show which worktrees would be removed without removing them")
     ] = False,
 ) -> int:
-    return cmd_worktree_clean(_ns(command="worktree", worktree_command="clean", workspace=workspace, dry_run=dry_run))
+    return worktree_clean_handler(SimpleNamespace(workspace=workspace, dry_run=dry_run))
 
 
 @worktree_app.command("rescue", help="List or rescue merge-failed worktree commits onto main")
@@ -993,7 +899,7 @@ def worktree_rescue(
         bool, typer.Option(help="Cherry-pick eligible worktree commits onto main")
     ] = False,
 ) -> int:
-    return cmd_worktree_rescue(_ns(command="worktree", worktree_command="rescue", workspace=workspace, apply=apply))
+    return worktree_rescue_handler(SimpleNamespace(workspace=workspace, apply=apply))
 
 
 app.add_typer(queue_app, name="queue", help="Show the active task and queued order")
@@ -1148,74 +1054,6 @@ def pipeline_journal_command(
                 + (f"  # {desc}" if desc else "")
             )
     return 0
-
-
-_PUBLIC_TOP_LEVEL_COMMANDS = {
-    "configure",
-    "status",
-    "doctor",
-    "health",
-    "engine",
-    "queue",
-    "task",
-    "import",
-    "repair",
-    "web",
-    "start",
-    "stop",
-    "restart",
-    "run",
-    "rollback",
-    "report",
-    "worktree",
-    "archive",
-    "backup",
-    "db",
-}
-
-_PUBLIC_GROUP_COMMANDS = {
-    "task": {"add", "list", "show", "update", "close", "abandon", "debug", "logs"},
-    "queue": {"move", "promote", "requeue", "resume", "stop"},
-    "import": {"github", "issue", "spec"},
-    "archive": {"cleanup"},
-    "backup": {"create", "list", "restore"},
-    "db": {"status", "migrate"},
-    "worktree": {"ls", "clean", "rescue"},
-}
-
-
-def _subparsers_action(parser: argparse.ArgumentParser):
-    for action in parser._actions:
-        if isinstance(action, argparse._SubParsersAction):
-            return action
-    return None
-
-
-def _filter_public_help(parser: argparse.ArgumentParser, visible: set[str]) -> None:
-    action = _subparsers_action(parser)
-    if action is None:
-        return
-    action.metavar = "command"
-    action._choices_actions = [
-        choice_action
-        for choice_action in action._choices_actions
-        if choice_action.dest in visible
-    ]
-
-
-def build_parser():
-    parser = argparse.ArgumentParser(prog="litehive")
-    subparsers = parser.add_subparsers(dest="command")
-    for register_parser in COMMAND_PARSER_BUILDERS:
-        register_parser(subparsers)
-    _filter_public_help(parser, _PUBLIC_TOP_LEVEL_COMMANDS)
-    action = _subparsers_action(parser)
-    if action is not None:
-        for command, visible in _PUBLIC_GROUP_COMMANDS.items():
-            child = action.choices.get(command)
-            if child is not None:
-                _filter_public_help(child, visible)
-    return parser
 
 
 def main() -> int:

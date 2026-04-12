@@ -15,8 +15,8 @@ from litehive.models import (
     utcnow,
 )
 
-from litehive.tasks.crud import _write_task_runtime, save_task_runtime
-from litehive.workspace.locking import _workspace_lock, workspace_mutation_guard
+from litehive.tasks.crud import write_task_runtime, save_task_runtime
+from litehive.workspace.locking import workspace_lock, workspace_mutation_guard
 from litehive.tasks.persistence import load_state
 from litehive.workspace.workflow import persist_task_and_state
 
@@ -54,7 +54,7 @@ def mark_task_run_finished(root: Path, task: TaskRecord, final_status: str) -> N
     save_task_runtime(root, task)
 
 
-def _apply_flag_count_auto_defer(task: TaskRecord) -> None:
+def apply_flag_count_auto_defer(task: TaskRecord) -> None:
     """Increment flag_count and auto-defer if the threshold is reached."""
     if task.status != "flagged":
         return
@@ -65,9 +65,9 @@ def _apply_flag_count_auto_defer(task: TaskRecord) -> None:
 
 
 def finish_task_run_transition(root: Path, task: TaskRecord, final_status: str) -> TaskRecord:
-    with workspace_mutation_guard(root), _workspace_lock(root):
+    with workspace_mutation_guard(root), workspace_lock(root):
         now = utcnow()
-        _apply_flag_count_auto_defer(task)
+        apply_flag_count_auto_defer(task)
         task.runtime.execution_status = final_status
         task.runtime.updated_at = now
         task.runtime.active_subagent = None
@@ -93,7 +93,7 @@ def finish_task_run_transition(root: Path, task: TaskRecord, final_status: str) 
             and task.pipeline_status == "done"
             and not state_changed
         ):
-            _write_task_runtime(root, task)
+            write_task_runtime(root, task)
             return task
         persist_task_and_state(root, task=task, state=state)
         return task
@@ -169,7 +169,7 @@ def mark_task_outcome(
     failure_classification: str | None = None,
     failure_diagnostics: dict[str, str | int | bool | None | list[str]] | None = None,
 ) -> None:
-    _apply_task_outcome(
+    apply_task_outcome(
         task,
         kind=kind,
         stage=stage,
@@ -184,7 +184,7 @@ def mark_task_outcome(
     save_task_runtime(root, task)
 
 
-def _apply_task_outcome(
+def apply_task_outcome(
     task: TaskRecord,
     *,
     kind: str,
@@ -232,11 +232,11 @@ def mark_stage_started(root: Path, task: TaskRecord, step: str) -> None:
 
 
 def mark_stage_finished(root: Path, task: TaskRecord, report: StageReport) -> None:
-    _apply_stage_finished(task, report)
+    apply_stage_finished(task, report)
     save_task_runtime(root, task)
 
 
-def _apply_stage_finished(task: TaskRecord, report: StageReport) -> None:
+def apply_stage_finished(task: TaskRecord, report: StageReport) -> None:
     now = utcnow()
     started_at = task.runtime.current_stage.started_at
     task.runtime.updated_at = now
@@ -247,7 +247,7 @@ def _apply_stage_finished(task: TaskRecord, report: StageReport) -> None:
             "started_at": started_at,
             "completed_at": now,
             "updated_at": now,
-            "duration_seconds": _duration_seconds(started_at, now),
+            "duration_seconds": duration_seconds(started_at, now),
             "verdict": report.verdict,
             "summary": report.summary,
         }
@@ -408,7 +408,7 @@ def summarize_transcript(transcript: str, limit: int = 120) -> str:
     return ""
 
 
-def _duration_seconds(started_at: str | None, ended_at: str | None) -> int:
+def duration_seconds(started_at: str | None, ended_at: str | None) -> int:
     if started_at is None or ended_at is None:
         return 0
     try:

@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 
 from litehive.pipeline.task_updates import (
-    _extract_yaml_block,
+    extract_yaml_block,
     apply_task_updates_from_comment,
 )
 from litehive.tasks.crud import create_task, get_task
@@ -34,7 +34,7 @@ acceptance_criteria:
   - Second criterion
 
 Summary: done."""
-    parsed = _extract_yaml_block(msg)
+    parsed = extract_yaml_block(msg)
     assert parsed is not None
     assert parsed["goal"] == "Build the thing"
     assert parsed["acceptance_criteria"] == ["First criterion", "Second criterion"]

@@ -17,38 +17,38 @@ import yaml
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from litehive.cli import (
-    _cmd_abandon_task,
-    _cmd_add,
-    _cmd_doctor,
-    _cmd_archive,
-    _cmd_cleanup,
-    _cmd_close_task,
-    _cmd_debug,
-    _cmd_dirty_worktree_gate,
-    _cmd_health,
-    _cmd_intake,
-    _cmd_issue,
-    _cmd_list,
-    _cmd_move,
-    _cmd_logs,
-    _cmd_prioritize,
-    _cmd_promote,
-    _cmd_report,
-    _cmd_queue,
-    _cmd_recover,
-    _cmd_repair,
-    _cmd_requeue_task,
-    _cmd_resume_task,
-    _cmd_rollback,
-    _cmd_run,
-    _cmd_show,
-    _cmd_status,
-    _cmd_stop_task,
-    _cmd_switch_task,
-    _cmd_update,
-    _cmd_worktree_clean,
-    _cmd_worktree_ls,
-    _cmd_worktree_rescue,
+    cmd_abandon_task,
+    cmd_add,
+    cmd_doctor,
+    cmd_archive,
+    cmd_cleanup,
+    cmd_close_task,
+    cmd_debug,
+    cmd_dirty_worktree_gate,
+    cmd_health,
+    cmd_intake,
+    cmd_issue,
+    cmd_list,
+    cmd_move,
+    cmd_logs,
+    cmd_prioritize,
+    cmd_promote,
+    cmd_report,
+    cmd_queue,
+    cmd_recover,
+    cmd_repair,
+    cmd_requeue_task,
+    cmd_resume_task,
+    cmd_rollback,
+    cmd_run,
+    cmd_show,
+    cmd_status,
+    cmd_stop_task,
+    cmd_switch_task,
+    cmd_update,
+    cmd_worktree_clean,
+    cmd_worktree_ls,
+    cmd_worktree_rescue,
     build_parser,
 )
 from litehive.config import (
@@ -162,8 +162,8 @@ from litehive.tasks.queue_ops import (
 from litehive.tasks.reports import append_thread_comment, load_task_thread
 from litehive.workspace.locking import runner_heartbeat, runner_status, workspace_runner_guard
 from litehive.recovery import (
-    _mark_interrupted_subagent,
-    _prepare_interrupted_task,
+    mark_interrupted_subagent,
+    prepare_interrupted_task,
     recover_stale_runner_state,
     repair_workspace_state,
 )
@@ -188,14 +188,47 @@ import litehive.tasks.templates as _tasks_templates
 import litehive.workspace.locking as _workspace_locking
 import litehive.workspace.workflow as _workspace_workflow
 
+_cmd_abandon_task = cmd_abandon_task
+_cmd_add = cmd_add
+_cmd_archive = cmd_archive
+_cmd_cleanup = cmd_cleanup
+_cmd_close_task = cmd_close_task
+_cmd_debug = cmd_debug
+_cmd_dirty_worktree_gate = cmd_dirty_worktree_gate
+_cmd_doctor = cmd_doctor
+_cmd_health = cmd_health
+_cmd_intake = cmd_intake
+_cmd_issue = cmd_issue
+_cmd_list = cmd_list
+_cmd_logs = cmd_logs
+_cmd_move = cmd_move
+_cmd_prioritize = cmd_prioritize
+_cmd_promote = cmd_promote
+_cmd_queue = cmd_queue
+_cmd_recover = cmd_recover
+_cmd_repair = cmd_repair
+_cmd_report = cmd_report
+_cmd_requeue_task = cmd_requeue_task
+_cmd_resume_task = cmd_resume_task
+_cmd_rollback = cmd_rollback
+_cmd_run = cmd_run
+_cmd_show = cmd_show
+_cmd_status = cmd_status
+_cmd_stop_task = cmd_stop_task
+_cmd_switch_task = cmd_switch_task
+_cmd_update = cmd_update
+_cmd_worktree_clean = cmd_worktree_clean
+_cmd_worktree_ls = cmd_worktree_ls
+_cmd_worktree_rescue = cmd_worktree_rescue
+
 tasks_module = types.SimpleNamespace(
     TASK_TEMPLATES=_tasks_templates.TASK_TEMPLATES,
-    _atomic_write_text=_tasks_persistence._atomic_write_text,
-    _mark_interrupted_subagent=_mark_interrupted_subagent,
-    _merged_state_for_runner_owned_write=_workspace_workflow._merged_state_for_runner_owned_write,
-    _prepare_interrupted_task=_prepare_interrupted_task,
-    _save_state_without_runner_guard=_tasks_persistence._save_state_without_runner_guard,
-    _workspace_transition_writes=_workspace_workflow._workspace_transition_writes,
+    atomic_write_text=_tasks_persistence.atomic_write_text,
+    mark_interrupted_subagent=mark_interrupted_subagent,
+    merged_state_for_runner_owned_write=_workspace_workflow.merged_state_for_runner_owned_write,
+    prepare_interrupted_task=prepare_interrupted_task,
+    save_state_without_runner_guard=_tasks_persistence.save_state_without_runner_guard,
+    workspace_transition_writes=_workspace_workflow.workspace_transition_writes,
     append_thread_comment=append_thread_comment,
     fcntl=_workspace_locking.fcntl,
     load_task_thread=load_task_thread,
@@ -234,14 +267,14 @@ def _block_runner_lock(monkeypatch: pytest.MonkeyPatch) -> None:
 def _fail_atomic_write_on_path(
     monkeypatch: pytest.MonkeyPatch, failing_path: Path, message: str = "write failed"
 ) -> None:
-    original_atomic_write = tasks_module._atomic_write_text
+    original_atomic_write = tasks_module.atomic_write_text
 
     def fail_on_selected_write(path: Path, content: str) -> None:
         if path == failing_path:
             raise OSError(message)
         original_atomic_write(path, content)
 
-    monkeypatch.setattr("litehive.tasks.persistence._atomic_write_text", fail_on_selected_write)
+    monkeypatch.setattr("litehive.tasks.persistence.atomic_write_text", fail_on_selected_write)
 
 
 def _latest_pool_run_report(root: Path) -> dict[str, object]:
@@ -649,38 +682,38 @@ __all__ = [
     "pytest",
     "yaml",
     "tasks_module",
-    "_cmd_abandon_task",
-    "_cmd_add",
-    "_cmd_archive",
-    "_cmd_cleanup",
-    "_cmd_close_task",
-    "_cmd_debug",
-    "_cmd_doctor",
-    "_cmd_dirty_worktree_gate",
-    "_cmd_health",
-    "_cmd_intake",
-    "_cmd_issue",
-    "_cmd_list",
-    "_cmd_logs",
-    "_cmd_move",
-    "_cmd_prioritize",
-    "_cmd_promote",
-    "_cmd_report",
-    "_cmd_queue",
-    "_cmd_recover",
-    "_cmd_repair",
-    "_cmd_requeue_task",
-    "_cmd_resume_task",
-    "_cmd_rollback",
-    "_cmd_run",
-    "_cmd_show",
-    "_cmd_status",
-    "_cmd_stop_task",
-    "_cmd_switch_task",
-    "_cmd_update",
-    "_cmd_worktree_clean",
-    "_cmd_worktree_ls",
-    "_cmd_worktree_rescue",
+    "cmd_abandon_task",
+    "cmd_add",
+    "cmd_archive",
+    "cmd_cleanup",
+    "cmd_close_task",
+    "cmd_debug",
+    "cmd_doctor",
+    "cmd_dirty_worktree_gate",
+    "cmd_health",
+    "cmd_intake",
+    "cmd_issue",
+    "cmd_list",
+    "cmd_logs",
+    "cmd_move",
+    "cmd_prioritize",
+    "cmd_promote",
+    "cmd_report",
+    "cmd_queue",
+    "cmd_recover",
+    "cmd_repair",
+    "cmd_requeue_task",
+    "cmd_resume_task",
+    "cmd_rollback",
+    "cmd_run",
+    "cmd_show",
+    "cmd_status",
+    "cmd_stop_task",
+    "cmd_switch_task",
+    "cmd_update",
+    "cmd_worktree_clean",
+    "cmd_worktree_ls",
+    "cmd_worktree_rescue",
     "build_parser",
     "ExternalEngineSandboxConfig",
     "ExternalEngineSandboxPolicy",

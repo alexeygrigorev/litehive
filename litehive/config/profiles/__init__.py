@@ -7,7 +7,7 @@ from typing import Any
 
 import yaml
 
-from ._rendering import render_context_template as render_context_template
+from .rendering import render_context_template as render_context_template
 
 _PROFILE_DIR = Path(__file__).resolve().parent
 _LIST_KEYS = {"development_rules", "tool_usage", "workspace_overlay", "specifics", "prompt_scaffold", "init_scaffold"}

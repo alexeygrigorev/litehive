@@ -141,13 +141,8 @@ Useful options:
 - `--goal`
 - `--acceptance-criteria` (repeatable)
 - `--depends-on`
-- `--human-checkpoint`
 - `--task-type`
-- `--mode implementation|tasks`
-- `--engine`
-- `--model`
-- `--retry-limit`
-- `--no-auto-commit`
+- `--mode full|single`
 
 ### `litehive import spec`
 
@@ -190,7 +185,6 @@ Update task metadata after creation.
 
 ```bash
 litehive update T-0002 --priority high
-litehive update T-0002 --human-checkpoint before_acceptance
 ```
 
 Replace durable shaping fields:
@@ -211,13 +205,7 @@ litehive task update T-0002 --depends-on T-0001,T-0003
 litehive task update T-0002 --depends-on none
 litehive task update T-0002 --from-file task-shape.yaml
 litehive task update T-0002 --edit
-litehive task update T-0002 --retry-limit default
 ```
-
-Use `litehive task update ... --engine ...` to change the persisted task-level
-engine override. To make a non-runnable task active again after changing task
-metadata, follow it with `litehive queue resume` or `litehive queue requeue`
-when appropriate.
 
 Record an engine switch request and requeue the task for the next pass.
 

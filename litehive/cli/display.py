@@ -6,11 +6,11 @@ from litehive.git_ops import is_git_repo
 from litehive.models import UpstreamPatchProposal
 
 
-def _workspace_project_name(root):
+def workspace_project_name(root):
     return root.resolve().name
 
 
-def _resolve_litehive_source_root(args):
+def resolve_litehive_source_root(args):
     explicit = getattr(args, "litehive_workspace", None)
     if explicit is not None:
         return explicit.resolve()
@@ -36,7 +36,7 @@ def _git_output(root, *args):
     return proc.stdout.strip()
 
 
-def _prepare_patch_branch(root, *, branch, base_ref):
+def prepare_patch_branch(root, *, branch, base_ref):
     if not is_git_repo(root):
         raise ValueError(f"{root} is not a git repository")
     branch = branch.strip()
@@ -68,7 +68,7 @@ def _prepare_patch_branch(root, *, branch, base_ref):
     )
 
 
-def _fallback_intake_title(brain_dump):
+def fallback_intake_title(brain_dump):
     first_nonempty = next((line.strip() for line in brain_dump.splitlines() if line.strip()), "")
     if not first_nonempty:
         return "Unstructured Intake"
@@ -76,7 +76,7 @@ def _fallback_intake_title(brain_dump):
     return compact[:77] + "..." if len(compact) > 80 else compact
 
 
-def _fallback_intake_goal(brain_dump):
+def fallback_intake_goal(brain_dump):
     lines = [" ".join(line.split()) for line in brain_dump.splitlines() if line.strip()]
     if not lines:
         return "Capture the original intake and prepare it for planner grooming."
@@ -85,7 +85,7 @@ def _fallback_intake_goal(brain_dump):
     return summary
 
 
-def _link_intake_brief_to_source(brief_file):
+def link_intake_brief_to_source(brief_file):
     if not brief_file.exists():
         return
     content = brief_file.read_text(encoding="utf-8")
@@ -99,13 +99,13 @@ def _link_intake_brief_to_source(brief_file):
         brief_file.write_text(content.replace(stub_pattern, replacement), encoding="utf-8")
 
 
-def _format_engine_int_map(values):
+def format_engine_int_map(values):
     if not values:
         return "-"
     return ", ".join(f"{engine}={limit}" for engine, limit in sorted(values.items()))
 
 
-def _format_execution_retry_policies(config):
+def format_execution_retry_policies(config):
     if not config.execution_retry_policies:
         return "-"
     parts = []
@@ -120,15 +120,15 @@ def _format_execution_retry_policies(config):
     return "; ".join(parts)
 
 
-def _task_engine_label(task_engine, default_engine):
+def task_engine_label(task_engine, default_engine):
     return task_engine or f"{default_engine} (default)"
 
 
-def _task_model_label(task_model):
+def task_model_label(task_model):
     return task_model or "default"
 
 
-def _task_dependencies_label(task_id, dependencies):
+def task_dependencies_label(task_id, dependencies):
     if not dependencies:
         return "-"
     return (
@@ -137,7 +137,7 @@ def _task_dependencies_label(task_id, dependencies):
     )
 
 
-def _task_interruption_label(task):
+def task_interruption_label(task):
     if task.status != "interrupted" or task.runtime.current_stage.status != "interrupted":
         return ""
     interruption = task.runtime.interruption
@@ -161,7 +161,7 @@ def _task_interruption_label(task):
     return label
 
 
-def _cli_override_or_default(value, default):
+def cli_override_or_default(value, default):
     if value is None:
         return default
     if isinstance(default, bool) and value is False:

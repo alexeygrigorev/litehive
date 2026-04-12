@@ -5,14 +5,14 @@ import yaml
 
 from litehive.config import config_path, load_config
 from litehive.models import StageReport, TaskRecord, TaskThreadComment
-from litehive.config.pipeline_states import _ROUTES
+from litehive.config.pipeline_states import ROUTES
 from litehive.tasks.constants import VALID_TASK_ENGINES
 from litehive.tasks.crud import create_task, require_task
 from litehive.tasks.paths import task_dir
 from litehive.tasks.persistence import load_state
 from litehive.tasks.reports import append_thread_comment
-from litehive.workspace.locking import _workspace_lock
-from litehive.workspace.runtime_tracking import _apply_stage_finished, _apply_task_outcome
+from litehive.workspace.locking import workspace_lock
+from litehive.workspace.runtime_tracking import apply_stage_finished, apply_task_outcome
 from litehive.workspace.task_status import (
     abandon_task,
     close_task,
@@ -21,25 +21,25 @@ from litehive.workspace.task_status import (
     switch_task_engine,
     update_task,
 )
-from litehive.workspace.workflow import _persist_task_and_state_without_runner_guard
+from litehive.workspace.workflow import persist_task_and_state_without_runner_guard
 
 from litehive.web.common import (
-    _WEB_REVIEWABLE_STAGES,
-    _WEB_VERDICT_OPTIONS,
-    _coerce_text_list,
-    _field_or_missing,
-    _list_field_or_missing,
-    _list_or_missing,
-    _load_yaml_file,
-    _optional_bool,
-    _optional_string,
-    _optional_string_list,
-    _optional_update_priority,
-    _require_string,
+    WEB_REVIEWABLE_STAGES,
+    WEB_VERDICT_OPTIONS,
+    coerce_text_list,
+    field_or_missing,
+    list_field_or_missing,
+    list_or_missing,
+    load_yaml_file,
+    optional_bool,
+    optional_string,
+    optional_string_list,
+    optional_update_priority,
+    require_string,
 )
 from litehive.web.snapshot import (
-    _serialize_task,
-    _serialize_task_with_queue_metadata,
+    serialize_task,
+    serialize_task_with_queue_metadata,
     read_engine_dashboard,
 )
 
@@ -56,7 +56,7 @@ def update_task_detail(root: Path, task_id: str, updates: dict[str, Any]) -> dic
             payload[field] = value
     for field in ("acceptance_criteria", "constraints", "plan"):
         if field in updates:
-            payload[field] = _coerce_text_list(field, updates[field])
+            payload[field] = coerce_text_list(field, updates[field])
     if not payload:
         raise ValueError("No supported fields to update")
     updated = update_task(
@@ -65,7 +65,7 @@ def update_task_detail(root: Path, task_id: str, updates: dict[str, Any]) -> dic
         journal_message="Task metadata updated via web dashboard.",
         **payload,
     )
-    return {"task": _serialize_task(root, updated, load_state(root).active_task_id)}
+    return {"task": serialize_task(root, updated, load_state(root).active_task_id)}
 
 
 def update_default_engine(root: Path, engine_name: str) -> dict[str, Any]:
@@ -73,7 +73,7 @@ def update_default_engine(root: Path, engine_name: str) -> dict[str, Any]:
     if engine_name not in VALID_TASK_ENGINES:
         raise ValueError(f"Unsupported engine '{engine_name}'")
     path = config_path(root)
-    raw_data = _load_yaml_file(path)
+    raw_data = load_yaml_file(path)
     config = load_config(root)
     previous_engine = config.default_engine
     raw_data["default_engine"] = engine_name
@@ -101,7 +101,7 @@ def switch_task_engine_via_web(
         raise
     task = require_task(root, task_id)
     return {
-        "task": _serialize_task(root, task, load_state(root).active_task_id),
+        "task": serialize_task(root, task, load_state(root).active_task_id),
         "switch": {
             "previous_engine": summary.previous_engine,
             "new_engine": summary.new_engine,
@@ -124,11 +124,11 @@ def submit_stage_verdict_via_web(
 ) -> dict[str, Any]:
     root = root.resolve()
     normalized_verdict = "reject" if verdict == "fail" else verdict
-    if normalized_verdict not in _WEB_VERDICT_OPTIONS:
-        allowed = ", ".join(_WEB_VERDICT_OPTIONS)
+    if normalized_verdict not in WEB_VERDICT_OPTIONS:
+        allowed = ", ".join(WEB_VERDICT_OPTIONS)
         raise ValueError(f"Unsupported verdict '{verdict}'. Expected one of: {allowed}")
 
-    with _workspace_lock(root):
+    with workspace_lock(root):
         state = load_state(root)
         active_task_id = state.active_task_id
         if not active_task_id:
@@ -137,7 +137,7 @@ def submit_stage_verdict_via_web(
             raise ValueError(f"Task {task_id} is not the active task")
 
         task = _require_task_for_web(root, active_task_id)
-        if task.pipeline_status not in _WEB_REVIEWABLE_STAGES:
+        if task.pipeline_status not in WEB_REVIEWABLE_STAGES:
             raise ValueError(
                 "Report submission is only available for active tasks in testing or accepting"
             )
@@ -158,7 +158,7 @@ def submit_stage_verdict_via_web(
 
         if normalized_verdict == "comment":
             return {
-                "task": _serialize_task(root, task, state.active_task_id),
+                "task": serialize_task(root, task, state.active_task_id),
                 "submitted": {
                     "task_id": task.id,
                     "step": step,
@@ -175,9 +175,9 @@ def submit_stage_verdict_via_web(
             feedback=cleaned_message,
         )
         _write_stage_report(root, task, report)
-        _apply_stage_finished(task, report)
+        apply_stage_finished(task, report)
 
-        target = _ROUTES.get((step, normalized_verdict))
+        target = ROUTES.get((step, normalized_verdict))
         if target == "accepting":
             task.pipeline_status = "accepting"
             task.status = "in_progress"
@@ -198,11 +198,11 @@ def submit_stage_verdict_via_web(
         else:
             task.status = "flagged"
             task.runtime.execution_status = "flagged"
-            from litehive.workspace.runtime_tracking import _apply_flag_count_auto_defer
-            _apply_flag_count_auto_defer(task)
+            from litehive.workspace.runtime_tracking import apply_flag_count_auto_defer
+            apply_flag_count_auto_defer(task)
             state.active_task_id = None
             state.queue = [item for item in state.queue if item != task.id]
-            _apply_task_outcome(
+            apply_task_outcome(
                 task,
                 kind="blocked" if verdict == "blocked" else "flagged",
                 stage=step,
@@ -213,9 +213,9 @@ def submit_stage_verdict_via_web(
                 retry_source="global",
             )
 
-        _persist_task_and_state_without_runner_guard(root, task=task, state=state)
+        persist_task_and_state_without_runner_guard(root, task=task, state=state)
         return {
-            "task": _serialize_task(root, task, state.active_task_id),
+            "task": serialize_task(root, task, state.active_task_id),
             "submitted": {
                 "task_id": task.id,
                 "step": step,
@@ -232,18 +232,18 @@ def submit_stage_verdict_via_web(
 
 def create_task_via_web(root: Path, payload: dict[str, Any]) -> dict[str, Any]:
     root = root.resolve()
-    title = _require_string(payload, "title")
+    title = require_string(payload, "title")
     task = create_task(
         root,
         title=title,
-        goal=_optional_string(payload, "goal") or "",
-        priority=_optional_string(payload, "priority"),
-        acceptance_criteria=_optional_string_list(payload, "acceptance_criteria"),
+        goal=optional_string(payload, "goal") or "",
+        priority=optional_string(payload, "priority"),
+        acceptance_criteria=optional_string_list(payload, "acceptance_criteria"),
     )
     return {
         "ok": True,
         "task_id": task.id,
-        "task": _serialize_task_with_queue_metadata(root, task),
+        "task": serialize_task_with_queue_metadata(root, task),
     }
 
 
@@ -255,37 +255,37 @@ def update_task_via_web(root: Path, task_id: str, payload: dict[str, Any]) -> di
     task = update_task(
         root,
         task_id,
-        goal=_field_or_missing(payload, "goal"),
-        priority=_optional_update_priority(payload),
-        acceptance_criteria=_list_field_or_missing(payload, "acceptance_criteria"),
-        constraints=_list_field_or_missing(payload, "constraints"),
-        plan=_list_or_missing(plan, "plan"),
+        goal=field_or_missing(payload, "goal"),
+        priority=optional_update_priority(payload),
+        acceptance_criteria=list_field_or_missing(payload, "acceptance_criteria"),
+        constraints=list_field_or_missing(payload, "constraints"),
+        plan=list_or_missing(plan, "plan"),
         journal_message="Task updated via web dashboard.",
     )
     return {
         "ok": True,
         "task_id": task.id,
-        "task": _serialize_task_with_queue_metadata(root, task),
+        "task": serialize_task_with_queue_metadata(root, task),
     }
 
 
 def close_task_via_web(root: Path, task_id: str, payload: dict[str, Any]) -> dict[str, Any]:
     root = root.resolve()
-    outcome = _require_string(payload, "outcome")
-    reason = _optional_string(payload, "reason")
+    outcome = require_string(payload, "outcome")
+    reason = optional_string(payload, "reason")
     task = close_task(root, task_id, outcome=outcome, reason=reason)
     return {
         "ok": True,
         "task_id": task.id,
-        "task": _serialize_task_with_queue_metadata(root, task),
+        "task": serialize_task_with_queue_metadata(root, task),
     }
 
 
 def requeue_task_via_web(root: Path, task_id: str, payload: dict[str, Any]) -> dict[str, Any]:
     root = root.resolve()
-    front = _optional_bool(payload, "front", default=False)
+    front = optional_bool(payload, "front", default=False)
     task = requeue_task(root, task_id, front=front)
-    serialized = _serialize_task_with_queue_metadata(root, task)
+    serialized = serialize_task_with_queue_metadata(root, task)
     return {
         "ok": True,
         "task_id": task.id,
@@ -303,7 +303,7 @@ def abandon_task_via_web(root: Path, task_id: str, payload: dict[str, Any]) -> d
     return {
         "ok": True,
         "task_id": task.id,
-        "task": _serialize_task_with_queue_metadata(root, task),
+        "task": serialize_task_with_queue_metadata(root, task),
     }
 
 
@@ -315,7 +315,7 @@ def stop_active_task_via_web(root: Path, payload: dict[str, Any]) -> dict[str, A
     return {
         "ok": True,
         "task_id": summary.task.id,
-        "task": _serialize_task_with_queue_metadata(root, summary.task),
+        "task": serialize_task_with_queue_metadata(root, summary.task),
         "runner_pid": summary.runner_pid,
         "signal_sent": summary.signal_sent,
     }

@@ -1,4 +1,4 @@
-from ._base import RoleAgent
+from .base import RoleAgent
 
 INSTRUCTIONS = """\
 - You are the SWE responsible for completing the implementation within scope.

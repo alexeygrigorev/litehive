@@ -9,13 +9,13 @@ import yaml
 from litehive.config import ensure_workspace, workspace_dir
 from litehive.daemon import latest_run_all_log_dir
 from litehive.tasks.crud import list_tasks_state_first
-from litehive.tasks.paths import _read_text_artifact, _resolve_artifact_path, task_dir
+from litehive.tasks.paths import read_text_artifact, resolve_artifact_path, task_dir
 
 _DEFAULT_TAIL_LINES = 40
 _FOLLOW_POLL_SECONDS = 0.1
 
 
-def _cmd_logs(args) -> int:
+def cmd_logs(args) -> int:
     ensure_workspace(args.workspace)
 
     if getattr(args, "follow", False):
@@ -43,7 +43,7 @@ def _show_latest_daemon_log(root: Path) -> int:
         return 0
     print(f"daemon log: {log_path.relative_to(root)}")
     print()
-    print(_tail_text(_read_text_artifact(log_path)))
+    print(_tail_text(read_text_artifact(log_path)))
     return 0
 
 
@@ -187,13 +187,13 @@ def _print_follow_chunk(stdout_path: Path, position: int) -> int:
 def _session_outcome(directory: Path) -> str:
     post_status = sorted(directory.glob("*-post-status.log"))
     for path in reversed(post_status):
-        for line in _read_text_artifact(path).splitlines():
+        for line in read_text_artifact(path).splitlines():
             if line.startswith("pool_stop_reason:"):
                 value = line.split(":", 1)[1].strip()
                 return value or "-"
     run_logs = sorted(directory.glob("*-run.log"))
     for path in reversed(run_logs):
-        for line in reversed(_read_text_artifact(path).splitlines()):
+        for line in reversed(read_text_artifact(path).splitlines()):
             if ":" not in line:
                 continue
             key, value = line.split(":", 1)
@@ -224,13 +224,13 @@ def _latest_subagent_ref(task):
 
 def _artifact_for_kind(base: Path, kind: str, *, active: bool) -> Path | None:
     if kind == "transcript":
-        return _resolve_artifact_path(base, "transcript.md")
+        return resolve_artifact_path(base, "transcript.md")
     if kind == "stdout":
         if active:
-            live = _resolve_artifact_path(base, "stdout.log")
+            live = resolve_artifact_path(base, "stdout.log")
             if live is not None:
                 return live
-        return _resolve_artifact_path(base, "stdout.txt")
+        return resolve_artifact_path(base, "stdout.txt")
     raise ValueError(f"Unsupported artifact kind: {kind}")
 
 
@@ -238,7 +238,7 @@ def _print_artifact_tail(path: Path | None, label: str) -> None:
     if path is None:
         print(f"{label}: (not found)")
         return
-    content = _read_text_artifact(path)
+    content = read_text_artifact(path)
     if not content:
         print(f"{label}: (empty)")
         return
@@ -247,11 +247,11 @@ def _print_artifact_tail(path: Path | None, label: str) -> None:
 
 
 def _load_session_yaml(base: Path) -> dict[str, object]:
-    session_path = _resolve_artifact_path(base, "session.yaml")
+    session_path = resolve_artifact_path(base, "session.yaml")
     if session_path is None:
         return {}
     try:
-        data = yaml.safe_load(_read_text_artifact(session_path))
+        data = yaml.safe_load(read_text_artifact(session_path))
     except Exception:
         return {}
     return data if isinstance(data, dict) else {}

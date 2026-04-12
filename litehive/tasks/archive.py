@@ -9,10 +9,10 @@ import yaml
 
 from litehive.models import TaskRecord, utcnow
 
-from .crud import _load_task_record_file, list_tasks, require_task
-from litehive.workspace.locking import _workspace_lock
+from .crud import load_task_record_file, list_tasks, require_task
+from litehive.workspace.locking import workspace_lock
 from .paths import task_dir, tasks_root
-from .persistence import _atomic_write_text
+from .persistence import atomic_write_text
 
 
 def archive_root(root: Path) -> Path:
@@ -38,12 +38,12 @@ def _update_archive_index(root: Path, tasks: list[TaskRecord]) -> None:
         title = (task.title or "").replace('"', '""')
         lines.append(f'{task.id},"{title}",{task.status},{created}')
 
-    _atomic_write_text(index_path, "\n".join(lines) + "\n")
+    atomic_write_text(index_path, "\n".join(lines) + "\n")
 
 
 def archive_task(root: Path, task_id: str) -> TaskRecord:
     """Move a single done task to the archive directory."""
-    with _workspace_lock(root):
+    with workspace_lock(root):
         task = require_task(root, task_id)
         if task.status != "done":
             raise ValueError(
@@ -60,7 +60,7 @@ def archive_task(root: Path, task_id: str) -> TaskRecord:
         data = yaml.safe_load(task_yaml_path.read_text(encoding="utf-8")) or {}
         data["archived_at"] = now
         data["updated_at"] = now
-        _atomic_write_text(task_yaml_path, yaml.safe_dump(data, sort_keys=False))
+        atomic_write_text(task_yaml_path, yaml.safe_dump(data, sort_keys=False))
         dst.parent.mkdir(parents=True, exist_ok=True)
         shutil.move(str(src), str(dst))
         _update_archive_index(root, [task])
@@ -98,7 +98,7 @@ def list_archived_tasks(root: Path) -> list[TaskRecord]:
         path = child / "task.yaml"
         if not path.exists():
             continue
-        records.append(_load_task_record_file(path))
+        records.append(load_task_record_file(path))
     return records
 
 
@@ -141,7 +141,7 @@ def cleanup_archived_tasks(root: Path, older_than: str) -> list[TaskRecord]:
             continue
         age_seconds = (now - archived_dt).total_seconds()
         if age_seconds >= max_age_seconds:
-            task = _load_task_record_file(path)
+            task = load_task_record_file(path)
             shutil.rmtree(child)
             deleted.append(task)
     return deleted

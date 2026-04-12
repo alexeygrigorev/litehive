@@ -61,7 +61,7 @@ def task_recovery_dir(root: Path, task: TaskRecord) -> Path:
     return task_dir(root, task) / "recovery"
 
 
-def _latest_path(paths: list[Path]) -> Path | None:
+def latest_path(paths: list[Path]) -> Path | None:
     existing = [path for path in paths if path.exists()]
     if not existing:
         return None
@@ -78,21 +78,21 @@ def _artifact_candidates(base: Path, *names: str) -> list[Path]:
     return candidates
 
 
-def _resolve_artifact_path(base: Path, *names: str) -> Path | None:
+def resolve_artifact_path(base: Path, *names: str) -> Path | None:
     for candidate in _artifact_candidates(base, *names):
         if candidate.exists():
             return candidate
     return None
 
 
-def _read_text_artifact(path: Path) -> str:
+def read_text_artifact(path: Path) -> str:
     if path.suffix == ".gz":
         with gzip.open(path, "rt", encoding="utf-8") as handle:
             return handle.read()
     return path.read_text(encoding="utf-8")
 
 
-def _latest_run_all_log_path(root: Path) -> Path | None:
+def latest_run_all_log_path(root: Path) -> Path | None:
     logs_root = root / ".litehive" / "logs" / "run-all"
     if not logs_root.exists():
         return None
@@ -106,7 +106,7 @@ def _latest_run_all_log_path(root: Path) -> Path | None:
     return sorted(candidates)[-1]
 
 
-def _latest_subagent_base(root: Path, task: TaskRecord) -> Path | None:
+def latest_subagent_base(root: Path, task: TaskRecord) -> Path | None:
     refs = list(task.subagents)
     preferred = []
     if task.runtime.active_subagent is not None:
@@ -127,7 +127,7 @@ def _latest_subagent_base(root: Path, task: TaskRecord) -> Path | None:
     return sorted(candidates)[-1]
 
 
-def _status_entry_paths(entries: list[str]) -> list[str]:
+def status_entry_paths(entries: list[str]) -> list[str]:
     paths: list[str] = []
     for entry in entries:
         stripped = entry.strip()

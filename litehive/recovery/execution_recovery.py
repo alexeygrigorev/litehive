@@ -19,21 +19,21 @@ from litehive.tasks.crud import save_task_runtime
 from litehive.tasks.journal import append_journal
 from litehive.tasks.normalization import implementation_entry_stage
 from litehive.tasks.paths import task_dir, task_file, task_runtime_file
-from litehive.tasks.persistence import _atomic_write_text, load_state
+from litehive.tasks.persistence import atomic_write_text, load_state
 from litehive.tasks.queue_management import prepare_completed_task_for_recovery
 from litehive.tasks.reports import (
     collect_recovery_evidence,
     load_task_thread,
     record_recovery_report,
 )
-from litehive.workspace.locking import _workspace_lock, workspace_mutation_guard
+from litehive.workspace.locking import workspace_lock, workspace_mutation_guard
 from litehive.workspace.workflow import persist_task_and_state
 
 from .detection import (
-    _classify_recovery_failure_owner,
-    _load_failed_subagent_diagnostics,
-    _resolve_recovery_execution_root,
-    _traceback_fingerprint,
+    classify_recovery_failure_owner,
+    load_failed_subagent_diagnostics,
+    resolve_recovery_execution_root,
+    traceback_fingerprint,
 )
 
 
@@ -334,7 +334,7 @@ def _finalize_successful_recovery(
     return recovery_report
 
 
-def _attempt_stage_recovery(
+def attempt_stage_recovery(
     root: Path,
     execution_root: Path,
     task: TaskRecord,
@@ -351,11 +351,11 @@ def _attempt_stage_recovery(
     if subagents is None or _recovery_attempt_exhausted(root, task, step):
         return None
     evidence_lines = _recovery_evidence_lines(root, task, stage=step)
-    diagnostics_text, report_attempt_summary = _load_failed_subagent_diagnostics(root, task)
-    failure_owner, traceback_text, source_root = _classify_recovery_failure_owner(
+    diagnostics_text, report_attempt_summary = load_failed_subagent_diagnostics(root, task)
+    failure_owner, traceback_text, source_root = classify_recovery_failure_owner(
         root, failed_report, config=config
     )
-    recovery_root = _resolve_recovery_execution_root(root, source_root)
+    recovery_root = resolve_recovery_execution_root(root, source_root)
     if recovery_root is None:
         _record_missing_litehive_source_repo(
             root,
@@ -368,7 +368,7 @@ def _attempt_stage_recovery(
         return None
     is_self_heal = failure_owner == "litehive" and recovery_root == source_root
     if is_self_heal:
-        fingerprint = _traceback_fingerprint(traceback_text, failed_report.summary)
+        fingerprint = traceback_fingerprint(traceback_text, failed_report.summary)
         return _run_litehive_self_heal(
             root=root,
             source_root=recovery_root,
@@ -513,7 +513,7 @@ def _run_litehive_self_heal(
     return None
 
 
-def _resolve_recovery_engine(
+def resolve_recovery_engine(
     root: Path,
     task: TaskRecord,
     config: LitehiveConfig | None,
@@ -545,7 +545,7 @@ def _resolve_recovery_engine(
     return engine, model
 
 
-def _attempt_commit_recovery(
+def attempt_commit_recovery(
     root: Path,
     execution_root: Path,
     task: TaskRecord,
@@ -557,7 +557,7 @@ def _attempt_commit_recovery(
     del execution_root
     if subagents is None:
         return None
-    engine_name, model = _resolve_recovery_engine(root, task, config)
+    engine_name, model = resolve_recovery_engine(root, task, config)
     recovery_result = subagents.run(
         task,
         role="recovery",
@@ -587,22 +587,22 @@ def _attempt_commit_recovery(
     return None
 
 
-def _require_completed_task(task: TaskRecord, action: str) -> None:
+def require_completed_task(task: TaskRecord, action: str) -> None:
     if task.status != "done" or task.pipeline_status != "done":
         raise GitError(f"Task {task.id} is not completed; cannot {action}")
 
 
-def _capture_persisted_files(paths: list[Path]) -> dict[Path, str | None]:
+def capture_persisted_files(paths: list[Path]) -> dict[Path, str | None]:
     return {path: path.read_text(encoding="utf-8") if path.exists() else None for path in paths}
 
 
-def _restore_persisted_files(snapshot: dict[Path, str | None]) -> None:
+def restore_persisted_files(snapshot: dict[Path, str | None]) -> None:
     for path, content in snapshot.items():
         if content is None:
             if path.exists():
                 path.unlink()
             continue
-        _atomic_write_text(path, content)
+        atomic_write_text(path, content)
 
 def _capture_runtime_snapshot(
     root: Path, task_id: str
@@ -626,20 +626,20 @@ def _restore_runtime_snapshot(
 
 
 def rollback_completed_task(root: Path, task_id: str) -> "RollbackSummary":
-    from .._types import RollbackSummary
+    from litehive.config.pool_types import RollbackSummary
 
     root = root.resolve()
-    with workspace_mutation_guard(root), _workspace_lock(root):
+    with workspace_mutation_guard(root), workspace_lock(root):
         from litehive.tasks.crud import get_task
 
         task = get_task(root, task_id)
         if task is None:
             raise GitError(f"Task {task_id} not found")
-        _require_completed_task(task, action="rollback")
+        require_completed_task(task, action="rollback")
         attempt = task.git.checkpoint_attempts
         recovery_stage = implementation_entry_stage(task)
         state = load_state(root)
-        snapshot = _capture_persisted_files(
+        snapshot = capture_persisted_files(
             [task_file(root, task), task_runtime_file(root, task), state_path(root), task_dir(root, task) / "journal.md"]
         )
         runtime_snapshot = _capture_runtime_snapshot(root, task.id)
@@ -665,7 +665,7 @@ def rollback_completed_task(root: Path, task_id: str) -> "RollbackSummary":
         except Exception:
             if rollback is not None and has_changes(root):
                 abort_revert(root)
-            _restore_persisted_files(snapshot)
+            restore_persisted_files(snapshot)
             _restore_runtime_snapshot(
                 root,
                 workspace_state=runtime_snapshot[0],
@@ -682,13 +682,13 @@ def rollback_completed_task(root: Path, task_id: str) -> "RollbackSummary":
 
 def recover_completed_task(root: Path, task_id: str) -> TaskRecord:
     root = root.resolve()
-    with workspace_mutation_guard(root), _workspace_lock(root):
+    with workspace_mutation_guard(root), workspace_lock(root):
         from litehive.tasks.crud import get_task
 
         task = get_task(root, task_id)
         if task is None:
             raise GitError(f"Task {task_id} not found")
-        _require_completed_task(task, action="recover")
+        require_completed_task(task, action="recover")
         recovery_stage = implementation_entry_stage(task)
         prepare_completed_task_for_recovery(task, recovery_stage=recovery_stage)
         state = load_state(root)
