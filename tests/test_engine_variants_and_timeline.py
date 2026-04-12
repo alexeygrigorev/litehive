@@ -312,7 +312,7 @@ def test_run_next_task_passes_configured_claude_max_turns(
         calls.append(max_turns)
         return _completed_subagent_result(tmp_path, task.pipeline_status, engine_name="claude", task=task)
 
-    monkeypatch.setattr("litehive.pipeline_old.SubagentManager.run", fake_subagent_run)
+    monkeypatch.setattr("litehive.agents.SubagentManager.run", fake_subagent_run)
 
     summary = run_next_task(tmp_path)
 

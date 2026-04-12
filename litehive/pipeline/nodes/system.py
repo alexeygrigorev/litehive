@@ -108,7 +108,7 @@ class WorktreeSyncNode(SystemNode):
 
     def run(self, state: TaskState) -> Event:
         try:
-            changed = self._sync(state)
+            self._sync(state)
         except MergeConflict as exc:
             return Reject(
                 source="system",

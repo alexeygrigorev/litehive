@@ -14,7 +14,6 @@ The serializer:
   - surfaces ``failure_context`` for recovery + merge agents
   - finishes with the ``litehive report`` verdict instructions
 
-Does not import from ``litehive.pipeline_old.*``.
 """
 
 from pathlib import Path
@@ -216,8 +215,6 @@ def _rejecting_hooks_section(hooks: list[dict[str, Any]]) -> str:
 
 
 def _verdict_instructions_section(prompt: dict[str, Any]) -> str:
-    role = prompt["role"]
-    stage = prompt["stage"]
     return (
         "IMPORTANT: when you are done, submit your verdict by running:\n"
         '  litehive agent report --verdict <pass|reject|blocked> --message "<your report>"\n\n'

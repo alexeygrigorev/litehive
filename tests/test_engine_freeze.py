@@ -307,7 +307,7 @@ def test_select_engine_records_quota_freeze_and_falls_back(
             return "codex quota exhausted (used 100%, resets at 2099-01-02T03:04:05Z)", freeze_until
         return None, None
 
-    monkeypatch.setattr("litehive.pipeline_old._models._engine_quota_block", fake_quota_block)
+    monkeypatch.setattr("litehive.config.engine_models._engine_quota_block", fake_quota_block)
 
     selection = select_engine(tmp_path, task, config)
 
@@ -339,7 +339,7 @@ def test_select_engine_skips_active_freeze_without_quota_call(
         quota_calls.append(engine_name)
         return None, None
 
-    monkeypatch.setattr("litehive.pipeline_old._models._engine_quota_block", fake_quota_block)
+    monkeypatch.setattr("litehive.config.engine_models._engine_quota_block", fake_quota_block)
 
     selection = select_engine(tmp_path, task, config)
 
@@ -373,7 +373,7 @@ def test_select_engine_rechecks_expired_freeze_before_refreshing(
             return "codex quota exhausted (used 100%, resets at 2099-02-03T04:05:06Z)", refreshed
         return None, None
 
-    monkeypatch.setattr("litehive.pipeline_old._models._engine_quota_block", fake_quota_block)
+    monkeypatch.setattr("litehive.config.engine_models._engine_quota_block", fake_quota_block)
 
     selection = select_engine(tmp_path, task, config)
 
@@ -405,7 +405,7 @@ def test_select_engine_rechecks_expired_freeze_and_allows_recovered_engine(
         quota_calls.append(engine_name)
         return None, None
 
-    monkeypatch.setattr("litehive.pipeline_old._models._engine_quota_block", fake_quota_block)
+    monkeypatch.setattr("litehive.config.engine_models._engine_quota_block", fake_quota_block)
 
     selection = select_engine(tmp_path, task, config)
 
@@ -424,7 +424,7 @@ def test_builder_uses_shared_select_engine(tmp_path: Path, monkeypatch: pytest.M
     task = create_task(tmp_path, title="Selection test")
     config = load_config(tmp_path)
     monkeypatch.setattr(
-        "litehive.pipeline_old._builder.select_engine",
+        "litehive.config.engine_models.select_engine",
         lambda *args, **kwargs: EngineSelection(
             engine_name=None,
             model_name=None,
@@ -500,7 +500,7 @@ def test_recovery_auto_engine_uses_shared_select_engine(
     task = create_task(tmp_path, title="Recovery selection")
     config = load_config(tmp_path)
     monkeypatch.setattr(
-        "litehive.pipeline_old._models.select_engine",
+        "litehive.config.engine_models.select_engine",
         lambda *args, **kwargs: EngineSelection(
             engine_name="gemini",
             model_name="gemini-2.5-pro",
