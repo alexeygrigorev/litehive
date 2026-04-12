@@ -72,8 +72,8 @@ def test_transient_error_retries_same_engine_and_succeeds() -> None:
     engine = _ScriptedEngine(
         "codex",
         [
-            TransientError("network blip"),
-            TransientError("network blip"),
+            TransientError("network blip", failure_kind="network"),
+            TransientError("network blip", failure_kind="network"),
             AgentVerdict(outcome="pass"),
         ],
     )
@@ -82,6 +82,7 @@ def test_transient_error_retries_same_engine_and_succeeds() -> None:
         _ListSelector([engine]),
         InMemorySessionStore(),
         retry_budget=3,
+        retry_on=("network",),
     )
     event = node.run(make_state())
     assert isinstance(event, Pass)
@@ -90,7 +91,7 @@ def test_transient_error_retries_same_engine_and_succeeds() -> None:
 
 def test_retry_exhaustion_becomes_engine_switch() -> None:
     """Retry budget exhausted on codex → claude gets its own fresh session."""
-    codex = _ScriptedEngine("codex", [TransientError("x")] * 3)
+    codex = _ScriptedEngine("codex", [TransientError("x", failure_kind="timeout")] * 3)
     claude = _ScriptedEngine("claude", [AgentVerdict(outcome="pass")])
     node = _TrivialAgent(
         "implementing",
@@ -105,8 +106,8 @@ def test_retry_exhaustion_becomes_engine_switch() -> None:
 
 
 def test_all_engines_exhausted_returns_crash() -> None:
-    codex = _ScriptedEngine("codex", [TransientError("a")] * 3)
-    claude = _ScriptedEngine("claude", [TransientError("b")] * 3)
+    codex = _ScriptedEngine("codex", [TransientError("a", failure_kind="timeout")] * 3)
+    claude = _ScriptedEngine("claude", [TransientError("b", failure_kind="timeout")] * 3)
     node = _TrivialAgent(
         "implementing",
         _ListSelector([codex, claude]),
@@ -126,8 +127,8 @@ def test_retry_backoff_sleeps_between_attempts() -> None:
     engine = _ScriptedEngine(
         "codex",
         [
-            TransientError("x"),
-            TransientError("x"),
+            TransientError("x", failure_kind="timeout"),
+            TransientError("x", failure_kind="timeout"),
             AgentVerdict(outcome="pass"),
         ],
     )
@@ -183,8 +184,8 @@ def test_nudge_does_not_consume_retry_budget() -> None:
         "codex",
         [
             NudgeRequired("missed"),              # nudge
-            TransientError("blip"),               # tier-1 retry (1/3)
-            TransientError("blip"),               # tier-1 retry (2/3)
+            TransientError("blip", failure_kind="timeout"),  # tier-1 retry (1/3)
+            TransientError("blip", failure_kind="timeout"),  # tier-1 retry (2/3)
             AgentVerdict(outcome="pass"),         # success
         ],
     )
@@ -197,6 +198,24 @@ def test_nudge_does_not_consume_retry_budget() -> None:
     event = node.run(make_state())
     assert isinstance(event, Pass)
     assert engine.calls == 4
+
+
+def test_transient_error_not_in_retry_on_switches_engine_without_retry() -> None:
+    codex = _ScriptedEngine("codex", [TransientError("service busy", failure_kind="service")])
+    claude = _ScriptedEngine("claude", [AgentVerdict(outcome="pass")])
+    node = _TrivialAgent(
+        "implementing",
+        _ListSelector([codex, claude]),
+        InMemorySessionStore(),
+        retry_budget=3,
+        retry_on=("timeout",),
+    )
+
+    event = node.run(make_state())
+
+    assert isinstance(event, Pass)
+    assert codex.calls == 1
+    assert claude.calls == 1
 
 
 def test_nudge_budget_exhausted_returns_crash() -> None:
@@ -237,7 +256,7 @@ def test_unrecoverable_error_becomes_crash_immediately() -> None:
 def test_engine_switch_uses_fresh_session_per_engine() -> None:
     """Verify the same session is reused across retries on one engine,
     but a fresh session is created when switching engines."""
-    codex = _ScriptedEngine("codex", [TransientError("a")] * 3)
+    codex = _ScriptedEngine("codex", [TransientError("a", failure_kind="timeout")] * 3)
     claude = _ScriptedEngine("claude", [AgentVerdict(outcome="pass")])
     store = InMemorySessionStore()
     node = _TrivialAgent(

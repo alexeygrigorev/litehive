@@ -4,14 +4,6 @@ from dataclasses import dataclass, field
 
 
 @dataclass(slots=True)
-class ExecutionRetryPolicy:
-    max_retries: int = 0
-    backoff_seconds: float = 0.0
-    backoff_multiplier: float = 1.0
-    retry_on: list[str] = field(default_factory=lambda: ["timeout", "network", "service"])
-
-
-@dataclass(slots=True)
 class SandboxCredentialInput:
     env_var: str
     mount_path: str

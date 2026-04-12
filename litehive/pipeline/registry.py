@@ -74,6 +74,7 @@ def build_registry(
     hook_specs: dict[NodeName, list[HookSpec]] | None = None,
     hook_execution_mode: ExecutionMode = ExecutionMode.FAIL_FAST,
     retry_budget: int = 3,
+    retry_on: tuple[str, ...] = ("execution_limit", "timeout"),
     retry_backoff_seconds: float = 0.0,
     retry_backoff_multiplier: float = 2.0,
 ) -> NodeRegistry:
@@ -130,6 +131,7 @@ def build_registry(
                 session_provider=session_store,
                 prompt_context=prompt_context,
                 retry_budget=retry_budget,
+                retry_on=retry_on,
             )
         )
 
@@ -141,6 +143,7 @@ def build_registry(
             session_provider=session_store,
             prompt_context=prompt_context,
             retry_budget=retry_budget,
+            retry_on=retry_on,
         )
     )
     registry.register(
@@ -149,6 +152,7 @@ def build_registry(
             session_provider=session_store,
             prompt_context=prompt_context,
             retry_budget=retry_budget,
+            retry_on=retry_on,
         )
     )
 

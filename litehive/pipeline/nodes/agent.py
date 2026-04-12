@@ -22,6 +22,10 @@ class TransientError(Exception):
     the agent just needs another shot with the same state.
     """
 
+    def __init__(self, message: str, *, failure_kind: str | None = None) -> None:
+        super().__init__(message)
+        self.failure_kind = failure_kind
+
 
 class EngineBlockedError(Exception):
     """Base class for 'this engine is unavailable — switch to another one'.
@@ -151,6 +155,7 @@ class AgentNode(Node):
         session_provider: SessionProvider,
         *,
         retry_budget: int = 3,
+        retry_on: tuple[str, ...] = ("execution_limit", "timeout"),
         retry_backoff_seconds: float = 0.0,
         retry_backoff_multiplier: float = 2.0,
         nudge_budget: int = 1,
@@ -161,6 +166,7 @@ class AgentNode(Node):
         self.selector = selector
         self.sessions = session_provider
         self.retry_budget = retry_budget
+        self.retry_on = frozenset(retry_on)
         self.retry_backoff_seconds = retry_backoff_seconds
         self.retry_backoff_multiplier = retry_backoff_multiplier
         # Default is 1 and that's almost always the right choice: if the agent
@@ -271,6 +277,11 @@ class AgentNode(Node):
                 # --continue) but does not consume a retry attempt.
                 continue
             except TransientError as exc:
+                if exc.failure_kind not in self.retry_on:
+                    return EngineBlockedError(
+                        f"{engine.name} failed with non-retryable execution kind "
+                        f"{exc.failure_kind or 'unknown'}: {exc}"
+                    )
                 last_exc = exc
                 attempts_used += 1
                 continue

@@ -49,6 +49,7 @@ claude_model: claude-sonnet-4-20250514
 claude_max_turns: 100
 
 default_retry_limit: 3
+retry_on: [execution_limit, timeout]
 default_stage_retry_limit: 2
 auto_commit: true
 ```
@@ -68,6 +69,7 @@ What they do:
 - `claude_max_turns`: guardrail to limit Claude CLI conversation length.
 - `default_retry_limit`: workspace-level limit for rejections routed back from
   `testing` or `accepting`.
+- `retry_on`: execution failure kinds that should retry on the same engine.
 - `default_stage_retry_limit`: per-stage retry limit before Litehive escalates
   back to `grooming`.
 - `auto_commit`: whether tasks create the final `commit_to_git` checkpoint by
@@ -139,38 +141,18 @@ Behavior:
   reject before Litehive escalates the task back to `grooming` instead of
   looping through implementation again.
 
-### Execution Retry Policies
+### Execution Retry Policy
 
-`execution_retry_policies` covers transient CLI failures such as timeouts,
-network issues, or overloaded services:
+`retry_on` covers transient execution failures at the live runtime boundary:
 
 ```yaml
-execution_retry_policies:
-  codex:
-    max_retries: 2
-    backoff_seconds: 0.25
-    backoff_multiplier: 2.0
-    retry_on: [timeout, network, service]
-  model_family:glm:
-    max_retries: 3
-    backoff_seconds: 0.5
-    backoff_multiplier: 2.0
-    retry_on: [timeout, service]
-  external_cli:
-    max_retries: 1
-    backoff_seconds: 0.25
-    backoff_multiplier: 1.0
-    retry_on: [network]
+default_retry_limit: 3
+retry_on: [execution_limit, timeout]
 ```
-
-Valid selectors are:
-
-- an engine name such as `codex`
-- `external_cli`
-- `model_family:<family>`
 
 Valid `retry_on` classifications are:
 
+- `execution_limit`
 - `timeout`
 - `network`
 - `service`

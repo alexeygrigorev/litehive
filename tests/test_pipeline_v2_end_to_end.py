@@ -24,13 +24,13 @@ import pytest
 from litehive.pipeline import SqliteJournal, StateMachineRunner, build_registry
 from litehive.pipeline.agents.base import PromptContext
 from litehive.pipeline.nodes import CommitNode, HookResult, HookRunner, StubCommitNode
-from litehive.pipeline.nodes.agent import AgentVerdict, Engine
+from litehive.pipeline.nodes.agent import AgentVerdict, Engine, TransientError
 from litehive.pipeline.nodes.system import MergeConflict
 from litehive.pipeline.persistence import SqlitePersistence
 from litehive.pipeline.sessions import InMemorySessionStore
 from litehive.pipeline.types import PipelineMode
 
-from tests.workspace_helpers import ensure_workspace
+from tests.workspace_helpers import LitehiveConfig, create_task, ensure_workspace, run_task
 
 
 class _PassEngine:
@@ -213,6 +213,62 @@ def test_persistence_state_survives_load_after_run(workspace: Path) -> None:
     reloaded = persistence.load("T-E2E-RESUME")
     assert reloaded.stage == "done"
     assert reloaded.pipeline_mode == PipelineMode.FULL
+
+
+class _FlakyEngine:
+    def __init__(self, failure_kind: str) -> None:
+        self.name = "codex"
+        self.failure_kind = failure_kind
+        self.calls = 0
+
+    def run_turn(self, session: Any, prompt: Any, state: Any) -> AgentVerdict:
+        self.calls += 1
+        if self.calls == 1:
+            raise TransientError("transient failure", failure_kind=self.failure_kind)
+        return AgentVerdict(outcome="pass")
+
+
+def test_run_task_uses_workspace_retry_on_for_live_execution_retries(tmp_path: Path) -> None:
+    ensure_workspace(
+        tmp_path,
+        LitehiveConfig(
+            default_engine="codex",
+            engine_preference=["codex"],
+            default_retry_limit=2,
+            retry_on=["timeout"],
+        ),
+    )
+    task = create_task(tmp_path, title="Retry once on timeout", pipeline_mode="single")
+    engine = _FlakyEngine("timeout")
+
+    result = run_task(tmp_path, task, engine_factory=lambda _engine_name: engine)
+
+    assert result.final_stage == "done"
+    assert engine.calls == 2
+
+
+def test_run_task_honors_task_retry_limit_override_for_live_execution_retries(tmp_path: Path) -> None:
+    ensure_workspace(
+        tmp_path,
+        LitehiveConfig(
+            default_engine="codex",
+            engine_preference=["codex"],
+            default_retry_limit=1,
+            retry_on=["timeout"],
+        ),
+    )
+    task = create_task(
+        tmp_path,
+        title="Task override gets one retry",
+        pipeline_mode="single",
+        retry_limit=2,
+    )
+    engine = _FlakyEngine("timeout")
+
+    result = run_task(tmp_path, task, engine_factory=lambda _engine_name: engine)
+
+    assert result.final_stage == "done"
+    assert engine.calls == 2
 
 
 # ── recovery flow ────────────────────────────────────────────────────────

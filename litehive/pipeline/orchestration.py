@@ -25,6 +25,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from litehive.config import load_config
+from litehive.config.engine_models import resolve_task_retry_policy
 from litehive.models import TaskRecord
 from litehive.tasks.crud import get_task, get_task_worktree_path, save_task
 from litehive.workspace.locking import runner_heartbeat, workspace_runner_guard
@@ -237,6 +238,7 @@ def run_task(
         )
         prompt_context = PromptContext(workspace_root=root)
         hook_specs = hook_specs_from_config(config)
+        retry_budget, _retry_source = resolve_task_retry_policy(task, config)
 
         registry = build_registry(
             selector=selector,
@@ -248,6 +250,8 @@ def run_task(
             pre_exec_recovery_node=pre_exec_recovery_node,
             prompt_context=prompt_context,
             hook_specs=hook_specs,
+            retry_budget=retry_budget,
+            retry_on=tuple(config.retry_on),
         )
 
         runner = StateMachineRunner(

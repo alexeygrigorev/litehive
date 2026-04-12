@@ -4,18 +4,16 @@ from dataclasses import dataclass, field
 
 from litehive.config.dataclasses import (
     RUNNER_HOOK_EXECUTION_MODES,
-    ExecutionRetryPolicy,
     ExternalEngineSandboxConfig,
     RunnerHookConfig,
 )
 from litehive.config.normalization import (
     normalize_agent_startup_guidance,
     normalize_engine_sequence,
-    normalize_execution_retry_policies,
     normalize_external_engine_sandbox_config,
+    normalize_retry_on,
     normalize_runner_hooks,
 )
-from litehive.config.retry import default_execution_retry_policies
 
 
 @dataclass(slots=True)
@@ -34,10 +32,8 @@ class LitehiveConfig:
     claude_model: str = "claude-sonnet-4-20250514"
     claude_max_turns: int = 100
     default_retry_limit: int = 3
+    retry_on: list[str] = field(default_factory=lambda: ["execution_limit", "timeout"])
     default_stage_retry_limit: int = 2
-    execution_retry_policies: dict[str, ExecutionRetryPolicy] = field(
-        default_factory=default_execution_retry_policies
-    )
     pool_stop_on_failure: bool = False
     pool_max_tasks: int | None = None
     pool_stop_on_dirty_git: bool = False
@@ -65,9 +61,7 @@ class LitehiveConfig:
             field_name="engine_preference",
         )
         self.agent_startup_guidance = normalize_agent_startup_guidance(self.agent_startup_guidance)
-        self.execution_retry_policies = normalize_execution_retry_policies(
-            self.execution_retry_policies
-        )
+        self.retry_on = normalize_retry_on(self.retry_on)
         self.runner_hook_execution_mode = str(self.runner_hook_execution_mode).strip().lower()
         if self.runner_hook_execution_mode not in RUNNER_HOOK_EXECUTION_MODES:
             allowed = ", ".join(sorted(RUNNER_HOOK_EXECUTION_MODES))

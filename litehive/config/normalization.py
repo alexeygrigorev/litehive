@@ -4,41 +4,21 @@ import re
 from typing import Mapping, Sequence
 
 from litehive.config.constants import (
-    ENGINE_CATEGORY_RETRY_SELECTOR_PREFIX,
-    MODEL_FAMILY_RETRY_SELECTOR_PREFIX,
     REJECTABLE_HOOK_POINTS,
     VALID_AGENT_STARTUP_GUIDANCE_KEYS,
     VALID_ENGINE_NAMES,
-    VALID_EXECUTION_RETRY_CLASSIFICATIONS,
-    VALID_EXECUTION_RETRY_SELECTORS,
+    VALID_RETRY_ON_FAILURE_KINDS,
     VALID_RUNNER_HOOK_POINTS,
     VALID_SANDBOX_BACKENDS,
     VALID_SANDBOX_NETWORK_MODES,
     VALID_SANDBOX_WORKSPACE_MODES,
 )
 from litehive.config.dataclasses import (
-    ExecutionRetryPolicy,
     ExternalEngineSandboxConfig,
     ExternalEngineSandboxPolicy,
     RunnerHookConfig,
     SandboxCredentialInput,
 )
-
-
-def _normalize_execution_retry_selector(selector: str) -> str:
-    normalized = selector.strip().lower()
-    if normalized in VALID_EXECUTION_RETRY_SELECTORS:
-        return normalized
-    if normalized == f"{ENGINE_CATEGORY_RETRY_SELECTOR_PREFIX}external_cli":
-        return "external_cli"
-    if normalized.startswith(MODEL_FAMILY_RETRY_SELECTOR_PREFIX):
-        family = normalized.removeprefix(MODEL_FAMILY_RETRY_SELECTOR_PREFIX).strip()
-        if re.fullmatch(r"[a-z0-9][a-z0-9_-]*", family):
-            return f"{MODEL_FAMILY_RETRY_SELECTOR_PREFIX}{family}"
-    raise ValueError(
-        "execution_retry_policies key must be an engine name, `external_cli`, "
-        "or `model_family:<family>`"
-    )
 
 
 def normalize_engine_sequence(engines: Sequence[str], *, field_name: str) -> list[str]:
@@ -74,6 +54,30 @@ def normalize_agent_startup_guidance(
                 cleaned.append(text)
         if cleaned:
             normalized[key] = cleaned
+    return normalized
+
+
+def normalize_retry_on(
+    retry_on: Sequence[str] | None,
+    *,
+    field_name: str = "retry_on",
+) -> list[str]:
+    if retry_on is None:
+        return []
+
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for raw_kind in retry_on:
+        kind = str(raw_kind).strip().lower()
+        if not kind:
+            continue
+        if kind not in VALID_RETRY_ON_FAILURE_KINDS:
+            allowed = ", ".join(sorted(VALID_RETRY_ON_FAILURE_KINDS))
+            raise ValueError(f"{field_name} must contain only: {allowed}")
+        if kind in seen:
+            continue
+        seen.add(kind)
+        normalized.append(kind)
     return normalized
 
 
@@ -265,50 +269,3 @@ def normalize_external_engine_sandbox_config(
         )
     config.engine_policies = normalized_policies
     return config
-
-
-def _normalize_execution_retry_policy(
-    raw_policy: ExecutionRetryPolicy | Mapping[str, object],
-    *,
-    field_name: str,
-) -> ExecutionRetryPolicy:
-    policy = (
-        raw_policy
-        if isinstance(raw_policy, ExecutionRetryPolicy)
-        else ExecutionRetryPolicy(**dict(raw_policy))
-    )
-    if policy.max_retries < 0:
-        raise ValueError(f"{field_name}.max_retries must be 0 or greater")
-    if policy.backoff_seconds < 0:
-        raise ValueError(f"{field_name}.backoff_seconds must be 0 or greater")
-    if policy.backoff_multiplier < 1:
-        raise ValueError(f"{field_name}.backoff_multiplier must be 1 or greater")
-
-    normalized_retry_on: list[str] = []
-    seen: set[str] = set()
-    for classification in policy.retry_on:
-        if classification not in VALID_EXECUTION_RETRY_CLASSIFICATIONS:
-            allowed = ", ".join(sorted(VALID_EXECUTION_RETRY_CLASSIFICATIONS))
-            raise ValueError(f"{field_name}.retry_on must be one of: {allowed}")
-        if classification in seen:
-            continue
-        seen.add(classification)
-        normalized_retry_on.append(classification)
-    policy.retry_on = normalized_retry_on
-    return policy
-
-
-def normalize_execution_retry_policies(
-    raw_policies: Mapping[str, ExecutionRetryPolicy | Mapping[str, object]] | None,
-) -> dict[str, ExecutionRetryPolicy]:
-    if raw_policies is None:
-        return {}
-
-    normalized: dict[str, ExecutionRetryPolicy] = {}
-    for raw_selector, raw_policy in raw_policies.items():
-        selector = _normalize_execution_retry_selector(raw_selector)
-        normalized[selector] = _normalize_execution_retry_policy(
-            raw_policy,
-            field_name=f"execution_retry_policies[{selector}]",
-        )
-    return normalized

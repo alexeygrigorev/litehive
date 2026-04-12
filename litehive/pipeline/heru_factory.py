@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import Any
 
 from litehive.agents import SubagentManager
+from litehive.agents.models import EngineFailure
 from litehive.tasks.crud import get_task
 
 from .nodes.agent import (
@@ -121,6 +122,9 @@ class HeruEngineAdapter:
             self._reraise(exc)
             raise  # unreachable
 
+        if result.failure is not None:
+            self._reraise_failure(result.failure)
+
         # Update the session with the new heru continuation id (if any).
         new_session_id = self._extract_continuation_id(result, session.engine_session_id)
         if new_session_id:
@@ -178,6 +182,17 @@ class HeruEngineAdapter:
         # heru.EngineError and unknown exceptions: assume unrecoverable
         # so the state machine routes through recovery.
         raise UnrecoverableError(f"{type(exc).__name__}: {message}") from exc
+
+    @staticmethod
+    def _reraise_failure(failure: EngineFailure) -> None:
+        if failure.kind == "execution_limit":
+            raise TransientError(failure.reason, failure_kind="execution_limit")
+        if failure.kind == "retryable_execution_error":
+            raise TransientError(
+                failure.reason,
+                failure_kind=failure.classification or "service",
+            )
+        raise UnrecoverableError(f"{failure.kind}: {failure.reason}")
 
 
 def _is_retryable_failure(exc: Exception) -> bool:

@@ -22,7 +22,7 @@ from litehive.workspace.locking import runner_status
 from litehive.recovery import recover_stale_runner_state, repair_workspace_state
 
 from litehive.cli.display import (
-    format_execution_retry_policies,
+    format_retry_on,
     task_dependencies_label,
     task_engine_label,
     task_interruption_label,
@@ -190,7 +190,7 @@ def _cmd_status_full(args, root, config, state, monitoring):
     for line in render_engine_monitoring_lines(monitoring):
         print(line)
     print(f"default_retry_limit: {config.default_retry_limit}")
-    print(f"execution_retry_policies: {format_execution_retry_policies(config)}")
+    print(f"retry_on: {format_retry_on(config)}")
     print(f"pool_stop_on_failure: {config.pool_stop_on_failure}")
     print(f"pool_max_tasks: {config.pool_max_tasks}")
     print(f"pool_stop_on_dirty_git: {config.pool_stop_on_dirty_git}")

@@ -5,8 +5,7 @@ VALID_ENGINE_NAMES = frozenset({"codex", "opencode", "gemini", "copilot", "claud
 VALID_AGENT_STARTUP_GUIDANCE_KEYS = frozenset(
     {"all", "planner", "swe", "qa", "reviewer", "recovery"}
 )
-VALID_EXECUTION_RETRY_SELECTORS = frozenset({*VALID_ENGINE_NAMES, "external_cli"})
-VALID_EXECUTION_RETRY_CLASSIFICATIONS = frozenset({"timeout", "network", "service"})
+VALID_RETRY_ON_FAILURE_KINDS = frozenset({"execution_limit", "timeout", "network", "service"})
 VALID_SANDBOX_NETWORK_MODES = frozenset({"none", "bridge", "host"})
 VALID_SANDBOX_WORKSPACE_MODES = frozenset({"ro", "rw"})
 VALID_SANDBOX_BACKENDS = frozenset({"docker", "bubblewrap"})
@@ -24,5 +23,3 @@ VALID_RUNNER_HOOK_POINTS = frozenset(
     }
 )
 REJECTABLE_HOOK_POINTS = frozenset({"after_implementing", "after_testing", "after_commit"})
-MODEL_FAMILY_RETRY_SELECTOR_PREFIX = "model_family:"
-ENGINE_CATEGORY_RETRY_SELECTOR_PREFIX = "engine_category:"

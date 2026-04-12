@@ -1,22 +1,20 @@
-"""Model and engine resolution, retry policy, and continuation handoff."""
+"""Model and engine resolution and continuation handoff."""
 
-import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
-import yaml
 import heru.quota.claude_quota as claude_quota_mod
 import heru.quota.codex_quota as codex_quota_mod
 import heru.quota.copilot_quota as copilot_quota_mod
 import heru.quota.zai_quota as zai_quota_mod
+import yaml
 
-from litehive.config import ExecutionRetryPolicy, LitehiveConfig
 from litehive.agents import extract_engine_continuation, get_engine
+from litehive.config import LitehiveConfig
+from litehive.config.paths import config_path
 from litehive.models import RuntimeContinuationHandoff, TaskRecord
 from litehive.workspace.runtime_tracking import set_task_continuation_handoff
-from litehive.config.paths import config_path
-from litehive.config.pool_types import ResolvedExecutionRetryPolicy
 
 
 def _engine_attempt_order(
@@ -314,35 +312,6 @@ def _resolve_stage_retry_limit(task: TaskRecord, config: LitehiveConfig) -> int:
     if task.retry_policy.stage_retry_limit is not None:
         return task.retry_policy.stage_retry_limit
     return config.default_stage_retry_limit
-
-
-def _execution_retry_model_family(*, engine_name: str, model_name: str | None) -> str:
-    if model_name:
-        model_tail = model_name.rsplit("/", 1)[-1].strip().lower()
-        match = re.match(r"[a-z0-9]+", model_tail)
-        if match is not None:
-            return match.group(0)
-    return engine_name
-
-
-def resolve_execution_retry_policy(
-    config: LitehiveConfig, *, engine_name: str, model_name: str | None = None
-) -> ResolvedExecutionRetryPolicy:
-    model_family = _execution_retry_model_family(engine_name=engine_name, model_name=model_name)
-    selector_order = [engine_name, f"model_family:{model_family}", "external_cli"]
-    for selector in selector_order:
-        if selector in config.execution_retry_policies:
-            return ResolvedExecutionRetryPolicy(
-                selector=selector,
-                policy=config.execution_retry_policies[selector],
-            )
-    return ResolvedExecutionRetryPolicy(selector="none", policy=ExecutionRetryPolicy())
-
-
-def _retry_backoff_seconds(policy: ExecutionRetryPolicy, retry_number: int) -> float:
-    if retry_number <= 0:
-        return 0.0
-    return policy.backoff_seconds * (policy.backoff_multiplier ** (retry_number - 1))
 
 
 def _set_continuation_handoff(

@@ -39,9 +39,6 @@ from litehive.config.paths import (
     worktree_root as worktree_root,
 )
 from litehive.config.profiles import *
-from litehive.config.retry import (
-    default_execution_retry_policies as default_execution_retry_policies,
-)
 from litehive.config.startup_guidance import (
     DEFAULT_AGENT_STARTUP_GUIDANCE as DEFAULT_AGENT_STARTUP_GUIDANCE,
     default_agent_startup_guidance as default_agent_startup_guidance,

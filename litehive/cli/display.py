@@ -105,19 +105,10 @@ def format_engine_int_map(values):
     return ", ".join(f"{engine}={limit}" for engine, limit in sorted(values.items()))
 
 
-def format_execution_retry_policies(config):
-    if not config.execution_retry_policies:
+def format_retry_on(config):
+    if not config.retry_on:
         return "-"
-    parts = []
-    for selector, policy in sorted(config.execution_retry_policies.items()):
-        retry_on = ",".join(policy.retry_on) if policy.retry_on else "-"
-        parts.append(
-            f"{selector}=retries:{policy.max_retries} "
-            f"backoff:{policy.backoff_seconds:.2f}s "
-            f"multiplier:{policy.backoff_multiplier:.2f} "
-            f"retry_on:{retry_on}"
-        )
-    return "; ".join(parts)
+    return ",".join(config.retry_on)
 
 
 def task_engine_label(task_engine, default_engine):

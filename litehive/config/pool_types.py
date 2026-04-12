@@ -3,7 +3,6 @@
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from litehive.config import ExecutionRetryPolicy
 from litehive.models import TaskRecord
 from litehive.tasks.models import BlockedTask
 
@@ -73,14 +72,6 @@ class DirtyWorktreeGateReport:
             finding.ownership in {"main-checkout", "ambiguous-ownership", "missing-recorded-worktree"}
             for finding in self.findings
         )
-
-
-@dataclass(frozen=True, slots=True)
-class ResolvedExecutionRetryPolicy:
-    selector: str
-    policy: ExecutionRetryPolicy
-
-
 def _path_within(candidate: Path, root: Path) -> bool:
     try:
         candidate.resolve().relative_to(root.resolve())

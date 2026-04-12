@@ -12,7 +12,6 @@ from tests.workspace_helpers import (
     pytest,
     resolve_engine_name,
     resolve_engine_plan,
-    resolve_execution_retry_policy,
     resolve_model,
     yaml,
 )
@@ -649,90 +648,17 @@ def test_resolve_model_honors_goz_run_task_and_workspace_overrides(tmp_path: Pat
     assert resolve_model(task, config, engine_name="goz") == "glm-5-turbo"
 
 
-def test_litehive_config_normalizes_execution_retry_policies() -> None:
-    config = LitehiveConfig(
-        execution_retry_policies={
-            "external_cli": {
-                "max_retries": 2,
-                "backoff_seconds": 0.25,
-                "backoff_multiplier": 2.0,
-                "retry_on": ["timeout", "network", "timeout"],
-            },
-            "gemini": {
-                "max_retries": 1,
-                "backoff_seconds": 1.0,
-                "backoff_multiplier": 1.0,
-                "retry_on": ["service"],
-            },
-            "model_family:GLM": {
-                "max_retries": 3,
-                "backoff_seconds": 0.5,
-                "backoff_multiplier": 1.0,
-                "retry_on": ["network"],
-            },
-        }
-    )
+def test_litehive_config_normalizes_retry_on() -> None:
+    config = LitehiveConfig(retry_on=["timeout", "network", "timeout", "execution_limit"])
 
-    assert config.execution_retry_policies["external_cli"].max_retries == 2
-    assert config.execution_retry_policies["external_cli"].retry_on == ["timeout", "network"]
-    assert resolve_execution_retry_policy(config, engine_name="codex").selector == "external_cli"
-    assert resolve_execution_retry_policy(config, engine_name="gemini").selector == "gemini"
-    assert config.execution_retry_policies["model_family:glm"].max_retries == 3
-    assert (
-        resolve_execution_retry_policy(
-            config,
-            engine_name="opencode",
-            model_name="zai-coding-plan/glm-5.1",
-        ).selector
-        == "model_family:glm"
-    )
+    assert config.retry_on == ["timeout", "network", "execution_limit"]
 
 
-def test_litehive_config_normalizes_external_cli_engine_category_alias() -> None:
-    config = LitehiveConfig(
-        execution_retry_policies={
-            "engine_category:external_cli": {
-                "max_retries": 1,
-                "backoff_seconds": 0.25,
-                "backoff_multiplier": 2.0,
-                "retry_on": ["timeout"],
-            }
-        }
-    )
-
-    assert list(config.execution_retry_policies) == ["external_cli"]
-
-
-def _assert_default_retry_policy(config: LitehiveConfig, engine_name: str) -> None:
-    policy = config.execution_retry_policies[engine_name]
-    assert policy.max_retries == 2
-    assert policy.backoff_seconds == 0.25
-    assert policy.backoff_multiplier == 2.0
-    assert policy.retry_on == ["timeout", "network", "service"]
-
-
-def test_litehive_config_defaults_include_claude_retry_policy() -> None:
+def test_litehive_config_defaults_include_flat_retry_on() -> None:
     config = LitehiveConfig()
 
     assert config.subagent_inactivity_timeout_seconds == 360.0
-    for engine_name in ("claude", "codex", "opencode", "gemini"):
-        _assert_default_retry_policy(config, engine_name)
-    assert (
-        resolve_execution_retry_policy(
-            config,
-            engine_name="opencode",
-            model_name="zai-coding-plan/glm-5.1",
-        ).selector
-        == "opencode"
-    )
-    assert (
-        resolve_execution_retry_policy(
-            config,
-            engine_name="gemini",
-            model_name="gemini-2.5-pro",
-        ).selector
-        == "gemini"
-    )
+    assert config.retry_on == ["execution_limit", "timeout"]
 
 
 def test_load_config_reads_subagent_inactivity_timeout_override(tmp_path: Path) -> None:
@@ -751,64 +677,9 @@ def test_load_config_reads_subagent_inactivity_timeout_override(tmp_path: Path) 
     assert config.subagent_inactivity_timeout_seconds == 42.0
 
 
-def test_resolve_execution_retry_policy_prefers_claude_selector_before_model_family_and_external_cli() -> (
-    None
-):
-    config = LitehiveConfig(
-        execution_retry_policies={
-            "claude": {
-                "max_retries": 1,
-                "backoff_seconds": 0.25,
-                "backoff_multiplier": 2.0,
-                "retry_on": ["network"],
-            },
-            "model_family:claude": {
-                "max_retries": 3,
-                "backoff_seconds": 1.0,
-                "backoff_multiplier": 2.0,
-                "retry_on": ["timeout"],
-            },
-            "external_cli": {
-                "max_retries": 5,
-                "backoff_seconds": 9.0,
-                "backoff_multiplier": 2.0,
-                "retry_on": ["service"],
-            },
-        },
-    )
-
-    resolved = resolve_execution_retry_policy(
-        config,
-        engine_name="claude",
-        model_name="claude-sonnet-4-20250514",
-    )
-
-    assert resolved.selector == "claude"
-    assert resolved.policy.max_retries == 1
-
-
-def test_resolve_execution_retry_policy_prefers_codex_selector_before_external_cli() -> None:
-    config = LitehiveConfig(
-        execution_retry_policies={
-            "codex": {
-                "max_retries": 1,
-                "backoff_seconds": 0.1,
-                "backoff_multiplier": 1.0,
-                "retry_on": ["timeout"],
-            },
-            "external_cli": {
-                "max_retries": 3,
-                "backoff_seconds": 1.0,
-                "backoff_multiplier": 2.0,
-                "retry_on": ["service"],
-            },
-        }
-    )
-
-    resolved = resolve_execution_retry_policy(config, engine_name="codex")
-
-    assert resolved.selector == "codex"
-    assert resolved.policy.max_retries == 1
+def test_litehive_config_rejects_unknown_retry_on_kind() -> None:
+    with pytest.raises(ValueError, match="retry_on must contain only"):
+        LitehiveConfig(retry_on=["timeout", "rate_limit"])
 
 
 def test_resolve_engine_name_ignores_title_keywords_uses_default(

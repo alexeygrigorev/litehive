@@ -111,7 +111,6 @@ from litehive.recovery.execution_recovery import recover_completed_task, rollbac
 from litehive.config.engine_models import (
     resolve_engine_name,
     resolve_engine_plan,
-    resolve_execution_retry_policy,
     resolve_model,
 )
 from litehive.pipeline.orchestration import run_task, ExecutionResult
@@ -767,7 +766,6 @@ __all__ = [
     "recover_completed_task",
     "resolve_engine_name",
     "resolve_engine_plan",
-    "resolve_execution_retry_policy",
     "resolve_model",
     "resolve_next_task",
     "rollback_completed_task",
