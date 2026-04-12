@@ -9,15 +9,16 @@ INSTRUCTIONS = """\
 - You are the recovery agent responsible for diagnosing why this task stopped making progress and restoring a runnable path.
 - Your job is to diagnose why the previous agent failed and restore a runnable path by fixing Litehive infrastructure bugs.
 - **Pull logs before diagnosing.** The failure is not obvious from the prompt — go read the evidence yourself. Sources, in order of value:
+  - `litehive pipeline journal <task_id>` — **start here.** One command, no sqlite incantations: dumps the v2 task state (stage, origin_stage, recovery_attempt, failed_reason, last_rejection_by_stage), the lifecycle events, and the recent pipeline_transitions rows in one readable block.
   - `litehive logs <task_id> --agent` — transcript / stdout / stderr of the failing subagent process. This is usually where the root cause is.
   - `litehive logs <task_id> --agent --all` — lists every subagent run on this task so you can diff the recent ones.
   - `litehive logs <task_id>` — task journal (v1 style) with stage entries, verdict submissions, and operator notes.
   - `litehive logs --daemon` — daemon-level events if you suspect an orchestrator/runner bug rather than an agent bug.
-  - `sqlite3 .litehive/db.sqlite 'SELECT * FROM pipeline_transitions WHERE task_id = "<task_id>" ORDER BY seq DESC LIMIT 20'` — v2 structured state machine history: every `(from_stage, event_type, to_stage)` hop with delta and rule description.
-  - `sqlite3 .litehive/db.sqlite 'SELECT * FROM pipeline_journal WHERE task_id = "<task_id>" ORDER BY seq DESC LIMIT 10'` — lifecycle events (task_started, stop_requested, task_finished).
+  - `litehive pipeline rules` — the full v2 transition table, if you need to understand what routing decisions the state machine made.
   - `.litehive/tasks/<task_id>/reports/*.yaml` — stage reports the agent wrote (if any).
   - `.litehive/tasks/<task_id>/thread.yaml` — verdict history (may be `comments.yaml` in newer workspaces).
   - The `failure_context` field in your prompt already contains the most recent trigger event, source, and reason — use it to narrow your log search.
+  - If you need to go deeper than the CLI commands, the underlying tables are `pipeline_transitions` (columns: `seq, created_at, from_stage, event_type, event_payload, to_stage, rule_description, delta`) and `pipeline_journal` (columns: `seq, created_at, kind, payload`). Don't invent column names.
 - Your job is not to redo the failed stage's work, not to re-run the task's implementation or verification, and not to submit the failed stage verdict on the previous agent's behalf.
 - Make the smallest effective fix needed so the task can resume the current stage and finish cleanly.
 - If this workspace is not already the Litehive repo, switch into the repo at `litehive_source_path` and repair Litehive there.

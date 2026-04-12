@@ -265,6 +265,18 @@ item lands.
   Typer raises `Exit(1)` on unknown task. 2 tests cover the happy
   path and the error. Operators now have one command to diagnose a
   wedged task instead of opening sqlite by hand. 137 v2 tests green.
+- 2026-04-12: **real bug found in the recovery agent prompt.** By
+  inspecting `litehive logs T-0001 --agent` against the v2 smoke
+  workspace from the earlier live run, I could see the recovery agent
+  had hallucinated column names (`details_json`, `delta_json`) in its
+  sqlite probes — those don't exist in my schema (the columns are
+  `payload` and `delta`). Root cause: the recovery prompt sent the
+  agent to `sqlite3 .litehive/db.sqlite 'SELECT * FROM ...'` without
+  telling it the column names, and the agent guessed. Fix: prompt now
+  tells the recovery agent to run `litehive pipeline journal
+  <task_id>` first (no sqlite incantations required, clean output) and
+  only fall back to raw sqlite if it needs to go deeper — with the
+  actual column names listed so it can't hallucinate.
 - 2026-04-12: bootstrap integration tests landed
   (`tests/test_pipeline_v2_bootstrap.py`). They drive `run_task_v2`
   against a real tmp_path workspace with SqlitePersistence, SqliteJournal,
