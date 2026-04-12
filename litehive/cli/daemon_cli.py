@@ -1,5 +1,7 @@
 import sys
 
+import typer
+
 from litehive.cli.common import WorkspaceOption, make_typer, require_subcommand
 from litehive.config import ensure_workspace
 from litehive.daemon import (
@@ -15,7 +17,7 @@ app = make_typer(invoke_without_command=True)
 
 
 @app.callback()
-def daemon_group(ctx):
+def daemon_group(ctx: typer.Context) -> None:
     require_subcommand(ctx)
 
 
