@@ -234,6 +234,12 @@ item lands.
   with a stderr warning — a malformed update shouldn't fail the
   pipeline. 2 tests in `test_pipeline_v2_task_updates.py`. 131 v2
   tests green.
+- 2026-04-12: Mermaid diagram generator for the state machine.
+  `litehive/pipeline/diagram.py` iterates `RULES` and renders a
+  `stateDiagram-v2` block. Committed a generated snapshot at
+  `docs/state-machine-diagram.md` that ops can open in any Mermaid
+  viewer. 2 tests confirm the output shape. 133 v2 tests green.
+  Hook for a future `litehive pipeline graph` CLI command.
 - 2026-04-12: bootstrap integration tests landed
   (`tests/test_pipeline_v2_bootstrap.py`). They drive `run_task_v2`
   against a real tmp_path workspace with SqlitePersistence, SqliteJournal,
