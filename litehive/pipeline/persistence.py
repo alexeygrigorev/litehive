@@ -12,6 +12,7 @@ from .types import FailedReason, NodeName, PipelineMode
 @dataclass(frozen=True)
 class Limits:
     stage_retry_limit: int = 3
+    same_hook_reject_limit: int = 3
     same_engine_retry_limit: int = 3
     overall_retry_limit: int = 30
     grace_period_seconds: int = 120
@@ -21,6 +22,14 @@ class Limits:
 class LastReport:
     files_changed: int = 0
     tests_added: int = 0
+
+
+@dataclass
+class HookRejectFingerprint:
+    point: NodeName
+    command: str
+    description: str = ""
+    fingerprint: str = ""
 
 
 @dataclass
@@ -60,6 +69,9 @@ class TaskState:
     failure_context: dict[str, Any] = field(default_factory=dict)
     last_report: LastReport = field(default_factory=LastReport)
     last_rejection_by_stage: dict[NodeName, LastRejection] = field(default_factory=dict)
+    consecutive_same_hook_rejects: int = 0
+    last_hook_reject_fingerprint: HookRejectFingerprint | None = None
+    hook_reject_recovery_invoked: bool = False
     failed_reason: FailedReason | None = None
     failed_message: str | None = None
     limits: Limits = field(default_factory=Limits)
@@ -103,6 +115,18 @@ def _state_payload(state: TaskState) -> dict[str, Any]:
             }
             for stage, rej in state.last_rejection_by_stage.items()
         },
+        "consecutive_same_hook_rejects": state.consecutive_same_hook_rejects,
+        "last_hook_reject_fingerprint": (
+            {
+                "point": state.last_hook_reject_fingerprint.point,
+                "command": state.last_hook_reject_fingerprint.command,
+                "description": state.last_hook_reject_fingerprint.description,
+                "fingerprint": state.last_hook_reject_fingerprint.fingerprint,
+            }
+            if state.last_hook_reject_fingerprint is not None
+            else None
+        ),
+        "hook_reject_recovery_invoked": state.hook_reject_recovery_invoked,
         "failed_reason": state.failed_reason,
         "failed_message": state.failed_message,
     }
@@ -117,6 +141,7 @@ def _state_from_row(
 ) -> TaskState:
     last_report_data = payload.get("last_report") or {}
     last_rejections_data = payload.get("last_rejection_by_stage") or {}
+    hook_fingerprint_data = payload.get("last_hook_reject_fingerprint") or None
     return TaskState(
         task_id=task_id,
         stage=stage,
@@ -138,6 +163,18 @@ def _state_from_row(
             )
             for stage_name, rej in last_rejections_data.items()
         },
+        consecutive_same_hook_rejects=int(payload.get("consecutive_same_hook_rejects") or 0),
+        last_hook_reject_fingerprint=(
+            HookRejectFingerprint(
+                point=hook_fingerprint_data["point"],
+                command=hook_fingerprint_data["command"],
+                description=hook_fingerprint_data.get("description", ""),
+                fingerprint=hook_fingerprint_data["fingerprint"],
+            )
+            if hook_fingerprint_data is not None
+            else None
+        ),
+        hook_reject_recovery_invoked=bool(payload.get("hook_reject_recovery_invoked", False)),
         failed_reason=payload.get("failed_reason"),
         failed_message=payload.get("failed_message"),
         limits=limits,

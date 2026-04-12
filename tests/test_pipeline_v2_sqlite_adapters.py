@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 
 from litehive.pipeline.persistence import (
+    HookRejectFingerprint,
     LastRejection,
     LastReport,
     Limits,
@@ -68,6 +69,14 @@ def test_persistence_roundtrip_preserves_full_state(workspace: Path) -> None:
                 raised_at_phase="testing",
             ),
         },
+        consecutive_same_hook_rejects=2,
+        last_hook_reject_fingerprint=HookRejectFingerprint(
+            point="after_implementing",
+            command="pytest -q",
+            description="timeout watchdog",
+            fingerprint="after_implementing|pytest -q|timeout watchdog",
+        ),
+        hook_reject_recovery_invoked=True,
         failed_reason=None,
         failed_message=None,
     )
@@ -86,6 +95,10 @@ def test_persistence_roundtrip_preserves_full_state(workspace: Path) -> None:
     assert loaded.last_report.tests_added == 3
     assert loaded.last_rejection_by_stage["implementing"].source == "qa"
     assert loaded.last_rejection_by_stage["implementing"].reason == "tests fail"
+    assert loaded.consecutive_same_hook_rejects == 2
+    assert loaded.last_hook_reject_fingerprint is not None
+    assert loaded.last_hook_reject_fingerprint.command == "pytest -q"
+    assert loaded.hook_reject_recovery_invoked is True
     # limits is runtime config, re-injected on load
     assert loaded.limits.stage_retry_limit == 5
 

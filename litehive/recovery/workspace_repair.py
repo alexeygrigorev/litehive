@@ -14,7 +14,13 @@ from litehive.models import (
     utcnow,
 )
 from litehive.tasks.models import WorkspaceRepairSummary
-from litehive.tasks.paths import read_text_artifact, resolve_artifact_path, task_dir
+from litehive.tasks.paths import (
+    legacy_task_thread_file,
+    read_text_artifact,
+    resolve_artifact_path,
+    task_comments_file,
+    task_dir,
+)
 from litehive.workspace.runtime_tracking import (
     apply_task_outcome,
     duration_seconds,
@@ -22,6 +28,49 @@ from litehive.workspace.runtime_tracking import (
 )
 
 from .detection import has_inactive_running_tasks, is_stranded_commit_task, should_requeue_commit_stage_task
+
+
+def _load_comment_entries(path: Path) -> list[dict[str, object]]:
+    if not path.exists():
+        return []
+    loaded = yaml.safe_load(path.read_text(encoding="utf-8"))
+    if not isinstance(loaded, list):
+        return []
+    return [dict(entry) for entry in loaded if isinstance(entry, dict)]
+
+
+def _migrate_legacy_thread_files(
+    root: Path,
+    *,
+    summary: WorkspaceRepairSummary | None = None,
+) -> bool:
+    from litehive.tasks.crud import list_tasks
+    from litehive.tasks.persistence import atomic_write_text
+
+    mutated = False
+    for task in list_tasks(root):
+        comments_path = task_comments_file(root, task)
+        legacy_path = legacy_task_thread_file(root, task)
+        if not legacy_path.exists():
+            continue
+
+        legacy_entries = _load_comment_entries(legacy_path)
+        comment_entries = _load_comment_entries(comments_path)
+        merged_entries = list(legacy_entries)
+        for entry in comment_entries:
+            if entry not in merged_entries:
+                merged_entries.append(entry)
+
+        if merged_entries != comment_entries:
+            atomic_write_text(
+                comments_path,
+                yaml.safe_dump(merged_entries, sort_keys=False),
+            )
+        legacy_path.unlink()
+        mutated = True
+        if summary is not None and task.id not in summary.migrated_comment_task_ids:
+            summary.migrated_comment_task_ids.append(task.id)
+    return mutated
 
 
 def prepare_interrupted_task_for_requeue(task: TaskRecord) -> None:
@@ -544,4 +593,6 @@ def repair_workspace_state(root: Path) -> WorkspaceRepairSummary:
     summary = WorkspaceRepairSummary()
     summary.stale_runner_recovered = recover_stale_runner_state(root, summary=summary)
     summary.mutated = summary.stale_runner_recovered
+    if _migrate_legacy_thread_files(root, summary=summary):
+        summary.mutated = True
     return summary

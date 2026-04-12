@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import Callable
 
-from .events import Event
+from .events import Event, Reject
 from .persistence import TaskState
 from .types import NodeName, PipelineMode
 
@@ -64,6 +64,16 @@ def stage_retries_exhausted(stage: NodeName) -> Guard:
         return state.stage_retry.get(stage, 0) >= state.limits.stage_retry_limit
 
     return Guard(check, f"stage_retries_exhausted({stage})")
+
+
+def hook_reject_loop_detected() -> Guard:
+    def check(state: TaskState, event: Event) -> bool:
+        if not isinstance(event, Reject) or event.source != "hook":
+            return False
+        count = event.metadata.get("consecutive_same_hook_rejects")
+        return isinstance(count, int) and count >= state.limits.same_hook_reject_limit
+
+    return Guard(check, "hook_reject_loop_detected")
 
 
 def zero_change_shortcut() -> Guard:

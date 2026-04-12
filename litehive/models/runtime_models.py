@@ -71,6 +71,13 @@ class RuntimeEngineSwitch(BaseModel):
     happened_at: str = Field(default_factory=utcnow)
 
 
+class RuntimeHookRejectFingerprint(BaseModel):
+    point: str
+    command: str
+    description: str = ""
+    fingerprint: str
+
+
 class TaskOutcomeState(BaseModel):
     kind: OutcomeKind | None = None
     stage: str | None = None
@@ -137,6 +144,9 @@ class TaskRuntime(BaseModel):
     interruption: RuntimeInterruptionState | None = None
     continuation_handoff: RuntimeContinuationHandoff | None = None
     last_engine_switch: RuntimeEngineSwitch | None = None
+    consecutive_same_hook_rejects: int = 0
+    last_hook_reject_fingerprint: RuntimeHookRejectFingerprint | None = None
+    hook_reject_recovery_invoked: bool = False
     last_outcome: TaskOutcomeState = Field(default_factory=TaskOutcomeState)
     self_heal_traceback_fingerprints: list[str] = Field(default_factory=list)
 

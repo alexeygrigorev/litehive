@@ -27,6 +27,7 @@ from pathlib import Path
 from litehive.config import load_config
 from litehive.config.engine_models import resolve_task_retry_policy
 from litehive.models import TaskRecord
+from litehive.models.runtime_models import RuntimeHookRejectFingerprint
 from litehive.tasks.crud import get_task, get_task_worktree_path, save_task
 from litehive.workspace.locking import runner_heartbeat, workspace_runner_guard
 
@@ -76,6 +77,18 @@ def _sync_back(state: TaskState, workspace_root: Path) -> TaskRecord | None:
     task_record = get_task(workspace_root, state.task_id)
     if task_record is None:
         return None
+    task_record.runtime.consecutive_same_hook_rejects = state.consecutive_same_hook_rejects
+    task_record.runtime.last_hook_reject_fingerprint = (
+        None
+        if state.last_hook_reject_fingerprint is None
+        else RuntimeHookRejectFingerprint(
+            point=state.last_hook_reject_fingerprint.point,
+            command=state.last_hook_reject_fingerprint.command,
+            description=state.last_hook_reject_fingerprint.description,
+            fingerprint=state.last_hook_reject_fingerprint.fingerprint,
+        )
+    )
+    task_record.runtime.hook_reject_recovery_invoked = state.hook_reject_recovery_invoked
     if state.stage == "done":
         task_record.status = "done"
         task_record.pipeline_status = "done"
@@ -87,6 +100,8 @@ def _sync_back(state: TaskState, workspace_root: Path) -> TaskRecord | None:
         else:
             task_record.status = "flagged"
             task_record.pipeline_status = "flagged"
+            if state.failure_context.get("reason_code") == "hook_reject_loop":
+                task_record.flag_reason = "hook_reject_loop"
     else:
         task_record.status = "in_progress"
         task_record.pipeline_status = _STAGE_TO_PIPELINE_STATUS.get(state.stage, task_record.pipeline_status)
@@ -195,6 +210,7 @@ def hook_specs_from_config(config) -> dict[str, list[HookSpec]]:
                     command=hook.command,
                     reject_on_failure=bool(hook.reject_on_failure),
                     timeout_seconds=int(hook.timeout_seconds or 60),
+                    description=hook.description,
                 )
             )
         if specs:

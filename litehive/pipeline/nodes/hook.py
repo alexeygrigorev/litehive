@@ -20,6 +20,7 @@ class HookSpec:
     command: str
     reject_on_failure: bool = True
     timeout_seconds: int = 60
+    description: str | None = None
 
 
 @dataclass
@@ -108,9 +109,33 @@ class HookNode(Node):
                 break
         rejecting = [r for r in results if not r.ok and r.spec.reject_on_failure]
         if rejecting:
-            return Reject(source="hook", reason=self._summarize(rejecting))
+            primary = rejecting[0]
+            hook = self._fingerprint(self.name, primary.spec)
+            same_as_last = (
+                state.last_hook_reject_fingerprint is not None
+                and state.last_hook_reject_fingerprint.fingerprint == hook["fingerprint"]
+            )
+            consecutive = state.consecutive_same_hook_rejects + 1 if same_as_last else 1
+            return Reject(
+                source="hook",
+                reason=self._summarize(rejecting),
+                metadata={
+                    "hook": hook,
+                    "consecutive_same_hook_rejects": consecutive,
+                },
+            )
         return HookOk()
 
     @staticmethod
     def _summarize(results: list[HookResult]) -> str:
         return "; ".join(f"{r.spec.command}: {r.output}".strip() for r in results)
+
+    @staticmethod
+    def _fingerprint(point: NodeName, spec: HookSpec) -> dict[str, str]:
+        description = spec.description or ""
+        return {
+            "point": point,
+            "command": spec.command,
+            "description": description,
+            "fingerprint": f"{point}|{spec.command}|{description}",
+        }

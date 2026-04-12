@@ -12,6 +12,10 @@ from .models import BlockedTask, TaskPlan, TaskSelection, WorkspaceConflictError
 logger = logging.getLogger(__name__)
 
 
+def _is_hook_reject_loop_flagged(task: TaskRecord) -> bool:
+    return task.status == "flagged" and task.flag_reason == "hook_reject_loop"
+
+
 def set_active_task(root: Path, task_id: str | None) -> WorkspaceState:
     from .crud import require_task
     from litehive.workspace.locking import workspace_lock, workspace_mutation_guard
@@ -114,6 +118,12 @@ def dequeue_next_task_selection(root: Path) -> TaskSelection:
             mutated = True
         if mutated:
             if next_task.status == "flagged":
+                if _is_hook_reject_loop_flagged(next_task):
+                    if state.active_task_id == next_task.id:
+                        state.active_task_id = None
+                    if mutated:
+                        save_state(root, state)
+                    return TaskSelection(task=None, blocked=blocked)
                 recovery_stage = _auto_recovery_stage_for_flagged_task(next_task)
                 record_recovery_report(
                     root,
@@ -154,6 +164,8 @@ def _is_parked_task(task: TaskRecord) -> bool:
 
 def is_task_eligible_for_execution(task: TaskRecord) -> bool:
     if task.pipeline_status == "done":
+        return False
+    if _is_hook_reject_loop_flagged(task):
         return False
     if task.status in {"queued", "in_progress", "flagged"}:
         return True
@@ -311,6 +323,8 @@ def restore_missing_queued_tasks(
     queued_ids = set(state.queue)
     for task_id, task in tasks_by_id.items():
         if task.status not in {"queued", "interrupted", "flagged"}:
+            continue
+        if _is_hook_reject_loop_flagged(task):
             continue
         if task.pipeline_status == "done":
             continue

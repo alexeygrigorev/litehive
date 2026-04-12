@@ -26,7 +26,7 @@ from .events import (
     StageRetryLimitHit,
     Timeout,
 )
-from .guards import mode, zero_change_shortcut
+from .guards import hook_reject_loop_detected, mode, zero_change_shortcut
 from .stages import Stages as S
 from .transitions import Rule, resume_from_origin, resume_from_pre_exec, retry_epoch_rules
 
@@ -243,6 +243,17 @@ RULES: list[Rule] = [
             with_effect=enter_recovery,
         )
         for p in S.GROOMING_EPOCH
+    ],
+    # ── same-hook reject circuit breaker ─────────────────────────────────────────────
+    *[
+        Rule(
+            from_state=phase,
+            on_event=Reject,
+            transition_to=S.RECOVERING,
+            when=hook_reject_loop_detected(),
+            with_effect=enter_recovery,
+        )
+        for phase in (*S.IMPLEMENTING_EPOCH, *S.TESTING_EPOCH, *S.ACCEPTING_EPOCH)
     ],
     # ── rejections: implementing / testing / accepting (retry then recover) ─────────────────────────────────────────────
     *retry_epoch_rules(

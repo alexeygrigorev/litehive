@@ -1,7 +1,7 @@
 from typing import Callable
 
 from .deltas import StateDelta
-from .events import Event, Pass
+from .events import Event, HookOk, Pass, RecoverySucceeded
 from .journal import NullJournal, PipelineJournal
 from .nodes.base import NodeRegistry
 from .persistence import Persistence, TaskState
@@ -55,6 +55,7 @@ class StateMachineRunner:
             self._apply_delta(state, trans.delta)
             self._apply_event_side_effects(state, event)
             state.stage = trans.next
+            self._reset_hook_reject_tracking_on_progress(state, from_stage, trans.next, event)
             self.persistence.save(state)
             self.journal.transition(
                 task_id=task_id,
@@ -92,6 +93,27 @@ class StateMachineRunner:
             state.last_report.tests_added = tests_added
 
     @staticmethod
+    def _reset_hook_reject_tracking_on_progress(
+        state: TaskState,
+        from_stage: str,
+        to_stage: str,
+        event: Event,
+    ) -> None:
+        if isinstance(event, RecoverySucceeded):
+            state.consecutive_same_hook_rejects = 0
+            state.last_hook_reject_fingerprint = None
+            state.hook_reject_recovery_invoked = False
+            return
+        if not isinstance(event, (Pass, HookOk)):
+            return
+        if _pipeline_stage_for_phase(from_stage) == _pipeline_stage_for_phase(to_stage):
+            if from_stage not in {"commit", "merge_resolving"}:
+                return
+        state.consecutive_same_hook_rejects = 0
+        state.last_hook_reject_fingerprint = None
+        state.hook_reject_recovery_invoked = False
+
+    @staticmethod
     def _apply_delta(state: TaskState, delta: StateDelta) -> None:
         if delta.set_origin_stage is not None:
             state.origin_stage = delta.set_origin_stage
@@ -110,9 +132,32 @@ class StateMachineRunner:
         if delta.set_last_rejection is not None:
             stage, rejection = delta.set_last_rejection
             state.last_rejection_by_stage[stage] = rejection
+        if delta.clear_hook_reject_tracking:
+            state.consecutive_same_hook_rejects = 0
+            state.last_hook_reject_fingerprint = None
+        if delta.set_consecutive_same_hook_rejects is not None:
+            state.consecutive_same_hook_rejects = delta.set_consecutive_same_hook_rejects
+        if delta.set_last_hook_reject_fingerprint is not None:
+            state.last_hook_reject_fingerprint = delta.set_last_hook_reject_fingerprint
+        if delta.set_hook_reject_recovery_invoked is not None:
+            state.hook_reject_recovery_invoked = delta.set_hook_reject_recovery_invoked
         if delta.set_failure_context is not None:
             state.failure_context = dict(delta.set_failure_context)
         if delta.failed_reason is not None:
             state.failed_reason = delta.failed_reason
         if delta.failed_message is not None:
             state.failed_message = delta.failed_message
+
+
+def _pipeline_stage_for_phase(phase: str) -> str:
+    if phase in {"before_grooming", "grooming", "after_grooming", "recovering"}:
+        return "grooming"
+    if phase in {"before_implementing", "implementing", "after_implementing"}:
+        return "implementing"
+    if phase in {"before_testing", "testing", "after_testing"}:
+        return "testing"
+    if phase in {"before_accepting", "accepting", "after_accepting"}:
+        return "accepting"
+    if phase in {"before_commit", "commit", "after_commit", "merge_resolving"}:
+        return "commit_to_git"
+    return phase

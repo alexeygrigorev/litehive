@@ -31,9 +31,11 @@ def test_hook_specs_from_config_copies_known_fields() -> None:
     assert out["before_grooming"][0].command == "echo pre-groom"
     assert out["before_grooming"][0].reject_on_failure is False
     assert out["before_grooming"][0].timeout_seconds == 30
+    assert out["before_grooming"][0].description == ""
     assert out["after_implementing"][0].command == "pytest -q"
     assert out["after_implementing"][0].reject_on_failure is True
     assert out["after_implementing"][0].timeout_seconds == 120
+    assert out["after_implementing"][0].description == ""
 
 
 def test_hook_specs_from_config_skips_empty_phases_and_missing_attr() -> None:
