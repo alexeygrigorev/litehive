@@ -46,7 +46,7 @@ def test_load_task_record_ignores_legacy_top_level_engine(tmp_path: Path) -> Non
 
     assert task.id == "T-0001"
     assert "engine: codex" not in serialized
-    assert "engine: gemini" in serialized
+    assert "subagents:" not in serialized
 
 
 def test_task_add_help_omits_engine_flag() -> None:

@@ -21,7 +21,7 @@ from litehive.tasks.constants import (
     RUNNER_LOCKS_MUTEX,
 )
 from litehive.tasks.models import WorkspaceConflictError, RunnerLockState
-from litehive.tasks.paths import runner_lock_path, task_dir, task_file, task_runtime_file
+from litehive.tasks.paths import runner_lock_path, task_dir, task_file
 
 logger = logging.getLogger(__name__)
 
@@ -410,14 +410,14 @@ def persist_future_task_update(
     *,
     journal_message: str | None = None,
 ) -> None:
-    from litehive.tasks.crud import ensure_runtime_ignored, serialize_task_record, serialize_task_runtime
-    from litehive.tasks.persistence import write_atomic_files
+    from litehive.storage import runtime_store
+    from litehive.tasks.crud import ensure_runtime_ignored, serialize_task_record, task_state_for_storage
+    from litehive.tasks.persistence import write_atomic_files_and_then
     from litehive.tasks.templates import render_task_brief, task_brief_file
 
     task.updated_at = utcnow()
     writes = {
         task_file(root, task): serialize_task_record(task),
-        task_runtime_file(root, task): serialize_task_runtime(task),
     }
     if journal_message is not None:
         journal_path = task_dir(root, task) / "journal.md"
@@ -425,5 +425,10 @@ def persist_future_task_update(
         writes[journal_path] = f"{existing}\n## {utcnow()}\n{journal_message}\n"
     if task.mode == "tasks":
         writes[task_brief_file(root, task)] = render_task_brief(task)
-    write_atomic_files(writes)
+    write_atomic_files_and_then(
+        writes,
+        lambda: runtime_store(root).save_runtime_transaction(
+            task_states={task.id: task_state_for_storage(task)}
+        ),
+    )
     ensure_runtime_ignored(root)

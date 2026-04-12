@@ -21,6 +21,7 @@ from tests.workspace_helpers import (
     render_context_template,
     resolve_process_profile,
     save_task_runtime,
+    save_task,
     state_path,
 )
 from concurrent.futures import ProcessPoolExecutor
@@ -357,6 +358,123 @@ def test_get_task_reads_runtime_from_database_without_runtime_yaml(tmp_path: Pat
     assert loaded is not None
     assert loaded.runtime.execution_status == "running"
     assert loaded.runtime.current_stage.step == "implementing"
+
+
+def test_task_yaml_persists_only_intent_fields_and_runtime_moves_to_db(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Intent only", auto_commit=False)
+    task.model = "gpt-5.4"
+    task.status = "flagged"
+    task.flag_reason = "needs-review"
+    task.flag_count = 2
+    task.pipeline_status = "implementing"
+    task.runtime.execution_status = "running"
+    task.runtime.current_stage.step = "implementing"
+    task.git.commit_sha = "abc123"
+    task.git.checkpoint_attempts = 3
+    save_task(tmp_path, task)
+
+    task_path = tmp_path / ".litehive" / "tasks" / f"{task.id}-{task.slug}" / "task.yaml"
+    data = yaml.safe_load(task_path.read_text(encoding="utf-8"))
+
+    assert set(data) == {
+        "id",
+        "slug",
+        "title",
+        "created_at",
+        "task_type",
+        "mode",
+        "pipeline_mode",
+        "priority",
+        "pm_complexity",
+        "planned_effort",
+        "depends_on",
+        "goal",
+        "acceptance_criteria",
+        "constraints",
+        "plan",
+        "human_checkpoints",
+        "git",
+        "created_from",
+        "upstream_origin",
+        "github_origin",
+    }
+    assert set(data["git"]) == {"auto_commit", "commit_message"}
+
+    loaded = get_task(tmp_path, task.id)
+    assert loaded is not None
+    assert loaded.model == "gpt-5.4"
+    assert loaded.status == "flagged"
+    assert loaded.flag_reason == "needs-review"
+    assert loaded.flag_count == 2
+    assert loaded.pipeline_status == "implementing"
+    assert loaded.git.commit_sha == "abc123"
+    assert loaded.git.checkpoint_attempts == 3
+    assert loaded.runtime.execution_status == "running"
+    assert loaded.runtime.current_stage.step == "implementing"
+
+
+def test_get_task_backfills_legacy_runtime_into_db_and_rewrites_task_yaml(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    task_dir = tmp_path / ".litehive" / "tasks" / "T-0001-legacy-runtime"
+    task_dir.mkdir(parents=True)
+    (task_dir / "task.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "id": "T-0001",
+                "slug": "legacy-runtime",
+                "title": "Legacy runtime",
+                "mode": "implementation",
+                "pipeline_mode": "full",
+                "priority": "high",
+                "status": "in_progress",
+                "pipeline_status": "testing",
+                "flag_count": 1,
+                "model": "legacy-model",
+                "git": {
+                    "auto_commit": True,
+                    "commit_message": "legacy message",
+                    "checkpoint_attempts": 2,
+                },
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+    (task_dir / "runtime.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "execution_status": "running",
+                "current_stage": {"step": "testing"},
+                "git": {"commit_sha": "deadbeef"},
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+
+    loaded = get_task(tmp_path, "T-0001")
+
+    assert loaded is not None
+    assert loaded.model == "legacy-model"
+    assert loaded.status == "in_progress"
+    assert loaded.pipeline_status == "testing"
+    assert loaded.flag_count == 1
+    assert loaded.git.checkpoint_attempts == 2
+    assert loaded.git.commit_sha == "deadbeef"
+    assert loaded.runtime.execution_status == "running"
+    assert loaded.runtime.current_stage.step == "testing"
+
+    sanitized = yaml.safe_load((task_dir / "task.yaml").read_text(encoding="utf-8"))
+    assert "status" not in sanitized
+    assert "pipeline_status" not in sanitized
+    assert "model" not in sanitized
+    assert set(sanitized["git"]) == {"auto_commit", "commit_message"}
+
+    reloaded = get_task(tmp_path, "T-0001")
+    assert reloaded is not None
+    assert reloaded.git.commit_sha == "deadbeef"
+    assert reloaded.runtime.execution_status == "running"
 
 
 def test_ensure_workspace_scaffolds_workspace_gitignore(tmp_path: Path) -> None:

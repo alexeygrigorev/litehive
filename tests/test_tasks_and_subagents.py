@@ -21,7 +21,6 @@ from tests.workspace_helpers import (
     SubagentRef,
     SubagentResult,
     _cmd_intake,
-    _fail_atomic_write_on_path,
     argparse,
     create_task,
     ensure_workspace,
@@ -39,7 +38,6 @@ from tests.workspace_helpers import (
     subprocess,
     sys,
     task_dir,
-    task_runtime_file,
     threading,
     time,
     update_task_metadata,
@@ -94,6 +92,8 @@ def test_create_task_persists_folder_and_queue(tmp_path: Path) -> None:
 def test_save_task_rolls_back_task_record_when_runtime_persist_fails(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    from litehive.storage.runtime import RuntimeStore
+
     ensure_workspace(tmp_path)
 
     task = create_task(tmp_path, title="Atomic save", auto_commit=False)
@@ -101,11 +101,10 @@ def test_save_task_rolls_back_task_record_when_runtime_persist_fails(
     task.pipeline_status = "testing"
     task.runtime.execution_status = "flagged"
 
-    _fail_atomic_write_on_path(
-        monkeypatch,
-        task_runtime_file(tmp_path, task),
-        message="runtime write failed",
-    )
+    def fail_runtime_transaction(self, *, task_states=None, workspace_state=None):
+        raise OSError("runtime write failed")
+
+    monkeypatch.setattr(RuntimeStore, "save_runtime_transaction", fail_runtime_transaction)
 
     with pytest.raises(OSError, match="runtime write failed"):
         save_task(tmp_path, task)

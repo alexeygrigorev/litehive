@@ -20,6 +20,7 @@ from litehive.models import (
     TaskCreationSource,
     TaskRecord,
     TaskRuntime,
+    TaskStateRecord,
     UpstreamContributionOrigin,
     WorkspaceState,
     utcnow,
@@ -36,10 +37,9 @@ from litehive.workspace.locking import workspace_lock, workspace_mutation_guard
 from .normalization import normalize_acceptance_criteria, normalize_human_checkpoints
 from .paths import slugify, task_dir, task_file, task_runtime_file, tasks_root
 from .persistence import (
-    atomic_write_text,
-    serialize_state,
-    write_atomic_files,
     load_state,
+    serialize_state,
+    write_atomic_files_and_then,
 )
 from .templates import apply_task_template_defaults, render_task_brief, task_brief_file
 
@@ -85,8 +85,7 @@ def ensure_runtime_ignored(root: Path) -> None:
 def serialize_task_record(task: TaskRecord) -> str:
     _normalize_task_worktree_state(task)
     _normalize_task_flag_reason(task)
-    payload = task.model_dump(mode="python")
-    payload["git"]["worktree_path"] = None
+    payload = task.to_intent_record().model_dump(mode="python")
     return yaml.safe_dump(payload, sort_keys=False)
 
 
@@ -112,9 +111,18 @@ def task_runtime_for_storage(task: TaskRecord) -> TaskRuntime:
     return runtime
 
 
+def task_state_for_storage(task: TaskRecord) -> TaskStateRecord:
+    _normalize_task_worktree_state(task)
+    _normalize_task_flag_reason(task)
+    state = task.to_state_record()
+    state.runtime = task_runtime_for_storage(task)
+    state.git.worktree_path = task.runtime.git.worktree_path
+    state.updated_at = task.updated_at
+    return state
+
+
 def write_task_runtime(root: Path, task: TaskRecord) -> None:
-    runtime_store(root).save_task_runtime(task.id, task_runtime_for_storage(task))
-    atomic_write_text(task_runtime_file(root, task), serialize_task_runtime(task))
+    runtime_store(root).save_task_state(task.id, task_state_for_storage(task))
     ensure_runtime_ignored(root)
 
 
@@ -158,41 +166,73 @@ def save_task_runtime(root: Path, task: TaskRecord) -> None:
         write_task_runtime(root, task)
 
 
+def _backfill_legacy_task_state(root: Path, task: TaskRecord) -> TaskRecord:
+    store = runtime_store(root)
+    writes = {task_file(root, task): serialize_task_record(task)}
+
+    def callback() -> None:
+        store.save_runtime_transaction(task_states={task.id: task_state_for_storage(task)})
+
+    write_atomic_files_and_then(writes, callback)
+    return task
+
+
 def _load_task_runtime(root: Path, task: TaskRecord) -> TaskRecord:
     from .worktrees import migrate_legacy_worktree
 
     store = runtime_store(root)
-    runtime = store.load_task_runtime(task.id)
-    if runtime is not None:
-        task.runtime = runtime
+    task_state = store.load_task_state(task.id)
+    if task_state is not None:
+        task = TaskRecord.from_intent_and_state(task.to_intent_record(), task_state)
         set_task_commit_sha(task, task.runtime.git.commit_sha)
         _normalize_task_worktree_state(task)
         _, changed = migrate_legacy_worktree(root, task)
         if changed:
-            store.save_task_runtime(task.id, task_runtime_for_storage(task))
-            atomic_write_text(task_file(root, task), serialize_task_record(task))
-            atomic_write_text(task_runtime_file(root, task), serialize_task_runtime(task))
+            _backfill_legacy_task_state(root, task)
         return task
+
     runtime_file = task_runtime_file(root, task)
-    if not runtime_file.exists():
-        _normalize_task_worktree_state(task)
-        _, changed = migrate_legacy_worktree(root, task)
-        if changed:
-            store.save_task_runtime(task.id, task_runtime_for_storage(task))
-            atomic_write_text(task_file(root, task), serialize_task_record(task))
-            atomic_write_text(task_runtime_file(root, task), serialize_task_runtime(task))
-        return task
-    data = yaml.safe_load(runtime_file.read_text(encoding="utf-8")) or {}
-    task.runtime = TaskRuntime(**data)
-    store.save_task_runtime(task.id, task.runtime)
-    set_task_commit_sha(task, task.runtime.git.commit_sha)
+    if runtime_file.exists():
+        data = yaml.safe_load(runtime_file.read_text(encoding="utf-8")) or {}
+        task.runtime = TaskRuntime(**data)
+        set_task_commit_sha(task, task.runtime.git.commit_sha)
     _normalize_task_worktree_state(task)
     _, changed = migrate_legacy_worktree(root, task)
-    if changed:
-        store.save_task_runtime(task.id, task_runtime_for_storage(task))
-        atomic_write_text(task_file(root, task), serialize_task_record(task))
-        atomic_write_text(task_runtime_file(root, task), serialize_task_runtime(task))
-    return task
+    if changed or runtime_file.exists() or _task_file_contains_runtime_state(task_file(root, task)):
+        return _backfill_legacy_task_state(root, task)
+    return _backfill_legacy_task_state(root, task)
+
+
+def _task_file_contains_runtime_state(path: Path) -> bool:
+    data = _drop_legacy_task_engine_field(
+        yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    )
+    if not isinstance(data, dict):
+        return False
+    return any(
+        key in data
+        for key in (
+            "model",
+            "status",
+            "flag_reason",
+            "flag_count",
+            "pipeline_status",
+            "updated_at",
+            "subagents",
+            "retry_policy",
+            "runtime",
+        )
+    ) or any(
+        key in (data.get("git") or {})
+        for key in (
+            "commit_sha",
+            "checkpoint_base_sha",
+            "checkpoint_attempts",
+            "rolled_back_checkpoint_attempt",
+            "merge_agent_attempts",
+            "worktree_path",
+        )
+    )
 
 
 def load_task_record_file(path: Path) -> TaskRecord:
@@ -283,18 +323,20 @@ def create_task(
                 protected_task_ids=[task.id],
             )
             writes = {
-                task_file(root, task): yaml.safe_dump(
-                    task.model_dump(mode="python"), sort_keys=False
-                ),
-                task_runtime_file(root, task): serialize_task_runtime(task),
+                task_file(root, task): serialize_task_record(task),
                 base / "journal.md": f"# {task.id} {task.title}\n\n## {utcnow()}\nTask created.\n",
                 state_path(root): serialize_state(state),
             }
             if task.mode == "tasks":
                 writes[task_brief_file(root, task)] = render_task_brief(task)
-            write_atomic_files(writes)
-            runtime_store(root).save_task_runtime(task.id, task_runtime_for_storage(task))
-            runtime_store(root).save_workspace_state(state)
+
+            def callback() -> None:
+                runtime_store(root).save_runtime_transaction(
+                    task_states={task.id: task_state_for_storage(task)},
+                    workspace_state=state,
+                )
+
+            write_atomic_files_and_then(writes, callback)
         except Exception:
             try:
                 shutil.rmtree(base)
@@ -356,10 +398,7 @@ def create_follow_up_tasks(
             (base / "artifacts").mkdir(parents=True, exist_ok=False)
             created_dirs.append(base)
             state.queue.append(task.id)
-            writes[task_file(root, task)] = yaml.safe_dump(
-                task.model_dump(mode="python"), sort_keys=False
-            )
-            writes[task_runtime_file(root, task)] = serialize_task_runtime(task)
+            writes[task_file(root, task)] = serialize_task_record(task)
             writes[base / "journal.md"] = (
                 f"# {task.id} {task.title}\n\n"
                 f"## {utcnow()}\n"
@@ -380,11 +419,16 @@ def create_follow_up_tasks(
         )
         writes[state_path(root)] = serialize_state(state)
         try:
-            write_atomic_files(writes)
-            store = runtime_store(root)
-            for task in created_tasks:
-                store.save_task_runtime(task.id, task_runtime_for_storage(task))
-            store.save_workspace_state(state)
+            def callback() -> None:
+                runtime_store(root).save_runtime_transaction(
+                    task_states={
+                        task.id: task_state_for_storage(task)
+                        for task in created_tasks
+                    },
+                    workspace_state=state,
+                )
+
+            write_atomic_files_and_then(writes, callback)
         except Exception:
             for base in reversed(created_dirs):
                 try:
@@ -421,8 +465,7 @@ def list_tasks(root: Path, *, include_runtime: bool = True) -> list[TaskRecord]:
         if not path.exists():
             continue
         task = load_task_record_file(path)
-        if include_runtime:
-            task = _load_task_runtime(root, task)
+        task = _load_task_runtime(root, task)
         records.append(task)
     return records
 
@@ -441,8 +484,7 @@ def list_tasks_state_first(
         if not path.exists():
             continue
         task = load_task_record_file(path)
-        if include_runtime:
-            task = _load_task_runtime(root, task)
+        task = _load_task_runtime(root, task)
         task_by_id[task.id] = task
 
     workspace_state = load_state(root) if state is None else state
@@ -484,6 +526,10 @@ def save_task(root: Path, task: TaskRecord) -> None:
     task.updated_at = utcnow()
     with workspace_mutation_guard(root):
         writes = workspace_transition_writes(root, tasks=[task])
-        write_atomic_files(writes)
-        runtime_store(root).save_task_runtime(task.id, task_runtime_for_storage(task))
+        write_atomic_files_and_then(
+            writes,
+            lambda: runtime_store(root).save_runtime_transaction(
+                task_states={task.id: task_state_for_storage(task)}
+            ),
+        )
         ensure_runtime_ignored(root)

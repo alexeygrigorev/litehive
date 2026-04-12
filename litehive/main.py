@@ -95,36 +95,20 @@ def _fast_status(argv: list[str]) -> int:
         print(f"runner_heartbeat_at: {runner['heartbeat_at']}")
 
     if active_task_id is not None:
-        tasks_root = workspace / ".litehive" / "tasks"
-        matches = sorted(tasks_root.glob(f"{active_task_id}-*/task.yaml"))
-        if matches:
-            task_path = matches[0]
-            try:
-                task_data = yaml.safe_load(task_path.read_text(encoding="utf-8")) or {}
-            except (OSError, yaml.YAMLError):
-                task_data = {}
-            runtime_path = task_path.with_name("runtime.yaml")
-            if runtime_path.exists():
-                try:
-                    runtime = yaml.safe_load(runtime_path.read_text(encoding="utf-8")) or {}
-                except (OSError, yaml.YAMLError):
-                    runtime = {}
-            else:
-                runtime = {}
-            current_stage = (runtime.get("current_stage") or {}).get("step")
-            last_subagent = runtime.get("last_subagent") or {}
-            active_subagent = runtime.get("active_subagent") or {}
-            stage = current_stage or task_data.get("pipeline_status") or "-"
+        from litehive.tasks.crud import get_task
+
+        task = get_task(workspace, active_task_id)
+        if task is not None:
+            stage = task.runtime.current_stage.step or task.pipeline_status or "-"
             engine = (
-                active_subagent.get("engine")
-                or last_subagent.get("engine")
-                or default_engine
+                task.runtime.active_subagent.engine
+                if task.runtime.active_subagent is not None
+                else task.runtime.last_subagent.engine
+                if task.runtime.last_subagent is not None
+                else default_engine
             )
-            print(f"active_task_title: {task_data.get('title', '-')}")
-            print(
-                "active_task_status: "
-                f"{task_data.get('status', '-')}/{task_data.get('pipeline_status', '-')}"
-            )
+            print(f"active_task_title: {task.title}")
+            print(f"active_task_status: {task.status}/{task.pipeline_status}")
             print(f"active_stage: {stage}")
             print(f"active_engine: {engine}")
     alerts = status_attention_findings(workspace, pool_stop_reason=stop_reason)

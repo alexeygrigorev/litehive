@@ -63,14 +63,13 @@ def atomic_write_gzip_text(path: Path, content: str) -> None:
 
 
 def write_atomic_files(writes: dict[Path, str]) -> None:
-    _write = atomic_write_text
     snapshots = {
         path: path.read_text(encoding="utf-8") if path.exists() else MISSING for path in writes
     }
     applied: list[Path] = []
     try:
         for path, content in writes.items():
-            _write(path, content)
+            atomic_write_text(path, content)
             applied.append(path)
     except Exception:
         for path in reversed(applied):
@@ -79,7 +78,28 @@ def write_atomic_files(writes: dict[Path, str]) -> None:
                 if path.exists():
                     path.unlink()
                 continue
-            _write(path, previous)
+            atomic_write_text(path, previous)
+        raise
+
+
+def write_atomic_files_and_then(writes: dict[Path, str], callback) -> None:
+    snapshots = {
+        path: path.read_text(encoding="utf-8") if path.exists() else MISSING for path in writes
+    }
+    applied: list[Path] = []
+    try:
+        for path, content in writes.items():
+            atomic_write_text(path, content)
+            applied.append(path)
+        callback()
+    except Exception:
+        for path in reversed(applied):
+            previous = snapshots[path]
+            if previous is MISSING:
+                if path.exists():
+                    path.unlink()
+                continue
+            atomic_write_text(path, previous)
         raise
 
 

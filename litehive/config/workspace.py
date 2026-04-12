@@ -2,6 +2,7 @@
 
 import logging
 import os
+import re
 from dataclasses import asdict
 from pathlib import Path
 
@@ -24,6 +25,9 @@ from litehive.config.workspace_registry import (
 )
 
 log = logging.getLogger(__name__)
+_UNRESOLVED_SHELL_VAR_RE = re.compile(
+    r"(?<!\\)\$(?:\{[A-Za-z_][A-Za-z0-9_]*\}|[A-Za-z_][A-Za-z0-9_]*)"
+)
 
 
 def render_workspace_gitignore() -> str:
@@ -58,9 +62,11 @@ def _resolve_workspace_root(path: Path) -> Path:
 
 def _reject_invalid_workspace_path(path: Path | str, *, source: str) -> None:
     raw = str(path).strip()
-    if raw.startswith("$"):
+    match = _UNRESOLVED_SHELL_VAR_RE.search(raw)
+    if match is not None:
         raise ValueError(
-            f"invalid workspace root from {source}: {raw!r} starts with '$' and looks like an unresolved shell variable"
+            f"invalid workspace root from {source}: {raw!r} contains unresolved shell variable "
+            f"syntax ({match.group(0)!r}); pass the expanded absolute path instead"
         )
 
 
@@ -68,6 +74,30 @@ def _nested_litehive_ancestor(path: Path) -> Path | None:
     for ancestor in path.parents:
         if ancestor.name == ".litehive":
             return ancestor
+    return None
+
+
+def _litehive_control_ancestor(path: Path) -> Path | None:
+    for ancestor in (path, *path.parents):
+        if ancestor.name == ".litehive":
+            return ancestor
+    return None
+
+
+def _managed_worktree_root(path: Path) -> Path | None:
+    for ancestor in (path, *path.parents):
+        if ancestor.name == "worktrees" and ancestor.parent.name == ".litehive":
+            return ancestor
+    return None
+
+
+def _workspace_parent_root(path: Path) -> Path | None:
+    for ancestor in path.parents:
+        try:
+            if workspace_dir(ancestor).is_dir():
+                return ancestor
+        except OSError:
+            continue
     return None
 
 
@@ -80,10 +110,17 @@ def _validate_workspace_root(
     _reject_invalid_workspace_path(root, source=source)
     expanded = Path(root).expanduser()
     resolved_input = expanded.resolve()
-    nested_ancestor = _nested_litehive_ancestor(resolved_input)
-    if nested_ancestor is not None and not allow_worktree_root_alias:
+    control_ancestor = _litehive_control_ancestor(resolved_input)
+    managed_worktree = _managed_worktree_root(resolved_input)
+    if managed_worktree is not None and not allow_worktree_root_alias:
         raise ValueError(
-            f"invalid workspace root from {source}: {resolved_input} is nested inside another .litehive tree"
+            f"invalid workspace root from {source}: {resolved_input} is inside Litehive managed "
+            f"worktrees at {managed_worktree}; choose the real repo root instead"
+        )
+    if control_ancestor is not None and not allow_worktree_root_alias:
+        raise ValueError(
+            f"invalid workspace root from {source}: {resolved_input} is inside the Litehive "
+            f"control directory {control_ancestor}; choose the real repo root instead"
         )
     resolved_root = _resolve_workspace_root(expanded)
     if _nested_litehive_ancestor(resolved_root) is not None:
@@ -91,6 +128,16 @@ def _validate_workspace_root(
             f"invalid workspace root from {source}: {resolved_root} is nested inside another .litehive tree"
         )
     return resolved_root
+
+
+def _reject_nested_workspace_bootstrap(root: Path, *, source: str) -> None:
+    parent_workspace = _workspace_parent_root(root)
+    if parent_workspace is None:
+        return
+    raise ValueError(
+        f"invalid workspace root from {source}: {root} is inside existing Litehive workspace "
+        f"{parent_workspace}; choose the real repo root instead of a nested subdirectory"
+    )
 
 
 def _task_exists(root: Path, task_id: str) -> bool:
@@ -171,6 +218,7 @@ def ensure_workspace(root: Path, config: LitehiveConfig | None = None) -> Path:
         source="ensure_workspace",
         allow_worktree_root_alias=False,
     )
+    _reject_nested_workspace_bootstrap(root, source="ensure_workspace")
     base = workspace_dir(root)
     tasks = base / "tasks"
     tasks.mkdir(parents=True, exist_ok=True)

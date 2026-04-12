@@ -452,8 +452,39 @@ def test_ensure_workspace_rejects_nested_workspace_root(tmp_path: Path) -> None:
     nested_root = tmp_path / ".litehive" / "worktrees" / "T-0001"
     nested_root.mkdir(parents=True)
 
-    with pytest.raises(ValueError, match="nested inside another \\.litehive tree"):
+    with pytest.raises(ValueError, match="managed worktrees.*choose the real repo root"):
         ensure_workspace(nested_root)
+
+
+def test_ensure_workspace_rejects_litehive_control_directory(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+
+    with pytest.raises(ValueError, match="Litehive control directory.*choose the real repo root"):
+        ensure_workspace(tmp_path / ".litehive")
+
+
+def test_ensure_workspace_rejects_nested_subdirectory_of_existing_workspace(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    nested_root = tmp_path / "packages" / "demo"
+    nested_root.mkdir(parents=True)
+
+    with pytest.raises(ValueError, match="inside existing Litehive workspace.*nested subdirectory"):
+        ensure_workspace(nested_root)
+
+
+def test_ensure_workspace_rejects_leading_unresolved_shell_var() -> None:
+    with pytest.raises(ValueError, match="unresolved shell variable syntax.*expanded absolute path"):
+        ensure_workspace(Path("$tmpdir/project"))
+
+
+def test_ensure_workspace_rejects_embedded_unresolved_shell_var() -> None:
+    with pytest.raises(ValueError, match="unresolved shell variable syntax.*expanded absolute path"):
+        ensure_workspace(Path("/tmp/$tmpdir/project"))
+
+
+def test_ensure_workspace_rejects_braced_unresolved_shell_var() -> None:
+    with pytest.raises(ValueError, match="unresolved shell variable syntax.*expanded absolute path"):
+        ensure_workspace(Path("/tmp/${tmpdir}/project"))
 
 
 def test_engine_status_command_shows_compact_summary(

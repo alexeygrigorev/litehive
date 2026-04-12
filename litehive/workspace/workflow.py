@@ -7,11 +7,11 @@ from litehive.models import TaskRecord, WorkspaceState, utcnow
 from litehive.storage import runtime_store
 
 from litehive.workspace.locking import workspace_mutation_guard
-from litehive.tasks.paths import task_dir, task_file, task_runtime_file
+from litehive.tasks.paths import task_dir, task_file
 from litehive.tasks.persistence import (
-    serialize_state,
-    write_atomic_files,
     load_state,
+    serialize_state,
+    write_atomic_files_and_then,
 )
 
 
@@ -22,12 +22,11 @@ def workspace_transition_writes(
     state: WorkspaceState | None = None,
     journal_messages: dict[str, str] | None = None,
 ) -> dict[Path, str]:
-    from litehive.tasks.crud import serialize_task_record, serialize_task_runtime
+    from litehive.tasks.crud import serialize_task_record
 
     writes: dict[Path, str] = {}
     for task in tasks:
         writes[task_file(root, task)] = serialize_task_record(task)
-        writes[task_runtime_file(root, task)] = serialize_task_runtime(task)
         if journal_messages is None or task.id not in journal_messages:
             continue
         journal_path = task_dir(root, task) / "journal.md"
@@ -222,7 +221,7 @@ def persist_tasks_and_state(
     state: WorkspaceState,
     journal_messages: dict[str, str] | None = None,
 ) -> None:
-    from litehive.tasks.crud import ensure_runtime_ignored
+    from litehive.tasks.crud import ensure_runtime_ignored, task_state_for_storage
 
     for task in tasks:
         task.updated_at = utcnow()
@@ -233,18 +232,18 @@ def persist_tasks_and_state(
         journal_messages=journal_messages,
     )
     with workspace_mutation_guard(root):
-        write_atomic_files(writes)
-        from litehive.tasks.crud import task_runtime_for_storage
-
-        store = runtime_store(root)
-        for task in tasks:
-            store.save_task_runtime(task.id, task_runtime_for_storage(task))
         merged_state = merged_state_for_runner_owned_write(
             root,
             state=state,
             protected_task_ids=[task.id for task in tasks],
         )
-        store.save_workspace_state(merged_state)
+        write_atomic_files_and_then(
+            writes,
+            lambda: runtime_store(root).save_runtime_transaction(
+                task_states={task.id: task_state_for_storage(task) for task in tasks},
+                workspace_state=merged_state,
+            ),
+        )
         ensure_runtime_ignored(root)
 
 
@@ -255,7 +254,7 @@ def persist_tasks_and_state_without_runner_guard(
     state: WorkspaceState,
     journal_messages: dict[str, str] | None = None,
 ) -> None:
-    from litehive.tasks.crud import ensure_runtime_ignored
+    from litehive.tasks.crud import ensure_runtime_ignored, task_state_for_storage
 
     for task in tasks:
         task.updated_at = utcnow()
@@ -265,18 +264,18 @@ def persist_tasks_and_state_without_runner_guard(
         state=state,
         journal_messages=journal_messages,
     )
-    write_atomic_files(writes)
-    from litehive.tasks.crud import task_runtime_for_storage
-
-    store = runtime_store(root)
-    for task in tasks:
-        store.save_task_runtime(task.id, task_runtime_for_storage(task))
     merged_state = merged_state_for_runner_owned_write(
         root,
         state=state,
         protected_task_ids=[task.id for task in tasks],
     )
-    store.save_workspace_state(merged_state)
+    write_atomic_files_and_then(
+        writes,
+        lambda: runtime_store(root).save_runtime_transaction(
+            task_states={task.id: task_state_for_storage(task) for task in tasks},
+            workspace_state=merged_state,
+        ),
+    )
     ensure_runtime_ignored(root)
 
 

@@ -28,6 +28,10 @@ from tests.workspace_helpers import (
 )
 
 
+def _typer_app(candidate):
+    return candidate.app if hasattr(candidate, "app") else candidate
+
+
 def _make_done_task(root: Path, title: str = "Done task") -> TaskRecord:
     """Create a task and mark it done."""
     task = create_task(root, title=title)
@@ -264,7 +268,7 @@ def test_cmd_archive_no_args_prints_help(
     tmp_path: Path,
 ) -> None:
     ensure_workspace(tmp_path)
-    result = CliRunner().invoke(app, ["archive", "--workspace", str(tmp_path)])
+    result = CliRunner().invoke(_typer_app(app), ["archive", "--workspace", str(tmp_path)])
 
     assert result.exit_code == 2
     assert "archive" in result.stdout
