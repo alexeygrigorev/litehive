@@ -31,7 +31,8 @@ uv sync
 
 # Set up a project
 cd /path/to/your/project
-litehive configure
+litehive status
+# edit .litehive/config.yaml before starting work if you need non-default settings
 
 # Add some tasks
 litehive task add "Add user authentication" --goal "Users can sign up and log in"
@@ -107,7 +108,6 @@ litehive status                           # quick workspace overview
 litehive status --fast                    # legacy alias for the default quick read
 litehive status --full                    # verbose per-task status dump
 litehive queue                            # show queue order
-litehive web                              # local web dashboard
 litehive task logs                             # tail the latest daemon run log
 litehive task logs --daemon                    # list recent daemon sessions with outcomes
 litehive task logs T-0002                      # print the task journal
@@ -186,10 +186,10 @@ agent_startup_guidance:
 Describe your project in `.litehive/context.md` so agents understand the codebase:
 
 ```bash
-litehive configure --process-profile python
+litehive status
 ```
 
-This generates a context template you can customize. Available profiles: generic, python, django, rust.
+Litehive bootstraps `.litehive/config.yaml` and `.litehive/context.md` on first run. Edit them by hand after bootstrap. Available profiles: generic, python, django, rust.
 
 ## Workspace layout
 
@@ -266,16 +266,16 @@ Install litehive once, use it anywhere:
 ```bash
 # Project A
 cd ~/projects/webapp
-litehive configure
+litehive status
 litehive start
 
 # Project B
 cd ~/projects/api-server
-litehive configure
+litehive status
 litehive start
 
 # See all running daemons
-litehive web
+litehive daemon instances
 ```
 
 All instances share quota tracking at `~/.config/litehive/quota.yaml` so they coordinate engine usage across projects.

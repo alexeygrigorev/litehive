@@ -15,24 +15,24 @@ _DEFAULT_TAIL_LINES = 40
 _FOLLOW_POLL_SECONDS = 0.1
 
 
-def cmd_logs(args) -> int:
-    ensure_workspace(args.workspace)
+def cmd_logs(workspace, task_id=None, daemon: bool = False, agent: bool = False, all: bool = False, follow: bool = False) -> int:
+    ensure_workspace(workspace)
 
-    if getattr(args, "follow", False):
-        return _follow_active_subagent(args.workspace, task_id=getattr(args, "task_id", None))
-    if getattr(args, "daemon", False):
-        return _list_daemon_sessions(args.workspace)
-    if getattr(args, "task_id", None):
-        task = _load_task_with_runtime(args.workspace, args.task_id)
+    if follow:
+        return _follow_active_subagent(workspace, task_id=task_id)
+    if daemon:
+        return _list_daemon_sessions(workspace)
+    if task_id:
+        task = _load_task_with_runtime(workspace, task_id)
         if task is None:
-            print(f"task not found: {args.task_id}")
+            print(f"task not found: {task_id}")
             return 1
-        if getattr(args, "agent", False):
-            if getattr(args, "all", False):
-                return _list_task_subagents(args.workspace, task)
-            return _show_latest_subagent(args.workspace, task)
-        return _show_task_journal(args.workspace, task)
-    return _show_latest_daemon_log(args.workspace)
+        if agent:
+            if all:
+                return _list_task_subagents(workspace, task)
+            return _show_latest_subagent(workspace, task)
+        return _show_task_journal(workspace, task)
+    return _show_latest_daemon_log(workspace)
 
 
 def _show_latest_daemon_log(root: Path) -> int:

@@ -1,7 +1,7 @@
 import sys
 
+from litehive.cli.common import WorkspaceOption, make_typer, require_subcommand
 from litehive.config import ensure_workspace
-from litehive.db import apply_pending_migrations
 from litehive.daemon import (
     daemon_status_lines,
     list_daemon_instances,
@@ -9,9 +9,18 @@ from litehive.daemon import (
     start_background_daemon,
     stop_workspace_daemon,
 )
+from litehive.db import apply_pending_migrations
+
+app = make_typer(invoke_without_command=True)
 
 
-def cmd_daemon_run(workspace, foreground: bool = False):
+@app.callback()
+def daemon_group(ctx):
+    require_subcommand(ctx)
+
+
+@app.command("run", help="Start the workspace daemon")
+def daemon_run(workspace: WorkspaceOption, foreground: bool = False) -> int:
     ensure_workspace(workspace)
     apply_pending_migrations(workspace)
     if foreground:
@@ -27,14 +36,16 @@ def cmd_daemon_run(workspace, foreground: bool = False):
     return 0
 
 
-def cmd_daemon_status(workspace):
+@app.command("status", help="Show daemon state for a workspace")
+def daemon_status(workspace: WorkspaceOption) -> int:
     ensure_workspace(workspace)
     for line in daemon_status_lines(workspace):
         print(line)
     return 0
 
 
-def cmd_daemon_stop(workspace):
+@app.command("stop", help="Stop the workspace daemon")
+def daemon_stop(workspace: WorkspaceOption) -> int:
     ensure_workspace(workspace)
     entry = stop_workspace_daemon(workspace)
     print(f"workspace: {workspace.resolve()}")
@@ -48,7 +59,8 @@ def cmd_daemon_stop(workspace):
     return 0
 
 
-def cmd_daemon_restart(workspace):
+@app.command("restart", help="Restart the workspace daemon")
+def daemon_restart(workspace: WorkspaceOption) -> int:
     ensure_workspace(workspace)
     previous = stop_workspace_daemon(workspace)
     try:
@@ -63,7 +75,8 @@ def cmd_daemon_restart(workspace):
     return 0
 
 
-def cmd_daemon_instances():
+@app.command("instances", help="List all live Litehive daemons")
+def daemon_instances() -> int:
     instances = list_daemon_instances()
     print(f"instances: {len(instances)}")
     for index, entry in enumerate(instances, start=1):
@@ -74,7 +87,8 @@ def cmd_daemon_instances():
     return 0
 
 
-def cmd_daemon_worker(workspace):
+@app.command("worker", hidden=True)
+def daemon_worker(workspace: WorkspaceOption) -> int:
     ensure_workspace(workspace)
     apply_pending_migrations(workspace)
     return run_daemon_loop(workspace, output_stream=None)

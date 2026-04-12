@@ -59,10 +59,10 @@ class _RescueResult:
     message: str | None = None
 
 
-def cmd_worktree_ls(args):
-    ensure_workspace(args.workspace)
-    worktrees = collect_managed_worktrees(args.workspace)
-    print(f"workspace: {args.workspace}")
+def cmd_worktree_ls(workspace):
+    ensure_workspace(workspace)
+    worktrees = collect_managed_worktrees(workspace)
+    print(f"workspace: {workspace}")
     print(f"worktree_count: {len(worktrees)}")
     if not worktrees:
         print("worktrees: none")
@@ -77,20 +77,20 @@ def cmd_worktree_ls(args):
     return 0
 
 
-def cmd_worktree_clean(args):
-    ensure_workspace(args.workspace)
-    worktrees = collect_managed_worktrees(args.workspace)
+def cmd_worktree_clean(workspace, dry_run: bool = False):
+    ensure_workspace(workspace)
+    worktrees = collect_managed_worktrees(workspace)
     candidates = [item for item in worktrees if item.cleanable]
     skipped_active = [item for item in worktrees if item.active]
 
-    print(f"workspace: {args.workspace}")
-    print(f"dry_run: {'yes' if args.dry_run else 'no'}")
+    print(f"workspace: {workspace}")
+    print(f"dry_run: {'yes' if dry_run else 'no'}")
     for item in candidates:
         print(f"would_remove: {item.task_id} {item.status} {item.worktree_rel}")
     for item in skipped_active:
         print(f"skipped_active: {item.task_id} {item.status} {item.worktree_rel}")
 
-    if args.dry_run:
+    if dry_run:
         print("removed_count: 0")
         print(f"would_remove_count: {len(candidates)}")
         return 0
@@ -100,11 +100,11 @@ def cmd_worktree_clean(args):
     removed_count = 0
     for item in candidates:
         try:
-            remove_worktree(args.workspace, item.worktree_path, force=True)
-            task = get_task(args.workspace, item.task_id)
+            remove_worktree(workspace, item.worktree_path, force=True)
+            task = get_task(workspace, item.task_id)
             if task is not None:
                 clear_task_worktree_path(task)
-                save_task(args.workspace, task)
+                save_task(workspace, task)
             removed.append(item)
             removed_count += 1
         except GitError as exc:
@@ -118,17 +118,17 @@ def cmd_worktree_clean(args):
     return 1 if failures else 0
 
 
-def cmd_worktree_rescue(args):
-    ensure_workspace(args.workspace)
-    candidates = _collect_rescue_candidates(args.workspace)
+def cmd_worktree_rescue(workspace, apply: bool = False):
+    ensure_workspace(workspace)
+    candidates = _collect_rescue_candidates(workspace)
 
-    print(f"workspace: {args.workspace}")
+    print(f"workspace: {workspace}")
     print(f"candidate_count: {len(candidates)}")
     if not candidates:
         print("rescues: none")
         return 0
 
-    if not args.apply:
+    if not apply:
         for candidate in candidates:
             print()
             print(f"task_id: {candidate.task_id}")
@@ -144,12 +144,12 @@ def cmd_worktree_rescue(args):
         return 0
 
     try:
-        _require_clean_main_checkout(args.workspace)
+        _require_clean_main_checkout(workspace)
     except GitError as exc:
         print(f"apply_error: {exc}")
         return 1
 
-    results = [_apply_rescue_candidate(args.workspace, candidate) for candidate in candidates]
+    results = [_apply_rescue_candidate(workspace, candidate) for candidate in candidates]
     clean_count = sum(1 for item in results if item.status == "clean")
     already_landed_count = sum(1 for item in results if item.status == "already_landed")
     manual_conflict_count = sum(1 for item in results if item.status == "manual_conflict")

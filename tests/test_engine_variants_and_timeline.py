@@ -676,58 +676,32 @@ def test_update_command_rejects_removed_goz_engine_flag(
 
 
 def test_configure_persists_claude_settings(tmp_path: Path) -> None:
-    from litehive.cli import cmd_configure
-
-    parser = argparse.Namespace(
-        workspace=tmp_path,
-        default_engine="codex",
-        process_profile="generic",
-        default_retry_limit=3,
-        opencode_model="zai-coding-plan/glm-5.1",
-        gemini_model=None,
-        copilot_model=None,
-        claude_model="claude-sonnet-4-20250514",
-        claude_max_turns=20,
-        pool_stop_on_failure=False,
-        pool_max_tasks=None,
-        pool_stop_on_dirty_git=False,
+    ensure_workspace(tmp_path)
+    raw = yaml.safe_load((tmp_path / ".litehive" / "config.yaml").read_text(encoding="utf-8"))
+    raw["claude_model"] = "claude-sonnet-4-20250514"
+    raw["claude_max_turns"] = 20
+    (tmp_path / ".litehive" / "config.yaml").write_text(
+        yaml.safe_dump(raw, sort_keys=False),
+        encoding="utf-8",
     )
-
-    assert cmd_configure(parser) == 0
     config = load_config(tmp_path)
     assert config.claude_model == "claude-sonnet-4-20250514"
     assert config.claude_max_turns == 20
 
 
 def test_configure_updates_existing_workspace_process_profile(tmp_path: Path) -> None:
-    from litehive.cli import cmd_configure
-
     ensure_workspace(tmp_path, LitehiveConfig(process_profile="generic"))
-
-    parser = argparse.Namespace(
-        workspace=tmp_path,
-        default_engine="codex",
-        process_profile="python",
-        default_retry_limit=3,
-        opencode_model="zai-coding-plan/glm-5.1",
-        gemini_model=None,
-        copilot_model=None,
-        claude_model="claude-sonnet-4-20250514",
-        claude_max_turns=20,
-        task_engine_route=None,
-        pool_stop_on_failure=False,
-        pool_max_tasks=None,
-        pool_stop_on_dirty_git=False,
-        pool_selection_policy="dependency_aware",
+    raw = yaml.safe_load((tmp_path / ".litehive" / "config.yaml").read_text(encoding="utf-8"))
+    raw["process_profile"] = "python"
+    raw["claude_max_turns"] = 20
+    (tmp_path / ".litehive" / "config.yaml").write_text(
+        yaml.safe_dump(raw, sort_keys=False),
+        encoding="utf-8",
     )
-
-    assert cmd_configure(parser) == 0
 
     config = load_config(tmp_path)
     assert config.process_profile == "python"
     assert config.claude_max_turns == 20
-    context = (tmp_path / ".litehive" / "context.md").read_text(encoding="utf-8")
-    assert "## Python specifics" in context
 
 
 def test_claude_model_resolved_from_workspace_defaults() -> None:

@@ -17,7 +17,7 @@ def resolve_litehive_source_root(args):
     config = load_config(args.workspace)
     if not config.litehive_source_path:
         raise ValueError(
-            "litehive_source_path is not configured; run `litehive configure --litehive-source-path <path>` "
+            "litehive_source_path is not configured; set it in `.litehive/config.yaml` "
             "or pass `--litehive-workspace`."
         )
     return Path(config.litehive_source_path).expanduser().resolve()

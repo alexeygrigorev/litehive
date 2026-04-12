@@ -10,7 +10,6 @@ commands as `uv run litehive ...`.
 
 Top-level commands:
 
-- `configure`
 - `status`
 - `health`
 - `engine`
@@ -18,7 +17,6 @@ Top-level commands:
 - `task`
 - `import`
 - `repair`
-- `web`
 - `start`
 - `stop`
 - `restart`
@@ -30,30 +28,8 @@ Top-level commands:
 
 ## Workspace Setup And Inspection
 
-### `litehive configure`
-
-Initialize `.litehive/` and optionally seed config values.
-
-```bash
-litehive configure
-litehive configure --default-engine codex --process-profile python
-```
-
-Useful options:
-
-- `--default-engine`
-- `--process-profile`
-- `--default-retry-limit`
-- `--litehive-source-path`
-- `--opencode-model`
-- `--gemini-model`
-- `--copilot-model`
-- `--claude-enabled`
-- `--claude-model`
-- `--claude-max-turns`
-- pool limit flags such as `--pool-max-tasks`
-- hook flags such as `--hook`
-- subagent resource-limit flags
+Litehive bootstraps `.litehive/` on first run. Use `litehive status` in a fresh repo,
+then edit `.litehive/config.yaml` and `.litehive/context.md` by hand.
 
 ### `litehive status`
 
@@ -76,15 +52,6 @@ Show the active task and queued order.
 
 ```bash
 litehive queue
-```
-
-### `litehive web`
-
-Serve the local queue and session monitor.
-
-```bash
-litehive web
-litehive web --host 127.0.0.1 --port 8765
 ```
 
 ## Engine Management
@@ -404,20 +371,12 @@ Restart the workspace daemon.
 litehive restart
 ```
 
-### `litehive web`
-
-List live Litehive daemons across workspaces from the global registry.
-
-```bash
-litehive web
-```
-
 ## Common Workflows
 
 ### Start a new workspace
 
 ```bash
-litehive configure
+litehive status
 litehive status
 ```
 

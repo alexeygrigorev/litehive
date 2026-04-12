@@ -8,7 +8,6 @@ from tests.workspace_helpers import (
     SubagentRef,
     _cmd_logs,
     argparse,
-    build_parser,
     create_task,
     ensure_workspace,
     pytest,
@@ -99,16 +98,6 @@ def test_logs_defaults_to_latest_daemon_run_tail(
     assert "line one" in output
     assert "line two" in output
 
-
-def test_logs_parser_accepts_new_flags() -> None:
-    parser = build_parser()
-    args = parser.parse_args(["logs", "T-0001", "--agent", "--all", "--workspace", "/tmp/demo"])
-
-    assert args.command == "logs"
-    assert args.task_id == "T-0001"
-    assert args.agent is True
-    assert args.all is True
-    assert args.workspace == Path("/tmp/demo")
 
 
 def test_logs_daemon_lists_latest_sessions_with_outcomes(

@@ -4,8 +4,8 @@ from litehive.config import resolve_workspace
 from litehive.db import MigrationApplyError, apply_pending_migrations, migration_status
 
 
-def cmd_db_status(args) -> int:
-    workspace = resolve_workspace(None, workspace=args.workspace)
+def cmd_db_status(workspace) -> int:
+    workspace = resolve_workspace(None, workspace=workspace)
     status = migration_status(workspace)
     print(f"workspace: {workspace}")
     print(f"schema_version: {status.current_version}")
@@ -16,10 +16,10 @@ def cmd_db_status(args) -> int:
     return 0
 
 
-def cmd_db_migrate(args) -> int:
-    workspace = resolve_workspace(None, workspace=args.workspace)
+def cmd_db_migrate(workspace, dry_run: bool = False) -> int:
+    workspace = resolve_workspace(None, workspace=workspace)
     try:
-        plan = apply_pending_migrations(workspace, dry_run=getattr(args, "dry_run", False))
+        plan = apply_pending_migrations(workspace, dry_run=dry_run)
     except MigrationApplyError as exc:
         print(f"db migrate failed: {exc}")
         return 1

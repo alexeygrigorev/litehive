@@ -1,0 +1,107 @@
+# Litehive workspace configuration.
+# This file is written automatically the first time Litehive bootstraps a repo.
+# Edit it by hand; Litehive does not provide a `configure` command anymore.
+
+# Default engine used for new runs unless a command explicitly overrides it.
+default_engine: codex
+
+# Optional engine used for recovery runs. Keep `auto` or unset to follow defaults.
+recovery_engine: auto
+
+# Optional path to a Litehive source checkout for upstream issue/task handoff.
+litehive_source_path: null
+
+# Process profile controls the scaffolded workspace context prompt.
+process_profile: generic
+
+# Per-engine default model overrides. Leave null to use adapter defaults.
+codex_model: null
+opencode_model: zai-coding-plan/glm-5.1
+goz_model: glm-5-turbo
+gemini_model: null
+copilot_model: null
+claude_model: claude-sonnet-4-20250514
+
+# Claude-specific guardrail to avoid runaway interactive sessions.
+claude_max_turns: 100
+
+# Retry policy for task execution.
+default_retry_limit: 3
+
+# Failure kinds that are eligible for retry.
+retry_on:
+  - execution_limit
+  - timeout
+
+# Stage-local retry budget before the pipeline escalates.
+default_stage_retry_limit: 2
+
+# Pool runner defaults for `litehive run --drain`.
+pool_stop_on_failure: false
+pool_max_tasks: null
+pool_stop_on_dirty_git: false
+pool_stop_on_attention: false
+pool_selection_policy: dependency_aware
+
+# Runner hook execution policy. Use `fail_fast` to stop after the first failing hook.
+runner_hook_execution_mode: run_all
+
+# Lifecycle hooks keyed by hook point.
+# Supported keys:
+#   before_grooming, after_grooming, before_implementing, after_implementing,
+#   before_testing, after_testing, before_accepting, after_accepting, after_commit
+# Each hook supports:
+#   command: shell command string
+#   reject_on_failure: only meaningful for rejectable hook points
+#   description: optional operator-facing label
+#   timeout_seconds: optional timeout budget
+#   instructions_on_failure: optional guidance surfaced on failure
+runner_hooks: {}
+
+# Timeout budget for detecting hung subagents and top-level runs.
+subagent_inactivity_timeout_seconds: 360.0
+inactivity_timeout_seconds: null
+
+# External engine sandbox configuration used for adapters that launch outside the repo.
+external_engine_sandbox:
+  enabled: false
+  backend: docker
+  runtime_binary: docker
+  image: litehive-external-engine:latest
+  workspace_mount_path: /workspace
+  binary_mount_root: /litehive/bin
+  runtime_args: []
+  default_network_mode: none
+  default_workspace_mode: rw
+  read_only_rootfs: true
+  drop_capabilities: true
+  no_new_privileges: true
+  tmpfs:
+    - /tmp
+  # Per-engine sandbox overrides. Each engine policy supports:
+  #   enabled, network_mode, workspace_mode, environment,
+  #   credential_inputs[{env_var, mount_path}], extra_ro_binds
+  engine_policies: {}
+
+# Temporary engine freezes keyed by engine name -> UTC timestamp.
+engine_freeze: {}
+
+# Engine fallback order when the preferred engine is unavailable.
+engine_preference:
+  - codex
+  - opencode
+  - gemini
+  - copilot
+  - goz
+
+# Optional startup guidance injected by role.
+# Example:
+# agent_startup_guidance:
+#   swe:
+#     - Run focused tests before reporting pass.
+agent_startup_guidance: {}
+
+# Workspace defaults for automatic commits and display labels.
+auto_commit: true
+task_mode_name: tasks
+implementation_mode_name: implementation

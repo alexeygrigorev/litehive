@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import argparse
 import sqlite3
 
 from typer.testing import CliRunner
@@ -109,7 +108,7 @@ def test_daemon_run_applies_pending_migrations_before_start(
     monkeypatch.setattr("litehive.db.schema.available_migrations", lambda: staged)
     monkeypatch.setattr("litehive.cli.daemon.start_background_daemon", lambda root: 4321)
 
-    exit_code = cmd_daemon_run(argparse.Namespace(workspace=tmp_path, foreground=False))
+    exit_code = cmd_daemon_run(tmp_path, foreground=False)
     output = capsys.readouterr().out
 
     assert exit_code == 0

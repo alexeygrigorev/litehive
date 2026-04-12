@@ -16,41 +16,30 @@ import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from litehive.cli import (
+from litehive.cli.debug import cmd_debug
+from litehive.cli.doctor import cmd_doctor
+from litehive.cli.health import cmd_health
+from litehive.cli.logs import cmd_logs
+from litehive.cli.queue import (
     cmd_abandon_task,
-    cmd_add,
-    cmd_doctor,
     cmd_archive,
     cmd_cleanup,
     cmd_close_task,
-    cmd_debug,
-    cmd_dirty_worktree_gate,
-    cmd_health,
-    cmd_intake,
-    cmd_issue,
-    cmd_list,
     cmd_move,
-    cmd_logs,
     cmd_prioritize,
     cmd_promote,
-    cmd_report,
-    cmd_queue,
     cmd_recover,
-    cmd_repair,
     cmd_requeue_task,
     cmd_resume_task,
     cmd_rollback,
-    cmd_run,
-    cmd_show,
-    cmd_status,
     cmd_stop_task,
     cmd_switch_task,
-    cmd_update,
-    cmd_worktree_clean,
-    cmd_worktree_ls,
-    cmd_worktree_rescue,
-    build_parser,
 )
+from litehive.cli.report import cmd_report
+from litehive.cli.run import cmd_run
+from litehive.cli.status import cmd_list, cmd_queue, cmd_repair, cmd_show, cmd_status
+from litehive.cli.tasks import cmd_add, cmd_intake, cmd_issue, cmd_update
+from litehive.cli.worktree import cmd_worktree_clean, cmd_worktree_ls, cmd_worktree_rescue
 from litehive.config import (
     ExternalEngineSandboxConfig,
     ExternalEngineSandboxPolicy,
@@ -184,38 +173,37 @@ import litehive.tasks.templates as _tasks_templates
 import litehive.workspace.locking as _workspace_locking
 import litehive.workspace.workflow as _workspace_workflow
 
-_cmd_abandon_task = cmd_abandon_task
-_cmd_add = cmd_add
-_cmd_archive = cmd_archive
-_cmd_cleanup = cmd_cleanup
-_cmd_close_task = cmd_close_task
-_cmd_debug = cmd_debug
-_cmd_dirty_worktree_gate = cmd_dirty_worktree_gate
-_cmd_doctor = cmd_doctor
-_cmd_health = cmd_health
-_cmd_intake = cmd_intake
-_cmd_issue = cmd_issue
-_cmd_list = cmd_list
-_cmd_logs = cmd_logs
-_cmd_move = cmd_move
-_cmd_prioritize = cmd_prioritize
-_cmd_promote = cmd_promote
-_cmd_queue = cmd_queue
-_cmd_recover = cmd_recover
-_cmd_repair = cmd_repair
-_cmd_report = cmd_report
-_cmd_requeue_task = cmd_requeue_task
-_cmd_resume_task = cmd_resume_task
-_cmd_rollback = cmd_rollback
-_cmd_run = cmd_run
-_cmd_show = cmd_show
-_cmd_status = cmd_status
-_cmd_stop_task = cmd_stop_task
-_cmd_switch_task = cmd_switch_task
-_cmd_update = cmd_update
-_cmd_worktree_clean = cmd_worktree_clean
-_cmd_worktree_ls = cmd_worktree_ls
-_cmd_worktree_rescue = cmd_worktree_rescue
+_cmd_abandon_task = lambda args: cmd_abandon_task(args.task_id, args.workspace)
+_cmd_add = lambda args: cmd_add(args.title, args.workspace, args.goal, args.acceptance_criteria, args.depends_on, args.task_type, args.mode, args.priority)
+_cmd_archive = lambda args: cmd_archive(args.workspace, task_id=args.task_id, all_done=getattr(args, "all_done", False), command_parser=getattr(args, "command_parser", None))
+_cmd_cleanup = lambda args: cmd_cleanup(args.workspace, args.older_than)
+_cmd_close_task = lambda args: cmd_close_task(args.task_id, args.workspace, args.outcome, getattr(args, "reason", None), getattr(args, "follow_up_task", None))
+_cmd_debug = lambda args: cmd_debug(args.task_id, args.workspace, all=getattr(args, "all", False), worktree=getattr(args, "worktree", False))
+_cmd_doctor = lambda args: cmd_doctor(args.workspace, fix=getattr(args, "fix", False))
+_cmd_health = lambda args: cmd_health(args.workspace)
+_cmd_intake = lambda args: cmd_intake(args.file, args.workspace, getattr(args, "engine", "opencode"), getattr(args, "model", None))
+_cmd_issue = lambda args: cmd_issue(args.workspace, args.upstream, getattr(args, "type", "runtime_bug"), getattr(args, "details", ""), getattr(args, "acceptance_criteria", None), getattr(args, "source_task", None), getattr(args, "source_stage", None), getattr(args, "source_role", "recovery"), getattr(args, "source_project", None), getattr(args, "litehive_workspace", None), getattr(args, "patch_branch", None), getattr(args, "patch_base", "HEAD"), getattr(args, "prepare_patch_branch", False))
+_cmd_list = lambda args: cmd_list(args.workspace, getattr(args, "show_all", False), getattr(args, "filter_status", None), getattr(args, "filter_pipeline_status", None), getattr(args, "filter_engine", None))
+_cmd_logs = lambda args: cmd_logs(args.workspace, task_id=getattr(args, "task_id", None), daemon=getattr(args, "daemon", False), agent=getattr(args, "agent", False), all=getattr(args, "all", False), follow=getattr(args, "follow", False))
+_cmd_move = lambda args: cmd_move(args.task_id, args.position, args.workspace)
+_cmd_prioritize = lambda args: cmd_prioritize(args.task_ids, args.workspace)
+_cmd_promote = lambda args: cmd_promote(args.task_id, args.workspace)
+_cmd_queue = lambda args: cmd_queue(args.workspace)
+_cmd_recover = lambda args: cmd_recover(args.task_id, args.workspace)
+_cmd_repair = lambda args: cmd_repair(args.workspace)
+_cmd_report = lambda args: cmd_report(args.workspace, args.verdict, args.message, getattr(args, "role", "swe"), getattr(args, "step", None), getattr(args, "task_id", None), getattr(args, "files_changed", None))
+_cmd_requeue_task = lambda args: cmd_requeue_task(args.task_id, args.workspace, getattr(args, "front", False), getattr(args, "force", False))
+_cmd_resume_task = lambda args: cmd_resume_task(args.task_id, args.workspace, getattr(args, "front", False))
+_cmd_rollback = lambda args: cmd_rollback(args.task_id, args.workspace)
+_cmd_run = lambda args: cmd_run(args.workspace, getattr(args, "dry_run", False), getattr(args, "drain", False), getattr(args, "engine", None), getattr(args, "model", None), getattr(args, "stop_on_failure", None), getattr(args, "max_tasks", None), getattr(args, "stop_on_dirty_git", None))
+_cmd_show = lambda args: cmd_show(args.workspace, args.task_id)
+_cmd_status = lambda args: cmd_status(args.workspace, getattr(args, "fast", False), getattr(args, "full", False))
+_cmd_stop_task = lambda args: cmd_stop_task(args.workspace)
+_cmd_switch_task = lambda args: cmd_switch_task(args.task_id, args.engine, args.workspace, args.reason)
+_cmd_update = lambda args: cmd_update(args.task_id, args.workspace, getattr(args, "title", None), getattr(args, "priority", None), getattr(args, "goal", None), getattr(args, "depends_on", None), getattr(args, "acceptance_criteria", None), getattr(args, "constraint", None), getattr(args, "plan_step", None), getattr(args, "from_file", None), getattr(args, "edit", False))
+_cmd_worktree_clean = lambda args: cmd_worktree_clean(args.workspace, getattr(args, "dry_run", False))
+_cmd_worktree_ls = lambda args: cmd_worktree_ls(args.workspace)
+_cmd_worktree_rescue = lambda args: cmd_worktree_rescue(args.workspace, getattr(args, "apply", False))
 
 tasks_module = types.SimpleNamespace(
     TASK_TEMPLATES=_tasks_templates.TASK_TEMPLATES,
@@ -685,7 +673,6 @@ __all__ = [
     "cmd_close_task",
     "cmd_debug",
     "cmd_doctor",
-    "cmd_dirty_worktree_gate",
     "cmd_health",
     "cmd_intake",
     "cmd_issue",
@@ -710,7 +697,6 @@ __all__ = [
     "cmd_worktree_clean",
     "cmd_worktree_ls",
     "cmd_worktree_rescue",
-    "build_parser",
     "ExternalEngineSandboxConfig",
     "ExternalEngineSandboxPolicy",
     "LitehiveConfig",

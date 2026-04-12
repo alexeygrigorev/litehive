@@ -21,9 +21,9 @@ class _QuotaHealth:
     problem: bool = False
 
 
-def cmd_health(args):
-    ensure_workspace(args.workspace)
-    root = args.workspace.resolve()
+def cmd_health(workspace):
+    ensure_workspace(workspace)
+    root = workspace.resolve()
     state = load_state(root)
     tasks = list_tasks_state_first(root, state=state, include_runtime=True)
     active_task = require_task(root, state.active_task_id) if state.active_task_id else None

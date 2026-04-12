@@ -33,41 +33,62 @@ def _run_single_v2(workspace: Path) -> int:
     return 0 if result.final_stage == "done" else 1
 
 
-def cmd_run(args):
-    ensure_workspace(args.workspace)
+def cmd_run(
+    workspace,
+    dry_run: bool = False,
+    drain: bool = False,
+    engine=None,
+    model=None,
+    stop_on_failure=None,
+    max_tasks=None,
+    stop_on_dirty_git=None,
+):
+    ensure_workspace(workspace)
 
-    if args.dry_run:
-        config = load_config(args.workspace)
-        if bool(getattr(args, "drain", False)):
-            return _cmd_run_drain_dry_run(args, config=config)
-        return _cmd_run_single_dry_run(args, config=config)
+    if dry_run:
+        config = load_config(workspace)
+        if drain:
+            return run_drain_dry_run(
+                workspace,
+                config=config,
+                engine=engine,
+                model=model,
+                stop_on_failure=stop_on_failure,
+                max_tasks=max_tasks,
+                stop_on_dirty_git=stop_on_dirty_git,
+            )
+        return run_single_dry_run(
+            workspace,
+            config=config,
+            engine=engine,
+            model=model,
+            stop_on_failure=stop_on_failure,
+            max_tasks=max_tasks,
+            stop_on_dirty_git=stop_on_dirty_git,
+        )
 
-    return _run_single_v2(args.workspace)
+    return _run_single_v2(workspace)
 
 
-def _cmd_run_drain_dry_run(args, *, config):
+def run_drain_dry_run(workspace, *, config, engine=None, model=None, stop_on_failure=None, max_tasks=None, stop_on_dirty_git=None):
     try:
-        plan = plan_task_selections(args.workspace)
+        plan = plan_task_selections(workspace)
     except WorkspaceConflictError as exc:
         print(f"run failed: {exc}")
         return 1
 
-    engine_override = getattr(args, "engine", None)
-    model_override = getattr(args, "model", None)
+    engine_override = engine
+    model_override = model
     from litehive.config.pool_types import TaskPoolStopConditions
 
     stop_conditions = TaskPoolStopConditions(
-        max_tasks=getattr(args, "max_tasks", None),
-        stop_on_failure=cli_override_or_default(
-            getattr(args, "stop_on_failure", None), config.pool_stop_on_failure
-        ),
-        stop_on_dirty_git=cli_override_or_default(
-            getattr(args, "stop_on_dirty_git", None), config.pool_stop_on_dirty_git
-        ),
+        max_tasks=max_tasks,
+        stop_on_failure=cli_override_or_default(stop_on_failure, config.pool_stop_on_failure),
+        stop_on_dirty_git=cli_override_or_default(stop_on_dirty_git, config.pool_stop_on_dirty_git),
         stop_on_attention=config.pool_stop_on_attention,
     )
     runnable_tasks, predicted_stop_reason = plan_pool_dry_run(
-        args.workspace,
+        workspace,
         planned_tasks=plan.tasks,
         blocked_count=len(plan.blocked),
         config=config,
@@ -76,7 +97,7 @@ def _cmd_run_drain_dry_run(args, *, config):
         model_override=model_override,
     )
     print_pool_dry_run_plan(
-        args.workspace,
+        workspace,
         planned_tasks=runnable_tasks,
         blocked=plan.blocked,
         config=config,
@@ -86,30 +107,26 @@ def _cmd_run_drain_dry_run(args, *, config):
     return 0
 
 
-def _cmd_run_single_dry_run(args, *, config):
+def run_single_dry_run(workspace, *, config, engine=None, model=None, stop_on_failure=None, max_tasks=None, stop_on_dirty_git=None):
     try:
-        selection = peek_next_task_selection(args.workspace)
+        selection = peek_next_task_selection(workspace)
     except WorkspaceConflictError as exc:
         print(f"run failed: {exc}")
         return 1
 
-    engine_override = getattr(args, "engine", None)
-    model_override = getattr(args, "model", None)
+    engine_override = engine
+    model_override = model
     from litehive.config.pool_types import TaskPoolStopConditions
 
     stop_conditions = TaskPoolStopConditions(
-        max_tasks=getattr(args, "max_tasks", None),
-        stop_on_failure=cli_override_or_default(
-            getattr(args, "stop_on_failure", None), config.pool_stop_on_failure
-        ),
-        stop_on_dirty_git=cli_override_or_default(
-            getattr(args, "stop_on_dirty_git", None), config.pool_stop_on_dirty_git
-        ),
+        max_tasks=max_tasks,
+        stop_on_failure=cli_override_or_default(stop_on_failure, config.pool_stop_on_failure),
+        stop_on_dirty_git=cli_override_or_default(stop_on_dirty_git, config.pool_stop_on_dirty_git),
         stop_on_attention=config.pool_stop_on_attention,
     )
     planned_tasks = [selection.task] if selection.task is not None else []
     runnable_tasks, predicted_stop_reason = plan_single_task_dry_run(
-        args.workspace,
+        workspace,
         planned_tasks=planned_tasks,
         blocked_count=len(selection.blocked),
         config=config,
@@ -118,7 +135,7 @@ def _cmd_run_single_dry_run(args, *, config):
         model_override=model_override,
     )
     print_pool_dry_run_plan(
-        args.workspace,
+        workspace,
         planned_tasks=runnable_tasks,
         blocked=selection.blocked,
         config=config,

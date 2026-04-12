@@ -17,19 +17,19 @@ from litehive.tasks.reports import load_task_thread
 from litehive.tasks.worktrees import migrate_legacy_worktree
 
 
-def cmd_debug(args):
-    ensure_workspace(args.workspace)
+def cmd_debug(task_id, workspace, all: bool = False, worktree: bool = False):
+    ensure_workspace(workspace)
     try:
-        task = require_task(args.workspace, args.task_id)
+        task = require_task(workspace, task_id)
     except ValueError:
-        print(f"task not found: {args.task_id}")
+        print(f"task not found: {task_id}")
         return 1
 
-    if getattr(args, "worktree", False):
-        return _debug_worktree(args.workspace, task)
-    if args.all:
-        return _debug_all(args.workspace, task)
-    return _debug_latest(args.workspace, task)
+    if worktree:
+        return _debug_worktree(workspace, task)
+    if all:
+        return _debug_all(workspace, task)
+    return _debug_latest(workspace, task)
 
 
 def _debug_all(root: Path, task):

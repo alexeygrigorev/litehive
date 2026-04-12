@@ -7,15 +7,22 @@ from litehive.tasks.persistence import load_state
 from litehive.tasks.reports import append_thread_comment
 
 
-def cmd_report(args):
+def cmd_report(
+    workspace,
+    verdict,
+    message,
+    role="swe",
+    step=None,
+    task_id=None,
+    files_changed=None,
+):
     from litehive.cli.agent_cli import block_if_agent
 
     block_if_agent()
-    task_id = args.task_id
     if not task_id:
         task_id = os.environ.get("LITEHIVE_TASK_ID")
     try:
-        root = resolve_workspace(task_id, workspace=args.workspace)
+        root = resolve_workspace(task_id, workspace=workspace)
     except ValueError as exc:
         print(f"report failed: {exc}")
         return 1
@@ -29,18 +36,18 @@ def cmd_report(args):
     if task is None:
         print(f"report failed: task {task_id} not found")
         return 1
-    step = args.step or task.pipeline_status
-    normalized_verdict = "reject" if args.verdict == "fail" else args.verdict
+    step = step or task.pipeline_status
+    normalized_verdict = "reject" if verdict == "fail" else verdict
     comment = TaskThreadComment(
-        role=args.role,
+        role=role,
         step=step,
         verdict=normalized_verdict,
-        message=args.message,
-        files_changed=list(getattr(args, "files_changed", []) or []),
+        message=message,
+        files_changed=list(files_changed or []),
     )
     append_thread_comment(root, task, comment)
     print(f"task: {task.id}")
     print(f"step: {step}")
     print(f"verdict: {comment.verdict}")
-    print(f"role: {args.role}")
+    print(f"role: {role}")
     return 0

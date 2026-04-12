@@ -6,10 +6,10 @@ def _render_finding(prefix: str, finding) -> None:
     print(f"{prefix}: {finding.code} {finding.summary} fix={finding.fix_command}")
 
 
-def cmd_doctor(args) -> int:
-    ensure_workspace(args.workspace)
-    root = args.workspace.resolve()
-    if getattr(args, "fix", False):
+def cmd_doctor(workspace, fix: bool = False) -> int:
+    ensure_workspace(workspace)
+    root = workspace.resolve()
+    if fix:
         result = apply_doctor_fixes(root)
         if result.stale_unmerged_worktrees_removed:
             print(

@@ -1,4 +1,3 @@
-import argparse
 import os
 from pathlib import Path
 import signal
@@ -89,13 +88,11 @@ with workspace_runner_guard(root):
         else:
             raise AssertionError("runner process did not acquire the lock")
         rc = cmd_close_task(
-            argparse.Namespace(
-                workspace=tmp_path,
-                task_id=task.id,
-                outcome="wont_do",
-                reason="bad direction",
-                follow_up_task=None,
-            )
+            task.id,
+            tmp_path,
+            "wont_do",
+            "bad direction",
+            None,
         )
 
         assert rc == 0

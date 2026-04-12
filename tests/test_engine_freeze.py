@@ -5,7 +5,6 @@ from tests.workspace_helpers import (
     TaskRecord,
     _cmd_status,
     argparse,
-    build_parser,
     create_task,
     ensure_workspace,
     load_config,
@@ -15,6 +14,7 @@ from tests.workspace_helpers import (
 from datetime import datetime, timedelta, timezone
 
 from litehive.agents import ENGINE_CHOICES
+from litehive.cli.engine import cmd_engine
 from litehive.config.engine_models import EngineSelection
 
 
@@ -22,17 +22,13 @@ def test_engine_freeze_cli_roundtrip(tmp_path: Path, capsys: pytest.CaptureFixtu
     """CLI: freeze an engine, verify config, then unfreeze."""
     ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
 
-    from litehive.cli import cmd_engine
-
     # Freeze codex until far future
     exit_code = cmd_engine(
-        argparse.Namespace(
-            workspace=tmp_path,
-            engine_action="freeze",
-            engine_name="codex",
-            until="2099-12-31",
-            reason="quota exhausted",
-        )
+        tmp_path,
+        "freeze",
+        "codex",
+        "2099-12-31",
+        "quota exhausted",
     )
     assert exit_code == 0
     output = capsys.readouterr().out
@@ -44,11 +40,9 @@ def test_engine_freeze_cli_roundtrip(tmp_path: Path, capsys: pytest.CaptureFixtu
 
     # Unfreeze
     exit_code = cmd_engine(
-        argparse.Namespace(
-            workspace=tmp_path,
-            engine_action="unfreeze",
-            engine_name="codex",
-        )
+        tmp_path,
+        "unfreeze",
+        "codex",
     )
     assert exit_code == 0
     output = capsys.readouterr().out
@@ -61,15 +55,11 @@ def test_engine_freeze_cli_roundtrip(tmp_path: Path, capsys: pytest.CaptureFixtu
 def test_engine_freeze_requires_iso_date(tmp_path: Path, capsys) -> None:
     ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
 
-    from litehive.cli import cmd_engine
-
     exit_code = cmd_engine(
-        argparse.Namespace(
-            workspace=tmp_path,
-            engine_action="freeze",
-            engine_name="gemini",
-            until="2099-06-15 14:30",
-        )
+        tmp_path,
+        "freeze",
+        "gemini",
+        "2099-06-15 14:30",
     )
     assert exit_code == 1
     assert "YYYY-MM-DD" in capsys.readouterr().out
@@ -78,14 +68,10 @@ def test_engine_freeze_requires_iso_date(tmp_path: Path, capsys) -> None:
 def test_unfreeze_not_frozen_engine_returns_error(tmp_path: Path, capsys) -> None:
     ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
 
-    from litehive.cli import cmd_engine
-
     exit_code = cmd_engine(
-        argparse.Namespace(
-            workspace=tmp_path,
-            engine_action="unfreeze",
-            engine_name="codex",
-        )
+        tmp_path,
+        "unfreeze",
+        "codex",
     )
     assert exit_code == 1
     assert "not frozen" in capsys.readouterr().out
@@ -97,16 +83,9 @@ def test_engine_status_prints_compact_summary(tmp_path: Path, capsys) -> None:
         LitehiveConfig(default_engine="codex", engine_freeze={"gemini": "2099-06-15T00:00:00Z"}),
     )
 
-    from litehive.cli import cmd_engine
-
     exit_code = cmd_engine(
-        argparse.Namespace(
-            workspace=tmp_path,
-            engine_action="status",
-            engine_name=None,
-            until=None,
-            reason=None,
-        )
+        tmp_path,
+        "status",
     )
     assert exit_code == 0
     output = capsys.readouterr().out.strip()
@@ -195,73 +174,15 @@ def test_status_no_frozen_engines(tmp_path: Path, capsys) -> None:
     output = capsys.readouterr().out
     assert "engine_frozen" not in output
 
-
-def test_parser_accepts_freeze_subcommand() -> None:
-    parser = build_parser()
-
-    args = parser.parse_args(
-        [
-            "engine",
-            "freeze",
-            "codex",
-            "--until",
-            "2026-04-08",
-            "--reason",
-            "quota exhausted",
-            "--workspace",
-            "/tmp/demo",
-        ]
-    )
-    assert args.command == "engine"
-    assert args.engine_action == "freeze"
-    assert args.engine_name == "codex"
-    assert args.until == "2026-04-08"
-    assert args.reason == "quota exhausted"
-
-
-def test_parser_accepts_unfreeze_subcommand() -> None:
-    parser = build_parser()
-
-    args = parser.parse_args(
-        ["engine", "unfreeze", "codex", "--workspace", "/tmp/demo"]
-    )
-    assert args.command == "engine"
-    assert args.engine_action == "unfreeze"
-    assert args.engine_name == "codex"
-
-
-def test_parser_accepts_status_subcommand() -> None:
-    parser = build_parser()
-
-    args = parser.parse_args(["engine", "status", "--workspace", "/tmp/demo"])
-    assert args.command == "engine"
-    assert args.engine_action == "status"
-    assert args.engine_name is None
-
-
-def test_parser_rejects_deleted_single_engine_status_form() -> None:
-    parser = build_parser()
-
-    with pytest.raises(SystemExit):
-        parser.parse_args(["engine", "status", "codex", "--workspace", "/tmp/demo"])
-
-
-def test_parser_rejects_deleted_set_subcommand() -> None:
-    parser = build_parser()
-
-    with pytest.raises(SystemExit):
-        parser.parse_args(["engine", "set", "gemini", "--workspace", "/tmp/demo"])
-
-
 def test_cmd_engine_rejects_stale_single_engine_status_namespace(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
 
-    from litehive.cli import cmd_engine
-
     exit_code = cmd_engine(
-        argparse.Namespace(workspace=tmp_path, engine_action="status", engine_name="codex")
+        tmp_path,
+        "status",
+        "codex",
     )
 
     assert exit_code == 1

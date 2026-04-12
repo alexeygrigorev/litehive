@@ -28,6 +28,9 @@ log = logging.getLogger(__name__)
 _UNRESOLVED_SHELL_VAR_RE = re.compile(
     r"(?<!\\)\$(?:\{[A-Za-z_][A-Za-z0-9_]*\}|[A-Za-z_][A-Za-z0-9_]*)"
 )
+_WORKSPACE_CONFIG_TEMPLATE = (
+    Path(__file__).resolve().parents[1] / "cli" / "templates" / "workspace_config.yaml"
+)
 
 
 def render_workspace_gitignore() -> str:
@@ -225,11 +228,16 @@ def ensure_workspace(root: Path, config: LitehiveConfig | None = None) -> Path:
 
     cfg = config or LitehiveConfig()
     if not config_path(root).exists():
-        initial_config = asdict(cfg) if config is not None else {}
-        config_path(root).write_text(
-            yaml.safe_dump(initial_config, sort_keys=False),
-            encoding="utf-8",
-        )
+        if config is None:
+            config_path(root).write_text(
+                _WORKSPACE_CONFIG_TEMPLATE.read_text(encoding="utf-8"),
+                encoding="utf-8",
+            )
+        else:
+            config_path(root).write_text(
+                yaml.safe_dump(asdict(cfg), sort_keys=False),
+                encoding="utf-8",
+            )
 
     if not context_path(root).exists():
         context_path(root).write_text(

@@ -190,26 +190,25 @@ def import_single_issue(root: Path, repo: str, issue_number: int, cwd: Path | No
 # ── CLI command handlers ─────────────────────────────────────────────────
 
 
-def cmd_import_issue(args) -> int:
-    ensure_workspace(args.workspace)
+def cmd_import_issue(workspace, issue_ref, repo=None) -> int:
+    ensure_workspace(workspace)
     try:
-        check_gh_auth(cwd=args.workspace)
+        check_gh_auth(cwd=workspace)
     except (GhNotFoundError, GhAuthError) as exc:
         print(f"import-issue failed: {exc}")
         return 1
 
-    ref = args.issue_ref
-    repo_from_ref, issue_number = parse_issue_ref(ref)
-    repo = getattr(args, "repo", None) or repo_from_ref
+    repo_from_ref, issue_number = parse_issue_ref(issue_ref)
+    repo = repo or repo_from_ref
     if repo is None:
         try:
-            repo = detect_repo_from_remote(cwd=args.workspace)
+            repo = detect_repo_from_remote(cwd=workspace)
         except RuntimeError as exc:
             print(f"import-issue failed: {exc}")
             return 1
 
     try:
-        task_id, status = import_single_issue(args.workspace, repo, issue_number, cwd=args.workspace)
+        task_id, status = import_single_issue(workspace, repo, issue_number, cwd=workspace)
     except (RuntimeError, ValueError, WorkspaceConflictError) as exc:
         print(f"import-issue failed: {exc}")
         return 1
@@ -221,24 +220,23 @@ def cmd_import_issue(args) -> int:
     return 0
 
 
-def cmd_import_issues(args) -> int:
-    ensure_workspace(args.workspace)
+def cmd_import_issues(workspace, repo=None) -> int:
+    ensure_workspace(workspace)
     try:
-        check_gh_auth(cwd=args.workspace)
+        check_gh_auth(cwd=workspace)
     except (GhNotFoundError, GhAuthError) as exc:
         print(f"import-issues failed: {exc}")
         return 1
 
-    repo = getattr(args, "repo", None)
     if repo is None:
         try:
-            repo = detect_repo_from_remote(cwd=args.workspace)
+            repo = detect_repo_from_remote(cwd=workspace)
         except RuntimeError as exc:
             print(f"import-issues failed: {exc}")
             return 1
 
     try:
-        issues = fetch_open_issues(repo, cwd=args.workspace)
+        issues = fetch_open_issues(repo, cwd=workspace)
     except RuntimeError as exc:
         print(f"import-issues failed: {exc}")
         return 1
@@ -248,7 +246,7 @@ def cmd_import_issues(args) -> int:
     errors = 0
     for issue_data in issues:
         issue_number = issue_data["number"]
-        existing = find_existing_task_for_issue(args.workspace, repo, issue_number)
+        existing = find_existing_task_for_issue(workspace, repo, issue_number)
         if existing is not None:
             skipped += 1
             continue
@@ -258,7 +256,7 @@ def cmd_import_issues(args) -> int:
 
         try:
             task = create_task(
-                args.workspace,
+                workspace,
                 title=issue_data["title"],
                 goal=issue_data.get("body") or "",
                 task_type=task_type,
@@ -280,10 +278,10 @@ def cmd_import_issues(args) -> int:
     return 0 if errors == 0 else 1
 
 
-def cmd_import_github(args) -> int:
-    if getattr(args, "all", False):
-        return cmd_import_issues(args)
-    if not getattr(args, "issue_ref", None):
+def cmd_import_github(workspace, issue_ref=None, repo=None, all: bool = False) -> int:
+    if all:
+        return cmd_import_issues(workspace, repo)
+    if not issue_ref:
         print("import github failed: provide an issue reference or use --all")
         return 1
-    return cmd_import_issue(args)
+    return cmd_import_issue(workspace, issue_ref, repo)

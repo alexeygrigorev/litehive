@@ -11,7 +11,7 @@ from litehive.config import workspace_backups_dir, workspace_database_path
 from litehive.models import RunnerStatusState
 from litehive.storage import create_workspace_backup, list_workspace_backups
 
-from tests.workspace_helpers import Path, argparse, ensure_workspace, pytest
+from tests.workspace_helpers import Path, ensure_workspace, pytest
 
 
 def _seed_workspace_db(root: Path, values: list[str]) -> None:
@@ -54,7 +54,7 @@ def test_backup_list_command_reports_timestamp_and_size(tmp_path: Path, capsys: 
     _seed_workspace_db(tmp_path, ["one"])
     create_workspace_backup(tmp_path, when=datetime(2026, 4, 11, 3, tzinfo=UTC))
 
-    exit_code = cmd_backup_list(argparse.Namespace(workspace=tmp_path))
+    exit_code = cmd_backup_list(tmp_path)
     output = capsys.readouterr().out
 
     assert exit_code == 0
@@ -68,7 +68,7 @@ def test_backup_create_command_reports_created_archive(tmp_path: Path, capsys: p
     ensure_workspace(tmp_path)
     _seed_workspace_db(tmp_path, ["one"])
 
-    exit_code = cmd_backup_create(argparse.Namespace(workspace=tmp_path))
+    exit_code = cmd_backup_create(tmp_path)
     output = capsys.readouterr().out
 
     assert exit_code == 0
@@ -85,9 +85,7 @@ def test_restore_command_refuses_when_daemon_running(
 
     monkeypatch.setattr("litehive.cli.backup.get_workspace_daemon", lambda root: {"pid": 123})
 
-    exit_code = cmd_backup_restore(
-        argparse.Namespace(workspace=tmp_path, timestamp="2026-04-11T02", yes=True)
-    )
+    exit_code = cmd_backup_restore("2026-04-11T02", tmp_path, yes=True)
     output = capsys.readouterr().out
 
     assert exit_code == 1
@@ -105,9 +103,7 @@ def test_restore_command_refuses_when_runner_active(
         lambda root: RunnerStatusState(status="running", pid=321),
     )
 
-    exit_code = cmd_backup_restore(
-        argparse.Namespace(workspace=tmp_path, timestamp="2026-04-11T02", yes=True)
-    )
+    exit_code = cmd_backup_restore("2026-04-11T02", tmp_path, yes=True)
     output = capsys.readouterr().out
 
     assert exit_code == 1

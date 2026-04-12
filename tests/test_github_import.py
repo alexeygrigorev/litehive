@@ -1,6 +1,5 @@
 """Tests for GitHub issue import commands."""
 
-import argparse
 import json
 import sys
 from pathlib import Path
@@ -284,17 +283,6 @@ def test_import_duplicate_skipped(workspace):
     assert status == "skipped"
 
 
-# ── CLI command: import-issue ────────────────────────────────────────────
-
-
-def _make_import_issue_args(workspace, issue_ref, repo=None):
-    args = argparse.Namespace()
-    args.workspace = workspace
-    args.issue_ref = issue_ref
-    args.repo = repo
-    return args
-
-
 def test_cmd_import_issue_from_url(workspace, capsys):
     issue_data = {
         "number": 5,
@@ -305,10 +293,9 @@ def test_cmd_import_issue_from_url(workspace, capsys):
     }
     with patch("litehive.cli.github_import.check_gh_auth"):
         with patch("litehive.cli.github_import.fetch_issue", return_value=issue_data):
-            args = _make_import_issue_args(
+            ret = cmd_import_issue(
                 workspace, "https://github.com/owner/repo/issues/5"
             )
-            ret = cmd_import_issue(args)
 
     assert ret == 0
     out = capsys.readouterr().out
@@ -326,8 +313,7 @@ def test_cmd_import_issue_from_number(workspace, capsys):
     }
     with patch("litehive.cli.github_import.check_gh_auth"):
         with patch("litehive.cli.github_import.fetch_issue", return_value=issue_data):
-            args = _make_import_issue_args(workspace, "3", repo="owner/repo")
-            ret = cmd_import_issue(args)
+            ret = cmd_import_issue(workspace, "3", repo="owner/repo")
 
     assert ret == 0
     out = capsys.readouterr().out
@@ -347,10 +333,9 @@ def test_cmd_import_issue_duplicate(workspace, capsys):
     )
     with patch("litehive.cli.github_import.check_gh_auth"):
         with patch("litehive.cli.github_import.fetch_issue") as mock_fetch:
-            args = _make_import_issue_args(
+            ret = cmd_import_issue(
                 workspace, "https://github.com/owner/repo/issues/5"
             )
-            ret = cmd_import_issue(args)
 
     assert ret == 0
     out = capsys.readouterr().out
@@ -364,22 +349,11 @@ def test_cmd_import_issue_gh_missing(workspace, capsys):
         "litehive.cli.github_import.check_gh_auth",
         side_effect=GhNotFoundError("gh CLI not found. Install it from https://cli.github.com/"),
     ):
-        args = _make_import_issue_args(workspace, "1", repo="owner/repo")
-        ret = cmd_import_issue(args)
+        ret = cmd_import_issue(workspace, "1", repo="owner/repo")
 
     assert ret == 1
     out = capsys.readouterr().out
     assert "gh CLI not found" in out
-
-
-# ── CLI command: import-issues ───────────────────────────────────────────
-
-
-def _make_import_issues_args(workspace, repo=None):
-    args = argparse.Namespace()
-    args.workspace = workspace
-    args.repo = repo
-    return args
 
 
 def test_cmd_import_issues_bulk(workspace, capsys):
@@ -408,8 +382,7 @@ def test_cmd_import_issues_bulk(workspace, capsys):
     ]
     with patch("litehive.cli.github_import.check_gh_auth"):
         with patch("litehive.cli.github_import.fetch_open_issues", return_value=issues):
-            args = _make_import_issues_args(workspace, repo="owner/repo")
-            ret = cmd_import_issues(args)
+            ret = cmd_import_issues(workspace, repo="owner/repo")
 
     assert ret == 0
     out = capsys.readouterr().out
@@ -455,8 +428,7 @@ def test_cmd_import_issues_skips_existing(workspace, capsys):
     ]
     with patch("litehive.cli.github_import.check_gh_auth"):
         with patch("litehive.cli.github_import.fetch_open_issues", return_value=issues):
-            args = _make_import_issues_args(workspace, repo="owner/repo")
-            ret = cmd_import_issues(args)
+            ret = cmd_import_issues(workspace, repo="owner/repo")
 
     assert ret == 0
     out = capsys.readouterr().out
@@ -469,8 +441,7 @@ def test_cmd_import_issues_gh_not_authenticated(workspace, capsys):
         "litehive.cli.github_import.check_gh_auth",
         side_effect=GhAuthError("gh CLI is not authenticated. Run 'gh auth login' first."),
     ):
-        args = _make_import_issues_args(workspace, repo="owner/repo")
-        ret = cmd_import_issues(args)
+        ret = cmd_import_issues(workspace, repo="owner/repo")
 
     assert ret == 1
     out = capsys.readouterr().out

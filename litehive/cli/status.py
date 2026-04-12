@@ -119,27 +119,25 @@ def _print_status_issues(issues) -> int:
     return 1
 
 
-def cmd_status(args):
-    root = args.workspace.resolve()
+def cmd_status(workspace, fast: bool = False, full: bool = False):
+    root = workspace.resolve()
     snapshot = collect_status_snapshot(root)
     config = snapshot.config
     state = snapshot.state
     runner = snapshot.runner
     monitoring = snapshot.monitoring
-    full_mode = bool(getattr(args, "full", False))
-
-    if full_mode:
-        return _cmd_status_full(args, root, config, state, runner, monitoring, snapshot.issues)
+    if full:
+        return status_full(workspace, root, config, state, runner, monitoring, snapshot.issues)
 
     # --- Dashboard mode (default) ---
-    active_task = _safe_active_task(args.workspace, state.active_task_id)
+    active_task = _safe_active_task(workspace, state.active_task_id)
 
     # Active Task section
     for line in render_active_task_section(active_task, config.default_engine):
         print(line)
 
     # Last Completed section
-    all_tasks = list_tasks_state_first(args.workspace, state=state)
+    all_tasks = list_tasks_state_first(workspace, state=state)
     last_done = find_last_completed_task(all_tasks)
     print()
     for line in render_last_completed_section(last_done):
@@ -170,9 +168,9 @@ def cmd_status(args):
     return _print_status_issues(snapshot.issues)
 
 
-def _cmd_status_full(args, root, config, state, runner, monitoring, issues):
+def status_full(workspace, root, config, state, runner, monitoring, issues):
     """Full verbose status output (--full flag)."""
-    print(f"workspace: {args.workspace}")
+    print(f"workspace: {workspace}")
     print("status_read_mode: full")
     print(f"default_engine: {config.default_engine}")
     freezes = active_engine_freezes(config)
@@ -196,7 +194,7 @@ def _cmd_status_full(args, root, config, state, runner, monitoring, issues):
         print(line)
     if state.queue:
         print(f"queue_head: {state.queue[0]}")
-    active_task = _safe_active_task(args.workspace, state.active_task_id)
+    active_task = _safe_active_task(workspace, state.active_task_id)
     if active_task is not None:
         active_engine = (
             active_task.runtime.active_subagent.engine
@@ -220,7 +218,7 @@ def _cmd_status_full(args, root, config, state, runner, monitoring, issues):
     print(f"pool_stop_on_attention: {config.pool_stop_on_attention}")
     print(f"pool_selection_policy: {config.pool_selection_policy}")
     print(f"process_profile: {config.process_profile}")
-    tasks = list_tasks(args.workspace)
+    tasks = list_tasks(workspace)
     if tasks:
         print()
         for task in tasks:
@@ -231,14 +229,14 @@ def _cmd_status_full(args, root, config, state, runner, monitoring, issues):
     return _print_status_issues(issues)
 
 
-def cmd_queue(args):
-    config = load_config(args.workspace)
-    recover_stale_runner_state(args.workspace)
-    state = load_state(args.workspace)
-    tasks = list_tasks(args.workspace)
+def cmd_queue(workspace):
+    config = load_config(workspace)
+    recover_stale_runner_state(workspace)
+    state = load_state(workspace)
+    tasks = list_tasks(workspace)
     print(f"active_task_id: {state.active_task_id}")
     if state.active_task_id is not None:
-        active_task = require_task(args.workspace, state.active_task_id)
+        active_task = require_task(workspace, state.active_task_id)
         print(
             f"active: {active_task.id} [{active_task.status}/{active_task.pipeline_status}] "
             f"priority={active_task.priority} engine={task_engine_label(None, config.default_engine)} "
@@ -248,7 +246,7 @@ def cmd_queue(args):
         )
     print(f"queue_length: {len(state.queue)}")
     for index, task_id in enumerate(state.queue, start=1):
-        task = require_task(args.workspace, task_id)
+        task = require_task(workspace, task_id)
         print(
             f"{index}. {task.id} [{task.status}/{task.pipeline_status}] "
             f"priority={task.priority} engine={task_engine_label(None, config.default_engine)} "
@@ -269,14 +267,16 @@ def cmd_queue(args):
     return 0
 
 
-def cmd_list(args):
-    ensure_workspace(args.workspace)
-    config = load_config(args.workspace)
-    tasks = list_tasks(args.workspace)
-    show_all = getattr(args, "show_all", False)
-    filter_status = getattr(args, "filter_status", None)
-    filter_pipeline = getattr(args, "filter_pipeline_status", None)
-    filter_engine = getattr(args, "filter_engine", None)
+def cmd_list(
+    workspace,
+    show_all: bool = False,
+    filter_status=None,
+    filter_pipeline_status=None,
+    filter_engine=None,
+):
+    ensure_workspace(workspace)
+    config = load_config(workspace)
+    tasks = list_tasks(workspace)
 
     filtered = []
     for task in tasks:
@@ -284,7 +284,7 @@ def cmd_list(args):
             continue
         if filter_status and task.status != filter_status:
             continue
-        if filter_pipeline and task.pipeline_status != filter_pipeline:
+        if filter_pipeline_status and task.pipeline_status != filter_pipeline_status:
             continue
         if filter_engine and config.default_engine != filter_engine:
             continue
@@ -298,12 +298,12 @@ def cmd_list(args):
     return 0
 
 
-def cmd_show(args):
-    ensure_workspace(args.workspace)
+def cmd_show(workspace, task_id):
+    ensure_workspace(workspace)
     try:
-        task = require_task(args.workspace, args.task_id)
+        task = require_task(workspace, task_id)
     except ValueError:
-        print(f"task not found: {args.task_id}")
+        print(f"task not found: {task_id}")
         return 1
     print(f"id: {task.id}")
     print(f"slug: {task.slug}")
@@ -312,12 +312,12 @@ def cmd_show(args):
     print(f"flag_reason: {_display_flag_reason(task)}")
     print(f"pipeline_status: {task.pipeline_status}")
     print(f"priority: {task.priority}")
-    print(f"engine: {load_config(args.workspace).default_engine}")
+    print(f"engine: {load_config(workspace).default_engine}")
     print(f"model: {task.model or '-'}")
     print(f"task_type: {task.task_type or '-'}")
     print(f"mode: {task.mode}")
     print(f"pipeline_mode: {task.pipeline_mode}")
-    print(f"depends_on: {_show_dependency_label(args.workspace, task)}")
+    print(f"depends_on: {_show_dependency_label(workspace, task)}")
     print(f"pm_complexity: {task.pm_complexity or '-'}")
     print(f"planned_effort: {task.planned_effort or '-'}")
     print(f"created_at: {task.created_at}")
@@ -354,14 +354,14 @@ def cmd_show(args):
     return 0
 
 
-def cmd_repair(args):
-    ensure_workspace(args.workspace)
+def cmd_repair(workspace):
+    ensure_workspace(workspace)
     try:
-        summary = repair_workspace_state(args.workspace)
+        summary = repair_workspace_state(workspace)
     except WorkspaceConflictError as exc:
         print(f"repair failed: {exc}")
         return 1
-    state = load_state(args.workspace)
+    state = load_state(workspace)
     print(f"repaired: {'yes' if summary.mutated else 'no'}")
     print(f"stale_runner_recovered: {'yes' if summary.stale_runner_recovered else 'no'}")
     print(f"cleared_active_task_id: {summary.cleared_active_task_id or '-'}")

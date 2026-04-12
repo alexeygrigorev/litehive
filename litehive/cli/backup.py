@@ -12,10 +12,10 @@ from litehive.storage import (
 from litehive.workspace.locking import runner_status
 
 
-def cmd_backup_create(args):
-    ensure_workspace(args.workspace)
+def cmd_backup_create(workspace):
+    ensure_workspace(workspace)
     try:
-        backup = create_workspace_backup(args.workspace)
+        backup = create_workspace_backup(workspace)
     except Exception as exc:
         print(f"backup create failed: {exc}")
         return 1
@@ -25,9 +25,9 @@ def cmd_backup_create(args):
     return 0
 
 
-def cmd_backup_list(args):
-    ensure_workspace(args.workspace)
-    backups = list_workspace_backups(args.workspace)
+def cmd_backup_list(workspace):
+    ensure_workspace(workspace)
+    backups = list_workspace_backups(workspace)
     print(f"backups: {len(backups)}")
     for backup in backups:
         print(f"timestamp: {backup.timestamp}")
@@ -36,22 +36,22 @@ def cmd_backup_list(args):
     return 0
 
 
-def cmd_backup_restore(args):
-    ensure_workspace(args.workspace)
-    daemon = get_workspace_daemon(args.workspace)
+def cmd_backup_restore(timestamp, workspace, yes: bool = False):
+    ensure_workspace(workspace)
+    daemon = get_workspace_daemon(workspace)
     if daemon is not None:
         print("backup restore failed: workspace daemon is running")
         return 1
 
-    runner = runner_status(args.workspace)
+    runner = runner_status(workspace)
     if runner.status in {"running", "late"}:
         print("backup restore failed: workspace runner is active")
         return 1
 
-    database_path = workspace_database_path(args.workspace)
-    if not getattr(args, "yes", False):
+    database_path = workspace_database_path(workspace)
+    if not yes:
         confirmed = click.confirm(
-            f"Restore backup {args.timestamp} and overwrite {database_path}?",
+            f"Restore backup {timestamp} and overwrite {database_path}?",
             default=False,
         )
         if not confirmed:
@@ -59,7 +59,7 @@ def cmd_backup_restore(args):
             return 1
 
     try:
-        backup = restore_workspace_backup(args.workspace, args.timestamp)
+        backup = restore_workspace_backup(workspace, timestamp)
     except ValueError as exc:
         print(f"backup restore failed: {exc}")
         return 1

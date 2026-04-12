@@ -12,7 +12,7 @@ from litehive.cli.display import (
     fallback_intake_goal,
     fallback_intake_title,
     link_intake_brief_to_source,
-    prepare_patch_branch,
+    prepare_patch_branch as prepare_patch_branch_for_issue,
     resolve_litehive_source_root,
     task_dependencies_label,
     task_model_label,
@@ -28,30 +28,30 @@ from litehive.cli.parse import (
 )
 
 
-def cmd_add(args):
-    ensure_workspace(args.workspace)
+def cmd_add(title, workspace, goal="", acceptance_criteria=None, depends_on=None, task_type=None, mode=None, priority=None):
+    ensure_workspace(workspace)
     try:
-        depends_on = parse_dependency_ids(getattr(args, "depends_on", None))
-        acceptance_criteria = parse_acceptance_criteria(getattr(args, "acceptance_criteria", None))
-        requested_task_type = getattr(args, "task_type", None)
-        mode = "tasks" if requested_task_type is not None else "implementation"
-        pipeline_mode = getattr(args, "mode", None) or "full"
+        depends_on = parse_dependency_ids(depends_on)
+        acceptance_criteria = parse_acceptance_criteria(acceptance_criteria)
+        requested_task_type = task_type
+        task_mode = "tasks" if requested_task_type is not None else "implementation"
+        pipeline_mode = mode or "full"
         task = create_task(
-            args.workspace,
-            title=args.title,
+            workspace,
+            title=title,
             depends_on=None if depends_on is ... else depends_on,
-            mode=mode,
+            mode=task_mode,
             pipeline_mode=pipeline_mode,
-            goal=args.goal,
+            goal=goal,
             acceptance_criteria=None if acceptance_criteria is ... else acceptance_criteria,
             task_type=requested_task_type,
-            priority=getattr(args, "priority", None),
+            priority=priority,
         )
     except (ValueError, WorkspaceConflictError) as exc:
         print(f"add failed: {exc}")
         return 1
     print(
-        f"Created task {task.id} in {args.workspace / '.litehive' / 'tasks' / (task.id + '-' + task.slug)}"
+        f"Created task {task.id} in {workspace / '.litehive' / 'tasks' / (task.id + '-' + task.slug)}"
     )
     print(f"priority: {task.priority}")
     print(
@@ -73,54 +73,70 @@ def cmd_add(args):
     return 0
 
 
-def cmd_issue(args):
-    ensure_workspace(args.workspace)
+def cmd_issue(
+    workspace,
+    upstream,
+    issue_type="runtime_bug",
+    details="",
+    acceptance_criteria=None,
+    source_task=None,
+    source_stage=None,
+    source_role="recovery",
+    source_project=None,
+    litehive_workspace=None,
+    patch_branch=None,
+    patch_base="HEAD",
+    prepare_patch_branch=False,
+):
+    ensure_workspace(workspace)
     try:
-        litehive_root = resolve_litehive_source_root(args)
+        litehive_root = resolve_litehive_source_root(
+            type("Args", (), {"workspace": workspace, "litehive_workspace": litehive_workspace})()
+        )
         ensure_workspace(litehive_root)
-        acceptance_criteria = parse_acceptance_criteria(getattr(args, "acceptance_criteria", None))
+        acceptance_criteria = parse_acceptance_criteria(acceptance_criteria)
     except ValueError as exc:
         print(f"issue failed: {exc}")
         return 1
 
-    state = load_state(args.workspace)
-    source_task_id = args.source_task or state.active_task_id
+    state = load_state(workspace)
+    source_task_id = source_task or state.active_task_id
     source_task = None
     if source_task_id is not None:
         try:
-            source_task = require_task(args.workspace, source_task_id)
+            source_task = require_task(workspace, source_task_id)
         except ValueError as exc:
             print(f"issue failed: {exc}")
             return 1
 
-    source_project = args.source_project or workspace_project_name(args.workspace)
-    source_stage = args.source_stage or (
+    source_project = source_project or workspace_project_name(workspace)
+    source_stage = source_stage or (
         source_task.pipeline_status if source_task is not None else None
     )
     source_title = source_task.title if source_task is not None else None
     patch = None
-    if args.patch_branch:
+    if patch_branch:
         patch = UpstreamPatchProposal(
-            branch=args.patch_branch,
-            base_ref=args.patch_base,
+            branch=patch_branch,
+            base_ref=patch_base,
             prepared=False,
             repo_path=str(litehive_root),
         )
-        if args.prepare_patch_branch:
+        if prepare_patch_branch:
             try:
-                patch = prepare_patch_branch(
+                patch = prepare_patch_branch_for_issue(
                     litehive_root,
-                    branch=args.patch_branch,
-                    base_ref=args.patch_base,
+                    branch=patch_branch,
+                    base_ref=patch_base,
                 )
             except ValueError as exc:
                 print(f"issue failed: {exc}")
                 return 1
-    elif args.prepare_patch_branch:
+    elif prepare_patch_branch:
         print("issue failed: --prepare-patch-branch requires --patch-branch")
         return 1
 
-    contribution_kind = args.type
+    contribution_kind = issue_type
     mode = (
         "tasks"
         if contribution_kind in {"missing_feature", "config_improvement", "prompt_improvement"}
@@ -133,7 +149,7 @@ def cmd_issue(args):
         if contribution_kind == "engine_adapter_fix"
         else None
     )
-    details = args.details.strip()
+    details = details.strip()
     goal_lines = [
         f"Upstream contribution from `{source_project}`.",
         f"Contribution kind: `{contribution_kind}`.",
@@ -147,20 +163,20 @@ def cmd_issue(args):
     try:
         task = create_task(
             litehive_root,
-            title=args.upstream,
+            title=upstream,
             mode=mode,
             task_type=task_type,
             goal=goal,
             acceptance_criteria=None if acceptance_criteria is ... else acceptance_criteria,
             upstream_origin=UpstreamContributionOrigin(
                 source_project=source_project,
-                source_workspace=str(args.workspace.resolve()),
+                source_workspace=str(workspace.resolve()),
                 source_task_id=source_task_id,
                 source_task_title=source_title,
                 source_stage=source_stage,
-                source_role=args.source_role,
+                source_role=source_role,
                 contribution_kind=contribution_kind,
-                summary=args.upstream,
+                summary=upstream,
                 details=details,
                 litehive_source_path=str(litehive_root),
                 patch=patch,
@@ -182,12 +198,12 @@ def cmd_issue(args):
     return 0
 
 
-def cmd_intake(args):
-    ensure_workspace(args.workspace)
+def cmd_intake(file, workspace, engine="opencode", model=None):
+    ensure_workspace(workspace)
     brain_dump = ""
-    if args.file:
+    if file:
         try:
-            brain_dump = args.file.read_text(encoding="utf-8")
+            brain_dump = file.read_text(encoding="utf-8")
         except OSError as exc:
             print(f"Failed to read file: {exc}")
             return 1
@@ -205,10 +221,10 @@ def cmd_intake(args):
         print("Empty brain dump; aborting.")
         return 1
 
-    config = load_config(args.workspace)
-    engine_name = args.engine or config.default_engine
+    config = load_config(workspace)
+    engine_name = engine or config.default_engine
     engine = get_engine(engine_name)
-    model = args.model or (config.opencode_model if engine_name == "opencode" else None)
+    model = model or (config.opencode_model if engine_name == "opencode" else None)
 
     prompt = intake_prompt(brain_dump)
     print(f"Analyzing brain dump with {engine_name}...")
@@ -217,7 +233,7 @@ def cmd_intake(args):
     raw_goal = ""
 
     try:
-        execution = engine.run(prompt, cwd=args.workspace, model=model)
+        execution = engine.run(prompt, cwd=workspace, model=model)
         if execution.exit_code == 0:
             transcript = engine.render_transcript(execution)
             import re as _re
@@ -248,22 +264,22 @@ def cmd_intake(args):
         task_goal += "\n\n(See intake.md for the original brain dump)"
 
         task = create_task(
-            args.workspace,
+            workspace,
             title=raw_title,
             goal=task_goal,
             mode="tasks",
             task_type="intake",
-            model=args.model,
+            model=model,
         )
-        base = task_dir(args.workspace, task)
+        base = task_dir(workspace, task)
         (base / "intake.md").write_text(brain_dump, encoding="utf-8")
 
-        brief_file = task_brief_file(args.workspace, task)
+        brief_file = task_brief_file(workspace, task)
         link_intake_brief_to_source(brief_file)
 
     except Exception as exc:
         if task is not None:
-            discard_created_task(args.workspace, task.id)
+            discard_created_task(workspace, task.id)
         print(f"Task creation failed: {exc}")
         return 1
 
@@ -274,24 +290,36 @@ def cmd_intake(args):
     return 0
 
 
-def cmd_update(args):
+def cmd_update(
+    task_id,
+    workspace,
+    title=None,
+    priority=None,
+    goal=None,
+    depends_on=None,
+    acceptance_criteria=None,
+    constraint=None,
+    plan_step=None,
+    from_file=None,
+    edit: bool = False,
+):
     from litehive.cli.agent_cli import block_if_agent
 
     block_if_agent()
-    ensure_workspace(args.workspace)
-    rich_file = getattr(args, "from_file", None)
-    edit_mode = bool(getattr(args, "edit", False))
+    ensure_workspace(workspace)
+    rich_file = from_file
+    edit_mode = edit
     if rich_file is not None and edit_mode:
         print("update failed: use either --from-file or --edit, not both")
         return 1
     if (
-        getattr(args, "title", None) is None
-        and getattr(args, "depends_on", None) is None
-        and getattr(args, "acceptance_criteria", None) is None
-        and getattr(args, "constraint", None) is None
-        and getattr(args, "plan_step", None) is None
-        and getattr(args, "priority", None) is None
-        and getattr(args, "goal", None) is None
+        title is None
+        and depends_on is None
+        and acceptance_criteria is None
+        and constraint is None
+        and plan_step is None
+        and priority is None
+        and goal is None
         and rich_file is None
         and not edit_mode
     ):
@@ -302,22 +330,22 @@ def cmd_update(args):
         if rich_file is not None:
             rich_updates = load_rich_task_update_file(rich_file)
         elif edit_mode:
-            rich_updates = collect_editor_task_updates(args.workspace, args.task_id)
+            rich_updates = collect_editor_task_updates(workspace, task_id)
 
         depends_on = parse_dependency_ids(
-            getattr(args, "depends_on", None), task_id=args.task_id, allow_clear=True
+            depends_on, task_id=task_id, allow_clear=True
         )
         acceptance_criteria = parse_acceptance_criteria(
-            getattr(args, "acceptance_criteria", None),
+            acceptance_criteria,
             allow_clear=True,
         )
         constraints = parse_text_list_option(
-            getattr(args, "constraint", None),
+            constraint,
             option_name="Constraints",
             allow_clear=True,
         )
         plan = parse_text_list_option(
-            getattr(args, "plan_step", None),
+            plan_step,
             option_name="Plan steps",
             allow_clear=True,
         )
@@ -330,17 +358,17 @@ def cmd_update(args):
             flag_updates["constraints"] = constraints
         if plan is not ...:
             flag_updates["plan"] = plan
-        if getattr(args, "priority", None) is not None:
-            flag_updates["priority"] = args.priority
-        if getattr(args, "title", None) is not None:
-            flag_updates["title"] = args.title
-        if getattr(args, "goal", None) is not None:
-            flag_updates["goal"] = args.goal
+        if priority is not None:
+            flag_updates["priority"] = priority
+        if title is not None:
+            flag_updates["title"] = title
+        if goal is not None:
+            flag_updates["goal"] = goal
 
         updates = merge_task_updates(rich_updates, flag_updates, overlay_source="CLI flags")
         task = update_task_metadata(
-            args.workspace,
-            args.task_id,
+            workspace,
+            task_id,
             title=updates.get("title", ...),
             depends_on=updates.get("depends_on", ...),
             task_type=updates.get("task_type", ...),

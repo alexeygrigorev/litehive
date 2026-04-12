@@ -2,7 +2,6 @@ from litehive.config import ensure_workspace
 from litehive.git_ops import GitError, checkpoint_message
 from litehive.recovery.execution_recovery import recover_completed_task, rollback_completed_task
 from litehive.tasks.archive import archive_done_tasks, archive_task, cleanup_archived_tasks
-from litehive.workspace.worktree_inspection import inspect_dirty_worktree_gate
 from litehive.tasks.crud import require_task
 from litehive.tasks.models import WorkspaceConflictError
 from litehive.tasks.normalization import missing_acceptance_criteria_reason
@@ -16,30 +15,12 @@ from litehive.workspace.task_status import (
     stop_current_task,
     switch_task_engine,
 )
-def cmd_dirty_worktree_gate(args):
-    report = inspect_dirty_worktree_gate(args.workspace)
-    print(f"workspace: {args.workspace}")
-    print(f"dirty_worktree_gate: {'blocked' if report.blocks_pool else 'open'}")
-    print(f"clean: {'yes' if report.is_clean else 'no'}")
-    if report.is_clean:
-        print("details: workspace checkout and recorded task worktrees are clean")
-        return 0
-    for finding in report.findings:
-        print()
-        print(f"location_kind: {finding.location_kind}")
-        print(f"ownership: {finding.ownership}")
-        if finding.task_id is not None:
-            print(f"task_id: {finding.task_id}")
-        if finding.worktree_path is not None:
-            print(f"worktree_path: {finding.worktree_path}")
-        print("dirty_paths: " + (", ".join(finding.dirty_paths) if finding.dirty_paths else "-"))
-    return 1 if report.blocks_pool else 0
 
 
-def cmd_rollback(args):
-    ensure_workspace(args.workspace)
+def cmd_rollback(task_id, workspace):
+    ensure_workspace(workspace)
     try:
-        summary = rollback_completed_task(args.workspace, args.task_id)
+        summary = rollback_completed_task(workspace, task_id)
     except (GitError, WorkspaceConflictError) as exc:
         print(f"rollback failed: {exc}")
         return 1
@@ -57,10 +38,10 @@ def cmd_rollback(args):
     return 0
 
 
-def cmd_recover(args):
-    ensure_workspace(args.workspace)
+def cmd_recover(task_id, workspace):
+    ensure_workspace(workspace)
     try:
-        task = recover_completed_task(args.workspace, args.task_id)
+        task = recover_completed_task(workspace, task_id)
     except (GitError, WorkspaceConflictError) as exc:
         print(f"recover failed: {exc}")
         return 1
@@ -76,22 +57,22 @@ def cmd_recover(args):
     return 0
 
 
-def cmd_move(args):
-    ensure_workspace(args.workspace)
+def cmd_move(task_id, position, workspace):
+    ensure_workspace(workspace)
     try:
-        state = move_queued_task(args.workspace, args.task_id, args.position)
+        state = move_queued_task(workspace, task_id, position)
     except (ValueError, WorkspaceConflictError) as exc:
         print(f"move failed: {exc}")
         return 1
-    print(f"task_id: {args.task_id}")
-    print(f"position: {state.queue.index(args.task_id) + 1}")
+    print(f"task_id: {task_id}")
+    print(f"position: {state.queue.index(task_id) + 1}")
     return 0
 
 
-def cmd_promote(args):
-    ensure_workspace(args.workspace)
+def cmd_promote(task_id, workspace):
+    ensure_workspace(workspace)
     try:
-        task = require_task(args.workspace, args.task_id)
+        task = require_task(workspace, task_id)
         if task.status in {
             "interrupted",
             "parked",
@@ -101,7 +82,7 @@ def cmd_promote(args):
             "deferred",
             "duplicate",
         }:
-            task = resume_task(args.workspace, args.task_id, front=True)
+            task = resume_task(workspace, task_id, front=True)
             print(f"task: {task.id} {task.title}")
             print("status: queued")
             print(f"pipeline_status: {task.pipeline_status}")
@@ -110,37 +91,37 @@ def cmd_promote(args):
                 print(f"warning: {missing_criteria_reason}")
             print("position: 1")
             return 0
-        move_queued_task(args.workspace, args.task_id, 1)
+        move_queued_task(workspace, task_id, 1)
     except (ValueError, WorkspaceConflictError) as exc:
         print(f"promote failed: {exc}")
         return 1
-    print(f"task_id: {args.task_id}")
+    print(f"task_id: {task_id}")
     print("position: 1")
     return 0
 
 
-def cmd_prioritize(args):
-    ensure_workspace(args.workspace)
+def cmd_prioritize(task_ids, workspace):
+    ensure_workspace(workspace)
     try:
-        state = prioritize_queued_tasks(args.workspace, args.task_ids)
+        state = prioritize_queued_tasks(workspace, task_ids)
     except (ValueError, WorkspaceConflictError) as exc:
         print(f"prioritize failed: {exc}")
         return 1
-    print(f"moved_tasks: {' '.join(args.task_ids)}")
-    print(f"moved_count: {len(args.task_ids)}")
-    print(f"front_of_queue: {' '.join(state.queue[: len(args.task_ids)])}")
+    print(f"moved_tasks: {' '.join(task_ids)}")
+    print(f"moved_count: {len(task_ids)}")
+    print(f"front_of_queue: {' '.join(state.queue[: len(task_ids)])}")
     print(f"queue_length: {len(state.queue)}")
     return 0
 
 
-def cmd_requeue_task(args):
-    ensure_workspace(args.workspace)
+def cmd_requeue_task(task_id, workspace, front: bool = False, force: bool = False):
+    ensure_workspace(workspace)
     try:
-        task = requeue_task(args.workspace, args.task_id, front=args.front, force=getattr(args, "force", False))
+        task = requeue_task(workspace, task_id, front=front, force=force)
     except (ValueError, WorkspaceConflictError) as exc:
         print(f"requeue failed: {exc}")
         return 1
-    state = load_state(args.workspace)
+    state = load_state(workspace)
     print(f"task: {task.id} {task.title}")
     print("status: queued")
     print(f"pipeline_status: {task.pipeline_status}")
@@ -151,22 +132,22 @@ def cmd_requeue_task(args):
     return 0
 
 
-def cmd_queue_requeue(args):
-    ensure_workspace(args.workspace)
-    task = require_task(args.workspace, args.task_id)
+def cmd_queue_requeue(task_id, workspace, front: bool = False, force: bool = False):
+    ensure_workspace(workspace)
+    task = require_task(workspace, task_id)
     if task.pipeline_status == "done" or task.status == "done":
-        return cmd_recover(args)
-    return cmd_requeue_task(args)
+        return cmd_recover(task_id, workspace)
+    return cmd_requeue_task(task_id, workspace, front=front, force=force)
 
 
-def cmd_resume_task(args):
-    ensure_workspace(args.workspace)
+def cmd_resume_task(task_id, workspace, front: bool = False):
+    ensure_workspace(workspace)
     try:
-        task = resume_task(args.workspace, args.task_id, front=args.front)
+        task = resume_task(workspace, task_id, front=front)
     except (ValueError, WorkspaceConflictError) as exc:
         print(f"resume failed: {exc}")
         return 1
-    state = load_state(args.workspace)
+    state = load_state(workspace)
     print(f"task: {task.id} {task.title}")
     print("status: queued")
     print(f"pipeline_status: {task.pipeline_status}")
@@ -177,10 +158,10 @@ def cmd_resume_task(args):
     return 0
 
 
-def cmd_abandon_task(args):
-    ensure_workspace(args.workspace)
+def cmd_abandon_task(task_id, workspace):
+    ensure_workspace(workspace)
     try:
-        task = abandon_task(args.workspace, args.task_id)
+        task = abandon_task(workspace, task_id)
     except ValueError as exc:
         print(f"abandon failed: {exc}")
         return 1
@@ -190,10 +171,10 @@ def cmd_abandon_task(args):
     return 0
 
 
-def cmd_stop_task(args):
-    ensure_workspace(args.workspace)
+def cmd_stop_task(workspace):
+    ensure_workspace(workspace)
     try:
-        summary = stop_current_task(args.workspace)
+        summary = stop_current_task(workspace)
     except (ValueError, WorkspaceConflictError) as exc:
         print(f"stop failed: {exc}")
         return 1
@@ -205,19 +186,19 @@ def cmd_stop_task(args):
     return 0
 
 
-def cmd_switch_task(args):
-    ensure_workspace(args.workspace)
+def cmd_switch_task(task_id, engine, workspace, reason):
+    ensure_workspace(workspace)
     try:
         summary = switch_task_engine(
-            args.workspace,
-            args.task_id,
-            engine=args.engine,
-            reason=args.reason,
+            workspace,
+            task_id,
+            engine=engine,
+            reason=reason,
         )
     except (ValueError, WorkspaceConflictError) as exc:
         print(f"switch failed: {exc}")
         return 1
-    state = load_state(args.workspace)
+    state = load_state(workspace)
     print(f"task: {summary.task.id} {summary.task.title}")
     print("status: queued")
     print(f"pipeline_status: {summary.task.pipeline_status}")
@@ -229,18 +210,18 @@ def cmd_switch_task(args):
     return 0
 
 
-def cmd_close_task(args):
+def cmd_close_task(task_id, workspace, outcome, reason=None, follow_up_task=None):
     from litehive.cli.agent_cli import block_if_agent
 
     block_if_agent()
-    ensure_workspace(args.workspace)
+    ensure_workspace(workspace)
     try:
         task = close_task(
-            args.workspace,
-            args.task_id,
-            outcome=args.outcome,
-            reason=args.reason,
-            follow_up_task_id=args.follow_up_task,
+            workspace,
+            task_id,
+            outcome=outcome,
+            reason=reason,
+            follow_up_task_id=follow_up_task,
         )
     except (ValueError, WorkspaceConflictError) as exc:
         print(f"close failed: {exc}")
@@ -254,21 +235,21 @@ def cmd_close_task(args):
     return 0
 
 
-def cmd_archive(args):
-    ensure_workspace(args.workspace)
-    if args.task_id is None and not getattr(args, "all_done", False):
-        parser = getattr(args, "command_parser", None)
+def cmd_archive(workspace, task_id=None, all_done: bool = False, command_parser=None):
+    ensure_workspace(workspace)
+    if task_id is None and not all_done:
+        parser = command_parser
         if parser is not None:
             parser.print_help()
         return 2
     try:
-        if args.task_id is not None:
-            task = archive_task(args.workspace, args.task_id)
+        if task_id is not None:
+            task = archive_task(workspace, task_id)
             print(f"archived: {task.id} {task.title}")
             print("archived_count: 1")
         else:
             tasks = archive_done_tasks(
-                args.workspace,
+                workspace,
                 on_skip=lambda task_id, exc: print(
                     f"archive skipped: {task_id} ({exc})"
                 ),
@@ -282,10 +263,10 @@ def cmd_archive(args):
     return 0
 
 
-def cmd_cleanup(args):
-    ensure_workspace(args.workspace)
+def cmd_cleanup(workspace, older_than):
+    ensure_workspace(workspace)
     try:
-        deleted = cleanup_archived_tasks(args.workspace, args.older_than)
+        deleted = cleanup_archived_tasks(workspace, older_than)
     except ValueError as exc:
         print(f"cleanup failed: {exc}")
         return 1
