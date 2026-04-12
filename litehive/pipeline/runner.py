@@ -5,7 +5,8 @@ from .events import Event, Pass
 from .journal import NullJournal, PipelineJournal
 from .nodes.base import NodeRegistry
 from .persistence import Persistence, TaskState
-from .transitions import RULES, Rule, evaluate
+from .transitions import Rule, evaluate
+from .rules import RULES
 from .types import TERMINAL_NODES
 
 

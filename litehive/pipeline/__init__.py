@@ -1,7 +1,8 @@
 from .journal import InMemoryJournal, NullJournal, PipelineJournal, SqliteJournal
 from .registry import build_registry
 from .runner import StateMachineRunner
-from .transitions import RULES, evaluate, list_transitions
+from .rules import RULES
+from .transitions import evaluate, list_transitions
 
 __all__ = [
     "StateMachineRunner",
