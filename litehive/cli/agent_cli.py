@@ -43,15 +43,21 @@ def _current_role() -> str | None:
     return os.environ.get("LITEHIVE_AGENT_ROLE")
 
 
-def block_if_agent(command_name: str = "") -> None:
+def block_if_agent(allowed_roles: set[str] | None = None) -> None:
     """Call at the top of any command agents should not use.
 
-    If ``LITEHIVE_AGENT_ROLE`` is set, prints a terse rejection and exits.
-    No explanation, no alternatives — just "you cannot use this command".
+    If ``LITEHIVE_AGENT_ROLE`` is set and the role is not in
+    ``allowed_roles``, prints a terse rejection and exits. Pass
+    ``allowed_roles={"planner"}`` to let the planner through while
+    blocking everyone else.
     """
-    if _current_role() is not None:
-        print("You cannot use this command.")
-        raise typer.Exit(1)
+    role = _current_role()
+    if role is None:
+        return
+    if allowed_roles is not None and role in allowed_roles:
+        return
+    print("You cannot use this command.")
+    raise typer.Exit(1)
 
 
 @agent_app.command("report", help="Submit your stage verdict")
