@@ -463,6 +463,13 @@ def test_ensure_workspace_rejects_litehive_control_directory(tmp_path: Path) -> 
         ensure_workspace(tmp_path / ".litehive")
 
 
+def test_ensure_workspace_rejects_nested_litehive_control_directory(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+
+    with pytest.raises(ValueError, match="Litehive control directory.*choose the real repo root"):
+        ensure_workspace(tmp_path / ".litehive" / ".litehive")
+
+
 def test_ensure_workspace_rejects_nested_subdirectory_of_existing_workspace(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     nested_root = tmp_path / "packages" / "demo"
