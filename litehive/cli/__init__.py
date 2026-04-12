@@ -1108,6 +1108,67 @@ def pipeline_rules_command() -> int:
     return 0
 
 
+@pipeline_app.command(
+    "journal", help="Dump the v2 pipeline journal + transitions for one task"
+)
+def pipeline_journal_command(
+    task_id: Annotated[str, typer.Argument(help="Task id (e.g. T-0001)")],
+    workspace: Annotated[
+        Path, typer.Option("--workspace", help="Workspace root (.litehive/ container)")
+    ] = Path.cwd(),
+    limit: Annotated[
+        int, typer.Option("--limit", "-n", help="Max transitions to show (most recent)")
+    ] = 50,
+) -> int:
+    from litehive.pipeline.journal import SqliteJournal
+    from litehive.pipeline.persistence import SqlitePersistence, TaskNotFound
+
+    journal = SqliteJournal(workspace)
+    store = SqlitePersistence(workspace)
+    try:
+        state = store.load(task_id)
+    except TaskNotFound:
+        print(f"no v2 state row for task {task_id}")
+        raise typer.Exit(1)
+
+    print(f"task: {task_id}")
+    print(f"stage: {state.stage}")
+    if state.origin_stage:
+        print(f"origin_stage: {state.origin_stage}")
+    if state.recovery_attempt:
+        print(f"recovery_attempt: {dict(state.recovery_attempt)}")
+    if state.stage_retry:
+        print(f"stage_retry: {dict(state.stage_retry)}")
+    if state.failed_reason:
+        print(f"failed_reason: {state.failed_reason}")
+    if state.failed_message:
+        print(f"failed_message: {state.failed_message}")
+    if state.last_rejection_by_stage:
+        print("last_rejection_by_stage:")
+        for stage, rej in state.last_rejection_by_stage.items():
+            print(f"  {stage}: source={rej.source} reason={rej.reason}")
+
+    lifecycle = journal.load_lifecycle(task_id)
+    if lifecycle:
+        print("\nlifecycle:")
+        for row in lifecycle:
+            print(f"  {row['seq']:3d} {row['created_at']}  {row['kind']}  {row['payload']}")
+
+    transitions = journal.load_transitions(task_id)
+    if transitions:
+        recent = transitions[-limit:]
+        print(f"\ntransitions (last {len(recent)} of {len(transitions)}):")
+        for row in recent:
+            desc = row["rule_description"] or ""
+            print(
+                f"  {row['seq']:3d} {row['created_at']}  "
+                f"{row['from_stage']:25s} --[{row['event_type']:25s}]--> "
+                f"{row['to_stage']}"
+                + (f"  # {desc}" if desc else "")
+            )
+    return 0
+
+
 _PUBLIC_TOP_LEVEL_COMMANDS = {
     "configure",
     "status",

@@ -258,6 +258,13 @@ item lands.
   `test_pipeline_v2_pre_exec_probe.py` cover probe injection,
   exception safety, repair execution, and the budget short-circuit.
   135 v2 tests green.
+- 2026-04-12: `litehive pipeline journal <task_id>` diagnostic CLI.
+  Dumps task state (stage, origin_stage, recovery_attempt, stage_retry,
+  failed_reason/message, last_rejection_by_stage) plus the pipeline
+  lifecycle events and recent pipeline_transitions rows for the task.
+  Typer raises `Exit(1)` on unknown task. 2 tests cover the happy
+  path and the error. Operators now have one command to diagnose a
+  wedged task instead of opening sqlite by hand. 137 v2 tests green.
 - 2026-04-12: bootstrap integration tests landed
   (`tests/test_pipeline_v2_bootstrap.py`). They drive `run_task_v2`
   against a real tmp_path workspace with SqlitePersistence, SqliteJournal,
