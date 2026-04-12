@@ -215,6 +215,14 @@ item lands.
   is "Already up to date" → returncode 0 → Pass. No guard needed —
   git semantics already handle the no-op case. Test added to
   `test_pipeline_v2_hooks_and_commit.py` to document the contract.
+- 2026-04-12: workspace hook config wired into `build_registry`.
+  `_hook_specs_from_config(config)` translates
+  `LitehiveConfig.runner_hooks` (v1 HookConfig shape) into v2 `HookSpec`
+  lists keyed by phase name. `run_task_v2` passes them to
+  `build_registry` so per-phase hooks configured in workspace YAML
+  actually run through `SubprocessHookRunner` during the corresponding
+  pipeline phase. 2 translator tests in
+  `test_pipeline_v2_hook_config_wiring.py`. 129 v2 tests green.
 - 2026-04-12: bootstrap integration tests landed
   (`tests/test_pipeline_v2_bootstrap.py`). They drive `run_task_v2`
   against a real tmp_path workspace with SqlitePersistence, SqliteJournal,

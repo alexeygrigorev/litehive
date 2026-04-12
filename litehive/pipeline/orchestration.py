@@ -33,7 +33,7 @@ from .agents._base import PromptContext
 from .engines import ConfigBackedEngineSelector, EngineFactory
 from .heru_factory import heru_engine_factory
 from .journal import SqliteJournal
-from .nodes import GitCommitNode, GitWorktreeSyncNode, SubprocessHookRunner
+from .nodes import GitCommitNode, GitWorktreeSyncNode, HookSpec, SubprocessHookRunner
 from .nodes.system import CommitNode
 from .persistence import SqlitePersistence, TaskState
 from .registry import build_registry
@@ -81,6 +81,33 @@ def _build_worktree_sync_node(root: Path) -> GitWorktreeSyncNode:
     )
 
 
+def _hook_specs_from_config(config) -> dict[str, list[HookSpec]]:
+    """Translate ``LitehiveConfig.runner_hooks`` into v2 ``HookSpec`` lists.
+
+    v1 config stores runner hooks as ``dict[phase_name, list[HookConfig]]``
+    where HookConfig has ``command``, ``reject_on_failure``,
+    ``timeout_seconds``, ``description``, ``instructions_on_failure``. v2
+    HookSpec is a strict subset — just command / reject_on_failure /
+    timeout_seconds. The phase names match (``before_grooming``,
+    ``after_implementing``, …), so this is a straight per-phase rewrite.
+    """
+    out: dict[str, list[HookSpec]] = {}
+    raw = getattr(config, "runner_hooks", None) or {}
+    for phase, hooks in raw.items():
+        specs: list[HookSpec] = []
+        for hook in hooks or []:
+            specs.append(
+                HookSpec(
+                    command=hook.command,
+                    reject_on_failure=bool(getattr(hook, "reject_on_failure", True)),
+                    timeout_seconds=int(getattr(hook, "timeout_seconds", 60) or 60),
+                )
+            )
+        if specs:
+            out[phase] = specs
+    return out
+
+
 def run_task_v2(
     root: Path,
     task: TaskRecord,
@@ -116,6 +143,7 @@ def run_task_v2(
         commit_node = _build_commit_node(root)
         worktree_sync_node = _build_worktree_sync_node(root)
         prompt_context = PromptContext(workspace_root=root)
+        hook_specs = _hook_specs_from_config(config)
 
         registry = build_registry(
             selector=selector,
@@ -124,6 +152,7 @@ def run_task_v2(
             commit_node=commit_node,
             worktree_sync_node=worktree_sync_node,
             prompt_context=prompt_context,
+            hook_specs=hook_specs,
         )
 
         runner = StateMachineRunner(
