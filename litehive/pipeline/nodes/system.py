@@ -158,10 +158,15 @@ class GitWorktreeSyncNode(WorktreeSyncNode):
             return False
 
         if not self._has_origin(worktree):
-            # Local-only workspace (no 'origin' remote configured). Nothing
-            # to sync from. This is a valid state — the task was created in
-            # a workspace that isn't tracking an upstream, and we shouldn't
-            # crash the pipeline over it.
+            return False
+
+        if self._is_dirty(worktree):
+            # Worktree has uncommitted changes — typically the SWE's
+            # work-in-progress from a previous run that was interrupted.
+            # Merging main into a dirty worktree would fail ("your local
+            # changes would be overwritten") or produce a confusing
+            # conflict between WIP and main. Skip the sync and let the
+            # agent resume on the existing state.
             return False
 
         fetch = subprocess.run(
@@ -196,6 +201,16 @@ class GitWorktreeSyncNode(WorktreeSyncNode):
             text=True,
         )
         raise GitError(f"worktree_sync merge failed: {merge.stderr.strip() or merge.stdout.strip()}")
+
+    @staticmethod
+    def _is_dirty(worktree: Path) -> bool:
+        proc = subprocess.run(
+            ["git", "status", "--porcelain"],
+            cwd=str(worktree),
+            capture_output=True,
+            text=True,
+        )
+        return proc.returncode == 0 and bool(proc.stdout.strip())
 
     @staticmethod
     def _has_origin(worktree: Path) -> bool:
