@@ -46,6 +46,14 @@ from .templates import apply_task_template_defaults, render_task_brief, task_bri
 logger = logging.getLogger(__name__)
 
 
+def _drop_legacy_task_engine_field(data: object) -> dict:
+    if not isinstance(data, dict):
+        return {}
+    sanitized = dict(data)
+    sanitized.pop("engine", None)
+    return sanitized
+
+
 def _highest_task_number_on_disk(root: Path) -> int:
     existing = []
     for child in tasks_root(root).iterdir():
@@ -188,7 +196,9 @@ def _load_task_runtime(root: Path, task: TaskRecord) -> TaskRecord:
 
 
 def load_task_record_file(path: Path) -> TaskRecord:
-    data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    data = _drop_legacy_task_engine_field(
+        yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    )
     return TaskRecord(**data)
 
 

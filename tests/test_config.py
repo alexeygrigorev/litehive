@@ -149,6 +149,7 @@ def test_task_add_parser_accepts_surviving_shaping_flags() -> None:
 @pytest.mark.parametrize(
     "flag",
     [
+        "--engine",
         "--model",
         "--retry-limit",
         "--record-mode",
@@ -211,6 +212,7 @@ def test_task_update_parser_accepts_surviving_shaping_flags() -> None:
     "argv",
     [
         ["task", "update", "T-0001", "--model", "gpt-5"],
+        ["task", "update", "T-0001", "--engine", "gemini"],
         ["task", "update", "T-0001", "--retry-limit", "5"],
         ["task", "update", "T-0001", "--pm-complexity", "moderate"],
         ["task", "update", "T-0001", "--planned-effort", "m"],

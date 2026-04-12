@@ -60,7 +60,6 @@ def cmd_add(args):
     print(f"priority: {task.priority}")
     print(f"mode: {task.mode}")
     print(f"pipeline_mode: {task.pipeline_mode}")
-    print(f"engine: {load_config(args.workspace).default_engine}")
     print(f"model: {task_model_label(task.model)}")
     print("human_checkpoints: " + (", ".join(task.human_checkpoints) if task.human_checkpoints else "-"))
     print(f"task_type: {task.task_type or '-'}")
@@ -361,9 +360,7 @@ def cmd_update(args):
     except (ValueError, WorkspaceConflictError) as exc:
         print(f"update failed: {exc}")
         return 1
-    config = load_config(args.workspace)
     print(f"task: {task.id} {task.title}")
-    print(f"engine: {config.default_engine}")
     print(f"model: {task_model_label(task.model)}")
     print(
         f"retry_limit: {task.retry_policy.max_retries if task.retry_policy.max_retries is not None else 'default'}"
