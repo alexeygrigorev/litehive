@@ -38,16 +38,16 @@ def _engine_quota_block_reason(engine_name: str) -> str | None:
     """Check if an engine's quota is too high to run integration tests."""
     try:
         if engine_name == "codex":
-            from litehive.agents.quota.codex_quota import codex_quota_block_reason
+            from heru.quota.codex_quota import codex_quota_block_reason
             return codex_quota_block_reason()
         if engine_name == "claude":
-            from litehive.agents.quota.claude_quota import claude_quota_block_reason
+            from heru.quota.claude_quota import claude_quota_block_reason
             return claude_quota_block_reason()
         if engine_name == "copilot":
-            from litehive.agents.quota.copilot_quota import copilot_quota_block_reason
+            from heru.quota.copilot_quota import copilot_quota_block_reason
             return copilot_quota_block_reason()
         if engine_name in ("goz", "opencode"):
-            from litehive.agents.quota.zai_quota import zai_quota_block_reason
+            from heru.quota.zai_quota import zai_quota_block_reason
             return zai_quota_block_reason()
     except Exception:
         pass

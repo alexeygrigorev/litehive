@@ -167,7 +167,7 @@ def record_codex_quota_check(
     status: object,
 ) -> None:
     """Record proactive codex quota status into engine monitoring."""
-    from litehive.agents.quota import UsageStatus
+    from heru.quota import UsageStatus
 
     if not isinstance(status, UsageStatus):
         return

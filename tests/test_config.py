@@ -15,7 +15,7 @@ from tests.workspace_helpers import (
     yaml,
 )
 
-import litehive.agents.quota.codex_quota as _codex_quota_mod
+import heru.quota.codex_quota as _codex_quota_mod
 
 
 def test_engine_command_switches_workspace_default_engine(
@@ -192,22 +192,22 @@ def _assert_engine_status_command_shows_all_monitored_engines(
     from litehive.models import EngineUsageRecord, EngineUsageWindow, WorkspaceEngineMonitoring
     from litehive.observability._engine_monitoring import save_engine_monitoring
     from litehive.cli import _cmd_engine
-    from litehive.agents.quota import UsageStatus
+    from heru.quota import UsageStatus
 
     monkeypatch.setattr(
         "litehive.cli.engine.check_codex_quota",
         lambda: _codex_quota_mod.UsageStatus(error="test-disabled"),
     )
     monkeypatch.setattr(
-        "litehive.agents.quota.claude_quota.check_claude_quota",
+        "litehive.cli.engine.check_claude_quota",
         lambda: UsageStatus(error="no-credentials"),
     )
     monkeypatch.setattr(
-        "litehive.agents.quota.copilot_quota.check_copilot_quota",
+        "litehive.cli.engine.check_copilot_quota",
         lambda: UsageStatus(error="gh not on PATH"),
     )
     monkeypatch.setattr(
-        "litehive.agents.quota.zai_quota.check_zai_quota",
+        "litehive.cli.engine.check_zai_quota",
         lambda: UsageStatus(error="goz not on PATH"),
     )
 
@@ -289,7 +289,7 @@ def test_engine_status_command_scopes_to_single_engine_and_shows_codex_quota(
     ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
 
     from litehive.cli import _cmd_engine
-    from litehive.agents.quota import UsageStatus, UsageWindow
+    from heru.quota import UsageStatus, UsageWindow
 
     def fake_check_codex_quota():
         return UsageStatus(
@@ -323,7 +323,7 @@ def test_engine_status_command_shows_claude_quota_without_monitoring_data(
     ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
 
     from litehive.cli import _cmd_engine
-    from litehive.agents.quota import UsageStatus, UsageWindow
+    from heru.quota import UsageStatus, UsageWindow
 
     def fake_check_claude_quota():
         return UsageStatus(
@@ -334,7 +334,7 @@ def test_engine_status_command_shows_claude_quota_without_monitoring_data(
         )
 
     monkeypatch.setattr(
-        "litehive.agents.quota.claude_quota.check_claude_quota",
+        "litehive.cli.engine.check_claude_quota",
         fake_check_claude_quota,
     )
 
@@ -362,7 +362,7 @@ def test_engine_status_command_shows_copilot_quota_without_monitoring_data(
     ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
 
     from litehive.cli import _cmd_engine
-    from litehive.agents.quota import UsageStatus, UsageWindow
+    from heru.quota import UsageStatus, UsageWindow
 
     def fake_check_copilot_quota():
         return UsageStatus(
@@ -373,7 +373,7 @@ def test_engine_status_command_shows_copilot_quota_without_monitoring_data(
         )
 
     monkeypatch.setattr(
-        "litehive.agents.quota.copilot_quota.check_copilot_quota",
+        "litehive.cli.engine.check_copilot_quota",
         fake_check_copilot_quota,
     )
 
@@ -400,7 +400,7 @@ def test_engine_status_command_shows_zai_quota_without_monitoring_data(
     ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
 
     from litehive.cli import _cmd_engine
-    from litehive.agents.quota import UsageStatus, UsageWindow
+    from heru.quota import UsageStatus, UsageWindow
 
     def fake_check_zai_quota():
         return UsageStatus(
@@ -411,7 +411,7 @@ def test_engine_status_command_shows_zai_quota_without_monitoring_data(
         )
 
     monkeypatch.setattr(
-        "litehive.agents.quota.zai_quota.check_zai_quota",
+        "litehive.cli.engine.check_zai_quota",
         fake_check_zai_quota,
     )
 
@@ -443,7 +443,7 @@ def test_engine_status_command_handles_live_quota_errors_gracefully(
         raise RuntimeError("boom")
 
     monkeypatch.setattr(
-        "litehive.agents.quota.copilot_quota.check_copilot_quota",
+        "litehive.cli.engine.check_copilot_quota",
         fake_check_copilot_quota,
     )
 

@@ -3,8 +3,8 @@
 import os
 
 import pytest
+import heru.quota.codex_quota as _codex_quota_mod
 
-import litehive.agents.quota.codex_quota as _codex_quota_mod
 
 # Skip fsync in tests — saves ~70% of file write time
 os.environ["LITEHIVE_SKIP_FSYNC"] = "1"

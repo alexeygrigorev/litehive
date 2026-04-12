@@ -133,3 +133,15 @@ def test_serialize_verdict_instructions_match_role_and_stage(workspace: Path) ->
     text = serialize_prompt(agent.build_prompt(make_state(task.id)), task_record=task)
 
     assert "litehive agent report --verdict <pass|reject|blocked>" in text
+
+
+def test_serialize_includes_nudge_message_when_present(workspace: Path) -> None:
+    task = create_task(workspace, title="t", goal="g")
+    agent = SWEAgent(_NullSelector(), _NullSessions(), prompt_context=PromptContext())
+    prompt = agent.build_nudge_prompt(make_state(task.id), agent.build_prompt(make_state(task.id)))
+
+    text = serialize_prompt(prompt, task_record=task)
+
+    assert "this is a nudge" in text
+    assert "without a verdict submission" in text
+    assert "Please review your work and submit your verdict now." in text

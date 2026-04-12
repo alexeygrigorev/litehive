@@ -69,6 +69,9 @@ def serialize_prompt(
     if conflict_files:
         sections.append(_merge_conflict_section(conflict_files, prompt.get("merge_attempt")))
 
+    if prompt.get("nudge"):
+        sections.append(_nudge_section(prompt))
+
     if thread:
         sections.append(_thread_section(thread))
 
@@ -188,6 +191,19 @@ def _merge_conflict_section(conflict_files: list[str], merge_attempt: int | None
     bullets = "\n".join(f"- {f}" for f in conflict_files)
     extra = f"\nMerge attempt: {merge_attempt}" if merge_attempt is not None else ""
     return f"Merge conflict files (resolve all of these):\n{bullets}{extra}"
+
+
+def _nudge_section(prompt: dict[str, Any]) -> str:
+    message = str(prompt.get("nudge_message") or "").strip()
+    lines = [
+        "IMPORTANT: this is a nudge because your prior turn ended without a verdict submission.",
+    ]
+    if message:
+        lines.append(message)
+    lines.append(
+        "Do not continue exploratory work until you have submitted `litehive agent report` with the correct verdict."
+    )
+    return "\n".join(lines)
 
 
 def _thread_section(thread: list[dict[str, Any]]) -> str:

@@ -6,13 +6,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import yaml
+import heru.quota.claude_quota as claude_quota_mod
+import heru.quota.codex_quota as codex_quota_mod
+import heru.quota.copilot_quota as copilot_quota_mod
+import heru.quota.zai_quota as zai_quota_mod
 
 from litehive.config import ExecutionRetryPolicy, LitehiveConfig
 from litehive.agents import extract_engine_continuation, get_engine
-import litehive.agents.quota.claude_quota as claude_quota_mod
-import litehive.agents.quota.codex_quota as codex_quota_mod
-import litehive.agents.quota.copilot_quota as copilot_quota_mod
-import litehive.agents.quota.zai_quota as zai_quota_mod
 from litehive.models import RuntimeContinuationHandoff, TaskRecord
 from litehive.workspace.runtime_tracking import set_task_continuation_handoff
 from litehive.config.paths import config_path

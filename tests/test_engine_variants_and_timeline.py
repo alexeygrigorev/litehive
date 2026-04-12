@@ -51,7 +51,7 @@ def test_engine_registry_uses_adapter_defaults_and_public_lookup_api() -> None:
 
 
 def test_adapters_package_does_not_export_private_adapter_internals() -> None:
-    import litehive.agents.adapters as adapters
+    import heru.adapters as adapters
 
     assert not hasattr(adapters, "_OPENCODE_STRIPPED_ENV_VARS")
     assert not hasattr(adapters, "_CLAUDE_STREAM_EVENT_ADAPTER")
@@ -65,7 +65,9 @@ def test_adapters_package_does_not_export_private_adapter_internals() -> None:
 
 
 def test_provider_adapter_modules_stay_under_200_lines() -> None:
-    adapter_dir = Path(__file__).resolve().parents[1] / "litehive" / "agents" / "adapters"
+    import heru.adapters as adapters
+
+    adapter_dir = Path(adapters.__file__).resolve().parent
     for name in ("claude.py", "codex.py", "copilot.py", "gemini.py", "goz.py", "opencode.py"):
         assert len((adapter_dir / name).read_text(encoding="utf-8").splitlines()) < 200
 
@@ -620,8 +622,9 @@ def test_goz_extract_usage_observation_reads_tokens_and_cost(tmp_path: Path) -> 
 
 
 def test_update_command_rejects_removed_claude_engine_flag(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    monkeypatch.delenv("LITEHIVE_AGENT_ROLE", raising=False)
     ensure_workspace(tmp_path, LitehiveConfig())
     task = create_task(tmp_path, title="Tune Claude task")
 
@@ -646,8 +649,9 @@ def test_update_command_rejects_removed_claude_engine_flag(
 
 
 def test_update_command_rejects_removed_goz_engine_flag(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    monkeypatch.delenv("LITEHIVE_AGENT_ROLE", raising=False)
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Tune Goz task")
 

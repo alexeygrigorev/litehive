@@ -118,14 +118,6 @@ from litehive.config.engine_models import (
 )
 from litehive.pipeline.orchestration import run_task, ExecutionResult
 from litehive.tasks.queue_ops import dequeue_next_task
-
-
-def run_next_task(root, **kwargs):
-    """v2 replacement for the deleted v1 run_next_task."""
-    task = dequeue_next_task(root)
-    if task is None:
-        return ExecutionResult(task=None, final_state=None, final_stage="none")
-    return run_task(root, task, **kwargs)
 from litehive.agents import (
     EngineFailure,
     SubagentManager,
@@ -216,6 +208,14 @@ tasks_module = types.SimpleNamespace(
     update_task=update_task,
     workspace_runner_guard=workspace_runner_guard,
 )
+
+
+def run_next_task(root, **kwargs):
+    """v2 replacement for the deleted v1 run_next_task."""
+    task = dequeue_next_task(root)
+    if task is None:
+        return ExecutionResult(task=None, final_state=None, final_stage="none")
+    return run_task(root, task, **kwargs)
 
 
 

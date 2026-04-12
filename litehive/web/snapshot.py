@@ -2,13 +2,14 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
-from litehive.config import load_config
-from litehive.agents.quota import (
+from heru.quota import (
     check_claude_quota,
     check_codex_quota,
     check_copilot_quota,
     check_zai_quota,
 )
+
+from litehive.config import load_config
 from litehive.models import TaskRecord
 from litehive.observability import load_engine_monitoring
 from litehive.config.engine_models import active_engine_freezes

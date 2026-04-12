@@ -1,12 +1,10 @@
 from dataclasses import dataclass
 
 from litehive.agents import ENGINE_CHOICES
-from litehive.agents.quota import (
-    check_claude_quota,
-    check_codex_quota,
-    check_copilot_quota,
-    check_zai_quota,
-)
+from heru.quota.claude_quota import check_claude_quota
+from heru.quota.codex_quota import check_codex_quota
+from heru.quota.copilot_quota import check_copilot_quota
+from heru.quota.zai_quota import check_zai_quota
 from litehive.config import ensure_workspace
 from litehive.daemon import daemon_status_lines
 from litehive.workspace.worktree_inspection import inspect_dirty_worktree_gate

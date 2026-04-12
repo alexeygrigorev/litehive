@@ -35,7 +35,7 @@ def test_iter_jsonl_payloads_no_warning_on_blank_lines(caplog):
 
 def test_claude_delta_fallback_warns_on_decode_failure(caplog):
     """Claude delta fallback logs a warning when JSON string literal decode fails."""
-    from litehive.agents.adapters.claude import _extract_claude_text_delta_fallback
+    from heru.adapters.claude import _extract_claude_text_delta_fallback
 
     # Craft a line that matches the regex but has an invalid JSON string literal
     bad_line = '{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"\\uZZZZ"}}'
@@ -48,7 +48,7 @@ def test_claude_delta_fallback_warns_on_decode_failure(caplog):
 
 def test_claude_delta_fallback_no_warning_on_valid(caplog):
     """No warning for valid delta lines."""
-    from litehive.agents.adapters.claude import _extract_claude_text_delta_fallback
+    from heru.adapters.claude import _extract_claude_text_delta_fallback
 
     good_line = '{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"hello"}}'
     stdout = good_line + "\n"
@@ -60,7 +60,7 @@ def test_claude_delta_fallback_no_warning_on_valid(caplog):
 
 def test_goz_extract_text_warns_on_unrecognized_dict(caplog):
     """goz _goz_extract_text logs a warning when a dict has no recognized keys."""
-    from litehive.agents.adapters.goz import _goz_extract_text
+    from heru.adapters.goz import _goz_extract_text
 
     unrecognized = {"unknown_key": "some value", "another": 42}
     with caplog.at_level(logging.WARNING, logger="litehive.agents.adapters.goz"):
@@ -71,7 +71,7 @@ def test_goz_extract_text_warns_on_unrecognized_dict(caplog):
 
 def test_goz_extract_text_no_warning_on_known_keys(caplog):
     """No warning when dict has recognized text key."""
-    from litehive.agents.adapters.goz import _goz_extract_text
+    from heru.adapters.goz import _goz_extract_text
 
     with caplog.at_level(logging.WARNING, logger="litehive.agents.adapters.goz"):
         result = _goz_extract_text({"text": "hello"})
@@ -81,7 +81,7 @@ def test_goz_extract_text_no_warning_on_known_keys(caplog):
 
 def test_goz_extract_text_no_warning_on_empty_dict(caplog):
     """No warning for empty dict (nothing to extract)."""
-    from litehive.agents.adapters.goz import _goz_extract_text
+    from heru.adapters.goz import _goz_extract_text
 
     with caplog.at_level(logging.WARNING, logger="litehive.agents.adapters.goz"):
         result = _goz_extract_text({})
@@ -91,7 +91,7 @@ def test_goz_extract_text_no_warning_on_empty_dict(caplog):
 
 def test_codex_transcript_warns_on_non_dict_item(caplog):
     """codex _extract_codex_transcript warns when item.completed has non-dict item."""
-    from litehive.agents.adapters.codex import _extract_codex_transcript
+    from heru.adapters.codex import _extract_codex_transcript
 
     stdout = json.dumps({"type": "item.completed", "item": "not_a_dict"}) + "\n"
     with caplog.at_level(logging.WARNING, logger="litehive.agents.adapters.codex"):
@@ -102,7 +102,7 @@ def test_codex_transcript_warns_on_non_dict_item(caplog):
 
 def test_codex_transcript_warns_on_missing_text(caplog):
     """codex _extract_codex_transcript warns when agent_message has no text."""
-    from litehive.agents.adapters.codex import _extract_codex_transcript
+    from heru.adapters.codex import _extract_codex_transcript
 
     stdout = json.dumps({"type": "item.completed", "item": {"type": "agent_message"}}) + "\n"
     with caplog.at_level(logging.WARNING, logger="litehive.agents.adapters.codex"):
@@ -113,7 +113,7 @@ def test_codex_transcript_warns_on_missing_text(caplog):
 
 def test_opencode_transcript_warns_on_non_dict_part(caplog):
     """opencode _extract_opencode_transcript warns when text event has non-dict part."""
-    from litehive.agents.adapters.opencode import _extract_opencode_transcript
+    from heru.adapters.opencode import _extract_opencode_transcript
 
     stdout = json.dumps({"type": "text", "part": "not_a_dict"}) + "\n"
     with caplog.at_level(logging.WARNING, logger="litehive.agents.adapters.opencode"):
@@ -124,7 +124,7 @@ def test_opencode_transcript_warns_on_non_dict_part(caplog):
 
 def test_opencode_transcript_warns_on_missing_text(caplog):
     """opencode _extract_opencode_transcript warns when part has no text field."""
-    from litehive.agents.adapters.opencode import _extract_opencode_transcript
+    from heru.adapters.opencode import _extract_opencode_transcript
 
     stdout = json.dumps({"type": "text", "part": {"image": "data"}}) + "\n"
     with caplog.at_level(logging.WARNING, logger="litehive.agents.adapters.opencode"):
