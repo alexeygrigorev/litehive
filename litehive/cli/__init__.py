@@ -1108,6 +1108,29 @@ def pipeline_rules_command() -> int:
     return 0
 
 
+@pipeline_app.command("set-state", help="Override a task's v2 pipeline stage (operator escape hatch)")
+def pipeline_set_state_command(
+    task_id: Annotated[str, typer.Argument(help="Task id")],
+    stage: Annotated[str, typer.Argument(help="Target stage (e.g. ready, implementing, failed)")],
+    workspace: Annotated[
+        Path, typer.Option("--workspace", help="Workspace root")
+    ] = Path.cwd(),
+) -> None:
+    from litehive.pipeline.persistence import SqlitePersistence, TaskNotFound
+
+    store = SqlitePersistence(workspace)
+    try:
+        state = store.load(task_id)
+    except TaskNotFound:
+        print(f"no v2 state row for {task_id}; use 'litehive pipeline add-task' first")
+        raise typer.Exit(1)
+    old_stage = state.stage
+    state.stage = stage
+    store.save(state)
+    print(f"task: {task_id}")
+    print(f"stage: {old_stage} → {stage}")
+
+
 @pipeline_app.command(
     "journal", help="Dump the v2 pipeline journal + transitions for one task"
 )
