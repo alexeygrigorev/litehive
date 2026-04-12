@@ -225,7 +225,7 @@ A daemon iteration:
 
 1. runs `litehive repair`
 2. runs one fresh `litehive run` subprocess
-3. records logs in `.litehive/logs/run-all/`
+3. records logs in `${LITEHIVE_HOME:-~/.local/share/litehive}/<workspace_id>/logs/run-all/`
 4. stops when Litehive reports an explicit stop reason
 
 ## Operator Controls

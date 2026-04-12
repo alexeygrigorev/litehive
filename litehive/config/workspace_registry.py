@@ -7,6 +7,7 @@ import logging
 import os
 from pathlib import Path
 import sqlite3
+import threading
 
 import yaml
 
@@ -22,15 +23,17 @@ def _utcnow() -> str:
 
 
 def _connection_key(db_path: Path) -> str:
-    return str(db_path.expanduser().resolve())
+    return f"{db_path.expanduser().resolve()}::{os.getpid()}::{threading.get_ident()}"
 
 
-def _close_cached_connection(db_path: Path) -> None:
-    key = _connection_key(db_path)
-    connection = _REGISTRY_CONNECTIONS.pop(key, None)
-    if connection is None:
-        return
-    connection.close()
+def _close_cached_connections(db_path: Path) -> None:
+    prefix = f"{db_path.expanduser().resolve()}::"
+    stale_keys = [key for key in _REGISTRY_CONNECTIONS if key.startswith(prefix)]
+    for key in stale_keys:
+        connection = _REGISTRY_CONNECTIONS.pop(key, None)
+        if connection is None:
+            continue
+        connection.close()
 
 
 def _open_connection(db_path: Path) -> sqlite3.Connection:
@@ -98,17 +101,9 @@ def _migrate_legacy_yaml(connection: sqlite3.Connection) -> None:
                 _upsert_workspace(connection, Path(entry))
             except OSError:
                 continue
-    try:
-        legacy_path.unlink()
-    except FileNotFoundError:
-        return
-    except OSError as exc:
-        log.warning("failed to remove legacy workspace registry %s (%s)", legacy_path, exc)
-
-
 def _rebuild_registry_db(db_path: Path, exc: Exception) -> None:
     log.warning("workspace registry database %s was unusable (%s); rebuilding", db_path, exc)
-    _close_cached_connection(db_path)
+    _close_cached_connections(db_path)
     for candidate in (db_path, db_path.with_name(db_path.name + "-wal"), db_path.with_name(db_path.name + "-shm")):
         try:
             candidate.unlink()

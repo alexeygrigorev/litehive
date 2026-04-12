@@ -4,7 +4,9 @@ import gzip
 import re
 from pathlib import Path
 
-from litehive.config import ensure_workspace, resolve_workspace, workspace_dir
+from litehive.config import ensure_workspace, resolve_workspace, workspace_dir, workspace_logs_dir
+from litehive.config.workspace_registry import list_registered_workspace_paths
+from litehive.config.paths import worktree_root
 from litehive.models import TaskRecord
 
 
@@ -14,6 +16,12 @@ def _worktree_workspace_dir(root: Path) -> Path | None:
     for i, part in enumerate(parts):
         if part == ".litehive" and i + 2 < len(parts) and parts[i + 1] == "worktrees":
             return Path(*parts[: i + 3]) / ".litehive"
+    for registered_root in list_registered_workspace_paths():
+        try:
+            if resolved.is_relative_to(worktree_root(registered_root).resolve()):
+                return workspace_dir(registered_root.resolve())
+        except OSError:
+            continue
     return None
 
 
@@ -102,7 +110,7 @@ def read_text_artifact(path: Path) -> str:
 
 
 def latest_run_all_log_path(root: Path) -> Path | None:
-    logs_root = root / ".litehive" / "logs" / "run-all"
+    logs_root = workspace_logs_dir(root.resolve()) / "run-all"
     if not logs_root.exists():
         return None
     candidates = [

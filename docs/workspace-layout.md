@@ -1,12 +1,17 @@
 # Workspace Layout
 
-Litehive stores all workspace state in `.litehive/`. Some of that state is
-durable and should be committed. Other parts are runtime-only and are ignored by
-the workspace `.gitignore`.
+Litehive splits state into two surfaces:
 
-## Top-Level Layout
+- repo-local `.litehive/` for durable, shareable workspace intent
+- global `${LITEHIVE_HOME:-~/.local/share/litehive}/` for user-local runtime state
 
-Typical structure:
+The repo-local surface is designed for git. The global surface is designed for
+operations: one place to inspect logs, worktrees, daemon state, and SQLite
+databases.
+
+## Repo-Local Layout
+
+Typical committed workspace structure:
 
 ```text
 .litehive/
@@ -16,8 +21,6 @@ Typical structure:
   state.yaml
   engine-monitoring.yaml
   pool-summary.txt
-  logs/
-  worktrees/
   tasks/
     T-0001-example-task/
       task.yaml
@@ -31,17 +34,40 @@ Typical structure:
       subagents/
 ```
 
+## Global Runtime Root
+
+User-global runtime state lives under:
+
+```text
+~/.local/share/litehive/
+  config.yaml
+  daemons.yaml
+  litehive.db
+  <workspace_id>/
+    data.db
+    backups/
+    logs/
+      run-all/
+    subagents/
+    worktrees/
+```
+
+`LITEHIVE_HOME` overrides that root for tests and alternate installs.
+
+On first run after upgrade, Litehive copies forward legacy files from
+`~/.config/litehive/` and legacy runtime directories from
+`~/.local/state/litehive/` or old repo-local `.litehive/logs` and
+`.litehive/worktrees` paths into this unified root.
+
 ## Tracked Versus Ignored
 
-The workspace `.gitignore` ignores these paths:
+The workspace `.gitignore` ignores these repo-local paths:
 
 ```text
 .lock
 .runner.lock
-logs/
 pool-summary.txt
 engine-monitoring.yaml
-worktrees/
 tasks/*/runtime.yaml
 tasks/*/reports/commit_to_git-*.yaml
 ```
@@ -61,19 +87,22 @@ That means the main tracked Litehive files are:
 - task `events.jsonl`
 - recovery reports under `recovery/`
 
-The main ignored runtime files are:
+The main ignored or global-runtime files are:
 
-- `.litehive/logs/`
-- `.litehive/worktrees/`
 - `.litehive/pool-summary.txt`
 - `.litehive/engine-monitoring.yaml`
 - task `runtime.yaml`
 - `commit_to_git-*` stage reports
+- `${LITEHIVE_HOME:-~/.local/share/litehive}/config.yaml`
+- `${LITEHIVE_HOME:-~/.local/share/litehive}/daemons.yaml`
+- `${LITEHIVE_HOME:-~/.local/share/litehive}/litehive.db`
+- `${LITEHIVE_HOME:-~/.local/share/litehive}/<workspace_id>/logs/`
+- `${LITEHIVE_HOME:-~/.local/share/litehive}/<workspace_id>/worktrees/`
 
 ## Why This Split Exists
 
-Litehive tries to keep the durable audit trail in git while leaving high-churn
-runtime state untracked.
+Litehive keeps the durable audit trail in git while leaving high-churn runtime
+state in a single inspectable global root.
 
 Tracked artifacts answer:
 
@@ -82,10 +111,10 @@ Tracked artifacts answer:
 - what did each stage report?
 - what recovery evidence and comment history were recorded?
 
-Ignored artifacts answer:
+Ignored or global-runtime artifacts answer:
 
 - what is happening right now?
-- where is the active worktree?
+- where is the active worktree under the global runtime root?
 - what did the latest daemon run print?
 - what temporary runtime or commit-integration state exists?
 
@@ -111,78 +140,29 @@ Workspace queue state, including:
 - pool stop reason
 - next task number
 
-### Task `task.yaml`
+### `${LITEHIVE_HOME}/config.yaml`
 
-The durable task record. This is the primary source of truth for:
+Global user defaults applied before workspace-local config.
 
-- title
-- goal
-- acceptance criteria
-- constraints
-- plan
-- task type
-- retry policy
-- pipeline status
-- terminal outcome metadata
+### `${LITEHIVE_HOME}/daemons.yaml`
 
-### Task `runtime.yaml`
+Global daemon registry for running workspace daemons.
 
-Live runtime state such as continuation handoff and active worktree metadata.
-Ignored because it is volatile.
+### `${LITEHIVE_HOME}/litehive.db`
 
-### Task `journal.md`
+Cross-workspace SQLite registry.
 
-Human-readable task history and lifecycle notes.
+### `${LITEHIVE_HOME}/<workspace_id>/data.db`
 
-### Task `comments.yaml`
+Workspace runtime SQLite database.
 
-Structured comments and reports written by agents or operator actions.
+### `${LITEHIVE_HOME}/<workspace_id>/worktrees/`
 
-### Task `events.jsonl`
+Ephemeral task worktrees for isolated execution.
 
-Live event stream captured for execution visibility and later diagnosis.
+### `${LITEHIVE_HOME}/<workspace_id>/logs/run-all/`
 
-### Task `reports/`
-
-Stage verdict records. These are generally tracked, except the
-`commit_to_git-*.yaml` reports, which are ignored.
-
-### Task `recovery/`
-
-Recovery reports and related evidence summaries.
-
-### Task `subagents/`
-
-Subagent execution artifacts, including `session.yaml` and `report.yaml` plus
-transcripts and other raw data when retained.
-
-## Worktrees
-
-When Litehive runs tasks in isolated worktrees, those live under:
-
-```text
-.litehive/worktrees/
-```
-
-They are intentionally ignored because they are ephemeral execution sandboxes,
-not durable project state.
-
-## Logs
-
-Background and pool-run logs live under:
-
-```text
-.litehive/logs/
-```
-
-Notable examples:
-
-- daemon run-all logs
-- pool-run summaries
-- other operator-facing diagnostics
-
-These are useful for debugging but are not intended to create permanent repo
-churn.
+Daemon and pool-run logs for operator debugging.
 
 ## Commit Behavior
 
@@ -207,5 +187,6 @@ For a specific task, the highest-signal files are usually:
 4. `comments.yaml`
 5. `journal.md`
 6. `runtime.yaml` for current live state
+7. `${LITEHIVE_HOME}/<workspace_id>/logs/run-all/` for daemon execution output
 
 That order matches Litehive's intended operator and agent workflow.

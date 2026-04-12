@@ -85,7 +85,9 @@ def test_logs_defaults_to_latest_daemon_run_tail(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     ensure_workspace(tmp_path)
-    log_dir = tmp_path / ".litehive" / "logs" / "run-all" / "20260409T120000Z"
+    from litehive.config import workspace_logs_dir
+
+    log_dir = workspace_logs_dir(tmp_path) / "run-all" / "20260409T120000Z"
     log_dir.mkdir(parents=True, exist_ok=True)
     (log_dir / "0001-run.log").write_text("line one\nline two\n", encoding="utf-8")
 
@@ -93,7 +95,7 @@ def test_logs_defaults_to_latest_daemon_run_tail(
     output = capsys.readouterr().out
 
     assert exit_code == 0
-    assert "daemon log: .litehive/logs/run-all/20260409T120000Z/0001-run.log" in output
+    assert f"daemon log: {log_dir / '0001-run.log'}" in output
     assert "line one" in output
     assert "line two" in output
 
@@ -113,7 +115,9 @@ def test_logs_daemon_lists_latest_sessions_with_outcomes(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     ensure_workspace(tmp_path)
-    logs_root = tmp_path / ".litehive" / "logs" / "run-all"
+    from litehive.config import workspace_logs_dir
+
+    logs_root = workspace_logs_dir(tmp_path) / "run-all"
     logs_root.mkdir(parents=True, exist_ok=True)
     for index in range(6):
         name = f"20260409T12000{index}Z"
@@ -266,3 +270,17 @@ def test_logs_follow_streams_active_stdout_until_subagent_finishes(
     assert "following: .litehive/tasks/" in output
     assert "chunk one" in output
     assert "chunk two" in output
+
+
+def test_logs_follow_falls_back_to_latest_stdout_when_subagent_just_finished(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    task, base = _make_task_with_subagent(tmp_path, active=False)
+    (base / "stdout.log").write_text("final live output\n", encoding="utf-8")
+
+    exit_code = _cmd_logs(_ns(tmp_path, follow=True))
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "following: .litehive/tasks/" in output
+    assert "final live output" in output

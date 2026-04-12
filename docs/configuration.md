@@ -2,11 +2,33 @@
 
 Litehive reads configuration from two places:
 
-1. Global config: `~/.config/litehive/config.yaml`
+1. Global config: `${LITEHIVE_HOME:-$XDG_DATA_HOME/litehive}/config.yaml`
 2. Workspace config: `.litehive/config.yaml`
 
 Workspace values override global values, and commands such as
 `litehive run --engine ...` can override the resolved engine for a single run.
+
+By default the global root is `~/.local/share/litehive/`. Set `LITEHIVE_HOME`
+to move all user-global Litehive state for testing or alternate installs.
+
+That unified root now contains:
+
+```text
+~/.local/share/litehive/
+  config.yaml
+  daemons.yaml
+  litehive.db
+  <workspace_id>/
+    data.db
+    backups/
+    logs/
+    subagents/
+    worktrees/
+```
+
+On first run after upgrade, Litehive copies forward legacy files from
+`~/.config/litehive/` and runtime directories from `~/.local/state/litehive/`
+into the unified root and prints a one-time deprecation notice.
 
 ## Creating Config
 

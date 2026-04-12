@@ -14,7 +14,7 @@ from typing import TextIO
 
 import yaml
 
-from litehive.config import ensure_workspace, state_path, workspace_dir
+from litehive.config import ensure_workspace, state_path, workspace_logs_dir
 from litehive.storage import create_scheduled_workspace_backup
 from litehive.workspace.locking import runner_status
 
@@ -243,7 +243,7 @@ def run_daemon_loop(
     ensure_workspace(workspace)
     command_prefix = _default_command_prefix()
     timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
-    log_base = workspace_dir(workspace) / "logs" / "run-all"
+    log_base = workspace_logs_dir(workspace) / "run-all"
     log_root = session_dir or (log_base / timestamp)
     log_root.mkdir(parents=True, exist_ok=True)
     prune_run_all_log_dirs(log_base)

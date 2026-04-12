@@ -4,7 +4,7 @@ import logging
 from pathlib import Path
 import shutil
 
-from litehive.config import workspace_dir
+from litehive.config import migrate_legacy_workspace_state, workspace_logs_dir
 
 logger = logging.getLogger(__name__)
 
@@ -12,7 +12,9 @@ _RUN_ALL_SESSION_RETENTION = 8
 
 
 def latest_run_all_log_dir(workspace: Path) -> Path | None:
-    log_base = workspace_dir(workspace.resolve()) / "logs" / "run-all"
+    workspace = workspace.resolve()
+    migrate_legacy_workspace_state(workspace)
+    log_base = workspace_logs_dir(workspace) / "run-all"
     if not log_base.exists():
         return None
     candidates = sorted(path for path in log_base.iterdir() if path.is_dir())

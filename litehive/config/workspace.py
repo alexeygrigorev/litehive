@@ -11,6 +11,8 @@ from litehive.config.model import LitehiveConfig
 from litehive.config.paths import (
     config_path,
     context_path,
+    migrate_legacy_workspace_state,
+    worktree_root,
     workspace_database_path,
     workspace_dir,
     workspace_gitignore_path,
@@ -27,13 +29,10 @@ log = logging.getLogger(__name__)
 def render_workspace_gitignore() -> str:
     return "\n".join(
         [
-            "# Transient litehive runtime state",
             ".lock",
             ".runner.lock",
-            "logs/",
             "pool-summary.txt",
             "engine-monitoring.yaml",
-            "worktrees/",
             "tasks/*/runtime.yaml",
             "tasks/*/reports/commit_to_git-*.yaml",
             "",
@@ -43,11 +42,18 @@ def render_workspace_gitignore() -> str:
 
 def _resolve_workspace_root(path: Path) -> Path:
     """Resolve back to the main workspace root if path is inside a worktree."""
-    parts = path.resolve().parts
+    resolved = path.resolve()
+    parts = resolved.parts
     for i, part in enumerate(parts):
         if part == ".litehive" and i + 2 < len(parts) and parts[i + 1] == "worktrees":
             return Path(*parts[:i])
-    return path.resolve()
+    for registered_root in list_registered_workspace_paths():
+        try:
+            if resolved.is_relative_to(worktree_root(registered_root).resolve()):
+                return registered_root.resolve()
+        except OSError:
+            continue
+    return resolved
 
 
 def _reject_invalid_workspace_path(path: Path | str, *, source: str) -> None:
@@ -128,6 +134,12 @@ def resolve_workspace(
             return resolved_env_workspace
 
     search_root = (cwd or Path.cwd()).resolve()
+    resolved_search_root = _validate_workspace_root(search_root, source=f"cwd:{search_root}")
+    if resolved_search_root != search_root:
+        if not effective_task_id or _task_exists(resolved_search_root, effective_task_id):
+            _register_workspace(resolved_search_root)
+            return resolved_search_root
+
     for candidate in (search_root, *search_root.parents):
         if not workspace_dir(candidate).is_dir():
             continue
@@ -183,6 +195,7 @@ def ensure_workspace(root: Path, config: LitehiveConfig | None = None) -> Path:
         )
 
     _register_workspace(root)
+    migrate_legacy_workspace_state(root)
 
     # Import here to avoid circular import with litehive.storage
     from litehive.storage import runtime_store

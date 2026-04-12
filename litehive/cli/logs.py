@@ -6,7 +6,7 @@ import time
 
 import yaml
 
-from litehive.config import ensure_workspace, workspace_dir
+from litehive.config import ensure_workspace, workspace_logs_dir
 from litehive.daemon import latest_run_all_log_dir
 from litehive.tasks.crud import list_tasks_state_first
 from litehive.tasks.paths import read_text_artifact, resolve_artifact_path, task_dir
@@ -41,14 +41,14 @@ def _show_latest_daemon_log(root: Path) -> int:
     if log_path is None:
         print("No daemon run logs found.")
         return 0
-    print(f"daemon log: {log_path.relative_to(root)}")
+    print(f"daemon log: {log_path}")
     print()
     print(_tail_text(read_text_artifact(log_path)))
     return 0
 
 
 def _list_daemon_sessions(root: Path) -> int:
-    logs_root = workspace_dir(root.resolve()) / "logs" / "run-all"
+    logs_root = workspace_logs_dir(root.resolve()) / "run-all"
     if not logs_root.exists():
         print("No daemon run logs found.")
         return 0
@@ -125,21 +125,31 @@ def _list_task_subagents(root: Path, task) -> int:
 
 def _follow_active_subagent(root: Path, *, task_id: str | None = None) -> int:
     task = _resolve_follow_task(root, task_id=task_id)
-    if task is None or task.runtime.active_subagent is None:
+    ref = None if task is None else _latest_subagent_ref(task)
+    is_active = bool(
+        task is not None
+        and ref is not None
+        and task.runtime.active_subagent is not None
+        and task.runtime.active_subagent.id == ref.id
+    )
+    if task is None or ref is None:
         print("No active subagent.")
         return 0
 
     active_task_id = task.id
-    active_subagent_id = task.runtime.active_subagent.id
-    active_path = task.runtime.active_subagent.path
+    active_subagent_id = ref.id
+    active_path = ref.path
     base = task_dir(root, task) / active_path
-    stdout_path = _artifact_for_kind(base, "stdout", active=True)
+    stdout_path = _artifact_for_kind(base, "stdout", active=is_active)
     if stdout_path is None:
         print("Active subagent stdout not found.")
         return 0
 
     print(f"following: {stdout_path.relative_to(root)}")
     position = 0
+    if not is_active:
+        _print_follow_chunk(stdout_path, position)
+        return 0
 
     while True:
         position = _print_follow_chunk(stdout_path, position)
@@ -230,7 +240,10 @@ def _artifact_for_kind(base: Path, kind: str, *, active: bool) -> Path | None:
             live = resolve_artifact_path(base, "stdout.log")
             if live is not None:
                 return live
-        return resolve_artifact_path(base, "stdout.txt")
+        archived = resolve_artifact_path(base, "stdout.txt")
+        if archived is not None:
+            return archived
+        return resolve_artifact_path(base, "stdout.log")
     raise ValueError(f"Unsupported artifact kind: {kind}")
 
 
@@ -286,7 +299,10 @@ def _resolve_follow_task(root: Path, *, task_id: str | None) -> object | None:
     tasks = list_tasks_state_first(root, include_runtime=True)
     if task_id is not None:
         return next((task for task in tasks if task.id == task_id), None)
-    return next((task for task in tasks if task.runtime.active_subagent is not None), None)
+    active = next((task for task in tasks if task.runtime.active_subagent is not None), None)
+    if active is not None:
+        return active
+    return next((task for task in tasks if task.subagents), None)
 
 
 def _load_task_with_runtime(root: Path, task_id: str):

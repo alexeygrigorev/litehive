@@ -359,9 +359,10 @@ def test_resolve_workspace_walks_up_and_normalizes_worktree(
 ) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Walk up worktree")
-    nested = tmp_path / ".litehive" / "worktrees" / task.id / "src"
+    from litehive.config import worktree_root
+
+    nested = worktree_root(tmp_path) / task.id / "src"
     nested.mkdir(parents=True)
-    (nested.parent / ".litehive").mkdir(parents=True, exist_ok=True)
 
     from litehive.config import resolve_workspace
 
@@ -370,6 +371,32 @@ def test_resolve_workspace_walks_up_and_normalizes_worktree(
     monkeypatch.delenv("LITEHIVE_WORKSPACE_ROOT", raising=False)
 
     assert resolve_workspace(None) == tmp_path.resolve()
+
+
+def test_resolve_workspace_prefers_current_unified_root_worktree_over_registry_task_id_collision(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("LITEHIVE_HOME", str(tmp_path / "litehive-home"))
+
+    workspace_one = tmp_path / "workspace-one"
+    workspace_two = tmp_path / "workspace-two"
+    ensure_workspace(workspace_one)
+    ensure_workspace(workspace_two)
+    task_one = create_task(workspace_one, title="first task")
+    task_two = create_task(workspace_two, title="second task")
+
+    assert task_one.id == task_two.id == "T-0001"
+
+    from litehive.config import resolve_workspace, worktree_root
+
+    nested = worktree_root(workspace_two) / task_two.id / "src"
+    nested.mkdir(parents=True)
+
+    monkeypatch.chdir(nested)
+    monkeypatch.setenv("LITEHIVE_TASK_ID", task_two.id)
+    monkeypatch.delenv("LITEHIVE_WORKSPACE_ROOT", raising=False)
+
+    assert resolve_workspace(None) == workspace_two.resolve()
 
 
 def test_resolve_workspace_prefers_explicit_override(
@@ -390,12 +417,8 @@ def test_resolve_workspace_prefers_explicit_override(
 def test_resolve_workspace_uses_registry_from_outside_repo(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    config_home = tmp_path / "xdg-config"
     data_home = tmp_path / "xdg-data"
-    state_home = tmp_path / "xdg-state"
-    monkeypatch.setenv("XDG_CONFIG_HOME", str(config_home))
     monkeypatch.setenv("XDG_DATA_HOME", str(data_home))
-    monkeypatch.setenv("XDG_STATE_HOME", str(state_home))
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Registry lookup")
     outside = tmp_path / "outside"
@@ -537,8 +560,7 @@ def test_configure_persists_process_profile(tmp_path: Path) -> None:
 def test_load_config_uses_global_defaults_when_workspace_config_is_empty(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    config_home = tmp_path / "xdg"
-    monkeypatch.setenv("XDG_CONFIG_HOME", str(config_home))
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "xdg"))
     global_path = global_config_path()
     global_path.parent.mkdir(parents=True, exist_ok=True)
     global_path.write_text(
@@ -564,8 +586,7 @@ def test_load_config_uses_global_defaults_when_workspace_config_is_empty(
 def test_load_config_applies_workspace_overrides_on_top_of_global_defaults(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    config_home = tmp_path / "xdg"
-    monkeypatch.setenv("XDG_CONFIG_HOME", str(config_home))
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "xdg"))
     global_path = global_config_path()
     global_path.parent.mkdir(parents=True, exist_ok=True)
     global_path.write_text(
@@ -601,8 +622,7 @@ def test_load_config_applies_workspace_overrides_on_top_of_global_defaults(
 def test_load_config_deep_merges_global_and_workspace_mappings(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    config_home = tmp_path / "xdg"
-    monkeypatch.setenv("XDG_CONFIG_HOME", str(config_home))
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "xdg"))
     global_path = global_config_path()
     global_path.parent.mkdir(parents=True, exist_ok=True)
     global_path.write_text(

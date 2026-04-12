@@ -8,7 +8,14 @@ from pathlib import Path
 
 import yaml
 
-from litehive.config.paths import daemon_registry_path, legacy_workspace_registry_path, state_path, workspace_dir
+from litehive.config.paths import (
+    daemon_registry_path,
+    legacy_daemon_registry_path,
+    legacy_workspace_registry_path,
+    state_path,
+    workspace_dir,
+    workspace_logs_dir,
+)
 from litehive.main import _fast_status
 from tests.workspace_helpers import _cmd_status, argparse, ensure_workspace
 
@@ -28,7 +35,8 @@ def test_status_reports_corrupt_workspace_dependencies_without_raising(tmp_path:
     config_file = workspace_dir(tmp_path) / "config.yaml"
     state_file = state_path(tmp_path)
     workspaces_file = legacy_workspace_registry_path()
-    daemons_file = daemon_registry_path()
+    daemons_file = legacy_daemon_registry_path()
+    current_daemons_file = daemon_registry_path()
 
     config_file.write_text("[", encoding="utf-8")
     state_file.write_text("[", encoding="utf-8")
@@ -36,6 +44,8 @@ def test_status_reports_corrupt_workspace_dependencies_without_raising(tmp_path:
     workspaces_file.write_text("[", encoding="utf-8")
     daemons_file.parent.mkdir(parents=True, exist_ok=True)
     daemons_file.write_text("[", encoding="utf-8")
+    current_daemons_file.parent.mkdir(parents=True, exist_ok=True)
+    current_daemons_file.write_text("[", encoding="utf-8")
 
     exit_code, output = _run_fast_status(tmp_path, capsys)
 
@@ -44,6 +54,7 @@ def test_status_reports_corrupt_workspace_dependencies_without_raising(tmp_path:
     assert f"state: CORRUPT at {state_file} (line 1)" in output
     assert f"registry: CORRUPT at {workspaces_file} (line 1)" in output
     assert f"registry: CORRUPT at {daemons_file} (line 1)" in output
+    assert f"registry: CORRUPT at {current_daemons_file} (line 1)" in output
     assert "Fix the YAML syntax or remove the file" in output
     assert "health:" in output
 
@@ -142,7 +153,7 @@ def test_status_reports_dead_daemon_pid(tmp_path: Path, capsys, monkeypatch) -> 
 
 def test_status_reports_failed_last_cycle(tmp_path: Path, capsys) -> None:
     ensure_workspace(tmp_path)
-    log_dir = workspace_dir(tmp_path) / "logs" / "run-all" / "20260412T010203Z"
+    log_dir = workspace_logs_dir(tmp_path) / "run-all" / "20260412T010203Z"
     log_dir.mkdir(parents=True, exist_ok=True)
     repair_log = log_dir / "0001-repair.log"
     repair_log.write_text("Traceback (most recent call last):\nboom\n", encoding="utf-8")

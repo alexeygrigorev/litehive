@@ -21,6 +21,7 @@ from litehive.tasks.worktrees import (
     legacy_worktree_root,
     migrate_legacy_worktree,
 )
+from litehive.config import worktree_root
 
 
 @dataclass(slots=True)
@@ -161,12 +162,13 @@ def _stale_worktree_findings(root: Path, tasks: list[TaskRecord], state: Workspa
                     fix_command="litehive worktree clean --dry-run && litehive worktree clean",
                 )
             )
-    worktrees_root = legacy_worktree_root(root)
-    if worktrees_root.exists():
+    for worktrees_root in (worktree_root(root), legacy_worktree_root(root)):
+        if not worktrees_root.exists():
+            continue
         for child in sorted(worktrees_root.iterdir()):
             if not child.is_dir():
                 continue
-            rel = str(child.relative_to(root))
+            rel = str(child) if worktrees_root == worktree_root(root) else str(child.relative_to(root))
             if rel in managed_by_path:
                 continue
             findings.append(
