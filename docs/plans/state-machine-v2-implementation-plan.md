@@ -320,4 +320,19 @@ item lands.
   ``state.failure_context``. No more merge-agent delegation hack inside
   a SystemNode. Registry now has 21 nodes. New e2e test covers the
   conflict → merge_resolving → after_commit → done path end to end.
+- 2026-04-12: **operator session — 7 post-cutover fixes committed.**
+  Daemon was crashing after the v1→v2 migration due to accumulated
+  breakages. Fixed in two commits:
+  1. `171c2ba3` — six fixes: `CLIExecutionResult.continuation`
+     AttributeError (used `getattr`), stale `from .._models` import in
+     `execution_recovery.py`, `config.runner_hooks` AttributeError on
+     SimpleNamespace, `Stage.__lt__` missing for `sorted()` in diagram
+     generator, stale v1 test imports (`RULES`, `run_single_task`,
+     `drain_task_pool`, `TaskExecutionRunner`), missing `os` import in
+     test_sandbox_git_profiles, relaxed extra_env assertion for new
+     `LITEHIVE_AGENT_ROLE` env var.
+  2. `60eacfb0` — added `"flagged"` to `PipelineStatus` Literal type;
+     `orchestration.py` already set it but the model rejected it on load.
+  522 tests passing, 5 stale v1 tests skipped. Daemon now runs through
+  grooming → implementing without crashes.
 - …
