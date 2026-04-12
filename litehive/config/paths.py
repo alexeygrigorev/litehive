@@ -39,6 +39,10 @@ def litehive_data_home() -> Path:
     return Path.home() / ".local" / "share" / "litehive"
 
 
+def litehive_database_path() -> Path:
+    return litehive_data_home() / "litehive.db"
+
+
 def litehive_state_home() -> Path:
     state_home = os.environ.get("XDG_STATE_HOME")
     if state_home:
@@ -46,7 +50,7 @@ def litehive_state_home() -> Path:
     return Path.home() / ".local" / "state" / "litehive"
 
 
-def workspace_registry_path() -> Path:
+def legacy_workspace_registry_path() -> Path:
     return litehive_config_home() / "workspaces.yaml"
 
 

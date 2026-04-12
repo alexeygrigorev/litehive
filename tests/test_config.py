@@ -390,21 +390,19 @@ def test_resolve_workspace_prefers_explicit_override(
 def test_resolve_workspace_uses_registry_from_outside_repo(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    config_home = tmp_path / "xdg-config"
+    data_home = tmp_path / "xdg-data"
+    state_home = tmp_path / "xdg-state"
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(config_home))
+    monkeypatch.setenv("XDG_DATA_HOME", str(data_home))
+    monkeypatch.setenv("XDG_STATE_HOME", str(state_home))
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Registry lookup")
-    config_home = tmp_path / "xdg-config"
-    registry = config_home / "litehive" / "workspaces.yaml"
-    registry.parent.mkdir(parents=True)
-    registry.write_text(
-        yaml.safe_dump([str(tmp_path)], sort_keys=False),
-        encoding="utf-8",
-    )
     outside = tmp_path / "outside"
     outside.mkdir()
 
     from litehive.config import resolve_workspace
 
-    monkeypatch.setenv("XDG_CONFIG_HOME", str(config_home))
     monkeypatch.chdir(outside)
     monkeypatch.delenv("LITEHIVE_WORKSPACE_ROOT", raising=False)
     monkeypatch.delenv("LITEHIVE_TASK_ID", raising=False)

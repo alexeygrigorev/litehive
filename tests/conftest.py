@@ -1,6 +1,7 @@
 """Shared test fixtures."""
 
 import os
+from pathlib import Path
 
 import pytest
 import heru.quota.codex_quota as _codex_quota_mod
@@ -8,11 +9,6 @@ import heru.quota.codex_quota as _codex_quota_mod
 
 # Skip fsync in tests — saves ~70% of file write time
 os.environ["LITEHIVE_SKIP_FSYNC"] = "1"
-
-# Skip the user-global workspace registry in tests. Tests don't need it,
-# and writing to it on every ensure_workspace() call made the suite 15x slower
-# and polluted ~/.config/litehive/workspaces.yaml with thousands of tmpdirs.
-os.environ["LITEHIVE_SKIP_REGISTRY"] = "1"
 
 
 def _noop_block_reason(**kw):
@@ -50,9 +46,21 @@ def _neutralize_codex_quota(request, monkeypatch):
     _codex_quota_mod.reset_cache()
 
 
-@pytest.fixture(autouse=True)
-def _use_tmp_xdg_dirs(tmp_path, monkeypatch):
-    xdg_root = tmp_path.parent / f"{tmp_path.name}-xdg"
-    monkeypatch.setenv("XDG_CONFIG_HOME", str(xdg_root / "config"))
-    monkeypatch.setenv("XDG_DATA_HOME", str(xdg_root / "data"))
-    monkeypatch.setenv("XDG_STATE_HOME", str(xdg_root / "state"))
+@pytest.fixture(scope="session", autouse=True)
+def _use_session_xdg_dirs(tmp_path_factory: pytest.TempPathFactory):
+    xdg_root = tmp_path_factory.mktemp("xdg-home")
+    paths = {
+        "XDG_CONFIG_HOME": xdg_root / "config",
+        "XDG_DATA_HOME": xdg_root / "data",
+        "XDG_STATE_HOME": xdg_root / "state",
+    }
+    previous = {key: os.environ.get(key) for key in paths}
+    for key, value in paths.items():
+        os.environ[key] = str(value)
+        Path(value).mkdir(parents=True, exist_ok=True)
+    yield
+    for key, value in previous.items():
+        if value is None:
+            os.environ.pop(key, None)
+        else:
+            os.environ[key] = value

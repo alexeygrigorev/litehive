@@ -23,8 +23,25 @@ from tests.workspace_helpers import (
     save_task_runtime,
     state_path,
 )
+from concurrent.futures import ProcessPoolExecutor
+import multiprocessing
+import os
+from pathlib import Path as SysPath
+import sqlite3
+
 import pytest
 import yaml
+
+
+def _register_workspace_in_subprocess(args: tuple[str, str, str, str]) -> str:
+    workspace_root, config_home, data_home, state_home = args
+    os.environ["XDG_CONFIG_HOME"] = config_home
+    os.environ["XDG_DATA_HOME"] = data_home
+    os.environ["XDG_STATE_HOME"] = state_home
+    from litehive.config import ensure_workspace
+
+    ensure_workspace(SysPath(workspace_root))
+    return workspace_root
 
 
 def test_config_package_facade_re_exports_public_helpers() -> None:
@@ -67,17 +84,14 @@ def test_ensure_workspace_bootstraps_runtime_db_and_registry(
     monkeypatch.setenv("XDG_CONFIG_HOME", str(config_home))
     monkeypatch.setenv("XDG_DATA_HOME", str(data_home))
     monkeypatch.setenv("XDG_STATE_HOME", str(state_home))
-    # This test specifically exercises the registry write — opt out of the
-    # session-wide LITEHIVE_SKIP_REGISTRY optimization.
-    monkeypatch.delenv("LITEHIVE_SKIP_REGISTRY", raising=False)
 
     from litehive.config import (
+        litehive_database_path,
         worktree_root,
         workspace_backups_dir,
         workspace_database_path,
         workspace_id,
         workspace_logs_dir,
-        workspace_registry_path,
         workspace_subagents_dir,
         workspace_worktrees_dir,
     )
@@ -95,9 +109,13 @@ def test_ensure_workspace_bootstraps_runtime_db_and_registry(
         data_home / "litehive" / wid / "subagents" / "T-0001" / "agent-1"
     )
     assert workspace_database_path(tmp_path).exists()
+    assert litehive_database_path() == data_home / "litehive" / "litehive.db"
 
-    registry = yaml.safe_load(workspace_registry_path().read_text(encoding="utf-8"))
-    assert registry == [str(tmp_path.resolve())]
+    with sqlite3.connect(litehive_database_path()) as connection:
+        rows = connection.execute(
+            "SELECT workspace_id, path FROM workspaces ORDER BY path"
+        ).fetchall()
+    assert rows == [(wid, str(tmp_path.resolve()))]
 
     with connect_workspace_db(tmp_path) as connection:
         tables = {
@@ -120,6 +138,101 @@ def test_ensure_workspace_bootstraps_runtime_db_and_registry(
         "attention",
         "worktrees",
     } <= tables
+
+
+def test_workspace_registry_migrates_legacy_yaml_once(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config_home = tmp_path / "xdg-config"
+    data_home = tmp_path / "xdg-data"
+    state_home = tmp_path / "xdg-state"
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(config_home))
+    monkeypatch.setenv("XDG_DATA_HOME", str(data_home))
+    monkeypatch.setenv("XDG_STATE_HOME", str(state_home))
+
+    from litehive.config import legacy_workspace_registry_path, litehive_database_path
+
+    legacy_path = legacy_workspace_registry_path()
+    legacy_path.parent.mkdir(parents=True, exist_ok=True)
+    legacy_path.write_text(
+        yaml.safe_dump([str(tmp_path.resolve())], sort_keys=False),
+        encoding="utf-8",
+    )
+
+    ensure_workspace(tmp_path)
+
+    assert not legacy_path.exists()
+    with sqlite3.connect(litehive_database_path()) as connection:
+        paths = [
+            row[0]
+            for row in connection.execute("SELECT path FROM workspaces ORDER BY path").fetchall()
+        ]
+    assert paths == [str(tmp_path.resolve())]
+
+
+def test_workspace_registry_handles_parallel_registration(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config_home = tmp_path / "xdg-config"
+    data_home = tmp_path / "xdg-data"
+    state_home = tmp_path / "xdg-state"
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(config_home))
+    monkeypatch.setenv("XDG_DATA_HOME", str(data_home))
+    monkeypatch.setenv("XDG_STATE_HOME", str(state_home))
+
+    from litehive.config import litehive_database_path, workspace_id
+
+    workspaces = []
+    for index in range(8):
+        root = tmp_path / f"workspace-{index}"
+        root.mkdir()
+        workspaces.append(root)
+
+    with ProcessPoolExecutor(max_workers=4, mp_context=multiprocessing.get_context("spawn")) as executor:
+        results = list(
+            executor.map(
+                _register_workspace_in_subprocess,
+                [
+                    (str(root), str(config_home), str(data_home), str(state_home))
+                    for root in workspaces
+                ],
+            )
+        )
+
+    assert {SysPath(path) for path in results} == set(workspaces)
+    with sqlite3.connect(litehive_database_path()) as connection:
+        rows = connection.execute(
+            "SELECT workspace_id, path FROM workspaces ORDER BY path"
+        ).fetchall()
+    assert rows == [
+        (workspace_id(root), str(root.resolve()))
+        for root in sorted(workspaces)
+    ]
+
+
+def test_workspace_registry_rebuilds_after_corruption(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config_home = tmp_path / "xdg-config"
+    data_home = tmp_path / "xdg-data"
+    state_home = tmp_path / "xdg-state"
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(config_home))
+    monkeypatch.setenv("XDG_DATA_HOME", str(data_home))
+    monkeypatch.setenv("XDG_STATE_HOME", str(state_home))
+
+    from litehive.config import litehive_database_path
+
+    litehive_database_path().parent.mkdir(parents=True, exist_ok=True)
+    litehive_database_path().write_text("not a sqlite database", encoding="utf-8")
+
+    ensure_workspace(tmp_path)
+
+    with sqlite3.connect(litehive_database_path()) as connection:
+        paths = [
+            row[0]
+            for row in connection.execute("SELECT path FROM workspaces ORDER BY path").fetchall()
+        ]
+    assert paths == [str(tmp_path.resolve())]
 
 
 def test_load_state_imports_legacy_state_yaml_into_db(tmp_path: Path) -> None:
