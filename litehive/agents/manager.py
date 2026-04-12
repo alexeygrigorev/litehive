@@ -59,6 +59,13 @@ class SubagentManager(SessionMixin):
         self.sandbox = SandboxLauncher(self.root, self.config)
         self._stream_offsets: dict[str, int] = {}
 
+    @staticmethod
+    def _report_step_for_task(task: TaskRecord) -> str:
+        stage = task.runtime.current_stage.step or task.pipeline_status
+        if stage in {"grooming", "implementing", "testing", "accepting", "commit_to_git"}:
+            return stage
+        return "implementing"
+
     def run(
         self,
         task: TaskRecord,
@@ -305,12 +312,7 @@ class SubagentManager(SessionMixin):
         resource_limit_event: ResourceLimitEvent | None,
         continuation,
     ) -> None:
-        report_step = (
-            task.pipeline_status
-            if task.pipeline_status
-            in {"grooming", "implementing", "testing", "accepting", "commit_to_git"}
-            else "implementing"
-        )
+        report_step = self._report_step_for_task(task)
         if resource_limit_event is not None:
             report = StageReport(
                 task_id=task.id,
@@ -433,12 +435,7 @@ class SubagentManager(SessionMixin):
                 "pid": execution.pid,
             },
         )
-        report_step = (
-            task.pipeline_status
-            if task.pipeline_status
-            in {"grooming", "implementing", "testing", "accepting", "commit_to_git"}
-            else "implementing"
-        )
+        report_step = self._report_step_for_task(task)
         report_payload = {
             "status": ref.status,
             "summary": "",

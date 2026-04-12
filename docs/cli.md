@@ -18,7 +18,6 @@ Top-level commands:
 - `task`
 - `import`
 - `repair`
-- `tasks`
 - `web`
 - `start`
 - `stop`
@@ -77,14 +76,6 @@ Show the active task and queued order.
 
 ```bash
 litehive queue
-```
-
-### `litehive tasks`
-
-Open the task view TUI.
-
-```bash
-litehive tasks
 ```
 
 ### `litehive web`
@@ -303,14 +294,6 @@ Useful pool controls:
 
 - `--stop-on-failure`
 - `--max-tasks`
-- `--stop-on-limit`
-- `--quota-threshold`
-- `--budget-threshold`
-- `--pool-usage-cap`
-- `--pool-cost-cap`
-- `--engine-usage-cap ENGINE=COUNT`
-- `--engine-budget-cap ENGINE=UNITS`
-- `--engine-cost ENGINE=UNITS`
 - `--stop-on-dirty-git`
 
 ### `litehive queue stop`

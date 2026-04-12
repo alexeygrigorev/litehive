@@ -10,69 +10,67 @@ import typer
 from litehive.agents import ENGINE_CHOICES
 from litehive.cli.parse import TASK_TYPE_CHOICES
 from litehive.cli.backup import (
-    backup_create as backup_create_handler,
-    backup_list as backup_list_handler,
-    backup_restore as backup_restore_handler,
+    cmd_backup_create as backup_create_handler,
+    cmd_backup_list as backup_list_handler,
+    cmd_backup_restore as backup_restore_handler,
 )
-from litehive.cli.db import db_migrate as db_migrate_handler, db_status as db_status_handler
-from litehive.cli.debug import debug as debug_handler
-from litehive.cli.doctor import doctor as doctor_handler
+from litehive.cli.db import cmd_db_migrate as db_migrate_handler, cmd_db_status as db_status_handler
+from litehive.cli.debug import cmd_debug as debug_handler
+from litehive.cli.doctor import cmd_doctor as doctor_handler
 from litehive.cli.daemon import (
-    daemon_instances as daemon_instances_handler,
-    daemon_restart as daemon_restart_handler,
-    daemon_run as daemon_run_handler,
-    daemon_status as daemon_status_handler,
-    daemon_stop as daemon_stop_handler,
-    daemon_worker as daemon_worker_handler,
+    cmd_daemon_instances as daemon_instances_handler,
+    cmd_daemon_restart as daemon_restart_handler,
+    cmd_daemon_run as daemon_run_handler,
+    cmd_daemon_status as daemon_status_handler,
+    cmd_daemon_stop as daemon_stop_handler,
+    cmd_daemon_worker as daemon_worker_handler,
 )
-from litehive.cli.engine import engine as engine_handler
+from litehive.cli.engine import cmd_engine as engine_handler
 from litehive.cli.github_import import (
-    import_github as import_github_handler,
+    cmd_import_github as import_github_handler,
 )
-from litehive.cli.health import health as health_handler
-from litehive.cli.logs import logs as logs_handler
+from litehive.cli.health import cmd_health as health_handler
+from litehive.cli.logs import cmd_logs as logs_handler
 from litehive.cli.queue import (
-    abandon_task_command as abandon_task_handler,
-    archive as archive_handler,
-    cleanup as cleanup_handler,
-    close_task_command as close_task_handler,
-    dirty_worktree_gate as dirty_worktree_gate_handler,
-    move as move_handler,
-    prioritize as prioritize_handler,
-    promote as promote_handler,
-    queue_requeue as queue_requeue_handler,
-    recover as recover_handler,
-    resume_task_command as resume_task_handler,
-    rollback as rollback_handler,
-    stop_task as stop_task_handler,
-    switch_task as switch_task_handler,
-    launch_app,
+    cmd_abandon_task as abandon_task_handler,
+    cmd_archive as archive_handler,
+    cmd_cleanup as cleanup_handler,
+    cmd_close_task as close_task_handler,
+    cmd_dirty_worktree_gate as dirty_worktree_gate_handler,
+    cmd_move as move_handler,
+    cmd_prioritize as prioritize_handler,
+    cmd_promote as promote_handler,
+    cmd_queue_requeue as queue_requeue_handler,
+    cmd_recover as recover_handler,
+    cmd_resume_task as resume_task_handler,
+    cmd_rollback as rollback_handler,
+    cmd_stop_task as stop_task_handler,
+    cmd_switch_task as switch_task_handler,
 )
 from litehive.cli.agent_cli import agent_app
-from litehive.cli.report import report as report_handler
-from litehive.cli.run import run as run_handler
+from litehive.cli.report import cmd_report as report_handler
+from litehive.cli.run import cmd_run as run_handler
 from litehive.cli.status import (
-    list_tasks as list_tasks_handler,
-    queue as queue_handler,
-    repair as repair_handler,
-    show_task as show_task_handler,
-    status as status_handler,
+    cmd_list as list_tasks_handler,
+    cmd_queue as queue_handler,
+    cmd_repair as repair_handler,
+    cmd_show as show_task_handler,
+    cmd_status as status_handler,
 )
 from litehive.cli.tasks import (
-    add_task as add_task_handler,
-    intake_task as intake_task_handler,
-    issue_task as issue_task_handler,
-    update_task_command as update_task_handler,
+    cmd_add as add_task_handler,
+    cmd_intake as intake_task_handler,
+    cmd_issue as issue_task_handler,
+    cmd_update as update_task_handler,
 )
 from litehive.cli.worktree import (
-    worktree_clean as worktree_clean_handler,
-    worktree_ls as worktree_ls_handler,
-    worktree_rescue as worktree_rescue_handler,
+    cmd_worktree_clean as worktree_clean_handler,
+    cmd_worktree_ls as worktree_ls_handler,
+    cmd_worktree_rescue as worktree_rescue_handler,
 )
 from litehive.pipeline.orchestration import run_task
 from litehive.tasks.queue_ops import dequeue_next_task
 from litehive.tasks.constants import VALID_TASK_PRIORITIES
-from litehive.web import serve_monitor
 
 WorkspaceOption = Annotated[
     Path,
@@ -168,7 +166,7 @@ def root(ctx: typer.Context) -> int | None:
     if result is not None and result.task is not None:
         print(f"{result.task.id}: {result.final_stage}")
         return 0
-    return launch_app(Path.cwd(), default_mode="implementation")
+    return status_handler(SimpleNamespace(workspace=Path.cwd(), fast=False, full=False))
 
 
 @app.command("status", help="Show workspace status")
@@ -237,22 +235,6 @@ def repair_command(workspace: WorkspaceOption = Path.cwd()) -> int:
     return repair_handler(SimpleNamespace(workspace=workspace))
 
 
-@app.command("tasks", help="Open the task view", hidden=True)
-def tasks_command(workspace: WorkspaceOption = Path.cwd()) -> int:
-    return launch_app(workspace, default_mode="tasks")
-
-
-@app.command("web", help="Serve the local queue and session monitor")
-def web_command(
-    workspace: WorkspaceOption = Path.cwd(),
-    host: Annotated[
-        str, typer.Option(help="Host interface to bind (default: 127.0.0.1 for local-only access)")
-    ] = "127.0.0.1",
-    port: Annotated[int, typer.Option(help="TCP port to bind")] = 8765,
-) -> int:
-    return serve_monitor(workspace, host=host, port=port)
-
-
 @daemon_app.callback()
 def daemon_group(ctx: typer.Context) -> None:
     _require_subcommand(ctx)
@@ -283,10 +265,6 @@ def run_command(
     drain: Annotated[
         bool, typer.Option("--drain", help="Drain the task pool until it reaches an explicit stop condition")
     ] = False,
-    parallel: Annotated[
-        bool,
-        typer.Option("--parallel", help="Run multiple independent tasks in parallel using separate worktrees (task-level parallelism)"),
-    ] = False,
     engine: Annotated[
         str | None, typer.Option(click_type=_choice(ENGINE_CHOICES), help="Override the engine for this run only")
     ] = None,
@@ -298,34 +276,6 @@ def run_command(
         typer.Option("--stop-on-failure", flag_value=True, help="Stop the pool after the first task that does not finish successfully"),
     ] = None,
     max_tasks: Annotated[int | None, typer.Option(help="Stop the pool after completing this many tasks")] = None,
-    stop_on_limit: Annotated[
-        bool | None,
-        typer.Option("--stop-on-limit", flag_value=True, help="Stop the pool after a quota, budget, rate, credit, or similar execution limit is hit"),
-    ] = None,
-    quota_threshold: Annotated[
-        int | None, typer.Option(help="Stop the pool after this many quota-like limit outcomes in the current run")
-    ] = None,
-    budget_threshold: Annotated[
-        int | None, typer.Option(help="Stop the pool after this many budget-like limit outcomes in the current run")
-    ] = None,
-    pool_usage_cap: Annotated[
-        int | None, typer.Option(help="Stop before starting another engine invocation once this many invocations have run in the current pool")
-    ] = None,
-    pool_cost_cap: Annotated[
-        int | None, typer.Option(help="Stop before starting another engine invocation once this many cost units have been spent in the current pool")
-    ] = None,
-    engine_usage_cap: Annotated[
-        list[str] | None,
-        typer.Option(help="Per-engine invocation cap for this run as ENGINE=COUNT; repeat to set multiple engines"),
-    ] = None,
-    engine_budget_cap: Annotated[
-        list[str] | None,
-        typer.Option(help="Per-engine budget cap for this run in cost units as ENGINE=UNITS; repeat to set multiple engines"),
-    ] = None,
-    engine_cost: Annotated[
-        list[str] | None,
-        typer.Option(help="Per-engine cost for this run as ENGINE=UNITS; repeat to override defaults"),
-    ] = None,
     stop_on_dirty_git: Annotated[
         bool | None,
         typer.Option("--stop-on-dirty-git", flag_value=True, help="Stop the pool when the git worktree is dirty before starting another task"),
@@ -340,14 +290,6 @@ def run_command(
             model=model,
             max_tasks=max_tasks,
             stop_on_failure=stop_on_failure,
-            stop_on_execution_limit=stop_on_execution_limit,
-            quota_threshold=quota_threshold,
-            budget_threshold=budget_threshold,
-            pool_usage_cap=pool_usage_cap,
-            pool_cost_cap=pool_cost_cap,
-            engine_usage_cap=engine_usage_cap,
-            engine_budget_cap=engine_budget_cap,
-            engine_cost=engine_cost,
             stop_on_dirty_git=stop_on_dirty_git,
         )
     )

@@ -177,7 +177,6 @@ def select_engine(
     task: TaskRecord,
     config: LitehiveConfig,
     *,
-    budget_ledger=None,
     engine_override: str | None = None,
     model_override: str | None = None,
     engine_names: list[str] | None = None,
@@ -217,11 +216,6 @@ def select_engine(
                 _persist_engine_freeze(root, config, engine_name=engine_name, freeze_until=freeze_until)
             skipped.append(EngineSkip(engine_name=engine_name, reason=quota_reason))
             continue
-        if budget_ledger is not None:
-            budget_reason = budget_ledger.block_reason(engine_name)
-            if budget_reason is not None:
-                skipped.append(EngineSkip(engine_name=engine_name, reason=budget_reason))
-                continue
         return EngineSelection(
             engine_name=engine_name,
             model_name=resolve_model(

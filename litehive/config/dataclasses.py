@@ -46,14 +46,6 @@ class ExternalEngineSandboxConfig:
 
 
 @dataclass(slots=True)
-class SubagentResourceLimitsConfig:
-    enabled: bool | None = None
-    memory_mb: int | None = None
-    cpu_count: float | None = None
-    process_limit: int | None = None
-
-
-@dataclass(slots=True)
 class RunnerHookConfig:
     command: str
     reject_on_failure: bool = False

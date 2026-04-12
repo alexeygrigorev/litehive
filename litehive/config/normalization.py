@@ -22,7 +22,6 @@ from litehive.config.dataclasses import (
     ExternalEngineSandboxPolicy,
     RunnerHookConfig,
     SandboxCredentialInput,
-    SubagentResourceLimitsConfig,
 )
 
 
@@ -53,27 +52,6 @@ def normalize_engine_sequence(engines: Sequence[str], *, field_name: str) -> lis
             continue
         seen.add(engine_name)
         normalized.append(engine_name)
-    return normalized
-
-
-def normalize_engine_int_map(
-    values: Mapping[str, int] | None,
-    *,
-    field_name: str,
-) -> dict[str, int]:
-    if values is None:
-        return {}
-
-    normalized: dict[str, int] = {}
-    for engine_name, raw_value in values.items():
-        if engine_name not in VALID_ENGINE_NAMES:
-            allowed = ", ".join(sorted(VALID_ENGINE_NAMES))
-            raise ValueError(f"{field_name} engine must be one of: {allowed}")
-        if not isinstance(raw_value, int):
-            raise ValueError(f"{field_name}[{engine_name}] must be an integer")
-        if raw_value < 0:
-            raise ValueError(f"{field_name}[{engine_name}] must be 0 or greater")
-        normalized[engine_name] = raw_value
     return normalized
 
 
@@ -147,67 +125,6 @@ def normalize_runner_hooks(
             for index, hook in enumerate(hooks)
         ]
     return normalized
-
-
-_PROFILE_RESOURCE_LIMIT_DEFAULTS: dict[str, SubagentResourceLimitsConfig] = {
-    "rust": SubagentResourceLimitsConfig(
-        enabled=True,
-        memory_mb=8192,
-        cpu_count=4.0,
-        process_limit=512,
-    ),
-    "cpp": SubagentResourceLimitsConfig(
-        enabled=True,
-        memory_mb=12288,
-        cpu_count=6.0,
-        process_limit=1024,
-    ),
-}
-
-
-def normalize_subagent_resource_limits(
-    raw_limits: SubagentResourceLimitsConfig | Mapping[str, object] | None,
-    *,
-    process_profile: str,
-) -> SubagentResourceLimitsConfig:
-    if raw_limits is None:
-        limits = SubagentResourceLimitsConfig()
-    elif isinstance(raw_limits, SubagentResourceLimitsConfig):
-        limits = raw_limits
-    else:
-        raw_enabled = raw_limits.get("enabled")
-        limits = SubagentResourceLimitsConfig(
-            enabled=None if raw_enabled is None else bool(raw_enabled),
-            memory_mb=(
-                None if raw_limits.get("memory_mb") is None else int(raw_limits.get("memory_mb"))
-            ),
-            cpu_count=(
-                None if raw_limits.get("cpu_count") is None else float(raw_limits.get("cpu_count"))
-            ),
-            process_limit=(
-                None
-                if raw_limits.get("process_limit") is None
-                else int(raw_limits.get("process_limit"))
-            ),
-        )
-
-    defaults = _PROFILE_RESOURCE_LIMIT_DEFAULTS.get(process_profile)
-    if limits.enabled is None:
-        limits.enabled = False if defaults is None else defaults.enabled
-    if limits.memory_mb is None and defaults is not None:
-        limits.memory_mb = defaults.memory_mb
-    if limits.cpu_count is None and defaults is not None:
-        limits.cpu_count = defaults.cpu_count
-    if limits.process_limit is None and defaults is not None:
-        limits.process_limit = defaults.process_limit
-
-    if limits.memory_mb is not None and limits.memory_mb <= 0:
-        raise ValueError("subagent_resource_limits.memory_mb must be greater than 0")
-    if limits.cpu_count is not None and limits.cpu_count <= 0:
-        raise ValueError("subagent_resource_limits.cpu_count must be greater than 0")
-    if limits.process_limit is not None and limits.process_limit <= 0:
-        raise ValueError("subagent_resource_limits.process_limit must be greater than 0")
-    return limits
 
 
 def _normalize_sandbox_credential_input(

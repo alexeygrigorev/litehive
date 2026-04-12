@@ -9,7 +9,6 @@ from tests.workspace_helpers import (
     LitehiveConfig,
     Path,
     SandboxCredentialInput,
-    SubagentResourceLimitsConfig,
     available_process_profiles,
     create_task,
     ensure_workspace,
@@ -641,38 +640,6 @@ def test_load_config_round_trips_external_engine_sandbox(tmp_path: Path) -> None
     assert policy.environment == ["OPENAI_API_KEY"]
     assert policy.extra_ro_binds == ["/opt/runtime"]
     assert [item.env_var for item in policy.credential_inputs] == ["GOOGLE_APPLICATION_CREDENTIALS"]
-
-
-def test_native_process_profiles_expose_resource_limit_defaults() -> None:
-    rust = LitehiveConfig(process_profile="rust")
-    cpp = LitehiveConfig(process_profile="cpp")
-
-    assert rust.subagent_resource_limits.enabled is True
-    assert rust.subagent_resource_limits.memory_mb == 8192
-    assert rust.subagent_resource_limits.cpu_count == 4.0
-    assert rust.subagent_resource_limits.process_limit == 512
-    assert cpp.subagent_resource_limits.enabled is True
-    assert cpp.subagent_resource_limits.memory_mb == 12288
-    assert cpp.subagent_resource_limits.cpu_count == 6.0
-    assert cpp.subagent_resource_limits.process_limit == 1024
-
-
-def test_workspace_resource_limit_overrides_replace_profile_defaults() -> None:
-    config = LitehiveConfig(
-        process_profile="rust",
-        subagent_resource_limits=SubagentResourceLimitsConfig(
-            enabled=True,
-            memory_mb=2048,
-            cpu_count=1.5,
-            process_limit=96,
-        ),
-    )
-
-    assert config.subagent_resource_limits.enabled is True
-    assert config.subagent_resource_limits.memory_mb == 2048
-    assert config.subagent_resource_limits.cpu_count == 1.5
-    assert config.subagent_resource_limits.process_limit == 96
-
 
 def test_available_process_profiles_include_generic_and_project_templates() -> None:
     assert available_process_profiles() == [

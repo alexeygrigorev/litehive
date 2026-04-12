@@ -6,7 +6,6 @@ from litehive.cli.dry_run import (
     plan_single_task_dry_run,
     print_pool_dry_run_plan,
 )
-from litehive.cli.parse import parse_engine_int_map
 from litehive.config import ensure_workspace, load_config
 from litehive.pipeline.orchestration import run_task
 from litehive.tasks.models import WorkspaceConflictError
@@ -55,30 +54,6 @@ def _cmd_run_drain_dry_run(args, *, config):
 
     engine_override = getattr(args, "engine", None)
     model_override = getattr(args, "model", None)
-    engine_usage_caps = cli_override_or_default(
-        parse_engine_int_map(
-            getattr(args, "engine_usage_cap", None), option_name="--engine-usage-cap"
-        )
-        if getattr(args, "engine_usage_cap", None) is not None
-        else None,
-        config.engine_usage_caps,
-    )
-    engine_budget_caps = cli_override_or_default(
-        parse_engine_int_map(
-            getattr(args, "engine_budget_cap", None), option_name="--engine-budget-cap"
-        )
-        if getattr(args, "engine_budget_cap", None) is not None
-        else None,
-        config.engine_budget_caps,
-    )
-    engine_costs = cli_override_or_default(
-        parse_engine_int_map(
-            getattr(args, "engine_cost", None), option_name="--engine-cost"
-        )
-        if getattr(args, "engine_cost", None) is not None
-        else None,
-        config.engine_costs,
-    )
     from litehive.config.pool_types import TaskPoolStopConditions
 
     stop_conditions = TaskPoolStopConditions(
@@ -86,25 +61,6 @@ def _cmd_run_drain_dry_run(args, *, config):
         stop_on_failure=cli_override_or_default(
             getattr(args, "stop_on_failure", None), config.pool_stop_on_failure
         ),
-        stop_on_execution_limit=cli_override_or_default(
-            getattr(args, "stop_on_execution_limit", None),
-            config.pool_stop_on_execution_limit,
-        ),
-        quota_threshold=cli_override_or_default(
-            getattr(args, "quota_threshold", None), config.pool_quota_threshold
-        ),
-        budget_threshold=cli_override_or_default(
-            getattr(args, "budget_threshold", None), config.pool_budget_threshold
-        ),
-        pool_usage_cap=cli_override_or_default(
-            getattr(args, "pool_usage_cap", None), config.pool_usage_cap
-        ),
-        pool_cost_cap=cli_override_or_default(
-            getattr(args, "pool_cost_cap", None), config.pool_cost_cap
-        ),
-        engine_usage_caps=engine_usage_caps,
-        engine_budget_caps=engine_budget_caps,
-        engine_costs=engine_costs,
         stop_on_dirty_git=cli_override_or_default(
             getattr(args, "stop_on_dirty_git", None), config.pool_stop_on_dirty_git
         ),
@@ -138,30 +94,6 @@ def _cmd_run_single_dry_run(args, *, config):
 
     engine_override = getattr(args, "engine", None)
     model_override = getattr(args, "model", None)
-    engine_usage_caps = cli_override_or_default(
-        parse_engine_int_map(
-            getattr(args, "engine_usage_cap", None), option_name="--engine-usage-cap"
-        )
-        if getattr(args, "engine_usage_cap", None) is not None
-        else None,
-        config.engine_usage_caps,
-    )
-    engine_budget_caps = cli_override_or_default(
-        parse_engine_int_map(
-            getattr(args, "engine_budget_cap", None), option_name="--engine-budget-cap"
-        )
-        if getattr(args, "engine_budget_cap", None) is not None
-        else None,
-        config.engine_budget_caps,
-    )
-    engine_costs = cli_override_or_default(
-        parse_engine_int_map(
-            getattr(args, "engine_cost", None), option_name="--engine-cost"
-        )
-        if getattr(args, "engine_cost", None) is not None
-        else None,
-        config.engine_costs,
-    )
     from litehive.config.pool_types import TaskPoolStopConditions
 
     stop_conditions = TaskPoolStopConditions(
@@ -169,25 +101,6 @@ def _cmd_run_single_dry_run(args, *, config):
         stop_on_failure=cli_override_or_default(
             getattr(args, "stop_on_failure", None), config.pool_stop_on_failure
         ),
-        stop_on_execution_limit=cli_override_or_default(
-            getattr(args, "stop_on_execution_limit", None),
-            config.pool_stop_on_execution_limit,
-        ),
-        quota_threshold=cli_override_or_default(
-            getattr(args, "quota_threshold", None), config.pool_quota_threshold
-        ),
-        budget_threshold=cli_override_or_default(
-            getattr(args, "budget_threshold", None), config.pool_budget_threshold
-        ),
-        pool_usage_cap=cli_override_or_default(
-            getattr(args, "pool_usage_cap", None), config.pool_usage_cap
-        ),
-        pool_cost_cap=cli_override_or_default(
-            getattr(args, "pool_cost_cap", None), config.pool_cost_cap
-        ),
-        engine_usage_caps=engine_usage_caps,
-        engine_budget_caps=engine_budget_caps,
-        engine_costs=engine_costs,
         stop_on_dirty_git=cli_override_or_default(
             getattr(args, "stop_on_dirty_git", None), config.pool_stop_on_dirty_git
         ),

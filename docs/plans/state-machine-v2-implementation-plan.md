@@ -173,7 +173,7 @@ daemon runs v2 exclusively, then `pipeline_old/` is deleted.
 
 ## Not in scope for this plan
 
-- Parallel task execution (the old `_parallel.py` pool runner).
+- Parallel task execution.
 - Budget ledger (`_budget.py`). Can be added as a `BudgetGuard` later.
 - Pool stop conditions (`_pool_control.py`). Part of the orchestration
   layer that gets rebuilt after the pipeline cutover.

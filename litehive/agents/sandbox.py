@@ -16,7 +16,6 @@ import stat
 from litehive.config import (
     ExternalEngineSandboxPolicy,
     LitehiveConfig,
-    SubagentResourceLimitsConfig,
 )
 from litehive.agents.base import CLIExecutionResult, CLIInvocation, ExternalCLIAdapter
 from litehive.agents.engine_detection import (
@@ -38,9 +37,6 @@ class SandboxPolicySummary:
     image: str | None = None
     network_mode: str | None = None
     workspace_mode: str | None = None
-    memory_mb: int | None = None
-    cpu_count: float | None = None
-    process_limit: int | None = None
     environment: tuple[str, ...] = ()
     credential_inputs: tuple[str, ...] = ()
     propagated_mounts: tuple[str, ...] = ()
@@ -54,9 +50,6 @@ class SandboxPolicySummary:
             "image": self.image,
             "network_mode": self.network_mode,
             "workspace_mode": self.workspace_mode,
-            "memory_mb": self.memory_mb,
-            "cpu_count": self.cpu_count,
-            "process_limit": self.process_limit,
             "environment": list(self.environment),
             "credential_inputs": list(self.credential_inputs),
             "propagated_mounts": list(self.propagated_mounts),
@@ -80,15 +73,6 @@ class SandboxPolicySummary:
                 f"net={self.network_mode}",
                 f"workspace={self.workspace_mode}",
             ]
-        limit_parts: list[str] = []
-        if self.memory_mb is not None:
-            limit_parts.append(f"memory={self.memory_mb}m")
-        if self.cpu_count is not None:
-            limit_parts.append(f"cpus={self.cpu_count:g}")
-        if self.process_limit is not None:
-            limit_parts.append(f"pids={self.process_limit}")
-        if limit_parts:
-            details.append("limits=" + ",".join(limit_parts))
         if self.environment:
             details.append(f"env={','.join(self.environment)}")
         if self.credential_inputs:
@@ -129,10 +113,7 @@ class SandboxLauncher:
     def policy_summary(self, engine_name: str, role: str = "") -> SandboxPolicySummary:
         policy = self._policy_for_engine(engine_name)
         profile = sandbox_profile_for_role(role)
-        limits = self.config.subagent_resource_limits
-        sandbox_enabled = bool(limits.enabled) or (
-            self.config.external_engine_sandbox.enabled and policy is not None and policy.enabled
-        )
+        sandbox_enabled = self.config.external_engine_sandbox.enabled and policy is not None and policy.enabled
         if not sandbox_enabled:
             return SandboxPolicySummary(enabled=False, profile=profile.value)
         return SandboxPolicySummary(
@@ -151,9 +132,6 @@ class SandboxLauncher:
                 if policy is None or policy.workspace_mode is None
                 else policy.workspace_mode
             ),
-            memory_mb=limits.memory_mb if limits.enabled else None,
-            cpu_count=limits.cpu_count if limits.enabled else None,
-            process_limit=limits.process_limit if limits.enabled else None,
             environment=tuple(() if policy is None else policy.environment),
             credential_inputs=tuple(
                 () if policy is None else (item.env_var for item in policy.credential_inputs)
@@ -240,12 +218,6 @@ class SandboxLauncher:
         argv.extend(runtime_config.runtime_args)
         argv.extend(["--workdir", str(workspace_mount)])
         argv.extend(["--network", summary.network_mode or runtime_config.default_network_mode])
-        if summary.memory_mb is not None:
-            argv.extend(["--memory", f"{summary.memory_mb}m"])
-        if summary.cpu_count is not None:
-            argv.extend(["--cpus", f"{summary.cpu_count:g}"])
-        if summary.process_limit is not None:
-            argv.extend(["--pids-limit", str(summary.process_limit)])
         if runtime_config.read_only_rootfs:
             argv.append("--read-only")
         if runtime_config.drop_capabilities:
@@ -457,102 +429,7 @@ class SandboxLauncher:
         stdout: str,
         stderr: str,
     ) -> ResourceLimitEvent | None:
-        summary = self.policy_summary(engine_name)
-        if not summary.enabled:
-            return None
-        limits = self.config.subagent_resource_limits
-        if not limits.enabled:
-            return None
-
-        text = "\n".join(part for part in (stdout, stderr) if part).lower()
-        if any(
-            marker in text
-            for marker in (
-                "oomkilled",
-                "oom killed",
-                "out of memory",
-                "oom",
-                "cannot allocate memory",
-            )
-        ):
-            return self._resource_limit_event(
-                limits,
-                resource="memory",
-                reason="memory limit exceeded (OOM)",
-                observed_signal="oom",
-                exit_code=exit_code,
-            )
-        if any(
-            marker in text
-            for marker in (
-                "pids limit",
-                "fork rejected by pids controller",
-                "resource temporarily unavailable",
-            )
-        ):
-            return self._resource_limit_event(
-                limits,
-                resource="processes",
-                reason="process limit exceeded",
-                observed_signal="pids_limit",
-                exit_code=exit_code,
-            )
-        if any(
-            marker in text
-            for marker in (
-                "cpu quota exceeded",
-                "cpu time limit exceeded",
-                "cpu cfs quota",
-                "cgroup cpu limit",
-                "max cpu time exceeded",
-            )
-        ):
-            return self._resource_limit_event(
-                limits,
-                resource="cpu",
-                reason="CPU limit exceeded",
-                observed_signal="cpu_limit",
-                exit_code=exit_code,
-            )
-        if exit_code == 137 and summary.memory_mb is not None:
-            return self._resource_limit_event(
-                limits,
-                resource="memory",
-                reason="memory limit exceeded (exit 137)",
-                observed_signal="exit_137",
-                exit_code=exit_code,
-            )
-        if "cgroup" in text and any(
-            limit is not None
-            for limit in (summary.memory_mb, summary.cpu_count, summary.process_limit)
-        ):
-            return self._resource_limit_event(
-                limits,
-                resource="resource",
-                reason="resource control limit exceeded",
-                observed_signal="cgroup_limit",
-                exit_code=exit_code,
-            )
         return None
-
-    @staticmethod
-    def _resource_limit_event(
-        limits: SubagentResourceLimitsConfig,
-        *,
-        resource: str,
-        reason: str,
-        observed_signal: str,
-        exit_code: int,
-    ) -> ResourceLimitEvent:
-        return ResourceLimitEvent(
-            resource=resource,  # type: ignore[arg-type]
-            reason=reason,
-            observed_signal=observed_signal,
-            exit_code=exit_code,
-            memory_mb=limits.memory_mb,
-            cpu_count=limits.cpu_count,
-            process_limit=limits.process_limit,
-        )
 
     @staticmethod
     def _translate_container_argv(

@@ -25,20 +25,6 @@ def format_external_engine_sandbox(config: LitehiveConfig) -> str:
     )
 
 
-def format_subagent_resource_limits(config: LitehiveConfig) -> str:
-    limits = config.subagent_resource_limits
-    if not limits.enabled:
-        return "disabled"
-    details: list[str] = []
-    if limits.memory_mb is not None:
-        details.append(f"memory_mb:{limits.memory_mb}")
-    if limits.cpu_count is not None:
-        details.append(f"cpu_count:{limits.cpu_count:g}")
-    if limits.process_limit is not None:
-        details.append(f"process_limit:{limits.process_limit}")
-    return "enabled " + " ".join(details) if details else "enabled"
-
-
 def format_runner_hooks(config: LitehiveConfig) -> str:
     if not config.runner_hooks:
         return f"mode:{config.runner_hook_execution_mode}; none"

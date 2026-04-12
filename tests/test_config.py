@@ -763,9 +763,6 @@ def test_configure_persists_process_profile(tmp_path: Path) -> None:
         copilot_model=None,
         pool_stop_on_failure=False,
         pool_max_tasks=None,
-        pool_stop_on_limit=False,
-        pool_quota_threshold=None,
-        pool_budget_threshold=None,
         pool_stop_on_dirty_git=False,
     )
 
@@ -780,37 +777,6 @@ def test_configure_persists_process_profile(tmp_path: Path) -> None:
     assert "## Rust specifics" in context
 
 
-def test_configure_persists_pool_stop_defaults(tmp_path: Path) -> None:
-    parser = argparse.Namespace(
-        workspace=tmp_path,
-        default_engine="codex",
-        process_profile="generic",
-        default_retry_limit=3,
-        opencode_model="zai-coding-plan/glm-5.1",
-        gemini_model=None,
-        copilot_model=None,
-        pool_stop_on_failure=True,
-        pool_max_tasks=2,
-        pool_stop_on_limit=True,
-        pool_quota_threshold=3,
-        pool_budget_threshold=1,
-        pool_stop_on_dirty_git=True,
-        pool_selection_policy="priority_first",
-    )
-
-    from litehive.cli import cmd_configure
-
-    assert cmd_configure(parser) == 0
-    config = load_config(tmp_path)
-    assert config.pool_stop_on_failure is True
-    assert config.pool_max_tasks == 2
-    assert config.pool_stop_on_execution_limit is True
-    assert config.pool_quota_threshold == 3
-    assert config.pool_budget_threshold == 1
-    assert config.pool_stop_on_dirty_git is True
-    assert config.pool_selection_policy == "priority_first"
-
-
 def test_load_config_uses_global_defaults_when_workspace_config_is_empty(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -823,7 +789,6 @@ def test_load_config_uses_global_defaults_when_workspace_config_is_empty(
             {
                 "default_engine": "gemini",
                 "pool_stop_on_failure": True,
-                "engine_costs": {"codex": 9},
             },
             sort_keys=False,
         ),
@@ -837,8 +802,6 @@ def test_load_config_uses_global_defaults_when_workspace_config_is_empty(
 
     assert config.default_engine == "gemini"
     assert config.pool_stop_on_failure is True
-    assert config.engine_costs["codex"] == 9
-    assert config.engine_costs["claude"] == 3
 
 
 def test_load_config_applies_workspace_overrides_on_top_of_global_defaults(
@@ -852,11 +815,7 @@ def test_load_config_applies_workspace_overrides_on_top_of_global_defaults(
         yaml.safe_dump(
             {
                 "default_engine": "gemini",
-                "engine_costs": {"codex": 9, "claude": 7},
-                "subagent_resource_limits": {
-                    "enabled": True,
-                    "memory_mb": 4096,
-                },
+                "pool_max_tasks": 7,
             },
             sort_keys=False,
         ),
@@ -869,8 +828,7 @@ def test_load_config_applies_workspace_overrides_on_top_of_global_defaults(
         yaml.safe_dump(
             {
                 "default_engine": "codex",
-                "engine_costs": {"claude": 4},
-                "subagent_resource_limits": {"cpu_count": 2.0},
+                "pool_max_tasks": 2,
             },
             sort_keys=False,
         ),
@@ -880,11 +838,7 @@ def test_load_config_applies_workspace_overrides_on_top_of_global_defaults(
     config = load_config(workspace)
 
     assert config.default_engine == "codex"
-    assert config.engine_costs["codex"] == 9
-    assert config.engine_costs["claude"] == 4
-    assert config.subagent_resource_limits.enabled is True
-    assert config.subagent_resource_limits.memory_mb == 4096
-    assert config.subagent_resource_limits.cpu_count == 2.0
+    assert config.pool_max_tasks == 2
 
 
 def test_resolve_engine_name_prefers_run_override_then_workspace_default(
@@ -1169,16 +1123,8 @@ def test_configure_no_longer_has_task_engine_routing(tmp_path: Path) -> None:
         copilot_model=None,
         claude_model="claude-sonnet-4-20250514",
         claude_max_turns=30,
-        pool_usage_cap=None,
-        pool_cost_cap=None,
-        engine_usage_cap=None,
-        engine_budget_cap=None,
-        engine_cost=None,
         pool_stop_on_failure=False,
         pool_max_tasks=None,
-        pool_stop_on_limit=False,
-        pool_quota_threshold=None,
-        pool_budget_threshold=None,
         pool_stop_on_dirty_git=False,
         pool_selection_policy="dependency_aware",
     )
@@ -1215,17 +1161,9 @@ def test_configure_persists_runner_hooks(tmp_path: Path) -> None:
         copilot_model=None,
         claude_model="claude-sonnet-4-20250514",
         claude_max_turns=30,
-        pool_usage_cap=None,
-        pool_cost_cap=None,
-        engine_usage_cap=None,
-        engine_budget_cap=None,
-        engine_cost=None,
         task_engine_route=None,
         pool_stop_on_failure=False,
         pool_max_tasks=None,
-        pool_stop_on_limit=False,
-        pool_quota_threshold=None,
-        pool_budget_threshold=None,
         pool_stop_on_dirty_git=False,
         pool_selection_policy="dependency_aware",
         pre_acceptance_command=None,
@@ -1317,25 +1255,13 @@ def test_configure_rejects_invalid_runner_hook_point(
         copilot_model=None,
         claude_model="claude-sonnet-4-20250514",
         claude_max_turns=30,
-        pool_usage_cap=None,
-        pool_cost_cap=None,
-        engine_usage_cap=None,
-        engine_budget_cap=None,
-        engine_cost=None,
         task_engine_route=None,
         pool_stop_on_failure=False,
         pool_max_tasks=None,
-        pool_stop_on_limit=False,
-        pool_quota_threshold=None,
-        pool_budget_threshold=None,
         pool_stop_on_dirty_git=False,
         pool_selection_policy="dependency_aware",
         pre_acceptance_command=None,
         hook=["invalid_hook_point=run:echo nope"],
-        subagent_resource_limits_enabled=None,
-        subagent_memory_mb=None,
-        subagent_cpu_count=None,
-        subagent_process_limit=None,
     )
 
     assert cmd_configure(parser) == 1

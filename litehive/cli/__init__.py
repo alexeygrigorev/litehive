@@ -43,7 +43,6 @@ from litehive.cli.queue import (
     cmd_rollback,
     cmd_stop_task,
     cmd_switch_task,
-    launch_app,
 )
 from litehive.cli.agent_cli import agent_app
 from litehive.cli.report import cmd_report
@@ -55,7 +54,6 @@ from litehive.config import VALID_POOL_SELECTION_POLICIES, available_process_pro
 from litehive.pipeline.orchestration import run_task
 from litehive.tasks.queue_ops import dequeue_next_task
 from litehive.tasks.constants import VALID_TASK_PRIORITIES
-from litehive.web import serve_monitor
 
 WorkspaceOption = Annotated[
     Path,
@@ -159,7 +157,7 @@ def root(ctx: typer.Context) -> int | None:
     if result is not None and result.task is not None:
         print(f"{result.task.id}: {result.final_stage}")
         return 0
-    return launch_app(Path.cwd(), default_mode="implementation")
+    return cmd_status(_ns(command="status", workspace=Path.cwd(), fast=False, full=False))
 
 
 @app.command("configure", help="Initialize litehive workspace config")
@@ -198,42 +196,12 @@ def configure_command(
         int,
         typer.Option(help="Maximum conversation turns per claude invocation (guardrail against accidental quota burn)"),
     ] = 30,
-    pool_usage_cap: Annotated[
-        int | None,
-        typer.Option(help="Default pool behavior: stop before starting another engine invocation once this many invocations have run"),
-    ] = None,
-    pool_cost_cap: Annotated[
-        int | None,
-        typer.Option(help="Default pool behavior: stop before starting another engine invocation once this many cost units have been spent"),
-    ] = None,
-    engine_usage_cap: Annotated[
-        list[str] | None,
-        typer.Option(help="Per-engine invocation cap as ENGINE=COUNT; repeat to set multiple engines"),
-    ] = None,
-    engine_budget_cap: Annotated[
-        list[str] | None,
-        typer.Option(help="Per-engine budget cap in cost units as ENGINE=UNITS; repeat to set multiple engines"),
-    ] = None,
-    engine_cost: Annotated[
-        list[str] | None,
-        typer.Option(help="Per-engine cost per invocation as ENGINE=UNITS; repeat to override defaults"),
-    ] = None,
     pool_stop_on_failure: Annotated[
         bool,
         typer.Option("--pool-stop-on-failure", help="Default pool behavior: stop after the first task that does not finish successfully"),
     ] = False,
     pool_max_tasks: Annotated[
         int | None, typer.Option(help="Default pool behavior: stop after completing this many tasks")
-    ] = None,
-    pool_stop_on_limit: Annotated[
-        bool,
-        typer.Option("--pool-stop-on-limit", help="Default pool behavior: stop after a quota, budget, rate, credit, or similar execution limit is hit"),
-    ] = False,
-    pool_quota_threshold: Annotated[
-        int | None, typer.Option(help="Default pool behavior: stop after this many quota-like limit outcomes in a run")
-    ] = None,
-    pool_budget_threshold: Annotated[
-        int | None, typer.Option(help="Default pool behavior: stop after this many budget-like limit outcomes in a run")
     ] = None,
     pool_stop_on_dirty_git: Annotated[
         bool,
@@ -257,22 +225,6 @@ def configure_command(
                 "reject_on_failure only valid for after_implementing and after_testing."
             )
         ),
-    ] = None,
-    subagent_resource_limits_enabled: Annotated[
-        bool | None,
-        typer.Option(
-            "--subagent-resource-limits/--no-subagent-resource-limits",
-            help="Enable container-level memory/CPU/process caps for subagent execution",
-        ),
-    ] = None,
-    subagent_memory_mb: Annotated[
-        int | None, typer.Option(help="Container memory cap in MiB for subagent execution")
-    ] = None,
-    subagent_cpu_count: Annotated[
-        float | None, typer.Option(help="Container CPU cap for subagent execution")
-    ] = None,
-    subagent_process_limit: Annotated[
-        int | None, typer.Option(help="Container process-count cap for subagent execution")
     ] = None,
 ) -> int:
     return cmd_configure(_ns(**locals()))
@@ -337,22 +289,6 @@ def repair_command(workspace: WorkspaceOption = Path.cwd()) -> int:
     return cmd_repair(_ns(command="repair", workspace=workspace))
 
 
-@app.command("tasks", help="Open the task view", hidden=True)
-def tasks_command(workspace: WorkspaceOption = Path.cwd()) -> int:
-    return launch_app(workspace, default_mode="tasks")
-
-
-@app.command("web", help="Serve the local queue and session monitor")
-def web_command(
-    workspace: WorkspaceOption = Path.cwd(),
-    host: Annotated[
-        str, typer.Option(help="Host interface to bind (default: 127.0.0.1 for local-only access)")
-    ] = "127.0.0.1",
-    port: Annotated[int, typer.Option(help="TCP port to bind")] = 8765,
-) -> int:
-    return serve_monitor(workspace, host=host, port=port)
-
-
 @daemon_app.callback()
 def daemon_group(ctx: typer.Context) -> None:
     _require_subcommand(ctx)
@@ -383,10 +319,6 @@ def run_command(
     drain: Annotated[
         bool, typer.Option("--drain", help="Drain the task pool until it reaches an explicit stop condition")
     ] = False,
-    parallel: Annotated[
-        bool,
-        typer.Option("--parallel", help="Run multiple independent tasks in parallel using separate worktrees (task-level parallelism)"),
-    ] = False,
     engine: Annotated[
         str | None, typer.Option(click_type=_choice(ENGINE_CHOICES), help="Override the engine for this run only")
     ] = None,
@@ -398,34 +330,6 @@ def run_command(
         typer.Option("--stop-on-failure", flag_value=True, help="Stop the pool after the first task that does not finish successfully"),
     ] = None,
     max_tasks: Annotated[int | None, typer.Option(help="Stop the pool after completing this many tasks")] = None,
-    stop_on_limit: Annotated[
-        bool | None,
-        typer.Option("--stop-on-limit", flag_value=True, help="Stop the pool after a quota, budget, rate, credit, or similar execution limit is hit"),
-    ] = None,
-    quota_threshold: Annotated[
-        int | None, typer.Option(help="Stop the pool after this many quota-like limit outcomes in the current run")
-    ] = None,
-    budget_threshold: Annotated[
-        int | None, typer.Option(help="Stop the pool after this many budget-like limit outcomes in the current run")
-    ] = None,
-    pool_usage_cap: Annotated[
-        int | None, typer.Option(help="Stop before starting another engine invocation once this many invocations have run in the current pool")
-    ] = None,
-    pool_cost_cap: Annotated[
-        int | None, typer.Option(help="Stop before starting another engine invocation once this many cost units have been spent in the current pool")
-    ] = None,
-    engine_usage_cap: Annotated[
-        list[str] | None,
-        typer.Option(help="Per-engine invocation cap for this run as ENGINE=COUNT; repeat to set multiple engines"),
-    ] = None,
-    engine_budget_cap: Annotated[
-        list[str] | None,
-        typer.Option(help="Per-engine budget cap for this run in cost units as ENGINE=UNITS; repeat to set multiple engines"),
-    ] = None,
-    engine_cost: Annotated[
-        list[str] | None,
-        typer.Option(help="Per-engine cost for this run as ENGINE=UNITS; repeat to override defaults"),
-    ] = None,
     stop_on_dirty_git: Annotated[
         bool | None,
         typer.Option("--stop-on-dirty-git", flag_value=True, help="Stop the pool when the git worktree is dirty before starting another task"),
@@ -1160,7 +1064,6 @@ _PUBLIC_TOP_LEVEL_COMMANDS = {
     "task",
     "import",
     "repair",
-    "web",
     "start",
     "stop",
     "restart",

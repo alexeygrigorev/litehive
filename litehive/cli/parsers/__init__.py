@@ -40,9 +40,7 @@ from litehive.cli.parsers.show import register_show_parser
 from litehive.cli.parsers.status import register_status_parser
 from litehive.cli.parsers.switch import register_switch_parser
 from litehive.cli.parsers.task import register_task_parser
-from litehive.cli.parsers.tasks import register_tasks_parser
 from litehive.cli.parsers.update import register_update_parser
-from litehive.cli.parsers.web import register_web_parser
 from litehive.cli.parsers.worktree import register_worktree_parser
 
 COMMAND_PARSER_BUILDERS = (
@@ -55,8 +53,6 @@ COMMAND_PARSER_BUILDERS = (
     register_task_parser,
     register_import_parser,
     register_repair_parser,
-    register_tasks_parser,
-    register_web_parser,
     register_daemon_parser,
     register_start_parser,
     register_stop_daemon_parser,

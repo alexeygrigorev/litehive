@@ -57,36 +57,6 @@ def register_configure_parser(subparsers):
         help="Maximum conversation turns per claude invocation (guardrail against accidental quota burn)",
     )
     parser.add_argument(
-        "--pool-usage-cap",
-        type=int,
-        default=None,
-        help="Default pool behavior: stop before starting another engine invocation once this many invocations have run",
-    )
-    parser.add_argument(
-        "--pool-cost-cap",
-        type=int,
-        default=None,
-        help="Default pool behavior: stop before starting another engine invocation once this many cost units have been spent",
-    )
-    parser.add_argument(
-        "--engine-usage-cap",
-        action="append",
-        default=None,
-        help="Per-engine invocation cap as ENGINE=COUNT; repeat to set multiple engines",
-    )
-    parser.add_argument(
-        "--engine-budget-cap",
-        action="append",
-        default=None,
-        help="Per-engine budget cap in cost units as ENGINE=UNITS; repeat to set multiple engines",
-    )
-    parser.add_argument(
-        "--engine-cost",
-        action="append",
-        default=None,
-        help="Per-engine cost per invocation as ENGINE=UNITS; repeat to override defaults",
-    )
-    parser.add_argument(
         "--pool-stop-on-failure",
         action="store_true",
         help="Default pool behavior: stop after the first task that does not finish successfully",
@@ -96,23 +66,6 @@ def register_configure_parser(subparsers):
         type=int,
         default=None,
         help="Default pool behavior: stop after completing this many tasks",
-    )
-    parser.add_argument(
-        "--pool-stop-on-limit",
-        action="store_true",
-        help="Default pool behavior: stop after a quota, budget, rate, credit, or similar execution limit is hit",
-    )
-    parser.add_argument(
-        "--pool-quota-threshold",
-        type=int,
-        default=None,
-        help="Default pool behavior: stop after this many quota-like limit outcomes in a run",
-    )
-    parser.add_argument(
-        "--pool-budget-threshold",
-        type=int,
-        default=None,
-        help="Default pool behavior: stop after this many budget-like limit outcomes in a run",
     )
     parser.add_argument(
         "--pool-stop-on-dirty-git",
@@ -136,35 +89,4 @@ def register_configure_parser(subparsers):
             "after_accepting, after_commit. "
             "reject_on_failure only valid for after_implementing and after_testing."
         ),
-    )
-    parser.add_argument(
-        "--subagent-resource-limits",
-        dest="subagent_resource_limits_enabled",
-        action="store_true",
-        default=None,
-        help="Enable container-level memory/CPU/process caps for subagent execution",
-    )
-    parser.add_argument(
-        "--no-subagent-resource-limits",
-        dest="subagent_resource_limits_enabled",
-        action="store_false",
-        help="Disable container-level memory/CPU/process caps for subagent execution",
-    )
-    parser.add_argument(
-        "--subagent-memory-mb",
-        type=int,
-        default=None,
-        help="Container memory cap in MiB for subagent execution",
-    )
-    parser.add_argument(
-        "--subagent-cpu-count",
-        type=float,
-        default=None,
-        help="Container CPU cap for subagent execution",
-    )
-    parser.add_argument(
-        "--subagent-process-limit",
-        type=int,
-        default=None,
-        help="Container process-count cap for subagent execution",
     )

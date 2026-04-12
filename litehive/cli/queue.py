@@ -16,9 +16,6 @@ from litehive.workspace.task_status import (
     stop_current_task,
     switch_task_engine,
 )
-from litehive.tui.app import LitehiveApp
-
-
 def cmd_dirty_worktree_gate(args):
     report = inspect_dirty_worktree_gate(args.workspace)
     print(f"workspace: {args.workspace}")
@@ -295,10 +292,4 @@ def cmd_cleanup(args):
     for task in deleted:
         print(f"deleted: {task.id} {task.title}")
     print(f"deleted_count: {len(deleted)}")
-    return 0
-
-
-def launch_app(workspace, default_mode):
-    app = LitehiveApp(workspace=workspace, default_mode=default_mode)
-    app.run()
     return 0

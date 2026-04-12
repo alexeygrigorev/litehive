@@ -217,40 +217,12 @@ daemon stop predictably:
 ```yaml
 pool_stop_on_failure: false
 pool_max_tasks: 10
-pool_stop_on_execution_limit: true
-pool_quota_threshold: 2
-pool_budget_threshold: 1
 pool_stop_on_dirty_git: true
-pool_usage_cap: 25
-pool_cost_cap: 40
-engine_usage_caps:
-  codex: 10
-  claude: 3
-engine_budget_caps:
-  claude: 9
-engine_costs:
-  claude: 3
-  codex: 1
 pool_selection_policy: dependency_aware
 ```
 
 These values define when a draining run or daemon iteration should stop before
 claiming more work.
-
-## Subagent Resource Limits
-
-Litehive can cap resource usage for subagent execution:
-
-```yaml
-subagent_resource_limits:
-  enabled: true
-  memory_mb: 8192
-  cpu_count: 4
-  process_limit: 512
-```
-
-This is especially relevant for heavier `rust` and `cpp` process profiles, where
-the code applies profile-aware defaults.
 
 ## External Engine Sandboxing
 

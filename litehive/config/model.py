@@ -7,16 +7,13 @@ from litehive.config.dataclasses import (
     ExecutionRetryPolicy,
     ExternalEngineSandboxConfig,
     RunnerHookConfig,
-    SubagentResourceLimitsConfig,
 )
 from litehive.config.normalization import (
     normalize_agent_startup_guidance,
-    normalize_engine_int_map,
     normalize_engine_sequence,
     normalize_execution_retry_policies,
     normalize_external_engine_sandbox_config,
     normalize_runner_hooks,
-    normalize_subagent_resource_limits,
 )
 from litehive.config.retry import default_execution_retry_policies
 
@@ -36,20 +33,6 @@ class LitehiveConfig:
     copilot_model: str | None = None
     claude_model: str = "claude-sonnet-4-20250514"
     claude_max_turns: int = 100
-    pool_usage_cap: int | None = None
-    pool_cost_cap: int | None = None
-    engine_usage_caps: dict[str, int] = field(default_factory=dict)
-    engine_budget_caps: dict[str, int] = field(default_factory=dict)
-    engine_costs: dict[str, int] = field(
-        default_factory=lambda: {
-            "codex": 1,
-            "opencode": 1,
-            "gemini": 1,
-            "copilot": 1,
-            "claude": 3,
-            "goz": 1,
-        }
-    )
     default_retry_limit: int = 3
     default_stage_retry_limit: int = 2
     execution_retry_policies: dict[str, ExecutionRetryPolicy] = field(
@@ -57,18 +40,12 @@ class LitehiveConfig:
     )
     pool_stop_on_failure: bool = False
     pool_max_tasks: int | None = None
-    pool_stop_on_execution_limit: bool = False
-    pool_quota_threshold: int | None = None
-    pool_budget_threshold: int | None = None
     pool_stop_on_dirty_git: bool = False
     pool_selection_policy: str = "dependency_aware"
     runner_hook_execution_mode: str = "run_all"
     runner_hooks: dict[str, list[RunnerHookConfig]] = field(default_factory=dict)
     subagent_inactivity_timeout_seconds: float = 360.0
     inactivity_timeout_seconds: float | None = None
-    subagent_resource_limits: SubagentResourceLimitsConfig = field(
-        default_factory=SubagentResourceLimitsConfig
-    )
     external_engine_sandbox: ExternalEngineSandboxConfig = field(
         default_factory=ExternalEngineSandboxConfig
     )
@@ -77,25 +54,11 @@ class LitehiveConfig:
         default_factory=lambda: ["codex", "opencode", "gemini", "copilot", "goz"]
     )
     agent_startup_guidance: dict[str, list[str]] = field(default_factory=dict)
-    parallel_capacity: int = 1
-    parallel_integration_check: str | None = None
     auto_commit: bool = True
     task_mode_name: str = "tasks"
     implementation_mode_name: str = "implementation"
 
     def __post_init__(self) -> None:
-        self.engine_usage_caps = normalize_engine_int_map(
-            self.engine_usage_caps,
-            field_name="engine_usage_caps",
-        )
-        self.engine_budget_caps = normalize_engine_int_map(
-            self.engine_budget_caps,
-            field_name="engine_budget_caps",
-        )
-        self.engine_costs = normalize_engine_int_map(
-            self.engine_costs,
-            field_name="engine_costs",
-        )
         self.engine_freeze = {str(k): str(v) for k, v in self.engine_freeze.items()}
         self.engine_preference = normalize_engine_sequence(
             list(self.engine_preference),
@@ -121,13 +84,6 @@ class LitehiveConfig:
                 raise ValueError("inactivity_timeout_seconds must be greater than 0 when set")
         if self.litehive_source_path is not None:
             self.litehive_source_path = self.litehive_source_path.strip() or None
-        self.subagent_resource_limits = normalize_subagent_resource_limits(
-            self.subagent_resource_limits,
-            process_profile=self.process_profile,
-        )
         self.external_engine_sandbox = normalize_external_engine_sandbox_config(
             self.external_engine_sandbox
         )
-        self.parallel_capacity = int(self.parallel_capacity)
-        if self.parallel_capacity < 1:
-            raise ValueError("parallel_capacity must be at least 1")

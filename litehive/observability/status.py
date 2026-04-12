@@ -350,19 +350,13 @@ def render_active_tasks_section(
     tasks: list[TaskRecord],
     default_engine: str,
 ) -> list[str]:
-    """Render the Active Tasks dashboard section for parallel execution.
-
-    Shows multiple active tasks with their individual worktrees, stages,
-    engines, and whether they are blocked on integration or conflict resolution.
-    This is task-level parallelism: each entry is an independent task, not
-    a worker slice of a parent task.
-    """
-    lines: list[str] = ["=== Active Tasks (parallel) ==="]
+    """Render the Active Tasks dashboard section."""
+    lines: list[str] = ["=== Active Tasks ==="]
     if not tasks:
         lines.append("  (none)")
         return lines
 
-    lines.append(f"  {len(tasks)} task(s) running in parallel")
+    lines.append(f"  {len(tasks)} active task(s)")
     for task in tasks:
         engine = (
             task.runtime.active_subagent.engine
@@ -375,15 +369,7 @@ def render_active_tasks_section(
         task_duration = _duration_label(task.runtime.run_started_at, 0)
         worktree = task.runtime.git.worktree_path or task.git.worktree_path or "-"
 
-        status_suffix = ""
-        if task.status == "merge_failed":
-            status_suffix = " [CONFLICT - blocked on integration]"
-        elif task.status == "done":
-            status_suffix = " [integrated]"
-
-        lines.append(
-            f"  {task.id} {stage} with {engine}, running for {task_duration}{status_suffix}"
-        )
+        lines.append(f"  {task.id} {stage} with {engine}, running for {task_duration}")
         lines.append(f"    title: {task.title}")
         lines.append(f"    worktree: {worktree}")
 

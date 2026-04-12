@@ -688,16 +688,8 @@ def test_configure_persists_claude_settings(tmp_path: Path) -> None:
         copilot_model=None,
         claude_model="claude-sonnet-4-20250514",
         claude_max_turns=20,
-        pool_usage_cap=12,
-        pool_cost_cap=30,
-        engine_usage_cap=["claude=2", "codex=5"],
-        engine_budget_cap=["claude=6"],
-        engine_cost=["claude=3", "codex=1"],
         pool_stop_on_failure=False,
         pool_max_tasks=None,
-        pool_stop_on_limit=False,
-        pool_quota_threshold=None,
-        pool_budget_threshold=None,
         pool_stop_on_dirty_git=False,
     )
 
@@ -705,27 +697,12 @@ def test_configure_persists_claude_settings(tmp_path: Path) -> None:
     config = load_config(tmp_path)
     assert config.claude_model == "claude-sonnet-4-20250514"
     assert config.claude_max_turns == 20
-    assert config.pool_usage_cap == 12
-    assert config.pool_cost_cap == 30
-    assert config.engine_usage_caps == {"claude": 2, "codex": 5}
-    assert config.engine_budget_caps == {"claude": 6}
-    assert config.engine_costs["claude"] == 3
 
 
-def test_configure_updates_existing_workspace_budget_settings(tmp_path: Path) -> None:
+def test_configure_updates_existing_workspace_process_profile(tmp_path: Path) -> None:
     from litehive.cli import cmd_configure
 
-    ensure_workspace(
-        tmp_path,
-        LitehiveConfig(
-            process_profile="generic",
-            pool_usage_cap=4,
-            pool_cost_cap=8,
-            engine_usage_caps={"codex": 2},
-            engine_budget_caps={"claude": 3},
-            engine_costs={"codex": 1, "claude": 3},
-        ),
-    )
+    ensure_workspace(tmp_path, LitehiveConfig(process_profile="generic"))
 
     parser = argparse.Namespace(
         workspace=tmp_path,
@@ -737,17 +714,9 @@ def test_configure_updates_existing_workspace_budget_settings(tmp_path: Path) ->
         copilot_model=None,
         claude_model="claude-sonnet-4-20250514",
         claude_max_turns=20,
-        pool_usage_cap=12,
-        pool_cost_cap=30,
-        engine_usage_cap=["claude=2", "codex=5"],
-        engine_budget_cap=["claude=6"],
-        engine_cost=["claude=3", "codex=1"],
         task_engine_route=None,
         pool_stop_on_failure=False,
         pool_max_tasks=None,
-        pool_stop_on_limit=False,
-        pool_quota_threshold=None,
-        pool_budget_threshold=None,
         pool_stop_on_dirty_git=False,
         pool_selection_policy="dependency_aware",
     )
@@ -757,15 +726,6 @@ def test_configure_updates_existing_workspace_budget_settings(tmp_path: Path) ->
     config = load_config(tmp_path)
     assert config.process_profile == "python"
     assert config.claude_max_turns == 20
-    assert config.pool_usage_cap == 12
-    assert config.pool_cost_cap == 30
-    assert config.engine_usage_caps == {"claude": 2, "codex": 5}
-    assert config.engine_budget_caps == {"claude": 6}
-    assert config.engine_costs["claude"] == 3
-    assert config.engine_costs["codex"] == 1
-    assert config.engine_costs["opencode"] == 1
-    assert config.engine_costs["gemini"] == 1
-    assert config.engine_costs["copilot"] == 1
     context = (tmp_path / ".litehive" / "context.md").read_text(encoding="utf-8")
     assert "## Python specifics" in context
 

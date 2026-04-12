@@ -18,7 +18,6 @@ from tests.workspace_helpers import (
     Path,
     SubagentManager,
     SubagentRef,
-    SubagentResourceLimitsConfig,
     SubagentResult,
     _cmd_intake,
     _fail_atomic_write_on_path,
@@ -748,6 +747,70 @@ def test_subagent_manager_passes_workspace_root_in_extra_env(
     assert captured["cwd"] == execution_root
     assert captured["extra_env"]["LITEHIVE_TASK_ID"] == task.id
     assert captured["extra_env"]["LITEHIVE_WORKSPACE_ROOT"] == str(tmp_path)
+
+
+def test_subagent_manager_uses_runtime_current_stage_for_cli_verdict_lookup(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Use runtime stage for reports")
+    task.runtime.current_stage.step = "grooming"
+    save_task(tmp_path, task)
+    manager = SubagentManager(tmp_path)
+
+    class FakeEngine:
+        name = "codex"
+        binary = "codex"
+
+        def is_available(self) -> bool:
+            return True
+
+        def run(
+            self,
+            prompt: str,
+            cwd: Path,
+            model: str | None = None,
+            *,
+            extra_env: dict[str, str] | None = None,
+        ) -> CLIExecutionResult:
+            comment_path = task_dir(tmp_path, task) / "thread.yaml"
+            comment_path.write_text(
+                yaml.safe_dump(
+                    [
+                        {
+                            "role": "planner",
+                            "step": "grooming",
+                            "verdict": "reject",
+                            "message": "REJECT\n\nregroom this task",
+                            "files_changed": [],
+                        }
+                    ],
+                    sort_keys=False,
+                ),
+                encoding="utf-8",
+            )
+            return CLIExecutionResult(
+                adapter="codex",
+                argv=("codex", "exec"),
+                cwd=cwd,
+                exit_code=0,
+                stdout="placeholder transcript",
+                stderr="",
+                pid=4242,
+            )
+
+        def render_transcript(self, execution: CLIExecutionResult) -> str:
+            return execution.transcript
+
+    monkeypatch.setattr("litehive.agents.manager.get_engine", lambda _: FakeEngine())
+
+    manager.run(task, role="planner", engine_name="codex", prompt="groom it")
+
+    base = task_dir(tmp_path, task) / "subagents" / "SA-0001-planner"
+    report = yaml.safe_load((base / "report.yaml").read_text(encoding="utf-8"))
+
+    assert report["summary"] == "REJECT"
+    assert report["warnings"] == []
 
 def _subagent_artifacts_exist_while_engine_is_running(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch

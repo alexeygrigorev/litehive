@@ -5,7 +5,6 @@ from litehive.config.dataclasses import *
 from litehive.config.formatting import (
     format_external_engine_sandbox as format_external_engine_sandbox,
     format_runner_hooks as format_runner_hooks,
-    format_subagent_resource_limits as format_subagent_resource_limits,
 )
 from litehive.config.loading import (
     merge_config_layers as merge_config_layers,
