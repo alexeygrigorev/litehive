@@ -47,7 +47,7 @@ class Stages:
     # entry
     READY               = Stage("ready",               ReadyNode)
     WORKTREE_SYNC       = Stage("worktree_sync",       WorktreeSyncNode)
-    PRE_EXEC            = Stage("recovering_pre_exec", PreExecRecoveryNode)
+    PRE_EXEC_RECOVERY            = Stage("recovering_pre_exec", PreExecRecoveryNode)
 
     # grooming
     BEFORE_GROOMING     = Stage("before_grooming",     HookNode)
