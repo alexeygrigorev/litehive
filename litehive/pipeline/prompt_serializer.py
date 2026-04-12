@@ -73,7 +73,11 @@ def serialize_prompt(
         sections.append(_nudge_section(prompt))
 
     if thread:
-        sections.append(_thread_section(thread, current_stage=prompt.get("stage")))
+        sections.append(_thread_section(
+            thread,
+            current_stage=prompt.get("stage"),
+            last_rejection=last_rejection,
+        ))
 
     rejecting_hooks = prompt.get("rejecting_hooks") or []
     if rejecting_hooks:
@@ -206,65 +210,123 @@ def _nudge_section(prompt: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def _trim_thread_for_prompt(thread: list[dict[str, Any]], current_stage: str | None) -> list[dict[str, Any]]:
-    """Keep only the thread entries an agent actually needs.
+_MESSAGE_CAP = 500
 
-    Strategy:
-    - Always include the grooming pass (sets scope/plan for all later stages).
-    - Always include the last entry per (step, verdict) pair — deduplicates
-      repeated reject/pass cycles into one representative each.
-    - Cap the total message text to ~4000 chars to prevent prompt bloat from
-      verbose prior verdicts. Truncate the oldest entries' messages first.
+
+def _cap_message(entry: dict[str, Any]) -> dict[str, Any]:
+    """Return a shallow copy with message truncated to _MESSAGE_CAP chars."""
+    msg = entry.get("message", "")
+    if len(msg) <= _MESSAGE_CAP:
+        return entry
+    return {**entry, "message": msg[:_MESSAGE_CAP] + "…(truncated)"}
+
+
+def _trim_thread_for_prompt(
+    thread: list[dict[str, Any]],
+    current_stage: str | None,
+    last_rejection: dict[str, Any] | None = None,
+) -> list[dict[str, Any]]:
+    """Keep only the thread entries the current stage actually needs.
+
+    Rules:
+    - Never include recovery entries with verdict=comment (bookkeeping noise).
+    - Never duplicate an entry whose content matches last_rejection (already
+      rendered in its own section).
+    - Per-stage relevance:
+        grooming:     nothing (first stage, no prior context needed)
+        implementing: grooming pass (scope) + last reject that sent us back
+        testing:      last implementing pass (what SWE claims it did)
+        accepting:    last implementing pass + last testing pass
+        recovering:   last crash/rejection + last implementing pass
+        fallback:     grooming pass + last entry per (step, verdict)
+    - Cap each individual message to 500 chars.
     """
-    if len(thread) <= 5:
-        return thread
+    # Filter out recovery bookkeeping comments
+    thread = [
+        e for e in thread
+        if not (e.get("role") == "recovery" and e.get("verdict") == "comment")
+    ]
+
+    if not thread:
+        return []
+
+    # Skip entries that duplicate last_rejection
+    if last_rejection:
+        rej_reason = last_rejection.get("reason", "")
+        thread = [
+            e for e in thread
+            if not (e.get("verdict") == "reject" and e.get("message", "") == rej_reason)
+        ]
+
+    def _last_where(**match: str) -> dict[str, Any] | None:
+        for e in reversed(thread):
+            if all(e.get(k) == v for k, v in match.items()):
+                return e
+        return None
 
     kept: list[dict[str, Any]] = []
-    seen: set[tuple[str, str]] = set()
 
-    # Always keep grooming pass
-    for entry in thread:
-        if entry.get("step") == "grooming" and entry.get("verdict") == "pass":
-            kept.append(entry)
-            break
+    if current_stage == "grooming":
+        pass  # no thread context needed
 
-    # Keep last entry per (step, verdict) pair, walking from newest
-    for entry in reversed(thread):
-        key = (entry.get("step", "?"), entry.get("verdict", "?"))
-        if key not in seen:
-            seen.add(key)
-            kept.append(entry)
+    elif current_stage == "implementing":
+        g = _last_where(step="grooming", verdict="pass")
+        if g:
+            kept.append(g)
+        # Last reject that routed us back (from testing, accepting, or hook)
+        for e in reversed(thread):
+            if e.get("verdict") == "reject" and e.get("step") in (
+                "testing", "accepting", "implementing",
+            ):
+                kept.append(e)
+                break
 
-    # Deduplicate and preserve original order
-    seen_ids = set()
-    ordered: list[dict[str, Any]] = []
-    for entry in thread:
-        eid = id(entry)
-        if eid in seen_ids:
-            continue
-        if entry in kept:
-            seen_ids.add(eid)
-            ordered.append(entry)
+    elif current_stage == "testing":
+        p = _last_where(step="implementing", verdict="pass")
+        if p:
+            kept.append(p)
 
-    # Truncate long messages to keep total under ~4000 chars
-    total = sum(len(e.get("message", "")) for e in ordered)
-    if total > 4000:
-        budget = 4000
-        for entry in reversed(ordered):
-            msg = entry.get("message", "")
-            if budget <= 0:
-                entry["message"] = "(truncated)"
-            elif len(msg) > budget:
-                entry["message"] = msg[:budget] + "…(truncated)"
-                budget = 0
-            else:
-                budget -= len(msg)
+    elif current_stage == "accepting":
+        p = _last_where(step="implementing", verdict="pass")
+        if p:
+            kept.append(p)
+        t = _last_where(step="testing", verdict="pass")
+        if t:
+            kept.append(t)
 
-    return ordered
+    elif current_stage == "recovering":
+        p = _last_where(step="implementing", verdict="pass")
+        if p:
+            kept.append(p)
+        # The crash or rejection that triggered recovery
+        for e in reversed(thread):
+            if e.get("verdict") in ("reject", "blocked"):
+                kept.append(e)
+                break
+
+    else:
+        # Fallback: grooming pass + last per (step, verdict)
+        g = _last_where(step="grooming", verdict="pass")
+        if g:
+            kept.append(g)
+        seen: set[tuple[str, str]] = set()
+        for e in reversed(thread):
+            key = (e.get("step", "?"), e.get("verdict", "?"))
+            if key not in seen:
+                seen.add(key)
+                kept.append(e)
+
+    # Deduplicate, preserve original order, cap messages
+    kept_ids = {id(e) for e in kept}
+    return [_cap_message(e) for e in thread if id(e) in kept_ids]
 
 
-def _thread_section(thread: list[dict[str, Any]], current_stage: str | None = None) -> str:
-    trimmed = _trim_thread_for_prompt(thread, current_stage)
+def _thread_section(
+    thread: list[dict[str, Any]],
+    current_stage: str | None = None,
+    last_rejection: dict[str, Any] | None = None,
+) -> str:
+    trimmed = _trim_thread_for_prompt(thread, current_stage, last_rejection)
     blocks: list[str] = []
     for entry in trimmed:
         role = entry.get("role", "?")
