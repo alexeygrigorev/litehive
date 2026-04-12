@@ -25,7 +25,7 @@ from litehive.tasks.reports import append_thread_comment
 
 
 VERDICT_ALLOWLIST: dict[str, set[str]] = {
-    "planner": {"pass", "reject", "blocked"},
+    "planner": {"pass", "blocked"},  # planners shape tasks via TASK_UPDATE, not reject
     "swe": {"pass", "blocked"},
     "qa": {"pass", "reject", "blocked"},
     "reviewer": {"pass", "reject", "blocked"},
