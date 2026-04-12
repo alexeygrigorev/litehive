@@ -242,7 +242,7 @@ def cmd_close_task(args):
             reason=args.reason,
             follow_up_task_id=args.follow_up_task,
         )
-    except ValueError as exc:
+    except (ValueError, WorkspaceConflictError) as exc:
         print(f"close failed: {exc}")
         return 1
     print(f"task: {task.id} {task.title}")

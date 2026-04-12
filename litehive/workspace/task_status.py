@@ -459,6 +459,9 @@ def close_task(
     if outcome not in _CLOSE_OUTCOME_REASON_CODES:
         allowed = ", ".join(sorted(_CLOSE_OUTCOME_REASON_CODES))
         raise ValueError(f"Unsupported close outcome '{outcome}'. Expected one of: {allowed}")
+    state = load_state(root)
+    if state.active_task_id == task_id:
+        stop_current_task(root)
     with workspace_lock(root):
         task = require_task(root, task_id)
         if follow_up_task_id is not None:
