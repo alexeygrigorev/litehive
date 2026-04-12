@@ -32,6 +32,13 @@ class Stage:
     def __hash__(self):
         return hash(self.name)
 
+    def __lt__(self, other):
+        if isinstance(other, Stage):
+            return self.name < other.name
+        if isinstance(other, str):
+            return self.name < other
+        return NotImplemented
+
     def __repr__(self):
         return self.name
 

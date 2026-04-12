@@ -155,9 +155,10 @@ class HeruEngineAdapter:
         execution = result.execution
         if execution is None:
             return fallback
-        if execution.continuation is None:
+        continuation = getattr(execution, "continuation", None)
+        if continuation is None:
             return fallback
-        return execution.continuation.resume_id or fallback
+        return continuation.resume_id or fallback
 
     @staticmethod
     def _reraise(exc: Exception) -> None:

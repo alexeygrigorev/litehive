@@ -518,7 +518,7 @@ def _resolve_recovery_engine(
     task: TaskRecord,
     config: LitehiveConfig | None,
 ) -> tuple[str, str | None]:
-    from .._models import resolve_model, select_engine
+    from litehive.config.engine_models import resolve_model, select_engine
 
     model: str | None = None
     if config and config.recovery_engine and config.recovery_engine != "auto":

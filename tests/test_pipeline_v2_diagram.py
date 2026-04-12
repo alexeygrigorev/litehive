@@ -1,7 +1,7 @@
 """Mermaid diagram generator tests."""
 
 from litehive.pipeline.diagram import render_markdown, render_mermaid_diagram
-from litehive.pipeline.transitions import RULES
+from litehive.pipeline.rules import RULES
 from litehive.pipeline.types import STAGES, TERMINAL_NODES
 
 

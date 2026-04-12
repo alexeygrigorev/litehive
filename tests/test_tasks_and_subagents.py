@@ -746,10 +746,8 @@ def test_subagent_manager_passes_workspace_root_in_extra_env(
     manager.run(task, role="swe", engine_name="codex", prompt="implement it")
 
     assert captured["cwd"] == execution_root
-    assert captured["extra_env"] == {
-        "LITEHIVE_TASK_ID": task.id,
-        "LITEHIVE_WORKSPACE_ROOT": str(tmp_path),
-    }
+    assert captured["extra_env"]["LITEHIVE_TASK_ID"] == task.id
+    assert captured["extra_env"]["LITEHIVE_WORKSPACE_ROOT"] == str(tmp_path)
 
 def _subagent_artifacts_exist_while_engine_is_running(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch

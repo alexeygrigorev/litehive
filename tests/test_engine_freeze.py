@@ -1,6 +1,5 @@
 """Tests for engine freeze/unfreeze CLI and runtime filtering."""
 from tests.workspace_helpers import (
-    EngineBudgetLedger,
     LitehiveConfig,
     Path,
     TaskRecord,
@@ -415,41 +414,6 @@ def test_select_engine_rechecks_expired_freeze_and_allows_recovered_engine(
 
 def test_builder_uses_shared_select_engine(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     pass  # build_executor deleted
-
-    class DummySubagents:
-        def run(self, *args, **kwargs):
-            raise AssertionError("builder should have stopped before launching a subagent")
-
-    ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
-    task = create_task(tmp_path, title="Selection test")
-    config = load_config(tmp_path)
-    monkeypatch.setattr(
-        "litehive.config.engine_models.select_engine",
-        lambda *args, **kwargs: EngineSelection(
-            engine_name=None,
-            model_name=None,
-            engine_attempts=["codex"],
-            skipped=[],
-            blocked_reason="shared selector blocked",
-        ),
-    )
-
-    executor = build_executor(
-        tmp_path,
-        execution_root=tmp_path,
-        initial_engine_names=["codex"],
-        workspace_context="",
-        subagents=DummySubagents(),
-        config=config,
-        task=task,
-        model_override=None,
-        config_auto_commit=False,
-        budget_ledger=EngineBudgetLedger(),
-    )
-    report = executor(task, "implementing")
-
-    assert report.verdict == "blocked"
-    assert report.summary == "implementing blocked: shared selector blocked"
 
 
 def test_dry_run_uses_shared_select_engine(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

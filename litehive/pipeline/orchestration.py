@@ -185,7 +185,7 @@ def _hook_specs_from_config(config) -> dict[str, list[HookSpec]]:
     ``after_implementing``, …), so this is a straight per-phase rewrite.
     """
     out: dict[str, list[HookSpec]] = {}
-    raw = config.runner_hooks or {}
+    raw = getattr(config, "runner_hooks", None) or {}
     for phase, hooks in raw.items():
         specs: list[HookSpec] = []
         for hook in hooks or []:
