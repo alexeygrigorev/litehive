@@ -20,15 +20,6 @@ def load_state(root: Path) -> WorkspaceState:
     ensure_workspace(root)
     store = runtime_store(root)
     state = store.load_workspace_state()
-    legacy_path = state_path(root)
-    if legacy_path.exists():
-        legacy = WorkspaceState(
-            **(yaml.safe_load(legacy_path.read_text(encoding="utf-8")) or {})
-        )
-        if state is None or state == WorkspaceState():
-            store.save_workspace_state(legacy)
-            return legacy
-        return state
     if state is None:
         state = WorkspaceState()
         store.save_workspace_state(state)
