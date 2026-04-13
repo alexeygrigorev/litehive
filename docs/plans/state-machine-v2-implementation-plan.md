@@ -369,4 +369,20 @@ item lands.
   6800 lines removed. 503 tests passing.
 - 2026-04-12: **T-0326 failed at grooming** — planner rejected,
   recovery exhausted. Expected behavior for unactionable task scope.
+- 2026-04-13: **state-machine improvement wave queued.** Created
+  T-0355..T-0365 covering: auto-clear pool_state on terminal,
+  reviewer veto over QA, zero-change shortcut on re-queue,
+  SemanticReject vs Crash split, pool_state/state.yaml split-brain
+  fix, retry budget persistence, grooming pre-flight code awareness,
+  recovery agent Crash/Timeout-only. Planner allowlist tightened
+  (`reject` removed — planners shape, not reject). SWE prompt
+  rewritten: "no out-of-scope excuse, a broken test either passes or
+  gets deleted" (`82880bba`).
+- 2026-04-13: **operator housekeeping.** Cleared 47k stale test
+  workspaces (4.7GB → 482MB). Resolved two duplicate-task-id
+  collisions (T-0346-t, T-0357-kill-stale-live-subagent — empty
+  stubs moved aside to `/tmp/litehive-duplicate-stubs/`).
+  Pipeline continued autonomously past T-0198 failure (blocked on
+  contradictory intent) and is currently executing T-0200 "remove
+  text-based stage report parsing". Queue: 126.
 - …
