@@ -240,6 +240,19 @@ class SqlitePersistence:
             limits=self.limits,
         )
 
+    def reset(self, task_id: str) -> None:
+        """Delete the v2 pipeline state row for a task.
+
+        Called when the task-level layer resets a flagged task back to
+        queued (dequeue auto-recovery path). Without this, the v2 state
+        machine keeps its terminal ``failed`` stage and the runner
+        immediately re-emits the failed terminal on the next run — an
+        infinite retry loop.
+        """
+        with connect_workspace_db(self.workspace_root) as connection:
+            connection.execute("DELETE FROM pipeline_task_state WHERE task_id = ?", (task_id,))
+            connection.commit()
+
     def initialize(
         self,
         task_id: str,
