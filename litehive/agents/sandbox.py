@@ -18,7 +18,7 @@ from litehive.config import (
     LitehiveConfig,
 )
 from heru.base import CLIExecutionResult, CLIInvocation, ExternalCLIAdapter
-from litehive.agents.engine_detection import (
+from heru.engine_detection import (
     ORIGINAL_EXTERNAL_ADAPTER_RUN,
     ORIGINAL_EXTERNAL_ADAPTER_RUN_LIVE,
     effective_engine_callable,

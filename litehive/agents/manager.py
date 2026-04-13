@@ -28,7 +28,7 @@ from litehive.agents.artifacts import (
     write_stream_artifact,
     write_text_if_changed,
 )
-from litehive.agents.engine_detection import (
+from heru.engine_detection import (
     effective_engine_callable,
     filter_supported_kwargs,
     supports_live_execution,

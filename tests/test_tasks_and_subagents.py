@@ -40,7 +40,7 @@ from tests.workspace_helpers import (
     update_task_metadata,
     yaml,
 )
-from litehive.agents.engine_detection import (
+from heru.engine_detection import (
     prefers_non_live_run,
     supports_live_execution,
 )
@@ -55,17 +55,14 @@ tasks_module = types.SimpleNamespace(
 
 @contextmanager
 def _patched_engine_detection(patcher):
-    import litehive.agents.engine_detection as engine_detection_module
-    import litehive.agents.engine_detection as subagent_engine_detection_module
+    import heru.engine_detection as engine_detection_module
 
     with pytest.MonkeyPatch.context() as isolated_monkeypatch:
         patcher(isolated_monkeypatch)
         importlib.reload(engine_detection_module)
-        importlib.reload(subagent_engine_detection_module)
         yield engine_detection_module
 
     importlib.reload(engine_detection_module)
-    importlib.reload(subagent_engine_detection_module)
 
 
 def _fresh_engine(name: str) -> ExternalCLIAdapter:
