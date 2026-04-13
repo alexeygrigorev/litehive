@@ -1367,8 +1367,8 @@ def _subagent_manager_uses_inherited_run_live_when_sandbox_binary_is_present(
             pid=4343,
         )
 
-    monkeypatch.setattr("litehive.agents.base.ExternalCLIAdapter.run", fail_run)
-    monkeypatch.setattr("litehive.agents.base.ExternalCLIAdapter.run_live", fake_run_live)
+    monkeypatch.setattr("heru.base.ExternalCLIAdapter.run", fail_run)
+    monkeypatch.setattr("heru.base.ExternalCLIAdapter.run_live", fake_run_live)
 
     result = manager.run(task, role="swe", engine_name="codex", prompt="implement it")
 
@@ -1444,8 +1444,8 @@ def _subagent_manager_uses_inherited_run_live_when_sandboxed_and_base_run_is_reb
             pid=4647,
         )
 
-    monkeypatch.setattr("litehive.agents.base.ExternalCLIAdapter.run", fail_run)
-    monkeypatch.setattr("litehive.agents.base.ExternalCLIAdapter.run_live", fake_run_live)
+    monkeypatch.setattr("heru.base.ExternalCLIAdapter.run", fail_run)
+    monkeypatch.setattr("heru.base.ExternalCLIAdapter.run_live", fake_run_live)
 
     result = manager.run(task, role="swe", engine_name="codex", prompt="implement it")
 
@@ -1478,7 +1478,7 @@ def _subagent_manager_ignores_class_alias_to_rebound_base_run_when_sandboxed_and
     def rebound_base_run(*args, **kwargs) -> CLIExecutionResult:  # type: ignore[no-untyped-def]
         raise AssertionError("run should not be used when it aliases the rebound base method")
 
-    monkeypatch.setattr("litehive.agents.base.ExternalCLIAdapter.run", rebound_base_run)
+    monkeypatch.setattr("heru.base.ExternalCLIAdapter.run", rebound_base_run)
     monkeypatch.setattr("shutil.which", lambda binary: f"/usr/bin/{binary}")
 
     class LivePreferredEngine(ExternalCLIAdapter):
@@ -1610,7 +1610,7 @@ def _subagent_manager_prefers_instance_run_override_when_sandboxed(
         raise AssertionError("run_live should not be used when sandboxed engine only overrides run")
 
     monkeypatch.setattr(type(engine), "run", fake_run)
-    monkeypatch.setattr("litehive.agents.base.ExternalCLIAdapter.run_live", fail_run_live)
+    monkeypatch.setattr("heru.base.ExternalCLIAdapter.run_live", fail_run_live)
 
     result = manager.run(task, role="swe", engine_name="codex", prompt="implement it")
 
@@ -1697,7 +1697,7 @@ def _subagent_manager_prefers_bound_alias_to_class_run_override_when_sandboxed(
 
     monkeypatch.setattr("litehive.agents.manager.get_engine", lambda _: engine)
     monkeypatch.setattr("shutil.which", lambda binary: f"/usr/bin/{binary}")
-    monkeypatch.setattr("litehive.agents.base.ExternalCLIAdapter.run_live", fail_run_live)
+    monkeypatch.setattr("heru.base.ExternalCLIAdapter.run_live", fail_run_live)
 
     result = manager.run(task, role="swe", engine_name="codex", prompt="implement it")
 
@@ -1783,7 +1783,7 @@ def _subagent_manager_ignores_class_alias_to_inherited_run_live_when_sandboxed(
 
     monkeypatch.setattr("litehive.agents.manager.get_engine", lambda _: engine)
     monkeypatch.setattr("shutil.which", lambda binary: f"/usr/bin/{binary}")
-    monkeypatch.setattr("litehive.agents.base.ExternalCLIAdapter.run_live", fail_run_live)
+    monkeypatch.setattr("heru.base.ExternalCLIAdapter.run_live", fail_run_live)
 
     result = manager.run(task, role="swe", engine_name="codex", prompt="implement it")
 
@@ -1864,7 +1864,7 @@ def _subagent_manager_does_not_pass_on_started_to_sandboxed_run_override_without
 
     monkeypatch.setattr("litehive.agents.manager.get_engine", lambda _: engine)
     monkeypatch.setattr("shutil.which", lambda binary: f"/usr/bin/{binary}")
-    monkeypatch.setattr("litehive.agents.base.ExternalCLIAdapter.run_live", fail_run_live)
+    monkeypatch.setattr("heru.base.ExternalCLIAdapter.run_live", fail_run_live)
 
     result = manager.run(task, role="swe", engine_name="codex", prompt="implement it")
 
@@ -1959,7 +1959,7 @@ def _subagent_manager_does_not_pass_on_started_to_sandboxed_run_live_override_wi
 
     monkeypatch.setattr("litehive.agents.manager.get_engine", lambda _: engine)
     monkeypatch.setattr("shutil.which", lambda binary: f"/usr/bin/{binary}")
-    monkeypatch.setattr("litehive.agents.base.ExternalCLIAdapter.run", fail_run)
+    monkeypatch.setattr("heru.base.ExternalCLIAdapter.run", fail_run)
 
     result = manager.run(task, role="swe", engine_name="codex", prompt="implement it")
 
@@ -2030,7 +2030,7 @@ def _subagent_manager_filters_unsupported_run_live_kwargs(
         raise AssertionError("run should not be used when engine overrides run_live")
 
     monkeypatch.setattr("litehive.agents.manager.get_engine", lambda _: engine)
-    monkeypatch.setattr("litehive.agents.base.ExternalCLIAdapter.run", fail_run)
+    monkeypatch.setattr("heru.base.ExternalCLIAdapter.run", fail_run)
 
     result = manager.run(
         task,
@@ -2119,7 +2119,7 @@ def _subagent_manager_filters_unsupported_sandboxed_run_live_kwargs(
 
     monkeypatch.setattr("litehive.agents.manager.get_engine", lambda _: engine)
     monkeypatch.setattr("shutil.which", lambda binary: f"/usr/bin/{binary}")
-    monkeypatch.setattr("litehive.agents.base.ExternalCLIAdapter.run", fail_run)
+    monkeypatch.setattr("heru.base.ExternalCLIAdapter.run", fail_run)
 
     result = manager.run(
         task,
@@ -2336,8 +2336,8 @@ def _subagent_manager_uses_inherited_run_live_when_available(
             pid=4242,
         )
 
-    monkeypatch.setattr("litehive.agents.base.ExternalCLIAdapter.run", fail_run)
-    monkeypatch.setattr("litehive.agents.base.ExternalCLIAdapter.run_live", fake_run_live)
+    monkeypatch.setattr("heru.base.ExternalCLIAdapter.run", fail_run)
+    monkeypatch.setattr("heru.base.ExternalCLIAdapter.run_live", fake_run_live)
 
     result = manager.run(task, role="swe", engine_name="codex", prompt="implement it")
 
@@ -2392,7 +2392,7 @@ def test_legacy_subagent_execution_module_alias_preserves_monkeypatching(
         raise AssertionError("run_live should not be used when the legacy module is patched")
 
     monkeypatch.setattr(engine, "run", fake_run)
-    monkeypatch.setattr("litehive.agents.base.ExternalCLIAdapter.run_live", fail_run_live)
+    monkeypatch.setattr("heru.base.ExternalCLIAdapter.run_live", fail_run_live)
 
     result = manager.run(task, role="swe", engine_name="codex", prompt="implement it")
 
@@ -2468,8 +2468,8 @@ def _subagent_manager_uses_inherited_run_live_when_sandboxed(
             sandbox_summary="sandbox[docker:test net=none workspace=rw]",
         )
 
-    monkeypatch.setattr("litehive.agents.base.ExternalCLIAdapter.run", fail_run)
-    monkeypatch.setattr("litehive.agents.base.ExternalCLIAdapter.run_live", fake_run_live)
+    monkeypatch.setattr("heru.base.ExternalCLIAdapter.run", fail_run)
+    monkeypatch.setattr("heru.base.ExternalCLIAdapter.run_live", fake_run_live)
 
     result = manager.run(task, role="swe", engine_name="codex", prompt="implement it")
 
@@ -2536,8 +2536,8 @@ def _subagent_manager_ignores_rebound_inherited_run_when_run_live_is_available(
             pid=4242,
         )
 
-    monkeypatch.setattr("litehive.agents.base.ExternalCLIAdapter.run", fail_run)
-    monkeypatch.setattr("litehive.agents.base.ExternalCLIAdapter.run_live", fake_run_live)
+    monkeypatch.setattr("heru.base.ExternalCLIAdapter.run", fail_run)
+    monkeypatch.setattr("heru.base.ExternalCLIAdapter.run_live", fake_run_live)
     monkeypatch.setattr(
         engine,
         "run",
@@ -2624,8 +2624,8 @@ def _subagent_manager_uses_class_rebound_run_live_when_instance_has_stale_alias(
             sandbox_summary="sandbox[docker:test net=none workspace=rw]",
         )
 
-    monkeypatch.setattr("litehive.agents.base.ExternalCLIAdapter.run", fail_run)
-    monkeypatch.setattr("litehive.agents.base.ExternalCLIAdapter.run_live", fake_run_live)
+    monkeypatch.setattr("heru.base.ExternalCLIAdapter.run", fail_run)
+    monkeypatch.setattr("heru.base.ExternalCLIAdapter.run_live", fake_run_live)
 
     result = manager.run(task, role="swe", engine_name="codex", prompt="implement it")
 
@@ -2678,7 +2678,7 @@ def test_subagent_manager_prefers_instance_run_override_over_inherited_run_live(
         raise AssertionError("run_live should not be used when only run is overridden")
 
     monkeypatch.setattr(engine, "run", fake_run)
-    monkeypatch.setattr("litehive.agents.base.ExternalCLIAdapter.run_live", fail_run_live)
+    monkeypatch.setattr("heru.base.ExternalCLIAdapter.run_live", fail_run_live)
 
     result = manager.run(task, role="swe", engine_name="codex", prompt="implement it")
 
@@ -2728,7 +2728,7 @@ def test_subagent_manager_prefers_bound_instance_run_override_over_inherited_run
         raise AssertionError("run_live should not be used when run is rebound to a custom method")
 
     monkeypatch.setattr(engine, "run", fake_run.__get__(engine, type(engine)))
-    monkeypatch.setattr("litehive.agents.base.ExternalCLIAdapter.run_live", fail_run_live)
+    monkeypatch.setattr("heru.base.ExternalCLIAdapter.run_live", fail_run_live)
 
     result = manager.run(task, role="swe", engine_name="codex", prompt="implement it")
 
@@ -2819,7 +2819,7 @@ def test_supports_live_execution_keeps_inherited_run_live_when_base_run_is_rebou
         raise AssertionError("execution should not happen in this unit test")
 
     with _patched_engine_detection(
-        lambda monkeypatch: monkeypatch.setattr("litehive.agents.base.ExternalCLIAdapter.run", fake_run)
+        lambda monkeypatch: monkeypatch.setattr("heru.base.ExternalCLIAdapter.run", fake_run)
     ) as engine_detection_module:
         assert engine_detection_module.prefers_non_live_run(engine) is False
         assert engine_detection_module.supports_live_execution(engine) is True
@@ -2836,8 +2836,8 @@ def test_has_callable_override_ignores_rebound_external_base_methods(
         raise AssertionError("execution should not happen in this unit test")
 
     def patch(monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setattr("litehive.agents.base.ExternalCLIAdapter.run", rebound_run)
-        monkeypatch.setattr("litehive.agents.base.ExternalCLIAdapter.run_live", rebound_run_live)
+        monkeypatch.setattr("heru.base.ExternalCLIAdapter.run", rebound_run)
+        monkeypatch.setattr("heru.base.ExternalCLIAdapter.run_live", rebound_run_live)
 
     with _patched_engine_detection(patch) as engine_detection_module:
         assert (
@@ -2866,7 +2866,7 @@ def test_has_callable_override_ignores_bound_alias_to_rebound_external_base_run(
         raise AssertionError("execution should not happen in this unit test")
 
     def patch(monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setattr("litehive.agents.base.ExternalCLIAdapter.run", rebound_run)
+        monkeypatch.setattr("heru.base.ExternalCLIAdapter.run", rebound_run)
         monkeypatch.setattr(
             engine,
             "run",
@@ -2892,7 +2892,7 @@ def test_supports_live_execution_does_not_leak_rebound_base_run_between_engines(
     def fake_run(*args, **kwargs) -> CLIExecutionResult:  # type: ignore[no-untyped-def]
         raise AssertionError("execution should not happen in this unit test")
 
-    monkeypatch.setattr("litehive.agents.base.ExternalCLIAdapter.run", fake_run)
+    monkeypatch.setattr("heru.base.ExternalCLIAdapter.run", fake_run)
     monkeypatch.setattr(
         rebound_engine,
         "run",
@@ -2920,7 +2920,7 @@ def test_supports_live_execution_ignores_stale_instance_alias_to_original_run_li
     def rebound_run_live(*args, **kwargs) -> CLIExecutionResult:  # type: ignore[no-untyped-def]
         raise AssertionError("execution should not happen in this unit test")
 
-    monkeypatch.setattr("litehive.agents.base.ExternalCLIAdapter.run_live", rebound_run_live)
+    monkeypatch.setattr("heru.base.ExternalCLIAdapter.run_live", rebound_run_live)
 
     assert prefers_non_live_run(engine) is False
     assert supports_live_execution(engine) is True
@@ -3002,7 +3002,7 @@ def _subagent_manager_prefers_class_run_override_over_inherited_run_live(
         raise AssertionError("run_live should not be used when only run is overridden")
 
     monkeypatch.setattr("litehive.agents.manager.get_engine", lambda _: engine)
-    monkeypatch.setattr("litehive.agents.base.ExternalCLIAdapter.run_live", fail_run_live)
+    monkeypatch.setattr("heru.base.ExternalCLIAdapter.run_live", fail_run_live)
 
     result = manager.run(task, role="swe", engine_name="codex", prompt="implement it")
 
@@ -3077,7 +3077,7 @@ def _subagent_manager_prefers_bound_alias_to_class_run_override_over_inherited_r
         raise AssertionError("run_live should not be used when run aliases a class override")
 
     monkeypatch.setattr("litehive.agents.manager.get_engine", lambda _: engine)
-    monkeypatch.setattr("litehive.agents.base.ExternalCLIAdapter.run_live", fail_run_live)
+    monkeypatch.setattr("heru.base.ExternalCLIAdapter.run_live", fail_run_live)
 
     result = manager.run(task, role="swe", engine_name="codex", prompt="implement it")
 
@@ -3153,7 +3153,7 @@ def _subagent_manager_ignores_class_alias_to_inherited_run_live(
         raise AssertionError("run_live should not be used when it aliases the base implementation")
 
     monkeypatch.setattr("litehive.agents.manager.get_engine", lambda _: engine)
-    monkeypatch.setattr("litehive.agents.base.ExternalCLIAdapter.run_live", fail_run_live)
+    monkeypatch.setattr("heru.base.ExternalCLIAdapter.run_live", fail_run_live)
 
     result = manager.run(task, role="swe", engine_name="codex", prompt="implement it")
 
@@ -3244,7 +3244,7 @@ def _subagent_manager_ignores_class_alias_to_inherited_run_override(
         raise AssertionError("run should not be used when it aliases an inherited override")
 
     monkeypatch.setattr("litehive.agents.manager.get_engine", lambda _: engine)
-    monkeypatch.setattr("litehive.agents.base.ExternalCLIAdapter.run", fail_run)
+    monkeypatch.setattr("heru.base.ExternalCLIAdapter.run", fail_run)
 
     result = manager.run(task, role="swe", engine_name="codex", prompt="implement it")
 
@@ -3312,8 +3312,8 @@ def _subagent_manager_uses_inherited_run_live_when_base_run_is_rebound(
             pid=4646,
         )
 
-    monkeypatch.setattr("litehive.agents.base.ExternalCLIAdapter.run", fail_run)
-    monkeypatch.setattr("litehive.agents.base.ExternalCLIAdapter.run_live", fake_run_live)
+    monkeypatch.setattr("heru.base.ExternalCLIAdapter.run", fail_run)
+    monkeypatch.setattr("heru.base.ExternalCLIAdapter.run_live", fake_run_live)
 
     result = manager.run(task, role="swe", engine_name="codex", prompt="implement it")
 
@@ -3339,7 +3339,7 @@ def _subagent_manager_ignores_class_alias_to_rebound_base_run_when_run_live_is_a
     def rebound_base_run(*args, **kwargs) -> CLIExecutionResult:  # type: ignore[no-untyped-def]
         raise AssertionError("run should not be used when it aliases the rebound base method")
 
-    monkeypatch.setattr("litehive.agents.base.ExternalCLIAdapter.run", rebound_base_run)
+    monkeypatch.setattr("heru.base.ExternalCLIAdapter.run", rebound_base_run)
 
     class LivePreferredEngine(ExternalCLIAdapter):
         def __init__(self) -> None:
