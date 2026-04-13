@@ -306,7 +306,7 @@ def run_task(
         )
         prompt_context = PromptContext(workspace_root=root)
         hook_specs = hook_specs_from_config(config)
-        retry_budget, _retry_source = resolve_task_retry_policy(task, config)
+        retry_budget = resolve_task_retry_policy(task, config)
 
         registry = build_registry(
             selector=selector,

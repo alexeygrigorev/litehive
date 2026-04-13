@@ -12,7 +12,7 @@ from litehive.agents import (
     classify_retryable_execution_failure,
     get_engine,
 )
-from litehive.agents.base import CLIExecutionResult, ExternalCLIAdapter, parse_stage_report_text
+from litehive.agents.base import CLIExecutionResult, ExternalCLIAdapter
 from litehive.agents.sandbox import SandboxError, SandboxLauncher
 from litehive.observability.events import append_event
 from litehive.models import (
@@ -510,7 +510,7 @@ class SubagentManager(SessionMixin):
         execution: CLIExecutionResult | None,
         transcript: str,
     ) -> StageReport:
-        cli_report = stage_report_from_subagent(
+        return stage_report_from_subagent(
             task,
             step,
             SubagentResult(
@@ -520,21 +520,4 @@ class SubagentManager(SessionMixin):
                 exit_code=0 if execution is None else execution.exit_code,
             ),
             root=self.root,
-        )
-        if cli_report.submitted_via_cli:
-            return cli_report
-        if execution is not None:
-            engine = get_engine(ref.engine)
-            if hasattr(engine, "parse_stage_report"):
-                return engine.parse_stage_report(
-                    task_id=task.id,
-                    step=step,  # type: ignore[arg-type]
-                    execution=execution,
-                    subagent_status=ref.status,
-                )
-        return parse_stage_report_text(
-            task_id=task.id,
-            step=step,  # type: ignore[arg-type]
-            transcript=transcript,
-            subagent_status=ref.status,
         )

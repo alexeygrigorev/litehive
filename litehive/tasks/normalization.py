@@ -4,8 +4,6 @@ import re
 
 from litehive.models import TaskRecord
 
-from .constants import VALID_HUMAN_CHECKPOINTS
-
 
 def normalize_acceptance_criteria(items: list[str] | None) -> list[str]:
     if not items:
@@ -44,27 +42,6 @@ def extract_report_list_section(text: str, key: str) -> list[str]:
             items.append(line.split("- ", 1)[1].strip())
     return items
 
-
-def normalize_human_checkpoints(items: list[str] | None) -> list[str]:
-    if not items:
-        return []
-
-    normalized: list[str] = []
-    seen: set[str] = set()
-    for item in items:
-        checkpoint = item.strip()
-        if not checkpoint:
-            continue
-        if checkpoint not in VALID_HUMAN_CHECKPOINTS:
-            allowed = ", ".join(sorted(VALID_HUMAN_CHECKPOINTS))
-            raise ValueError(
-                f"Unsupported human checkpoint '{checkpoint}'. Expected one of: {allowed}"
-            )
-        if checkpoint in seen:
-            continue
-        seen.add(checkpoint)
-        normalized.append(checkpoint)
-    return normalized
 
 def task_requires_acceptance_criteria(task: TaskRecord) -> bool:
     return bool(_acceptance_criteria_requirement_signals(task))

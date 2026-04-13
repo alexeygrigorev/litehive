@@ -303,10 +303,10 @@ def resolve_engine_plan(
     return [config.default_engine]
 
 
-def resolve_task_retry_policy(task: TaskRecord, config: LitehiveConfig) -> tuple[int, str]:
+def resolve_task_retry_policy(task: TaskRecord, config: LitehiveConfig) -> int:
     if task.retry_policy.max_retries is not None:
-        return task.retry_policy.max_retries, "task"
-    return config.default_retry_limit, "global"
+        return task.retry_policy.max_retries
+    return config.default_retry_limit
 
 
 def _resolve_stage_retry_limit(task: TaskRecord, config: LitehiveConfig) -> int:
@@ -337,15 +337,6 @@ def _set_continuation_handoff(
     if result.execution is not None:
         rendered = get_engine(from_engine).render_transcript(result.execution)
         transcript_snippet = transcript_snippet or rendered.splitlines()[0].strip()
-        if rendered.strip():
-            report = get_engine(from_engine).parse_stage_report(
-                task_id=task.id,
-                step=step,  # type: ignore[arg-type]
-                execution=result.execution,
-                subagent_status=result.ref.status,
-            )
-            summary = report.summary
-            warnings = list(report.warnings)
 
     handoff = RuntimeContinuationHandoff(
         step=step,

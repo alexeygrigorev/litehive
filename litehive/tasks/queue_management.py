@@ -90,7 +90,6 @@ def reset_task_for_recovery(
     task.runtime.interruption = None
     task.runtime.retry_count = 0
     task.runtime.retry_limit = 0
-    task.runtime.retry_source = "global"
     if not preserve_continuation_handoff:
         task.runtime.continuation_handoff = None
     task.runtime.current_stage = task.runtime.current_stage.model_copy(

@@ -181,7 +181,6 @@ def status_full(workspace, root, config, state, runner, monitoring, issues):
             local_until = until_dt.astimezone().strftime("%Y-%m-%d %H:%M %Z")
             print(f"engine_frozen: {engine_name} until {local_until}")
     print(f"litehive_source_path: {config.litehive_source_path or '-'}")
-    print(f"mode: {state.mode}")
     print(f"active_task_id: {state.active_task_id}")
     print(
         "runner_status: "

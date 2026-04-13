@@ -819,18 +819,3 @@ class SandboxedAdapter(ExternalCLIAdapter):
 
     def render_transcript(self, execution: CLIExecutionResult) -> str:
         return self._adapter.render_transcript(execution)
-
-    def parse_stage_report(
-        self,
-        *,
-        task_id: str,
-        step: str,
-        execution: CLIExecutionResult,
-        subagent_status: str,
-    ):
-        return self._adapter.parse_stage_report(
-            task_id=task_id,
-            step=step,
-            execution=execution,
-            subagent_status=subagent_status,
-        )

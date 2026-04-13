@@ -178,16 +178,6 @@ class HeruEngineAdapter:
                 f"{self.name} finished {step} without a litehive report submission"
             )
 
-        # If this was a grooming verdict, the planner may have embedded a
-        # TASK_UPDATE block (or text sections like ACCEPTANCE_CRITERIA /
-        # PLAN / CONSTRAINTS) in its message. Apply those to the task
-        # record so downstream stages see the updated intent.
-        if step == "grooming" and task is not None:
-            from .task_updates import apply_task_updates_from_comment
-
-            message = verdict.reason or ""
-            apply_task_updates_from_comment(self.workspace_root, task, message=message)
-
         return verdict
 
     @staticmethod

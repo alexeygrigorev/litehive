@@ -1,28 +1,54 @@
-"""Stage, recovery, and reporting models.
-
-StageReport, StageResultSubmission, StageResultTests, and
-TaskUpdateSubmission now live in heru.types. This module re-exports them
-and keeps the litehive-only recovery/follow-up/thread models
-authoritative here.
-"""
+"""Stage, recovery, and reporting models (litehive-native)."""
 
 from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
 
-from heru.types import (
-    StageReport,
-    StageResultSubmission,
-    StageResultTests,
-    TaskUpdateSubmission,
-)
-
 from .common import (
     FEEDBACK_CAP,
+    OutcomeKind,
+    OutcomeReasonCode,
     TRUNCATION_MARKER,
     cap_feedback,
     utcnow,
 )
+from .runtime_models import ResourceLimitEvent
+
+
+class StageReport(BaseModel):
+    """Persisted stage-report record.
+
+    Historically heru parsed a `STAGE_RESULT: <yaml>` block out of agent
+    stdout to build one of these. That path is gone — agents now submit
+    verdicts via the `litehive report` CLI (thread comments) and
+    `stage_report_from_subagent` constructs this record directly.
+    """
+
+    task_id: str
+    step: Literal["grooming", "implementing", "testing", "accepting", "commit_to_git"]
+    verdict: Literal["pass", "accept", "fail", "reject", "blocked"]
+    source: Literal["agent", "hook"] = "agent"
+    summary: str
+    feedback: str = ""
+    submitted_via_cli: bool = False
+    files_changed: list[str] = Field(default_factory=list)
+    created_follow_up_task_ids: list[str] = Field(default_factory=list)
+    tests: dict[str, int] = Field(default_factory=lambda: {"added": 0, "passing": 0})
+    warnings: list[str] = Field(default_factory=list)
+    retry_count: int = 0
+    retry_limit: int = 0
+    retry_decision: Literal["continue", "retry", "final"] = "continue"
+    outcome: OutcomeKind | None = None
+    outcome_reason_code: OutcomeReasonCode | None = None
+    outcome_reason: str = ""
+    failure_classification: str | None = None
+    failure_diagnostics: dict[str, str | int | bool | None | list[str]] = Field(
+        default_factory=dict
+    )
+    resource_limit_event: ResourceLimitEvent | None = None
+    duration_seconds: int = 0
+    hook_results: list[dict[str, str | int | bool | None]] = Field(default_factory=list)
+    created_at: str = Field(default_factory=utcnow)
 
 
 class FollowUpTaskSpec(BaseModel):
@@ -105,10 +131,7 @@ __all__ = [
     "RecoveryEvidenceItem",
     "RecoveryReport",
     "StageReport",
-    "StageResultSubmission",
-    "StageResultTests",
     "TaskThreadComment",
-    "TaskUpdateSubmission",
     "TRUNCATION_MARKER",
     "cap_feedback",
 ]

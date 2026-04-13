@@ -1,37 +1,61 @@
-"""Shared literals and helpers for litehive models.
+"""Shared literals and helpers for litehive models."""
 
-The engine-facing literals, helpers, and constants (SubagentStatus,
-EngineMonitoringSource, EngineLimitKind, LiveEventKind, LiveEventRole,
-OutcomeKind, OutcomeReasonCode, RetrySource, cap_feedback, utcnow,
-FEEDBACK_CAP, and the task/effort/checkpoint literals that flow through
-agent submissions) now live in `heru.types`. This module re-exports them
-for backward compatibility and keeps litehive-only types (PipelineMode,
-TaskStatus, PipelineStatus, etc.) authoritative here.
-"""
-
+from datetime import UTC, datetime
 from typing import Literal
 
 from heru.types import (
-    FEEDBACK_CAP,
     EngineLimitKind,
     EngineMonitoringSource,
-    HumanCheckpoint,
     LiveEventKind,
     LiveEventRole,
-    OutcomeKind,
-    OutcomeReasonCode,
-    PlannedEffort,
-    RetrySource,
     SubagentStatus,
-    TaskComplexity,
-    TaskMode,
-    cap_feedback,
-    utcnow,
-    _TRUNCATION_MARKER as HERU_TRUNCATION_MARKER,
 )
 
 
-TRUNCATION_MARKER = HERU_TRUNCATION_MARKER
+FEEDBACK_CAP = 2000
+TRUNCATION_MARKER = "\n\n… [truncated — full transcript in subagent artifacts]"
+
+
+def utcnow() -> str:
+    return datetime.now(UTC).replace(microsecond=0).isoformat()
+
+
+def cap_feedback(text: str, *, limit: int = FEEDBACK_CAP) -> str:
+    if len(text) <= limit:
+        return text
+    return text[: limit - len(TRUNCATION_MARKER)] + TRUNCATION_MARKER
+
+
+# ── litehive-native task-lifecycle vocabularies ─────────────────────────────
+
+OutcomeKind = Literal[
+    "flagged",
+    "blocked",
+    "interrupted",
+    "cancelled",
+    "wont_do",
+    "deferred",
+    "duplicate",
+]
+
+OutcomeReasonCode = Literal[
+    "verdict_fail",
+    "verdict_reject",
+    "verdict_blocked",
+    "hallucinated_completion",
+    "resource_limit",
+    "missing_acceptance_criteria",
+    "retry_limit_exhausted",
+    "stage_retry_limit_exhausted",
+    "execution_interrupted",
+    "execution_cancelled",
+    "stage_exception",
+    "unsupported_verdict",
+    "merge_conflict",
+    "wont_do",
+    "deferred",
+    "duplicate",
+]
 
 PipelineMode = Literal["single", "full"]
 TaskStatus = Literal[
@@ -59,34 +83,21 @@ PipelineStatus = Literal[
     "flagged",
 ]
 RunnerExecutionStatus = Literal["idle", "running", "late", "stale"]
-UpstreamContributionKind = Literal[
-    "runtime_bug",
-    "missing_feature",
-    "config_improvement",
-    "prompt_improvement",
-    "engine_adapter_fix",
-]
 
 
 __all__ = [
     "EngineLimitKind",
     "EngineMonitoringSource",
     "FEEDBACK_CAP",
-    "HumanCheckpoint",
     "LiveEventKind",
     "LiveEventRole",
     "OutcomeKind",
     "OutcomeReasonCode",
     "PipelineMode",
     "PipelineStatus",
-    "PlannedEffort",
-    "RetrySource",
     "RunnerExecutionStatus",
     "SubagentStatus",
-    "TaskComplexity",
-    "TaskMode",
     "TaskStatus",
-    "UpstreamContributionKind",
     "TRUNCATION_MARKER",
     "cap_feedback",
     "utcnow",

@@ -119,7 +119,7 @@ def test_set_continuation_handoff_preserves_unified_continuation_payload(
 
     assert handoff.continuation is not None
     assert handoff.continuation.resume_id == "session-42"
-    assert handoff.summary == "summary"
-    assert handoff.warnings == ["warning"]
+    # summary/warnings are no longer populated from adapter parse_stage_report —
+    # that path was deleted along with the STAGE_RESULT YAML block parser.
     assert captured["task_id"] == task.id
     assert captured["handoff"].continuation.resume_id == "session-42"

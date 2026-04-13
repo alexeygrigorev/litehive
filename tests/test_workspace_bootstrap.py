@@ -383,21 +383,15 @@ def test_task_yaml_persists_only_intent_fields_and_runtime_moves_to_db(tmp_path:
         "title",
         "created_at",
         "task_type",
-        "mode",
         "pipeline_mode",
         "priority",
-        "pm_complexity",
-        "planned_effort",
         "depends_on",
         "goal",
         "acceptance_criteria",
         "constraints",
         "plan",
-        "human_checkpoints",
         "git",
         "created_from",
-        "upstream_origin",
-        "github_origin",
     }
     assert set(data["git"]) == {"auto_commit", "commit_message"}
 

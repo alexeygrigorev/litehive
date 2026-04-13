@@ -275,7 +275,6 @@ def _set_interruption_metadata(
         reason=summary,
         retry_count=task.runtime.retry_count,
         retry_limit=task.runtime.retry_limit,
-        retry_source=task.runtime.retry_source,
     )
     task.runtime.interruption = RuntimeInterruptionState(
         source="subagent" if interrupted_subagent is not None else "runner",

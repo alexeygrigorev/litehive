@@ -413,7 +413,6 @@ def persist_future_task_update(
     from litehive.storage import runtime_store
     from litehive.tasks.crud import ensure_runtime_ignored, serialize_task_record, task_state_for_storage
     from litehive.tasks.persistence import write_atomic_files_and_then
-    from litehive.tasks.templates import render_task_brief, task_brief_file
 
     task.updated_at = utcnow()
     writes = {
@@ -423,8 +422,6 @@ def persist_future_task_update(
         journal_path = task_dir(root, task) / "journal.md"
         existing = journal_path.read_text(encoding="utf-8") if journal_path.exists() else ""
         writes[journal_path] = f"{existing}\n## {utcnow()}\n{journal_message}\n"
-    if task.mode == "tasks":
-        writes[task_brief_file(root, task)] = render_task_brief(task)
     write_atomic_files_and_then(
         writes,
         lambda: runtime_store(root).save_runtime_transaction(

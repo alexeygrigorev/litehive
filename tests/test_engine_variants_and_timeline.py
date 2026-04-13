@@ -323,7 +323,8 @@ def test_run_next_task_passes_configured_claude_max_turns(
     assert calls[0] == 7
 
 
-def test_claude_renders_jsonl_transcript_and_stage_report(tmp_path: Path) -> None:
+def test_claude_renders_jsonl_transcript(tmp_path: Path) -> None:
+    """Adapter-level transcript rendering still surfaces the first assistant line."""
     from litehive.agents import ClaudeCLIAdapter
 
     execution = CLIExecutionResult(
@@ -335,9 +336,6 @@ def test_claude_renders_jsonl_transcript_and_stage_report(tmp_path: Path) -> Non
             [
                 '{"type":"system","subtype":"init"}',
                 '{"type":"assistant","message":{"content":[{"type":"text","text":"VERDICT: PASS\\n"}]}}',
-                '{"type":"assistant","message":{"content":[{"type":"text","text":"SUMMARY: implemented Claude adapter\\n"}]}}',
-                '{"type":"assistant","message":{"content":[{"type":"text","text":"FILES_CHANGED:\\n- litehive/engines.py\\n"}]}}',
-                '{"type":"assistant","message":{"content":[{"type":"text","text":"TESTS_ADDED: 3\\nTESTS_PASSING: 3\\nWARNINGS:\\n"}]}}',
                 '{"type":"result","result":"done"}',
             ]
         ),
@@ -355,60 +353,6 @@ def test_claude_renders_jsonl_transcript_and_stage_report(tmp_path: Path) -> Non
     )
 
     assert adapter.render_transcript(execution).splitlines()[0] == "VERDICT: PASS"
-    report = adapter.parse_stage_report(
-        task_id="T-0006",
-        step="implementing",
-        execution=execution,
-        subagent_status="completed",
-    )
-
-    # Text-based verdict parsing removed; without CLI verdict or STAGE_RESULT JSON,
-    # verdict defaults to reject.
-    assert report.verdict == "reject"
-    assert report.summary == "VERDICT: PASS"
-    assert report.files_changed == []
-
-
-def test_claude_renders_partial_stream_events_for_live_capture(tmp_path: Path) -> None:
-    from litehive.agents import ClaudeCLIAdapter
-
-    execution = CLIExecutionResult(
-        adapter="claude",
-        argv=("claude", "-p"),
-        cwd=tmp_path,
-        exit_code=0,
-        stdout="\n".join(
-            [
-                '{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"VERDICT: PASS\\n"}}',
-                '{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"SUMMARY: partial Claude output\\n"}}',
-                '{"type":"content_block_delta","index":1,"delta":{"type":"text_delta","text":"FILES_CHANGED:\\n- litehive/engines.py\\n"}}',
-                '{"type":"content_block_delta","index":1,"delta":{"type":"text_delta","text":"TESTS_ADDED: 1\\nTESTS_PASSING: 1\\nWARNINGS:\\n"}}',
-            ]
-        ),
-        stderr="",
-    )
-
-    adapter = ClaudeCLIAdapter(
-        name="claude",
-        binary="claude",
-        capabilities=AdapterCapabilities(
-            supports_model_override=True,
-            strips_environment=False,
-            transcript_format="jsonl",
-        ),
-    )
-
-    transcript = adapter.render_transcript(execution)
-    assert transcript.splitlines()[0] == "VERDICT: PASS"
-    report = adapter.parse_stage_report(
-        task_id="T-0006",
-        step="implementing",
-        execution=execution,
-        subagent_status="running",
-    )
-
-    assert report.summary == "VERDICT: PASS"
-    assert report.files_changed == []
 
 
 def test_claude_live_progress_report_uses_adapter_summary_for_restart_snippet(
@@ -454,7 +398,9 @@ def test_claude_live_progress_report_uses_adapter_summary_for_restart_snippet(
 
     report = yaml.safe_load((base / "report.yaml").read_text(encoding="utf-8"))
     assert report["status"] == "running"
-    assert report["summary"] == "VERDICT: PASS"
+    # The session snapshot summary is now the reject reason from stage_report_from_subagent
+    # because no CLI verdict was submitted — adapter-level STAGE_RESULT parsing is gone.
+    assert "did not submit verdict" in report["summary"]
     assert report["files_changed"] == []
 
     refreshed = get_task(tmp_path, task.id)
@@ -467,44 +413,13 @@ def test_claude_live_progress_report_uses_adapter_summary_for_restart_snippet(
     )
 
     assert interrupted is not None
-    assert interrupted.transcript_snippet == "VERDICT: PASS"
+    # transcript_snippet now reflects the reject reason from stage_report_from_subagent
+    # (no CLI verdict submitted) — STAGE_RESULT parsing is gone.
+    assert "did not submit verdict" in interrupted.transcript_snippet
 
     resumed_report = yaml.safe_load((base / "report.yaml").read_text(encoding="utf-8"))
     assert resumed_report["status"] == "interrupted"
-    assert resumed_report["summary"] == "VERDICT: PASS"
     assert resumed_report["resume_stage"] == "implementing"
-
-
-def test_claude_stage_report_uses_error_when_no_assistant_message(tmp_path: Path) -> None:
-    from litehive.agents import ClaudeCLIAdapter
-
-    execution = CLIExecutionResult(
-        adapter="claude",
-        argv=("claude", "-p"),
-        cwd=tmp_path,
-        exit_code=1,
-        stdout='{"type":"error","data":{"message":"authentication required"}}',
-        stderr="",
-    )
-
-    adapter = ClaudeCLIAdapter(
-        name="claude",
-        binary="claude",
-        capabilities=AdapterCapabilities(
-            supports_model_override=True,
-            strips_environment=False,
-            transcript_format="jsonl",
-        ),
-    )
-    report = adapter.parse_stage_report(
-        task_id="T-0006",
-        step="testing",
-        execution=execution,
-        subagent_status="failed",
-    )
-
-    assert report.summary == "authentication required"
-    assert report.verdict == "reject"
 
 
 def test_resolve_engine_name_rejects_claude_when_not_enabled(tmp_path: Path) -> None:

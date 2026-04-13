@@ -45,7 +45,6 @@ from litehive.agents.base import (
     AdapterCapabilities,
     CLIExecutionResult,
     ExternalCLIAdapter,
-    parse_stage_report_text,
 )
 from litehive.agents.sandbox import SandboxLauncher
 from litehive.git_ops import GitError, checkpoint_message, commit_task
@@ -65,8 +64,6 @@ from litehive.models import (
     StageReport,
     SubagentRef,
     TaskRecord,
-    UpstreamContributionOrigin,
-    UpstreamPatchProposal,
 )
 from litehive.observability import (
     load_engine_monitoring,
@@ -86,7 +83,6 @@ from litehive.agents import (
     EngineFailure,
     SubagentManager,
     SubagentResult,
-    intake_prompt,
     stage_prompt,
     stage_report_from_subagent,
 )
@@ -146,7 +142,6 @@ from litehive.workspace.task_status import (
     update_task_metadata,
 )
 import litehive.tasks.persistence as _tasks_persistence
-import litehive.tasks.templates as _tasks_templates
 import litehive.workspace.locking as _workspace_locking
 import litehive.workspace.workflow as _workspace_workflow
 
@@ -177,8 +172,6 @@ def _cmd_add(args):
         argv.extend(["--depends-on", dep])
     if args.task_type is not None:
         argv.extend(["--task-type", args.task_type])
-    if args.mode is not None:
-        argv.extend(["--mode", args.mode])
     if args.priority is not None:
         argv.extend(["--priority", args.priority])
     return _invoke_cli(argv)
@@ -231,30 +224,6 @@ def _cmd_debug(args):
 
 def _cmd_health(args):
     return _invoke_cli(["health", "--workspace", args.workspace])
-
-
-def _cmd_intake(args):
-    argv = ["import", "spec", "--workspace", args.workspace]
-    if args.file is not None:
-        argv.append(args.file)
-    if getattr(args, "engine", None) is not None:
-        argv.extend(["--engine", args.engine])
-    if getattr(args, "model", None) is not None:
-        argv.extend(["--model", args.model])
-    return _invoke_cli(argv)
-
-
-def _cmd_issue(args):
-    argv = ["import", "issue", "--workspace", args.workspace, "--upstream", args.upstream, "--type", getattr(args, "type", "runtime_bug"), "--details", getattr(args, "details", "")]
-    for criterion in getattr(args, "acceptance_criteria", None) or []:
-        argv.extend(["--acceptance-criteria", criterion])
-    for name in ["source_task", "source_stage", "source_role", "source_project", "litehive_workspace", "patch_branch", "patch_base"]:
-        value = getattr(args, name, None)
-        if value is not None:
-            argv.extend([f"--{name.replace('_', '-')}", value])
-    if getattr(args, "prepare_patch_branch", False):
-        argv.append("--prepare-patch-branch")
-    return _invoke_cli(argv)
 
 
 def _cmd_list(args):
@@ -413,7 +382,6 @@ def _cmd_worktree_rescue(args):
     return _invoke_cli(argv)
 
 tasks_module = types.SimpleNamespace(
-    TASK_TEMPLATES=_tasks_templates.TASK_TEMPLATES,
     atomic_write_text=_tasks_persistence.atomic_write_text,
     mark_interrupted_subagent=mark_interrupted_subagent,
     merged_state_for_runner_owned_write=_workspace_workflow.merged_state_for_runner_owned_write,
@@ -893,7 +861,6 @@ __all__ = [
     "AdapterCapabilities",
     "CLIExecutionResult",
     "ExternalCLIAdapter",
-    "parse_stage_report_text",
     "SandboxLauncher",
     "GitError",
     "checkpoint_message",
@@ -913,8 +880,6 @@ __all__ = [
     "StageReport",
     "SubagentRef",
     "TaskRecord",
-    "UpstreamContributionOrigin",
-    "UpstreamPatchProposal",
     "load_engine_monitoring",
     "record_engine_execution",
     "render_task_summary",
@@ -936,7 +901,6 @@ __all__ = [
     "EngineFailure",
     "SubagentManager",
     "SubagentResult",
-    "intake_prompt",
     "stage_prompt",
     "stage_report_from_subagent",
     "WorkspaceConflictError",

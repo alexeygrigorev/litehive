@@ -18,7 +18,6 @@ from heru.types import (
 from .common import (
     OutcomeKind,
     OutcomeReasonCode,
-    RetrySource,
     RunnerExecutionStatus,
     SubagentStatus,
     utcnow,
@@ -88,7 +87,6 @@ class TaskOutcomeState(BaseModel):
     follow_up_task_id: str | None = None
     retry_count: int = 0
     retry_limit: int = 0
-    retry_source: RetrySource = "global"
     recorded_at: str | None = None
 
 
@@ -135,7 +133,6 @@ class TaskRuntime(BaseModel):
     updated_at: str | None = None
     retry_count: int = 0
     retry_limit: int = 0
-    retry_source: RetrySource = "global"
     stage_retry_counts: dict[str, int] = Field(default_factory=dict)
     current_stage: RuntimeStageState = Field(default_factory=RuntimeStageState)
     last_stage: RuntimeStageState = Field(default_factory=RuntimeStageState)

@@ -30,7 +30,6 @@ from heru.base import (
     extract_stream_errors,
     extract_stream_transcript,
     iter_jsonl_payloads,
-    parse_stage_report_text,
 )
 from heru.types import (
     EngineUsageObservation,
@@ -56,7 +55,7 @@ if TYPE_CHECKING:
     from litehive.agents.manager import SubagentManager
     from litehive.agents.models import EngineFailure, SubagentInactivityTimeout, SubagentResult
     from litehive.agents.parsing import stage_report_from_subagent
-    from litehive.agents.prompts import intake_prompt, stage_prompt
+    from litehive.agents.prompts import stage_prompt
 
 
 _LAZY_EXPORTS = {
@@ -65,7 +64,6 @@ _LAZY_EXPORTS = {
     "SubagentInactivityTimeout": ("litehive.agents.models", "SubagentInactivityTimeout"),
     "SubagentResult": ("litehive.agents.models", "SubagentResult"),
     "stage_report_from_subagent": ("litehive.agents.parsing", "stage_report_from_subagent"),
-    "intake_prompt": ("litehive.agents.prompts", "intake_prompt"),
     "stage_prompt": ("litehive.agents.prompts", "stage_prompt"),
 }
 
@@ -120,10 +118,8 @@ __all__ = [
     "extract_stream_transcript",
     "get_engine",
     "get_stream_event_adapter",
-    "intake_prompt",
     "iter_jsonl_payloads",
     "parse_unified_execution",
-    "parse_stage_report_text",
     "stage_prompt",
     "stage_report_from_subagent",
 ]

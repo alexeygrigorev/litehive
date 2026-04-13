@@ -1,7 +1,6 @@
 """Tests for report feedback capping (T-0143)."""
 
 from litehive.models import cap_feedback, FEEDBACK_CAP, TRUNCATION_MARKER
-from litehive.agents.base import parse_stage_report_text
 
 
 def test_cap_feedback_short_text_unchanged() -> None:
@@ -25,46 +24,3 @@ def test_cap_feedback_custom_limit() -> None:
     result = cap_feedback("a" * 200, limit=100)
     assert len(result) <= 100
     assert result.endswith(TRUNCATION_MARKER)
-
-
-def test_parse_stage_report_text_caps_feedback_structured() -> None:
-    """Structured STAGE_RESULT path caps feedback from transcript."""
-    long_preamble = "z" * 5000
-    transcript = (
-        long_preamble + "\n"
-        "STAGE_RESULT:\n"
-        '{"verdict":"pass","summary":"done","files_changed":["foo.py"],'
-        '"tests":{"added":1,"passing":1},"warnings":[],'
-        '"acceptance_criteria":[]}\n'
-    )
-    report = parse_stage_report_text(
-        task_id="T-0099",
-        step="implementing",
-        transcript=transcript,
-        subagent_status="completed",
-    )
-    assert len(report.feedback) <= FEEDBACK_CAP
-    assert report.verdict == "pass"
-
-
-def test_parse_stage_report_text_caps_feedback_no_cli_verdict() -> None:
-    """Without CLI verdict, feedback is still capped and verdict is reject."""
-    long_preamble = "z" * 5000
-    transcript = (
-        long_preamble + "\n"
-        "VERDICT: PASS\n"
-        "SUMMARY: done\n"
-        "FILES_CHANGED:\n"
-        "- foo.py\n"
-        "TESTS_ADDED: 1\n"
-        "TESTS_PASSING: 1\n"
-    )
-    report = parse_stage_report_text(
-        task_id="T-0099",
-        step="implementing",
-        transcript=transcript,
-        subagent_status="completed",
-    )
-    assert len(report.feedback) <= FEEDBACK_CAP
-    # Text VERDICT: PASS is no longer parsed — verdict is reject
-    assert report.verdict == "reject"

@@ -44,63 +44,6 @@ def test_engine_command_freezes_engine(
 
 
 
-def test_update_command_from_file_still_supports_rich_backdoor_fields(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.delenv("LITEHIVE_AGENT_ROLE", raising=False)
-    ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
-    task = create_task(tmp_path, title="Rich update fallback")
-    payload = tmp_path / "task-shape.yaml"
-    payload.write_text(
-        yaml.safe_dump(
-            {
-                "goal": "Route through the rich update backdoor.",
-                "task_type": "docs",
-                "mode": "tasks",
-                "model": "gpt-5",
-                "retry_limit": 4,
-                "pm_complexity": "moderate",
-                "planned_effort": "m",
-                "human_checkpoints": ["before_acceptance"],
-                "auto_commit": False,
-            },
-            sort_keys=False,
-        ),
-        encoding="utf-8",
-    )
-
-    exit_code = _cmd_update(
-        argparse.Namespace(
-            workspace=tmp_path,
-            task_id=task.id,
-            title=None,
-            priority=None,
-            goal=None,
-            depends_on=None,
-            acceptance_criteria=None,
-            constraint=None,
-            plan_step=None,
-            from_file=payload,
-            edit=False,
-        )
-    )
-    output = capsys.readouterr().out
-
-    assert exit_code == 0
-    assert "task_type: docs" in output
-    updated = get_task(tmp_path, task.id)
-    assert updated is not None
-    assert updated.goal == "Route through the rich update backdoor."
-    assert updated.task_type == "docs"
-    assert updated.mode == "tasks"
-    assert updated.model == "gpt-5"
-    assert updated.retry_policy.max_retries == 4
-    assert updated.pm_complexity == "moderate"
-    assert updated.planned_effort == "m"
-    assert updated.human_checkpoints == ["before_acceptance"]
-    assert updated.git.auto_commit is False
-
-
 def test_resolve_workspace_uses_workspace_root_env(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

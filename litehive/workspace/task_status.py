@@ -14,8 +14,6 @@ from litehive.models import TaskRecord, WorkspaceState, utcnow
 from litehive.tasks.constants import (
     CLOSED_TASK_STATUSES,
     RESUMABLE_TASK_STATUSES,
-    VALID_PLANNED_EFFORTS,
-    VALID_PM_COMPLEXITIES,
     VALID_TASK_ENGINES,
     VALID_TASK_PRIORITIES,
     VALID_TASK_TYPES,
@@ -27,7 +25,6 @@ from litehive.tasks.models import StopTaskSummary, SwitchTaskSummary, WorkspaceC
 from litehive.tasks.normalization import (
     missing_acceptance_criteria_reason,
     normalize_acceptance_criteria,
-    normalize_human_checkpoints,
     normalize_task_text_list,
     reroute_stage_for_acceptance_criteria,
     implementation_entry_stage,
@@ -419,7 +416,6 @@ def abandon_task(root: Path, task_id: str) -> TaskRecord:
         task.runtime.last_outcome.reason = "Task abandoned via CLI."
         task.runtime.last_outcome.retry_count = 0
         task.runtime.last_outcome.retry_limit = 0
-        task.runtime.last_outcome.retry_source = "global"
         task.runtime.last_outcome.recorded_at = task.runtime.updated_at
         if state.active_task_id == task.id:
             state.active_task_id = None
@@ -493,7 +489,6 @@ def close_task(
         task.runtime.last_outcome.follow_up_task_id = follow_up_task_id
         task.runtime.last_outcome.retry_count = 0
         task.runtime.last_outcome.retry_limit = 0
-        task.runtime.last_outcome.retry_source = "global"
         task.runtime.last_outcome.recorded_at = now
         if state.active_task_id == task.id:
             state.active_task_id = None
@@ -561,10 +556,6 @@ def update_task(
     acceptance_criteria: list[str] | object = ...,
     constraints: list[str] | object = ...,
     plan: list[str] | object = ...,
-    pm_complexity: str | None | object = ...,
-    planned_effort: str | None | object = ...,
-    human_checkpoints: list[str] | object = ...,
-    mode: str | object = ...,
     auto_commit: bool | object = ...,
     outcome: str | None | object = ...,
     outcome_reason: str | None | object = ...,
@@ -576,7 +567,6 @@ def update_task(
     from litehive.tasks.persistence import load_state
     from litehive.tasks.queue_management import reset_task_for_recovery
     from litehive.tasks.queue_ops import validate_task_dependencies
-    from litehive.tasks.templates import apply_task_template_defaults
     from .workflow import persist_task_and_state_without_runner_guard
 
     with workspace_lock(root):
@@ -620,7 +610,6 @@ def update_task(
             )
             task.runtime.last_outcome.retry_count = 0
             task.runtime.last_outcome.retry_limit = 0
-            task.runtime.last_outcome.retry_source = "global"
             task.runtime.last_outcome.recorded_at = now
             if state.active_task_id == task.id:
                 state.active_task_id = None
@@ -689,7 +678,6 @@ def update_task(
                 task.runtime.last_outcome.reason = "Task abandoned via structured report."
                 task.runtime.last_outcome.retry_count = 0
                 task.runtime.last_outcome.retry_limit = 0
-                task.runtime.last_outcome.retry_source = "global"
                 task.runtime.last_outcome.recorded_at = now
                 if state.active_task_id == task.id:
                     state.active_task_id = None
@@ -728,16 +716,6 @@ def update_task(
                 raise ValueError(f"Unsupported priority '{priority}'")
             task.priority = priority
 
-        if pm_complexity is not ...:
-            if pm_complexity is not None and pm_complexity not in VALID_PM_COMPLEXITIES:
-                raise ValueError(f"Unsupported PM complexity '{pm_complexity}'")
-            task.pm_complexity = pm_complexity  # type: ignore[assignment]
-
-        if planned_effort is not ...:
-            if planned_effort is not None and planned_effort not in VALID_PLANNED_EFFORTS:
-                raise ValueError(f"Unsupported planned effort '{planned_effort}'")
-            task.planned_effort = planned_effort  # type: ignore[assignment]
-
         if goal is not ...:
             task.goal = goal
 
@@ -750,18 +728,9 @@ def update_task(
         if plan is not ...:
             task.plan = normalize_task_text_list(list(plan))
 
-        if human_checkpoints is not ...:
-            task.human_checkpoints = normalize_human_checkpoints(list(human_checkpoints))
-
-        if mode is not ...:
-            if mode not in {"tasks", "implementation"}:
-                raise ValueError(f"Unsupported mode '{mode}'")
-            task.mode = mode  # type: ignore[assignment]
-
         if auto_commit is not ...:
             task.git.auto_commit = auto_commit
 
-        apply_task_template_defaults(task)
         task.pipeline_status = reroute_stage_for_acceptance_criteria(task)
 
         if journal_message is None:

@@ -25,7 +25,7 @@ from litehive.tasks.reports import append_thread_comment
 
 
 VERDICT_ALLOWLIST: dict[str, set[str]] = {
-    "planner": {"pass", "blocked"},  # planners shape tasks via TASK_UPDATE, not reject
+    "planner": {"pass", "blocked"},  # planners shape tasks via CLI, not reject
     "swe": {"pass", "blocked"},
     "qa": {"pass", "reject", "blocked"},
     "reviewer": {"pass", "reject", "blocked"},
@@ -133,8 +133,6 @@ def agent_update_command(
     acceptance_criteria: Annotated[list[str] | None, typer.Option("--acceptance-criteria")] = None,
     plan: Annotated[list[str] | None, typer.Option("--plan-step")] = None,
     constraints: Annotated[list[str] | None, typer.Option("--constraint")] = None,
-    pm_complexity: Annotated[str | None, typer.Option("--pm-complexity")] = None,
-    planned_effort: Annotated[str | None, typer.Option("--planned-effort")] = None,
     priority: Annotated[str | None, typer.Option("--priority")] = None,
 ) -> None:
     _require_role({"planner", "reviewer"})
@@ -157,8 +155,6 @@ def agent_update_command(
         acceptance_criteria=acceptance_criteria if acceptance_criteria is not None else sentinel,
         plan=plan if plan is not None else sentinel,
         constraints=constraints if constraints is not None else sentinel,
-        pm_complexity=pm_complexity if pm_complexity is not None else sentinel,
-        planned_effort=planned_effort if planned_effort is not None else sentinel,
         priority=priority if priority is not None else sentinel,
     )
     print(f"task: {tid}")

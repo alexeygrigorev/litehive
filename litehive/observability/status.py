@@ -67,37 +67,11 @@ def render_task_summary(task: TaskRecord, *, active: bool, root: Path | None = N
     marker = "*" if active else " "
     retry_policy = task.retry_policy.max_retries
     retry_label = "default" if retry_policy is None else str(retry_policy)
-    lines = [f"{marker} {task.id} [{task.status}/{task.pipeline_status}] {task.mode} retry_limit={retry_label} {task.title}"]
+    lines = [f"{marker} {task.id} [{task.status}/{task.pipeline_status}] retry_limit={retry_label} {task.title}"]
     if task.depends_on:
         lines.append(f"  depends_on={', '.join(task.depends_on)}")
-    if task.human_checkpoints:
-        lines.append(f"  human_checkpoints={', '.join(task.human_checkpoints)}")
     if task.model:
         lines.append(f"  engine=workspace-default model={task.model or 'default'}")
-    if task.pm_complexity or task.planned_effort:
-        lines.append(
-            f"  pm_complexity={task.pm_complexity or '-'} planned_effort={task.planned_effort or '-'}"
-        )
-    if task.upstream_origin is not None:
-        upstream = task.upstream_origin
-        lines.append(
-            "  "
-            + (
-                f"upstream_from={upstream.source_project} "
-                f"kind={upstream.contribution_kind} "
-                f"source_task={upstream.source_task_id or '-'} "
-                f"source_stage={upstream.source_stage or '-'}"
-            )
-        )
-        if upstream.patch is not None and upstream.patch.branch:
-            lines.append(
-                "  "
-                + (
-                    f"upstream_patch_branch={upstream.patch.branch} "
-                    f"base={upstream.patch.base_ref or '-'} "
-                    f"prepared={upstream.patch.prepared}"
-                )
-            )
     _wt_path = task.runtime.git.worktree_path or task.git.worktree_path
     if task.status == "merge_failed" and _wt_path:
         lines.append(f"  unmerged_worktree={_wt_path}")
@@ -108,7 +82,7 @@ def render_task_summary(task: TaskRecord, *, active: bool, root: Path | None = N
     runtime = task.runtime
     configured_limit = retry_policy if retry_policy is not None else "default"
     lines.append(
-        f"  retry_policy=configured:{configured_limit} effective:{runtime.retry_limit} source={runtime.retry_source}"
+        f"  retry_policy=configured:{configured_limit} effective:{runtime.retry_limit}"
     )
     if (
         runtime.execution_status != "idle"
@@ -118,7 +92,6 @@ def render_task_summary(task: TaskRecord, *, active: bool, root: Path | None = N
     ):
         parts = [f"run={runtime.execution_status}"]
         parts.append(f"retries={runtime.retry_count}/{runtime.retry_limit}")
-        parts.append(f"retry_source={runtime.retry_source}")
         if runtime.run_started_at:
             parts.append(f"started={runtime.run_started_at}")
         if runtime.current_stage.status != "idle":
@@ -243,7 +216,7 @@ def render_task_summary(task: TaskRecord, *, active: bool, root: Path | None = N
                 f"reason_code={reason_code} recorded_at={recorded_at} "
                 f"follow_up_task={follow_up_task_id} "
                 f"retry_state={runtime.last_outcome.retry_count}/{runtime.last_outcome.retry_limit} "
-                f"retry_source={runtime.last_outcome.retry_source} reason={reason}"
+                f"reason={reason}"
             )
         )
         if runtime.last_outcome.failure_classification is not None:

@@ -105,13 +105,11 @@ def set_task_retry_state(
     *,
     retry_count: int,
     retry_limit: int,
-    retry_source: str,
 ) -> None:
     _apply_task_retry_state(
         task,
         retry_count=retry_count,
         retry_limit=retry_limit,
-        retry_source=retry_source,
     )
     save_task_runtime(root, task)
 
@@ -142,12 +140,10 @@ def _apply_task_retry_state(
     *,
     retry_count: int,
     retry_limit: int,
-    retry_source: str,
 ) -> None:
     task.runtime.updated_at = utcnow()
     task.runtime.retry_count = retry_count
     task.runtime.retry_limit = retry_limit
-    task.runtime.retry_source = retry_source
 
 
 def _clear_task_outcome(task: TaskRecord) -> None:
@@ -165,7 +161,6 @@ def mark_task_outcome(
     reason: str,
     retry_count: int,
     retry_limit: int,
-    retry_source: str,
     failure_classification: str | None = None,
     failure_diagnostics: dict[str, str | int | bool | None | list[str]] | None = None,
 ) -> None:
@@ -177,7 +172,6 @@ def mark_task_outcome(
         reason=reason,
         retry_count=retry_count,
         retry_limit=retry_limit,
-        retry_source=retry_source,
         failure_classification=failure_classification,
         failure_diagnostics=failure_diagnostics,
     )
@@ -193,7 +187,6 @@ def apply_task_outcome(
     reason: str,
     retry_count: int,
     retry_limit: int,
-    retry_source: str,
     failure_classification: str | None = None,
     failure_diagnostics: dict[str, str | int | bool | None | list[str]] | None = None,
 ) -> None:
@@ -208,7 +201,6 @@ def apply_task_outcome(
         failure_diagnostics=dict(failure_diagnostics or {}),
         retry_count=retry_count,
         retry_limit=retry_limit,
-        retry_source=retry_source,
         recorded_at=now,
     )
 

@@ -5,14 +5,9 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from .common import (
-    HumanCheckpoint,
     PipelineMode,
     PipelineStatus,
-    PlannedEffort,
-    TaskComplexity,
-    TaskMode,
     TaskStatus,
-    UpstreamContributionKind,
     utcnow,
 )
 from .runtime_models import SubagentRef, TaskRuntime
@@ -28,34 +23,6 @@ class TaskCreationSource(BaseModel):
     stage: Literal["grooming", "accepting"]
     rationale: str
     blocking: bool = False
-
-
-class UpstreamPatchProposal(BaseModel):
-    branch: str | None = None
-    base_ref: str | None = None
-    prepared: bool = False
-    repo_path: str | None = None
-
-
-class UpstreamContributionOrigin(BaseModel):
-    source_project: str
-    source_workspace: str
-    source_task_id: str | None = None
-    source_task_title: str | None = None
-    source_stage: str | None = None
-    source_role: str | None = None
-    contribution_kind: UpstreamContributionKind
-    summary: str = ""
-    details: str = ""
-    litehive_source_path: str
-    patch: UpstreamPatchProposal | None = None
-
-
-class GitHubOrigin(BaseModel):
-    repo: str
-    issue_number: int
-    issue_url: str
-    imported_at: str = Field(default_factory=utcnow)
 
 
 class GitSettings(BaseModel):
@@ -89,21 +56,15 @@ class TaskIntentRecord(BaseModel):
     title: str
     created_at: str = Field(default_factory=utcnow)
     task_type: str | None = None
-    mode: TaskMode = "implementation"
     pipeline_mode: PipelineMode = "full"
     priority: str = "medium"
-    pm_complexity: TaskComplexity | None = None
-    planned_effort: PlannedEffort | None = None
     depends_on: list[str] = Field(default_factory=list)
     goal: str = ""
     acceptance_criteria: list[str] = Field(default_factory=list)
     constraints: list[str] = Field(default_factory=list)
     plan: list[str] = Field(default_factory=list)
-    human_checkpoints: list[HumanCheckpoint] = Field(default_factory=list)
     git: TaskIntentGitSettings = Field(default_factory=TaskIntentGitSettings)
     created_from: TaskCreationSource | None = None
-    upstream_origin: UpstreamContributionOrigin | None = None
-    github_origin: GitHubOrigin | None = None
 
 
 class TaskStateRecord(BaseModel):
@@ -126,28 +87,22 @@ class TaskRecord(BaseModel):
     depends_on: list[str] = Field(default_factory=list)
     task_type: str | None = None
     model: str | None = None
-    mode: TaskMode = "implementation"
     pipeline_mode: PipelineMode = "full"
     status: TaskStatus = "queued"
     flag_reason: str | None = None
     flag_count: int = 0
     pipeline_status: PipelineStatus = "backlog"
     priority: str = "medium"
-    pm_complexity: TaskComplexity | None = None
-    planned_effort: PlannedEffort | None = None
     created_at: str = Field(default_factory=utcnow)
     updated_at: str = Field(default_factory=utcnow)
     goal: str = ""
     acceptance_criteria: list[str] = Field(default_factory=list)
     constraints: list[str] = Field(default_factory=list)
     plan: list[str] = Field(default_factory=list)
-    human_checkpoints: list[HumanCheckpoint] = Field(default_factory=list)
     subagents: list[SubagentRef] = Field(default_factory=list)
     git: GitSettings = Field(default_factory=GitSettings)
     retry_policy: TaskRetryPolicy = Field(default_factory=TaskRetryPolicy)
     created_from: TaskCreationSource | None = None
-    upstream_origin: UpstreamContributionOrigin | None = None
-    github_origin: GitHubOrigin | None = None
     runtime: TaskRuntime = Field(default_factory=TaskRuntime, exclude=True)
 
     def to_intent_record(self) -> TaskIntentRecord:
@@ -157,24 +112,18 @@ class TaskRecord(BaseModel):
             title=self.title,
             created_at=self.created_at,
             task_type=self.task_type,
-            mode=self.mode,
             pipeline_mode=self.pipeline_mode,
             priority=self.priority,
-            pm_complexity=self.pm_complexity,
-            planned_effort=self.planned_effort,
             depends_on=list(self.depends_on),
             goal=self.goal,
             acceptance_criteria=list(self.acceptance_criteria),
             constraints=list(self.constraints),
             plan=list(self.plan),
-            human_checkpoints=list(self.human_checkpoints),
             git=TaskIntentGitSettings(
                 auto_commit=self.git.auto_commit,
                 commit_message=self.git.commit_message,
             ),
             created_from=self.created_from,
-            upstream_origin=self.upstream_origin,
-            github_origin=self.github_origin,
         )
 
     def to_state_record(self) -> TaskStateRecord:
@@ -232,7 +181,6 @@ class UnmergedWorktree(BaseModel):
 
 class WorkspaceState(BaseModel):
     active_task_id: str | None = None
-    mode: TaskMode = "implementation"
     queue: list[str] = Field(default_factory=list)
     pool_stop_reason: str | None = None
     next_task_number: int = 0

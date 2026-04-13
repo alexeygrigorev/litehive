@@ -121,13 +121,12 @@ def print_pool_dry_run_plan(
     for index, (task, selected_engine, engine_attempts, selected_model) in enumerate(
         planned_tasks, start=1
     ):
-        checkpoints = ", ".join(task.human_checkpoints) if task.human_checkpoints else "-"
         model_label = selected_model or "-"
         print(
             f"would_run: {index}. {task.id} {task.title} "
             f"status={task.status} pipeline_status={task.pipeline_status} "
             f"engine={selected_engine} engine_attempts={', '.join(engine_attempts)} "
-            f"model={model_label} human_checkpoints={checkpoints}"
+            f"model={model_label}"
         )
     print(f"blocked_tasks: {len(blocked)}")
     for blocked_task in blocked:

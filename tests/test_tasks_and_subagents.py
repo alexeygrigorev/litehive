@@ -4,7 +4,6 @@ from contextlib import contextmanager
 
 import litehive.tasks.crud as tasks_crud
 import litehive.tasks.persistence as tasks_persistence
-import litehive.tasks.templates as tasks_templates
 import litehive.workspace.task_status as task_status_module
 import litehive.workspace.workflow as workflow_module
 from litehive.pipeline.heru_factory import HeruEngineAdapter
@@ -20,13 +19,11 @@ from tests.workspace_helpers import (
     SubagentManager,
     SubagentRef,
     SubagentResult,
-    _cmd_intake,
     argparse,
     create_task,
     ensure_workspace,
     get_engine,
     get_task,
-    intake_prompt,
     list_tasks,
     load_engine_monitoring,
     load_state,
@@ -49,7 +46,6 @@ from litehive.agents.engine_detection import (
 )
 
 tasks_module = types.SimpleNamespace(
-    TASK_TEMPLATES=tasks_templates.TASK_TEMPLATES,
     merged_state_for_runner_owned_write=workflow_module.merged_state_for_runner_owned_write,
     save_state_without_runner_guard=tasks_persistence.save_state_without_runner_guard,
     workspace_transition_writes=workflow_module.workspace_transition_writes,
@@ -279,283 +275,8 @@ def test_create_task_uses_persisted_next_task_number_without_rescanning(
     assert load_state(tmp_path).next_task_number == 2
 
 
-def test_create_task_seeds_tasks_mode_template_defaults(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
-
-    task = create_task(
-        tmp_path, title="Investigate queue stalls", task_type="research", mode="tasks"
-    )
-    brief = (task_dir(tmp_path, task) / "brief.md").read_text(encoding="utf-8")
-
-    assert (
-        task.goal
-        == "Answer the open question with concrete evidence and a recommendation for next action."
-    )
-    assert task.acceptance_criteria == [
-        "The research question, scope, and decision to inform are stated clearly.",
-        "Findings are grounded in repository evidence, experiments, or direct inspection.",
-        "The output includes a recommendation, tradeoffs, and any follow-up tasks.",
-    ]
-    assert task.constraints == [
-        "Prefer evidence from the repository and local experiments over speculation.",
-        "Keep conclusions explicit about confidence and remaining unknowns.",
-    ]
-    assert task.plan == [
-        "Define the exact question and scope of the investigation.",
-        "Gather evidence from code, configs, tests, or focused experiments.",
-        "Summarize findings, recommendation, and concrete follow-up actions.",
-    ]
-    assert "## Template Guidance" in brief
-    assert "Frame the question, scope, and decision this research should inform." in brief
-    assert "## Intake Notes" in brief
-    assert "### Question and Scope" in brief
-    assert "Define what is being investigated and what is out of scope." in brief
-    assert "_TBD_" in brief
 
 
-@pytest.mark.parametrize(
-    ("task_type", "title"),
-    [
-        ("adapter", "Add Gemini adapter"),
-        ("bugfix", "Fix queue retry regression"),
-        ("research", "Investigate queue stalls"),
-        ("review", "Review adapter update"),
-        ("refactor", "Refactor queue routing"),
-    ],
-)
-def test_create_task_seeds_requested_task_type_templates(
-    tmp_path: Path, task_type: str, title: str
-) -> None:
-    ensure_workspace(tmp_path)
-
-    task = create_task(tmp_path, title=title, task_type=task_type, mode="tasks")
-    template = tasks_module.TASK_TEMPLATES[task_type]
-    brief = (task_dir(tmp_path, task) / "brief.md").read_text(encoding="utf-8")
-    prompt = stage_prompt(task, "grooming", workspace_context="")
-
-    assert task.goal == template["goal"]
-    assert task.acceptance_criteria == template["acceptance_criteria"]
-    assert task.constraints == template["constraints"]
-    assert task.plan == template["plan"]
-    assert f"- Task type: {task_type}" in brief
-    assert "## Template Guidance" in brief
-    assert "## Intake Notes" in brief
-    assert f"Task type: {task_type}" in prompt
-    assert "Task template:" in prompt
-    assert "Template sections to fill or verify:" in prompt
-
-    for item in template["prompt_guidance"]:
-        assert item in brief
-        assert item in prompt
-    for item in template["brief_sections"]:
-        assert item in prompt
-    for stub in template["brief_section_stubs"]:
-        assert f"### {stub['title']}" in brief
-        assert stub["prompt"] in brief
-
-
-def test_intake_prompt_uses_codehive_style_guidance() -> None:
-    prompt = intake_prompt("Need a rough task from this brain dump.")
-
-    assert "You are the planner for a local multi-agent coding workspace." in prompt
-    assert "You are handling freeform task intake for a Codehive-style workflow." in prompt
-    assert (
-        "Preserve execution visibility through task reports, subagent transcripts, and recent progress."
-        in prompt
-    )
-    assert (
-        "Do not add acceptance criteria, implementation plans, decomposition, or detailed structure."
-        in prompt
-    )
-    assert "Treat the original dump as the authoritative source of detail." in prompt
-    assert "TITLE: <concise rough task title>" in prompt
-    assert "GOAL: <1-3 sentence high-level goal statement>" in prompt
-
-
-def _intake_command_creates_linked_task_from_freeform_dump(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    ensure_workspace(tmp_path)
-
-    captured: dict[str, object] = {}
-
-    class FakeEngine:
-        def run(
-            self,
-            prompt: str,
-            cwd: Path,
-            model: str | None = None,
-            *,
-            max_turns: int | None = None,
-            on_started=None,
-        ) -> CLIExecutionResult:
-            captured["prompt"] = prompt
-            captured["cwd"] = cwd
-            captured["model"] = model
-            captured["max_turns"] = max_turns
-            return CLIExecutionResult(
-                adapter="opencode",
-                argv=("opencode", "run"),
-                cwd=cwd,
-                exit_code=0,
-                stdout="TITLE: Capture queue visibility gaps\nGOAL: Turn the raw notes into a queued task planner can groom later.\n",
-                stderr="",
-            )
-
-        def render_transcript(self, execution: CLIExecutionResult) -> str:
-            return execution.transcript
-
-    monkeypatch.setattr("litehive.cli.import_cli.get_engine", lambda _: FakeEngine())
-
-    dump = "We need better queue visibility.\nShow stage, transcript, and last progress in the task view.\n"
-    intake_file = tmp_path / "brain-dump.md"
-    intake_file.write_text(dump, encoding="utf-8")
-
-    exit_code = _cmd_intake(
-        argparse.Namespace(
-            file=intake_file,
-            engine="opencode",
-            model=None,
-            workspace=tmp_path,
-        )
-    )
-    output = capsys.readouterr().out
-
-    assert exit_code == 0
-    task = get_task(tmp_path, "T-0001")
-    assert task is not None
-    assert task.title == "Capture queue visibility gaps"
-    assert task.goal == (
-        "Turn the raw notes into a queued task planner can groom later.\n\n"
-        "(See intake.md for the original brain dump)"
-    )
-    assert task.mode == "tasks"
-    assert task.task_type == "intake"
-    assert task.status == "queued"
-    assert task.pipeline_status == "backlog"
-    assert captured["cwd"] == tmp_path
-    assert captured["model"] == "zai-coding-plan/glm-5.1"
-    assert captured["max_turns"] is None
-    assert "Codehive-style specifics:" in str(captured["prompt"])
-
-    base = task_dir(tmp_path, task)
-    assert (base / "intake.md").read_text(encoding="utf-8") == dump
-    brief = (base / "brief.md").read_text(encoding="utf-8")
-    assert "- Original dump: [intake.md](intake.md)" in brief
-    assert "Treat `intake.md` as the authoritative source for the raw specification." in brief
-    assert dump.strip() not in brief
-    assert "Created task T-0001: Capture queue visibility gaps" in output
-    assert "Original dump preserved at:" in output
-
-def _intake_command_creates_linked_task_from_freeform_dump(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    _intake_command_creates_linked_task_from_freeform_dump(tmp_path, monkeypatch, capsys)
-
-
-def _intake_command_rolls_back_created_task_when_post_create_write_fails(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    ensure_workspace(tmp_path)
-
-    class FakeEngine:
-        def run(
-            self,
-            prompt: str,
-            cwd: Path,
-            model: str | None = None,
-            *,
-            max_turns: int | None = None,
-            on_started=None,
-        ) -> CLIExecutionResult:
-            return CLIExecutionResult(
-                adapter="opencode",
-                argv=("opencode", "run"),
-                cwd=cwd,
-                exit_code=0,
-                stdout="TITLE: Capture queue visibility gaps\nGOAL: Turn the raw notes into a queued task PM can groom later.\n",
-                stderr="",
-            )
-
-        def render_transcript(self, execution: CLIExecutionResult) -> str:
-            return execution.transcript
-
-    monkeypatch.setattr("litehive.cli.import_cli.get_engine", lambda _: FakeEngine())
-    monkeypatch.setattr(
-        "litehive.cli.import_cli.link_intake_brief_to_source",
-        lambda _: (_ for _ in ()).throw(OSError("disk full")),
-    )
-
-    intake_file = tmp_path / "brain-dump.md"
-    intake_file.write_text("We need better queue visibility.\n", encoding="utf-8")
-
-    exit_code = _cmd_intake(
-        argparse.Namespace(
-            file=intake_file,
-            engine="opencode",
-            model=None,
-            workspace=tmp_path,
-        )
-    )
-    output = capsys.readouterr().out
-
-    assert exit_code == 1
-    assert "Task creation failed: disk full" in output
-    assert get_task(tmp_path, "T-0001") is None
-    assert load_state(tmp_path).queue == []
-    assert list((tmp_path / ".litehive" / "tasks").iterdir()) == []
-
-def _intake_command_rolls_back_created_task_when_post_create_write_fails(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    _intake_command_rolls_back_created_task_when_post_create_write_fails(tmp_path, monkeypatch, capsys)
-
-
-def test_update_task_fills_only_unset_template_fields_for_typed_tasks(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
-    task = create_task(
-        tmp_path,
-        title="Review queue behavior",
-        task_type="review",
-        mode="tasks",
-        goal="Use explicit review framing",
-        acceptance_criteria=["Call out the highest-risk regression first."],
-    )
-
-    updated = tasks_module.update_task(tmp_path, task.id, mode="tasks", task_type="review")
-
-    assert updated.goal == "Use explicit review framing"
-    assert updated.acceptance_criteria == ["Call out the highest-risk regression first."]
-    assert updated.constraints == tasks_module.TASK_TEMPLATES["review"]["constraints"]
-    assert updated.plan == tasks_module.TASK_TEMPLATES["review"]["plan"]
-
-
-def test_create_task_preserves_explicit_fields_when_seeding_template_defaults(
-    tmp_path: Path,
-) -> None:
-    ensure_workspace(tmp_path)
-
-    task = create_task(
-        tmp_path,
-        title="Stabilize flaky queue retry",
-        task_type="bugfix",
-        mode="tasks",
-        goal="Eliminate the duplicate retry path",
-        acceptance_criteria=["Queue retries once for a limit error"],
-    )
-
-    assert task.goal == "Eliminate the duplicate retry path"
-    assert task.acceptance_criteria == ["Queue retries once for a limit error"]
-    assert task.constraints
-    assert task.plan
 
 
 def test_create_task_persists_dependencies(tmp_path: Path) -> None:
@@ -873,7 +594,8 @@ def test_subagent_manager_consumes_unified_stdout_for_reports_and_continuation(
     session = yaml.safe_load((base / "session.yaml").read_text(encoding="utf-8"))
     timeline = yaml.safe_load((base / "timeline.yaml").read_text(encoding="utf-8"))
 
-    assert report["summary"] == "implemented via unified events"
+    # Summary is now the reject reason (no CLI verdict submitted) — STAGE_RESULT parsing is gone.
+    assert "did not submit verdict" in report["summary"]
     assert session["continuation"]["session_id"] == "session-42"
     assert timeline["event_counts"] == {"message": 1, "continuation": 1}
 

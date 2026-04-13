@@ -16,32 +16,27 @@ from litehive.config import (
 from litehive.git_ops import default_commit_message
 from litehive.models import (
     FollowUpTaskSpec,
-    GitHubOrigin,
     TaskCreationSource,
     TaskRecord,
     TaskRuntime,
     TaskStateRecord,
-    UpstreamContributionOrigin,
     WorkspaceState,
     utcnow,
 )
 from litehive.storage import runtime_store
 
 from .constants import (
-    VALID_PLANNED_EFFORTS,
-    VALID_PM_COMPLEXITIES,
     VALID_TASK_PRIORITIES,
     VALID_TASK_TYPES,
 )
 from litehive.workspace.locking import workspace_lock, workspace_mutation_guard
-from .normalization import normalize_acceptance_criteria, normalize_human_checkpoints
+from .normalization import normalize_acceptance_criteria
 from .paths import slugify, task_dir, task_file, task_runtime_file, tasks_root
 from .persistence import (
     load_state,
     serialize_state,
     write_atomic_files_and_then,
 )
-from .templates import apply_task_template_defaults, render_task_brief, task_brief_file
 
 logger = logging.getLogger(__name__)
 
@@ -247,19 +242,13 @@ def create_task(
     *,
     title: str,
     depends_on: list[str] | None = None,
-    mode: str = "implementation",
     pipeline_mode: str = "full",
     task_type: str | None = None,
     model: str | None = None,
     retry_limit: int | None = None,
     goal: str = "",
     acceptance_criteria: list[str] | None = None,
-    pm_complexity: str | None = None,
-    planned_effort: str | None = None,
-    human_checkpoints: list[str] | None = None,
     auto_commit: bool = True,
-    upstream_origin: UpstreamContributionOrigin | None = None,
-    github_origin: GitHubOrigin | None = None,
     priority: str | None = None,
 ) -> TaskRecord:
     ensure_workspace(root)
@@ -271,12 +260,6 @@ def create_task(
         raise ValueError(f"Unsupported priority '{priority}'; choose from {sorted(VALID_TASK_PRIORITIES)}")
     if task_type is not None and task_type not in VALID_TASK_TYPES:
         raise ValueError(f"Unsupported task type '{task_type}'")
-    if pm_complexity is not None and pm_complexity not in VALID_PM_COMPLEXITIES:
-        raise ValueError(f"Unsupported PM complexity '{pm_complexity}'")
-    if planned_effort is not None and planned_effort not in VALID_PLANNED_EFFORTS:
-        raise ValueError(f"Unsupported planned effort '{planned_effort}'")
-    if priority is not None and priority not in VALID_TASK_PRIORITIES:
-        raise ValueError(f"Unsupported priority '{priority}'")
     from .queue_ops import validate_task_dependencies
 
     with workspace_lock(root):
@@ -291,23 +274,16 @@ def create_task(
             depends_on=list(depends_on or []),
             task_type=task_type,
             model=model,
-            mode=mode,  # type: ignore[arg-type]
             pipeline_mode=pipeline_mode,  # type: ignore[arg-type]
             priority=priority or "medium",
             goal=goal,
             acceptance_criteria=normalize_acceptance_criteria(acceptance_criteria),
-            pm_complexity=pm_complexity,  # type: ignore[arg-type]
-            planned_effort=planned_effort,  # type: ignore[arg-type]
-            human_checkpoints=normalize_human_checkpoints(human_checkpoints),
             retry_policy={"max_retries": retry_limit},
             git={
                 "auto_commit": auto_commit,
                 "commit_message": default_commit_message(task_id, slug),
             },
-            upstream_origin=upstream_origin,
-            github_origin=github_origin,
         )
-        task = apply_task_template_defaults(task)
 
         base = task_dir(root, task)
         (base / "reports").mkdir(parents=True, exist_ok=False)
@@ -327,8 +303,6 @@ def create_task(
                 base / "journal.md": f"# {task.id} {task.title}\n\n## {utcnow()}\nTask created.\n",
                 state_path(root): serialize_state(state),
             }
-            if task.mode == "tasks":
-                writes[task_brief_file(root, task)] = render_task_brief(task)
 
             def callback() -> None:
                 runtime_store(root).save_runtime_transaction(
@@ -370,12 +344,10 @@ def create_follow_up_tasks(
         for next_number, follow_up in zip(reserved_numbers, follow_ups):
             task_id = f"T-{next_number:04d}"
             slug = slugify(follow_up.title)
-            mode = "tasks" if follow_up.task_type else "implementation"
             task = TaskRecord(
                 id=task_id,
                 slug=slug,
                 title=follow_up.title,
-                mode=mode,  # type: ignore[arg-type]
                 task_type=follow_up.task_type,
                 goal=follow_up.goal,
                 acceptance_criteria=normalize_acceptance_criteria(follow_up.acceptance_criteria),
@@ -390,7 +362,6 @@ def create_follow_up_tasks(
                     "commit_message": default_commit_message(task_id, slug),
                 },
             )
-            task = apply_task_template_defaults(task)
 
             base = task_dir(root, task)
             (base / "reports").mkdir(parents=True, exist_ok=False)
@@ -406,8 +377,6 @@ def create_follow_up_tasks(
                 f"Created as a follow-up from `{parent_task.id}` during `{stage}`.\n"
                 f"Rationale: {follow_up.rationale}\n"
             )
-            if task.mode == "tasks":
-                writes[task_brief_file(root, task)] = render_task_brief(task)
             created_tasks.append(task)
 
         from litehive.workspace.workflow import merged_state_for_runner_owned_write

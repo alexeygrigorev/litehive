@@ -8,7 +8,6 @@ from litehive.tasks.normalization import (
     infer_acceptance_criteria,
     missing_acceptance_criteria_reason,
 )
-from litehive.tasks.templates import task_template
 
 
 _REJECTING_HOOK_POINTS: dict[str, str] = {
@@ -174,23 +173,6 @@ def stage_prompt(
             ]
         )
 
-    template = task_template(task)
-    if template is not None:
-        lines.extend(
-            [
-                "",
-                "Task template:",
-                f"- Use the `{task.task_type}` template to keep the task structured.",
-            ]
-        )
-        prompt_guidance = template.get("prompt_guidance", [])
-        if isinstance(prompt_guidance, list):
-            lines.extend(f"- {item}" for item in prompt_guidance)
-        brief_sections = template.get("brief_sections", [])
-        if isinstance(brief_sections, list):
-            lines.extend(["", "Template sections to fill or verify:"])
-            lines.extend(f"- {item}" for item in brief_sections)
-
     handoff = task.runtime.continuation_handoff
     if handoff is not None and handoff.step == step:
         lines.extend(["", "Continuation handoff:"])
@@ -243,18 +225,6 @@ def stage_prompt(
         lines.extend(f"- {item}" for item in task.plan)
     else:
         lines.append("- No plan defined.")
-
-    lines.extend(["", "PM sizing:"])
-    lines.append(f"- Current PM complexity: {task.pm_complexity or '-'}")
-    lines.append(f"- Current planned effort: {task.planned_effort or '-'}")
-    if step == "grooming":
-        lines.extend(
-            [
-                "- During grooming, set PM sizing when you have enough context.",
-                "- Use `PM_COMPLEXITY: simple|moderate|complex`.",
-                "- Use `PLANNED_EFFORT: xs|s|m|l|xl`.",
-            ]
-        )
 
     lines.extend(["", "Constraints:"])
     if task.constraints:
@@ -360,15 +330,13 @@ def _stage_role_prompt(step: str, owner: str | None = None) -> list[str]:
     if step == "grooming":
         return [
             "- You are the planner, a PM-style role representing the user's and product's point of view.",
-            "- Frame the real user problem, clarify scope, sharpen acceptance criteria, decompose the work, identify follow-up tasks, and estimate PM sizing.",
-            "- Treat the Litehive CLI as the source of truth for task shaping: use the task record fields directly, and when documenting operator guidance prefer concrete `litehive task add`, `litehive task update`, and `litehive task close` flows over vague prose.",
+            "- Frame the real user problem, clarify scope, sharpen acceptance criteria, decompose the work, identify follow-up tasks.",
+            "- Treat the Litehive CLI as the source of truth for task shaping. Use explicit CLI commands to mutate task state:",
+            "  - `litehive agent update --goal ... --acceptance-criteria ... --plan-step ...` to rewrite task fields.",
+            "  - `litehive task add ...` to create follow-up tasks when the current task mixes concerns.",
+            "  - `litehive task close <task-id> --outcome duplicate|wont_do|deferred --reason ...` to close.",
             "- Do not pass grooming with a blank task record; make sure the task has a clear goal and explicit acceptance criteria, or reject it with a clear explanation of what is missing.",
-            "- During grooming, you can emit a structured `TASK_UPDATE:` YAML block to update any task field (goal, acceptance_criteria, constraints, plan, pm_complexity, planned_effort, priority, auto_commit, etc.).",
-            "- To close a task as duplicate, wont_do, or deferred, include `outcome: <status>` and optional `outcome_reason: <text>` in the TASK_UPDATE block.",
-            "- To park a task (pause without closing), include `action: park` in the TASK_UPDATE block.",
-            "- To requeue a previously parked or closed task for another pass, include `action: requeue`. To abandon it entirely, include `action: abandon`.",
             "- Do not implement code in this stage.",
-            "- Scope contamination: if the task mixes in work that belongs to a separate concern, use `litehive task add` to create follow-up tasks and narrow the current task via TASK_UPDATE.",
         ]
     if step == "accepting":
         return [
@@ -377,7 +345,7 @@ def _stage_role_prompt(step: str, owner: str | None = None) -> list[str]:
             "- Reject work that is incomplete, weakly verified, or misaligned with the promised outcome.",
             "- If SWE shows the requested work was already implemented before this run and provides concrete verification evidence, accept the task to normal `done` rather than inventing a special closed status.",
             "- Use `wont_do`, `duplicate`, or `deferred` only when the task is genuinely obsolete, superseded, or duplicated.",
-            "- You may close a task as duplicate, wont_do, or deferred by including `outcome: <status>` with optional `outcome_reason` in a TASK_UPDATE block. You may park a task with `action: park`.",
+            "- You may close a task as duplicate, wont_do, or deferred via `litehive task close <task-id> --outcome <status> --reason <text>`.",
         ]
     if step == "implementing":
         return [
@@ -430,27 +398,3 @@ def _agent_startup_guidance(
     return lines
 
 
-def intake_prompt(brain_dump: str) -> str:
-    """Build a prompt to analyze a freeform brain dump and suggest a task title and goal."""
-    profile = resolve_process_profile("codehive")
-    specifics = "\n".join(str(item) for item in profile.get("specifics", []))
-    return f"""You are the planner for a local multi-agent coding workspace.
-You are handling freeform task intake for a Codehive-style workflow.
-
-Codehive-style specifics:
-{specifics}
-
-Analyze the following freeform specification or brain dump and turn it into a rough queued task description.
-Produce only a concise title and a short goal statement that preserve the user's intent.
-Do not add acceptance criteria, implementation plans, decomposition, or detailed structure.
-Keep the scope high-level and reviewable so planner grooming can refine it later.
-Treat the original dump as the authoritative source of detail.
-
-Return your suggestion in exactly this format:
-
-TITLE: <concise rough task title>
-GOAL: <1-3 sentence high-level goal statement>
-
---- BRAIN DUMP ---
-{brain_dump.strip()}
-"""

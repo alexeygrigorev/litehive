@@ -8,9 +8,6 @@ from litehive.cli.common import WorkspaceOption, choice, make_typer
 from litehive.cli.display import task_dependencies_label, task_model_label
 from litehive.cli.parse import (
     TASK_TYPE_CHOICES,
-    collect_editor_task_updates,
-    load_rich_task_update_file,
-    merge_task_updates,
     parse_acceptance_criteria,
     parse_dependency_ids,
     parse_text_list_option,
@@ -77,7 +74,9 @@ def add(
     task_type: Annotated[
         str | None, typer.Option(click_type=choice(TASK_TYPE_CHOICES), help="Explicit routing class for this task")
     ] = None,
-    mode: Annotated[str | None, typer.Option(click_type=choice(["full", "single"]), help="Task pipeline mode")] = None,
+    pipeline_mode: Annotated[
+        str, typer.Option(click_type=choice(["full", "single"]), help="Task pipeline mode")
+    ] = "full",
     priority: Annotated[
         str | None, typer.Option(click_type=choice(VALID_TASK_PRIORITIES), help="Task priority")
     ] = None,
@@ -86,18 +85,14 @@ def add(
     try:
         depends_on = parse_dependency_ids(depends_on)
         acceptance_criteria = parse_acceptance_criteria(acceptance_criteria)
-        requested_task_type = task_type
-        task_mode = "tasks" if requested_task_type is not None else "implementation"
-        pipeline_mode = mode or "full"
         task = create_task(
             workspace,
             title=title,
             depends_on=None if depends_on is ... else depends_on,
-            mode=task_mode,
             pipeline_mode=pipeline_mode,
             goal=goal,
             acceptance_criteria=None if acceptance_criteria is ... else acceptance_criteria,
-            task_type=requested_task_type,
+            task_type=task_type,
             priority=priority,
         )
     except (ValueError, WorkspaceConflictError) as exc:
@@ -106,15 +101,10 @@ def add(
     print(f"Created task {task.id} in {workspace / '.litehive' / 'tasks' / (task.id + '-' + task.slug)}")
     print(f"priority: {task.priority}")
     print(f"retry_limit: {task.retry_policy.max_retries if task.retry_policy.max_retries is not None else 'default'}")
-    print(f"priority: {task.priority}")
-    print(f"mode: {task.mode}")
     print(f"pipeline_mode: {task.pipeline_mode}")
     print(f"model: {task_model_label(task.model)}")
-    print("human_checkpoints: " + (", ".join(task.human_checkpoints) if task.human_checkpoints else "-"))
     print(f"task_type: {task.task_type or '-'}")
     print(f"depends_on: {task_dependencies_label(task.id, task.depends_on)}")
-    print(f"pm_complexity: {task.pm_complexity or '-'}")
-    print(f"planned_effort: {task.planned_effort or '-'}")
     print(f"acceptance_criteria: {len(task.acceptance_criteria)}")
     missing_criteria_reason = missing_acceptance_criteria_cli_warning(task)
     if missing_criteria_reason is not None:
@@ -217,11 +207,8 @@ def show(task_id: Annotated[str, typer.Argument(help="Task ID")], workspace: Wor
     print(f"engine: {load_config(workspace).default_engine}")
     print(f"model: {task.model or '-'}")
     print(f"task_type: {task.task_type or '-'}")
-    print(f"mode: {task.mode}")
     print(f"pipeline_mode: {task.pipeline_mode}")
     print(f"depends_on: {_show_dependency_label(workspace, task)}")
-    print(f"pm_complexity: {task.pm_complexity or '-'}")
-    print(f"planned_effort: {task.planned_effort or '-'}")
     print(f"created_at: {task.created_at}")
     print(f"updated_at: {task.updated_at}")
     print(f"goal: {task.goal or '-'}")
@@ -243,10 +230,6 @@ def show(task_id: Annotated[str, typer.Argument(help="Task ID")], workspace: Wor
             print(f"  - {step}")
     else:
         print("plan: -")
-    if task.human_checkpoints:
-        print(f"human_checkpoints: {', '.join(task.human_checkpoints)}")
-    else:
-        print("human_checkpoints: -")
     rt = task.runtime
     print(f"execution_status: {rt.execution_status or '-'}")
     print(f"current_stage: {rt.current_stage.step if rt.current_stage and rt.current_stage.step else '-'}")
@@ -316,16 +299,11 @@ def update(
     acceptance_criteria: Annotated[list[str] | None, typer.Option(help="Replace acceptance criteria")] = None,
     constraint: Annotated[list[str] | None, typer.Option(help="Replace constraints")] = None,
     plan_step: Annotated[list[str] | None, typer.Option(help="Replace the plan")] = None,
-    from_file: Annotated[Path | None, typer.Option(help="Load updates from a YAML file")] = None,
-    edit: Annotated[bool, typer.Option(help="Open editable YAML in $VISUAL or $EDITOR")] = False,
 ) -> int:
     from litehive.cli.agent_cli import block_if_agent
 
     block_if_agent()
     ensure_workspace(workspace)
-    if from_file is not None and edit:
-        print("update failed: use either --from-file or --edit, not both")
-        return 1
     if (
         title is None
         and depends_on is None
@@ -334,57 +312,25 @@ def update(
         and plan_step is None
         and priority is None
         and goal is None
-        and from_file is None
-        and not edit
     ):
         print("update failed: no changes requested")
         return 1
     try:
-        rich_updates = {}
-        if from_file is not None:
-            rich_updates = load_rich_task_update_file(from_file)
-        elif edit:
-            rich_updates = collect_editor_task_updates(workspace, task_id)
-
         depends_on = parse_dependency_ids(depends_on, task_id=task_id, allow_clear=True)
         acceptance_criteria = parse_acceptance_criteria(acceptance_criteria, allow_clear=True)
         constraints = parse_text_list_option(constraint, option_name="Constraints", allow_clear=True)
         plan = parse_text_list_option(plan_step, option_name="Plan steps", allow_clear=True)
-        flag_updates = {}
-        if depends_on is not ...:
-            flag_updates["depends_on"] = depends_on
-        if acceptance_criteria is not ...:
-            flag_updates["acceptance_criteria"] = acceptance_criteria
-        if constraints is not ...:
-            flag_updates["constraints"] = constraints
-        if plan is not ...:
-            flag_updates["plan"] = plan
-        if priority is not None:
-            flag_updates["priority"] = priority
-        if title is not None:
-            flag_updates["title"] = title
-        if goal is not None:
-            flag_updates["goal"] = goal
 
-        updates = merge_task_updates(rich_updates, flag_updates, overlay_source="CLI flags")
         task = update_task_metadata(
             workspace,
             task_id,
-            title=updates.get("title", ...),
-            depends_on=updates.get("depends_on", ...),
-            task_type=updates.get("task_type", ...),
-            model=updates.get("model", ...),
-            retry_limit=updates.get("retry_limit", ...),
-            priority=updates.get("priority", ...),
-            pm_complexity=updates.get("pm_complexity", ...),
-            planned_effort=updates.get("planned_effort", ...),
-            goal=updates.get("goal", ...),
-            acceptance_criteria=updates.get("acceptance_criteria", ...),
-            constraints=updates.get("constraints", ...),
-            plan=updates.get("plan", ...),
-            human_checkpoints=updates.get("human_checkpoints", ...),
-            mode=updates.get("mode", ...),
-            auto_commit=updates.get("auto_commit", ...),
+            title=title if title is not None else ...,
+            depends_on=depends_on,
+            priority=priority if priority is not None else ...,
+            goal=goal if goal is not None else ...,
+            acceptance_criteria=acceptance_criteria,
+            constraints=constraints,
+            plan=plan,
         )
     except (ValueError, WorkspaceConflictError) as exc:
         print(f"update failed: {exc}")
@@ -393,11 +339,7 @@ def update(
     print(f"model: {task_model_label(task.model)}")
     print(f"retry_limit: {task.retry_policy.max_retries if task.retry_policy.max_retries is not None else 'default'}")
     print(f"priority: {task.priority}")
-    print(f"pm_complexity: {task.pm_complexity or '-'}")
-    print(f"planned_effort: {task.planned_effort or '-'}")
-    print(f"mode: {task.mode}")
     print(f"auto_commit: {task.git.auto_commit}")
-    print("human_checkpoints: " + (", ".join(task.human_checkpoints) if task.human_checkpoints else "-"))
     print(f"task_type: {task.task_type or '-'}")
     print(f"depends_on: {task_dependencies_label(task.id, task.depends_on)}")
     print(f"goal: {task.goal}")
