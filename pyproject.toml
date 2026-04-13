@@ -9,7 +9,6 @@ readme = "README.md"
 requires-python = ">=3.11"
 dynamic = ["version"]
 dependencies = [
-    "heru>=1.0.1",
     "pydantic>=2.11.0",
     "pyyaml>=6.0.2",
     "typer>=0.16.0",
@@ -46,9 +45,6 @@ target-version = "py311"
 
 [tool.ruff.lint]
 extend-select = ["E402", "F401"]
-
-[tool.uv.sources]
-heru = { path = "/home/alexey/git/heru", editable = true }
 
 [dependency-groups]
 dev = [
