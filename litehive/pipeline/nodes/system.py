@@ -432,6 +432,21 @@ class StubCommitNode(CommitNode):
 WorktreeResolver = Callable[[TaskState], Path]
 
 
+def _is_runner_owned_metadata(relpath: str, task_id: str) -> bool:
+    """Return True if ``relpath`` is a runner-written workspace metadata file
+    that must be excluded from the commit-stage auto-commit.
+
+    The runner rewrites these files in both the worktree and the main repo
+    as the pipeline advances; capturing them in the checkpoint commit
+    causes ``git merge`` to abort with "Your local changes would be
+    overwritten" (see T-0320).
+    """
+    if relpath == ".litehive/state.yaml":
+        return True
+    prefix = f".litehive/tasks/{task_id}-"
+    return relpath.startswith(prefix) or relpath.startswith(".litehive/tasks/archive/")
+
+
 class GitCommitNode(CommitNode):
     """Real ``commit`` node — plain automatic merge, no agents.
 
@@ -523,6 +538,14 @@ class GitCommitNode(CommitNode):
         the worktree branch ref is unchanged from main HEAD and `git merge`
         below is a silent no-op ("Already up to date"), producing an
         empty-pass that loses the agent's work.
+
+        Runner-owned metadata under ``.litehive/tasks/<task_id>-*/`` and
+        ``.litehive/state.yaml`` is excluded: the runner rewrites those
+        files in both the worktree and the main repo as the pipeline
+        advances, and capturing them in the checkpoint commit causes
+        ``git merge`` to abort with "Your local changes would be
+        overwritten" on any task that updates its own task.yaml (see
+        T-0320).
         """
         if worktree == self.main_repo_root:
             return
@@ -534,14 +557,21 @@ class GitCommitNode(CommitNode):
         )
         if status.returncode != 0 or not status.stdout.strip():
             return
+
+        dirty_paths = [line[3:] for line in status.stdout.splitlines() if line.strip()]
+        committable = [p for p in dirty_paths if not _is_runner_owned_metadata(p, state.task_id)]
+        if not committable:
+            # Only runner-owned metadata is dirty — nothing to checkpoint.
+            return
+
         add = subprocess.run(
-            ["git", "add", "-A"],
+            ["git", "add", "--", *committable],
             cwd=str(worktree),
             capture_output=True,
             text=True,
         )
         if add.returncode != 0:
-            raise GitError(f"git add -A failed in {worktree}: {add.stderr.strip()}")
+            raise GitError(f"git add failed in {worktree}: {add.stderr.strip()}")
         message = f"litehive {state.task_id}: auto-commit worktree changes"
         commit = subprocess.run(
             ["git", "commit", "-m", message],

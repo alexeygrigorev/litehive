@@ -128,6 +128,20 @@ litehive queue requeue T-0001                   # requeue without reverting
 litehive queue resume T-0002                    # resume an interrupted task
 ```
 
+Queue and recovery shortcuts:
+
+```bash
+litehive recover T-0001                   # requeue a completed task but keep its code in place
+litehive switch T-0002 gemini --reason "Need larger context window"
+litehive prioritize T-0007 T-0003 T-0009  # move queued tasks to the front in this exact order
+```
+
+Use `litehive recover <task_id>` when a completed task needs another pipeline pass but the accepted code should remain in the workspace and git history. Use `litehive rollback <task_id>` instead when you need to revert the code before retrying.
+
+Use `litehive switch <task_id> <engine> --reason "..."` when the task should continue on a different engine next time it runs. Litehive records the handoff reason, stops or detaches the current run if needed, and requeues the task for the next iteration.
+
+Use `litehive prioritize <task_id> [task_id ...]` when several tasks are already queued and you need to pull them to the front without changing their relative order. The command preserves the exact order you pass on the command line.
+
 Agent interaction:
 
 ```bash

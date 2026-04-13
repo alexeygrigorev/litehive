@@ -233,21 +233,30 @@ EngineChoice = choice(ENGINE_CHOICES)
 
 
 def register_hidden_root_commands(app: typer.Typer) -> None:
-    @app.command("recover", help="Requeue a completed task without reverting code", hidden=True)
+    @app.command(
+        "recover",
+        help="Use after an accepted task needs another pass but its current code should stay in place",
+    )
     def recover_command(
         task_id: Annotated[str, typer.Argument(help="Task id to recover")],
         workspace: WorkspaceOption = Path.cwd(),
     ) -> int:
         return recover(task_id, workspace)
 
-    @app.command("prioritize", help="Move multiple queued tasks to the front in the requested order", hidden=True)
+    @app.command(
+        "prioritize",
+        help="Use to pull queued tasks to the front when operator ordering matters more than the current queue",
+    )
     def prioritize_command(
         task_ids: Annotated[list[str], typer.Argument(help="Queued task ids to move to the front")],
         workspace: WorkspaceOption = Path.cwd(),
     ) -> int:
         return prioritize(task_ids, workspace)
 
-    @app.command("switch", help="Stop or resume a task, record an engine switch request, and queue it for the next iteration", hidden=True)
+    @app.command(
+        "switch",
+        help="Use when a task should continue with a different engine on its next queued run",
+    )
     def switch_command(
         task_id: Annotated[str, typer.Argument(help="Task id to switch")],
         engine: Annotated[str, typer.Argument(click_type=EngineChoice, help="Engine to switch to")],
