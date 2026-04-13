@@ -3,7 +3,7 @@ from typing import Annotated
 
 import typer
 
-from litehive.agents import ENGINE_CHOICES
+from litehive.agents import ENGINE_CHOICES, get_engine, intake_prompt
 from litehive.cli.common import WorkspaceOption, choice, make_typer, require_subcommand
 from litehive.cli.display import (
     fallback_intake_goal,
@@ -24,7 +24,8 @@ from litehive.cli.github_import import (
     map_labels,
     parse_issue_ref,
 )
-from litehive.cli.tasks import load_config, parse_acceptance_criteria
+from litehive.cli.parse import parse_acceptance_criteria
+from litehive.config import load_config
 from litehive.models import GitHubOrigin, UpstreamContributionOrigin, UpstreamPatchProposal
 from litehive.tasks.crud import create_task as create_litehive_task, discard_created_task, require_task
 from litehive.tasks.models import WorkspaceConflictError
@@ -153,7 +154,6 @@ def spec(
     engine: Annotated[str, typer.Option(click_type=choice(ENGINE_CHOICES), help="Engine to use")] = "opencode",
     model: Annotated[str | None, typer.Option(help="Model override")] = None,
 ) -> int:
-    from litehive.agents import get_engine, intake_prompt
     from litehive.config import ensure_workspace
     from litehive.tasks.paths import task_dir
     from litehive.tasks.templates import task_brief_file

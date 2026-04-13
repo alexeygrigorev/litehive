@@ -6,7 +6,6 @@ import sqlite3
 from typer.testing import CliRunner
 
 from litehive.cli import app
-from litehive.cli.backup import cmd_backup_create, cmd_backup_list, cmd_backup_restore
 from litehive.config import workspace_backups_dir, workspace_database_path
 from litehive.models import RunnerStatusState
 from litehive.storage import create_workspace_backup, list_workspace_backups
@@ -54,10 +53,10 @@ def test_backup_list_command_reports_timestamp_and_size(tmp_path: Path, capsys: 
     _seed_workspace_db(tmp_path, ["one"])
     create_workspace_backup(tmp_path, when=datetime(2026, 4, 11, 3, tzinfo=UTC))
 
-    exit_code = cmd_backup_list(tmp_path)
-    output = capsys.readouterr().out
+    result = CliRunner().invoke(app, ["backup", "list", "--workspace", str(tmp_path)], standalone_mode=False)
+    output = result.output
 
-    assert exit_code == 0
+    assert result.return_value == 0
     assert "backups: 1" in output
     assert "timestamp: 2026-04-11T03" in output
     assert "size_bytes: " in output
@@ -68,10 +67,10 @@ def test_backup_create_command_reports_created_archive(tmp_path: Path, capsys: p
     ensure_workspace(tmp_path)
     _seed_workspace_db(tmp_path, ["one"])
 
-    exit_code = cmd_backup_create(tmp_path)
-    output = capsys.readouterr().out
+    result = CliRunner().invoke(app, ["backup", "create", "--workspace", str(tmp_path)], standalone_mode=False)
+    output = result.output
 
-    assert exit_code == 0
+    assert result.return_value == 0
     assert "timestamp: " in output
     assert "path: " in output
     assert "size_bytes: " in output
@@ -83,12 +82,16 @@ def test_restore_command_refuses_when_daemon_running(
 ) -> None:
     ensure_workspace(tmp_path)
 
-    monkeypatch.setattr("litehive.cli.backup.get_workspace_daemon", lambda root: {"pid": 123})
+    monkeypatch.setattr("litehive.cli.runner.get_workspace_daemon", lambda root: {"pid": 123})
 
-    exit_code = cmd_backup_restore("2026-04-11T02", tmp_path, yes=True)
-    output = capsys.readouterr().out
+    result = CliRunner().invoke(
+        app,
+        ["backup", "restore", "2026-04-11T02", "--workspace", str(tmp_path), "--yes"],
+        standalone_mode=False,
+    )
+    output = result.output
 
-    assert exit_code == 1
+    assert result.return_value == 1
     assert "backup restore failed: workspace daemon is running" in output
 
 
@@ -97,16 +100,20 @@ def test_restore_command_refuses_when_runner_active(
 ) -> None:
     ensure_workspace(tmp_path)
 
-    monkeypatch.setattr("litehive.cli.backup.get_workspace_daemon", lambda root: None)
+    monkeypatch.setattr("litehive.cli.runner.get_workspace_daemon", lambda root: None)
     monkeypatch.setattr(
-        "litehive.cli.backup.runner_status",
+        "litehive.cli.runner.runner_status",
         lambda root: RunnerStatusState(status="running", pid=321),
     )
 
-    exit_code = cmd_backup_restore("2026-04-11T02", tmp_path, yes=True)
-    output = capsys.readouterr().out
+    result = CliRunner().invoke(
+        app,
+        ["backup", "restore", "2026-04-11T02", "--workspace", str(tmp_path), "--yes"],
+        standalone_mode=False,
+    )
+    output = result.output
 
-    assert exit_code == 1
+    assert result.return_value == 1
     assert "backup restore failed: workspace runner is active" in output
 
 

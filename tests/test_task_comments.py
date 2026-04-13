@@ -1,8 +1,9 @@
 from pathlib import Path
 
 import yaml
+from typer.testing import CliRunner
 
-from litehive.cli.status import cmd_repair
+from litehive.cli import app
 from litehive.models import TaskThreadComment
 from litehive.tasks.crud import create_task
 from litehive.tasks.paths import legacy_task_thread_file, task_comments_file
@@ -91,9 +92,9 @@ def test_repair_migrates_legacy_thread_yaml_to_comments_yaml(tmp_path: Path) -> 
         encoding="utf-8",
     )
 
-    summary = cmd_repair(tmp_path)
+    result = CliRunner().invoke(app, ["repair", "--workspace", str(tmp_path)], standalone_mode=False)
 
-    assert summary == 0
+    assert result.return_value == 0
     assert comments_path.exists()
     assert not legacy_path.exists()
     assert [entry.message for entry in load_task_thread(tmp_path, task)] == ["legacy migration"]
@@ -137,10 +138,10 @@ def test_repair_merges_legacy_thread_yaml_into_existing_comments_yaml(
         encoding="utf-8",
     )
 
-    exit_code = cmd_repair(tmp_path)
-    output = capsys.readouterr().out
+    result = CliRunner().invoke(app, ["repair", "--workspace", str(tmp_path)], standalone_mode=False)
+    output = result.output
 
-    assert exit_code == 0
+    assert result.return_value == 0
     assert "migrated_comment_tasks: " in output
     assert task.id in output
     assert not legacy_path.exists()

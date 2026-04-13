@@ -5,9 +5,8 @@ import subprocess
 
 import yaml
 
-from litehive.config import ensure_workspace
 from litehive.git.ops import current_head
-from litehive.tasks.crud import get_task_worktree_path, require_task, save_task
+from litehive.tasks.crud import get_task_worktree_path, save_task
 from litehive.tasks.paths import (
     read_text_artifact,
     resolve_artifact_path,
@@ -15,21 +14,6 @@ from litehive.tasks.paths import (
 )
 from litehive.tasks.reports import load_task_thread
 from litehive.tasks.worktrees import migrate_legacy_worktree
-
-
-def cmd_debug(task_id, workspace, all: bool = False, worktree: bool = False):
-    ensure_workspace(workspace)
-    try:
-        task = require_task(workspace, task_id)
-    except ValueError:
-        print(f"task not found: {task_id}")
-        return 1
-
-    if worktree:
-        return _debug_worktree(workspace, task)
-    if all:
-        return _debug_all(workspace, task)
-    return _debug_latest(workspace, task)
 
 
 def _debug_all(root: Path, task):

@@ -10,7 +10,6 @@ from tests.workspace_helpers import (
     StageReport,
     SubagentManager,
     SubagentRef,
-    _cmd_run,
     _cmd_update,
     _completed_subagent_result,
     argparse,
@@ -712,72 +711,6 @@ def test_claude_model_resolved_from_workspace_defaults() -> None:
 
     config_default = LitehiveConfig()
     assert workspace_model_for_engine(config_default, "claude") == "claude-sonnet-4-20250514"
-
-
-@pytest.mark.skip(reason="v1 run_single_task/drain_task_pool deleted; test needs rewrite for v2 pipeline")
-def test_cmd_run_dry_run_rejects_default_claude_when_not_enabled(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    ensure_workspace(tmp_path, LitehiveConfig(default_engine="claude"))
-    create_task(tmp_path, title="Claude default task")
-
-    def fail_run_single(*args, **kwargs):  # type: ignore[no-untyped-def]
-        raise AssertionError("run_single_task should not be called for dry-run")
-
-    def fail_drain(*args, **kwargs):  # type: ignore[no-untyped-def]
-        raise AssertionError("drain_task_pool should not be called for dry-run")
-
-    monkeypatch.setattr("litehive.cli.run._run_single_v2", fail_run_single)
-    monkeypatch.setattr("litehive.cli.run.drain_task_pool", fail_drain)
-
-    exit_code = _cmd_run(argparse.Namespace(workspace=tmp_path, dry_run=True, engine=None))
-    assert exit_code == 0
-
-
-@pytest.mark.skip(reason="v1 _cmd_run_single/_cmd_run_drain deleted; test needs rewrite for v2 pipeline")
-def test_cmd_run_dispatches_single_task_mode(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    ensure_workspace(tmp_path)
-    called: list[str] = []
-
-    def fake_run_single(*args, **kwargs):  # type: ignore[no-untyped-def]
-        called.append("single")
-        return 0
-
-    def fail_run_drain(*args, **kwargs):  # type: ignore[no-untyped-def]
-        raise AssertionError("drain handler should not run for single-task mode")
-
-    monkeypatch.setattr("litehive.cli.run._cmd_run_single", fake_run_single)
-    monkeypatch.setattr("litehive.cli.run._cmd_run_drain", fail_run_drain)
-
-    exit_code = _cmd_run(argparse.Namespace(workspace=tmp_path, dry_run=False, drain=False))
-
-    assert exit_code == 0
-    assert called == ["single"]
-
-
-@pytest.mark.skip(reason="v1 _cmd_run_single/_cmd_run_drain deleted; test needs rewrite for v2 pipeline")
-def test_cmd_run_dispatches_pool_drain_mode(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    ensure_workspace(tmp_path)
-    called: list[str] = []
-
-    def fail_run_single(*args, **kwargs):  # type: ignore[no-untyped-def]
-        raise AssertionError("single-task handler should not run for drain mode")
-
-    def fake_run_drain(*args, **kwargs):  # type: ignore[no-untyped-def]
-        called.append("drain")
-        return 0
-
-    monkeypatch.setattr("litehive.cli.run._cmd_run_single", fail_run_single)
-    monkeypatch.setattr("litehive.cli.run._cmd_run_drain", fake_run_drain)
-
-    exit_code = _cmd_run(argparse.Namespace(workspace=tmp_path, dry_run=False, drain=True))
-
-    assert exit_code == 0
-    assert called == ["drain"]
 
 
 def test_extract_engine_timeline_returns_none_for_empty_stdout() -> None:

@@ -35,20 +35,19 @@ from litehive.observability.status_diagnostics import (
     render_health_summary,
     status_has_problems,
 )
-from litehive.recovery import (
-    repair_workspace_state,
-)
+from litehive.recovery import repair_workspace_state
 from litehive.tasks import list_tasks_state_first, load_state, require_task
 from litehive.tasks.crud import list_tasks
 from litehive.tasks.models import WorkspaceConflictError
 from litehive.tasks.persistence import load_state as load_runtime_state
 from litehive.workspace.worktree_inspection import inspect_dirty_worktree_gate
 
-from litehive.cli.worktree import collect_managed_worktrees
+from litehive.cli.worktree_support import collect_managed_worktrees
 
 
 def register_root_commands(app: typer.Typer) -> None:
     app.command("status", help="Show workspace status")(status_command)
+    app.command("doctor", help="Run workspace integrity checks and optional safe fixes")(doctor_command)
     app.command("health", help="Show workspace health diagnostics")(health_command)
     app.command("engine", help="Manage engine freezes and status")(engine_command)
     app.command("repair", help="Repair stale active tasks, interrupted runs, and queue inconsistencies")(repair_command)
@@ -128,6 +127,47 @@ def _print_status_issues(issues) -> int:
     for issue in issues:
         print(issue.render())
     print(render_health_summary(issues))
+    return 1
+
+
+def doctor_command(
+    workspace: WorkspaceOption = Path.cwd(),
+    fix: Annotated[bool, typer.Option("--fix", help="Apply deterministic non-destructive fixes")] = False,
+) -> int:
+    ensure_workspace(workspace)
+    root = workspace.resolve()
+    if fix:
+        try:
+            summary = repair_workspace_state(root)
+        except WorkspaceConflictError as exc:
+            print(f"doctor failed: {exc}")
+            return 1
+        print(f"doctor_repaired: {'yes' if summary.mutated else 'no'}")
+        print(f"stale_runner_recovered: {'yes' if summary.stale_runner_recovered else 'no'}")
+        if summary.cleared_active_task_id:
+            print(f"cleared_active_task_id: {summary.cleared_active_task_id}")
+        if summary.requeued_task_ids:
+            print(f"requeued_tasks: {' '.join(summary.requeued_task_ids)}")
+        if summary.removed_queue_entries:
+            print(f"removed_queue_entries: {' '.join(summary.removed_queue_entries)}")
+        if summary.deduped_queue_entries:
+            print(f"deduped_queue_entries: {' '.join(summary.deduped_queue_entries)}")
+        snapshot = collect_status_snapshot(root)
+        if not snapshot.issues:
+            print(f"doctor: clean workspace={root}")
+            return 0
+        for issue in snapshot.issues:
+            print(issue.render())
+        print(render_health_summary(snapshot.issues))
+        return 1
+
+    snapshot = collect_status_snapshot(root)
+    if not snapshot.issues:
+        print(f"doctor: clean workspace={root}")
+        return 0
+    for issue in snapshot.issues:
+        print(issue.render())
+    print(render_health_summary(snapshot.issues))
     return 1
 
 
@@ -414,3 +454,10 @@ def _zai_quota_health(engine: str, status) -> _QuotaHealth:
         return _QuotaHealth(engine, "unavailable", status.error)
     summary = f"short={status.short_term.percent_remaining:.1f}% remaining long={status.long_term.percent_remaining:.1f}% remaining"
     return _QuotaHealth(engine, "warning" if status.limit_reached else "ok", summary, status.limit_reached)
+
+
+cmd_status = status_command
+cmd_doctor = doctor_command
+cmd_health = health_command
+cmd_engine = engine_command
+cmd_repair = repair_command

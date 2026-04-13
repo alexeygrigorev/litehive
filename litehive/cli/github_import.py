@@ -5,10 +5,8 @@ import re
 import subprocess
 from pathlib import Path
 
-from litehive.config import ensure_workspace
 from litehive.models import GitHubOrigin
 from litehive.tasks.crud import create_task, list_tasks
-from litehive.tasks.models import WorkspaceConflictError
 
 # ── Label mapping ────────────────────────────────────────────────────────
 
@@ -185,103 +183,3 @@ def import_single_issue(root: Path, repo: str, issue_number: int, cwd: Path | No
         auto_commit=True,
     )
     return task.id, "created"
-
-
-# ── CLI command handlers ─────────────────────────────────────────────────
-
-
-def cmd_import_issue(workspace, issue_ref, repo=None) -> int:
-    ensure_workspace(workspace)
-    try:
-        check_gh_auth(cwd=workspace)
-    except (GhNotFoundError, GhAuthError) as exc:
-        print(f"import-issue failed: {exc}")
-        return 1
-
-    repo_from_ref, issue_number = parse_issue_ref(issue_ref)
-    repo = repo or repo_from_ref
-    if repo is None:
-        try:
-            repo = detect_repo_from_remote(cwd=workspace)
-        except RuntimeError as exc:
-            print(f"import-issue failed: {exc}")
-            return 1
-
-    try:
-        task_id, status = import_single_issue(workspace, repo, issue_number, cwd=workspace)
-    except (RuntimeError, ValueError, WorkspaceConflictError) as exc:
-        print(f"import-issue failed: {exc}")
-        return 1
-
-    if status == "skipped":
-        print(f"Issue #{issue_number} already imported as {task_id}, skipping.")
-        return 0
-    print(f"Created task {task_id} from {repo}#{issue_number}")
-    return 0
-
-
-def cmd_import_issues(workspace, repo=None) -> int:
-    ensure_workspace(workspace)
-    try:
-        check_gh_auth(cwd=workspace)
-    except (GhNotFoundError, GhAuthError) as exc:
-        print(f"import-issues failed: {exc}")
-        return 1
-
-    if repo is None:
-        try:
-            repo = detect_repo_from_remote(cwd=workspace)
-        except RuntimeError as exc:
-            print(f"import-issues failed: {exc}")
-            return 1
-
-    try:
-        issues = fetch_open_issues(repo, cwd=workspace)
-    except RuntimeError as exc:
-        print(f"import-issues failed: {exc}")
-        return 1
-
-    created = 0
-    skipped = 0
-    errors = 0
-    for issue_data in issues:
-        issue_number = issue_data["number"]
-        existing = find_existing_task_for_issue(workspace, repo, issue_number)
-        if existing is not None:
-            skipped += 1
-            continue
-
-        labels = [lbl["name"] for lbl in issue_data.get("labels", [])]
-        task_type, priority = map_labels(labels)
-
-        try:
-            task = create_task(
-                workspace,
-                title=issue_data["title"],
-                goal=issue_data.get("body") or "",
-                task_type=task_type,
-                priority=priority,
-                github_origin=GitHubOrigin(
-                    repo=repo,
-                    issue_number=issue_number,
-                    issue_url=issue_data["url"],
-                ),
-                auto_commit=True,
-            )
-            print(f"Created task {task.id} from {repo}#{issue_number}: {task.title}")
-            created += 1
-        except (ValueError, WorkspaceConflictError) as exc:
-            print(f"  error importing #{issue_number}: {exc}")
-            errors += 1
-
-    print(f"\nImported {created} issue(s), skipped {skipped} already-tracked issue(s).")
-    return 0 if errors == 0 else 1
-
-
-def cmd_import_github(workspace, issue_ref=None, repo=None, all: bool = False) -> int:
-    if all:
-        return cmd_import_issues(workspace, repo)
-    if not issue_ref:
-        print("import github failed: provide an issue reference or use --all")
-        return 1
-    return cmd_import_issue(workspace, issue_ref, repo)

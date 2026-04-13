@@ -14,8 +14,15 @@ from tests.workspace_helpers import (
 from datetime import datetime, timedelta, timezone
 
 from litehive.agents import ENGINE_CHOICES
-from litehive.cli.engine import cmd_engine
+from typer.testing import CliRunner
+
+from litehive.cli import app
 from litehive.config.engine_models import EngineSelection
+
+
+def _run_engine(*args: str) -> tuple[int | None, str]:
+    result = CliRunner().invoke(app, list(args), standalone_mode=False)
+    return result.return_value, result.output
 
 
 def test_engine_freeze_cli_roundtrip(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
@@ -23,15 +30,18 @@ def test_engine_freeze_cli_roundtrip(tmp_path: Path, capsys: pytest.CaptureFixtu
     ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
 
     # Freeze codex until far future
-    exit_code = cmd_engine(
-        tmp_path,
+    exit_code, output = _run_engine(
+        "engine",
         "freeze",
         "codex",
+        "--workspace",
+        str(tmp_path),
+        "--until",
         "2099-12-31",
+        "--reason",
         "quota exhausted",
     )
     assert exit_code == 0
-    output = capsys.readouterr().out
     assert "engine_frozen: codex" in output
     assert "reason=quota exhausted" in output
 
@@ -39,13 +49,14 @@ def test_engine_freeze_cli_roundtrip(tmp_path: Path, capsys: pytest.CaptureFixtu
     assert config.engine_freeze["codex"] == "2099-12-31T00:00:00Z"
 
     # Unfreeze
-    exit_code = cmd_engine(
-        tmp_path,
+    exit_code, output = _run_engine(
+        "engine",
         "unfreeze",
         "codex",
+        "--workspace",
+        str(tmp_path),
     )
     assert exit_code == 0
-    output = capsys.readouterr().out
     assert "engine_unfrozen: codex" in output
 
     config = load_config(tmp_path)
@@ -55,26 +66,31 @@ def test_engine_freeze_cli_roundtrip(tmp_path: Path, capsys: pytest.CaptureFixtu
 def test_engine_freeze_requires_iso_date(tmp_path: Path, capsys) -> None:
     ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
 
-    exit_code = cmd_engine(
-        tmp_path,
+    exit_code, output = _run_engine(
+        "engine",
         "freeze",
         "gemini",
+        "--workspace",
+        str(tmp_path),
+        "--until",
         "2099-06-15 14:30",
     )
     assert exit_code == 1
-    assert "YYYY-MM-DD" in capsys.readouterr().out
+    assert "YYYY-MM-DD" in output
 
 
 def test_unfreeze_not_frozen_engine_returns_error(tmp_path: Path, capsys) -> None:
     ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
 
-    exit_code = cmd_engine(
-        tmp_path,
+    exit_code, output = _run_engine(
+        "engine",
         "unfreeze",
         "codex",
+        "--workspace",
+        str(tmp_path),
     )
     assert exit_code == 1
-    assert "not frozen" in capsys.readouterr().out
+    assert "not frozen" in output
 
 
 def test_engine_status_prints_compact_summary(tmp_path: Path, capsys) -> None:
@@ -83,12 +99,14 @@ def test_engine_status_prints_compact_summary(tmp_path: Path, capsys) -> None:
         LitehiveConfig(default_engine="codex", engine_freeze={"gemini": "2099-06-15T00:00:00Z"}),
     )
 
-    exit_code = cmd_engine(
-        tmp_path,
+    exit_code, output = _run_engine(
+        "engine",
         "status",
+        "--workspace",
+        str(tmp_path),
     )
     assert exit_code == 0
-    output = capsys.readouterr().out.strip()
+    output = output.strip()
     assert output.startswith("default_engine: codex | engine_freeze: gemini=2099-06-15T00:00:00Z | engines: ")
     for engine_name in ENGINE_CHOICES:
         assert f"{engine_name}(" in output
@@ -179,14 +197,16 @@ def test_cmd_engine_rejects_stale_single_engine_status_namespace(
 ) -> None:
     ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
 
-    exit_code = cmd_engine(
-        tmp_path,
+    exit_code, output = _run_engine(
+        "engine",
         "status",
         "codex",
+        "--workspace",
+        str(tmp_path),
     )
 
     assert exit_code == 1
-    assert "does not take an engine name" in capsys.readouterr().out
+    assert "does not take an engine name" in output
 
 
 def test_frozen_engine_in_fallback_chain_skipped(tmp_path: Path) -> None:

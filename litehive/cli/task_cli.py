@@ -1,11 +1,22 @@
 from pathlib import Path
 from typing import Annotated
+import csv
 
 import typer
 
 from litehive.cli.common import WorkspaceOption, choice, make_typer
-from litehive.cli.debug import _debug_all, _debug_latest, _debug_worktree
-from litehive.cli.logs import (
+from litehive.cli.display import task_dependencies_label, task_model_label
+from litehive.cli.parse import (
+    TASK_TYPE_CHOICES,
+    collect_editor_task_updates,
+    load_rich_task_update_file,
+    merge_task_updates,
+    parse_acceptance_criteria,
+    parse_dependency_ids,
+    parse_text_list_option,
+)
+from litehive.cli.task_debug_support import _debug_all, _debug_latest, _debug_worktree
+from litehive.cli.task_logs_support import (
     _follow_active_subagent,
     _list_daemon_sessions,
     _list_task_subagents,
@@ -14,26 +25,42 @@ from litehive.cli.logs import (
     _show_latest_subagent,
     _show_task_journal,
 )
-from litehive.cli.parse import TASK_TYPE_CHOICES
-from litehive.cli.status import _display_flag_reason, _show_dependency_label
-from litehive.cli.tasks import (
-    collect_editor_task_updates,
-    load_rich_task_update_file,
-    merge_task_updates,
-    missing_acceptance_criteria_cli_warning,
-    parse_acceptance_criteria,
-    parse_dependency_ids,
-    parse_text_list_option,
-    task_dependencies_label,
-    task_model_label,
-)
 from litehive.config import ensure_workspace, load_config
+from litehive.tasks.archive import archive_root
 from litehive.tasks.crud import create_task, list_tasks as load_tasks, require_task
 from litehive.tasks.models import WorkspaceConflictError
+from litehive.tasks.normalization import missing_acceptance_criteria_cli_warning
 from litehive.tasks.constants import VALID_TASK_PRIORITIES
 from litehive.workspace.task_status import abandon_task, close_task, update_task_metadata
 
 app = make_typer(invoke_without_command=True)
+
+
+def _display_flag_reason(task) -> str:
+    if task.status != "flagged":
+        return "-"
+    return task.flag_reason or "unknown"
+
+
+def _show_dependency_label(root, task) -> str:
+    if not task.depends_on:
+        return "-"
+
+    active_statuses = {record.id: record.status for record in load_tasks(root, include_runtime=False)}
+    index_path = archive_root(root) / "INDEX.csv"
+    archived_ids: set[str] = set()
+    if index_path.exists():
+        with index_path.open(newline="", encoding="utf-8") as handle:
+            archived_ids = {row["id"] for row in csv.DictReader(handle) if row.get("id")}
+    labels: list[str] = []
+    for dependency_id in task.depends_on:
+        if dependency_id in active_statuses:
+            labels.append(f"{dependency_id} ({active_statuses[dependency_id]})")
+        elif dependency_id in archived_ids:
+            labels.append(f"{dependency_id} (archived)")
+        else:
+            labels.append(f"{dependency_id} (missing)")
+    return ", ".join(labels)
 
 
 @app.command("add", help="Create a queued task")

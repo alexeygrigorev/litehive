@@ -7,17 +7,17 @@ from unittest.mock import patch, MagicMock
 
 import pytest
 import yaml
+from typer.testing import CliRunner
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from litehive.cli import app
 from litehive.config import ensure_workspace
 from litehive.models import GitHubOrigin
 from litehive.tasks import create_task, list_tasks
 from litehive.cli.github_import import (
     GhAuthError,
     GhNotFoundError,
-    cmd_import_issue,
-    cmd_import_issues,
     check_gh_auth,
     detect_repo_from_remote,
     find_existing_task_for_issue,
@@ -34,6 +34,14 @@ def workspace(tmp_path):
     _init_git_repo(tmp_path)
     ensure_workspace(tmp_path)
     return tmp_path
+
+
+def _invoke_import_github(workspace: Path, *args: str):
+    return CliRunner().invoke(
+        app,
+        ["import", "github", "--workspace", str(workspace), *args],
+        standalone_mode=False,
+    )
 
 
 # ── parse_issue_ref ──────────────────────────────────────────────────────
@@ -291,14 +299,12 @@ def test_cmd_import_issue_from_url(workspace, capsys):
         "labels": [{"name": "enhancement"}],
         "url": "https://github.com/owner/repo/issues/5",
     }
-    with patch("litehive.cli.github_import.check_gh_auth"):
+    with patch("litehive.cli.import_cli.check_gh_auth"):
         with patch("litehive.cli.github_import.fetch_issue", return_value=issue_data):
-            ret = cmd_import_issue(
-                workspace, "https://github.com/owner/repo/issues/5"
-            )
+            result = _invoke_import_github(workspace, "https://github.com/owner/repo/issues/5")
 
-    assert ret == 0
-    out = capsys.readouterr().out
+    assert result.return_value == 0
+    out = result.output
     assert "Created task" in out
     assert "owner/repo#5" in out
 
@@ -311,12 +317,12 @@ def test_cmd_import_issue_from_number(workspace, capsys):
         "labels": [],
         "url": "https://github.com/owner/repo/issues/3",
     }
-    with patch("litehive.cli.github_import.check_gh_auth"):
+    with patch("litehive.cli.import_cli.check_gh_auth"):
         with patch("litehive.cli.github_import.fetch_issue", return_value=issue_data):
-            ret = cmd_import_issue(workspace, "3", repo="owner/repo")
+            result = _invoke_import_github(workspace, "3", "--repo", "owner/repo")
 
-    assert ret == 0
-    out = capsys.readouterr().out
+    assert result.return_value == 0
+    out = result.output
     assert "Created task" in out
 
 
@@ -331,14 +337,12 @@ def test_cmd_import_issue_duplicate(workspace, capsys):
         ),
         auto_commit=False,
     )
-    with patch("litehive.cli.github_import.check_gh_auth"):
+    with patch("litehive.cli.import_cli.check_gh_auth"):
         with patch("litehive.cli.github_import.fetch_issue") as mock_fetch:
-            ret = cmd_import_issue(
-                workspace, "https://github.com/owner/repo/issues/5"
-            )
+            result = _invoke_import_github(workspace, "https://github.com/owner/repo/issues/5")
 
-    assert ret == 0
-    out = capsys.readouterr().out
+    assert result.return_value == 0
+    out = result.output
     assert "already imported" in out
     assert "skipping" in out
     mock_fetch.assert_not_called()  # should skip before fetching
@@ -346,13 +350,13 @@ def test_cmd_import_issue_duplicate(workspace, capsys):
 
 def test_cmd_import_issue_gh_missing(workspace, capsys):
     with patch(
-        "litehive.cli.github_import.check_gh_auth",
+        "litehive.cli.import_cli.check_gh_auth",
         side_effect=GhNotFoundError("gh CLI not found. Install it from https://cli.github.com/"),
     ):
-        ret = cmd_import_issue(workspace, "1", repo="owner/repo")
+        result = _invoke_import_github(workspace, "1", "--repo", "owner/repo")
 
-    assert ret == 1
-    out = capsys.readouterr().out
+    assert result.return_value == 1
+    out = result.output
     assert "gh CLI not found" in out
 
 
@@ -380,12 +384,12 @@ def test_cmd_import_issues_bulk(workspace, capsys):
             "url": "https://github.com/owner/repo/issues/3",
         },
     ]
-    with patch("litehive.cli.github_import.check_gh_auth"):
-        with patch("litehive.cli.github_import.fetch_open_issues", return_value=issues):
-            ret = cmd_import_issues(workspace, repo="owner/repo")
+    with patch("litehive.cli.import_cli.check_gh_auth"):
+        with patch("litehive.cli.import_cli.fetch_open_issues", return_value=issues):
+            result = _invoke_import_github(workspace, "--all", "--repo", "owner/repo")
 
-    assert ret == 0
-    out = capsys.readouterr().out
+    assert result.return_value == 0
+    out = result.output
     assert "Imported 3 issue(s)" in out
 
     tasks = list_tasks(workspace, include_runtime=False)
@@ -426,23 +430,23 @@ def test_cmd_import_issues_skips_existing(workspace, capsys):
             "url": "https://github.com/owner/repo/issues/2",
         },
     ]
-    with patch("litehive.cli.github_import.check_gh_auth"):
-        with patch("litehive.cli.github_import.fetch_open_issues", return_value=issues):
-            ret = cmd_import_issues(workspace, repo="owner/repo")
+    with patch("litehive.cli.import_cli.check_gh_auth"):
+        with patch("litehive.cli.import_cli.fetch_open_issues", return_value=issues):
+            result = _invoke_import_github(workspace, "--all", "--repo", "owner/repo")
 
-    assert ret == 0
-    out = capsys.readouterr().out
+    assert result.return_value == 0
+    out = result.output
     assert "Imported 1 issue(s)" in out
     assert "skipped 1" in out
 
 
 def test_cmd_import_issues_gh_not_authenticated(workspace, capsys):
     with patch(
-        "litehive.cli.github_import.check_gh_auth",
+        "litehive.cli.import_cli.check_gh_auth",
         side_effect=GhAuthError("gh CLI is not authenticated. Run 'gh auth login' first."),
     ):
-        ret = cmd_import_issues(workspace, repo="owner/repo")
+        result = _invoke_import_github(workspace, "--all", "--repo", "owner/repo")
 
-    assert ret == 1
-    out = capsys.readouterr().out
+    assert result.return_value == 1
+    out = result.output
     assert "not authenticated" in out

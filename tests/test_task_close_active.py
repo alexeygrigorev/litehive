@@ -5,7 +5,9 @@ import subprocess
 import sys
 import time
 
-from litehive.cli.queue import cmd_close_task
+from typer.testing import CliRunner
+
+from litehive.cli import app
 from litehive.config import ensure_workspace
 from litehive.models import SubagentRef
 from litehive.tasks.crud import create_task, require_task
@@ -87,16 +89,24 @@ with workspace_runner_guard(root):
             time.sleep(0.05)
         else:
             raise AssertionError("runner process did not acquire the lock")
-        rc = cmd_close_task(
-            task.id,
-            tmp_path,
-            "wont_do",
-            "bad direction",
-            None,
+        result = CliRunner().invoke(
+            app,
+            [
+                "task",
+                "close",
+                task.id,
+                "--workspace",
+                str(tmp_path),
+                "--outcome",
+                "wont_do",
+                "--reason",
+                "bad direction",
+            ],
+            standalone_mode=False,
         )
 
-        assert rc == 0
-        out = capsys.readouterr().out
+        assert result.return_value == 0
+        out = result.output
         assert f"task: {task.id} Kill bad run" in out
         assert "status: wont_do" in out
         assert "outcome: wont_do" in out

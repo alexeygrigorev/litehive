@@ -16,7 +16,9 @@ from tests.workspace_helpers import (
 )
 
 from litehive.agents import ENGINE_CHOICES
-from litehive.cli.engine import cmd_engine
+from typer.testing import CliRunner
+
+from litehive.cli import app
 
 
 def test_engine_command_freezes_engine(
@@ -24,15 +26,14 @@ def test_engine_command_freezes_engine(
 ) -> None:
     ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
 
-    exit_code = cmd_engine(
-        tmp_path,
-        "freeze",
-        "gemini",
-        "2099-01-02",
+    result = CliRunner().invoke(
+        app,
+        ["engine", "freeze", "gemini", "--workspace", str(tmp_path), "--until", "2099-01-02"],
+        standalone_mode=False,
     )
-    output = capsys.readouterr().out
+    output = result.output
 
-    assert exit_code == 0
+    assert result.return_value == 0
     config = load_config(tmp_path)
     assert config.default_engine == "codex"
     raw_config = yaml.safe_load(
@@ -267,13 +268,14 @@ def test_engine_status_command_shows_compact_summary(
         ),
     )
 
-    exit_code = cmd_engine(
-        tmp_path,
-        "status",
+    result = CliRunner().invoke(
+        app,
+        ["engine", "status", "--workspace", str(tmp_path)],
+        standalone_mode=False,
     )
-    output = capsys.readouterr().out.strip()
+    output = result.output.strip()
 
-    assert exit_code == 0
+    assert result.return_value == 0
     assert output.startswith("default_engine: codex | engine_freeze: gemini=2099-06-15T00:00:00Z | engines: ")
     for engine_name in ENGINE_CHOICES:
         assert f"{engine_name}(available=" in output

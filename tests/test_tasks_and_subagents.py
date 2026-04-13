@@ -407,7 +407,7 @@ def _intake_command_creates_linked_task_from_freeform_dump(
         def render_transcript(self, execution: CLIExecutionResult) -> str:
             return execution.transcript
 
-    monkeypatch.setattr("litehive.cli.tasks.get_engine", lambda _: FakeEngine())
+    monkeypatch.setattr("litehive.cli.import_cli.get_engine", lambda _: FakeEngine())
 
     dump = "We need better queue visibility.\nShow stage, transcript, and last progress in the task view.\n"
     intake_file = tmp_path / "brain-dump.md"
@@ -486,9 +486,9 @@ def _intake_command_rolls_back_created_task_when_post_create_write_fails(
         def render_transcript(self, execution: CLIExecutionResult) -> str:
             return execution.transcript
 
-    monkeypatch.setattr("litehive.cli.tasks.get_engine", lambda _: FakeEngine())
+    monkeypatch.setattr("litehive.cli.import_cli.get_engine", lambda _: FakeEngine())
     monkeypatch.setattr(
-        "litehive.cli.tasks._link_intake_brief_to_source",
+        "litehive.cli.import_cli.link_intake_brief_to_source",
         lambda _: (_ for _ in ()).throw(OSError("disk full")),
     )
 

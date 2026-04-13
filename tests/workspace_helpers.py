@@ -13,31 +13,11 @@ import types
 
 import pytest
 import yaml
+from typer.testing import CliRunner
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from litehive.cli.debug import cmd_debug
-from litehive.cli.health import cmd_health
-from litehive.cli.logs import cmd_logs
-from litehive.cli.queue import (
-    cmd_abandon_task,
-    cmd_archive,
-    cmd_cleanup,
-    cmd_close_task,
-    cmd_move,
-    cmd_prioritize,
-    cmd_promote,
-    cmd_recover,
-    cmd_requeue_task,
-    cmd_resume_task,
-    cmd_stop_task,
-    cmd_switch_task,
-)
-from litehive.cli.report import cmd_report
-from litehive.cli.run import cmd_run
-from litehive.cli.status import cmd_list, cmd_queue, cmd_repair, cmd_show, cmd_status
-from litehive.cli.tasks import cmd_add, cmd_intake, cmd_issue, cmd_update
-from litehive.cli.worktree import cmd_worktree_clean, cmd_worktree_ls, cmd_worktree_rescue
+from litehive.cli import app as cli_app
 from litehive.config import (
     ExternalEngineSandboxConfig,
     ExternalEngineSandboxPolicy,
@@ -170,35 +150,267 @@ import litehive.tasks.templates as _tasks_templates
 import litehive.workspace.locking as _workspace_locking
 import litehive.workspace.workflow as _workspace_workflow
 
-_cmd_abandon_task = lambda args: cmd_abandon_task(args.task_id, args.workspace)
-_cmd_add = lambda args: cmd_add(args.title, args.workspace, args.goal, args.acceptance_criteria, args.depends_on, args.task_type, args.mode, args.priority)
-_cmd_archive = lambda args: cmd_archive(args.workspace, task_id=args.task_id, all_done=getattr(args, "all_done", False), command_parser=getattr(args, "command_parser", None))
-_cmd_cleanup = lambda args: cmd_cleanup(args.workspace, args.older_than)
-_cmd_close_task = lambda args: cmd_close_task(args.task_id, args.workspace, args.outcome, getattr(args, "reason", None), getattr(args, "follow_up_task", None))
-_cmd_debug = lambda args: cmd_debug(args.task_id, args.workspace, all=getattr(args, "all", False), worktree=getattr(args, "worktree", False))
-_cmd_health = lambda args: cmd_health(args.workspace)
-_cmd_intake = lambda args: cmd_intake(args.file, args.workspace, getattr(args, "engine", "opencode"), getattr(args, "model", None))
-_cmd_issue = lambda args: cmd_issue(args.workspace, args.upstream, getattr(args, "type", "runtime_bug"), getattr(args, "details", ""), getattr(args, "acceptance_criteria", None), getattr(args, "source_task", None), getattr(args, "source_stage", None), getattr(args, "source_role", "recovery"), getattr(args, "source_project", None), getattr(args, "litehive_workspace", None), getattr(args, "patch_branch", None), getattr(args, "patch_base", "HEAD"), getattr(args, "prepare_patch_branch", False))
-_cmd_list = lambda args: cmd_list(args.workspace, getattr(args, "show_all", False), getattr(args, "filter_status", None), getattr(args, "filter_pipeline_status", None), getattr(args, "filter_engine", None))
-_cmd_logs = lambda args: cmd_logs(args.workspace, task_id=getattr(args, "task_id", None), daemon=getattr(args, "daemon", False), agent=getattr(args, "agent", False), all=getattr(args, "all", False), follow=getattr(args, "follow", False))
-_cmd_move = lambda args: cmd_move(args.task_id, args.position, args.workspace)
-_cmd_prioritize = lambda args: cmd_prioritize(args.task_ids, args.workspace)
-_cmd_promote = lambda args: cmd_promote(args.task_id, args.workspace)
-_cmd_queue = lambda args: cmd_queue(args.workspace)
-_cmd_recover = lambda args: cmd_recover(args.task_id, args.workspace)
-_cmd_repair = lambda args: cmd_repair(args.workspace)
-_cmd_report = lambda args: cmd_report(args.workspace, args.verdict, args.message, getattr(args, "role", "swe"), getattr(args, "step", None), getattr(args, "task_id", None), getattr(args, "files_changed", None))
-_cmd_requeue_task = lambda args: cmd_requeue_task(args.task_id, args.workspace, getattr(args, "front", False), getattr(args, "force", False))
-_cmd_resume_task = lambda args: cmd_resume_task(args.task_id, args.workspace, getattr(args, "front", False))
-_cmd_run = lambda args: cmd_run(args.workspace, getattr(args, "dry_run", False), getattr(args, "drain", False), getattr(args, "engine", None), getattr(args, "model", None), getattr(args, "stop_on_failure", None), getattr(args, "max_tasks", None), getattr(args, "stop_on_dirty_git", None))
-_cmd_show = lambda args: cmd_show(args.workspace, args.task_id)
-_cmd_status = lambda args: cmd_status(args.workspace, getattr(args, "fast", False), getattr(args, "full", False))
-_cmd_stop_task = lambda args: cmd_stop_task(args.workspace)
-_cmd_switch_task = lambda args: cmd_switch_task(args.task_id, args.engine, args.workspace, args.reason)
-_cmd_update = lambda args: cmd_update(args.task_id, args.workspace, getattr(args, "title", None), getattr(args, "priority", None), getattr(args, "goal", None), getattr(args, "depends_on", None), getattr(args, "acceptance_criteria", None), getattr(args, "constraint", None), getattr(args, "plan_step", None), getattr(args, "from_file", None), getattr(args, "edit", False))
-_cmd_worktree_clean = lambda args: cmd_worktree_clean(args.workspace, getattr(args, "dry_run", False))
-_cmd_worktree_ls = lambda args: cmd_worktree_ls(args.workspace)
-_cmd_worktree_rescue = lambda args: cmd_worktree_rescue(args.workspace, getattr(args, "apply", False))
+_runner = CliRunner()
+
+
+def _invoke_cli(argv, *, input_text: str | None = None):
+    normalized = [str(arg) for arg in argv if arg is not None]
+    result = _runner.invoke(cli_app, normalized, input=input_text, standalone_mode=False)
+    if result.output:
+        print(result.output, end="")
+    if result.exit_code != 0:
+        return result.exit_code
+    if isinstance(result.return_value, int):
+        return result.return_value
+    return 0
+
+
+def _cmd_abandon_task(args):
+    return _invoke_cli(["task", "abandon", args.task_id, "--workspace", args.workspace])
+
+
+def _cmd_add(args):
+    argv = ["task", "add", args.title, "--workspace", args.workspace, "--goal", args.goal]
+    for criterion in args.acceptance_criteria or []:
+        argv.extend(["--acceptance-criteria", criterion])
+    for dep in args.depends_on or []:
+        argv.extend(["--depends-on", dep])
+    if args.task_type is not None:
+        argv.extend(["--task-type", args.task_type])
+    if args.mode is not None:
+        argv.extend(["--mode", args.mode])
+    if args.priority is not None:
+        argv.extend(["--priority", args.priority])
+    return _invoke_cli(argv)
+
+
+def _cmd_archive(args):
+    ensure_workspace(args.workspace)
+    try:
+        if getattr(args, "all_done", False):
+            tasks = archive_done_tasks(
+                args.workspace,
+                on_skip=lambda skipped_task_id, exc: print(
+                    f"archive skipped: {skipped_task_id} ({exc})"
+                ),
+            )
+            for task in tasks:
+                print(f"archived: {task.id} {task.title}")
+            print(f"archived_count: {len(tasks)}")
+        else:
+            task = archive_task(args.workspace, args.task_id)
+            print(f"archived: {task.id} {task.title}")
+            print("archived_count: 1")
+    except ValueError as exc:
+        print(f"archive failed: {exc}")
+        return 1
+    return 0
+
+
+def _cmd_cleanup(args):
+    return _invoke_cli(["archive", "cleanup", "--workspace", args.workspace, "--older-than", args.older_than])
+
+
+def _cmd_close_task(args):
+    argv = ["task", "close", args.task_id, "--workspace", args.workspace, "--outcome", args.outcome]
+    if getattr(args, "reason", None) is not None:
+        argv.extend(["--reason", args.reason])
+    if getattr(args, "follow_up_task", None) is not None:
+        argv.extend(["--follow-up-task", args.follow_up_task])
+    return _invoke_cli(argv)
+
+
+def _cmd_debug(args):
+    argv = ["task", "debug", args.task_id, "--workspace", args.workspace]
+    if getattr(args, "all", False):
+        argv.append("--all")
+    if getattr(args, "worktree", False):
+        argv.append("--worktree")
+    return _invoke_cli(argv)
+
+
+def _cmd_health(args):
+    return _invoke_cli(["health", "--workspace", args.workspace])
+
+
+def _cmd_intake(args):
+    argv = ["import", "spec", "--workspace", args.workspace]
+    if args.file is not None:
+        argv.append(args.file)
+    if getattr(args, "engine", None) is not None:
+        argv.extend(["--engine", args.engine])
+    if getattr(args, "model", None) is not None:
+        argv.extend(["--model", args.model])
+    return _invoke_cli(argv)
+
+
+def _cmd_issue(args):
+    argv = ["import", "issue", "--workspace", args.workspace, "--upstream", args.upstream, "--type", getattr(args, "type", "runtime_bug"), "--details", getattr(args, "details", "")]
+    for criterion in getattr(args, "acceptance_criteria", None) or []:
+        argv.extend(["--acceptance-criteria", criterion])
+    for name in ["source_task", "source_stage", "source_role", "source_project", "litehive_workspace", "patch_branch", "patch_base"]:
+        value = getattr(args, name, None)
+        if value is not None:
+            argv.extend([f"--{name.replace('_', '-')}", value])
+    if getattr(args, "prepare_patch_branch", False):
+        argv.append("--prepare-patch-branch")
+    return _invoke_cli(argv)
+
+
+def _cmd_list(args):
+    argv = ["task", "list", "--workspace", args.workspace]
+    if getattr(args, "show_all", False):
+        argv.append("--all")
+    if getattr(args, "filter_status", None) is not None:
+        argv.extend(["--status", args.filter_status])
+    if getattr(args, "filter_pipeline_status", None) is not None:
+        argv.extend(["--pipeline-status", args.filter_pipeline_status])
+    if getattr(args, "filter_engine", None) is not None:
+        argv.extend(["--engine", args.filter_engine])
+    return _invoke_cli(argv)
+
+
+def _cmd_logs(args):
+    argv = ["task", "logs", "--workspace", args.workspace]
+    if getattr(args, "task_id", None) is not None:
+        argv.insert(2, args.task_id)
+    if getattr(args, "daemon", False):
+        argv.append("--daemon")
+    if getattr(args, "agent", False):
+        argv.append("--agent")
+    if getattr(args, "all", False):
+        argv.append("--all")
+    if getattr(args, "follow", False):
+        argv.append("--follow")
+    return _invoke_cli(argv)
+
+
+def _cmd_move(args):
+    return _invoke_cli(["queue", "move", args.task_id, args.position, "--workspace", args.workspace])
+
+
+def _cmd_prioritize(args):
+    return _invoke_cli(["prioritize", *args.task_ids, "--workspace", args.workspace])
+
+
+def _cmd_promote(args):
+    return _invoke_cli(["queue", "promote", args.task_id, "--workspace", args.workspace])
+
+
+def _cmd_queue(args):
+    return _invoke_cli(["queue", "--workspace", args.workspace])
+
+
+def _cmd_recover(args):
+    return _invoke_cli(["recover", args.task_id, "--workspace", args.workspace])
+
+
+def _cmd_repair(args):
+    return _invoke_cli(["repair", "--workspace", args.workspace])
+
+
+def _cmd_report(args):
+    argv = ["report", "--verdict", args.verdict, "--message", args.message]
+    if args.workspace is not None:
+        argv.extend(["--workspace", args.workspace])
+    for name in ["role", "step", "task_id"]:
+        value = getattr(args, name, None)
+        if value is not None:
+            argv.extend([f"--{name.replace('_', '-')}", value])
+    for path in getattr(args, "files_changed", None) or []:
+        argv.extend(["--files-changed", path])
+    return _invoke_cli(argv)
+
+
+def _cmd_requeue_task(args):
+    argv = ["queue", "requeue", args.task_id, "--workspace", args.workspace]
+    if getattr(args, "front", False):
+        argv.append("--front")
+    if getattr(args, "force", False):
+        argv.append("--force")
+    return _invoke_cli(argv)
+
+
+def _cmd_resume_task(args):
+    argv = ["queue", "resume", args.task_id, "--workspace", args.workspace]
+    if getattr(args, "front", False):
+        argv.append("--front")
+    return _invoke_cli(argv)
+
+
+def _cmd_run(args):
+    argv = ["run", "--workspace", args.workspace]
+    if getattr(args, "dry_run", False):
+        argv.append("--dry-run")
+    if getattr(args, "drain", False):
+        argv.append("--drain")
+    for name in ["engine", "model", "max_tasks"]:
+        value = getattr(args, name, None)
+        if value is not None:
+            argv.extend([f"--{name.replace('_', '-')}", value])
+    if getattr(args, "stop_on_failure", None):
+        argv.append("--stop-on-failure")
+    if getattr(args, "stop_on_dirty_git", None):
+        argv.append("--stop-on-dirty-git")
+    return _invoke_cli(argv)
+
+
+def _cmd_show(args):
+    return _invoke_cli(["task", "show", args.task_id, "--workspace", args.workspace])
+
+
+def _cmd_status(args):
+    argv = ["status", "--workspace", args.workspace]
+    if getattr(args, "fast", False):
+        argv.append("--fast")
+    if getattr(args, "full", False):
+        argv.append("--full")
+    return _invoke_cli(argv)
+
+
+def _cmd_stop_task(args):
+    return _invoke_cli(["queue", "stop", "--workspace", args.workspace])
+
+
+def _cmd_switch_task(args):
+    return _invoke_cli(["switch", args.task_id, args.engine, "--workspace", args.workspace, "--reason", args.reason])
+
+
+def _cmd_update(args):
+    argv = ["task", "update", args.task_id, "--workspace", args.workspace]
+    for name in ["title", "priority", "goal", "from_file"]:
+        value = getattr(args, name, None)
+        if value is not None:
+            argv.extend([f"--{name.replace('_', '-')}", value])
+    for option_name, values in [
+        ("depends-on", getattr(args, "depends_on", None)),
+        ("acceptance-criteria", getattr(args, "acceptance_criteria", None)),
+        ("constraint", getattr(args, "constraint", None)),
+        ("plan-step", getattr(args, "plan_step", None)),
+    ]:
+        for value in values or []:
+            argv.extend([f"--{option_name}", value])
+    if getattr(args, "edit", False):
+        argv.append("--edit")
+    return _invoke_cli(argv)
+
+
+def _cmd_worktree_clean(args):
+    argv = ["worktree", "clean", "--workspace", args.workspace]
+    if getattr(args, "dry_run", False):
+        argv.append("--dry-run")
+    return _invoke_cli(argv)
+
+
+def _cmd_worktree_ls(args):
+    return _invoke_cli(["worktree", "ls", "--workspace", args.workspace])
+
+
+def _cmd_worktree_rescue(args):
+    argv = ["worktree", "rescue", "--workspace", args.workspace]
+    if getattr(args, "apply", False):
+        argv.append("--apply")
+    return _invoke_cli(argv)
 
 tasks_module = types.SimpleNamespace(
     TASK_TEMPLATES=_tasks_templates.TASK_TEMPLATES,
@@ -661,36 +873,6 @@ __all__ = [
     "pytest",
     "yaml",
     "tasks_module",
-    "cmd_abandon_task",
-    "cmd_add",
-    "cmd_archive",
-    "cmd_cleanup",
-    "cmd_close_task",
-    "cmd_debug",
-    "cmd_doctor",
-    "cmd_health",
-    "cmd_intake",
-    "cmd_issue",
-    "cmd_list",
-    "cmd_logs",
-    "cmd_move",
-    "cmd_prioritize",
-    "cmd_promote",
-    "cmd_report",
-    "cmd_queue",
-    "cmd_recover",
-    "cmd_repair",
-    "cmd_requeue_task",
-    "cmd_resume_task",
-    "cmd_run",
-    "cmd_show",
-    "cmd_status",
-    "cmd_stop_task",
-    "cmd_switch_task",
-    "cmd_update",
-    "cmd_worktree_clean",
-    "cmd_worktree_ls",
-    "cmd_worktree_rescue",
     "ExternalEngineSandboxConfig",
     "ExternalEngineSandboxPolicy",
     "LitehiveConfig",

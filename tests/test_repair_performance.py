@@ -1,7 +1,9 @@
 import time
 from pathlib import Path
 
-from litehive.cli.status import cmd_repair
+from typer.testing import CliRunner
+
+from litehive.cli import app
 from litehive.recovery.workspace_repair import recover_stale_runner_state
 from litehive.tasks.crud import create_task
 from tests.workspace_helpers import ensure_workspace
@@ -27,8 +29,8 @@ def test_repair_clean_workspace_with_100_tasks_stays_under_budget(tmp_path: Path
         create_task(tmp_path, title=f"Task {index}")
 
     started = time.perf_counter()
-    exit_code = cmd_repair(tmp_path)
+    result = CliRunner().invoke(app, ["repair", "--workspace", str(tmp_path)], standalone_mode=False)
     elapsed = time.perf_counter() - started
 
-    assert exit_code == 0
+    assert result.return_value == 0
     assert elapsed < 1.0

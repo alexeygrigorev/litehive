@@ -290,7 +290,7 @@ def test_cmd_archive_all_done_logs_skipped_broken_task(
             raise FileNotFoundError("missing task directory")
         return original_archive_task(root, task_id)
 
-    monkeypatch.setattr("litehive.cli.queue.archive_task", fake_archive_task)
+    monkeypatch.setattr("tests.workspace_helpers.archive_task", fake_archive_task)
     monkeypatch.setattr("litehive.tasks.archive.archive_task", fake_archive_task)
 
     exit_code = _cmd_archive(

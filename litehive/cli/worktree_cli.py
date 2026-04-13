@@ -4,7 +4,7 @@ from typing import Annotated
 import typer
 
 from litehive.cli.common import WorkspaceOption, make_typer, require_subcommand
-from litehive.cli.worktree import (
+from litehive.cli.worktree_support import (
     _apply_rescue_candidate,
     _collect_rescue_candidates,
     _require_clean_main_checkout,

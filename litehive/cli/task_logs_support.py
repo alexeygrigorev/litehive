@@ -6,33 +6,13 @@ import time
 
 import yaml
 
-from litehive.config import ensure_workspace, workspace_logs_dir
+from litehive.config import workspace_logs_dir
 from litehive.daemon import latest_run_all_log_dir
 from litehive.tasks.crud import list_tasks_state_first
 from litehive.tasks.paths import read_text_artifact, resolve_artifact_path, task_dir
 
 _DEFAULT_TAIL_LINES = 40
 _FOLLOW_POLL_SECONDS = 0.1
-
-
-def cmd_logs(workspace, task_id=None, daemon: bool = False, agent: bool = False, all: bool = False, follow: bool = False) -> int:
-    ensure_workspace(workspace)
-
-    if follow:
-        return _follow_active_subagent(workspace, task_id=task_id)
-    if daemon:
-        return _list_daemon_sessions(workspace)
-    if task_id:
-        task = _load_task_with_runtime(workspace, task_id)
-        if task is None:
-            print(f"task not found: {task_id}")
-            return 1
-        if agent:
-            if all:
-                return _list_task_subagents(workspace, task)
-            return _show_latest_subagent(workspace, task)
-        return _show_task_journal(workspace, task)
-    return _show_latest_daemon_log(workspace)
 
 
 def _show_latest_daemon_log(root: Path) -> int:
