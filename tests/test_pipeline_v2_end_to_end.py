@@ -22,6 +22,7 @@ from typing import Any
 
 import pytest
 
+import litehive.pipeline.orchestration as orchestration
 from litehive.pipeline import SqliteJournal, StateMachineRunner, build_registry
 from litehive.pipeline.agents.base import PromptContext
 from litehive.pipeline.nodes import CommitNode, HookResult, HookRunner, StubCommitNode
@@ -347,6 +348,45 @@ def test_run_task_cleans_up_worktree_after_failed_terminal_state(tmp_path: Path)
     assert refreshed.status == "flagged"
     assert get_task_worktree_path(refreshed) is None
     assert not engine.observed_worktree.exists()
+
+
+class _AlreadyLandedCommitNode(CommitNode):
+    def _merge_worktree(self, state) -> dict[str, object] | None:
+        return {
+            "commit_result": {
+                "status": "reconciled_noop",
+                "reason": "already_landed",
+                "head_sha": "deadbeefcafebabe",
+            }
+        }
+
+
+def test_run_task_records_already_landed_commit_reconciliation(tmp_path: Path, monkeypatch) -> None:
+    ensure_workspace(
+        tmp_path,
+        LitehiveConfig(default_engine="codex", engine_preference=["codex"]),
+    )
+    task = create_task(tmp_path, title="Already landed reconcile", pipeline_mode="single")
+    persistence = SqlitePersistence(tmp_path)
+    state = persistence.initialize(task.id, pipeline_mode=PipelineMode.SINGLE)
+    state.last_report.files_changed = 1
+    persistence.save(state)
+
+    monkeypatch.setattr(orchestration, "_build_commit_node", lambda root: _AlreadyLandedCommitNode())
+
+    result = run_task(tmp_path, task, engine_factory=lambda _engine_name: _PassEngine())
+    refreshed = get_task(tmp_path, task.id)
+
+    assert result.final_stage == "done"
+    assert refreshed is not None
+    assert refreshed.status == "done"
+    assert refreshed.pipeline_status == "done"
+    assert refreshed.git.commit_sha == "deadbeefcafebabe"
+
+    journal = (tmp_path / ".litehive" / "tasks" / f"{task.id}-{task.slug}" / "journal.md").read_text(
+        encoding="utf-8"
+    )
+    assert "patch already landed on main at deadbeefcafebabe" in journal
 
 
 def test_run_task_honors_task_retry_limit_override_for_live_execution_retries(tmp_path: Path) -> None:

@@ -30,8 +30,15 @@ from litehive.config.engine_models import resolve_task_retry_policy
 from litehive.git import GitError, remove_worktree
 from litehive.models import TaskRecord
 from litehive.models.runtime_models import RuntimeHookRejectFingerprint
-from litehive.tasks.crud import clear_task_worktree_path, get_task, get_task_worktree_path, save_task
+from litehive.tasks.crud import (
+    clear_task_worktree_path,
+    get_task,
+    get_task_worktree_path,
+    save_task,
+    set_task_commit_sha,
+)
 from litehive.tasks.worktrees import resolve_recorded_worktree_path, task_worktree_branch
+from litehive.workspace.locking import persist_future_task_update
 from litehive.workspace.locking import runner_heartbeat, workspace_runner_guard
 
 from .agents.base import PromptContext
@@ -92,14 +99,32 @@ def _sync_back(state: TaskState, workspace_root: Path) -> TaskRecord | None:
         )
     )
     task_record.runtime.hook_reject_recovery_invoked = state.hook_reject_recovery_invoked
+    journal_message: str | None = None
+    commit_result = state.failure_context.get("commit_result")
     if state.stage == "done":
         task_record.status = "done"
         task_record.pipeline_status = "done"
+        if isinstance(commit_result, dict):
+            head_sha = commit_result.get("head_sha")
+            if isinstance(head_sha, str) and head_sha:
+                set_task_commit_sha(task_record, head_sha)
+                reason = commit_result.get("reason")
+                if reason == "already_landed":
+                    journal_message = (
+                        f"commit_to_git reconciled: worktree patch already landed on main at {head_sha}."
+                    )
+                else:
+                    journal_message = (
+                        f"commit_to_git reconciled as a no-op on main at {head_sha}; "
+                        "no new integration commit was needed."
+                    )
     elif state.stage == "failed":
         commit_stages = {"commit", "before_commit", "after_commit", "merge_resolving"}
         if state.origin_stage in commit_stages:
             task_record.status = "merge_failed"
             task_record.pipeline_status = "merge_failed"
+            if state.failed_message:
+                journal_message = f"commit_to_git failed during merge reconciliation: {state.failed_message}"
         else:
             task_record.status = "flagged"
             task_record.pipeline_status = "flagged"
@@ -108,7 +133,10 @@ def _sync_back(state: TaskState, workspace_root: Path) -> TaskRecord | None:
     else:
         task_record.status = "in_progress"
         task_record.pipeline_status = _STAGE_TO_PIPELINE_STATUS.get(state.stage, task_record.pipeline_status)
-    save_task(workspace_root, task_record)
+    if journal_message is not None:
+        persist_future_task_update(workspace_root, task_record, journal_message=journal_message)
+    else:
+        save_task(workspace_root, task_record)
     return task_record
 
 

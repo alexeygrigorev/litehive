@@ -91,6 +91,12 @@ class StateMachineRunner:
         tests_added = meta.get("tests_added")
         if isinstance(tests_added, int):
             state.last_report.tests_added = tests_added
+        commit_result = meta.get("commit_result")
+        if isinstance(commit_result, dict):
+            state.failure_context = {
+                **state.failure_context,
+                "commit_result": dict(commit_result),
+            }
 
     @staticmethod
     def _reset_hook_reject_tracking_on_progress(

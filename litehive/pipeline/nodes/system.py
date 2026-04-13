@@ -408,14 +408,14 @@ class CommitNode(SystemNode):
 
     def run(self, state: TaskState) -> Event:
         try:
-            self._merge_worktree(state)
-            return Pass()
+            metadata = self._merge_worktree(state) or {}
+            return Pass(metadata=metadata)
         except MergeConflict as exc:
             return MergeConflictDetected(conflict_files=tuple(exc.conflict_files))
         except GitError as exc:
             return Crash(exc_type="GitError", message=str(exc))
 
-    def _merge_worktree(self, state: TaskState) -> None:
+    def _merge_worktree(self, state: TaskState) -> dict[str, object] | None:
         raise NotImplementedError
 
 
@@ -425,7 +425,7 @@ class StubCommitNode(CommitNode):
     Returns ``Pass`` unconditionally. Use ``GitCommitNode`` in production.
     """
 
-    def _merge_worktree(self, state: TaskState) -> None:
+    def _merge_worktree(self, state: TaskState) -> dict[str, object] | None:
         return None
 
 
@@ -457,17 +457,36 @@ class GitCommitNode(CommitNode):
         self.main_repo_root = Path(main_repo_root)
         self.worktree_resolver = worktree_resolver
 
-    def _merge_worktree(self, state: TaskState) -> None:
+    def _merge_worktree(self, state: TaskState) -> dict[str, object] | None:
         worktree = self.worktree_resolver(state)
         self._autocommit_worktree_changes(worktree, state)
+        main_head_before = self._main_head()
         branch_ref = self._worktree_branch(worktree) or self._worktree_head(worktree)
+        worktree_head = self._worktree_head(worktree)
 
         result = self._git_merge(branch_ref)
         if result.returncode == 0:
             # Clean merge or "Already up to date" (which is the case when
             # the task has no dedicated worktree and branch_ref == current
             # HEAD). Either way, commit stage passes.
-            return
+            main_head_after = self._main_head()
+            if main_head_after is None:
+                raise GitError("git merge completed but main HEAD could not be resolved")
+            if main_head_before == main_head_after:
+                reason = "no_op"
+                if worktree_head != main_head_before and self._worktree_patch_already_on_main(
+                    worktree_head,
+                    main_head_before,
+                ):
+                    reason = "already_landed"
+                return {
+                    "commit_result": {
+                        "status": "reconciled_noop",
+                        "reason": reason,
+                        "head_sha": main_head_after,
+                    }
+                }
+            return None
 
         unresolved = self._unresolved_conflicts()
         if not unresolved:
@@ -485,6 +504,17 @@ class GitCommitNode(CommitNode):
         # leave the worktree as-is and report — the recovery agent then
         # decides whether to abort the merge or keep investigating.
         raise MergeConflict(unresolved)
+
+    def _main_head(self) -> str | None:
+        proc = subprocess.run(
+            ["git", "rev-parse", "--verify", "HEAD"],
+            cwd=str(self.main_repo_root),
+            capture_output=True,
+            text=True,
+        )
+        if proc.returncode != 0:
+            return None
+        return proc.stdout.strip() or None
 
     def _autocommit_worktree_changes(self, worktree: Path, state: TaskState) -> None:
         """Commit any uncommitted SWE edits inside the worktree.
@@ -553,6 +583,20 @@ class GitCommitNode(CommitNode):
             capture_output=True,
             text=True,
         )
+
+    def _worktree_patch_already_on_main(self, worktree_head: str, main_head: str | None) -> bool:
+        if not main_head:
+            return False
+        cherry = subprocess.run(
+            ["git", "cherry", main_head, worktree_head],
+            cwd=str(self.main_repo_root),
+            capture_output=True,
+            text=True,
+        )
+        if cherry.returncode != 0:
+            return False
+        lines = [line.strip() for line in cherry.stdout.splitlines() if line.strip()]
+        return bool(lines) and all(line.startswith("-") for line in lines)
 
     def _unresolved_conflicts(self) -> list[str]:
         proc = subprocess.run(

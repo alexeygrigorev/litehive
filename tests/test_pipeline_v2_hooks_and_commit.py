@@ -157,6 +157,42 @@ def test_commit_node_autocommits_uncommitted_worktree_edits(tmp_path: Path) -> N
     assert (repo / "new.txt").read_text() == "agent wrote this\n"
 
 
+def test_commit_node_reports_already_landed_noop_reconciliation(git_repo_with_branch, monkeypatch) -> None:
+    main_repo, worktree = git_repo_with_branch
+
+    node = GitCommitNode(
+        main_repo,
+        worktree_resolver=lambda state: worktree,
+    )
+
+    monkeypatch.setattr(node, "_autocommit_worktree_changes", lambda worktree, state: None)
+    monkeypatch.setattr(node, "_worktree_branch", lambda worktree: "feature")
+    monkeypatch.setattr(node, "_worktree_head", lambda worktree: "feature-head")
+    monkeypatch.setattr(node, "_main_head", lambda: "main-head")
+    monkeypatch.setattr(
+        node,
+        "_git_merge",
+        lambda branch_ref: subprocess.CompletedProcess(
+            args=["git", "merge", branch_ref, "--no-edit"],
+            returncode=0,
+            stdout="Already up to date.\n",
+            stderr="",
+        ),
+    )
+    monkeypatch.setattr(node, "_worktree_patch_already_on_main", lambda wt_head, main_head: True)
+
+    event = node.run(make_state(stage="commit"))
+
+    assert isinstance(event, Pass), event
+    assert event.metadata == {
+        "commit_result": {
+            "status": "reconciled_noop",
+            "reason": "already_landed",
+            "head_sha": "main-head",
+        }
+    }
+
+
 def test_commit_node_with_conflict_emits_merge_conflict_detected(
     git_repo_with_branch,
 ) -> None:
