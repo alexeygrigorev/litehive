@@ -57,21 +57,6 @@ app.add_typer(pipeline_app, name="pipeline", help="Inspect the v2 pipeline state
 app.add_typer(agent_app, name="agent", help="Agent-restricted commands (verdict submission)")
 
 
-@pipeline_app.command("graph", help="Print a Mermaid stateDiagram-v2 of the v2 pipeline rules")
-def pipeline_graph_command(
-    output: Annotated[Path | None, typer.Option("--output", "-o", help="Write to a file")] = None,
-) -> int:
-    from litehive.pipeline.diagram import render_markdown
-
-    content = render_markdown()
-    if output is None:
-        print(content)
-    else:
-        output.write_text(content)
-        print(f"wrote {output}")
-    return 0
-
-
 @pipeline_app.command("rules", help="List the v2 transition rules as readable rows")
 def pipeline_rules_command() -> int:
     from litehive.pipeline.transitions import list_transitions
