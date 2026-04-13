@@ -134,11 +134,16 @@ def collect_recovery_evidence(
                 )
             )
     if latest_run_log is not None:
+        try:
+            log_display_path = str(latest_run_log.relative_to(root))
+        except ValueError:
+            # Run-all logs live under ~/.local/share/litehive (out of tree) per T-0297.
+            log_display_path = str(latest_run_log)
         evidence.append(
             RecoveryEvidenceItem(
                 kind="wrapper_log",
                 label="latest run-all log",
-                path=str(latest_run_log.relative_to(root)),
+                path=log_display_path,
                 exists=True,
                 summary="latest daemon/run-all wrapper log",
             )
