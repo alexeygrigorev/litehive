@@ -20,7 +20,7 @@ from litehive.daemon import (
     stop_workspace_daemon,
 )
 from litehive.db import MigrationApplyError, apply_pending_migrations, migration_status
-from litehive.git_ops import GitError, checkpoint_message
+from litehive.git.ops import GitError, checkpoint_message
 from litehive.models import TaskThreadComment
 from litehive.pipeline.orchestration import run_task
 from litehive.recovery.execution_recovery import rollback_completed_task

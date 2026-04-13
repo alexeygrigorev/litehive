@@ -1,0 +1,44 @@
+id: T-0372
+slug: remove-vendored-heru-from-litehive-and-depend-on
+title: Remove vendored heru/ from litehive and depend on ../heru as filesystem path
+created_at: '2026-04-13T20:37:10+00:00'
+task_type: null
+mode: implementation
+pipeline_mode: full
+priority: high
+pm_complexity: null
+planned_effort: null
+depends_on: []
+goal: "The extraction commit 70a07eac (refactor: extract heru into standalone repo\
+  \ at github.com/alexeygrigorev/heru) said heru would become a standalone project,\
+  \ and ../heru exists at /home/alexey/git/heru as its own git repo with its own pyproject.toml,\
+  \ but the copy in litehive/heru/ was never removed \u2014 every file is still checked\
+  \ into this repo and litehive imports directly from it (from heru.adapters, from\
+  \ heru.quota.codex_quota, etc.). Result: bugfixes in heru have to be applied here\
+  \ AND in the standalone repo, or the standalone repo silently drifts. Migrate litehive\
+  \ to depend on the sibling ../heru as a filesystem-path editable dep and delete\
+  \ the vendored copy. Verify nothing imports from the vendored path afterwards and\
+  \ all tests still pass. DO NOT delete the vendored heru/ before the migration is\
+  \ green."
+acceptance_criteria:
+- pyproject.toml lists heru as an editable filesystem path dependency ([tool.uv.sources]
+  heru = { path = '../heru', editable = true }) and removes 'heru' from [tool.hatch.build.targets.wheel]
+  packages
+- Every 'from heru...' import in litehive/ still resolves after the vendored copy
+  is removed; unit tests green; integration tests green
+- heru/ subdirectory deleted from the litehive git history (final commit of the migration,
+  not intermediate commits)
+- README / CLAUDE.md updated to document that heru lives at ../heru and is a separate
+  repo
+- CI (if any) / make test-unit / make test-integration still pass
+- 'Sanity check: diff vendored heru/ against ../heru/heru/ before deletion; resolve
+  any drift by pushing to ../heru first'
+constraints: []
+plan: []
+human_checkpoints: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0372 remove-vendored-heru-from-litehive-and-depend-on'
+created_from: null
+upstream_origin: null
+github_origin: null

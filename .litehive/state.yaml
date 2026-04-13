@@ -1,4 +1,4 @@
-active_task_id: T-0326
+active_task_id: T-0356
 mode: implementation
 queue:
 - T-0298
@@ -10,8 +10,6 @@ queue:
 - T-0302
 - T-0296
 - T-0295
-- T-0355
-- T-0356
 - T-0357
 - T-0358
 - T-0359
@@ -23,6 +21,7 @@ queue:
 - T-0365
 - T-0366
 - T-0369
+- T-0371
 pool_stop_reason: null
-next_task_number: 369
+next_task_number: 372
 unmerged_worktrees: []

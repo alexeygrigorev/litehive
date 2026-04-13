@@ -8,7 +8,7 @@ import time
 from pathlib import Path
 
 from litehive.config import load_config
-from litehive.git_ops import current_head
+from litehive.git.ops import current_head
 from litehive.models import TaskRecord, WorkspaceState, utcnow
 
 from litehive.tasks.constants import (

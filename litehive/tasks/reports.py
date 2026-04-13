@@ -5,7 +5,7 @@ from typing import Iterable
 
 import yaml
 
-from litehive.git_ops import GitError, current_head, is_git_repo, status_porcelain
+from litehive.git.ops import GitError, current_head, is_git_repo, status_porcelain
 from litehive.models import (
     RecoveryAction,
     RecoveryEvidenceItem,

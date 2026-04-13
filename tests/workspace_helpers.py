@@ -47,7 +47,7 @@ from litehive.agents.base import (
     ExternalCLIAdapter,
 )
 from litehive.agents.sandbox import SandboxLauncher
-from litehive.git_ops import GitError, checkpoint_message, commit_task
+from litehive.git.ops import GitError, checkpoint_message, commit_task
 from litehive.models import (
     EngineUsageObservation,
     EngineUsageWindow,

@@ -12,7 +12,7 @@ from litehive.cli.display import (
     task_model_label,
 )
 from litehive.config import ensure_workspace, load_config
-from litehive.git_ops import GitError, checkpoint_message
+from litehive.git.ops import GitError, checkpoint_message
 from litehive.recovery import recover_stale_runner_state
 from litehive.recovery.execution_recovery import recover_completed_task
 from litehive.tasks.crud import list_tasks, require_task

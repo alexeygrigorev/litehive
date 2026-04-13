@@ -1,0 +1,44 @@
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0355-add-prior-work-retry-summary-to-prompts-from/recovery/recovery-001.yaml'
+  files_changed: []
+  created_at: '2026-04-13T19:47:05+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0355-add-prior-work-retry-summary-to-prompts-from/recovery/recovery-002.yaml'
+  files_changed: []
+  created_at: '2026-04-13T19:48:48+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0355-add-prior-work-retry-summary-to-prompts-from/recovery/recovery-003.yaml'
+  files_changed: []
+  created_at: '2026-04-13T19:50:35+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0355-add-prior-work-retry-summary-to-prompts-from/recovery/recovery-004.yaml'
+  files_changed: []
+  created_at: '2026-04-13T19:52:27+00:00'

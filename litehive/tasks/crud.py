@@ -13,7 +13,7 @@ from litehive.config import (
     state_path,
     workspace_gitignore_path,
 )
-from litehive.git_ops import default_commit_message
+from litehive.git.ops import default_commit_message
 from litehive.models import (
     FollowUpTaskSpec,
     TaskCreationSource,
