@@ -3,7 +3,7 @@ revision = 3
 requires-python = ">=3.11"
 
 [options]
-exclude-newer = "2026-04-06T15:55:13.302350816Z"
+exclude-newer = "2026-04-06T20:38:05.360125351Z"
 exclude-newer-span = "P7D"
 
 [[package]]
@@ -55,6 +55,23 @@ wheels = [
 ]
 
 [[package]]
+name = "heru"
+version = "1.0.0"
+source = { editable = "../heru" }
+dependencies = [
+    { name = "pydantic" },
+    { name = "typer" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "pydantic", specifier = ">=2.11.0" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.4.0" },
+    { name = "typer", specifier = ">=0.16.0" },
+]
+provides-extras = ["dev"]
+
+[[package]]
 name = "iniconfig"
 version = "2.3.0"
 source = { registry = "https://pypi.org/simple" }
@@ -67,6 +84,7 @@ wheels = [
 name = "litehive"
 source = { editable = "." }
 dependencies = [
+    { name = "heru" },
     { name = "pydantic" },
     { name = "pyyaml" },
     { name = "typer" },
@@ -86,6 +104,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "heru", editable = "../heru" },
     { name = "pydantic", specifier = ">=2.11.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.4.0" },
     { name = "pytest-timeout", marker = "extra == 'dev'", specifier = ">=2.4.0" },
