@@ -439,4 +439,19 @@ item lands.
   consecutive empty-passes confirm the guard is broken *right
   now* in M2-live operation. T-0368 already includes the
   investigation in its acceptance criteria; no new task filed.
+- 2026-04-13: **empty-pass root cause found + fixed** (`e58b66e9`).
+  Pulled the reviewer transcript for T-0367 and found the SWE had
+  actually edited 10 files / 141+23 lines in the worktree — the work
+  was real. Went through `GitCommitNode._merge_worktree` and found
+  the bug: SWE subagents edit files but never run `git commit`, so
+  the worktree branch ref still equals main HEAD. `git merge
+  <branch_ref>` returns "Already up to date" → Pass. Agent's work
+  discarded when the worktree is cleaned up after terminal state.
+  The April 12 working note about "git merge no-op is safe" was
+  correct for the no-worktree fallback path but became the bug once
+  per-task worktrees landed (T-0354). **Fix:** before merging,
+  GitCommitNode runs `git status --porcelain` in the worktree and,
+  if dirty, does `git add -A && git commit -m "litehive <task>:
+  auto-commit worktree changes"`. Regression test added.
+  145 pipeline/commit tests green. Daemon restarted.
 - …
