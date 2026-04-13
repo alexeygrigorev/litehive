@@ -396,4 +396,18 @@ item lands.
   changes") and created T-0366 (critical): dequeue filter must
   exclude cancelled/duplicate tasks, plus investigate the null
   worktree path regression.
+- 2026-04-13: **zombie-task scope confirmed at scale.** Two more
+  heartbeats later, T-0203, T-0209, and T-0210 all reproduced the
+  same pattern (runtime.yaml `execution_status=done` from days ago,
+  `worktree_path=null`, SWE edits orphaned in main, commit stage
+  no-op). Operator counted **67 already-done tasks still sitting in
+  `queued/backlog`** out of 124 queued. Daemon stopped. Six orphan
+  files from T-0203/T-0209/T-0210 stashed as
+  "T-0203/T-0209/T-0210 orphan changes (zombie task re-run bug)".
+  Sweep in progress: closing every zombie with
+  `litehive task close --outcome duplicate --reason "Zombie
+  re-queue: ... see T-0366"`. **T-0366 expanded** with full root
+  cause and 7 acceptance criteria covering both bugs (selector
+  filter on `execution_status` + persistence of `worktree_path`
+  from `GitWorktreeSyncNode`).
 - …
