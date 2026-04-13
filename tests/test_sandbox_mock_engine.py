@@ -38,6 +38,8 @@ from litehive.config import (
     ensure_workspace,
 )
 
+pytestmark = pytest.mark.integration
+
 
 def _bubblewrap_available() -> str | None:
     runtime = shutil.which("bwrap")
