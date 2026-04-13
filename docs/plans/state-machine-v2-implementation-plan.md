@@ -385,4 +385,15 @@ item lands.
   Pipeline continued autonomously past T-0198 failure (blocked on
   contradictory intent) and is currently executing T-0200 "remove
   text-based stage report parsing". Queue: 126.
+- 2026-04-13: **cancelled task re-run bug.** T-0200 had been closed
+  as duplicate on 2026-04-07 (`execution_status=cancelled`,
+  `last_outcome.kind=duplicate`), but the v2 pipeline pulled it off
+  the queue and drove it ready→done today, burning full
+  planner/SWE/QA/reviewer cycles. GitWorktreeSyncNode also set
+  `worktree_path=null` for this task, so the SWE's edits landed in
+  the main repo working dir and the commit stage produced nothing.
+  Operator stashed the orphans (`git stash` entry: "T-0200 orphan
+  changes") and created T-0366 (critical): dequeue filter must
+  exclude cancelled/duplicate tasks, plus investigate the null
+  worktree path regression.
 - …
