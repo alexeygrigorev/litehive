@@ -889,7 +889,6 @@ __all__ = [
     "_commit_to_git_report",
     "_role_for_step",
     "_unexpected_dirty_paths",
-    "drain_task_pool",
     "recover_completed_task",
     "resolve_engine_name",
     "resolve_engine_plan",

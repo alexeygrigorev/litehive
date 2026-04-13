@@ -6,7 +6,6 @@ import litehive.pipeline as pipeline
 def test_pipeline_package_exports_required_public_names():
     required = {
         "run_task",
-        "drain_task_pool",
         "TaskPoolStopConditions",
         "recover_completed_task",
         "rollback_completed_task",
