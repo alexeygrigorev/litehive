@@ -17,6 +17,7 @@ Asserts:
 """
 
 from pathlib import Path
+import subprocess
 from typing import Any
 
 import pytest
@@ -29,6 +30,8 @@ from litehive.pipeline.nodes.system import MergeConflict
 from litehive.pipeline.persistence import SqlitePersistence
 from litehive.pipeline.sessions import InMemorySessionStore
 from litehive.pipeline.types import PipelineMode
+from litehive.tasks.crud import get_task, get_task_worktree_path
+from litehive.tasks.worktrees import resolve_recorded_worktree_path
 
 from tests.workspace_helpers import LitehiveConfig, create_task, ensure_workspace, run_task
 
@@ -245,6 +248,105 @@ def test_run_task_uses_workspace_retry_on_for_live_execution_retries(tmp_path: P
 
     assert result.final_stage == "done"
     assert engine.calls == 2
+
+
+class _WorktreeCommitEngine:
+    name = "stub"
+
+    def __init__(self, root: Path, *, fail_stage: str | None = None) -> None:
+        self.root = root
+        self.fail_stage = fail_stage
+        self.observed_main_clean = False
+        self.observed_worktree: Path | None = None
+
+    def run_turn(self, session: Any, prompt: Any, state: Any) -> AgentVerdict:
+        session.turn_count += 1
+        session.engine_session_id = f"stub-{state.task_id}-{state.stage}"
+        if state.stage == "implementing":
+            task = get_task(self.root, state.task_id)
+            assert task is not None
+            worktree = resolve_recorded_worktree_path(self.root, get_task_worktree_path(task))
+            assert worktree is not None and worktree.exists()
+            self.observed_worktree = worktree
+            status = subprocess.run(
+                ["git", "status", "--porcelain"],
+                cwd=self.root,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            dirty_paths = [
+                line[3:]
+                for line in status.stdout.splitlines()
+                if line.strip() and not line[3:].startswith(".litehive/")
+            ]
+            self.observed_main_clean = status.returncode == 0 and not dirty_paths
+            feature_path = worktree / "feature.txt"
+            if not feature_path.exists():
+                feature_path.write_text("from worktree\n", encoding="utf-8")
+            subprocess.run(["git", "add", "feature.txt"], cwd=worktree, check=True)
+            feature_status = subprocess.run(
+                ["git", "status", "--porcelain", "feature.txt"],
+                cwd=worktree,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if feature_status.stdout.strip():
+                subprocess.run(["git", "commit", "-qm", "feature"], cwd=worktree, check=True)
+        if self.fail_stage == state.stage:
+            return AgentVerdict(outcome="reject", reason=f"fail at {state.stage}")
+        return AgentVerdict(outcome="pass")
+
+
+def _init_git_workspace(root: Path) -> None:
+    subprocess.run(["git", "init", "-q", "-b", "main"], cwd=root, check=True)
+    subprocess.run(["git", "config", "user.email", "t@t"], cwd=root, check=True)
+    subprocess.run(["git", "config", "user.name", "t"], cwd=root, check=True)
+    (root / "base.txt").write_text("base\n", encoding="utf-8")
+    subprocess.run(["git", "add", "base.txt"], cwd=root, check=True)
+    subprocess.run(["git", "commit", "-qm", "base"], cwd=root, check=True)
+
+
+def test_run_task_creates_worktree_and_merges_back_into_main(tmp_path: Path) -> None:
+    ensure_workspace(
+        tmp_path,
+        LitehiveConfig(default_engine="codex", engine_preference=["codex"]),
+    )
+    _init_git_workspace(tmp_path)
+    task = create_task(tmp_path, title="Worktree merge")
+    engine = _WorktreeCommitEngine(tmp_path)
+
+    result = run_task(tmp_path, task, engine_factory=lambda _engine_name: engine)
+    refreshed = get_task(tmp_path, task.id)
+
+    assert result.final_stage == "done"
+    assert engine.observed_main_clean is True
+    assert engine.observed_worktree is not None
+    assert (tmp_path / "feature.txt").read_text(encoding="utf-8") == "from worktree\n"
+    assert refreshed is not None
+    assert get_task_worktree_path(refreshed) is None
+    assert not engine.observed_worktree.exists()
+
+
+def test_run_task_cleans_up_worktree_after_failed_terminal_state(tmp_path: Path) -> None:
+    ensure_workspace(
+        tmp_path,
+        LitehiveConfig(default_engine="codex", engine_preference=["codex"]),
+    )
+    _init_git_workspace(tmp_path)
+    task = create_task(tmp_path, title="Worktree failure")
+    engine = _WorktreeCommitEngine(tmp_path, fail_stage="implementing")
+
+    result = run_task(tmp_path, task, engine_factory=lambda _engine_name: engine)
+    refreshed = get_task(tmp_path, task.id)
+
+    assert result.final_stage == "failed"
+    assert engine.observed_worktree is not None
+    assert refreshed is not None
+    assert refreshed.status == "flagged"
+    assert get_task_worktree_path(refreshed) is None
+    assert not engine.observed_worktree.exists()
 
 
 def test_run_task_honors_task_retry_limit_override_for_live_execution_retries(tmp_path: Path) -> None:

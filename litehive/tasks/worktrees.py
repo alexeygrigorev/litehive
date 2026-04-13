@@ -19,6 +19,10 @@ def task_worktree_path(root: Path, task: TaskRecord) -> Path:
     return worktree_root(root) / f"{task.id}-{task.slug}"
 
 
+def task_worktree_branch(task: TaskRecord) -> str:
+    return f"litehive/{task.id}-{task.slug}"
+
+
 def is_legacy_worktree_path(worktree_path: str | None) -> bool:
     if not worktree_path:
         return False

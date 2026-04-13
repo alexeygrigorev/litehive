@@ -134,25 +134,62 @@ class NoopWorktreeSyncNode(WorktreeSyncNode):
 
 
 class GitWorktreeSyncNode(WorktreeSyncNode):
-    """Real worktree sync — runs ``git fetch origin`` then ``git merge origin/main``.
+    """Real worktree sync — provisions a task worktree, then syncs from ``main``.
 
-    Takes a ``worktree_resolver`` callable that returns the worktree path
-    for a given task, and a ``main_ref`` (default ``origin/main``) naming
-    the upstream branch to merge from. If the resolved worktree path
-    doesn't exist yet (first time a task runs), this is a no-op.
+    Takes the workspace root plus a ``worktree_resolver`` callable that returns
+    the on-disk worktree path for a given task, and a ``main_ref`` (default
+    ``origin/main``) naming the upstream branch to merge from. When a task does
+    not yet have a recorded worktree, the node creates one with a dedicated task
+    branch before any agent stage runs.
     """
 
     def __init__(
         self,
         *,
+        workspace_root: Path,
         worktree_resolver: "WorktreeResolver",
         main_ref: str = "origin/main",
     ) -> None:
         super().__init__()
+        self.workspace_root = Path(workspace_root)
         self.worktree_resolver = worktree_resolver
         self.main_ref = main_ref
 
     def _sync(self, state: TaskState) -> bool:
+        from litehive.tasks.crud import get_task, save_task
+        from litehive.tasks.worktrees import (
+            resolve_recorded_worktree_path,
+            serialize_worktree_path,
+            task_worktree_branch,
+            task_worktree_path,
+        )
+
+        if not self._is_git_repo(self.workspace_root):
+            return False
+
+        task = get_task(self.workspace_root, state.task_id)
+        if task is None:
+            raise GitError(f"task {state.task_id} not found while creating worktree")
+
+        recorded = resolve_recorded_worktree_path(self.workspace_root, task.runtime.git.worktree_path)
+        if recorded is None or not recorded.exists():
+            worktree = task_worktree_path(self.workspace_root, task)
+            worktree.parent.mkdir(parents=True, exist_ok=True)
+            branch = task_worktree_branch(task)
+            created = subprocess.run(
+                ["git", "worktree", "add", "--force", "-B", branch, str(worktree), "HEAD"],
+                cwd=str(self.workspace_root),
+                capture_output=True,
+                text=True,
+            )
+            if created.returncode != 0:
+                raise GitError(
+                    f"git worktree add failed: {created.stderr.strip() or created.stdout.strip()}"
+                )
+            task.runtime.git.worktree_path = serialize_worktree_path(worktree)
+            save_task(self.workspace_root, task)
+            return True
+
         worktree = self.worktree_resolver(state)
         if not Path(worktree).exists():
             return False
@@ -213,6 +250,16 @@ class GitWorktreeSyncNode(WorktreeSyncNode):
             if stash_ref and not restored_stash and not self._unresolved(worktree):
                 self._restore_local_changes(worktree, stash_ref)
             raise
+
+    @staticmethod
+    def _is_git_repo(root: Path) -> bool:
+        proc = subprocess.run(
+            ["git", "rev-parse", "--is-inside-work-tree"],
+            cwd=str(root),
+            capture_output=True,
+            text=True,
+        )
+        return proc.returncode == 0 and proc.stdout.strip() == "true"
 
     @staticmethod
     def _is_dirty(worktree: Path) -> bool:
@@ -412,7 +459,7 @@ class GitCommitNode(CommitNode):
 
     def _merge_worktree(self, state: TaskState) -> None:
         worktree = self.worktree_resolver(state)
-        branch_ref = self._worktree_head(worktree)
+        branch_ref = self._worktree_branch(worktree) or self._worktree_head(worktree)
 
         result = self._git_merge(branch_ref)
         if result.returncode == 0:
@@ -448,6 +495,17 @@ class GitCommitNode(CommitNode):
         if proc.returncode != 0:
             raise GitError(f"cannot read worktree HEAD at {worktree}: {proc.stderr.strip()}")
         return proc.stdout.strip()
+
+    def _worktree_branch(self, worktree: Path) -> str | None:
+        proc = subprocess.run(
+            ["git", "symbolic-ref", "--quiet", "--short", "HEAD"],
+            cwd=str(worktree),
+            capture_output=True,
+            text=True,
+        )
+        if proc.returncode != 0:
+            return None
+        return proc.stdout.strip() or None
 
     def _git_merge(self, branch_ref: str) -> subprocess.CompletedProcess:
         return subprocess.run(

@@ -23,12 +23,15 @@ caller can render.
 
 from dataclasses import dataclass
 from pathlib import Path
+import subprocess
 
 from litehive.config import load_config
 from litehive.config.engine_models import resolve_task_retry_policy
+from litehive.git import GitError, remove_worktree
 from litehive.models import TaskRecord
 from litehive.models.runtime_models import RuntimeHookRejectFingerprint
-from litehive.tasks.crud import get_task, get_task_worktree_path, save_task
+from litehive.tasks.crud import clear_task_worktree_path, get_task, get_task_worktree_path, save_task
+from litehive.tasks.worktrees import resolve_recorded_worktree_path, task_worktree_branch
 from litehive.workspace.locking import runner_heartbeat, workspace_runner_guard
 
 from .agents.base import PromptContext
@@ -123,7 +126,6 @@ class ExecutionResult:
 def _resolve_worktree(root: Path, state: TaskState) -> Path:
     """Look up the on-disk worktree path for a task, falling back to root."""
     from litehive.tasks.crud import get_task as _get_task
-    from litehive.tasks.worktrees import resolve_recorded_worktree_path
 
     task = _get_task(root, state.task_id)
     if task is None:
@@ -142,6 +144,7 @@ def _build_commit_node(root: Path) -> CommitNode:
 def _build_worktree_sync_node(root: Path) -> GitWorktreeSyncNode:
     """Return the production ``GitWorktreeSyncNode`` bound to this workspace."""
     return GitWorktreeSyncNode(
+        workspace_root=root,
         worktree_resolver=lambda state: _resolve_worktree(root, state),
     )
 
@@ -188,6 +191,27 @@ def _clear_stale_worktree_repair(root: Path):
         save_task(root, task)
 
     return _repair
+
+
+def _cleanup_terminal_worktree(root: Path, task: TaskRecord | None) -> None:
+    if task is None:
+        return
+    worktree_rel = get_task_worktree_path(task)
+    if not worktree_rel:
+        return
+    worktree_path = resolve_recorded_worktree_path(root, worktree_rel)
+    if worktree_path is not None and worktree_path.exists():
+        remove_worktree(root, worktree_path, force=True)
+    clear_task_worktree_path(task)
+    save_task(root, task)
+    branch = task_worktree_branch(task)
+    subprocess.run(
+        ["git", "branch", "-D", branch],
+        cwd=str(root),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
 
 
 def hook_specs_from_config(config) -> dict[str, list[HookSpec]]:
@@ -282,6 +306,11 @@ def run_task(
 
         # 4. Mirror terminal state back to the v1 TaskRecord.
         updated_task = _sync_back(final_state, root) or task
+        if final_state.stage in {"done", "failed"}:
+            try:
+                _cleanup_terminal_worktree(root, updated_task)
+            except GitError:
+                pass
 
     return ExecutionResult(
         task=updated_task,

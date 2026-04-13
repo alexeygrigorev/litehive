@@ -80,8 +80,9 @@ def test_hook_node_with_failing_spec_emits_reject(tmp_path: Path) -> None:
 
 @pytest.fixture
 def git_repo_with_branch(tmp_path: Path) -> tuple[Path, Path]:
-    """Create a main repo with a feature branch that can be merged cleanly."""
+    """Create a main repo with a feature worktree branch that can be merged cleanly."""
     repo = tmp_path / "repo"
+    worktree = tmp_path / "feature-worktree"
     repo.mkdir()
     subprocess.run(["git", "init", "-q", "-b", "main"], cwd=repo, check=True)
     subprocess.run(["git", "config", "user.email", "t@t"], cwd=repo, check=True)
@@ -91,53 +92,32 @@ def git_repo_with_branch(tmp_path: Path) -> tuple[Path, Path]:
     subprocess.run(["git", "add", "."], cwd=repo, check=True)
     subprocess.run(["git", "commit", "-qm", "base"], cwd=repo, check=True)
 
-    subprocess.run(["git", "checkout", "-qb", "feature"], cwd=repo, check=True)
-    (repo / "b.txt").write_text("feature\n")
-    subprocess.run(["git", "add", "."], cwd=repo, check=True)
-    subprocess.run(["git", "commit", "-qm", "feature"], cwd=repo, check=True)
-
-    subprocess.run(["git", "checkout", "-q", "main"], cwd=repo, check=True)
-    return repo, repo  # main repo and "worktree" point to same path for simplicity
-
-
-def _resolve_same_repo(repo: Path):
-    def _resolver(state):
-        return repo
-
-    return _resolver
-
-
-def test_commit_node_no_worktree_path_is_already_up_to_date(git_repo_with_branch) -> None:
-    """When the task has no dedicated worktree, _resolve_worktree returns the
-    repo root. ``_worktree_head`` then returns main's current HEAD sha, and
-    ``git merge <sha>`` is a no-op ("Already up to date") — Pass.
-    """
-    main_repo, _ = git_repo_with_branch
-
-    node = GitCommitNode(
-        main_repo,
-        worktree_resolver=lambda state: main_repo,
+    subprocess.run(
+        ["git", "worktree", "add", "-q", "-b", "feature", str(worktree), "HEAD"],
+        cwd=repo,
+        check=True,
     )
-    # No monkey-patch here: _worktree_head returns the real HEAD sha.
-    state = make_state(stage="commit")
-    event = node.run(state)
-    assert isinstance(event, Pass), event
+    subprocess.run(["git", "config", "user.email", "t@t"], cwd=worktree, check=True)
+    subprocess.run(["git", "config", "user.name", "t"], cwd=worktree, check=True)
+    (worktree / "b.txt").write_text("feature\n")
+    subprocess.run(["git", "add", "."], cwd=worktree, check=True)
+    subprocess.run(["git", "commit", "-qm", "feature"], cwd=worktree, check=True)
+
+    return repo, worktree
 
 
 def test_commit_node_clean_merge_returns_pass(git_repo_with_branch) -> None:
-    main_repo, _ = git_repo_with_branch
+    main_repo, worktree = git_repo_with_branch
 
     node = GitCommitNode(
         main_repo,
-        worktree_resolver=lambda state: main_repo,
+        worktree_resolver=lambda state: worktree,
     )
-    # Point the merge at 'feature' — simple override so we don't need a
-    # separate worktree path for this smoke test
-    node._worktree_head = lambda wt: "feature"
 
     state = make_state(stage="commit")
     event = node.run(state)
     assert isinstance(event, Pass), event
+    assert (main_repo / "b.txt").read_text() == "feature\n"
 
 
 def test_commit_node_with_conflict_emits_merge_conflict_detected(
@@ -146,22 +126,18 @@ def test_commit_node_with_conflict_emits_merge_conflict_detected(
     """GitCommitNode no longer delegates to the merge agent — it emits
     ``MergeConflictDetected`` and the state machine routes the task to
     the ``merge_resolving`` node on the next step."""
-    main_repo, _ = git_repo_with_branch
+    main_repo, worktree = git_repo_with_branch
 
     # Create a conflict: modify a.txt on both feature and main
-    subprocess.run(["git", "checkout", "-q", "feature"], cwd=main_repo, check=True)
-    (main_repo / "a.txt").write_text("feature_change\n")
-    subprocess.run(["git", "commit", "-qam", "feature change"], cwd=main_repo, check=True)
-
-    subprocess.run(["git", "checkout", "-q", "main"], cwd=main_repo, check=True)
+    (worktree / "a.txt").write_text("feature_change\n")
+    subprocess.run(["git", "commit", "-qam", "feature change"], cwd=worktree, check=True)
     (main_repo / "a.txt").write_text("main_change\n")
     subprocess.run(["git", "commit", "-qam", "main change"], cwd=main_repo, check=True)
 
     node = GitCommitNode(
         main_repo,
-        worktree_resolver=lambda state: main_repo,
+        worktree_resolver=lambda state: worktree,
     )
-    node._worktree_head = lambda wt: "feature"
 
     state = make_state(stage="commit")
     event = node.run(state)

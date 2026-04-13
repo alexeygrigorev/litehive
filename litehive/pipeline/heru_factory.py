@@ -24,6 +24,7 @@ from typing import Any
 from litehive.agents import SubagentManager
 from litehive.agents.models import EngineFailure
 from litehive.tasks.crud import get_task
+from litehive.tasks.worktrees import resolve_recorded_worktree_path
 
 from .nodes.agent import (
     AgentVerdict,
@@ -107,9 +108,13 @@ class HeruEngineAdapter:
         step = prompt["stage"]
         role = prompt["role"]
         prompt_text = serialize_prompt(prompt, task_record=task, workspace_root=self.workspace_root)
+        execution_root = (
+            resolve_recorded_worktree_path(self.workspace_root, task.runtime.git.worktree_path)
+            or self.workspace_root
+        )
 
         before_turn = datetime.now(UTC)
-        manager = SubagentManager(self.workspace_root)
+        manager = SubagentManager(self.workspace_root, execution_root=execution_root)
         try:
             result = manager.run(
                 task,
