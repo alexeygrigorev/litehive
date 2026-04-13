@@ -76,6 +76,35 @@ def test_recover_stale_runner_state_requeues_commit_stage_as_queued(tmp_path: Pa
     assert refreshed.runtime.interruption.resume_stage == "commit_to_git"
 
 
+def test_recover_stale_runner_state_requeues_running_task_without_active_task_id(
+    tmp_path: Path,
+) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Running without active task id")
+    task.status = "in_progress"
+    task.pipeline_status = "implementing"
+    task.runtime.execution_status = "running"
+    task.runtime.run_started_at = "2026-04-12T10:00:00Z"
+    task.runtime.current_stage.step = "implementing"
+    task.runtime.current_stage.status = "running"
+    task.runtime.current_stage.started_at = "2026-04-12T10:00:00Z"
+    save_task(tmp_path, task)
+
+    state = load_state(tmp_path)
+    state.active_task_id = None
+    save_state(tmp_path, state)
+
+    assert recover_stale_runner_state(tmp_path) is True
+
+    refreshed = get_task(tmp_path, task.id)
+    assert refreshed is not None
+    assert refreshed.status == "interrupted"
+    assert refreshed.runtime.execution_status == "interrupted"
+
+    refreshed_state = load_state(tmp_path)
+    assert refreshed_state.queue[0] == task.id
+
+
 def test_prepare_interrupted_task_writes_resume_bookkeeping(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Interrupted run")

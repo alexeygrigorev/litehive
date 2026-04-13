@@ -333,6 +333,7 @@ def run_daemon_loop(
                     _emit(str(exc), stream=output_stream)
                     return 0
 
+            repair_started = time.perf_counter()
             try:
                 repair_rc = _run_logged_subprocess(
                     [*command_prefix, "repair", "--workspace", str(workspace)],
@@ -347,11 +348,23 @@ def run_daemon_loop(
                 iteration_failed = True
                 iteration_failure_reason = f"repair raised: {exc}"
                 repair_rc = -1
+            repair_elapsed_ms = int((time.perf_counter() - repair_started) * 1000)
             if repair_rc != 0 and not iteration_failed:
                 _emit(f"litehive repair failed (rc={repair_rc}); see {repair_file}",
                       stream=output_stream)
                 iteration_failed = True
                 iteration_failure_reason = f"repair exited {repair_rc}"
+            elif repair_rc == 0:
+                repair_status = "completed"
+                try:
+                    repair_text = repair_file.read_text(encoding="utf-8", errors="replace")
+                except OSError:
+                    repair_text = ""
+                if "repaired: no" in repair_text:
+                    repair_status = "clean"
+                elif "repaired: yes" in repair_text:
+                    repair_status = "changed"
+                _emit(f"repair: {repair_status} ({repair_elapsed_ms}ms)", stream=output_stream)
 
             if not iteration_failed:
                 try:

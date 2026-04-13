@@ -1,5 +1,7 @@
 """Workspace-level recovery and stale-runner repair."""
 
+import re
+import sqlite3
 from pathlib import Path
 
 import yaml
@@ -15,10 +17,8 @@ from litehive.models import (
 )
 from litehive.tasks.models import WorkspaceRepairSummary
 from litehive.tasks.paths import (
-    legacy_task_thread_file,
     read_text_artifact,
     resolve_artifact_path,
-    task_comments_file,
     task_dir,
 )
 from litehive.workspace.runtime_tracking import (
@@ -28,6 +28,24 @@ from litehive.workspace.runtime_tracking import (
 )
 
 from .detection import has_inactive_running_tasks, is_stranded_commit_task, should_requeue_commit_stage_task
+
+
+def _running_task_ids(root: Path) -> list[str]:
+    from litehive.db import connect_workspace_db
+
+    with connect_workspace_db(root) as connection:
+        try:
+            rows = connection.execute(
+                """
+                SELECT task_id
+                FROM task_state
+                WHERE json_extract(payload, '$.runtime.execution_status') = 'running'
+                ORDER BY task_id
+                """
+            ).fetchall()
+        except sqlite3.OperationalError:
+            return []
+    return [str(row["task_id"]) for row in rows]
 
 
 def _load_comment_entries(path: Path) -> list[dict[str, object]]:
@@ -44,15 +62,17 @@ def _migrate_legacy_thread_files(
     *,
     summary: WorkspaceRepairSummary | None = None,
 ) -> bool:
-    from litehive.tasks.crud import list_tasks
     from litehive.tasks.persistence import atomic_write_text
+    from litehive.tasks.paths import tasks_root
 
     mutated = False
-    for task in list_tasks(root):
-        comments_path = task_comments_file(root, task)
-        legacy_path = legacy_task_thread_file(root, task)
+    for task_path in sorted(tasks_root(root).iterdir()):
+        if not task_path.is_dir():
+            continue
+        legacy_path = task_path / "thread.yaml"
         if not legacy_path.exists():
             continue
+        comments_path = task_path / "comments.yaml"
 
         legacy_entries = _load_comment_entries(legacy_path)
         comment_entries = _load_comment_entries(comments_path)
@@ -68,8 +88,11 @@ def _migrate_legacy_thread_files(
             )
         legacy_path.unlink()
         mutated = True
-        if summary is not None and task.id not in summary.migrated_comment_task_ids:
-            summary.migrated_comment_task_ids.append(task.id)
+        if summary is not None:
+            match = re.match(r"^(T-\d{4})-", task_path.name)
+            task_id = match.group(1) if match else task_path.name
+            if task_id not in summary.migrated_comment_task_ids:
+                summary.migrated_comment_task_ids.append(task_id)
     return mutated
 
 
@@ -516,15 +539,22 @@ def recover_stale_runner_state(
 ) -> bool:
     from litehive.tasks.crud import list_tasks
     from litehive.tasks.persistence import save_state_without_runner_guard, load_state
-    from litehive.workspace.locking import workspace_lock
+    from litehive.workspace.locking import (
+        current_thread_owns_runner_guard,
+        runner_lock_is_held,
+        workspace_lock,
+    )
     from litehive.workspace.workflow import persist_tasks_and_state_without_runner_guard
 
     root = root.resolve()
     with workspace_lock(root):
         state = load_state(root)
+        running_task_ids = _running_task_ids(root)
+        if not running_task_ids and state.active_task_id is None:
+            if not current_thread_owns_runner_guard(root) and not runner_lock_is_held(root):
+                return False
         tasks = list_tasks(root)
         tasks_by_id = {task.id: task for task in tasks}
-        running_task_ids = sorted(task.id for task in tasks if task.runtime.execution_status == "running")
         if not _can_attempt_stale_runner_recovery(root, tasks_by_id, running_task_ids):
             return False
         mutated = False
@@ -536,10 +566,11 @@ def recover_stale_runner_state(
             if task is None:
                 continue
             if task_id != state.active_task_id and not should_requeue_commit_stage_task(task):
-                from litehive.workspace.locking import read_runner_lock_metadata, runner_metadata_present
+                if state.active_task_id is not None:
+                    from litehive.workspace.locking import read_runner_lock_metadata, runner_metadata_present
 
-                if not runner_metadata_present(read_runner_lock_metadata(root)):
-                    continue
+                    if not runner_metadata_present(read_runner_lock_metadata(root)):
+                        continue
             task_mutated, journal_message, prioritize = _recover_stale_running_task(
                 root, task, summary=summary
             )

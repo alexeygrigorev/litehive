@@ -23,6 +23,7 @@ from typing import Any
 
 from litehive.agents import SubagentManager
 from litehive.agents.models import EngineFailure
+from litehive.git import GitError, current_head, is_git_repo, status_porcelain
 from litehive.tasks.crud import get_task
 from litehive.tasks.worktrees import resolve_recorded_worktree_path
 
@@ -42,6 +43,28 @@ from .sessions import Session
 
 class _MissingThreadComment(Exception):
     """Internal: agent finished without producing a fresh thread comment."""
+
+
+def _execution_checkout_has_changes(workspace_root: Path, task_id: str) -> bool:
+    task = get_task(workspace_root, task_id)
+    if task is None:
+        return False
+    checkout = (
+        resolve_recorded_worktree_path(workspace_root, task.runtime.git.worktree_path)
+        or workspace_root
+    )
+    if not is_git_repo(checkout):
+        return False
+    try:
+        if status_porcelain(checkout):
+            return True
+        workspace_head = current_head(workspace_root)
+        checkout_head = current_head(checkout)
+    except GitError:
+        return False
+    if workspace_head is None or checkout_head is None:
+        return False
+    return workspace_head != checkout_head
 
 
 def _latest_verdict_after(
@@ -70,6 +93,18 @@ def _latest_verdict_after(
     if not fresh:
         return None
     latest = fresh[-1]
+    if (
+        step == "implementing"
+        and latest.verdict == "pass"
+        and not _execution_checkout_has_changes(workspace_root, task_id)
+    ):
+        return AgentVerdict(
+            outcome="reject",
+            reason=(
+                "implementing pass rejected: execution checkout is clean and HEAD matches the "
+                "workspace base, so no work landed"
+            ),
+        )
     return AgentVerdict(
         outcome=latest.verdict,
         reason=latest.message or "",

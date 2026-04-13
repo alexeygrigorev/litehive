@@ -1,12 +1,14 @@
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from litehive.agents.models import SubagentResult
-from litehive.models import SubagentRef
-from litehive.pipeline.heru_factory import HeruEngineAdapter
+from litehive.models import SubagentRef, TaskThreadComment
+from litehive.pipeline.heru_factory import HeruEngineAdapter, _latest_verdict_after
 from litehive.pipeline.nodes.agent import AgentVerdict
 from litehive.pipeline.persistence import TaskState
 from litehive.pipeline.sessions import Session
 from litehive.pipeline.types import PipelineMode
+from litehive.tasks.reports import append_thread_comment
 from heru.types import RuntimeEngineContinuation
 
 
@@ -100,3 +102,64 @@ def test_heru_engine_adapter_runs_subagent_in_task_worktree(tmp_path, monkeypatc
     )
 
     assert _StubManager.last_init == (tmp_path.resolve(), worktree.resolve())
+
+
+def test_latest_verdict_after_rejects_empty_implementing_pass(tmp_path, monkeypatch) -> None:
+    from litehive.tasks.crud import create_task
+
+    task = create_task(tmp_path, title="empty pass")
+    append_thread_comment(
+        tmp_path,
+        task,
+        TaskThreadComment(
+            role="swe",
+            step="implementing",
+            verdict="pass",
+            message="implemented nothing",
+        ),
+    )
+    monkeypatch.setattr(
+        "litehive.pipeline.heru_factory._execution_checkout_has_changes",
+        lambda workspace_root, task_id: False,
+    )
+
+    verdict = _latest_verdict_after(
+        tmp_path,
+        task.id,
+        "implementing",
+        datetime.now(UTC) - timedelta(minutes=1),
+    )
+
+    assert verdict is not None
+    assert verdict.outcome == "reject"
+    assert "execution checkout is clean" in verdict.reason
+
+
+def test_latest_verdict_after_allows_real_implementing_pass(tmp_path, monkeypatch) -> None:
+    from litehive.tasks.crud import create_task
+
+    task = create_task(tmp_path, title="real pass")
+    append_thread_comment(
+        tmp_path,
+        task,
+        TaskThreadComment(
+            role="swe",
+            step="implementing",
+            verdict="pass",
+            message="implemented change",
+        ),
+    )
+    monkeypatch.setattr(
+        "litehive.pipeline.heru_factory._execution_checkout_has_changes",
+        lambda workspace_root, task_id: True,
+    )
+
+    verdict = _latest_verdict_after(
+        tmp_path,
+        task.id,
+        "implementing",
+        datetime.now(UTC) - timedelta(minutes=1),
+    )
+
+    assert verdict is not None
+    assert verdict.outcome == "pass"
