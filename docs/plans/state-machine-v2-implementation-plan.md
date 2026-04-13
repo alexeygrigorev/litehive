@@ -425,4 +425,18 @@ item lands.
   the repair perf bug AND log root cause of why the empty-pass
   guard let this through. Heartbeat after that: daemon moved on
   to T-0242 cleanly; pipeline self-healing.
+- 2026-04-13: **T-0242 also empty-pass.** Next heartbeat after
+  T-0367: T-0242 closed `done/done` with the same signature —
+  `files_changed: []` from SA-0002-swe, SA-0006-swe, and
+  SA-0008-reviewer; no commit landed. One lead from the journal:
+  the in-pipeline recovery agent (`SA-0004-recovery`) ran on a
+  ruff-check failure and its report.yaml carries
+  `warnings: [Agent did not submit verdict via litehive report
+  CLI]`. Hypothesis: the recovery agent exited without submitting
+  a verdict, the pipeline treated that silent exit as recovery
+  success, and the origin stage resumed assuming the preceding
+  SWE pass was valid — cascading into an empty-pass accept. Two
+  consecutive empty-passes confirm the guard is broken *right
+  now* in M2-live operation. T-0368 already includes the
+  investigation in its acceptance criteria; no new task filed.
 - …
