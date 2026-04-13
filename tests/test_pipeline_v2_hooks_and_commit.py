@@ -120,6 +120,43 @@ def test_commit_node_clean_merge_returns_pass(git_repo_with_branch) -> None:
     assert (main_repo / "b.txt").read_text() == "feature\n"
 
 
+def test_commit_node_autocommits_uncommitted_worktree_edits(tmp_path: Path) -> None:
+    """SWE subagents write files but do not run ``git commit``. GitCommitNode
+    must commit those edits before merging, otherwise ``git merge`` sees no
+    new commits, reports "Already up to date", and the agent's work is
+    silently lost at the terminal stage (empty-pass bug)."""
+    repo = tmp_path / "main"
+    worktree = tmp_path / "wt"
+    repo.mkdir()
+    subprocess.run(["git", "init", "-q", "-b", "main", str(repo)], check=True)
+    subprocess.run(["git", "config", "user.email", "t@t"], cwd=repo, check=True)
+    subprocess.run(["git", "config", "user.name", "t"], cwd=repo, check=True)
+    (repo / "seed.txt").write_text("seed\n")
+    subprocess.run(["git", "add", "."], cwd=repo, check=True)
+    subprocess.run(["git", "commit", "-qm", "seed"], cwd=repo, check=True)
+
+    subprocess.run(
+        ["git", "worktree", "add", "-q", "-b", "feature", str(worktree), "HEAD"],
+        cwd=repo,
+        check=True,
+    )
+    subprocess.run(["git", "config", "user.email", "t@t"], cwd=worktree, check=True)
+    subprocess.run(["git", "config", "user.name", "t"], cwd=worktree, check=True)
+
+    (worktree / "new.txt").write_text("agent wrote this\n")
+
+    node = GitCommitNode(
+        repo,
+        worktree_resolver=lambda state: worktree,
+    )
+
+    state = make_state(stage="commit")
+    event = node.run(state)
+
+    assert isinstance(event, Pass), event
+    assert (repo / "new.txt").read_text() == "agent wrote this\n"
+
+
 def test_commit_node_with_conflict_emits_merge_conflict_detected(
     git_repo_with_branch,
 ) -> None:

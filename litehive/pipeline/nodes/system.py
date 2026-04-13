@@ -459,6 +459,7 @@ class GitCommitNode(CommitNode):
 
     def _merge_worktree(self, state: TaskState) -> None:
         worktree = self.worktree_resolver(state)
+        self._autocommit_worktree_changes(worktree, state)
         branch_ref = self._worktree_branch(worktree) or self._worktree_head(worktree)
 
         result = self._git_merge(branch_ref)
@@ -484,6 +485,44 @@ class GitCommitNode(CommitNode):
         # leave the worktree as-is and report — the recovery agent then
         # decides whether to abort the merge or keep investigating.
         raise MergeConflict(unresolved)
+
+    def _autocommit_worktree_changes(self, worktree: Path, state: TaskState) -> None:
+        """Commit any uncommitted SWE edits inside the worktree.
+
+        SWE subagents edit files but do not run `git commit`. Without this,
+        the worktree branch ref is unchanged from main HEAD and `git merge`
+        below is a silent no-op ("Already up to date"), producing an
+        empty-pass that loses the agent's work.
+        """
+        if worktree == self.main_repo_root:
+            return
+        status = subprocess.run(
+            ["git", "status", "--porcelain"],
+            cwd=str(worktree),
+            capture_output=True,
+            text=True,
+        )
+        if status.returncode != 0 or not status.stdout.strip():
+            return
+        add = subprocess.run(
+            ["git", "add", "-A"],
+            cwd=str(worktree),
+            capture_output=True,
+            text=True,
+        )
+        if add.returncode != 0:
+            raise GitError(f"git add -A failed in {worktree}: {add.stderr.strip()}")
+        message = f"litehive {state.task_id}: auto-commit worktree changes"
+        commit = subprocess.run(
+            ["git", "commit", "-m", message],
+            cwd=str(worktree),
+            capture_output=True,
+            text=True,
+        )
+        if commit.returncode != 0:
+            raise GitError(
+                f"git commit failed in {worktree}: {commit.stderr.strip() or commit.stdout.strip()}"
+            )
 
     def _worktree_head(self, worktree: Path) -> str:
         proc = subprocess.run(
