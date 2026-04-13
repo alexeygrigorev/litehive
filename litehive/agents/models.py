@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 
-from litehive.agents.base import CLIExecutionResult
+from heru.base import CLIExecutionResult
 from heru.types import RuntimeEngineContinuation
 from litehive.models import ResourceLimitEvent, SubagentRef
 

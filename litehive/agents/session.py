@@ -10,7 +10,7 @@ import yaml
 
 from litehive.agents import extract_engine_timeline, parse_unified_execution
 from litehive.agents._continuation import extract_execution_continuation
-from litehive.agents.base import CLIExecutionResult
+from heru.base import CLIExecutionResult
 from litehive.observability.events import append_event, append_session_log, ensure_session_log
 from litehive.models import ResourceLimitEvent, SubagentRef, TaskRecord, utcnow
 from litehive.agents.artifacts import (

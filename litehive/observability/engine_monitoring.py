@@ -5,7 +5,7 @@ from pathlib import Path
 import yaml
 
 from litehive.config import render_workspace_gitignore, workspace_gitignore_path
-from litehive.agents.base import CLIExecutionResult, ExternalCLIAdapter
+from heru.base import CLIExecutionResult, ExternalCLIAdapter
 from litehive.models import (
     EngineUsageObservation,
     EngineUsageRecord,

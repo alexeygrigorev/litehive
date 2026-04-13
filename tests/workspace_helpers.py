@@ -41,7 +41,7 @@ from litehive.agents import (
     extract_engine_timeline,
     get_engine,
 )
-from litehive.agents.base import (
+from heru.base import (
     AdapterCapabilities,
     CLIExecutionResult,
     ExternalCLIAdapter,

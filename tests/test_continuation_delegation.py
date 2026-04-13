@@ -2,7 +2,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from litehive.agents._continuation import extract_execution_continuation
-from litehive.agents.base import CLIExecutionResult
+from heru.base import CLIExecutionResult
 from litehive.config.engine_models import _set_continuation_handoff
 from litehive.models import RuntimeEngineContinuation
 from litehive.tasks import create_task

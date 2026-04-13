@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from litehive.attention import list_attention
-from litehive.agents.base import CLIInvocation
+from heru.base import CLIInvocation
 from litehive.agents.sandbox import SandboxLauncher, SandboxProfile, sandbox_profile_for_role
 from litehive.config import ExternalEngineSandboxConfig, ExternalEngineSandboxPolicy, LitehiveConfig, ensure_workspace
 from litehive.workspace.worktree_inspection import resolve_task_execution_root

@@ -29,7 +29,7 @@ from pathlib import Path
 
 import pytest
 
-from litehive.agents.base import CLIInvocation
+from heru.base import CLIInvocation
 from litehive.agents.sandbox import SandboxLauncher
 from litehive.config import (
     ExternalEngineSandboxConfig,

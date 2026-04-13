@@ -17,7 +17,7 @@ from litehive.config import (
     ExternalEngineSandboxPolicy,
     LitehiveConfig,
 )
-from litehive.agents.base import CLIExecutionResult, CLIInvocation, ExternalCLIAdapter
+from heru.base import CLIExecutionResult, CLIInvocation, ExternalCLIAdapter
 from litehive.agents.engine_detection import (
     ORIGINAL_EXTERNAL_ADAPTER_RUN,
     ORIGINAL_EXTERNAL_ADAPTER_RUN_LIVE,

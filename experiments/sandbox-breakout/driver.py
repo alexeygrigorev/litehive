@@ -6,7 +6,7 @@ import subprocess
 import tempfile
 
 from litehive.agents import get_engine
-from litehive.agents.base import CLIInvocation, ExternalCLIAdapter
+from heru.base import CLIInvocation, ExternalCLIAdapter
 from litehive.agents.sandbox import SandboxLauncher
 from litehive.config import ExternalEngineSandboxConfig, ExternalEngineSandboxPolicy, LitehiveConfig, ensure_workspace
 

@@ -12,7 +12,7 @@ from litehive.agents import (
     classify_retryable_execution_failure,
     get_engine,
 )
-from litehive.agents.base import CLIExecutionResult, ExternalCLIAdapter
+from heru.base import CLIExecutionResult, ExternalCLIAdapter
 from litehive.agents.sandbox import SandboxError, SandboxLauncher
 from litehive.observability.events import append_event
 from litehive.models import (

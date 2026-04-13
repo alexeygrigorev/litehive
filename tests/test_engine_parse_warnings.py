@@ -3,7 +3,7 @@
 import json
 import logging
 
-from litehive.agents.base import iter_jsonl_payloads
+from heru.base import iter_jsonl_payloads
 
 
 def test_iter_jsonl_payloads_warns_on_invalid_json(caplog):

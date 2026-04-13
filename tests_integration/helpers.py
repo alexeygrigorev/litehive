@@ -8,7 +8,7 @@ import pytest
 
 from litehive.config import LitehiveConfig, VALID_ENGINE_NAMES, ensure_workspace, load_config
 from litehive.agents import extract_engine_continuation, get_engine
-from litehive.agents.base import CLIExecutionResult
+from heru.base import CLIExecutionResult
 
 
 INTEGRATION_ENV = "LITEHIVE_INTEGRATION_ENGINES"
