@@ -2,16 +2,17 @@
 
 from pathlib import Path
 
-from litehive.config import LitehiveConfig, state_path
-from litehive.git import GitError, abort_revert, commit_task, has_changes, rollback_message, rollback_task
-from litehive.models import TaskRecord
-from litehive.storage import runtime_store
+from litehive.config.model import LitehiveConfig
+from litehive.config.paths import state_path
+from litehive.git.ops import GitError, abort_revert, commit_task, has_changes, rollback_message, rollback_task
+from litehive.models.task_models import TaskRecord
+from litehive.state.store import runtime_store
 from litehive.tasks.paths import task_dir, task_file, task_runtime_file
 from litehive.tasks.persistence import atomic_write_text, load_state
 from litehive.tasks.normalization import implementation_entry_stage
 from litehive.tasks.queue import prepare_completed_task_for_recovery
-from litehive.workspace.locking import workspace_lock, workspace_mutation_guard
-from litehive.workspace.workflow import persist_task_and_state
+from litehive.state.locking import workspace_lock, workspace_mutation_guard
+from litehive.state.persist import persist_task_and_state
 
 
 def resolve_recovery_engine(
@@ -53,7 +54,7 @@ def require_completed_task(task: TaskRecord, action: str) -> None:
 
 def rollback_completed_task(root: Path, task_id: str):
     from litehive.config.pool_types import RollbackSummary
-    from litehive.tasks.crud import get_task
+    from litehive.state.records import get_task
 
     root = root.resolve()
     with workspace_mutation_guard(root), workspace_lock(root):
@@ -108,7 +109,7 @@ def rollback_completed_task(root: Path, task_id: str):
 def recover_completed_task(root: Path, task_id: str) -> TaskRecord:
     root = root.resolve()
     with workspace_mutation_guard(root), workspace_lock(root):
-        from litehive.tasks.crud import get_task
+        from litehive.state.records import get_task
 
         task = get_task(root, task_id)
         if task is None:

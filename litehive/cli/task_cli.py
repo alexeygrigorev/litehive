@@ -22,13 +22,14 @@ from litehive.cli.task_logs_support import (
     _show_latest_subagent,
     _show_task_journal,
 )
-from litehive.config import ensure_workspace, load_config
+from litehive.config.loading import load_config
+from litehive.config.workspace import ensure_workspace
 from litehive.tasks.archive import archive_root
-from litehive.tasks.crud import create_task, list_tasks as load_tasks, require_task
+from litehive.state.records import create_task, list_tasks as load_tasks, require_task
 from litehive.tasks.models import WorkspaceConflictError
 from litehive.tasks.normalization import missing_acceptance_criteria_cli_warning
 from litehive.tasks.constants import VALID_TASK_PRIORITIES
-from litehive.workspace.task_status import abandon_task, close_task, update_task_metadata
+from litehive.tasks.status import abandon_task, close_task, update_task_metadata
 
 app = make_typer(invoke_without_command=True)
 

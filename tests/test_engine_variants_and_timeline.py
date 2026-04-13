@@ -32,7 +32,7 @@ from tests.workspace_helpers import (
 
 
 def test_engine_registry_uses_adapter_defaults_and_public_lookup_api() -> None:
-    from litehive.agents import ENGINE_REGISTRY, get_engine
+    from heru import ENGINE_REGISTRY, get_engine
 
     assert list(ENGINE_REGISTRY) == ["codex", "opencode", "goz", "gemini", "copilot", "claude"]
 
@@ -72,7 +72,7 @@ def test_provider_adapter_modules_stay_under_200_lines() -> None:
 
 
 def test_claude_build_invocation_includes_model_and_resume(tmp_path: Path) -> None:
-    from litehive.agents import ClaudeCLIAdapter
+    from heru.adapters import ClaudeCLIAdapter
 
     adapter = ClaudeCLIAdapter(
         name="claude",
@@ -128,7 +128,7 @@ def test_claude_build_invocation_includes_model_and_resume(tmp_path: Path) -> No
 
 def test_claude_build_invocation_uses_stdin_for_large_prompt(tmp_path: Path) -> None:
     """Prompts exceeding MAX_ARG_STRLEN are piped via stdin, not -p."""
-    from litehive.agents import ClaudeCLIAdapter
+    from heru.adapters import ClaudeCLIAdapter
 
     adapter = ClaudeCLIAdapter(
         name="claude",
@@ -236,7 +236,7 @@ def test_engine_invocation_preserves_virtual_env_within_caller_workspace(
 
 
 def test_claude_no_max_turns_by_default(tmp_path: Path) -> None:
-    from litehive.agents import ClaudeCLIAdapter
+    from heru.adapters import ClaudeCLIAdapter
 
     adapter = ClaudeCLIAdapter(
         name="claude",
@@ -253,7 +253,7 @@ def test_claude_no_max_turns_by_default(tmp_path: Path) -> None:
 
 
 def test_claude_build_invocation_includes_max_turns(tmp_path: Path) -> None:
-    from litehive.agents import ClaudeCLIAdapter
+    from heru.adapters import ClaudeCLIAdapter
 
     adapter = ClaudeCLIAdapter(
         name="claude",
@@ -274,7 +274,7 @@ def test_claude_build_invocation_includes_max_turns(tmp_path: Path) -> None:
 def test_claude_invocation_preserves_claude_credentials_while_stripping_virtual_env_for_other_project(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from litehive.agents import ClaudeCLIAdapter
+    from heru.adapters import ClaudeCLIAdapter
 
     caller_workspace = tmp_path / "project-a"
     other_workspace = tmp_path / "project-b"
@@ -325,7 +325,7 @@ def test_run_next_task_passes_configured_claude_max_turns(
 
 def test_claude_renders_jsonl_transcript(tmp_path: Path) -> None:
     """Adapter-level transcript rendering still surfaces the first assistant line."""
-    from litehive.agents import ClaudeCLIAdapter
+    from heru.adapters import ClaudeCLIAdapter
 
     execution = CLIExecutionResult(
         adapter="claude",

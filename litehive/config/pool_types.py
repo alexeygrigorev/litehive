@@ -3,7 +3,7 @@
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from litehive.models import TaskRecord
+from litehive.models.task_models import TaskRecord
 from litehive.tasks.models import BlockedTask
 
 

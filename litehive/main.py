@@ -8,7 +8,7 @@ from pathlib import Path
 import yaml
 
 from litehive.attention import waiting_for_you_lines
-from litehive.config import resolve_workspace
+from litehive.config.workspace import resolve_workspace
 from litehive.observability.status_diagnostics import (
     collect_status_snapshot,
     render_health_summary,
@@ -110,7 +110,7 @@ def _fast_status(argv: list[str]) -> int:
         print(f"runner_heartbeat_at: {runner['heartbeat_at']}")
 
     if active_task_id is not None:
-        from litehive.tasks.crud import get_task
+        from litehive.state.records import get_task
 
         task = get_task(workspace, active_task_id)
         if task is not None:
@@ -192,7 +192,7 @@ def main() -> int:
     if argv and argv[0] == "status" and "--full" not in argv:
         return _fast_status(argv[1:])
 
-    from litehive.cli import main as cli_main
+    from litehive.cli.app import main as cli_main
 
     return cli_main()
 

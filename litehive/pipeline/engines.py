@@ -18,7 +18,7 @@ workspace root and session context.
 from datetime import UTC, datetime
 from typing import Callable
 
-from litehive.config import LitehiveConfig
+from litehive.config.model import LitehiveConfig
 
 from .nodes.agent import (
     Engine,

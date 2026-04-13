@@ -1,6 +1,8 @@
 import pytest
 
-from litehive.tasks import create_task, load_task_thread, require_task, set_active_task
+from litehive.state.records import create_task, require_task
+from litehive.tasks.queue import set_active_task
+from litehive.tasks.reports import load_task_thread
 
 from .helpers import (
     assert_nudge_verdict_submission,

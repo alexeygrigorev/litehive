@@ -7,9 +7,10 @@ import threading
 import time
 from pathlib import Path
 
-from litehive.config import load_config
+from litehive.config.loading import load_config
 from litehive.git.ops import current_head
-from litehive.models import TaskRecord, WorkspaceState, utcnow
+from litehive.models.common import utcnow
+from litehive.models.task_models import TaskRecord, WorkspaceState
 
 from litehive.tasks.constants import (
     CLOSED_TASK_STATUSES,
@@ -20,7 +21,7 @@ from litehive.tasks.constants import (
     RUNNER_LOCKS,
     RUNNER_LOCKS_MUTEX,
 )
-from litehive.workspace.locking import workspace_lock
+from litehive.state.locking import workspace_lock
 from litehive.tasks.models import StopTaskSummary, SwitchTaskSummary, WorkspaceConflictError
 from litehive.tasks.normalization import (
     missing_acceptance_criteria_reason,
@@ -44,10 +45,10 @@ def _active_task_id_for_stop(root: Path, state: WorkspaceState) -> str:
 
 
 def _stop_active_task_without_runner_guard(root: Path, task_id: str) -> TaskRecord:
-    from litehive.tasks.crud import require_task
+    from litehive.state.records import require_task
     from litehive.tasks.persistence import load_state
-    from litehive.recovery import prepare_interrupted_task, interruption_journal_message
-    from .workflow import persist_task_and_state_without_runner_guard
+    from litehive.recovery.workspace_repair import prepare_interrupted_task, interruption_journal_message
+    from litehive.state.persist import persist_task_and_state_without_runner_guard
 
     with workspace_lock(root):
         state = load_state(root)
@@ -89,15 +90,15 @@ def stop_current_task(
     wait_timeout_seconds: float = 5.0,
     poll_interval_seconds: float = 0.1,
 ) -> StopTaskSummary:
-    from litehive.tasks.crud import require_task
+    from litehive.state.records import require_task
     from litehive.tasks.persistence import load_state
     from litehive.tasks.queue import active_task_markers
-    from litehive.workspace.locking import (
+    from litehive.state.locking import (
         read_runner_lock_metadata,
         runner_lock_is_held,
         runner_pid_is_alive,
     )
-    from litehive.recovery import recover_stale_runner_state
+    from litehive.recovery.workspace_repair import recover_stale_runner_state
 
     state = load_state(root)
     active_task_id = _active_task_id_for_stop(root, state)
@@ -189,11 +190,11 @@ def _switch_thread_comment_message(
 
 
 def switch_task_engine(root: Path, task_id: str, *, engine: str, reason: str) -> SwitchTaskSummary:
-    from litehive.tasks.crud import require_task
+    from litehive.state.records import require_task
     from litehive.tasks.persistence import load_state
     from litehive.tasks.queue import move_queued_task
     from litehive.tasks.reports import append_thread_comment
-    from .runtime_tracking import mark_engine_switch
+    from litehive.tasks.runtime import mark_engine_switch
 
     if engine not in VALID_TASK_ENGINES:
         raise ValueError(f"Unsupported engine '{engine}'")
@@ -240,7 +241,7 @@ def switch_task_engine(root: Path, task_id: str, *, engine: str, reason: str) ->
         )
 
     prior_work_paths = _switch_prior_work_paths(root, task)
-    from litehive.models import TaskThreadComment
+    from litehive.models.report_models import TaskThreadComment
 
     append_thread_comment(
         root,
@@ -271,8 +272,8 @@ def switch_task_engine(root: Path, task_id: str, *, engine: str, reason: str) ->
 
 
 def requeue_task(root: Path, task_id: str, *, front: bool = False, force: bool = False) -> TaskRecord:
-    from litehive.tasks.crud import require_task
-    from .locking import ensure_future_task_mutation_allowed, workspace_lock
+    from litehive.state.records import require_task
+    from litehive.state.locking import ensure_future_task_mutation_allowed, workspace_lock
     from litehive.tasks.persistence import load_state
     from litehive.tasks.queue import reset_task_for_recovery
     from litehive.tasks.reports import (
@@ -283,7 +284,7 @@ def requeue_task(root: Path, task_id: str, *, front: bool = False, force: bool =
         save_task_thread,
     )
     from litehive.tasks.worktrees import resolve_recorded_worktree_path
-    from .workflow import persist_task_and_state_without_runner_guard
+    from litehive.state.persist import persist_task_and_state_without_runner_guard
 
     def _task_checkout_path(task: TaskRecord) -> Path:
         worktree_path = resolve_recorded_worktree_path(
@@ -353,11 +354,11 @@ def requeue_task(root: Path, task_id: str, *, front: bool = False, force: bool =
 
 
 def resume_task(root: Path, task_id: str, *, front: bool = False) -> TaskRecord:
-    from litehive.tasks.crud import require_task
-    from .locking import ensure_future_task_mutation_allowed, workspace_lock
+    from litehive.state.records import require_task
+    from litehive.state.locking import ensure_future_task_mutation_allowed, workspace_lock
     from litehive.tasks.persistence import load_state
     from litehive.tasks.queue import reset_task_for_recovery
-    from .workflow import persist_task_and_state_without_runner_guard
+    from litehive.state.persist import persist_task_and_state_without_runner_guard
 
     with workspace_lock(root):
         task = require_task(root, task_id)
@@ -394,10 +395,10 @@ def resume_task(root: Path, task_id: str, *, front: bool = False) -> TaskRecord:
 
 
 def abandon_task(root: Path, task_id: str) -> TaskRecord:
-    from litehive.tasks.crud import require_task
-    from .locking import ensure_future_task_mutation_allowed, workspace_lock
+    from litehive.state.records import require_task
+    from litehive.state.locking import ensure_future_task_mutation_allowed, workspace_lock
     from litehive.tasks.persistence import load_state
-    from .workflow import persist_task_and_state_without_runner_guard
+    from litehive.state.persist import persist_task_and_state_without_runner_guard
 
     with workspace_lock(root):
         task = require_task(root, task_id)
@@ -447,10 +448,10 @@ def close_task(
     reason: str | None = None,
     follow_up_task_id: str | None = None,
 ) -> TaskRecord:
-    from litehive.tasks.crud import require_task
-    from .locking import ensure_future_task_mutation_allowed, workspace_lock
+    from litehive.state.records import require_task
+    from litehive.state.locking import ensure_future_task_mutation_allowed, workspace_lock
     from litehive.tasks.persistence import load_state
-    from .workflow import persist_task_and_state_without_runner_guard
+    from litehive.state.persist import persist_task_and_state_without_runner_guard
 
     """Mark a task as explicitly closed with a non-implementation outcome.
 
@@ -508,10 +509,10 @@ def close_task(
 
 
 def park_task(root: Path, task_id: str) -> TaskRecord:
-    from litehive.tasks.crud import require_task
-    from .locking import ensure_future_task_mutation_allowed, workspace_lock
+    from litehive.state.records import require_task
+    from litehive.state.locking import ensure_future_task_mutation_allowed, workspace_lock
     from litehive.tasks.persistence import load_state
-    from .workflow import persist_task_and_state_without_runner_guard
+    from litehive.state.persist import persist_task_and_state_without_runner_guard
 
     """Mark a task as parked.
 
@@ -562,12 +563,12 @@ def update_task(
     action: str | None | object = ...,
     journal_message: str | None = None,
 ) -> TaskRecord:
-    from litehive.tasks.crud import require_task
-    from .locking import ensure_future_task_mutation_allowed, persist_future_task_update, workspace_lock
+    from litehive.state.records import require_task
+    from litehive.state.locking import ensure_future_task_mutation_allowed, persist_future_task_update, workspace_lock
     from litehive.tasks.persistence import load_state
     from litehive.tasks.queue import reset_task_for_recovery
     from litehive.tasks.queue import validate_task_dependencies
-    from .workflow import persist_task_and_state_without_runner_guard
+    from litehive.state.persist import persist_task_and_state_without_runner_guard
 
     with workspace_lock(root):
         state = load_state(root)

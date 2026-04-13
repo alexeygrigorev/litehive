@@ -116,7 +116,7 @@ class RoleAgent(AgentNode):
         if root is None:
             return []
         try:
-            from litehive.config import load_config
+            from litehive.config.loading import load_config
 
             config = load_config(root)
         except Exception:

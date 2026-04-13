@@ -5,7 +5,7 @@ import yaml
 from typer.testing import CliRunner
 
 import litehive.cli as legacy_cli
-from litehive.tasks.crud import load_task_record_file, serialize_task_record
+from litehive.state.records import load_task_record_file, serialize_task_record
 from tests.workspace_helpers import ensure_workspace
 
 modern_cli = importlib.import_module("litehive.cli.app")

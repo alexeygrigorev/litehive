@@ -156,7 +156,7 @@ class GitWorktreeSyncNode(WorktreeSyncNode):
         self.main_ref = main_ref
 
     def _sync(self, state: TaskState) -> bool:
-        from litehive.tasks.crud import get_task, save_task
+        from litehive.state.records import get_task, save_task
         from litehive.tasks.worktrees import (
             resolve_recorded_worktree_path,
             serialize_worktree_path,

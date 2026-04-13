@@ -57,7 +57,7 @@ def _render_stage_prompt_scaffolding(profile: dict[str, Any]) -> list[str]:
 
 
 def render_context_template(profile_name: str) -> str:
-    from litehive.config.profiles import resolve_process_profile
+    from litehive.config.profiles.loader import resolve_process_profile
 
     profile = resolve_process_profile(profile_name)
     lines = [

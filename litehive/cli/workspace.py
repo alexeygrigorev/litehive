@@ -12,19 +12,21 @@ from heru.quota.codex_quota import check_codex_quota
 from heru.quota.copilot_quota import check_copilot_quota
 from heru.quota.zai_quota import check_zai_quota
 
-from litehive.agents import ENGINE_CHOICES, get_engine
+from heru import ENGINE_CHOICES, get_engine
 from litehive.attention import waiting_for_you_lines
 from litehive.cli.display import format_retry_on
 from litehive.cli.common import WorkspaceOption, choice
-from litehive.config import config_path, ensure_workspace, load_config
+from litehive.config.loading import load_config
+from litehive.config.paths import config_path
+from litehive.config.workspace import ensure_workspace
 from litehive.config.engine_models import active_engine_freezes
-from litehive.daemon import daemon_status_lines
-from litehive.observability import (
+from litehive.daemon.execution import daemon_status_lines
+from litehive.observability.engine_monitoring import render_engine_monitoring_lines
+from litehive.observability.status import (
     collect_recent_activity,
     find_last_completed_task,
     render_active_task_section,
     render_engine_health_section,
-    render_engine_monitoring_lines,
     render_last_completed_section,
     render_queue_section,
     render_recent_activity_section,
@@ -35,12 +37,13 @@ from litehive.observability.status_diagnostics import (
     render_health_summary,
     status_has_problems,
 )
-from litehive.recovery import repair_workspace_state
-from litehive.tasks import list_tasks_state_first, load_state, require_task
-from litehive.tasks.crud import list_tasks
+from litehive.recovery.workspace_repair import repair_workspace_state
+from litehive.state.records import list_tasks_state_first, require_task
+from litehive.tasks.persistence import load_state
+from litehive.state.records import list_tasks
 from litehive.tasks.models import WorkspaceConflictError
 from litehive.tasks.persistence import load_state as load_runtime_state
-from litehive.workspace.worktree_inspection import inspect_dirty_worktree_gate
+from litehive.tasks.worktree_inspection import inspect_dirty_worktree_gate
 
 from litehive.cli.worktree_support import collect_managed_worktrees
 

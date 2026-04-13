@@ -84,7 +84,7 @@ def test_logs_defaults_to_latest_daemon_run_tail(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     ensure_workspace(tmp_path)
-    from litehive.config import workspace_logs_dir
+    from litehive.config.paths import workspace_logs_dir
 
     log_dir = workspace_logs_dir(tmp_path) / "run-all" / "20260409T120000Z"
     log_dir.mkdir(parents=True, exist_ok=True)
@@ -104,7 +104,7 @@ def test_logs_daemon_lists_latest_sessions_with_outcomes(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     ensure_workspace(tmp_path)
-    from litehive.config import workspace_logs_dir
+    from litehive.config.paths import workspace_logs_dir
 
     logs_root = workspace_logs_dir(tmp_path) / "run-all"
     logs_root.mkdir(parents=True, exist_ok=True)

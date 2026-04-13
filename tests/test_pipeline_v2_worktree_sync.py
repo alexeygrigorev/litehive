@@ -1,11 +1,12 @@
 import subprocess
 from pathlib import Path
 
-from litehive.config import ensure_workspace, worktree_root
+from litehive.config.paths import worktree_root
+from litehive.config.workspace import ensure_workspace
 from litehive.pipeline.nodes.system import GitWorktreeSyncNode
 from litehive.pipeline.persistence import TaskState
 from litehive.pipeline.types import PipelineMode
-from litehive.tasks.crud import create_task, save_task
+from litehive.state.records import create_task, save_task
 from litehive.tasks.worktrees import task_worktree_branch
 
 

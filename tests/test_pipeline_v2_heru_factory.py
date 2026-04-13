@@ -2,7 +2,8 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from litehive.agents.models import SubagentResult
-from litehive.models import SubagentRef, TaskThreadComment
+from heru.types import SubagentRef
+from litehive.models.report_models import TaskThreadComment
 from litehive.pipeline.heru_factory import HeruEngineAdapter, _latest_verdict_after
 from litehive.pipeline.nodes.agent import AgentVerdict
 from litehive.pipeline.persistence import TaskState
@@ -40,7 +41,7 @@ class _StubManager:
 def test_heru_engine_adapter_updates_session_from_subagent_result_continuation(
     tmp_path, monkeypatch
 ) -> None:
-    from litehive.tasks.crud import create_task
+    from litehive.state.records import create_task
 
     task = create_task(tmp_path, title="resume", goal="keep continuation")
     session = Session()
@@ -71,7 +72,7 @@ def test_heru_engine_adapter_updates_session_from_subagent_result_continuation(
 
 
 def test_heru_engine_adapter_runs_subagent_in_task_worktree(tmp_path, monkeypatch) -> None:
-    from litehive.tasks.crud import create_task, save_task
+    from litehive.state.records import create_task, save_task
 
     task = create_task(tmp_path, title="worktree", goal="use execution root")
     worktree = tmp_path / ".litehive" / "worktrees" / f"{task.id}-{task.slug}"
@@ -105,7 +106,7 @@ def test_heru_engine_adapter_runs_subagent_in_task_worktree(tmp_path, monkeypatc
 
 
 def test_latest_verdict_after_rejects_empty_implementing_pass(tmp_path, monkeypatch) -> None:
-    from litehive.tasks.crud import create_task
+    from litehive.state.records import create_task
 
     task = create_task(tmp_path, title="empty pass")
     append_thread_comment(
@@ -136,7 +137,7 @@ def test_latest_verdict_after_rejects_empty_implementing_pass(tmp_path, monkeypa
 
 
 def test_latest_verdict_after_allows_real_implementing_pass(tmp_path, monkeypatch) -> None:
-    from litehive.tasks.crud import create_task
+    from litehive.state.records import create_task
 
     task = create_task(tmp_path, title="real pass")
     append_thread_comment(

@@ -13,10 +13,10 @@ from tests.workspace_helpers import (
 
 from datetime import datetime, timedelta, timezone
 
-from litehive.agents import ENGINE_CHOICES
+from heru import ENGINE_CHOICES
 from typer.testing import CliRunner
 
-from litehive.cli import app
+from litehive.cli.app import app
 from litehive.config.engine_models import EngineSelection
 
 

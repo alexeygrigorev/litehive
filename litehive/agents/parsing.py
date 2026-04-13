@@ -2,7 +2,9 @@
 
 from pathlib import Path
 
-from litehive.models import StageReport, TaskRecord, cap_feedback
+from litehive.models.common import cap_feedback
+from litehive.models.report_models import StageReport
+from litehive.models.task_models import TaskRecord
 
 from litehive.agents.models import SubagentResult
 

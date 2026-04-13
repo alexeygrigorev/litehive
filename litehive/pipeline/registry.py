@@ -18,28 +18,23 @@ and pass them in; this module doesn't import any concrete engine or git
 plumbing.
 """
 
-from .agents import (
-    MergeAgent,
-    PlannerAgent,
-    QAAgent,
-    RecoveryAgent,
-    ReviewerAgent,
-    SWEAgent,
-)
 from .agents.base import PromptContext, RoleAgent
-from .nodes import (
+from .agents.merge import MergeAgent
+from .agents.planner import PlannerAgent
+from .agents.qa import QAAgent
+from .agents.recovery import RecoveryAgent
+from .agents.reviewer import ReviewerAgent
+from .agents.swe import SWEAgent
+from .nodes.base import NodeRegistry
+from .nodes.hook import ExecutionMode, HookNode, HookRunner, HookSpec
+from .nodes.system import (
     CommitNode,
-    ExecutionMode,
-    HookNode,
-    HookRunner,
-    HookSpec,
-    NodeRegistry,
     NoopWorktreeSyncNode,
     PreExecRecoveryNode,
     ReadyNode,
-    TerminalNode,
     WorktreeSyncNode,
 )
+from .nodes.terminal import TerminalNode
 from .nodes.agent import EngineSelector, SessionProvider
 from .types import NodeName
 

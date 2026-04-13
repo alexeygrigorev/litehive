@@ -3,15 +3,15 @@ import sys
 import typer
 
 from litehive.cli.common import WorkspaceOption, make_typer, require_subcommand
-from litehive.config import ensure_workspace
-from litehive.daemon import (
+from litehive.config.workspace import ensure_workspace
+from litehive.daemon.execution import (
     daemon_status_lines,
-    list_daemon_instances,
     run_daemon_loop,
     start_background_daemon,
     stop_workspace_daemon,
 )
-from litehive.db import apply_pending_migrations
+from litehive.daemon.registry import list_daemon_instances
+from litehive.db.schema import apply_pending_migrations
 
 app = make_typer(invoke_without_command=True)
 

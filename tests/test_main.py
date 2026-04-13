@@ -15,7 +15,7 @@ def test_main_rewrites_agent_report_compat_command(
         return 7
 
     monkeypatch.setenv("LITEHIVE_AGENT_ROLE", "swe")
-    monkeypatch.setattr("litehive.cli.main", fake_cli_main)
+    monkeypatch.setattr("litehive.cli.app.main", fake_cli_main)
     monkeypatch.setattr(
         sys,
         "argv",
@@ -46,7 +46,7 @@ def test_main_allows_recovery_diagnostic_commands(
         return 9
 
     monkeypatch.setenv("LITEHIVE_AGENT_ROLE", "recovery")
-    monkeypatch.setattr("litehive.cli.main", fake_cli_main)
+    monkeypatch.setattr("litehive.cli.app.main", fake_cli_main)
     monkeypatch.setattr(
         sys,
         "argv",

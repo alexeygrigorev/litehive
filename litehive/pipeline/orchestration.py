@@ -25,12 +25,12 @@ from dataclasses import dataclass
 from pathlib import Path
 import subprocess
 
-from litehive.config import load_config
+from litehive.config.loading import load_config
 from litehive.config.engine_models import resolve_task_retry_policy
-from litehive.git import GitError, remove_worktree
-from litehive.models import TaskRecord
+from litehive.git.ops import GitError, remove_worktree
+from litehive.models.task_models import TaskRecord
 from litehive.models.runtime_models import RuntimeHookRejectFingerprint
-from litehive.tasks.crud import (
+from litehive.state.records import (
     clear_task_worktree_path,
     get_task,
     get_task_worktree_path,
@@ -38,22 +38,21 @@ from litehive.tasks.crud import (
     set_task_commit_sha,
 )
 from litehive.tasks.worktrees import resolve_recorded_worktree_path, task_worktree_branch
-from litehive.workspace.locking import persist_future_task_update
-from litehive.workspace.locking import runner_heartbeat, workspace_runner_guard
+from litehive.state.locking import persist_future_task_update
+from litehive.state.locking import runner_heartbeat, workspace_runner_guard
 
 from .agents.base import PromptContext
 from .engines import ConfigBackedEngineSelector, EngineFactory
 from .heru_factory import heru_engine_factory
 from .journal import SqliteJournal
-from .nodes import (
+from .nodes.hook import HookSpec, SubprocessHookRunner
+from .nodes.system import (
+    CommitNode,
     GitCommitNode,
     GitWorktreeSyncNode,
-    HookSpec,
     PreExecRecoveryNode,
     ReadyNode,
-    SubprocessHookRunner,
 )
-from .nodes.system import CommitNode
 from .persistence import SqlitePersistence, TaskState
 from .registry import build_registry
 from .runner import StateMachineRunner
@@ -153,7 +152,7 @@ class ExecutionResult:
 
 def _resolve_worktree(root: Path, state: TaskState) -> Path:
     """Look up the on-disk worktree path for a task, falling back to root."""
-    from litehive.tasks.crud import get_task as _get_task
+    from litehive.state.records import get_task as _get_task
 
     task = _get_task(root, state.task_id)
     if task is None:
@@ -180,7 +179,7 @@ def _build_worktree_sync_node(root: Path) -> GitWorktreeSyncNode:
 def _missing_worktree_probe(root: Path):
     """Return a probe callable that flags tasks whose worktree_path is gone."""
 
-    from litehive.tasks.crud import get_task as _get_task
+    from litehive.state.records import get_task as _get_task
     from litehive.tasks.worktrees import resolve_recorded_worktree_path
 
     def _probe(state) -> bool:
@@ -201,8 +200,8 @@ def _missing_worktree_probe(root: Path):
 def _clear_stale_worktree_repair(root: Path):
     """Return a repair callable that clears a stale worktree_path on the task."""
 
-    from litehive.tasks.crud import get_task as _get_task
-    from litehive.tasks.crud import set_task_worktree_path, save_task
+    from litehive.state.records import get_task as _get_task
+    from litehive.state.records import set_task_worktree_path, save_task
     from litehive.tasks.worktrees import resolve_recorded_worktree_path
 
     def _repair(state) -> None:

@@ -8,10 +8,11 @@ from typing import Any, Literal
 import yaml
 from pydantic import BaseModel, Field
 
-from litehive.config import ensure_workspace
-from litehive.db import connect_workspace_db
-from litehive.models import TaskRecord, utcnow
-from litehive.tasks.crud import list_tasks
+from litehive.config.workspace import ensure_workspace
+from litehive.db.schema import connect_workspace_db
+from litehive.models.common import utcnow
+from litehive.models.task_models import TaskRecord
+from litehive.state.records import list_tasks
 from litehive.tasks.paths import tasks_root
 from litehive.tasks.persistence import load_state, set_pool_stop_reason
 
@@ -388,7 +389,7 @@ def _flagged_and_merge_failed_items(tasks: list[TaskRecord]) -> list[AttentionIt
 
 
 def _stale_worktree_items(root: Path, tasks: list[TaskRecord], state) -> list[AttentionItem]:
-    from litehive.config import worktree_root
+    from litehive.config.paths import worktree_root
     from litehive.tasks.queue import is_task_eligible_for_execution
     from litehive.tasks.worktrees import (
         is_managed_worktree_path,

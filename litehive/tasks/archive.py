@@ -7,10 +7,11 @@ from pathlib import Path
 
 import yaml
 
-from litehive.models import TaskRecord, utcnow
+from litehive.models.common import utcnow
+from litehive.models.task_models import TaskRecord
 
-from .crud import load_task_record_file, list_tasks, require_task
-from litehive.workspace.locking import workspace_lock
+from litehive.state.records import load_task_record_file, list_tasks, require_task
+from litehive.state.locking import workspace_lock
 from .paths import task_dir, tasks_root
 from .persistence import atomic_write_text
 

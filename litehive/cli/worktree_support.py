@@ -4,13 +4,13 @@ from dataclasses import dataclass
 from pathlib import Path
 import subprocess
 
-from litehive.git import (
+from litehive.git.ops import (
     GitError,
     current_head,
     has_non_litehive_changes,
     status_porcelain,
 )
-from litehive.tasks.crud import (
+from litehive.state.records import (
     get_task_worktree_path,
     list_tasks,
     set_task_commit_sha,
@@ -408,8 +408,8 @@ def _drop_task_metadata_changes(root: Path, task_id: str) -> None:
 
 
 def _finalize_rescue(root: Path, task, *, outcome: str, head_sha: str | None) -> None:
-    from litehive.workspace.locking import ensure_future_task_mutation_allowed, workspace_lock
-    from litehive.workspace.workflow import persist_task_and_state_without_runner_guard
+    from litehive.state.locking import ensure_future_task_mutation_allowed, workspace_lock
+    from litehive.state.persist import persist_task_and_state_without_runner_guard
 
     journal_message = "Worktree rescue found no commits ahead of main; cleared pending rescue state."
     if outcome == "rescued" and head_sha:
@@ -456,7 +456,7 @@ def _ensure_unmerged_worktree_state(root: Path, task_id: str, worktree_rel: str)
     for entry in state.unmerged_worktrees:
         if entry.task_id == task_id:
             return
-    from litehive.models import UnmergedWorktree
+    from litehive.models.task_models import UnmergedWorktree
 
     state.unmerged_worktrees.append(UnmergedWorktree(task_id=task_id, worktree_path=worktree_rel))
     save_state(root, state)

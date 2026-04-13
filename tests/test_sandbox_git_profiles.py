@@ -8,10 +8,12 @@ import pytest
 from litehive.attention import list_attention
 from heru.base import CLIInvocation
 from litehive.agents.sandbox import SandboxLauncher, SandboxProfile, sandbox_profile_for_role
-from litehive.config import ExternalEngineSandboxConfig, ExternalEngineSandboxPolicy, LitehiveConfig, ensure_workspace
-from litehive.workspace.worktree_inspection import resolve_task_execution_root
+from litehive.config.model import LitehiveConfig
+from litehive.config.workspace import ensure_workspace
+from litehive.config.dataclasses import ExternalEngineSandboxConfig, ExternalEngineSandboxPolicy
+from litehive.tasks.worktree_inspection import resolve_task_execution_root
 from litehive.sandbox.git_wrapper import rejection_reason
-from litehive.tasks import create_task
+from litehive.state.records import create_task
 
 
 def _bubblewrap_launcher(root: Path) -> SandboxLauncher:

@@ -10,9 +10,9 @@ from litehive.cli.worktree_support import (
     _require_clean_main_checkout,
     collect_managed_worktrees,
 )
-from litehive.config import ensure_workspace
-from litehive.git import GitError, remove_worktree
-from litehive.tasks.crud import clear_task_worktree_path, get_task, save_task
+from litehive.config.workspace import ensure_workspace
+from litehive.git.ops import GitError, remove_worktree
+from litehive.state.records import clear_task_worktree_path, get_task, save_task
 
 app = make_typer(invoke_without_command=True)
 

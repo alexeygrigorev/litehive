@@ -3,7 +3,7 @@
 from datetime import UTC, datetime
 from pathlib import Path
 
-from litehive.models import TaskRecord
+from litehive.models.task_models import TaskRecord
 from litehive.observability.events import last_event_timestamp
 
 

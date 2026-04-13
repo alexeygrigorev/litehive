@@ -5,7 +5,8 @@ import os
 from pathlib import Path
 from typing import Any
 
-from litehive.models import TaskRecord, utcnow
+from litehive.models.common import utcnow
+from litehive.models.task_models import TaskRecord
 
 
 def _events_path(root: Path, task: TaskRecord) -> Path:

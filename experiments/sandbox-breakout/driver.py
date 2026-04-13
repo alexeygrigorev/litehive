@@ -5,10 +5,12 @@ import shutil
 import subprocess
 import tempfile
 
-from litehive.agents import get_engine
+from heru import get_engine
 from heru.base import CLIInvocation, ExternalCLIAdapter
 from litehive.agents.sandbox import SandboxLauncher
-from litehive.config import ExternalEngineSandboxConfig, ExternalEngineSandboxPolicy, LitehiveConfig, ensure_workspace
+from litehive.config.model import LitehiveConfig
+from litehive.config.workspace import ensure_workspace
+from litehive.config import ExternalEngineSandboxConfig, ExternalEngineSandboxPolicy
 
 
 def _init_repo(repo: Path, remote: Path) -> None:

@@ -7,15 +7,15 @@ import time
 
 from typer.testing import CliRunner
 
-from litehive.cli import app
-from litehive.config import ensure_workspace
-from litehive.models import SubagentRef
-from litehive.tasks.crud import create_task, require_task
+from litehive.cli.app import app
+from litehive.config.workspace import ensure_workspace
+from heru.types import SubagentRef
+from litehive.state.records import create_task, require_task
 from litehive.tasks.paths import runner_lock_path, task_dir
 from litehive.tasks.persistence import load_state
 from litehive.tasks.queue import set_active_task
-from litehive.workspace.locking import runner_lock_is_held
-from litehive.workspace.runtime_tracking import (
+from litehive.state.locking import runner_lock_is_held
+from litehive.tasks.runtime import (
     mark_subagent_started,
     mark_task_run_started,
 )
@@ -50,7 +50,7 @@ import threading
 import time
 from pathlib import Path
 
-from litehive.workspace.locking import runner_heartbeat, workspace_runner_guard
+from litehive.state.locking import runner_heartbeat, workspace_runner_guard
 
 root = Path(sys.argv[1])
 task_id = sys.argv[2]

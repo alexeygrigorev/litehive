@@ -2,10 +2,10 @@ import importlib
 import types
 from contextlib import contextmanager
 
-import litehive.tasks.crud as tasks_crud
+import litehive.state.records as tasks_crud
 import litehive.tasks.persistence as tasks_persistence
-import litehive.workspace.task_status as task_status_module
-import litehive.workspace.workflow as workflow_module
+import litehive.tasks.status as task_status_module
+import litehive.state.persist as workflow_module
 from litehive.pipeline.heru_factory import HeruEngineAdapter
 from tests.workspace_helpers import (
     AdapterCapabilities,
@@ -85,7 +85,7 @@ def test_create_task_persists_folder_and_queue(tmp_path: Path) -> None:
 def test_save_task_rolls_back_task_record_when_runtime_persist_fails(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from litehive.storage.runtime import RuntimeStore
+    from litehive.state.store import RuntimeStore
 
     ensure_workspace(tmp_path)
 
@@ -139,10 +139,11 @@ def test_create_task_preserves_runner_queue_changes_after_state_snapshot(tmp_pat
     script = """
 import json
 from pathlib import Path
-from litehive.config import ensure_workspace
-from litehive.tasks import create_task, load_state
+from litehive.config.workspace import ensure_workspace
+from litehive.state.records import create_task
+from litehive.tasks.persistence import load_state
 from litehive.tasks.persistence import save_state_without_runner_guard
-from litehive.workspace import workflow as workflow_module
+from litehive.state import persist as workflow_module
 
 root = Path(__import__("sys").argv[1])
 ensure_workspace(root)
@@ -184,12 +185,13 @@ def _create_follow_up_tasks_preserves_runner_queue_changes_after_state_snapshot(
     script = """
 import json
 from pathlib import Path
-from litehive.config import ensure_workspace
-from litehive.models import FollowUpTaskSpec
-from litehive.tasks import create_task, load_state
-from litehive.tasks.crud import create_follow_up_tasks
+from litehive.config.workspace import ensure_workspace
+from litehive.models.report_models import FollowUpTaskSpec
+from litehive.state.records import create_task
+from litehive.tasks.persistence import load_state
+from litehive.state.records import create_follow_up_tasks
 from litehive.tasks.persistence import save_state_without_runner_guard
-from litehive.workspace import workflow as workflow_module
+from litehive.state import persist as workflow_module
 
 root = Path(__import__("sys").argv[1])
 ensure_workspace(root)

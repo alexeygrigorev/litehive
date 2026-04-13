@@ -4,10 +4,11 @@ import gzip
 import re
 from pathlib import Path
 
-from litehive.config import ensure_workspace, resolve_workspace, workspace_dir, workspace_logs_dir
+from litehive.config.paths import workspace_dir, workspace_logs_dir
+from litehive.config.workspace import ensure_workspace, resolve_workspace
 from litehive.config.workspace_registry import list_registered_workspace_paths
 from litehive.config.paths import worktree_root
-from litehive.models import TaskRecord
+from litehive.models.task_models import TaskRecord
 
 
 def _worktree_workspace_dir(root: Path) -> Path | None:

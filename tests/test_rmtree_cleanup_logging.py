@@ -7,10 +7,10 @@ from unittest.mock import patch
 
 import pytest
 
-from litehive.config import ensure_workspace
-from litehive.daemon import prune_run_all_log_dirs
-from litehive.tasks import create_task
-from litehive.tasks.crud import discard_created_task
+from litehive.config.workspace import ensure_workspace
+from litehive.daemon.logs import prune_run_all_log_dirs
+from litehive.state.records import create_task
+from litehive.state.records import discard_created_task
 from litehive.tasks.paths import task_dir
 
 

@@ -2,8 +2,8 @@ import sqlite3
 
 from typer.testing import CliRunner
 
-from litehive.cli import app
-from litehive.config import workspace_database_path
+from litehive.cli.app import app
+from litehive.config.paths import workspace_database_path
 from litehive.db.schema import Migration, MigrationApplyError, apply_pending_migrations, available_migrations
 
 from tests.workspace_helpers import Path, ensure_workspace, pytest

@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any
 
 from litehive.db.schema import connect_workspace_db
-from litehive.models import utcnow
+from litehive.models.common import utcnow
 
 from .deltas import StateDelta
 from .events import Event

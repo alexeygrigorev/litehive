@@ -6,7 +6,7 @@ import typer
 from typer.core import TyperGroup
 
 from litehive.cli.common import WorkspaceOption
-from litehive.config import ensure_workspace
+from litehive.config.workspace import ensure_workspace
 from litehive.tasks.archive import archive_done_tasks, archive_task, cleanup_archived_tasks
 
 

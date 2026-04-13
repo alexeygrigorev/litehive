@@ -4,7 +4,8 @@ from dataclasses import dataclass
 
 from heru.base import CLIExecutionResult
 from heru.types import RuntimeEngineContinuation
-from litehive.models import ResourceLimitEvent, SubagentRef
+from heru.types import SubagentRef
+from litehive.models.runtime_models import ResourceLimitEvent
 
 
 @dataclass(slots=True)

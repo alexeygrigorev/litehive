@@ -6,8 +6,11 @@ from pathlib import Path
 
 import pytest
 
-from litehive.config import LitehiveConfig, VALID_ENGINE_NAMES, ensure_workspace, load_config
-from litehive.agents import extract_engine_continuation, get_engine
+from litehive.config.loading import load_config
+from litehive.config.model import LitehiveConfig
+from litehive.config.workspace import ensure_workspace
+from litehive.config.constants import VALID_ENGINE_NAMES
+from heru import extract_engine_continuation, get_engine
 from heru.base import CLIExecutionResult
 
 
@@ -84,7 +87,7 @@ def sandboxed_integration_workspace(root: Path) -> Path:
     dirs don't exist on this host."""
     import os as _os
 
-    from litehive.config import ExternalEngineSandboxConfig, ExternalEngineSandboxPolicy
+    from litehive.config.dataclasses import ExternalEngineSandboxConfig, ExternalEngineSandboxPolicy
 
     home = _os.path.expanduser("~")
     nvm = f"{home}/.nvm/versions/node/v24.13.1"
@@ -292,7 +295,8 @@ def _assistant_transcript(transcript: str) -> str:
 
 
 def prepare_smoke_session(engine_name: str, *, cwd: Path, sandboxed: bool = False) -> SmokeSession:
-    from litehive.tasks import create_task, require_task, save_task, set_active_task
+    from litehive.state.records import create_task, require_task, save_task
+    from litehive.tasks.queue import set_active_task
 
     require_real_engine(engine_name)
     task = create_task(cwd, title=f"{engine_name} nudge task", auto_commit=False)
@@ -341,7 +345,8 @@ def assert_nudge_verdict_submission(
     smoke_session: SmokeSession | None = None,
 ) -> None:
     """Verify the nudge flow: run engine, then nudge to submit verdict via CLI."""
-    from litehive.tasks import load_task_thread, require_task
+    from litehive.state.records import require_task
+    from litehive.tasks.reports import load_task_thread
 
     session = smoke_session
     if session is None:

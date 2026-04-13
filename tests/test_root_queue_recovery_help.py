@@ -2,7 +2,7 @@
 
 from typer.testing import CliRunner
 
-from litehive.cli import app
+from litehive.cli.app import app
 
 
 def test_root_help_lists_queue_recovery_shortcuts() -> None:

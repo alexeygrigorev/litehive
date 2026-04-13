@@ -15,10 +15,10 @@ from tests.workspace_helpers import (
     yaml,
 )
 
-from litehive.agents import ENGINE_CHOICES
+from heru import ENGINE_CHOICES
 from typer.testing import CliRunner
 
-from litehive.cli import app
+from litehive.cli.app import app
 
 
 def test_engine_command_freezes_engine(
@@ -49,7 +49,7 @@ def test_resolve_workspace_uses_workspace_root_env(
 ) -> None:
     ensure_workspace(tmp_path)
 
-    from litehive.config import resolve_workspace
+    from litehive.config.workspace import resolve_workspace
 
     outside = tmp_path / "outside"
     outside.mkdir()
@@ -65,12 +65,12 @@ def test_resolve_workspace_walks_up_and_normalizes_worktree(
 ) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Walk up worktree")
-    from litehive.config import worktree_root
+    from litehive.config.paths import worktree_root
 
     nested = worktree_root(tmp_path) / task.id / "src"
     nested.mkdir(parents=True)
 
-    from litehive.config import resolve_workspace
+    from litehive.config.workspace import resolve_workspace
 
     monkeypatch.chdir(nested)
     monkeypatch.setenv("LITEHIVE_TASK_ID", task.id)
@@ -93,7 +93,8 @@ def test_resolve_workspace_prefers_current_unified_root_worktree_over_registry_t
 
     assert task_one.id == task_two.id == "T-0001"
 
-    from litehive.config import resolve_workspace, worktree_root
+    from litehive.config.paths import worktree_root
+    from litehive.config.workspace import resolve_workspace
 
     nested = worktree_root(workspace_two) / task_two.id / "src"
     nested.mkdir(parents=True)
@@ -112,7 +113,7 @@ def test_resolve_workspace_prefers_explicit_override(
     outside = tmp_path / "outside"
     outside.mkdir()
 
-    from litehive.config import resolve_workspace
+    from litehive.config.workspace import resolve_workspace
 
     monkeypatch.chdir(outside)
     monkeypatch.setenv("LITEHIVE_WORKSPACE_ROOT", str(outside))
@@ -130,7 +131,7 @@ def test_resolve_workspace_uses_registry_from_outside_repo(
     outside = tmp_path / "outside"
     outside.mkdir()
 
-    from litehive.config import resolve_workspace
+    from litehive.config.workspace import resolve_workspace
 
     monkeypatch.chdir(outside)
     monkeypatch.delenv("LITEHIVE_WORKSPACE_ROOT", raising=False)
@@ -144,7 +145,7 @@ def test_resolve_workspace_rejects_unresolved_workspace_root_env(
 ) -> None:
     ensure_workspace(tmp_path)
 
-    from litehive.config import resolve_workspace
+    from litehive.config.workspace import resolve_workspace
 
     monkeypatch.setenv("LITEHIVE_WORKSPACE_ROOT", "$tmpdir/project")
     monkeypatch.delenv("LITEHIVE_TASK_ID", raising=False)
@@ -520,7 +521,8 @@ def test_configure_no_longer_has_task_engine_routing(tmp_path: Path) -> None:
 
 
 def test_load_config_rejects_legacy_pre_acceptance_command(tmp_path: Path) -> None:
-    from litehive.config import ensure_workspace, config_path
+    from litehive.config.paths import config_path
+    from litehive.config.workspace import ensure_workspace
 
     ensure_workspace(tmp_path)
     import yaml

@@ -4,17 +4,18 @@ from pathlib import Path
 
 import yaml
 
-from litehive.config import render_workspace_gitignore, workspace_gitignore_path
+from litehive.config.paths import workspace_gitignore_path
+from litehive.config.workspace import render_workspace_gitignore
 from heru.base import CLIExecutionResult, ExternalCLIAdapter
-from litehive.models import (
+from litehive.models.common import utcnow
+from litehive.models.engine_models import (
     EngineUsageObservation,
     EngineUsageRecord,
     EngineUsageWindow,
     WorkspaceEngineMonitoring,
-    utcnow,
 )
 from litehive.tasks.persistence import atomic_write_text
-from litehive.workspace.locking import workspace_mutation_guard
+from litehive.state.locking import workspace_mutation_guard
 
 
 def engine_monitoring_file(root: Path) -> Path:

@@ -13,10 +13,8 @@ from pathlib import Path, PurePosixPath
 import shutil
 import stat
 
-from litehive.config import (
-    ExternalEngineSandboxPolicy,
-    LitehiveConfig,
-)
+from litehive.config.model import LitehiveConfig
+from litehive.config.dataclasses import ExternalEngineSandboxPolicy
 from heru.base import CLIExecutionResult, CLIInvocation, ExternalCLIAdapter
 from heru.engine_detection import (
     ORIGINAL_EXTERNAL_ADAPTER_RUN,
@@ -25,7 +23,7 @@ from heru.engine_detection import (
     filter_supported_kwargs,
     has_callable_override,
 )
-from litehive.models import ResourceLimitEvent
+from litehive.models.runtime_models import ResourceLimitEvent
 
 
 @dataclass(frozen=True, slots=True)

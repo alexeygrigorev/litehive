@@ -2,8 +2,8 @@
 
 from pathlib import Path
 
-from litehive.config import worktree_root
-from litehive.models import TaskRecord
+from litehive.config.paths import worktree_root
+from litehive.models.task_models import TaskRecord
 
 
 def task_worktree_path(root: Path, task: TaskRecord) -> Path:

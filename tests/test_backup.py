@@ -3,10 +3,10 @@ import sqlite3
 
 from typer.testing import CliRunner
 
-from litehive.cli import app
-from litehive.config import workspace_backups_dir, workspace_database_path
-from litehive.models import RunnerStatusState
-from litehive.storage import create_workspace_backup, list_workspace_backups
+from litehive.cli.app import app
+from litehive.config.paths import workspace_backups_dir, workspace_database_path
+from litehive.models.runtime_models import RunnerStatusState
+from litehive.state.backup import create_workspace_backup, list_workspace_backups
 
 from tests.workspace_helpers import Path, ensure_workspace, pytest
 
@@ -155,7 +155,7 @@ def test_backup_rotation_keeps_seven_daily_and_four_weekly(tmp_path: Path) -> No
 
 
 def test_daemon_loop_creates_scheduled_backup(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    import litehive.daemon as daemon_module
+    from litehive.daemon.execution import run_daemon_loop
 
     workspace = tmp_path / "workspace"
     workspace.mkdir()
@@ -188,7 +188,7 @@ def test_daemon_loop_creates_scheduled_backup(tmp_path: Path, monkeypatch: pytes
         lambda: [str(fake_uv), "run", "litehive"],
     )
 
-    exit_code = daemon_module.run_daemon_loop(workspace, output_stream=None)
+    exit_code = run_daemon_loop(workspace, output_stream=None)
 
     assert exit_code == 0
     backups = list_workspace_backups(workspace)

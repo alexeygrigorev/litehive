@@ -2,8 +2,10 @@
 
 from pathlib import Path
 
-from litehive.config import LitehiveConfig, default_agent_startup_guidance, resolve_process_profile
-from litehive.models import TaskRecord
+from litehive.config.model import LitehiveConfig
+from litehive.config.startup_guidance import default_agent_startup_guidance
+from litehive.config.profiles.loader import resolve_process_profile
+from litehive.models.task_models import TaskRecord
 from litehive.tasks.normalization import (
     infer_acceptance_criteria,
     missing_acceptance_criteria_reason,

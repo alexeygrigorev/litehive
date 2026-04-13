@@ -2,7 +2,7 @@
 
 import re
 
-from litehive.models import TaskRecord
+from litehive.models.task_models import TaskRecord
 
 
 def normalize_acceptance_criteria(items: list[str] | None) -> list[str]:

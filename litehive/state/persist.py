@@ -2,11 +2,12 @@
 
 from pathlib import Path
 
-from litehive.config import state_path
-from litehive.models import TaskRecord, WorkspaceState, utcnow
-from litehive.storage import runtime_store
+from litehive.config.paths import state_path
+from litehive.models.common import utcnow
+from litehive.models.task_models import TaskRecord, WorkspaceState
+from litehive.state.store import runtime_store
 
-from litehive.workspace.locking import workspace_mutation_guard
+from litehive.state.locking import workspace_mutation_guard
 from litehive.tasks.paths import task_dir, task_file
 from litehive.tasks.persistence import (
     load_state,
@@ -22,7 +23,7 @@ def workspace_transition_writes(
     state: WorkspaceState | None = None,
     journal_messages: dict[str, str] | None = None,
 ) -> dict[Path, str]:
-    from litehive.tasks.crud import serialize_task_record
+    from litehive.state.records import serialize_task_record
 
     writes: dict[Path, str] = {}
     for task in tasks:
@@ -123,7 +124,7 @@ def persist_tasks_and_state(
     state: WorkspaceState,
     journal_messages: dict[str, str] | None = None,
 ) -> None:
-    from litehive.tasks.crud import ensure_runtime_ignored, task_state_for_storage
+    from litehive.state.records import ensure_runtime_ignored, task_state_for_storage
 
     for task in tasks:
         task.updated_at = utcnow()
@@ -156,7 +157,7 @@ def persist_tasks_and_state_without_runner_guard(
     state: WorkspaceState,
     journal_messages: dict[str, str] | None = None,
 ) -> None:
-    from litehive.tasks.crud import ensure_runtime_ignored, task_state_for_storage
+    from litehive.state.records import ensure_runtime_ignored, task_state_for_storage
 
     for task in tasks:
         task.updated_at = utcnow()

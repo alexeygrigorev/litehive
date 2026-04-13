@@ -17,29 +17,24 @@ from typer.testing import CliRunner
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from litehive.cli import app as cli_app
-from litehive.config import (
-    ExternalEngineSandboxConfig,
-    ExternalEngineSandboxPolicy,
-    LitehiveConfig,
-    SandboxCredentialInput,
-    available_process_profiles,
-    ensure_workspace,
-    format_external_engine_sandbox,
-    global_config_path,
-    load_config,
-    render_context_template,
-    resolve_process_profile,
-    state_path,
-    worktree_root,
-)
-from litehive.agents import (
-    classify_execution_interruption,
-    classify_execution_limit,
-    classify_retryable_execution_failure,
+from litehive.cli.app import app as cli_app
+from litehive.config.formatting import format_external_engine_sandbox
+from litehive.config.loading import load_config
+from litehive.config.model import LitehiveConfig
+from litehive.config.paths import global_config_path, state_path, worktree_root
+from litehive.config.workspace import ensure_workspace
+from litehive.config.dataclasses import ExternalEngineSandboxConfig, ExternalEngineSandboxPolicy, SandboxCredentialInput
+from litehive.config.profiles.loader import available_process_profiles, resolve_process_profile
+from litehive.config.profiles.rendering import render_context_template
+from heru import (
     extract_engine_continuation,
     extract_engine_timeline,
     get_engine,
+)
+from heru.adapters import (
+    classify_execution_interruption,
+    classify_execution_limit,
+    classify_retryable_execution_failure,
 )
 from heru.base import (
     AdapterCapabilities,
@@ -48,12 +43,15 @@ from heru.base import (
 )
 from litehive.agents.sandbox import SandboxLauncher
 from litehive.git.ops import GitError, checkpoint_message, commit_task
-from litehive.models import (
+from heru.types import SubagentRef
+from litehive.models.engine_models import (
     EngineUsageObservation,
     EngineUsageWindow,
-    FollowUpTaskSpec,
     LiveEvent,
     LiveTimeline,
+)
+from litehive.models.report_models import FollowUpTaskSpec, StageReport
+from litehive.models.runtime_models import (
     ResourceLimitEvent,
     RuntimeContinuationHandoff,
     RuntimeEngineContinuation,
@@ -61,15 +59,10 @@ from litehive.models import (
     RuntimeStageState,
     RuntimeSubagentState,
     RunnerStatusState,
-    StageReport,
-    SubagentRef,
-    TaskRecord,
 )
-from litehive.observability import (
-    load_engine_monitoring,
-    record_engine_execution,
-    render_task_summary,
-)
+from litehive.models.task_models import TaskRecord
+from litehive.observability.engine_monitoring import load_engine_monitoring, record_engine_execution
+from litehive.observability.status import render_task_summary
 from litehive.config.pool_types import TaskPoolStopConditions
 from litehive.recovery.execution_recovery import recover_completed_task
 from litehive.config.engine_models import (
@@ -79,13 +72,10 @@ from litehive.config.engine_models import (
 )
 from litehive.pipeline.orchestration import run_task, ExecutionResult
 from litehive.tasks.queue import dequeue_next_task
-from litehive.agents import (
-    EngineFailure,
-    SubagentManager,
-    SubagentResult,
-    stage_prompt,
-    stage_report_from_subagent,
-)
+from litehive.agents.manager import SubagentManager
+from litehive.agents.models import EngineFailure, SubagentResult
+from litehive.agents.parsing import stage_report_from_subagent
+from litehive.agents.prompts import stage_prompt
 from litehive.tasks.archive import (
     archive_done_tasks,
     archive_root,
@@ -93,7 +83,7 @@ from litehive.tasks.archive import (
     cleanup_archived_tasks,
     list_archived_tasks,
 )
-from litehive.tasks.crud import (
+from litehive.state.records import (
     create_follow_up_tasks,
     create_task,
     get_task,
@@ -120,18 +110,18 @@ from litehive.tasks.queue import (
     set_active_task,
 )
 from litehive.tasks.reports import append_thread_comment, load_task_thread
-from litehive.workspace.locking import runner_heartbeat, runner_status, workspace_runner_guard
-from litehive.recovery import (
+from litehive.state.locking import runner_heartbeat, runner_status, workspace_runner_guard
+from litehive.recovery.workspace_repair import (
     mark_interrupted_subagent,
     prepare_interrupted_task,
     recover_stale_runner_state,
 )
-from litehive.workspace.runtime_tracking import (
+from litehive.tasks.runtime import (
     finish_task_run_transition,
     mark_subagent_started,
     mark_task_run_started,
 )
-from litehive.workspace.task_status import (
+from litehive.tasks.status import (
     abandon_task,
     close_task,
     requeue_task,
@@ -142,8 +132,8 @@ from litehive.workspace.task_status import (
     update_task_metadata,
 )
 import litehive.tasks.persistence as _tasks_persistence
-import litehive.workspace.locking as _workspace_locking
-import litehive.workspace.workflow as _workspace_workflow
+import litehive.state.locking as _workspace_locking
+import litehive.state.persist as _workspace_workflow
 
 _runner = CliRunner()
 
@@ -420,7 +410,7 @@ def _block_runner_lock(monkeypatch: pytest.MonkeyPatch) -> None:
             raise BlockingIOError("runner is busy")
         return real_flock(fd, flags)
 
-    monkeypatch.setattr("litehive.workspace.locking.fcntl.flock", fake_flock)
+    monkeypatch.setattr("litehive.state.locking.fcntl.flock", fake_flock)
 
 
 def _fail_atomic_write_on_path(
@@ -553,7 +543,7 @@ def _write_cli_verdict(
 ) -> None:
     """Simulate a litehive report CLI invocation by writing a thread comment.
     """
-    from litehive.models import TaskThreadComment
+    from litehive.models.report_models import TaskThreadComment
 
     # Write to the main workspace root, not the worktree.
     ws_root = _resolve_workspace_root(root)
@@ -803,7 +793,7 @@ def _interrupted_subagent_result(
 def _successful_stage_execution(tmp_path: Path, adapter: str, step: str) -> CLIExecutionResult:
     # Auto-write a CLI verdict for the active task in the workspace.
     ws_root = _resolve_workspace_root(tmp_path)
-    from litehive.tasks.crud import get_task as _get_task
+    from litehive.state.records import get_task as _get_task
     from litehive.tasks.persistence import load_state as _load_state
 
     state = _load_state(ws_root)

@@ -17,9 +17,9 @@ import typer
 
 from litehive.pipeline.persistence import SqlitePersistence, TaskNotFound
 
-from litehive.config import resolve_workspace
-from litehive.models import TaskThreadComment
-from litehive.tasks.crud import get_task
+from litehive.config.workspace import resolve_workspace
+from litehive.models.report_models import TaskThreadComment
+from litehive.state.records import get_task
 from litehive.tasks.persistence import load_state
 from litehive.tasks.reports import append_thread_comment
 
@@ -137,7 +137,7 @@ def agent_update_command(
 ) -> None:
     _require_role({"planner", "reviewer"})
 
-    from litehive.workspace.task_status import update_task
+    from litehive.tasks.status import update_task
 
     tid = task_id or os.environ.get("LITEHIVE_TASK_ID")
     if not tid:
@@ -170,7 +170,7 @@ def agent_close_command(
 ) -> None:
     _require_role({"planner", "reviewer"})
 
-    from litehive.workspace.task_status import close_task
+    from litehive.tasks.status import close_task
 
     tid = task_id or os.environ.get("LITEHIVE_TASK_ID")
     if not tid:

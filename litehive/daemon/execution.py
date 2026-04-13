@@ -15,10 +15,12 @@ from typing import TextIO
 import yaml
 
 from litehive.attention import list_attention
-from litehive.config import ensure_workspace, load_config, state_path, workspace_logs_dir
-from litehive.storage import create_scheduled_workspace_backup
+from litehive.config.loading import load_config
+from litehive.config.paths import state_path, workspace_logs_dir
+from litehive.config.workspace import ensure_workspace
+from litehive.state.backup import create_scheduled_workspace_backup
 from litehive.tasks.persistence import set_pool_stop_reason
-from litehive.workspace.locking import runner_status
+from litehive.state.locking import runner_status
 
 from .logs import latest_matching, prune_run_all_log_dirs, latest_run_all_log_dir
 from .registry import (

@@ -39,32 +39,10 @@ def _register_workspace_in_subprocess(args: tuple[str, str, str, str]) -> str:
     workspace_root, _config_home, data_home, state_home = args
     os.environ["XDG_DATA_HOME"] = data_home
     os.environ["XDG_STATE_HOME"] = state_home
-    from litehive.config import ensure_workspace
+    from litehive.config.workspace import ensure_workspace
 
     ensure_workspace(SysPath(workspace_root))
     return workspace_root
-
-
-def test_config_package_facade_re_exports_public_helpers() -> None:
-    import litehive.config as config_module
-
-    exported = {
-        "LitehiveConfig": config_module.LitehiveConfig,
-        "ensure_workspace": config_module.ensure_workspace,
-        "load_config": config_module.load_config,
-        "workspace_dir": config_module.workspace_dir,
-        "config_path": config_module.config_path,
-        "state_path": config_module.state_path,
-        "render_workspace_gitignore": config_module.render_workspace_gitignore,
-        "format_runner_hooks": config_module.format_runner_hooks,
-    }
-
-    assert exported["LitehiveConfig"].__module__ == "litehive.config.model"
-    assert exported["ensure_workspace"].__module__ == "litehive.config.workspace"
-    assert exported["load_config"].__module__ == "litehive.config.loading"
-    assert exported["workspace_dir"].__module__ == "litehive.config.paths"
-    assert exported["format_runner_hooks"].__module__ == "litehive.config.formatting"
-    assert len((Path(config_module.__file__)).read_text(encoding="utf-8").splitlines()) < 60
 
 
 def test_ensure_workspace_creates_layout(tmp_path: Path) -> None:
@@ -84,7 +62,7 @@ def test_ensure_workspace_bootstraps_runtime_db_and_registry(
     monkeypatch.setenv("XDG_DATA_HOME", str(data_home))
     monkeypatch.setenv("XDG_STATE_HOME", str(state_home))
 
-    from litehive.config import (
+    from litehive.config.paths import (
         litehive_database_path,
         worktree_root,
         workspace_backups_dir,
@@ -94,7 +72,7 @@ def test_ensure_workspace_bootstraps_runtime_db_and_registry(
         workspace_subagents_dir,
         workspace_worktrees_dir,
     )
-    from litehive.storage import connect_workspace_db
+    from litehive.db.schema import connect_workspace_db
 
     ensure_workspace(tmp_path)
 
@@ -149,7 +127,7 @@ def test_workspace_registry_migrates_legacy_yaml_once(
     monkeypatch.setenv("XDG_DATA_HOME", str(data_home))
     monkeypatch.setenv("XDG_STATE_HOME", str(state_home))
 
-    from litehive.config import legacy_workspace_registry_path, litehive_database_path
+    from litehive.config.paths import legacy_workspace_registry_path, litehive_database_path
 
     legacy_path = legacy_workspace_registry_path()
     legacy_path.parent.mkdir(parents=True, exist_ok=True)
@@ -177,7 +155,7 @@ def test_workspace_registry_handles_parallel_registration(
     monkeypatch.setenv("XDG_DATA_HOME", str(data_home))
     monkeypatch.setenv("XDG_STATE_HOME", str(state_home))
 
-    from litehive.config import litehive_database_path, workspace_id
+    from litehive.config.paths import litehive_database_path, workspace_id
 
     workspaces = []
     for index in range(8):
@@ -215,7 +193,7 @@ def test_workspace_registry_rebuilds_after_corruption(
     monkeypatch.setenv("XDG_DATA_HOME", str(data_home))
     monkeypatch.setenv("XDG_STATE_HOME", str(state_home))
 
-    from litehive.config import litehive_database_path
+    from litehive.config.paths import litehive_database_path
 
     litehive_database_path().parent.mkdir(parents=True, exist_ok=True)
     litehive_database_path().write_text("not a sqlite database", encoding="utf-8")
@@ -260,7 +238,12 @@ def test_litehive_home_overrides_default_root(
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "ignored-data"))
     monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "ignored-state"))
 
-    from litehive.config import litehive_database_path, litehive_root, workspace_database_path, workspace_id
+    from litehive.config.paths import (
+        litehive_database_path,
+        litehive_root,
+        workspace_database_path,
+        workspace_id,
+    )
 
     ensure_workspace(tmp_path)
 
@@ -282,7 +265,7 @@ def test_ensure_workspace_migrates_legacy_global_and_runtime_state_once(
     monkeypatch.setenv("XDG_DATA_HOME", str(data_home))
     monkeypatch.setenv("XDG_STATE_HOME", str(state_home))
 
-    from litehive.config import (
+    from litehive.config.paths import (
         daemon_registry_path,
         global_config_path,
         legacy_daemon_registry_path,
@@ -319,27 +302,6 @@ def test_ensure_workspace_migrates_legacy_global_and_runtime_state_once(
     ensure_workspace(tmp_path)
     second_notice = capsys.readouterr().err
     assert second_notice == ""
-
-
-def test_load_state_imports_legacy_state_yaml_into_db(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
-    state_path(tmp_path).write_text(
-        yaml.safe_dump(
-            {
-                "active_task_id": "T-0007",
-                "queue": ["T-0007", "T-0008"],
-                "next_task_number": 8,
-            },
-            sort_keys=False,
-        ),
-        encoding="utf-8",
-    )
-
-    state = load_state(tmp_path)
-
-    assert state.active_task_id == "T-0007"
-    assert state.queue == ["T-0007", "T-0008"]
-    assert state.next_task_number == 8
 
 
 def test_get_task_reads_runtime_from_database_without_runtime_yaml(tmp_path: Path) -> None:
@@ -898,7 +860,7 @@ def test_ensure_workspace_scaffolds_profile_specific_context(tmp_path: Path) -> 
     django_path = tmp_path / "django"
     django_path.mkdir()
 
-    from litehive.config import LitehiveConfig
+    from litehive.config.model import LitehiveConfig
 
     ensure_workspace(django_path, LitehiveConfig(process_profile="django"))
 

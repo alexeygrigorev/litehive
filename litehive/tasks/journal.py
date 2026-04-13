@@ -2,9 +2,10 @@
 
 from pathlib import Path
 
-from litehive.models import TaskRecord, utcnow
+from litehive.models.common import utcnow
+from litehive.models.task_models import TaskRecord
 
-from litehive.workspace.locking import workspace_mutation_guard
+from litehive.state.locking import workspace_mutation_guard
 from .paths import task_dir
 from .persistence import atomic_write_text
 

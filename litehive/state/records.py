@@ -7,32 +7,28 @@ from pathlib import Path
 
 import yaml
 
-from litehive.config import (
-    ensure_workspace,
-    render_workspace_gitignore,
-    state_path,
-    workspace_gitignore_path,
-)
+from litehive.config.paths import state_path, workspace_gitignore_path
+from litehive.config.workspace import ensure_workspace, render_workspace_gitignore
 from litehive.git.ops import default_commit_message
-from litehive.models import (
-    FollowUpTaskSpec,
+from litehive.models.common import utcnow
+from litehive.models.report_models import FollowUpTaskSpec
+from litehive.models.runtime_models import TaskRuntime
+from litehive.models.task_models import (
     TaskCreationSource,
     TaskRecord,
-    TaskRuntime,
     TaskStateRecord,
     WorkspaceState,
-    utcnow,
 )
-from litehive.storage import runtime_store
+from litehive.state.store import runtime_store
 
-from .constants import (
+from litehive.tasks.constants import (
     VALID_TASK_PRIORITIES,
     VALID_TASK_TYPES,
 )
-from litehive.workspace.locking import workspace_lock, workspace_mutation_guard
-from .normalization import normalize_acceptance_criteria
-from .paths import slugify, task_dir, task_file, task_runtime_file, tasks_root
-from .persistence import (
+from litehive.state.locking import workspace_lock, workspace_mutation_guard
+from litehive.tasks.normalization import normalize_acceptance_criteria
+from litehive.tasks.paths import slugify, task_dir, task_file, task_runtime_file, tasks_root
+from litehive.tasks.persistence import (
     load_state,
     serialize_state,
     write_atomic_files_and_then,
@@ -252,7 +248,7 @@ def create_task(
         raise ValueError(f"Unsupported priority '{priority}'; choose from {sorted(VALID_TASK_PRIORITIES)}")
     if task_type is not None and task_type not in VALID_TASK_TYPES:
         raise ValueError(f"Unsupported task type '{task_type}'")
-    from .queue import validate_task_dependencies
+    from litehive.tasks.queue import validate_task_dependencies
 
     with workspace_lock(root):
         state = load_state(root)
@@ -283,7 +279,7 @@ def create_task(
         (base / "artifacts").mkdir(parents=True, exist_ok=False)
         state.queue.append(task.id)
         try:
-            from litehive.workspace.workflow import merged_state_for_runner_owned_write
+            from litehive.state.persist import merged_state_for_runner_owned_write
 
             state = merged_state_for_runner_owned_write(
                 root,
@@ -371,7 +367,7 @@ def create_follow_up_tasks(
             )
             created_tasks.append(task)
 
-        from litehive.workspace.workflow import merged_state_for_runner_owned_write
+        from litehive.state.persist import merged_state_for_runner_owned_write
 
         state = merged_state_for_runner_owned_write(
             root,
@@ -408,7 +404,7 @@ def discard_created_task(root: Path, task_id: str) -> None:
         if state.active_task_id == task_id:
             state.active_task_id = None
         state.queue = [queued_id for queued_id in state.queue if queued_id != task_id]
-        from .persistence import save_state_without_runner_guard
+        from litehive.tasks.persistence import save_state_without_runner_guard
 
         save_state_without_runner_guard(root, state)
         if task is not None:
@@ -482,7 +478,7 @@ def require_task(root: Path, task_id: str) -> TaskRecord:
 
 
 def save_task(root: Path, task: TaskRecord) -> None:
-    from litehive.workspace.workflow import workspace_transition_writes
+    from litehive.state.persist import workspace_transition_writes
 
     task.updated_at = utcnow()
     with workspace_mutation_guard(root):

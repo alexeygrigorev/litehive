@@ -4,7 +4,8 @@ from dataclasses import dataclass, field
 import threading
 from typing import TextIO
 
-from litehive.models import RunnerStatusState, TaskRecord
+from litehive.models.runtime_models import RunnerStatusState
+from litehive.models.task_models import TaskRecord
 
 
 @dataclass(slots=True)

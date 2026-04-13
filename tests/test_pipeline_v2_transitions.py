@@ -5,7 +5,8 @@ runner, no persistence.
 """
 import pytest
 
-from litehive.pipeline import RULES, evaluate, list_transitions
+from litehive.pipeline.rules import RULES
+from litehive.pipeline.transitions import evaluate, list_transitions
 from litehive.pipeline.events import (
     Blocked,
     CleanState,

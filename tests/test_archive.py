@@ -1,6 +1,6 @@
 from typer.testing import CliRunner
 
-from litehive.cli import app
+from litehive.cli.app import app
 
 from tests.workspace_helpers import (
     Path,

@@ -6,8 +6,10 @@ import sqlite3
 
 from pathlib import Path
 
-from litehive.db import connect_workspace_db
-from litehive.models import TaskRuntime, TaskStateRecord, WorkspaceState, utcnow
+from litehive.db.schema import connect_workspace_db
+from litehive.models.common import utcnow
+from litehive.models.runtime_models import TaskRuntime
+from litehive.models.task_models import TaskStateRecord, WorkspaceState
 
 logger = logging.getLogger(__name__)
 

@@ -1,4 +1,4 @@
-from litehive.agents import ENGINE_CHOICES
+from heru import ENGINE_CHOICES
 from litehive.tasks.constants import VALID_TASK_TYPES
 from litehive.tasks.normalization import (
     normalize_acceptance_criteria,

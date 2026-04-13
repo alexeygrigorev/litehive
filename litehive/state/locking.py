@@ -11,8 +11,10 @@ from typing import TextIO
 
 import yaml
 
-from litehive.config import workspace_dir
-from litehive.models import RunnerStatusState, TaskRecord, WorkspaceState, utcnow
+from litehive.config.paths import workspace_dir
+from litehive.models.common import utcnow
+from litehive.models.runtime_models import RunnerStatusState
+from litehive.models.task_models import TaskRecord, WorkspaceState
 
 from litehive.tasks.constants import (
     HEARTBEAT_LATE_THRESHOLD_SECONDS,
@@ -84,7 +86,7 @@ def runner_lock_is_active(root: Path) -> bool:
 
 
 def runner_status_needs_reconciliation(root: Path) -> bool:
-    from litehive.tasks.crud import list_tasks
+    from litehive.state.records import list_tasks
     from litehive.tasks.persistence import load_state
 
     state = load_state(root)
@@ -379,7 +381,7 @@ def ensure_future_task_mutation_allowed(
     *,
     state: WorkspaceState | None = None,
 ) -> None:
-    from litehive.tasks.crud import get_task
+    from litehive.state.records import get_task
     from litehive.tasks.queue import is_task_eligible_for_execution, active_task_markers
 
     markers = active_task_markers(root, state)
@@ -410,8 +412,8 @@ def persist_future_task_update(
     *,
     journal_message: str | None = None,
 ) -> None:
-    from litehive.storage import runtime_store
-    from litehive.tasks.crud import ensure_runtime_ignored, serialize_task_record, task_state_for_storage
+    from litehive.state.store import runtime_store
+    from litehive.state.records import ensure_runtime_ignored, serialize_task_record, task_state_for_storage
     from litehive.tasks.persistence import write_atomic_files_and_then
 
     task.updated_at = utcnow()

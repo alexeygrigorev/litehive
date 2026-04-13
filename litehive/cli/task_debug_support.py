@@ -6,7 +6,7 @@ import subprocess
 import yaml
 
 from litehive.git.ops import current_head
-from litehive.tasks.crud import get_task_worktree_path, save_task
+from litehive.state.records import get_task_worktree_path, save_task
 from litehive.tasks.paths import (
     read_text_artifact,
     resolve_artifact_path,

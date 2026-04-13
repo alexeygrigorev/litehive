@@ -19,8 +19,8 @@ The serializer:
 from pathlib import Path
 from typing import Any
 
-from litehive.models import TaskRecord
-from litehive.tasks.crud import get_task
+from litehive.models.task_models import TaskRecord
+from litehive.state.records import get_task
 
 
 SECTION_SEP = "\n"

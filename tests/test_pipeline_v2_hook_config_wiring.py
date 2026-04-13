@@ -2,7 +2,7 @@
 
 from types import SimpleNamespace
 
-from litehive.pipeline.nodes import HookSpec
+from litehive.pipeline.nodes.hook import HookSpec
 from litehive.pipeline.orchestration import hook_specs_from_config
 
 

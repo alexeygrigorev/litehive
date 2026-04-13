@@ -9,29 +9,30 @@ import typer
 from litehive.cli.display import cli_override_or_default
 from litehive.cli.dry_run import plan_pool_dry_run, plan_single_task_dry_run, print_pool_dry_run_plan
 from litehive.cli.common import WorkspaceOption, choice, require_subcommand
-from litehive.config import ensure_workspace, resolve_workspace, workspace_database_path, load_config
-from litehive.agents import ENGINE_CHOICES
-from litehive.daemon import (
+from litehive.config.loading import load_config
+from litehive.config.paths import workspace_database_path
+from litehive.config.workspace import ensure_workspace, resolve_workspace
+from heru import ENGINE_CHOICES
+from litehive.daemon.execution import (
     daemon_status_lines,
-    get_workspace_daemon,
-    list_daemon_instances,
     run_daemon_loop,
     start_background_daemon,
     stop_workspace_daemon,
 )
-from litehive.db import MigrationApplyError, apply_pending_migrations, migration_status
+from litehive.daemon.registry import get_workspace_daemon, list_daemon_instances
+from litehive.db.schema import MigrationApplyError, apply_pending_migrations, migration_status
 from litehive.git.ops import GitError, checkpoint_message
-from litehive.models import TaskThreadComment
+from litehive.models.report_models import TaskThreadComment
 from litehive.pipeline.orchestration import run_task
 from litehive.recovery.execution_recovery import rollback_completed_task
-from litehive.storage import create_workspace_backup, list_workspace_backups, restore_workspace_backup
-from litehive.tasks.crud import get_task
+from litehive.state.backup import create_workspace_backup, list_workspace_backups, restore_workspace_backup
+from litehive.state.records import get_task
 from litehive.tasks.models import WorkspaceConflictError
 from litehive.tasks.normalization import missing_acceptance_criteria_reason
 from litehive.tasks.persistence import load_state
 from litehive.tasks.queue import dequeue_next_task, peek_next_task_selection, plan_task_selections
 from litehive.tasks.reports import append_thread_comment
-from litehive.workspace.locking import runner_status
+from litehive.state.locking import runner_status
 
 
 def register_root_commands(app: typer.Typer, backup_app: typer.Typer, db_app: typer.Typer) -> None:

@@ -21,10 +21,10 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from litehive.agents import SubagentManager
+from litehive.agents.manager import SubagentManager
 from litehive.agents.models import EngineFailure
-from litehive.git import GitError, current_head, is_git_repo, status_porcelain
-from litehive.tasks.crud import get_task
+from litehive.git.ops import GitError, current_head, is_git_repo, status_porcelain
+from litehive.state.records import get_task
 from litehive.tasks.worktrees import resolve_recorded_worktree_path
 
 from .nodes.agent import (

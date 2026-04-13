@@ -6,8 +6,8 @@ from heru.main import main
 
 
 def test_heru_registry_matches_litehive_surface() -> None:
-    from litehive.agents import ENGINE_CHOICES as litehive_engine_choices
-    from litehive.agents import get_engine as litehive_get_engine
+    from heru import ENGINE_CHOICES as litehive_engine_choices
+    from heru import get_engine as litehive_get_engine
 
     assert ENGINE_CHOICES == litehive_engine_choices
     assert type(get_engine("claude")) is type(litehive_get_engine("claude"))

@@ -4,7 +4,7 @@ import logging
 from pathlib import Path
 import shutil
 
-from litehive.config import migrate_legacy_workspace_state, workspace_logs_dir
+from litehive.config.paths import migrate_legacy_workspace_state, workspace_logs_dir
 
 logger = logging.getLogger(__name__)
 

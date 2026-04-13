@@ -23,15 +23,18 @@ from typing import Any
 import pytest
 
 import litehive.pipeline.orchestration as orchestration
-from litehive.pipeline import SqliteJournal, StateMachineRunner, build_registry
+from litehive.pipeline.journal import SqliteJournal
+from litehive.pipeline.registry import build_registry
+from litehive.pipeline.runner import StateMachineRunner
 from litehive.pipeline.agents.base import PromptContext
-from litehive.pipeline.nodes import CommitNode, HookResult, HookRunner, StubCommitNode
+from litehive.pipeline.nodes.hook import HookResult, HookRunner
+from litehive.pipeline.nodes.system import CommitNode, StubCommitNode
 from litehive.pipeline.nodes.agent import AgentVerdict, Engine, TransientError
 from litehive.pipeline.nodes.system import MergeConflict
 from litehive.pipeline.persistence import SqlitePersistence
 from litehive.pipeline.sessions import InMemorySessionStore
 from litehive.pipeline.types import PipelineMode
-from litehive.tasks.crud import get_task, get_task_worktree_path
+from litehive.state.records import get_task, get_task_worktree_path
 from litehive.tasks.worktrees import resolve_recorded_worktree_path
 
 from tests.workspace_helpers import LitehiveConfig, create_task, ensure_workspace, run_task

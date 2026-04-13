@@ -1,6 +1,6 @@
 """Tests for report feedback capping (T-0143)."""
 
-from litehive.models import cap_feedback, FEEDBACK_CAP, TRUNCATION_MARKER
+from litehive.models.common import cap_feedback, FEEDBACK_CAP, TRUNCATION_MARKER
 
 
 def test_cap_feedback_short_text_unchanged() -> None:

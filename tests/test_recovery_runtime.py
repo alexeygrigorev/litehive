@@ -2,7 +2,7 @@ from pathlib import Path
 
 import yaml
 
-from litehive.models import RuntimeSubagentState
+from litehive.models.runtime_models import RuntimeSubagentState
 from tests.workspace_helpers import (
     create_task,
     ensure_workspace,

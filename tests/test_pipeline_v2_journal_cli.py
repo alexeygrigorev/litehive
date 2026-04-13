@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from litehive.cli import app
+from litehive.cli.app import app
 from litehive.pipeline.deltas import StateDelta
 from litehive.pipeline.events import CleanState, Reject
 from litehive.pipeline.journal import SqliteJournal

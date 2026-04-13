@@ -3,7 +3,7 @@ from typing import Annotated
 
 import typer
 
-from litehive.agents import ENGINE_CHOICES
+from heru import ENGINE_CHOICES
 from litehive.cli.common import WorkspaceOption, choice, make_typer
 from litehive.cli.display import (
     task_dependencies_label,
@@ -11,16 +11,17 @@ from litehive.cli.display import (
     task_interruption_label,
     task_model_label,
 )
-from litehive.config import ensure_workspace, load_config
+from litehive.config.loading import load_config
+from litehive.config.workspace import ensure_workspace
 from litehive.git.ops import GitError, checkpoint_message
-from litehive.recovery import recover_stale_runner_state
+from litehive.recovery.workspace_repair import recover_stale_runner_state
 from litehive.recovery.execution_recovery import recover_completed_task
-from litehive.tasks.crud import list_tasks, require_task
+from litehive.state.records import list_tasks, require_task
 from litehive.tasks.models import WorkspaceConflictError
 from litehive.tasks.normalization import missing_acceptance_criteria_reason
 from litehive.tasks.persistence import load_state
 from litehive.tasks.queue import move_queued_task, prioritize_queued_tasks
-from litehive.workspace.task_status import (
+from litehive.tasks.status import (
     requeue_task,
     resume_task,
     stop_current_task,

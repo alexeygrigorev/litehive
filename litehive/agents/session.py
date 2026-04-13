@@ -8,18 +8,22 @@ from typing import Callable
 
 import yaml
 
-from litehive.agents import extract_engine_timeline, parse_unified_execution
+from heru import extract_engine_timeline
+from litehive.agents.unified_events import parse_unified_execution
 from litehive.agents._continuation import extract_execution_continuation
 from heru.base import CLIExecutionResult
 from litehive.observability.events import append_event, append_session_log, ensure_session_log
-from litehive.models import ResourceLimitEvent, SubagentRef, TaskRecord, utcnow
+from heru.types import SubagentRef
+from litehive.models.common import utcnow
+from litehive.models.runtime_models import ResourceLimitEvent
+from litehive.models.task_models import TaskRecord
 from litehive.agents.artifacts import (
     write_stream_artifact,
     write_text_artifact,
 )
 from litehive.agents.models import SubagentInactivityTimeout
 from litehive.tasks.persistence import write_atomic_files
-from litehive.workspace.runtime_tracking import mark_subagent_pid
+from litehive.tasks.runtime import mark_subagent_pid
 
 
 class SessionMixin:

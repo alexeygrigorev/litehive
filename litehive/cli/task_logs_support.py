@@ -6,9 +6,9 @@ import time
 
 import yaml
 
-from litehive.config import workspace_logs_dir
-from litehive.daemon import latest_run_all_log_dir
-from litehive.tasks.crud import list_tasks_state_first
+from litehive.config.paths import workspace_logs_dir
+from litehive.daemon.logs import latest_run_all_log_dir
+from litehive.state.records import list_tasks_state_first
 from litehive.tasks.paths import read_text_artifact, resolve_artifact_path, task_dir
 
 _DEFAULT_TAIL_LINES = 40

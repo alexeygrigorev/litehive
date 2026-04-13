@@ -3,9 +3,12 @@ from typing import Any
 
 import pytest
 
-from litehive.pipeline import SqliteJournal, StateMachineRunner, build_registry
+from litehive.pipeline.journal import SqliteJournal
+from litehive.pipeline.registry import build_registry
+from litehive.pipeline.runner import StateMachineRunner
 from litehive.pipeline.agents.base import PromptContext
-from litehive.pipeline.nodes import HookResult, HookRunner, HookSpec, StubCommitNode
+from litehive.pipeline.nodes.hook import HookResult, HookRunner, HookSpec
+from litehive.pipeline.nodes.system import StubCommitNode
 from litehive.pipeline.nodes.agent import AgentVerdict
 from litehive.pipeline.orchestration import _sync_back
 from litehive.pipeline.persistence import SqlitePersistence

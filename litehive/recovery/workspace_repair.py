@@ -6,22 +6,22 @@ from pathlib import Path
 
 import yaml
 
-from litehive.config import load_config
-from litehive.models import (
-    RecoveryAction,
+from litehive.config.loading import load_config
+from litehive.models.common import utcnow
+from litehive.models.report_models import RecoveryAction
+from litehive.models.runtime_models import (
     RuntimeContinuationHandoff,
     RuntimeInterruptionState,
     RuntimeSubagentState,
-    TaskRecord,
-    utcnow,
 )
+from litehive.models.task_models import TaskRecord
 from litehive.tasks.models import WorkspaceRepairSummary
 from litehive.tasks.paths import (
     read_text_artifact,
     resolve_artifact_path,
     task_dir,
 )
-from litehive.workspace.runtime_tracking import (
+from litehive.tasks.runtime import (
     apply_task_outcome,
     duration_seconds,
     summarize_transcript,
@@ -31,7 +31,7 @@ from .detection import has_inactive_running_tasks, is_stranded_commit_task, shou
 
 
 def _running_task_ids(root: Path) -> list[str]:
-    from litehive.db import connect_workspace_db
+    from litehive.db.schema import connect_workspace_db
 
     with connect_workspace_db(root) as connection:
         try:
@@ -393,7 +393,7 @@ def stale_interruption_reason(task: TaskRecord, stage: str, *, stale_pid: bool =
 def _can_attempt_stale_runner_recovery(
     root: Path, tasks_by_id: dict[str, TaskRecord], running_task_ids: list[str]
 ) -> bool:
-    from litehive.workspace.locking import (
+    from litehive.state.locking import (
         current_thread_owns_runner_guard,
         runner_lock_is_held,
         runner_lock_pid_is_stale,
@@ -470,7 +470,7 @@ def _recover_stale_running_task(
     summary: WorkspaceRepairSummary | None,
 ) -> tuple[bool, str | None, bool]:
     from litehive.tasks.queue import is_task_eligible_for_execution
-    from litehive.workspace.locking import subagent_process_is_stale
+    from litehive.state.locking import subagent_process_is_stale
 
     if not is_task_eligible_for_execution(task):
         return False, None, False
@@ -536,14 +536,14 @@ def recover_stale_runner_state(
     *,
     summary: WorkspaceRepairSummary | None = None,
 ) -> bool:
-    from litehive.tasks.crud import list_tasks
+    from litehive.state.records import list_tasks
     from litehive.tasks.persistence import save_state_without_runner_guard, load_state
-    from litehive.workspace.locking import (
+    from litehive.state.locking import (
         current_thread_owns_runner_guard,
         runner_lock_is_held,
         workspace_lock,
     )
-    from litehive.workspace.workflow import persist_tasks_and_state_without_runner_guard
+    from litehive.state.persist import persist_tasks_and_state_without_runner_guard
 
     root = root.resolve()
     with workspace_lock(root):
@@ -566,7 +566,7 @@ def recover_stale_runner_state(
                 continue
             if task_id != state.active_task_id and not should_requeue_commit_stage_task(task):
                 if state.active_task_id is not None:
-                    from litehive.workspace.locking import read_runner_lock_metadata, runner_metadata_present
+                    from litehive.state.locking import read_runner_lock_metadata, runner_metadata_present
 
                     if not runner_metadata_present(read_runner_lock_metadata(root)):
                         continue

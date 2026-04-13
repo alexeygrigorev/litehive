@@ -3,9 +3,9 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
-from litehive.cli import app
+from litehive.cli.app import app
 from litehive.recovery.workspace_repair import recover_stale_runner_state
-from litehive.tasks.crud import create_task
+from litehive.state.records import create_task
 from tests.workspace_helpers import ensure_workspace
 
 
@@ -18,7 +18,7 @@ def test_recover_stale_runner_state_skips_task_scan_for_clean_queue(
     def _boom(root, *, include_runtime=True):  # type: ignore[no-untyped-def]
         raise AssertionError("clean repair should not scan task records")
 
-    monkeypatch.setattr("litehive.tasks.crud.list_tasks", _boom)
+    monkeypatch.setattr("litehive.state.records.list_tasks", _boom)
 
     assert recover_stale_runner_state(tmp_path) is False
 

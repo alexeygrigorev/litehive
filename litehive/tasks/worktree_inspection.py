@@ -6,8 +6,9 @@ from pathlib import Path, PurePosixPath
 
 import yaml
 
-from litehive.config import LitehiveConfig, load_config
-from litehive.git import (
+from litehive.config.loading import load_config
+from litehive.config.model import LitehiveConfig
+from litehive.git.ops import (
     GitError,
     add_worktree,
     current_head,
@@ -16,9 +17,9 @@ from litehive.git import (
     rebase_worktree_onto,
     status_porcelain,
 )
-from litehive.models import TaskRecord
-from litehive.agents import SubagentManager
-from litehive.tasks.crud import (
+from litehive.models.task_models import TaskRecord
+from litehive.agents.manager import SubagentManager
+from litehive.state.records import (
     get_task,
     get_task_worktree_path,
     list_tasks,
@@ -252,7 +253,7 @@ def _run_worktree_merge_agent(
 
     append_journal(root, task, f"[worktree] Merge conflict on {len(conflicts)} file(s). Launching merge agent.")
     cfg = config or load_config(root)
-    from litehive.recovery import resolve_recovery_engine
+    from litehive.recovery.execution_recovery import resolve_recovery_engine
     engine_name, model = resolve_recovery_engine(root, task, cfg)
     subagents = SubagentManager(root, execution_root=worktree_path)
     subagents.run(

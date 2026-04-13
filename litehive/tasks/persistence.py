@@ -7,9 +7,10 @@ from pathlib import Path
 
 import yaml
 
-from litehive.config import ensure_workspace, state_path
-from litehive.models import WorkspaceState
-from litehive.storage import runtime_store
+from litehive.config.paths import state_path
+from litehive.config.workspace import ensure_workspace
+from litehive.models.task_models import WorkspaceState
+from litehive.state.store import runtime_store
 
 from .constants import MISSING
 
@@ -99,7 +100,7 @@ def serialize_state(state: WorkspaceState) -> str:
 
 
 def save_state(root: Path, state: WorkspaceState) -> None:
-    from litehive.workspace.locking import workspace_mutation_guard
+    from litehive.state.locking import workspace_mutation_guard
 
     with workspace_mutation_guard(root):
         runtime_store(root).save_workspace_state(state)
@@ -112,7 +113,7 @@ def save_state_without_runner_guard(root: Path, state: WorkspaceState) -> None:
 
 
 def set_pool_stop_reason(root: Path, stop_reason: str | None) -> WorkspaceState:
-    from litehive.workspace.locking import workspace_lock
+    from litehive.state.locking import workspace_lock
 
     with workspace_lock(root):
         state = load_state(root)

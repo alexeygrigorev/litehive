@@ -8,8 +8,8 @@ from pathlib import Path
 
 import yaml
 
-from litehive.config import daemon_registry_path
-from litehive.models import utcnow
+from litehive.config.paths import daemon_registry_path
+from litehive.models.common import utcnow
 
 logger = logging.getLogger(__name__)
 

@@ -6,12 +6,8 @@ from typing import Iterable
 import yaml
 
 from litehive.git.ops import GitError, current_head, is_git_repo, status_porcelain
-from litehive.models import (
-    RecoveryAction,
-    RecoveryEvidenceItem,
-    RecoveryReport,
-    TaskRecord,
-)
+from litehive.models.report_models import RecoveryAction, RecoveryEvidenceItem, RecoveryReport
+from litehive.models.task_models import TaskRecord
 
 from .paths import (
     legacy_task_thread_file,
@@ -38,9 +34,9 @@ def collect_recovery_evidence(
     *,
     stage: str | None = None,
 ) -> list[RecoveryEvidenceItem]:
-    from litehive.observability import engine_monitoring_file, load_engine_monitoring
+    from litehive.observability.engine_monitoring import engine_monitoring_file, load_engine_monitoring
 
-    from .crud import get_task_worktree_path
+    from litehive.state.records import get_task_worktree_path
     from .worktrees import resolve_recorded_worktree_path
 
     evidence: list[RecoveryEvidenceItem] = []
@@ -233,7 +229,7 @@ def record_recovery_report(
     recovery_subagent_id: str | None = None,
     recovery_subagent_path: str | None = None,
 ) -> Path:
-    from litehive.models import TaskThreadComment
+    from litehive.models.report_models import TaskThreadComment
 
     report = RecoveryReport(
         task_id=task.id,
@@ -308,7 +304,7 @@ def retract_thread_comment(comment: "TaskThreadComment") -> bool:
 
 
 def load_task_thread(root: Path, task: TaskRecord) -> list["TaskThreadComment"]:
-    from litehive.models import TaskThreadComment
+    from litehive.models.report_models import TaskThreadComment
 
     path = task_comments_file(root, task)
     if not path.exists():

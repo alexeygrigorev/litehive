@@ -1,4 +1,4 @@
-from litehive.tasks import slugify
+from litehive.tasks.paths import slugify
 
 
 def test_slugify_short_unchanged() -> None:

@@ -10,12 +10,13 @@ import heru.quota.copilot_quota as copilot_quota_mod
 import heru.quota.zai_quota as zai_quota_mod
 import yaml
 
-from litehive.agents import get_engine
+from heru import get_engine
 from litehive.agents._continuation import extract_execution_continuation
-from litehive.config import LitehiveConfig
+from litehive.config.model import LitehiveConfig
 from litehive.config.paths import config_path
-from litehive.models import RuntimeContinuationHandoff, TaskRecord
-from litehive.workspace.runtime_tracking import set_task_continuation_handoff
+from litehive.models.runtime_models import RuntimeContinuationHandoff
+from litehive.models.task_models import TaskRecord
+from litehive.tasks.runtime import set_task_continuation_handoff
 
 
 def _engine_attempt_order(

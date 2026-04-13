@@ -18,7 +18,7 @@ from litehive.config.paths import (
     workspace_dir,
     workspace_gitignore_path,
 )
-from litehive.config.profiles import render_context_template
+from litehive.config.profiles.rendering import render_context_template
 from litehive.config.workspace_registry import (
     list_registered_workspace_paths,
     register_workspace_path,
@@ -253,8 +253,8 @@ def ensure_workspace(root: Path, config: LitehiveConfig | None = None) -> Path:
     _register_workspace(root)
     migrate_legacy_workspace_state(root)
 
-    # Import here to avoid circular import with litehive.storage
-    from litehive.storage import runtime_store
+    # Import here to avoid circular import with litehive.state
+    from litehive.state.store import runtime_store
     runtime_store(root).bootstrap()
     workspace_database_path(root).parent.mkdir(parents=True, exist_ok=True)
 
