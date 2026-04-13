@@ -3,7 +3,7 @@
 from pathlib import Path
 
 from litehive.config.model import LitehiveConfig
-from litehive.config.startup_guidance import default_agent_startup_guidance
+from litehive.roles.guidance import default_startup_guidance
 from litehive.config.profiles.loader import resolve_process_profile
 from litehive.models.task_models import TaskRecord
 from litehive.tasks.normalization import (
@@ -386,7 +386,7 @@ def _agent_startup_guidance(
     root: Path | None = None,
 ) -> list[str]:
     lines: list[str] = []
-    guidance = default_agent_startup_guidance()
+    guidance = default_startup_guidance()
     if config is not None:
         for key, values in config.agent_startup_guidance.items():
             guidance.setdefault(key, []).extend(values)

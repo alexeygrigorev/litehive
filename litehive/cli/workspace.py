@@ -234,7 +234,6 @@ def status_full(workspace, root, config, state, runner, monitoring, issues):
 def status_command(
     workspace: WorkspaceOption = Path.cwd(),
     full: Annotated[bool, typer.Option(help="Include the full per-task status dump.")] = False,
-    fast: Annotated[bool, typer.Option(help="Deprecated compatibility alias")] = False,
 ) -> int:
     root = workspace.resolve()
     snapshot = collect_status_snapshot(root)

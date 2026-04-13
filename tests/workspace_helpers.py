@@ -18,7 +18,6 @@ from typer.testing import CliRunner
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from litehive.cli.app import app as cli_app
-from litehive.config.formatting import format_external_engine_sandbox
 from litehive.config.loading import load_config
 from litehive.config.model import LitehiveConfig
 from litehive.config.paths import global_config_path, state_path, worktree_root
@@ -320,8 +319,6 @@ def _cmd_show(args):
 
 def _cmd_status(args):
     argv = ["status", "--workspace", args.workspace]
-    if getattr(args, "fast", False):
-        argv.append("--fast")
     if getattr(args, "full", False):
         argv.append("--full")
     return _invoke_cli(argv)
@@ -837,7 +834,6 @@ __all__ = [
     "SandboxCredentialInput",
     "available_process_profiles",
     "ensure_workspace",
-    "format_external_engine_sandbox",
     "global_config_path",
     "load_config",
     "render_context_template",

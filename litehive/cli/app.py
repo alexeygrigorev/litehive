@@ -39,7 +39,7 @@ def root(ctx: typer.Context) -> int | None:
     if result is not None and result.task is not None:
         print(f"{result.task.id}: {result.final_stage}")
         return 0
-    return status_command(Path.cwd(), full=False, fast=False)
+    return status_command(Path.cwd(), full=False)
 
 register_workspace_commands(app)
 register_runner_commands(app, backup_app, db_app)
