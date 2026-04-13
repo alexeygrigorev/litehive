@@ -504,4 +504,22 @@ item lands.
   operator also manually cleared `pool_state.active_task_id`
   and `state.yaml active_task_id` (both were stuck on T-0264,
   the same v1→v2 bridge problem — filed as part of T-0366 scope).
+- 2026-04-13: **auto-commit captured runner-owned metadata**
+  (commit `5df3b1b7`). T-0320 (CLI help text) flagged merge_failed.
+  Recovery agent diagnosed it correctly: `git add -A` in the
+  worktree auto-commit captured runner-written files under
+  `.litehive/tasks/<task>/` (task.yaml, etc), which the runner
+  also rewrites in main — so `git merge` aborted on
+  "Your local changes would be overwritten". Recovery agent
+  proposed the right narrowing but recovery_exhausted discarded
+  the fix. Operator applied the same fix:
+  `_autocommit_worktree_changes` now filters out
+  `.litehive/tasks/<task_id>-*`, `.litehive/tasks/archive/`,
+  `.litehive/state.yaml`, and skips the commit entirely when
+  only those paths are dirty. Regression test covers the exact
+  race. Also recovered T-0320's real SWE work from dangling
+  commit `5f190242` (README +14, queue_cli.py +15, one new test
+  file). 150 pipeline-v2/commit tests + 2 recovered tests green.
+  T-0320 closed duplicate. Meta-finding: recovery-agent proposals
+  still don't automatically land — same class as earlier heartbeats.
 - …
