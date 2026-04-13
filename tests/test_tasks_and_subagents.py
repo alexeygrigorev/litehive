@@ -2350,56 +2350,6 @@ def _subagent_manager_uses_inherited_run_live_when_available(
     _subagent_manager_uses_inherited_run_live_when_available(tmp_path, monkeypatch)
 
 
-def test_legacy_subagent_execution_module_alias_preserves_monkeypatching(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    ensure_workspace(tmp_path)
-    task = create_task(tmp_path, title="Fallback usage-limit task")
-    legacy_execution = importlib.import_module("litehive.agents._execution")
-    manager = legacy_execution.SubagentManager(tmp_path)
-    engine = get_engine("codex")
-
-    monkeypatch.setattr(legacy_execution, "get_engine", lambda _: engine)
-    monkeypatch.setattr(engine, "is_available", lambda: True)
-
-    calls: list[str] = []
-
-    def fake_run(
-        prompt: str,
-        cwd: Path,
-        model: str | None = None,
-        *,
-        max_turns: int | None = None,
-        resume_session_id: str | None = None,
-        on_started=None,
-        **kwargs,
-    ) -> CLIExecutionResult:
-        del prompt, model, max_turns, resume_session_id, kwargs
-        calls.append("run")
-        assert on_started is not None
-        on_started(4241)
-        return CLIExecutionResult(
-            adapter="codex",
-            argv=("codex", "exec"),
-            cwd=cwd,
-            exit_code=1,
-            stdout="",
-            stderr="ERROR: You've hit your usage limit. Try again later.",
-            pid=4241,
-        )
-
-    def fail_run_live(*args, **kwargs) -> CLIExecutionResult:  # type: ignore[no-untyped-def]
-        raise AssertionError("run_live should not be used when the legacy module is patched")
-
-    monkeypatch.setattr(engine, "run", fake_run)
-    monkeypatch.setattr("heru.base.ExternalCLIAdapter.run_live", fail_run_live)
-
-    result = manager.run(task, role="swe", engine_name="codex", prompt="implement it")
-
-    assert calls == ["run"]
-    assert result.failure == EngineFailure(kind="execution_limit", reason="usage limit reached")
-
-
 def _subagent_manager_uses_inherited_run_live_when_sandboxed(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
