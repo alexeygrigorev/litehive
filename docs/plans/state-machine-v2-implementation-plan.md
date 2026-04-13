@@ -410,4 +410,19 @@ item lands.
   cause and 7 acceptance criteria covering both bugs (selector
   filter on `execution_status` + persistence of `worktree_path`
   from `GitWorktreeSyncNode`).
+- 2026-04-13: **T-0367 closed empty-pass.** Daemon ran T-0367 (the
+  repair-perf task itself) for 45 minutes through full pipeline
+  (planner → SWE → QA → SWE → QA → reviewer) and closed it as
+  `done/done` with no commit landed. Both SWE reports
+  (`SA-0002-swe`, `SA-0004-swe`) and the reviewer
+  (`SA-0006-reviewer`) explicitly recorded
+  `files_changed: []`, `tests added: 0`, yet `status: completed`.
+  This is the same empty-pass class as T-0210 / the
+  `feedback_empty_swe_guard.md` memory: the verdict guard either
+  did not fire or did not see the worktree changes (likely the
+  worktree was actually empty since the agents wrote no code).
+  T-0368 filed (critical, promoted to queue front) to re-attack
+  the repair perf bug AND log root cause of why the empty-pass
+  guard let this through. Heartbeat after that: daemon moved on
+  to T-0242 cleanly; pipeline self-healing.
 - …
