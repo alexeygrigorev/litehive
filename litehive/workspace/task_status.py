@@ -282,13 +282,13 @@ def requeue_task(root: Path, task_id: str, *, front: bool = False, force: bool =
         retract_thread_comment,
         save_task_thread,
     )
-    from litehive.tasks.worktrees import migrate_legacy_worktree
+    from litehive.tasks.worktrees import resolve_recorded_worktree_path
     from .workflow import persist_task_and_state_without_runner_guard
 
     def _task_checkout_path(task: TaskRecord) -> Path:
-        worktree_path, changed = migrate_legacy_worktree(root, task)
-        if changed:
-            save_task(root, task)
+        worktree_path = resolve_recorded_worktree_path(
+            root, task.runtime.git.worktree_path or task.git.worktree_path
+        )
         if worktree_path is not None and worktree_path.exists():
             return worktree_path
         return root

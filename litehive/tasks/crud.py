@@ -173,17 +173,12 @@ def _backfill_legacy_task_state(root: Path, task: TaskRecord) -> TaskRecord:
 
 
 def _load_task_runtime(root: Path, task: TaskRecord) -> TaskRecord:
-    from .worktrees import migrate_legacy_worktree
-
     store = runtime_store(root)
     task_state = store.load_task_state(task.id)
     if task_state is not None:
         task = TaskRecord.from_intent_and_state(task.to_intent_record(), task_state)
         set_task_commit_sha(task, task.runtime.git.commit_sha)
         _normalize_task_worktree_state(task)
-        _, changed = migrate_legacy_worktree(root, task)
-        if changed:
-            _backfill_legacy_task_state(root, task)
         return task
 
     runtime_file = task_runtime_file(root, task)
@@ -192,9 +187,6 @@ def _load_task_runtime(root: Path, task: TaskRecord) -> TaskRecord:
         task.runtime = TaskRuntime(**data)
         set_task_commit_sha(task, task.runtime.git.commit_sha)
     _normalize_task_worktree_state(task)
-    _, changed = migrate_legacy_worktree(root, task)
-    if changed or runtime_file.exists() or _task_file_contains_runtime_state(task_file(root, task)):
-        return _backfill_legacy_task_state(root, task)
     return _backfill_legacy_task_state(root, task)
 
 

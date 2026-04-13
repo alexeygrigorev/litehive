@@ -392,8 +392,7 @@ def _stale_worktree_items(root: Path, tasks: list[TaskRecord], state) -> list[At
     from litehive.tasks.queue_ops import is_task_eligible_for_execution
     from litehive.tasks.worktrees import (
         is_managed_worktree_path,
-        legacy_worktree_root,
-        migrate_legacy_worktree,
+        resolve_recorded_worktree_path,
     )
 
     items: list[AttentionItem] = []
@@ -403,8 +402,7 @@ def _stale_worktree_items(root: Path, tasks: list[TaskRecord], state) -> list[At
         worktree_rel = task.runtime.git.worktree_path or task.git.worktree_path
         if not is_managed_worktree_path(root, worktree_rel):
             continue
-        worktree_path, _changed = migrate_legacy_worktree(root, task)
-        worktree_rel = task.runtime.git.worktree_path or task.git.worktree_path
+        worktree_path = resolve_recorded_worktree_path(root, worktree_rel)
         if worktree_rel is None:
             continue
         managed_paths[worktree_rel] = task.id
@@ -423,13 +421,12 @@ def _stale_worktree_items(root: Path, tasks: list[TaskRecord], state) -> list[At
                 metadata={"path": worktree_rel},
             )
         )
-    for worktrees_root in (worktree_root(root), legacy_worktree_root(root)):
-        if not worktrees_root.exists():
-            continue
+    worktrees_root = worktree_root(root)
+    if worktrees_root.exists():
         for child in sorted(worktrees_root.iterdir()):
             if not child.is_dir():
                 continue
-            rel = str(child) if worktrees_root == worktree_root(root) else str(child.relative_to(root))
+            rel = str(child)
             if rel in managed_paths:
                 continue
             items.append(

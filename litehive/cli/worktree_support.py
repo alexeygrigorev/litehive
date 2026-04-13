@@ -17,7 +17,7 @@ from litehive.tasks.crud import (
 )
 from litehive.tasks.models import WorkspaceConflictError
 from litehive.tasks.persistence import load_state, save_state
-from litehive.tasks.worktrees import is_managed_worktree_path, migrate_legacy_worktree
+from litehive.tasks.worktrees import is_managed_worktree_path, resolve_recorded_worktree_path
 
 _CLEANABLE_STATUSES = {"done", "deferred", "wont_do", "duplicate"}
 
@@ -64,10 +64,7 @@ def collect_managed_worktrees(root: Path) -> list[_ManagedWorktree]:
         worktree_rel = get_task_worktree_path(task)
         if not is_managed_worktree_path(root, worktree_rel):
             continue
-        worktree_path, changed = migrate_legacy_worktree(root, task)
-        if changed:
-            save_task(root, task)
-            worktree_rel = get_task_worktree_path(task)
+        worktree_path = resolve_recorded_worktree_path(root, worktree_rel)
         if worktree_path is None or not worktree_path.exists() or worktree_rel is None:
             continue
         try:
@@ -95,10 +92,7 @@ def _collect_rescue_candidates(root: Path) -> list[_RescueCandidate]:
         worktree_rel = get_task_worktree_path(task)
         if not is_managed_worktree_path(root, worktree_rel):
             continue
-        worktree_path, changed = migrate_legacy_worktree(root, task)
-        if changed:
-            save_task(root, task)
-            worktree_rel = get_task_worktree_path(task)
+        worktree_path = resolve_recorded_worktree_path(root, worktree_rel)
         if worktree_path is None or worktree_rel is None:
             continue
         commit_shas = _worktree_commits_ahead_of_main(root, worktree_path) if worktree_path.exists() else []

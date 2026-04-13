@@ -13,7 +13,7 @@ from litehive.tasks.paths import (
     task_dir,
 )
 from litehive.tasks.reports import load_task_thread
-from litehive.tasks.worktrees import migrate_legacy_worktree
+from litehive.tasks.worktrees import resolve_recorded_worktree_path
 
 
 def _debug_all(root: Path, task):
@@ -118,10 +118,7 @@ def _debug_worktree(root: Path, task):
         print("worktree: no worktree")
         return 0
 
-    worktree_path, changed = migrate_legacy_worktree(root, task)
-    if changed:
-        save_task(root, task)
-        worktree_rel = get_task_worktree_path(task) or worktree_rel
+    worktree_path = resolve_recorded_worktree_path(root, worktree_rel)
     if worktree_path is None or not worktree_path.exists():
         print(f"worktree: {worktree_rel}")
         print("exists: no")
