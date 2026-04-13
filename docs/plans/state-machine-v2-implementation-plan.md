@@ -486,4 +486,22 @@ item lands.
   fall back to the absolute path string. 27 reports/recovery
   tests green. Daemon restarted. T-0264 still flagged; operator
   to decide whether to `litehive recover` once runner is idle.
+- 2026-04-13: **flagged-task infinite retry loop fixed**
+  (commit `ff463738`). After the recovery-evidence fix landed,
+  the daemon restarted and re-picked T-0264 — and kept re-picking
+  it. 5 consecutive run-all entries all ended
+  `final_stage: failed, failed_reason: recovery_exhausted` within
+  a minute each. Root cause: `dequeue_next_task_selection` has
+  an auto-recovery path for non-hook-reject flagged tasks that
+  calls `reset_task_for_recovery` (task-level) but never touches
+  the v2 `pipeline_task_state` row. `SqlitePersistence.initialize`
+  is a no-op when the row exists, so the runner loaded the
+  sticky `failed` terminal and re-emitted it immediately — task
+  bounces back to flagged → dequeue resets → loop. Fix: add
+  `SqlitePersistence.reset(task_id)` that DELETEs the row, call
+  it from the dequeue auto-recovery path right after
+  `reset_task_for_recovery`. 527 tests green. Daemon restarted;
+  operator also manually cleared `pool_state.active_task_id`
+  and `state.yaml active_task_id` (both were stuck on T-0264,
+  the same v1→v2 bridge problem — filed as part of T-0366 scope).
 - …
