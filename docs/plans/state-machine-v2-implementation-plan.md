@@ -474,4 +474,16 @@ item lands.
   must detect dirty main repo pre-merge and emit Blocked with
   file list, not Crash into recovery — losing work to dangling
   commits should be impossible.
+- 2026-04-13: **daemon runner crash in recovery-evidence path**
+  (commit `228324fd`). Heartbeat check: T-0264 (CLI reorg) was
+  flagged, runner stopped. Daemon log showed a ValueError from
+  `litehive/tasks/reports.py:141` — `Path.relative_to(root)`
+  raised because `latest_run_all_log_path` now returns
+  `~/.local/share/litehive/<ws>/logs/run-all/daemon.log` (moved
+  out of tree by T-0297), and `collect_recovery_evidence` had
+  hard-coded relative rendering. Every task entering RECOVERING
+  crashes the runner in this code path. Fix: catch ValueError,
+  fall back to the absolute path string. 27 reports/recovery
+  tests green. Daemon restarted. T-0264 still flagged; operator
+  to decide whether to `litehive recover` once runner is idle.
 - …
