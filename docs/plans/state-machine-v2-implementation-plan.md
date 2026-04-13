@@ -454,4 +454,24 @@ item lands.
   if dirty, does `git add -A && git commit -m "litehive <task>:
   auto-commit worktree changes"`. Regression test added.
   145 pipeline/commit tests green. Daemon restarted.
+- 2026-04-13: **fix validated end-to-end by T-0368 itself**
+  (commit `943316eb`). First task after the fix, T-0368, was the
+  repair-perf re-attack. It ran planner → SWE → QA → SWE → QA → QA
+  → reviewer → SWE → QA → reviewer → recovery, all the way to
+  commit stage, and the auto-commit fix dutifully wrote
+  `099e2686 litehive T-0368: auto-commit worktree changes` into
+  the worktree branch. **But** commit stage still crashed: the
+  main repo had a pre-existing uncommitted orphan in
+  `litehive/agents/base.py` (legacy-warning shim from the
+  zombie-sweep session), `git merge` refused with "Your local
+  changes would be overwritten", GitCommitNode emitted Crash →
+  RECOVERING → recovery_exhausted → worktree+branch cleaned up →
+  real work dangling but reachable via `git fsck --unreachable`.
+  Operator: stashed the orphan, cherry-picked `099e2686` onto
+  main, tests green (20/20), force-amended the cherry-pick
+  message, pushed. **Two follow-ups**: T-0368 closed duplicate
+  (work is in main); filed **T-0369** (high): GitCommitNode
+  must detect dirty main repo pre-merge and emit Blocked with
+  file list, not Crash into recovery — losing work to dangling
+  commits should be impossible.
 - …
