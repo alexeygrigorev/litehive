@@ -1,7 +1,5 @@
 """Shared helpers for Litehive-managed task worktrees."""
 
-from __future__ import annotations
-
 from pathlib import Path, PurePosixPath
 
 from litehive.config import worktree_root

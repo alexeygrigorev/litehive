@@ -1,7 +1,5 @@
 """Status diagnostics for broken workspace state."""
 
-from __future__ import annotations
-
 from datetime import UTC, datetime, timedelta
 import os
 from pathlib import Path

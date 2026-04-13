@@ -1,7 +1,5 @@
 """Global cross-workspace registry backed by SQLite."""
 
-from __future__ import annotations
-
 from datetime import UTC, datetime
 import logging
 import os

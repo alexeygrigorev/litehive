@@ -1,7 +1,5 @@
 """Filesystem paths for repo-local and unified global Litehive state."""
 
-from __future__ import annotations
-
 import hashlib
 import os
 from pathlib import Path

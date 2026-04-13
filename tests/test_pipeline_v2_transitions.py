@@ -3,8 +3,6 @@
 These only exercise the pure rule layer via ``evaluate`` — no engines, no
 runner, no persistence.
 """
-from __future__ import annotations
-
 import pytest
 
 from litehive.pipeline import RULES, evaluate, list_transitions
