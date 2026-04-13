@@ -380,7 +380,7 @@ def ensure_future_task_mutation_allowed(
     state: WorkspaceState | None = None,
 ) -> None:
     from litehive.tasks.crud import get_task
-    from litehive.tasks.queue_ops import is_task_eligible_for_execution, active_task_markers
+    from litehive.tasks.queue import is_task_eligible_for_execution, active_task_markers
 
     markers = active_task_markers(root, state)
     conflicts: list[str] = []

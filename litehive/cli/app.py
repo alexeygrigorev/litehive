@@ -16,7 +16,7 @@ from litehive.cli.task_cli import app as task_app
 from litehive.cli.workspace import register_root_commands as register_workspace_commands, status_command
 from litehive.cli.worktree_cli import app as worktree_app
 from litehive.pipeline.orchestration import run_task
-from litehive.tasks.queue_ops import dequeue_next_task
+from litehive.tasks.queue import dequeue_next_task
 
 app = make_typer()
 backup_app = make_typer(invoke_without_command=True)

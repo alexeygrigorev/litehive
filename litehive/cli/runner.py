@@ -29,7 +29,7 @@ from litehive.tasks.crud import get_task
 from litehive.tasks.models import WorkspaceConflictError
 from litehive.tasks.normalization import missing_acceptance_criteria_reason
 from litehive.tasks.persistence import load_state
-from litehive.tasks.queue_ops import dequeue_next_task, peek_next_task_selection, plan_task_selections
+from litehive.tasks.queue import dequeue_next_task, peek_next_task_selection, plan_task_selections
 from litehive.tasks.reports import append_thread_comment
 from litehive.workspace.locking import runner_status
 

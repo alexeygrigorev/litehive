@@ -33,7 +33,7 @@ from litehive.tasks.paths import latest_subagent_base, task_dir
 
 
 def _active_task_id_for_stop(root: Path, state: WorkspaceState) -> str:
-    from litehive.tasks.queue_ops import validate_single_active_task, active_task_markers
+    from litehive.tasks.queue import validate_single_active_task, active_task_markers
 
     markers = active_task_markers(root, state)
     if not markers:
@@ -91,7 +91,7 @@ def stop_current_task(
 ) -> StopTaskSummary:
     from litehive.tasks.crud import require_task
     from litehive.tasks.persistence import load_state
-    from litehive.tasks.queue_ops import active_task_markers
+    from litehive.tasks.queue import active_task_markers
     from litehive.workspace.locking import (
         read_runner_lock_metadata,
         runner_lock_is_held,
@@ -191,7 +191,7 @@ def _switch_thread_comment_message(
 def switch_task_engine(root: Path, task_id: str, *, engine: str, reason: str) -> SwitchTaskSummary:
     from litehive.tasks.crud import require_task
     from litehive.tasks.persistence import load_state
-    from litehive.tasks.queue_management import move_queued_task
+    from litehive.tasks.queue import move_queued_task
     from litehive.tasks.reports import append_thread_comment
     from .runtime_tracking import mark_engine_switch
 
@@ -274,7 +274,7 @@ def requeue_task(root: Path, task_id: str, *, front: bool = False, force: bool =
     from litehive.tasks.crud import require_task
     from .locking import ensure_future_task_mutation_allowed, workspace_lock
     from litehive.tasks.persistence import load_state
-    from litehive.tasks.queue_management import reset_task_for_recovery
+    from litehive.tasks.queue import reset_task_for_recovery
     from litehive.tasks.reports import (
         normalized_files_changed,
         is_retractable_pass_comment,
@@ -356,7 +356,7 @@ def resume_task(root: Path, task_id: str, *, front: bool = False) -> TaskRecord:
     from litehive.tasks.crud import require_task
     from .locking import ensure_future_task_mutation_allowed, workspace_lock
     from litehive.tasks.persistence import load_state
-    from litehive.tasks.queue_management import reset_task_for_recovery
+    from litehive.tasks.queue import reset_task_for_recovery
     from .workflow import persist_task_and_state_without_runner_guard
 
     with workspace_lock(root):
@@ -565,8 +565,8 @@ def update_task(
     from litehive.tasks.crud import require_task
     from .locking import ensure_future_task_mutation_allowed, persist_future_task_update, workspace_lock
     from litehive.tasks.persistence import load_state
-    from litehive.tasks.queue_management import reset_task_for_recovery
-    from litehive.tasks.queue_ops import validate_task_dependencies
+    from litehive.tasks.queue import reset_task_for_recovery
+    from litehive.tasks.queue import validate_task_dependencies
     from .workflow import persist_task_and_state_without_runner_guard
 
     with workspace_lock(root):

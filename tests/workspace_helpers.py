@@ -78,7 +78,7 @@ from litehive.config.engine_models import (
     resolve_model,
 )
 from litehive.pipeline.orchestration import run_task, ExecutionResult
-from litehive.tasks.queue_ops import dequeue_next_task
+from litehive.tasks.queue import dequeue_next_task
 from litehive.agents import (
     EngineFailure,
     SubagentManager,
@@ -112,8 +112,8 @@ from litehive.tasks.normalization import (
 )
 from litehive.tasks.paths import task_dir, task_file, task_runtime_file
 from litehive.tasks.persistence import load_state, save_state
-from litehive.tasks.queue_management import move_queued_task
-from litehive.tasks.queue_ops import (
+from litehive.tasks.queue import move_queued_task
+from litehive.tasks.queue import (
     dequeue_next_task_selection,
     peek_next_task_selection,
     restore_untouched_active_task,

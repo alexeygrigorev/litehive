@@ -469,7 +469,7 @@ def _recover_stale_running_task(
     *,
     summary: WorkspaceRepairSummary | None,
 ) -> tuple[bool, str | None, bool]:
-    from litehive.tasks.queue_ops import is_task_eligible_for_execution
+    from litehive.tasks.queue import is_task_eligible_for_execution
     from litehive.workspace.locking import subagent_process_is_stale
 
     if not is_task_eligible_for_execution(task):

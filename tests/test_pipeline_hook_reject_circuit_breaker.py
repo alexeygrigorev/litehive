@@ -12,7 +12,7 @@ from litehive.pipeline.persistence import SqlitePersistence
 from litehive.pipeline.sessions import InMemorySessionStore
 from litehive.pipeline.types import PipelineMode
 from litehive.tasks.persistence import load_state, save_state
-from litehive.tasks.queue_ops import peek_next_task_selection
+from litehive.tasks.queue import peek_next_task_selection
 
 from tests.workspace_helpers import create_task, ensure_workspace
 

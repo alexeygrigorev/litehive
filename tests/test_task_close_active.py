@@ -13,7 +13,7 @@ from litehive.models import SubagentRef
 from litehive.tasks.crud import create_task, require_task
 from litehive.tasks.paths import runner_lock_path, task_dir
 from litehive.tasks.persistence import load_state
-from litehive.tasks.queue_ops import set_active_task
+from litehive.tasks.queue import set_active_task
 from litehive.workspace.locking import runner_lock_is_held
 from litehive.workspace.runtime_tracking import (
     mark_subagent_started,

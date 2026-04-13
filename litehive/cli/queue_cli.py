@@ -19,7 +19,7 @@ from litehive.tasks.crud import list_tasks, require_task
 from litehive.tasks.models import WorkspaceConflictError
 from litehive.tasks.normalization import missing_acceptance_criteria_reason
 from litehive.tasks.persistence import load_state
-from litehive.tasks.queue_management import move_queued_task, prioritize_queued_tasks
+from litehive.tasks.queue import move_queued_task, prioritize_queued_tasks
 from litehive.workspace.task_status import (
     requeue_task,
     resume_task,

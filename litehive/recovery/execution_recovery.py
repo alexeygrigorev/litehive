@@ -9,7 +9,7 @@ from litehive.storage import runtime_store
 from litehive.tasks.paths import task_dir, task_file, task_runtime_file
 from litehive.tasks.persistence import atomic_write_text, load_state
 from litehive.tasks.normalization import implementation_entry_stage
-from litehive.tasks.queue_management import prepare_completed_task_for_recovery
+from litehive.tasks.queue import prepare_completed_task_for_recovery
 from litehive.workspace.locking import workspace_lock, workspace_mutation_guard
 from litehive.workspace.workflow import persist_task_and_state
 

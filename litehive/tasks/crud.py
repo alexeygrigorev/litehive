@@ -252,7 +252,7 @@ def create_task(
         raise ValueError(f"Unsupported priority '{priority}'; choose from {sorted(VALID_TASK_PRIORITIES)}")
     if task_type is not None and task_type not in VALID_TASK_TYPES:
         raise ValueError(f"Unsupported task type '{task_type}'")
-    from .queue_ops import validate_task_dependencies
+    from .queue import validate_task_dependencies
 
     with workspace_lock(root):
         state = load_state(root)

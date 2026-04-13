@@ -389,7 +389,7 @@ def _flagged_and_merge_failed_items(tasks: list[TaskRecord]) -> list[AttentionIt
 
 def _stale_worktree_items(root: Path, tasks: list[TaskRecord], state) -> list[AttentionItem]:
     from litehive.config import worktree_root
-    from litehive.tasks.queue_ops import is_task_eligible_for_execution
+    from litehive.tasks.queue import is_task_eligible_for_execution
     from litehive.tasks.worktrees import (
         is_managed_worktree_path,
         resolve_recorded_worktree_path,
