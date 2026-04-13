@@ -1,21 +1,14 @@
 id: T-0241
 slug: extend-crash-resume-to-all-engines-not-just-claude
 title: Extend crash resume to all engines, not just Claude
-depends_on: []
+created_at: '2026-04-09T08:01:08+00:00'
 task_type: null
-engine: null
-model: null
 mode: implementation
 pipeline_mode: full
-status: done
-flag_reason: null
-flag_count: 1
-pipeline_status: done
 priority: medium
 pm_complexity: null
 planned_effort: null
-created_at: '2026-04-09T08:01:08+00:00'
-updated_at: '2026-04-09T23:22:08+00:00'
+depends_on: []
 goal: 'Currently crash_resume_attempted only fires for engine_name == ''claude''.
   Extend to any engine that provides a resume_id (codex thread_id, gemini session_id,
   opencode sessionID). Use the same pattern: detect crash (exit != 0, no failure classification),
@@ -30,68 +23,9 @@ acceptance_criteria:
 constraints: []
 plan: []
 human_checkpoints: []
-subagents:
-- id: SA-0001
-  role: planner
-  engine: claude
-  status: completed
-  path: subagents/SA-0001-planner
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0002
-  role: swe
-  engine: claude
-  status: interrupted
-  path: subagents/SA-0002-swe
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0003
-  role: recovery
-  engine: codex
-  status: completed
-  path: subagents/SA-0003-recovery
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0004
-  role: merge-resolver
-  engine: codex
-  status: completed
-  path: subagents/SA-0004-merge-resolver
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0005
-  role: swe
-  engine: codex
-  status: completed
-  path: subagents/SA-0005-swe
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0006
-  role: qa
-  engine: codex
-  status: completed
-  path: subagents/SA-0006-qa
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0007
-  role: reviewer
-  engine: codex
-  status: completed
-  path: subagents/SA-0007-reviewer
-  sandboxed: false
-  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0241 extend-crash-resume-to-all-engines-not-just-claude'
-  commit_sha: 50c0a96c3ae9baca83e8fe1dc0fd9c5a754b769b
-  checkpoint_base_sha: 390decee7df7aab8fa3dcbbdba5e3da2959953e7
-  checkpoint_attempts: 1
-  rolled_back_checkpoint_attempt: null
-  merge_agent_attempts: 0
-  worktree_path: null
-retry_policy:
-  max_retries: null
-  stage_retry_limit: null
 created_from: null
 upstream_origin: null
 github_origin: null

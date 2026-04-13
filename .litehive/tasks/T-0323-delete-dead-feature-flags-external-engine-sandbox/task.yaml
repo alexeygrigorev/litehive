@@ -2,20 +2,14 @@ id: T-0323
 slug: delete-dead-feature-flags-external-engine-sandbox
 title: 'Delete dead feature flags: external_engine_sandbox, subagent_resource_limits,
   budget/cost ledger'
-depends_on: []
+created_at: '2026-04-10T20:17:02+00:00'
 task_type: null
-model: null
 mode: implementation
 pipeline_mode: full
-status: queued
-flag_reason: null
-flag_count: 0
-pipeline_status: backlog
 priority: high
 pm_complexity: null
 planned_effort: null
-created_at: '2026-04-10T20:17:02+00:00'
-updated_at: '2026-04-10T20:17:51+00:00'
+depends_on: []
 goal: "Two dead feature flags to delete. Sandbox stays \u2014 only removing the resource-limits\
   \ branch inside it and the separate budget ledger.\n\n### 1. Engine budget / cost\
   \ / usage cap ledger (~230 LOC) \u2014 fully independent\nClient-side rate limiter.\
@@ -69,19 +63,9 @@ acceptance_criteria:
 constraints: []
 plan: []
 human_checkpoints: []
-subagents: []
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0323 delete-dead-feature-flags-external-engine-sandbox'
-  commit_sha: null
-  checkpoint_base_sha: null
-  checkpoint_attempts: 0
-  rolled_back_checkpoint_attempt: null
-  merge_agent_attempts: 0
-  worktree_path: null
-retry_policy:
-  max_retries: null
-  stage_retry_limit: null
 created_from: null
 upstream_origin: null
 github_origin: null

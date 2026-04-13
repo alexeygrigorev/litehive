@@ -2,21 +2,14 @@ id: T-0266
 slug: clean-up-git-history-to-remove-large-tracked-artifacts-and-reduce-repo-clone-size
 title: Clean up git history to remove large tracked artifacts and reduce repo clone
   size
-depends_on: []
+created_at: '2026-04-04T16:38:25+00:00'
 task_type: null
-engine: null
-model: null
 mode: implementation
 pipeline_mode: full
-status: deferred
-flag_reason: 'History rewrite requires manual review and force-push. Tonight incident: codex force-pushed without human approval.'
-flag_count: 0
-pipeline_status: backlog
 priority: medium
 pm_complexity: complex
 planned_effort: m
-created_at: '2026-04-04T16:38:25+00:00'
-updated_at: '2026-04-10T00:44:24+00:00'
+depends_on: []
 goal: Rewrite git history to remove the subagent artifacts, event logs, and other
   execution residue that was tracked before the gitignore fix, so fresh clones are
   small (under 10MB)
@@ -47,19 +40,9 @@ plan:
   report.
 human_checkpoints:
 - before_commit
-subagents: []
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0143 clean-up-git-history-to-remove-large-tracked-artifacts-and-reduce-repo-clone-size'
-  commit_sha: null
-  checkpoint_base_sha: null
-  checkpoint_attempts: 0
-  rolled_back_checkpoint_attempt: null
-  merge_agent_attempts: 0
-  worktree_path: null
-retry_policy:
-  max_retries: null
-  stage_retry_limit: null
 created_from: null
 upstream_origin: null
 github_origin: null

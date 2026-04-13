@@ -1,0 +1,162 @@
+- role: planner
+  step: grooming
+  verdict: pass
+  message: "Task shaped for rework. The current tree already contains divergence-detection\
+    \ code, but it does not match the product requirement: `litehive/daemon/execution.py`\
+    \ currently attempts automatic recovery by creating a backup branch and hard-resetting\
+    \ to `origin/main`, and on failure it falls back to `pool_stop_reason=attention_required`.\
+    \ This task should instead stop immediately with an explicit `diverged_from_origin`\
+    \ stop reason and operator-facing manual reconciliation guidance. `litehive status`\
+    \ should surface that state prominently.\n\nScope stays narrow: only daemon pre-pick\
+    \ git sync/divergence behavior, persisted stop reason, status/attention rendering,\
+    \ and regression coverage for those paths. Do not expand this into generic git\
+    \ health checks or broader recovery automation.\n\nTASK_UPDATE:\n  action: requeue\n\
+    \  task_type: bugfix\n  priority: critical\n  pm_complexity: moderate\n  planned_effort:\
+    \ s\n  goal: >-\n    Before the daemon picks each new task from the pool, it must\
+    \ refresh `origin/main`\n    and compare it against local `main`. If the two branches\
+    \ have truly diverged\n    (neither side is an ancestor of the other), the daemon\
+    \ must stop the pool and\n    require a human to reconcile the branch state before\
+    \ any more work is started.\n    This prevents the T-0266 failure mode where the\
+    \ daemon continued committing for\n    hours on a local `main` that no longer\
+    \ matched upstream history.\n  acceptance_criteria:\n    - >-\n      On every\
+    \ daemon iteration before a new task is picked, Litehive runs `git fetch`\n  \
+    \    for `origin main` and evaluates local `main` versus `origin/main` using\n\
+    \      fast-forward/ancestor semantics.\n    - >-\n      If local `main` and `origin/main`\
+    \ are equal, or either side can fast-forward\n      to the other, the daemon continues\
+    \ normally and does not stop the pool for\n      divergence.\n    - >-\n     \
+    \ If local `main` and `origin/main` have truly diverged, the daemon halts before\n\
+    \      starting task work, persists `pool_stop_reason=diverged_from_origin`, and\
+    \ does\n      not attempt auto-recovery, backup-branch creation, or reset/merge/rebase\
+    \ on the\n      operator's behalf.\n    - >-\n      The operator-facing error\
+    \ and/or attention message names both refs and gives\n      concrete manual reconciliation\
+    \ guidance, including inspecting\n      `git log --oneline --left-right main...origin/main`\
+    \ and then reconciling with\n      reset, rebase, or merge before restarting the\
+    \ pool.\n    - >-\n      `litehive status` shows this condition prominently as\
+    \ an attention-required\n      state, with the stop reason and remediation visible\
+    \ without needing to inspect\n      daemon logs.\n    - >-\n      Regression tests\
+    \ cover the non-diverged cases (equal, local behind, local ahead)\n      and the\
+    \ true-divergence case, plus status/attention rendering for the persisted\n  \
+    \    `diverged_from_origin` stop reason.\n  constraints:\n    - Keep changes scoped\
+    \ to daemon divergence handling, persisted stop reason wiring, and status/attention\
+    \ presentation.\n    - Do not add automatic branch reconciliation in this task.\n\
+    \  plan:\n    - >-\n      Replace the current divergence branch in `litehive/daemon/execution.py`\
+    \ so the\n      pre-pick check fetches `origin main`, treats only true split-history\
+    \ as fatal,\n      and stops with `diverged_from_origin` instead of auto-recovering.\n\
+    \    - >-\n      Remove or bypass the current auto-recovery path for this scenario,\
+    \ including any\n      backup-branch/reset behavior that conflicts with manual\
+    \ reconciliation.\n    - >-\n      Ensure the persisted stop reason and any attention\
+    \ item or daemon output use the\n      same `diverged_from_origin` vocabulary\
+    \ end to end.\n    - >-\n      Update `litehive status` and related attention\
+    \ rendering so divergence appears as\n      a prominent attention-required condition\
+    \ with actionable remediation text.\n    - >-\n      Add focused tests for ancestor/equality\
+    \ cases, true divergence, persisted stop\n      reason behavior, and status/attention\
+    \ output.\n\nNext agent should treat the existing auto-recovery implementation\
+    \ as the main product mismatch to remove or refactor, not as a foundation to preserve.\n"
+  files_changed: []
+  created_at: '2026-04-13T16:52:01+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: "Implemented T-0285.\n\nWhat changed:\n- `litehive/daemon/execution.py`:\
+    \ daemon still runs `check_origin_divergence()` before each iteration/task pick,\
+    \ which performs `git fetch origin main`, but it now stops immediately on true\
+    \ divergence instead of attempting auto-recovery. It writes `pool_stop_reason=diverged_from_origin`,\
+    \ logs the divergence, and emits an operator-facing halt message with manual reconciliation\
+    \ steps.\n- `litehive/observability/status_diagnostics.py`: `litehive status`\
+    \ now raises an explicit `origin_divergence` health issue when `pool_stop_reason=diverged_from_origin`,\
+    \ with a prominent `!!! ATTENTION REQUIRED !!!` banner and the reconciliation\
+    \ commands.\n- `litehive/cli/pool.py`: added a human-readable label for `diverged_from_origin`.\n\
+    - Added regression tests in `tests/test_attention_queue.py` and `tests/test_status_broken_states.py`.\n\
+    \nAcceptance criteria evidence:\n1. Daemon runs git fetch before each task pick\n\
+    - `check_origin_divergence()` is still called at the start of each daemon iteration\
+    \ before `repair` / `run`, and it executes `git fetch origin main`.\n2. Diverged\
+    \ local `main` halts pool with `pool_stop_reason=diverged_from_origin`\n- Covered\
+    \ by `test_pool_halts_immediately_when_local_main_diverges_from_origin`, which\
+    \ verifies the daemon exits before `repair`/`run` and persists `pool_stop_reason\
+    \ == \"diverged_from_origin\"`.\n3. Clear error message points to manual reconciliation\
+    \ steps\n- The daemon/status message now includes `git fetch origin main` and\
+    \ `git log --oneline --left-right main...origin/main`, followed by rebase/reset/merge\
+    \ guidance.\n4. `litehive status` shows the divergence warning prominently\n-\
+    \ Covered by `test_status_reports_origin_divergence_as_attention_required`, which\
+    \ verifies `origin_divergence: !!! ATTENTION REQUIRED !!! ...` appears in status\
+    \ output together with the reconciliation commands.\n\nValidation run:\n- `uv\
+    \ run ruff check --select E402,F401 litehive tests` \u2705\n- `uv run pytest -q\
+    \ tests/test_attention_queue.py tests/test_status_broken_states.py tests/test_backup.py`\
+    \ \u2705 (21 passed)\n- `uv run pytest -q` \u2705 (536 passed, 5 skipped, 3 warnings)\
+    \ in 121.87s\n"
+  files_changed: []
+  created_at: '2026-04-13T16:58:34+00:00'
+- role: qa
+  step: testing
+  verdict: pass
+  message: "PASS\n\nValidated T-0285 against the acceptance criteria.\n\nWhat I verified:\n\
+    - Targeted regression tests passed:\n  - `pytest -q tests/test_attention_queue.py::test_pool_halts_immediately_when_local_main_diverges_from_origin`\n\
+    \  - `pytest -q tests/test_status_broken_states.py::test_status_reports_origin_divergence_as_attention_required`\n\
+    - Ran a bespoke git-level repro in a throwaway bare-remote/local-main setup:\n\
+    \  - advanced `origin/main` in a separate clone\n  - created an independent local\
+    \ `main` commit without fetching first\n  - confirmed `check_origin_divergence()`\
+    \ updated stale `origin/main` via `git fetch origin main` before evaluating ancestry\n\
+    \  - confirmed true divergence was detected only after the fetch refresh\n- Ran\
+    \ `run_daemon_loop()` on that diverged workspace and confirmed:\n  - daemon exited\
+    \ cleanly before repair/run work proceeded\n  - `pool_stop_reason` was written\
+    \ as `diverged_from_origin`\n  - operator output included `!!! ATTENTION REQUIRED\
+    \ !!! Local main has diverged from origin/main. Halting pool: diverged_from_origin`\n\
+    \  - operator output included manual reconciliation steps with `git fetch origin\
+    \ main` and `git log --oneline --left-right main...origin/main`\n- Verified status\
+    \ rendering through the same internal fast-status entrypoint used by the test\
+    \ suite:\n  - nonzero exit\n  - `pool_stop_reason: diverged_from_origin`\n  -\
+    \ prominent `origin_divergence: !!! ATTENTION REQUIRED !!! ...`\n  - manual reconciliation\
+    \ steps present\n\nAcceptance criteria status:\n- Daemon runs git fetch before\
+    \ each task pick: satisfied by live repro and code path in `check_origin_divergence()`\
+    \ invoked at start of each daemon iteration before repair/run.\n- Diverged local\
+    \ `main` vs `origin/main` halts pool with `pool_stop_reason=diverged_from_origin`:\
+    \ satisfied.\n- Clear error message points to manual reconciliation steps: satisfied.\n\
+    - `litehive status` shows the divergence warning prominently: satisfied.\n\nNotes:\n\
+    - Direct external `litehive status` CLI execution in this environment returned\
+    \ an unrelated authorization message, so operator-output verification for status\
+    \ used the project\u2019s internal `_fast_status()` path, which is the same route\
+    \ exercised by the status test suite.\n"
+  files_changed: []
+  created_at: '2026-04-13T17:05:02+00:00'
+- role: reviewer
+  step: accepting
+  verdict: pass
+  message: 'Accepted.
+
+
+    Verified against the acceptance criteria:
+
+    - Daemon still runs `check_origin_divergence()` at the top of every loop iteration
+    before `repair` or task execution, and that helper performs `git fetch origin
+    main` before comparing `main` vs `origin/main`.
+
+    - True divergence is detected only when neither side is an ancestor of the other
+    (`merge-base --is-ancestor` in both directions). On divergence the daemon now
+    halts immediately, writes `pool_stop_reason=diverged_from_origin`, logs the condition,
+    and does not attempt auto-recovery.
+
+    - Operator-facing halt output is clear and includes manual reconciliation steps:
+    `git fetch origin main`, inspect `git log --oneline --left-right main...origin/main`,
+    then rebase/reset/merge before restarting.
+
+    - `litehive status` surfaces this as `origin_divergence: !!! ATTENTION REQUIRED
+    !!! ...` and preserves the stop reason label `diverged_from_origin`.
+
+
+    Evidence I checked:
+
+    - Read the implementation diff in `litehive/daemon/execution.py`, `litehive/observability/status_diagnostics.py`,
+    and `litehive/cli/pool.py`.
+
+    - Ran `pytest -q tests/test_attention_queue.py::test_pool_halts_immediately_when_local_main_diverges_from_origin`
+    -> passed.
+
+    - Ran `pytest -q tests/test_status_broken_states.py::test_status_reports_origin_divergence_as_attention_required`
+    -> passed.
+
+
+    No blocking gaps found for T-0285.
+
+    '
+  files_changed: []
+  created_at: '2026-04-13T17:06:27+00:00'

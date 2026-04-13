@@ -1,20 +1,14 @@
 id: T-0335
 slug: delegate-resume-continue-to-heru-s-unified-resume
 title: Delegate --resume/--continue to heru's unified resume mechanism
-depends_on: []
+created_at: '2026-04-10T20:48:17+00:00'
 task_type: refactor
-model: null
 mode: tasks
 pipeline_mode: full
-status: queued
-flag_reason: null
-flag_count: 0
-pipeline_status: backlog
 priority: high
 pm_complexity: moderate
 planned_effort: m
-created_at: '2026-04-10T20:48:17+00:00'
-updated_at: '2026-04-10T20:48:17+00:00'
+depends_on: []
 goal: "heru T-0003 shipped a unified --resume/--continue path across all engine adapters.\
   \ litehive currently has per-engine resume/continuation logic (see extract_engine_continuation\
   \ and friends in litehive/agents/). Replace that with a single call into heru's\
@@ -40,19 +34,9 @@ plan:
 - Restructure the code in small, reviewable steps.
 - Run focused verification to confirm behavior is preserved.
 human_checkpoints: []
-subagents: []
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0335 delegate-resume-continue-to-heru-s-unified-resume'
-  commit_sha: null
-  checkpoint_base_sha: null
-  checkpoint_attempts: 0
-  rolled_back_checkpoint_attempt: null
-  merge_agent_attempts: 0
-  worktree_path: null
-retry_policy:
-  max_retries: null
-  stage_retry_limit: null
 created_from: null
 upstream_origin: null
 github_origin: null

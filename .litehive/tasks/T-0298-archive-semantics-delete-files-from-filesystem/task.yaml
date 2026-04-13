@@ -1,22 +1,16 @@
 id: T-0298
 slug: archive-semantics-delete-files-from-filesystem
 title: 'Archive semantics: delete files from filesystem, retain full record in DB'
-depends_on:
-- T-0291
-- T-0295
+created_at: '2026-04-10T06:49:30+00:00'
 task_type: null
-model: null
 mode: implementation
 pipeline_mode: full
-status: queued
-flag_reason: null
-flag_count: 0
-pipeline_status: backlog
 priority: high
 pm_complexity: null
 planned_effort: null
-created_at: '2026-04-10T06:49:30+00:00'
-updated_at: '2026-04-10T06:49:30+00:00'
+depends_on:
+- T-0291
+- T-0295
 goal: 'Change litehive close/archive to: 1) sync the task''s intent and state to DB,
   2) git rm -r the task directory from .litehive/tasks/, 3) commit the deletion. The
   DB retains everything forever. Archived tasks are accessible via litehive archive
@@ -36,19 +30,9 @@ acceptance_criteria:
 constraints: []
 plan: []
 human_checkpoints: []
-subagents: []
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0298 archive-semantics-delete-files-from-filesystem'
-  commit_sha: null
-  checkpoint_base_sha: null
-  checkpoint_attempts: 0
-  rolled_back_checkpoint_attempt: null
-  merge_agent_attempts: 0
-  worktree_path: null
-retry_policy:
-  max_retries: null
-  stage_retry_limit: null
 created_from: null
 upstream_origin: null
 github_origin: null

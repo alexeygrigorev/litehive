@@ -1,21 +1,14 @@
 id: T-0262
 slug: simplify-agent-verdicts-to-pass-reject-only
 title: Simplify agent verdicts to pass/reject only - remove fail and blocked
-depends_on: []
+created_at: '2026-04-09T10:56:14+00:00'
 task_type: null
-engine: null
-model: null
 mode: implementation
 pipeline_mode: full
-status: done
-flag_reason: null
-flag_count: 0
-pipeline_status: done
 priority: high
 pm_complexity: null
 planned_effort: null
-created_at: '2026-04-09T10:56:14+00:00'
-updated_at: '2026-04-09T23:44:03+00:00'
+depends_on: []
 goal: 'Agents currently submit pass/fail/reject/blocked verdicts. This causes routing
   confusion: fail triggers recovery instead of going back to SWE. Simplify to pass
   or reject only. If the agent cannot complete the work, that is a reject with an
@@ -31,47 +24,9 @@ acceptance_criteria:
 constraints: []
 plan: []
 human_checkpoints: []
-subagents:
-- id: SA-0001
-  role: planner
-  engine: codex
-  status: completed
-  path: subagents/SA-0001-planner
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0002
-  role: swe
-  engine: codex
-  status: completed
-  path: subagents/SA-0002-swe
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0003
-  role: qa
-  engine: codex
-  status: completed
-  path: subagents/SA-0003-qa
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0004
-  role: reviewer
-  engine: codex
-  status: completed
-  path: subagents/SA-0004-reviewer
-  sandboxed: false
-  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0262 simplify-agent-verdicts-to-pass-reject-only'
-  commit_sha: e36bc53e38fe0e57e50c282c579b672c65f14927
-  checkpoint_base_sha: 50c0a96c3ae9baca83e8fe1dc0fd9c5a754b769b
-  checkpoint_attempts: 1
-  rolled_back_checkpoint_attempt: null
-  merge_agent_attempts: 0
-  worktree_path: null
-retry_policy:
-  max_retries: null
-  stage_retry_limit: null
 created_from: null
 upstream_origin: null
 github_origin: null

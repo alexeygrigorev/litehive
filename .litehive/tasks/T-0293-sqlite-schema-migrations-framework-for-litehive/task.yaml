@@ -1,21 +1,15 @@
 id: T-0293
 slug: sqlite-schema-migrations-framework-for-litehive
 title: SQLite schema migrations framework for litehive data.db
-depends_on:
-- T-0291
+created_at: '2026-04-10T06:46:58+00:00'
 task_type: null
-model: null
 mode: implementation
 pipeline_mode: full
-status: done
-flag_reason: null
-flag_count: 0
-pipeline_status: done
 priority: medium
 pm_complexity: moderate
 planned_effort: m
-created_at: '2026-04-10T06:46:58+00:00'
-updated_at: '2026-04-11T07:20:36+00:00'
+depends_on:
+- T-0291
 goal: Evolve the data.db schema over time without data loss. Every schema change is
   a numbered migration that runs automatically on daemon startup if the DB's schema
   version is behind. Migrations are transactional and tracked in a schema_migrations
@@ -35,68 +29,9 @@ acceptance_criteria:
 constraints: []
 plan: []
 human_checkpoints: []
-subagents:
-- id: SA-0001
-  role: planner
-  engine: codex
-  status: completed
-  path: subagents/SA-0001-planner
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0002
-  role: swe
-  engine: codex
-  status: failed
-  path: subagents/SA-0002-swe
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0003
-  role: recovery
-  engine: codex
-  status: completed
-  path: subagents/SA-0003-recovery
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0004
-  role: qa
-  engine: codex
-  status: failed
-  path: subagents/SA-0004-qa
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0005
-  role: recovery
-  engine: codex
-  status: failed
-  path: subagents/SA-0005-recovery
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0006
-  role: recovery
-  engine: codex
-  status: completed
-  path: subagents/SA-0006-recovery
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0007
-  role: reviewer
-  engine: codex
-  status: completed
-  path: subagents/SA-0007-reviewer
-  sandboxed: false
-  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0293 sqlite-schema-migrations-framework-for-litehive'
-  commit_sha: 84d2d105259a3b653f2b72bbf21fa116f6b00e02
-  checkpoint_base_sha: e49d9a1f1bc1f63c76989d07851b9dfa575dcf29
-  checkpoint_attempts: 1
-  rolled_back_checkpoint_attempt: null
-  merge_agent_attempts: 0
-  worktree_path: null
-retry_policy:
-  max_retries: null
-  stage_retry_limit: null
 created_from: null
 upstream_origin: null
 github_origin: null

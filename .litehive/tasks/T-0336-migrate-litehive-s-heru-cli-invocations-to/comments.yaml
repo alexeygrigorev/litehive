@@ -1,0 +1,165 @@
+- role: planner
+  step: grooming
+  verdict: pass
+  message: "Grooming passes with a task-shaping update.\n\nProblem framing:\nThe user\
+    \ problem is narrow: Litehive should stop using Heru's legacy `--engine` CLI form\
+    \ anywhere it directly invokes the `heru` binary, and instead use the new positional\
+    \ form `heru <engine> ...`. This is a mechanical compatibility cleanup and should\
+    \ not change Litehive's own CLI surface.\n\nRepo findings:\n- The repo does not\
+    \ have broad `heru` shellouts. Most `heru` references are Python imports or prose,\
+    \ so the original acceptance criterion `grep for 'heru '` is too noisy to be a\
+    \ reliable done check.\n- The real seam is direct `heru` CLI usage in tests/helpers/docs.\
+    \ The obvious legacy example is `tests/test_heru_cli.py`, which still exercises\
+    \ `main([... \"--engine\", \"claude\", ...])`.\n- Litehive's own `--engine` flags\
+    \ in `litehive ...` commands and docs are unrelated and must remain out of scope.\n\
+    \nOperator guidance:\n- Before changing anything, locate direct `heru` invocations\
+    \ with targeted grep, not broad `heru ` prose matches.\n- Update the narrow set\
+    \ of direct Heru command arrays/snippets only.\n- Do not touch `litehive ... --engine\
+    \ ...` docs, parser options, or behavior in this task.\n- Verify with targeted\
+    \ tests first, then run the full `tests/` suite required by the task.\n\nSuggested\
+    \ implementation flow:\n1. `rg -n --glob '!docs/plans/**' -- '--engine' README.md\
+    \ docs tests litehive` and keep only matches that are part of direct `heru` invocations.\n\
+    2. Update those call sites from `heru --engine <engine> ...` semantics to `heru\
+    \ <engine> ...` while preserving prompt/cwd/model/max-turns/resume behavior.\n\
+    3. Run the focused Heru CLI coverage, then `pytest tests`.\n4. If there are any\
+    \ docs/README snippets invoking `heru` directly, update them; if none exist, do\
+    \ not manufacture new docs changes.\n\nPM sizing:\n- Complexity remains `simple`.\n\
+    - Effort remains `xs`.\n\nTASK_UPDATE:\ngoal: >-\n  Migrate Litehive-owned direct\
+    \ `heru` CLI invocations from the legacy\n  engine-flag form to Heru's preferred\
+    \ positional engine form\n  (`heru <engine> \"prompt\"`). Scope is limited to\
+    \ places where this repo\n  directly shells out to `heru` or documents that direct\
+    \ invocation in\n  tests/helpers/docs. Litehive's own `litehive ... --engine ...`\
+    \ CLI surface\n  is out of scope.\nacceptance_criteria:\n  - >-\n    Every direct\
+    \ `heru` CLI invocation in Litehive-owned code, tests, helpers,\n    and docs\
+    \ uses positional engine syntax; no legacy direct invocation using\n    `--engine`\
+    \ remains.\n  - >-\n    Direct Heru CLI coverage preserves existing forwarded\
+    \ behavior for prompt,\n    cwd, model, max-turns, and resume-session-id while\
+    \ using positional engine\n    parsing.\n  - tests/ passes.\n  - >-\n    Any existing\
+    \ README or docs snippets that invoke `heru` directly are updated\n    to the\
+    \ positional form.\nconstraints:\n  - Avoid broad opportunistic cleanup outside\
+    \ the chosen seam.\n  - Preserve existing behavior unless the task explicitly\
+    \ includes functional changes.\n  - >-\n    Do not modify Litehive's own `litehive\
+    \ ... --engine ...` flags, docs, or\n    parser behavior as part of this task.\n\
+    plan:\n  - >-\n    Find the narrow set of direct `heru` command arrays/snippets\
+    \ and separate\n    them from unrelated `heru` imports and Litehive `--engine`\
+    \ references.\n  - >-\n    Update those direct invocations to positional engine\
+    \ syntax in small,\n    reviewable edits while preserving forwarded arguments\
+    \ and runtime behavior.\n  - >-\n    Run focused Heru CLI verification, then run\
+    \ the full `tests/` suite and\n    confirm any direct-doc examples are consistent.\n"
+  files_changed: []
+  created_at: '2026-04-12T13:58:07+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: "Implemented T-0336 in the direct Heru CLI coverage seam.\n\nWhat changed:\n\
+    - Updated `tests/test_heru_cli.py` to invoke Heru with positional engine syntax:\
+    \ `main([\"claude\", \"ship it\", ...])` instead of the legacy `--engine` form.\n\
+    - Preserved forwarded behavior coverage for prompt, cwd, model, max_turns, and\
+    \ resume session forwarding. The positional parser accepts `--resume`, and the\
+    \ test still proves the adapter receives `resume_session_id=\"session-123\"`.\n\
+    - Added an assertion that stderr is empty so this coverage exercises the non-legacy\
+    \ path and does not emit the deprecated `--engine` warning.\n\nEvidence against\
+    \ acceptance criteria:\n- Direct invocation coverage now uses positional syntax\
+    \ at `tests/test_heru_cli.py:46-70`.\n- Search of scoped files for direct legacy\
+    \ Heru invocation left only Litehive CLI `--engine` parser references, which are\
+    \ explicitly out of scope:\n  `rg -n 'heru\\s+--engine|\"--engine\"' tests/test_heru_cli.py\
+    \ README.md docs litehive`\n  matched only `litehive/...` parser/filter definitions\
+    \ and no direct `heru --engine` snippets in tests/docs/README.\n- Focused Heru\
+    \ coverage: `uv run pytest -q tests/test_heru_cli.py` -> `2 passed`.\n- Required\
+    \ lint hook: `uv run ruff check --select E402,F401 litehive tests` -> passed.\n\
+    - Required full suite: `uv run pytest -q` -> `509 passed, 5 skipped` in `23.65s`.\n\
+    \nNotes:\n- The worktree contains many unrelated pre-existing changes outside\
+    \ this task. I did not modify or revert them.\n"
+  files_changed: []
+  created_at: '2026-04-12T14:00:59+00:00'
+- role: qa
+  step: testing
+  verdict: pass
+  message: 'PASS: direct Litehive-owned Heru CLI coverage now uses positional engine
+    syntax and the scoped acceptance criteria are met.
+
+
+    Verified behavior:
+
+    - `tests/test_heru_cli.py` now invokes `heru.main.main([...])` as `[''claude'',
+    ''ship it'', ''--cwd'', ..., ''--model'', ..., ''--max-turns'', ''3'', ''--resume'',
+    ''session-123'']` rather than legacy `--engine` form.
+
+    - The test still proves forwarding of prompt, cwd, model, max_turns, and resume_session_id
+    to the selected engine adapter.
+
+    - The test additionally asserts stderr is empty, so the positional path is exercised
+    without a legacy warning.
+
+
+    Scoped search results:
+
+    - `rg -n --glob ''!docs/plans/**'' -- ''--engine'' README.md docs tests litehive`
+    only matched Litehive CLI `litehive ... --engine ...` references and parser definitions,
+    which are explicitly out of scope.
+
+    - `rg -n ''heru\s+--engine|"--engine"'' tests/test_heru_cli.py README.md docs
+    litehive` found no remaining direct `heru --engine` invocations; remaining hits
+    are Litehive CLI/parser `--engine` options.
+
+    - `rg -n ''\bheru\b'' README.md docs tests litehive` showed Heru imports/prose
+    but no README/docs direct `heru --engine` snippet requiring update.
+
+
+    Execution evidence:
+
+    - `uv run pytest -q tests/test_heru_cli.py` -> 2 passed.
+
+    - `uv run ruff check --select E402,F401 litehive tests` -> passed.
+
+    - `uv run pytest -q` -> 509 passed, 5 skipped.
+
+
+    Conclusion:
+
+    - Acceptance criteria met for the direct Heru invocation seam.
+
+    - No out-of-scope changes to Litehive''s own `litehive ... --engine ...` surface
+    were required.
+
+    '
+  files_changed: []
+  created_at: '2026-04-12T14:02:47+00:00'
+- role: reviewer
+  step: accepting
+  verdict: pass
+  message: 'Accepted.
+
+
+    Validated scope and outcome directly:
+
+    - The only Litehive-owned direct Heru invocation seam in scope changed in `tests/test_heru_cli.py`
+    from legacy `--engine` form to positional engine form: `main(["claude", "ship
+    it", ...])`.
+
+    - The same test still proves forwarding for prompt, cwd, model, max_turns, and
+    resume_session_id, now via positional parsing with `--resume`.
+
+    - The test now also asserts `stderr == ""`, which confirms the non-legacy path
+    is exercised without a deprecated warning.
+
+
+    Acceptance criteria evidence:
+
+    - Scoped grep `rg -n --glob ''!docs/plans/**'' -- ''--engine'' README.md docs
+    tests litehive` only returns Litehive CLI `--engine` references, which are explicitly
+    out of scope.
+
+    - Scoped grep `rg -n ''heru\s+--engine|"--engine"'' tests/test_heru_cli.py README.md
+    docs litehive` finds no remaining direct `heru --engine` invocations.
+
+    - `uv run pytest -q tests/test_heru_cli.py` passed: `2 passed`.
+
+    - `uv run pytest -q` passed: `509 passed, 5 skipped`.
+
+
+    Verdict: pass.
+
+    '
+  files_changed: []
+  created_at: '2026-04-12T14:03:58+00:00'

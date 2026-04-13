@@ -2,21 +2,14 @@ id: T-0260
 slug: include-runner-hook-descriptions-in-agent-prompts
 title: Include runner hook descriptions in agent prompts and route hook failures to
   SWE
-depends_on: []
+created_at: '2026-04-09T09:45:36+00:00'
 task_type: null
-engine: null
-model: null
 mode: implementation
 pipeline_mode: full
-status: done
-flag_reason: null
-flag_count: 0
-pipeline_status: done
 priority: high
 pm_complexity: null
 planned_effort: null
-created_at: '2026-04-09T09:45:36+00:00'
-updated_at: '2026-04-09T13:40:45+00:00'
+depends_on: []
 goal: 'Two issues: (1) Agents don''t know about runner hooks - they should be told
   what checks will run after their stage so they can write code that passes. Include
   hook commands with descriptions in the SWE prompt. (2) When a before_pm_acceptance
@@ -46,68 +39,9 @@ constraints:
 - Works for any project profile (python, django, rust, etc.)
 plan: []
 human_checkpoints: []
-subagents:
-- id: SA-0001
-  role: planner
-  engine: codex
-  status: completed
-  path: subagents/SA-0001-planner
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0002
-  role: swe
-  engine: codex
-  status: completed
-  path: subagents/SA-0002-swe
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0003
-  role: qa
-  engine: codex
-  status: completed
-  path: subagents/SA-0003-qa
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0004
-  role: reviewer
-  engine: codex
-  status: completed
-  path: subagents/SA-0004-reviewer
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0005
-  role: swe
-  engine: codex
-  status: completed
-  path: subagents/SA-0005-swe
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0006
-  role: qa
-  engine: codex
-  status: completed
-  path: subagents/SA-0006-qa
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0007
-  role: reviewer
-  engine: codex
-  status: completed
-  path: subagents/SA-0007-reviewer
-  sandboxed: false
-  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0260 include-runner-hook-descriptions-in-agent-prompts'
-  commit_sha: 5495b927b252206f4d93ccfd9f4ea1e22f19628d
-  checkpoint_base_sha: 866979a27221c58f7aac7fa1f47f87656a4ca236
-  checkpoint_attempts: 1
-  rolled_back_checkpoint_attempt: null
-  merge_agent_attempts: 0
-  worktree_path: null
-retry_policy:
-  max_retries: null
-  stage_retry_limit: null
 created_from: null
 upstream_origin: null
 github_origin: null

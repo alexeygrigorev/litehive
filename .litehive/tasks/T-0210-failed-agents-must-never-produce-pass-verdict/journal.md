@@ -94,3 +94,9 @@ Task requeued for another implementation pass.
 
 ## 2026-04-07T18:55:29+00:00
 Task closed: wont_do. Manually merged, marking done
+
+## 2026-04-13T10:34:24+00:00
+Interrupted subagent execution while `backlog` was running. Reason: Task stopped via CLI. Subagent `SA-0022` (swe/codex, pid=2477448, path `subagents/SA-0022-swe`) stopped with status `interrupted`. Last snippet: Implemented the QA follow-up for T-0210 by removing the remaining local transcript verdict path instead of keeping a reject-only compatibility shim.. Resume from `backlog`.
+
+## 2026-04-13T10:34:29+00:00
+Task closed: duplicate. Zombie re-queue: runtime.yaml execution_status=cancelled. See T-0366.

@@ -1,21 +1,14 @@
 id: T-0254
 slug: slim-tasks-init-py-barrel-file-to-curated-public
 title: Slim tasks/__init__.py barrel file to curated public API
-depends_on: []
+created_at: '2026-04-09T09:16:15+00:00'
 task_type: null
-engine: null
-model: null
 mode: implementation
 pipeline_mode: full
-status: done
-flag_reason: null
-flag_count: 0
-pipeline_status: done
 priority: medium
 pm_complexity: null
 planned_effort: null
-created_at: '2026-04-09T09:16:15+00:00'
-updated_at: '2026-04-09T15:02:36+00:00'
+depends_on: []
 goal: tasks/__init__.py re-exports ~100 items from 8+ submodules in 499 lines. Reduce
   to a curated public API of ~20 essential items. Internal code should import from
   specific submodules directly.
@@ -27,54 +20,9 @@ acceptance_criteria:
 constraints: []
 plan: []
 human_checkpoints: []
-subagents:
-- id: SA-0001
-  role: planner
-  engine: codex
-  status: completed
-  path: subagents/SA-0001-planner
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0002
-  role: swe
-  engine: codex
-  status: completed
-  path: subagents/SA-0002-swe
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0003
-  role: qa
-  engine: codex
-  status: completed
-  path: subagents/SA-0003-qa
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0004
-  role: reviewer
-  engine: codex
-  status: completed
-  path: subagents/SA-0004-reviewer
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0005
-  role: merge-resolver
-  engine: claude
-  status: completed
-  path: subagents/SA-0005-merge-resolver
-  sandboxed: false
-  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0254 slim-tasks-init-py-barrel-file-to-curated-public'
-  commit_sha: 042be1b6c24aeeca340a250573e87db9cd2de41a
-  checkpoint_base_sha: 7b78196a620b02f09b2b78b9cbb75e7b1de03a5f
-  checkpoint_attempts: 1
-  rolled_back_checkpoint_attempt: null
-  merge_agent_attempts: 1
-  worktree_path: null
-retry_policy:
-  max_retries: null
-  stage_retry_limit: null
 created_from: null
 upstream_origin: null
 github_origin: null

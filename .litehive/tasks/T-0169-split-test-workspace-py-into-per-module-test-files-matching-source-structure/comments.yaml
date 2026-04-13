@@ -1,0 +1,231 @@
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Recovered implementing stage after prior agent completed the minimal split/removal
+    but never submitted a verdict. Verified the task remains satisfied by the smallest
+    safe change set already present in the task worktree: deleted tests/test_workspace.py
+    as leftover duplicate coverage, and updated docs/configuration.md so the example
+    after_swe_implementation hook no longer points at the removed file. Confirmed
+    the deleted behaviors are already covered by module-oriented suites in tests/test_retry_commit_and_recovery.py,
+    specifically test_commit_to_git_reconciles_existing_checkpoint_commit_without_duplicate_retry
+    and test_resolve_next_task_finalizes_existing_checkpoint_commit_without_retry.
+    Verification run in the task worktree: uv run pytest -q tests/test_retry_commit_and_recovery.py
+    -k ''reconciles_existing_checkpoint_commit_without_duplicate_retry or finalizes_existing_checkpoint_commit_without_retry''
+    => 2 passed, 87 deselected in 1.18s. Additional structure check: uv run pytest
+    -q --collect-only tests/test_retry_commit_and_recovery.py tests/test_runtime_pool.py
+    => 153 tests collected, confirming the example hook target exists and the per-module
+    suites are intact. Acceptance evidence: tests/ already contains multiple module-aligned
+    test files, tests/test_workspace.py is removed, and the replacement coverage passes
+    from existing module-oriented suites. No broader refactor was needed. Note: unrelated
+    existing modification to .litehive/tasks/T-0184-replace-per-engine-fallbacks-with-single-engine/thread.yaml
+    was left untouched.'
+  files_changed: []
+  created_at: '2026-04-08T07:37:36+00:00'
+- role: recovery
+  step: implementing
+  verdict: comment
+  message: 'Recovery trigger `stage_failure`: Recovered implementing stage after prior
+    agent completed the minimal split/removal but never submitted a verdict. Verified
+    the task remains satisfied by the smallest safe change set already present in
+    the task worktree: deleted tests/test_workspace.py as leftover duplicate coverage,
+    and updated docs/configuration.md so the example after_swe_implementation hook
+    no longer points at the removed file. Confirmed the deleted behaviors are already
+    covered by module-oriented suites in tests/test_retry_commit_and_recovery.py,
+    specifically test_commit_to_git_reconciles_existing_checkpoint_commit_without_duplicate_retry
+    and test_resolve_next_task_finalizes_existing_checkpoint_commit_without_retry.
+    Verification run in the task worktree: uv run pytest -q tests/test_retry_commit_and_recovery.py
+    -k ''reconciles_existing_checkpoint_commit_without_duplicate_retry or finalizes_existing_checkpoint_commit_without_retry''
+    => 2 passed, 87 deselected in 1.18s. Additional structure check: uv run pytest
+    -q --collect-only tests/test_retry_commit_and_recovery.py tests/test_runtime_pool.py
+    => 153 tests collected, confirming the example hook target exists and the per-module
+    suites are intact. Acceptance evidence: tests/ already contains multiple module-aligned
+    test files, tests/test_workspace.py is removed, and the replacement coverage passes
+    from existing module-oriented suites. No broader refactor was needed. Note: unrelated
+    existing modification to .litehive/tasks/T-0184-replace-per-engine-fallbacks-with-single-engine/thread.yaml
+    was left untouched.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0169-split-test-workspace-py-into-per-module-test-files-matching-source-structure/recovery/recovery-001.yaml'
+  files_changed: []
+  created_at: '2026-04-08T07:38:35+00:00'
+- role: recovery
+  step: testing
+  verdict: comment
+  message: 'Recovery trigger `same_stage_retry_churn`: Stage retry limit exhausted
+    for `testing` (3 rejection(s), limit: 2); escalating to grooming for recovery
+    escalation
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0169-split-test-workspace-py-into-per-module-test-files-matching-source-structure/recovery/recovery-002.yaml'
+  files_changed: []
+  created_at: '2026-04-08T07:50:42+00:00'
+- role: recovery
+  step: grooming
+  verdict: comment
+  message: 'Recovery trigger `stage_failure`: Recovery agent could not restore `grooming`
+    to a runnable state.
+
+    runnable_state: blocked
+
+    report: .litehive/tasks/T-0169-split-test-workspace-py-into-per-module-test-files-matching-source-structure/recovery/recovery-003.yaml
+
+    blocker: grooming failed: agent did not submit verdict via litehive report CLI'
+  files_changed: []
+  created_at: '2026-04-08T07:55:37+00:00'
+- role: planner
+  step: grooming
+  verdict: pass
+  message: "Task is already satisfied in the current repo state and should remain\
+    \ closed rather than re-implemented.\n\nEvidence from the workspace:\n- `tests/test_workspace.py`\
+    \ does not exist.\n- Coverage has already been redistributed into module/behavior-oriented\
+    \ files including `tests/test_config.py`, `tests/test_workspace_bootstrap.py`,\
+    \ and `tests/test_tasks_and_subagents.py`.\n- The task record at `.litehive/tasks/T-0169-split-test-workspace-py-into-per-module-test-files-matching-source-structure/task.yaml`\
+    \ is already closed from 2026-04-08 with the note `Completed manually`.\n- The\
+    \ task thread also records prior verification that the removed `test_workspace.py`\
+    \ coverage was moved into split suites.\n\nTASK_UPDATE:\n  outcome: duplicate\n\
+    \  outcome_reason: >-\n    The repo already reflects the intended end state of\
+    \ this task. `tests/test_workspace.py`\n    has already been removed and the relevant\
+    \ coverage now lives in split test modules,\n    so there is no remaining implementation\
+    \ work for T-0169.\n  goal: >-\n    No-op cleanup record: confirm that the historical\
+    \ `tests/test_workspace.py` split has\n    already been completed and keep the\
+    \ task closed without reopening implementation.\n  acceptance_criteria:\n    -\
+    \ `tests/test_workspace.py` is absent from the repo.\n    - Replacement coverage\
+    \ exists in module- or behavior-specific test files under `tests/`.\n    - The\
+    \ task remains closed and is not requeued for additional implementation.\n  constraints:\n\
+    \    - Do not reintroduce or re-split historical test files unless a new regression\
+    \ is identified.\n    - Keep any future follow-up scoped to a concrete missing\
+    \ coverage gap, not to the already-completed split.\n  plan:\n    - Inspect the\
+    \ current `tests/` layout and confirm the monolithic file is already gone.\n \
+    \   - Treat the task as already completed elsewhere and preserve a closed outcome.\n\
+    \    - Open a new task only if a specific uncovered module is discovered later.\n\
+    \  pm_complexity: low\n  planned_effort: XS\n  priority: low\n\nNo follow-up task\
+    \ is needed from grooming based on the current repository contents.\n"
+  files_changed: []
+  created_at: '2026-04-13T04:50:31+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Verified current repo state against T-0169 without making code changes.
+
+
+    Evidence:
+
+    - `git diff --stat main...HEAD` produced no output, so this worktree has no implementation
+    diff to add.
+
+    - `rg --files tests` shows the suite is already split across many module/behavior
+    files, including `tests/test_config.py`, `tests/test_workspace_bootstrap.py`,
+    `tests/test_tasks_and_subagents.py`, `tests/test_main.py`, `tests/test_archive.py`,
+    `tests/test_backup.py`, `tests/test_logs_command.py`, and many `tests/test_pipeline_v2_*`
+    files.
+
+    - `test -e tests/test_workspace.py; echo $?` returned `1`, confirming `tests/test_workspace.py`
+    is absent.
+
+    - `rg -n "test_workspace\\.py|test_workspace" tests docs litehive` found only
+    test function names in `tests/test_workspace_bootstrap.py` and `tests/test_tasks_and_subagents.py`;
+    there are no stale file references to `tests/test_workspace.py`.
+
+
+    Required checks run in this worktree:
+
+    - `uv run ruff check --select E402,F401 litehive tests` -> passed.
+
+    - forbidden `noqa` suppression check -> passed (no output / exit 0).
+
+    - `uv run pytest -q` -> `521 passed, 5 skipped, 3 warnings in 89.44s (0:01:29)`.
+
+
+    Acceptance criteria status:
+
+    - `tests/ has multiple test files matching source modules` -> met.
+
+    - `test_workspace.py is deleted or nearly empty` -> met; file is deleted.
+
+    - `all tests pass with same coverage` -> met to the extent validated in this stage
+    by the required full-suite pass; coverage remains represented by the redistributed
+    module-oriented files already present in the repo.
+
+
+    Conclusion: task is already satisfied in the current repo state; implementation
+    stage passes with no additional changes required.
+
+    '
+  files_changed: []
+  created_at: '2026-04-13T04:53:20+00:00'
+- role: qa
+  step: testing
+  verdict: pass
+  message: 'PASS: The current repository state satisfies T-0169''s acceptance criteria.
+
+
+    Evidence:
+
+    - `git diff --stat main...HEAD` returned no output, so this worktree contains
+    no task-specific implementation delta relative to `main`.
+
+    - `tests/` is already split across multiple module/behavior-focused files, including
+    `tests/test_config.py`, `tests/test_logs_command.py`, `tests/test_main.py`, `tests/test_tasks_and_subagents.py`,
+    and `tests/test_workspace_bootstrap.py`.
+
+    - `rg --files tests | rg ''test_workspace\.py$''` returned no matches, so the
+    legacy monolithic `tests/test_workspace.py` is not present.
+
+    - `git ls-tree -r --name-only main tests` shows the same split test layout on
+    `main`, indicating this task appears to have been satisfied before this branch.
+
+    - `uv run pytest tests` passed: 521 passed, 5 skipped, 3 warnings.
+
+
+    Notes:
+
+    - I did not run coverage tooling because no coverage command/plugin is configured
+    in this worktree, but since `HEAD` has no diff from `main`, there is no branch-local
+    evidence of a coverage regression.
+
+    - The only warnings observed were an unknown `timeout` pytest config option and
+    Typer deprecation warnings, neither specific to this task.
+
+    '
+  files_changed: []
+  created_at: '2026-04-13T04:58:16+00:00'
+- role: reviewer
+  step: accepting
+  verdict: pass
+  message: 'Pass.
+
+
+    Reviewer verification:
+
+    - `git diff --stat main...HEAD` returned no output, so this worktree adds no task-specific
+    diff relative to `main`.
+
+    - `tests/test_workspace.py` does not exist.
+
+    - `tests/` is already split across many module/behavior-focused files, including
+    `tests/test_config.py`, `tests/test_main.py`, `tests/test_logs_command.py`, `tests/test_workspace_bootstrap.py`,
+    `tests/test_tasks_and_subagents.py`, and many additional per-area files.
+
+    - Full suite verification passed: `uv run pytest tests/ -q` -> `521 passed, 5
+    skipped, 3 warnings in 89.27s`.
+
+
+    Acceptance criteria judgment:
+
+    - `tests/` has multiple test files matching source/modules: met.
+
+    - `test_workspace.py` is deleted or nearly empty: met (deleted).
+
+    - All tests pass with same coverage: met to the extent verifiable in this repo
+    state. There is no task diff against `main`, and the full current suite passes
+    unchanged. The repo does not expose a separate coverage baseline/gate in this
+    task context.
+
+
+    Outcome: done.
+
+    '
+  files_changed: []
+  created_at: '2026-04-13T05:00:42+00:00'

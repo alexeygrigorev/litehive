@@ -5,3 +5,6 @@ Task created.
 
 ## 2026-04-09T21:18:59+00:00
 Task closed: duplicate. Superseded by T-0276, which tracks the same goz model-override adapter work with the final wording. Follow-up task: T-0276.
+
+## 2026-04-13T10:46:16+00:00
+Task closed: duplicate. Zombie re-queue: runtime.yaml execution_status=cancelled. See T-0366.

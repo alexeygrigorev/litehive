@@ -1,20 +1,14 @@
 id: T-0311
 slug: fix-typer-migration-regressions-task-add-queue-promote
 title: "Fix Typer migration regressions \u2014 task add and queue promote are broken"
-depends_on: []
+created_at: '2026-04-10T14:50:15+00:00'
 task_type: bugfix
-model: null
 mode: implementation
 pipeline_mode: full
-status: done
-flag_reason: null
-flag_count: 0
-pipeline_status: done
 priority: high
 pm_complexity: simple
 planned_effort: s
-created_at: '2026-04-10T14:50:15+00:00'
-updated_at: '2026-04-10T15:28:05+00:00'
+depends_on: []
 goal: "T-0263's Typer migration introduced two user-visible regressions discovered\
   \ immediately after landing: (1) 'litehive task add' accepts the title positional\
   \ but silently drops --goal, --priority, --depends-on, --acceptance-criteria and\
@@ -49,47 +43,9 @@ plan:
   \ likely)"
 - Add regression tests for both commands so this doesn't happen again
 human_checkpoints: []
-subagents:
-- id: SA-0001
-  role: planner
-  engine: codex
-  status: completed
-  path: subagents/SA-0001-planner
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0002
-  role: swe
-  engine: codex
-  status: completed
-  path: subagents/SA-0002-swe
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0003
-  role: qa
-  engine: codex
-  status: completed
-  path: subagents/SA-0003-qa
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0004
-  role: reviewer
-  engine: codex
-  status: completed
-  path: subagents/SA-0004-reviewer
-  sandboxed: false
-  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0311 fix-typer-migration-regressions-task-add-queue-promote'
-  commit_sha: 576f5d0e3e3c118b5c9b321df97c00ffc9f58d28
-  checkpoint_base_sha: d3521e583bfe2de23233526c690b8d6d9a52781a
-  checkpoint_attempts: 1
-  rolled_back_checkpoint_attempt: null
-  merge_agent_attempts: 0
-  worktree_path: null
-retry_policy:
-  max_retries: null
-  stage_retry_limit: null
 created_from: null
 upstream_origin: null
 github_origin: null

@@ -1,0 +1,202 @@
+- role: planner
+  step: grooming
+  verdict: pass
+  message: "TASK_UPDATE:\n  goal: |\n    Operators currently have three valid queue/recovery\
+    \ commands that are implemented but not discoverable from the public CLI surface\
+    \ after the Typer rewrite. The task is to expose and document those commands without\
+    \ changing their underlying behavior.\n\n    Commands in scope:\n    - `litehive\
+    \ recover <task_id>`: requeue a completed task without reverting code, for cases\
+    \ where accepted code should stay in place but the task needs another pass.\n\
+    \    - `litehive switch <task_id> <engine> --reason \"...\"`: stop or detach the\
+    \ current run, record the engine switch in the task thread/comments, and requeue\
+    \ the task for the next iteration with the requested engine.\n    - `litehive\
+    \ prioritize <task_id> [task_id ...]`: move multiple already-queued tasks to the\
+    \ front in the exact order requested.\n\n    Scope:\n    1. Remove `hidden=True`\
+    \ from the Typer registration for these three root commands in the post-T-0317\
+    \ CLI layout.\n    2. Ensure each command's `--help` text is explicit about when\
+    \ to use it, not just what it does.\n    3. Add a README usage subsection with\
+    \ concrete example invocations and operator guidance for when to choose each command.\n\
+    \    4. If a top-level `CLAUDE.md` exists in the repo at implementation time and\
+    \ contains a CLI overview, add a brief mention there as well. If no such file\
+    \ exists, do not create one for this task.\n\n    Dependency: keep this landing\
+    \ after T-0317 to avoid conflicting with the CLI split.\n  acceptance_criteria:\n\
+    \    - \"`litehive --help` lists `recover`, `switch`, and `prioritize` as public\
+    \ commands after the T-0317 CLI rewrite\"\n    - \"`litehive recover --help`,\
+    \ `litehive switch --help`, and `litehive prioritize --help` each include a one-line\
+    \ description that explains the intended operator scenario for that command\"\n\
+    \    - \"README.md includes a dedicated usage subsection documenting all three\
+    \ commands with example invocations and concise guidance on when to use each one\"\
+    \n    - \"If a repo-root `CLAUDE.md` with CLI guidance exists at implementation\
+    \ time, it mentions these commands; if it does not exist, the task is still complete\
+    \ without adding a new file\"\n    - \"No behavioral changes are introduced to\
+    \ the command handlers beyond help visibility and help/documentation text\"\n\
+    \  constraints:\n    - \"Keep the work scoped to command discoverability and documentation\
+    \ only; do not change queue/recovery semantics\"\n    - \"Do not reintroduce pre-T-0317\
+    \ CLI wiring or add alias churn beyond making these existing commands visible\"\
+    \n    - \"Avoid creating `CLAUDE.md` solely for this task\"\n  plan:\n    - \"\
+    Confirm the final post-T-0317 Typer registration point for `recover`, `switch`,\
+    \ and `prioritize`, then remove `hidden=True` only for those commands\"\n    -\
+    \ \"Update the command help strings so root help and per-command help both explain\
+    \ the operator use case clearly\"\n    - \"Add a README usage subsection with\
+    \ concrete examples, including when to prefer `recover` over rollback/requeue,\
+    \ when to use `switch`, and how ordering works for `prioritize`\"\n    - \"If\
+    \ `CLAUDE.md` exists at implementation time, add a short CLI-overview note there;\
+    \ otherwise leave it untouched\"\n    - \"Verify via help output inspection that\
+    \ the commands appear publicly and that the help text matches the documented scenarios\"\
+    \n  pm_complexity: simple\n  planned_effort: xs\n  priority: low\n\nTask record\
+    \ updated in `.litehive/tasks/T-0320-un-hide-and-document-litehive-recover-switch/task.yaml`.\n\
+    \nImplementation notes for the next agent:\n- `litehive/cli/queue_cli.py` still\
+    \ registers all three commands with `hidden=True` under `register_hidden_root_commands`.\n\
+    - Current help strings are present but should be sharpened to explain operator\
+    \ scenarios, not just mechanics.\n- README.md has CLI command sections already,\
+    \ but no dedicated usage guidance for these three commands.\n- Repo-root `CLAUDE.md`\
+    \ is absent in this worktree, so that doc touchpoint is conditional rather than\
+    \ required.\n"
+  files_changed: []
+  created_at: '2026-04-13T18:24:39+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: "Implemented T-0320 by exposing the existing root commands `recover`, `switch`,\
+    \ and `prioritize` without changing their handlers.\n\nAcceptance criteria evidence:\n\
+    - `litehive --help` visibility: verified via `uv run python -c 'import sys; from\
+    \ litehive.cli.app import main; sys.exit(main())' --help`. The command list now\
+    \ includes:\n  - `recover     Use after an accepted task needs another pass but\
+    \ its current code should stay in place`\n  - `prioritize  Use to pull queued\
+    \ tasks to the front when operator ordering matters more than the current queue`\n\
+    \  - `switch      Use when a task should continue with a different engine on its\
+    \ next queued run`\n- Per-command one-line help: verified via the same entrypoint\
+    \ with `recover --help`, `switch --help`, and `prioritize --help`; each shows\
+    \ the operator-scenario one-liner above.\n- README documentation: added a new\
+    \ `Queue and recovery shortcuts` subsection in `README.md` with concrete examples\
+    \ for all three commands and guidance on when to use `recover` vs `rollback`,\
+    \ when to use `switch`, and how `prioritize` preserves the exact requested order.\n\
+    - No behavior changes: only `litehive/cli/queue_cli.py` help/visibility wiring\
+    \ changed; command bodies still call the existing `recover(...)`, `switch(...)`,\
+    \ and `prioritize(...)` functions unchanged. Added a regression test in `tests/test_root_queue_recovery_help.py`\
+    \ for help visibility and help text.\n- `CLAUDE.md`: not present at repo root,\
+    \ so no change was needed.\n\nValidation run:\n- `uv run ruff check --select E402,F401\
+    \ litehive tests` \u2705\n- `uv run pytest -q` \u2705 (`538 passed, 2 skipped`)\n"
+  files_changed: []
+  created_at: '2026-04-13T18:29:39+00:00'
+- role: qa
+  step: testing
+  verdict: pass
+  message: 'PASS
+
+
+    Validated acceptance criteria in the task worktree.
+
+
+    Evidence:
+
+    - `uv run python -c ''import sys; from litehive.cli.app import main; sys.exit(main())''
+    --help` exits 0 and lists `recover`, `switch`, and `prioritize` in the root command
+    table.
+
+    - `uv run python -c ''import sys; from litehive.cli.app import main; sys.exit(main())''
+    recover --help` exits 0 and shows: `Use after an accepted task needs another pass
+    but its current code should stay in place`.
+
+    - `uv run python -c ''import sys; from litehive.cli.app import main; sys.exit(main())''
+    switch --help` exits 0 and shows: `Use when a task should continue with a different
+    engine on its next queued run`.
+
+    - `uv run python -c ''import sys; from litehive.cli.app import main; sys.exit(main())''
+    prioritize --help` exits 0 and shows: `Use to pull queued tasks to the front when
+    operator ordering matters more than the current queue`.
+
+    - `README.md` contains a `Queue and recovery shortcuts` section documenting all
+    three commands with example usage and explanation text for when to use each one.
+
+    - Focused regression coverage passes: `uv run pytest tests/test_root_queue_recovery_help.py
+    -q` => `2 passed`.
+
+
+    Notes:
+
+    - Pytest emitted an existing `PytestConfigWarning: Unknown config option: timeout`
+    and Typer deprecation warnings, but they did not affect this task''s acceptance
+    criteria.
+
+    '
+  files_changed: []
+  created_at: '2026-04-13T18:33:51+00:00'
+- role: reviewer
+  step: accepting
+  verdict: pass
+  message: 'Pass. The task meets the stated end-user outcome without expanding scope.
+
+
+    Evidence:
+
+    - `uv run python -c ''import sys; from litehive.cli.app import main; sys.exit(main())''
+    --help` exits 0 and the root command table includes `recover`, `switch`, and `prioritize`.
+
+    - `uv run python -c ''import sys; from litehive.cli.app import main; sys.exit(main())''
+    recover --help` exits 0 and shows the one-liner: `Use after an accepted task needs
+    another pass but its current code should stay in place`.
+
+    - `uv run python -c ''import sys; from litehive.cli.app import main; sys.exit(main())''
+    switch --help` exits 0 and shows the one-liner: `Use when a task should continue
+    with a different engine on its next queued run`.
+
+    - `uv run python -c ''import sys; from litehive.cli.app import main; sys.exit(main())''
+    prioritize --help` exits 0 and shows the one-liner: `Use to pull queued tasks
+    to the front when operator ordering matters more than the current queue`.
+
+    - `README.md` now has a dedicated `Queue and recovery shortcuts` section documenting
+    all three commands with example usage and operator guidance.
+
+    - `uv run pytest -q tests/test_root_queue_recovery_help.py` passes, adding regression
+    coverage for root help visibility and the new help text.
+
+
+    Scope review:
+
+    - The code change in `litehive/cli/queue_cli.py` only removes `hidden=True` and
+    updates help text for the existing handlers. I did not find evidence of underlying
+    behavior changes.
+
+    - README and tests are aligned with the acceptance criteria.
+
+    '
+  files_changed: []
+  created_at: '2026-04-13T18:35:01+00:00'
+- role: recovery
+  step: recovering
+  verdict: pass
+  message: 'Root cause: `commit_to_git` auto-committed every dirty worktree file before
+    merging, including runner-owned task metadata under `.litehive/tasks/<task-id>-*/task.yaml`.
+    For T-0320, the worktree checkpoint commit included that task metadata rewrite,
+    while the main checkout also had its own local runner-written edit to the same
+    `task.yaml`. `git merge` then aborted with `Your local changes ... would be overwritten
+    by merge`, even though the task''s real implementation changes were mergeable.
+
+
+    Litehive fix made: narrowed `GitCommitNode._autocommit_worktree_changes()` so
+    the automatic checkpoint commit excludes runner-owned workspace metadata for the
+    current task (`.litehive/tasks/<task-id>-*`, archived copies, and `.litehive/state.yaml`).
+    The node now also skips creating an auto-commit entirely when those excluded metadata
+    files are the only dirty paths. Added a regression test covering the exact failure
+    mode: main has a local runner edit to task metadata, the worktree has both a real
+    code/doc change and a task metadata rewrite, and `commit_to_git` must merge the
+    real change without touching the runner-owned metadata.
+
+
+    Why retry should succeed: the failed T-0320 branch already contains the intended
+    CLI/help changes, and the merge blocker was Litehive''s checkpoint plumbing, not
+    the task implementation. With the metadata excluded from the worktree auto-commit,
+    the next commit-stage retry should merge the actual task changes cleanly instead
+    of crashing on `task.yaml`.
+
+
+    Verification:
+
+    - `uv run pytest tests/test_pipeline_v2_hooks_and_commit.py`
+
+    - `uv run pytest tests/test_root_queue_recovery_help.py`
+
+    '
+  files_changed: []
+  created_at: '2026-04-13T18:39:35+00:00'

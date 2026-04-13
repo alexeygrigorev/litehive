@@ -1,0 +1,36 @@
+id: T-0368
+slug: litehive-repair-perf-re-attack-t-0367-closed
+title: litehive repair perf - re-attack (T-0367 closed empty-pass)
+created_at: '2026-04-13T12:14:35+00:00'
+task_type: null
+mode: implementation
+pipeline_mode: full
+priority: critical
+pm_complexity: null
+planned_effort: null
+depends_on: []
+goal: 'T-0367 was closed as done at 2026-04-13T12:05 but produced files_changed=[]
+  in both SWE and Reviewer reports. No commit landed. The 2-minute repair-on-clean-queue
+  bug is still present. Re-attack it: profile what litehive repair does on a 43-task
+  clean queue, and make it sub-second when there are no inconsistencies. Also: this
+  incident is another instance of the empty-pass bug class tracked under T-0210 /
+  T-0366 - the verdict guard either skipped or didn''t compare against the worktree
+  HEAD. Reference: T-0367, daemon pid 2549592, runner pid 2581423.'
+acceptance_criteria:
+- litehive repair on a 100-task clean queue completes in under 1 second
+- Repair scales with inconsistencies fixed, not total queue size
+- 'Daemon log records ''repair: clean (Xms)'' so operators can see it ran'
+- Regression test profiles repair on a synthetic 100-task clean workspace and asserts
+  wall-clock budget
+- 'Investigate why T-0367 closed empty-pass: the SWE/Reviewer reports said files_changed=[]
+  but verdict allowed completion - log root cause as comment on this task before fixing
+  the perf bug'
+constraints: []
+plan: []
+human_checkpoints: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0368 litehive-repair-perf-re-attack-t-0367-closed'
+created_from: null
+upstream_origin: null
+github_origin: null

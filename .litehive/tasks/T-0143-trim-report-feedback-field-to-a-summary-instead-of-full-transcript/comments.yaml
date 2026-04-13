@@ -1,0 +1,115 @@
+- role: planner
+  step: grooming
+  verdict: pass
+  message: "TASK_UPDATE:\n  goal: >-\n    Keep stage reports git-friendly by storing\
+    \ a concise feedback summary instead of the\n    full transcript when Litehive\
+    \ synthesizes a stage report from subagent output. Preserve\n    full transcript/stdout\
+    \ artifacts under subagents/, and do not alter explicit\n    `litehive report`\
+    \ submissions because those messages are already operator-authored summaries.\n\
+    \  acceptance_criteria:\n    - >-\n      Any stage report feedback derived from\
+    \ a subagent transcript is capped at 2000 characters\n      total, including a\
+    \ visible truncation marker when truncation occurs.\n    - >-\n      The cap applies\
+    \ to transcript-backed fallback paths used when Litehive parses or synthesizes\n\
+    \      a stage report from subagent output, including non-CLI reject/blocked outcomes.\n\
+    \    - >-\n      Reports submitted explicitly via `litehive report` keep the provided\
+    \ message unchanged.\n    - >-\n      Full subagent transcript/stdout artifacts\
+    \ remain available in the task's `subagents/`\n      artifact directory and are\
+    \ not truncated by this task.\n    - >-\n      Automated coverage verifies both\
+    \ the capping helper and at least one transcript-backed\n      stage report path,\
+    \ plus the explicit CLI report passthrough behavior.\n  constraints:\n    - Keep\
+    \ changes scoped to stage report feedback storage and parsing.\n    - Do not change\
+    \ where full transcript/stdout artifacts are written.\n    - Do not change the\
+    \ semantics of explicit `litehive report` messages.\n  plan:\n    - >-\n     \
+    \ Confirm the single source of truth for feedback capping (`cap_feedback`, `FEEDBACK_CAP`,\n\
+    \      truncation marker) and use it everywhere transcript text becomes `StageReport.feedback`.\n\
+    \    - >-\n      Update transcript-backed stage report creation paths so oversized\
+    \ transcript text is\n      summarized/capped before being persisted to report/thread\
+    \ records.\n    - >-\n      Leave the CLI submission path untouched so `litehive\
+    \ report --message-file ...` stores\n      the supplied message verbatim.\n  \
+    \  - >-\n      Add or align tests around transcript-backed parsing/synthesis and\
+    \ explicit CLI passthrough.\n  pm_complexity: low\n  planned_effort: small\n \
+    \ priority: medium\n\nShaping notes:\n- No task split needed. This is a narrow\
+    \ storage/serialization concern.\n- Existing code already suggests the right boundaries:\
+    \ transcript-derived reports flow through\n  `litehive/agents/parsing.py` and\
+    \ transcript-backed report synthesis in `litehive/agents/manager.py`,\n  while\
+    \ explicit operator summaries go through `litehive/cli/report.py` and should remain\
+    \ as-is.\n- There is already targeted test scaffolding in `tests/test_feedback_cap.py`;\
+    \ use that as the starting\n  point, but make sure blocked/resource-limit transcript-backed\
+    \ paths are also covered if they bypass\n  the common parser.\n\nOperator guidance:\n\
+    - If you need to mirror this shaping directly in the task record later, use:\n\
+    \  `litehive task update T-0143 --goal \"...\"`\n  `litehive task update T-0143\
+    \ --acceptance-criteria \"...\"`\n  `litehive task update T-0143 --plan \"...\"\
+    `\n- No follow-up task required unless implementation uncovers a separate artifact-retention\
+    \ bug.\n"
+  files_changed: []
+  created_at: '2026-04-13T03:46:59+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: "Verified against current branch state; `git diff main...HEAD` is empty\
+    \ because the implementation is already present on this branch/base.\n\nAcceptance\
+    \ criteria evidence:\n1. Feedback cap with truncation marker: `heru.types.cap_feedback()`\
+    \ enforces `FEEDBACK_CAP=2000` and appends `\"\\n\\n\u2026 [truncated \u2014 full\
+    \ transcript in subagent artifacts]\"`. Verified via runtime inspection: `FEEDBACK_CAP=2000`,\
+    \ truncated output length is `2000`, and `endswith(marker)=True`.\n2. Transcript-derived\
+    \ stage reports are capped: structured/fallback parsing uses `feedback=cap_feedback(transcript)`\
+    \ in `heru.base.parse_stage_report_text()`, and the non-CLI subagent fallback\
+    \ path uses `feedback=cap_feedback(result.transcript)` in `litehive/agents/parsing.py:54-61`.\
+    \ Resource-limit blocked reports are capped in `litehive/agents/manager.py:326-333`.\n\
+    3. Full transcript remains in subagent artifacts: after report creation, the raw\
+    \ transcript/stdout/stderr are still written to the session snapshot via `litehive/agents/manager.py:344-350`\
+    \ (`transcript=transcript + \"\\n\"`, `stdout=execution.stdout`, `stderr=execution.stderr`).\
+    \ The cap only affects report feedback.\n4. CLI-submitted summaries remain as-is:\
+    \ `litehive/agents/parsing.py:23-34` returns `feedback=latest.message` with `submitted_via_cli=True`,\
+    \ so operator-authored `litehive report` messages bypass truncation.\n5. Tests\
+    \ covering this task exist in `tests/test_feedback_cap.py:7-70`, including direct\
+    \ cap behavior and transcript-derived report capping.\n\nChecks run:\n- `uv run\
+    \ ruff check --select E402,F401 litehive tests` \u2705\n- `uv run pytest -q` \u2705\
+    \ (`521 passed, 5 skipped, 3 warnings in 89.54s`)\n"
+  files_changed: []
+  created_at: '2026-04-13T03:50:15+00:00'
+- role: qa
+  step: testing
+  verdict: pass
+  message: "PASS\n\nVerified the branch behavior against the acceptance criteria with\
+    \ focused code inspection, runtime checks, and targeted tests.\n\nEvidence:\n\
+    - Feedback cap with truncation marker: `heru.types.cap_feedback()` reports `FEEDBACK_CAP\
+    \ = 2000` and truncates long transcript-derived feedback to exactly 2000 chars,\
+    \ ending with `\u2026 [truncated \u2014 full transcript in subagent artifacts]`.\n\
+    - Transcript-derived stage reports are capped: `litehive/agents/parsing.py` applies\
+    \ `cap_feedback(result.transcript)` on the no-CLI-verdict path, and `litehive/agents/manager.py`\
+    \ applies `cap_feedback(transcript)` for resource-limit blocked reports.\n- Full\
+    \ transcript remains accessible in subagent artifacts: `litehive/agents/manager.py`\
+    \ writes uncapped `transcript.md`, `stdout.txt`, and `stderr.txt` under `subagents/SA-*/`;\
+    \ existing artifact tests in `tests/test_tasks_and_subagents.py` verify those\
+    \ files are persisted.\n- CLI/litehive-report submissions stay as-is: `litehive/agents/parsing.py`\
+    \ uses `feedback=latest.message` for thread comments. I verified with a local\
+    \ repro that a multi-line `litehive agent report` message is returned unchanged\
+    \ in `report.feedback` while only `report.summary` uses the first line.\n\nTest\
+    \ results:\n- `pytest -q tests/test_feedback_cap.py tests/test_stage_result_submission.py`\
+    \ -> 18 passed\n\nConclusion:\n- AC met: report feedback is capped at 2000 chars\
+    \ with truncation marker for transcript-derived reports.\n- AC met: full transcript\
+    \ remains available in subagent artifact files.\n- AC met: `litehive agent report`\
+    \ message content is preserved as submitted.\n"
+  files_changed: []
+  created_at: '2026-04-13T03:54:47+00:00'
+- role: reviewer
+  step: accepting
+  verdict: pass
+  message: "Accepted. The requested behavior is already implemented on the current\
+    \ branch/base; `git diff main...HEAD` is empty, but the code and tests in-tree\
+    \ satisfy the task.\n\nVerified evidence:\n- Transcript-derived report feedback\
+    \ is capped at 2000 chars with the truncation marker. Runtime check: `cap_feedback('x'*5000)`\
+    \ returns length `2000` and ends with `\\n\\n\u2026 [truncated \u2014 full transcript\
+    \ in subagent artifacts]`.\n- Transcript-derived stage reports are capped on the\
+    \ non-CLI path in `litehive/agents/parsing.py:55-61`, and blocked resource-limit\
+    \ reports are capped in `litehive/agents/manager.py:326-333`.\n- Full transcript\
+    \ remains available in subagent artifacts because the manager still writes the\
+    \ raw transcript to `transcript.md` in `litehive/agents/manager.py:437-440`.\n\
+    - Agents that submit via `litehive report` keep their message as-is: `litehive/agents/parsing.py:23-35`\
+    \ returns `feedback=latest.message` unchanged. I also verified this with a direct\
+    \ runtime check using a saved task-thread comment.\n- Targeted tests pass: `pytest\
+    \ -q tests/test_feedback_cap.py tests/test_stage_result_submission.py` => 18 passed.\n\
+    \nNo regression blocking acceptance found.\n"
+  files_changed: []
+  created_at: '2026-04-13T03:57:18+00:00'

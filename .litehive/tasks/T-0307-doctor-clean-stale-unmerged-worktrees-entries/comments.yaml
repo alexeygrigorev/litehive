@@ -1,0 +1,118 @@
+- role: planner
+  step: grooming
+  verdict: pass
+  message: "Pass. The task is valid and scoped, but the record needed PM shaping before\
+    \ implementation.\n\nKey product decision: treat this as safe automatic hygiene\
+    \ in `litehive doctor` itself, not a `--fix`-only repair. The stale `state.yaml.unmerged_worktrees`\
+    \ rows are bookkeeping noise, not user-authored state, and leaving them behind\
+    \ creates misleading operator output.\n\nNotes for implementation:\n- Keep scope\
+    \ limited to pruning `state.yaml.unmerged_worktrees`; do not expand into broader\
+    \ worktree cleanup or task-status repair.\n- Detect stale entries when either\
+    \ condition holds: the referenced task is terminal/closed, or the recorded worktree\
+    \ path is missing on disk.\n- Be tolerant of legacy status values if they exist\
+    \ in old task files; current canonical closed statuses include `done`, `cancelled`,\
+    \ `wont_do`, `deferred`, and `duplicate`.\n- `litehive doctor` should report how\
+    \ many stale `unmerged_worktrees` entries it removed during that run, and a follow-up\
+    \ run should be clean.\n\nTASK_UPDATE:\n  goal: >-\n    Keep `.litehive/state.yaml.unmerged_worktrees`\
+    \ accurate by having `litehive doctor`\n    automatically prune stale entries\
+    \ left behind after rescue or out-of-band finalization.\n    A stale entry is\
+    \ one whose referenced task is already terminal/closed or whose\n    recorded\
+    \ worktree path no longer exists. This is safe metadata cleanup intended to\n\
+    \    reduce operator confusion when inspecting workspace state.\n  acceptance_criteria:\n\
+    \    - >-\n      `litehive doctor` detects stale `.litehive/state.yaml.unmerged_worktrees`\
+    \ entries.\n      An entry is stale if either: (a) the referenced task status\
+    \ is terminal/closed\n      (`done`, `cancelled`, `wont_do`, `deferred`, `duplicate`,\
+    \ plus legacy `abandoned`\n      if encountered), or (b) the recorded worktree\
+    \ path no longer exists on disk.\n    - >-\n      On every `litehive doctor` run,\
+    \ stale `unmerged_worktrees` entries are removed from\n      `.litehive/state.yaml`\
+    \ automatically without requiring a separate cleanup command.\n    - >-\n    \
+    \  Doctor output includes the number of stale `unmerged_worktrees` entries removed\
+    \ in\n      that run; when none are removed, the command remains silent about\
+    \ this cleanup.\n    - >-\n      Test coverage constructs a workspace state containing\
+    \ stale `unmerged_worktrees`\n      entries for both cases: a terminal task reference\
+    \ and a missing worktree path.\n      After running `litehive doctor`, the entries\
+    \ are removed from state and a second\n      doctor run reports no remaining finding\
+    \ or warning for them.\n  constraints:\n    - Keep changes scoped to doctor's\
+    \ `unmerged_worktrees` reconciliation only.\n    - Do not broaden this task into\
+    \ deleting worktree directories or mutating task status fields.\n  plan:\n   \
+    \ - Audit current doctor scan/fix flow and decide where automatic `unmerged_worktrees`\
+    \ pruning belongs.\n    - Implement stale-entry detection against task status\
+    \ and filesystem existence, then persist cleaned state.\n    - Update doctor CLI\
+    \ output to surface removed-entry counts for the run.\n    - Add regression tests\
+    \ covering terminal-task and missing-path stale entries plus clean rerun behavior.\n\
+    \  pm_complexity: small\n  planned_effort: small\n"
+  files_changed: []
+  created_at: '2026-04-12T17:53:58+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: "Implemented T-0307 by adding automatic stale `state.yaml.unmerged_worktrees`\
+    \ pruning to `litehive doctor`.\n\nWhat changed:\n- `litehive/recovery/doctor.py`\
+    \ now prunes stale `unmerged_worktrees` entries on every doctor scan.\n- An entry\
+    \ is removed when either condition holds:\n  - the referenced task is terminal\
+    \ (`done`, `abandoned`, `cancelled`, `wont_do`, `duplicate`, `deferred`), using\
+    \ loaded task runtime state with a raw-file fallback for legacy status values\n\
+    \  - the recorded worktree path no longer exists on disk\n- `DoctorReport` / `DoctorFixResult`\
+    \ now carry `stale_unmerged_worktrees_removed`, and `litehive/cli/doctor.py` prints\
+    \ `doctor_cleanup: stale_unmerged_worktrees_removed=N` when cleanup happened.\n\
+    - Added regression test `tests/test_doctor_stale_unmerged_worktrees.py` covering\
+    \ both stale cases and a clean second rerun.\n\nAcceptance-criteria evidence:\n\
+    - AC1 + AC2 + AC3: covered by the new doctor cleanup path and CLI output. The\
+    \ new test constructs one stale entry for a terminal task and one stale entry\
+    \ for a missing worktree path, runs doctor, and asserts both are removed plus\
+    \ the cleanup count is reported.\n- AC4: `uv run pytest -q tests/test_doctor_stale_unmerged_worktrees.py`\
+    \ -> `1 passed`.\n\nRepo checks run:\n- `uv run ruff check --select E402,F401\
+    \ litehive tests` -> passed\n- forbidden `noqa` grep hook -> passed\n- `uv run\
+    \ pytest -q` -> `546 passed, 5 skipped, 4 warnings in 137.74s (0:02:17)`\n"
+  files_changed: []
+  created_at: '2026-04-12T18:00:24+00:00'
+- role: qa
+  step: testing
+  verdict: pass
+  message: "PASS\n\nVerified T-0307 on the current workspace state.\n\nWhat I checked:\n\
+    - `litehive/recovery/doctor.py` prunes `state.yaml.unmerged_worktrees` during\
+    \ doctor scans and fix runs.\n- Staleness matches the acceptance rule:\n  - terminal\
+    \ task statuses include `done`, `abandoned`, plus `cancelled`, `wont_do`, `duplicate`,\
+    \ and `deferred`\n  - missing worktree paths are also pruned\n- `litehive/cli/doctor.py`\
+    \ reports `doctor_cleanup: stale_unmerged_worktrees_removed=N` when removals occur.\n\
+    - The targeted regression test covers both stale cases in one run and verifies\
+    \ the entry is removed with no remaining warning.\n\nValidation run:\n- `pytest\
+    \ -q tests/test_doctor_stale_unmerged_worktrees.py` -> passed\n- `pytest -q tests/test_doctor_stale_unmerged_worktrees.py\
+    \ tests/test_pipeline_v2_worktree_sync.py` -> passed\n\nResult: acceptance criteria\
+    \ met. No issues found in the scoped change.\n"
+  files_changed: []
+  created_at: '2026-04-12T18:03:45+00:00'
+- role: reviewer
+  step: accepting
+  verdict: pass
+  message: 'Accepted.
+
+
+    Verified against the current workspace implementation and by running `pytest -q
+    tests/test_doctor_stale_unmerged_worktrees.py` (passed).
+
+
+    Evidence:
+
+    - `litehive/recovery/doctor.py` prunes stale `state.yaml.unmerged_worktrees` entries
+    during every `scan_workspace_doctor()` call, so cleanup happens on normal `litehive
+    doctor` runs as required.
+
+    - Stale detection matches the acceptance rule: entries are removed when the task
+    status is terminal (`done`, `abandoned`, `cancelled`, `wont_do`, `duplicate`,
+    `deferred`) or when the recorded worktree path does not exist.
+
+    - `litehive/cli/doctor.py` reports `doctor_cleanup: stale_unmerged_worktrees_removed=N`
+    when removals occur.
+
+    - `tests/test_doctor_stale_unmerged_worktrees.py` constructs stale entries for
+    both cases (done task and missing worktree), runs doctor, asserts both entries
+    are removed from state, and confirms the cleanup line disappears on the next run
+    with no stale warning remaining.
+
+
+    No acceptance gaps found.
+
+    '
+  files_changed: []
+  created_at: '2026-04-12T18:04:33+00:00'

@@ -1,21 +1,14 @@
 id: T-0243
 slug: agent-must-submit-verdict-even-when-task-is
 title: Agent must submit verdict even when task is already complete - never exit silently
-depends_on: []
+created_at: '2026-04-09T08:01:46+00:00'
 task_type: null
-engine: null
-model: null
 mode: implementation
 pipeline_mode: full
-status: done
-flag_reason: null
-flag_count: 0
-pipeline_status: done
 priority: high
 pm_complexity: null
 planned_effort: null
-created_at: '2026-04-09T08:01:46+00:00'
-updated_at: '2026-04-09T11:28:41+00:00'
+depends_on: []
 goal: 'When an SWE agent discovers the task is already implemented (code exists, tests
   pass), it must submit a pass verdict with evidence, not exit silently. Currently
   agents exit with code 0 and no verdict, triggering the empty SWE guard rejection.
@@ -37,68 +30,9 @@ acceptance_criteria:
 constraints: []
 plan: []
 human_checkpoints: []
-subagents:
-- id: SA-0001
-  role: planner
-  engine: codex
-  status: completed
-  path: subagents/SA-0001-planner
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0002
-  role: swe
-  engine: codex
-  status: completed
-  path: subagents/SA-0002-swe
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0003
-  role: qa
-  engine: codex
-  status: completed
-  path: subagents/SA-0003-qa
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0004
-  role: reviewer
-  engine: codex
-  status: completed
-  path: subagents/SA-0004-reviewer
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0005
-  role: swe
-  engine: codex
-  status: completed
-  path: subagents/SA-0005-swe
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0006
-  role: qa
-  engine: codex
-  status: completed
-  path: subagents/SA-0006-qa
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0007
-  role: recovery
-  engine: claude
-  status: completed
-  path: subagents/SA-0007-recovery
-  sandboxed: false
-  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0243 agent-must-submit-verdict-even-when-task-is'
-  commit_sha: d0fabe8f348f0abaef2503b9afdf56ae26870cad
-  checkpoint_base_sha: 08ae4211c56248b887251b464d106b9bae091731
-  checkpoint_attempts: 1
-  rolled_back_checkpoint_attempt: null
-  merge_agent_attempts: 0
-  worktree_path: null
-retry_policy:
-  max_retries: null
-  stage_retry_limit: null
 created_from: null
 upstream_origin: null
 github_origin: null

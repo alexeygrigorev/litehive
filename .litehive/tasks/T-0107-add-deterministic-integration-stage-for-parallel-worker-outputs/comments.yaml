@@ -1,0 +1,686 @@
+- role: planner
+  step: grooming
+  verdict: blocked
+  message: "BLOCKED: Task T-0107 cannot be groomed \u2014 insufficient product context\
+    \ to shape.\n\nWHAT EXISTS TODAY:\n- Litehive executes tasks strictly sequentially\
+    \ with a workspace-wide runner guard (one active task at a time).\n- Each task\
+    \ gets a single worktree, runs through fixed stages (grooming \u2192 implementing\
+    \ \u2192 testing \u2192 accepting \u2192 commit_to_git \u2192 done), and merges\
+    \ to main at commit_to_git.\n- There is no concept of parallel workers, parallel\
+    \ subtasks, or multi-agent concurrent execution within a single task.\n\nWHAT\
+    \ THE TITLE IMPLIES BUT DOESN'T DEFINE:\nThe phrase \"deterministic integration\
+    \ stage for parallel worker outputs\" could mean several very different things:\n\
+    1. Multiple SWE agents working on the same task in parallel (e.g., exploring different\
+    \ approaches), with a stage to pick/merge the best result.\n2. Multiple tasks\
+    \ running concurrently in separate worktrees, with a stage to integrate their\
+    \ combined changes into main without conflicts.\n3. Subtask decomposition where\
+    \ a parent task spawns child tasks that execute in parallel, then a gather/reduce\
+    \ stage merges their outputs.\n4. A post-commit integration check that validates\
+    \ multiple recently-merged tasks don't conflict at the integration level.\n\n\
+    Each of these implies fundamentally different architecture, scope, and effort.\n\
+    \nWHAT IS NEEDED TO UNBLOCK:\n- A clear goal statement: what user problem does\
+    \ this solve? What scenario triggers the need for parallel workers?\n- Which parallelism\
+    \ model is intended (see options 1-4 above, or something else)?\n- What does \"\
+    deterministic\" mean here \u2014 ordering guarantee? idempotent merge? reproducible\
+    \ conflict resolution?\n- What are the inputs and outputs of the integration stage?\n\
+    - How does this interact with the existing single-worktree-per-task model and\
+    \ workspace runner guard?\n\nRECOMMENDATION:\nEither (a) provide product context\
+    \ and re-groom, or (b) decompose into a research spike (e.g., \"Design parallel\
+    \ execution model for litehive\") followed by the implementation task."
+  files_changed: []
+  created_at: '2026-04-09T06:11:20+00:00'
+- role: recovery
+  step: grooming
+  verdict: blocked
+  message: "NO LITEHIVE INFRASTRUCTURE BUG \u2014 task content issue only.\n\nDIAGNOSIS:\n\
+    The previous planner agent correctly blocked T-0107 during grooming. All Litehive\
+    \ infrastructure worked as expected:\n- Subagent launched successfully (SA-0001-planner,\
+    \ exit code 0)\n- `litehive report --verdict blocked` was called and recorded\
+    \ correctly\n- Session management, continuation, and artifact capture all functioned\
+    \ properly\n\nROOT CAUSE: Task T-0107 is underspecified at the product level:\n\
+    - No goal statement\n- No acceptance criteria\n- Ambiguous title that could mean\
+    \ 4+ fundamentally different features\n- The concept it describes (parallel worker\
+    \ outputs) does not exist in current architecture\n\nThe planner's blocked verdict\
+    \ is the correct outcome. No Litehive fix can resolve a missing product specification.\n\
+    \nFAILURE OWNERSHIP: task/project (not litehive infrastructure)\n\nRECOMMENDED\
+    \ ACTION: Either (a) add product context (goal, acceptance criteria, parallelism\
+    \ model) and re-groom, or (b) replace with a research spike task like \"Design\
+    \ parallel execution model for litehive\"."
+  files_changed: []
+  created_at: '2026-04-09T06:11:47+00:00'
+- role: recovery
+  step: grooming
+  verdict: comment
+  message: "Recovery trigger `stage_failure`: Recovery agent could not restore `grooming`\
+    \ to a runnable state.\nrunnable_state: blocked\nreport: .litehive/tasks/T-0107-add-deterministic-integration-stage-for-parallel-worker-outputs/recovery/recovery-001.yaml\n\
+    blocker: NO LITEHIVE INFRASTRUCTURE BUG \u2014 task content issue only."
+  files_changed: []
+  created_at: '2026-04-09T06:11:51+00:00'
+- role: recovery
+  step: grooming
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0107-add-deterministic-integration-stage-for-parallel-worker-outputs/recovery/recovery-002.yaml'
+  files_changed: []
+  created_at: '2026-04-09T07:37:50+00:00'
+- role: planner
+  step: grooming
+  verdict: pass
+  message: "GROOMING PASS \u2014 Task shaped with goal, acceptance criteria, plan,\
+    \ and sizing.\n\n## What this task is about\n\nThe parallel execution pipeline\
+    \ (T-0129) runs multiple independent tasks in separate worktrees, then merges\
+    \ them to main sequentially in task-ID order with agent-assisted merge conflict\
+    \ resolution. However, after all parallel tasks merge, there is NO post-batch\
+    \ integration verification. Each task passes its own tests in its worktree, but\
+    \ the combined merged state is never validated. Two tasks could individually pass\
+    \ tests but break each other when combined (e.g., conflicting imports, incompatible\
+    \ API changes, duplicate definitions).\n\nThis task adds a deterministic integration\
+    \ verification stage that runs after Phase 3 (merge) completes, validating the\
+    \ combined result before the batch is considered done.\n\n## TASK_UPDATE:\n\n\
+    ```yaml\ngoal: >\n  Add a post-merge integration verification stage to the parallel\
+    \ execution pipeline.\n  After all parallel tasks are merged to main (Phase 3),\
+    \ run a configurable integration\n  check (tests, lint, build) on the combined\
+    \ merged state. If the check fails, report\n  which tasks were in the batch, mark\
+    \ the batch result as integration_failed, and leave\n  actionable evidence for\
+    \ recovery. The stage must be deterministic: same inputs produce\n  same verdicts.\n\
+    \nacceptance_criteria:\n  - \"After all parallel tasks merge to main, an integration\
+    \ verification step runs automatically on the combined merged state before the\
+    \ batch is marked complete.\"\n  - \"The integration check is configurable via\
+    \ config.yaml (e.g., `parallel_integration_check: 'uv run pytest -q'`) with a\
+    \ sensible default (no-op if unconfigured).\"\n  - \"If the integration check\
+    \ passes, the ParallelRunSummary reports stop_reason 'parallel_batch_complete'\
+    \ and all tasks remain done.\"\n  - \"If the integration check fails, the ParallelRunSummary\
+    \ reports stop_reason 'parallel_integration_failed', the failure output is captured\
+    \ in a batch integration report, and the journal of each task in the batch records\
+    \ the integration failure.\"\n  - \"The integration report includes: batch task\
+    \ IDs, merge order, check command, exit code, stdout/stderr, and timestamp \u2014\
+    \ enough for an operator or recovery agent to diagnose the failure.\"\n  - \"\
+    Integration verification is idempotent: running the same check on the same merged\
+    \ state produces the same result.\"\n  - \"Existing tests pass and new tests cover:\
+    \ (a) integration check passes, (b) integration check fails, (c) no integration\
+    \ check configured (no-op).\"\n\nconstraints:\n  - \"Keep changes scoped to the\
+    \ parallel pipeline and its configuration; do not modify the sequential single-task\
+    \ flow.\"\n  - \"Do not block on or require changes to the recovery pipeline \u2014\
+    \ just leave actionable evidence that recovery can consume later.\"\n  - \"The\
+    \ integration check runs on the main worktree after merges, not in a separate\
+    \ worktree.\"\n\nplan:\n  - \"Add `parallel_integration_check` field to LitehiveConfig\
+    \ (optional string, default None).\"\n  - \"In `_parallel.py` `run_parallel_tasks`,\
+    \ after Phase 3 merge loop and before determining stop_reason, add Phase 4: if\
+    \ `parallel_integration_check` is configured and at least one task merged successfully,\
+    \ run the check command on the main worktree.\"\n  - \"Capture check results (exit\
+    \ code, stdout, stderr, timestamp) and write a batch integration report to `.litehive/logs/parallel-integration/`.\"\
+    \n  - \"If the check fails, set stop_reason to 'parallel_integration_failed' and\
+    \ append a journal entry to each merged task.\"\n  - \"Add IntegrationCheckResult\
+    \ dataclass to _parallel.py and include it in ParallelRunSummary.\"\n  - \"Add\
+    \ the new config field to config schema and documentation.\"\n  - \"Write tests:\
+    \ (a) configured check passes \u2192 batch_complete, (b) configured check fails\
+    \ \u2192 integration_failed + report written, (c) no check configured \u2192 no-op,\
+    \ existing behavior preserved.\"\n\npm_complexity: moderate\nplanned_effort: m\n\
+    ```\n\n## Key architectural decisions for the implementer\n\n1. **Where the check\
+    \ runs**: On the main worktree (`root`), after all merges complete. This is the\
+    \ combined state.\n2. **How the check runs**: `subprocess.run(shlex.split(config.parallel_integration_check),\
+    \ cwd=root)` \u2014 same pattern as existing hook execution.\n3. **Report location**:\
+    \ `.litehive/logs/parallel-integration/{timestamp}-batch.yaml` \u2014 keeps it\
+    \ out of per-task artifacts since this is a batch-level concern.\n4. **No rollback**:\
+    \ This task does NOT roll back failed integrations. It only reports. Rollback/recovery\
+    \ is a separate concern.\n5. **Determinism guarantee**: The check command runs\
+    \ on a committed git state (all merges are committed), so re-running it on the\
+    \ same HEAD produces the same result.\n\n## Follow-up work (not in scope)\n- Automatic\
+    \ rollback of failed integration batches\n- Recovery agent integration for `parallel_integration_failed`\
+    \ state\n- Per-task integration blame (which task broke the integration)"
+  files_changed: []
+  created_at: '2026-04-09T07:40:14+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: "## Implementation Complete\n\n### What was implemented\nAdded a post-merge\
+    \ integration verification stage (Phase 4) to the parallel execution pipeline.\n\
+    \n### Changes made\n\n**litehive/config/model.py:**\n- Added `parallel_integration_check:\
+    \ str | None = None` field to `LitehiveConfig`. When set to a shell command string,\
+    \ the integration check runs after all parallel task merges complete.\n\n**litehive/pipeline/_parallel.py:**\n\
+    - Added `IntegrationCheckResult` dataclass with fields: command, exit_code, stdout,\
+    \ stderr, timestamp, task_ids, merge_order, success.\n- Added `integration_check:\
+    \ IntegrationCheckResult | None` field to `ParallelRunSummary`.\n- Added `_run_integration_check()`\
+    \ function that runs the configured command via `subprocess.run` on the main worktree,\
+    \ captures all output, and writes a YAML batch report to `.litehive/logs/parallel-integration/{timestamp}-batch.yaml`.\n\
+    - Added Phase 4 logic in `run_parallel_tasks()` after Phase 3 merge loop: if `parallel_integration_check`\
+    \ is configured and at least one task merged successfully, runs the check. If\
+    \ it fails, sets `stop_reason` to `parallel_integration_failed` and appends a\
+    \ journal entry to each merged task.\n\n**tests/test_parallel_execution.py:**\n\
+    - `test_integration_check_passes`: Configured check (`true`) passes \u2192 `parallel_batch_complete`,\
+    \ report written.\n- `test_integration_check_fails`: Configured check (`false`)\
+    \ fails \u2192 `parallel_integration_failed`, report written with batch info,\
+    \ journal entries written.\n- `test_integration_check_not_configured`: No check\
+    \ configured \u2192 no-op, no report directory created, existing behavior preserved.\n\
+    - `test_run_integration_check_captures_output`: Direct unit test of `_run_integration_check`\
+    \ verifying stdout capture, report file, and field values.\n\n### Acceptance criteria\
+    \ verification\n1. \u2705 After all parallel tasks merge, integration verification\
+    \ runs automatically \u2014 Phase 4 in `run_parallel_tasks`.\n2. \u2705 Configurable\
+    \ via `parallel_integration_check` in config.yaml, no-op if unconfigured.\n3.\
+    \ \u2705 If check passes, stop_reason is `parallel_batch_complete` \u2014 verified\
+    \ by `test_integration_check_passes`.\n4. \u2705 If check fails, stop_reason is\
+    \ `parallel_integration_failed`, failure captured in report, journal entries written\
+    \ \u2014 verified by `test_integration_check_fails`.\n5. \u2705 Integration report\
+    \ includes: batch task IDs, merge order, check command, exit code, stdout/stderr,\
+    \ timestamp \u2014 verified by report content assertions.\n6. \u2705 Integration\
+    \ check is idempotent: runs on committed git state after merges.\n7. \u2705 Existing\
+    \ tests pass (20/20), new tests cover pass/fail/unconfigured scenarios.\n\n###\
+    \ Tests run\n- `uv run pytest tests/test_parallel_execution.py -q` \u2192 20 passed\n\
+    - `uv run pytest tests/test_config_and_run_cli.py -q` \u2192 58 passed"
+  files_changed: []
+  created_at: '2026-04-09T07:47:33+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: "## Implementation Complete\n\n### Changes Made\n\n**litehive/config/model.py:**\n\
+    - Added `parallel_integration_check: str | None = None` field to `LitehiveConfig`.\
+    \ When set to a shell command string (e.g., `uv run pytest -q`), the integration\
+    \ check runs after all parallel task merges complete. Defaults to `None` (no-op).\n\
+    \n**litehive/pipeline/_parallel.py:**\n- Added `IntegrationCheckResult` dataclass\
+    \ (fields: command, exit_code, stdout, stderr, timestamp, task_ids, merge_order,\
+    \ success).\n- Added `integration_check: IntegrationCheckResult | None` field\
+    \ to `ParallelRunSummary`.\n- Added `_run_integration_check()` function that runs\
+    \ the configured command via `subprocess.run` on the main worktree, captures all\
+    \ output, and writes a YAML batch report to `.litehive/logs/parallel-integration/{timestamp}-batch.yaml`.\n\
+    - Added Phase 4 logic in `run_parallel_tasks()` after Phase 3 merge loop: if `parallel_integration_check`\
+    \ is configured and at least one task merged successfully with stop_reason `parallel_batch_complete`,\
+    \ runs the check. If it fails, sets `stop_reason` to `parallel_integration_failed`\
+    \ and appends a journal entry to each merged task recording the failure.\n\n**tests/test_parallel_execution.py\
+    \ (4 new tests, 20 total):**\n- `test_integration_check_passes`: Configured check\
+    \ (`true`) passes \u2192 `parallel_batch_complete`, report written, integration_check.success=True.\n\
+    - `test_integration_check_fails`: Configured check (`false`) fails \u2192 `parallel_integration_failed`,\
+    \ report written with batch info (task_ids, success=False), journal entries record\
+    \ failure for each merged task.\n- `test_integration_check_not_configured`: No\
+    \ check configured \u2192 no-op, no report directory created, existing behavior\
+    \ preserved.\n- `test_run_integration_check_captures_output`: Direct unit test\
+    \ of `_run_integration_check` verifying stdout capture (\"hello-world\"), report\
+    \ file written, and all field values correct.\n\n### Acceptance Criteria Verification\n\
+    \n1. \u2705 After all parallel tasks merge to main, integration verification runs\
+    \ automatically \u2014 Phase 4 in `run_parallel_tasks`, gated on `parallel_integration_check`\
+    \ being configured and at least one successful merge.\n2. \u2705 Configurable\
+    \ via `parallel_integration_check` in config.yaml, no-op if unconfigured \u2014\
+    \ verified by `test_integration_check_not_configured`.\n3. \u2705 If check passes,\
+    \ stop_reason is `parallel_batch_complete` and integration_check.success=True\
+    \ \u2014 verified by `test_integration_check_passes`.\n4. \u2705 If check fails,\
+    \ stop_reason is `parallel_integration_failed`, failure captured in report, journal\
+    \ entries written to each merged task \u2014 verified by `test_integration_check_fails`.\n\
+    5. \u2705 Integration report includes: batch task IDs, merge order, check command,\
+    \ exit code, stdout/stderr, and timestamp \u2014 verified by report content assertions\
+    \ in tests.\n6. \u2705 Integration check is idempotent: runs on committed git\
+    \ state after merges (same HEAD \u2192 same result).\n7. \u2705 Existing tests\
+    \ pass (16 pre-existing) and new tests cover pass/fail/unconfigured/output-capture\
+    \ scenarios (4 new, 20 total).\n\n### Test Results\n- `uv run pytest tests/test_parallel_execution.py\
+    \ -q` \u2192 20 passed in 1.91s\n- `uv run pytest tests/test_config_and_run_cli.py\
+    \ -q` \u2192 58 passed in 9.89s"
+  files_changed: []
+  created_at: '2026-04-09T07:51:44+00:00'
+- role: qa
+  step: testing
+  verdict: pass
+  message: "## QA PASS \u2014 T-0107 Integration Check Verified\n\n### What was verified\n\
+    \nAll 7 acceptance criteria confirmed through code review and test execution.\n\
+    \n### Tests executed\n\n- `uv run pytest tests/test_parallel_execution.py -q`\
+    \ \u2192 **20 passed in 1.69s** (includes 4 new integration-check tests)\n- Full\
+    \ suite (`uv run pytest tests/ -q --ignore=tests/test_codex_quota.py`) \u2192\
+    \ **842 passed, 9 failed, 3 skipped in 249s**. All 9 failures are pre-existing\
+    \ in unrelated files (test_retry_commit_and_recovery, test_self_heal_recovery,\
+    \ test_web_daemon_monitor, test_web_snapshot_lockfree). No regressions from this\
+    \ change.\n- test_codex_quota.py excluded due to pre-existing ImportError unrelated\
+    \ to this task.\n\n### Acceptance criteria evidence\n\n1. **Auto-runs after merge**:\
+    \ Phase 4 in `_parallel.py:547-575` executes after Phase 3 merge loop, gated on\
+    \ `parallel_integration_check` config + at least one successful merge.\n2. **Configurable**:\
+    \ `parallel_integration_check: str | None = None` in `model.py:80`. No-op when\
+    \ unconfigured \u2014 verified by `test_integration_check_not_configured`.\n3.\
+    \ **Pass \u2192 parallel_batch_complete**: `test_integration_check_passes` confirms\
+    \ stop_reason stays `parallel_batch_complete`, integration_check.success=True,\
+    \ report written.\n4. **Fail \u2192 parallel_integration_failed + report + journal**:\
+    \ `test_integration_check_fails` confirms stop_reason changes to `parallel_integration_failed`,\
+    \ report written with task_ids/success=False, journal entries contain \"Integration\
+    \ check FAILED\".\n5. **Report contains required fields**: `_run_integration_check`\
+    \ writes YAML with command, exit_code, stdout, stderr, timestamp, task_ids, merge_order,\
+    \ success. Verified by `test_run_integration_check_captures_output`.\n6. **Idempotent**:\
+    \ Check runs on committed git state (after all merges), so same HEAD produces\
+    \ same result. No side effects beyond the report file.\n7. **Tests cover all scenarios**:\
+    \ 4 new tests \u2014 pass, fail, unconfigured (no-op), and direct output-capture\
+    \ unit test.\n\n### Changes reviewed\n\n- `litehive/config/model.py`: +1 field\
+    \ (`parallel_integration_check`)\n- `litehive/pipeline/_parallel.py`: +`IntegrationCheckResult`\
+    \ dataclass, +`_run_integration_check()` function, +Phase 4 logic in `run_parallel_tasks()`,\
+    \ +`integration_check` field on `ParallelRunSummary`\n- `tests/test_parallel_execution.py`:\
+    \ +4 tests (lines 430-566)\n\nNo changes to sequential pipeline. Scoped correctly."
+  files_changed: []
+  created_at: '2026-04-09T07:57:52+00:00'
+- role: recovery
+  step: accepting
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0107-add-deterministic-integration-stage-for-parallel-worker-outputs/recovery/recovery-003.yaml'
+  files_changed: []
+  created_at: '2026-04-09T09:26:04+00:00'
+- role: planner
+  step: grooming
+  verdict: pass
+  message: 'GROOMING PASS.
+
+
+    I verified that the durable task record was the only grooming gap left. The repository
+    already contains the scoped implementation and QA evidence for this feature:  defines
+    ,  defines  and Phase 4 post-merge integration verification, and  contains focused
+    pass/fail/unconfigured coverage.
+
+
+    I updated  so the task source of truth is no longer blank. The task now has a
+    concrete goal, 7 acceptance criteria, 3 constraints, a 7-step execution plan,
+    , and .
+
+
+    What I verified:
+
+    - The task title now maps to a specific user problem: validate the combined merged
+    state after a parallel batch finishes merging.
+
+    - Acceptance criteria are observable and reviewer-checkable rather than implementation-only.
+
+    - Scope is constrained to the parallel pipeline and config; sequential flow and
+    recovery automation stay out of scope.
+
+    - Repo evidence matches the shaped task: config field, post-merge integration
+    stage, batch report output, failure journaling, and focused tests all exist.
+
+    - Existing prior test evidence recorded on the task is consistent with the shaped
+    scope: ....................                                                     [100%]
+
+    20 passed in 1.66s passed with 20 tests including the new integration-check scenarios;
+    QA also recorded a larger suite run with unrelated pre-existing failures only.
+
+
+    Operator note: the intended CLI path  is currently broken in this workspace. Running  fails
+    with , so I persisted the grooming fields directly in  instead.
+
+
+    Handoff summary for downstream stages:
+
+    - Goal: add deterministic post-merge integration verification for parallel batches.
+
+    - Key outcomes expected: configurable integration command on main worktree, no-op
+    when unset, batch report on every configured run,  stop reason on failure, and
+    task journal evidence for each merged task.
+
+    - Follow-up work remains out of scope: rollback, recovery automation, and per-task
+    blame for integration failures.'
+  files_changed: []
+  created_at: '2026-04-10T14:32:24+00:00'
+- role: planner
+  step: grooming
+  verdict: pass
+  message: 'GROOMING PASS.
+
+
+    I verified that the durable task record was the only grooming gap left. The repository
+    already contains the scoped implementation and QA evidence for this feature: litehive/config/model.py
+    defines parallel_integration_check, litehive/pipeline/_parallel.py defines IntegrationCheckResult
+    and Phase 4 post-merge integration verification, and tests/test_parallel_execution.py
+    contains focused pass/fail/unconfigured coverage.
+
+
+    I updated .litehive/tasks/T-0107-add-deterministic-integration-stage-for-parallel-worker-outputs/task.yaml
+    so the task source of truth is no longer blank. The task now has a concrete goal,
+    7 acceptance criteria, 3 constraints, a 7-step execution plan, pm_complexity=moderate,
+    and planned_effort=m.
+
+
+    What I verified:
+
+    - The task title now maps to a specific user problem: validate the combined merged
+    state after a parallel batch finishes merging.
+
+    - Acceptance criteria are observable and reviewer-checkable rather than implementation-only.
+
+    - Scope is constrained to the parallel pipeline and config; sequential flow and
+    recovery automation stay out of scope.
+
+    - Repo evidence matches the shaped task: config field, post-merge integration
+    stage, batch report output, failure journaling, and focused tests all exist.
+
+    - Existing prior test evidence recorded on the task is consistent with the shaped
+    scope: uv run pytest tests/test_parallel_execution.py -q passed with 20 tests
+    including the new integration-check scenarios; QA also recorded a larger suite
+    run with unrelated pre-existing failures only.
+
+
+    Operator note: the intended CLI path litehive task update is currently broken
+    in this workspace. Running litehive task update T-0107 ... fails with AttributeError:
+    module ''typer'' has no attribute ''get_current_context'', so I persisted the
+    grooming fields directly in task.yaml instead.
+
+
+    Handoff summary for downstream stages:
+
+    - Goal: add deterministic post-merge integration verification for parallel batches.
+
+    - Key outcomes expected: configurable integration command on main worktree, no-op
+    when unset, batch report on every configured run, parallel_integration_failed
+    stop reason on failure, and task journal evidence for each merged task.
+
+    - Follow-up work remains out of scope: rollback, recovery automation, and per-task
+    blame for integration failures.'
+  files_changed: []
+  created_at: '2026-04-10T14:32:29+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Verified the existing T-0107 implementation already satisfies the shaped
+    task contract. Confirmed litehive/config/model.py adds optional parallel_integration_check,
+    litehive/pipeline/_parallel.py adds IntegrationCheckResult plus Phase 4 post-merge
+    integration verification on the main worktree, writes batch reports under .litehive/logs/parallel-integration/,
+    exposes integration_check on ParallelRunSummary, sets stop_reason to parallel_integration_failed
+    on check failure, and appends per-task journal entries for merged tasks when the
+    integration check fails. Confirmed focused coverage in tests/test_parallel_execution.py
+    for pass/fail/unconfigured cases plus direct output capture/report assertions.
+    Fresh verification run in this workspace: uv run pytest tests/test_parallel_execution.py
+    -q -> 20 passed in 1.07s; uv run ruff check --select E402,F401 litehive tests
+    -> All checks passed; required forbidden-noqa shell gate -> passed with exit 0.
+    Acceptance criteria evidence: configured check runs automatically after deterministic
+    merge ordering and before batch completion, is a no-op when unset, preserves parallel_batch_complete
+    on success, switches to parallel_integration_failed on failure, captures command/exit_code/stdout/stderr/timestamp/task_ids/merge_order
+    in the batch report, and remains scoped to the parallel pipeline without changing
+    the sequential flow. No additional code changes were needed in this pass.'
+  files_changed: []
+  created_at: '2026-04-10T14:33:57+00:00'
+- role: qa
+  step: testing
+  verdict: pass
+  message: 'QA PASS for T-0107. I independently verified the deterministic post-merge
+    integration stage in the parallel pipeline and confirmed the task record now matches
+    the implemented scope. Code review evidence: litehive/config/model.py adds optional
+    parallel_integration_check on LitehiveConfig; litehive/pipeline/_parallel.py adds
+    IntegrationCheckResult, stores integration_check on ParallelRunSummary, runs Phase
+    4 after deterministic task-ID merge ordering, writes batch reports under .litehive/logs/parallel-integration/,
+    sets stop_reason to parallel_integration_failed when the configured check exits
+    non-zero, and appends per-task journal entries for merged tasks on failure. Focused
+    test evidence: uv run pytest tests/test_parallel_execution.py -q -> 20 passed
+    in 1.11s; uv run pytest tests/test_parallel_execution.py -q -k ''integration_check
+    or run_integration_check'' -> 4 passed, 16 deselected in 0.53s; uv run pytest
+    tests/test_config.py -q -> 39 passed in 0.60s; uv run pytest tests/test_run_cli.py
+    -q -> 34 passed in 2.80s. Acceptance criteria coverage confirmed: configured integration
+    check auto-runs after merges and before batch completion; no-op when parallel_integration_check
+    is unset; passing check preserves stop_reason parallel_batch_complete; failing
+    check produces stop_reason parallel_integration_failed plus batch report and failure
+    journal entries; report includes command, exit_code, stdout, stderr, timestamp,
+    task_ids, and merge_order; behavior stays scoped to the parallel pipeline and
+    does not alter sequential flow. Note: an earlier implementation note referenced
+    tests/test_config_and_run_cli.py, but in this workspace those checks live in tests/test_config.py
+    and tests/test_run_cli.py; both passed.'
+  files_changed: []
+  created_at: '2026-04-10T14:35:13+00:00'
+- role: reviewer
+  step: accepting
+  verdict: pass
+  message: 'ACCEPTED. I verified the implemented scope matches the shaped task for
+    deterministic post-merge integration verification in the parallel pipeline. Code
+    review confirms litehive/config/model.py adds optional parallel_integration_check
+    on LitehiveConfig; litehive/pipeline/_parallel.py adds IntegrationCheckResult,
+    exposes integration_check on ParallelRunSummary, runs a Phase 4 integration check
+    on the main worktree after deterministic task-ID-ordered merges, writes batch
+    reports under .litehive/logs/parallel-integration/, records task_ids/merge_order/command/exit_code/stdout/stderr/timestamp,
+    sets stop_reason to parallel_integration_failed on non-zero exit, and appends
+    failure journal entries to each merged task. The behavior remains scoped to the
+    parallel pipeline; the sequential single-task flow is unchanged. Fresh verification
+    in this workspace: uv run pytest tests/test_parallel_execution.py -q -> 20 passed
+    in 1.18s; uv run pytest tests/test_parallel_execution.py -q -k ''integration_check
+    or run_integration_check'' -> 4 passed, 16 deselected in 0.56s; uv run pytest
+    tests/test_config.py -q -> 39 passed in 0.60s; uv run pytest tests/test_run_cli.py
+    -q -> 34 passed in 2.86s. Acceptance criteria coverage: configured integration
+    check runs automatically after all successful merges and before batch completion;
+    no-op when parallel_integration_check is unset; passing check preserves stop_reason
+    parallel_batch_complete; failing check produces stop_reason parallel_integration_failed
+    plus batch report and per-task journal evidence; report content is sufficient
+    for diagnosis; focused tests cover pass, fail, no-op, and output capture scenarios.
+    Note: git status shows a modified task record file (.litehive/tasks/T-0107-add-deterministic-integration-stage-for-parallel-worker-outputs/task.yaml)
+    from grooming persistence, but it does not affect the acceptance outcome.'
+  files_changed: []
+  created_at: '2026-04-10T14:36:14+00:00'
+- role: planner
+  step: grooming
+  verdict: pass
+  message: "TASK_UPDATE:\n  goal: >\n    Add a deterministic post-merge integration\
+    \ verification stage for parallel task\n    batches. After the runner merges a\
+    \ batch of independently executed parallel\n    tasks back to main, Litehive should\
+    \ run one configurable integration check\n    against the combined merged state,\
+    \ record the exact batch inputs and result,\n    and surface a stable success\
+    \ or failure outcome for the batch. This task is\n    about integrating outputs\
+    \ from parallel task-level execution, not spawning\n    multiple workers inside\
+    \ a single task.\n  acceptance_criteria:\n    - After the parallel merge phase\
+    \ finishes and at least one task merged successfully, Litehive automatically runs\
+    \ one integration verification step against the combined merged state before treating\
+    \ the batch as complete.\n    - The integration step is configured through workspace\
+    \ config and is a no-op when no integration check command is configured.\n   \
+    \ - The integration step runs deterministically on the merged main-worktree state,\
+    \ captures the batch task ids and merge order it evaluated, and writes a durable\
+    \ report with the command, exit code, stdout, stderr, and timestamp.\n    - If\
+    \ the integration check passes, the batch keeps the success stop reason and exposes\
+    \ the successful integration result in the parallel-run summary or reporting surface.\n\
+    \    - If the integration check fails, Litehive marks the batch as integration_failed\
+    \ or equivalent, preserves actionable failure evidence, and records which merged\
+    \ tasks were part of the failed batch so recovery can act on the right scope.\n\
+    \    - Focused tests cover configured-pass, configured-fail, and unconfigured\
+    \ no-op paths for the deterministic integration stage without regressing existing\
+    \ sequential pipeline behavior.\n  constraints:\n    - Keep changes scoped to\
+    \ the parallel batch integration path; do not introduce intra-task worker fanout\
+    \ or a new multi-worker execution model inside one task.\n    - Preserve runner\
+    \ ownership of scheduling, merge order, and verdict or state transitions; agents\
+    \ may help with recovery, but the integration-stage trigger and outcome handling\
+    \ stay deterministic in local code.\n    - Do not change the sequential single-task\
+    \ pipeline semantics except where shared reporting or config surfaces must expose\
+    \ the new parallel-batch integration result.\n  plan:\n    - Inspect the existing\
+    \ parallel execution flow and identify the exact point after deterministic merge\
+    \ completion where batch-level integration verification should run.\n    - Add\
+    \ a configuration-backed integration check hook for parallel batches, execute\
+    \ it against the merged main-worktree state, and persist a report that captures\
+    \ batch identity, command, exit status, and output.\n    - Wire the integration\
+    \ result into the parallel run summary and stop-reason or state handling so success\
+    \ preserves normal completion and failure produces a distinct actionable batch-level\
+    \ failure outcome.\n    - Add focused tests for pass, fail, and unconfigured cases\
+    \ and confirm existing sequential pipeline behavior remains unchanged.\n  pm_complexity:\
+    \ moderate\n  planned_effort: m\n  priority: medium\n\nGrooming pass. The task\
+    \ title is ambiguous, but the durable task shape above narrows scope to deterministic\
+    \ post-merge verification for parallel task batches. This explicitly excludes\
+    \ parallel workers inside one task and aligns the work with the already-established\
+    \ task-level parallel execution model.\n"
+  files_changed: []
+  created_at: '2026-04-13T02:17:38+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: "Implemented deterministic post-batch integration verification for task-pool\
+    \ runs.\n\nWhat changed:\n- Added optional `parallel_integration_check` config\
+    \ to `LitehiveConfig` and the workspace config template.\n- Extended `TaskPoolRunSummary`\
+    \ with `integration_check` metadata and introduced `IntegrationCheckResult`.\n\
+    - Updated `litehive/pipeline/compat.py` so `drain_task_pool()` runs one deterministic\
+    \ integration check on the merged main checkout after a successful batch completes\
+    \ naturally (`queue_exhausted` / `blocked_tasks_remaining`).\n- The integration\
+    \ stage captures command, exit code, stdout, stderr, timestamp, merged task ids\
+    \ / merge order, current HEAD SHA, and writes a batch report under `.litehive/logs/parallel-integration/`.\n\
+    - Failed integration checks now flip the batch stop reason to `parallel_integration_failed`\
+    \ and append actionable journal entries to each merged task.\n\nKey code references:\n\
+    - `litehive/config/model.py:42`\n- `litehive/config/pool_types.py:24-43`\n- `litehive/pipeline/compat.py:28-212`\n\
+    - `tests/test_parallel_integration.py:37-126`\n- `tests/test_config.py:389-406`\n\
+    \nVerification:\n- `uv run ruff check --select E402,F401 litehive tests` \u2705\
+    \n- forbidden-noqa check command from stage prompt \u2705\n- `uv run pytest -q\
+    \ tests/test_parallel_integration.py tests/test_config.py` \u2192 46 passed \u2705\
+    \n- `uv run pytest -q` \u2192 525 passed, 5 skipped in 94.75s \u2705\n\nBehavior\
+    \ verified:\n- Configured check pass => `parallel_batch_complete` with report\
+    \ file written.\n- Configured check fail => `parallel_integration_failed`, report\
+    \ written, task journals updated.\n- Unconfigured check => no-op, existing `queue_exhausted`\
+    \ behavior preserved.\n"
+  files_changed: []
+  created_at: '2026-04-13T02:30:33+00:00'
+- role: qa
+  step: testing
+  verdict: reject
+  message: 'REJECT
+
+
+    Observed regression:
+
+    `drain_task_pool()` can report `parallel_batch_complete` even when the pool actually
+    stopped with blocked work remaining after a failed task. In `litehive/pipeline/compat.py:115-140`,
+    `_should_run_parallel_integration_check()` allows `blocked_tasks_remaining`, and
+    `_finalize_pool_run()` overwrites that stop reason with `parallel_batch_complete`
+    whenever the integration command succeeds.
+
+
+    EXPECTED behavior:
+
+    The deterministic integration stage should only run after a batch completes naturally,
+    and it must not mask unresolved blocked work or a prior task failure. A pool run
+    that ends with blocked tasks remaining should keep a stop reason that reflects
+    the blocked/incomplete state unless there is an explicit product decision otherwise.
+
+
+    OBSERVED behavior:
+
+    A mixed batch with one successful task, one failed task (`merge_failed`), and
+    one dependent blocked task returns:
+
+    - `stop_reason == "parallel_batch_complete"`
+
+    - `blocked_count == 1`
+
+    - `blocked_task_ids == ["T-0003"]`
+
+    - `integration_success == True`
+
+    - `integration_task_ids == ["T-0001"]`
+
+    So the summary claims the batch completed even though task `T-0003` is still blocked
+    by the failed task.
+
+
+    Reproduction steps:
+
+    1. Create a temp workspace with `parallel_integration_check` configured, e.g.
+    `${sys.executable} -c "print(''ok'')"`.
+
+    2. Create three tasks: `T-0001`, `T-0002`, and `T-0003` where `T-0003` depends
+    on `T-0002`.
+
+    3. Monkeypatch `litehive.pipeline.compat.run_task` so the first task returns `final_stage="done"`
+    and the second returns a non-done result while persisting `status="merge_failed"`,
+    `pipeline_status="merge_failed"`.
+
+    4. Call `drain_task_pool(root)`.
+
+    5. Observe that the summary reports `parallel_batch_complete` despite `summary.blocked`
+    still containing `T-0003`.
+
+
+    Validation performed:
+
+    - `pytest -q tests/test_parallel_integration.py tests/test_config.py` passes.
+
+    - Independent repro above fails semantically and demonstrates the incorrect final
+    summary.
+
+
+    Acceptance/task fit not met:
+
+    The task goal is to add a deterministic integration stage for parallel worker
+    outputs. The current implementation is not safe because it can misreport an incomplete/blocked
+    pool run as a completed parallel batch.
+
+    '
+  files_changed: []
+  created_at: '2026-04-13T02:35:42+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: "Fixed the QA-reported regression in the deterministic post-batch integration\
+    \ stage.\n\nQA issue addressed:\n- `drain_task_pool()` was incorrectly allowed\
+    \ to run the integration check for `blocked_tasks_remaining`, and a successful\
+    \ check could overwrite that stop reason with `parallel_batch_complete`.\n\nFix\
+    \ implemented:\n- Narrowed `_should_run_parallel_integration_check()` in `litehive/pipeline/compat.py`\
+    \ so the integration stage only runs when the pool stop reason is exactly `queue_exhausted`.\n\
+    - Added a second guard requiring every execution in the batch to have completed\
+    \ successfully (`final_status == \"done\"`). Mixed success/failure batches no\
+    \ longer run the integration check.\n- Added a focused regression test proving\
+    \ `_finalize_pool_run()` preserves `blocked_tasks_remaining` and does not create\
+    \ an integration report when blocked work remains after a failed task.\n\nKey\
+    \ code references:\n- `litehive/pipeline/compat.py:131-140`\n- `tests/test_parallel_integration.py:109-141`\n\
+    \nVerification run after the fix:\n- `uv run ruff check --select E402,F401 litehive\
+    \ tests` \u2705\n- forbidden-noqa check command from stage prompt \u2705\n- `uv\
+    \ run pytest -q tests/test_parallel_integration.py` \u2192 4 passed \u2705\n-\
+    \ `uv run pytest -q` \u2192 526 passed, 5 skipped in 98.31s \u2705\n\nNet behavior\
+    \ now:\n- Integration check runs only after a fully successful completed batch.\n\
+    - `blocked_tasks_remaining` is preserved when blocked work remains.\n- `parallel_batch_complete`\
+    \ is only reported for a naturally exhausted successful batch.\n"
+  files_changed: []
+  created_at: '2026-04-13T02:39:42+00:00'
+- role: qa
+  step: testing
+  verdict: pass
+  message: "PASS\n\nValidated the regression fix for the deterministic integration\
+    \ stage.\n\nWhat I verified:\n- `litehive/pipeline/compat.py` now only runs the\
+    \ integration check when `stop_reason == \"queue_exhausted\"`.\n- It also requires\
+    \ every recorded execution in the batch to be successfully merged (`final_status\
+    \ == \"done\"`) before the integration check can run.\n\nFocused test results:\n\
+    - `pytest -q tests/test_parallel_integration.py tests/test_config.py`\n- Result:\
+    \ 47 passed, 2 warnings\n\nIndependent regression repro:\n- Re-ran the exact mixed-batch\
+    \ scenario from the previous rejection: one successful task, one `merge_failed`\
+    \ task, and one dependent blocked task, with `parallel_integration_check` configured.\n\
+    - Observed result after the fix:\n  - `stop_reason == \"blocked_tasks_remaining\"\
+    `\n  - `blocked_count == 1`\n  - `blocked_task_ids == [\"T-0003\"]`\n  - `integration_check\
+    \ is None`\n- This matches expected behavior and confirms the summary no longer\
+    \ misreports an incomplete batch as `parallel_batch_complete`.\n\nQA verdict:\n\
+    - Pass. The previously reported masking bug is fixed, and I did not find a new\
+    \ regression in the scoped validation surface.\n"
+  files_changed: []
+  created_at: '2026-04-13T02:43:00+00:00'
+- role: reviewer
+  step: accepting
+  verdict: pass
+  message: 'PASS
+
+
+    Reviewed the regression fix for deterministic parallel-worker integration.
+
+
+    What I verified:
+
+    - `litehive/pipeline/compat.py` now gates the integration stage on `stop_reason
+    == "queue_exhausted"` in `_should_run_parallel_integration_check()`, so blocked
+    queues no longer get their stop reason overwritten.
+
+    - The same gate also requires every execution in the batch to be successfully
+    merged (`result.final_status == "done"`) before the integration check can run.
+
+    - `_finalize_pool_run()` preserves `blocked_tasks_remaining` when blocked work
+    remains, and only emits `parallel_batch_complete` / `parallel_integration_failed`
+    after a valid post-batch integration run.
+
+    - Config surface for `parallel_integration_check` is wired through the model/template
+    and covered by config tests.
+
+
+    Test evidence:
+
+    - Ran `pytest -q tests/test_parallel_integration.py tests/test_config.py`
+
+    - Result: `47 passed, 2 warnings`
+
+
+    Outcome judgment:
+
+    - Accepting as done. The reviewed change matches the stated goal and resolves
+    the reported regression without an evident product-facing gap in the tested path.
+
+    '
+  files_changed: []
+  created_at: '2026-04-13T02:44:29+00:00'

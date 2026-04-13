@@ -1,21 +1,15 @@
 id: T-0296
 slug: move-worktrees-out-of-repo-to-local-state
 title: Move worktrees out of repo to ~/.local/state/litehive/<wid>/worktrees/
-depends_on:
-- T-0291
+created_at: '2026-04-10T06:48:59+00:00'
 task_type: null
-model: null
 mode: implementation
 pipeline_mode: full
-status: queued
-flag_reason: null
-flag_count: 0
-pipeline_status: backlog
 priority: medium
 pm_complexity: null
 planned_effort: null
-created_at: '2026-04-10T06:48:59+00:00'
-updated_at: '2026-04-10T06:48:59+00:00'
+depends_on:
+- T-0291
 goal: Git worktrees should never live inside the repo they belong to (gitignore helps
   but nested .git directories cause confusion and archival risks). Move worktrees
   to $XDG_STATE_HOME/litehive/<workspace-id>/worktrees/<task-id>/. The workspace-id
@@ -31,19 +25,9 @@ acceptance_criteria:
 constraints: []
 plan: []
 human_checkpoints: []
-subagents: []
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0296 move-worktrees-out-of-repo-to-local-state'
-  commit_sha: null
-  checkpoint_base_sha: null
-  checkpoint_attempts: 0
-  rolled_back_checkpoint_attempt: null
-  merge_agent_attempts: 0
-  worktree_path: null
-retry_policy:
-  max_retries: null
-  stage_retry_limit: null
 created_from: null
 upstream_origin: null
 github_origin: null

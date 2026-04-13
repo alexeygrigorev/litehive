@@ -1,19 +1,14 @@
 id: T-0160
 slug: refactor-models-py-into-models-module
 title: Refactor models.py into models/ module
-depends_on: []
+created_at: '2026-04-04T20:46:38+00:00'
 task_type: null
-engine: null
-model: null
 mode: implementation
 pipeline_mode: full
-status: wont_do
-pipeline_status: implementing
 priority: medium
 pm_complexity: null
 planned_effort: null
-created_at: '2026-04-04T20:46:38+00:00'
-updated_at: '2026-04-08T15:27:09+00:00'
+depends_on: []
 goal: Split models.py into models/__init__.py with separate files grouping related
   models (task models, report models, runtime models, engine models).
 acceptance_criteria:
@@ -22,47 +17,9 @@ acceptance_criteria:
 constraints: []
 plan: []
 human_checkpoints: []
-subagents:
-- id: SA-0001
-  role: planner
-  engine: opencode
-  status: completed
-  path: subagents/SA-0001-planner
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0002
-  role: swe
-  engine: opencode
-  status: interrupted
-  path: subagents/SA-0002-swe
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0003
-  role: swe
-  engine: codex
-  status: completed
-  path: subagents/SA-0003-swe
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0004
-  role: recovery
-  engine: codex
-  status: failed
-  path: subagents/SA-0004-recovery
-  sandboxed: false
-  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0160 refactor-models-py-into-models-module'
-  commit_sha: null
-  checkpoint_base_sha: null
-  checkpoint_attempts: 0
-  rolled_back_checkpoint_attempt: null
-  merge_agent_attempts: 0
-  worktree_path: null
-retry_policy:
-  max_retries: null
-  stage_retry_limit: null
 created_from: null
 upstream_origin: null
 github_origin: null

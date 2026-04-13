@@ -1,0 +1,115 @@
+- role: planner
+  step: grooming
+  verdict: pass
+  message: "Shaped T-0353 down to the remaining contract gaps in `prompt_serializer.py`.\
+    \ The core stage-aware filtering already exists in commit `4d01572d` (`litehive/pipeline/prompt_serializer.py`),\
+    \ but the task is not actually done: current deduplication skips reject thread\
+    \ entries by `reason` only, while the contract requires dedup by `source + reason`,\
+    \ and the serializer tests do not yet cover the stage-aware thread rules. Keep\
+    \ this task scoped to serializer alignment plus targeted tests only.\n\nTASK_UPDATE:\n\
+    ```yaml\ngoal: Tighten the existing stage-aware prompt thread filtering so the\
+    \ serialized prompt matches the retry-context contract exactly and is locked down\
+    \ with focused prompt_serializer tests.\nacceptance_criteria:\n  - Implementing\
+    \ prompts on retry include only the latest grooming pass plus the separate last_rejection\
+    \ section; the thread must not repeat a rejection when its source and reason match\
+    \ last_rejection, and must not include recovery comments or stale implementing/testing\
+    \ history.\n  - Testing prompts include only the latest implementing pass in the\
+    \ discussion thread.\n  - Accepting prompts include only the latest implementing\
+    \ pass and the latest testing pass in the discussion thread.\n  - Individual thread\
+    \ messages are capped at 500 characters and use the truncation marker when shortened.\n\
+    \  - Existing prompt_serializer tests pass, and new tests cover implementing/testing/accepting\
+    \ stage filtering, recovery comment exclusion, last_rejection deduplication by\
+    \ source plus reason, and per-entry truncation.\nconstraints:\n  - Keep changes\
+    \ scoped to litehive/pipeline/prompt_serializer.py and targeted prompt_serializer\
+    \ tests.\n  - Do not add retry work-summary serialization or engine-session reset\
+    \ behavior in this task; track those separately.\nplan:\n  - Compare the current\
+    \ serializer behavior with docs/plans/prompt-context-management.md and this task\
+    \ contract, then identify the remaining mismatches.\n  - Adjust thread deduplication\
+    \ so last_rejection matching is based on source plus reason while preserving the\
+    \ current stage-aware filtering rules.\n  - Add focused tests that assert the\
+    \ exact thread contents for implementing, testing, and accepting prompts, plus\
+    \ recovery-comment exclusion and 500-character truncation.\n  - Run pytest -q\
+    \ tests/test_pipeline_v2_prompt_serializer.py and keep the change set limited\
+    \ to the serializer and its tests.\npm_complexity: moderate\nplanned_effort: s\n\
+    priority: critical\n```\n\nFollow-up tasks created to keep scope clean:\n- `T-0355`\
+    \ Add prior-work retry summary to prompts from `state.last_report`\n- `T-0356`\
+    \ Start fresh engine sessions on cross-agent retries\n\nVerification:\n- `pytest\
+    \ -q tests/test_pipeline_v2_prompt_serializer.py` currently passes (`7 passed`),\
+    \ but coverage for the shaped contract is still missing.\n- `litehive agent update`\
+    \ was blocked by runner state (`WorkspaceConflictError: runner is actively using\
+    \ task state that cannot be changed concurrently: T-0353 (workspace.active_task_id)`),\
+    \ so rely on this TASK_UPDATE as the shaping source for the next agent.\n"
+  files_changed: []
+  created_at: '2026-04-12T23:28:47+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: "Implemented the remaining T-0353 prompt serializer gaps in `litehive/pipeline/prompt_serializer.py`\
+    \ and added focused coverage in `tests/test_pipeline_v2_prompt_serializer.py`.\n\
+    \nWhat changed:\n- Tightened `last_rejection` deduplication to match on `source\
+    \ + reason` instead of `reason` only, using thread entry `source` or `role` as\
+    \ the source key.\n- For `implementing` prompts with `last_rejection` present,\
+    \ the discussion thread now keeps only the latest grooming pass; it no longer\
+    \ falls back to older reject entries after dedup.\n- Added serializer tests covering:\n\
+    \  - implementing retry thread includes only truncated grooming context plus separate\
+    \ `last_rejection`\n  - recovery `comment` entries are excluded\n  - reject dedup\
+    \ uses `source + reason` and does not drop same-reason rejects from a different\
+    \ source\n  - testing thread includes only the last implementing pass\n  - accepting\
+    \ thread includes only the last implementing pass and last testing pass\n  - per-entry\
+    \ 500-char truncation marker behavior in the thread output\n\nAcceptance criteria\
+    \ evidence:\n1. Implementing retry contract covered by `test_implementing_retry_thread_keeps_only_grooming_and_dedups_last_rejection_by_source_and_reason`;\
+    \ it asserts only the grooming pass remains in `Discussion thread`, the message\
+    \ is truncated with `\u2026(truncated)`, and stale recovery / SWE / QA entries\
+    \ are absent while `last_rejection` is rendered separately.\n2. QA contract covered\
+    \ by `test_testing_thread_keeps_only_last_implementing_pass`.\n3. Accepting contract\
+    \ covered by `test_accepting_thread_keeps_only_last_implementing_and_testing_passes`.\n\
+    4. Recovery comment exclusion covered in the implementing retry test above (`bookkeeping`\
+    \ absent).\n5. Per-entry 500-char cap covered in the implementing retry test via\
+    \ exact truncated expected line.\n6. Source+reason dedup covered by the implementing\
+    \ retry test plus `test_thread_does_not_dedup_reject_when_source_differs`.\n7.\
+    \ Verification:\n   - `uv run ruff check --select E402,F401 litehive tests` ->\
+    \ passed\n   - `uv run pytest -q tests/test_pipeline_v2_prompt_serializer.py`\
+    \ -> 11 passed\n   - `uv run pytest -q` -> 518 passed, 5 skipped, 2 warnings in\
+    \ 125.21s\n"
+  files_changed: []
+  created_at: '2026-04-12T23:33:17+00:00'
+- role: qa
+  step: testing
+  verdict: pass
+  message: "PASS\n\nValidated `litehive/pipeline/prompt_serializer.py` against T-0353\
+    \ acceptance criteria.\n\nObserved behavior:\n- Implementing retry includes only\
+    \ the latest grooming pass in the discussion thread, capped to 500 chars with\
+    \ `\u2026(truncated)`, while the matching QA rejection is rendered only in `Last\
+    \ rejection` and not duplicated in the thread.\n- Testing includes only the latest\
+    \ implementing pass.\n- Accepting includes only the latest implementing pass and\
+    \ latest testing pass.\n- Recovery `verdict=comment` entries are excluded from\
+    \ thread rendering.\n- Deduplication matches `last_rejection` by `source + reason`\
+    \ and preserves distinct rejects from other sources.\n\nValidation run:\n- `pytest\
+    \ -q tests/test_pipeline_v2_prompt_serializer.py` -> 11 passed\n- `pytest -q -k\
+    \ prompt_serializer` -> 11 passed\n\nAcceptance criteria 1-7 are met by code and\
+    \ covered by tests in `tests/test_pipeline_v2_prompt_serializer.py`.\n"
+  files_changed: []
+  created_at: '2026-04-12T23:36:13+00:00'
+- role: reviewer
+  step: accepting
+  verdict: pass
+  message: "Pass. T-0353 is done and the implementation matches the requested stage-aware\
+    \ prompt filtering behavior.\n\nValidated in `litehive/pipeline/prompt_serializer.py`:\n\
+    - Implementing retry thread keeps only the latest grooming pass and omits reject\
+    \ entries from the thread when `last_rejection` is present.\n- `last_rejection`\
+    \ dedup now matches on `source + reason`, so only the exact same rejection is\
+    \ suppressed from the thread.\n- Recovery bookkeeping entries with `role=recovery`\
+    \ and `verdict=comment` are filtered out before stage selection.\n- Testing keeps\
+    \ only the latest implementing pass.\n- Accepting keeps only the latest implementing\
+    \ pass and latest testing pass.\n- Thread messages are capped to 500 chars with\
+    \ the `\u2026(truncated)` marker.\n\nVerification:\n- Ran `pytest -q tests/test_pipeline_v2_prompt_serializer.py`\n\
+    - Result: 11 passed\n\nAcceptance criteria check:\n- AC1: covered by `test_implementing_retry_thread_keeps_only_grooming_and_dedups_last_rejection_by_source_and_reason`\n\
+    - AC2: covered by `test_testing_thread_keeps_only_last_implementing_pass`\n- AC3:\
+    \ covered by `test_accepting_thread_keeps_only_last_implementing_and_testing_passes`\n\
+    - AC4: covered by the implementing retry test asserting recovery comment removal\n\
+    - AC5: covered by the implementing retry test asserting 500-char truncation marker\n\
+    - AC6: covered by the implementing retry test plus `test_thread_does_not_dedup_reject_when_source_differs`\n\
+    - AC7: existing prompt serializer tests pass and new targeted tests were added\
+    \ in `tests/test_pipeline_v2_prompt_serializer.py`\n"
+  files_changed: []
+  created_at: '2026-04-12T23:37:03+00:00'

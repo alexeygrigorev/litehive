@@ -1,0 +1,33 @@
+id: T-0365
+slug: recovery-agent-only-handles-crash-timeout-not
+title: Recovery agent only handles Crash/Timeout, not semantic Reject
+created_at: '2026-04-13T07:24:39+00:00'
+task_type: null
+mode: implementation
+pipeline_mode: full
+priority: medium
+pm_complexity: null
+planned_effort: null
+depends_on: []
+goal: The recovery agent currently runs for ANY reject in terminal stages. But it
+  can only meaningfully fix infrastructure crashes (engine died, timeout, stale session).
+  For SemanticReject (QA disagrees on acceptance criteria), it just reads the same
+  artifacts and fails. 3+ minutes wasted per cycle. Gate recovery on origin=Crash/Timeout
+  only; SemanticReject goes directly to failed or to reviewer override (see T-0356).
+acceptance_criteria:
+- "1. Rule table change: recovering is only reachable from Crash, Timeout, Blocked\
+  \ \u2014 not from Reject."
+- 2. SemanticReject at terminal retry exhaustion routes to failed directly or to reviewer-with-override
+  (if T-0356 landed).
+- '3. Recovery agent prompt clarifies: ''you fix litehive infrastructure bugs, not
+  agent judgment disagreements''.'
+- 4. Integration test for both paths.
+constraints: []
+plan: []
+human_checkpoints: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0365 recovery-agent-only-handles-crash-timeout-not'
+created_from: null
+upstream_origin: null
+github_origin: null

@@ -1,21 +1,14 @@
 id: T-0246
 slug: add-litehive-worktree-command-to-list-and-clean
 title: Add litehive worktree command to list and clean worktrees
-depends_on: []
+created_at: '2026-04-09T08:37:21+00:00'
 task_type: null
-engine: null
-model: null
 mode: implementation
 pipeline_mode: full
-status: done
-flag_reason: null
-flag_count: 0
-pipeline_status: done
 priority: medium
 pm_complexity: null
 planned_effort: null
-created_at: '2026-04-09T08:37:21+00:00'
-updated_at: '2026-04-09T12:32:19+00:00'
+depends_on: []
 goal: Add litehive worktree ls to show all worktrees with their task status and whether
   they have changes. Add litehive worktree clean to remove worktrees for closed/deferred/done
   tasks. This replaces manual git worktree list + status checking.
@@ -28,54 +21,9 @@ acceptance_criteria:
 constraints: []
 plan: []
 human_checkpoints: []
-subagents:
-- id: SA-0001
-  role: planner
-  engine: codex
-  status: completed
-  path: subagents/SA-0001-planner
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0002
-  role: swe
-  engine: codex
-  status: completed
-  path: subagents/SA-0002-swe
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0003
-  role: qa
-  engine: codex
-  status: completed
-  path: subagents/SA-0003-qa
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0004
-  role: reviewer
-  engine: codex
-  status: completed
-  path: subagents/SA-0004-reviewer
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0005
-  role: merge-resolver
-  engine: claude
-  status: completed
-  path: subagents/SA-0005-merge-resolver
-  sandboxed: false
-  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0246 add-litehive-worktree-command-to-list-and-clean'
-  commit_sha: 7b6f83957f6dbae186a890b71dc6b9c9f5e247de
-  checkpoint_base_sha: 279b5ab8a81fdd607590cedd4443ca969284dd94
-  checkpoint_attempts: 1
-  rolled_back_checkpoint_attempt: null
-  merge_agent_attempts: 1
-  worktree_path: null
-retry_policy:
-  max_retries: null
-  stage_retry_limit: null
 created_from: null
 upstream_origin: null
 github_origin: null

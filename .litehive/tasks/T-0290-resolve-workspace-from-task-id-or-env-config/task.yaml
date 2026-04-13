@@ -1,20 +1,14 @@
 id: T-0290
 slug: resolve-workspace-from-task-id-or-env-config
 title: Resolve workspace from task ID or env/config instead of --workspace path
-depends_on: []
+created_at: '2026-04-10T06:15:31+00:00'
 task_type: null
-model: null
 mode: implementation
 pipeline_mode: full
-status: done
-flag_reason: null
-flag_count: 0
-pipeline_status: done
 priority: high
 pm_complexity: null
 planned_effort: null
-created_at: '2026-04-10T06:15:31+00:00'
-updated_at: '2026-04-10T15:43:59+00:00'
+depends_on: []
 goal: 'Remove the ambiguity of --workspace path arguments. Agents should only need
   to pass --task-id T-XXXX or rely on LITEHIVE_TASK_ID env var (which we already inject).
   Workspace root is resolved by walking up from cwd until finding .litehive/ that
@@ -38,61 +32,9 @@ acceptance_criteria:
 constraints: []
 plan: []
 human_checkpoints: []
-subagents:
-- id: SA-0001
-  role: planner
-  engine: codex
-  status: completed
-  path: subagents/SA-0001-planner
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0002
-  role: swe
-  engine: codex
-  status: completed
-  path: subagents/SA-0002-swe
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0003
-  role: swe
-  engine: codex
-  status: completed
-  path: subagents/SA-0003-swe
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0004
-  role: qa
-  engine: codex
-  status: completed
-  path: subagents/SA-0004-qa
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0005
-  role: reviewer
-  engine: codex
-  status: completed
-  path: subagents/SA-0005-reviewer
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0006
-  role: merge-resolver
-  engine: codex
-  status: completed
-  path: subagents/SA-0006-merge-resolver
-  sandboxed: false
-  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0290 resolve-workspace-from-task-id-or-env-config'
-  commit_sha: eff12208f1c495fce7d247a162f7e47fed1afd28
-  checkpoint_base_sha: f5f2739ad3e3b403a1e2cefdcc236cea3cc8b681
-  checkpoint_attempts: 1
-  rolled_back_checkpoint_attempt: null
-  merge_agent_attempts: 1
-  worktree_path: null
-retry_policy:
-  max_retries: null
-  stage_retry_limit: null
 created_from: null
 upstream_origin: null
 github_origin: null

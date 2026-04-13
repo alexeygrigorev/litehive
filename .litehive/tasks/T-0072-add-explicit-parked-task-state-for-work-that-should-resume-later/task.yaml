@@ -1,20 +1,14 @@
 id: T-0072
 slug: add-explicit-parked-task-state-for-work-that-should-resume-later
 title: Add explicit parked task state for work that should resume later
-depends_on: []
+created_at: '2026-04-01T06:36:00+00:00'
 task_type: null
-engine: null
-model: null
 mode: implementation
 pipeline_mode: full
-status: done
-flag_reason: null
-pipeline_status: done
 priority: medium
 pm_complexity: moderate
 planned_effort: m
-created_at: '2026-04-01T06:36:00+00:00'
-updated_at: '2026-04-09T08:00:30+00:00'
+depends_on: []
 goal: Replace the current magic-string handling for user-stopped work with an explicit
   parked task lifecycle state so Litehive can distinguish resumable system interruptions
   from intentionally parked tasks in durable state, CLI output, repair logic, and
@@ -51,89 +45,9 @@ plan:
 - Add focused tests covering parked versus interrupted lifecycle behavior and update
   the state-machine documentation to match the new contract.
 human_checkpoints: []
-subagents:
-- id: SA-0298
-  role: planner
-  engine: claude
-  status: running
-  path: subagents/SA-0298-planner
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0299
-  role: recovery
-  engine: claude
-  status: completed
-  path: subagents/SA-0299-recovery
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0300
-  role: planner
-  engine: claude
-  status: completed
-  path: subagents/SA-0300-planner
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0301
-  role: swe
-  engine: claude
-  status: completed
-  path: subagents/SA-0301-swe
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0302
-  role: swe
-  engine: claude
-  status: completed
-  path: subagents/SA-0302-swe
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0303
-  role: swe
-  engine: claude
-  status: completed
-  path: subagents/SA-0303-swe
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0304
-  role: swe
-  engine: claude
-  status: completed
-  path: subagents/SA-0304-swe
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0305
-  role: swe
-  engine: claude
-  status: completed
-  path: subagents/SA-0305-swe
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0306
-  role: qa
-  engine: claude
-  status: completed
-  path: subagents/SA-0306-qa
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0307
-  role: reviewer
-  engine: claude
-  status: completed
-  path: subagents/SA-0307-reviewer
-  sandboxed: false
-  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0072 add-explicit-parked-task-state-for-work-that-should-resume-later'
-  commit_sha: 73094a258161594c3cac6bbca6771e81dab26ba9
-  checkpoint_base_sha: 45e0b1f8fe80b4427f6c50fd0de39adb6db3dc8e
-  checkpoint_attempts: 1
-  rolled_back_checkpoint_attempt: null
-  merge_agent_attempts: 0
-  worktree_path: null
-retry_policy:
-  max_retries: null
-  stage_retry_limit: null
 created_from: null
 upstream_origin: null
 github_origin: null

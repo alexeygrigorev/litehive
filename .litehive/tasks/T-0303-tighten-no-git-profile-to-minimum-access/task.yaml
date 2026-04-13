@@ -1,21 +1,15 @@
 id: T-0303
 slug: tighten-no-git-profile-to-minimum-access
 title: 'Tighten no-git profile to minimum access: workspace + python + uv only'
-depends_on:
-- T-0302
+created_at: '2026-04-10T10:10:31+00:00'
 task_type: null
-model: null
 mode: implementation
 pipeline_mode: full
-status: queued
-flag_reason: null
-flag_count: 0
-pipeline_status: backlog
 priority: medium
 pm_complexity: null
 planned_effort: null
-created_at: '2026-04-10T10:10:31+00:00'
-updated_at: '2026-04-10T10:10:31+00:00'
+depends_on:
+- T-0302
 goal: "The current BWRAP_SYSTEM_RO_BINDS constant mounts all of /usr, /lib, /lib64,\
   \ /bin, /sbin, /etc/alternatives, /etc/resolv.conf, /etc/ssl, /etc/ca-certificates,\
   \ /etc/ld.so.cache \u2014 which gives the agent access to curl, ssh, wget, gh, apt,\
@@ -38,19 +32,9 @@ acceptance_criteria:
 constraints: []
 plan: []
 human_checkpoints: []
-subagents: []
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0303 tighten-no-git-profile-to-minimum-access'
-  commit_sha: null
-  checkpoint_base_sha: null
-  checkpoint_attempts: 0
-  rolled_back_checkpoint_attempt: null
-  merge_agent_attempts: 0
-  worktree_path: null
-retry_policy:
-  max_retries: null
-  stage_retry_limit: null
 created_from: null
 upstream_origin: null
 github_origin: null

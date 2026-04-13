@@ -1,0 +1,146 @@
+- role: planner
+  step: grooming
+  verdict: pass
+  message: "Shaped the task around the existing live-subagent timeout and retry pipeline.\n\
+    \nThe repo already has generic inactivity-timeout plumbing for subagents (`subagent_inactivity_timeout_seconds`,\
+    \ currently 360s), timeout classification as retryable, and continuation/resume\
+    \ support. The real gap for this task is to make the 5-minute behavior explicit\
+    \ for Codex live execution, ensure the retry path is the intended automatic restart\
+    \ path, and cover it with docs/tests. Do not broaden this into daemon-level stale-runner\
+    \ recovery; that is a separate concern already represented by `inactivity_timeout_seconds`.\n\
+    \nTASK_UPDATE:\n  goal: >-\n    Detect stalled live Codex execution after 5 minutes\
+    \ without new output and\n    recover automatically by treating it as a retryable\
+    \ stage restart, reusing\n    continuation/resume state when available.\n  acceptance_criteria:\n\
+    \    - >-\n      Live Codex subagent runs use a 300-second inactivity threshold\
+    \ by default,\n      and the threshold remains configurable through workspace\
+    \ config instead of\n      being hardcoded in the adapter.\n    - >-\n      If\
+    \ no new stdout arrives for the configured threshold, Litehive terminates\n  \
+    \    the stale Codex process, records the timeout in session/report artifacts,\n\
+    \      and classifies the result as a retryable `timeout` failure.\n    - >-\n\
+    \      The pipeline's existing retry flow performs the automatic restart for that\n\
+    \      stage after an inactivity timeout; when a continuation/resume id is\n \
+    \     available, the restarted Codex turn receives it so work can continue from\n\
+    \      the prior session instead of starting fresh.\n    - >-\n      Workspace\
+    \ config templates and user-facing docs describe the 5-minute\n      default and\
+    \ clarify that this behavior applies to live subagent output\n      stalls, not\
+    \ daemon-level stale-runner recovery.\n    - >-\n      Automated tests cover timeout\
+    \ detection, retry classification, and\n      continuation/resume handoff for\
+    \ the restarted Codex turn.\n  constraints:\n    - Keep changes scoped to Codex/live\
+    \ subagent inactivity handling.\n    - Do not redesign workspace-level `inactivity_timeout_seconds`\
+    \ or daemon restart behavior in this task.\n    - Reuse the existing retry/continuation\
+    \ path instead of introducing a second restart mechanism.\n  plan:\n    - >-\n\
+    \      Audit the current live subagent timeout path in `litehive/agents/manager.py`,\n\
+    \      `litehive/agents/session.py`, and the Heru/Codex adapter boundary to confirm\n\
+    \      where the 360-second default is sourced and how timeout failures propagate.\n\
+    \    - >-\n      Update the default/wiring so Codex live execution enforces a\
+    \ 300-second\n      inactivity threshold and still surfaces a retryable `timeout`\
+    \ failure with\n      the expected transcript/session metadata.\n    - >-\n  \
+    \    Verify the automatic restart path uses the existing same-stage retry flow\n\
+    \      and preserves any available continuation/resume id for the next Codex turn.\n\
+    \    - >-\n      Update config templates/docs and add regression tests for timeout\n\
+    \      detection, retry classification, and resumed retry behavior.\n  pm_complexity:\
+    \ moderate\n  planned_effort: m\n  task_type: adapter\n"
+  files_changed: []
+  created_at: '2026-04-13T00:51:42+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Implemented T-0084 by making the Codex live inactivity timeout explicit
+    at 5 minutes and documenting the automatic restart path.
+
+
+    Evidence:
+
+    - Default subagent inactivity timeout is now a shared constant set to 300.0 seconds
+    in litehive/config/model.py:18-46.
+
+    - Checked-in workspace/template config now advertises 300.0 seconds in .litehive/config.yaml:107
+    and litehive/cli/templates/workspace_config.yaml:61-63.
+
+    - Codex live execution coverage now asserts SubagentManager forwards inactivity_timeout_seconds
+    == 300.0 into Codex run_live in tests/test_tasks_and_subagents.py:2579-2593.
+
+    - Config default coverage tracks the new default in tests/test_config.py:504-508.
+
+    - Operator docs now state the 5-minute Codex timeout and retryable automatic restart
+    path in README.md:158-165,193-195 and docs/engines.md (Codex Live Timeout section).
+
+
+    Verification:
+
+    - uv run pytest -q tests/test_config.py tests/test_tasks_and_subagents.py -> 75
+    passed, 1 warning in 5.26s
+
+    - uv run ruff check --select E402,F401 litehive tests -> passed
+
+    - forbidden noqa grep guard -> passed
+
+    - uv run pytest -q -> 521 passed, 5 skipped, 3 warnings in 90.08s
+
+    '
+  files_changed: []
+  created_at: '2026-04-13T00:57:34+00:00'
+- role: qa
+  step: testing
+  verdict: pass
+  message: "PASS\n\nVerified T-0084 in the workspace.\n\nWhat I validated:\n- `LitehiveConfig`\
+    \ now uses a shared default `DEFAULT_SUBAGENT_INACTIVITY_TIMEOUT_SECONDS = 300.0`,\
+    \ and config defaults still include `retry_on = [\"execution_limit\", \"timeout\"\
+    ]`.\n- Checked-in workspace config and bootstrap template both advertise `subagent_inactivity_timeout_seconds:\
+    \ 300.0` with the 5-minute Codex restart note.\n- `SubagentManager` forwards `subagent_inactivity_timeout_seconds`\
+    \ into Codex `run_live` as `inactivity_timeout_seconds`.\n- `SubagentSession._check_stdout_inactivity`\
+    \ still terminates stale live processes and raises `SubagentInactivityTimeout`.\n\
+    - `SubagentManager` still maps `SubagentInactivityTimeout` to `EngineFailure(kind=\"\
+    retryable_execution_error\", classification=\"timeout\")`, which is what drives\
+    \ the normal retry/restart path.\n\nEvidence gathered:\n- Focused runtime/code\
+    \ inspection in `litehive/agents/manager.py` and `litehive/agents/session.py`\
+    \ confirmed the timeout-to-retry path is intact.\n- Tests passed:\n  - `pytest\
+    \ -q tests/test_config.py`\n  - `pytest -q tests/test_tasks_and_subagents.py`\n\
+    \  - `pytest -q tests/test_tasks_and_subagents.py::test_legacy_subagent_execution_module_alias_preserves_monkeypatching`\n\
+    \  - `pytest -q tests/test_tasks_and_subagents.py::test_subagent_manager_consumes_unified_stdout_for_reports_and_continuation`\n\
+    \nNo blocking issues found. Change is scoped to the task and behaves consistently\
+    \ with the documented 5-minute inactivity restart behavior.\n"
+  files_changed: []
+  created_at: '2026-04-13T01:01:33+00:00'
+- role: reviewer
+  step: accepting
+  verdict: pass
+  message: 'PASS: T-0084 meets the requested outcome.
+
+
+    What changed:
+
+    - `LitehiveConfig` now defaults `subagent_inactivity_timeout_seconds` to `300.0`
+    via a shared constant in `litehive/config/model.py`.
+
+    - Checked-in workspace config and the bootstrap template both advertise `300.0`,
+    so new and existing workspaces align on a 5-minute Codex live inactivity budget.
+
+    - `SubagentManager` already forwards `subagent_inactivity_timeout_seconds` into
+    Codex `run_live` as `inactivity_timeout_seconds`, and stale-live execution is
+    still converted into `EngineFailure(kind="retryable_execution_error", classification="timeout")`,
+    which feeds the normal retry/restart path.
+
+
+    Verification performed:
+
+    - `uv run pytest -q tests/test_config.py -k ''defaults_include_flat_retry_on or
+    load_config_reads_subagent_inactivity_timeout_override''` -> 2 passed.
+
+    - `uv run pytest -q tests/test_pipeline_v2_agent_retries.py` -> 10 passed.
+
+    - `uv run pytest -q tests/test_tasks_and_subagents.py` -> 33 passed.
+
+    - Code inspection confirmed the stale-stdout kill path in `litehive/agents/session.py`
+    and retryable timeout mapping in `litehive/agents/manager.py`.
+
+
+    Reviewer judgment:
+
+    - Automatic restart behavior was largely pre-existing; this task correctly tightens
+    the default from 360s to 300s and documents the user-visible 5-minute behavior
+    without expanding scope.
+
+    '
+  files_changed: []
+  created_at: '2026-04-13T01:03:45+00:00'

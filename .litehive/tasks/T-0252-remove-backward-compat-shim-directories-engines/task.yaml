@@ -1,21 +1,14 @@
 id: T-0252
 slug: remove-backward-compat-shim-directories-engines
 title: Remove backward-compat shim directories (engines/, runtime/, runner/)
-depends_on: []
+created_at: '2026-04-09T09:16:11+00:00'
 task_type: null
-engine: null
-model: null
 mode: implementation
 pipeline_mode: full
-status: done
-flag_reason: null
-flag_count: 0
-pipeline_status: done
 priority: high
 pm_complexity: null
 planned_effort: null
-created_at: '2026-04-09T09:16:11+00:00'
-updated_at: '2026-04-09T14:15:34+00:00'
+depends_on: []
 goal: After T-0232 reorg, engines/, runtime/, runner/ are pure re-export shims (from
   litehive.agents/pipeline import *). Update all internal imports to use canonical
   paths (agents/, pipeline/) and remove or minimize the shim directories.
@@ -28,54 +21,9 @@ acceptance_criteria:
 constraints: []
 plan: []
 human_checkpoints: []
-subagents:
-- id: SA-0001
-  role: planner
-  engine: codex
-  status: completed
-  path: subagents/SA-0001-planner
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0002
-  role: swe
-  engine: codex
-  status: completed
-  path: subagents/SA-0002-swe
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0003
-  role: qa
-  engine: codex
-  status: completed
-  path: subagents/SA-0003-qa
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0004
-  role: reviewer
-  engine: codex
-  status: completed
-  path: subagents/SA-0004-reviewer
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0005
-  role: merge-resolver
-  engine: claude
-  status: completed
-  path: subagents/SA-0005-merge-resolver
-  sandboxed: false
-  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0252 remove-backward-compat-shim-directories-engines'
-  commit_sha: 4cdfc1254e8d4f054d8c4b9849445054768dcf6c
-  checkpoint_base_sha: f627615edc19a3e6aa905302bebc579bae2e3168
-  checkpoint_attempts: 1
-  rolled_back_checkpoint_attempt: null
-  merge_agent_attempts: 1
-  worktree_path: null
-retry_policy:
-  max_retries: null
-  stage_retry_limit: null
 created_from: null
 upstream_origin: null
 github_origin: null

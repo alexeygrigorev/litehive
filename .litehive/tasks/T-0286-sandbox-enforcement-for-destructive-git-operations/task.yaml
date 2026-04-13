@@ -1,20 +1,14 @@
 id: T-0286
 slug: sandbox-enforcement-for-destructive-git-operations
 title: Sandbox enforcement for destructive git operations
-depends_on: []
+created_at: '2026-04-10T05:59:06+00:00'
 task_type: null
-model: null
 mode: implementation
 pipeline_mode: full
-status: done
-flag_reason: null
-flag_count: 0
-pipeline_status: done
 priority: high
 pm_complexity: null
 planned_effort: null
-created_at: '2026-04-10T05:59:06+00:00'
-updated_at: '2026-04-10T08:50:18+00:00'
+depends_on: []
 goal: "Prevent agents from running destructive git operations by removing git from\
   \ the sandbox filesystem for every role except merge-resolver. The T-0266 incident\
   \ had codex running non-sandboxed with full host access and force-pushed to origin/main.\
@@ -45,28 +39,26 @@ acceptance_criteria:
   is somehow bypassed, there is nothing for `git push` to push to.
 - Sandbox profile selection lives in a single code path so it can be audited, and
   the default (unknown role) is the no-git profile (fail closed).
-- 'NO HOST MODE EVER. Every subagent invocation MUST run inside a sandbox.
-  SandboxLauncher.wrap_invocation currently has a code path that returns the raw
-  invocation unchanged when external_engine_sandbox.enabled is false — this
-  fallback must be removed. If a sandbox profile cannot be resolved or the
-  container runtime is unavailable, spawning raises SandboxError and the task is
-  marked failed. The concept of "host" execution is eliminated from the codebase:
-  SandboxPolicySummary.summary never returns the string "host", and the enabled
-  flag in config is either removed or hardcoded to true (never user-toggleable).'
-- 'Docker is the backend. The existing external_engine_sandbox.backend setting
-  stays as "docker" (the host supports docker and the operator is in the docker
-  group). A minimal image litehive-agent:latest contains only: a Python
-  interpreter matching the project venv, uv, and nothing else — no git, no ssh,
-  no curl, no gh, no bash utils beyond what Python needs to run. The image is
-  built by a script in scripts/ or similar, checked in, and rebuilt on uv/python
-  version changes. For merge-resolver, a separate image litehive-merge-resolver:latest
-  additionally contains only the git wrapper (at /usr/local/bin/git) — not real
-  git anywhere in the image.'
-- 'Docker run arguments enforce: --read-only rootfs, --cap-drop=ALL,
-  --security-opt=no-new-privileges, --network=none (except for roles that
-  specifically need network for package installs), workspace mounted rw at
-  /workspace, no other host bind-mounts, no inherited env vars except an
-  explicit allowlist.'
+- "NO HOST MODE EVER. Every subagent invocation MUST run inside a sandbox. SandboxLauncher.wrap_invocation\
+  \ currently has a code path that returns the raw invocation unchanged when external_engine_sandbox.enabled\
+  \ is false \u2014 this fallback must be removed. If a sandbox profile cannot be\
+  \ resolved or the container runtime is unavailable, spawning raises SandboxError\
+  \ and the task is marked failed. The concept of \"host\" execution is eliminated\
+  \ from the codebase: SandboxPolicySummary.summary never returns the string \"host\"\
+  , and the enabled flag in config is either removed or hardcoded to true (never user-toggleable)."
+- "Docker is the backend. The existing external_engine_sandbox.backend setting stays\
+  \ as \"docker\" (the host supports docker and the operator is in the docker group).\
+  \ A minimal image litehive-agent:latest contains only: a Python interpreter matching\
+  \ the project venv, uv, and nothing else \u2014 no git, no ssh, no curl, no gh,\
+  \ no bash utils beyond what Python needs to run. The image is built by a script\
+  \ in scripts/ or similar, checked in, and rebuilt on uv/python version changes.\
+  \ For merge-resolver, a separate image litehive-merge-resolver:latest additionally\
+  \ contains only the git wrapper (at /usr/local/bin/git) \u2014 not real git anywhere\
+  \ in the image."
+- 'Docker run arguments enforce: --read-only rootfs, --cap-drop=ALL, --security-opt=no-new-privileges,
+  --network=none (except for roles that specifically need network for package installs),
+  workspace mounted rw at /workspace, no other host bind-mounts, no inherited env
+  vars except an explicit allowlist.'
 - "In-CI integration tests spawn a REAL subprocess with the sandbox profile applied\
   \ (no mocks, no monkey-patching of the shim) and assert behavior directly: - no-git\
   \ profile: `git --version` exits non-zero / command-not-found; `which git` finds\
@@ -90,11 +82,18 @@ acceptance_criteria:
 constraints:
 - "Do not rely on env vars, role strings, or prompt-scanning for git gating \u2014\
   \ they are bypassable by the very thing we are trying to restrict."
-- "Do not rely on PATH manipulation alone; the binary must actually be absent from the sandbox filesystem view for non-merge-resolver roles."
-- "Merge-resolver is the only role that may have git. Do not add per-task overrides without changing this task's AC."
-- "Fail closed on unknown roles and on sandbox setup errors."
-- "No host mode, ever. There is no config flag, env var, CLI option, or task field that allows a subagent to run outside the sandbox. If docker is not available on the host, litehive refuses to start the pool at all rather than silently falling back to host execution."
-- "The image must be MINIMAL. The goal is: agent has access to workspace + python + uv, and nothing else. Do not bind-mount /usr, /bin, /lib wholesale from the host into the container. The container image itself is the allowlist."
+- Do not rely on PATH manipulation alone; the binary must actually be absent from
+  the sandbox filesystem view for non-merge-resolver roles.
+- Merge-resolver is the only role that may have git. Do not add per-task overrides
+  without changing this task's AC.
+- Fail closed on unknown roles and on sandbox setup errors.
+- No host mode, ever. There is no config flag, env var, CLI option, or task field
+  that allows a subagent to run outside the sandbox. If docker is not available on
+  the host, litehive refuses to start the pool at all rather than silently falling
+  back to host execution.
+- 'The image must be MINIMAL. The goal is: agent has access to workspace + python
+  + uv, and nothing else. Do not bind-mount /usr, /bin, /lib wholesale from the host
+  into the container. The container image itself is the allowlist.'
 plan:
 - "Inventory the existing sandbox/execution layer (litehive/pipeline, heru adapters)\
   \ to find where subagent subprocesses are launched and what sandboxing primitives\
@@ -103,8 +102,13 @@ plan:
   \ runtime."
 - "Define SandboxProfile enum with NO_GIT (default) and MERGE_RESOLVER. Map role \u2192\
   \ profile in a single audited function."
-- "For NO_GIT profile, use the sandbox primitive to either (a) launch in a mount namespace / container where /usr/bin/git is not bind-mounted, or (b) in a chroot with no git binary. The exact mechanism depends on what the existing sandbox layer supports; document any gaps."
-- "For MERGE_RESOLVER profile, build a small wrapper binary (litehive/sandbox/git_wrapper.py compiled or kept as a script) that exec's a hidden real git and enforces the denylist. Bind-mount it into the sandbox as the only visible git."
+- For NO_GIT profile, use the sandbox primitive to either (a) launch in a mount namespace
+  / container where /usr/bin/git is not bind-mounted, or (b) in a chroot with no git
+  binary. The exact mechanism depends on what the existing sandbox layer supports;
+  document any gaps.
+- For MERGE_RESOLVER profile, build a small wrapper binary (litehive/sandbox/git_wrapper.py
+  compiled or kept as a script) that exec's a hidden real git and enforces the denylist.
+  Bind-mount it into the sandbox as the only visible git.
 - Wire profile selection into subagent spawn path. Make sure every spawn goes through
   the single entry point so no role can silently get a different profile.
 - Strip origin from non-merge-resolver worktrees in the worktree setup code.
@@ -115,61 +119,9 @@ plan:
   it is NOT picked up by the default pytest collection.
 - Docs update describing the policy and how to audit it.
 human_checkpoints: []
-subagents:
-- id: SA-0001
-  role: planner
-  engine: codex
-  status: completed
-  path: subagents/SA-0001-planner
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0002
-  role: swe
-  engine: codex
-  status: completed
-  path: subagents/SA-0002-swe
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0003
-  role: qa
-  engine: codex
-  status: completed
-  path: subagents/SA-0003-qa
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0004
-  role: recovery
-  engine: codex
-  status: completed
-  path: subagents/SA-0004-recovery
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0005
-  role: qa
-  engine: codex
-  status: completed
-  path: subagents/SA-0005-qa
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0006
-  role: reviewer
-  engine: codex
-  status: completed
-  path: subagents/SA-0006-reviewer
-  sandboxed: false
-  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0286 sandbox-enforcement-for-destructive-git-operations'
-  commit_sha: df4ce25a4f88f743cd6fa00947c651d813f746b4
-  checkpoint_base_sha: d4bf96b1cfe0978f25e6287176d6c8e21298532d
-  checkpoint_attempts: 1
-  rolled_back_checkpoint_attempt: null
-  merge_agent_attempts: 0
-  worktree_path: null
-retry_policy:
-  max_retries: null
-  stage_retry_limit: null
 created_from: null
 upstream_origin: null
 github_origin: null

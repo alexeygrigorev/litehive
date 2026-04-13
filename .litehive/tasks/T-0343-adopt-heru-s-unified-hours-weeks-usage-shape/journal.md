@@ -5,3 +5,6 @@ Task created.
 
 ## 2026-04-11T07:02:41+00:00
 Task closed: wont_do. Superseded by the combined heru task (T-0014 in heru workspace) that updates heru and litehive atomically, so they never diverge on the quota API shape.
+
+## 2026-04-13T10:46:42+00:00
+Task closed: duplicate. Zombie re-queue: runtime.yaml execution_status=cancelled. See T-0366.

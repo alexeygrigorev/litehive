@@ -1,0 +1,159 @@
+- role: planner
+  step: grooming
+  verdict: pass
+  message: "The codebase already has generic stale-subagent handling: live subagents\
+    \ are killed when stdout stops changing, the failure is classified as `timeout`,\
+    \ and pipeline retries already treat `timeout` as retryable. The remaining product\
+    \ gap is to make this explicitly satisfy the Claude use case at a 5-minute threshold,\
+    \ not to invent a second restart mechanism.\n\nTASK_UPDATE:\n  action: requeue\n\
+    \  title: Set Claude stale-output timeout to 5 minutes and verify automatic retry/resume\n\
+    \  task_type: adapter\n  priority: medium\n  pm_complexity: m\n  planned_effort:\
+    \ s\n  auto_commit: true\n  goal: >-\n    Make Claude runs behave predictably\
+    \ when the CLI stops producing output by\n    enforcing a 5-minute stale-output\
+    \ timeout, surfacing that condition as a\n    retryable timeout, and preserving\
+    \ the existing automatic retry/resume flow.\n  acceptance_criteria:\n    - Claude\
+    \ live executions are considered stale after 300 seconds without new stdout, not\
+    \ 360 seconds, and the stale process is terminated.\n    - A stale Claude run\
+    \ is surfaced to the pipeline as a retryable timeout so the normal retry path\
+    \ automatically restarts the stage without manual operator action.\n    - When\
+    \ Claude exposes a continuation or resume id, the retry path preserves and reuses\
+    \ it; when none is available, the retry still starts a fresh attempt cleanly.\n\
+    \    - Workspace config defaults and operator-facing docs/examples reflect the\
+    \ 300-second timeout and make clear that the setting is overrideable.\n    - Automated\
+    \ tests cover the timeout threshold change and at least one Claude-specific retry/resume\
+    \ path without requiring the real Claude CLI.\n  constraints:\n    - Keep scope\
+    \ on subagent/live-execution inactivity handling; do not mix in daemon-level inactive-task\
+    \ repair or unrelated timeout systems.\n    - Reuse the existing retry and continuation\
+    \ plumbing instead of introducing a Claude-only restart framework.\n    - Avoid\
+    \ real engine subprocesses in tests; use fakes/mocks consistent with current adapter\
+    \ signatures.\n  plan:\n    - Change the default subagent inactivity timeout from\
+    \ 360 seconds to 300 seconds in config/model/template layers and update any assertions\
+    \ that codify the old default.\n    - Add or update tests proving stale live output\
+    \ is classified as a timeout and that Claude retries can continue through the\
+    \ existing resume-session plumbing.\n    - Refresh README/docs/config examples\
+    \ so operators understand the new 5-minute default and the override knob.\n  \
+    \  - Verify there is no separate implementation gap in pipeline retry wiring;\
+    \ if a gap is found, fix only that wiring rather than broadening the task.\n\n\
+    Implementation notes for the next agent:\n- Existing timeout plumbing is in `litehive/agents/session.py`\
+    \ and `litehive/agents/manager.py`.\n- Existing continuation/retry plumbing is\
+    \ in `litehive/pipeline/heru_factory.py` and the retry tests under `tests/test_pipeline_v2_agent_retries.py`.\n\
+    - Existing default is currently `360.0` in `litehive/config/model.py`, the workspace\
+    \ template, and tests.\n"
+  files_changed: []
+  created_at: '2026-04-13T01:26:04+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: "Implemented T-0086 by narrowing the existing stale-subagent path to the\
+    \ requested 5-minute budget and wiring timeout retries to preserve Claude continuation\
+    \ ids.\n\nWhat changed:\n- Changed the default workspace config timeout from 360.0s\
+    \ to 300.0s in `litehive/config/model.py` and the generated workspace template\
+    \ in `litehive/cli/templates/workspace_config.yaml`.\n- Fixed `litehive/pipeline/heru_factory.py`\
+    \ so `HeruEngineAdapter.run_turn()` records the subagent continuation id on the\
+    \ session before re-raising retryable failures. This lets same-engine timeout\
+    \ retries automatically resume the interrupted Claude session instead of restarting\
+    \ cold.\n- Added regression coverage in `tests/test_pipeline_v2_heru_factory.py`\
+    \ proving a timed-out Claude turn stores `claude-session-1`, then the next retry\
+    \ passes `resume_session_id=\"claude-session-1\"` back into `SubagentManager.run()`.\n\
+    - Updated timeout documentation text in `README.md` from 6 minutes to 5 minutes.\n\
+    \nEvidence:\n- `uv run ruff check --select E402,F401 litehive tests` -> passed.\n\
+    - forbidden-noqa guard from the task prompt -> passed.\n- `uv run pytest -q` ->\
+    \ `522 passed, 5 skipped, 3 warnings in 90.01s (0:01:30)`.\n- Code evidence:\n\
+    \  - `litehive/config/model.py:44` now sets `subagent_inactivity_timeout_seconds:\
+    \ float = 300.0`.\n  - `litehive/pipeline/heru_factory.py:130-135` now updates\
+    \ `session.engine_session_id` before handling `result.failure`.\n  - `tests/test_pipeline_v2_heru_factory.py:106-177`\
+    \ verifies timeout -> `TransientError(timeout)` on first Claude turn and automatic\
+    \ retry with `seen_resume_ids == [None, \"claude-session-1\"]` on the next turn.\n"
+  files_changed: []
+  created_at: '2026-04-13T01:31:04+00:00'
+- role: qa
+  step: testing
+  verdict: pass
+  message: 'PASS
+
+
+    Validated the T-0086 changes with focused QA against the modified paths.
+
+
+    What I verified:
+
+    - `LitehiveConfig` now defaults `subagent_inactivity_timeout_seconds` to `300.0`,
+    and the generated workspace template matches that value.
+
+    - `HeruEngineAdapter.run_turn()` now stores the returned continuation id on the
+    session before re-raising retryable failures, so a Claude timeout can resume with
+    the same continuation id on the retry.
+
+
+    Evidence:
+
+    - `pytest -q tests/test_config.py tests/test_pipeline_v2_heru_factory.py` -> 45
+    passed
+
+    - `pytest -q tests/test_config.py -k ''subagent_inactivity_timeout or defaults_include_flat_retry_on''`
+    -> 2 passed
+
+    - `pytest -q tests/test_pipeline_v2_heru_factory.py -k preserves_continuation_on_timeout_for_retry`
+    -> 1 passed
+
+
+    Manual code review also confirmed that `SubagentManager` already forwards `subagent_inactivity_timeout_seconds`
+    into live engine runs and classifies stale-output termination as retryable `timeout`,
+    so lowering the default budget to 5 minutes is correctly wired.
+
+
+    Residual note:
+
+    - `tests/test_tasks_and_subagents.py` contains stale-timeout helper cases that
+    are not currently collected by pytest because of their naming/aliasing pattern.
+    That appears pre-existing and outside this task''s diff, but it means the broader
+    stale-timeout path still relies partly on indirect coverage.
+
+    '
+  files_changed: []
+  created_at: '2026-04-13T01:35:12+00:00'
+- role: reviewer
+  step: accepting
+  verdict: pass
+  message: 'PASS
+
+
+    The requested end-user outcome is met. The existing stale-subagent timeout path
+    was already in place; this change correctly narrows the default Claude/subagent
+    inactivity budget from 360s to 300s and fixes the retry path so a timeout-triggered
+    automatic retry preserves and reuses Claude''s continuation id.
+
+
+    What I verified:
+
+    - `litehive/config/model.py` and `litehive/cli/templates/workspace_config.yaml`
+    now default `subagent_inactivity_timeout_seconds` to `300.0`.
+
+    - `litehive/agents/manager.py` still classifies a stale-output kill as retryable
+    timeout failure, and `litehive/pipeline/nodes/agent.py` retries `timeout` on the
+    same engine/session by default.
+
+    - `litehive/pipeline/heru_factory.py` now records the returned continuation id
+    on `session.engine_session_id` before re-raising retryable failures, which is
+    the missing link for Claude automatic restart after inactivity.
+
+    - The new regression test in `tests/test_pipeline_v2_heru_factory.py` proves the
+    second call receives `resume_session_id="claude-session-1"` after the first call
+    times out.
+
+
+    Verification evidence:
+
+    - `pytest -q tests/test_config.py tests/test_pipeline_v2_heru_factory.py tests/test_pipeline_v2_agent_retries.py
+    tests/test_pipeline_v2_end_to_end.py` -> `65 passed`.
+
+
+    Notes:
+
+    - I also checked the stale-subagent implementation path directly in code. The
+    timeout mechanism itself predates this task; this patch appropriately scopes to
+    the requested 5-minute default and makes Claude retries resume correctly.
+
+    '
+  files_changed: []
+  created_at: '2026-04-13T01:37:07+00:00'

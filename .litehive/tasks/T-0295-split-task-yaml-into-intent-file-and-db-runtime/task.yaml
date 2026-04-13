@@ -1,21 +1,15 @@
 id: T-0295
 slug: split-task-yaml-into-intent-file-and-db-runtime
 title: Split task.yaml into intent file and DB runtime state
-depends_on:
-- T-0291
+created_at: '2026-04-10T06:48:43+00:00'
 task_type: null
-model: null
 mode: implementation
 pipeline_mode: full
-status: queued
-flag_reason: null
-flag_count: 0
-pipeline_status: backlog
 priority: high
 pm_complexity: null
 planned_effort: null
-created_at: '2026-04-10T06:48:43+00:00'
-updated_at: '2026-04-10T06:48:43+00:00'
+depends_on:
+- T-0291
 goal: Today task.yaml mixes intent (goal, acceptance_criteria, plan, constraints,
   depends_on) with runtime state (status, pipeline_status, flag_count, git commit_sha,
   updated_at, runtime snapshot). Split so task.yaml on disk only contains intent fields
@@ -35,19 +29,9 @@ acceptance_criteria:
 constraints: []
 plan: []
 human_checkpoints: []
-subagents: []
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0295 split-task-yaml-into-intent-file-and-db-runtime'
-  commit_sha: null
-  checkpoint_base_sha: null
-  checkpoint_attempts: 0
-  rolled_back_checkpoint_attempt: null
-  merge_agent_attempts: 0
-  worktree_path: null
-retry_policy:
-  max_retries: null
-  stage_retry_limit: null
 created_from: null
 upstream_origin: null
 github_origin: null

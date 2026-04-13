@@ -70,3 +70,6 @@ fi`.
 
 ## 2026-04-10T00:14:51+00:00
 Interrupted runner execution while `commit_to_git` was running. Reason: Task stopped via CLI. Resume from `commit_to_git`.
+
+## 2026-04-13T10:29:40+00:00
+Task closed: duplicate. Zombie re-queue: runtime.yaml execution_status=done. See T-0366.

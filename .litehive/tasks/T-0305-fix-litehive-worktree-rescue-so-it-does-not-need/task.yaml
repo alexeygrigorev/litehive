@@ -1,20 +1,14 @@
 id: T-0305
 slug: fix-litehive-worktree-rescue-so-it-does-not-need
 title: Fix litehive worktree rescue so it does not need the runner lock
-depends_on: []
+created_at: '2026-04-10T10:11:10+00:00'
 task_type: null
-model: null
 mode: implementation
 pipeline_mode: full
-status: done
-flag_reason: null
-flag_count: 0
-pipeline_status: done
 priority: high
 pm_complexity: null
 planned_effort: null
-created_at: '2026-04-10T10:11:10+00:00'
-updated_at: '2026-04-10T12:38:19+00:00'
+depends_on: []
 goal: 'When the daemon is running, ''litehive worktree rescue --apply'' successfully
   cherry-picks the worktree commits onto main but then fails to finalize task state
   because save_task tries to acquire the runner lock (held by the daemon). This leaves
@@ -37,61 +31,9 @@ acceptance_criteria:
 constraints: []
 plan: []
 human_checkpoints: []
-subagents:
-- id: SA-0001
-  role: planner
-  engine: codex
-  status: completed
-  path: subagents/SA-0001-planner
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0002
-  role: swe
-  engine: codex
-  status: completed
-  path: subagents/SA-0002-swe
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0003
-  role: qa
-  engine: codex
-  status: completed
-  path: subagents/SA-0003-qa
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0004
-  role: reviewer
-  engine: codex
-  status: completed
-  path: subagents/SA-0004-reviewer
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0005
-  role: merge-resolver
-  engine: codex
-  status: completed
-  path: subagents/SA-0005-merge-resolver
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0006
-  role: merge-resolver
-  engine: codex
-  status: completed
-  path: subagents/SA-0006-merge-resolver
-  sandboxed: false
-  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0305 fix-litehive-worktree-rescue-so-it-does-not-need'
-  commit_sha: f42e8bd21b12c63abc14046a24ec838d2d040db2
-  checkpoint_base_sha: 6940e1c855aaeb5ae87263648c2ef2be2399f5cc
-  checkpoint_attempts: 1
-  rolled_back_checkpoint_attempt: null
-  merge_agent_attempts: 1
-  worktree_path: null
-retry_policy:
-  max_retries: null
-  stage_retry_limit: null
 created_from: null
 upstream_origin: null
 github_origin: null

@@ -1,0 +1,148 @@
+- role: planner
+  step: grooming
+  verdict: pass
+  message: "Pass grooming. The task is well-motivated and scoped, with one necessary\
+    \ clarification from code inspection: task YAML also contains real nested engine\
+    \ data under `subagents[].engine`, so this work must remove only the obsolete\
+    \ top-level per-task `engine` field and must not strip nested subagent history/runtime\
+    \ engine fields.\n\nImplementation notes for the next agent:\n- `TaskRecord` currently\
+    \ has no `engine` field, but `load_task_record_file()` still does `TaskRecord(**data)`.\
+    \ That means backward-compatible loading of legacy top-level `engine:` keys is\
+    \ not guaranteed by default; make the load path explicitly tolerate and ignore\
+    \ legacy top-level `engine` before model construction, or otherwise ensure unknown\
+    \ top-level `engine` does not crash while keeping the model clean.\n- The misleading\
+    \ `engine: {config.default_engine}` lines are in `litehive/cli/tasks.py` add/update\
+    \ output and should be removed.\n- Remove any `--engine` surface only for `task\
+    \ add` / `task update`; keep `run`, `import spec` / `intake`, list filters, switch,\
+    \ and other non-task-override engine flags intact.\n- Update both CLI surfaces\
+    \ if they still back tests/help: Typer commands in `litehive/cli/__init__.py`\
+    \ and legacy argparse parsers in `litehive/cli/parsers/*` where applicable.\n\
+    - Migration must drop only the top-level `engine:` key from `.litehive/tasks/*/task.yaml`;\
+    \ do not touch `subagents[*].engine` entries.\n\nSuggested verification:\n- `rg\
+    \ -n \"task\\\\.engine|record\\\\.engine|TaskRecord\\\\.engine\" litehive/pipeline\
+    \ litehive/agents litehive/cli litehive/tasks tests`\n- help/output assertions\
+    \ for `litehive task add` and `litehive task update`\n- full test suite\n\nTASK_UPDATE:\n\
+    \  pm_complexity: simple\n  planned_effort: s\n  constraints:\n    - Keep scope\
+    \ limited to the obsolete top-level per-task `engine` field, its add/update CLI\
+    \ flags, misleading add/update display output, YAML persistence/loading, and migration\
+    \ of existing task files.\n    - Preserve workspace-level `default_engine`, `engine_freeze`,\
+    \ `is_engine_frozen`, pipeline engine fallback behavior, `active_engine`, and\
+    \ nested `subagents[].engine` history unchanged.\n    - Do not remove unrelated\
+    \ `--engine` flags such as run-time engine override, intake/import-spec analysis\
+    \ engine selection, list filtering, or explicit engine-switch commands.\n  acceptance_criteria:\n\
+    \    - Top-level per-task `engine` is not part of the durable `TaskRecord` schema.\n\
+    \    - `--engine` is removed from `litehive task add` and `litehive task update`\
+    \ command surfaces and help text.\n    - `litehive task add` and `litehive task\
+    \ update` no longer print a misleading per-task `engine: ...` line.\n    - Task\
+    \ YAML serialization no longer writes a top-level `engine:` field.\n    - Loading\
+    \ a legacy `task.yaml` that still contains a top-level `engine:` field does not\
+    \ crash and silently ignores that field.\n    - A one-time migration removes the\
+    \ top-level `engine:` field from existing `.litehive/tasks/*/task.yaml` files,\
+    \ while preserving nested `subagents[].engine` entries.\n    - Workspace default-engine\
+    \ behavior, engine freeze/fallback behavior, `active_engine`, and other non-task\
+    \ engine concepts remain unchanged.\n    - All tests pass.\n  plan:\n    - Audit\
+    \ and remove the obsolete top-level per-task engine surface from task schema,\
+    \ task load/save paths, and add/update command output.\n    - Remove only the\
+    \ `task add` / `task update` engine flag/help surface across both CLI entrypoints\
+    \ still covered by tests.\n    - Add backward-compatible legacy YAML loading plus\
+    \ an idempotent migration that strips only top-level `engine:` from existing task\
+    \ files.\n    - Update or add tests for CLI help/output, legacy task loading,\
+    \ migration behavior, and full regression coverage.\n"
+  files_changed: []
+  created_at: '2026-04-12T14:19:20+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: "Implemented T-0338.\n\nWhat changed\n- Removed the misleading per-task\
+    \ `engine:` display line from `litehive/cli/tasks.py` for both `task add` and\
+    \ `task update`.\n- Added explicit backward-compatible legacy loading in `litehive/tasks/crud.py`:\
+    \ `load_task_record_file()` now strips only the obsolete top-level `engine` key\
+    \ before constructing `TaskRecord`.\n- Added regression coverage for:\n  - argparse\
+    \ rejecting `--engine` on `task add` / `task update`\n  - add/update output omitting\
+    \ `engine:`\n  - legacy task YAML loading ignoring top-level `engine:` while preserving\
+    \ nested `subagents[].engine`\n  - Typer help for legacy and modern apps not listing\
+    \ `--engine` on `task add` / `task update`\n- Ran the one-time migration over\
+    \ `.litehive/tasks/*/task.yaml` and removed all top-level `engine:` lines. Nested\
+    \ subagent engine fields were left intact.\n\nEvidence\n- `rg -n \"task\\.engine|record\\\
+    .engine|TaskRecord\\.engine\" litehive/pipeline litehive/agents` returned no matches.\n\
+    - Direct CLI sanity script:\n  - `add_exit 0`, `add_has_engine_line False`\n \
+    \ - `update_exit 0`, `update_has_engine_line False`\n- Typer help sanity script:\n\
+    \  - `legacy task add --help 0 False`\n  - `legacy task update --help 0 False`\n\
+    \  - `modern task add --help 0 False`\n  - `modern task update --help 0 False`\n\
+    \  (`False` above is whether `--engine` appeared.)\n- Top-level migration check:\
+    \ `top_level_engine_lines=0`\n- Full test suite: `516 passed, 5 skipped, 4 warnings\
+    \ in 23.74s`\n- Required lint check: `uv run ruff check --select E402,F401 litehive\
+    \ tests` passed.\n\nNotes\n- `TaskRecord` already had no `engine` field when I\
+    \ started; this task finishes the remaining dead surface and migration path.\n\
+    - The worktree contains unrelated `.litehive` state/thread churn outside this\
+    \ task. I did not revert unrelated workspace changes.\n"
+  files_changed: []
+  created_at: '2026-04-12T14:25:03+00:00'
+- role: qa
+  step: testing
+  verdict: pass
+  message: "PASS\n\nVerified independently:\n- `TaskRecord` has no top-level `engine`\
+    \ field in `litehive/models/task_models.py`.\n- Legacy top-level `engine:` in\
+    \ `task.yaml` is tolerated and silently ignored by `load_task_record_file()` before\
+    \ `TaskRecord` construction. I reproduced this with a synthetic legacy task file;\
+    \ serialization dropped the top-level `engine:` while preserving nested `subagents[].engine`.\n\
+    - `litehive task add` and `litehive task update` no longer print a misleading\
+    \ per-task `engine:` line. Direct handler probe returned `{'add_rc': 0, 'add_has_engine':\
+    \ False, 'update_rc': 0, 'update_has_engine': False}`.\n- `--engine` is absent\
+    \ from both legacy and modern Typer help for `task add` / `task update`:\n  -\
+    \ `legacy task add --help 0 False`\n  - `legacy task update --help 0 False`\n\
+    \  - `modern task add --help 0 False`\n  - `modern task update --help 0 False`\n\
+    \  (`False` = `--engine` not present.)\n- Argparse task add/update surfaces are\
+    \ also clean; focused parser tests passed.\n- Migration scope is correct in the\
+    \ current workspace: top-level `engine` keys across `.litehive/tasks/*/task.yaml`\
+    \ = 0, while nested `subagents[].engine` entries remain present (`984` found).\n\
+    - Deprecated-reference grep is clean where it matters: `rg -n \"task\\\\.engine|record\\\
+    \\.engine|TaskRecord\\\\.engine\" litehive/pipeline litehive/agents` returned\
+    \ no matches.\n- Full regression suite passed: `516 passed, 5 skipped, 4 warnings\
+    \ in 23.42s`.\n\nResult: acceptance criteria met. Workspace-level `default_engine`,\
+    \ engine freeze/fallback behavior, `active_engine`, and nested subagent engine\
+    \ history remain intact.\n"
+  files_changed: []
+  created_at: '2026-04-12T14:28:38+00:00'
+- role: reviewer
+  step: accepting
+  verdict: pass
+  message: 'Pass. Acceptance criteria are met and the scope stayed limited to the
+    obsolete top-level per-task engine override surface.
+
+
+    What I verified directly:
+
+    - `TaskRecord` has no top-level `engine` field in `litehive/models/task_models.py`.
+
+    - `litehive/tasks/crud.py:load_task_record_file()` explicitly strips only the
+    legacy top-level `engine` key before `TaskRecord` construction, preserving backward-compatible
+    reads while keeping nested `subagents[].engine` intact.
+
+    - `litehive/cli/tasks.py` no longer prints a misleading per-task `engine:` line
+    for `task add` or `task update`.
+
+    - Argparse task add/update parsers no longer accept `--engine`; focused parser
+    coverage passed.
+
+    - Workspace migration result is correct in this worktree: top-level `engine:`
+    lines across `.litehive/tasks/*/task.yaml` = 0, while nested `subagents[].engine`
+    entries remain present.
+
+    - Required dead-reference grep is clean: `rg -n "task\\.engine|record\\.engine|TaskRecord\\.engine"
+    litehive/pipeline litehive/agents` returned no matches.
+
+    - Fresh command probe confirmed add/update output omits `engine:`: `{''add_rc'':
+    0, ''add_has_engine'': False, ''update_rc'': 0, ''update_has_engine'': False}`.
+
+    - Fresh focused tests passed: `77 passed` for `tests/test_task_engine_cleanup.py
+    tests/test_list_and_show.py tests/test_config.py`.
+
+    - Fresh full suite passed: `516 passed, 5 skipped, 4 warnings in 23.50s`.
+
+
+    Judgment: done.
+
+    '
+  files_changed: []
+  created_at: '2026-04-12T14:30:54+00:00'

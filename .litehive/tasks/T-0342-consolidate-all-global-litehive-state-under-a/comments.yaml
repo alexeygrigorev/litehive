@@ -1,0 +1,320 @@
+- role: planner
+  step: grooming
+  verdict: pass
+  message: "Pass. The user problem is clear and worth doing, but the current task\
+    \ record mixes the real objective (one inspectable global root) with an outdated\
+    \ implementation assumption (`workspaces.yaml` as the live registry). The repo\
+    \ already moved the cross-workspace registry to SQLite in `~/.local/share/litehive/litehive.db`\
+    \ via T-0339, while `config.yaml`, `daemons.yaml`, and some log/worktree paths\
+    \ still split across `XDG_CONFIG_HOME` and `XDG_STATE_HOME`. Grooming should therefore\
+    \ preserve the single-root outcome and explicitly avoid reverting the registry\
+    \ back to YAML.\n\nKey shaping decisions for implementation:\n- Treat `LITEHIVE_HOME`\
+    \ as the single override point. Default root remains `XDG_DATA_HOME/litehive`.\n\
+    - Do not recreate `workspaces.yaml` as source of truth. Keep the SQLite global\
+    \ registry, just relocate all remaining global files and per-workspace runtime\
+    \ directories under the same root.\n- Fold the path-target changes that conflict\
+    \ with T-0296/T-0297 into this task\u2019s implementation target: worktrees and\
+    \ daemon logs should now land under the unified root, not `XDG_STATE_HOME`.\n\
+    - Split the \"after 1 release, delete old-path readers\" cleanup into a follow-up\
+    \ task instead of widening T-0342 across two releases.\n\nImplementation notes\
+    \ from current codebase:\n- `litehive/config/paths.py` still exposes separate\
+    \ config/data/state homes and too many helper branches.\n- `litehive/config/workspace_registry.py`\
+    \ already uses a global SQLite DB at `litehive.db`; that is the current source\
+    \ of truth for registered workspaces.\n- `litehive/daemon/registry.py` still stores\
+    \ daemon registry YAML outside the data root.\n- `litehive/daemon/logs.py`, `docs/configuration.md`,\
+    \ `docs/workspace-layout.md`, and several tests still reflect the old split layout.\n\
+    \nTASK_UPDATE:\n```yaml\npm_complexity: complex\nplanned_effort: m\ngoal: >-\n\
+    \  Consolidate all user-global Litehive state under one inspectable root so an\n\
+    \  operator can debug, back up, or delete Litehive by opening a single directory.\n\
+    \  The unified root is `LITEHIVE_HOME` when set, otherwise\n  `$XDG_DATA_HOME/litehive`\
+    \ (default `~/.local/share/litehive`). Preserve the\n  existing per-repo `.litehive/`\
+    \ intent files and preserve the SQLite\n  cross-workspace registry introduced\
+    \ by T-0339; this task is about path\n  consolidation, migration, and docs, not\
+    \ reverting registry storage back to\n  YAML.\nacceptance_criteria:\n  - >-\n\
+    \    A single root helper resolves all user-global Litehive paths from\n    `LITEHIVE_HOME`\
+    \ or, if unset, `$XDG_DATA_HOME/litehive`.\n  - >-\n    Global config and daemon\
+    \ registry live under that root\n    (`<root>/config.yaml`, `<root>/daemons.yaml`),\
+    \ and the cross-workspace\n    registry remains under the same root via the existing\
+    \ SQLite database.\n  - >-\n    Per-workspace runtime state also lives under that\
+    \ root:\n    `<root>/<workspace_id>/data.db`, `<root>/<workspace_id>/worktrees/`,\n\
+    \    `<root>/<workspace_id>/logs/`, plus any existing per-workspace durable data\n\
+    \    already stored under `<root>/<workspace_id>/...`.\n  - >-\n    On first run\
+    \ after upgrade, Litehive migrates legacy global files from\n    `~/.config/litehive/`\
+    \ (`config.yaml`, `daemons.yaml`, and any remaining\n    legacy registry input\
+    \ still supported by current code) into the unified root\n    if present, without\
+    \ overwriting newer files already in the root.\n  - >-\n    On first run after\
+    \ upgrade, Litehive also migrates legacy runtime paths that\n    this task supersedes\
+    \ (`~/.local/state/litehive/...` and any older\n    repo-local daemon log/worktree\
+    \ locations still supported) into the unified\n    root or reads them compatibly\
+    \ until copied forward.\n  - >-\n    A deprecation notice is emitted once per\
+    \ migrated install when legacy paths\n    were detected and copied.\n  - >-\n\
+    \    New writes stop targeting `~/.config/litehive` and `~/.local/state/litehive`;\n\
+    \    those locations are compatibility read/migration sources only.\n  - >-\n\
+    \    `litehive/config/paths.py` is simplified around the unified root plus\n \
+    \   per-workspace derivation helpers rather than separate config/data/state home\n\
+    \    families.\n  - >-\n    Tests cover default-root behavior, `LITEHIVE_HOME`\
+    \ override behavior, and\n    one-time migration from legacy config/state locations.\n\
+    \  - >-\n    Documentation describes the single-root layout and no longer instructs\
+    \ users\n    to inspect multiple XDG directories for Litehive global state.\n\
+    plan:\n  - >-\n    Audit every caller of global path helpers and classify each\
+    \ path as\n    root-global, per-workspace-under-root, or repo-local `.litehive/`\
+    \ so the\n    consolidation does not accidentally move committed workspace intent\
+    \ files.\n  - >-\n    Introduce a single root resolution API (`LITEHIVE_HOME`\
+    \ first,\n    `XDG_DATA_HOME/litehive` fallback) and refactor path helpers and\
+    \ callers to\n    derive all global paths from it.\n  - >-\n    Migrate daemon\
+    \ registry, global config loading, log/worktree helpers, and\n    any status/doctor/debug\
+    \ surfaces to the unified root while keeping the\n    SQLite workspace registry\
+    \ in place.\n  - >-\n    Add first-run migration logic for legacy `~/.config/litehive`,\n\
+    \    `~/.local/state/litehive`, and older repo-local runtime directories, with\
+    \ a\n    one-time deprecation notice and non-destructive copy-forward behavior.\n\
+    \  - >-\n    Update tests and fixtures to use `LITEHIVE_HOME` as the top-level\
+    \ isolation\n    mechanism and remove stale expectations around split config/state\
+    \ roots.\n  - >-\n    Update operator docs to show the new single-root filesystem\
+    \ layout and the\n    migration/deprecation behavior.\nconstraints:\n  - Keep\
+    \ `.litehive/` intent files inside the repo unchanged.\n  - Do not change config\
+    \ schema or task intent/runtime schema as part of this task.\n  - Do not revert\
+    \ the T-0339 SQLite workspace registry back to YAML.\n```\n\nFollow-up task to\
+    \ add separately:\n- `litehive task add \"Remove pre-T-0342 global path compatibility\
+    \ readers after deprecation window\" --depends-on T-0342` to delete old-path readers\
+    \ one release later. That is valid cleanup, but it should not be bundled into\
+    \ this implementation task.\n\nCoordination note:\n- T-0296 and T-0297 still describe\
+    \ `XDG_STATE_HOME` targets. Do not implement those old destinations first. Either\
+    \ update those task records to point at the unified root or close them as subsumed\
+    \ once T-0342 lands.\n"
+  files_changed: []
+  created_at: '2026-04-12T15:07:22+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: "Implemented T-0342.\n\nAcceptance evidence:\n- Unified root resolution\
+    \ now goes through `LITEHIVE_HOME` first, then `$XDG_DATA_HOME/litehive`, and\
+    \ all global/per-workspace runtime paths derive from that root in `litehive/config/paths.py`\
+    \ (`litehive_root`, `workspace_data_dir`, `workspace_logs_dir`, `workspace_worktrees_dir`)\
+    \ [lines 32-97].\n- First-run copy-forward migration is implemented for legacy\
+    \ global files (`~/.config/litehive/config.yaml`, `daemons.yaml`) plus legacy\
+    \ runtime directories from `~/.local/state/litehive/<workspace_id>/...` and repo-local\
+    \ `.litehive/logs` / `.litehive/worktrees`, with a one-time deprecation notice\
+    \ marker under the unified root [paths.py lines 146-209].\n- Workspace bootstrap\
+    \ now runs the migration and resolves worktrees from the new global root, so commands\
+    \ executed inside moved worktrees still normalize back to the main workspace [litehive/config/workspace.py\
+    \ lines 43-56, 162-197].\n- Daemon/run-all logs now write/read from `<root>/<workspace_id>/logs/run-all/`\
+    \ instead of repo-local `.litehive/logs`, via `litehive/daemon/execution.py`,\
+    \ `litehive/daemon/logs.py`, `litehive/cli/logs.py`, and `litehive/tasks/paths.py`.\n\
+    - Docs now describe the single-root layout and migration behavior in `docs/configuration.md`,\
+    \ `docs/workspace-layout.md`, and `docs/pipeline.md`.\n- Tests added/updated for\
+    \ default-root behavior, `LITEHIVE_HOME` override, migration, daemon log location,\
+    \ and worktree resolution: `tests/test_workspace_bootstrap.py`, `tests/test_config.py`,\
+    \ `tests/test_logs_command.py`, `tests/test_status_broken_states.py`.\n\nVerification:\n\
+    - `uv run ruff check --select E402,F401 litehive tests` \u2705\n- forbidden-noqa\
+    \ hook check \u2705\n- `uv run pytest -q` \u2705 (`528 passed, 5 skipped, 4 warnings\
+    \ in 129.26s`)\n"
+  files_changed: []
+  created_at: '2026-04-12T15:19:13+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: "Implemented T-0342 and addressed the after_implementing rejection.\n\n\
+    Acceptance evidence:\n- Unified root resolution still goes through `LITEHIVE_HOME`\
+    \ first, then `$XDG_DATA_HOME/litehive`, and all global/per-workspace runtime\
+    \ paths derive from that root in `litehive/config/paths.py`.\n- First-run copy-forward\
+    \ migration still covers legacy global files from `~/.config/litehive/` plus legacy\
+    \ runtime directories from `~/.local/state/litehive/<workspace_id>/...` and repo-local\
+    \ `.litehive/logs` / `.litehive/worktrees`, with a one-time deprecation notice\
+    \ marker under the unified root.\n- Workspace bootstrap still migrates legacy\
+    \ runtime state and resolves moved worktrees back to the main workspace.\n- Daemon/run-all\
+    \ logs still write/read from `<root>/<workspace_id>/logs/run-all/`, and docs remain\
+    \ updated in `docs/configuration.md`, `docs/workspace-layout.md`, and `docs/pipeline.md`.\n\
+    \nRejection fix:\n- `litehive/config/workspace_registry.py` now uses thread-local\
+    \ cached SQLite connections instead of sharing one cached connection across threads.\
+    \ This removes the cross-thread sqlite failures that surfaced during `logs --follow`\
+    \ and concurrent runtime writes.\n- `litehive/cli/logs.py` now falls back to the\
+    \ latest subagent stdout artifact when an active subagent has just finished, so\
+    \ `litehive logs --follow` no longer spuriously prints `No active subagent.` in\
+    \ the race window that caused the hook failure.\n- Added regression coverage in\
+    \ `tests/test_workspace_bootstrap.py::test_workspace_registry_uses_thread_local_connections`\
+    \ and `tests/test_logs_command.py::test_logs_follow_falls_back_to_latest_stdout_when_subagent_just_finished`.\n\
+    \nVerification:\n- `uv run ruff check --select E402,F401 litehive tests` \u2705\
+    \n- forbidden-noqa hook check \u2705\n- `uv run pytest -q` \u2705 (`530 passed,\
+    \ 5 skipped, 4 warnings in 130.17s`)\n"
+  files_changed: []
+  created_at: '2026-04-12T15:28:55+00:00'
+- role: qa
+  step: testing
+  verdict: pass
+  message: "PASS\n\nIndependent QA validation for T-0342 passed.\n\nWhat I verified:\n\
+    - Unified root resolution now goes through `LITEHIVE_HOME` first, then `$XDG_DATA_HOME/litehive`,\
+    \ with global config, daemon registry, global SQLite registry, workspace DB, logs,\
+    \ and worktrees all deriving from that root.\n- Legacy copy-forward migration\
+    \ works for `~/.config/litehive/{config,daemons}.yaml`, `~/.local/state/litehive/<workspace_id>/...`,\
+    \ and repo-local `.litehive/worktrees`, and it does not overwrite newer files\
+    \ already present in the unified root.\n- Migration notice behavior is one-time\
+    \ per install via the marker under the unified root.\n- `logs --follow` no longer\
+    \ falls into the stale `No active subagent.` window when the active subagent has\
+    \ just finished; it follows the latest stdout artifact correctly.\n- Workspace\
+    \ registry access no longer shares a SQLite connection across threads; the thread-local\
+    \ regression check passes.\n- Docs now point operators to a single global root\
+    \ instead of split XDG config/state locations.\n\nEvidence:\n- Focused pytest\
+    \ run passed:\n  `tests/test_workspace_bootstrap.py::test_litehive_home_overrides_default_root`\n\
+    \  `tests/test_workspace_bootstrap.py::test_ensure_workspace_migrates_legacy_global_and_runtime_state_once`\n\
+    \  `tests/test_workspace_bootstrap.py::test_workspace_registry_uses_thread_local_connections`\n\
+    \  `tests/test_logs_command.py::test_logs_follow_falls_back_to_latest_stdout_when_subagent_just_finished`\n\
+    \  `tests/test_logs_command.py::test_logs_follow_streams_active_stdout_until_subagent_finishes`\n\
+    \  `tests/test_status_broken_states.py::test_status_reports_failed_last_cycle`\n\
+    \  `tests/test_config.py::test_resolve_workspace_walks_up_and_normalizes_worktree`\n\
+    - Additional manual repro with a temporary custom `LITEHIVE_HOME` confirmed legacy\
+    \ config, daemon registry, state logs, and repo-local worktrees are copied into\
+    \ the unified root and that a second run preserves the newer root copy.\n\nNo\
+    \ acceptance gap found in the implemented scope.\n"
+  files_changed: []
+  created_at: '2026-04-12T15:34:03+00:00'
+- role: reviewer
+  step: accepting
+  verdict: reject
+  message: "Reject.\n\nEXPECTED behavior:\nCommands started from inside a migrated/unified-root\
+    \ worktree must normalize back to that worktree's owning workspace, even when\
+    \ multiple workspaces are registered and task ids overlap across workspaces. This\
+    \ was part of the acceptance evidence for T-0342 and is required for the consolidated\
+    \ layout to be safe in normal multi-workspace use.\n\nOBSERVED behavior:\n`resolve_workspace()`\
+    \ can return the wrong workspace when invoked from `${LITEHIVE_HOME}/<workspace_id>/worktrees/<task_id>/...`.\
+    \ If another registered workspace has the same task id, the resolver falls through\
+    \ to the registry/task-id scan and picks the first matching workspace instead\
+    \ of the workspace that owns the current worktree path.\n\nConcrete evidence:\n\
+    - Focused pytest run failed when executed in a realistic sequence:\n  `uv run\
+    \ pytest -q tests/test_workspace_bootstrap.py::test_litehive_home_overrides_default_root\
+    \ tests/test_workspace_bootstrap.py::test_ensure_workspace_migrates_legacy_global_and_runtime_state_once\
+    \ tests/test_workspace_bootstrap.py::test_workspace_registry_uses_thread_local_connections\
+    \ tests/test_logs_command.py::test_logs_follow_falls_back_to_latest_stdout_when_subagent_just_finished\
+    \ tests/test_config.py::test_resolve_workspace_walks_up_and_normalizes_worktree`\n\
+    - Failure:\n  `tests/test_config.py::test_resolve_workspace_walks_up_and_normalizes_worktree`\n\
+    \  expected the current workspace root, but `resolve_workspace(None)` returned\
+    \ a different previously registered workspace.\n- Standalone repro also fails:\n\
+    \  1. Set `LITEHIVE_HOME` to a temp directory.\n  2. Create two workspaces `ws1`\
+    \ and `ws2` with `ensure_workspace()`.\n  3. Create one task in each workspace\
+    \ so both get task id `T-0001`.\n  4. `cd` into `${LITEHIVE_HOME}/<ws2-id>/worktrees/T-0001/src`\
+    \ and set `LITEHIVE_TASK_ID=T-0001`.\n  5. Call `resolve_workspace(None)`.\n \
+    \ 6. It returns `ws1`, not `ws2`.\n- Relevant code path:\n  [litehive/config/workspace.py](/home/alexey/git/litehive/litehive/config/workspace.py:136)\
+    \ only walks parent directories looking for repo-local `.litehive/`; from a unified-root\
+    \ worktree that fails, and lines 146-150 then choose the first registered workspace\
+    \ containing the task id.\n\nAcceptance criteria not met:\n- `Per-workspace runtime\
+    \ state also lives under that root: <root>/<workspace_id>/worktrees/ ...` is not\
+    \ safely usable because commands run from those moved worktrees do not reliably\
+    \ resolve back to the owning workspace.\n- The implementation note / evidence\
+    \ that `commands executed inside moved worktrees still normalize back to the main\
+    \ workspace` is false in a realistic multi-workspace scenario.\n- Test coverage\
+    \ is not sufficient as claimed, because the existing worktree-normalization test\
+    \ only passes in isolation and misses this multi-workspace collision case.\n\n\
+    What needs to change:\n- Teach `resolve_workspace()` to detect the unified-root\
+    \ worktree path directly from `cwd` before falling back to registry/task-id lookup,\
+    \ or otherwise map current worktree paths back to the owning workspace without\
+    \ relying on task-id uniqueness across workspaces.\n- Add a regression test that\
+    \ registers at least two workspaces with the same task id and asserts that resolving\
+    \ from the second workspace's unified-root worktree returns the second workspace.\n"
+  files_changed: []
+  created_at: '2026-04-12T15:35:54+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: "Implemented T-0342 and addressed the reviewer rejection.\n\nAcceptance\
+    \ evidence:\n- Unified root resolution still goes through `LITEHIVE_HOME` first,\
+    \ then `$XDG_DATA_HOME/litehive`, with global config, daemon registry, global\
+    \ SQLite registry, workspace DB, logs, and worktrees all deriving from that root.\n\
+    - Legacy copy-forward migration still covers `~/.config/litehive/{config,daemons}.yaml`,\
+    \ `~/.local/state/litehive/<workspace_id>/...`, and repo-local `.litehive/logs`\
+    \ / `.litehive/worktrees`, with a one-time deprecation notice marker.\n- Commands\
+    \ started from inside unified-root worktrees now normalize back to the owning\
+    \ workspace before any task-id-based registry fallback. `litehive/config/workspace.py`\
+    \ now resolves the current cwd through `_validate_workspace_root()` first, so\
+    \ moved worktrees are safe even when multiple registered workspaces contain the\
+    \ same task id.\n- Daemon/run-all logs still write/read from `<root>/<workspace_id>/logs/run-all/`,\
+    \ and docs remain updated in `docs/configuration.md`, `docs/workspace-layout.md`,\
+    \ and `docs/pipeline.md`.\n\nReviewer-rejection fix:\n- Added direct unified-root\
+    \ worktree detection in `resolve_workspace()` so `${LITEHIVE_HOME}/<workspace_id>/worktrees/<task_id>/...`\
+    \ maps back to the correct workspace without relying on task-id uniqueness across\
+    \ workspaces.\n- Added regression coverage in `tests/test_config.py::test_resolve_workspace_prefers_current_unified_root_worktree_over_registry_task_id_collision`,\
+    \ which creates two registered workspaces with overlapping `T-0001` ids and asserts\
+    \ resolution from the second workspace's unified-root worktree returns the second\
+    \ workspace.\n- Previously added thread-local workspace-registry connections and\
+    \ `logs --follow` fallback behavior remain covered and passing.\n\nVerification:\n\
+    - `uv run ruff check --select E402,F401 litehive tests` \u2705\n- forbidden-noqa\
+    \ hook check \u2705\n- `uv run pytest -q` \u2705 (`531 passed, 5 skipped, 4 warnings\
+    \ in 129.17s`)\n"
+  files_changed: []
+  created_at: '2026-04-12T15:39:17+00:00'
+- role: qa
+  step: testing
+  verdict: pass
+  message: "PASS\n\nIndependent QA re-validation for the reviewer rejection fix passed.\n\
+    \nWhat I verified:\n- `resolve_workspace()` now normalizes the current working\
+    \ directory through `_validate_workspace_root()` before any task-id-based registry\
+    \ fallback, so a path under `${LITEHIVE_HOME}/<workspace_id>/worktrees/...` maps\
+    \ back to its owning workspace first.\n- The overlapping-task-id regression is\
+    \ covered by `tests/test_config.py::test_resolve_workspace_prefers_current_unified_root_worktree_over_registry_task_id_collision`.\n\
+    - Previously claimed T-0342 behaviors still hold in the focused regression slice:\
+    \ unified root override, one-time migration, thread-local registry behavior, and\
+    \ `logs --follow` latest-stdout fallback.\n\nEvidence:\n- Re-ran the exact previously\
+    \ failing sequence plus the new collision regression test:\n  `uv run pytest -q\
+    \ tests/test_workspace_bootstrap.py::test_litehive_home_overrides_default_root\
+    \ tests/test_workspace_bootstrap.py::test_ensure_workspace_migrates_legacy_global_and_runtime_state_once\
+    \ tests/test_workspace_bootstrap.py::test_workspace_registry_uses_thread_local_connections\
+    \ tests/test_logs_command.py::test_logs_follow_falls_back_to_latest_stdout_when_subagent_just_finished\
+    \ tests/test_config.py::test_resolve_workspace_walks_up_and_normalizes_worktree\
+    \ tests/test_config.py::test_resolve_workspace_prefers_current_unified_root_worktree_over_registry_task_id_collision`\n\
+    \  Result: `6 passed`.\n- Manual repro with two registered workspaces under a\
+    \ temporary `LITEHIVE_HOME`, both containing `T-0001`, now resolves correctly\
+    \ from `ws2`'s unified-root worktree:\n  `resolve_workspace(None)` returned `ws2`,\
+    \ matching the owning workspace, not `ws1`.\n\nNo acceptance gap found after the\
+    \ fix.\n"
+  files_changed: []
+  created_at: '2026-04-12T15:42:24+00:00'
+- role: reviewer
+  step: accepting
+  verdict: pass
+  message: 'Pass.
+
+
+    T-0342 now meets the reviewer-blocking acceptance gap from the prior rejection.
+
+
+    What I verified:
+
+    - `resolve_workspace()` now normalizes the current cwd through `_validate_workspace_root()`
+    before registry/task-id fallback, so paths under `${LITEHIVE_HOME}/<workspace_id>/worktrees/...`
+    resolve back to the owning workspace instead of whichever registered workspace
+    happens to share the task id.
+
+    - The new regression test `tests/test_config.py::test_resolve_workspace_prefers_current_unified_root_worktree_over_registry_task_id_collision`
+    covers the exact multi-workspace collision case that previously broke acceptance.
+
+    - The exact previously failing focused sequence now passes.
+
+    - A direct manual repro with two registered workspaces under a temporary `LITEHIVE_HOME`,
+    both containing `T-0001`, now resolves correctly from `ws2`''s unified-root worktree:
+    `resolve_workspace(None)` returned `ws2`.
+
+    - Docs still describe the single-root layout under `${LITEHIVE_HOME:-~/.local/share/litehive}`
+    and point logs/worktrees at the unified root.
+
+
+    Concrete evidence:
+
+    - `uv run pytest -q tests/test_workspace_bootstrap.py::test_litehive_home_overrides_default_root
+    tests/test_workspace_bootstrap.py::test_ensure_workspace_migrates_legacy_global_and_runtime_state_once
+    tests/test_workspace_bootstrap.py::test_workspace_registry_uses_thread_local_connections
+    tests/test_logs_command.py::test_logs_follow_falls_back_to_latest_stdout_when_subagent_just_finished
+    tests/test_config.py::test_resolve_workspace_walks_up_and_normalizes_worktree
+    tests/test_config.py::test_resolve_workspace_prefers_current_unified_root_worktree_over_registry_task_id_collision`
+    -> `6 passed`
+
+    - Manual repro under temporary `LITEHIVE_HOME`: from `ws2` worktree path, `resolve_workspace(None)`
+    returned `ws2` as expected.
+
+
+    Reviewer judgment:
+
+    - The prior worktree-resolution regression is concretely fixed.
+
+    - No remaining acceptance gap was found in the validated scope for this retry.
+
+    '
+  files_changed: []
+  created_at: '2026-04-12T15:43:16+00:00'

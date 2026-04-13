@@ -1,20 +1,14 @@
 id: T-0234
 slug: add-all-done-flag-to-litehive-archive-command
 title: Add --all-done flag to litehive archive command
-depends_on: []
+created_at: '2026-04-08T07:48:05+00:00'
 task_type: null
-engine: null
-model: null
 mode: implementation
 pipeline_mode: full
-status: done
-flag_reason: null
-pipeline_status: done
 priority: medium
 pm_complexity: null
 planned_effort: null
-created_at: '2026-04-08T07:48:05+00:00'
-updated_at: '2026-04-09T01:05:58+00:00'
+depends_on: []
 goal: litehive archive without args currently tries to archive all done tasks but
   fails on missing references. Add explicit --all-done flag for bulk archival that
   skips missing/broken tasks gracefully. Without --all-done or a task_id, show usage
@@ -27,82 +21,9 @@ acceptance_criteria:
 constraints: []
 plan: []
 human_checkpoints: []
-subagents:
-- id: SA-0001
-  role: planner
-  engine: codex
-  status: completed
-  path: subagents/SA-0001-planner
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0002
-  role: swe
-  engine: codex
-  status: completed
-  path: subagents/SA-0002-swe
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0003
-  role: qa
-  engine: codex
-  status: completed
-  path: subagents/SA-0003-qa
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0004
-  role: reviewer
-  engine: codex
-  status: completed
-  path: subagents/SA-0004-reviewer
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0005
-  role: merge-resolver
-  engine: claude
-  status: completed
-  path: subagents/SA-0005-merge-resolver
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0006
-  role: merge-resolver
-  engine: claude
-  status: completed
-  path: subagents/SA-0006-merge-resolver
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0007
-  role: swe
-  engine: codex
-  status: completed
-  path: subagents/SA-0007-swe
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0008
-  role: qa
-  engine: codex
-  status: completed
-  path: subagents/SA-0008-qa
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0009
-  role: recovery
-  engine: codex
-  status: completed
-  path: subagents/SA-0009-recovery
-  sandboxed: false
-  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0234 add-all-done-flag-to-litehive-archive-command'
-  commit_sha: 2a34bc489a8f37abd4c6c1c974ca390f99685ccc
-  checkpoint_base_sha: 3114875f192700909a7dbbc98bffb8fb704f4fef
-  checkpoint_attempts: 1
-  rolled_back_checkpoint_attempt: null
-  merge_agent_attempts: 1
-  worktree_path: null
-retry_policy:
-  max_retries: null
-  stage_retry_limit: null
 created_from: null
 upstream_origin: null
 github_origin: null

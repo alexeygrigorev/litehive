@@ -1,20 +1,14 @@
 id: T-0345
 slug: litehive-status-should-report-whether-the-daemon
 title: '''litehive status'' should report whether the daemon is alive or dead'
-depends_on: []
+created_at: '2026-04-11T07:26:45+00:00'
 task_type: adapter
-model: null
 mode: tasks
 pipeline_mode: full
-status: duplicate
-flag_reason: null
-flag_count: 0
-pipeline_status: backlog
 priority: high
 pm_complexity: simple
 planned_effort: s
-created_at: '2026-04-11T07:26:45+00:00'
-updated_at: '2026-04-11T07:35:32+00:00'
+depends_on: []
 goal: 'Today ''litehive status'' shows workspace state (active_task_id, queued_tasks,
   pool_stop_reason, engine_monitoring) but does not report whether the background
   runner process is actually alive. This lets a dead daemon hide behind normal-looking
@@ -40,19 +34,9 @@ plan:
 - Implement the adapter change close to the integration seam.
 - Verify the adapter path with a focused test or representative run.
 human_checkpoints: []
-subagents: []
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0345 litehive-status-should-report-whether-the-daemon'
-  commit_sha: null
-  checkpoint_base_sha: null
-  checkpoint_attempts: 0
-  rolled_back_checkpoint_attempt: null
-  merge_agent_attempts: 0
-  worktree_path: null
-retry_policy:
-  max_retries: null
-  stage_retry_limit: null
 created_from: null
 upstream_origin: null
 github_origin: null

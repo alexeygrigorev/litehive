@@ -1,0 +1,247 @@
+- role: planner
+  step: grooming
+  verdict: pass
+  message: "Grooming pass.\n\nReal user problem: `ensure_workspace()` is a bootstrap\
+    \ boundary and must fail closed when the caller points it at an unsafe path. The\
+    \ bug is not just `.litehive/.litehive/`; it is any attempt to initialize a new\
+    \ workspace from inside an existing workspace control tree or managed worktree\
+    \ path, plus any raw path string that still contains shell-variable syntax and\
+    \ would create state in the wrong place.\n\nScope for implementation:\n- Keep\
+    \ this limited to workspace-root validation in `litehive/config/workspace.py`\
+    \ and directly affected tests.\n- Do not expand into broader CLI parsing, path\
+    \ normalization redesign, or unrelated worktree behavior.\n- Treat managed worktree\
+    \ paths under `.litehive/worktrees/` as invalid for `ensure_workspace()` even\
+    \ if `resolve_workspace()` may still normalize them for read/lookup flows.\n\n\
+    Important shaping note: the current code already covers one narrow case (`ensure_workspace()`\
+    \ under `.litehive/worktrees/...`) and leading `$` for some sources. The missing\
+    \ product requirement is broader: reject any target located anywhere inside an\
+    \ existing workspace tree whose parent chain already contains a sibling `.litehive/`,\
+    \ and reject unresolved shell vars anywhere in the raw input string, not only\
+    \ a leading `$`.\n\nTASK_UPDATE:\ngoal: Prevent accidental workspace bootstrap\
+    \ into nested control paths or unresolved shell-variable paths. `ensure_workspace()`\
+    \ must reject any target that would create `.litehive/` inside an existing Litehive\
+    \ workspace, any managed worktree path under `.litehive/worktrees/`, and any raw\
+    \ path string that still contains unresolved shell-variable syntax.\nacceptance_criteria:\n\
+    \  - `ensure_workspace()` raises `ValueError` when the requested root is inside\
+    \ an existing workspace tree, including paths whose parent chain contains a `.litehive/`\
+    \ directory even if the target itself is not under `.litehive/`.\n  - `ensure_workspace()`\
+    \ raises `ValueError` when the requested root is inside another `.litehive/` directory\
+    \ or under `.litehive/worktrees/`.\n  - `ensure_workspace()` raises `ValueError`\
+    \ for unresolved shell-variable syntax in the raw path string, including `$NAME`\
+    \ and `${NAME}` forms, whether at the start of the path or later in the string.\n\
+    \  - Error messages state both why the path was rejected and what the operator\
+    \ should do instead, for example choose the real repo root or pass an expanded\
+    \ absolute path.\n  - Tests cover the parent-workspace case, `.litehive` nesting\
+    \ case, managed-worktree case, leading `$NAME`, embedded `$NAME`, and `${NAME}`\
+    \ inputs.\nconstraints:\n  - Keep changes scoped to `ensure_workspace()` validation\
+    \ and directly affected tests.\n  - Preserve existing `resolve_workspace()` behavior\
+    \ unless a shared helper change is required for correctness and remains backwards-compatible\
+    \ for lookup flows.\nplan:\n  - Audit current validation helpers in `litehive/config/workspace.py`\
+    \ to separate bootstrap-only rejection rules from workspace-resolution aliasing\
+    \ rules.\n  - Implement a single validation path for `ensure_workspace()` that\
+    \ detects: ancestors named `.litehive`, any parent directory already containing\
+    \ `.litehive`, and managed worktree paths under `.litehive/worktrees/`.\n  - Expand\
+    \ raw-path validation from only `startswith(\"$\")` to unresolved shell-variable\
+    \ patterns anywhere in the input string, with focused and operator-readable error\
+    \ text.\n  - Add focused tests in existing workspace/config bootstrap test modules\
+    \ for each guard case and keep scope limited to these validation paths.\npm_complexity:\
+    \ moderate\nplanned_effort: s\npriority: high\n\nNo follow-up task is needed at\
+    \ grooming. This task is implementation-ready once the agent treats bootstrap\
+    \ validation separately from lookup normalization.\n"
+  files_changed: []
+  created_at: '2026-04-12T16:36:31+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: "Implemented T-0299 in `litehive/config/workspace.py` and `tests/test_config.py`.\n\
+    \nAcceptance criteria evidence:\n- `ensure_workspace()` now rejects unresolved\
+    \ shell-variable syntax anywhere in the raw path string (`$NAME` and `${NAME}`),\
+    \ with operator guidance to pass the expanded absolute path instead. See `litehive/config/workspace.py:63-70`\
+    \ and tests `tests/test_config.py:475-487`.\n- `ensure_workspace()` now rejects\
+    \ bootstrap targets inside `.litehive` control directories and specifically under\
+    \ `.litehive/worktrees/`, with messages telling the operator to choose the real\
+    \ repo root. See `litehive/config/workspace.py:80-129` and tests `tests/test_config.py:450-463`.\n\
+    - `ensure_workspace()` now rejects any nested subdirectory whose parent chain\
+    \ already contains a Litehive workspace root. See `litehive/config/workspace.py:133-139,215-221`\
+    \ and test `tests/test_config.py:466-472`.\n- Lookup behavior remains intact because\
+    \ the stricter nested-workspace rejection is applied only from `ensure_workspace()`,\
+    \ not the general `resolve_workspace()` aliasing flow.\n\nChecks run:\n- `uv run\
+    \ ruff check --select E402,F401 litehive tests` \u2705\n- forbidden `noqa` suppression\
+    \ hook command \u2705\n- `uv run pytest -q` \u2705 (`539 passed, 5 skipped, 4\
+    \ warnings in 123.36s`)\n"
+  files_changed: []
+  created_at: '2026-04-12T16:42:05+00:00'
+- role: qa
+  step: testing
+  verdict: pass
+  message: 'Verified `ensure_workspace()` against the T-0299 acceptance criteria.
+
+
+    Observed behavior matches the task:
+
+    - Rejects bootstrap targets inside existing Litehive workspace trees, including
+    ordinary nested subdirectories whose parent chain already contains a sibling `.litehive/`.
+
+    - Rejects targets inside `.litehive` control paths, including `.litehive/.litehive`-style
+    nesting and managed worktree paths under `.litehive/worktrees/`.
+
+    - Rejects unresolved shell-variable syntax anywhere in the raw path string for
+    both `$NAME` and `${NAME}` forms, with guidance to pass the expanded absolute
+    path instead.
+
+    - Error messages explain both why the path is unsafe and what the operator should
+    do instead.
+
+    - Focused tests cover the parent-workspace case, `.litehive` control case, managed-worktree
+    case, leading `$NAME`, embedded `$NAME`, and `${NAME}`.
+
+
+    Validation performed:
+
+    - Reviewed `litehive/config/workspace.py` and `tests/test_config.py`.
+
+    - Ran `uv run pytest -q tests/test_config.py -k ''ensure_workspace_rejects or
+    resolve_workspace_rejects_unresolved_workspace_root_env''` -> 7 passed.
+
+    - Manually probed `.litehive/.litehive`, `.litehive/tasks`, `.litehive/worktrees/T-1`,
+    nested subdirectory, `/tmp/$tmpdir/project`, and `/tmp/${tmpdir}/project`; each
+    raised `ValueError` with the expected operator-facing guidance.
+
+
+    QA verdict: pass.
+
+    '
+  files_changed: []
+  created_at: '2026-04-12T16:57:26+00:00'
+- role: reviewer
+  step: accepting
+  verdict: reject
+  message: "Rejected.\n\nEXPECTED behavior:\n- The change must include tests covering\
+    \ all listed guard cases, including the specific `.litehive` nesting regression\
+    \ (`.litehive/.litehive`) in addition to managed worktrees, parent-workspace nesting,\
+    \ and unresolved shell-variable inputs.\n\nOBSERVED behavior:\n- `ensure_workspace()`\
+    \ implementation in `litehive/config/workspace.py` does reject the probed unsafe\
+    \ paths, including `.litehive/.litehive`, `.litehive/tasks`, `.litehive/worktrees/T-1`,\
+    \ nested subdirectories under an existing workspace root, and unresolved `$NAME`\
+    \ / `${NAME}` inputs.\n- However, the committed tests in `tests/test_config.py`\
+    \ only cover:\n  - managed worktree path under `.litehive/worktrees/`\n  - direct\
+    \ `.litehive` control directory root\n  - nested subdirectory under an existing\
+    \ workspace root\n  - leading / embedded / braced unresolved shell vars\n- There\
+    \ is no automated test for the explicit `.litehive/.litehive` nesting regression\
+    \ named in the task and acceptance notes.\n\nREPRODUCTION:\n1. Inspect `tests/test_config.py`\
+    \ around lines 450-487.\n2. Observe there is no case calling `ensure_workspace(tmp_path\
+    \ / '.litehive' / '.litehive')` or equivalent.\n3. Compare that to the acceptance\
+    \ requirement that tests cover the `.litehive` nesting case.\n\nACCEPTANCE CRITERIA\
+    \ NOT MET:\n- Tests cover all guard cases.\n- More specifically, the requested\
+    \ `.litehive` nesting case is not covered by an automated test, so the regression\
+    \ is not pinned.\n\nWhat to do:\n- Add a focused test for `.litehive/.litehive`\
+    \ (or an equivalent nested path inside a `.litehive` control tree) asserting `ValueError`\
+    \ with the operator-facing guidance.\n- Keep scope limited to `ensure_workspace()`\
+    \ validation/tests as planned.\n"
+  files_changed: []
+  created_at: '2026-04-12T16:58:30+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: "Addressed the reviewer rejection by adding the missing automated regression\
+    \ test for explicit `.litehive/.litehive` nesting in `tests/test_config.py`.\n\
+    \nAcceptance criteria evidence:\n- The explicit `.litehive/.litehive` regression\
+    \ is now pinned by `test_ensure_workspace_rejects_nested_litehive_control_directory`\
+    \ at `tests/test_config.py:466-470`, asserting `ValueError` with operator-facing\
+    \ guidance to choose the real repo root.\n- Existing focused tests still cover\
+    \ the remaining requested guard cases:\n  - managed worktree path under `.litehive/worktrees/`\
+    \ at `tests/test_config.py:450-456`\n  - direct `.litehive` control directory\
+    \ at `tests/test_config.py:459-463`\n  - nested subdirectory under an existing\
+    \ workspace root at `tests/test_config.py:473-479`\n  - leading / embedded / braced\
+    \ unresolved shell vars at `tests/test_config.py:482-494`\n- Runtime behavior\
+    \ remains unchanged from the already-validated implementation in `litehive/config/workspace.py`;\
+    \ this follow-up is limited to the missing regression coverage the reviewer requested.\n\
+    \nChecks run:\n- `uv run pytest -q tests/test_config.py -k 'nested_litehive_control_directory\
+    \ or ensure_workspace_rejects or resolve_workspace_rejects_unresolved_workspace_root_env'`\
+    \ \u2705 (`8 passed, 61 deselected`)\n- `uv run ruff check --select E402,F401\
+    \ litehive tests` \u2705\n- forbidden `noqa` suppression hook command \u2705\n\
+    - `uv run pytest -q` \u2705 (`540 passed, 5 skipped, 4 warnings in 122.31s`)\n"
+  files_changed: []
+  created_at: '2026-04-12T17:01:34+00:00'
+- role: qa
+  step: testing
+  verdict: pass
+  message: 'Re-verified T-0299 after the reviewer rejection.
+
+
+    Observed behavior now satisfies the acceptance criteria:
+
+    - The explicit `.litehive/.litehive` regression is covered by an automated test:
+    `test_ensure_workspace_rejects_nested_litehive_control_directory` in `tests/test_config.py`.
+
+    - Focused tests cover the full requested guard set: managed worktree path under
+    `.litehive/worktrees/`, direct `.litehive` control directory, explicit `.litehive/.litehive`
+    nesting, nested subdirectory under an existing workspace root, and leading / embedded
+    / braced unresolved shell-variable inputs.
+
+    - `ensure_workspace()` behavior remains aligned with the task: it rejects nested
+    workspace bootstraps, `.litehive` control paths, managed worktree paths, and unresolved
+    shell-variable syntax with operator-facing guidance.
+
+
+    Validation performed:
+
+    - Reviewed `tests/test_config.py` to confirm the added `.litehive/.litehive` regression
+    test is present.
+
+    - Ran `uv run pytest -q tests/test_config.py -k ''nested_litehive_control_directory
+    or ensure_workspace_rejects or resolve_workspace_rejects_unresolved_workspace_root_env''`
+    -> 8 passed.
+
+
+    QA verdict: pass.
+
+    '
+  files_changed: []
+  created_at: '2026-04-12T17:04:13+00:00'
+- role: reviewer
+  step: accepting
+  verdict: pass
+  message: 'Accepted.
+
+
+    I re-checked the exact gap from the prior rejection. The implementation in `litehive/config/workspace.py`
+    still enforces the required bootstrap-time rejections, and the missing automated
+    regression coverage has now been added.
+
+
+    What is now verified:
+
+    - `ensure_workspace()` rejects targets inside `.litehive` control paths, including
+    the explicit `.litehive/.litehive` regression.
+
+    - `ensure_workspace()` rejects managed worktree paths under `.litehive/worktrees/`.
+
+    - `ensure_workspace()` rejects nested subdirectories whose parent chain already
+    contains an existing Litehive workspace root.
+
+    - `ensure_workspace()` rejects unresolved shell-variable syntax for leading `$NAME`,
+    embedded `$NAME`, and `${NAME}` inputs.
+
+    - Error messages include both the reason and operator guidance to choose the real
+    repo root or pass the expanded absolute path.
+
+
+    Evidence reviewed:
+
+    - `tests/test_config.py:466-470` now adds `test_ensure_workspace_rejects_nested_litehive_control_directory`,
+    which directly calls `ensure_workspace(tmp_path / ''.litehive'' / ''.litehive'')`
+    and asserts operator-facing guidance.
+
+    - The surrounding focused tests cover the remaining required guard cases.
+
+    - Targeted verification command passed: `uv run pytest -q tests/test_config.py
+    -k ''nested_litehive_control_directory or ensure_workspace_rejects or resolve_workspace_rejects_unresolved_workspace_root_env''`
+    -> `8 passed`.
+
+
+    Verdict: pass.
+
+    '
+  files_changed: []
+  created_at: '2026-04-12T17:04:54+00:00'

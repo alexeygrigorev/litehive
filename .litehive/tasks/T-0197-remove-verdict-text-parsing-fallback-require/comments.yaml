@@ -1,0 +1,269 @@
+- role: planner
+  step: grooming
+  verdict: pass
+  message: "Shaped this task to focus on the remaining runtime gap: agents already\
+    \ do not get verdicts inferred from transcript text in `litehive/agents/parsing.py`,\
+    \ so the work here is to enforce the missing-report recovery path cleanly. Treat\
+    \ this as a bugfix to the nudge/failure flow: if no `litehive agent report` verdict\
+    \ exists for the stage, continue the same session once with an explicit CLI instruction;\
+    \ if the agent still does not report, fail the stage clearly.\n\nTASK_UPDATE:\n\
+    goal: Require stage agents to submit verdicts via `litehive agent report`, with\
+    \ one explicit resume/nudge when no report is submitted and no transcript-based\
+    \ verdict extraction.\nacceptance_criteria:\n  - If an agent turn ends without\
+    \ a persisted CLI report for the current step and without a resource-limit classification,\
+    \ the runner resumes the same session once with an explicit instruction to run\
+    \ `litehive agent report --verdict <pass|reject|blocked>`.\n  - Verdict resolution\
+    \ reads only persisted Litehive reports for the current step; transcript text,\
+    \ including `VERDICT:` lines or similar free-form output, is never parsed or inferred\
+    \ into a verdict.\n  - If the nudged agent still does not submit a CLI report,\
+    \ the stage fails with a clear missing-report error that names the `litehive agent\
+    \ report` requirement.\n  - Resource-limit exits still resolve to `blocked` without\
+    \ requiring a CLI verdict.\n  - Tests cover both paths: missing report then successful\
+    \ CLI submission after nudge, and missing report again after nudge leading to\
+    \ a clear stage failure.\nconstraints:\n  - Keep changes scoped to verdict submission\
+    \ enforcement, same-session nudge/resume behavior, and the related tests/docs.\n\
+    plan:\n  - Audit the stage-reporting path for any remaining transcript-verdict\
+    \ extraction helpers or prompt text that still imply `VERDICT:` parsing and remove\
+    \ or update them.\n  - Update the missing-report handling so the first miss triggers\
+    \ a same-session nudge with explicit `litehive agent report` guidance, not verdict\
+    \ inference.\n  - Ensure a second miss surfaces a clear failure/error path for\
+    \ the stage runner.\n  - Add or update unit/integration coverage for both the\
+    \ nudge-success and nudge-failure flows.\npm_complexity: moderate\nplanned_effort:\
+    \ m\npriority: high\n"
+  files_changed: []
+  created_at: '2026-04-13T07:21:35+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Implemented the missing-report recovery path so a stage that finishes
+    without a CLI verdict gets one continued turn with an explicit `litehive agent
+    report --verdict <pass|reject|blocked> --message-file /tmp/verdict_msg.txt` instruction,
+    and if it still does not report the stage now crashes with a clear `NudgeBudgetExhausted`
+    message that says the agent did not submit a verdict via `litehive agent report`
+    after being nudged.
+
+
+    Acceptance criteria evidence:
+
+    - Agents that do not run litehive report get their session continued with explicit
+    instruction to submit via CLI: `AgentNode.build_nudge_prompt()` now injects the
+    exact report command, and `prompt_serializer._nudge_section()` surfaces that exact
+    CLI command before any more exploratory work. Covered by `tests/test_pipeline_v2_prompt_serializer.py::test_serialize_includes_nudge_message_when_present`
+    and `tests/test_pipeline_v2_heru_factory.py::test_heru_engine_adapter_nudges_when_no_fresh_cli_report_exists`.
+
+    - `_parse_verdict` text fallback is removed / no verdict inferred from transcript
+    text: this was already true in the current branch; the runtime path remains thread-comment
+    driven in `litehive/agents/parsing.py` and `litehive/pipeline/heru_factory.py`,
+    with no text verdict extraction added back by this change.
+
+    - If agent still does not submit after being asked, stage fails with clear error:
+    `AgentNode` now returns `Crash(exc_type="NudgeBudgetExhausted")` with a direct
+    CLI-report error message after the single allowed nudge. Covered by `tests/test_pipeline_v2_agent_retries.py::test_nudge_budget_exhausted_returns_crash`.
+
+
+    Verification:
+
+    - `uv run ruff check --select E402,F401 litehive tests`
+
+    - hook-equivalent forbidden-noqa guard command
+
+    - `uv run pytest -q` -> 522 passed, 5 skipped, 3 warnings in 91.93s
+
+    '
+  files_changed: []
+  created_at: '2026-04-13T07:26:23+00:00'
+- role: qa
+  step: testing
+  verdict: pass
+  message: 'QA pass for T-0197.
+
+
+    Validated focused behavior and regressions:
+
+    - `HeruEngineAdapter` now accepts only a fresh thread verdict comment created
+    after the turn via `_latest_verdict_after(...)`; if none exists it raises `NudgeRequired`
+    with `without a litehive report submission`.
+
+    - `AgentNode` nudge prompt explicitly instructs `litehive agent report --verdict
+    <pass|reject|blocked> --message-file /tmp/verdict_msg.txt` and the exhausted-nudge
+    crash is now `NudgeBudgetExhausted` with a clear `did not submit a verdict via
+    litehive agent report after being nudged` message.
+
+    - No `_parse_verdict` fallback remains in the codebase; targeted search found
+    only docs/prompts/tests mentioning `VERDICT:` text, and existing tests assert
+    transcript text is preserved only as summary text, not inferred as verdict.
+
+
+    Evidence:
+
+    - `pytest -q tests/test_pipeline_v2_agent_retries.py tests/test_pipeline_v2_heru_factory.py
+    tests/test_pipeline_v2_prompt_serializer.py tests/test_stage_result_submission.py
+    tests/test_engine_variants_and_timeline.py`
+
+    - Result: 83 passed, 5 skipped.
+
+    '
+  files_changed: []
+  created_at: '2026-04-13T07:29:54+00:00'
+- role: reviewer
+  step: accepting
+  verdict: reject
+  message: 'EXPECTED behavior:
+
+    Agents should be taught one consistent submission path: `litehive agent report
+    --verdict <pass|reject|blocked> --message-file /tmp/verdict_msg.txt`, with no
+    remaining prompt text steering them toward the legacy `litehive report` command.
+
+
+    OBSERVED behavior:
+
+    The new nudge/final prompt text uses `litehive agent report`, but the base implementing-stage
+    instructions still tell SWE to submit `litehive report --verdict pass` and to
+    never exit without calling `litehive report`.
+
+
+    Reproduction steps:
+
+    1. Inspect `litehive/pipeline/agents/swe.py:9-16`.
+
+    2. Compare with `litehive/pipeline/prompt_serializer.py:208` and `litehive/pipeline/prompt_serializer.py:362-365`.
+
+    3. The prompt source contains both commands, so an implementing agent can still
+    learn and follow the legacy CLI instead of the required agent CLI.
+
+
+    Acceptance criteria not met:
+
+    - Agents must submit verdicts via the required CLI, and the system should make
+    agents learn to use that CLI consistently.
+
+    - Current prompts still contain legacy `litehive report` instructions, so the
+    guidance is internally inconsistent.
+
+
+    What is working:
+
+    - Missing fresh CLI verdict now triggers `NudgeRequired` and a nudge prompt.
+
+    - Exhausted nudge budget now fails clearly.
+
+    - The targeted tests for nudge/crash/no-text-fallback passed.
+
+    '
+  files_changed: []
+  created_at: '2026-04-13T07:32:43+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Addressed the reviewer rejection by removing the remaining legacy `litehive
+    report` guidance from the implementing-stage prompt source. `litehive/pipeline/agents/swe.py`
+    now tells SWE agents to submit with `litehive agent report --verdict pass --message-file
+    /tmp/verdict_msg.txt` and to never exit without calling `litehive agent report`,
+    so the base stage instructions, nudge text, and final verdict block all teach
+    the same CLI path.
+
+
+    Acceptance criteria evidence:
+
+    - Agents that do not run litehive report get their session continued with explicit
+    instruction to submit via CLI: the nudge path still injects the exact `litehive
+    agent report --verdict <pass|reject|blocked> --message-file /tmp/verdict_msg.txt`
+    command in `AgentNode.build_nudge_prompt()` and `prompt_serializer._nudge_section()`.
+    Covered by `tests/test_pipeline_v2_prompt_serializer.py::test_serialize_includes_nudge_message_when_present`
+    and `tests/test_pipeline_v2_heru_factory.py::test_heru_engine_adapter_nudges_when_no_fresh_cli_report_exists`.
+
+    - `_parse_verdict` text fallback is removed: this was already true in the branch
+    before the runtime prompt fix; `litehive/agents/parsing.py` still rejects missing
+    CLI verdicts instead of parsing transcript verdict text.
+
+    - No verdict is inferred from transcript text: existing stage-result tests continue
+    to enforce reject-on-text-only behavior in `tests/test_stage_result_submission.py`
+    and `tests/test_feedback_cap.py`.
+
+    - If agent still does not submit after being asked, stage fails with clear error:
+    `AgentNode` still returns `Crash(exc_type="NudgeBudgetExhausted")` with a direct
+    `litehive agent report` error message after the single nudge. Covered by `tests/test_pipeline_v2_agent_retries.py::test_nudge_budget_exhausted_returns_crash`.
+
+    - Reviewer-specific fix: implementing-stage instructions no longer mention the
+    legacy command. Covered by `tests/test_pipeline_v2_prompt_serializer.py::test_serialize_includes_role_instructions`,
+    which asserts the prompt contains `litehive agent report --verdict pass --message-file
+    /tmp/verdict_msg.txt` and does not contain `litehive report --verdict pass`.
+
+
+    Verification:
+
+    - `uv run ruff check --select E402,F401 litehive tests`
+
+    - hook-equivalent forbidden-noqa guard command
+
+    - `uv run pytest -q` -> 522 passed, 5 skipped, 3 warnings in 89.63s
+
+    '
+  files_changed: []
+  created_at: '2026-04-13T07:35:45+00:00'
+- role: qa
+  step: testing
+  verdict: pass
+  message: 'QA pass for the T-0197 follow-up.
+
+
+    Focused validation:
+
+    - `litehive/pipeline/agents/swe.py` no longer tells implementing agents to use
+    legacy `litehive report`; it now instructs `litehive agent report --verdict pass
+    --message-file /tmp/verdict_msg.txt` and says never to exit without calling `litehive
+    agent report`.
+
+    - `tests/test_pipeline_v2_prompt_serializer.py` now asserts the serialized SWE
+    prompt contains the new CLI instruction and does not contain the old `litehive
+    report --verdict pass` or `Never exit the stage without calling litehive report`
+    wording.
+
+    - Previously validated missing-report behavior remains intact: nudges require
+    `litehive agent report ... --message-file`, no transcript verdict fallback is
+    used, and exhausted nudges fail clearly.
+
+
+    Evidence:
+
+    - `pytest -q tests/test_pipeline_v2_prompt_serializer.py tests/test_pipeline_v2_agent_retries.py
+    tests/test_pipeline_v2_heru_factory.py tests/test_stage_result_submission.py`
+
+    - Result: 36 passed.
+
+    '
+  files_changed: []
+  created_at: '2026-04-13T07:39:00+00:00'
+- role: reviewer
+  step: accepting
+  verdict: pass
+  message: 'Accepted. The remaining prompt inconsistency is fixed.
+
+
+    Validated outcome:
+
+    - Implementing-stage base instructions now tell SWE to use `litehive agent report
+    --verdict pass --message-file /tmp/verdict_msg.txt` and no longer tell agents
+    to call legacy `litehive report`.
+
+    - The nudge path and final verdict block still require `litehive agent report`,
+    so the prompt now teaches one consistent CLI path.
+
+    - The existing CLI-only verdict recovery behavior remains intact: missing fresh
+    report triggers a nudge, no verdict is inferred from transcript text, and exhausted
+    nudges fail clearly.
+
+
+    Verification:
+
+    - Inspected `litehive/pipeline/agents/swe.py` and `tests/test_pipeline_v2_prompt_serializer.py`.
+
+    - Ran `pytest -q tests/test_pipeline_v2_agent_retries.py tests/test_pipeline_v2_heru_factory.py
+    tests/test_pipeline_v2_prompt_serializer.py tests/test_stage_result_submission.py
+    tests/test_feedback_cap.py`.
+
+    - Result: 42 passed.
+
+    '
+  files_changed: []
+  created_at: '2026-04-13T07:39:54+00:00'

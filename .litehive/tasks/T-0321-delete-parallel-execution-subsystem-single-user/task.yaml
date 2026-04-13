@@ -1,20 +1,14 @@
 id: T-0321
 slug: delete-parallel-execution-subsystem-single-user
 title: Delete parallel execution subsystem (single-user never runs parallel)
-depends_on: []
+created_at: '2026-04-10T20:13:47+00:00'
 task_type: null
-model: null
 mode: implementation
 pipeline_mode: full
-status: queued
-flag_reason: null
-flag_count: 0
-pipeline_status: backlog
 priority: high
 pm_complexity: null
 planned_effort: null
-created_at: '2026-04-10T20:13:47+00:00'
-updated_at: '2026-04-10T20:13:47+00:00'
+depends_on: []
 goal: "Remove the parallel worktree execution path \u2014 single-user workflow doesn't\
   \ need it. Your .litehive/config.yaml uses parallel_capacity=1 (sequential only).\
   \ ~1170 LOC gone.\n\nFiles to delete:\n- litehive/pipeline/_parallel.py (576 LOC):\
@@ -44,19 +38,9 @@ acceptance_criteria:
 constraints: []
 plan: []
 human_checkpoints: []
-subagents: []
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0321 delete-parallel-execution-subsystem-single-user'
-  commit_sha: null
-  checkpoint_base_sha: null
-  checkpoint_attempts: 0
-  rolled_back_checkpoint_attempt: null
-  merge_agent_attempts: 0
-  worktree_path: null
-retry_policy:
-  max_retries: null
-  stage_retry_limit: null
 created_from: null
 upstream_origin: null
 github_origin: null

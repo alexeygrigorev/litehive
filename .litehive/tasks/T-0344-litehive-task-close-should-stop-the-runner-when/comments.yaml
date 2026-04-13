@@ -1,0 +1,173 @@
+- role: planner
+  step: grooming
+  verdict: pass
+  message: "Pass. T-0344 is ready for implementation.\n\nUser problem\n`litehive task\
+    \ close <id>` currently fails for the actively running task because the close\
+    \ path hits the future-task mutation guard before it stops the runner. That makes\
+    \ `close` unusable for the common \"kill this bad run now\" workflow and forces\
+    \ an extra manual `litehive stop`.\n\nImplementation guidance\n- Keep this narrowly\
+    \ scoped to active-task close.\n- `litehive/workspace/task_status.py:close_task()`\
+    \ currently calls `ensure_future_task_mutation_allowed(...)` while the task is\
+    \ still active, so it conflicts on `workspace.active_task_id`.\n- Reuse the existing\
+    \ stop path rather than inventing a second shutdown flow. `stop_current_task()`\
+    \ already handles SIGINT, waits for the runner lock to clear, recovers stale runner\
+    \ state, and clears active execution state.\n- After stopping the active run,\
+    \ apply the existing close transition so the final persisted task/state/journal\
+    \ outcome matches idle close behavior.\n- Do not redesign idle close semantics\
+    \ in this task; only remove the active-close failure mode.\n\nTest guidance\n\
+    - Add coverage for the end-to-end active close path through the CLI or equivalent\
+    \ integration surface used by `cmd_close_task`.\n- Assert that closing the active\
+    \ task succeeds without a prior `litehive stop`.\n- Assert that in-flight execution\
+    \ is actually stopped, not just hidden: runner lock / runner PID / active subagent\
+    \ state should no longer indicate a live run after close.\n- Assert final state\
+    \ matches idle close behavior: outcome status set, removed from queue, `active_task_id`\
+    \ cleared, journal written.\n- Run the relevant focused regression tests and then\
+    \ the required test suite for this task.\n\nRisk to preserve\nIf the runner cannot\
+    \ be stopped cleanly, the command should fail rather than falsely marking the\
+    \ task closed. Preserve that safety behavior while fixing the default active-close\
+    \ flow.\n\nTASK_UPDATE:\n  constraints:\n    - Prefer the smallest change that\
+    \ removes the failure mode.\n    - Do not change idle close semantics beyond making\
+    \ active close reuse the existing stop path.\n    - Call out any remaining edge\
+    \ cases or follow-up risk explicitly.\n"
+  files_changed: []
+  created_at: '2026-04-12T15:48:21+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Implemented T-0344.
+
+
+    What changed:
+
+    - `litehive/workspace/task_status.py:462-465` now detects when `close_task()`
+    targets `workspace.active_task_id` and calls `stop_current_task(root)` before
+    entering the existing close transition. This reuses the normal stop path for SIGINT,
+    runner-lock wait, stale-runner recovery, and active execution cleanup; if the
+    runner does not stop cleanly, close still fails instead of falsely marking the
+    task closed.
+
+    - `litehive/cli/queue.py:245-246` now reports `WorkspaceConflictError` from `cmd_close_task`
+    as a normal `close failed: ...` CLI failure instead of leaving it uncaught.
+
+    - Added `tests/test_task_close_active.py:23-125`, an end-to-end regression that
+    starts a real subprocess holding the runner lock/heartbeat for the active task,
+    runs `cmd_close_task`, and asserts the process exits, the runner lock file is
+    cleared, the task ends in `wont_do`, `runtime.active_subagent` is cleared, `active_task_id`
+    is null, the task is removed from the queue, and the close journal entry is written.
+
+
+    Evidence:
+
+    - `uv run pytest -q tests/test_task_close_active.py` -> passed
+
+    - `uv run ruff check --select E402,F401 litehive tests` -> passed
+
+    - `uv run pytest -q` -> 532 passed, 5 skipped, 4 warnings in 137.23s
+
+
+    Residual edge case / follow-up risk:
+
+    - Active close now intentionally writes the normal stop/interruption journal entry
+    before the existing close journal entry, because it reuses `stop_current_task()`
+    as requested. Final persisted task state matches idle close behavior, but active-close
+    history includes that extra interruption breadcrumb.
+
+    '
+  files_changed: []
+  created_at: '2026-04-12T15:55:02+00:00'
+- role: qa
+  step: testing
+  verdict: pass
+  message: 'PASS for T-0344.
+
+
+    Validated implementation against the acceptance criteria.
+
+
+    What I verified:
+
+    - `litehive/workspace/task_status.py:close_task()` now detects `state.active_task_id
+    == task_id` and calls `stop_current_task(root)` before the existing close transition.
+    This is the narrow change requested and reuses the established stop path rather
+    than introducing a second shutdown flow.
+
+    - `stop_current_task()` still preserves the safety invariant: if the runner lock
+    remains held after SIGINT, it raises `WorkspaceConflictError` and the close does
+    not proceed. This avoids falsely marking a still-running task as closed.
+
+    - `tests/test_task_close_active.py` exercises the end-to-end active-close path
+    through `cmd_close_task()` using a real subprocess that acquires the runner lock
+    and heartbeat. The test asserts the close succeeds without prior `litehive stop`,
+    the subprocess exits, the runner lock file is cleared, `runtime.active_subagent`
+    is cleared, the task status becomes `wont_do`, `active_task_id` is cleared, the
+    task is removed from the queue, and the close journal entry is written.
+
+    - CLI handling in `litehive/cli/queue.py` now reports `WorkspaceConflictError`
+    from close as a normal `close failed: ...` failure instead of leaving it uncaught.
+
+
+    Test evidence:
+
+    - `uv run pytest -q tests/test_task_close_active.py` -> passed
+
+    - `uv run pytest -q` -> 532 passed, 5 skipped, 4 warnings in 135.59s
+
+
+    Remaining note:
+
+    - Active close now records the normal stop/interruption journal breadcrumb before
+    the close journal breadcrumb because it intentionally reuses `stop_current_task()`.
+    Final persisted state matches idle close behavior, and I do not consider this
+    a blocker for T-0344.
+
+    '
+  files_changed: []
+  created_at: '2026-04-12T16:00:34+00:00'
+- role: reviewer
+  step: accepting
+  verdict: pass
+  message: 'PASS for T-0344.
+
+
+    I reviewed the implementation against the user outcome and acceptance criteria
+    and verified it locally.
+
+
+    What is correct:
+
+    - `close_task()` now detects `state.active_task_id == task_id` and calls `stop_current_task(root)`
+    before the existing close transition. This is the narrow change requested and
+    it reuses the established stop path instead of inventing a parallel shutdown flow.
+
+    - The safety invariant is preserved: if the runner lock stays held after SIGINT,
+    `stop_current_task()` raises `WorkspaceConflictError` and close does not falsely
+    mark the task closed.
+
+    - The new regression test covers the active-close path end-to-end through `cmd_close_task()`
+    with a real subprocess holding the runner lock/heartbeat. It asserts the close
+    succeeds without prior `litehive stop`, the subprocess exits, the runner lock
+    file is cleared, `runtime.active_subagent` is cleared, the task status becomes
+    `wont_do`, `active_task_id` is cleared, the task is removed from the queue, and
+    the close journal entry is written.
+
+    - CLI handling now reports close conflicts as a normal `close failed: ...` failure
+    instead of leaking an uncaught workspace conflict.
+
+
+    Verification I ran:
+
+    - `uv run pytest -q tests/test_task_close_active.py` -> 1 passed
+
+    - `uv run pytest -q` -> 532 passed, 5 skipped, 4 warnings in 134.71s
+
+
+    Non-blocking note:
+
+    - Because active close intentionally reuses `stop_current_task()`, the journal/history
+    records the normal interruption breadcrumb before the final close breadcrumb.
+    Final persisted task state matches idle close semantics, so this does not block
+    acceptance.
+
+    '
+  files_changed: []
+  created_at: '2026-04-12T16:04:28+00:00'

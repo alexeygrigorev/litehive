@@ -1,20 +1,14 @@
 id: T-0319
 slug: audit-cli-option-bloat-on-task-add-task-update
 title: Audit CLI option bloat on task add / task update / issue commands
-depends_on: []
+created_at: '2026-04-10T19:57:40+00:00'
 task_type: null
-model: null
 mode: implementation
 pipeline_mode: full
-status: queued
-flag_reason: null
-flag_count: 0
-pipeline_status: backlog
 priority: low
 pm_complexity: null
 planned_effort: null
-created_at: '2026-04-10T19:57:40+00:00'
-updated_at: '2026-04-10T19:57:40+00:00'
+depends_on: []
 goal: "After the T-0317 cleanup, `task add` still has 14 options and `task update`\
   \ has 17. Some are load-bearing for daily use (title, goal, acceptance-criteria,\
   \ priority, depends-on). Others are YAGNI flags that I rarely set at creation time\
@@ -48,19 +42,9 @@ acceptance_criteria:
 constraints: []
 plan: []
 human_checkpoints: []
-subagents: []
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0319 audit-cli-option-bloat-on-task-add-task-update'
-  commit_sha: null
-  checkpoint_base_sha: null
-  checkpoint_attempts: 0
-  rolled_back_checkpoint_attempt: null
-  merge_agent_attempts: 0
-  worktree_path: null
-retry_policy:
-  max_retries: null
-  stage_retry_limit: null
 created_from: null
 upstream_origin: null
 github_origin: null

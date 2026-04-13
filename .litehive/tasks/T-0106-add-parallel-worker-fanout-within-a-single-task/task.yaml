@@ -1,19 +1,15 @@
 id: T-0106
 slug: add-parallel-worker-fanout-within-a-single-task
 title: Add parallel worker fanout within a single task
-depends_on:
-- T-0070
+created_at: '2026-04-01T15:05:40+00:00'
 task_type: null
-engine: null
-model: null
 mode: implementation
-status: wont_do
-pipeline_status: testing
+pipeline_mode: full
 priority: medium
 pm_complexity: complex
 planned_effort: l
-created_at: '2026-04-01T15:05:40+00:00'
-updated_at: '2026-04-05T03:50:29+00:00'
+depends_on:
+- T-0070
 goal: ''
 acceptance_criteria:
 - The `implementing` stage can launch more than one SWE worker for a single task from
@@ -34,107 +30,9 @@ acceptance_criteria:
 constraints: []
 plan: []
 human_checkpoints: []
-subagents:
-- id: SA-0001
-  role: planner
-  engine: codex
-  status: completed
-  path: subagents/SA-0001-planner
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0002
-  role: swe
-  engine: codex
-  status: completed
-  path: subagents/SA-0002-swe
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0003
-  role: swe
-  engine: codex
-  status: completed
-  path: subagents/SA-0003-swe
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0004
-  role: qa
-  engine: codex
-  status: completed
-  path: subagents/SA-0004-qa
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0005
-  role: swe
-  engine: codex
-  status: completed
-  path: subagents/SA-0005-swe
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0006
-  role: qa
-  engine: codex
-  status: completed
-  path: subagents/SA-0006-qa
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0007
-  role: swe
-  engine: codex
-  status: interrupted
-  path: subagents/SA-0007-swe
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0009
-  role: recovery
-  engine: claude
-  status: failed
-  path: subagents/SA-0009-recovery
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0010
-  role: swe
-  engine: codex
-  status: completed
-  path: subagents/SA-0010-swe
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0011
-  role: qa
-  engine: codex
-  status: completed
-  path: subagents/SA-0011-qa
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0012
-  role: reviewer
-  engine: codex
-  status: completed
-  path: subagents/SA-0012-reviewer
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0013
-  role: swe
-  engine: codex
-  status: completed
-  path: subagents/SA-0013-swe
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0014
-  role: qa
-  engine: codex
-  status: interrupted
-  path: subagents/SA-0014-qa
-  sandboxed: false
-  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0106 add-parallel-worker-fanout-within-a-single-task'
-  commit_sha: null
-  checkpoint_base_sha: null
-  checkpoint_attempts: 0
-  rolled_back_checkpoint_attempt: null
-  worktree_path: null
-retry_policy:
-  max_retries: null
 created_from: null
 upstream_origin: null
+github_origin: null

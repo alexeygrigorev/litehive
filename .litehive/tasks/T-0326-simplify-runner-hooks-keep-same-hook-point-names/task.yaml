@@ -1,20 +1,14 @@
 id: T-0326
 slug: simplify-runner-hooks-keep-same-hook-point-names
 title: 'Simplify runner hooks: keep same hook point names, cut execution-mode matrix'
-depends_on: []
+created_at: '2026-04-10T20:27:08+00:00'
 task_type: null
-model: null
 mode: implementation
 pipeline_mode: full
-status: queued
-flag_reason: null
-flag_count: 0
-pipeline_status: backlog
 priority: medium
 pm_complexity: null
 planned_effort: null
-created_at: '2026-04-10T20:27:08+00:00'
-updated_at: '2026-04-10T20:27:08+00:00'
+depends_on: []
 goal: "Runner hooks today are ~386 LOC in pipeline/_hooks.py + config + normalization.\
   \ The complexity is a 3-phase execution mode system (RunnerHookConfig.hook_point,\
   \ execution_mode with 'run_all' / 'stop_on_failure', reject-on-failure plumbing,\
@@ -44,19 +38,9 @@ acceptance_criteria:
 constraints: []
 plan: []
 human_checkpoints: []
-subagents: []
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0326 simplify-runner-hooks-keep-same-hook-point-names'
-  commit_sha: null
-  checkpoint_base_sha: null
-  checkpoint_attempts: 0
-  rolled_back_checkpoint_attempt: null
-  merge_agent_attempts: 0
-  worktree_path: null
-retry_policy:
-  max_retries: null
-  stage_retry_limit: null
 created_from: null
 upstream_origin: null
 github_origin: null

@@ -1,21 +1,14 @@
 id: T-0278
 slug: reduce-noisy-jsonl-parse-warnings-for-codex
 title: Reduce noisy JSONL parse warnings for Codex command_execution payloads
-depends_on: []
+created_at: '2026-04-09T21:24:47+00:00'
 task_type: bugfix
-engine: codex
-model: null
 mode: tasks
 pipeline_mode: full
-status: duplicate
-flag_reason: null
-flag_count: 0
-pipeline_status: backlog
 priority: medium
 pm_complexity: moderate
 planned_effort: m
-created_at: '2026-04-09T21:24:47+00:00'
-updated_at: '2026-04-09T21:24:47+00:00'
+depends_on: []
 goal: Litehive should not spam iter_jsonl_payloads warnings when Codex emits command_execution
   payloads whose embedded command/output strings contain unescaped shell content.
 acceptance_criteria:
@@ -32,19 +25,9 @@ plan:
 - Implement the minimal targeted fix.
 - Run focused regression coverage for the affected behavior.
 human_checkpoints: []
-subagents: []
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0278 reduce-noisy-jsonl-parse-warnings-for-codex'
-  commit_sha: null
-  checkpoint_base_sha: null
-  checkpoint_attempts: 0
-  rolled_back_checkpoint_attempt: null
-  merge_agent_attempts: 0
-  worktree_path: null
-retry_policy:
-  max_retries: null
-  stage_retry_limit: null
 created_from: null
 upstream_origin: null
 github_origin: null

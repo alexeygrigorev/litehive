@@ -1,21 +1,15 @@
 id: T-0315
 slug: replace-if-already-implemented-just-verify-with
 title: Replace 'if already implemented just verify' with filesystem-grounded check
-depends_on:
-- T-0313
+created_at: '2026-04-10T14:55:07+00:00'
 task_type: null
-model: null
 mode: implementation
 pipeline_mode: full
-status: done
-flag_reason: null
-flag_count: 0
-pipeline_status: done
 priority: medium
 pm_complexity: null
 planned_effort: null
-created_at: '2026-04-10T14:55:07+00:00'
-updated_at: '2026-04-10T16:14:40+00:00'
+depends_on:
+- T-0313
 goal: "The implementing stage prompt currently tells the SWE: 'If the requested behavior\
   \ is already implemented, do not exit silently: run the relevant verification, confirm\
   \ the acceptance criteria against the existing code, and submit litehive report\
@@ -42,54 +36,9 @@ acceptance_criteria:
 constraints: []
 plan: []
 human_checkpoints: []
-subagents:
-- id: SA-0001
-  role: planner
-  engine: codex
-  status: completed
-  path: subagents/SA-0001-planner
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0002
-  role: swe
-  engine: codex
-  status: completed
-  path: subagents/SA-0002-swe
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0003
-  role: qa
-  engine: codex
-  status: completed
-  path: subagents/SA-0003-qa
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0004
-  role: qa
-  engine: codex
-  status: completed
-  path: subagents/SA-0004-qa
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0005
-  role: reviewer
-  engine: codex
-  status: completed
-  path: subagents/SA-0005-reviewer
-  sandboxed: false
-  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0315 replace-if-already-implemented-just-verify-with'
-  commit_sha: e762f072fe7ce77f21085e6fd1adce47fff598b7
-  checkpoint_base_sha: c0ef2783f6bef5f4445d10c90e20fc9baa2e4f79
-  checkpoint_attempts: 1
-  rolled_back_checkpoint_attempt: null
-  merge_agent_attempts: 0
-  worktree_path: null
-retry_policy:
-  max_retries: null
-  stage_retry_limit: null
 created_from: null
 upstream_origin: null
 github_origin: null

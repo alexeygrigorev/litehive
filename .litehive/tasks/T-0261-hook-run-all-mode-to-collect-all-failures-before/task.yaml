@@ -1,21 +1,14 @@
 id: T-0261
 slug: hook-run-all-mode-to-collect-all-failures-before
 title: Hook run-all mode to collect all failures before rejecting
-depends_on: []
+created_at: '2026-04-09T09:50:39+00:00'
 task_type: null
-engine: null
-model: null
 mode: implementation
 pipeline_mode: full
-status: done
-flag_reason: null
-flag_count: 0
-pipeline_status: done
 priority: medium
 pm_complexity: moderate
 planned_effort: s
-created_at: '2026-04-09T09:50:39+00:00'
-updated_at: '2026-04-09T21:51:34+00:00'
+depends_on: []
 goal: When multiple hooks run for a stage, collect all failures into one combined
   reject report instead of stopping on first. Also support fail-fast mode. Default
   is run-all so SWE gets all problems at once.
@@ -28,61 +21,9 @@ acceptance_criteria:
 constraints: []
 plan: []
 human_checkpoints: []
-subagents:
-- id: SA-0001
-  role: planner
-  engine: codex
-  status: completed
-  path: subagents/SA-0001-planner
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0002
-  role: swe
-  engine: codex
-  status: completed
-  path: subagents/SA-0002-swe
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0003
-  role: qa
-  engine: codex
-  status: completed
-  path: subagents/SA-0003-qa
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0004
-  role: recovery
-  engine: codex
-  status: completed
-  path: subagents/SA-0004-recovery
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0005
-  role: qa
-  engine: codex
-  status: completed
-  path: subagents/SA-0005-qa
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0006
-  role: reviewer
-  engine: codex
-  status: completed
-  path: subagents/SA-0006-reviewer
-  sandboxed: false
-  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0261 hook-run-all-mode-to-collect-all-failures-before'
-  commit_sha: d4b53b8ec42ab673a2a04422afc7a69332aaa1ac
-  checkpoint_base_sha: b74604eecafa236459077a976f3e87be7090b58d
-  checkpoint_attempts: 1
-  rolled_back_checkpoint_attempt: null
-  merge_agent_attempts: 0
-  worktree_path: null
-retry_policy:
-  max_retries: null
-  stage_retry_limit: null
 created_from: null
 upstream_origin: null
 github_origin: null

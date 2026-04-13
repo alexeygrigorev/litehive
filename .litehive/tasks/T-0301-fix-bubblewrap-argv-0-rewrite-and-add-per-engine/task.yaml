@@ -1,20 +1,14 @@
 id: T-0301
 slug: fix-bubblewrap-argv-0-rewrite-and-add-per-engine
 title: Fix bubblewrap argv[0] rewrite and add per-engine extra_ro_binds
-depends_on: []
+created_at: '2026-04-10T10:09:43+00:00'
 task_type: null
-model: null
 mode: implementation
 pipeline_mode: full
-status: done
-flag_reason: null
-flag_count: 0
-pipeline_status: done
 priority: high
 pm_complexity: null
 planned_effort: null
-created_at: '2026-04-10T10:09:43+00:00'
-updated_at: '2026-04-10T12:25:40+00:00'
+depends_on: []
 goal: The bubblewrap sandbox path in SandboxLauncher._wrap_bubblewrap does not rewrite
   argv[0] the way _wrap_docker does, so an engine binary that is not on PATH inside
   the sandbox (e.g. codex installed via nvm at /home/alexey/.nvm/versions/node/v24.13.1/bin/codex)
@@ -39,54 +33,9 @@ acceptance_criteria:
 constraints: []
 plan: []
 human_checkpoints: []
-subagents:
-- id: SA-0001
-  role: planner
-  engine: codex
-  status: completed
-  path: subagents/SA-0001-planner
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0002
-  role: swe
-  engine: codex
-  status: completed
-  path: subagents/SA-0002-swe
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0003
-  role: qa
-  engine: codex
-  status: completed
-  path: subagents/SA-0003-qa
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0004
-  role: reviewer
-  engine: codex
-  status: completed
-  path: subagents/SA-0004-reviewer
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0005
-  role: merge-resolver
-  engine: codex
-  status: completed
-  path: subagents/SA-0005-merge-resolver
-  sandboxed: false
-  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0301 fix-bubblewrap-argv-0-rewrite-and-add-per-engine'
-  commit_sha: 6ce7eba0e83178ef001a1d074629a3cffecca3bf
-  checkpoint_base_sha: d711ef19862b898163ca1b86c66fc8af9ad06af7
-  checkpoint_attempts: 1
-  rolled_back_checkpoint_attempt: null
-  merge_agent_attempts: 1
-  worktree_path: null
-retry_policy:
-  max_retries: null
-  stage_retry_limit: null
 created_from: null
 upstream_origin: null
 github_origin: null

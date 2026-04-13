@@ -1,0 +1,170 @@
+- role: planner
+  step: grooming
+  verdict: pass
+  message: "TASK_UPDATE:\n  goal: >-\n    Keep this task as an umbrella audit only.\
+    \ The work is too broad for one\n    implementation task and should remain split\
+    \ into focused follow-ups that each\n    remove one class of silent fallback or\
+    \ legacy masking behavior.\n  acceptance_criteria:\n    - T-0198 remains closed\
+    \ as a duplicate umbrella task rather than being implemented directly.\n    -\
+    \ Verdict fallback removal is tracked under T-0197.\n    - Structured stage-result\
+    \ parsing removal is tracked under T-0200.\n    - Legacy pre_acceptance_command\
+    \ compat removal is tracked under T-0203.\n    - Remaining cleanup/rmtree and\
+    \ engine-output parse-warning work is tracked by dedicated follow-up tasks rather\
+    \ than reopened here.\n  constraints:\n    - Do not implement code in T-0198.\n\
+    \    - Keep scope split by failure mode; do not merge unrelated fallback removals\
+    \ back into one task.\n    - Use Litehive task records as the source of truth\
+    \ for any follow-up creation or closure.\n  plan:\n    - Confirm existing child-task\
+    \ ownership before scheduling implementation.\n    - Preserve T-0198 as the duplicate\
+    \ parent/umbrella record.\n    - Recreate or relink missing child tasks for rmtree\
+    \ cleanup logging and engine-output parse warnings, since the journal references\
+    \ T-0201 and T-0202 but those records are absent in .litehive/tasks.\n    - Route\
+    \ implementation against the focused child tasks only.\n  pm_complexity: medium\n\
+    \  planned_effort: S\n  priority: medium\n  outcome: duplicate\n  outcome_reason:\
+    \ >-\n    This umbrella task was already split on 2026-04-06. Existing child records\
+    \ in\n    the repo cover verdict fallback removal (T-0197), structured stage-result\n\
+    \    submission (T-0200), and legacy pre_acceptance_command compat removal (T-0203).\n\
+    \    The journal also references T-0201 and T-0202 for engine parse warnings and\n\
+    \    rmtree cleanup behavior, but those task records are missing and should be\n\
+    \    recreated or relinked instead of reopening T-0198.\n\nPlanner assessment:\n\
+    - Keep T-0198 closed as duplicate. Reopening it would re-bundle unrelated implementation\
+    \ slices and make acceptance ambiguous.\n- Existing repo evidence supports the\
+    \ split: tests exist for structured stage-result validation, parse warnings, rmtree\
+    \ cleanup logging, and config rejection paths.\n- Data hygiene issue: `.litehive/tasks/T-0198.../journal.md`\
+    \ names T-0201 and T-0202, but no matching task records exist under `.litehive/tasks`.\n\
+    \nOperator guidance:\n- Leave this task closed.\n- If needed, recreate the missing\
+    \ slices explicitly with:\n  - `litehive task add --title \"Log engine output\
+    \ parse failures instead of silently skipping items\"`\n  - `litehive task add\
+    \ --title \"Make rmtree cleanup explicit: log targets and raise on unexpected\
+    \ failures\"`\n- Then update T-0198 notes/journal linkage so the duplicate chain\
+    \ is accurate.\n"
+  files_changed: []
+  created_at: '2026-04-13T07:45:56+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: "Pass as duplicate umbrella task; no code changes were made.\n\nEvidence:\n\
+    - `git diff --stat main...HEAD` returned no output, so this branch contains no\
+    \ prior implementation to preserve or extend.\n- `.litehive/tasks/T-0198-remove-silent-fallbacks-fail-explicitly-instead/task.yaml`\
+    \ already marks this task `status: duplicate`.\n- `.litehive/tasks/T-0198-remove-silent-fallbacks-fail-explicitly-instead/journal.md`\
+    \ says: `Task closed: duplicate. Split into T-0197 (verdict), T-0200 (structured\
+    \ submission), T-0201 (engine parsing), T-0202 (rmtree), T-0203 (legacy compat)`.\n\
+    - This matches the grooming thread update for T-0198: keep it as an umbrella audit\
+    \ only and track implementation in focused follow-up tasks rather than re-opening\
+    \ T-0198.\n\nConcrete follow-up task evidence in the workspace:\n- `T-0197` exists:\
+    \ `.litehive/tasks/T-0197-remove-verdict-text-parsing-fallback-require/task.yaml`.\n\
+    - `T-0200` exists: `.litehive/tasks/T-0200-remove-text-based-stage-report-parsing-require/task.yaml`.\n\
+    - `T-0203` exists and is completed: `.litehive/tasks/T-0203-remove-legacy-pre-acceptance-command-and-legacy/task.yaml`\
+    \ with `status: done`, `pipeline_status: done`, commit `334f54a5ae79d2b1071e04f4c1a29742a0a4f16d`.\n\
+    \nVerification run in this worktree:\n- `uv run ruff check --select E402,F401\
+    \ litehive tests` \u2705\n- forbidden `noqa` suppression check \u2705\n- `uv run\
+    \ pytest -q` \u2705 `521 passed, 5 skipped, 3 warnings in 89.28s`\n\nConclusion:\n\
+    - T-0198 should remain passed as a duplicate umbrella task, not implemented directly\
+    \ in this branch.\n"
+  files_changed: []
+  created_at: '2026-04-13T07:49:08+00:00'
+- role: qa
+  step: testing
+  verdict: reject
+  message: "REJECT for T-0198.\n\nEXPECTED:\n- This task should remove silent fallbacks\
+    \ and fail explicitly instead of guessing.\n- No summary should be fabricated\
+    \ from transcript text when there is no structured submission.\n- rmtree cleanup\
+    \ paths should log what they delete and raise on unexpected failures instead of\
+    \ swallowing them.\n- Engine output parse failures should be logged instead of\
+    \ silently skipped.\n\nOBSERVED:\n- The branch has no implementation for this\
+    \ task (`git diff --stat main...HEAD` is empty) and only marks the task as duplicate\
+    \ in `.litehive/tasks/T-0198-remove-silent-fallbacks-fail-explicitly-instead/task.yaml`\
+    \ / `journal.md`.\n- `parse_stage_report_text()` still derives `summary` from\
+    \ the first transcript line when there is no valid structured submission (`/home/alexey/git/heru/heru/base.py:852-859`\
+    \ in the current installed source for `litehive.agents.base`). Repro below shows\
+    \ it returning `summary='VERDICT: PASS'`, which is still transcript-text guessing\
+    \ rather than explicit structured-only failure.\n- `prune_run_all_log_dirs()`\
+    \ still swallows delete failures by warning and continuing (`litehive/daemon/logs.py:24-32`).\
+    \ That does not raise on unexpected `rmtree` failures.\n- `parse_unified_execution()`\
+    \ still silently skips `UnifiedEvent` validation failures with `except ValidationError:\
+    \ continue` and no logging (`litehive/agents/unified_events.py:57-67`).\n\nREPRODUCTION:\n\
+    1. Confirm branch has no task implementation:\n   - `git diff --stat main...HEAD`\n\
+    \   - Result: no output.\n2. Reproduce summary fallback from transcript text:\n\
+    \   - Run:\n     `python - <<'PY'\nfrom litehive.agents.base import parse_stage_report_text\n\
+    report = parse_stage_report_text(task_id='T-0198', step='implementing', transcript='VERDICT:\
+    \ PASS\\nSUMMARY: guessed from transcript\\n', subagent_status='failed')\nprint(report.model_dump())\n\
+    PY`\n   - Observed: report contains `verdict='reject'` but `summary='VERDICT:\
+    \ PASS'`.\n3. Reproduce silent unified-event parse skip:\n   - Run:\n     `python\
+    \ - <<'PY'\nfrom litehive.agents.unified_events import parse_unified_execution\n\
+    print(parse_unified_execution('{\"kind\":\"message\",\"content\":123}\\n'))\n\
+    PY`\n   - Observed: `None`, with no parse-failure log from `parse_unified_execution()`.\n\
+    4. Inspect rmtree cleanup handling:\n   - `sed -n '24,32p' litehive/daemon/logs.py`\n\
+    \   - Observed: `shutil.rmtree(directory)` is wrapped in `try/except OSError`\
+    \ and only logs `Failed to prune log dir ...`, then continues.\n\nACCEPTANCE CRITERIA\
+    \ NOT MET:\n- No summary fabrication from transcript text - require structured\
+    \ submission.\n- rmtree calls log what they are deleting and raise on unexpected\
+    \ failures.\n- Engine output parse failures are logged, not silently skipped.\n\
+    \nNOTES:\n- `pre_acceptance_command` removal appears implemented already in `litehive/config/loading.py:50-58`.\n\
+    - Structured STAGE_RESULT rejection paths and JSONL warning coverage have tests\
+    \ passing, but the remaining gaps above mean the umbrella task is not satisfied\
+    \ on this branch.\n"
+  files_changed: []
+  created_at: '2026-04-13T07:53:51+00:00'
+- role: swe
+  step: implementing
+  verdict: blocked
+  message: "Blocked due to contradictory task contract; I am not guessing scope.\n\
+    \nWhat I verified:\n- `git diff --stat main...HEAD` returned no output, so this\
+    \ worktree has no implementation for T-0198.\n- `.litehive/tasks/T-0198-remove-silent-fallbacks-fail-explicitly-instead/task.yaml`\
+    \ still contains broad implementation acceptance criteria, but the same file marks\
+    \ the task `status: duplicate`.\n- `.litehive/tasks/T-0198-remove-silent-fallbacks-fail-explicitly-instead/journal.md`\
+    \ says: `Task closed: duplicate. Split into T-0197 (verdict), T-0200 (structured\
+    \ submission), T-0201 (engine parsing), T-0202 (rmtree), T-0203 (legacy compat)`.\n\
+    - The discussion thread included in the stage prompt also says T-0198 should remain\
+    \ an umbrella audit only and not be implemented directly.\n- The QA rejection\
+    \ asks me to implement the old umbrella acceptance criteria anyway.\n\nWhy this\
+    \ is blocked:\n- The role guidance says to treat the task goal / acceptance criteria\
+    \ / plan as the execution contract, and if they are contradictory, submit `blocked`\
+    \ so recovery can route instead of guessing.\n- That is the current state here:\
+    \ one artifact says \u201Cdo not implement this task directly; it is a duplicate\
+    \ umbrella\u201D, while another artifact demands implementation of the umbrella\
+    \ scope.\n\nWhat needs to be resolved upstream:\n- Either reopen T-0198 with updated\
+    \ non-duplicate status and a concrete scoped plan if it truly should be implemented\
+    \ here,\n- or keep T-0198 closed as duplicate and route any remaining work to\
+    \ the focused follow-up tasks (T-0197/T-0200/T-0201/T-0202/T-0203 or their successors).\n"
+  files_changed: []
+  created_at: '2026-04-13T07:56:04+00:00'
+- role: recovery
+  step: recovering
+  verdict: pass
+  message: 'Root cause: recovery prompts were reusing the original task intent goal
+    and acceptance criteria even when the task had already been explicitly closed
+    as `duplicate`. For T-0198 that produced a contradictory contract: the prompt
+    still told the agent to implement the umbrella scope, while the task journal/runtime
+    outcome said the task had been closed and split into follow-up tasks. The previous
+    agent blocked rather than guessing, which was correct.
+
+
+    Litehive fix made:
+
+    - Updated `litehive/pipeline/prompt_serializer.py` so closed tasks (`duplicate`,
+    `deferred`, `wont_do`, `cancelled`) no longer present the stale execution contract
+    as the active goal/acceptance criteria.
+
+    - Closed-task prompts now explicitly say the task is closed and must not execute
+    the original implementation scope unless it is reopened, and they surface the
+    closure reason from runtime state.
+
+    - Added a regression test in `tests/test_pipeline_v2_prompt_serializer.py` covering
+    the duplicate-task prompt shape that caused this recovery.
+
+
+    Verification:
+
+    - `uv run pytest tests/test_pipeline_v2_prompt_serializer.py`
+
+
+    Why retry should succeed now:
+
+    - On the next recovery/agent attempt, Litehive will present the closure contract
+    instead of the stale umbrella implementation contract, so the agent can correctly
+    treat T-0198 as a duplicate umbrella task and avoid blocking on contradictory
+    instructions.
+
+    '
+  files_changed: []
+  created_at: '2026-04-13T08:00:16+00:00'

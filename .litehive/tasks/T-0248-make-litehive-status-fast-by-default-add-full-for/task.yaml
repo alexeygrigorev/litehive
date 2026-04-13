@@ -1,21 +1,14 @@
 id: T-0248
 slug: make-litehive-status-fast-by-default-add-full-for
 title: Make litehive status fast by default, add --full for verbose output
-depends_on: []
+created_at: '2026-04-09T08:49:18+00:00'
 task_type: null
-engine: null
-model: null
 mode: implementation
 pipeline_mode: full
-status: done
-flag_reason: null
-flag_count: 0
-pipeline_status: done
 priority: high
 pm_complexity: null
 planned_effort: null
-created_at: '2026-04-09T08:49:18+00:00'
-updated_at: '2026-04-09T13:15:26+00:00'
+depends_on: []
 goal: 'litehive status currently requires --fast for quick reads. Swap the default:
   fast mode is the default, --full gives the verbose per-task output. Nobody wants
   to wait for slow status.'
@@ -27,54 +20,9 @@ acceptance_criteria:
 constraints: []
 plan: []
 human_checkpoints: []
-subagents:
-- id: SA-0001
-  role: planner
-  engine: codex
-  status: completed
-  path: subagents/SA-0001-planner
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0002
-  role: swe
-  engine: codex
-  status: completed
-  path: subagents/SA-0002-swe
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0003
-  role: qa
-  engine: codex
-  status: completed
-  path: subagents/SA-0003-qa
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0004
-  role: reviewer
-  engine: codex
-  status: completed
-  path: subagents/SA-0004-reviewer
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0005
-  role: merge-resolver
-  engine: claude
-  status: completed
-  path: subagents/SA-0005-merge-resolver
-  sandboxed: false
-  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0248 make-litehive-status-fast-by-default-add-full-for'
-  commit_sha: 200f089ac242a83e9ebdd3b7597c0fc0720e866c
-  checkpoint_base_sha: a1d5459377816f8ff659234e0b56b725d13afc60
-  checkpoint_attempts: 1
-  rolled_back_checkpoint_attempt: null
-  merge_agent_attempts: 1
-  worktree_path: null
-retry_policy:
-  max_retries: null
-  stage_retry_limit: null
 created_from: null
 upstream_origin: null
 github_origin: null

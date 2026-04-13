@@ -1,0 +1,36 @@
+id: T-0360
+slug: zero-change-shortcut-for-re-queued-tasks-already
+title: Zero-change shortcut for re-queued tasks already done on main
+created_at: '2026-04-13T07:23:33+00:00'
+task_type: null
+mode: implementation
+pipeline_mode: full
+priority: high
+pm_complexity: null
+planned_effort: null
+depends_on: []
+goal: 'When a task is re-queued (via requeue command or after a failed run), the pipeline
+  should detect that its work is already on main and skip straight to done instead
+  of re-running the full grooming+implementing+testing cycle. Observed this session:
+  T-0072, T-0087, T-0108, T-0194 each burned 15-30 min of agent time re-discovering
+  that their work was already merged from a prior successful run. The SWE keeps finding
+  ''git diff main...HEAD is empty'' and QA keeps rejecting on unrelated test failures.'
+acceptance_criteria:
+- '1. Add a pre-grooming probe: if task.yaml has a recorded completion commit (or
+  if acceptance criteria can be verified without running agents), emit a ZeroChange
+  event that routes the task to done with a ''verified-already-done'' metadata flag.'
+- '2. Alternatively: when a task reaches implementing and git diff main...HEAD is
+  empty AND main contains a commit matching the task_id, the SWE auto-passes with
+  verdict ''already done''.'
+- '3. Test: mock a task whose completion commit is already on main, run the pipeline,
+  assert it reaches done in under 3 transitions without running any agents.'
+- 4. Existing zero_change_shortcut guard still works for single-mode tasks.
+constraints: []
+plan: []
+human_checkpoints: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0360 zero-change-shortcut-for-re-queued-tasks-already'
+created_from: null
+upstream_origin: null
+github_origin: null

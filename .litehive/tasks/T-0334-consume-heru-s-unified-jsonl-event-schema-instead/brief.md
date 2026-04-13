@@ -6,7 +6,7 @@
 - Planned effort: l
 
 ## Goal
-heru T-0001 shipped a unified JSONL event output schema across all engine adapters (codex, claude, copilot, gemini, opencode, goz). Each engine now emits the same event shape via heru's stream reader. litehive currently has per-engine event parsing scattered across litehive/agents/*. Migrate litehive to read heru's unified event stream directly, deleting the per-engine parsing layers where possible. Keep engine-specific logic only where heru genuinely cannot normalize (e.g. provider-specific quota fields). The public API surface heru exposes is documented in heru's README (shipped in heru T-0006) — use that as the contract. Bump the heru dependency pin to whatever version includes T-0001. Run litehive's full test suite including tests_integration/ after the migration.
+Refactor Litehive's subagent execution/session pipeline to consume heru's unified JSONL event contract as the source of truth, instead of relying on Litehive-side per-engine JSONL parsing behavior.
 
 ## Acceptance Criteria
 - litehive/agents/ no longer contains per-engine JSONL parsing code paths that heru's unified schema already covers

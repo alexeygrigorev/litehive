@@ -2,21 +2,15 @@ id: T-0329
 slug: shrink-litehive-pipeline-init-py-from-220-line-re
 title: Shrink litehive/pipeline/__init__.py from 220-line re-export manifest to thin
   public surface
-depends_on:
-- T-0321
+created_at: '2026-04-10T20:27:46+00:00'
 task_type: null
-model: null
 mode: implementation
 pipeline_mode: full
-status: queued
-flag_reason: null
-flag_count: 0
-pipeline_status: backlog
 priority: medium
 pm_complexity: null
 planned_effort: null
-created_at: '2026-04-10T20:27:46+00:00'
-updated_at: '2026-04-10T20:27:46+00:00'
+depends_on:
+- T-0321
 goal: "litehive/pipeline/__init__.py imports ~90 names from 12 private _xxx.py modules\
   \ and re-exports them in a giant __all__. Dozens of underscore-prefixed helpers\
   \ (_path_within, _budget_ledger_from_conditions, _dirty_worktree_owner_task, ...)\
@@ -46,19 +40,9 @@ acceptance_criteria:
 constraints: []
 plan: []
 human_checkpoints: []
-subagents: []
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0329 shrink-litehive-pipeline-init-py-from-220-line-re'
-  commit_sha: null
-  checkpoint_base_sha: null
-  checkpoint_attempts: 0
-  rolled_back_checkpoint_attempt: null
-  merge_agent_attempts: 0
-  worktree_path: null
-retry_policy:
-  max_retries: null
-  stage_retry_limit: null
 created_from: null
 upstream_origin: null
 github_origin: null

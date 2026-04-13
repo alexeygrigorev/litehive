@@ -1,0 +1,125 @@
+- role: planner
+  step: grooming
+  verdict: pass
+  message: "The original ask assumes a parallel task-slice execution subsystem that\
+    \ no longer exists in the current product direction.\n\nWhat I found:\n- The task\
+    \ record is blank and currently `status: cancelled`, so it needs shaping before\
+    \ grooming can pass.\n- `docs/plans/state-machine-v2-implementation-plan.md` explicitly\
+    \ lists \"Parallel task execution\" as out of scope.\n- The same plan's working\
+    \ notes say the parallel execution subsystem was deleted on 2026-04-12 (`T-0321..T-0324\
+    \ completed \u2014 major cleanup wave. ... deleted parallel execution subsystem`).\n\
+    - Current execution wiring in `litehive/pipeline/heru_factory.py` and `litehive/agents/manager.py`\
+    \ only supports one `execution_root` per task run, not a live pool of parallel\
+    \ worker slices.\n\nPM decision:\n- Close this task as `wont_do` rather than re-scope\
+    \ it into speculative future architecture.\n- If Litehive later reintroduces multi-worker\
+    \ execution, create a fresh task against that concrete design instead of reviving\
+    \ this pre-cleanup task title.\n\nOperator guidance:\n- This grooming pass closes\
+    \ the obsolete task contract.\n- If parallel worker orchestration returns later,\
+    \ open a new task with a concrete flow such as:\n  `litehive task add \"Add worker\
+    \ execution-root allocator for parallel orchestration\" --goal \"Provision and\
+    \ clean up an isolated git worktree per concurrently running worker\"`\n  then\
+    \ follow with\n  `litehive task update <new-task-id> --acceptance-criteria \"\
+    Each concurrent worker gets a distinct execution root\" --acceptance-criteria\
+    \ \"Worker cleanup removes per-worker worktrees after success and failure\" --acceptance-criteria\
+    \ \"Tests cover isolation, reuse/cleanup, and conflict handling\"`\n\nTASK_UPDATE:\n\
+    \  goal: >-\n    Retire this obsolete task. The original request targeted a parallel\
+    \ task-slice\n    execution model that is no longer part of Litehive's single-user\
+    \ runner\n    architecture after the parallel execution subsystem was removed.\n\
+    \  acceptance_criteria:\n    - This task is closed without implementation because\
+    \ Litehive no longer supports the parallel task-slice execution path the request\
+    \ depended on.\n    - Any future return of concurrent worker orchestration is\
+    \ tracked in a new task with a fresh scope and acceptance criteria, rather than\
+    \ reviving this pre-cleanup contract.\n  constraints:\n    - Do not reintroduce\
+    \ parallel orchestration or per-worker worktree management through this task.\n\
+    \    - Preserve the current single-user, single-execution-root runner model unless\
+    \ a separate product decision changes it.\n  plan:\n    - Confirm whether the\
+    \ requested feature still matches the current runner architecture.\n    - Record\
+    \ that the supporting parallel subsystem was intentionally removed and is out\
+    \ of scope.\n    - Close this task as `wont_do` and require any future parallel-work\
+    \ feature to start from a new task.\n  pm_complexity: simple\n  planned_effort:\
+    \ xs\n  priority: low\n  outcome: wont_do\n  outcome_reason: >-\n    The requested\
+    \ capability depends on a parallel task-slice execution subsystem\n    that has\
+    \ since been intentionally removed from Litehive. Implementing it now\n    would\
+    \ reintroduce deleted architecture instead of advancing the current\n    single-user\
+    \ runner design.\n"
+  files_changed: []
+  created_at: '2026-04-13T02:49:51+00:00'
+- role: swe
+  step: implementing
+  verdict: blocked
+  message: "Blocked: this task has no executable implementation contract in the current\
+    \ repo state, and the requested feature conflicts with current product direction.\n\
+    \nEvidence gathered before broad exploration:\n- `git diff --stat main...HEAD`\
+    \ returned no output, so this worktree has no implementation in progress.\n- `.litehive/tasks/T-0108-add-worktree-per-worker-execution-for-parallel-task-slices/task.yaml`\
+    \ shows:\n  - `status: cancelled`\n  - `goal: ''`\n  - `acceptance_criteria: []`\n\
+    \  - `plan: []`\n- The task directory contains only `task.yaml`; there is no `comments.yaml`,\
+    \ rejection artifact, recovery artifact, or prior stage report to recover intent\
+    \ from.\n- `docs/plans/state-machine-v2-implementation-plan.md` explicitly lists\
+    \ `Parallel task execution.` under `Not in scope for this plan`.\n- The same plan's\
+    \ working notes record on 2026-04-12: `T-0321..T-0324 completed \u2014 major cleanup\
+    \ wave. All clean first-pass runs: deleted parallel execution subsystem...`\n\
+    - `.litehive/tasks/T-0321-delete-parallel-execution-subsystem-single-user/task.yaml`\
+    \ confirms that subsystem was intentionally removed, including `litehive/pipeline/_parallel.py`,\
+    \ `tests/test_parallel_execution.py`, config fields like `parallel_capacity`,\
+    \ and the CLI parallel dispatch.\n\nWhy this is blocked:\n- Implementing `worktree-per-worker\
+    \ execution for parallel task slices` would require reintroducing a subsystem\
+    \ the repo intentionally deleted on 2026-04-12.\n- The current task record is\
+    \ blank/cancelled and provides no acceptance criteria or plan to define what the\
+    \ replacement scope should be.\n- Per stage instructions, I should not guess scope\
+    \ or rewrite acceptance criteria; this needs planner/recovery shaping first.\n\
+    \nBaseline verification on the untouched branch:\n- `uv run ruff check --select\
+    \ E402,F401 litehive tests` -> passed\n- `uv run pytest -q` -> `521 passed, 5\
+    \ skipped, 3 warnings in 88.89s`\n\nRecommended next step:\n- Route this to recovery/planning\
+    \ to either keep it cancelled/duplicate against T-0321, or write a new task with\
+    \ an explicit goal, acceptance criteria, and architecture for any new single-user\
+    \ worktree-sync behavior that is actually desired.\n"
+  files_changed: []
+  created_at: '2026-04-13T02:52:56+00:00'
+- role: recovery
+  step: recovering
+  verdict: blocked
+  message: 'Recovery findings:
+
+    - Root cause of the task stop is not a missing worker-worktree implementation
+    in Litehive runtime. T-0108 is currently a cancelled/backlog task with no executable
+    contract (`goal: ''''`, empty acceptance criteria/plan), no v2 state row, no task
+    journal, no subagent logs, and no recovery artifacts. `resume_task` already refuses
+    backlog/done tasks, so Litehive does not have a valid runnable stage to resume
+    here.
+
+    - The requested feature also conflicts with current repo direction: the parallel
+    execution subsystem was intentionally removed, and the current task record does
+    not redefine the replacement scope. Retrying implementing would just reproduce
+    the same block.
+
+
+    Litehive infrastructure fix made:
+
+    - Fixed `litehive pipeline rules` crashing during recovery diagnostics. The CLI
+    was formatting `Stage` objects with a string format specifier, which raised `TypeError:
+    unsupported format string passed to Stage.__format__`.
+
+    - Normalized stage-like values to names before rendering and added a regression
+    test covering `pipeline rules`.
+
+
+    Verification:
+
+    - `uv run pytest tests/test_pipeline_v2_journal_cli.py -q` -> 3 passed
+
+    - `uv run litehive pipeline rules` -> succeeds and prints the transition table
+
+
+    Why this should not retry implementing yet:
+
+    - There is still no runnable implementation contract for T-0108 in the current
+    repo state. Recovery restored the broken diagnostic path, but it did not uncover
+    a resumable Litehive execution bug for this task.
+
+    - Next step should be planner/product shaping: either keep T-0108 cancelled as
+    obsolete/duplicate, or create a new task with explicit goal, acceptance criteria,
+    and architecture for any replacement worktree behavior.
+
+    '
+  files_changed: []
+  created_at: '2026-04-13T02:56:07+00:00'

@@ -1,21 +1,14 @@
 id: T-0253
 slug: split-cli-parser-py-build-parser-into-per-command
 title: Split cli/parser.py build_parser() into per-command modules
-depends_on: []
+created_at: '2026-04-09T09:16:13+00:00'
 task_type: null
-engine: null
-model: null
 mode: implementation
 pipeline_mode: full
-status: done
-flag_reason: null
-flag_count: 0
-pipeline_status: done
 priority: medium
 pm_complexity: null
 planned_effort: null
-created_at: '2026-04-09T09:16:13+00:00'
-updated_at: '2026-04-09T14:37:33+00:00'
+depends_on: []
 goal: build_parser() is 1015 lines in a single function with 39 subparsers. Split
   into one module per command group (run, queue, tasks, daemon, etc.) that each define
   their own parser arguments. The main build_parser() just assembles them.
@@ -28,61 +21,9 @@ acceptance_criteria:
 constraints: []
 plan: []
 human_checkpoints: []
-subagents:
-- id: SA-0001
-  role: planner
-  engine: codex
-  status: completed
-  path: subagents/SA-0001-planner
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0002
-  role: swe
-  engine: codex
-  status: failed
-  path: subagents/SA-0002-swe
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0003
-  role: recovery
-  engine: codex
-  status: completed
-  path: subagents/SA-0003-recovery
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0004
-  role: qa
-  engine: codex
-  status: completed
-  path: subagents/SA-0004-qa
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0005
-  role: reviewer
-  engine: codex
-  status: completed
-  path: subagents/SA-0005-reviewer
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0006
-  role: merge-resolver
-  engine: claude
-  status: completed
-  path: subagents/SA-0006-merge-resolver
-  sandboxed: false
-  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0253 split-cli-parser-py-build-parser-into-per-command'
-  commit_sha: 7b78196a620b02f09b2b78b9cbb75e7b1de03a5f
-  checkpoint_base_sha: 4cdfc1254e8d4f054d8c4b9849445054768dcf6c
-  checkpoint_attempts: 1
-  rolled_back_checkpoint_attempt: null
-  merge_agent_attempts: 1
-  worktree_path: null
-retry_policy:
-  max_retries: null
-  stage_retry_limit: null
 created_from: null
 upstream_origin: null
 github_origin: null

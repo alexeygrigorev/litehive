@@ -1,21 +1,14 @@
 id: T-0247
 slug: add-litehive-health-command-single-command-for
 title: Add litehive health command - single command for full workspace diagnostics
-depends_on: []
+created_at: '2026-04-09T08:47:51+00:00'
 task_type: null
-engine: null
-model: null
 mode: implementation
 pipeline_mode: full
-status: queued
-flag_reason: null
-flag_count: 1
-pipeline_status: done
 priority: medium
 pm_complexity: null
 planned_effort: null
-created_at: '2026-04-09T08:47:51+00:00'
-updated_at: '2026-04-10T00:14:51+00:00'
+depends_on: []
 goal: 'One command that shows everything needed to assess workspace health: active
   task + stage, flagged tasks with reasons, stale worktrees, uncommitted code changes,
   engine quotas, daemon status, and recent completions. Replaces running 5+ commands
@@ -30,75 +23,9 @@ acceptance_criteria:
 constraints: []
 plan: []
 human_checkpoints: []
-subagents:
-- id: SA-0001
-  role: planner
-  engine: codex
-  status: completed
-  path: subagents/SA-0001-planner
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0002
-  role: swe
-  engine: codex
-  status: completed
-  path: subagents/SA-0002-swe
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0003
-  role: qa
-  engine: codex
-  status: completed
-  path: subagents/SA-0003-qa
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0004
-  role: recovery
-  engine: claude
-  status: completed
-  path: subagents/SA-0004-recovery
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0005
-  role: merge-resolver
-  engine: codex
-  status: completed
-  path: subagents/SA-0005-merge-resolver
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0006
-  role: swe
-  engine: codex
-  status: completed
-  path: subagents/SA-0006-swe
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0007
-  role: qa
-  engine: codex
-  status: completed
-  path: subagents/SA-0007-qa
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0008
-  role: reviewer
-  engine: codex
-  status: completed
-  path: subagents/SA-0008-reviewer
-  sandboxed: false
-  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0247 add-litehive-health-command-single-command-for'
-  commit_sha: 4c5ba5a732f37691a003e4debfe24c0ed34b4ac9
-  checkpoint_base_sha: e36bc53e38fe0e57e50c282c579b672c65f14927
-  checkpoint_attempts: 1
-  rolled_back_checkpoint_attempt: null
-  merge_agent_attempts: 0
-  worktree_path: null
-retry_policy:
-  max_retries: null
-  stage_retry_limit: null
 created_from: null
 upstream_origin: null
 github_origin: null

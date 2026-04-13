@@ -1,0 +1,344 @@
+- role: planner
+  step: grooming
+  verdict: pass
+  message: "Pass. The user problem is real and currently fragmented: operator-attention\
+    \ signals exist in several places (`status_attention_findings`, `.litehive/runtime/attention.log`,\
+    \ pool stop reasons, doctor findings), but there is no single durable queue, no\
+    \ resolve flow, and no pool gate tied to unresolved attention. The task should\
+    \ be implemented as a first-class runtime attention queue, not as another ad hoc\
+    \ status banner.\n\nMost important scope correction: the current acceptance criterion\
+    \ `Attention items persisted in .litehive/attention/ as YAML files` conflicts\
+    \ with the repo's accepted runtime-state direction. Runtime state has already\
+    \ moved toward SQLite, `tests/test_workspace_bootstrap.py` asserts an `attention`\
+    \ table exists, and `docs/plans/sqlite-migration.md` explicitly places attention\
+    \ in the DB. Do not build a new `.litehive/attention/` filesystem store. Use the\
+    \ existing runtime DB `attention` table as the source of truth.\n\nUse concrete\
+    \ operator flows in UX copy and suggested actions. Prefer commands like `litehive\
+    \ attention list`, `litehive attention resolve <id>`, `litehive doctor --fix`,\
+    \ `litehive debug <task> --worktree`, `litehive recover <task>`, and the exact\
+    \ git reconciliation commands already suggested for origin divergence.\n\nTASK_UPDATE:\n\
+    \  goal: >-\n    Provide a first-class persistent operator-attention queue so\
+    \ Litehive keeps all\n    human-required interventions in one durable place, surfaces\
+    \ them prominently in\n    `litehive status`, and can stop pool execution until\
+    \ the operator clears or fixes\n    them. Attention items should cover existing\
+    \ operator-only conditions that are\n    currently split across status warnings,\
+    \ runtime attention logs, and pool stop reasons.\n  acceptance_criteria:\n   \
+    \ - >-\n      `litehive attention list` shows every unresolved attention item\
+    \ with stable id,\n      title, created_at, kind/reason, related task id when\
+    \ applicable, and a concrete\n      suggested action.\n    - >-\n      `litehive\
+    \ attention resolve <id>` marks an attention item resolved without deleting\n\
+    \      audit history.\n    - >-\n      `litehive status` shows the unresolved\
+    \ attention count prominently and renders a\n      `waiting for you:` section\
+    \ with the highest-signal pending actions.\n    - >-\n      Structured attention\
+    \ items are created for these events: denied destructive git\n      operation\
+    \ from the sandbox/git wrapper, `human_checkpoint_before_commit`,\n      origin/main\
+    \ divergence that requires manual reconciliation, duplicate task ids,\n      flagged\
+    \ task requiring operator action, and `merge_failed` / stale managed worktree\n\
+    \      recovery cases.\n    - >-\n      Existing attention producers are unified\
+    \ so the operator does not need to inspect\n      both `.litehive/runtime/attention.log`\
+    \ and synthesized status warnings to know what\n      needs action.\n    - >-\n\
+    \      If `pool_stop_on_attention` is enabled, the pool halts before starting\
+    \ further work\n      whenever unresolved attention items exist, and resumes only\
+    \ after the queue is empty.\n    - >-\n      Attention items persist in the workspace\
+    \ runtime database using the existing\n      `attention` table; do not add a new\
+    \ `.litehive/attention/` filesystem store.\n    - >-\n      For built-in detectable\
+    \ conditions, running the suggested fix causes the item to\n      disappear on\
+    \ the next reconciliation scan; otherwise the operator can clear it via\n    \
+    \  `litehive attention resolve <id>`.\n    - >-\n      Tests cover persistence,\
+    \ list/resolve UX, status rendering, producer creation for\n      each trigger,\
+    \ and pool-stop behavior.\n  constraints:\n    - Keep changes scoped to the attention\
+    \ queue and its operator UX.\n    - Reuse existing detection logic where possible\
+    \ (`status_attention_findings`, doctor findings, pool stop reasons, sandbox git\
+    \ wrapper events) instead of re-implementing separate detectors.\n    - Preserve\
+    \ auditability of why an item was created and how it was resolved.\n    - Do not\
+    \ introduce a second runtime persistence mechanism for attention state.\n  plan:\n\
+    \    - >-\n      Define an `AttentionItem` runtime model and DB persistence helpers\
+    \ around the\n      existing `attention` table, including unresolved/resolved\
+    \ state and optional\n      related task metadata.\n    - >-\n      Convert existing\
+    \ producers into structured item writers: sandbox denied-op,\n      checkpoint\
+    \ stop, origin divergence, duplicate-id detection, flagged/merge_failed,\n   \
+    \   and stale worktree findings.\n    - >-\n      Add `litehive attention list`\
+    \ and `litehive attention resolve <id>` CLI commands.\n    - >-\n      Update\
+    \ `litehive status` to show unresolved attention count and `waiting for you:`\n\
+    \      actions from the structured queue rather than stitching together ad hoc\
+    \ warnings.\n    - >-\n      Add config support and pool gating for `pool_stop_on_attention`,\
+    \ with clear stop\n      reason/reporting.\n    - >-\n      Reconcile auto-clearing\
+    \ behavior for detectable conditions and keep manual resolve\n      for notes/items\
+    \ that cannot be inferred as fixed.\n    - >-\n      Add end-to-end and unit coverage\
+    \ for DB persistence, CLI UX, status output,\n      trigger creation, deduping,\
+    \ and pool stop behavior.\n  pm_complexity: M\n  planned_effort: 2-4 days\n  priority:\
+    \ high\n  auto_commit: true\n\nImplementation notes for the next agent:\n- There\
+    \ is already partial attention behavior in `litehive/main.py`, `litehive/recovery/doctor.py`,\
+    \ `litehive/daemon/execution.py`, `litehive/sandbox/git_wrapper.py`, and the SQLite\
+    \ schema in `litehive/db/migrations/0001_initial.sql`.\n- Treat those as producers/inputs\
+    \ to unify, not as the final UX.\n- The biggest risk is duplicate noise from both\
+    \ synthesized findings and persisted items. Define a dedupe key per attention\
+    \ kind early.\n"
+  files_changed: []
+  created_at: '2026-04-12T17:09:45+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Implemented T-0289 as a first-class SQLite-backed operator attention queue.
+
+
+    What changed:
+
+    - Added `litehive/attention.py` with a persistent attention item model and DB-backed
+    store over the existing `attention` table. Items keep audit history via payload
+    state (`pending`/`resolved`, `resolved_at`, `resolution`) instead of deleting
+    rows.
+
+    - Added `litehive attention list` and `litehive attention resolve <id>` via `litehive/cli/attention.py`
+    and CLI wiring in `litehive/cli/__init__.py` plus argparse parser support.
+
+    - Updated `litehive status` and fast status to show `attention_items: <n>` and
+    a `waiting for you:` section driven by the structured queue.
+
+    - Unified attention producers/reconciliation for duplicate task ids, flagged tasks,
+    merge_failed tasks, stale managed worktrees, origin/main divergence, human checkpoint
+    before commit, and destructive git wrapper denials. The merge-resolver sandbox
+    continues writing `.litehive/runtime/attention.log`, and reconciliation imports
+    those entries into the queue so operators do not need to inspect the log separately.
+
+    - Added `pool_stop_on_attention` config/plumbing and daemon gating so the pool
+    halts before starting more work when unresolved attention items exist.
+
+
+    Acceptance criteria evidence:
+
+    - `litehive attention list` / resolve UX and persistence covered by `tests/test_attention_queue.py::test_attention_list_and_resolve_persist_items`.
+
+    - Status count + `waiting for you:` rendering covered by `tests/test_attention_queue.py::test_status_shows_attention_count_and_waiting_actions`.
+
+    - Producer creation + auto-clear for duplicate ids, flagged, merge_failed, stale
+    worktree, origin divergence, and human checkpoint covered by `tests/test_attention_queue.py::test_detectable_attention_items_reconcile_and_auto_clear`.
+
+    - Denied destructive git op producer covered by `tests/test_sandbox_git_profiles.py::test_merge_resolver_profile_rejects_force_push_and_logs_attention`.
+
+    - Pool stop behavior covered by `tests/test_attention_queue.py::test_pool_stops_before_running_tasks_when_attention_gate_enabled`.
+
+
+    Verification run:
+
+    - `uv run ruff check --select E402,F401 litehive tests` -> passed
+
+    - forbidden `noqa` suppression check -> passed
+
+    - `uv run pytest -q` -> `544 passed, 5 skipped, 4 warnings in 129.18s`
+
+    '
+  files_changed: []
+  created_at: '2026-04-12T17:35:03+00:00'
+- role: qa
+  step: testing
+  verdict: reject
+  message: 'REJECT
+
+
+    EXPECTED behavior:
+
+    `litehive attention resolve <id>` should dismiss the selected attention item while
+    preserving audit history. That includes structured detectable items such as `duplicate_task_id`,
+    `origin_divergence`, `flagged_task`, `merge_failed_task`, `stale_worktree`, and
+    `human_checkpoint_before_commit`, because the acceptance criteria explicitly require
+    a resolve flow and say items are dismissed either by explicit resolve or by running
+    the suggested fix.
+
+
+    OBSERVED behavior:
+
+    Detectable items are recreated immediately on the next reconciliation scan after
+    being resolved, so the resolve command does not actually dismiss them unless the
+    underlying condition is already fixed. The recreated row gets a new id, which
+    also breaks the notion of resolving a stable queue entry.
+
+
+    Reproduction steps:
+
+    1. Create a workspace with a detectable condition, for example duplicate task
+    ids.
+
+    2. Run `list_attention(root)` or `litehive attention list` and note the item id.
+
+    3. Run `resolve_attention(root, <id>)` or `litehive attention resolve <id>`.
+
+    4. Run `list_attention(root)` / `litehive attention list` again without fixing
+    the duplicate.
+
+    5. The same attention item reappears immediately with a new id.
+
+
+    Minimal repro used in QA:
+
+    - create task `T-0001`
+
+    - add a second `.litehive/tasks/.../task.yaml` claiming the same `id`
+
+    - first `list_attention(root)` => `[(1, ''duplicate_task_id'', ''pending'', ''duplicate_task_id:T-0001'')]`
+
+    - `resolve_attention(root, 1)` => resolved
+
+    - second `list_attention(root)` => `[(2, ''duplicate_task_id'', ''pending'', ''duplicate_task_id:T-0001'')]`
+
+
+    Why this happens:
+
+    - `resolve_attention()` only marks the payload as resolved: `litehive/attention.py:204-206`.
+
+    - Reconciliation only dedupes against pending rows: `litehive/attention.py:81-85`,
+    `124-141`.
+
+    - On the next scan, the detectable condition is still present, so `reconcile()`
+    inserts a fresh pending row for the same dedupe key instead of honoring the explicit
+    operator resolution.
+
+
+    Acceptance criteria not met:
+
+    - `litehive attention resolve <id>` dismisses an item.
+
+    - Built-in detectable conditions can be cleared via explicit `litehive attention
+    resolve <id>` when the operator chooses that path.
+
+    - Items are dismissed only via explicit resolve or by the operator running the
+    suggested fix.
+
+
+    Suggested fix direction:
+
+    Persist explicit operator dismissal state by dedupe key for detectable items and
+    have reconciliation suppress recreation until the underlying condition clears
+    and later reoccurs, or otherwise distinguish operator-resolved detectable items
+    from auto-resolved items.
+
+    '
+  files_changed: []
+  created_at: '2026-04-12T17:38:53+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Implemented the QA follow-up for T-0289.
+
+
+    QA issue fixed:
+
+    - Explicit `litehive attention resolve <id>` on detectable items now suppresses
+    that dedupe key until the underlying condition clears once. Reconciliation no
+    longer recreates a fresh pending row immediately after an operator resolve.
+
+    - When the condition later clears, the resolved item is marked as having cleared
+    after resolution. If the same condition reoccurs later, reconciliation creates
+    a new attention row with a new id, preserving both dismissal semantics and recurrence
+    auditability.
+
+
+    Code changes:
+
+    - Updated `litehive/attention.py` reconciliation logic to consider resolved rows
+    for detectable dedupe keys, persist operator-dismissal suppression metadata, and
+    release that suppression only after the condition disappears on a later scan.
+
+    - Added regression coverage in `tests/test_attention_queue.py::test_operator_resolve_suppresses_detectable_attention_until_condition_clears`.
+
+
+    Verification:
+
+    - `uv run ruff check --select E402,F401 litehive tests` -> passed
+
+    - forbidden `noqa` suppression check -> passed
+
+    - focused regression suite: `uv run pytest -q tests/test_attention_queue.py tests/test_sandbox_git_profiles.py
+    tests/test_status_broken_states.py` -> `26 passed, 2 warnings in 15.10s`
+
+    - full suite: `uv run pytest -q` -> `545 passed, 5 skipped, 4 warnings in 129.69s`
+
+
+    Acceptance-criteria evidence now includes:
+
+    - explicit resolve for detectable items is covered by `tests/test_attention_queue.py::test_operator_resolve_suppresses_detectable_attention_until_condition_clears`
+
+    - previous coverage for list/resolve UX, status rendering, producer creation,
+    auto-clear on suggested fix, and pool-stop behavior remains in place
+
+    '
+  files_changed: []
+  created_at: '2026-04-12T17:43:09+00:00'
+- role: qa
+  step: testing
+  verdict: pass
+  message: "PASS\n\nVerified the previous QA regression is fixed.\n\nWhat I validated:\n\
+    - Focused suite passed: `pytest -q tests/test_attention_queue.py tests/test_sandbox_git_profiles.py\
+    \ tests/test_status_broken_states.py -q`\n- Manual repro of the previous failure\
+    \ now behaves correctly for a detectable item (`duplicate_task_id`):\n  1. Create\
+    \ duplicate task ids.\n  2. `list_attention(root)` returns one pending `duplicate_task_id`\
+    \ item.\n  3. `resolve_attention(root, <id>)` clears it.\n  4. A second `list_attention(root)`\
+    \ returns `[]` while the duplicate condition still exists, so explicit resolve\
+    \ now dismisses the queue item instead of recreating it immediately.\n  5. After\
+    \ removing the duplicate directory, reconciliation records that the condition\
+    \ cleared.\n  6. After reintroducing the duplicate condition, `list_attention(root)`\
+    \ creates a fresh pending row with a new id, preserving recurrence auditability.\n\
+    \nAcceptance criteria status:\n- `litehive attention resolve <id>` now dismisses\
+    \ detectable items correctly.\n- Detectable items stay suppressed until the underlying\
+    \ condition clears once, then reappear only on a later recurrence.\n- Existing\
+    \ list/status/producer/pool-stop behavior remains covered by the focused suite\
+    \ and still passes.\n\nNotes:\n- The workspace prints repeated warnings about\
+    \ an unreadable legacy registry at `/home/alexey/.config/litehive/workspaces.yaml`,\
+    \ but that did not affect attention-queue behavior or this task\u2019s acceptance\
+    \ criteria.\n"
+  files_changed: []
+  created_at: '2026-04-12T17:46:29+00:00'
+- role: reviewer
+  step: accepting
+  verdict: pass
+  message: 'PASS
+
+
+    Validated T-0289 against the groomed acceptance criteria and the QA follow-up.
+    The implementation now behaves like a first-class persistent operator-attention
+    queue backed by the existing SQLite `attention` table, not a second filesystem
+    store.
+
+
+    What I verified:
+
+    - `litehive attention list` exposes unresolved items with stable id, `created_at`,
+    kind, title, reason, suggested action, and related task id when present via `litehive/cli/attention.py`
+    and `litehive/attention.py`.
+
+    - `litehive attention resolve <id>` resolves items without deleting audit history;
+    resolved rows keep resolution metadata in payload state.
+
+    - Explicit operator resolve for detectable items no longer recreates the same
+    queue entry on the next reconciliation scan. Suppression is held by dedupe key
+    until the underlying condition clears once, then a later recurrence creates a
+    fresh item id. This fixes the prior QA reject.
+
+    - `litehive status` and fast status both render `attention_items: <n>` plus a
+    `waiting for you:` section sourced from the structured queue.
+
+    - Structured producers exist for denied destructive git operations, `human_checkpoint_before_commit`,
+    origin divergence, duplicate task ids, flagged tasks, merge-failed tasks, and
+    stale managed worktrees; reconciliation also imports legacy `.litehive/runtime/attention.log`
+    events so operators do not need to inspect a separate channel.
+
+    - Pool gating is wired: when `pool_stop_on_attention` is enabled, the daemon stops
+    before starting further work if unresolved attention exists.
+
+    - Auto-clear behavior is present for detectable conditions after the suggested
+    fix/remediation removes the condition.
+
+
+    Verification run:
+
+    - `pytest -q tests/test_attention_queue.py tests/test_sandbox_git_profiles.py
+    tests/test_status_broken_states.py` -> `26 passed`
+
+    - `pytest -q` -> `545 passed, 5 skipped, 4 warnings`
+
+
+    Outcome: done
+
+    '
+  files_changed: []
+  created_at: '2026-04-12T17:49:53+00:00'

@@ -14,3 +14,6 @@ Task metadata updated during grooming: clarified engine dashboard scope, accepta
 
 ## 2026-04-08T19:01:42+00:00
 CommitToGit complete. Commit: 211bef3090e83d7267284b941bb6ecd7325777c9
+
+## 2026-04-13T10:27:35+00:00
+Task closed: duplicate. Zombie re-queue: runtime.yaml execution_status=done. See T-0366.

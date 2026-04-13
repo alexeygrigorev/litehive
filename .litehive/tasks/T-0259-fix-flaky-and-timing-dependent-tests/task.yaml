@@ -1,21 +1,14 @@
 id: T-0259
 slug: fix-flaky-and-timing-dependent-tests
 title: Fix flaky and timing-dependent tests
-depends_on: []
+created_at: '2026-04-09T09:21:41+00:00'
 task_type: null
-engine: null
-model: null
 mode: implementation
 pipeline_mode: full
-status: done
-flag_reason: null
-flag_count: 0
-pipeline_status: done
 priority: medium
 pm_complexity: null
 planned_effort: null
-created_at: '2026-04-09T09:21:41+00:00'
-updated_at: '2026-04-09T20:25:27+00:00'
+depends_on: []
 goal: Several tests have timing-dependent assertions or shared mutable state that
   causes flaky failures. Fix them.
 acceptance_criteria:
@@ -30,68 +23,9 @@ acceptance_criteria:
 constraints: []
 plan: []
 human_checkpoints: []
-subagents:
-- id: SA-0001
-  role: planner
-  engine: codex
-  status: completed
-  path: subagents/SA-0001-planner
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0002
-  role: swe
-  engine: codex
-  status: failed
-  path: subagents/SA-0002-swe
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0003
-  role: recovery
-  engine: codex
-  status: failed
-  path: subagents/SA-0003-recovery
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0004
-  role: recovery
-  engine: codex
-  status: completed
-  path: subagents/SA-0004-recovery
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0005
-  role: qa
-  engine: codex
-  status: completed
-  path: subagents/SA-0005-qa
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0006
-  role: reviewer
-  engine: codex
-  status: completed
-  path: subagents/SA-0006-reviewer
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0007
-  role: merge-resolver
-  engine: claude
-  status: completed
-  path: subagents/SA-0007-merge-resolver
-  sandboxed: false
-  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0259 fix-flaky-and-timing-dependent-tests'
-  commit_sha: 163658467b20c6f13ee235d5911c7ca283585b4d
-  checkpoint_base_sha: e69e240c813f619664b86d7d853b1bb7e4810646
-  checkpoint_attempts: 1
-  rolled_back_checkpoint_attempt: null
-  merge_agent_attempts: 1
-  worktree_path: null
-retry_policy:
-  max_retries: null
-  stage_retry_limit: null
 created_from: null
 upstream_origin: null
 github_origin: null

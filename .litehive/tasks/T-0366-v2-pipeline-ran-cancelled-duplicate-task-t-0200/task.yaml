@@ -1,0 +1,53 @@
+id: T-0366
+slug: v2-pipeline-ran-cancelled-duplicate-task-t-0200
+title: V2 pipeline ran cancelled/duplicate task T-0200, leaving orphan changes in
+  main
+created_at: '2026-04-13T08:45:50+00:00'
+task_type: null
+mode: implementation
+pipeline_mode: full
+priority: critical
+pm_complexity: null
+planned_effort: null
+depends_on: []
+goal: "Three bugs conspire to re-run already-done tasks, lose their work, and wedge\
+  \ the daemon. (1) v2 dequeue selector ignores runtime.execution_status \u2014 done/cancelled\
+  \ tasks get pulled off the queue and re-run from scratch. (2) GitWorktreeSyncNode\
+  \ creates the per-task worktree on disk but never persists worktree_path into runtime.yaml,\
+  \ so AgentNode/GitCommitNode operate in the main repo, leaving SWE edits as orphans\
+  \ and the commit stage as a no-op. (3) Selector skips tasks whose stale pipeline_status\
+  \ is anything other than 'backlog' (e.g. 'flagged' or 'implementing' from prior\
+  \ crashed runs) but never resets them, causing the daemon pool to spin with tasks_run=1,\
+  \ stop_reason=task_requeued indefinitely. Impact today: 80 zombie tasks closed manually\
+  \ (67 done class + 12 cancelled class + T-0210), the daemon wedged twice mid-session,\
+  \ T-0203/T-0209/T-0210 leaked orphan changes (operator stashed). Plus: closing a\
+  \ task does not kill its in-flight subagent process \u2014 codex kept running for\
+  \ T-0217 even after operator closed it. Fix all four together so partial fixes can't\
+  \ mask each other."
+acceptance_criteria:
+- Dequeue filter excludes tasks where runtime.execution_status in (done, cancelled,
+  failed, blocked, interrupted)
+- Dequeue filter excludes tasks where runtime.last_outcome.kind in (duplicate, deferred,
+  wont_do)
+- 'Regression test: queued tasks with runtime.execution_status=done are not picked
+  by selector'
+- GitWorktreeSyncNode persists worktree_path into runtime.yaml before emitting Pass
+- 'Regression test: runtime.yaml has non-null worktree_path pointing to an existing
+  dir after GitWorktreeSyncNode runs'
+- 'Regression test: AgentNode and GitCommitNode use the persisted worktree_path and
+  produce a real git commit on the task branch'
+- Selector resets stale pipeline_status (anything not in {backlog, the live active
+  task's stage}) back to backlog instead of skipping forever
+- Closing a task (litehive task close) signals and reaps any live subagent processes
+  for that task
+- 'Regression test: full sweep of a queue containing one of each zombie class results
+  in no tasks re-run and no orphan files in main worktree'
+constraints: []
+plan: []
+human_checkpoints: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0366 v2-pipeline-ran-cancelled-duplicate-task-t-0200'
+created_from: null
+upstream_origin: null
+github_origin: null

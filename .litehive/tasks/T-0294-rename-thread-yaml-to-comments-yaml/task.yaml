@@ -1,130 +1,46 @@
 id: T-0294
 slug: rename-thread-yaml-to-comments-yaml
 title: Rename thread.yaml to comments.yaml
-depends_on: []
+created_at: '2026-04-10T06:48:26+00:00'
 task_type: null
-model: null
 mode: implementation
 pipeline_mode: full
-status: in_progress
-flag_reason: null
-flag_count: 0
-pipeline_status: commit_to_git
 priority: medium
-pm_complexity: null
-planned_effort: null
-created_at: '2026-04-10T06:48:26+00:00'
-updated_at: '2026-04-11T10:22:24+00:00'
+pm_complexity: moderate
+planned_effort: m
+depends_on: []
 goal: Rename the per-task agent review file from thread.yaml to comments.yaml for
   clearer terminology (matches GitHub PR comment mental model). Update all code references,
   all tests, and all docs. Backward compat for reading old thread.yaml files during
   migration.
 acceptance_criteria:
-- All writes go to comments.yaml
-- Reader falls back to thread.yaml if comments.yaml missing (migration aid)
-- All tests updated and pass
-- Docs, prompts, and agent instructions reference comments.yaml
-- Migration helper converts existing thread.yaml to comments.yaml on repair
-constraints: []
-plan: []
+- All new task discussion writes land in comments.yaml rather than thread.yaml.
+- Task discussion reads use comments.yaml when present and fall back to thread.yaml
+  when comments.yaml is absent.
+- Repair or doctor migration moves legacy thread.yaml task discussion data into comments.yaml
+  so repaired tasks converge on the new filename.
+- Focused tests cover write-path, read fallback, repair migration, and affected UI
+  or CLI metadata, and the updated test set passes.
+- Active docs, prompt scaffolding, and operator-facing instructions in the product
+  repo refer to comments.yaml for task discussion storage.
+constraints:
+- Keep the change scoped to task discussion filename handling, compatibility fallback,
+  repair migration, and direct references in active code, tests, and docs.
+- Do not bulk-rewrite historical task artifacts under .litehive/tasks/ solely to rename
+  evidence files inside old reports, recovery manifests, or transcripts.
+plan:
+- Inventory all code paths that read, write, label, or expose the task discussion
+  file, including CLI, web snapshot metadata, recovery evidence, and prompt builders.
+- Introduce a canonical comments.yaml path plus a legacy thread.yaml fallback for
+  reads, keeping all writes on the canonical filename.
+- Extend repair or doctor behavior so legacy thread.yaml files are migrated to comments.yaml
+  during workspace repair and covered by focused tests.
+- Update tests and active docs or prompt text that describe the task discussion artifact,
+  then run targeted pytest coverage for the touched surfaces.
 human_checkpoints: []
-subagents:
-- id: SA-0001
-  role: planner
-  engine: codex
-  status: completed
-  path: subagents/SA-0001-planner
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0002
-  role: swe
-  engine: codex
-  status: interrupted
-  path: subagents/SA-0002-swe
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0003
-  role: recovery
-  engine: codex
-  status: completed
-  path: subagents/SA-0003-recovery
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0004
-  role: qa
-  engine: codex
-  status: completed
-  path: subagents/SA-0004-qa
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0005
-  role: recovery
-  engine: codex
-  status: interrupted
-  path: subagents/SA-0005-recovery
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0006
-  role: recovery
-  engine: codex
-  status: failed
-  path: subagents/SA-0006-recovery
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0007
-  role: recovery
-  engine: codex
-  status: failed
-  path: subagents/SA-0007-recovery
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0008
-  role: recovery
-  engine: codex
-  status: failed
-  path: subagents/SA-0008-recovery
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0009
-  role: recovery
-  engine: claude
-  status: completed
-  path: subagents/SA-0009-recovery
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0010
-  role: qa
-  engine: claude
-  status: interrupted
-  path: subagents/SA-0010-qa
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0011
-  role: recovery
-  engine: codex
-  status: completed
-  path: subagents/SA-0011-recovery
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0012
-  role: reviewer
-  engine: codex
-  status: completed
-  path: subagents/SA-0012-reviewer
-  sandboxed: false
-  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0294 rename-thread-yaml-to-comments-yaml'
-  commit_sha: null
-  checkpoint_base_sha: null
-  checkpoint_attempts: 0
-  rolled_back_checkpoint_attempt: null
-  merge_agent_attempts: 0
-  worktree_path: null
-retry_policy:
-  max_retries: null
-  stage_retry_limit: null
 created_from: null
 upstream_origin: null
 github_origin: null

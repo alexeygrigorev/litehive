@@ -29,3 +29,6 @@ Execution started with engine `codex`.
 
 ## 2026-04-08T20:31:52+00:00
 CommitToGit complete. Commit: 451f3c2e004a4105a1a9f74b941a722b815565a9
+
+## 2026-04-13T10:28:39+00:00
+Task closed: duplicate. Zombie re-queue: runtime.yaml execution_status=done. See T-0366.

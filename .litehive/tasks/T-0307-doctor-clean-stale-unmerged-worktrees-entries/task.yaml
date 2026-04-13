@@ -1,20 +1,14 @@
 id: T-0307
 slug: doctor-clean-stale-unmerged-worktrees-entries
 title: 'Doctor: clean stale unmerged_worktrees entries whose task is already done'
-depends_on: []
+created_at: '2026-04-10T13:29:12+00:00'
 task_type: null
-model: null
 mode: implementation
 pipeline_mode: full
-status: queued
-flag_reason: null
-flag_count: 0
-pipeline_status: backlog
 priority: low
 pm_complexity: null
 planned_effort: null
-created_at: '2026-04-10T13:29:12+00:00'
-updated_at: '2026-04-10T13:29:12+00:00'
+depends_on: []
 goal: state.yaml has an unmerged_worktrees list that tracks tasks whose worktree commits
   have not yet landed on main. When a task is rescued (via worktree rescue) or finalized
   out-of-band, its task.yaml moves to done/done but the unmerged_worktrees entry is
@@ -35,19 +29,9 @@ acceptance_criteria:
 constraints: []
 plan: []
 human_checkpoints: []
-subagents: []
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0307 doctor-clean-stale-unmerged-worktrees-entries'
-  commit_sha: null
-  checkpoint_base_sha: null
-  checkpoint_attempts: 0
-  rolled_back_checkpoint_attempt: null
-  merge_agent_attempts: 0
-  worktree_path: null
-retry_policy:
-  max_retries: null
-  stage_retry_limit: null
 created_from: null
 upstream_origin: null
 github_origin: null

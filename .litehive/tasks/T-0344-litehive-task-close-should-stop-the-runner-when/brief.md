@@ -17,6 +17,7 @@ Today, closing an actively-running task is rejected by the concurrency guard and
 
 ## Constraints
 - Prefer the smallest change that removes the failure mode.
+- Do not change idle close semantics beyond making active close reuse the existing stop path.
 - Call out any remaining edge cases or follow-up risk explicitly.
 
 ## Plan

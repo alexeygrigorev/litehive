@@ -1,0 +1,33 @@
+id: T-0362
+slug: eliminate-pool-state-state-yaml-split-brain-for
+title: Eliminate pool_state / state.yaml split-brain for active_task_id
+created_at: '2026-04-13T07:24:08+00:00'
+task_type: null
+mode: implementation
+pipeline_mode: full
+priority: critical
+pm_complexity: null
+planned_effort: null
+depends_on: []
+goal: 'Two sources of truth for active_task_id: .litehive/state.yaml and ~/.local/share/litehive/<workspace>/data.db:pool_state.
+  When a task terminates, state.yaml gets updated but pool_state sqlite doesn''t,
+  causing the recurring stale-runner wedge I had to manually clear ~5 times this session.
+  Pick one canonical store and make the other a read-only projection.'
+acceptance_criteria:
+- 1. Make pool_state sqlite the canonical store for active_task_id, queue, unmerged_worktrees,
+  etc.
+- 2. state.yaml either goes away, or becomes a read-only snapshot regenerated on demand
+  for operator tooling (and never read by the runner).
+- 3. Any pipeline transition to a terminal state (done, failed) atomically clears
+  active_task_id in the canonical store.
+- '4. Regression test: after a task fails, next daemon iteration does NOT re-pick
+  the same failed task.'
+constraints: []
+plan: []
+human_checkpoints: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0362 eliminate-pool-state-state-yaml-split-brain-for'
+created_from: null
+upstream_origin: null
+github_origin: null

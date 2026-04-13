@@ -1,19 +1,14 @@
 id: T-0218
 slug: refactor-engines-init-py-into-separate-modules
 title: Refactor engines/__init__.py into separate modules
-depends_on: []
+created_at: '2026-04-07T21:03:40+00:00'
 task_type: null
-engine: null
-model: null
 mode: implementation
 pipeline_mode: full
-status: wont_do
-pipeline_status: backlog
 priority: medium
 pm_complexity: null
 planned_effort: null
-created_at: '2026-04-07T21:03:40+00:00'
-updated_at: '2026-04-07T21:03:59+00:00'
+depends_on: []
 goal: Split the 2400-line engines/__init__.py into separate files per engine adapter
   (claude.py, codex.py, copilot.py, gemini.py, opencode.py, goz.py) plus shared utilities
   (base.py, monitoring.py, etc). Re-export from __init__.py for backward compatibility.
@@ -26,19 +21,9 @@ acceptance_criteria:
 constraints: []
 plan: []
 human_checkpoints: []
-subagents: []
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0218 refactor-engines-init-py-into-separate-modules'
-  commit_sha: null
-  checkpoint_base_sha: null
-  checkpoint_attempts: 0
-  rolled_back_checkpoint_attempt: null
-  worktree_path: null
-  merge_agent_attempts: 0
-retry_policy:
-  max_retries: null
-  stage_retry_limit: null
 created_from: null
 upstream_origin: null
 github_origin: null

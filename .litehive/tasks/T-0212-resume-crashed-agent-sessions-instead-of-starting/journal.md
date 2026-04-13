@@ -299,3 +299,9 @@ Execution finished with status `flagged`.
 
 ## 2026-04-09T07:44:11+00:00
 Task closed: deferred. Agent consistently fails to produce code for this task
+
+## 2026-04-13T10:45:39+00:00
+Interrupted runner execution while `backlog` was running. Reason: Task stopped via CLI. Resume from `backlog`.
+
+## 2026-04-13T10:45:44+00:00
+Task closed: duplicate. Zombie re-queue: runtime.yaml execution_status=cancelled. See T-0366.

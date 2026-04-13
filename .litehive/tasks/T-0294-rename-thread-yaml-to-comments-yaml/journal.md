@@ -88,3 +88,17 @@ Interrupted subagent execution while `testing` was running. Reason: Stale runner
 
 ## 2026-04-11T09:58:58+00:00
 Execution started with engine `codex`.
+
+## 2026-04-12T12:40:51+00:00
+Interrupted runner execution while `commit_to_git` was running. Reason: Stale runner detected while `commit_to_git` was still marked running.. Resume from `commit_to_git`.
+
+## 2026-04-12T12:42:02+00:00
+Task record updated from grooming output:
+- acceptance_criteria: `['All new task discussion writes land in comments.yaml rather than thread.yaml.', 'Task discussion reads use comments.yaml when present and fall back to thread.yaml when comments.yaml is absent.', 'Repair or doctor migration moves legacy thread.yaml task discussion data into comments.yaml so repaired tasks converge on the new filename.', 'Focused tests cover write-path, read fallback, repair migration, and affected UI or CLI metadata, and the updated test set passes.', 'Active docs, prompt scaffolding, and operator-facing instructions in the product repo refer to comments.yaml for task discussion storage.']`
+- constraints: `['Keep the change scoped to task discussion filename handling, compatibility fallback, repair migration, and direct references in active code, tests, and docs.', 'Do not bulk-rewrite historical task artifacts under .litehive/tasks/ solely to rename evidence files inside old reports, recovery manifests, or transcripts.']`
+- plan: `['Inventory all code paths that read, write, label, or expose the task discussion file, including CLI, web snapshot metadata, recovery evidence, and prompt builders.', 'Introduce a canonical comments.yaml path plus a legacy thread.yaml fallback for reads, keeping all writes on the canonical filename.', 'Extend repair or doctor behavior so legacy thread.yaml files are migrated to comments.yaml during workspace repair and covered by focused tests.', 'Update tests and active docs or prompt text that describe the task discussion artifact, then run targeted pytest coverage for the touched surfaces.']`
+- pm_complexity: `moderate`
+- planned_effort: `m`
+
+## 2026-04-12T12:54:47+00:00
+Recovered interrupted run and requeued the task at `flagged`.

@@ -1,20 +1,14 @@
 id: T-0299
 slug: ensure-workspace-refuses-to-create-nested-or
 title: ensure_workspace() refuses to create nested or invalid .litehive directories
-depends_on: []
+created_at: '2026-04-10T06:49:44+00:00'
 task_type: null
-model: null
 mode: implementation
 pipeline_mode: full
-status: queued
-flag_reason: null
-flag_count: 0
-pipeline_status: backlog
 priority: high
 pm_complexity: null
 planned_effort: null
-created_at: '2026-04-10T06:49:44+00:00'
-updated_at: '2026-04-10T06:49:44+00:00'
+depends_on: []
 goal: Prevent the accidental .litehive/.litehive/ and $tmpdir/.litehive/ creation
   bugs. ensure_workspace() should refuse any path that would create a workspace nested
   inside an existing workspace, or any path starting with $ (unresolved shell variable),
@@ -30,19 +24,9 @@ acceptance_criteria:
 constraints: []
 plan: []
 human_checkpoints: []
-subagents: []
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0299 ensure-workspace-refuses-to-create-nested-or'
-  commit_sha: null
-  checkpoint_base_sha: null
-  checkpoint_attempts: 0
-  rolled_back_checkpoint_attempt: null
-  merge_agent_attempts: 0
-  worktree_path: null
-retry_policy:
-  max_retries: null
-  stage_retry_limit: null
 created_from: null
 upstream_origin: null
 github_origin: null

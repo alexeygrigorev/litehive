@@ -1,20 +1,14 @@
 id: T-0239
 slug: ensure-subagent-stdout-stderr-are-always-written
 title: Ensure subagent stdout/stderr are always written even on short or empty runs
-depends_on: []
+created_at: '2026-04-09T07:46:52+00:00'
 task_type: null
-engine: null
-model: null
 mode: implementation
 pipeline_mode: full
-status: done
-flag_reason: null
-pipeline_status: done
 priority: medium
 pm_complexity: simple
 planned_effort: xs
-created_at: '2026-04-09T07:46:52+00:00'
-updated_at: '2026-04-09T09:01:48+00:00'
+depends_on: []
 goal: Some subagent runs produce no stdout/transcript artifacts (only session.yaml
   and report.yaml). This makes debugging impossible. Ensure stdout.txt and stderr.txt
   are always written, even if empty, so we can distinguish 'agent produced nothing'
@@ -27,61 +21,9 @@ acceptance_criteria:
 constraints: []
 plan: []
 human_checkpoints: []
-subagents:
-- id: SA-0001
-  role: planner
-  engine: claude
-  status: completed
-  path: subagents/SA-0001-planner
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0002
-  role: swe
-  engine: claude
-  status: completed
-  path: subagents/SA-0002-swe
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0003
-  role: swe
-  engine: claude
-  status: completed
-  path: subagents/SA-0003-swe
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0004
-  role: qa
-  engine: claude
-  status: completed
-  path: subagents/SA-0004-qa
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0005
-  role: reviewer
-  engine: claude
-  status: completed
-  path: subagents/SA-0005-reviewer
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0006
-  role: merge-resolver
-  engine: claude
-  status: completed
-  path: subagents/SA-0006-merge-resolver
-  sandboxed: false
-  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0239 ensure-subagent-stdout-stderr-are-always-written'
-  commit_sha: e6dee38ff49d805621e30ecf6d7da75c950bc674
-  checkpoint_base_sha: df667322d0082d1e829d9ccd5232a42e614a2a51
-  checkpoint_attempts: 1
-  rolled_back_checkpoint_attempt: null
-  merge_agent_attempts: 1
-  worktree_path: null
-retry_policy:
-  max_retries: null
-  stage_retry_limit: null
 created_from: null
 upstream_origin: null
 github_origin: null

@@ -1,18 +1,14 @@
 id: T-0143
 slug: trim-report-feedback-field-to-a-summary-instead-of-full-transcript
 title: Trim report feedback field to a summary instead of full transcript
-depends_on: []
+created_at: '2026-04-04T16:46:47+00:00'
 task_type: null
-engine: null
-model: null
 mode: implementation
-status: done
-pipeline_status: done
+pipeline_mode: full
 priority: medium
 pm_complexity: null
 planned_effort: null
-created_at: '2026-04-04T16:46:47+00:00'
-updated_at: '2026-04-05T15:48:03+00:00'
+depends_on: []
 goal: Stage reports should contain a concise feedback summary (under 2000 chars) instead
   of the full agent transcript. The full transcript stays in subagents/ artifacts.
   This keeps reports lightweight enough to track in git.
@@ -24,80 +20,9 @@ acceptance_criteria:
 constraints: []
 plan: []
 human_checkpoints: []
-subagents:
-- id: SA-0001
-  role: planner
-  engine: codex
-  status: completed
-  path: subagents/SA-0001-planner
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0002
-  role: planner
-  engine: claude
-  status: completed
-  path: subagents/SA-0002-planner
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0003
-  role: planner
-  engine: claude
-  status: completed
-  path: subagents/SA-0003-planner
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0004
-  role: swe
-  engine: claude
-  status: completed
-  path: subagents/SA-0004-swe
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0005
-  role: swe
-  engine: claude
-  status: completed
-  path: subagents/SA-0005-swe
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0006
-  role: qa
-  engine: claude
-  status: completed
-  path: subagents/SA-0006-qa
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0007
-  role: qa
-  engine: claude
-  status: completed
-  path: subagents/SA-0007-qa
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0008
-  role: reviewer
-  engine: claude
-  status: completed
-  path: subagents/SA-0008-reviewer
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0009
-  role: reviewer
-  engine: claude
-  status: completed
-  path: subagents/SA-0009-reviewer
-  sandboxed: false
-  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0143 trim-report-feedback-field-to-a-summary-instead-of-full-transcript'
-  commit_sha: 59635e938227800daa26fc6fc3ec37620d9979d6
-  checkpoint_base_sha: null
-  checkpoint_attempts: 0
-  rolled_back_checkpoint_attempt: null
-  worktree_path: null
-retry_policy:
-  max_retries: null
-  stage_retry_limit: null
 created_from: null
 upstream_origin: null
+github_origin: null

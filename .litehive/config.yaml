@@ -112,9 +112,9 @@ subagent_resource_limits:
   cpu_count: null
   process_limit: null
 external_engine_sandbox:
-  enabled: false
-  backend: docker
-  runtime_binary: docker
+  enabled: true
+  backend: bubblewrap
+  runtime_binary: bwrap
   image: litehive-external-engine:latest
   workspace_mount_path: /workspace
   binary_mount_root: /litehive/bin
@@ -128,16 +128,16 @@ external_engine_sandbox:
   - /tmp
   engine_policies:
     codex:
-      enabled: false
-      network_mode: null
+      enabled: true
+      network_mode: host
       workspace_mode: null
       environment: []
       credential_inputs: []
       extra_ro_binds:
       - /home/alexey/.nvm/versions/node/v24.13.1
     claude:
-      enabled: false
-      network_mode: null
+      enabled: true
+      network_mode: host
       workspace_mode: null
       environment: []
       credential_inputs: []

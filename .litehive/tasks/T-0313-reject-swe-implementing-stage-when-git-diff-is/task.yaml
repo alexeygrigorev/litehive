@@ -1,20 +1,14 @@
 id: T-0313
 slug: reject-swe-implementing-stage-when-git-diff-is
 title: Reject SWE implementing stage when git diff is empty but report claims changes
-depends_on: []
+created_at: '2026-04-10T14:54:31+00:00'
 task_type: null
-model: null
 mode: implementation
 pipeline_mode: full
-status: done
-flag_reason: null
-flag_count: 0
-pipeline_status: done
 priority: high
 pm_complexity: null
 planned_effort: null
-created_at: '2026-04-10T14:54:31+00:00'
-updated_at: '2026-04-10T15:50:58+00:00'
+depends_on: []
 goal: "Root cause of T-0240's multi-day confirmation-bias loop: the first SWE hallucinated\
   \ a completion report without actually invoking any file-edit tool. The report described\
   \ extensive file changes but 'git status' in the worktree was empty. Nothing in\
@@ -43,61 +37,9 @@ acceptance_criteria:
 constraints: []
 plan: []
 human_checkpoints: []
-subagents:
-- id: SA-0001
-  role: planner
-  engine: codex
-  status: completed
-  path: subagents/SA-0001-planner
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0002
-  role: swe
-  engine: codex
-  status: completed
-  path: subagents/SA-0002-swe
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0003
-  role: qa
-  engine: codex
-  status: completed
-  path: subagents/SA-0003-qa
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0004
-  role: recovery
-  engine: codex
-  status: completed
-  path: subagents/SA-0004-recovery
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0005
-  role: qa
-  engine: codex
-  status: completed
-  path: subagents/SA-0005-qa
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0006
-  role: reviewer
-  engine: codex
-  status: completed
-  path: subagents/SA-0006-reviewer
-  sandboxed: false
-  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0313 reject-swe-implementing-stage-when-git-diff-is'
-  commit_sha: 4ac32518c8f3bbdd70f734f4635cf6674e032f58
-  checkpoint_base_sha: eff12208f1c495fce7d247a162f7e47fed1afd28
-  checkpoint_attempts: 1
-  rolled_back_checkpoint_attempt: null
-  merge_agent_attempts: 0
-  worktree_path: null
-retry_policy:
-  max_retries: null
-  stage_retry_limit: null
 created_from: null
 upstream_origin: null
 github_origin: null

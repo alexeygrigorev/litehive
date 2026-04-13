@@ -5,3 +5,6 @@ Task created.
 
 ## 2026-04-09T21:00:24+00:00
 Task metadata updated via CLI.
+
+## 2026-04-13T10:31:45+00:00
+Task closed: duplicate. Zombie re-queue: runtime.yaml execution_status=done. See T-0366.

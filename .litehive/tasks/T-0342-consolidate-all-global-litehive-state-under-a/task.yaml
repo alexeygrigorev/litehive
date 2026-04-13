@@ -2,21 +2,15 @@ id: T-0342
 slug: consolidate-all-global-litehive-state-under-a
 title: Consolidate all global litehive state under a single XDG_DATA_HOME/litehive
   root
-depends_on:
-- T-0332
+created_at: '2026-04-11T05:41:14+00:00'
 task_type: null
-model: null
 mode: implementation
 pipeline_mode: full
-status: queued
-flag_reason: null
-flag_count: 0
-pipeline_status: backlog
 priority: medium
 pm_complexity: null
 planned_effort: null
-created_at: '2026-04-11T05:41:14+00:00'
-updated_at: '2026-04-11T05:41:14+00:00'
+depends_on:
+- T-0332
 goal: "Global litehive state is scattered across multiple XDG directories and that\
   \ scatter is part of why yesterday's outage went unnoticed:\n- ~/.config/litehive/workspaces.yaml\
   \ (registry)\n- ~/.config/litehive/daemons.yaml (daemon registry)\n- ~/.local/share/litehive/<workspace_id>/data.db\
@@ -61,19 +55,9 @@ acceptance_criteria:
 constraints: []
 plan: []
 human_checkpoints: []
-subagents: []
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0342 consolidate-all-global-litehive-state-under-a'
-  commit_sha: null
-  checkpoint_base_sha: null
-  checkpoint_attempts: 0
-  rolled_back_checkpoint_attempt: null
-  merge_agent_attempts: 0
-  worktree_path: null
-retry_policy:
-  max_retries: null
-  stage_retry_limit: null
 created_from: null
 upstream_origin: null
 github_origin: null

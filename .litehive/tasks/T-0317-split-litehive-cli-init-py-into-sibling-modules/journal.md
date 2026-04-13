@@ -17,3 +17,6 @@ Task metadata updated via CLI.
 
 ## 2026-04-10T20:11:29+00:00
 Task metadata updated via CLI.
+
+## 2026-04-12T19:59:05+00:00
+Recovered interrupted run and requeued the task at `flagged`.

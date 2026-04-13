@@ -51,3 +51,6 @@ Merge conflict on 2 file(s). Launching merge agent (attempt 1).
 
 ## 2026-04-09T17:14:11+00:00
 CommitToGit complete. Commit: b8eb0ef0820c906f0d3019d7417ec78919139942
+
+## 2026-04-13T10:30:41+00:00
+Task closed: duplicate. Zombie re-queue: runtime.yaml execution_status=done. See T-0366.

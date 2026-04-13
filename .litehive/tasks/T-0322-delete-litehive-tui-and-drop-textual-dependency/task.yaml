@@ -1,20 +1,14 @@
 id: T-0322
 slug: delete-litehive-tui-and-drop-textual-dependency
 title: Delete litehive/tui/ and drop textual dependency
-depends_on: []
+created_at: '2026-04-10T20:13:56+00:00'
 task_type: null
-model: null
 mode: implementation
 pipeline_mode: full
-status: queued
-flag_reason: null
-flag_count: 0
-pipeline_status: backlog
 priority: medium
 pm_complexity: null
 planned_effort: null
-created_at: '2026-04-10T20:13:56+00:00'
-updated_at: '2026-04-10T20:13:56+00:00'
+depends_on: []
 goal: "litehive/tui/app.py is a 54-line Textual dashboard that prints workspace path,\
   \ mode, active_task_id, and a task list with 1-second auto-refresh. No input, no\
   \ actions, no tests. It pulls in textual>=3.2.0 as a runtime dependency for zero\
@@ -35,19 +29,9 @@ acceptance_criteria:
 constraints: []
 plan: []
 human_checkpoints: []
-subagents: []
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0322 delete-litehive-tui-and-drop-textual-dependency'
-  commit_sha: null
-  checkpoint_base_sha: null
-  checkpoint_attempts: 0
-  rolled_back_checkpoint_attempt: null
-  merge_agent_attempts: 0
-  worktree_path: null
-retry_policy:
-  max_retries: null
-  stage_retry_limit: null
 created_from: null
 upstream_origin: null
 github_origin: null

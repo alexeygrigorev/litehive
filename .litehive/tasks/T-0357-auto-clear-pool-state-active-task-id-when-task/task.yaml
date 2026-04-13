@@ -1,0 +1,36 @@
+id: T-0357
+slug: auto-clear-pool-state-active-task-id-when-task
+title: Auto-clear pool_state active_task_id when task reaches terminal state (done/failed)
+created_at: '2026-04-13T03:02:41+00:00'
+task_type: null
+mode: implementation
+pipeline_mode: full
+priority: high
+pm_complexity: null
+planned_effort: null
+depends_on: []
+goal: 'When a task reaches a terminal state (done or failed), the pipeline should
+  automatically clear pool_state.active_task_id in SQLite. Currently, when a task
+  fails or is blocked, the active_task_id persists in pool_state, and the next daemon
+  iteration wedges on a stale runner lock requiring manual operator intervention (sqlite
+  update + task abandon). Root cause: the pool_state sync only happens on successful
+  completion, not on failure/block. Pattern hit 3+ times this session: T-0325, T-0087,
+  T-0108.'
+acceptance_criteria:
+- "1. When GitCommitNode reaches after_commit \u2192 done, the pipeline clears pool_state.active_task_id\
+  \ in sqlite."
+- 2. When a task reaches the failed terminal state (recovery_exhausted, recovery_failed,
+  etc.), the pipeline clears pool_state.active_task_id in sqlite.
+- 3. The daemon's next iteration automatically picks up the next queued task without
+  operator intervention.
+- 4. Add integration test that exercises the failed-terminal path and asserts pool_state.active_task_id
+  is cleared.
+constraints: []
+plan: []
+human_checkpoints: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0357 auto-clear-pool-state-active-task-id-when-task'
+created_from: null
+upstream_origin: null
+github_origin: null

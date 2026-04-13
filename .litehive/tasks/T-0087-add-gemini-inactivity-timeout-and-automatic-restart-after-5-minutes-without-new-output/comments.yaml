@@ -1,0 +1,126 @@
+- role: planner
+  step: grooming
+  verdict: pass
+  message: "Gemini-specific inactivity handling is already covered by Litehive's shared\
+    \ live-subagent watchdog and retry path. The current code passes `subagent_inactivity_timeout_seconds`\
+    \ into live runs for every engine, converts stale-output kills into retryable\
+    \ `timeout` failures, and preserves continuation handoff for `gemini`. That means\
+    \ there is no remaining Gemini-only implementation to add.\n\nThe only mismatch\
+    \ against this title is product wording: the shared default is currently `360.0`\
+    \ seconds, not `300.0`. That should be handled as one shared follow-up task instead\
+    \ of reviving per-engine duplicates.\n\nSuggested operator follow-up if the five-minute\
+    \ SLA is still required:\n`litehive task add \"Change shared subagent inactivity\
+    \ timeout default from 360s to 300s\" --goal \"Make the shared live-subagent inactivity\
+    \ watchdog fire after 5 minutes without new stdout instead of 6 minutes.\" --acceptance-criteria\
+    \ \"Default LitehiveConfig.subagent_inactivity_timeout_seconds is 300.0 and the\
+    \ workspace config template reflects 300 seconds.\" --acceptance-criteria \"Live\
+    \ subagent timeout tests still classify the interruption as retryable timeout\
+    \ and preserve restart/continuation behavior.\" --priority medium`\n\nTASK_UPDATE:\n\
+    \  task_type: bugfix\n  pm_complexity: simple\n  planned_effort: xs\n  goal: >-\n\
+    \    Close this engine-specific task because Gemini already participates in the\n\
+    \    shared live-subagent inactivity timeout and automatic retry/restart flow;\n\
+    \    there is no Gemini-only implementation left to add.\n  acceptance_criteria:\n\
+    \    - >-\n      Task is closed as duplicate because Gemini already receives the\
+    \ shared\n      inactivity watchdog, timeout classification, and restart/continuation\n\
+    \      handling used by live subagent execution.\n    - >-\n      Any future requirement\
+    \ to change the timeout threshold from 360 seconds\n      to 300 seconds is tracked\
+    \ as a separate shared task, not implemented as a\n      Gemini-only code path.\n\
+    \  constraints:\n    - Do not introduce Gemini-specific timeout logic while the\
+    \ watchdog remains shared across engines.\n    - Keep any future threshold change\
+    \ scoped to shared config, template, and tests.\n  plan:\n    - Record that existing\
+    \ shared live-subagent inactivity handling already covers Gemini.\n    - Do not\
+    \ reopen this task for adapter-specific code unless Gemini diverges from the shared\
+    \ live execution contract.\n    - Create a separate shared task if product still\
+    \ wants 5 minutes exactly instead of the current 360-second default.\n  outcome:\
+    \ duplicate\n  outcome_reason: >-\n    Gemini already inherits the shared inactivity-timeout\
+    \ and retry/restart\n    path; the only remaining gap is the global default value,\
+    \ which belongs in\n    one cross-engine task rather than this engine-specific\
+    \ backlog item.\n"
+  files_changed: []
+  created_at: '2026-04-13T01:43:12+00:00'
+- role: swe
+  step: implementing
+  verdict: blocked
+  message: "Blocked on task contract inconsistency.\n\nEvidence gathered:\n- `git\
+    \ diff --stat main...HEAD` is empty and `git status --short` is empty in this\
+    \ worktree, so there is no in-progress implementation to finish.\n- `.litehive/tasks/T-0087-add-gemini-inactivity-timeout-and-automatic-restart-after-5-minutes-without-new-output/task.yaml`\
+    \ is internally inconsistent with the stage request: `status: cancelled`, `goal:\
+    \ ''`, `acceptance_criteria: []`, and `plan: []`.\n- The task directory has no\
+    \ `thread.yaml`, no prior stage reports, and no recovery/rejection artifacts to\
+    \ use as the required execution contract.\n- The codebase already contains shared\
+    \ inactivity handling that appears to cover the requested behavior generically\
+    \ rather than Gemini-only:\n  - `litehive/config/model.py` defines `subagent_inactivity_timeout_seconds:\
+    \ 360.0`.\n  - `litehive/agents/manager.py` passes that value into live runs as\
+    \ `inactivity_timeout_seconds` and converts `SubagentInactivityTimeout` into retryable\
+    \ failure classification `timeout`.\n  - `litehive/agents/session.py` kills stale\
+    \ executions when stdout has been idle longer than the configured timeout.\n\n\
+    I did not make code changes because the task record is cancelled and lacks goal/acceptance\
+    \ criteria/plan, which the stage instructions say must be treated as blocking\
+    \ instead of guessing scope. Recovery/planning should either restore a valid task\
+    \ contract or explicitly mark this as already satisfied by the shared watchdog\
+    \ implementation.\n"
+  files_changed: []
+  created_at: '2026-04-13T01:44:24+00:00'
+- role: recovery
+  step: recovering
+  verdict: blocked
+  message: 'Recovery found and fixed one Litehive infrastructure bug, but the task
+    is still blocked on invalid task data.
+
+
+    Root cause fixed in Litehive:
+
+    - Recovery handoff/worktree context used the full task-directory name `T-0087-add-gemini-inactivity-timeout-and-automatic-restart-after-5-minutes-without-new-output`,
+    while recovery startup diagnostics (`litehive pipeline journal <task_id>`, `litehive
+    task logs <task_id> --agent`) only accepted the canonical task id (`T-0087`).
+
+    - That made the required recovery commands fail with misleading "task not found"
+    / unresolved-id output and obscured the actual state.
+
+
+    Litehive fix made:
+
+    - Added `normalize_task_reference()` in `litehive/tasks/crud.py` to canonicalize
+    a full task-directory/worktree name back to the task id.
+
+    - Wired that normalization into `litehive task logs ...` and `litehive pipeline
+    journal ...`.
+
+    - Added focused regression coverage in `tests/test_logs_command.py` and `tests/test_pipeline_v2_journal_cli.py`.
+
+
+    Verification:
+
+    - `uv run pytest tests/test_pipeline_v2_journal_cli.py tests/test_logs_command.py`
+    passed.
+
+    - `uv run litehive pipeline journal T-0087-add-gemini-inactivity-timeout-and-automatic-restart-after-5-minutes-without-new-output`
+    now resolves to the canonical id and reports the real state: `no v2 state row
+    for task T-0087`.
+
+    - `uv run litehive task logs T-0087-add-gemini-inactivity-timeout-and-automatic-restart-after-5-minutes-without-new-output
+    --agent` now resolves and reports `T-0087: no subagents` instead of `task not
+    found`.
+
+
+    Remaining blocker (not fixed by infrastructure):
+
+    - `.litehive/tasks/T-0087-add-gemini-inactivity-timeout-and-automatic-restart-after-5-minutes-without-new-output/task.yaml`
+    still has `status: cancelled`, empty `goal`, empty `acceptance_criteria`, and
+    empty `plan`.
+
+    - There is still no v2 pipeline state row for `T-0087` and no prior subagent/report
+    artifacts to resume from.
+
+
+    Why this should NOT retry implementing yet:
+
+    - The previous implementing block was caused by an invalid/missing task contract,
+    not by missing Gemini inactivity-timeout code paths.
+
+    - Retry implementing only after the task is restored to a valid active contract
+    (or explicitly closed as already satisfied by the shared inactivity watchdog implementation).
+
+    '
+  files_changed: []
+  created_at: '2026-04-13T01:52:29+00:00'

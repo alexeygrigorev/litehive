@@ -62,3 +62,6 @@ Execution started with engine `claude`.
 
 ## 2026-04-09T11:28:39+00:00
 CommitToGit complete. Commit: d0fabe8f348f0abaef2503b9afdf56ae26870cad
+
+## 2026-04-13T10:29:11+00:00
+Task closed: duplicate. Zombie re-queue: runtime.yaml execution_status=done. See T-0366.

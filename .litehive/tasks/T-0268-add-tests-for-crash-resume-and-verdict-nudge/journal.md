@@ -36,3 +36,6 @@ Created task worktree at `.litehive/worktrees/T-0268-add-tests-for-crash-resume-
 
 ## 2026-04-10T03:03:01+00:00
 Execution started with engine `codex`.
+
+## 2026-04-13T10:31:38+00:00
+Task closed: duplicate. Zombie re-queue: runtime.yaml execution_status=done. See T-0366.

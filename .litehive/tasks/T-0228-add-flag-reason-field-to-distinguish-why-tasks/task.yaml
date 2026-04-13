@@ -1,19 +1,14 @@
 id: T-0228
 slug: add-flag-reason-field-to-distinguish-why-tasks
 title: Add flag_reason field to distinguish why tasks were flagged
-depends_on: []
+created_at: '2026-04-08T06:06:23+00:00'
 task_type: null
-engine: null
-model: null
 mode: implementation
 pipeline_mode: full
-status: done
-pipeline_status: done
 priority: medium
 pm_complexity: moderate
 planned_effort: s
-created_at: '2026-04-08T06:06:23+00:00'
-updated_at: '2026-04-08T20:40:31+00:00'
+depends_on: []
 goal: When a task is flagged, record a structured reason (retry_limit_exceeded, empty_output,
   recovery_failed, infeasible, etc.) so operators can quickly see why without digging
   through journals and reports.
@@ -25,47 +20,9 @@ acceptance_criteria:
 constraints: []
 plan: []
 human_checkpoints: []
-subagents:
-- id: SA-0001
-  role: planner
-  engine: codex
-  status: completed
-  path: subagents/SA-0001-planner
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0002
-  role: swe
-  engine: codex
-  status: completed
-  path: subagents/SA-0002-swe
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0003
-  role: qa
-  engine: codex
-  status: completed
-  path: subagents/SA-0003-qa
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0004
-  role: reviewer
-  engine: codex
-  status: completed
-  path: subagents/SA-0004-reviewer
-  sandboxed: false
-  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0228 add-flag-reason-field-to-distinguish-why-tasks'
-  commit_sha: ab00d219866e0f8f8fb1a94f3faae97e27d7f913
-  checkpoint_base_sha: 451f3c2e004a4105a1a9f74b941a722b815565a9
-  checkpoint_attempts: 1
-  rolled_back_checkpoint_attempt: null
-  merge_agent_attempts: 0
-  worktree_path: null
-retry_policy:
-  max_retries: null
-  stage_retry_limit: null
 created_from: null
 upstream_origin: null
 github_origin: null

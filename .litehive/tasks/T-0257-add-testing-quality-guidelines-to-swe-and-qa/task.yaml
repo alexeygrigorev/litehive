@@ -1,21 +1,14 @@
 id: T-0257
 slug: add-testing-quality-guidelines-to-swe-and-qa
 title: Add testing quality guidelines to SWE and QA prompts
-depends_on: []
+created_at: '2026-04-09T09:21:16+00:00'
 task_type: null
-engine: null
-model: null
 mode: implementation
 pipeline_mode: full
-status: done
-flag_reason: null
-flag_count: 0
-pipeline_status: done
 priority: high
 pm_complexity: null
 planned_effort: null
-created_at: '2026-04-09T09:21:16+00:00'
-updated_at: '2026-04-09T17:24:08+00:00'
+depends_on: []
 goal: Embed testing best practices into the agent prompts so agents write better tests.
   Rules should be generic (apply to any project) with profile-specific additions.
   Add to both SWE (implementing stage) and QA (testing stage) prompts.
@@ -36,54 +29,9 @@ acceptance_criteria:
 constraints: []
 plan: []
 human_checkpoints: []
-subagents:
-- id: SA-0001
-  role: planner
-  engine: codex
-  status: completed
-  path: subagents/SA-0001-planner
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0002
-  role: swe
-  engine: codex
-  status: completed
-  path: subagents/SA-0002-swe
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0003
-  role: qa
-  engine: codex
-  status: completed
-  path: subagents/SA-0003-qa
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0004
-  role: reviewer
-  engine: codex
-  status: completed
-  path: subagents/SA-0004-reviewer
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0005
-  role: merge-resolver
-  engine: claude
-  status: completed
-  path: subagents/SA-0005-merge-resolver
-  sandboxed: false
-  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0257 add-testing-quality-guidelines-to-swe-and-qa'
-  commit_sha: f5493908e138b73ede65447907492a685ee7f8b5
-  checkpoint_base_sha: b8eb0ef0820c906f0d3019d7417ec78919139942
-  checkpoint_attempts: 1
-  rolled_back_checkpoint_attempt: null
-  merge_agent_attempts: 1
-  worktree_path: null
-retry_policy:
-  max_retries: null
-  stage_retry_limit: null
 created_from: null
 upstream_origin: null
 github_origin: null

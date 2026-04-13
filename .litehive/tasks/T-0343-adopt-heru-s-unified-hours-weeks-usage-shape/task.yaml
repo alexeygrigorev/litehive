@@ -1,20 +1,14 @@
 id: T-0343
 slug: adopt-heru-s-unified-hours-weeks-usage-shape
 title: Adopt heru's unified (hours, weeks) usage shape
-depends_on: []
+created_at: '2026-04-11T07:01:22+00:00'
 task_type: refactor
-model: null
 mode: tasks
 pipeline_mode: full
-status: wont_do
-flag_reason: null
-flag_count: 0
-pipeline_status: backlog
 priority: high
 pm_complexity: moderate
 planned_effort: m
-created_at: '2026-04-11T07:01:22+00:00'
-updated_at: '2026-04-11T07:02:41+00:00'
+depends_on: []
 goal: heru is normalizing its quota/usage output to a single unified shape with exactly
   two windows (hours and weeks) and collapsing the per-provider dataclasses (see the
   corresponding heru task). litehive currently consumes the old per-provider shapes
@@ -43,19 +37,9 @@ plan:
 - Restructure the code in small, reviewable steps.
 - Run focused verification to confirm behavior is preserved.
 human_checkpoints: []
-subagents: []
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0343 adopt-heru-s-unified-hours-weeks-usage-shape'
-  commit_sha: null
-  checkpoint_base_sha: null
-  checkpoint_attempts: 0
-  rolled_back_checkpoint_attempt: null
-  merge_agent_attempts: 0
-  worktree_path: null
-retry_policy:
-  max_retries: null
-  stage_retry_limit: null
 created_from: null
 upstream_origin: null
 github_origin: null

@@ -1,19 +1,14 @@
 id: T-0200
 slug: remove-text-based-stage-report-parsing-require
 title: Remove text-based stage report parsing - require structured JSON submission
-depends_on: []
+created_at: '2026-04-06T20:34:07+00:00'
 task_type: null
-engine: null
-model: null
 mode: implementation
 pipeline_mode: full
-status: duplicate
-pipeline_status: backlog
 priority: medium
 pm_complexity: null
 planned_effort: null
-created_at: '2026-04-06T20:34:07+00:00'
-updated_at: '2026-04-07T08:26:06+00:00'
+depends_on: []
 goal: 'Remove all text-based report parsing fallbacks in engines/base.py. When an
   agent submits a stage result, it must be valid JSON via STAGE_RESULT: block or via
   litehive report CLI. Remove _extract_line, _extract_int, _extract_list, _extract_section_block,
@@ -28,17 +23,9 @@ acceptance_criteria:
 constraints: []
 plan: []
 human_checkpoints: []
-subagents: []
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0200 remove-text-based-stage-report-parsing-require'
-  commit_sha: null
-  checkpoint_base_sha: null
-  checkpoint_attempts: 0
-  rolled_back_checkpoint_attempt: null
-  worktree_path: null
-retry_policy:
-  max_retries: null
-  stage_retry_limit: null
 created_from: null
 upstream_origin: null
+github_origin: null

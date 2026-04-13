@@ -1,20 +1,14 @@
 id: T-0233
 slug: move-process-profiles-from-python-dicts-to-yaml
 title: Move process profiles from Python dicts to YAML files
-depends_on: []
+created_at: '2026-04-08T07:13:06+00:00'
 task_type: null
-engine: null
-model: null
 mode: implementation
 pipeline_mode: full
-status: done
-flag_reason: null
-pipeline_status: done
 priority: medium
 pm_complexity: null
 planned_effort: null
-created_at: '2026-04-08T07:13:06+00:00'
-updated_at: '2026-04-08T23:22:11+00:00'
+depends_on: []
 goal: "profiles.py is 425 lines of hardcoded Python dicts with no logic \u2014 pure\
   \ data. Move each profile to a YAML file under litehive/config/profiles/ (e.g. _shared.yaml,\
   \ generic.yaml, python.yaml, django.yaml, rust.yaml). Replace profiles.py with a\
@@ -28,54 +22,9 @@ acceptance_criteria:
 constraints: []
 plan: []
 human_checkpoints: []
-subagents:
-- id: SA-0001
-  role: planner
-  engine: codex
-  status: completed
-  path: subagents/SA-0001-planner
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0002
-  role: swe
-  engine: codex
-  status: completed
-  path: subagents/SA-0002-swe
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0003
-  role: qa
-  engine: codex
-  status: completed
-  path: subagents/SA-0003-qa
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0004
-  role: recovery
-  engine: codex
-  status: completed
-  path: subagents/SA-0004-recovery
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0005
-  role: merge-resolver
-  engine: claude
-  status: completed
-  path: subagents/SA-0005-merge-resolver
-  sandboxed: false
-  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0233 move-process-profiles-from-python-dicts-to-yaml'
-  commit_sha: 7fe5b455347d1e4091afd68ecc9bc326a83ee7bc
-  checkpoint_base_sha: 2e01d35489e458a6a74f80174902ffe62f39b2f8
-  checkpoint_attempts: 1
-  rolled_back_checkpoint_attempt: null
-  merge_agent_attempts: 1
-  worktree_path: null
-retry_policy:
-  max_retries: null
-  stage_retry_limit: null
 created_from: null
 upstream_origin: null
 github_origin: null

@@ -6,21 +6,23 @@
 - Planned effort: xs
 
 ## Goal
-heru T-0002 shipped a positional engine argument for the heru CLI: 'heru codex "prompt"' is now the preferred form. Update any place in litehive that shells out to heru (scripts, docs, tests_integration helpers) to use the new positional form instead of any legacy flag-based form. Small mechanical change; bundled as its own task so it does not get lost in the larger T-0001/T-0003 adoption work.
+Migrate Litehive-owned direct `heru` CLI invocations from the legacy engine-flag form to Heru's preferred positional engine form (`heru <engine> "prompt"`). Scope is limited to places where this repo directly shells out to `heru` or documents that direct invocation in tests/helpers/docs. Litehive's own `litehive ... --engine ...` CLI surface is out of scope.
 
 ## Acceptance Criteria
-- grep for 'heru ' across litehive shows only positional-engine invocations
-- tests/ passes
-- Any docs/README snippets showing heru CLI usage are updated
+- Every direct `heru` CLI invocation in Litehive-owned code, tests, helpers, and docs uses positional engine syntax; no legacy direct invocation using `--engine` remains.
+- Direct Heru CLI coverage preserves existing forwarded behavior for prompt, cwd, model, max-turns, and resume-session-id while using positional engine parsing.
+- tests/ passes.
+- Any existing README or docs snippets that invoke `heru` directly are updated to the positional form.
 
 ## Constraints
 - Avoid broad opportunistic cleanup outside the chosen seam.
 - Preserve existing behavior unless the task explicitly includes functional changes.
+- Do not modify Litehive's own `litehive ... --engine ...` flags, docs, or parser behavior as part of this task.
 
 ## Plan
-- Identify the narrow seam to refactor and the behavior that must stay stable.
-- Restructure the code in small, reviewable steps.
-- Run focused verification to confirm behavior is preserved.
+- Find the narrow set of direct `heru` command arrays/snippets and separate them from unrelated `heru` imports and Litehive `--engine` references.
+- Update those direct invocations to positional engine syntax in small, reviewable edits while preserving forwarded arguments and runtime behavior.
+- Run focused Heru CLI verification, then run the full `tests/` suite and confirm any direct-doc examples are consistent.
 
 ## PM Sizing
 - Complexity: simple

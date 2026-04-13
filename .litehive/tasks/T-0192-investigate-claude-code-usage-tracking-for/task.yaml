@@ -1,19 +1,14 @@
 id: T-0192
 slug: investigate-claude-code-usage-tracking-for
 title: Investigate Claude Code usage tracking for proactive quota detection
-depends_on: []
+created_at: '2026-04-06T20:07:50+00:00'
 task_type: research
-engine: null
-model: null
 mode: implementation
 pipeline_mode: full
-status: wont_do
-pipeline_status: implementing
 priority: medium
 pm_complexity: null
 planned_effort: null
-created_at: '2026-04-06T20:07:50+00:00'
-updated_at: '2026-04-08T13:29:37+00:00'
+depends_on: []
 goal: 'Claude Code CLI tracks usage somehow but there is no obvious quota API endpoint.
   api.anthropic.com/api/claude_code/metrics exists but rejects OAuth tokens. The claude.ai/api/organizations/usage
   endpoint is behind Cloudflare. The CLI likely tracks usage locally against known
@@ -34,54 +29,9 @@ acceptance_criteria:
 constraints: []
 plan: []
 human_checkpoints: []
-subagents:
-- id: SA-0001
-  role: planner
-  engine: claude
-  status: completed
-  path: subagents/SA-0001-planner
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0002
-  role: swe
-  engine: claude
-  status: completed
-  path: subagents/SA-0002-swe
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0003
-  role: swe
-  engine: claude
-  status: completed
-  path: subagents/SA-0003-swe
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0004
-  role: swe
-  engine: claude
-  status: completed
-  path: subagents/SA-0004-swe
-  sandboxed: false
-  sandbox_summary: host
-- id: SA-0005
-  role: swe
-  engine: claude
-  status: completed
-  path: subagents/SA-0005-swe
-  sandboxed: false
-  sandbox_summary: host
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0192 investigate-claude-code-usage-tracking-for'
-  commit_sha: null
-  checkpoint_base_sha: null
-  checkpoint_attempts: 0
-  rolled_back_checkpoint_attempt: null
-  merge_agent_attempts: 0
-  worktree_path: null
-retry_policy:
-  max_retries: null
-  stage_retry_limit: null
 created_from: null
 upstream_origin: null
 github_origin: null

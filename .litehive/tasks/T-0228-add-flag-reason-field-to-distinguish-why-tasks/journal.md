@@ -16,3 +16,6 @@ Task record updated from grooming output:
 
 ## 2026-04-08T20:40:29+00:00
 CommitToGit complete. Commit: ab00d219866e0f8f8fb1a94f3faae97e27d7f913
+
+## 2026-04-13T10:27:48+00:00
+Task closed: duplicate. Zombie re-queue: runtime.yaml execution_status=done. See T-0366.
