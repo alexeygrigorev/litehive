@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from .helpers import integration_workspace
+from .helpers import integration_workspace, sandboxed_integration_workspace
 
 
 @pytest.fixture(autouse=True)
@@ -19,3 +19,8 @@ def integration_root(tmp_path: Path) -> Path:
 @pytest.fixture(scope="module")
 def module_integration_root(tmp_path_factory: pytest.TempPathFactory, request) -> Path:
     return integration_workspace(tmp_path_factory.mktemp(request.module.__name__))
+
+
+@pytest.fixture
+def sandboxed_integration_root(tmp_path: Path) -> Path:
+    return sandboxed_integration_workspace(tmp_path)

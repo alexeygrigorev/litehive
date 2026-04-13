@@ -76,6 +76,101 @@ def integration_workspace(root: Path) -> Path:
     return root
 
 
+def sandboxed_integration_workspace(root: Path) -> Path:
+    """Integration workspace with bwrap sandboxing enabled and per-engine
+    policies wired up (binds for ~/.codex, ~/.claude, etc., plus
+    setenv HOME and CODEX_HOME). Used by tests that must exercise the
+    full sandbox path on real engines. Skips if the operator's session
+    dirs don't exist on this host."""
+    import os as _os
+
+    from litehive.config import ExternalEngineSandboxConfig, ExternalEngineSandboxPolicy
+
+    home = _os.path.expanduser("~")
+    nvm = f"{home}/.nvm/versions/node/v24.13.1"
+    codex_dir = f"{home}/.codex"
+    claude_dir = f"{home}/.claude"
+    copilot_dir = f"{home}/.copilot"
+    gh_config = f"{home}/.config/gh"  # copilot auth lives here via `gh auth login`
+    gemini_dir = f"{home}/.gemini"
+    goz_dir = f"{home}/.goz"
+    goz_config = f"{home}/.config/goz"
+    goz_bin = f"{home}/bin"
+    local_bin = f"{home}/.local/bin"  # goz wrapper script uses uv from here
+    opencode_dir = f"{home}/.config/opencode"
+
+    engine_policies: dict[str, ExternalEngineSandboxPolicy] = {}
+    setenv_home = {"HOME": home}
+
+    if Path(nvm).exists() and Path(codex_dir).exists():
+        engine_policies["codex"] = ExternalEngineSandboxPolicy(
+            enabled=True,
+            network_mode="host",
+            extra_ro_binds=[nvm, codex_dir],
+            setenv={**setenv_home, "CODEX_HOME": codex_dir},
+        )
+    if Path(nvm).exists() and Path(claude_dir).exists():
+        engine_policies["claude"] = ExternalEngineSandboxPolicy(
+            enabled=True,
+            network_mode="host",
+            extra_ro_binds=[nvm, claude_dir],
+            setenv=setenv_home,
+        )
+    if Path(nvm).exists() and Path(copilot_dir).exists():
+        copilot_binds = [nvm, copilot_dir]
+        if Path(gh_config).exists():
+            copilot_binds.append(gh_config)
+        engine_policies["copilot"] = ExternalEngineSandboxPolicy(
+            enabled=True,
+            network_mode="host",
+            extra_ro_binds=copilot_binds,
+            setenv=setenv_home,
+        )
+    if Path(nvm).exists() and Path(gemini_dir).exists():
+        engine_policies["gemini"] = ExternalEngineSandboxPolicy(
+            enabled=True,
+            network_mode="host",
+            extra_ro_binds=[nvm, gemini_dir],
+            setenv=setenv_home,
+        )
+    if Path(goz_bin).exists() and Path(goz_dir).exists():
+        goz_binds = [goz_bin, goz_dir]
+        if Path(goz_config).exists():
+            goz_binds.append(goz_config)
+        if Path(local_bin).exists():
+            goz_binds.append(local_bin)
+        engine_policies["goz"] = ExternalEngineSandboxPolicy(
+            enabled=True,
+            network_mode="host",
+            extra_ro_binds=goz_binds,
+            setenv=setenv_home,
+        )
+    if Path(nvm).exists() and Path(opencode_dir).exists():
+        engine_policies["opencode"] = ExternalEngineSandboxPolicy(
+            enabled=True,
+            network_mode="host",
+            extra_ro_binds=[nvm, opencode_dir],
+            setenv=setenv_home,
+        )
+
+    ensure_workspace(
+        root,
+        LitehiveConfig(
+            default_engine="codex",
+            opencode_model="zai-coding-plan/glm-5.1",
+            gemini_model="gemini-2.5-flash-lite",
+            claude_model="claude-sonnet-4-20250514",
+            external_engine_sandbox=ExternalEngineSandboxConfig(
+                enabled=True,
+                backend="bubblewrap",
+                runtime_binary="bwrap",
+                engine_policies=engine_policies,
+            ),
+        ),
+    )
+    return root
+
+
 def smoke_prompt(engine_name: str) -> str:
     return f"Reply with exactly: {engine_name} integration smoke."
 
@@ -88,6 +183,8 @@ def execute_engine_prompt(
     max_turns: int | None = None,
     resume_session_id: str | None = None,
     extra_env: dict[str, str] | None = None,
+    sandboxed: bool = False,
+    role: str = "swe",
 ) -> tuple[object, CLIExecutionResult]:
     engine = get_engine(engine_name)
     if max_turns is None and engine_name == "claude":
@@ -125,12 +222,39 @@ def execute_engine_prompt(
         )
     elif engine_name == "gemini":
         argv.extend(["--sandbox", "false"])
+    run_cwd = invocation.cwd
+    run_env = invocation.env
+    sandbox_summary_override: str | None = None
+    sandbox_applied = False
+    if sandboxed:
+        from litehive.agents.sandbox import SandboxLauncher
+        from heru.base import CLIInvocation as _HeruCLIInvocation
+
+        launcher = SandboxLauncher(cwd, config)
+        summary = launcher.policy_summary(engine_name, role)
+        if not summary.enabled:
+            pytest.skip(
+                f"sandbox not enabled in config for engine {engine_name!r} — "
+                "set external_engine_sandbox.enabled=true and engine_policies.<engine>.enabled=true"
+            )
+        heru_invocation = _HeruCLIInvocation(
+            argv=tuple(argv),
+            cwd=Path(run_cwd),
+            env=dict(run_env),
+            stdin_data=None,
+        )
+        wrapped = launcher.wrap_invocation(engine_name, argv[0], heru_invocation, role=role)
+        argv = list(wrapped.argv)
+        run_cwd = wrapped.cwd
+        run_env = dict(wrapped.env)
+        sandbox_summary_override = summary.summary
+        sandbox_applied = True
     timeout_seconds = int(os.environ.get(TIMEOUT_ENV, str(DEFAULT_TIMEOUT_SECONDS)))
     try:
         completed = subprocess.run(
             argv,
-            cwd=invocation.cwd,
-            env=invocation.env,
+            cwd=run_cwd,
+            env=run_env,
             stdin=subprocess.DEVNULL,
             capture_output=True,
             text=True,
@@ -141,20 +265,24 @@ def execute_engine_prompt(
         stdout_tail = (exc.stdout or "")[-800:]
         stderr_tail = (exc.stderr or "")[-800:]
         pytest.fail(
-            f"{engine_name} timed out after {timeout_seconds}s\n"
+            f"{engine_name} timed out after {timeout_seconds}s (sandboxed={sandbox_applied})\n"
             f"argv: {argv!r}\n"
             f"stdout_tail:\n{stdout_tail}\n"
             f"stderr_tail:\n{stderr_tail}"
         )
-    sandboxed, sandbox_summary = engine.sandbox_details()
+    if sandbox_applied:
+        sandboxed_flag = True
+        sandbox_summary = sandbox_summary_override or ""
+    else:
+        sandboxed_flag, sandbox_summary = engine.sandbox_details()
     return engine, CLIExecutionResult(
         adapter=engine.name,
         argv=tuple(argv),
-        cwd=invocation.cwd,
+        cwd=Path(run_cwd),
         exit_code=completed.returncode,
         stdout=completed.stdout,
         stderr=completed.stderr,
-        sandboxed=sandboxed,
+        sandboxed=sandboxed_flag,
         sandbox_summary=sandbox_summary,
     )
 
@@ -163,7 +291,7 @@ def _assistant_transcript(transcript: str) -> str:
     return transcript.partition("\n\n[stderr]\n")[0].strip()
 
 
-def prepare_smoke_session(engine_name: str, *, cwd: Path) -> SmokeSession:
+def prepare_smoke_session(engine_name: str, *, cwd: Path, sandboxed: bool = False) -> SmokeSession:
     from litehive.tasks import create_task, require_task, save_task, set_active_task
 
     require_real_engine(engine_name)
@@ -176,6 +304,7 @@ def prepare_smoke_session(engine_name: str, *, cwd: Path) -> SmokeSession:
         engine_name,
         prompt=smoke_prompt(engine_name),
         cwd=cwd,
+        sandboxed=sandboxed,
     )
     assert execution.exit_code == 0, execution.transcript
     continuation = extract_engine_continuation(engine_name, execution)

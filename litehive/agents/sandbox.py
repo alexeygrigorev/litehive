@@ -383,6 +383,10 @@ class SandboxLauncher:
                 value = invocation.env.get(builtin_var, os.environ.get(builtin_var, ""))
                 if value:
                     allowed_env[builtin_var] = value
+        # Policy-hardcoded env values (e.g. CODEX_HOME) override everything.
+        if policy is not None:
+            for env_name, env_value in policy.setenv.items():
+                allowed_env[env_name] = env_value
         if git_plan.prepend_path:
             existing_path = allowed_env.get("PATH", "")
             segments = [*git_plan.prepend_path]

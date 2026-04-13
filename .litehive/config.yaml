@@ -135,6 +135,10 @@ external_engine_sandbox:
       credential_inputs: []
       extra_ro_binds:
       - /home/alexey/.nvm/versions/node/v24.13.1
+      - /home/alexey/.codex
+      setenv:
+        HOME: /home/alexey
+        CODEX_HOME: /home/alexey/.codex
     claude:
       enabled: true
       network_mode: host
@@ -143,6 +147,56 @@ external_engine_sandbox:
       credential_inputs: []
       extra_ro_binds:
       - /home/alexey/.nvm/versions/node/v24.13.1
+      - /home/alexey/.claude
+      setenv:
+        HOME: /home/alexey
+    copilot:
+      enabled: true
+      network_mode: host
+      workspace_mode: null
+      environment: []
+      credential_inputs: []
+      extra_ro_binds:
+      - /home/alexey/.nvm/versions/node/v24.13.1
+      - /home/alexey/.copilot
+      - /home/alexey/.config/gh
+      setenv:
+        HOME: /home/alexey
+    gemini:
+      enabled: true
+      network_mode: host
+      workspace_mode: null
+      environment: []
+      credential_inputs: []
+      extra_ro_binds:
+      - /home/alexey/.nvm/versions/node/v24.13.1
+      - /home/alexey/.gemini
+      setenv:
+        HOME: /home/alexey
+    goz:
+      enabled: true
+      network_mode: host
+      workspace_mode: null
+      environment: []
+      credential_inputs: []
+      extra_ro_binds:
+      - /home/alexey/bin
+      - /home/alexey/.goz
+      - /home/alexey/.config/goz
+      - /home/alexey/.local/bin
+      setenv:
+        HOME: /home/alexey
+    opencode:
+      enabled: true
+      network_mode: host
+      workspace_mode: null
+      environment: []
+      credential_inputs: []
+      extra_ro_binds:
+      - /home/alexey/.nvm/versions/node/v24.13.1
+      - /home/alexey/.config/opencode
+      setenv:
+        HOME: /home/alexey
 engine_freeze:
   claude: '2026-04-10T09:00:00Z'
 engine_preference:

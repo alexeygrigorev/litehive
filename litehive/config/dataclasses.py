@@ -17,6 +17,11 @@ class ExternalEngineSandboxPolicy:
     environment: list[str] = field(default_factory=list)
     credential_inputs: list[SandboxCredentialInput] = field(default_factory=list)
     extra_ro_binds: list[str] = field(default_factory=list)
+    # Hardcoded env vars to set inside the sandbox. Unlike `environment`,
+    # which propagates values from the caller, these are fixed values
+    # baked into the policy (e.g. CODEX_HOME -> /home/<user>/.codex so
+    # codex can find auth.json when HOME is the workspace root).
+    setenv: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass(slots=True)

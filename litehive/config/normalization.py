@@ -178,11 +178,20 @@ def _normalize_external_engine_sandbox_policy(
                 for index, item in enumerate(raw_policy.get("credential_inputs", []))
             ],
             extra_ro_binds=[str(item).strip() for item in raw_policy.get("extra_ro_binds", [])],
+            setenv={
+                str(key): str(value)
+                for key, value in (raw_policy.get("setenv") or {}).items()
+            },
         )
     for index, env_name in enumerate(policy.environment):
         if not re.fullmatch(r"[A-Z][A-Z0-9_]*", env_name):
             raise ValueError(
                 f"{field_name}.environment[{index}] must be an uppercase environment variable name"
+            )
+    for env_name in policy.setenv.keys():
+        if not re.fullmatch(r"[A-Z][A-Z0-9_]*", env_name):
+            raise ValueError(
+                f"{field_name}.setenv key {env_name!r} must be an uppercase environment variable name"
             )
     if policy.network_mode is not None and policy.network_mode not in VALID_SANDBOX_NETWORK_MODES:
         allowed = ", ".join(sorted(VALID_SANDBOX_NETWORK_MODES))
