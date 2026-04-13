@@ -1,6 +1,6 @@
 from typing import Any
 
-from ..persistence import TaskState
+from litehive.lifecycle.persistence import TaskState
 from .base import RoleAgent
 
 INSTRUCTIONS = """\

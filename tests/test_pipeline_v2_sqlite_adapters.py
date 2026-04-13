@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from litehive.pipeline.persistence import (
+from litehive.lifecycle.persistence import (
     HookRejectFingerprint,
     LastRejection,
     LastReport,
@@ -18,8 +18,8 @@ from litehive.pipeline.persistence import (
     TaskNotFound,
     TaskState,
 )
-from litehive.pipeline.sessions import Session, SqliteSessionStore
-from litehive.pipeline.types import PipelineMode
+from litehive.lifecycle.sessions import Session, SqliteSessionStore
+from litehive.lifecycle.types import PipelineMode
 
 from tests.workspace_helpers import ensure_workspace
 

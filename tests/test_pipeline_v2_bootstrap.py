@@ -16,8 +16,8 @@ from typing import Any
 
 import pytest
 
-from litehive.pipeline.nodes.agent import AgentVerdict, EngineBlockedError
-from litehive.pipeline.orchestration import run_task
+from litehive.lifecycle.nodes.agent import AgentVerdict, EngineBlockedError
+from litehive.lifecycle.orchestration import run_task
 from litehive.state.records import create_task, save_task
 
 from tests.workspace_helpers import ensure_workspace

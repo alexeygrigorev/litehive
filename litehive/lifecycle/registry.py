@@ -18,13 +18,13 @@ and pass them in; this module doesn't import any concrete engine or git
 plumbing.
 """
 
-from .agents.base import PromptContext, RoleAgent
-from .agents.merge import MergeAgent
-from .agents.planner import PlannerAgent
-from .agents.qa import QAAgent
-from .agents.recovery import RecoveryAgent
-from .agents.reviewer import ReviewerAgent
-from .agents.swe import SWEAgent
+from litehive.roles.base import PromptContext, RoleAgent
+from litehive.roles.merge import MergeAgent
+from litehive.roles.planner import PlannerAgent
+from litehive.roles.qa import QAAgent
+from litehive.roles.recovery import RecoveryAgent
+from litehive.roles.reviewer import ReviewerAgent
+from litehive.roles.swe import SWEAgent
 from .nodes.base import NodeRegistry
 from .nodes.hook import ExecutionMode, HookNode, HookRunner, HookSpec
 from .nodes.system import (

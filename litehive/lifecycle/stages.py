@@ -6,12 +6,12 @@ Ctrl+click: ``Stages.GROOMING`` → here → ``node=PlannerAgent`` → the agent
 
 from dataclasses import dataclass
 
-from .agents.merge import MergeAgent
-from .agents.planner import PlannerAgent
-from .agents.qa import QAAgent
-from .agents.recovery import RecoveryAgent
-from .agents.reviewer import ReviewerAgent
-from .agents.swe import SWEAgent
+from litehive.roles.merge import MergeAgent
+from litehive.roles.planner import PlannerAgent
+from litehive.roles.qa import QAAgent
+from litehive.roles.recovery import RecoveryAgent
+from litehive.roles.reviewer import ReviewerAgent
+from litehive.roles.swe import SWEAgent
 from .nodes.hook import HookNode
 from .nodes.system import CommitNode, PreExecRecoveryNode, ReadyNode, WorktreeSyncNode
 from .nodes.terminal import TerminalNode

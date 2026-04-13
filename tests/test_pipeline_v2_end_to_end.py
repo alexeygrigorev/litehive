@@ -22,18 +22,18 @@ from typing import Any
 
 import pytest
 
-import litehive.pipeline.orchestration as orchestration
-from litehive.pipeline.journal import SqliteJournal
-from litehive.pipeline.registry import build_registry
-from litehive.pipeline.runner import StateMachineRunner
-from litehive.pipeline.agents.base import PromptContext
-from litehive.pipeline.nodes.hook import HookResult, HookRunner
-from litehive.pipeline.nodes.system import CommitNode, StubCommitNode
-from litehive.pipeline.nodes.agent import AgentVerdict, Engine, TransientError
-from litehive.pipeline.nodes.system import MergeConflict
-from litehive.pipeline.persistence import SqlitePersistence
-from litehive.pipeline.sessions import InMemorySessionStore
-from litehive.pipeline.types import PipelineMode
+import litehive.lifecycle.orchestration as orchestration
+from litehive.lifecycle.journal import SqliteJournal
+from litehive.lifecycle.registry import build_registry
+from litehive.lifecycle.runner import StateMachineRunner
+from litehive.roles.base import PromptContext
+from litehive.lifecycle.nodes.hook import HookResult, HookRunner
+from litehive.lifecycle.nodes.system import CommitNode, StubCommitNode
+from litehive.lifecycle.nodes.agent import AgentVerdict, Engine, TransientError
+from litehive.lifecycle.nodes.system import MergeConflict
+from litehive.lifecycle.persistence import SqlitePersistence
+from litehive.lifecycle.sessions import InMemorySessionStore
+from litehive.lifecycle.types import PipelineMode
 from litehive.state.records import get_task, get_task_worktree_path
 from litehive.tasks.worktrees import resolve_recorded_worktree_path
 

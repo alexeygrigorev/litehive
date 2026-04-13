@@ -4,11 +4,11 @@ from pathlib import Path
 from litehive.agents.models import SubagentResult
 from heru.types import SubagentRef
 from litehive.models.report_models import TaskThreadComment
-from litehive.pipeline.heru_factory import HeruEngineAdapter, _latest_verdict_after
-from litehive.pipeline.nodes.agent import AgentVerdict
-from litehive.pipeline.persistence import TaskState
-from litehive.pipeline.sessions import Session
-from litehive.pipeline.types import PipelineMode
+from litehive.lifecycle.heru_factory import HeruEngineAdapter, _latest_verdict_after
+from litehive.lifecycle.nodes.agent import AgentVerdict
+from litehive.lifecycle.persistence import TaskState
+from litehive.lifecycle.sessions import Session
+from litehive.lifecycle.types import PipelineMode
 from litehive.tasks.reports import append_thread_comment
 from heru.types import RuntimeEngineContinuation
 
@@ -48,9 +48,9 @@ def test_heru_engine_adapter_updates_session_from_subagent_result_continuation(
     state = TaskState(task_id=task.id, stage="implementing", pipeline_mode=PipelineMode.FULL)
     adapter = HeruEngineAdapter("codex", tmp_path)
 
-    monkeypatch.setattr("litehive.pipeline.heru_factory.SubagentManager", _StubManager)
+    monkeypatch.setattr("litehive.lifecycle.heru_factory.SubagentManager", _StubManager)
     monkeypatch.setattr(
-        "litehive.pipeline.heru_factory._latest_verdict_after",
+        "litehive.lifecycle.heru_factory._latest_verdict_after",
         lambda *args, **kwargs: AgentVerdict(outcome="pass", reason="ok"),
     )
 
@@ -84,9 +84,9 @@ def test_heru_engine_adapter_runs_subagent_in_task_worktree(tmp_path, monkeypatc
     state = TaskState(task_id=task.id, stage="implementing", pipeline_mode=PipelineMode.FULL)
     adapter = HeruEngineAdapter("codex", tmp_path)
 
-    monkeypatch.setattr("litehive.pipeline.heru_factory.SubagentManager", _StubManager)
+    monkeypatch.setattr("litehive.lifecycle.heru_factory.SubagentManager", _StubManager)
     monkeypatch.setattr(
-        "litehive.pipeline.heru_factory._latest_verdict_after",
+        "litehive.lifecycle.heru_factory._latest_verdict_after",
         lambda *args, **kwargs: AgentVerdict(outcome="pass", reason="ok"),
     )
 
@@ -120,7 +120,7 @@ def test_latest_verdict_after_rejects_empty_implementing_pass(tmp_path, monkeypa
         ),
     )
     monkeypatch.setattr(
-        "litehive.pipeline.heru_factory._execution_checkout_has_changes",
+        "litehive.lifecycle.heru_factory._execution_checkout_has_changes",
         lambda workspace_root, task_id: False,
     )
 
@@ -151,7 +151,7 @@ def test_latest_verdict_after_allows_real_implementing_pass(tmp_path, monkeypatc
         ),
     )
     monkeypatch.setattr(
-        "litehive.pipeline.heru_factory._execution_checkout_has_changes",
+        "litehive.lifecycle.heru_factory._execution_checkout_has_changes",
         lambda workspace_root, task_id: True,
     )
 

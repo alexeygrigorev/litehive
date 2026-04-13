@@ -23,7 +23,7 @@ from litehive.daemon.registry import get_workspace_daemon, list_daemon_instances
 from litehive.db.schema import MigrationApplyError, apply_pending_migrations, migration_status
 from litehive.git.ops import GitError, checkpoint_message
 from litehive.models.report_models import TaskThreadComment
-from litehive.pipeline.orchestration import run_task
+from litehive.lifecycle.orchestration import run_task
 from litehive.recovery.execution_recovery import rollback_completed_task
 from litehive.state.backup import create_workspace_backup, list_workspace_backups, restore_workspace_backup
 from litehive.state.records import get_task

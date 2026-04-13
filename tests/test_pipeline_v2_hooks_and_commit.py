@@ -5,11 +5,11 @@ from pathlib import Path
 
 import pytest
 
-from litehive.pipeline.events import HookOk, MergeConflictDetected, Pass, Reject
-from litehive.pipeline.nodes.hook import HookNode, HookSpec, SubprocessHookRunner
-from litehive.pipeline.nodes.system import GitCommitNode, StubCommitNode
-from litehive.pipeline.persistence import TaskState
-from litehive.pipeline.types import PipelineMode
+from litehive.lifecycle.events import HookOk, MergeConflictDetected, Pass, Reject
+from litehive.lifecycle.nodes.hook import HookNode, HookSpec, SubprocessHookRunner
+from litehive.lifecycle.nodes.system import GitCommitNode, StubCommitNode
+from litehive.lifecycle.persistence import TaskState
+from litehive.lifecycle.types import PipelineMode
 
 
 def make_state(stage: str = "before_grooming", task_id: str = "T-0001") -> TaskState:

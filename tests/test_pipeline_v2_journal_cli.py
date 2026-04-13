@@ -10,11 +10,11 @@ import pytest
 from typer.testing import CliRunner
 
 from litehive.cli.app import app
-from litehive.pipeline.deltas import StateDelta
-from litehive.pipeline.events import CleanState, Reject
-from litehive.pipeline.journal import SqliteJournal
-from litehive.pipeline.persistence import SqlitePersistence
-from litehive.pipeline.types import PipelineMode
+from litehive.lifecycle.deltas import StateDelta
+from litehive.lifecycle.events import CleanState, Reject
+from litehive.lifecycle.journal import SqliteJournal
+from litehive.lifecycle.persistence import SqlitePersistence
+from litehive.lifecycle.types import PipelineMode
 
 from tests.workspace_helpers import ensure_workspace
 

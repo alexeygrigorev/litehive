@@ -1,8 +1,8 @@
 from typing import Any
 
-from ..events import Event, RecoveryBudgetHit, RecoveryFailed, RecoverySucceeded
-from ..nodes.agent import AgentVerdict
-from ..persistence import TaskState
+from litehive.lifecycle.events import Event, RecoveryBudgetHit, RecoveryFailed, RecoverySucceeded
+from litehive.lifecycle.nodes.agent import AgentVerdict
+from litehive.lifecycle.persistence import TaskState
 from .base import RoleAgent
 
 INSTRUCTIONS = """\

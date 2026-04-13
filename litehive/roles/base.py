@@ -2,9 +2,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from ..nodes.agent import AgentNode, EngineSelector, SessionProvider
-from ..persistence import TaskState
-from ..types import NodeName
+from litehive.lifecycle.nodes.agent import AgentNode, EngineSelector, SessionProvider
+from litehive.lifecycle.persistence import TaskState
+from litehive.lifecycle.types import NodeName
 from .guidance import default_startup_guidance
 
 

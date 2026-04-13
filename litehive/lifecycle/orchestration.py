@@ -41,7 +41,7 @@ from litehive.tasks.worktrees import resolve_recorded_worktree_path, task_worktr
 from litehive.state.locking import persist_future_task_update
 from litehive.state.locking import runner_heartbeat, workspace_runner_guard
 
-from .agents.base import PromptContext
+from litehive.roles.base import PromptContext
 from .engines import ConfigBackedEngineSelector, EngineFactory
 from .heru_factory import heru_engine_factory
 from .journal import SqliteJournal

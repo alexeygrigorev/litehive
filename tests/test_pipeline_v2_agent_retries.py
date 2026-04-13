@@ -6,17 +6,17 @@ exercised without the full state machine.
 
 from typing import Any
 
-from litehive.pipeline.events import Crash, Pass
-from litehive.pipeline.nodes.agent import (
+from litehive.lifecycle.events import Crash, Pass
+from litehive.lifecycle.nodes.agent import (
     AgentNode,
     AgentVerdict,
     NudgeRequired,
     TransientError,
     UnrecoverableError,
 )
-from litehive.pipeline.persistence import TaskState
-from litehive.pipeline.sessions import InMemorySessionStore
-from litehive.pipeline.types import PipelineMode
+from litehive.lifecycle.persistence import TaskState
+from litehive.lifecycle.sessions import InMemorySessionStore
+from litehive.lifecycle.types import PipelineMode
 
 
 class _ScriptedEngine:

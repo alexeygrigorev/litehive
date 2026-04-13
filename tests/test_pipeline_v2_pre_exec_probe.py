@@ -1,14 +1,14 @@
 """Tests for ReadyNode probe injection + PreExecRecoveryNode repairs."""
 
-from litehive.pipeline.events import (
+from litehive.lifecycle.events import (
     CleanState,
     NeedsPreExecRecovery,
     PreExecRecoveryBudgetHit,
     PreExecRecoverySucceeded,
 )
-from litehive.pipeline.nodes.system import PreExecRecoveryNode, ReadyNode
-from litehive.pipeline.persistence import TaskState
-from litehive.pipeline.types import PipelineMode
+from litehive.lifecycle.nodes.system import PreExecRecoveryNode, ReadyNode
+from litehive.lifecycle.persistence import TaskState
+from litehive.lifecycle.types import PipelineMode
 
 
 def _state(**overrides) -> TaskState:

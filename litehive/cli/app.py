@@ -15,7 +15,7 @@ from litehive.cli.runner import register_root_commands as register_runner_comman
 from litehive.cli.task_cli import app as task_app
 from litehive.cli.workspace import register_root_commands as register_workspace_commands, status_command
 from litehive.cli.worktree_cli import app as worktree_app
-from litehive.pipeline.orchestration import run_task
+from litehive.lifecycle.orchestration import run_task
 from litehive.tasks.queue import dequeue_next_task
 
 app = make_typer()
@@ -59,7 +59,7 @@ app.add_typer(agent_app, name="agent", help="Agent-restricted commands (verdict 
 
 @pipeline_app.command("rules", help="List the v2 transition rules as readable rows")
 def pipeline_rules_command() -> int:
-    from litehive.pipeline.transitions import list_transitions
+    from litehive.lifecycle.transitions import list_transitions
 
     for rule in list_transitions():
         from_state = "|".join(sorted(rule.from_state)) if isinstance(rule.from_state, frozenset) else rule.from_state
@@ -76,7 +76,7 @@ def pipeline_set_state_command(
     stage: Annotated[str, typer.Argument(help="Target stage")],
     workspace: Annotated[Path, typer.Option("--workspace", help="Workspace root")] = Path.cwd(),
 ) -> None:
-    from litehive.pipeline.persistence import SqlitePersistence, TaskNotFound
+    from litehive.lifecycle.persistence import SqlitePersistence, TaskNotFound
 
     store = SqlitePersistence(workspace)
     try:
@@ -112,8 +112,8 @@ def pipeline_journal_command(
     workspace: Annotated[Path, typer.Option("--workspace", help="Workspace root")] = Path.cwd(),
     limit: Annotated[int, typer.Option("--limit", "-n", help="Max transitions to show")] = 50,
 ) -> int:
-    from litehive.pipeline.journal import SqliteJournal
-    from litehive.pipeline.persistence import SqlitePersistence, TaskNotFound
+    from litehive.lifecycle.journal import SqliteJournal
+    from litehive.lifecycle.persistence import SqlitePersistence, TaskNotFound
 
     journal = SqliteJournal(workspace)
     store = SqlitePersistence(workspace)

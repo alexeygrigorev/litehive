@@ -3,17 +3,17 @@ from typing import Any
 
 import pytest
 
-from litehive.pipeline.journal import SqliteJournal
-from litehive.pipeline.registry import build_registry
-from litehive.pipeline.runner import StateMachineRunner
-from litehive.pipeline.agents.base import PromptContext
-from litehive.pipeline.nodes.hook import HookResult, HookRunner, HookSpec
-from litehive.pipeline.nodes.system import StubCommitNode
-from litehive.pipeline.nodes.agent import AgentVerdict
-from litehive.pipeline.orchestration import _sync_back
-from litehive.pipeline.persistence import SqlitePersistence
-from litehive.pipeline.sessions import InMemorySessionStore
-from litehive.pipeline.types import PipelineMode
+from litehive.lifecycle.journal import SqliteJournal
+from litehive.lifecycle.registry import build_registry
+from litehive.lifecycle.runner import StateMachineRunner
+from litehive.roles.base import PromptContext
+from litehive.lifecycle.nodes.hook import HookResult, HookRunner, HookSpec
+from litehive.lifecycle.nodes.system import StubCommitNode
+from litehive.lifecycle.nodes.agent import AgentVerdict
+from litehive.lifecycle.orchestration import _sync_back
+from litehive.lifecycle.persistence import SqlitePersistence
+from litehive.lifecycle.sessions import InMemorySessionStore
+from litehive.lifecycle.types import PipelineMode
 from litehive.tasks.persistence import load_state, save_state
 from litehive.tasks.queue import peek_next_task_selection
 

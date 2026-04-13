@@ -70,7 +70,7 @@ from litehive.config.engine_models import (
     resolve_engine_plan,
     resolve_model,
 )
-from litehive.pipeline.orchestration import run_task, ExecutionResult
+from litehive.lifecycle.orchestration import run_task, ExecutionResult
 from litehive.tasks.queue import dequeue_next_task
 from litehive.agents.manager import SubagentManager
 from litehive.agents.models import EngineFailure, SubagentResult

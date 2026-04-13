@@ -2,8 +2,8 @@
 
 from types import SimpleNamespace
 
-from litehive.pipeline.nodes.hook import HookSpec
-from litehive.pipeline.orchestration import hook_specs_from_config
+from litehive.lifecycle.nodes.hook import HookSpec
+from litehive.lifecycle.orchestration import hook_specs_from_config
 
 
 def _fake_hook(command: str, *, reject: bool = True, timeout: int = 60) -> SimpleNamespace:

@@ -284,7 +284,7 @@ def dequeue_next_task_selection(root: Path) -> TaskSelection:
                 # Drop the v2 pipeline_task_state row so the runner starts
                 # from `ready` instead of re-emitting the sticky `failed`
                 # terminal and looping forever.
-                from litehive.pipeline.persistence import SqlitePersistence
+                from litehive.lifecycle.persistence import SqlitePersistence
 
                 SqlitePersistence(root).reset(next_task.id)
             if next_task.status in {"queued", "interrupted"}:

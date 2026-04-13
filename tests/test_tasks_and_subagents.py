@@ -6,7 +6,7 @@ import litehive.state.records as tasks_crud
 import litehive.tasks.persistence as tasks_persistence
 import litehive.tasks.status as task_status_module
 import litehive.state.persist as workflow_module
-from litehive.pipeline.heru_factory import HeruEngineAdapter
+from litehive.lifecycle.heru_factory import HeruEngineAdapter
 from tests.workspace_helpers import (
     AdapterCapabilities,
     CLIExecutionResult,

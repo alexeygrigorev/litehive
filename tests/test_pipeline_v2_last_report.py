@@ -7,12 +7,12 @@ transition so guards like ``zero_change_shortcut`` see real numbers.
 
 from typing import Any
 
-from litehive.pipeline.events import Pass
-from litehive.pipeline.nodes.agent import AgentNode, AgentVerdict
-from litehive.pipeline.persistence import TaskState
-from litehive.pipeline.runner import StateMachineRunner
-from litehive.pipeline.sessions import InMemorySessionStore
-from litehive.pipeline.types import PipelineMode
+from litehive.lifecycle.events import Pass
+from litehive.lifecycle.nodes.agent import AgentNode, AgentVerdict
+from litehive.lifecycle.persistence import TaskState
+from litehive.lifecycle.runner import StateMachineRunner
+from litehive.lifecycle.sessions import InMemorySessionStore
+from litehive.lifecycle.types import PipelineMode
 
 
 class _FixedSelector:

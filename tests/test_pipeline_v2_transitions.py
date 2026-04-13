@@ -5,9 +5,9 @@ runner, no persistence.
 """
 import pytest
 
-from litehive.pipeline.rules import RULES
-from litehive.pipeline.transitions import evaluate, list_transitions
-from litehive.pipeline.events import (
+from litehive.lifecycle.rules import RULES
+from litehive.lifecycle.transitions import evaluate, list_transitions
+from litehive.lifecycle.events import (
     Blocked,
     CleanState,
     Crash,
@@ -21,9 +21,9 @@ from litehive.pipeline.events import (
     Reject,
     Timeout,
 )
-from litehive.pipeline.persistence import LastReport, Limits, TaskState
-from litehive.pipeline.transitions import NoTransitionError
-from litehive.pipeline.types import (
+from litehive.lifecycle.persistence import LastReport, Limits, TaskState
+from litehive.lifecycle.transitions import NoTransitionError
+from litehive.lifecycle.types import (
     ANY_STAGE_PHASE,
     STAGES,
     TERMINAL_NODES,

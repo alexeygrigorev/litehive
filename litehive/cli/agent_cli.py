@@ -15,7 +15,7 @@ from typing import Annotated
 
 import typer
 
-from litehive.pipeline.persistence import SqlitePersistence, TaskNotFound
+from litehive.lifecycle.persistence import SqlitePersistence, TaskNotFound
 
 from litehive.config.workspace import resolve_workspace
 from litehive.models.report_models import TaskThreadComment

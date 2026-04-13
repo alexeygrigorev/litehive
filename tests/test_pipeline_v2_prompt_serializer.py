@@ -4,13 +4,13 @@ from pathlib import Path
 
 import pytest
 
-from litehive.pipeline.agents.planner import PlannerAgent
-from litehive.pipeline.agents.recovery import RecoveryAgent
-from litehive.pipeline.agents.swe import SWEAgent
-from litehive.pipeline.agents.base import PromptContext
-from litehive.pipeline.persistence import LastRejection, TaskState
-from litehive.pipeline.prompt_serializer import serialize_prompt
-from litehive.pipeline.types import PipelineMode
+from litehive.roles.planner import PlannerAgent
+from litehive.roles.recovery import RecoveryAgent
+from litehive.roles.swe import SWEAgent
+from litehive.roles.base import PromptContext
+from litehive.lifecycle.persistence import LastRejection, TaskState
+from litehive.lifecycle.prompt_serializer import serialize_prompt
+from litehive.lifecycle.types import PipelineMode
 from litehive.state.records import create_task, save_task
 
 from tests.workspace_helpers import ensure_workspace
