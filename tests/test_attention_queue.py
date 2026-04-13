@@ -13,7 +13,7 @@ from litehive.daemon.execution import run_daemon_loop
 from litehive.main import _fast_status
 from litehive.models import WorkspaceState
 from litehive.tasks.crud import create_task, save_task
-from litehive.tasks.persistence import save_state, set_pool_stop_reason
+from litehive.tasks.persistence import load_state, save_state, set_pool_stop_reason
 from tests.workspace_helpers import ensure_workspace
 
 
@@ -234,3 +234,41 @@ def test_pool_stops_before_running_tasks_when_attention_gate_enabled(
     assert exit_code == 0
     assert any("repair" in command for command in calls)
     assert "Pool stopped: attention_required" in output
+
+
+def test_pool_halts_immediately_when_local_main_diverges_from_origin(
+    tmp_path: Path, monkeypatch
+) -> None:
+    ensure_workspace(tmp_path)
+    create_task(tmp_path, title="Queued work")
+
+    calls: list[tuple[str, ...]] = []
+
+    def fake_run_logged_subprocess(command, **kwargs):
+        calls.append(tuple(command))
+        raise AssertionError("daemon should halt before repair or run when main diverges")
+
+    monkeypatch.setattr(
+        "litehive.daemon.execution.check_origin_divergence",
+        lambda workspace: (
+            "local main (12345678) and origin/main (abcdef12) have diverged. "
+            "Manual reconciliation required: run `git fetch origin main`, inspect "
+            "`git log --oneline --left-right main...origin/main`, then rebase, reset, or merge "
+            "before restarting the pool."
+        ),
+    )
+    monkeypatch.setattr("litehive.daemon.execution.register_daemon", lambda *args, **kwargs: None)
+    monkeypatch.setattr("litehive.daemon.execution.unregister_daemon", lambda *args, **kwargs: None)
+    monkeypatch.setattr("litehive.daemon.execution._run_logged_subprocess", fake_run_logged_subprocess)
+    monkeypatch.setattr("litehive.daemon.execution._maybe_run_workspace_backup", lambda *args, **kwargs: None)
+
+    stream = io.StringIO()
+    exit_code = run_daemon_loop(tmp_path, output_stream=stream, session_dir=tmp_path / "logs")
+    output = stream.getvalue()
+
+    assert exit_code == 0
+    assert calls == []
+    assert "!!! ATTENTION REQUIRED !!! Local main has diverged from origin/main. Halting pool: diverged_from_origin" in output
+    assert "git fetch origin main" in output
+    assert "git log --oneline --left-right main...origin/main" in output
+    assert load_state(tmp_path).pool_stop_reason == "diverged_from_origin"

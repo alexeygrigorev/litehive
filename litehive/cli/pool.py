@@ -247,6 +247,7 @@ def pool_stop_condition_label(stop_reason):
         "execution_limit_reached": "execution limit reached",
         "execution_limit_fallbacks_exhausted": "execution-limit fallbacks exhausted",
         "dirty_git_state": "dirty git state",
+        "diverged_from_origin": "local main diverged from origin/main",
         "attention_required": "attention required",
         "human_checkpoint_before_acceptance": "human checkpoint before acceptance",
         "human_checkpoint_before_commit": "human checkpoint before commit",

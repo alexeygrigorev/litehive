@@ -14,9 +14,10 @@ from typing import TextIO
 
 import yaml
 
-from litehive.attention import list_attention, record_attention
+from litehive.attention import list_attention
 from litehive.config import ensure_workspace, load_config, state_path, workspace_logs_dir
 from litehive.storage import create_scheduled_workspace_backup
+from litehive.tasks.persistence import set_pool_stop_reason
 from litehive.workspace.locking import runner_status
 
 from .logs import latest_matching, prune_run_all_log_dirs, latest_run_all_log_dir
@@ -96,18 +97,14 @@ def check_origin_divergence(workspace: Path) -> str | None:
         return None
     return (
         f"local main ({local_sha[:8]}) and origin/main ({remote_sha[:8]}) have diverged. "
-        "Manual reconciliation required: inspect `git log main..origin/main` and "
-        "`git log origin/main..main`, then rebase, reset, or merge as appropriate."
+        "Manual reconciliation required: run `git fetch origin main`, inspect "
+        "`git log --oneline --left-right main...origin/main`, then rebase, reset, or merge "
+        "before restarting the pool."
     )
 
 
 def _write_pool_stop_reason(workspace: Path, reason: str) -> None:
-    sp = state_path(workspace)
-    state = yaml.safe_load(sp.read_text(encoding="utf-8")) if sp.exists() else {}
-    if not isinstance(state, dict):
-        state = {}
-    state["pool_stop_reason"] = reason
-    sp.write_text(yaml.safe_dump(state, sort_keys=False), encoding="utf-8")
+    set_pool_stop_reason(workspace, reason)
 
 
 def _append_attention_log(workspace: Path, message: str) -> None:
@@ -117,37 +114,6 @@ def _append_attention_log(workspace: Path, message: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a", encoding="utf-8") as handle:
         handle.write(f"{timestamp}\t{message}\n")
-
-
-def _auto_recover_from_divergence(workspace: Path) -> str:
-    """Snapshot local main into a backup branch and reset to origin/main.
-
-    Preserves any local commits in `backup/diverged-<ts>` so they can be
-    inspected or cherry-picked later. Raises if any git step fails.
-    """
-    timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
-    local = _git(workspace, "rev-parse", "main")
-    remote = _git(workspace, "rev-parse", "origin/main")
-    if local.returncode != 0 or remote.returncode != 0:
-        raise RuntimeError("failed to resolve main / origin/main SHAs")
-    local_sha = local.stdout.strip()
-    remote_sha = remote.stdout.strip()
-    ahead = _git(workspace, "rev-list", "--count", f"origin/main..{local_sha}").stdout.strip() or "?"
-    behind = _git(workspace, "rev-list", "--count", f"{local_sha}..origin/main").stdout.strip() or "?"
-    backup_branch = f"backup/diverged-{timestamp}"
-    branch = _git(workspace, "branch", backup_branch, local_sha)
-    if branch.returncode != 0:
-        raise RuntimeError(f"failed to create backup branch {backup_branch}: {branch.stderr.strip()}")
-    reset = _git(workspace, "reset", "--hard", "origin/main")
-    if reset.returncode != 0:
-        raise RuntimeError(f"failed to reset main to origin/main: {reset.stderr.strip()}")
-    summary = (
-        f"divergence auto-recovered: local main ({local_sha[:8]}) had {ahead} unique "
-        f"commit(s), origin/main ({remote_sha[:8]}) had {behind}. "
-        f"Local commits preserved in branch {backup_branch}. Reset main to origin/main."
-    )
-    _append_attention_log(workspace, summary)
-    return summary
 
 
 def _state_snapshot(workspace: Path) -> tuple[dict[str, object], str]:
@@ -300,38 +266,15 @@ def run_daemon_loop(
 
             divergence_reason = check_origin_divergence(workspace)
             if divergence_reason is not None:
+                _write_pool_stop_reason(workspace, "diverged_from_origin")
+                _append_attention_log(workspace, divergence_reason)
                 _emit(
-                    "!!! ATTENTION !!! Detected divergence from origin/main. "
-                    "Attempting auto-recovery (backup branch + reset).",
+                    "!!! ATTENTION REQUIRED !!! Local main has diverged from origin/main. "
+                    "Halting pool: diverged_from_origin",
                     stream=output_stream,
                 )
                 _emit(divergence_reason, stream=output_stream)
-                try:
-                    recovery_summary = _auto_recover_from_divergence(workspace)
-                    _emit(recovery_summary, stream=output_stream)
-                except Exception as exc:
-                    logger.exception("auto-recovery from divergence failed")
-                    record_attention(
-                        workspace,
-                        kind="origin_divergence",
-                        title="Local main has diverged from origin/main",
-                        reason=divergence_reason,
-                        suggested_action=(
-                            "Run `git fetch origin main && git log --oneline --left-right main...origin/main`,"
-                            " then reconcile local and remote main before restarting the pool."
-                        ),
-                        dedupe_key="origin_divergence:main",
-                        metadata={"auto_recovery_error": str(exc)},
-                        log_message=f"divergence auto-recovery FAILED: {exc}",
-                    )
-                    _write_pool_stop_reason(workspace, "attention_required")
-                    _emit(
-                        "!!! ATTENTION REQUIRED !!! Auto-recovery failed. "
-                        "Halting pool: attention_required",
-                        stream=output_stream,
-                    )
-                    _emit(str(exc), stream=output_stream)
-                    return 0
+                return 0
 
             repair_started = time.perf_counter()
             try:

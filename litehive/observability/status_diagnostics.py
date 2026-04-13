@@ -67,6 +67,7 @@ def collect_status_snapshot(root: Path) -> StatusSnapshot:
         *_probe_daemon_status(root),
         *_probe_last_cycle(root),
         *_probe_heru_link(root),
+        *_probe_origin_divergence(root, state),
     ]
     return StatusSnapshot(
         config=config,
@@ -300,6 +301,29 @@ def _probe_heru_link(root: Path) -> list[StatusIssue]:
             message=(
                 "BROKEN (worktrees cannot resolve heru)"
                 f" — update `[tool.uv.sources].heru.path` or restore {resolved}, then run `uv sync`."
+            ),
+        )
+    ]
+
+
+def _probe_origin_divergence(root: Path, state: WorkspaceState) -> list[StatusIssue]:
+    if state.pool_stop_reason != "diverged_from_origin":
+        return []
+    from litehive.daemon.execution import check_origin_divergence
+
+    message = check_origin_divergence(root)
+    detail = (
+        message
+        if message is not None
+        else "local main and origin/main previously diverged; manual reconciliation is still required."
+    )
+    return [
+        StatusIssue(
+            key="origin_divergence",
+            severity="ERROR",
+            message=(
+                "!!! ATTENTION REQUIRED !!! "
+                f"{detail}"
             ),
         )
     ]

@@ -16,7 +16,9 @@ from litehive.config.paths import (
     workspace_dir,
     workspace_logs_dir,
 )
+from litehive.models import WorkspaceState
 from litehive.main import _fast_status
+from litehive.tasks.persistence import save_state
 from tests.workspace_helpers import _cmd_status, argparse, ensure_workspace
 
 
@@ -185,3 +187,27 @@ heru = { path = "../heru", editable = true }
     assert exit_code == 1
     assert "heru_link: BROKEN (worktrees cannot resolve heru)" in output
     assert "uv sync" in output
+
+
+def test_status_reports_origin_divergence_as_attention_required(
+    tmp_path: Path, capsys, monkeypatch
+) -> None:
+    ensure_workspace(tmp_path)
+    save_state(tmp_path, WorkspaceState(pool_stop_reason="diverged_from_origin"))
+    monkeypatch.setattr(
+        "litehive.daemon.execution.check_origin_divergence",
+        lambda workspace: (
+            "local main (12345678) and origin/main (abcdef12) have diverged. "
+            "Manual reconciliation required: run `git fetch origin main`, inspect "
+            "`git log --oneline --left-right main...origin/main`, then rebase, reset, or merge "
+            "before restarting the pool."
+        ),
+    )
+
+    exit_code, output = _run_fast_status(tmp_path, capsys)
+
+    assert exit_code == 1
+    assert "pool_stop_reason: diverged_from_origin" in output
+    assert "origin_divergence: !!! ATTENTION REQUIRED !!! local main (12345678) and origin/main (abcdef12) have diverged." in output
+    assert "git fetch origin main" in output
+    assert "git log --oneline --left-right main...origin/main" in output
