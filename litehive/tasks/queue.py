@@ -16,6 +16,7 @@ from litehive.state.records import set_task_commit_sha
 from litehive.domain.task_ops import BlockedTask, TaskPlan, TaskSelection, WorkspaceConflictError
 from litehive.state.persist import load_state, save_state_without_runner_guard
 from litehive.state.locking import ensure_future_task_mutation_allowed, workspace_lock
+from litehive.tasks.runtime import clear_task_run_activity, idle_stage_state
 
 logger = logging.getLogger(__name__)
 
@@ -97,27 +98,12 @@ def reset_task_for_recovery(
     now = utcnow()
     task.status = status
     task.pipeline_status = pipeline_status
-    task.runtime.execution_status = "idle"
-    task.runtime.run_started_at = None
-    task.runtime.updated_at = now
-    task.runtime.active_subagent = None
-    task.runtime.interruption = None
+    clear_task_run_activity(task, execution_status="idle", updated_at=now, clear_interruption=True)
     task.runtime.retry_count = 0
     task.runtime.retry_limit = 0
     if not preserve_continuation_handoff:
         task.runtime.continuation_handoff = None
-    task.runtime.current_stage = task.runtime.current_stage.model_copy(
-        update={
-            "step": None,
-            "status": "idle",
-            "started_at": None,
-            "completed_at": None,
-            "updated_at": now,
-            "duration_seconds": 0,
-            "verdict": None,
-            "summary": "",
-        }
-    )
+    task.runtime.current_stage = idle_stage_state(updated_at=now)
     if clear_last_outcome:
         task.runtime.last_outcome = TaskOutcomeState()
     elif task.runtime.last_outcome.kind == "interrupted":

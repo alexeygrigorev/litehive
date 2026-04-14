@@ -22,7 +22,9 @@ from litehive.tasks.paths import (
 )
 from litehive.tasks.runtime import (
     apply_task_outcome,
+    clear_task_run_activity,
     duration_seconds,
+    idle_stage_state,
     summarize_transcript,
 )
 
@@ -48,24 +50,10 @@ def _running_task_ids(root: Path) -> list[str]:
 
 
 def prepare_interrupted_task_for_requeue(task: TaskRecord) -> None:
-    now = utcnow()
+    now = clear_task_run_activity(task, execution_status="idle")
     task.status = "queued"
-    task.runtime.execution_status = "idle"
-    task.runtime.run_started_at = None
-    task.runtime.active_subagent = None
-    task.runtime.updated_at = now
     if task.runtime.current_stage.step is None:
-        task.runtime.current_stage = task.runtime.current_stage.model_copy(
-            update={
-                "status": "idle",
-                "started_at": None,
-                "completed_at": None,
-                "updated_at": now,
-                "duration_seconds": 0,
-                "verdict": None,
-                "summary": "",
-            }
-        )
+        task.runtime.current_stage = idle_stage_state(updated_at=now)
         return
     task.runtime.current_stage = task.runtime.current_stage.model_copy(
         update={"status": "interrupted", "updated_at": now}

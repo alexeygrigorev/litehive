@@ -31,6 +31,7 @@ from litehive.tasks.normalization import (
     implementation_entry_stage,
 )
 from litehive.tasks.paths import latest_subagent_base, task_dir
+from litehive.tasks.runtime import clear_task_run_activity
 
 
 def _active_task_id_for_stop(root: Path, state: WorkspaceState) -> str:
@@ -434,12 +435,8 @@ def _queue_task(state: WorkspaceState, task_id: str, *, front: bool = False) -> 
 
 
 def _apply_cancelled_task_state(task: TaskRecord, *, reason: str) -> None:
-    now = utcnow()
+    now = clear_task_run_activity(task, execution_status="cancelled")
     task.status = "cancelled"
-    task.runtime.execution_status = "cancelled"
-    task.runtime.run_started_at = None
-    task.runtime.updated_at = now
-    task.runtime.active_subagent = None
     task.runtime.last_outcome.kind = "cancelled"
     task.runtime.last_outcome.stage = task.pipeline_status
     task.runtime.last_outcome.reason_code = "execution_cancelled"
@@ -457,14 +454,10 @@ def _apply_close_task_state(
     follow_up_task_id: str | None = None,
     pipeline_status: str | None = None,
 ) -> str:
-    now = utcnow()
+    now = clear_task_run_activity(task, execution_status="cancelled")
     task.status = outcome  # type: ignore[assignment]
     if pipeline_status is not None:
         task.pipeline_status = pipeline_status
-    task.runtime.execution_status = "cancelled"
-    task.runtime.run_started_at = None
-    task.runtime.updated_at = now
-    task.runtime.active_subagent = None
     task.runtime.last_outcome.kind = outcome  # type: ignore[assignment]
     task.runtime.last_outcome.stage = task.pipeline_status
     task.runtime.last_outcome.reason_code = outcome
@@ -482,12 +475,8 @@ def _apply_close_task_state(
 
 
 def _apply_parked_task_state(task: TaskRecord) -> None:
-    now = utcnow()
+    clear_task_run_activity(task, execution_status="paused")
     task.status = "parked"
-    task.runtime.execution_status = "paused"
-    task.runtime.run_started_at = None
-    task.runtime.updated_at = now
-    task.runtime.active_subagent = None
 
 
 def close_task(

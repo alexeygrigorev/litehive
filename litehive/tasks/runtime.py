@@ -22,7 +22,7 @@ from litehive.state.persist import load_state
 from litehive.state.persist import persist_task_and_state
 
 
-def _idle_stage_state(*, updated_at: str) -> RuntimeStageState:
+def idle_stage_state(*, updated_at: str) -> RuntimeStageState:
     return RuntimeStageState(updated_at=updated_at)
 
 
@@ -86,25 +86,35 @@ def _runtime_subagent_state(
     )
 
 
-def mark_task_run_started(root: Path, task: TaskRecord) -> None:
-    now = utcnow()
-    task.runtime.execution_status = "running"
-    task.runtime.run_started_at = now
+def clear_task_run_activity(
+    task: TaskRecord,
+    *,
+    execution_status: str,
+    updated_at: str | None = None,
+    clear_interruption: bool = False,
+) -> str:
+    now = updated_at or utcnow()
+    task.runtime.execution_status = execution_status
+    task.runtime.run_started_at = None
     task.runtime.updated_at = now
+    task.runtime.active_subagent = None
+    if clear_interruption:
+        task.runtime.interruption = None
+    return now
+
+
+def mark_task_run_started(root: Path, task: TaskRecord) -> None:
+    now = clear_task_run_activity(task, execution_status="running", clear_interruption=True)
+    task.runtime.run_started_at = now
     task.runtime.retry_count = 0
     task.runtime.retry_limit = task.runtime.retry_limit
     task.runtime.last_outcome = TaskOutcomeState()
-    task.runtime.current_stage = _idle_stage_state(updated_at=now)
-    task.runtime.active_subagent = None
-    task.runtime.interruption = None
+    task.runtime.current_stage = idle_stage_state(updated_at=now)
     save_task_runtime(root, task)
 
 
 def mark_task_run_finished(root: Path, task: TaskRecord, final_status: str) -> None:
-    now = utcnow()
-    task.runtime.execution_status = final_status
-    task.runtime.updated_at = now
-    task.runtime.active_subagent = None
+    clear_task_run_activity(task, execution_status=final_status)
     save_task_runtime(root, task)
 
 
@@ -120,11 +130,8 @@ def apply_flag_count_auto_defer(task: TaskRecord) -> None:
 
 def finish_task_run_transition(root: Path, task: TaskRecord, final_status: str) -> TaskRecord:
     with workspace_mutation_guard(root), workspace_lock(root):
-        now = utcnow()
         apply_flag_count_auto_defer(task)
-        task.runtime.execution_status = final_status
-        task.runtime.updated_at = now
-        task.runtime.active_subagent = None
+        clear_task_run_activity(task, execution_status=final_status)
         state = load_state(root)
         state_changed = False
         if state.active_task_id == task.id:
@@ -276,7 +283,7 @@ def apply_stage_finished(task: TaskRecord, report: StageReport) -> None:
     started_at = task.runtime.current_stage.started_at
     task.runtime.updated_at = now
     task.runtime.last_stage = _completed_stage_state(report, started_at=started_at, completed_at=now)
-    task.runtime.current_stage = _idle_stage_state(updated_at=now)
+    task.runtime.current_stage = idle_stage_state(updated_at=now)
     if (
         task.runtime.continuation_handoff is not None
         and task.runtime.continuation_handoff.step == report.step
