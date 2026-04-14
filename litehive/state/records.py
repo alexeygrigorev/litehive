@@ -12,7 +12,6 @@ from litehive.config.workspace import ensure_workspace, render_workspace_gitigno
 from litehive.git.ops import default_commit_message
 from litehive.domain.common import utcnow
 from litehive.domain.reports import FollowUpTaskSpec
-from litehive.domain.runtime import TaskRuntime
 from litehive.domain.task import (
     TaskCreationSource,
     TaskRecord,
@@ -84,22 +83,10 @@ def serialize_task_record(task: TaskRecord) -> str:
     return yaml.safe_dump(payload, sort_keys=False)
 
 
-def task_runtime_for_storage(task: TaskRecord) -> TaskRuntime:
-    _normalize_task_worktree_state(task)
-    runtime = task.runtime.model_copy(deep=True)
-    runtime.git.commit_sha = task.git.commit_sha
-    runtime.git.worktree_path = task.runtime.git.worktree_path
-    return runtime
-
-
 def task_state_for_storage(task: TaskRecord) -> TaskStateRecord:
     _normalize_task_worktree_state(task)
     _normalize_task_flag_reason(task)
-    state = task.to_state_record()
-    state.runtime = task_runtime_for_storage(task)
-    state.git.worktree_path = task.runtime.git.worktree_path
-    state.updated_at = task.updated_at
-    return state
+    return task.to_storage_state_record()
 
 
 def write_task_runtime(root: Path, task: TaskRecord) -> None:

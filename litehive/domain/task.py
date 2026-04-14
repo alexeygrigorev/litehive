@@ -182,6 +182,16 @@ class TaskRecord(BaseModel):
             runtime=self.runtime.model_copy(deep=True),
         )
 
+    def to_storage_state_record(self) -> TaskStateRecord:
+        state = self.to_state_record()
+        state.runtime = self.runtime.for_storage(
+            commit_sha=self.git.commit_sha,
+            worktree_path=self.runtime.git.worktree_path,
+        )
+        state.git.worktree_path = self.runtime.git.worktree_path
+        state.updated_at = self.updated_at
+        return state
+
     @classmethod
     def from_intent_and_state(
         cls,

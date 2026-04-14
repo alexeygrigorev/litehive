@@ -147,6 +147,17 @@ class TaskRuntime(BaseModel):
     last_outcome: TaskOutcomeState = Field(default_factory=TaskOutcomeState)
     self_heal_traceback_fingerprints: list[str] = Field(default_factory=list)
 
+    def for_storage(
+        self,
+        *,
+        commit_sha: str | None,
+        worktree_path: str | None,
+    ) -> "TaskRuntime":
+        runtime = self.model_copy(deep=True)
+        runtime.git.commit_sha = commit_sha
+        runtime.git.worktree_path = worktree_path
+        return runtime
+
 
 class RunnerStatusState(BaseModel):
     status: RunnerExecutionStatus = "idle"
