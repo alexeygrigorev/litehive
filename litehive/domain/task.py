@@ -37,6 +37,22 @@ class GitSettings(BaseModel):
     merge_agent_attempts: int = 0
     worktree_path: str | None = None
 
+    def to_intent_git_settings(self) -> "TaskIntentGitSettings":
+        return TaskIntentGitSettings(
+            auto_commit=self.auto_commit,
+            commit_message=self.commit_message,
+        )
+
+    def to_state_git_settings(self) -> "TaskStateGitSettings":
+        return TaskStateGitSettings(
+            commit_sha=self.commit_sha,
+            checkpoint_base_sha=self.checkpoint_base_sha,
+            checkpoint_attempts=self.checkpoint_attempts,
+            rolled_back_checkpoint_attempt=self.rolled_back_checkpoint_attempt,
+            merge_agent_attempts=self.merge_agent_attempts,
+            worktree_path=self.worktree_path,
+        )
+
 
 class TaskIntentGitSettings(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -52,6 +68,16 @@ class TaskStateGitSettings(BaseModel):
     rolled_back_checkpoint_attempt: int | None = None
     merge_agent_attempts: int = 0
     worktree_path: str | None = None
+
+    def to_git_updates(self) -> dict[str, str | int | None]:
+        return {
+            "commit_sha": self.commit_sha,
+            "checkpoint_base_sha": self.checkpoint_base_sha,
+            "checkpoint_attempts": self.checkpoint_attempts,
+            "rolled_back_checkpoint_attempt": self.rolled_back_checkpoint_attempt,
+            "merge_agent_attempts": self.merge_agent_attempts,
+            "worktree_path": self.worktree_path,
+        }
 
 
 class TaskIntentRecord(BaseModel):
@@ -84,6 +110,19 @@ class TaskStateRecord(BaseModel):
     git: TaskStateGitSettings = Field(default_factory=TaskStateGitSettings)
     retry_policy: TaskRetryPolicy = Field(default_factory=TaskRetryPolicy)
     runtime: TaskRuntime = Field(default_factory=TaskRuntime)
+
+    def apply_to_task(self, record: "TaskRecord") -> "TaskRecord":
+        record.model = self.model
+        record.status = self.status
+        record.flag_reason = self.flag_reason
+        record.flag_count = self.flag_count
+        record.pipeline_status = self.pipeline_status
+        record.updated_at = self.updated_at
+        record.subagents = list(self.subagents)
+        record.git = record.git.model_copy(update=self.git.to_git_updates())
+        record.retry_policy = self.retry_policy.model_copy(deep=True)
+        record.runtime = self.runtime.model_copy(deep=True)
+        return record
 
 
 class TaskRecord(BaseModel):
@@ -125,10 +164,7 @@ class TaskRecord(BaseModel):
             acceptance_criteria=list(self.acceptance_criteria),
             constraints=list(self.constraints),
             plan=list(self.plan),
-            git=TaskIntentGitSettings(
-                auto_commit=self.git.auto_commit,
-                commit_message=self.git.commit_message,
-            ),
+            git=self.git.to_intent_git_settings(),
             created_from=self.created_from,
         )
 
@@ -141,14 +177,7 @@ class TaskRecord(BaseModel):
             pipeline_status=self.pipeline_status,
             updated_at=self.updated_at,
             subagents=list(self.subagents),
-            git=TaskStateGitSettings(
-                commit_sha=self.git.commit_sha,
-                checkpoint_base_sha=self.git.checkpoint_base_sha,
-                checkpoint_attempts=self.git.checkpoint_attempts,
-                rolled_back_checkpoint_attempt=self.git.rolled_back_checkpoint_attempt,
-                merge_agent_attempts=self.git.merge_agent_attempts,
-                worktree_path=self.git.worktree_path,
-            ),
+            git=self.git.to_state_git_settings(),
             retry_policy=self.retry_policy.model_copy(deep=True),
             runtime=self.runtime.model_copy(deep=True),
         )
@@ -162,22 +191,7 @@ class TaskRecord(BaseModel):
         record = cls(**intent.model_dump(mode="python"))
         if state is None:
             return record
-        record.model = state.model
-        record.status = state.status
-        record.flag_reason = state.flag_reason
-        record.flag_count = state.flag_count
-        record.pipeline_status = state.pipeline_status
-        record.updated_at = state.updated_at
-        record.subagents = list(state.subagents)
-        record.git.commit_sha = state.git.commit_sha
-        record.git.checkpoint_base_sha = state.git.checkpoint_base_sha
-        record.git.checkpoint_attempts = state.git.checkpoint_attempts
-        record.git.rolled_back_checkpoint_attempt = state.git.rolled_back_checkpoint_attempt
-        record.git.merge_agent_attempts = state.git.merge_agent_attempts
-        record.git.worktree_path = state.git.worktree_path
-        record.retry_policy = state.retry_policy.model_copy(deep=True)
-        record.runtime = state.runtime.model_copy(deep=True)
-        return record
+        return state.apply_to_task(record)
 
 
 class UnmergedWorktree(BaseModel):

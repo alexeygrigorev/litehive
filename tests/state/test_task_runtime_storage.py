@@ -4,6 +4,7 @@ import pytest
 import yaml
 
 from litehive.config.workspace import ensure_workspace
+from litehive.domain.task import TaskRecord
 from litehive.state.records import (
     TaskStateMissingError,
     create_task,
@@ -99,3 +100,33 @@ def test_get_task_requires_sqlite_runtime_state_row(tmp_path: Path) -> None:
 
     with pytest.raises(TaskStateMissingError, match="missing its SQLite runtime state row"):
         get_task(tmp_path, "T-0001")
+
+
+def test_task_record_intent_state_roundtrip_uses_model_helpers(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Roundtrip")
+    task.model = "gpt-5.4"
+    task.status = "flagged"
+    task.flag_reason = "needs-review"
+    task.flag_count = 2
+    task.pipeline_status = "implementing"
+    task.git.commit_sha = "abc123"
+    task.git.checkpoint_attempts = 3
+    task.git.merge_agent_attempts = 1
+    task.runtime.execution_status = "running"
+    task.runtime.current_stage.step = "implementing"
+
+    intent = task.to_intent_record()
+    state = task.to_state_record()
+    restored = TaskRecord.from_intent_and_state(intent, state)
+
+    assert restored.model == "gpt-5.4"
+    assert restored.status == "flagged"
+    assert restored.flag_reason == "needs-review"
+    assert restored.flag_count == 2
+    assert restored.pipeline_status == "implementing"
+    assert restored.git.commit_sha == "abc123"
+    assert restored.git.checkpoint_attempts == 3
+    assert restored.git.merge_agent_attempts == 1
+    assert restored.runtime.execution_status == "running"
+    assert restored.runtime.current_stage.step == "implementing"
