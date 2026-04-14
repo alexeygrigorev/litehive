@@ -73,6 +73,48 @@ def _config(root):
     return load_config(root), path, data if isinstance(data, dict) else {}
 
 
+def _engine_status_line(config) -> str:
+    frozen = ", ".join(f"{k}={v}" for k, v in sorted(config.engine_freeze.items())) or "-"
+    engines = ", ".join(
+        f"{name}(available={'yes' if c.available else 'no'}, model_override={'yes' if c.supports_model_override else 'no'}, strips_env={'yes' if c.strips_environment else 'no'})"
+        for name in ENGINE_CHOICES
+        for c in [get_engine(name).capabilities]
+    )
+    return f"default_engine: {config.default_engine} | engine_freeze: {frozen} | engines: {engines}"
+
+
+def _engine_freeze_mapping(raw: dict) -> dict[str, str]:
+    frozen = raw.get("engine_freeze")
+    return dict(frozen) if isinstance(frozen, dict) else {}
+
+
+def _write_workspace_config(path: Path, raw: dict) -> None:
+    path.write_text(yaml.safe_dump(raw, sort_keys=False), encoding="utf-8")
+
+
+def _parse_engine_freeze_until(until: str | None) -> str | None:
+    try:
+        return datetime.strptime(until, "%Y-%m-%d").replace(tzinfo=UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+    except (TypeError, ValueError):
+        return None
+
+
+def _set_engine_freeze(raw: dict, *, engine_name: str, until: str) -> None:
+    raw["engine_freeze"] = _engine_freeze_mapping(raw) | {engine_name: until}
+
+
+def _clear_engine_freeze(raw: dict, *, engine_name: str) -> bool:
+    frozen = _engine_freeze_mapping(raw)
+    if engine_name not in frozen:
+        return False
+    frozen.pop(engine_name)
+    if frozen:
+        raw["engine_freeze"] = frozen
+    else:
+        raw.pop("engine_freeze", None)
+    return True
+
+
 def engine_command(
     workspace: WorkspaceOption = Path.cwd(),
     engine_action: Annotated[
@@ -89,37 +131,26 @@ def engine_command(
             print("engine status: does not take an engine name")
             return 1
         config, _, _ = _config(workspace)
-        frozen = ", ".join(f"{k}={v}" for k, v in sorted(config.engine_freeze.items())) or "-"
-        engines = ", ".join(
-            f"{name}(available={'yes' if c.available else 'no'}, model_override={'yes' if c.supports_model_override else 'no'}, strips_env={'yes' if c.strips_environment else 'no'})"
-            for name in ENGINE_CHOICES
-            for c in [get_engine(name).capabilities]
-        )
-        print(f"default_engine: {config.default_engine} | engine_freeze: {frozen} | engines: {engines}")
+        print(_engine_status_line(config))
         return 0
     name = engine_name
     if name not in ENGINE_CHOICES:
         print(f"engine {engine_action}: unknown engine '{name}'")
         return 1
     _, path, raw = _config(workspace)
-    frozen = raw.get("engine_freeze") if isinstance(raw.get("engine_freeze"), dict) else {}
     if engine_action == "freeze":
-        try:
-            until = datetime.strptime(until, "%Y-%m-%d").replace(tzinfo=UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
-        except (TypeError, ValueError):
+        normalized_until = _parse_engine_freeze_until(until)
+        if normalized_until is None:
             print("engine freeze: --until must be ISO date YYYY-MM-DD")
             return 1
-        raw["engine_freeze"] = frozen | {name: until}
-        path.write_text(yaml.safe_dump(raw, sort_keys=False), encoding="utf-8")
-        print(f"engine_frozen: {name} until {until}" + (f" reason={reason}" if reason else ""))
+        _set_engine_freeze(raw, engine_name=name, until=normalized_until)
+        _write_workspace_config(path, raw)
+        print(f"engine_frozen: {name} until {normalized_until}" + (f" reason={reason}" if reason else ""))
         return 0
-    if name not in frozen:
+    if not _clear_engine_freeze(raw, engine_name=name):
         print(f"engine unfreeze: {name} is not frozen")
         return 1
-    frozen.pop(name)
-    raw["engine_freeze"] = frozen
-    raw.pop("engine_freeze", None) if not frozen else None
-    path.write_text(yaml.safe_dump(raw, sort_keys=False), encoding="utf-8")
+    _write_workspace_config(path, raw)
     print(f"engine_unfrozen: {name}")
     return 0
 
