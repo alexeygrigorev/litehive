@@ -20,7 +20,7 @@ Current working-tree state:
 - align test locations with the current package layout
 - rename files around behavior or current package ownership, not old architecture names
 - split mixed files before moving them
-- shrink shared helpers into smaller support modules with clear ownership
+- keep support modules as real helper code, not wrapper or re-export layers
 - keep the suite behavioral; do not add repo-hygiene or forbidden-import tests
 
 ## Main problems
@@ -146,7 +146,7 @@ These files can move with little or no test-body change.
 - `tests/test_list_and_show.py` -> `tests/cli/test_task_list_and_show.py`
 - `tests/test_logs_command.py` -> `tests/cli/test_logs.py`
 - `tests/test_main.py` -> `tests/cli/test_main_entrypoint.py`
-- `tests/test_root_queue_recovery_help.py` -> `tests/cli/test_help_output.py`
+- `tests/test_root_queue_recovery_help.py` -> removed as low-value help-copy coverage
 
 ### `tests/config/`
 
@@ -264,8 +264,12 @@ Split into:
 
 Split into:
 
-- `tests/state/test_task_record_validation.py`
 - `tests/cli/test_task_engine_help.py`
+
+Then remove both resulting tests as low-value cleanup:
+
+- `tests/cli/test_task_engine_help.py` only froze help output
+- `tests/state/test_task_record_validation.py` only guarded a removed legacy shape
 
 ## Integration suite plan
 
@@ -295,32 +299,48 @@ Split into:
 
 ## Helper cleanup
 
-Replace `tests/workspace_helpers.py` with smaller support modules:
+Keep helper cleanup pragmatic:
 
-- `tests/support/workspace.py`
-  - `ensure_workspace()`
-  - workspace path helpers
-  - common workspace fixtures
-- `tests/support/tasks.py`
-  - `create_task()`
-  - `get_task()`
-  - `save_task()`
-  - queue/task helpers
-- `tests/support/cli.py`
-  - `CliRunner`
-  - `_cmd_*` wrappers
-  - command result helpers
-- `tests/support/engines.py`
-  - subagent helpers
-  - engine result builders
-  - timeline/report helpers
+- move shared helper code under `tests/support/helpers.py`
+- move integration helper code under `tests_integration/support/helpers.py`
+- do not add wrapper modules that only re-export imports from those helper files
+- keep reducing broad helper imports over time by importing production symbols directly where practical
 
-Replace `tests_integration/helpers.py` with:
+Guideline: stop importing giant re-export bundles like `from tests.workspace_helpers import (...)` with dozens of unrelated names. Import production symbols directly unless the test is using real shared helper behavior.
 
-- `tests_integration/support/workspace.py`
-- `tests_integration/support/engines.py`
+## Low-value test smells
 
-Guideline: stop importing giant re-export bundles like `from tests.workspace_helpers import (...)` with dozens of unrelated names. Import only the specific helper module that owns the behavior.
+The smell to remove is not “CLI help tests” specifically. The real problem is tests that only freeze output text when no logic, state, branching, or data transformation is being exercised.
+
+### Remove
+
+- `tests/cli/test_task_engine_help.py`
+  - only checks that Typer help text for `task add` and `task update` does not mention `--engine`
+  - this does not exercise Litehive logic; it freezes framework-rendered help output
+- `tests/tasks/test_archive.py::test_cmd_archive_no_args_prints_help`
+  - only checks usage text and option names for a missing-argument invocation
+  - this is presentation coverage, not archive behavior
+- `tests/config/test_workspace_bootstrap.py::test_ensure_workspace_scaffolds_workspace_gitignore`
+  - asserts exact scaffold lines in a generated `.gitignore`
+  - this is static template coverage and fails on harmless wording or pattern edits
+- `tests/config/test_workspace_bootstrap.py::test_ensure_workspace_scaffolds_profile_specific_context`
+  - asserts prose and headings in generated `context.md`
+  - this freezes editorial copy instead of behavior
+- `tests/config/test_workspace_bootstrap.py::test_available_process_profiles_include_generic_and_project_templates`
+  - asserts the full static list of shipped profile names
+  - low signal as a behavioral test; profile resolution already covers the real config contract
+
+### Keep
+
+- `tests/cli/test_entrypoint.py`
+  - exercises actual fallback behavior: run-next-task vs status
+  - command-removal assertions cover command-surface behavior, not just wording
+- `tests/lifecycle/test_journal_cli.py`
+  - output depends on persisted state and journal transitions
+  - this is a rendering contract for real lifecycle data, not static help copy
+- `tests/observability/test_task_summary.py`
+  - summary output depends on task reports and estimate calculations
+  - the assertions verify behavior produced from state
 
 ## Rollout order
 

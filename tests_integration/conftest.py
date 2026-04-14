@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from .helpers import integration_workspace, sandboxed_integration_workspace
+from tests_integration.support.helpers import integration_workspace, sandboxed_integration_workspace
 
 
 @pytest.fixture(autouse=True)

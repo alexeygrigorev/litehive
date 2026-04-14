@@ -1,0 +1,301 @@
+from pathlib import Path
+
+import pytest
+import yaml
+
+from heru.base import CLIExecutionResult
+
+from litehive.agents.manager import SubagentManager
+from litehive.config.workspace import ensure_workspace
+from litehive.domain.agent import EngineFailure
+from litehive.lifecycle.heru_factory import HeruEngineAdapter
+from litehive.state.records import create_task, get_task, save_task
+from litehive.tasks.paths import task_dir
+
+
+def test_subagent_manager_passes_workspace_root_in_extra_env(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ensure_workspace(tmp_path)
+    execution_root = tmp_path / "other-project"
+    execution_root.mkdir()
+    task = create_task(tmp_path, title="Pass workspace root")
+    manager = SubagentManager(tmp_path, execution_root=execution_root)
+    captured: dict[str, object] = {}
+
+    class FakeEngine:
+        name = "codex"
+        binary = "codex"
+
+        def is_available(self) -> bool:
+            return True
+
+        def run(
+            self,
+            prompt: str,
+            cwd: Path,
+            model: str | None = None,
+            *,
+            extra_env: dict[str, str] | None = None,
+        ) -> CLIExecutionResult:
+            captured["cwd"] = cwd
+            captured["extra_env"] = extra_env
+            return CLIExecutionResult(
+                adapter="codex",
+                argv=("codex", "exec"),
+                cwd=cwd,
+                exit_code=0,
+                stdout="VERDICT: PASS\nSUMMARY: ok",
+                stderr="",
+                pid=4242,
+            )
+
+        def render_transcript(self, execution: CLIExecutionResult) -> str:
+            return execution.transcript
+
+    monkeypatch.setattr("litehive.agents.manager.get_engine", lambda _: FakeEngine())
+
+    manager.run(task, role="swe", engine_name="codex", prompt="implement it")
+
+    assert captured["cwd"] == execution_root
+    assert captured["extra_env"]["LITEHIVE_TASK_ID"] == task.id
+    assert captured["extra_env"]["LITEHIVE_WORKSPACE_ROOT"] == str(tmp_path)
+
+
+def test_subagent_manager_uses_runtime_current_stage_for_cli_verdict_lookup(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Use runtime stage for reports")
+    task.runtime.current_stage.step = "grooming"
+    save_task(tmp_path, task)
+    manager = SubagentManager(tmp_path)
+
+    class FakeEngine:
+        name = "codex"
+        binary = "codex"
+
+        def is_available(self) -> bool:
+            return True
+
+        def run(
+            self,
+            prompt: str,
+            cwd: Path,
+            model: str | None = None,
+            *,
+            extra_env: dict[str, str] | None = None,
+        ) -> CLIExecutionResult:
+            comment_path = task_dir(tmp_path, task) / "comments.yaml"
+            comment_path.write_text(
+                yaml.safe_dump(
+                    [
+                        {
+                            "role": "planner",
+                            "step": "grooming",
+                            "verdict": "reject",
+                            "message": "REJECT\n\nregroom this task",
+                            "files_changed": [],
+                        }
+                    ],
+                    sort_keys=False,
+                ),
+                encoding="utf-8",
+            )
+            return CLIExecutionResult(
+                adapter="codex",
+                argv=("codex", "exec"),
+                cwd=cwd,
+                exit_code=0,
+                stdout="placeholder transcript",
+                stderr="",
+                pid=4242,
+            )
+
+        def render_transcript(self, execution: CLIExecutionResult) -> str:
+            return execution.transcript
+
+    monkeypatch.setattr("litehive.agents.manager.get_engine", lambda _: FakeEngine())
+
+    manager.run(task, role="planner", engine_name="codex", prompt="groom it")
+
+    base = task_dir(tmp_path, task) / "subagents" / "SA-0001-planner"
+    report = yaml.safe_load((base / "report.yaml").read_text(encoding="utf-8"))
+
+    assert report["summary"] == "REJECT"
+    assert report["warnings"] == []
+
+
+def test_subagent_manager_consumes_unified_stdout_for_reports_and_continuation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Consume unified stdout")
+    manager = SubagentManager(tmp_path)
+    captured: dict[str, object] = {}
+
+    class FakeEngine:
+        name = "codex"
+        binary = "codex"
+
+        def is_available(self) -> bool:
+            return True
+
+        def run(
+            self,
+            prompt: str,
+            cwd: Path,
+            model: str | None = None,
+            *,
+            emit_unified: bool = False,
+            extra_env: dict[str, str] | None = None,
+        ) -> CLIExecutionResult:
+            del prompt, model, extra_env
+            captured["emit_unified"] = emit_unified
+            return CLIExecutionResult(
+                adapter="codex",
+                argv=("codex", "exec"),
+                cwd=cwd,
+                exit_code=0,
+                stdout=(
+                    '{"kind":"message","engine":"codex","sequence":0,'
+                    '"role":"assistant","content":"implemented via unified events",'
+                    '"timestamp":"2026-04-12T00:00:00+00:00","usage_delta":{},'
+                    '"raw":{},"metadata":{}}\n'
+                    '{"kind":"continuation","engine":"codex","sequence":1,'
+                    '"timestamp":"2026-04-12T00:00:01+00:00",'
+                    '"continuation_id":"session-42","usage_delta":{},'
+                    '"raw":{},"metadata":{}}\n'
+                ),
+                stderr="",
+                pid=4242,
+            )
+
+        def render_transcript(self, execution: CLIExecutionResult) -> str:
+            return "fallback transcript should not be used"
+
+    monkeypatch.setattr("litehive.agents.manager.get_engine", lambda _: FakeEngine())
+
+    result = manager.run(task, role="swe", engine_name="codex", prompt="implement it")
+
+    assert captured["emit_unified"] is True
+    assert result.transcript == "implemented via unified events"
+
+    base = task_dir(tmp_path, task) / "subagents" / "SA-0001-swe"
+    report = yaml.safe_load((base / "report.yaml").read_text(encoding="utf-8"))
+    session = yaml.safe_load((base / "session.yaml").read_text(encoding="utf-8"))
+    timeline = yaml.safe_load((base / "timeline.yaml").read_text(encoding="utf-8"))
+
+    assert "did not submit verdict" in report["summary"]
+    assert session["continuation"]["session_id"] == "session-42"
+    assert timeline["event_counts"] == {"message": 1, "continuation": 1}
+
+    refreshed = get_task(tmp_path, task.id)
+    assert refreshed is not None
+    assert refreshed.runtime.last_subagent is not None
+    assert refreshed.runtime.last_subagent.continuation is not None
+    assert refreshed.runtime.last_subagent.continuation.session_id == "session-42"
+    assert result.continuation is not None
+    assert result.continuation.resume_id == "session-42"
+    assert HeruEngineAdapter._extract_continuation_id(result, None) == "session-42"
+
+
+def test_subagent_manager_prefers_instance_run_override_over_inherited_run_live(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Fallback usage-limit task")
+    manager = SubagentManager(tmp_path)
+    from heru import get_engine
+
+    engine = get_engine("codex")
+    monkeypatch.setattr("litehive.agents.manager.get_engine", lambda _: engine)
+    monkeypatch.setattr(engine, "is_available", lambda: True)
+
+    calls: list[str] = []
+
+    def fake_run(
+        prompt: str,
+        cwd: Path,
+        model: str | None = None,
+        *,
+        max_turns: int | None = None,
+        resume_session_id: str | None = None,
+        on_started=None,
+        **kwargs,
+    ) -> CLIExecutionResult:
+        calls.append("run")
+        assert on_started is not None
+        on_started(4242)
+        return CLIExecutionResult(
+            adapter="codex",
+            argv=("codex", "exec"),
+            cwd=cwd,
+            exit_code=1,
+            stdout="",
+            stderr="ERROR: You've hit your usage limit. Try again later.",
+            pid=4242,
+        )
+
+    def fail_run_live(*args, **kwargs) -> CLIExecutionResult:  # type: ignore[no-untyped-def]
+        raise AssertionError("run_live should not be used when only run is overridden")
+
+    monkeypatch.setattr(engine, "run", fake_run)
+    monkeypatch.setattr("heru.base.ExternalCLIAdapter.run_live", fail_run_live)
+
+    result = manager.run(task, role="swe", engine_name="codex", prompt="implement it")
+
+    assert calls == ["run"]
+    assert result.failure == EngineFailure(kind="execution_limit", reason="usage limit reached")
+
+
+def test_subagent_manager_prefers_bound_instance_run_override_over_inherited_run_live(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Fallback usage-limit task")
+    manager = SubagentManager(tmp_path)
+    from heru import get_engine
+
+    engine = get_engine("codex")
+    monkeypatch.setattr("litehive.agents.manager.get_engine", lambda _: engine)
+    monkeypatch.setattr(engine, "is_available", lambda: True)
+
+    calls: list[str] = []
+
+    def fake_run(
+        self,
+        prompt: str,
+        cwd: Path,
+        model: str | None = None,
+        *,
+        max_turns: int | None = None,
+        resume_session_id: str | None = None,
+        on_started=None,
+        **kwargs,
+    ) -> CLIExecutionResult:
+        del self, prompt, model, max_turns, resume_session_id, kwargs
+        calls.append("run")
+        assert on_started is not None
+        on_started(4242)
+        return CLIExecutionResult(
+            adapter="codex",
+            argv=("codex", "exec"),
+            cwd=cwd,
+            exit_code=1,
+            stdout="",
+            stderr="ERROR: You've hit your usage limit. Try again later.",
+            pid=4242,
+        )
+
+    def fail_run_live(*args, **kwargs) -> CLIExecutionResult:  # type: ignore[no-untyped-def]
+        raise AssertionError("run_live should not be used when run is rebound to a custom method")
+
+    monkeypatch.setattr(engine, "run", fake_run.__get__(engine, type(engine)))
+    monkeypatch.setattr("heru.base.ExternalCLIAdapter.run_live", fail_run_live)
+
+    result = manager.run(task, role="swe", engine_name="codex", prompt="implement it")
+
+    assert calls == ["run"]
+    assert result.failure == EngineFailure(kind="execution_limit", reason="usage limit reached")
+

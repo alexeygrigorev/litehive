@@ -25,12 +25,6 @@ Run a single engine plus the non-engine CLI integration coverage:
 LITEHIVE_INTEGRATION_ENGINES=codex uv run pytest tests_integration/ -q
 ```
 
-Run one engine file:
-
-```bash
-LITEHIVE_INTEGRATION_ENGINES=gemini uv run pytest tests_integration/test_gemini.py -q
-```
-
 Optional timeout override:
 
 ```bash
