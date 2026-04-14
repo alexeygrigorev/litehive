@@ -85,6 +85,12 @@ def render_health_summary(issues: list[StatusIssue]) -> str:
     return f"health: {broken} broken, {warning} warning"
 
 
+def render_issue_lines(issues: list[StatusIssue]) -> list[str]:
+    if not status_has_problems(issues):
+        return []
+    return [*(issue.render() for issue in issues), render_health_summary(issues)]
+
+
 def _load_config_for_status(root: Path) -> tuple[LitehiveConfig, list[StatusIssue]]:
     issues: list[StatusIssue] = []
     data = asdict(LitehiveConfig())

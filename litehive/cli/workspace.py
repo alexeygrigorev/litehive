@@ -35,7 +35,7 @@ from litehive.observability.status import (
 )
 from litehive.observability.status_diagnostics import (
     collect_status_snapshot,
-    render_health_summary,
+    render_issue_lines,
     status_has_problems,
 )
 from litehive.recovery.workspace_repair import repair_workspace_state
@@ -128,9 +128,8 @@ def _print_status_issues(issues) -> int:
     if not status_has_problems(issues):
         return 0
     print()
-    for issue in issues:
-        print(issue.render())
-    print(render_health_summary(issues))
+    for line in render_issue_lines(issues):
+        print(line)
     return 1
 
 
@@ -160,18 +159,16 @@ def doctor_command(
         if not snapshot.issues:
             print(f"doctor: clean workspace={root}")
             return 0
-        for issue in snapshot.issues:
-            print(issue.render())
-        print(render_health_summary(snapshot.issues))
+        for line in render_issue_lines(snapshot.issues):
+            print(line)
         return 1
 
     snapshot = collect_status_snapshot(root)
     if not snapshot.issues:
         print(f"doctor: clean workspace={root}")
         return 0
-    for issue in snapshot.issues:
-        print(issue.render())
-    print(render_health_summary(snapshot.issues))
+    for line in render_issue_lines(snapshot.issues):
+        print(line)
     return 1
 
 

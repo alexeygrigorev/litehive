@@ -13,7 +13,7 @@ from litehive.observability.engine_monitoring import render_engine_monitoring_li
 from litehive.observability.status import render_active_task_detail_lines
 from litehive.observability.status_diagnostics import (
     collect_status_snapshot,
-    render_health_summary,
+    render_issue_lines,
     status_has_problems,
 )
 
@@ -96,9 +96,8 @@ def _fast_status(argv: list[str]) -> int:
         print(line)
     if status_has_problems(snapshot.issues):
         print()
-        for issue in snapshot.issues:
-            print(issue.render())
-        print(render_health_summary(snapshot.issues))
+        for line in render_issue_lines(snapshot.issues):
+            print(line)
         return 1
     return 0
 
