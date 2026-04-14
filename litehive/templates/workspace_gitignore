@@ -3,7 +3,6 @@
 
 # Transient litehive runtime state
 .lock
-.runner.lock
 pool-summary.txt
 engine-monitoring.yaml
 

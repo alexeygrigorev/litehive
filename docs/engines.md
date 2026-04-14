@@ -15,7 +15,8 @@ Current adapters:
 - `claude`
 - `goz`
 
-The adapter implementations live in `litehive/engines.py`.
+The adapter implementations live in the `heru` adapter modules, with Litehive
+handling engine selection and prompt orchestration around them.
 
 ## Default Models
 
@@ -28,10 +29,9 @@ Config defaults:
 - `copilot_model`: optional
 - `claude_model`: `claude-sonnet-4-20250514`
 
-Claude is intentionally opt-in:
+Claude-specific tuning:
 
 ```yaml
-claude_enabled: true
 claude_model: claude-sonnet-4-20250514
 claude_max_turns: 100
 ```
@@ -41,8 +41,7 @@ claude_max_turns: 100
 Litehive resolves engine order in this precedence:
 
 1. run override such as `litehive run --engine gemini`
-2. `task_engine_routing` for the task type
-3. workspace `default_engine`
+2. workspace `default_engine`
 
 Examples:
 
@@ -52,25 +51,6 @@ litehive engine unfreeze codex
 litehive engine status
 litehive run --engine gemini --model gemini-2.5-pro
 ```
-
-## Task-Type Routing
-
-A workspace can route different categories of work to different engines:
-
-```yaml
-task_engine_routing:
-  adapter: [codex, opencode, gemini, copilot, goz]
-  bugfix: [codex, opencode, copilot, gemini, goz]
-  research: [gemini, codex, opencode, copilot, goz]
-  review: [copilot, codex, opencode, gemini, goz]
-  refactor: [opencode, codex, copilot, gemini, goz]
-  docs: [codex, gemini, opencode, copilot, goz]
-  intake: [opencode, codex, gemini, copilot, goz]
-```
-
-If a task does not have an explicit `task_type`, Litehive can infer one from the
-task text using keywords such as `review`, `investigate`, `refactor`, `docs`,
-and `fix`.
 
 ## Engine Preference
 

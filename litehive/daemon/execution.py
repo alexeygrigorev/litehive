@@ -12,18 +12,17 @@ import sys
 import time
 from typing import TextIO
 
-import yaml
-
 from litehive.attention import list_attention
 from litehive.config.loading import load_config
-from litehive.config.paths import state_path, workspace_logs_dir
+from litehive.config.paths import workspace_logs_dir
 from litehive.config.workspace import ensure_workspace
 from litehive.state.backup import create_scheduled_workspace_backup
-from litehive.state.persist import set_pool_stop_reason
+from litehive.state.persist import load_state, set_pool_stop_reason
 from litehive.state.locking import runner_status
 
 from .logs import latest_matching, prune_run_all_log_dirs, latest_run_all_log_dir
 from .registry import (
+    daemon_metadata,
     pid_is_alive,
     get_workspace_daemon,
     register_daemon,
@@ -119,10 +118,7 @@ def _append_attention_log(workspace: Path, message: str) -> None:
 
 
 def _state_snapshot(workspace: Path) -> tuple[dict[str, object], str]:
-    sp = state_path(workspace)
-    state = yaml.safe_load(sp.read_text(encoding="utf-8")) if sp.exists() else {}
-    if not isinstance(state, dict):
-        state = {}
+    state = load_state(workspace).model_dump(mode="python")
     active_task_id = state.get("active_task_id")
     queue = state.get("queue", []) or []
     stop_reason = state.get("pool_stop_reason")
@@ -459,10 +455,12 @@ def run_daemon_loop(
 
 def start_background_daemon(workspace: Path) -> int:
     workspace = workspace.resolve()
-    existing = get_workspace_daemon(workspace)
-    if existing is not None:
+    existing = daemon_metadata(workspace)
+    if existing is not None and existing.get("status") == "running":
         pid = existing.get("pid")
         raise RuntimeError(f"daemon already running for {workspace}: pid={pid}")
+    if existing is not None and existing.get("status") == "stale":
+        unregister_daemon(workspace)
     project_root = Path(__file__).resolve().parents[2]
     process = subprocess.Popen(
         [
@@ -493,8 +491,11 @@ def start_background_daemon(workspace: Path) -> int:
 
 def stop_workspace_daemon(workspace: Path) -> dict[str, object] | None:
     workspace = workspace.resolve()
-    entry = get_workspace_daemon(workspace)
+    entry = daemon_metadata(workspace)
     if entry is None:
+        return None
+    if entry.get("status") != "running":
+        unregister_daemon(workspace)
         return None
     pid = entry.get("pid")
     if not isinstance(pid, int):
@@ -512,9 +513,9 @@ def stop_workspace_daemon(workspace: Path) -> dict[str, object] | None:
 
 def daemon_status_lines(workspace: Path) -> list[str]:
     workspace = workspace.resolve()
-    entry = get_workspace_daemon(workspace)
+    entry = daemon_metadata(workspace)
     lines = [f"workspace: {workspace}"]
-    if entry is None:
+    if entry is None or entry.get("status") != "running":
         lines.append("daemon_status: stopped")
     else:
         lines.append("daemon_status: running")

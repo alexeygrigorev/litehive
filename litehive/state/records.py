@@ -7,7 +7,7 @@ from pathlib import Path
 
 import yaml
 
-from litehive.config.paths import state_path, workspace_gitignore_path
+from litehive.config.paths import workspace_gitignore_path
 from litehive.config.workspace import ensure_workspace, render_workspace_gitignore
 from litehive.git.ops import default_commit_message
 from litehive.domain.common import utcnow
@@ -31,7 +31,6 @@ from litehive.state.locking import workspace_lock, workspace_mutation_guard
 from litehive.state.persist import (
     load_state,
     save_state_without_runner_guard,
-    serialize_state,
     write_atomic_files_and_then,
 )
 from litehive.tasks.normalization import normalize_acceptance_criteria
@@ -265,7 +264,6 @@ def create_task(
             writes = {
                 task_file(root, task): serialize_task_record(task),
                 base / "journal.md": f"# {task.id} {task.title}\n\n## {utcnow()}\nTask created.\n",
-                state_path(root): serialize_state(state),
             }
 
             def callback() -> None:
@@ -350,7 +348,6 @@ def create_follow_up_tasks(
             state=state,
             protected_task_ids=[task.id for task in created_tasks],
         )
-        writes[state_path(root)] = serialize_state(state)
         try:
             def callback() -> None:
                 runtime_store(root).save_runtime_transaction(

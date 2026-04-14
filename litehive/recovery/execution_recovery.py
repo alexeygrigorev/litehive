@@ -3,7 +3,6 @@
 from pathlib import Path
 
 from litehive.config.model import LitehiveConfig
-from litehive.config.paths import state_path
 from litehive.git.ops import GitError, abort_revert, commit_task, has_changes, rollback_message, rollback_task
 from litehive.domain.task import TaskRecord
 from litehive.state.store import runtime_store
@@ -68,7 +67,6 @@ def rollback_completed_task(root: Path, task_id: str):
         file_snapshot = _capture_persisted_files(
             [
                 task_file(root, task),
-                state_path(root),
                 task_dir(root, task) / "journal.md",
             ]
         )

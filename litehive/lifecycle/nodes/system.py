@@ -441,8 +441,6 @@ def _is_runner_owned_metadata(relpath: str, task_id: str) -> bool:
     causes ``git merge`` to abort with "Your local changes would be
     overwritten" (see T-0320).
     """
-    if relpath == ".litehive/state.yaml":
-        return True
     prefix = f".litehive/tasks/{task_id}-"
     return relpath.startswith(prefix) or relpath.startswith(".litehive/tasks/archive/")
 
@@ -539,13 +537,12 @@ class GitCommitNode(CommitNode):
         below is a silent no-op ("Already up to date"), producing an
         empty-pass that loses the agent's work.
 
-        Runner-owned metadata under ``.litehive/tasks/<task_id>-*/`` and
-        ``.litehive/state.yaml`` is excluded: the runner rewrites those
-        files in both the worktree and the main repo as the pipeline
-        advances, and capturing them in the checkpoint commit causes
-        ``git merge`` to abort with "Your local changes would be
-        overwritten" on any task that updates its own task.yaml (see
-        T-0320).
+        Runner-owned task metadata under ``.litehive/tasks/<task_id>-*/`` is
+        excluded: the runner rewrites those files in both the worktree and
+        the main repo as the pipeline advances, and capturing them in the
+        checkpoint commit causes ``git merge`` to abort with "Your local
+        changes would be overwritten" on any task that updates its own
+        task.yaml (see T-0320).
         """
         if worktree == self.main_repo_root:
             return

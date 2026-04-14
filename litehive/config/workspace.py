@@ -36,7 +36,6 @@ def render_workspace_gitignore() -> str:
     return "\n".join(
         [
             ".lock",
-            ".runner.lock",
             "pool-summary.txt",
             "engine-monitoring.yaml",
             "tasks/*/reports/commit_to_git-*.yaml",

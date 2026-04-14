@@ -12,13 +12,13 @@ from litehive.config.loading import merge_config_layers
 from litehive.config.model import LitehiveConfig
 from litehive.config.paths import (
     config_path,
-    daemon_registry_path,
     global_config_path,
-    state_path,
+    workspace_database_path,
+    workspace_runner_lock_path,
     workspace_dir,
 )
 from litehive.daemon.logs import latest_run_all_log_dir
-from litehive.daemon.registry import pid_is_alive
+from litehive.daemon.registry import daemon_metadata, pid_is_alive
 from litehive.domain.engine import WorkspaceEngineMonitoring
 from litehive.domain.runtime import RunnerStatusState
 from litehive.domain.task import WorkspaceState
@@ -60,7 +60,6 @@ def collect_status_snapshot(root: Path) -> StatusSnapshot:
         *state_issues,
         *([runner_issue] if runner_issue is not None else []),
         *monitoring_issues,
-        *_probe_registry_health(),
         *_probe_runner_state(root, state, runner),
         *_probe_daemon_status(root),
         *_probe_last_cycle(root),
@@ -109,33 +108,23 @@ def _load_config_for_status(root: Path) -> tuple[LitehiveConfig, list[StatusIssu
 
 def _load_state_for_status(root: Path) -> tuple[WorkspaceState, list[StatusIssue]]:
     issues: list[StatusIssue] = []
-    yaml_state: WorkspaceState | None = None
-    mapping, issue = _safe_yaml_mapping(
-        state_path(root),
-        key="state",
-        remediation="Fix `.litehive/state.yaml` or remove it so Litehive can regenerate state metadata.",
-    )
-    if issue is not None:
-        issues.append(issue)
-    elif mapping is not None:
-        try:
-            yaml_state = WorkspaceState(**mapping)
-        except Exception:
-            yaml_state = None
-
     try:
         store_state = runtime_store(root).load_workspace_state()
-    except Exception:
-        store_state = None
+    except Exception as exc:
+        detail = str(exc).strip() or type(exc).__name__
+        issues.append(
+            StatusIssue(
+                key="state",
+                severity="ERROR",
+                message=(
+                    f"BROKEN at {workspace_database_path(root)} ({detail})"
+                    " — restore the workspace database from backup or rerun `litehive db migrate`."
+                ),
+            )
+        )
+        return WorkspaceState(), issues
 
-    default_state = WorkspaceState()
-    if yaml_state is not None and (store_state is None or store_state == default_state):
-        return yaml_state, issues
-    if store_state is not None:
-        return store_state, issues
-    if yaml_state is not None:
-        return yaml_state, issues
-    return default_state, issues
+    return (store_state or WorkspaceState()), issues
 
 
 def _load_engine_monitoring_for_status(
@@ -163,24 +152,11 @@ def _load_engine_monitoring_for_status(
         return WorkspaceEngineMonitoring(), []
 
 
-def _probe_registry_health() -> list[StatusIssue]:
-    issues: list[StatusIssue] = []
-    for path in (daemon_registry_path(),):
-        _, issue = _safe_yaml_document(
-            path,
-            key="registry",
-            remediation="Fix the YAML syntax or remove the registry file so Litehive can rebuild it.",
-        )
-        if issue is not None:
-            issues.append(issue)
-    return issues
-
-
 def _probe_runner_state(root: Path, state: WorkspaceState, runner: RunnerStatusState) -> list[StatusIssue]:
     issues: list[StatusIssue] = []
     active_task_id = runner.active_task_id or state.active_task_id
     live_pid = runner_pid_is_alive(runner.pid)
-    lock_path = workspace_dir(root) / ".runner.lock"
+    lock_path = workspace_runner_lock_path(root)
 
     if live_pid:
         heartbeat_age_seconds = _heartbeat_age_seconds(runner.heartbeat_at)
@@ -214,21 +190,10 @@ def _probe_runner_state(root: Path, state: WorkspaceState, runner: RunnerStatusS
 
 
 def _probe_daemon_status(root: Path) -> list[StatusIssue]:
-    registry_path = daemon_registry_path()
-    data, issue = _safe_yaml_document(
-        registry_path,
-        key="registry",
-        remediation="Fix the YAML syntax or remove the registry file so Litehive can rebuild it.",
-    )
-    if issue is not None or not isinstance(data, Mapping):
+    entry = daemon_metadata(root)
+    if entry is None or entry.get("status") != "stale":
         return []
-    daemons = data.get("daemons")
-    if not isinstance(daemons, Mapping):
-        return []
-    payload = daemons.get(str(root.resolve()))
-    if not isinstance(payload, Mapping):
-        return []
-    pid = payload.get("pid")
+    pid = entry.get("pid")
     if isinstance(pid, int) and not pid_is_alive(pid):
         return [
             StatusIssue(
@@ -369,11 +334,11 @@ def _safe_yaml_document(
 
 
 def _load_runner_status_for_status(root: Path) -> tuple[RunnerStatusState, StatusIssue | None]:
-    path = workspace_dir(root) / ".runner.lock"
+    path = workspace_runner_lock_path(root)
     mapping, issue = _safe_yaml_mapping(
         path,
         key="runner_state",
-        remediation="Remove or rewrite `.litehive/.runner.lock`, then restart the runner or daemon.",
+        remediation="Remove or rewrite the runner lock file, then restart the runner or daemon.",
     )
     if issue is not None:
         return RunnerStatusState(), issue

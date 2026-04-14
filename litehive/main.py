@@ -7,6 +7,7 @@ from pathlib import Path
 
 import yaml
 
+from litehive.config.paths import workspace_runner_lock_path
 from litehive.attention import waiting_for_you_lines
 from litehive.config.workspace import resolve_workspace
 from litehive.observability.status_diagnostics import (
@@ -31,7 +32,7 @@ def _agent_command_is_allowed(role: str, argv: list[str]) -> bool:
 
 def _fast_runner_status(workspace: Path) -> dict:
     """Return runner liveness inferred from the lock file, without importing locking.py."""
-    lock_path = workspace / ".litehive" / ".runner.lock"
+    lock_path = workspace_runner_lock_path(workspace)
     result: dict = {
         "state": "never_started",
         "pid": None,

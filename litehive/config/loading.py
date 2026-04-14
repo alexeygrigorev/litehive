@@ -42,27 +42,10 @@ def load_effective_config_data(root: Path) -> dict[str, Any]:
 def load_config(root: Path) -> LitehiveConfig:
     ensure_workspace(root)
     data = load_effective_config_data(root)
-    data.pop("engine_fallbacks", None)
     if data.get("process_profile") not in PROCESS_PROFILES:
         data["process_profile"] = "generic"
     if data.get("pool_selection_policy") not in VALID_POOL_SELECTION_POLICIES:
         data["pool_selection_policy"] = "dependency_aware"
-    data.pop("engine_fallbacks", None)
-    if data.pop("pre_acceptance_command", None):
-        raise ValueError(
-            "pre_acceptance_command is no longer supported. "
-            "Migrate to runner_hooks.after_implementing in config.yaml. Example:\n"
-            "  runner_hooks:\n"
-            "    after_implementing:\n"
-            "      - command: '<your command>'\n"
-            "        reject_on_failure: true"
-        )
-    import dataclasses
-    import warnings
-    known_fields = {f.name for f in dataclasses.fields(LitehiveConfig)}
-    for key in sorted(set(data) - known_fields):
-        warnings.warn(f"unknown config key '{key}' — ignoring", stacklevel=2)
-    data = {k: v for k, v in data.items() if k in known_fields}
     return LitehiveConfig(**data)
 
 

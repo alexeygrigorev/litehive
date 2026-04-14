@@ -16,19 +16,15 @@ That unified root now contains:
 ```text
 ~/.local/share/litehive/
   config.yaml
-  daemons.yaml
   litehive.db
   <workspace_id>/
     data.db
     backups/
     logs/
+    runtime/
     subagents/
     worktrees/
 ```
-
-On first run after upgrade, Litehive copies forward legacy files from
-`~/.config/litehive/` and runtime directories from `~/.local/state/litehive/`
-into the unified root and prints a one-time deprecation notice.
 
 ## Creating Config
 
@@ -66,7 +62,6 @@ goz_model: glm-5-turbo
 gemini_model: gemini-2.5-pro
 copilot_model: gpt-5
 
-claude_enabled: true
 claude_model: claude-sonnet-4-20250514
 claude_max_turns: 100
 
@@ -87,7 +82,6 @@ What they do:
   issue filing and self-heal workflows.
 - `*_model`: default model per adapter when that adapter supports model
   selection.
-- `claude_enabled`: opt-in gate for the Claude adapter.
 - `claude_max_turns`: guardrail to limit Claude CLI conversation length.
 - `default_retry_limit`: workspace-level limit for rejections routed back from
   `testing` or `accepting`.
@@ -124,20 +118,10 @@ Model resolution is:
 
 1. Explicit run override such as `litehive run --engine gemini --model ...`
 2. Task-level `model`
-3. Task-type routing from `task_engine_routing`
-4. Workspace `default_engine`
-5. Adapter-specific default model field such as `opencode_model`
+3. Workspace `default_engine`
+4. Adapter-specific default model field such as `opencode_model`
 
-## Task Routing And Fallbacks
-
-Litehive can route different task types to different engine orders:
-
-```yaml
-task_engine_routing:
-  docs: [codex, gemini, opencode]
-  review: [copilot, codex]
-  refactor: [opencode, codex]
-```
+## Engine Fallbacks
 
 If an engine hits a limit or fails in a retryable way, Litehive walks the global
 engine preference list to find the next available adapter:

@@ -66,8 +66,8 @@ the normal reports and comment history.
 Litehive gathers recovery evidence from task-local artifacts such as:
 
 - latest stage report
-- `runtime.yaml`
-- `comments.yaml` (`thread.yaml` is legacy fallback during migration)
+- runtime state from the workspace database
+- `comments.yaml`
 - `events.jsonl`
 - latest subagent `session.yaml`
 - latest subagent `report.yaml`

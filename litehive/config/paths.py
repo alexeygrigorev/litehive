@@ -13,10 +13,6 @@ def config_path(root: Path) -> Path:
     return workspace_dir(root) / "config.yaml"
 
 
-def state_path(root: Path) -> Path:
-    return workspace_dir(root) / "state.yaml"
-
-
 def context_path(root: Path) -> Path:
     return workspace_dir(root) / "context.md"
 
@@ -39,10 +35,6 @@ def global_config_path() -> Path:
     return litehive_root() / "config.yaml"
 
 
-def daemon_registry_path() -> Path:
-    return litehive_root() / "daemons.yaml"
-
-
 def litehive_database_path() -> Path:
     return litehive_root() / "litehive.db"
 
@@ -54,6 +46,10 @@ def workspace_id(root: Path) -> str:
 
 def workspace_data_dir(root: Path) -> Path:
     return litehive_root() / workspace_id(root)
+
+
+def workspace_runtime_dir(root: Path) -> Path:
+    return workspace_data_dir(root) / "runtime"
 
 
 def workspace_database_path(root: Path) -> Path:
@@ -87,3 +83,11 @@ def workspace_subagents_dir(
     if subagent_id is not None:
         path /= subagent_id
     return path
+
+
+def workspace_runner_lock_path(root: Path) -> Path:
+    return workspace_runtime_dir(root) / ".runner.lock"
+
+
+def workspace_daemon_lock_path(root: Path) -> Path:
+    return workspace_runtime_dir(root) / ".daemon.lock"

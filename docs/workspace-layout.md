@@ -18,14 +18,12 @@ Typical committed workspace structure:
   .gitignore
   config.yaml
   context.md
-  state.yaml
   engine-monitoring.yaml
   pool-summary.txt
   tasks/
     T-0001-example-task/
       task.yaml
       brief.md
-      runtime.yaml
       journal.md
       comments.yaml
       events.jsonl
@@ -41,23 +39,20 @@ User-global runtime state lives under:
 ```text
 ~/.local/share/litehive/
   config.yaml
-  daemons.yaml
   litehive.db
   <workspace_id>/
     data.db
     backups/
     logs/
       run-all/
+    runtime/
+      .daemon.lock
+      .runner.lock
     subagents/
     worktrees/
 ```
 
 `LITEHIVE_HOME` overrides that root for tests and alternate installs.
-
-On first run after upgrade, Litehive copies forward legacy files from
-`~/.config/litehive/` and legacy runtime directories from
-`~/.local/state/litehive/` or old repo-local `.litehive/logs` and
-`.litehive/worktrees` paths into this unified root.
 
 ## Tracked Versus Ignored
 
@@ -65,10 +60,8 @@ The workspace `.gitignore` ignores these repo-local paths:
 
 ```text
 .lock
-.runner.lock
 pool-summary.txt
 engine-monitoring.yaml
-tasks/*/runtime.yaml
 tasks/*/reports/commit_to_git-*.yaml
 ```
 
@@ -77,7 +70,6 @@ That means the main tracked Litehive files are:
 - `.litehive/.gitignore`
 - `.litehive/config.yaml`
 - `.litehive/context.md`
-- `.litehive/state.yaml`
 - each task directory under `.litehive/tasks/<task-id>-<slug>/`
 - task `task.yaml`
 - task `brief.md`
@@ -91,11 +83,10 @@ The main ignored or global-runtime files are:
 
 - `.litehive/pool-summary.txt`
 - `.litehive/engine-monitoring.yaml`
-- task `runtime.yaml`
 - `commit_to_git-*` stage reports
 - `${LITEHIVE_HOME:-~/.local/share/litehive}/config.yaml`
-- `${LITEHIVE_HOME:-~/.local/share/litehive}/daemons.yaml`
 - `${LITEHIVE_HOME:-~/.local/share/litehive}/litehive.db`
+- `${LITEHIVE_HOME:-~/.local/share/litehive}/<workspace_id>/runtime/`
 - `${LITEHIVE_HOME:-~/.local/share/litehive}/<workspace_id>/logs/`
 - `${LITEHIVE_HOME:-~/.local/share/litehive}/<workspace_id>/worktrees/`
 
@@ -130,23 +121,9 @@ be shared.
 Project context and process overlay used to build agent prompts. Also intended to
 be shared.
 
-### `.litehive/state.yaml`
-
-Workspace queue state, including:
-
-- active task id
-- queue order
-- current workspace mode
-- pool stop reason
-- next task number
-
 ### `${LITEHIVE_HOME}/config.yaml`
 
 Global user defaults applied before workspace-local config.
-
-### `${LITEHIVE_HOME}/daemons.yaml`
-
-Global daemon registry for running workspace daemons.
 
 ### `${LITEHIVE_HOME}/litehive.db`
 
@@ -154,7 +131,11 @@ Cross-workspace SQLite registry.
 
 ### `${LITEHIVE_HOME}/<workspace_id>/data.db`
 
-Workspace runtime SQLite database.
+Workspace runtime SQLite database, including queue state and task runtime state.
+
+### `${LITEHIVE_HOME}/<workspace_id>/runtime/`
+
+Workspace-local lock metadata for the current daemon and runner processes.
 
 ### `${LITEHIVE_HOME}/<workspace_id>/worktrees/`
 
@@ -172,7 +153,6 @@ workspace metadata:
 - `.litehive/.gitignore`
 - `.litehive/config.yaml`
 - `.litehive/context.md`
-- `.litehive/state.yaml`
 
 If only ignored runtime files changed, Litehive can skip creating a checkpoint
 commit and mark the task done without adding meaningless git noise.
@@ -186,7 +166,7 @@ For a specific task, the highest-signal files are usually:
 3. latest file in `recovery/`, if present
 4. `comments.yaml`
 5. `journal.md`
-6. `runtime.yaml` for current live state
+6. `${LITEHIVE_HOME}/<workspace_id>/data.db` for current live state
 7. `${LITEHIVE_HOME}/<workspace_id>/logs/run-all/` for daemon execution output
 
 That order matches Litehive's intended operator and agent workflow.

@@ -4,9 +4,6 @@ import gzip
 import os
 from pathlib import Path
 
-import yaml
-
-from litehive.config.paths import state_path
 from litehive.config.workspace import ensure_workspace
 from litehive.domain.common import utcnow
 from litehive.domain.task import TaskRecord, WorkspaceState
@@ -94,21 +91,15 @@ def write_atomic_files_and_then(writes: dict[Path, str], callback) -> None:
         raise
 
 
-def serialize_state(state: WorkspaceState) -> str:
-    return yaml.safe_dump(state.model_dump(mode="python"), sort_keys=False)
-
-
 def save_state(root: Path, state: WorkspaceState) -> None:
     from litehive.state.locking import workspace_mutation_guard
 
     with workspace_mutation_guard(root):
         runtime_store(root).save_workspace_state(state)
-        atomic_write_text(state_path(root), serialize_state(state))
 
 
 def save_state_without_runner_guard(root: Path, state: WorkspaceState) -> None:
     runtime_store(root).save_workspace_state(state)
-    atomic_write_text(state_path(root), serialize_state(state))
 
 
 def set_pool_stop_reason(root: Path, stop_reason: str | None) -> WorkspaceState:
@@ -138,13 +129,6 @@ def workspace_transition_writes(
         journal_path = task_dir(root, task) / "journal.md"
         existing = journal_path.read_text(encoding="utf-8") if journal_path.exists() else ""
         writes[journal_path] = f"{existing}\n## {utcnow()}\n{journal_messages[task.id]}\n"
-    if state is not None:
-        state = merged_state_for_runner_owned_write(
-            root,
-            state=state,
-            protected_task_ids=[task.id for task in tasks],
-        )
-        writes[state_path(root)] = serialize_state(state)
     return writes
 
 

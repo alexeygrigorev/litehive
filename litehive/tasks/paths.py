@@ -4,7 +4,7 @@ import gzip
 import re
 from pathlib import Path
 
-from litehive.config.paths import workspace_dir, workspace_logs_dir
+from litehive.config.paths import workspace_dir, workspace_logs_dir, workspace_runner_lock_path
 from litehive.config.workspace import ensure_workspace, resolve_workspace
 from litehive.config.registry import list_registered_workspace_paths
 from litehive.config.paths import worktree_root
@@ -37,7 +37,7 @@ def tasks_root(root: Path) -> Path:
 def runner_lock_path(root: Path) -> Path:
     root = resolve_workspace(None, workspace=root)
     ensure_workspace(root)
-    return workspace_dir(root) / ".runner.lock"
+    return workspace_runner_lock_path(root)
 
 
 def slugify(value: str, max_length: int = 50) -> str:
