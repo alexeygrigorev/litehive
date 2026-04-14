@@ -10,6 +10,7 @@ from litehive.config.paths import workspace_runner_lock_path
 from litehive.config.workspace import resolve_workspace
 from litehive.domain.runtime import RunnerStatusState
 from litehive.observability.engine_monitoring import render_engine_monitoring_lines
+from litehive.observability.status import render_active_task_detail_lines
 from litehive.observability.status_diagnostics import (
     collect_status_snapshot,
     render_health_summary,
@@ -89,19 +90,8 @@ def _fast_status(argv: list[str]) -> int:
         from litehive.state.records import get_task
 
         task = get_task(workspace, active_task_id)
-        if task is not None:
-            stage = task.runtime.current_stage.step or task.pipeline_status or "-"
-            engine = (
-                task.runtime.active_subagent.engine
-                if task.runtime.active_subagent is not None
-                else task.runtime.last_subagent.engine
-                if task.runtime.last_subagent is not None
-                else default_engine
-            )
-            print(f"active_task_title: {task.title}")
-            print(f"active_task_status: {task.status}/{task.pipeline_status}")
-            print(f"active_stage: {stage}")
-            print(f"active_engine: {engine}")
+        for line in render_active_task_detail_lines(task, default_engine):
+            print(line)
     for line in render_engine_monitoring_lines(monitoring):
         print(line)
     if status_has_problems(snapshot.issues):

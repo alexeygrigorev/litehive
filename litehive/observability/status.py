@@ -317,6 +317,27 @@ def render_active_task_section(task: TaskRecord | None, default_engine: str) -> 
     return lines
 
 
+def render_active_task_detail_lines(task: TaskRecord | None, default_engine: str) -> list[str]:
+    """Render the flat active-task detail lines used by CLI status outputs."""
+    if task is None:
+        return []
+
+    engine = (
+        task.runtime.active_subagent.engine
+        if task.runtime.active_subagent is not None
+        else task.runtime.last_subagent.engine
+        if task.runtime.last_subagent is not None
+        else default_engine
+    )
+    stage = task.runtime.current_stage.step or task.pipeline_status or "-"
+    return [
+        f"active_task_title: {task.title}",
+        f"active_task_status: {task.status}/{task.pipeline_status}",
+        f"active_stage: {stage}",
+        f"active_engine: {engine}",
+    ]
+
+
 def render_active_tasks_section(
     tasks: list[TaskRecord],
     default_engine: str,

@@ -25,6 +25,7 @@ from litehive.observability.engine_monitoring import render_engine_monitoring_li
 from litehive.observability.status import (
     collect_recent_activity,
     find_last_completed_task,
+    render_active_task_detail_lines,
     render_active_task_section,
     render_engine_health_section,
     render_last_completed_section,
@@ -199,19 +200,8 @@ def status_full(workspace, root, config, state, runner, monitoring, issues):
     if state.queue:
         print(f"queue_head: {state.queue[0]}")
     active_task = _safe_active_task(workspace, state.active_task_id)
-    if active_task is not None:
-        active_engine = (
-            active_task.runtime.active_subagent.engine
-            if active_task.runtime.active_subagent is not None
-            else active_task.runtime.last_subagent.engine
-            if active_task.runtime.last_subagent is not None
-            else config.default_engine
-        )
-        active_stage = active_task.runtime.current_stage.step or active_task.pipeline_status or "-"
-        print(f"active_task_title: {active_task.title}")
-        print(f"active_task_status: {active_task.status}/{active_task.pipeline_status}")
-        print(f"active_stage: {active_stage}")
-        print(f"active_engine: {active_engine}")
+    for line in render_active_task_detail_lines(active_task, config.default_engine):
+        print(line)
     for line in render_engine_monitoring_lines(monitoring):
         print(line)
     print(f"default_retry_limit: {config.default_retry_limit}")
