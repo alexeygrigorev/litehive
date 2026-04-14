@@ -7,6 +7,7 @@ import tomllib
 from typing import Any, Literal, Mapping
 
 import yaml
+from pydantic import ValidationError
 
 from litehive.config.loading import merge_config_layers
 from litehive.config.model import LitehiveConfig
@@ -107,7 +108,17 @@ def _load_config_for_status(root: Path) -> tuple[LitehiveConfig, list[StatusIssu
             data = merge_config_layers(data, mapping)
     try:
         config = LitehiveConfig(**data)
-    except Exception:
+    except (TypeError, ValidationError) as exc:
+        issues.append(
+            StatusIssue(
+                key="config",
+                severity="ERROR",
+                message=(
+                    f"INVALID merged config ({_validation_error_label(exc)})"
+                    " — fix invalid config values; status is falling back to defaults."
+                ),
+            )
+        )
         config = LitehiveConfig()
     return config, issues
 
@@ -154,8 +165,16 @@ def _load_engine_monitoring_for_status(
             ),
         )
         return WorkspaceEngineMonitoring(), [issue]
-    except Exception:
-        return WorkspaceEngineMonitoring(), []
+    except ValidationError as exc:
+        issue = StatusIssue(
+            key="engine_monitoring",
+            severity="WARN",
+            message=(
+                f"INVALID at {path} ({_validation_error_label(exc)})"
+                " — fix `.litehive/engine-monitoring.yaml` to restore engine usage details."
+            ),
+        )
+        return WorkspaceEngineMonitoring(), [issue]
 
 
 def _probe_runner_state(root: Path, state: WorkspaceState, runner: RunnerStatusState) -> list[StatusIssue]:
@@ -352,8 +371,15 @@ def _load_runner_status_for_status(root: Path) -> tuple[RunnerStatusState, Statu
         return RunnerStatusState(), None
     try:
         status = RunnerStatusState(**mapping)
-    except Exception:
-        return RunnerStatusState(), None
+    except ValidationError as exc:
+        return RunnerStatusState(), StatusIssue(
+            key="runner_state",
+            severity="ERROR",
+            message=(
+                f"INVALID at {path} ({_validation_error_label(exc)})"
+                " — rewrite the runner lock file or restart the runner or daemon."
+            ),
+        )
     if runner_pid_is_alive(status.pid):
         return status.model_copy(update={"status": "running"}), None
     if runner_metadata_present(status):
@@ -369,6 +395,17 @@ def _heartbeat_age_seconds(heartbeat_at: str | None) -> int | None:
     except ValueError:
         return None
     return max(0, int((datetime.now(UTC) - timestamp).total_seconds()))
+
+
+def _validation_error_label(exc: Exception) -> str:
+    if isinstance(exc, ValidationError):
+        error = exc.errors()[0] if exc.errors() else {}
+        location = ".".join(str(part) for part in error.get("loc", ()))
+        message = error.get("msg") or "validation error"
+        return f"{location}: {message}" if location else str(message)
+    return str(exc).strip() or type(exc).__name__
+
+
 def _yaml_location_label(exc: yaml.YAMLError | None) -> str:
     if exc is None:
         return "line unknown"

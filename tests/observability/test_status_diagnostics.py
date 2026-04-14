@@ -49,6 +49,46 @@ def test_status_reports_corrupt_workspace_dependencies_without_raising(tmp_path:
     assert "health:" in output
 
 
+def test_status_reports_invalid_merged_config_without_silent_defaulting(tmp_path: Path, capsys) -> None:
+    ensure_workspace(tmp_path)
+    config_file = workspace_dir(tmp_path) / "config.yaml"
+    config_file.write_text("poll_interval_seconds: not-a-number\n", encoding="utf-8")
+
+    exit_code, output = _run_fast_status(tmp_path, capsys)
+
+    assert exit_code == 1
+    assert "config: INVALID merged config (" in output
+    assert "poll_interval_seconds" in output
+    assert "status is falling back to defaults" in output
+    assert "health:" in output
+
+
+def test_status_reports_invalid_engine_monitoring_schema(tmp_path: Path, capsys) -> None:
+    ensure_workspace(tmp_path)
+    monitoring_file = workspace_dir(tmp_path) / "engine-monitoring.yaml"
+    monitoring_file.write_text(
+        yaml.safe_dump(
+            {
+                "engines": {
+                    "claude": {
+                        "engine": "claude",
+                        "invocation_count": "many",
+                    }
+                }
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+
+    exit_code, output = _run_fast_status(tmp_path, capsys)
+
+    assert exit_code == 1
+    assert f"engine_monitoring: INVALID at {monitoring_file} (engines.claude.invocation_count:" in output
+    assert "restore engine usage details" in output
+    assert "health:" in output
+
+
 def test_status_reports_never_started_runner_without_lock(tmp_path: Path, capsys) -> None:
     ensure_workspace(tmp_path)
 
@@ -96,6 +136,20 @@ def test_full_status_reports_corrupt_runner_lock_without_raising(tmp_path: Path,
     assert exit_code == 1
     assert f"runner_state: CORRUPT at {lock_path} (line 1)" in output
     assert "Remove or rewrite the runner lock file" in output
+    assert "health:" in output
+
+
+def test_full_status_reports_invalid_runner_lock_schema(tmp_path: Path, capsys) -> None:
+    ensure_workspace(tmp_path)
+    lock_path = workspace_runner_lock_path(tmp_path)
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    lock_path.write_text("pid: nope\n", encoding="utf-8")
+
+    exit_code, output = _run_full_status(tmp_path, capsys)
+
+    assert exit_code == 1
+    assert f"runner_state: INVALID at {lock_path} (pid:" in output
+    assert "restart the runner or daemon" in output
     assert "health:" in output
 
 
@@ -218,3 +272,14 @@ def test_status_reports_origin_divergence_as_attention_required(
     assert "origin_divergence: !!! ATTENTION REQUIRED !!! local main (12345678) and origin/main (abcdef12) have diverged." in output
     assert "git fetch origin main" in output
     assert "git log --oneline --left-right main...origin/main" in output
+
+
+def test_full_status_tolerates_missing_active_task_record(tmp_path: Path, capsys) -> None:
+    ensure_workspace(tmp_path)
+    save_state(tmp_path, WorkspaceState(active_task_id="T-9999"))
+
+    exit_code, output = _run_full_status(tmp_path, capsys)
+
+    assert exit_code == 1
+    assert "active_task_title:" not in output
+    assert "runner_state: STALE (no live pid for active_task_id=T-9999)" in output

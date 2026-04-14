@@ -106,18 +106,25 @@ class StateMachineRunner:
         event: Event,
     ) -> None:
         if isinstance(event, RecoverySucceeded):
-            state.consecutive_same_hook_rejects = 0
-            state.last_hook_reject_fingerprint = None
-            state.hook_reject_recovery_invoked = False
+            StateMachineRunner._clear_hook_reject_tracking(state, clear_recovery_invoked=True)
             return
         if not isinstance(event, (Pass, HookOk)):
             return
         if _pipeline_stage_for_phase(from_stage) == _pipeline_stage_for_phase(to_stage):
             if from_stage not in {"commit", "merge_resolving"}:
                 return
+        StateMachineRunner._clear_hook_reject_tracking(state, clear_recovery_invoked=True)
+
+    @staticmethod
+    def _clear_hook_reject_tracking(
+        state: TaskState,
+        *,
+        clear_recovery_invoked: bool,
+    ) -> None:
         state.consecutive_same_hook_rejects = 0
         state.last_hook_reject_fingerprint = None
-        state.hook_reject_recovery_invoked = False
+        if clear_recovery_invoked:
+            state.hook_reject_recovery_invoked = False
 
     @staticmethod
     def _apply_delta(state: TaskState, delta: StateDelta) -> None:
@@ -139,8 +146,7 @@ class StateMachineRunner:
             stage, rejection = delta.set_last_rejection
             state.last_rejection_by_stage[stage] = rejection
         if delta.clear_hook_reject_tracking:
-            state.consecutive_same_hook_rejects = 0
-            state.last_hook_reject_fingerprint = None
+            StateMachineRunner._clear_hook_reject_tracking(state, clear_recovery_invoked=False)
         if delta.set_consecutive_same_hook_rejects is not None:
             state.consecutive_same_hook_rejects = delta.set_consecutive_same_hook_rejects
         if delta.set_last_hook_reject_fingerprint is not None:

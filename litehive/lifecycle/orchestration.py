@@ -81,23 +81,25 @@ _STAGE_TO_PIPELINE_STATUS: dict[str, str] = {
 }
 
 
-def _sync_back(state: TaskState, workspace_root: Path) -> TaskRecord | None:
-    """Mirror the pipeline stage back to the TaskRecord so litehive status stays accurate."""
-    task_record = get_task(workspace_root, state.task_id)
-    if task_record is None:
+def _runtime_hook_reject_fingerprint(state: TaskState) -> RuntimeHookRejectFingerprint | None:
+    fingerprint = state.last_hook_reject_fingerprint
+    if fingerprint is None:
         return None
-    task_record.runtime.consecutive_same_hook_rejects = state.consecutive_same_hook_rejects
-    task_record.runtime.last_hook_reject_fingerprint = (
-        None
-        if state.last_hook_reject_fingerprint is None
-        else RuntimeHookRejectFingerprint(
-            point=state.last_hook_reject_fingerprint.point,
-            command=state.last_hook_reject_fingerprint.command,
-            description=state.last_hook_reject_fingerprint.description,
-            fingerprint=state.last_hook_reject_fingerprint.fingerprint,
-        )
+    return RuntimeHookRejectFingerprint(
+        point=fingerprint.point,
+        command=fingerprint.command,
+        description=fingerprint.description,
+        fingerprint=fingerprint.fingerprint,
     )
+
+
+def _sync_runtime_fields(task_record: TaskRecord, state: TaskState) -> None:
+    task_record.runtime.consecutive_same_hook_rejects = state.consecutive_same_hook_rejects
+    task_record.runtime.last_hook_reject_fingerprint = _runtime_hook_reject_fingerprint(state)
     task_record.runtime.hook_reject_recovery_invoked = state.hook_reject_recovery_invoked
+
+
+def _sync_terminal_status(task_record: TaskRecord, state: TaskState) -> str | None:
     journal_message: str | None = None
     commit_result = state.failure_context.get("commit_result")
     if state.stage == "done":
@@ -132,6 +134,16 @@ def _sync_back(state: TaskState, workspace_root: Path) -> TaskRecord | None:
     else:
         task_record.status = "in_progress"
         task_record.pipeline_status = _STAGE_TO_PIPELINE_STATUS.get(state.stage, task_record.pipeline_status)
+    return journal_message
+
+
+def _sync_back(state: TaskState, workspace_root: Path) -> TaskRecord | None:
+    """Mirror the pipeline stage back to the TaskRecord so litehive status stays accurate."""
+    task_record = get_task(workspace_root, state.task_id)
+    if task_record is None:
+        return None
+    _sync_runtime_fields(task_record, state)
+    journal_message = _sync_terminal_status(task_record, state)
     if journal_message is not None:
         persist_future_task_update(workspace_root, task_record, journal_message=journal_message)
     else:
@@ -152,15 +164,18 @@ class ExecutionResult:
 
 def _resolve_worktree(root: Path, state: TaskState) -> Path:
     """Look up the on-disk worktree path for a task, falling back to root."""
-    from litehive.state.records import get_task as _get_task
+    _, worktree_path = _task_recorded_worktree(root, state.task_id)
+    return worktree_path or root
 
-    task = _get_task(root, state.task_id)
+
+def _task_recorded_worktree(root: Path, task_id: str) -> tuple[TaskRecord | None, Path | None]:
+    task = get_task(root, task_id)
     if task is None:
-        return root
-    wt = get_task_worktree_path(task)
-    if not wt:
-        return root
-    return resolve_recorded_worktree_path(root, wt) or root
+        return None, None
+    recorded = get_task_worktree_path(task)
+    if not recorded:
+        return task, None
+    return task, resolve_recorded_worktree_path(root, recorded)
 
 
 def _build_commit_node(root: Path) -> CommitNode:
@@ -179,18 +194,9 @@ def _build_worktree_sync_node(root: Path) -> GitWorktreeSyncNode:
 def _missing_worktree_probe(root: Path):
     """Return a probe callable that flags tasks whose worktree_path is gone."""
 
-    from litehive.state.records import get_task as _get_task
-    from litehive.tasks.worktrees import resolve_recorded_worktree_path
-
     def _probe(state) -> bool:
-        task = _get_task(root, state.task_id)
-        if task is None:
-            return False
-        wt = get_task_worktree_path(task)
-        if not wt:
-            return False
-        path = resolve_recorded_worktree_path(root, wt)
-        if path is None:
+        task, path = _task_recorded_worktree(root, state.task_id)
+        if task is None or path is None:
             return False
         return not path.exists()
 
@@ -200,21 +206,11 @@ def _missing_worktree_probe(root: Path):
 def _clear_stale_worktree_repair(root: Path):
     """Return a repair callable that clears a stale worktree_path on the task."""
 
-    from litehive.state.records import get_task as _get_task
-    from litehive.state.records import set_task_worktree_path, save_task
-    from litehive.tasks.worktrees import resolve_recorded_worktree_path
-
     def _repair(state) -> None:
-        task = _get_task(root, state.task_id)
-        if task is None:
+        task, path = _task_recorded_worktree(root, state.task_id)
+        if task is None or (path is not None and path.exists()):
             return
-        wt = get_task_worktree_path(task)
-        if not wt:
-            return
-        path = resolve_recorded_worktree_path(root, wt)
-        if path is not None and path.exists():
-            return
-        set_task_worktree_path(task, None)
+        clear_task_worktree_path(task)
         save_task(root, task)
 
     return _repair
