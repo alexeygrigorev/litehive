@@ -66,6 +66,16 @@ def _parse_datetime_utc(value: str | None) -> datetime | None:
     return parsed.astimezone(timezone.utc)
 
 
+def parse_engine_freeze_until(value: str | None) -> str | None:
+    if value is None:
+        return None
+    try:
+        parsed = datetime.strptime(value, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+    except ValueError:
+        return None
+    return parsed.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
 def _dedupe_engine_names(engine_names: list[str]) -> list[str]:
     seen: set[str] = set()
     ordered: list[str] = []
@@ -98,6 +108,41 @@ def active_engine_freezes(config: LitehiveConfig) -> dict[str, datetime]:
     return result
 
 
+def _load_raw_workspace_config(root: Path) -> dict[str, object]:
+    path = config_path(root)
+    raw_data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    return dict(raw_data) if isinstance(raw_data, dict) else {}
+
+
+def _raw_engine_freeze_mapping(raw_data: dict[str, object]) -> dict[str, str]:
+    freeze_map = raw_data.get("engine_freeze")
+    return dict(freeze_map) if isinstance(freeze_map, dict) else {}
+
+
+def persist_engine_freeze_iso(root: Path, *, engine_name: str, freeze_iso: str) -> None:
+    raw_data = _load_raw_workspace_config(root)
+    freeze_map = _raw_engine_freeze_mapping(raw_data)
+    if freeze_map.get(engine_name) == freeze_iso:
+        return
+    freeze_map[engine_name] = freeze_iso
+    raw_data["engine_freeze"] = freeze_map
+    config_path(root).write_text(yaml.safe_dump(raw_data, sort_keys=False), encoding="utf-8")
+
+
+def clear_persisted_engine_freeze(root: Path, *, engine_name: str) -> bool:
+    raw_data = _load_raw_workspace_config(root)
+    freeze_map = _raw_engine_freeze_mapping(raw_data)
+    if engine_name not in freeze_map:
+        return False
+    freeze_map.pop(engine_name)
+    if freeze_map:
+        raw_data["engine_freeze"] = freeze_map
+    else:
+        raw_data.pop("engine_freeze", None)
+    config_path(root).write_text(yaml.safe_dump(raw_data, sort_keys=False), encoding="utf-8")
+    return True
+
+
 def _persist_engine_freeze(
     root: Path,
     config: LitehiveConfig,
@@ -108,16 +153,7 @@ def _persist_engine_freeze(
     freeze_iso = freeze_until.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     if config.engine_freeze.get(engine_name) == freeze_iso:
         return
-    path = config_path(root)
-    raw_data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-    if not isinstance(raw_data, dict):
-        raw_data = {}
-    freeze_map = raw_data.get("engine_freeze", {})
-    if not isinstance(freeze_map, dict):
-        freeze_map = {}
-    freeze_map[engine_name] = freeze_iso
-    raw_data["engine_freeze"] = freeze_map
-    path.write_text(yaml.safe_dump(raw_data, sort_keys=False), encoding="utf-8")
+    persist_engine_freeze_iso(root, engine_name=engine_name, freeze_iso=freeze_iso)
     config.engine_freeze[engine_name] = freeze_iso
 
 

@@ -15,9 +15,9 @@ pass a fake factory; production passes a ``HeruEngineFactory`` bound to a
 workspace root and session context.
 """
 
-from datetime import UTC, datetime
 from typing import Callable
 
+from litehive.config.engine_models import is_engine_frozen
 from litehive.config.model import LitehiveConfig
 
 from .nodes.agent import (
@@ -28,27 +28,6 @@ from .types import NodeName
 
 
 EngineFactory = Callable[[str], Engine]
-
-
-def _parse_freeze(value: str | None) -> datetime | None:
-    if not value:
-        return None
-    try:
-        if value.endswith("Z"):
-            value = value[:-1] + "+00:00"
-        dt = datetime.fromisoformat(value)
-    except ValueError:
-        return None
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=UTC)
-    return dt
-
-
-def _is_frozen(config: LitehiveConfig, engine_name: str, now: datetime | None = None) -> bool:
-    freeze_dt = _parse_freeze(config.engine_freeze.get(engine_name))
-    if freeze_dt is None:
-        return False
-    return (now or datetime.now(UTC)) < freeze_dt
 
 
 class ConfigBackedEngineSelector:
@@ -78,11 +57,10 @@ class ConfigBackedEngineSelector:
         node_name: NodeName,
         excluded: frozenset[str],
     ) -> Engine | None:
-        now = datetime.now(UTC)
         for engine_name in self.config.engine_preference:
             if engine_name in excluded:
                 continue
-            if _is_frozen(self.config, engine_name, now):
+            if is_engine_frozen(self.config, engine_name):
                 continue
             return self.engine_factory(engine_name)
         return None

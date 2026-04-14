@@ -9,8 +9,12 @@ from heru import ENGINE_CHOICES
 from typer.testing import CliRunner
 
 from litehive.cli.app import app
-from litehive.cli.workspace import _clear_engine_freeze, _engine_freeze_mapping, _parse_engine_freeze_until
-from litehive.config.engine_models import EngineSelection
+from litehive.config.engine_models import (
+    EngineSelection,
+    clear_persisted_engine_freeze,
+    parse_engine_freeze_until,
+    persist_engine_freeze_iso,
+)
 from litehive.config.loading import load_config
 from litehive.config.model import LitehiveConfig
 from litehive.config.workspace import ensure_workspace
@@ -110,17 +114,18 @@ def test_engine_status_prints_compact_summary(tmp_path: Path, capsys) -> None:
         assert f"{engine_name}(" in output
 
 
-def test_engine_freeze_helpers_normalize_and_clear_raw_mapping() -> None:
-    raw = {"engine_freeze": ["bad-data"]}
+def test_engine_freeze_helpers_persist_and_clear_workspace_config(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
 
-    assert _engine_freeze_mapping(raw) == {}
-    assert _parse_engine_freeze_until("2099-06-15") == "2099-06-15T00:00:00Z"
-    assert _parse_engine_freeze_until("2099-06-15 14:30") is None
-    assert _clear_engine_freeze(raw, engine_name="codex") is False
+    assert parse_engine_freeze_until("2099-06-15") == "2099-06-15T00:00:00Z"
+    assert parse_engine_freeze_until("2099-06-15 14:30") is None
 
-    raw["engine_freeze"] = {"codex": "2099-06-15T00:00:00Z"}
-    assert _clear_engine_freeze(raw, engine_name="codex") is True
-    assert "engine_freeze" not in raw
+    persist_engine_freeze_iso(tmp_path, engine_name="codex", freeze_iso="2099-06-15T00:00:00Z")
+    assert load_config(tmp_path).engine_freeze["codex"] == "2099-06-15T00:00:00Z"
+
+    assert clear_persisted_engine_freeze(tmp_path, engine_name="gemini") is False
+    assert clear_persisted_engine_freeze(tmp_path, engine_name="codex") is True
+    assert "codex" not in load_config(tmp_path).engine_freeze
 
 
 def test_frozen_engine_skipped_in_attempt_order(tmp_path: Path) -> None:
