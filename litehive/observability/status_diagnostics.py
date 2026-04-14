@@ -14,8 +14,6 @@ from litehive.config.paths import (
     config_path,
     daemon_registry_path,
     global_config_path,
-    legacy_daemon_registry_path,
-    legacy_workspace_registry_path,
     state_path,
     workspace_dir,
 )
@@ -167,7 +165,7 @@ def _load_engine_monitoring_for_status(
 
 def _probe_registry_health() -> list[StatusIssue]:
     issues: list[StatusIssue] = []
-    for path in (legacy_workspace_registry_path(), legacy_daemon_registry_path(), daemon_registry_path()):
+    for path in (daemon_registry_path(),):
         _, issue = _safe_yaml_document(
             path,
             key="registry",

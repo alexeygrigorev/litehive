@@ -12,7 +12,6 @@ from litehive.config.model import LitehiveConfig
 from litehive.config.paths import (
     config_path,
     context_path,
-    migrate_legacy_workspace_state,
     worktree_root,
     workspace_database_path,
     workspace_dir,
@@ -251,7 +250,6 @@ def ensure_workspace(root: Path, config: LitehiveConfig | None = None) -> Path:
         )
 
     _register_workspace(root)
-    migrate_legacy_workspace_state(root)
 
     # Import here to avoid circular import with litehive.state
     from litehive.state.store import runtime_store

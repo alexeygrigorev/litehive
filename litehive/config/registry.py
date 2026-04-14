@@ -7,9 +7,7 @@ from pathlib import Path
 import sqlite3
 import threading
 
-import yaml
-
-from litehive.config.paths import legacy_workspace_registry_path, litehive_database_path, workspace_id
+from litehive.config.paths import litehive_database_path, workspace_id
 
 log = logging.getLogger(__name__)
 
@@ -81,24 +79,6 @@ def _upsert_workspace(connection: sqlite3.Connection, root: Path) -> None:
     connection.commit()
 
 
-def _migrate_legacy_yaml(connection: sqlite3.Connection) -> None:
-    legacy_path = legacy_workspace_registry_path()
-    if not legacy_path.exists():
-        return
-    try:
-        raw = legacy_path.read_text(encoding="utf-8")
-        data = yaml.safe_load(raw) or []
-    except (OSError, yaml.YAMLError) as exc:
-        log.warning("legacy workspace registry %s was unreadable (%s); skipping", legacy_path, exc)
-        return
-    if isinstance(data, list):
-        for entry in data:
-            if not isinstance(entry, str):
-                continue
-            try:
-                _upsert_workspace(connection, Path(entry))
-            except OSError:
-                continue
 def _rebuild_registry_db(db_path: Path, exc: Exception) -> None:
     log.warning("workspace registry database %s was unusable (%s); rebuilding", db_path, exc)
     _close_cached_connections(db_path)
@@ -117,7 +97,6 @@ def _with_registry(operation):
         try:
             connection = _open_connection(db_path)
             _ensure_schema(connection)
-            _migrate_legacy_yaml(connection)
             return operation(connection)
         except sqlite3.DatabaseError as exc:
             if attempt == 1:

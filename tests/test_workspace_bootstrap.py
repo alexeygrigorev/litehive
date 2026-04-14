@@ -117,7 +117,7 @@ def test_ensure_workspace_bootstraps_runtime_db_and_registry(
     } <= tables
 
 
-def test_workspace_registry_migrates_legacy_yaml_once(
+def test_workspace_registry_ignores_legacy_yaml_file(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     config_home = tmp_path / "xdg-config"
@@ -127,12 +127,14 @@ def test_workspace_registry_migrates_legacy_yaml_once(
     monkeypatch.setenv("XDG_DATA_HOME", str(data_home))
     monkeypatch.setenv("XDG_STATE_HOME", str(state_home))
 
-    from litehive.config.paths import legacy_workspace_registry_path, litehive_database_path
+    from litehive.config.paths import litehive_database_path
 
-    legacy_path = legacy_workspace_registry_path()
+    legacy_workspace = tmp_path.parent / f"{tmp_path.name}-legacy-only"
+    legacy_workspace.mkdir()
+    legacy_path = config_home / "litehive" / "workspaces.yaml"
     legacy_path.parent.mkdir(parents=True, exist_ok=True)
     legacy_path.write_text(
-        yaml.safe_dump([str(tmp_path.resolve())], sort_keys=False),
+        yaml.safe_dump([str(legacy_workspace.resolve())], sort_keys=False),
         encoding="utf-8",
     )
 
@@ -253,7 +255,7 @@ def test_litehive_home_overrides_default_root(
     assert workspace_database_path(tmp_path) == custom_home / wid / "data.db"
 
 
-def test_ensure_workspace_migrates_legacy_global_and_runtime_state_once(
+def test_ensure_workspace_ignores_legacy_global_and_runtime_state(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -268,17 +270,17 @@ def test_ensure_workspace_migrates_legacy_global_and_runtime_state_once(
     from litehive.config.paths import (
         daemon_registry_path,
         global_config_path,
-        legacy_daemon_registry_path,
-        legacy_global_config_path,
         workspace_id,
         workspace_logs_dir,
         workspace_worktrees_dir,
     )
+    from litehive.daemon.logs import latest_run_all_log_dir
 
     wid = workspace_id(tmp_path)
-    legacy_global_config_path().parent.mkdir(parents=True, exist_ok=True)
-    legacy_global_config_path().write_text("default_engine: gemini\n", encoding="utf-8")
-    legacy_daemon_registry_path().write_text("daemons: {}\n", encoding="utf-8")
+    legacy_root = config_home / "litehive"
+    legacy_root.mkdir(parents=True, exist_ok=True)
+    (legacy_root / "config.yaml").write_text("default_engine: gemini\n", encoding="utf-8")
+    (legacy_root / "daemons.yaml").write_text("daemons: {}\n", encoding="utf-8")
     legacy_log = state_home / "litehive" / wid / "logs" / "run-all" / "20260412T010203Z" / "0001-run.log"
     legacy_log.parent.mkdir(parents=True, exist_ok=True)
     legacy_log.write_text("legacy daemon log\n", encoding="utf-8")
@@ -287,21 +289,20 @@ def test_ensure_workspace_migrates_legacy_global_and_runtime_state_once(
     legacy_worktree.write_text("legacy worktree\n", encoding="utf-8")
 
     ensure_workspace(tmp_path)
-    first_notice = capsys.readouterr().err
+    stderr = capsys.readouterr().err
 
-    assert global_config_path().read_text(encoding="utf-8") == "default_engine: gemini\n"
-    assert daemon_registry_path().read_text(encoding="utf-8") == "daemons: {}\n"
-    assert (
+    assert global_config_path() == data_home / "litehive" / "config.yaml"
+    assert daemon_registry_path() == data_home / "litehive" / "daemons.yaml"
+    assert not global_config_path().exists()
+    assert not daemon_registry_path().exists()
+    assert latest_run_all_log_dir(tmp_path) is None
+    assert not (
         workspace_logs_dir(tmp_path) / "run-all" / "20260412T010203Z" / "0001-run.log"
-    ).read_text(encoding="utf-8") == "legacy daemon log\n"
-    assert (workspace_worktrees_dir(tmp_path) / "T-0001-demo" / "README.md").read_text(
-        encoding="utf-8"
-    ) == "legacy worktree\n"
-    assert "migrated legacy state" in first_notice
-
-    ensure_workspace(tmp_path)
-    second_notice = capsys.readouterr().err
-    assert second_notice == ""
+    ).exists()
+    assert not (workspace_worktrees_dir(tmp_path) / "T-0001-demo" / "README.md").exists()
+    assert legacy_log.exists()
+    assert legacy_worktree.exists()
+    assert stderr == ""
 
 
 def test_get_task_reads_runtime_from_database_without_runtime_yaml(tmp_path: Path) -> None:
