@@ -10,6 +10,23 @@ import heru.quota.codex_quota as _codex_quota_mod
 # Skip fsync in tests — saves ~70% of file write time
 os.environ["LITEHIVE_SKIP_FSYNC"] = "1"
 
+# The sandbox exposes git plumbing under /lib/git-core. Prepend it so
+# subprocess-based git tests are stable under `uv run pytest`.
+_GIT_CORE_DIR = "/lib/git-core"
+if Path(_GIT_CORE_DIR).is_dir():
+    current_path = os.environ.get("PATH", "")
+    path_entries = current_path.split(os.pathsep) if current_path else []
+    if _GIT_CORE_DIR not in path_entries:
+        os.environ["PATH"] = (
+            os.pathsep.join([_GIT_CORE_DIR, *path_entries]) if current_path else _GIT_CORE_DIR
+        )
+    os.environ.setdefault("GIT_EXEC_PATH", _GIT_CORE_DIR)
+
+# Several git tests assume `git init` defaults to `main`.
+os.environ["GIT_CONFIG_COUNT"] = "1"
+os.environ["GIT_CONFIG_KEY_0"] = "init.defaultBranch"
+os.environ["GIT_CONFIG_VALUE_0"] = "main"
+
 
 def _noop_block_reason(**kw):
     return None

@@ -51,6 +51,9 @@ extend-select = ["E402", "F401"]
 
 [dependency-groups]
 dev = [
+    "pytest>=8.4.0",
+    "pytest-timeout>=2.4.0",
+    "ruff>=0.12.0",
     "pytest-xdist>=3.8.0",
 ]
 

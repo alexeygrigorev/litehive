@@ -337,6 +337,11 @@ def resolve_engine_plan(
 ) -> list[str]:
     if engine_override is not None:
         return [engine_override]
+    if (
+        task.runtime.last_engine_switch is not None
+        and task.runtime.last_engine_switch.step == task.pipeline_status
+    ):
+        return [task.runtime.last_engine_switch.to_engine]
     return [config.default_engine]
 
 

@@ -4,6 +4,7 @@ from litehive.config.engine_models import resolve_engine_name, resolve_engine_pl
 from litehive.config.loading import load_config
 from litehive.config.model import LitehiveConfig
 from litehive.config.workspace import ensure_workspace
+from litehive.domain.runtime import RuntimeEngineSwitch
 from litehive.state.records import create_task
 
 
@@ -103,3 +104,20 @@ def test_resolve_engine_name_uses_default_engine_without_task_override(
 
     assert resolve_engine_name(task, config) == "gemini"
     assert resolve_engine_plan(task, config) == ["gemini"]
+
+
+def test_resolve_engine_name_honors_stage_matched_engine_switch(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
+    config = load_config(tmp_path)
+    task = create_task(tmp_path, title="Switch engine for retry")
+    task.pipeline_status = "implementing"
+    task.runtime.last_engine_switch = RuntimeEngineSwitch(
+        step="implementing",
+        from_engine="codex",
+        to_engine="opencode",
+        reason="codex recovery loop",
+        happened_at="2026-04-14T17:00:00Z",
+    )
+
+    assert resolve_engine_name(task, config) == "opencode"
+    assert resolve_engine_plan(task, config) == ["opencode"]

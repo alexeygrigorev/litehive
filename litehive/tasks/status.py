@@ -9,7 +9,6 @@ from pathlib import Path
 
 from litehive.config.loading import load_config
 from litehive.git.ops import current_head
-from litehive.domain.common import utcnow
 from litehive.domain.task import TaskRecord, WorkspaceState
 
 from litehive.tasks.constants import (

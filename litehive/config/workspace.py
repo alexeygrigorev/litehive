@@ -51,6 +51,8 @@ def _resolve_workspace_root(path: Path) -> Path:
     for i, part in enumerate(parts):
         if part == ".litehive" and i + 2 < len(parts) and parts[i + 1] == "worktrees":
             return Path(*parts[:i])
+    if "worktrees" not in parts:
+        return resolved
     for registered_root in list_registered_workspace_paths():
         try:
             if resolved.is_relative_to(worktree_root(registered_root).resolve()):

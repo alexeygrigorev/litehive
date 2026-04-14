@@ -77,6 +77,19 @@ def test_resolve_workspace_prefers_explicit_override(
     assert resolve_workspace(None, workspace=tmp_path) == tmp_path.resolve()
 
 
+def test_resolve_workspace_explicit_plain_root_skips_registry_lookup(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ensure_workspace(tmp_path)
+
+    def _boom() -> list[Path]:
+        raise AssertionError("plain workspace roots should not scan the registry")
+
+    monkeypatch.setattr("litehive.config.workspace.list_registered_workspace_paths", _boom)
+
+    assert resolve_workspace(None, workspace=tmp_path) == tmp_path.resolve()
+
+
 def test_resolve_workspace_uses_registry_from_outside_repo(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -151,4 +164,3 @@ def test_ensure_workspace_rejects_embedded_unresolved_shell_var() -> None:
 def test_ensure_workspace_rejects_braced_unresolved_shell_var() -> None:
     with pytest.raises(ValueError, match="unresolved shell variable syntax.*expanded absolute path"):
         ensure_workspace(Path("/tmp/${tmpdir}/project"))
-
