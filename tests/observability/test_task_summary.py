@@ -1,14 +1,23 @@
 from pathlib import Path
+from types import SimpleNamespace
 
 import yaml
 
 from litehive.config.model import LitehiveConfig
 from litehive.config.workspace import ensure_workspace
+from litehive.domain.pool import DirtyWorktreeFinding, DirtyWorktreeGateReport
 from litehive.domain.runtime import RunnerStatusState, RuntimeSubagentState
 from litehive.domain.task import WorkspaceState
 from litehive.observability.status import (
     render_active_task_detail_lines,
     render_full_status_header_lines,
+    render_health_active_task_lines,
+    render_health_daemon_lines,
+    render_health_flagged_task_lines,
+    render_health_quota_lines,
+    render_health_recent_completion_lines,
+    render_health_worktree_finding_lines,
+    render_health_worktree_lines,
     render_runner_status_line,
     render_runtime_policy_lines,
     render_task_summary,
@@ -124,4 +133,92 @@ def test_render_runtime_policy_lines_uses_preformatted_retry_label() -> None:
         "pool_stop_on_attention: True",
         "pool_selection_policy: fifo",
         "process_profile: python",
+    ]
+
+
+def test_render_health_task_sections(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    active = create_task(tmp_path, title="Active health task")
+    active.status = "in_progress"
+    active.pipeline_status = "implementing"
+    active.runtime.current_stage.step = "testing"
+
+    flagged = create_task(tmp_path, title="Flagged health task")
+    flagged.status = "flagged"
+    flagged.pipeline_status = "testing"
+    flagged.flag_reason = "needs review"
+    flagged.runtime.last_stage.verdict = "fail"
+    flagged.runtime.last_stage.summary = "missing evidence"
+
+    done = create_task(tmp_path, title="Done health task")
+    done.status = "done"
+    done.updated_at = "2026-04-14T10:15:00Z"
+    done.runtime.last_stage.summary = "all checks passed"
+
+    active_lines = render_health_active_task_lines(active)
+    flagged_lines = render_health_flagged_task_lines([flagged])
+    completion_lines = render_health_recent_completion_lines([done])
+
+    assert active_lines == [
+        "=== Active Task ===",
+        "active_task: T-0001 [in_progress/implementing] stage=testing title=Active health task",
+    ]
+    assert flagged_lines == [
+        "=== Flagged Tasks ===",
+        "flagged_count: 1",
+        "flagged: T-0002 stage=testing reason=needs review last_verdict=fail summary=missing evidence",
+    ]
+    assert completion_lines == [
+        "=== Recent Completions ===",
+        "completed: T-0003 title=Done health task when=2026-04-14T10:15:00Z summary=all checks passed",
+    ]
+
+
+def test_render_health_worktree_and_quota_sections() -> None:
+    worktrees = [
+        SimpleNamespace(
+            task_id="T-0004",
+            status="done",
+            change_count=2,
+            active=False,
+            worktree_rel=".worktrees/T-0004-demo",
+        )
+    ]
+    dirty_report = DirtyWorktreeGateReport(
+        findings=[
+            DirtyWorktreeFinding(
+                location_kind="task-worktree",
+                ownership="task-owned-worktree",
+                task_id="T-0004",
+                worktree_path=".worktrees/T-0004-demo",
+                dirty_paths=["src/app.py", "README.md"],
+            )
+        ]
+    )
+    quota_health = [SimpleNamespace(engine="codex", status="ok", summary="90% remaining")]
+
+    worktree_lines = render_health_worktree_lines(worktrees)
+    finding_lines = render_health_worktree_finding_lines(dirty_report)
+    quota_lines = render_health_quota_lines(quota_health)
+
+    assert worktree_lines == [
+        "=== Worktrees ===",
+        "worktree_count: 1",
+        "worktree: T-0004 status=done changes=2 active=no path=.worktrees/T-0004-demo",
+    ]
+    assert finding_lines == [
+        "=== Worktree Findings ===",
+        "finding: location=task-worktree ownership=task-owned-worktree task_id=T-0004 path=.worktrees/T-0004-demo dirty_paths=src/app.py,README.md",
+    ]
+    assert quota_lines == [
+        "=== Engine Quotas ===",
+        "quota: codex status=ok summary=90% remaining",
+    ]
+
+
+def test_render_health_daemon_lines() -> None:
+    assert render_health_daemon_lines("running", "4242") == [
+        "=== Daemon ===",
+        "daemon_status: running",
+        "daemon_pid: 4242",
     ]

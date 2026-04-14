@@ -28,6 +28,13 @@ from litehive.observability.status import (
     render_active_task_section,
     render_engine_health_section,
     render_full_status_header_lines,
+    render_health_active_task_lines,
+    render_health_daemon_lines,
+    render_health_flagged_task_lines,
+    render_health_quota_lines,
+    render_health_recent_completion_lines,
+    render_health_worktree_finding_lines,
+    render_health_worktree_lines,
     render_last_completed_section,
     render_queue_section,
     render_recent_activity_section,
@@ -316,84 +323,37 @@ def health_command(workspace: WorkspaceOption = Path.cwd()) -> int:
     print(f"workspace: {root}")
 
     print()
-    print("=== Active Task ===")
-    if active_task is None:
-        print("active_task: none")
-    else:
-        stage = _active_stage(active_task)
-        print(f"active_task: {active_task.id} [{active_task.status}/{active_task.pipeline_status}] stage={stage} title={active_task.title}")
+    for line in render_health_active_task_lines(active_task):
+        print(line)
 
     print()
-    print("=== Flagged Tasks ===")
-    print(f"flagged_count: {len(flagged_tasks)}")
-    if not flagged_tasks:
-        print("flagged: none")
-    else:
-        for task in flagged_tasks:
-            print(f"flagged: {task.id} stage={_active_stage(task)} reason={task.flag_reason or 'unknown'} last_verdict={_last_verdict(task)} summary={_last_summary(task)}")
+    for line in render_health_flagged_task_lines(flagged_tasks):
+        print(line)
 
     print()
-    print("=== Worktrees ===")
-    print(f"worktree_count: {len(worktrees)}")
-    if not worktrees:
-        print("worktree: none")
-    else:
-        for item in worktrees:
-            print(f"worktree: {item.task_id} status={item.status} changes={item.change_count} active={'yes' if item.active else 'no'} path={item.worktree_rel}")
+    for line in render_health_worktree_lines(worktrees):
+        print(line)
 
     print()
-    print("=== Worktree Findings ===")
-    if dirty_report.is_clean:
-        print("worktree_findings: clean")
-    else:
-        for finding in dirty_report.findings:
-            details = [f"location={finding.location_kind}", f"ownership={finding.ownership}"]
-            if finding.task_id:
-                details.append(f"task_id={finding.task_id}")
-            if finding.worktree_path:
-                details.append(f"path={finding.worktree_path}")
-            details.append("dirty_paths=" + (",".join(finding.dirty_paths) if finding.dirty_paths else "-"))
-            print("finding: " + " ".join(details))
+    for line in render_health_worktree_finding_lines(dirty_report):
+        print(line)
 
     print()
-    print("=== Engine Quotas ===")
-    for quota in quota_health:
-        print(f"quota: {quota.engine} status={quota.status} summary={quota.summary}")
+    for line in render_health_quota_lines(quota_health):
+        print(line)
 
     print()
-    print("=== Daemon ===")
     daemon_status, daemon_pid = _health_daemon_status(root)
-    print(f"daemon_status: {daemon_status}")
-    print(f"daemon_pid: {daemon_pid}")
+    for line in render_health_daemon_lines(daemon_status, daemon_pid):
+        print(line)
 
     print()
-    print("=== Recent Completions ===")
-    if not completed:
-        print("completed: none")
-    else:
-        for task in completed:
-            print(f"completed: {task.id} title={task.title} when={task.updated_at or '-'} summary={_last_summary(task)}")
+    for line in render_health_recent_completion_lines(completed):
+        print(line)
 
     has_quota_problem = any(item.problem for item in quota_health)
-    has_worktree_problem = any(
-        finding.ownership in {"main-checkout", "ambiguous-ownership", "missing-recorded-worktree"}
-        for finding in dirty_report.findings
-    )
+    has_worktree_problem = dirty_report.blocks_pool
     return 1 if flagged_tasks or has_worktree_problem or has_quota_problem else 0
-
-
-def _active_stage(task) -> str:
-    return task.runtime.current_stage.step or task.pipeline_status or "-"
-
-
-def _last_verdict(task) -> str:
-    return task.runtime.last_stage.verdict or task.runtime.last_outcome.kind or "-"
-
-
-def _last_summary(task) -> str:
-    return task.runtime.last_stage.summary or task.runtime.last_outcome.reason or task.flag_reason or "-"
-
-
 def _health_daemon_status(root: Path) -> tuple[str, str]:
     entry = daemon_metadata(root)
     if entry is None or entry.get("status") != "running":

@@ -64,6 +64,28 @@ def _collect_report_durations(root: Path) -> list[float]:
     return durations
 
 
+def _task_engine_label(task: TaskRecord, default_engine: str) -> str:
+    return (
+        task.runtime.active_subagent.engine
+        if task.runtime.active_subagent is not None
+        else task.runtime.last_subagent.engine
+        if task.runtime.last_subagent is not None
+        else default_engine
+    )
+
+
+def _task_stage_label(task: TaskRecord) -> str:
+    return task.runtime.current_stage.step or task.pipeline_status or "-"
+
+
+def _task_last_verdict_label(task: TaskRecord) -> str:
+    return task.runtime.last_stage.verdict or task.runtime.last_outcome.kind or "-"
+
+
+def _task_last_summary_label(task: TaskRecord) -> str:
+    return task.runtime.last_stage.summary or task.runtime.last_outcome.reason or task.flag_reason or "-"
+
+
 def render_task_summary(task: TaskRecord, *, active: bool, root: Path | None = None) -> list[str]:
     marker = "*" if active else " "
     retry_policy = task.retry_policy.max_retries
@@ -293,14 +315,8 @@ def render_active_task_section(task: TaskRecord | None, default_engine: str) -> 
         lines.append("  (none)")
         return lines
 
-    engine = (
-        task.runtime.active_subagent.engine
-        if task.runtime.active_subagent is not None
-        else task.runtime.last_subagent.engine
-        if task.runtime.last_subagent is not None
-        else default_engine
-    )
-    stage = task.runtime.current_stage.step or task.pipeline_status or "-"
+    engine = _task_engine_label(task, default_engine)
+    stage = _task_stage_label(task)
 
     # Task elapsed duration (since run started)
     task_duration = _duration_label(task.runtime.run_started_at, 0)
@@ -325,14 +341,8 @@ def render_active_task_detail_lines(task: TaskRecord | None, default_engine: str
     if task is None:
         return []
 
-    engine = (
-        task.runtime.active_subagent.engine
-        if task.runtime.active_subagent is not None
-        else task.runtime.last_subagent.engine
-        if task.runtime.last_subagent is not None
-        else default_engine
-    )
-    stage = task.runtime.current_stage.step or task.pipeline_status or "-"
+    engine = _task_engine_label(task, default_engine)
+    stage = _task_stage_label(task)
     return [
         f"active_task_title: {task.title}",
         f"active_task_status: {task.status}/{task.pipeline_status}",
@@ -404,14 +414,8 @@ def render_active_tasks_section(
 
     lines.append(f"  {len(tasks)} active task(s)")
     for task in tasks:
-        engine = (
-            task.runtime.active_subagent.engine
-            if task.runtime.active_subagent is not None
-            else task.runtime.last_subagent.engine
-            if task.runtime.last_subagent is not None
-            else default_engine
-        )
-        stage = task.runtime.current_stage.step or task.pipeline_status or "-"
+        engine = _task_engine_label(task, default_engine)
+        stage = _task_stage_label(task)
         task_duration = _duration_label(task.runtime.run_started_at, 0)
         worktree = task.runtime.git.worktree_path or task.git.worktree_path or "-"
 
@@ -438,9 +442,93 @@ def render_last_completed_section(task: TaskRecord | None) -> list[str]:
         return lines
 
     outcome = task.runtime.last_outcome
-    verdict = outcome.kind or task.runtime.last_stage.verdict or "-"
+    verdict = outcome.kind or _task_last_verdict_label(task)
     when = outcome.recorded_at or task.updated_at or "-"
     lines.append(f"  {task.id} {task.title} verdict={verdict} at {when}")
+    return lines
+
+
+def render_health_active_task_lines(task: TaskRecord | None) -> list[str]:
+    lines = ["=== Active Task ==="]
+    if task is None:
+        lines.append("active_task: none")
+        return lines
+    lines.append(
+        f"active_task: {task.id} [{task.status}/{task.pipeline_status}] "
+        f"stage={_task_stage_label(task)} title={task.title}"
+    )
+    return lines
+
+
+def render_health_flagged_task_lines(flagged_tasks: list[TaskRecord]) -> list[str]:
+    lines = ["=== Flagged Tasks ===", f"flagged_count: {len(flagged_tasks)}"]
+    if not flagged_tasks:
+        lines.append("flagged: none")
+        return lines
+    for task in flagged_tasks:
+        lines.append(
+            f"flagged: {task.id} stage={_task_stage_label(task)} "
+            f"reason={task.flag_reason or 'unknown'} "
+            f"last_verdict={_task_last_verdict_label(task)} "
+            f"summary={_task_last_summary_label(task)}"
+        )
+    return lines
+
+
+def render_health_worktree_lines(worktrees: list[Any]) -> list[str]:
+    lines = ["=== Worktrees ===", f"worktree_count: {len(worktrees)}"]
+    if not worktrees:
+        lines.append("worktree: none")
+        return lines
+    for item in worktrees:
+        lines.append(
+            f"worktree: {item.task_id} status={item.status} changes={item.change_count} "
+            f"active={'yes' if item.active else 'no'} path={item.worktree_rel}"
+        )
+    return lines
+
+
+def render_health_worktree_finding_lines(report: Any) -> list[str]:
+    lines = ["=== Worktree Findings ==="]
+    if report.is_clean:
+        lines.append("worktree_findings: clean")
+        return lines
+    for finding in report.findings:
+        details = [f"location={finding.location_kind}", f"ownership={finding.ownership}"]
+        if finding.task_id:
+            details.append(f"task_id={finding.task_id}")
+        if finding.worktree_path:
+            details.append(f"path={finding.worktree_path}")
+        details.append("dirty_paths=" + (",".join(finding.dirty_paths) if finding.dirty_paths else "-"))
+        lines.append("finding: " + " ".join(details))
+    return lines
+
+
+def render_health_quota_lines(quota_health: list[Any]) -> list[str]:
+    lines = ["=== Engine Quotas ==="]
+    for quota in quota_health:
+        lines.append(f"quota: {quota.engine} status={quota.status} summary={quota.summary}")
+    return lines
+
+
+def render_health_daemon_lines(daemon_status: str, daemon_pid: str) -> list[str]:
+    return [
+        "=== Daemon ===",
+        f"daemon_status: {daemon_status}",
+        f"daemon_pid: {daemon_pid}",
+    ]
+
+
+def render_health_recent_completion_lines(completed: list[TaskRecord]) -> list[str]:
+    lines = ["=== Recent Completions ==="]
+    if not completed:
+        lines.append("completed: none")
+        return lines
+    for task in completed:
+        lines.append(
+            f"completed: {task.id} title={task.title} when={task.updated_at or '-'} "
+            f"summary={_task_last_summary_label(task)}"
+        )
     return lines
 
 
