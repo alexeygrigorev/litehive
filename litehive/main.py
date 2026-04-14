@@ -9,6 +9,7 @@ from litehive.attention import waiting_for_you_lines
 from litehive.config.paths import workspace_runner_lock_path
 from litehive.config.workspace import resolve_workspace
 from litehive.domain.runtime import RunnerStatusState
+from litehive.observability.engine_monitoring import render_engine_monitoring_lines
 from litehive.observability.status_diagnostics import (
     collect_status_snapshot,
     render_health_summary,
@@ -101,42 +102,8 @@ def _fast_status(argv: list[str]) -> int:
             print(f"active_task_status: {task.status}/{task.pipeline_status}")
             print(f"active_stage: {stage}")
             print(f"active_engine: {engine}")
-    for engine_name in sorted(monitoring.engines):
-        record = monitoring.engines[engine_name]
-        parts = [
-            f"engine_monitoring: {engine_name}",
-            f"source={record.source}",
-            f"invocations={record.invocation_count}",
-            f"success={record.success_count}",
-            f"failure={record.failure_count}",
-            f"limits={record.limit_event_count}",
-        ]
-        if record.provider:
-            parts.append(f"provider={record.provider}")
-        if record.last_limit_kind:
-            parts.append(f"last_limit_kind={record.last_limit_kind}")
-        if record.last_limit_reason:
-            parts.append(f"last_limit_reason={record.last_limit_reason}")
-        usage = record.usage
-        if usage is not None:
-            usage_parts: list[str] = []
-            if usage.used is not None:
-                usage_parts.append(f"used={usage.used}")
-            if usage.limit is not None:
-                usage_parts.append(f"limit={usage.limit}")
-            if usage.remaining is not None:
-                usage_parts.append(f"remaining={usage.remaining}")
-            if usage.unit:
-                usage_parts.append(f"unit={usage.unit}")
-            if usage.reset_at:
-                usage_parts.append(f"reset_at={usage.reset_at}")
-            if usage_parts:
-                parts.append("usage=" + ",".join(usage_parts))
-        if record.last_task_id:
-            parts.append(f"last_task={record.last_task_id}")
-        if record.observed_at:
-            parts.append(f"observed_at={record.observed_at}")
-        print(" ".join(parts))
+    for line in render_engine_monitoring_lines(monitoring):
+        print(line)
     if status_has_problems(snapshot.issues):
         print()
         for issue in snapshot.issues:
