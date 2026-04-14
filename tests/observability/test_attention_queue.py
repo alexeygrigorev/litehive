@@ -1,10 +1,11 @@
 import io
 from pathlib import Path
 import shutil
+import sqlite3
 
 import yaml
 
-from litehive.attention import list_attention, record_attention, resolve_attention
+from litehive.attention import list_attention, record_attention, resolve_attention, waiting_for_you_lines
 from litehive.cli.attention import cmd_attention_list, cmd_attention_resolve
 from litehive.config.model import LitehiveConfig
 from litehive.config.paths import worktree_root
@@ -63,6 +64,16 @@ def test_status_shows_attention_count_and_waiting_actions(tmp_path: Path, capsys
     assert "attention_items: 1" in output
     assert "waiting for you:" in output
     assert "Destructive git command was blocked" in output
+
+
+def test_waiting_for_you_lines_reports_database_unavailable(tmp_path: Path, monkeypatch) -> None:
+    ensure_workspace(tmp_path)
+    monkeypatch.setattr(
+        "litehive.attention.list_attention",
+        lambda root, reconcile=True: (_ for _ in ()).throw(sqlite3.DatabaseError("boom")),
+    )
+
+    assert waiting_for_you_lines(tmp_path) == ["attention_items: unavailable"]
 
 
 def test_detectable_attention_items_reconcile_and_auto_clear(tmp_path: Path, monkeypatch) -> None:
@@ -138,6 +149,19 @@ def test_detectable_attention_items_reconcile_and_auto_clear(tmp_path: Path, mon
 
     remaining = list_attention(tmp_path)
     assert remaining == []
+
+
+def test_duplicate_id_detection_ignores_non_mapping_task_yaml(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+
+    primary = create_task(tmp_path, title="Primary task")
+    duplicate_dir = tmp_path / ".litehive" / "tasks" / f"{primary.id}-broken-copy"
+    duplicate_dir.mkdir(parents=True)
+    (duplicate_dir / "task.yaml").write_text("- not-a-task-mapping\n", encoding="utf-8")
+
+    items = list_attention(tmp_path)
+
+    assert all(item.kind != "duplicate_task_id" for item in items)
 
 
 def test_operator_resolve_suppresses_detectable_attention_until_condition_clears(tmp_path: Path) -> None:

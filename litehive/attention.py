@@ -255,7 +255,7 @@ def reconcile_attention(root: Path) -> list[AttentionItem]:
 def waiting_for_you_lines(root: Path, *, limit: int = 5) -> list[str]:
     try:
         items = list_attention(root)
-    except Exception:
+    except sqlite3.Error:
         return ["attention_items: unavailable"]
     lines = [f"attention_items: {len(items)}"]
     if not items:
@@ -331,7 +331,9 @@ def _duplicate_id_items(root: Path) -> list[AttentionItem]:
             continue
         try:
             payload = yaml.safe_load(task_path.read_text(encoding="utf-8")) or {}
-        except Exception:
+        except (OSError, yaml.YAMLError):
+            continue
+        if not isinstance(payload, dict):
             continue
         task_id = str(payload.get("id") or "").strip()
         if not task_id:
