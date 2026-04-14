@@ -1,0 +1,95 @@
+from pathlib import Path
+
+from heru.types import RuntimeEngineContinuation, SubagentRef
+
+from litehive.config.workspace import ensure_workspace
+from litehive.domain.common import utcnow
+from litehive.domain.reports import StageReport
+from litehive.domain.runtime import RuntimeInterruptionState
+from litehive.state.records import create_task, require_task, save_task
+from litehive.tasks.runtime import (
+    mark_stage_finished,
+    mark_stage_started,
+    mark_subagent_finished,
+    mark_subagent_started,
+    mark_task_run_started,
+)
+
+
+def _subagent_ref() -> SubagentRef:
+    return SubagentRef(
+        id="SA-0001",
+        role="swe",
+        engine="codex",
+        status="running",
+        path="subagents/SA-0001-swe",
+    )
+
+
+def test_mark_task_run_started_resets_stage_and_active_subagent(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Reset runtime")
+
+    mark_stage_started(tmp_path, task, "implementing")
+    task = require_task(tmp_path, task.id)
+    mark_subagent_started(tmp_path, task, _subagent_ref())
+
+    task = require_task(tmp_path, task.id)
+    task.runtime.interruption = RuntimeInterruptionState(source="runner", reason="stale state")
+    save_task(tmp_path, task)
+
+    mark_task_run_started(tmp_path, task)
+
+    refreshed = require_task(tmp_path, task.id)
+    assert refreshed.runtime.execution_status == "running"
+    assert refreshed.runtime.current_stage.step is None
+    assert refreshed.runtime.current_stage.status == "idle"
+    assert refreshed.runtime.active_subagent is None
+    assert refreshed.runtime.interruption is None
+
+
+def test_mark_stage_finished_uses_shared_idle_and_completed_stage_shapes(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Finish stage")
+
+    mark_stage_started(tmp_path, task, "implementing")
+    task = require_task(tmp_path, task.id)
+    report = StageReport(
+        task_id=task.id,
+        step="implementing",
+        verdict="pass",
+        summary="implemented the change",
+    )
+
+    mark_stage_finished(tmp_path, task, report)
+
+    refreshed = require_task(tmp_path, task.id)
+    assert refreshed.runtime.last_stage.step == "implementing"
+    assert refreshed.runtime.last_stage.status == "completed"
+    assert refreshed.runtime.last_stage.summary == "implemented the change"
+    assert refreshed.runtime.current_stage.step is None
+    assert refreshed.runtime.current_stage.status == "idle"
+
+
+def test_mark_subagent_finished_reuses_active_continuation_when_explicit_one_missing(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Persist continuation")
+    ref = _subagent_ref()
+
+    mark_subagent_started(tmp_path, task, ref)
+    task = require_task(tmp_path, task.id)
+    task.runtime.active_subagent.continuation = RuntimeEngineContinuation(
+        session_id="sess-1",
+        thread_id="thread-1",
+        updated_at=utcnow(),
+    )
+    save_task(tmp_path, task)
+
+    mark_subagent_finished(tmp_path, task, ref, "SUMMARY: partial output", exit_code=0)
+
+    refreshed = require_task(tmp_path, task.id)
+    assert refreshed.runtime.active_subagent is None
+    assert refreshed.runtime.last_subagent is not None
+    assert refreshed.runtime.last_subagent.transcript_snippet == "partial output"
+    assert refreshed.runtime.last_subagent.continuation is not None
+    assert refreshed.runtime.last_subagent.continuation.session_id == "sess-1"

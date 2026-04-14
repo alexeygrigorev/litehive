@@ -10,6 +10,7 @@ from litehive.domain.runtime import (
     RuntimeContinuationHandoff,
     RuntimeEngineContinuation,
     RuntimeEngineSwitch,
+    RuntimeStageState,
     RuntimeSubagentState,
     TaskOutcomeState,
 )
@@ -21,6 +22,70 @@ from litehive.state.persist import load_state
 from litehive.state.persist import persist_task_and_state
 
 
+def _idle_stage_state(*, updated_at: str) -> RuntimeStageState:
+    return RuntimeStageState(updated_at=updated_at)
+
+
+def _running_stage_state(step: str, *, started_at: str) -> RuntimeStageState:
+    return RuntimeStageState(
+        step=step,
+        status="running",
+        started_at=started_at,
+        updated_at=started_at,
+    )
+
+
+def _completed_stage_state(
+    report: StageReport,
+    *,
+    started_at: str | None,
+    completed_at: str,
+) -> RuntimeStageState:
+    return RuntimeStageState(
+        step=report.step,
+        status="completed" if report.verdict in {"pass", "accept"} else report.verdict,
+        started_at=started_at,
+        completed_at=completed_at,
+        updated_at=completed_at,
+        duration_seconds=duration_seconds(started_at, completed_at),
+        verdict=report.verdict,
+        summary=report.summary,
+    )
+
+
+def _runtime_subagent_state(
+    ref: SubagentRef,
+    *,
+    started_at: str,
+    updated_at: str,
+    pid: int | None = None,
+    completed_at: str | None = None,
+    exit_code: int | None = None,
+    transcript_snippet: str = "",
+    interruption_reason: str = "",
+    resource_limit_event: ResourceLimitEvent | None = None,
+    continuation: RuntimeEngineContinuation | None = None,
+) -> RuntimeSubagentState:
+    return RuntimeSubagentState(
+        id=ref.id,
+        role=ref.role,
+        engine=ref.engine,
+        status=ref.status,
+        path=ref.path,
+        pid=pid,
+        sandboxed=ref.sandboxed,
+        sandbox_summary=ref.sandbox_summary,
+        started_at=started_at,
+        updated_at=updated_at,
+        completed_at=completed_at,
+        exit_code=exit_code,
+        transcript_snippet=transcript_snippet,
+        interruption_reason=interruption_reason,
+        resource_limit_event=resource_limit_event,
+        continuation=continuation,
+    )
+
+
 def mark_task_run_started(root: Path, task: TaskRecord) -> None:
     now = utcnow()
     task.runtime.execution_status = "running"
@@ -29,18 +94,7 @@ def mark_task_run_started(root: Path, task: TaskRecord) -> None:
     task.runtime.retry_count = 0
     task.runtime.retry_limit = task.runtime.retry_limit
     task.runtime.last_outcome = TaskOutcomeState()
-    task.runtime.current_stage = task.runtime.current_stage.model_copy(
-        update={
-            "step": None,
-            "status": "idle",
-            "started_at": None,
-            "completed_at": None,
-            "updated_at": now,
-            "duration_seconds": 0,
-            "verdict": None,
-            "summary": "",
-        }
-    )
+    task.runtime.current_stage = _idle_stage_state(updated_at=now)
     task.runtime.active_subagent = None
     task.runtime.interruption = None
     save_task_runtime(root, task)
@@ -208,18 +262,7 @@ def apply_task_outcome(
 def mark_stage_started(root: Path, task: TaskRecord, step: str) -> None:
     now = utcnow()
     task.runtime.updated_at = now
-    task.runtime.current_stage = task.runtime.current_stage.model_copy(
-        update={
-            "step": step,
-            "status": "running",
-            "started_at": now,
-            "completed_at": None,
-            "updated_at": now,
-            "duration_seconds": 0,
-            "verdict": None,
-            "summary": "",
-        }
-    )
+    task.runtime.current_stage = _running_stage_state(step, started_at=now)
     save_task_runtime(root, task)
 
 
@@ -232,30 +275,8 @@ def apply_stage_finished(task: TaskRecord, report: StageReport) -> None:
     now = utcnow()
     started_at = task.runtime.current_stage.started_at
     task.runtime.updated_at = now
-    task.runtime.last_stage = task.runtime.last_stage.model_copy(
-        update={
-            "step": report.step,
-            "status": "completed" if report.verdict in {"pass", "accept"} else report.verdict,
-            "started_at": started_at,
-            "completed_at": now,
-            "updated_at": now,
-            "duration_seconds": duration_seconds(started_at, now),
-            "verdict": report.verdict,
-            "summary": report.summary,
-        }
-    )
-    task.runtime.current_stage = task.runtime.current_stage.model_copy(
-        update={
-            "step": None,
-            "status": "idle",
-            "started_at": None,
-            "completed_at": None,
-            "updated_at": now,
-            "duration_seconds": 0,
-            "verdict": None,
-            "summary": "",
-        }
-    )
+    task.runtime.last_stage = _completed_stage_state(report, started_at=started_at, completed_at=now)
+    task.runtime.current_stage = _idle_stage_state(updated_at=now)
     if (
         task.runtime.continuation_handoff is not None
         and task.runtime.continuation_handoff.step == report.step
@@ -266,18 +287,7 @@ def apply_stage_finished(task: TaskRecord, report: StageReport) -> None:
 def mark_subagent_started(root: Path, task: TaskRecord, ref: SubagentRef) -> None:
     now = utcnow()
     task.runtime.updated_at = now
-    task.runtime.active_subagent = RuntimeSubagentState(
-        id=ref.id,
-        role=ref.role,
-        engine=ref.engine,
-        status=ref.status,
-        path=ref.path,
-        sandboxed=ref.sandboxed,
-        sandbox_summary=ref.sandbox_summary,
-        started_at=now,
-        updated_at=now,
-        continuation=None,
-    )
+    task.runtime.active_subagent = _runtime_subagent_state(ref, started_at=now, updated_at=now)
     save_task_runtime(root, task)
 
 
@@ -340,17 +350,11 @@ def mark_subagent_finished(
     if runtime_pid is None and task.runtime.active_subagent is not None:
         runtime_pid = task.runtime.active_subagent.pid
     task.runtime.updated_at = now
-    task.runtime.last_subagent = RuntimeSubagentState(
-        id=ref.id,
-        role=ref.role,
-        engine=ref.engine,
-        status=ref.status,
-        path=ref.path,
-        pid=runtime_pid,
-        sandboxed=ref.sandboxed,
-        sandbox_summary=ref.sandbox_summary,
+    task.runtime.last_subagent = _runtime_subagent_state(
+        ref,
         started_at=started_at,
         updated_at=now,
+        pid=runtime_pid,
         completed_at=now,
         exit_code=exit_code,
         transcript_snippet=summarize_transcript(transcript),
