@@ -357,19 +357,20 @@ def discard_created_task(root: Path, task_id: str) -> None:
                 shutil.rmtree(td)
 
 
-def list_tasks(
-    root: Path,
-    *,
-    include_runtime: bool = True,
-    strict: bool = True,
-) -> list[TaskRecord]:
-    records: list[TaskRecord] = []
+def _task_record_paths(root: Path) -> list[Path]:
+    paths: list[Path] = []
     for child in sorted(tasks_root(root).iterdir()):
         if not child.is_dir():
             continue
         path = child / "task.yaml"
-        if not path.exists():
-            continue
+        if path.exists():
+            paths.append(path)
+    return paths
+
+
+def _load_tasks_from_disk(root: Path, *, strict: bool) -> list[TaskRecord]:
+    records: list[TaskRecord] = []
+    for path in _task_record_paths(root):
         try:
             task = load_task_record_file(path)
             task = _load_task_runtime(root, task)
@@ -381,22 +382,22 @@ def list_tasks(
     return records
 
 
+def list_tasks(
+    root: Path,
+    *,
+    include_runtime: bool = True,
+    strict: bool = True,
+) -> list[TaskRecord]:
+    return _load_tasks_from_disk(root, strict=strict)
+
+
 def list_tasks_state_first(
     root: Path,
     *,
     state: WorkspaceState | None = None,
     include_runtime: bool = False,
 ) -> list[TaskRecord]:
-    task_by_id: dict[str, TaskRecord] = {}
-    for child in sorted(tasks_root(root).iterdir()):
-        if not child.is_dir():
-            continue
-        path = child / "task.yaml"
-        if not path.exists():
-            continue
-        task = load_task_record_file(path)
-        task = _load_task_runtime(root, task)
-        task_by_id[task.id] = task
+    task_by_id = {task.id: task for task in _load_tasks_from_disk(root, strict=True)}
 
     workspace_state = load_state(root) if state is None else state
     ordered_ids: list[str] = []
@@ -418,7 +419,7 @@ def list_tasks_state_first(
 
 
 def get_task(root: Path, task_id: str) -> TaskRecord | None:
-    for task in list_tasks(root):
+    for task in _load_tasks_from_disk(root, strict=True):
         if task.id == task_id:
             return task
     return None
