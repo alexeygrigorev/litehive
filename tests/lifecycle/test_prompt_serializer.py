@@ -9,10 +9,12 @@ from litehive.roles.recovery import RecoveryAgent
 from litehive.roles.swe import SWEAgent
 from litehive.roles.base import PromptContext
 from litehive.config.workspace import ensure_workspace
+from litehive.config.paths import config_path
 from litehive.lifecycle.persistence import LastRejection, TaskState
 from litehive.lifecycle.prompt_serializer import serialize_prompt
 from litehive.lifecycle.types import PipelineMode
 from litehive.state.records import create_task, save_task
+from litehive.tasks.paths import task_comments_file
 
 
 @pytest.fixture
@@ -119,6 +121,20 @@ def test_serialize_recovery_includes_failure_context(workspace: Path) -> None:
     assert "litehive task logs <task_id> --agent" in text
 
 
+def test_serialize_ignores_corrupt_task_comments_file(workspace: Path) -> None:
+    task = create_task(workspace, title="t", goal="g")
+    task_comments_file(workspace, task).write_text("[\n", encoding="utf-8")
+
+    agent = SWEAgent(_NullSelector(), _NullSessions(), prompt_context=PromptContext())
+    text = serialize_prompt(
+        agent.build_prompt(make_state(task.id)),
+        task_record=task,
+        workspace_root=workspace,
+    )
+
+    assert "Discussion thread:" not in text
+
+
 def test_serialize_includes_last_rejection(workspace: Path) -> None:
     task = create_task(workspace, title="t", goal="g")
     agent = SWEAgent(_NullSelector(), _NullSessions(), prompt_context=PromptContext())
@@ -134,6 +150,20 @@ def test_serialize_includes_last_rejection(workspace: Path) -> None:
     assert "- Source: qa" in text
     assert "- Raised at phase: testing" in text
     assert "tests fail with ImportError" in text
+
+
+def test_build_prompt_ignores_corrupt_hook_config(workspace: Path) -> None:
+    task = create_task(workspace, title="t", goal="g")
+    config_path(workspace).write_text("[\n", encoding="utf-8")
+
+    agent = SWEAgent(
+        _NullSelector(),
+        _NullSessions(),
+        prompt_context=PromptContext(workspace_root=workspace),
+    )
+    prompt = agent.build_prompt(make_state(task.id))
+
+    assert prompt["rejecting_hooks"] == []
 
 
 def test_serialize_works_without_task_record() -> None:

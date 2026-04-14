@@ -2,6 +2,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from pydantic import ValidationError
+import yaml
+
 from litehive.lifecycle.nodes.agent import AgentNode, EngineSelector, SessionProvider
 from litehive.lifecycle.persistence import TaskState
 from litehive.lifecycle.types import NodeName
@@ -119,7 +122,7 @@ class RoleAgent(AgentNode):
             from litehive.config.loading import load_config
 
             config = load_config(root)
-        except Exception:
+        except (OSError, TypeError, ValidationError, ValueError, yaml.YAMLError):
             return []
         raw_hooks = (config.runner_hooks or {}).get(after_phase, [])
         return [

@@ -19,6 +19,9 @@ The serializer:
 from pathlib import Path
 from typing import Any
 
+from pydantic import ValidationError
+import yaml
+
 from litehive.domain.task import TaskRecord
 from litehive.state.records import get_task
 
@@ -95,7 +98,7 @@ def _load_task_thread_comments(
         from litehive.tasks.reports import load_task_thread
 
         comments = load_task_thread(workspace_root, task_record)
-    except Exception:
+    except (OSError, ValidationError, yaml.YAMLError):
         return []
     return [
         {
