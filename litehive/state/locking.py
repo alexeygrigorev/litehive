@@ -126,19 +126,6 @@ def heartbeat_is_late(heartbeat_at: str | None) -> bool:
         return False
 
 
-def runner_status_readonly(root: Path) -> RunnerStatusState:
-    """Return runner status using only file reads and PID liveness — no fcntl.flock."""
-    root = root.resolve()
-    status = read_runner_lock_metadata(root)
-    if not runner_metadata_present(status):
-        return RunnerStatusState()
-    if runner_pid_is_alive(status.pid):
-        if heartbeat_is_late(status.heartbeat_at):
-            return status.model_copy(update={"status": "late"})
-        return status.model_copy(update={"status": "running"})
-    return status.model_copy(update={"status": "stale"})
-
-
 def runner_status(root: Path) -> RunnerStatusState:
     root = root.resolve()
     status = read_runner_lock_metadata(root)

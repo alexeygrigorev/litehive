@@ -49,6 +49,15 @@ def test_status_reports_corrupt_workspace_dependencies_without_raising(tmp_path:
     assert "health:" in output
 
 
+def test_status_reports_never_started_runner_without_lock(tmp_path: Path, capsys) -> None:
+    ensure_workspace(tmp_path)
+
+    exit_code, output = _run_fast_status(tmp_path, capsys)
+
+    assert exit_code == 0
+    assert "runner_status: never_started" in output
+
+
 def test_status_reports_stale_runner_lock(tmp_path: Path, capsys, monkeypatch) -> None:
     ensure_workspace(tmp_path)
     save_state(tmp_path, WorkspaceState(active_task_id="T-0001"))
@@ -70,6 +79,7 @@ def test_status_reports_stale_runner_lock(tmp_path: Path, capsys, monkeypatch) -
     exit_code, output = _run_fast_status(tmp_path, capsys)
 
     assert exit_code == 1
+    assert "runner_status: dead" in output
     assert "runner_state: STALE (no live pid for active_task_id=T-0001)" in output
     assert "litehive repair" in output
     assert "health:" in output
@@ -87,6 +97,18 @@ def test_full_status_reports_corrupt_runner_lock_without_raising(tmp_path: Path,
     assert f"runner_state: CORRUPT at {lock_path} (line 1)" in output
     assert "Remove or rewrite the runner lock file" in output
     assert "health:" in output
+
+
+def test_status_reports_stopped_runner_for_empty_lock_file(tmp_path: Path, capsys) -> None:
+    ensure_workspace(tmp_path)
+    lock_path = workspace_runner_lock_path(tmp_path)
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    lock_path.write_text("{}\n", encoding="utf-8")
+
+    exit_code, output = _run_fast_status(tmp_path, capsys)
+
+    assert exit_code == 0
+    assert "runner_status: stopped" in output
 
 
 def test_status_reports_wedged_runner_heartbeat(tmp_path: Path, capsys) -> None:
