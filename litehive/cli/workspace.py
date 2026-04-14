@@ -19,7 +19,6 @@ from litehive.cli.common import WorkspaceOption, choice
 from litehive.config.loading import load_config
 from litehive.config.paths import config_path
 from litehive.config.workspace import ensure_workspace
-from litehive.config.engine_models import active_engine_freezes
 from litehive.daemon.execution import daemon_status_lines
 from litehive.observability.engine_monitoring import render_engine_monitoring_lines
 from litehive.observability.status import (
@@ -28,9 +27,11 @@ from litehive.observability.status import (
     render_active_task_detail_lines,
     render_active_task_section,
     render_engine_health_section,
+    render_full_status_header_lines,
     render_last_completed_section,
     render_queue_section,
     render_recent_activity_section,
+    render_runtime_policy_lines,
     render_task_summary,
 )
 from litehive.observability.status_diagnostics import (
@@ -173,25 +174,8 @@ def doctor_command(
 
 
 def status_full(workspace, root, config, state, runner, monitoring, issues):
-    print(f"workspace: {workspace}")
-    print("status_read_mode: full")
-    print(f"default_engine: {config.default_engine}")
-    freezes = active_engine_freezes(config)
-    if freezes:
-        for engine_name, until_dt in sorted(freezes.items()):
-            local_until = until_dt.astimezone().strftime("%Y-%m-%d %H:%M %Z")
-            print(f"engine_frozen: {engine_name} until {local_until}")
-    print(f"litehive_source_path: {config.litehive_source_path or '-'}")
-    print(f"active_task_id: {state.active_task_id}")
-    print(
-        "runner_status: "
-        f"{runner.status} pid={runner.pid or '-'} "
-        f"started_at={runner.started_at or '-'} "
-        f"heartbeat_at={runner.heartbeat_at or '-'} "
-        f"active_task_id={runner.active_task_id or '-'}"
-    )
-    print(f"queued_tasks: {len(state.queue)}")
-    print(f"pool_stop_reason: {state.pool_stop_reason}")
+    for line in render_full_status_header_lines(workspace, config, state, runner):
+        print(line)
     for line in waiting_for_you_lines(root):
         print(line)
     if state.queue:
@@ -201,14 +185,8 @@ def status_full(workspace, root, config, state, runner, monitoring, issues):
         print(line)
     for line in render_engine_monitoring_lines(monitoring):
         print(line)
-    print(f"default_retry_limit: {config.default_retry_limit}")
-    print(f"retry_on: {format_retry_on(config)}")
-    print(f"pool_stop_on_failure: {config.pool_stop_on_failure}")
-    print(f"pool_max_tasks: {config.pool_max_tasks}")
-    print(f"pool_stop_on_dirty_git: {config.pool_stop_on_dirty_git}")
-    print(f"pool_stop_on_attention: {config.pool_stop_on_attention}")
-    print(f"pool_selection_policy: {config.pool_selection_policy}")
-    print(f"process_profile: {config.process_profile}")
+    for line in render_runtime_policy_lines(config, format_retry_on(config)):
+        print(line)
     tasks = list_tasks(workspace)
     if tasks:
         print()

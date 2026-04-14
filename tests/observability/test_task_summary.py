@@ -2,9 +2,17 @@ from pathlib import Path
 
 import yaml
 
+from litehive.config.model import LitehiveConfig
 from litehive.config.workspace import ensure_workspace
-from litehive.domain.runtime import RuntimeSubagentState
-from litehive.observability.status import render_active_task_detail_lines, render_task_summary
+from litehive.domain.runtime import RunnerStatusState, RuntimeSubagentState
+from litehive.domain.task import WorkspaceState
+from litehive.observability.status import (
+    render_active_task_detail_lines,
+    render_full_status_header_lines,
+    render_runner_status_line,
+    render_runtime_policy_lines,
+    render_task_summary,
+)
 from litehive.state.records import create_task
 
 
@@ -58,4 +66,62 @@ def test_render_active_task_detail_lines_prefers_active_subagent_engine(tmp_path
         "active_task_status: in_progress/implementing",
         "active_stage: testing",
         "active_engine: codex",
+    ]
+
+
+def test_render_runner_status_and_full_header_lines(tmp_path: Path) -> None:
+    config = LitehiveConfig(
+        default_engine="codex",
+        litehive_source_path="/src/litehive",
+        engine_freeze={"gemini": "2099-06-15T00:00:00Z"},
+    )
+    state = WorkspaceState(active_task_id="T-0001", queue=["T-0002", "T-0003"])
+    runner = RunnerStatusState(
+        status="running",
+        pid=123,
+        started_at="2026-04-14T10:00:00Z",
+        heartbeat_at="2026-04-14T10:01:00Z",
+        active_task_id="T-0001",
+    )
+
+    runner_line = render_runner_status_line(runner)
+    lines = render_full_status_header_lines(tmp_path, config, state, runner)
+
+    assert runner_line == (
+        "runner_status: running pid=123 "
+        "started_at=2026-04-14T10:00:00Z "
+        "heartbeat_at=2026-04-14T10:01:00Z "
+        "active_task_id=T-0001"
+    )
+    assert lines[0] == f"workspace: {tmp_path}"
+    assert "status_read_mode: full" in lines
+    assert "default_engine: codex" in lines
+    assert "litehive_source_path: /src/litehive" in lines
+    assert "active_task_id: T-0001" in lines
+    assert runner_line in lines
+    assert "queued_tasks: 2" in lines
+
+
+def test_render_runtime_policy_lines_uses_preformatted_retry_label() -> None:
+    config = LitehiveConfig(
+        default_retry_limit=5,
+        pool_stop_on_failure=True,
+        pool_max_tasks=7,
+        pool_stop_on_dirty_git=True,
+        pool_stop_on_attention=True,
+        pool_selection_policy="fifo",
+        process_profile="python",
+    )
+
+    lines = render_runtime_policy_lines(config, "timeout, network")
+
+    assert lines == [
+        "default_retry_limit: 5",
+        "retry_on: timeout, network",
+        "pool_stop_on_failure: True",
+        "pool_max_tasks: 7",
+        "pool_stop_on_dirty_git: True",
+        "pool_stop_on_attention: True",
+        "pool_selection_policy: fifo",
+        "process_profile: python",
     ]

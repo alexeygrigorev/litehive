@@ -7,9 +7,12 @@ from typing import Any
 
 import yaml
 
+from litehive.config.engine_models import active_engine_freezes
+from litehive.config.model import LitehiveConfig
 from litehive.domain.engine import WorkspaceEngineMonitoring
 from litehive.domain.reports import ExecutionEstimate
-from litehive.domain.task import TaskRecord
+from litehive.domain.runtime import RunnerStatusState
+from litehive.domain.task import TaskRecord, WorkspaceState
 
 # Ordered pipeline stages for remaining-time estimation.
 _PIPELINE_STAGES = ["grooming", "implementing", "testing", "accepting", "commit_to_git"]
@@ -335,6 +338,57 @@ def render_active_task_detail_lines(task: TaskRecord | None, default_engine: str
         f"active_task_status: {task.status}/{task.pipeline_status}",
         f"active_stage: {stage}",
         f"active_engine: {engine}",
+    ]
+
+
+def render_runner_status_line(runner: RunnerStatusState) -> str:
+    return (
+        "runner_status: "
+        f"{runner.status} pid={runner.pid or '-'} "
+        f"started_at={runner.started_at or '-'} "
+        f"heartbeat_at={runner.heartbeat_at or '-'} "
+        f"active_task_id={runner.active_task_id or '-'}"
+    )
+
+
+def render_full_status_header_lines(
+    workspace: Path,
+    config: LitehiveConfig,
+    state: WorkspaceState,
+    runner: RunnerStatusState,
+) -> list[str]:
+    lines = [
+        f"workspace: {workspace}",
+        "status_read_mode: full",
+        f"default_engine: {config.default_engine}",
+    ]
+    freezes = active_engine_freezes(config)
+    if freezes:
+        for engine_name, until_dt in sorted(freezes.items()):
+            local_until = until_dt.astimezone().strftime("%Y-%m-%d %H:%M %Z")
+            lines.append(f"engine_frozen: {engine_name} until {local_until}")
+    lines.extend(
+        [
+            f"litehive_source_path: {config.litehive_source_path or '-'}",
+            f"active_task_id: {state.active_task_id}",
+            render_runner_status_line(runner),
+            f"queued_tasks: {len(state.queue)}",
+            f"pool_stop_reason: {state.pool_stop_reason}",
+        ]
+    )
+    return lines
+
+
+def render_runtime_policy_lines(config: LitehiveConfig, retry_on_label: str) -> list[str]:
+    return [
+        f"default_retry_limit: {config.default_retry_limit}",
+        f"retry_on: {retry_on_label}",
+        f"pool_stop_on_failure: {config.pool_stop_on_failure}",
+        f"pool_max_tasks: {config.pool_max_tasks}",
+        f"pool_stop_on_dirty_git: {config.pool_stop_on_dirty_git}",
+        f"pool_stop_on_attention: {config.pool_stop_on_attention}",
+        f"pool_selection_policy: {config.pool_selection_policy}",
+        f"process_profile: {config.process_profile}",
     ]
 
 

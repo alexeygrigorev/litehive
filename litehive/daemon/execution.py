@@ -16,6 +16,7 @@ from litehive.attention import list_attention
 from litehive.config.loading import load_config
 from litehive.config.paths import workspace_logs_dir
 from litehive.config.workspace import ensure_workspace
+from litehive.observability.status import render_runner_status_line
 from litehive.state.backup import create_scheduled_workspace_backup
 from litehive.state.persist import load_state, set_pool_stop_reason
 from litehive.state.locking import runner_status
@@ -523,13 +524,7 @@ def daemon_status_lines(workspace: Path) -> list[str]:
         lines.append(f"started_at: {entry.get('started_at')}")
         lines.append(f"log_dir: {entry.get('log_dir')}")
     runner = runner_status(workspace)
-    lines.append(
-        "runner_status: "
-        f"{runner.status} pid={runner.pid or '-'} "
-        f"started_at={runner.started_at or '-'} "
-        f"heartbeat_at={runner.heartbeat_at or '-'} "
-        f"active_task_id={runner.active_task_id or '-'}"
-    )
+    lines.append(render_runner_status_line(runner))
     latest_dir = latest_run_all_log_dir(workspace)
     lines.append(f"latest_run_all_dir: {latest_dir if latest_dir is not None else '-'}")
     latest_post = latest_matching(latest_dir, "*-post-status.log")
