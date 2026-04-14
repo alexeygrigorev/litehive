@@ -19,7 +19,7 @@ from litehive.cli.common import WorkspaceOption, choice
 from litehive.config.loading import load_config
 from litehive.config.paths import config_path
 from litehive.config.workspace import ensure_workspace
-from litehive.daemon.execution import daemon_status_lines
+from litehive.daemon.registry import daemon_metadata
 from litehive.observability.engine_monitoring import render_engine_monitoring_lines
 from litehive.observability.status import (
     collect_recent_activity,
@@ -334,9 +334,7 @@ def health_command(workspace: WorkspaceOption = Path.cwd()) -> int:
 
     print()
     print("=== Daemon ===")
-    daemon_lines = daemon_status_lines(root)
-    daemon_status = _daemon_value(daemon_lines, "daemon_status") or "stopped"
-    daemon_pid = _daemon_value(daemon_lines, "pid") or "-"
+    daemon_status, daemon_pid = _health_daemon_status(root)
     print(f"daemon_status: {daemon_status}")
     print(f"daemon_pid: {daemon_pid}")
 
@@ -368,12 +366,12 @@ def _last_summary(task) -> str:
     return task.runtime.last_stage.summary or task.runtime.last_outcome.reason or task.flag_reason or "-"
 
 
-def _daemon_value(lines: list[str], key: str) -> str | None:
-    prefix = f"{key}: "
-    for line in lines:
-        if line.startswith(prefix):
-            return line[len(prefix):]
-    return None
+def _health_daemon_status(root: Path) -> tuple[str, str]:
+    entry = daemon_metadata(root)
+    if entry is None or entry.get("status") != "running":
+        return ("stopped", "-")
+    pid = entry.get("pid")
+    return ("running", str(pid) if pid is not None else "-")
 
 
 def _collect_quota_health() -> list[_QuotaHealth]:
