@@ -7,8 +7,9 @@ import pytest
 
 import litehive.state.records as tasks_crud
 from litehive.config.workspace import ensure_workspace
+from litehive.domain.reports import FollowUpTaskSpec
 from litehive.state.persist import load_state, save_state
-from litehive.state.records import create_task, get_task, list_tasks, save_task
+from litehive.state.records import create_follow_up_tasks, create_task, get_task, list_tasks, save_task
 from litehive.tasks.status import update_task_metadata
 
 
@@ -137,3 +138,30 @@ def test_create_task_rejects_dependency_cycle(tmp_path: Path) -> None:
         ValueError, match=rf"Task {second.id} dependency cycle detected via {first.id}"
     ):
         update_task_metadata(tmp_path, second.id, depends_on=[first.id])
+
+
+def test_create_follow_up_tasks_persists_queue_and_creation_source(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    parent = create_task(tmp_path, title="Parent task")
+
+    created = create_follow_up_tasks(
+        tmp_path,
+        parent_task=parent,
+        stage="accepting",
+        follow_ups=[
+            FollowUpTaskSpec(
+                title="Document edge case",
+                rationale="Need a follow-up after review",
+                blocking=True,
+            )
+        ],
+    )
+
+    assert len(created) == 1
+    follow_up = get_task(tmp_path, created[0].id)
+    assert follow_up is not None
+    assert follow_up.created_from is not None
+    assert follow_up.created_from.task_id == parent.id
+    assert follow_up.created_from.stage == "accepting"
+    assert follow_up.created_from.blocking is True
+    assert load_state(tmp_path).queue[-1] == created[0].id

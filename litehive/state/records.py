@@ -142,6 +142,48 @@ def _normalize_task_flag_reason(task: TaskRecord) -> None:
     task.flag_reason = None
 
 
+def _create_task_runtime_dirs(base: Path) -> None:
+    (base / "reports").mkdir(parents=True, exist_ok=False)
+    (base / "subagents").mkdir(parents=True, exist_ok=False)
+    (base / "artifacts").mkdir(parents=True, exist_ok=False)
+
+
+def _cleanup_created_task_dirs(paths: list[Path]) -> None:
+    for path in reversed(paths):
+        try:
+            shutil.rmtree(path)
+        except OSError as cleanup_err:
+            logger.warning("Failed to clean up %s: %s", path, cleanup_err)
+
+
+def _persist_created_tasks(
+    root: Path,
+    *,
+    tasks: list[TaskRecord],
+    state: WorkspaceState,
+    writes: dict[Path, str],
+    cleanup_dirs: list[Path],
+) -> None:
+    from litehive.state.persist import merged_state_for_runner_owned_write
+
+    merged_state = merged_state_for_runner_owned_write(
+        root,
+        state=state,
+        protected_task_ids=[task.id for task in tasks],
+    )
+    try:
+        def callback() -> None:
+            runtime_store(root).save_runtime_transaction(
+                task_states={task.id: task_state_for_storage(task) for task in tasks},
+                workspace_state=merged_state,
+            )
+
+        write_atomic_files_and_then(writes, callback)
+    except Exception:
+        _cleanup_created_task_dirs(cleanup_dirs)
+        raise
+
+
 def save_task_runtime(root: Path, task: TaskRecord) -> None:
     with workspace_mutation_guard(root):
         write_task_runtime(root, task)
@@ -217,36 +259,19 @@ def create_task(
         )
 
         base = task_dir(root, task)
-        (base / "reports").mkdir(parents=True, exist_ok=False)
-        (base / "subagents").mkdir(parents=True, exist_ok=False)
-        (base / "artifacts").mkdir(parents=True, exist_ok=False)
+        _create_task_runtime_dirs(base)
         state.queue.append(task.id)
-        try:
-            from litehive.state.persist import merged_state_for_runner_owned_write
-
-            state = merged_state_for_runner_owned_write(
-                root,
-                state=state,
-                protected_task_ids=[task.id],
-            )
-            writes = {
-                task_file(root, task): serialize_task_record(task),
-                base / "journal.md": f"# {task.id} {task.title}\n\n## {utcnow()}\nTask created.\n",
-            }
-
-            def callback() -> None:
-                runtime_store(root).save_runtime_transaction(
-                    task_states={task.id: task_state_for_storage(task)},
-                    workspace_state=state,
-                )
-
-            write_atomic_files_and_then(writes, callback)
-        except Exception:
-            try:
-                shutil.rmtree(base)
-            except OSError as cleanup_err:
-                logger.warning("Failed to clean up %s: %s", base, cleanup_err)
-            raise
+        writes = {
+            task_file(root, task): serialize_task_record(task),
+            base / "journal.md": f"# {task.id} {task.title}\n\n## {utcnow()}\nTask created.\n",
+        }
+        _persist_created_tasks(
+            root,
+            tasks=[task],
+            state=state,
+            writes=writes,
+            cleanup_dirs=[base],
+        )
         ensure_runtime_ignored(root)
         return task
 
@@ -294,9 +319,7 @@ def create_follow_up_tasks(
             )
 
             base = task_dir(root, task)
-            (base / "reports").mkdir(parents=True, exist_ok=False)
-            (base / "subagents").mkdir(parents=True, exist_ok=False)
-            (base / "artifacts").mkdir(parents=True, exist_ok=False)
+            _create_task_runtime_dirs(base)
             created_dirs.append(base)
             state.queue.append(task.id)
             writes[task_file(root, task)] = serialize_task_record(task)
@@ -309,31 +332,13 @@ def create_follow_up_tasks(
             )
             created_tasks.append(task)
 
-        from litehive.state.persist import merged_state_for_runner_owned_write
-
-        state = merged_state_for_runner_owned_write(
+        _persist_created_tasks(
             root,
+            tasks=created_tasks,
             state=state,
-            protected_task_ids=[task.id for task in created_tasks],
+            writes=writes,
+            cleanup_dirs=created_dirs,
         )
-        try:
-            def callback() -> None:
-                runtime_store(root).save_runtime_transaction(
-                    task_states={
-                        task.id: task_state_for_storage(task)
-                        for task in created_tasks
-                    },
-                    workspace_state=state,
-                )
-
-            write_atomic_files_and_then(writes, callback)
-        except Exception:
-            for base in reversed(created_dirs):
-                try:
-                    shutil.rmtree(base)
-                except OSError as cleanup_err:
-                    logger.warning("Failed to clean up %s: %s", base, cleanup_err)
-            raise
         ensure_runtime_ignored(root)
     return created_tasks
 
