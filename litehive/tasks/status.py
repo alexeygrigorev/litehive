@@ -339,11 +339,7 @@ def requeue_task(root: Path, task_id: str, *, front: bool = False, force: bool =
             pipeline_status=implementation_entry_stage(task),
             clear_last_outcome=task.status not in {"flagged", "merge_failed", "parked"},
         )
-        state.queue = [item for item in state.queue if item != task.id]
-        if front:
-            state.queue.insert(0, task.id)
-        else:
-            state.queue.append(task.id)
+        _queue_task(state, task.id, front=front)
         persist_task_and_state_without_runner_guard(
             root,
             task=task,
@@ -380,11 +376,7 @@ def resume_task(root: Path, task_id: str, *, front: bool = False) -> TaskRecord:
             clear_last_outcome=task.status not in {"interrupted", "parked", "flagged", "merge_failed"},
             preserve_continuation_handoff=task.status in {"interrupted", "parked"},
         )
-        state.queue = [item for item in state.queue if item != task.id]
-        if front:
-            state.queue.insert(0, task.id)
-        else:
-            state.queue.append(task.id)
+        _queue_task(state, task.id, front=front)
         persist_task_and_state_without_runner_guard(
             root,
             task=task,
@@ -406,21 +398,8 @@ def abandon_task(root: Path, task_id: str) -> TaskRecord:
         ensure_future_task_mutation_allowed(root, [task.id], state=state)
         if task.status not in {"flagged", "merge_failed", *CLOSED_TASK_STATUSES, *RESUMABLE_TASK_STATUSES}:
             raise ValueError(f"Task {task.id} is not interrupted, parked, flagged, merge_failed, or closed")
-        task.status = "cancelled"
-        task.runtime.execution_status = "cancelled"
-        task.runtime.run_started_at = None
-        task.runtime.updated_at = utcnow()
-        task.runtime.active_subagent = None
-        task.runtime.last_outcome.kind = "cancelled"
-        task.runtime.last_outcome.stage = task.pipeline_status
-        task.runtime.last_outcome.reason_code = "execution_cancelled"
-        task.runtime.last_outcome.reason = "Task abandoned via CLI."
-        task.runtime.last_outcome.retry_count = 0
-        task.runtime.last_outcome.retry_limit = 0
-        task.runtime.last_outcome.recorded_at = task.runtime.updated_at
-        if state.active_task_id == task.id:
-            state.active_task_id = None
-        state.queue = [item for item in state.queue if item != task.id]
+        _apply_cancelled_task_state(task, reason="Task abandoned via CLI.")
+        _drop_task_from_workspace_state(state, task.id)
         persist_task_and_state_without_runner_guard(
             root,
             task=task,
@@ -438,6 +417,77 @@ _CLOSE_REASON_CODE_LABELS: dict[str, str] = {
     "duplicate": "Task closed as duplicate.",
     "execution_cancelled": "Task abandoned via CLI.",
 }
+
+
+def _drop_task_from_workspace_state(state: WorkspaceState, task_id: str) -> None:
+    if state.active_task_id == task_id:
+        state.active_task_id = None
+    state.queue = [item for item in state.queue if item != task_id]
+
+
+def _queue_task(state: WorkspaceState, task_id: str, *, front: bool = False) -> None:
+    state.queue = [item for item in state.queue if item != task_id]
+    if front:
+        state.queue.insert(0, task_id)
+    else:
+        state.queue.append(task_id)
+
+
+def _apply_cancelled_task_state(task: TaskRecord, *, reason: str) -> None:
+    now = utcnow()
+    task.status = "cancelled"
+    task.runtime.execution_status = "cancelled"
+    task.runtime.run_started_at = None
+    task.runtime.updated_at = now
+    task.runtime.active_subagent = None
+    task.runtime.last_outcome.kind = "cancelled"
+    task.runtime.last_outcome.stage = task.pipeline_status
+    task.runtime.last_outcome.reason_code = "execution_cancelled"
+    task.runtime.last_outcome.reason = reason
+    task.runtime.last_outcome.retry_count = 0
+    task.runtime.last_outcome.retry_limit = 0
+    task.runtime.last_outcome.recorded_at = now
+
+
+def _apply_close_task_state(
+    task: TaskRecord,
+    *,
+    outcome: str,
+    reason: str | None,
+    follow_up_task_id: str | None = None,
+    pipeline_status: str | None = None,
+) -> str:
+    now = utcnow()
+    task.status = outcome  # type: ignore[assignment]
+    if pipeline_status is not None:
+        task.pipeline_status = pipeline_status
+    task.runtime.execution_status = "cancelled"
+    task.runtime.run_started_at = None
+    task.runtime.updated_at = now
+    task.runtime.active_subagent = None
+    task.runtime.last_outcome.kind = outcome  # type: ignore[assignment]
+    task.runtime.last_outcome.stage = task.pipeline_status
+    task.runtime.last_outcome.reason_code = outcome
+    task.runtime.last_outcome.reason = reason or _CLOSE_REASON_CODE_LABELS[outcome]
+    task.runtime.last_outcome.follow_up_task_id = follow_up_task_id
+    task.runtime.last_outcome.retry_count = 0
+    task.runtime.last_outcome.retry_limit = 0
+    task.runtime.last_outcome.recorded_at = now
+    journal_message = f"Task closed: {outcome}."
+    if reason:
+        journal_message += f" {reason}"
+    if follow_up_task_id is not None:
+        journal_message += f" Follow-up task: {follow_up_task_id}."
+    return journal_message
+
+
+def _apply_parked_task_state(task: TaskRecord) -> None:
+    now = utcnow()
+    task.status = "parked"
+    task.runtime.execution_status = "paused"
+    task.runtime.run_started_at = None
+    task.runtime.updated_at = now
+    task.runtime.active_subagent = None
 
 
 def close_task(
@@ -477,28 +527,13 @@ def close_task(
         ensure_future_task_mutation_allowed(root, [task.id], state=state)
         if task.status == "done":
             raise ValueError(f"Task {task.id} is already done and cannot be closed")
-        now = utcnow()
-        task.status = outcome  # type: ignore[assignment]
-        task.runtime.execution_status = "cancelled"
-        task.runtime.run_started_at = None
-        task.runtime.updated_at = now
-        task.runtime.active_subagent = None
-        task.runtime.last_outcome.kind = outcome  # type: ignore[assignment]
-        task.runtime.last_outcome.stage = task.pipeline_status
-        task.runtime.last_outcome.reason_code = outcome
-        task.runtime.last_outcome.reason = reason or _CLOSE_REASON_CODE_LABELS[outcome]
-        task.runtime.last_outcome.follow_up_task_id = follow_up_task_id
-        task.runtime.last_outcome.retry_count = 0
-        task.runtime.last_outcome.retry_limit = 0
-        task.runtime.last_outcome.recorded_at = now
-        if state.active_task_id == task.id:
-            state.active_task_id = None
-        state.queue = [item for item in state.queue if item != task.id]
-        journal_message = f"Task closed: {outcome}."
-        if reason:
-            journal_message += f" {reason}"
-        if follow_up_task_id is not None:
-            journal_message += f" Follow-up task: {follow_up_task_id}."
+        journal_message = _apply_close_task_state(
+            task,
+            outcome=outcome,
+            reason=reason,
+            follow_up_task_id=follow_up_task_id,
+        )
+        _drop_task_from_workspace_state(state, task.id)
         persist_task_and_state_without_runner_guard(
             root,
             task=task,
@@ -524,15 +559,8 @@ def park_task(root: Path, task_id: str) -> TaskRecord:
         ensure_future_task_mutation_allowed(root, [task.id], state=state)
         if task.status == "done":
             raise ValueError(f"Task {task.id} is already done and cannot be parked")
-        now = utcnow()
-        task.status = "parked"
-        task.runtime.execution_status = "paused"
-        task.runtime.run_started_at = None
-        task.runtime.updated_at = now
-        task.runtime.active_subagent = None
-        if state.active_task_id == task.id:
-            state.active_task_id = None
-        state.queue = [item for item in state.queue if item != task.id]
+        _apply_parked_task_state(task)
+        _drop_task_from_workspace_state(state, task.id)
         persist_task_and_state_without_runner_guard(
             root,
             task=task,
@@ -596,28 +624,13 @@ def update_task(
                 )
             if task.status == "done":
                 raise ValueError(f"Task {task.id} is already done and cannot be closed")
-            now = utcnow()
-            task.status = outcome_str
-            task.pipeline_status = "done"
-            task.runtime.execution_status = "cancelled"
-            task.runtime.run_started_at = None
-            task.runtime.updated_at = now
-            task.runtime.active_subagent = None
-            task.runtime.last_outcome.kind = outcome_str
-            task.runtime.last_outcome.stage = task.pipeline_status
-            task.runtime.last_outcome.reason_code = outcome_str
-            task.runtime.last_outcome.reason = reason_str or _CLOSE_REASON_CODE_LABELS.get(
-                outcome_str, f"Task closed: {outcome_str}."
+            close_msg = _apply_close_task_state(
+                task,
+                outcome=outcome_str,
+                reason=reason_str,
+                pipeline_status="done",
             )
-            task.runtime.last_outcome.retry_count = 0
-            task.runtime.last_outcome.retry_limit = 0
-            task.runtime.last_outcome.recorded_at = now
-            if state.active_task_id == task.id:
-                state.active_task_id = None
-            state.queue = [item for item in state.queue if item != task.id]
-            close_msg = f"Task closed: {outcome_str}."
-            if reason_str:
-                close_msg += f" {reason_str}"
+            _drop_task_from_workspace_state(state, task.id)
             persist_task_and_state_without_runner_guard(
                 root,
                 task=task,
@@ -630,15 +643,8 @@ def update_task(
             if action == "park":
                 if task.status == "done":
                     raise ValueError(f"Task {task.id} is already done and cannot be parked")
-                now = utcnow()
-                task.status = "parked"
-                task.runtime.execution_status = "paused"
-                task.runtime.run_started_at = None
-                task.runtime.updated_at = now
-                task.runtime.active_subagent = None
-                if state.active_task_id == task.id:
-                    state.active_task_id = None
-                state.queue = [item for item in state.queue if item != task.id]
+                _apply_parked_task_state(task)
+                _drop_task_from_workspace_state(state, task.id)
                 persist_task_and_state_without_runner_guard(
                     root,
                     task=task,
@@ -655,8 +661,7 @@ def update_task(
                     pipeline_status=implementation_entry_stage(task),
                     clear_last_outcome=task.status not in {"flagged", "merge_failed", "parked"},
                 )
-                state.queue = [item for item in state.queue if item != task.id]
-                state.queue.append(task.id)
+                _queue_task(state, task.id)
                 persist_task_and_state_without_runner_guard(
                     root,
                     task=task,
@@ -667,22 +672,8 @@ def update_task(
             if action == "abandon":
                 if task.status not in {"flagged", "merge_failed", *CLOSED_TASK_STATUSES, *RESUMABLE_TASK_STATUSES}:
                     raise ValueError(f"Task {task.id} is not interruptible or closed")
-                now = utcnow()
-                task.status = "cancelled"
-                task.runtime.execution_status = "cancelled"
-                task.runtime.run_started_at = None
-                task.runtime.updated_at = now
-                task.runtime.active_subagent = None
-                task.runtime.last_outcome.kind = "cancelled"
-                task.runtime.last_outcome.stage = task.pipeline_status
-                task.runtime.last_outcome.reason_code = "execution_cancelled"
-                task.runtime.last_outcome.reason = "Task abandoned via structured report."
-                task.runtime.last_outcome.retry_count = 0
-                task.runtime.last_outcome.retry_limit = 0
-                task.runtime.last_outcome.recorded_at = now
-                if state.active_task_id == task.id:
-                    state.active_task_id = None
-                state.queue = [item for item in state.queue if item != task.id]
+                _apply_cancelled_task_state(task, reason="Task abandoned via structured report.")
+                _drop_task_from_workspace_state(state, task.id)
                 persist_task_and_state_without_runner_guard(
                     root,
                     task=task,
@@ -745,9 +736,6 @@ def update_task(
             )
         persist_future_task_update(root, task, journal_message=journal_message)
         return task
-
-
-update_task_metadata = update_task
 
 
 update_task_metadata = update_task
