@@ -36,6 +36,15 @@ from litehive.tasks.paths import slugify, task_dir, task_file, tasks_root
 
 logger = logging.getLogger(__name__)
 
+_LEGACY_TASK_INTENT_KEYS = {
+    "mode",
+    "pm_complexity",
+    "planned_effort",
+    "human_checkpoints",
+    "upstream_origin",
+    "github_origin",
+}
+
 
 class TaskStateMissingError(RuntimeError):
     """Raised when a task has no SQLite runtime state row."""
@@ -45,7 +54,10 @@ def _load_task_record_mapping(path: Path) -> dict:
     loaded = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
     if not isinstance(loaded, dict):
         raise ValueError(f"Task file must contain a mapping: {path}")
-    return dict(loaded)
+    data = dict(loaded)
+    for key in _LEGACY_TASK_INTENT_KEYS:
+        data.pop(key, None)
+    return data
 
 
 def _highest_task_number_on_disk(root: Path) -> int:

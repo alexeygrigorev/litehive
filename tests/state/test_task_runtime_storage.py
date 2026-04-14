@@ -9,6 +9,7 @@ from litehive.state.records import (
     TaskStateMissingError,
     create_task,
     get_task,
+    load_task_record_file,
     save_task,
     save_task_runtime,
 )
@@ -100,6 +101,42 @@ def test_get_task_requires_sqlite_runtime_state_row(tmp_path: Path) -> None:
 
     with pytest.raises(TaskStateMissingError, match="missing its SQLite runtime state row"):
         get_task(tmp_path, "T-0001")
+
+
+def test_load_task_record_file_ignores_legacy_intent_fields(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    task_dir = tmp_path / ".litehive" / "tasks" / "T-0001-legacy-intent"
+    task_dir.mkdir(parents=True)
+    task_path = task_dir / "task.yaml"
+    task_path.write_text(
+        yaml.safe_dump(
+            {
+                "id": "T-0001",
+                "slug": "legacy-intent",
+                "title": "Legacy intent",
+                "mode": "implementation",
+                "pipeline_mode": "full",
+                "priority": "medium",
+                "pm_complexity": "moderate",
+                "planned_effort": "s",
+                "human_checkpoints": [],
+                "upstream_origin": None,
+                "github_origin": None,
+                "git": {
+                    "auto_commit": True,
+                    "commit_message": "legacy intent",
+                },
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+
+    task = load_task_record_file(task_path)
+
+    assert task.id == "T-0001"
+    assert task.pipeline_mode == "full"
+    assert task.git.commit_message == "legacy intent"
 
 
 def test_task_record_intent_state_roundtrip_uses_model_helpers(tmp_path: Path) -> None:
