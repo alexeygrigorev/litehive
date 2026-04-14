@@ -56,18 +56,8 @@ def task_dir(root: Path, task: TaskRecord) -> Path:
 
 def task_file(root: Path, task: TaskRecord) -> Path:
     return task_dir(root, task) / "task.yaml"
-
-
-def task_runtime_file(root: Path, task: TaskRecord) -> Path:
-    return task_dir(root, task) / "runtime.yaml"
-
-
 def task_comments_file(root: Path, task: TaskRecord) -> Path:
     return task_dir(root, task) / "comments.yaml"
-
-
-def legacy_task_thread_file(root: Path, task: TaskRecord) -> Path:
-    return task_dir(root, task) / "thread.yaml"
 
 
 def task_thread_file(root: Path, task: TaskRecord) -> Path:

@@ -39,7 +39,6 @@ def render_workspace_gitignore() -> str:
             ".runner.lock",
             "pool-summary.txt",
             "engine-monitoring.yaml",
-            "tasks/*/runtime.yaml",
             "tasks/*/reports/commit_to_git-*.yaml",
             "",
         ]

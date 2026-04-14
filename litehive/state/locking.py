@@ -87,7 +87,7 @@ def runner_lock_is_active(root: Path) -> bool:
 
 def runner_status_needs_reconciliation(root: Path) -> bool:
     from litehive.state.records import list_tasks
-    from litehive.tasks.persistence import load_state
+    from litehive.state.persist import load_state
 
     state = load_state(root)
     if state.active_task_id is not None:
@@ -414,7 +414,7 @@ def persist_future_task_update(
 ) -> None:
     from litehive.state.store import runtime_store
     from litehive.state.records import ensure_runtime_ignored, serialize_task_record, task_state_for_storage
-    from litehive.tasks.persistence import write_atomic_files_and_then
+    from litehive.state.persist import write_atomic_files_and_then
 
     task.updated_at = utcnow()
     writes = {

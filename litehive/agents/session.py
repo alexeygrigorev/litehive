@@ -22,7 +22,7 @@ from litehive.agents.artifacts import (
     write_text_artifact,
 )
 from litehive.domain.agent import SubagentInactivityTimeout
-from litehive.tasks.persistence import write_atomic_files
+from litehive.state.persist import write_atomic_files
 from litehive.tasks.runtime import mark_subagent_pid
 
 

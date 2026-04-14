@@ -14,7 +14,7 @@ from litehive.domain.common import utcnow
 from litehive.domain.task import TaskRecord
 from litehive.state.records import list_tasks
 from litehive.tasks.paths import tasks_root
-from litehive.tasks.persistence import load_state, set_pool_stop_reason
+from litehive.state.persist import load_state, set_pool_stop_reason
 
 
 DETECTABLE_ATTENTION_KINDS = {
@@ -268,7 +268,7 @@ def waiting_for_you_lines(root: Path, *, limit: int = 5) -> list[str]:
 
 
 def _detect_attention_items(root: Path, pool_stop_reason: str | None) -> list[AttentionItem]:
-    tasks = list_tasks(root)
+    tasks = list_tasks(root, strict=False)
     state = load_state(root)
     detected: list[AttentionItem] = []
     detected.extend(_duplicate_id_items(root))

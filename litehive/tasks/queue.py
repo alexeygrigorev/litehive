@@ -14,7 +14,7 @@ from litehive.domain.task import TaskRecord, WorkspaceState
 from .constants import TASK_PRIORITY_ORDER
 from litehive.state.records import set_task_commit_sha
 from litehive.domain.task_ops import BlockedTask, TaskPlan, TaskSelection, WorkspaceConflictError
-from .persistence import load_state, save_state_without_runner_guard
+from litehive.state.persist import load_state, save_state_without_runner_guard
 from litehive.state.locking import ensure_future_task_mutation_allowed, workspace_lock
 
 logger = logging.getLogger(__name__)
@@ -149,7 +149,7 @@ def _is_hook_reject_loop_flagged(task: TaskRecord) -> bool:
 def set_active_task(root: Path, task_id: str | None) -> WorkspaceState:
     from litehive.state.records import require_task
     from litehive.state.locking import workspace_lock, workspace_mutation_guard
-    from .persistence import load_state, save_state
+    from litehive.state.persist import load_state, save_state
     from litehive.state.persist import persist_task_and_state
 
     with workspace_mutation_guard(root), workspace_lock(root):
@@ -174,7 +174,7 @@ def peek_next_task(root: Path) -> TaskRecord | None:
 
 def peek_next_task_selection(root: Path) -> TaskSelection:
     from litehive.state.locking import workspace_lock, workspace_mutation_guard
-    from .persistence import load_state, save_state
+    from litehive.state.persist import load_state, save_state
     from litehive.recovery.workspace_repair import recover_stale_runner_state
 
     recover_stale_runner_state(root)
@@ -190,7 +190,7 @@ def peek_next_task_selection(root: Path) -> TaskSelection:
 def plan_task_selections(root: Path) -> TaskPlan:
     from litehive.state.records import list_tasks
     from litehive.state.locking import workspace_lock, workspace_mutation_guard
-    from .persistence import load_state
+    from litehive.state.persist import load_state
     from litehive.recovery.workspace_repair import recover_stale_runner_state
 
     recover_stale_runner_state(root)
@@ -227,7 +227,7 @@ def dequeue_next_task(root: Path) -> TaskRecord | None:
 
 def dequeue_next_task_selection(root: Path) -> TaskSelection:
     from litehive.state.locking import workspace_mutation_guard
-    from .persistence import save_state
+    from litehive.state.persist import save_state
     from litehive.recovery.workspace_repair import recover_stale_runner_state
     from .reports import record_recovery_report
     from litehive.state.persist import persist_task_and_state
@@ -340,7 +340,7 @@ def _task_blockers(task: TaskRecord, tasks_by_id: dict[str, TaskRecord]) -> list
 def validate_task_dependencies(root: Path, *, task_id: str, depends_on: list[str]) -> None:
     from litehive.state.records import list_tasks
 
-    tasks_by_id = {task.id: task for task in list_tasks(root)}
+    tasks_by_id = {task.id: task for task in list_tasks(root, strict=False)}
     seen: set[str] = set()
     for dependency_id in depends_on:
         if dependency_id in seen:
@@ -553,7 +553,7 @@ def clear_active_task(root: Path) -> WorkspaceState:
 def restore_untouched_active_task(root: Path) -> WorkspaceState:
     from litehive.state.records import get_task
     from litehive.state.locking import workspace_mutation_guard
-    from .persistence import save_state
+    from litehive.state.persist import save_state
     from litehive.recovery.detection import should_requeue_commit_stage_task
     from litehive.recovery.workspace_repair import (
         prepare_interrupted_task,
@@ -632,7 +632,7 @@ def restore_untouched_active_task(root: Path) -> WorkspaceState:
 
 def active_task_markers(root: Path, state: WorkspaceState | None = None) -> dict[str, list[str]]:
     from litehive.state.records import list_tasks
-    from .persistence import load_state
+    from litehive.state.persist import load_state
 
     markers: dict[str, list[str]] = {}
     current_state = state or load_state(root)

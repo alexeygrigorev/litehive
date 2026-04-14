@@ -16,7 +16,7 @@ INSTRUCTIONS = """\
   - `litehive task logs --daemon` — daemon-level events if you suspect an orchestrator/runner bug rather than an agent bug.
   - `litehive pipeline rules` — the full v2 transition table, if you need to understand what routing decisions the state machine made.
   - `.litehive/tasks/<task_id>/reports/*.yaml` — stage reports the agent wrote (if any).
-  - `.litehive/tasks/<task_id>/comments.yaml` — verdict history (`thread.yaml` is legacy fallback during migration).
+  - `.litehive/tasks/<task_id>/comments.yaml` — verdict history.
   - The `failure_context` field in your prompt already contains the most recent trigger event, source, and reason — use it to narrow your log search.
   - If you need to go deeper than the CLI commands, the underlying tables are `pipeline_transitions` (columns: `seq, created_at, from_stage, event_type, event_payload, to_stage, rule_description, delta`) and `pipeline_journal` (columns: `seq, created_at, kind, payload`). Don't invent column names.
 - Your job is not to redo the failed stage's work, not to re-run the task's implementation or verification, and not to submit the failed stage verdict on the previous agent's behalf.

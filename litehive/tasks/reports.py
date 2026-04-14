@@ -10,7 +10,6 @@ from litehive.domain.reports import RecoveryAction, RecoveryEvidenceItem, Recove
 from litehive.domain.task import TaskRecord
 
 from .paths import (
-    legacy_task_thread_file,
     latest_path,
     latest_run_all_log_path,
     latest_subagent_base,
@@ -19,7 +18,6 @@ from .paths import (
     task_comments_file,
     task_dir,
     task_file,
-    task_runtime_file,
     task_recovery_dir,
 )
 
@@ -41,10 +39,7 @@ def collect_recovery_evidence(
 
     evidence: list[RecoveryEvidenceItem] = []
     task_path = task_file(root, task)
-    runtime_path = task_runtime_file(root, task)
     comments_path = task_comments_file(root, task)
-    legacy_thread_path = legacy_task_thread_file(root, task)
-    discussion_path = comments_path if comments_path.exists() or not legacy_thread_path.exists() else legacy_thread_path
     events_path = task_dir(root, task) / "events.jsonl"
     latest_report_path = latest_path(sorted((task_dir(root, task) / "reports").glob("*.yaml")))
     latest_run_log = latest_run_all_log_path(root)
@@ -72,9 +67,7 @@ def collect_recovery_evidence(
     evidence.append(
         RecoveryEvidenceItem(
             kind="runtime",
-            label="runtime.yaml",
-            path=str(runtime_path.relative_to(root)),
-            exists=runtime_path.exists(),
+            label="runtime state",
             summary=(
                 f"execution_status={task.runtime.execution_status} current_stage={task.runtime.current_stage.step} "
                 f"last_outcome={task.runtime.last_outcome.kind or 'none'}"
@@ -85,8 +78,8 @@ def collect_recovery_evidence(
         RecoveryEvidenceItem(
             kind="thread",
             label="comments.yaml",
-            path=str(discussion_path.relative_to(root)),
-            exists=comments_path.exists() or legacy_thread_path.exists(),
+            path=str(comments_path.relative_to(root)),
+            exists=comments_path.exists(),
             summary=f"discussion entries={len(load_task_thread(root, task))}",
         )
     )
@@ -307,8 +300,6 @@ def load_task_thread(root: Path, task: TaskRecord) -> list["TaskThreadComment"]:
     from litehive.domain.reports import TaskThreadComment
 
     path = task_comments_file(root, task)
-    if not path.exists():
-        path = legacy_task_thread_file(root, task)
     if not path.exists():
         return []
     loaded = yaml.safe_load(path.read_text(encoding="utf-8"))

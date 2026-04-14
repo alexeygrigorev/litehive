@@ -20,7 +20,7 @@ from litehive.lifecycle.persistence import SqlitePersistence, TaskNotFound
 from litehive.config.workspace import resolve_workspace
 from litehive.domain.reports import TaskThreadComment
 from litehive.state.records import get_task
-from litehive.tasks.persistence import load_state
+from litehive.state.persist import load_state
 from litehive.tasks.reports import append_thread_comment
 
 

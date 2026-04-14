@@ -14,7 +14,7 @@ from litehive.config.paths import (
 )
 from litehive.domain.task import WorkspaceState
 from litehive.main import _fast_status
-from litehive.tasks.persistence import save_state
+from litehive.state.persist import save_state
 from tests.workspace_helpers import _cmd_status, argparse, ensure_workspace
 
 

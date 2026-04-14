@@ -39,11 +39,11 @@ from litehive.observability.status_diagnostics import (
 )
 from litehive.recovery.workspace_repair import repair_workspace_state
 from litehive.state.records import list_tasks_state_first, require_task
-from litehive.tasks.persistence import load_state
+from litehive.state.persist import load_state
 from litehive.state.records import list_tasks
 from litehive.domain.task_ops import WorkspaceConflictError
-from litehive.tasks.persistence import load_state as load_runtime_state
-from litehive.tasks.worktree_inspection import inspect_dirty_worktree_gate
+from litehive.state.persist import load_state as load_runtime_state
+from litehive.tasks.worktrees import inspect_dirty_worktree_gate
 
 from litehive.cli.worktree_support import collect_managed_worktrees
 
@@ -287,7 +287,6 @@ def repair_command(workspace: WorkspaceOption = Path.cwd()) -> int:
     print(f"repaired: {'yes' if summary.mutated else 'no'}")
     print(f"stale_runner_recovered: {'yes' if summary.stale_runner_recovered else 'no'}")
     print(f"cleared_active_task_id: {summary.cleared_active_task_id or '-'}")
-    print("migrated_comment_tasks: " + (" ".join(summary.migrated_comment_task_ids) if summary.migrated_comment_task_ids else "-"))
     print("requeued_tasks: " + (" ".join(summary.requeued_task_ids) if summary.requeued_task_ids else "-"))
     print("removed_queue_entries: " + (" ".join(summary.removed_queue_entries) if summary.removed_queue_entries else "-"))
     print("deduped_queue_entries: " + (" ".join(summary.deduped_queue_entries) if summary.deduped_queue_entries else "-"))

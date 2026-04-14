@@ -4,7 +4,7 @@ import pytest
 from litehive.domain.runtime import RuntimeContinuationHandoff, RuntimeSubagentState
 from litehive.state.records import create_task, get_task, save_task
 from litehive.tasks.paths import task_dir
-from litehive.tasks.persistence import load_state
+from litehive.state.persist import load_state
 from litehive.state.records import save_task_runtime
 
 from .helpers import cli_command

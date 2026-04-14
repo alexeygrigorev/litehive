@@ -14,7 +14,7 @@ from litehive.lifecycle.orchestration import _sync_back
 from litehive.lifecycle.persistence import SqlitePersistence
 from litehive.lifecycle.sessions import InMemorySessionStore
 from litehive.lifecycle.types import PipelineMode
-from litehive.tasks.persistence import load_state, save_state
+from litehive.state.persist import load_state, save_state
 from litehive.tasks.queue import peek_next_task_selection
 
 from tests.workspace_helpers import create_task, ensure_workspace

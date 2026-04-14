@@ -10,14 +10,24 @@ import yaml
 from litehive.domain.common import utcnow
 from litehive.domain.task import TaskRecord
 
-from litehive.state.records import load_task_record_file, list_tasks, require_task
+from litehive.state.records import list_tasks, require_task
 from litehive.state.locking import workspace_lock
 from .paths import task_dir, tasks_root
-from .persistence import atomic_write_text
+from litehive.state.persist import atomic_write_text
 
 
 def archive_root(root: Path) -> Path:
     return tasks_root(root) / "archive"
+
+
+def _load_archived_task_record(path: Path) -> TaskRecord:
+    data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    if not isinstance(data, dict):
+        raise ValueError(f"Archived task file must contain a mapping: {path}")
+    data = dict(data)
+    data.pop("archived_at", None)
+    data.pop("updated_at", None)
+    return TaskRecord(**data)
 
 
 def _archive_index_path(root: Path) -> Path:
@@ -99,7 +109,7 @@ def list_archived_tasks(root: Path) -> list[TaskRecord]:
         path = child / "task.yaml"
         if not path.exists():
             continue
-        records.append(load_task_record_file(path))
+        records.append(_load_archived_task_record(path))
     return records
 
 
@@ -142,7 +152,7 @@ def cleanup_archived_tasks(root: Path, older_than: str) -> list[TaskRecord]:
             continue
         age_seconds = (now - archived_dt).total_seconds()
         if age_seconds >= max_age_seconds:
-            task = load_task_record_file(path)
+            task = _load_archived_task_record(path)
             shutil.rmtree(child)
             deleted.append(task)
     return deleted

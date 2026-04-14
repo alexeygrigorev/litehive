@@ -99,7 +99,6 @@ def sandboxed_integration_workspace(root: Path) -> Path:
     goz_dir = f"{home}/.goz"
     goz_config = f"{home}/.config/goz"
     goz_bin = f"{home}/bin"
-    local_bin = f"{home}/.local/bin"  # goz wrapper script uses uv from here
     opencode_dir = f"{home}/.config/opencode"
 
     engine_policies: dict[str, ExternalEngineSandboxPolicy] = {}
@@ -151,17 +150,11 @@ def sandboxed_integration_workspace(root: Path) -> Path:
         goz_ro_binds = [goz_bin]
         if Path(goz_config).exists():
             goz_ro_binds.append(goz_config)
-        if Path(local_bin).exists():
-            goz_ro_binds.append(local_bin)
-        # goz wrapper script `exec uv run --project /home/alexey/git/goz python -m goz`
-        # needs the source project bind-mounted so `python -m goz` can import it,
-        # plus uv's managed python toolchain dir so .venv's python symlink resolves.
+        # The local launcher executes the project's virtualenv python directly,
+        # and the editable install resolves against the source tree.
         goz_project = f"{home}/git/goz"
         if Path(goz_project).exists():
             goz_ro_binds.append(goz_project)
-        uv_python_dir = f"{home}/.local/share/uv/python"
-        if Path(uv_python_dir).exists():
-            goz_ro_binds.append(uv_python_dir)
         # ~/.goz must be writable because goz persists a session file per
         # invocation to ~/.goz/sessions/<id>.json. A --ro-bind here causes
         # the smoke test to exit 1 after the successful reply.
@@ -170,11 +163,7 @@ def sandboxed_integration_workspace(root: Path) -> Path:
             network_mode="host",
             extra_ro_binds=goz_ro_binds,
             extra_rw_binds=[goz_dir],
-            # UV_FROZEN: the goz wrapper runs `uv run --project`, and uv
-            # triggers a re-resolve on any env drift unless told to trust
-            # the existing lockfile. The source project dir is read-only
-            # inside the sandbox, so a re-resolve would fail writing uv.lock.
-            setenv={**setenv_home, "UV_FROZEN": "1"},
+            setenv=setenv_home,
         )
     if Path(nvm).exists() and Path(opencode_dir).exists():
         engine_policies["opencode"] = ExternalEngineSandboxPolicy(

@@ -17,7 +17,7 @@ from litehive.domain.task import TaskRecord
 
 from litehive.state.records import write_task_runtime, save_task_runtime
 from litehive.state.locking import workspace_lock, workspace_mutation_guard
-from litehive.tasks.persistence import load_state
+from litehive.state.persist import load_state
 from litehive.state.persist import persist_task_and_state
 
 
@@ -411,4 +411,3 @@ def duration_seconds(started_at: str | None, ended_at: str | None) -> int:
     except ValueError:
         return 0
     return max(0, int((ended - started).total_seconds()))
-

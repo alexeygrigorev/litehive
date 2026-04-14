@@ -7,8 +7,8 @@ from litehive.config.paths import state_path
 from litehive.git.ops import GitError, abort_revert, commit_task, has_changes, rollback_message, rollback_task
 from litehive.domain.task import TaskRecord
 from litehive.state.store import runtime_store
-from litehive.tasks.paths import task_dir, task_file, task_runtime_file
-from litehive.tasks.persistence import atomic_write_text, load_state
+from litehive.state.persist import atomic_write_text, load_state
+from litehive.tasks.paths import task_dir, task_file
 from litehive.tasks.normalization import implementation_entry_stage
 from litehive.tasks.queue import prepare_completed_task_for_recovery
 from litehive.state.locking import workspace_lock, workspace_mutation_guard
@@ -68,7 +68,6 @@ def rollback_completed_task(root: Path, task_id: str):
         file_snapshot = _capture_persisted_files(
             [
                 task_file(root, task),
-                task_runtime_file(root, task),
                 state_path(root),
                 task_dir(root, task) / "journal.md",
             ]

@@ -99,8 +99,8 @@ from litehive.tasks.normalization import (
     reroute_stage_for_acceptance_criteria,
     task_requires_acceptance_criteria,
 )
-from litehive.tasks.paths import task_dir, task_file, task_runtime_file
-from litehive.tasks.persistence import load_state, save_state
+from litehive.tasks.paths import task_dir, task_file
+from litehive.state.persist import load_state, save_state
 from litehive.tasks.queue import move_queued_task
 from litehive.tasks.queue import (
     dequeue_next_task_selection,
@@ -130,7 +130,7 @@ from litehive.tasks.status import (
     update_task,
     update_task_metadata,
 )
-import litehive.tasks.persistence as _tasks_persistence
+import litehive.state.persist as _tasks_persistence
 import litehive.state.locking as _workspace_locking
 import litehive.state.persist as _workspace_workflow
 
@@ -420,7 +420,7 @@ def _fail_atomic_write_on_path(
             raise OSError(message)
         original_atomic_write(path, content)
 
-    monkeypatch.setattr("litehive.tasks.persistence.atomic_write_text", fail_on_selected_write)
+    monkeypatch.setattr("litehive.state.persist.atomic_write_text", fail_on_selected_write)
 
 
 def _latest_pool_run_report(root: Path) -> dict[str, object]:
@@ -791,7 +791,7 @@ def _successful_stage_execution(tmp_path: Path, adapter: str, step: str) -> CLIE
     # Auto-write a CLI verdict for the active task in the workspace.
     ws_root = _resolve_workspace_root(tmp_path)
     from litehive.state.records import get_task as _get_task
-    from litehive.tasks.persistence import load_state as _load_state
+    from litehive.state.persist import load_state as _load_state
 
     state = _load_state(ws_root)
     active_id = state.active_task_id
@@ -925,7 +925,6 @@ __all__ = [
     "task_dir",
     "task_file",
     "task_requires_acceptance_criteria",
-    "task_runtime_file",
     "update_task_metadata",
     "_block_runner_lock",
     "_fail_atomic_write_on_path",

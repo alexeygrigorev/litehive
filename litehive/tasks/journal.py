@@ -7,7 +7,7 @@ from litehive.domain.task import TaskRecord
 
 from litehive.state.locking import workspace_mutation_guard
 from .paths import task_dir
-from .persistence import atomic_write_text
+from litehive.state.persist import atomic_write_text
 
 
 def append_journal(root: Path, task: TaskRecord, message: str) -> None:

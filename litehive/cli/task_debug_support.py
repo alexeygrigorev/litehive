@@ -49,7 +49,7 @@ def _debug_latest(root: Path, task):
     print(f"role: {ref.role}")
     print(f"status: {ref.status}")
 
-    # Try to get richer runtime state (exit_code, timing) from runtime.yaml
+    # Prefer task runtime state loaded from SQLite; fall back to session artifacts when needed.
     runtime_sa = None
     if task.runtime.last_subagent and task.runtime.last_subagent.id == ref.id:
         runtime_sa = task.runtime.last_subagent

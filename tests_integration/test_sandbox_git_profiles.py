@@ -11,7 +11,7 @@ from litehive.agents.sandbox import SandboxLauncher, SandboxProfile, sandbox_pro
 from litehive.config.model import LitehiveConfig
 from litehive.config.workspace import ensure_workspace
 from litehive.config.model import ExternalEngineSandboxConfig, ExternalEngineSandboxPolicy
-from litehive.tasks.worktree_inspection import resolve_task_execution_root
+from litehive.tasks.worktrees import resolve_task_execution_root
 from litehive.sandbox.git_wrapper import rejection_reason
 from litehive.state.records import create_task
 

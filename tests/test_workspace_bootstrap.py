@@ -34,6 +34,8 @@ import threading
 import pytest
 import yaml
 
+from litehive.state.records import LegacyTaskStateError, TaskStateMissingError
+
 
 def _register_workspace_in_subprocess(args: tuple[str, str, str, str]) -> str:
     workspace_root, _config_home, data_home, state_home = args
@@ -371,7 +373,7 @@ def test_task_yaml_persists_only_intent_fields_and_runtime_moves_to_db(tmp_path:
     assert loaded.runtime.current_stage.step == "implementing"
 
 
-def test_get_task_backfills_legacy_runtime_into_db_and_rewrites_task_yaml(tmp_path: Path) -> None:
+def test_get_task_rejects_legacy_runtime_yaml(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     task_dir = tmp_path / ".litehive" / "tasks" / "T-0001-legacy-runtime"
     task_dir.mkdir(parents=True)
@@ -381,17 +383,11 @@ def test_get_task_backfills_legacy_runtime_into_db_and_rewrites_task_yaml(tmp_pa
                 "id": "T-0001",
                 "slug": "legacy-runtime",
                 "title": "Legacy runtime",
-                "mode": "implementation",
                 "pipeline_mode": "full",
                 "priority": "high",
-                "status": "in_progress",
-                "pipeline_status": "testing",
-                "flag_count": 1,
-                "model": "legacy-model",
                 "git": {
                     "auto_commit": True,
                     "commit_message": "legacy message",
-                    "checkpoint_attempts": 2,
                 },
             },
             sort_keys=False,
@@ -410,28 +406,34 @@ def test_get_task_backfills_legacy_runtime_into_db_and_rewrites_task_yaml(tmp_pa
         encoding="utf-8",
     )
 
-    loaded = get_task(tmp_path, "T-0001")
+    with pytest.raises(LegacyTaskStateError, match="runtime.yaml"):
+        get_task(tmp_path, "T-0001")
 
-    assert loaded is not None
-    assert loaded.model == "legacy-model"
-    assert loaded.status == "in_progress"
-    assert loaded.pipeline_status == "testing"
-    assert loaded.flag_count == 1
-    assert loaded.git.checkpoint_attempts == 2
-    assert loaded.git.commit_sha == "deadbeef"
-    assert loaded.runtime.execution_status == "running"
-    assert loaded.runtime.current_stage.step == "testing"
 
-    sanitized = yaml.safe_load((task_dir / "task.yaml").read_text(encoding="utf-8"))
-    assert "status" not in sanitized
-    assert "pipeline_status" not in sanitized
-    assert "model" not in sanitized
-    assert set(sanitized["git"]) == {"auto_commit", "commit_message"}
+def test_get_task_requires_sqlite_runtime_state_row(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    task_dir = tmp_path / ".litehive" / "tasks" / "T-0001-missing-runtime"
+    task_dir.mkdir(parents=True)
+    (task_dir / "task.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "id": "T-0001",
+                "slug": "missing-runtime",
+                "title": "Missing runtime row",
+                "pipeline_mode": "full",
+                "priority": "medium",
+                "git": {
+                    "auto_commit": True,
+                    "commit_message": "missing runtime row",
+                },
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
 
-    reloaded = get_task(tmp_path, "T-0001")
-    assert reloaded is not None
-    assert reloaded.git.commit_sha == "deadbeef"
-    assert reloaded.runtime.execution_status == "running"
+    with pytest.raises(TaskStateMissingError, match="missing its SQLite runtime state row"):
+        get_task(tmp_path, "T-0001")
 
 
 def test_ensure_workspace_scaffolds_workspace_gitignore(tmp_path: Path) -> None:
@@ -440,7 +442,6 @@ def test_ensure_workspace_scaffolds_workspace_gitignore(tmp_path: Path) -> None:
     gitignore = (tmp_path / ".litehive" / ".gitignore").read_text(encoding="utf-8")
 
     assert "engine-monitoring.yaml" in gitignore
-    assert "tasks/*/runtime.yaml" in gitignore
     assert "tasks/*/reports/commit_to_git-*.yaml" in gitignore
     assert "state.yaml" not in gitignore
 

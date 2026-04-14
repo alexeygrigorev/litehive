@@ -46,7 +46,7 @@ def _active_task_id_for_stop(root: Path, state: WorkspaceState) -> str:
 
 def _stop_active_task_without_runner_guard(root: Path, task_id: str) -> TaskRecord:
     from litehive.state.records import require_task
-    from litehive.tasks.persistence import load_state
+    from litehive.state.persist import load_state
     from litehive.recovery.workspace_repair import prepare_interrupted_task, interruption_journal_message
     from litehive.state.persist import persist_task_and_state_without_runner_guard
 
@@ -91,7 +91,7 @@ def stop_current_task(
     poll_interval_seconds: float = 0.1,
 ) -> StopTaskSummary:
     from litehive.state.records import require_task
-    from litehive.tasks.persistence import load_state
+    from litehive.state.persist import load_state
     from litehive.tasks.queue import active_task_markers
     from litehive.state.locking import (
         read_runner_lock_metadata,
@@ -191,7 +191,7 @@ def _switch_thread_comment_message(
 
 def switch_task_engine(root: Path, task_id: str, *, engine: str, reason: str) -> SwitchTaskSummary:
     from litehive.state.records import require_task
-    from litehive.tasks.persistence import load_state
+    from litehive.state.persist import load_state
     from litehive.tasks.queue import move_queued_task
     from litehive.tasks.reports import append_thread_comment
     from litehive.tasks.runtime import mark_engine_switch
@@ -274,7 +274,7 @@ def switch_task_engine(root: Path, task_id: str, *, engine: str, reason: str) ->
 def requeue_task(root: Path, task_id: str, *, front: bool = False, force: bool = False) -> TaskRecord:
     from litehive.state.records import require_task
     from litehive.state.locking import ensure_future_task_mutation_allowed, workspace_lock
-    from litehive.tasks.persistence import load_state
+    from litehive.state.persist import load_state
     from litehive.tasks.queue import reset_task_for_recovery
     from litehive.tasks.reports import (
         normalized_files_changed,
@@ -356,7 +356,7 @@ def requeue_task(root: Path, task_id: str, *, front: bool = False, force: bool =
 def resume_task(root: Path, task_id: str, *, front: bool = False) -> TaskRecord:
     from litehive.state.records import require_task
     from litehive.state.locking import ensure_future_task_mutation_allowed, workspace_lock
-    from litehive.tasks.persistence import load_state
+    from litehive.state.persist import load_state
     from litehive.tasks.queue import reset_task_for_recovery
     from litehive.state.persist import persist_task_and_state_without_runner_guard
 
@@ -397,7 +397,7 @@ def resume_task(root: Path, task_id: str, *, front: bool = False) -> TaskRecord:
 def abandon_task(root: Path, task_id: str) -> TaskRecord:
     from litehive.state.records import require_task
     from litehive.state.locking import ensure_future_task_mutation_allowed, workspace_lock
-    from litehive.tasks.persistence import load_state
+    from litehive.state.persist import load_state
     from litehive.state.persist import persist_task_and_state_without_runner_guard
 
     with workspace_lock(root):
@@ -450,7 +450,7 @@ def close_task(
 ) -> TaskRecord:
     from litehive.state.records import require_task
     from litehive.state.locking import ensure_future_task_mutation_allowed, workspace_lock
-    from litehive.tasks.persistence import load_state
+    from litehive.state.persist import load_state
     from litehive.state.persist import persist_task_and_state_without_runner_guard
 
     """Mark a task as explicitly closed with a non-implementation outcome.
@@ -511,7 +511,7 @@ def close_task(
 def park_task(root: Path, task_id: str) -> TaskRecord:
     from litehive.state.records import require_task
     from litehive.state.locking import ensure_future_task_mutation_allowed, workspace_lock
-    from litehive.tasks.persistence import load_state
+    from litehive.state.persist import load_state
     from litehive.state.persist import persist_task_and_state_without_runner_guard
 
     """Mark a task as parked.
@@ -565,7 +565,7 @@ def update_task(
 ) -> TaskRecord:
     from litehive.state.records import require_task
     from litehive.state.locking import ensure_future_task_mutation_allowed, persist_future_task_update, workspace_lock
-    from litehive.tasks.persistence import load_state
+    from litehive.state.persist import load_state
     from litehive.tasks.queue import reset_task_for_recovery
     from litehive.tasks.queue import validate_task_dependencies
     from litehive.state.persist import persist_task_and_state_without_runner_guard

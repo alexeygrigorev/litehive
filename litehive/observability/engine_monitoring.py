@@ -14,7 +14,7 @@ from litehive.domain.engine import (
     EngineUsageWindow,
     WorkspaceEngineMonitoring,
 )
-from litehive.tasks.persistence import atomic_write_text
+from litehive.state.persist import atomic_write_text
 from litehive.state.locking import workspace_mutation_guard
 
 

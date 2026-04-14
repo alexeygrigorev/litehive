@@ -19,7 +19,7 @@ from litehive.recovery.execution_recovery import recover_completed_task
 from litehive.state.records import list_tasks, require_task
 from litehive.domain.task_ops import WorkspaceConflictError
 from litehive.tasks.normalization import missing_acceptance_criteria_reason
-from litehive.tasks.persistence import load_state
+from litehive.state.persist import load_state
 from litehive.tasks.queue import move_queued_task, prioritize_queued_tasks
 from litehive.tasks.status import (
     requeue_task,

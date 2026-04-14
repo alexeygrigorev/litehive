@@ -22,7 +22,7 @@ def plan_pool_dry_run(
     engine_override,
     model_override,
 ):
-    from litehive.tasks.worktree_inspection import git_worktree_blocks_pool
+    from litehive.tasks.worktrees import git_worktree_blocks_pool
 
     if stop_conditions.stop_on_dirty_git and git_worktree_blocks_pool(root):
         return [], "dirty_git_state"
@@ -72,7 +72,7 @@ def plan_single_task_dry_run(
     engine_override,
     model_override,
 ):
-    from litehive.tasks.worktree_inspection import git_worktree_blocks_pool
+    from litehive.tasks.worktrees import git_worktree_blocks_pool
 
     if stop_conditions.stop_on_dirty_git and git_worktree_blocks_pool(root):
         return [], "dirty_git_state"

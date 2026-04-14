@@ -16,6 +16,8 @@ from litehive.domain.runtime import TaskRuntime
 from litehive.domain.task import (
     TaskCreationSource,
     TaskRecord,
+    TaskIntentGitSettings,
+    TaskIntentRecord,
     TaskStateRecord,
     WorkspaceState,
 )
@@ -26,23 +28,53 @@ from litehive.tasks.constants import (
     VALID_TASK_TYPES,
 )
 from litehive.state.locking import workspace_lock, workspace_mutation_guard
-from litehive.tasks.normalization import normalize_acceptance_criteria
-from litehive.tasks.paths import slugify, task_dir, task_file, task_runtime_file, tasks_root
-from litehive.tasks.persistence import (
+from litehive.state.persist import (
     load_state,
+    save_state_without_runner_guard,
     serialize_state,
     write_atomic_files_and_then,
 )
+from litehive.tasks.normalization import normalize_acceptance_criteria
+from litehive.tasks.paths import slugify, task_dir, task_file, tasks_root
 
 logger = logging.getLogger(__name__)
 
 
-def _drop_legacy_task_engine_field(data: object) -> dict:
-    if not isinstance(data, dict):
-        return {}
-    sanitized = dict(data)
-    sanitized.pop("engine", None)
-    return sanitized
+class LegacyTaskStateError(ValueError):
+    """Raised when a task still depends on the removed pre-SQLite layout."""
+
+
+class TaskStateMissingError(RuntimeError):
+    """Raised when a task has no SQLite runtime state row."""
+
+
+def _load_task_record_mapping(path: Path) -> dict:
+    loaded = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    if not isinstance(loaded, dict):
+        raise ValueError(f"Task file must contain a mapping: {path}")
+    return dict(loaded)
+
+
+def _validate_task_intent_payload(path: Path, data: dict) -> None:
+    allowed_keys = set(TaskIntentRecord.model_fields)
+    unexpected_keys = sorted(set(data) - allowed_keys)
+    if unexpected_keys:
+        joined = ", ".join(unexpected_keys)
+        raise LegacyTaskStateError(
+            f"{path} uses removed non-intent task fields: {joined}. "
+            "Task runtime now lives only in SQLite."
+        )
+    git_payload = data.get("git") or {}
+    if not isinstance(git_payload, dict):
+        raise ValueError(f"Task git section must contain a mapping: {path}")
+    allowed_git_keys = set(TaskIntentGitSettings.model_fields)
+    unexpected_git_keys = sorted(set(git_payload) - allowed_git_keys)
+    if unexpected_git_keys:
+        joined = ", ".join(unexpected_git_keys)
+        raise LegacyTaskStateError(
+            f"{path} uses removed runtime git fields: {joined}. "
+            "Task runtime now lives only in SQLite."
+        )
 
 
 def _highest_task_number_on_disk(root: Path) -> int:
@@ -78,20 +110,6 @@ def serialize_task_record(task: TaskRecord) -> str:
     _normalize_task_flag_reason(task)
     payload = task.to_intent_record().model_dump(mode="python")
     return yaml.safe_dump(payload, sort_keys=False)
-
-
-def serialize_task_runtime(task: TaskRecord) -> str:
-    _normalize_task_worktree_state(task)
-    return yaml.safe_dump(
-        {
-            **task_runtime_for_storage(task).model_dump(mode="python"),
-            "git": {
-                "commit_sha": task.git.commit_sha,
-                "worktree_path": task.runtime.git.worktree_path,
-            },
-        },
-        sort_keys=False,
-    )
 
 
 def task_runtime_for_storage(task: TaskRecord) -> TaskRuntime:
@@ -157,17 +175,6 @@ def save_task_runtime(root: Path, task: TaskRecord) -> None:
         write_task_runtime(root, task)
 
 
-def _backfill_legacy_task_state(root: Path, task: TaskRecord) -> TaskRecord:
-    store = runtime_store(root)
-    writes = {task_file(root, task): serialize_task_record(task)}
-
-    def callback() -> None:
-        store.save_runtime_transaction(task_states={task.id: task_state_for_storage(task)})
-
-    write_atomic_files_and_then(writes, callback)
-    return task
-
-
 def _load_task_runtime(root: Path, task: TaskRecord) -> TaskRecord:
     store = runtime_store(root)
     task_state = store.load_task_state(task.id)
@@ -177,51 +184,20 @@ def _load_task_runtime(root: Path, task: TaskRecord) -> TaskRecord:
         _normalize_task_worktree_state(task)
         return task
 
-    runtime_file = task_runtime_file(root, task)
-    if runtime_file.exists():
-        data = yaml.safe_load(runtime_file.read_text(encoding="utf-8")) or {}
-        task.runtime = TaskRuntime(**data)
-        set_task_commit_sha(task, task.runtime.git.commit_sha)
-    _normalize_task_worktree_state(task)
-    return _backfill_legacy_task_state(root, task)
-
-
-def _task_file_contains_runtime_state(path: Path) -> bool:
-    data = _drop_legacy_task_engine_field(
-        yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-    )
-    if not isinstance(data, dict):
-        return False
-    return any(
-        key in data
-        for key in (
-            "model",
-            "status",
-            "flag_reason",
-            "flag_count",
-            "pipeline_status",
-            "updated_at",
-            "subagents",
-            "retry_policy",
-            "runtime",
+    runtime_path = task_dir(root, task) / "runtime.yaml"
+    if runtime_path.exists():
+        raise LegacyTaskStateError(
+            f"{runtime_path} is no longer supported. Task runtime now lives only in SQLite."
         )
-    ) or any(
-        key in (data.get("git") or {})
-        for key in (
-            "commit_sha",
-            "checkpoint_base_sha",
-            "checkpoint_attempts",
-            "rolled_back_checkpoint_attempt",
-            "merge_agent_attempts",
-            "worktree_path",
-        )
+    raise TaskStateMissingError(
+        f"Task {task.id} is missing its SQLite runtime state row. "
+        "This workspace no longer supports reconstructing runtime state from files."
     )
 
 
 def load_task_record_file(path: Path) -> TaskRecord:
-    data = _drop_legacy_task_engine_field(
-        yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-    )
+    data = _load_task_record_mapping(path)
+    _validate_task_intent_payload(path, data)
     return TaskRecord(**data)
 
 
@@ -404,8 +380,6 @@ def discard_created_task(root: Path, task_id: str) -> None:
         if state.active_task_id == task_id:
             state.active_task_id = None
         state.queue = [queued_id for queued_id in state.queue if queued_id != task_id]
-        from litehive.tasks.persistence import save_state_without_runner_guard
-
         save_state_without_runner_guard(root, state)
         if task is not None:
             td = task_dir(root, task)
@@ -413,7 +387,12 @@ def discard_created_task(root: Path, task_id: str) -> None:
                 shutil.rmtree(td)
 
 
-def list_tasks(root: Path, *, include_runtime: bool = True) -> list[TaskRecord]:
+def list_tasks(
+    root: Path,
+    *,
+    include_runtime: bool = True,
+    strict: bool = True,
+) -> list[TaskRecord]:
     records: list[TaskRecord] = []
     for child in sorted(tasks_root(root).iterdir()):
         if not child.is_dir():
@@ -421,8 +400,13 @@ def list_tasks(root: Path, *, include_runtime: bool = True) -> list[TaskRecord]:
         path = child / "task.yaml"
         if not path.exists():
             continue
-        task = load_task_record_file(path)
-        task = _load_task_runtime(root, task)
+        try:
+            task = load_task_record_file(path)
+            task = _load_task_runtime(root, task)
+        except (LegacyTaskStateError, TaskStateMissingError, ValueError):
+            if strict:
+                raise
+            continue
         records.append(task)
     return records
 

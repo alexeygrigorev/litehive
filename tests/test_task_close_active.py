@@ -12,7 +12,7 @@ from litehive.config.workspace import ensure_workspace
 from heru.types import SubagentRef
 from litehive.state.records import create_task, require_task
 from litehive.tasks.paths import runner_lock_path, task_dir
-from litehive.tasks.persistence import load_state
+from litehive.state.persist import load_state
 from litehive.tasks.queue import set_active_task
 from litehive.state.locking import runner_lock_is_held
 from litehive.tasks.runtime import (

@@ -8,7 +8,6 @@ pool-summary.txt
 engine-monitoring.yaml
 
 # Task runtime artifacts (not durable project state)
-tasks/*/runtime.yaml
 tasks/*/journal.md
 tasks/*/brief.md
 tasks/*/events.jsonl

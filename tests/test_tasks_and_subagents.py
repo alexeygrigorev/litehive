@@ -3,7 +3,7 @@ import types
 from contextlib import contextmanager
 
 import litehive.state.records as tasks_crud
-import litehive.tasks.persistence as tasks_persistence
+import litehive.state.persist as tasks_persistence
 import litehive.tasks.status as task_status_module
 import litehive.state.persist as workflow_module
 from litehive.lifecycle.heru_factory import HeruEngineAdapter
@@ -141,8 +141,8 @@ import json
 from pathlib import Path
 from litehive.config.workspace import ensure_workspace
 from litehive.state.records import create_task
-from litehive.tasks.persistence import load_state
-from litehive.tasks.persistence import save_state_without_runner_guard
+from litehive.state.persist import load_state
+from litehive.state.persist import save_state_without_runner_guard
 from litehive.state import persist as workflow_module
 
 root = Path(__import__("sys").argv[1])
@@ -188,9 +188,9 @@ from pathlib import Path
 from litehive.config.workspace import ensure_workspace
 from litehive.domain.reports import FollowUpTaskSpec
 from litehive.state.records import create_task
-from litehive.tasks.persistence import load_state
+from litehive.state.persist import load_state
 from litehive.state.records import create_follow_up_tasks
-from litehive.tasks.persistence import save_state_without_runner_guard
+from litehive.state.persist import save_state_without_runner_guard
 from litehive.state import persist as workflow_module
 
 root = Path(__import__("sys").argv[1])

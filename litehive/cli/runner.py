@@ -29,7 +29,7 @@ from litehive.state.backup import create_workspace_backup, list_workspace_backup
 from litehive.state.records import get_task
 from litehive.domain.task_ops import WorkspaceConflictError
 from litehive.tasks.normalization import missing_acceptance_criteria_reason
-from litehive.tasks.persistence import load_state
+from litehive.state.persist import load_state
 from litehive.tasks.queue import dequeue_next_task, peek_next_task_selection, plan_task_selections
 from litehive.tasks.reports import append_thread_comment
 from litehive.state.locking import runner_status

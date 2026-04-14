@@ -1,6 +1,5 @@
 """Workspace-level recovery and stale-runner repair."""
 
-import re
 import sqlite3
 from pathlib import Path
 
@@ -46,54 +45,6 @@ def _running_task_ids(root: Path) -> list[str]:
         except sqlite3.OperationalError:
             return []
     return [str(row["task_id"]) for row in rows]
-
-
-def _load_comment_entries(path: Path) -> list[dict[str, object]]:
-    if not path.exists():
-        return []
-    loaded = yaml.safe_load(path.read_text(encoding="utf-8"))
-    if not isinstance(loaded, list):
-        return []
-    return [dict(entry) for entry in loaded if isinstance(entry, dict)]
-
-
-def _migrate_legacy_thread_files(
-    root: Path,
-    *,
-    summary: WorkspaceRepairSummary | None = None,
-) -> bool:
-    from litehive.tasks.persistence import atomic_write_text
-    from litehive.tasks.paths import tasks_root
-
-    mutated = False
-    for task_path in sorted(tasks_root(root).iterdir()):
-        if not task_path.is_dir():
-            continue
-        legacy_path = task_path / "thread.yaml"
-        if not legacy_path.exists():
-            continue
-        comments_path = task_path / "comments.yaml"
-
-        legacy_entries = _load_comment_entries(legacy_path)
-        comment_entries = _load_comment_entries(comments_path)
-        merged_entries = list(legacy_entries)
-        for entry in comment_entries:
-            if entry not in merged_entries:
-                merged_entries.append(entry)
-
-        if merged_entries != comment_entries:
-            atomic_write_text(
-                comments_path,
-                yaml.safe_dump(merged_entries, sort_keys=False),
-            )
-        legacy_path.unlink()
-        mutated = True
-        if summary is not None:
-            match = re.match(r"^(T-\d{4})-", task_path.name)
-            task_id = match.group(1) if match else task_path.name
-            if task_id not in summary.migrated_comment_task_ids:
-                summary.migrated_comment_task_ids.append(task_id)
-    return mutated
 
 
 def prepare_interrupted_task_for_requeue(task: TaskRecord) -> None:
@@ -162,7 +113,7 @@ def _write_interrupted_subagent_artifacts(
     *,
     resume_stage: str,
 ) -> None:
-    from litehive.tasks.persistence import write_atomic_files
+    from litehive.state.persist import write_atomic_files
 
     now = utcnow()
     base = task_dir(root, task) / subagent.path
@@ -537,7 +488,7 @@ def recover_stale_runner_state(
     summary: WorkspaceRepairSummary | None = None,
 ) -> bool:
     from litehive.state.records import list_tasks
-    from litehive.tasks.persistence import save_state_without_runner_guard, load_state
+    from litehive.state.persist import load_state, save_state_without_runner_guard
     from litehive.state.locking import (
         current_thread_owns_runner_guard,
         runner_lock_is_held,
@@ -623,6 +574,4 @@ def repair_workspace_state(root: Path) -> WorkspaceRepairSummary:
     summary = WorkspaceRepairSummary()
     summary.stale_runner_recovered = recover_stale_runner_state(root, summary=summary)
     summary.mutated = summary.stale_runner_recovered
-    if _migrate_legacy_thread_files(root, summary=summary):
-        summary.mutated = True
     return summary

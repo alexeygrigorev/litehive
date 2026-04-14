@@ -16,7 +16,7 @@ from litehive.state.records import (
     set_task_commit_sha,
 )
 from litehive.domain.task_ops import WorkspaceConflictError
-from litehive.tasks.persistence import load_state, save_state
+from litehive.state.persist import load_state, save_state
 from litehive.tasks.worktrees import is_managed_worktree_path, resolve_recorded_worktree_path
 
 _CLEANABLE_STATUSES = {"done", "deferred", "wont_do", "duplicate"}
