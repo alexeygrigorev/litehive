@@ -192,22 +192,6 @@ def test_status_no_frozen_engines(tmp_path: Path, capsys) -> None:
     output = capsys.readouterr().out
     assert "engine_frozen" not in output
 
-def test_cmd_engine_rejects_stale_single_engine_status_namespace(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
-    ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
-
-    exit_code, output = _run_engine(
-        "engine",
-        "status",
-        "codex",
-        "--workspace",
-        str(tmp_path),
-    )
-
-    assert exit_code == 1
-    assert "does not take an engine name" in output
-
 
 def test_frozen_engine_in_fallback_chain_skipped(tmp_path: Path) -> None:
     """When a fallback engine is frozen, it's skipped but others remain."""

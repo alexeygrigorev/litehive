@@ -5,8 +5,6 @@ from typer.testing import CliRunner
 
 from litehive.cli.app import app as cli_app
 from litehive.config.paths import worktree_root
-from litehive.config.workspace import ensure_workspace
-from litehive.tasks.archive import archive_done_tasks, archive_task
 
 
 _runner = CliRunner()
@@ -35,35 +33,6 @@ def _cmd_add(args) -> int:
     if args.priority is not None:
         argv.extend(["--priority", args.priority])
     return _invoke_cli(argv)
-
-
-def _cmd_archive(args) -> int:
-    ensure_workspace(args.workspace)
-    try:
-        if getattr(args, "all_done", False):
-            tasks = archive_done_tasks(
-                args.workspace,
-                on_skip=lambda skipped_task_id, exc: print(
-                    f"archive skipped: {skipped_task_id} ({exc})"
-                ),
-            )
-            for task in tasks:
-                print(f"archived: {task.id} {task.title}")
-            print(f"archived_count: {len(tasks)}")
-        else:
-            task = archive_task(args.workspace, args.task_id)
-            print(f"archived: {task.id} {task.title}")
-            print("archived_count: 1")
-    except ValueError as exc:
-        print(f"archive failed: {exc}")
-        return 1
-    return 0
-
-
-def _cmd_cleanup(args) -> int:
-    return _invoke_cli(
-        ["archive", "cleanup", "--workspace", args.workspace, "--older-than", args.older_than]
-    )
 
 
 def _cmd_debug(args) -> int:

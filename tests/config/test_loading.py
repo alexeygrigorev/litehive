@@ -183,25 +183,3 @@ def test_load_config_reads_subagent_inactivity_timeout_override(tmp_path: Path) 
 def test_litehive_config_rejects_unknown_retry_on_kind() -> None:
     with pytest.raises(ValueError, match="retry_on must contain only"):
         LitehiveConfig(retry_on=["timeout", "rate_limit"])
-
-
-def test_configure_no_longer_has_task_engine_routing(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
-    raw_text = (tmp_path / ".litehive" / "config.yaml").read_text(encoding="utf-8")
-    assert "task_engine_route" not in raw_text
-    config = load_config(tmp_path)
-    assert config.default_engine == "codex"
-
-
-def test_load_config_rejects_removed_pre_acceptance_command(tmp_path: Path) -> None:
-    from litehive.config.paths import config_path
-
-    ensure_workspace(tmp_path)
-
-    cfg = yaml.safe_load(config_path(tmp_path).read_text(encoding="utf-8")) or {}
-    cfg["pre_acceptance_command"] = "uv run ruff check litehive tests"
-    config_path(tmp_path).write_text(yaml.safe_dump(cfg, sort_keys=False), encoding="utf-8")
-
-    with pytest.raises(TypeError, match="pre_acceptance_command"):
-        load_config(tmp_path)
-

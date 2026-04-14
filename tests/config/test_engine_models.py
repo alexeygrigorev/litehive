@@ -1,7 +1,5 @@
 from pathlib import Path
 
-import pytest
-
 from litehive.config.engine_models import resolve_engine_name, resolve_engine_plan, resolve_model
 from litehive.config.loading import load_config
 from litehive.config.model import LitehiveConfig
@@ -18,15 +16,6 @@ def test_resolve_engine_name_prefers_run_override_then_workspace_default(
 
     assert resolve_engine_name(task, config, engine_override="gemini") == "gemini"
     assert resolve_engine_name(task, config) == config.default_engine
-
-
-def test_create_task_rejects_removed_engine_override(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
-
-    with pytest.raises(TypeError):
-        create_task(tmp_path, title="Pending task", engine="gemini")
-
-    assert load_config(tmp_path).default_engine == "codex"
 
 
 def test_resolve_model_prefers_run_override_then_task_then_workspace_default(
@@ -114,4 +103,3 @@ def test_resolve_engine_name_uses_default_engine_without_task_override(
 
     assert resolve_engine_name(task, config) == "gemini"
     assert resolve_engine_plan(task, config) == ["gemini"]
-

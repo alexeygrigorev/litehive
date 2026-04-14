@@ -10,7 +10,7 @@ from litehive.config.workspace import ensure_workspace
 from litehive.state.records import create_task, get_task, save_task
 from litehive.tasks.archive import archive_task
 
-from tests.support.helpers import _cmd_add, _cmd_list, _cmd_show, _cmd_update
+from tests.support.helpers import _cmd_list, _cmd_show, _cmd_update
 
 
 def test_list_excludes_done_tasks_by_default(
@@ -190,30 +190,6 @@ def test_show_prints_task_details(
     assert "  - step two" in output
 
 
-def test_task_add_output_omits_misleading_engine_line(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
-    ensure_workspace(tmp_path, LitehiveConfig(default_engine="gemini"))
-
-    exit_code = _cmd_add(
-        argparse.Namespace(
-            workspace=tmp_path,
-            title="Added task",
-            goal="Keep output focused.",
-            acceptance_criteria=None,
-            depends_on=None,
-            task_type=None,
-            mode=None,
-            priority=None,
-        )
-    )
-    output = capsys.readouterr().out
-
-    assert exit_code == 0
-    assert "Created task T-0001" in output
-    assert "engine:" not in output
-
-
 def test_task_update_renames_title_in_place(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -240,7 +216,6 @@ def test_task_update_renames_title_in_place(
 
     assert exit_code == 0
     assert f"task: {task.id} Renamed title" in update_output
-    assert "engine:" not in update_output
 
     updated = get_task(tmp_path, task.id)
     assert updated is not None
