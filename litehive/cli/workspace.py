@@ -43,7 +43,7 @@ from litehive.recovery.workspace_repair import repair_workspace_state
 from litehive.state.records import list_tasks_state_first, require_task
 from litehive.state.persist import load_state
 from litehive.state.records import list_tasks
-from litehive.domain.task_ops import WorkspaceConflictError
+from litehive.domain.task_ops import WorkspaceConflictError, WorkspaceRepairSummary
 from litehive.state.persist import load_state as load_runtime_state
 from litehive.tasks.worktrees import inspect_dirty_worktree_gate
 
@@ -134,6 +134,40 @@ def _print_status_issues(issues) -> int:
     return 1
 
 
+def _repair_summary_lines(
+    summary: WorkspaceRepairSummary,
+    *,
+    result_label: str,
+    include_empty: bool,
+    include_extended_fields: bool,
+) -> list[str]:
+    lines = [
+        f"{result_label}: {'yes' if summary.mutated else 'no'}",
+        f"stale_runner_recovered: {'yes' if summary.stale_runner_recovered else 'no'}",
+    ]
+    if summary.cleared_active_task_id or include_empty:
+        lines.append(f"cleared_active_task_id: {summary.cleared_active_task_id or '-'}")
+
+    items = [
+        ("requeued_tasks", summary.requeued_task_ids),
+        ("removed_queue_entries", summary.removed_queue_entries),
+        ("deduped_queue_entries", summary.deduped_queue_entries),
+    ]
+    if include_extended_fields:
+        items.extend(
+            [
+                ("restored_queue_entries", summary.restored_queue_entries),
+                ("finalized_commit_tasks", summary.finalized_commit_task_ids),
+                ("stale_process_tasks", summary.stale_process_task_ids),
+                ("reassigned_duplicate_ids", summary.reassigned_duplicate_ids),
+            ]
+        )
+    for label, values in items:
+        if values or include_empty:
+            lines.append(f"{label}: {' '.join(values) if values else '-'}")
+    return lines
+
+
 def doctor_command(
     workspace: WorkspaceOption = Path.cwd(),
     fix: Annotated[bool, typer.Option("--fix", help="Apply deterministic non-destructive fixes")] = False,
@@ -146,16 +180,13 @@ def doctor_command(
         except WorkspaceConflictError as exc:
             print(f"doctor failed: {exc}")
             return 1
-        print(f"doctor_repaired: {'yes' if summary.mutated else 'no'}")
-        print(f"stale_runner_recovered: {'yes' if summary.stale_runner_recovered else 'no'}")
-        if summary.cleared_active_task_id:
-            print(f"cleared_active_task_id: {summary.cleared_active_task_id}")
-        if summary.requeued_task_ids:
-            print(f"requeued_tasks: {' '.join(summary.requeued_task_ids)}")
-        if summary.removed_queue_entries:
-            print(f"removed_queue_entries: {' '.join(summary.removed_queue_entries)}")
-        if summary.deduped_queue_entries:
-            print(f"deduped_queue_entries: {' '.join(summary.deduped_queue_entries)}")
+        for line in _repair_summary_lines(
+            summary,
+            result_label="doctor_repaired",
+            include_empty=False,
+            include_extended_fields=False,
+        ):
+            print(line)
         snapshot = collect_status_snapshot(root)
         if not snapshot.issues:
             print(f"doctor: clean workspace={root}")
@@ -249,16 +280,13 @@ def repair_command(workspace: WorkspaceOption = Path.cwd()) -> int:
         print(f"repair failed: {exc}")
         return 1
     state = load_runtime_state(workspace)
-    print(f"repaired: {'yes' if summary.mutated else 'no'}")
-    print(f"stale_runner_recovered: {'yes' if summary.stale_runner_recovered else 'no'}")
-    print(f"cleared_active_task_id: {summary.cleared_active_task_id or '-'}")
-    print("requeued_tasks: " + (" ".join(summary.requeued_task_ids) if summary.requeued_task_ids else "-"))
-    print("removed_queue_entries: " + (" ".join(summary.removed_queue_entries) if summary.removed_queue_entries else "-"))
-    print("deduped_queue_entries: " + (" ".join(summary.deduped_queue_entries) if summary.deduped_queue_entries else "-"))
-    print("restored_queue_entries: " + (" ".join(summary.restored_queue_entries) if summary.restored_queue_entries else "-"))
-    print("finalized_commit_tasks: " + (" ".join(summary.finalized_commit_task_ids) if summary.finalized_commit_task_ids else "-"))
-    print("stale_process_tasks: " + (" ".join(summary.stale_process_task_ids) if summary.stale_process_task_ids else "-"))
-    print("reassigned_duplicate_ids: " + (" ".join(summary.reassigned_duplicate_ids) if summary.reassigned_duplicate_ids else "-"))
+    for line in _repair_summary_lines(
+        summary,
+        result_label="repaired",
+        include_empty=True,
+        include_extended_fields=True,
+    ):
+        print(line)
     print(f"active_task_id: {state.active_task_id}")
     print(f"queue_length: {len(state.queue)}")
     return 0
