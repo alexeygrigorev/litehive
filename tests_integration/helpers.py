@@ -1,6 +1,7 @@
 import os
 import subprocess
 import sys
+import time
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -18,6 +19,7 @@ INTEGRATION_ENV = "LITEHIVE_INTEGRATION_ENGINES"
 TIMEOUT_ENV = "LITEHIVE_INTEGRATION_TIMEOUT_SECONDS"
 DEFAULT_TIMEOUT_SECONDS = 30
 ENGINE_MATRIX = tuple(sorted(VALID_ENGINE_NAMES))
+_GOZ_TRANSIENT_ERROR_MARKERS = ("ResponseNotRead",)
 
 
 @dataclass(frozen=True, slots=True)
@@ -155,6 +157,12 @@ def sandboxed_integration_workspace(root: Path) -> Path:
         goz_project = f"{home}/git/goz"
         if Path(goz_project).exists():
             goz_ro_binds.append(goz_project)
+        # The goz virtualenv's python is a symlink into uv's managed Python
+        # install, so the interpreter target itself must also be visible in
+        # the sandbox.
+        uv_python_dir = f"{home}/.local/share/uv/python"
+        if Path(uv_python_dir).exists():
+            goz_ro_binds.append(uv_python_dir)
         # ~/.goz must be writable because goz persists a session file per
         # invocation to ~/.goz/sessions/<id>.json. A --ro-bind here causes
         # the smoke test to exit 1 after the successful reply.
@@ -271,26 +279,40 @@ def execute_engine_prompt(
         sandbox_summary_override = summary.summary
         sandbox_applied = True
     timeout_seconds = int(os.environ.get(TIMEOUT_ENV, str(DEFAULT_TIMEOUT_SECONDS)))
-    try:
-        completed = subprocess.run(
-            argv,
-            cwd=run_cwd,
-            env=run_env,
-            stdin=subprocess.DEVNULL,
-            capture_output=True,
-            text=True,
-            timeout=timeout_seconds,
-            check=False,
-        )
-    except subprocess.TimeoutExpired as exc:
-        stdout_tail = (exc.stdout or "")[-800:]
-        stderr_tail = (exc.stderr or "")[-800:]
-        pytest.fail(
-            f"{engine_name} timed out after {timeout_seconds}s (sandboxed={sandbox_applied})\n"
-            f"argv: {argv!r}\n"
-            f"stdout_tail:\n{stdout_tail}\n"
-            f"stderr_tail:\n{stderr_tail}"
-        )
+    completed: subprocess.CompletedProcess[str] | None = None
+    attempts = 2 if engine_name == "goz" else 1
+    for attempt in range(attempts):
+        try:
+            completed = subprocess.run(
+                argv,
+                cwd=run_cwd,
+                env=run_env,
+                stdin=subprocess.DEVNULL,
+                capture_output=True,
+                text=True,
+                timeout=timeout_seconds,
+                check=False,
+            )
+        except subprocess.TimeoutExpired as exc:
+            stdout_tail = (exc.stdout or "")[-800:]
+            stderr_tail = (exc.stderr or "")[-800:]
+            pytest.fail(
+                f"{engine_name} timed out after {timeout_seconds}s (sandboxed={sandbox_applied})\n"
+                f"argv: {argv!r}\n"
+                f"stdout_tail:\n{stdout_tail}\n"
+                f"stderr_tail:\n{stderr_tail}"
+            )
+        combined_output = f"{completed.stdout}\n{completed.stderr}"
+        if (
+            engine_name == "goz"
+            and completed.returncode != 0
+            and attempt + 1 < attempts
+            and any(marker in combined_output for marker in _GOZ_TRANSIENT_ERROR_MARKERS)
+        ):
+            time.sleep(0.5)
+            continue
+        break
+    assert completed is not None
     if sandbox_applied:
         sandboxed_flag = True
         sandbox_summary = sandbox_summary_override or ""
