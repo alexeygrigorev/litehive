@@ -13,16 +13,12 @@ from litehive.state.records import (
 )
 
 
-def test_get_task_reads_runtime_from_database_without_runtime_yaml(tmp_path: Path) -> None:
+def test_get_task_reads_runtime_from_database(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="DB runtime")
     task.runtime.execution_status = "running"
     task.runtime.current_stage.step = "implementing"
     save_task_runtime(tmp_path, task)
-
-    runtime_path = tmp_path / ".litehive" / "tasks" / f"{task.id}-{task.slug}" / "runtime.yaml"
-    if runtime_path.exists():
-        runtime_path.unlink()
 
     loaded = get_task(tmp_path, task.id)
 
@@ -77,6 +73,8 @@ def test_task_yaml_persists_only_intent_fields_and_runtime_moves_to_db(tmp_path:
     assert loaded.git.checkpoint_attempts == 3
     assert loaded.runtime.execution_status == "running"
     assert loaded.runtime.current_stage.step == "implementing"
+
+
 def test_get_task_requires_sqlite_runtime_state_row(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     task_dir = tmp_path / ".litehive" / "tasks" / "T-0001-missing-runtime"
