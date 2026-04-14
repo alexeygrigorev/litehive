@@ -10,6 +10,7 @@ import yaml
 from heru.quota.claude_quota import check_claude_quota
 from heru.quota.codex_quota import check_codex_quota
 from heru.quota.copilot_quota import check_copilot_quota
+from heru.quota import UsageStatus
 from heru.quota.zai_quota import check_zai_quota
 
 from heru import ENGINE_CHOICES, get_engine
@@ -363,47 +364,55 @@ def _health_daemon_status(root: Path) -> tuple[str, str]:
 
 
 def _collect_quota_health() -> list[_QuotaHealth]:
+    claude_status = check_claude_quota()
+    codex_status = check_codex_quota()
+    copilot_status = check_copilot_quota()
     zai_status = check_zai_quota()
     snapshots = {
-        "claude": _claude_quota_health(),
-        "codex": _codex_quota_health(),
-        "copilot": _copilot_quota_health(),
-        "gemini": _QuotaHealth(engine="gemini", status="unsupported", summary="no proactive quota check"),
-        "goz": _zai_quota_health("goz", zai_status),
-        "opencode": _zai_quota_health("opencode", zai_status),
+        "claude": _quota_health(
+            "claude",
+            claude_status,
+            reset_at=_preferred_reset_at(claude_status, include_short_term_fallback=True),
+        ),
+        "codex": _quota_health("codex", codex_status, reset_at=_preferred_reset_at(codex_status)),
+        "copilot": _quota_health(
+            "copilot",
+            copilot_status,
+            reset_at=_preferred_reset_at(copilot_status),
+        ),
+        "gemini": _unsupported_quota_health("gemini"),
+        "goz": _quota_health("goz", zai_status),
+        "opencode": _quota_health("opencode", zai_status),
     }
     return [snapshots[engine] for engine in ENGINE_CHOICES]
 
 
-def _codex_quota_health() -> _QuotaHealth:
-    status = check_codex_quota()
-    if status.error is not None:
-        return _QuotaHealth("codex", "unavailable", status.error)
-    summary = f"short={status.short_term.percent_remaining:.1f}% remaining long={status.long_term.percent_remaining:.1f}% remaining reset={status.long_term.reset_at or '-'}"
-    return _QuotaHealth("codex", "warning" if status.limit_reached else "ok", summary, status.limit_reached)
+def _unsupported_quota_health(engine: str) -> _QuotaHealth:
+    return _QuotaHealth(engine=engine, status="unsupported", summary="no proactive quota check")
 
 
-def _claude_quota_health() -> _QuotaHealth:
-    status = check_claude_quota()
-    if status.error is not None:
-        return _QuotaHealth("claude", "unavailable", status.error)
-    reset_at = status.long_term.reset_at or status.short_term.reset_at or "-"
-    summary = f"short={status.short_term.percent_remaining:.1f}% remaining long={status.long_term.percent_remaining:.1f}% remaining reset={reset_at}"
-    return _QuotaHealth("claude", "warning" if status.limit_reached else "ok", summary, status.limit_reached)
+def _preferred_reset_at(
+    status: UsageStatus,
+    *,
+    include_short_term_fallback: bool = False,
+) -> str | None:
+    return status.long_term.reset_at or (status.short_term.reset_at if include_short_term_fallback else None)
 
 
-def _copilot_quota_health() -> _QuotaHealth:
-    status = check_copilot_quota()
-    if status.error is not None:
-        return _QuotaHealth("copilot", "unavailable", status.error)
-    summary = f"short={status.short_term.percent_remaining:.1f}% remaining long={status.long_term.percent_remaining:.1f}% remaining reset={status.long_term.reset_at or '-'}"
-    return _QuotaHealth("copilot", "warning" if status.limit_reached else "ok", summary, status.limit_reached)
-
-
-def _zai_quota_health(engine: str, status) -> _QuotaHealth:
+def _quota_health(
+    engine: str,
+    status: UsageStatus,
+    *,
+    reset_at: str | None = None,
+) -> _QuotaHealth:
     if status.error is not None:
         return _QuotaHealth(engine, "unavailable", status.error)
-    summary = f"short={status.short_term.percent_remaining:.1f}% remaining long={status.long_term.percent_remaining:.1f}% remaining"
+    summary = (
+        f"short={status.short_term.percent_remaining:.1f}% remaining "
+        f"long={status.long_term.percent_remaining:.1f}% remaining"
+    )
+    if reset_at is not None:
+        summary += f" reset={reset_at}"
     return _QuotaHealth(engine, "warning" if status.limit_reached else "ok", summary, status.limit_reached)
 
 
