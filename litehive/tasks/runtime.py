@@ -222,6 +222,7 @@ def mark_task_outcome(
     reason: str,
     retry_count: int,
     retry_limit: int,
+    follow_up_task_id: str | None = None,
     failure_classification: str | None = None,
     failure_diagnostics: dict[str, str | int | bool | None | list[str]] | None = None,
 ) -> None:
@@ -233,6 +234,7 @@ def mark_task_outcome(
         reason=reason,
         retry_count=retry_count,
         retry_limit=retry_limit,
+        follow_up_task_id=follow_up_task_id,
         failure_classification=failure_classification,
         failure_diagnostics=failure_diagnostics,
     )
@@ -248,6 +250,7 @@ def apply_task_outcome(
     reason: str,
     retry_count: int,
     retry_limit: int,
+    follow_up_task_id: str | None = None,
     failure_classification: str | None = None,
     failure_diagnostics: dict[str, str | int | bool | None | list[str]] | None = None,
 ) -> None:
@@ -260,6 +263,7 @@ def apply_task_outcome(
         reason=reason,
         failure_classification=failure_classification,
         failure_diagnostics=dict(failure_diagnostics or {}),
+        follow_up_task_id=follow_up_task_id,
         retry_count=retry_count,
         retry_limit=retry_limit,
         recorded_at=now,

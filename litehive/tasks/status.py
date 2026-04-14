@@ -31,7 +31,7 @@ from litehive.tasks.normalization import (
     implementation_entry_stage,
 )
 from litehive.tasks.paths import latest_subagent_base, task_dir
-from litehive.tasks.runtime import clear_task_run_activity
+from litehive.tasks.runtime import apply_task_outcome, clear_task_run_activity
 
 
 def _active_task_id_for_stop(root: Path, state: WorkspaceState) -> str:
@@ -435,15 +435,17 @@ def _queue_task(state: WorkspaceState, task_id: str, *, front: bool = False) -> 
 
 
 def _apply_cancelled_task_state(task: TaskRecord, *, reason: str) -> None:
-    now = clear_task_run_activity(task, execution_status="cancelled")
+    clear_task_run_activity(task, execution_status="cancelled")
     task.status = "cancelled"
-    task.runtime.last_outcome.kind = "cancelled"
-    task.runtime.last_outcome.stage = task.pipeline_status
-    task.runtime.last_outcome.reason_code = "execution_cancelled"
-    task.runtime.last_outcome.reason = reason
-    task.runtime.last_outcome.retry_count = 0
-    task.runtime.last_outcome.retry_limit = 0
-    task.runtime.last_outcome.recorded_at = now
+    apply_task_outcome(
+        task,
+        kind="cancelled",
+        stage=task.pipeline_status,
+        reason_code="execution_cancelled",
+        reason=reason,
+        retry_count=0,
+        retry_limit=0,
+    )
 
 
 def _apply_close_task_state(
@@ -454,18 +456,20 @@ def _apply_close_task_state(
     follow_up_task_id: str | None = None,
     pipeline_status: str | None = None,
 ) -> str:
-    now = clear_task_run_activity(task, execution_status="cancelled")
+    clear_task_run_activity(task, execution_status="cancelled")
     task.status = outcome  # type: ignore[assignment]
     if pipeline_status is not None:
         task.pipeline_status = pipeline_status
-    task.runtime.last_outcome.kind = outcome  # type: ignore[assignment]
-    task.runtime.last_outcome.stage = task.pipeline_status
-    task.runtime.last_outcome.reason_code = outcome
-    task.runtime.last_outcome.reason = reason or _CLOSE_REASON_CODE_LABELS[outcome]
-    task.runtime.last_outcome.follow_up_task_id = follow_up_task_id
-    task.runtime.last_outcome.retry_count = 0
-    task.runtime.last_outcome.retry_limit = 0
-    task.runtime.last_outcome.recorded_at = now
+    apply_task_outcome(
+        task,
+        kind=outcome,
+        stage=task.pipeline_status,
+        reason_code=outcome,
+        reason=reason or _CLOSE_REASON_CODE_LABELS[outcome],
+        retry_count=0,
+        retry_limit=0,
+        follow_up_task_id=follow_up_task_id,
+    )
     journal_message = f"Task closed: {outcome}."
     if reason:
         journal_message += f" {reason}"
