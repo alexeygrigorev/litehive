@@ -5,6 +5,7 @@ from heru.quota import UsageStatus, UsageWindow
 
 from litehive.cli.workspace import (
     _collect_quota_health,
+    _print_doctor_snapshot,
     _health_daemon_status,
     _quota_health,
     _repair_summary_lines,
@@ -121,3 +122,16 @@ def test_collect_quota_health_reuses_shared_statuses(monkeypatch) -> None:
     assert by_engine["gemini"].status == "unsupported"
     assert by_engine["goz"].problem is True
     assert by_engine["opencode"].summary == "short=10.0% remaining long=5.0% remaining"
+
+
+def test_print_doctor_snapshot_reports_clean_workspace(tmp_path: Path, monkeypatch, capsys) -> None:
+    monkeypatch.setattr(
+        "litehive.cli.workspace.collect_status_snapshot",
+        lambda root: type("Snapshot", (), {"issues": []})(),
+    )
+
+    exit_code = _print_doctor_snapshot(tmp_path)
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert f"doctor: clean workspace={tmp_path}" in output

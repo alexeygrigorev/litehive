@@ -173,6 +173,16 @@ def _repair_summary_lines(
     return lines
 
 
+def _print_doctor_snapshot(root: Path) -> int:
+    snapshot = collect_status_snapshot(root)
+    if not snapshot.issues:
+        print(f"doctor: clean workspace={root}")
+        return 0
+    for line in render_issue_lines(snapshot.issues):
+        print(line)
+    return 1
+
+
 def doctor_command(
     workspace: WorkspaceOption = Path.cwd(),
     fix: Annotated[bool, typer.Option("--fix", help="Apply deterministic non-destructive fixes")] = False,
@@ -192,21 +202,7 @@ def doctor_command(
             include_extended_fields=False,
         ):
             print(line)
-        snapshot = collect_status_snapshot(root)
-        if not snapshot.issues:
-            print(f"doctor: clean workspace={root}")
-            return 0
-        for line in render_issue_lines(snapshot.issues):
-            print(line)
-        return 1
-
-    snapshot = collect_status_snapshot(root)
-    if not snapshot.issues:
-        print(f"doctor: clean workspace={root}")
-        return 0
-    for line in render_issue_lines(snapshot.issues):
-        print(line)
-    return 1
+    return _print_doctor_snapshot(root)
 
 
 def status_full(workspace, root, config, state, runner, monitoring, issues):
