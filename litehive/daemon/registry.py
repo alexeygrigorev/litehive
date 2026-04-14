@@ -13,25 +13,12 @@ import yaml
 from litehive.config.paths import workspace_daemon_lock_path
 from litehive.config.registry import list_registered_workspace_paths
 from litehive.domain.common import utcnow
+from litehive.state.locking import runner_pid_is_alive as pid_is_alive
 
 logger = logging.getLogger(__name__)
 
 _DAEMON_LOCKS: dict[Path, TextIO] = {}
 _DAEMON_LOCKS_MUTEX = threading.Lock()
-
-
-def pid_is_alive(pid: int) -> bool:
-    if pid <= 0:
-        return False
-    try:
-        os.kill(pid, 0)
-    except ProcessLookupError:
-        return False
-    except PermissionError:
-        return True
-    return True
-
-
 def daemon_lock_path(workspace: Path) -> Path:
     return workspace_daemon_lock_path(workspace.resolve())
 

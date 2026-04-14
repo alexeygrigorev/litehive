@@ -23,7 +23,7 @@ from litehive.domain.engine import WorkspaceEngineMonitoring
 from litehive.domain.runtime import RunnerStatusState
 from litehive.domain.task import WorkspaceState
 from litehive.state.store import runtime_store
-from litehive.state.locking import runner_pid_is_alive
+from litehive.state.locking import runner_metadata_present, runner_pid_is_alive
 
 _STATUS_WEDGED_HEARTBEAT_SECONDS = 10 * 60
 
@@ -174,7 +174,7 @@ def _probe_runner_state(root: Path, state: WorkspaceState, runner: RunnerStatusS
             )
         return issues
 
-    if (lock_path.exists() and _runner_metadata_present(runner)) or active_task_id is not None:
+    if (lock_path.exists() and runner_metadata_present(runner)) or active_task_id is not None:
         task_label = active_task_id or "-"
         issues.append(
             StatusIssue(
@@ -350,7 +350,7 @@ def _load_runner_status_for_status(root: Path) -> tuple[RunnerStatusState, Statu
         return RunnerStatusState(), None
     if runner_pid_is_alive(status.pid):
         return status.model_copy(update={"status": "running"}), None
-    if _runner_metadata_present(status):
+    if runner_metadata_present(status):
         return status.model_copy(update={"status": "stale"}), None
     return RunnerStatusState(), None
 
@@ -363,21 +363,6 @@ def _heartbeat_age_seconds(heartbeat_at: str | None) -> int | None:
     except ValueError:
         return None
     return max(0, int((datetime.now(UTC) - timestamp).total_seconds()))
-
-
-def _runner_metadata_present(status: RunnerStatusState) -> bool:
-    return any(
-        (
-            status.pid is not None,
-            bool(status.workspace),
-            bool(status.command),
-            status.started_at is not None,
-            status.heartbeat_at is not None,
-            status.active_task_id is not None,
-        )
-    )
-
-
 def _yaml_location_label(exc: yaml.YAMLError | None) -> str:
     if exc is None:
         return "line unknown"
