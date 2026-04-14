@@ -18,7 +18,6 @@ def test_switch_cli_persists_engine_handoff_and_requeues_task(integration_root) 
     interrupted = create_task(integration_root, title="Switch interrupted task", auto_commit=False)
     interrupted.status = "interrupted"
     interrupted.pipeline_status = "implementing"
-    interrupted.engine = "codex"
     interrupted.runtime.execution_status = "interrupted"
     interrupted.runtime.last_outcome.kind = "interrupted"
     interrupted.runtime.last_outcome.stage = "implementing"
@@ -72,7 +71,8 @@ def test_switch_cli_persists_engine_handoff_and_requeues_task(integration_root) 
 
     refreshed = get_task(integration_root, interrupted.id)
     assert refreshed is not None
-    assert refreshed.engine == "gemini"
+    assert refreshed.runtime.last_engine_switch is not None
+    assert refreshed.runtime.last_engine_switch.to_engine == "gemini"
     assert refreshed.status == "queued"
     assert refreshed.pipeline_status == "implementing"
     assert refreshed.runtime.continuation_handoff is not None

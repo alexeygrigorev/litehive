@@ -50,6 +50,10 @@ class ExternalEngineSandboxPolicy:
     environment: list[str] = field(default_factory=list)
     credential_inputs: list[SandboxCredentialInput] = field(default_factory=list)
     extra_ro_binds: list[str] = field(default_factory=list)
+    # Writable bind mounts (bwrap --bind). Required when the engine's CLI
+    # writes to a fixed host path outside the workspace — e.g. goz writes
+    # session files to ~/.goz/sessions.
+    extra_rw_binds: list[str] = field(default_factory=list)
     # Hardcoded env vars to set inside the sandbox. Unlike `environment`,
     # which propagates values from the caller, these are fixed values
     # baked into the policy (e.g. CODEX_HOME -> /home/<user>/.codex so

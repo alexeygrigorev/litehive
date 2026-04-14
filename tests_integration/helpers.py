@@ -106,53 +106,82 @@ def sandboxed_integration_workspace(root: Path) -> Path:
     setenv_home = {"HOME": home}
 
     if Path(nvm).exists() and Path(codex_dir).exists():
+        # ~/.codex must be writable: codex persists trusted-project state to
+        # config.toml on every run and exits non-zero when it cannot.
         engine_policies["codex"] = ExternalEngineSandboxPolicy(
             enabled=True,
             network_mode="host",
-            extra_ro_binds=[nvm, codex_dir],
+            extra_ro_binds=[nvm],
+            extra_rw_binds=[codex_dir],
             setenv={**setenv_home, "CODEX_HOME": codex_dir},
         )
     if Path(nvm).exists() and Path(claude_dir).exists():
+        # ~/.claude is rewritten on every run (telemetry, statsig, session
+        # state). Read-only causes intermittent rc!=0.
         engine_policies["claude"] = ExternalEngineSandboxPolicy(
             enabled=True,
             network_mode="host",
-            extra_ro_binds=[nvm, claude_dir],
+            extra_ro_binds=[nvm],
+            extra_rw_binds=[claude_dir],
             setenv=setenv_home,
         )
     if Path(nvm).exists() and Path(copilot_dir).exists():
-        copilot_binds = [nvm, copilot_dir]
+        copilot_ro_binds = [nvm]
         if Path(gh_config).exists():
-            copilot_binds.append(gh_config)
+            copilot_ro_binds.append(gh_config)
         engine_policies["copilot"] = ExternalEngineSandboxPolicy(
             enabled=True,
             network_mode="host",
-            extra_ro_binds=copilot_binds,
+            extra_ro_binds=copilot_ro_binds,
+            extra_rw_binds=[copilot_dir],
             setenv=setenv_home,
         )
     if Path(nvm).exists() and Path(gemini_dir).exists():
+        # ~/.gemini must be writable: gemini-cli rewrites state files
+        # (installation_id, settings.json scratch updates, oauth refresh,
+        # etc.) at startup and hangs indefinitely when the dir is read-only.
         engine_policies["gemini"] = ExternalEngineSandboxPolicy(
             enabled=True,
             network_mode="host",
-            extra_ro_binds=[nvm, gemini_dir],
+            extra_ro_binds=[nvm],
+            extra_rw_binds=[gemini_dir],
             setenv=setenv_home,
         )
     if Path(goz_bin).exists() and Path(goz_dir).exists():
-        goz_binds = [goz_bin, goz_dir]
+        goz_ro_binds = [goz_bin]
         if Path(goz_config).exists():
-            goz_binds.append(goz_config)
+            goz_ro_binds.append(goz_config)
         if Path(local_bin).exists():
-            goz_binds.append(local_bin)
+            goz_ro_binds.append(local_bin)
+        # goz wrapper script `exec uv run --project /home/alexey/git/goz python -m goz`
+        # needs the source project bind-mounted so `python -m goz` can import it,
+        # plus uv's managed python toolchain dir so .venv's python symlink resolves.
+        goz_project = f"{home}/git/goz"
+        if Path(goz_project).exists():
+            goz_ro_binds.append(goz_project)
+        uv_python_dir = f"{home}/.local/share/uv/python"
+        if Path(uv_python_dir).exists():
+            goz_ro_binds.append(uv_python_dir)
+        # ~/.goz must be writable because goz persists a session file per
+        # invocation to ~/.goz/sessions/<id>.json. A --ro-bind here causes
+        # the smoke test to exit 1 after the successful reply.
         engine_policies["goz"] = ExternalEngineSandboxPolicy(
             enabled=True,
             network_mode="host",
-            extra_ro_binds=goz_binds,
-            setenv=setenv_home,
+            extra_ro_binds=goz_ro_binds,
+            extra_rw_binds=[goz_dir],
+            # UV_FROZEN: the goz wrapper runs `uv run --project`, and uv
+            # triggers a re-resolve on any env drift unless told to trust
+            # the existing lockfile. The source project dir is read-only
+            # inside the sandbox, so a re-resolve would fail writing uv.lock.
+            setenv={**setenv_home, "UV_FROZEN": "1"},
         )
     if Path(nvm).exists() and Path(opencode_dir).exists():
         engine_policies["opencode"] = ExternalEngineSandboxPolicy(
             enabled=True,
             network_mode="host",
-            extra_ro_binds=[nvm, opencode_dir],
+            extra_ro_binds=[nvm],
+            extra_rw_binds=[opencode_dir],
             setenv=setenv_home,
         )
 

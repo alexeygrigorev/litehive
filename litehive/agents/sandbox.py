@@ -292,10 +292,25 @@ class SandboxLauncher:
         "/bin",
         "/sbin",
         "/etc/alternatives",
+        # User and host lookups: glibc + node's os.userInfo() / os.hostname()
+        # need these to derive a stable username/group/host. Without
+        # /etc/passwd, gemini-cli's FileKeychain salt becomes uid-based and
+        # cached oauth credentials can't be decrypted.
+        "/etc/passwd",
+        "/etc/group",
+        "/etc/hosts",
+        "/etc/hostname",
+        "/etc/nsswitch.conf",
+        "/etc/host.conf",
         "/etc/resolv.conf",
         "/etc/ssl",
         "/etc/ca-certificates",
         "/etc/ld.so.cache",
+        # systemd-resolved stub listens on 127.0.0.53 but glibc's NSS layer
+        # also reads /run/systemd/resolve to pick up the upstream resolver
+        # state. Without it, getaddrinfo() returns EAI_AGAIN and any HTTPS
+        # client (gemini-cli, opencode, etc.) can't reach the network.
+        "/run/systemd/resolve",
     )
 
     def _wrap_bubblewrap(
@@ -333,6 +348,7 @@ class SandboxLauncher:
 
         git_plan = self._prepare_git_filesystem(role)
         extra_ro_binds = self._resolved_extra_ro_binds(engine_name, policy)
+        extra_rw_binds = self._resolved_extra_rw_binds(engine_name, policy)
 
         # Read-only system mounts (only existing paths).
         for sys_path in self.BWRAP_SYSTEM_RO_BINDS:
@@ -344,6 +360,9 @@ class SandboxLauncher:
         for host_path in extra_ro_binds:
             host_path_str = str(host_path)
             argv.extend(["--ro-bind", host_path_str, host_path_str])
+        for host_path in extra_rw_binds:
+            host_path_str = str(host_path)
+            argv.extend(["--bind", host_path_str, host_path_str])
 
         # Workspace mount.
         workspace_root = str(self.root)
@@ -418,6 +437,22 @@ class SandboxLauncher:
             if not host_path.exists():
                 raise SandboxError(
                     f"Sandbox policy for engine '{engine_name}' requires read-only bind path "
+                    f"'{host_path}', but it does not exist on the host."
+                )
+            resolved_paths.append(host_path.resolve())
+        return tuple(resolved_paths)
+
+    @staticmethod
+    def _resolved_extra_rw_binds(
+        engine_name: str,
+        policy: ExternalEngineSandboxPolicy | None,
+    ) -> tuple[Path, ...]:
+        resolved_paths: list[Path] = []
+        for raw_path in () if policy is None else policy.extra_rw_binds:
+            host_path = Path(raw_path).expanduser()
+            if not host_path.exists():
+                raise SandboxError(
+                    f"Sandbox policy for engine '{engine_name}' requires read-write bind path "
                     f"'{host_path}', but it does not exist on the host."
                 )
             resolved_paths.append(host_path.resolve())
