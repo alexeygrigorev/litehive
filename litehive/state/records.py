@@ -16,7 +16,6 @@ from litehive.domain.runtime import TaskRuntime
 from litehive.domain.task import (
     TaskCreationSource,
     TaskRecord,
-    TaskIntentGitSettings,
     TaskIntentRecord,
     TaskStateRecord,
     WorkspaceState,
@@ -39,10 +38,6 @@ from litehive.tasks.paths import slugify, task_dir, task_file, tasks_root
 logger = logging.getLogger(__name__)
 
 
-class LegacyTaskStateError(ValueError):
-    """Raised when a task still depends on the removed pre-SQLite layout."""
-
-
 class TaskStateMissingError(RuntimeError):
     """Raised when a task has no SQLite runtime state row."""
 
@@ -52,28 +47,6 @@ def _load_task_record_mapping(path: Path) -> dict:
     if not isinstance(loaded, dict):
         raise ValueError(f"Task file must contain a mapping: {path}")
     return dict(loaded)
-
-
-def _validate_task_intent_payload(path: Path, data: dict) -> None:
-    allowed_keys = set(TaskIntentRecord.model_fields)
-    unexpected_keys = sorted(set(data) - allowed_keys)
-    if unexpected_keys:
-        joined = ", ".join(unexpected_keys)
-        raise LegacyTaskStateError(
-            f"{path} uses removed non-intent task fields: {joined}. "
-            "Task runtime now lives only in SQLite."
-        )
-    git_payload = data.get("git") or {}
-    if not isinstance(git_payload, dict):
-        raise ValueError(f"Task git section must contain a mapping: {path}")
-    allowed_git_keys = set(TaskIntentGitSettings.model_fields)
-    unexpected_git_keys = sorted(set(git_payload) - allowed_git_keys)
-    if unexpected_git_keys:
-        joined = ", ".join(unexpected_git_keys)
-        raise LegacyTaskStateError(
-            f"{path} uses removed runtime git fields: {joined}. "
-            "Task runtime now lives only in SQLite."
-        )
 
 
 def _highest_task_number_on_disk(root: Path) -> int:
@@ -183,11 +156,6 @@ def _load_task_runtime(root: Path, task: TaskRecord) -> TaskRecord:
         _normalize_task_worktree_state(task)
         return task
 
-    runtime_path = task_dir(root, task) / "runtime.yaml"
-    if runtime_path.exists():
-        raise LegacyTaskStateError(
-            f"{runtime_path} is no longer supported. Task runtime now lives only in SQLite."
-        )
     raise TaskStateMissingError(
         f"Task {task.id} is missing its SQLite runtime state row. "
         "This workspace no longer supports reconstructing runtime state from files."
@@ -196,8 +164,8 @@ def _load_task_runtime(root: Path, task: TaskRecord) -> TaskRecord:
 
 def load_task_record_file(path: Path) -> TaskRecord:
     data = _load_task_record_mapping(path)
-    _validate_task_intent_payload(path, data)
-    return TaskRecord(**data)
+    intent = TaskIntentRecord.model_validate(data)
+    return TaskRecord.from_intent_and_state(intent)
 
 
 def create_task(
@@ -400,7 +368,7 @@ def list_tasks(
         try:
             task = load_task_record_file(path)
             task = _load_task_runtime(root, task)
-        except (LegacyTaskStateError, TaskStateMissingError, ValueError):
+        except (TaskStateMissingError, ValueError):
             if strict:
                 raise
             continue

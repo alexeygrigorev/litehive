@@ -2,7 +2,7 @@
 
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from .common import (
     PipelineMode,
@@ -19,6 +19,8 @@ class TaskRetryPolicy(BaseModel):
 
 
 class TaskCreationSource(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     task_id: str
     stage: Literal["grooming", "accepting"]
     rationale: str
@@ -37,6 +39,8 @@ class GitSettings(BaseModel):
 
 
 class TaskIntentGitSettings(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     auto_commit: bool = True
     commit_message: str | None = None
 
@@ -51,6 +55,8 @@ class TaskStateGitSettings(BaseModel):
 
 
 class TaskIntentRecord(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     id: str
     slug: str
     title: str
