@@ -23,6 +23,19 @@ class LastReport:
     files_changed: int = 0
     tests_added: int = 0
 
+    def to_payload(self) -> dict[str, int]:
+        return {
+            "files_changed": self.files_changed,
+            "tests_added": self.tests_added,
+        }
+
+    @classmethod
+    def from_payload(cls, payload: dict[str, Any]) -> "LastReport":
+        return cls(
+            files_changed=int(payload.get("files_changed", 0)),
+            tests_added=int(payload.get("tests_added", 0)),
+        )
+
 
 @dataclass
 class HookRejectFingerprint:
@@ -30,6 +43,23 @@ class HookRejectFingerprint:
     command: str
     description: str = ""
     fingerprint: str = ""
+
+    def to_payload(self) -> dict[str, str]:
+        return {
+            "point": self.point,
+            "command": self.command,
+            "description": self.description,
+            "fingerprint": self.fingerprint,
+        }
+
+    @classmethod
+    def from_payload(cls, payload: dict[str, Any]) -> "HookRejectFingerprint":
+        return cls(
+            point=payload["point"],
+            command=payload["command"],
+            description=payload.get("description", ""),
+            fingerprint=payload["fingerprint"],
+        )
 
 
 @dataclass
@@ -45,6 +75,21 @@ class LastRejection:
     source: str  # "agent" | "hook" | "guard" | "system"
     reason: str
     raised_at_phase: NodeName  # the phase that emitted the reject
+
+    def to_payload(self) -> dict[str, str]:
+        return {
+            "source": self.source,
+            "reason": self.reason,
+            "raised_at_phase": self.raised_at_phase,
+        }
+
+    @classmethod
+    def from_payload(cls, payload: dict[str, Any]) -> "LastRejection":
+        return cls(
+            source=payload["source"],
+            reason=payload["reason"],
+            raised_at_phase=payload["raised_at_phase"],
+        )
 
 
 @dataclass
@@ -103,26 +148,14 @@ def _state_payload(state: TaskState) -> dict[str, Any]:
         "pre_exec_recovery_attempt": state.pre_exec_recovery_attempt,
         "origin_stage": state.origin_stage,
         "failure_context": dict(state.failure_context),
-        "last_report": {
-            "files_changed": state.last_report.files_changed,
-            "tests_added": state.last_report.tests_added,
-        },
+        "last_report": state.last_report.to_payload(),
         "last_rejection_by_stage": {
-            stage: {
-                "source": rej.source,
-                "reason": rej.reason,
-                "raised_at_phase": rej.raised_at_phase,
-            }
+            stage: rej.to_payload()
             for stage, rej in state.last_rejection_by_stage.items()
         },
         "consecutive_same_hook_rejects": state.consecutive_same_hook_rejects,
         "last_hook_reject_fingerprint": (
-            {
-                "point": state.last_hook_reject_fingerprint.point,
-                "command": state.last_hook_reject_fingerprint.command,
-                "description": state.last_hook_reject_fingerprint.description,
-                "fingerprint": state.last_hook_reject_fingerprint.fingerprint,
-            }
+            state.last_hook_reject_fingerprint.to_payload()
             if state.last_hook_reject_fingerprint is not None
             else None
         ),
@@ -151,26 +184,14 @@ def _state_from_row(
         pre_exec_recovery_attempt=int(payload.get("pre_exec_recovery_attempt") or 0),
         origin_stage=payload.get("origin_stage"),
         failure_context=dict(payload.get("failure_context") or {}),
-        last_report=LastReport(
-            files_changed=int(last_report_data.get("files_changed", 0)),
-            tests_added=int(last_report_data.get("tests_added", 0)),
-        ),
+        last_report=LastReport.from_payload(last_report_data),
         last_rejection_by_stage={
-            stage_name: LastRejection(
-                source=rej["source"],
-                reason=rej["reason"],
-                raised_at_phase=rej["raised_at_phase"],
-            )
+            stage_name: LastRejection.from_payload(rej)
             for stage_name, rej in last_rejections_data.items()
         },
         consecutive_same_hook_rejects=int(payload.get("consecutive_same_hook_rejects") or 0),
         last_hook_reject_fingerprint=(
-            HookRejectFingerprint(
-                point=hook_fingerprint_data["point"],
-                command=hook_fingerprint_data["command"],
-                description=hook_fingerprint_data.get("description", ""),
-                fingerprint=hook_fingerprint_data["fingerprint"],
-            )
+            HookRejectFingerprint.from_payload(hook_fingerprint_data)
             if hook_fingerprint_data is not None
             else None
         ),
