@@ -39,6 +39,8 @@ from litehive.tasks.worktrees import resolve_recorded_worktree_path
 
 from tests.workspace_helpers import LitehiveConfig, create_task, ensure_workspace, run_task
 
+pytestmark = pytest.mark.integration
+
 
 class _PassEngine:
     """Always returns a ``pass`` verdict. One engine, one name."""

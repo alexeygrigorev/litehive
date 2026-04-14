@@ -22,6 +22,8 @@ from litehive.state.records import create_task, save_task
 
 from tests.workspace_helpers import ensure_workspace
 
+pytestmark = pytest.mark.integration
+
 
 def _init_git_repo(root: Path) -> None:
     subprocess.run(["git", "init", "-q", "-b", "main"], cwd=root, check=True)

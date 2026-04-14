@@ -15,6 +15,8 @@ from litehive.tasks.worktree_inspection import resolve_task_execution_root
 from litehive.sandbox.git_wrapper import rejection_reason
 from litehive.state.records import create_task
 
+pytestmark = pytest.mark.integration
+
 
 def _bubblewrap_launcher(root: Path) -> SandboxLauncher:
     return _bubblewrap_launcher_with_policies(

@@ -1,6 +1,6 @@
 # Integration test suite
 
-`tests_integration/` is the real-binary Litehive adapter suite. It is intentionally separate from `tests/` so unit runs stay fast and deterministic.
+`tests_integration/` is the slower integration suite for Litehive. It is intentionally separate from `tests/` so default unit runs stay fast and deterministic.
 
 Engine matrix derived from `litehive.config.VALID_ENGINE_NAMES`:
 

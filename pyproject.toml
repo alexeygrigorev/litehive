@@ -39,7 +39,7 @@ path = "litehive/__version__.py"
 testpaths = ["tests"]
 timeout = 60
 markers = [
-    "integration: real-binary Litehive adapter integration coverage",
+    "integration: slower end-to-end, sandbox, and external-boundary coverage",
 ]
 
 [tool.ruff]
