@@ -214,7 +214,7 @@ def test_workspace_registry_uses_thread_local_connections(
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "xdg-data"))
     ensure_workspace(tmp_path)
 
-    from litehive.config.workspace_registry import list_registered_workspace_paths
+    from litehive.config.registry import list_registered_workspace_paths
 
     results: list[list[Path]] = []
 

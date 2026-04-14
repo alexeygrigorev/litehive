@@ -14,7 +14,7 @@ import shutil
 import stat
 
 from litehive.config.model import LitehiveConfig
-from litehive.config.dataclasses import ExternalEngineSandboxPolicy
+from litehive.config.model import ExternalEngineSandboxPolicy
 from heru.base import CLIExecutionResult, CLIInvocation, ExternalCLIAdapter
 from heru.engine_detection import (
     ORIGINAL_EXTERNAL_ADAPTER_RUN,

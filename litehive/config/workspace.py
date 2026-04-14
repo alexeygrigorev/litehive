@@ -19,7 +19,7 @@ from litehive.config.paths import (
     workspace_gitignore_path,
 )
 from litehive.config.profiles.rendering import render_context_template
-from litehive.config.workspace_registry import (
+from litehive.config.registry import (
     list_registered_workspace_paths,
     register_workspace_path,
 )

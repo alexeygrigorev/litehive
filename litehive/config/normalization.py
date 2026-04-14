@@ -3,7 +3,7 @@
 import re
 from typing import Mapping, Sequence
 
-from litehive.config.constants import (
+from litehive.config.model import (
     REJECTABLE_HOOK_POINTS,
     VALID_AGENT_STARTUP_GUIDANCE_KEYS,
     VALID_ENGINE_NAMES,
@@ -13,7 +13,7 @@ from litehive.config.constants import (
     VALID_SANDBOX_NETWORK_MODES,
     VALID_SANDBOX_WORKSPACE_MODES,
 )
-from litehive.config.dataclasses import (
+from litehive.config.model import (
     ExternalEngineSandboxConfig,
     ExternalEngineSandboxPolicy,
     RunnerHookConfig,

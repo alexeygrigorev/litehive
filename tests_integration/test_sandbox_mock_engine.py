@@ -33,7 +33,7 @@ from heru.base import CLIInvocation
 from litehive.agents.sandbox import SandboxLauncher
 from litehive.config.model import LitehiveConfig
 from litehive.config.workspace import ensure_workspace
-from litehive.config.dataclasses import ExternalEngineSandboxConfig, ExternalEngineSandboxPolicy
+from litehive.config.model import ExternalEngineSandboxConfig, ExternalEngineSandboxPolicy
 
 pytestmark = pytest.mark.integration
 

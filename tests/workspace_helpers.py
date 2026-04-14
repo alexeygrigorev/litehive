@@ -22,7 +22,7 @@ from litehive.config.loading import load_config
 from litehive.config.model import LitehiveConfig
 from litehive.config.paths import global_config_path, state_path, worktree_root
 from litehive.config.workspace import ensure_workspace
-from litehive.config.dataclasses import ExternalEngineSandboxConfig, ExternalEngineSandboxPolicy, SandboxCredentialInput
+from litehive.config.model import ExternalEngineSandboxConfig, ExternalEngineSandboxPolicy, SandboxCredentialInput
 from litehive.config.profiles.loader import available_process_profiles, resolve_process_profile
 from litehive.config.profiles.rendering import render_context_template
 from heru import (

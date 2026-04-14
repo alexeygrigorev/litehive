@@ -9,7 +9,7 @@ import pytest
 from litehive.config.loading import load_config
 from litehive.config.model import LitehiveConfig
 from litehive.config.workspace import ensure_workspace
-from litehive.config.constants import VALID_ENGINE_NAMES
+from litehive.config.model import VALID_ENGINE_NAMES
 from heru import extract_engine_continuation, get_engine
 from heru.base import CLIExecutionResult
 
@@ -87,7 +87,7 @@ def sandboxed_integration_workspace(root: Path) -> Path:
     dirs don't exist on this host."""
     import os as _os
 
-    from litehive.config.dataclasses import ExternalEngineSandboxConfig, ExternalEngineSandboxPolicy
+    from litehive.config.model import ExternalEngineSandboxConfig, ExternalEngineSandboxPolicy
 
     home = _os.path.expanduser("~")
     nvm = f"{home}/.nvm/versions/node/v24.13.1"

@@ -6,7 +6,7 @@ from pathlib import Path
 
 from litehive.config.paths import workspace_dir, workspace_logs_dir
 from litehive.config.workspace import ensure_workspace, resolve_workspace
-from litehive.config.workspace_registry import list_registered_workspace_paths
+from litehive.config.registry import list_registered_workspace_paths
 from litehive.config.paths import worktree_root
 from litehive.domain.task import TaskRecord
 

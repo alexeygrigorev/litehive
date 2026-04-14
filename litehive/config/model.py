@@ -1,19 +1,90 @@
-"""Primary workspace config dataclass."""
+"""Workspace configuration: validation constants, supporting dataclasses,
+and the primary ``LitehiveConfig`` aggregate."""
 
 from dataclasses import dataclass, field
 
-from litehive.config.dataclasses import (
-    RUNNER_HOOK_EXECUTION_MODES,
-    ExternalEngineSandboxConfig,
-    RunnerHookConfig,
+
+# --- validation constants ---
+
+VALID_POOL_SELECTION_POLICIES = {"fifo", "priority_first", "dependency_aware"}
+VALID_ENGINE_NAMES = frozenset({"codex", "opencode", "gemini", "copilot", "claude", "goz"})
+VALID_AGENT_STARTUP_GUIDANCE_KEYS = frozenset(
+    {"all", "planner", "swe", "qa", "reviewer", "recovery"}
 )
-from litehive.config.normalization import (
-    normalize_agent_startup_guidance,
-    normalize_engine_sequence,
-    normalize_external_engine_sandbox_config,
-    normalize_retry_on,
-    normalize_runner_hooks,
+VALID_RETRY_ON_FAILURE_KINDS = frozenset({"execution_limit", "timeout", "network", "service"})
+VALID_SANDBOX_NETWORK_MODES = frozenset({"none", "bridge", "host"})
+VALID_SANDBOX_WORKSPACE_MODES = frozenset({"ro", "rw"})
+VALID_SANDBOX_BACKENDS = frozenset({"docker", "bubblewrap"})
+VALID_RUNNER_HOOK_POINTS = frozenset(
+    {
+        "before_grooming",
+        "after_grooming",
+        "before_implementing",
+        "after_implementing",
+        "before_testing",
+        "after_testing",
+        "before_accepting",
+        "after_accepting",
+        "after_commit",
+    }
 )
+REJECTABLE_HOOK_POINTS = frozenset({"after_implementing", "after_testing", "after_commit"})
+
+RUNNER_HOOK_EXECUTION_MODES = {"run_all", "fail_fast"}
+
+
+# --- supporting dataclasses ---
+
+
+@dataclass(slots=True)
+class SandboxCredentialInput:
+    env_var: str
+    mount_path: str
+
+
+@dataclass(slots=True)
+class ExternalEngineSandboxPolicy:
+    enabled: bool = False
+    network_mode: str | None = None
+    workspace_mode: str | None = None
+    environment: list[str] = field(default_factory=list)
+    credential_inputs: list[SandboxCredentialInput] = field(default_factory=list)
+    extra_ro_binds: list[str] = field(default_factory=list)
+    # Hardcoded env vars to set inside the sandbox. Unlike `environment`,
+    # which propagates values from the caller, these are fixed values
+    # baked into the policy (e.g. CODEX_HOME -> /home/<user>/.codex so
+    # codex can find auth.json when HOME is the workspace root).
+    setenv: dict[str, str] = field(default_factory=dict)
+
+
+@dataclass(slots=True)
+class ExternalEngineSandboxConfig:
+    enabled: bool = False
+    backend: str = "docker"
+    runtime_binary: str = "docker"
+    image: str = "litehive-external-engine:latest"
+    workspace_mount_path: str = "/workspace"
+    binary_mount_root: str = "/litehive/bin"
+    runtime_args: list[str] = field(default_factory=list)
+    default_network_mode: str = "none"
+    default_workspace_mode: str = "rw"
+    read_only_rootfs: bool = True
+    drop_capabilities: bool = True
+    no_new_privileges: bool = True
+    tmpfs: list[str] = field(default_factory=lambda: ["/tmp"])
+    engine_policies: dict[str, ExternalEngineSandboxPolicy] = field(default_factory=dict)
+
+
+@dataclass(slots=True)
+class RunnerHookConfig:
+    command: str
+    reject_on_failure: bool = False
+    description: str | None = None
+    timeout_seconds: float | None = None
+    instructions_on_failure: str | None = None
+
+
+# --- primary config ---
 
 
 @dataclass(slots=True)
@@ -56,6 +127,14 @@ class LitehiveConfig:
     implementation_mode_name: str = "implementation"
 
     def __post_init__(self) -> None:
+        from litehive.config.normalization import (
+            normalize_agent_startup_guidance,
+            normalize_engine_sequence,
+            normalize_external_engine_sandbox_config,
+            normalize_retry_on,
+            normalize_runner_hooks,
+        )
+
         self.engine_freeze = {str(k): str(v) for k, v in self.engine_freeze.items()}
         self.engine_preference = normalize_engine_sequence(
             list(self.engine_preference),

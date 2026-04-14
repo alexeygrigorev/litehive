@@ -5,7 +5,7 @@ import logging
 from pathlib import Path
 
 from litehive.config.loading import load_config
-from litehive.config.constants import VALID_POOL_SELECTION_POLICIES
+from litehive.config.model import VALID_POOL_SELECTION_POLICIES
 from litehive.domain.common import utcnow
 from litehive.domain.reports import RecoveryAction
 from litehive.domain.runtime import TaskOutcomeState

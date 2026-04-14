@@ -6,7 +6,7 @@ from typing import Any, Mapping
 
 import yaml
 
-from litehive.config.constants import VALID_POOL_SELECTION_POLICIES
+from litehive.config.model import VALID_POOL_SELECTION_POLICIES
 from litehive.config.model import LitehiveConfig
 from litehive.config.paths import config_path, context_path, global_config_path
 from litehive.config.profiles.loader import PROCESS_PROFILES
