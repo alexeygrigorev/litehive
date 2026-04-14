@@ -1,5 +1,12 @@
 # Litehive refactoring plan
 
+> Historical planning document.
+> Most of the structural work described here has already landed, and some
+> planning-time details no longer match current code. In particular:
+> workspace state is now SQLite-only, `comments.yaml` is the only supported
+> task discussion file, and the daemon registry no longer uses a global YAML
+> file.
+
 Structural cleanup of `litehive/` to remove v1→v2 legacy shims, consolidate overlapping packages, and rename packages whose names no longer match their contents.
 
 ## Goals
@@ -57,9 +64,11 @@ Only caller is `pipeline/heru_factory.py:24` (via `litehive.agents` re-export). 
 - Update `pipeline/heru_factory.py` to import from `agents.manager` (or via the `agents/__init__.py` lazy export, which already routes to `manager` directly at lines 61–68).
 - Delete `agents/_execution.py`.
 
-### A6. `tasks/persistence.py` YAML fallback (lines 19–35)
+### A6. `tasks/persistence.py` YAML fallback (historical note)
 
-`load_state()` falls back to reading legacy `state.yaml` when SQLite is empty. This is the only real v1→v2 bridge that touches user data.
+At the time of this plan, `load_state()` still fell back to reading legacy
+`state.yaml` when SQLite was empty. The final cleanup removed that fallback;
+workspace state now lives only in SQLite.
 
 **Two options:**
 
