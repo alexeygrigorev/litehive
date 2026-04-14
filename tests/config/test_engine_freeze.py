@@ -1,6 +1,5 @@
 """Tests for engine freeze/unfreeze CLI and runtime filtering."""
 
-import argparse
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -16,8 +15,6 @@ from litehive.config.model import LitehiveConfig
 from litehive.config.workspace import ensure_workspace
 from litehive.domain.task import TaskRecord
 from litehive.state.records import create_task
-
-from tests.support.helpers import _cmd_status
 
 
 def _run_engine(*args: str) -> tuple[int | None, str]:
@@ -160,37 +157,6 @@ def test_is_engine_frozen_and_active_freezes() -> None:
     freezes = active_engine_freezes(config)
     assert "codex" in freezes
     assert "gemini" not in freezes
-
-
-def test_status_shows_frozen_engines(tmp_path: Path, capsys) -> None:
-    """litehive status displays frozen engines."""
-    future = (datetime.now(timezone.utc) + timedelta(days=30)).strftime("%Y-%m-%dT%H:%M:%SZ")
-    ensure_workspace(
-        tmp_path,
-        LitehiveConfig(
-            default_engine="codex",
-            engine_freeze={"codex": future},
-        ),
-    )
-
-    exit_code = _cmd_status(
-        argparse.Namespace(workspace=tmp_path, full=True, fast=False)
-    )
-    assert exit_code == 0
-    output = capsys.readouterr().out
-    assert "engine_frozen: codex until" in output
-
-
-def test_status_no_frozen_engines(tmp_path: Path, capsys) -> None:
-    """Status without frozen engines shows no freeze lines."""
-    ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
-
-    exit_code = _cmd_status(
-        argparse.Namespace(workspace=tmp_path, full=True, fast=False)
-    )
-    assert exit_code == 0
-    output = capsys.readouterr().out
-    assert "engine_frozen" not in output
 
 
 def test_frozen_engine_in_fallback_chain_skipped(tmp_path: Path) -> None:

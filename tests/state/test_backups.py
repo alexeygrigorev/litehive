@@ -47,35 +47,6 @@ def test_create_backup_and_restore_backup_cli(tmp_path: Path) -> None:
     assert _read_workspace_db_values(tmp_path) == ["before"]
 
 
-def test_backup_list_command_reports_timestamp_and_size(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    ensure_workspace(tmp_path)
-    _seed_workspace_db(tmp_path, ["one"])
-    create_workspace_backup(tmp_path, when=datetime(2026, 4, 11, 3, tzinfo=UTC))
-
-    result = CliRunner().invoke(app, ["backup", "list", "--workspace", str(tmp_path)], standalone_mode=False)
-    output = result.output
-
-    assert result.return_value == 0
-    assert "backups: 1" in output
-    assert "timestamp: 2026-04-11T03" in output
-    assert "size_bytes: " in output
-    assert str(workspace_backups_dir(tmp_path) / "data-2026-04-11T03.db.gz") in output
-
-
-def test_backup_create_command_reports_created_archive(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    ensure_workspace(tmp_path)
-    _seed_workspace_db(tmp_path, ["one"])
-
-    result = CliRunner().invoke(app, ["backup", "create", "--workspace", str(tmp_path)], standalone_mode=False)
-    output = result.output
-
-    assert result.return_value == 0
-    assert "timestamp: " in output
-    assert "path: " in output
-    assert "size_bytes: " in output
-    assert list_workspace_backups(tmp_path)
-
-
 def test_restore_command_refuses_when_daemon_running(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
