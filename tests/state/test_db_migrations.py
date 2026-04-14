@@ -104,7 +104,7 @@ def test_daemon_run_applies_pending_migrations_before_start(
         ),
     )
     monkeypatch.setattr("litehive.db.schema.available_migrations", lambda: staged)
-    monkeypatch.setattr("litehive.cli.daemon_cli.start_background_daemon", lambda root: 4321)
+    monkeypatch.setattr("litehive.cli.runner.start_background_daemon", lambda root: 4321)
 
     result = CliRunner().invoke(
         app,
