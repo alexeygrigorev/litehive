@@ -5,7 +5,7 @@ from pathlib import Path
 from litehive.config.model import LitehiveConfig
 from litehive.roles.guidance import default_startup_guidance
 from litehive.config.profiles.loader import resolve_process_profile
-from litehive.models.task_models import TaskRecord
+from litehive.domain.task import TaskRecord
 from litehive.tasks.normalization import (
     infer_acceptance_criteria,
     missing_acceptance_criteria_reason,

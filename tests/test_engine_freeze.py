@@ -358,7 +358,7 @@ def test_builder_uses_shared_select_engine(tmp_path: Path, monkeypatch: pytest.M
 
 def test_dry_run_uses_shared_select_engine(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     from litehive.cli.dry_run import plan_single_task_dry_run
-    from litehive.config.pool_types import TaskPoolStopConditions
+    from litehive.domain.pool import TaskPoolStopConditions
 
     ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
     task = create_task(tmp_path, title="Dry run selection")

@@ -3,9 +3,9 @@
 from pathlib import Path
 
 from heru.types import SubagentRef
-from litehive.models.common import utcnow
-from litehive.models.report_models import StageReport
-from litehive.models.runtime_models import (
+from litehive.domain.common import utcnow
+from litehive.domain.reports import StageReport
+from litehive.domain.runtime import (
     ResourceLimitEvent,
     RuntimeContinuationHandoff,
     RuntimeEngineContinuation,
@@ -13,7 +13,7 @@ from litehive.models.runtime_models import (
     RuntimeSubagentState,
     TaskOutcomeState,
 )
-from litehive.models.task_models import TaskRecord
+from litehive.domain.task import TaskRecord
 
 from litehive.state.records import write_task_runtime, save_task_runtime
 from litehive.state.locking import workspace_lock, workspace_mutation_guard

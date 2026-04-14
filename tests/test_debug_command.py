@@ -19,7 +19,7 @@ from tests.workspace_helpers import (
     save_task_runtime,
     task_dir,
 )
-from litehive.models.report_models import TaskThreadComment
+from litehive.domain.reports import TaskThreadComment
 from litehive.tasks.reports import append_thread_comment
 
 

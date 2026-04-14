@@ -15,7 +15,7 @@ from litehive.state.records import (
     list_tasks,
     set_task_commit_sha,
 )
-from litehive.tasks.models import WorkspaceConflictError
+from litehive.domain.task_ops import WorkspaceConflictError
 from litehive.tasks.persistence import load_state, save_state
 from litehive.tasks.worktrees import is_managed_worktree_path, resolve_recorded_worktree_path
 
@@ -456,7 +456,7 @@ def _ensure_unmerged_worktree_state(root: Path, task_id: str, worktree_rel: str)
     for entry in state.unmerged_worktrees:
         if entry.task_id == task_id:
             return
-    from litehive.models.task_models import UnmergedWorktree
+    from litehive.domain.task import UnmergedWorktree
 
     state.unmerged_worktrees.append(UnmergedWorktree(task_id=task_id, worktree_path=worktree_rel))
     save_state(root, state)

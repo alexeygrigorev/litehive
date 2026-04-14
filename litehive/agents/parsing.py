@@ -2,11 +2,11 @@
 
 from pathlib import Path
 
-from litehive.models.common import cap_feedback
-from litehive.models.report_models import StageReport
-from litehive.models.task_models import TaskRecord
+from litehive.domain.common import cap_feedback
+from litehive.domain.reports import StageReport
+from litehive.domain.task import TaskRecord
 
-from litehive.agents.models import SubagentResult
+from litehive.domain.agent import SubagentResult
 
 
 def stage_report_from_subagent(

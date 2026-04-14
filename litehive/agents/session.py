@@ -14,14 +14,14 @@ from litehive.agents._continuation import extract_execution_continuation
 from heru.base import CLIExecutionResult
 from litehive.observability.events import append_event, append_session_log, ensure_session_log
 from heru.types import SubagentRef
-from litehive.models.common import utcnow
-from litehive.models.runtime_models import ResourceLimitEvent
-from litehive.models.task_models import TaskRecord
+from litehive.domain.common import utcnow
+from litehive.domain.runtime import ResourceLimitEvent
+from litehive.domain.task import TaskRecord
 from litehive.agents.artifacts import (
     write_stream_artifact,
     write_text_artifact,
 )
-from litehive.agents.models import SubagentInactivityTimeout
+from litehive.domain.agent import SubagentInactivityTimeout
 from litehive.tasks.persistence import write_atomic_files
 from litehive.tasks.runtime import mark_subagent_pid
 

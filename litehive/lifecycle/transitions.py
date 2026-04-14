@@ -10,7 +10,7 @@ This module provides:
 from dataclasses import dataclass
 from typing import Callable
 
-from .deltas import EMPTY_DELTA, EffectFn, StateDelta, enter_recovery, inc_stage_retry
+from litehive.domain.lifecycle_deltas import EMPTY_DELTA, EffectFn, StateDelta, enter_recovery, inc_stage_retry
 from .events import Event, PreExecRecoverySucceeded, RecoverySucceeded, Reject
 from .guards import Guard, stage_retries_exhausted, stage_retries_remaining
 from .persistence import TaskState

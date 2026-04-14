@@ -15,9 +15,9 @@ from pathlib import Path
 from typing import Any
 
 from litehive.db.schema import connect_workspace_db
-from litehive.models.common import utcnow
+from litehive.domain.common import utcnow
 
-from .deltas import StateDelta
+from litehive.domain.lifecycle_deltas import StateDelta
 from .events import Event
 from .types import NodeName
 

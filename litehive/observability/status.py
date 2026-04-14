@@ -7,9 +7,9 @@ from typing import Any
 
 import yaml
 
-from litehive.models.engine_models import WorkspaceEngineMonitoring
-from litehive.models.report_models import ExecutionEstimate
-from litehive.models.task_models import TaskRecord
+from litehive.domain.engine import WorkspaceEngineMonitoring
+from litehive.domain.reports import ExecutionEstimate
+from litehive.domain.task import TaskRecord
 
 # Ordered pipeline stages for remaining-time estimation.
 _PIPELINE_STAGES = ["grooming", "implementing", "testing", "accepting", "commit_to_git"]

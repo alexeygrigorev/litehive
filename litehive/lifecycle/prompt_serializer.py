@@ -19,7 +19,7 @@ The serializer:
 from pathlib import Path
 from typing import Any
 
-from litehive.models.task_models import TaskRecord
+from litehive.domain.task import TaskRecord
 from litehive.state.records import get_task
 
 

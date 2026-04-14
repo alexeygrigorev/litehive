@@ -17,7 +17,7 @@ from litehive.git.ops import (
     rebase_worktree_onto,
     status_porcelain,
 )
-from litehive.models.task_models import TaskRecord
+from litehive.domain.task import TaskRecord
 from litehive.agents.manager import SubagentManager
 from litehive.state.records import (
     get_task,
@@ -28,7 +28,7 @@ from litehive.state.records import (
 )
 from litehive.tasks.journal import append_journal
 
-from litehive.config.pool_types import DirtyWorktreeFinding, DirtyWorktreeGateReport
+from litehive.domain.pool import DirtyWorktreeFinding, DirtyWorktreeGateReport
 
 
 def _git_worktree_is_dirty(root: Path) -> bool:

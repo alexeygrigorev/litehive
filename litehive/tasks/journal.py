@@ -2,8 +2,8 @@
 
 from pathlib import Path
 
-from litehive.models.common import utcnow
-from litehive.models.task_models import TaskRecord
+from litehive.domain.common import utcnow
+from litehive.domain.task import TaskRecord
 
 from litehive.state.locking import workspace_mutation_guard
 from .paths import task_dir

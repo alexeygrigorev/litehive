@@ -5,7 +5,7 @@ from typer.testing import CliRunner
 
 from litehive.cli.app import app
 from litehive.config.paths import workspace_backups_dir, workspace_database_path
-from litehive.models.runtime_models import RunnerStatusState
+from litehive.domain.runtime import RunnerStatusState
 from litehive.state.backup import create_workspace_backup, list_workspace_backups
 
 from tests.workspace_helpers import Path, ensure_workspace, pytest

@@ -16,10 +16,10 @@ from heru.base import CLIExecutionResult, ExternalCLIAdapter
 from litehive.agents.sandbox import SandboxError, SandboxLauncher
 from litehive.observability.events import append_event
 from heru.types import SubagentRef
-from litehive.models.common import cap_feedback
-from litehive.models.report_models import StageReport
-from litehive.models.runtime_models import ResourceLimitEvent
-from litehive.models.task_models import TaskRecord
+from litehive.domain.common import cap_feedback
+from litehive.domain.reports import StageReport
+from litehive.domain.runtime import ResourceLimitEvent
+from litehive.domain.task import TaskRecord
 from litehive.observability.engine_monitoring import record_engine_execution, record_engine_observation
 from litehive.agents.artifacts import (
     prune_superseded_subagent_artifacts,
@@ -33,7 +33,7 @@ from heru.engine_detection import (
     supports_live_on_started,
     supports_on_started,
 )
-from litehive.agents.models import EngineFailure, SubagentInactivityTimeout, SubagentResult
+from litehive.domain.agent import EngineFailure, SubagentInactivityTimeout, SubagentResult
 from litehive.agents.parsing import stage_report_from_subagent
 from litehive.agents.sandbox import SandboxedAdapter
 from litehive.agents.session import SessionMixin

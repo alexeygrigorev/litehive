@@ -5,7 +5,7 @@ from pathlib import Path
 from litehive.config.model import LitehiveConfig
 from litehive.config.paths import state_path
 from litehive.git.ops import GitError, abort_revert, commit_task, has_changes, rollback_message, rollback_task
-from litehive.models.task_models import TaskRecord
+from litehive.domain.task import TaskRecord
 from litehive.state.store import runtime_store
 from litehive.tasks.paths import task_dir, task_file, task_runtime_file
 from litehive.tasks.persistence import atomic_write_text, load_state
@@ -53,7 +53,7 @@ def require_completed_task(task: TaskRecord, action: str) -> None:
 
 
 def rollback_completed_task(root: Path, task_id: str):
-    from litehive.config.pool_types import RollbackSummary
+    from litehive.domain.pool import RollbackSummary
     from litehive.state.records import get_task
 
     root = root.resolve()

@@ -10,7 +10,7 @@ from litehive.config.model import LitehiveConfig
 from litehive.config.paths import worktree_root
 from litehive.daemon.execution import run_daemon_loop
 from litehive.main import _fast_status
-from litehive.models.task_models import WorkspaceState
+from litehive.domain.task import WorkspaceState
 from litehive.state.records import create_task, save_task
 from litehive.tasks.persistence import load_state, save_state, set_pool_stop_reason
 from tests.workspace_helpers import ensure_workspace

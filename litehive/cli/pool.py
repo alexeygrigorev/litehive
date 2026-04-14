@@ -1,6 +1,6 @@
 import yaml
 
-from litehive.models.common import utcnow
+from litehive.domain.common import utcnow
 from litehive.state.records import list_tasks
 
 

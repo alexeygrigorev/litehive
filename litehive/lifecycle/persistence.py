@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from litehive.db.schema import connect_workspace_db
-from litehive.models.common import utcnow
+from litehive.domain.common import utcnow
 
 from .types import FailedReason, NodeName, PipelineMode
 

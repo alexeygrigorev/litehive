@@ -3,8 +3,8 @@
 from pathlib import Path
 
 from litehive.config.paths import state_path
-from litehive.models.common import utcnow
-from litehive.models.task_models import TaskRecord, WorkspaceState
+from litehive.domain.common import utcnow
+from litehive.domain.task import TaskRecord, WorkspaceState
 from litehive.state.store import runtime_store
 
 from litehive.state.locking import workspace_mutation_guard

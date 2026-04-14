@@ -6,8 +6,8 @@ from typing import Iterable
 import yaml
 
 from litehive.git.ops import GitError, current_head, is_git_repo, status_porcelain
-from litehive.models.report_models import RecoveryAction, RecoveryEvidenceItem, RecoveryReport
-from litehive.models.task_models import TaskRecord
+from litehive.domain.reports import RecoveryAction, RecoveryEvidenceItem, RecoveryReport
+from litehive.domain.task import TaskRecord
 
 from .paths import (
     legacy_task_thread_file,
@@ -229,7 +229,7 @@ def record_recovery_report(
     recovery_subagent_id: str | None = None,
     recovery_subagent_path: str | None = None,
 ) -> Path:
-    from litehive.models.report_models import TaskThreadComment
+    from litehive.domain.reports import TaskThreadComment
 
     report = RecoveryReport(
         task_id=task.id,
@@ -304,7 +304,7 @@ def retract_thread_comment(comment: "TaskThreadComment") -> bool:
 
 
 def load_task_thread(root: Path, task: TaskRecord) -> list["TaskThreadComment"]:
-    from litehive.models.report_models import TaskThreadComment
+    from litehive.domain.reports import TaskThreadComment
 
     path = task_comments_file(root, task)
     if not path.exists():

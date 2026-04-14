@@ -6,14 +6,14 @@ from pathlib import Path
 
 from litehive.config.loading import load_config
 from litehive.config.constants import VALID_POOL_SELECTION_POLICIES
-from litehive.models.common import utcnow
-from litehive.models.report_models import RecoveryAction
-from litehive.models.runtime_models import TaskOutcomeState
-from litehive.models.task_models import TaskRecord, WorkspaceState
+from litehive.domain.common import utcnow
+from litehive.domain.reports import RecoveryAction
+from litehive.domain.runtime import TaskOutcomeState
+from litehive.domain.task import TaskRecord, WorkspaceState
 
 from .constants import TASK_PRIORITY_ORDER
 from litehive.state.records import set_task_commit_sha
-from .models import BlockedTask, TaskPlan, TaskSelection, WorkspaceConflictError
+from litehive.domain.task_ops import BlockedTask, TaskPlan, TaskSelection, WorkspaceConflictError
 from .persistence import load_state, save_state_without_runner_guard
 from litehive.state.locking import ensure_future_task_mutation_allowed, workspace_lock
 

@@ -12,7 +12,7 @@ from .common import (
     cap_feedback,
     utcnow,
 )
-from .runtime_models import ResourceLimitEvent
+from .runtime import ResourceLimitEvent
 
 
 class StageReport(BaseModel):

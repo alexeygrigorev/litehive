@@ -9,7 +9,7 @@ import yaml
 
 from litehive.config.paths import state_path
 from litehive.config.workspace import ensure_workspace
-from litehive.models.task_models import WorkspaceState
+from litehive.domain.task import WorkspaceState
 from litehive.state.store import runtime_store
 
 from .constants import MISSING

@@ -10,7 +10,7 @@ import pytest
 from typer.testing import CliRunner
 
 from litehive.cli.app import app
-from litehive.lifecycle.deltas import StateDelta
+from litehive.domain.lifecycle_deltas import StateDelta
 from litehive.lifecycle.events import CleanState, Reject
 from litehive.lifecycle.journal import SqliteJournal
 from litehive.lifecycle.persistence import SqlitePersistence

@@ -7,8 +7,8 @@ import yaml
 from litehive.config.paths import workspace_gitignore_path
 from litehive.config.workspace import render_workspace_gitignore
 from heru.base import CLIExecutionResult, ExternalCLIAdapter
-from litehive.models.common import utcnow
-from litehive.models.engine_models import (
+from litehive.domain.common import utcnow
+from litehive.domain.engine import (
     EngineUsageObservation,
     EngineUsageRecord,
     EngineUsageWindow,

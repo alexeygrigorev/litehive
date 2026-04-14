@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import Any
 
 from litehive.agents.manager import SubagentManager
-from litehive.agents.models import EngineFailure
+from litehive.domain.agent import EngineFailure
 from litehive.git.ops import GitError, current_head, is_git_repo, status_porcelain
 from litehive.state.records import get_task
 from litehive.tasks.worktrees import resolve_recorded_worktree_path
@@ -182,7 +182,7 @@ class HeruEngineAdapter:
 
     @staticmethod
     def _extract_continuation_id(result, fallback: str | None) -> str | None:
-        from litehive.agents.models import SubagentResult
+        from litehive.domain.agent import SubagentResult
 
         if not isinstance(result, SubagentResult):
             return fallback

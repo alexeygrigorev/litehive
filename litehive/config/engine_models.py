@@ -14,8 +14,8 @@ from heru import get_engine
 from litehive.agents._continuation import extract_execution_continuation
 from litehive.config.model import LitehiveConfig
 from litehive.config.paths import config_path
-from litehive.models.runtime_models import RuntimeContinuationHandoff
-from litehive.models.task_models import TaskRecord
+from litehive.domain.runtime import RuntimeContinuationHandoff
+from litehive.domain.task import TaskRecord
 from litehive.tasks.runtime import set_task_continuation_handoff
 
 

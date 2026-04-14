@@ -41,7 +41,7 @@ from litehive.recovery.workspace_repair import repair_workspace_state
 from litehive.state.records import list_tasks_state_first, require_task
 from litehive.tasks.persistence import load_state
 from litehive.state.records import list_tasks
-from litehive.tasks.models import WorkspaceConflictError
+from litehive.domain.task_ops import WorkspaceConflictError
 from litehive.tasks.persistence import load_state as load_runtime_state
 from litehive.tasks.worktree_inspection import inspect_dirty_worktree_gate
 

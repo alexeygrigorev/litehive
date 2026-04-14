@@ -1,9 +1,9 @@
 from dataclasses import dataclass
 from typing import Any, Callable
 
-from .events import Blocked, Crash, Event, MergeConflictDetected, Reject
-from .persistence import HookRejectFingerprint, LastRejection, TaskState
-from .types import FailedReason, NodeName
+from litehive.lifecycle.events import Blocked, Crash, Event, MergeConflictDetected, Reject
+from litehive.lifecycle.persistence import HookRejectFingerprint, LastRejection, TaskState
+from litehive.lifecycle.types import FailedReason, NodeName
 
 EffectFn = Callable[[TaskState, Event], "StateDelta"]
 

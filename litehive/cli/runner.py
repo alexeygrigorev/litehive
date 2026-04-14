@@ -22,12 +22,12 @@ from litehive.daemon.execution import (
 from litehive.daemon.registry import get_workspace_daemon, list_daemon_instances
 from litehive.db.schema import MigrationApplyError, apply_pending_migrations, migration_status
 from litehive.git.ops import GitError, checkpoint_message
-from litehive.models.report_models import TaskThreadComment
+from litehive.domain.reports import TaskThreadComment
 from litehive.lifecycle.orchestration import run_task
 from litehive.recovery.execution_recovery import rollback_completed_task
 from litehive.state.backup import create_workspace_backup, list_workspace_backups, restore_workspace_backup
 from litehive.state.records import get_task
-from litehive.tasks.models import WorkspaceConflictError
+from litehive.domain.task_ops import WorkspaceConflictError
 from litehive.tasks.normalization import missing_acceptance_criteria_reason
 from litehive.tasks.persistence import load_state
 from litehive.tasks.queue import dequeue_next_task, peek_next_task_selection, plan_task_selections
@@ -163,7 +163,7 @@ def run_drain_dry_run(workspace, *, config, engine=None, model=None, stop_on_fai
     except WorkspaceConflictError as exc:
         print(f"run failed: {exc}")
         return 1
-    from litehive.config.pool_types import TaskPoolStopConditions
+    from litehive.domain.pool import TaskPoolStopConditions
 
     stop_conditions = TaskPoolStopConditions(
         max_tasks=max_tasks,
@@ -197,7 +197,7 @@ def run_single_dry_run(workspace, *, config, engine=None, model=None, stop_on_fa
     except WorkspaceConflictError as exc:
         print(f"run failed: {exc}")
         return 1
-    from litehive.config.pool_types import TaskPoolStopConditions
+    from litehive.domain.pool import TaskPoolStopConditions
 
     stop_conditions = TaskPoolStopConditions(
         max_tasks=max_tasks,

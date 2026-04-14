@@ -3,8 +3,8 @@
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from litehive.models.task_models import TaskRecord
-from litehive.tasks.models import BlockedTask
+from litehive.domain.task import TaskRecord
+from litehive.domain.task_ops import BlockedTask
 
 
 @dataclass(slots=True)

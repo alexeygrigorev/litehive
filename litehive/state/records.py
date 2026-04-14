@@ -10,10 +10,10 @@ import yaml
 from litehive.config.paths import state_path, workspace_gitignore_path
 from litehive.config.workspace import ensure_workspace, render_workspace_gitignore
 from litehive.git.ops import default_commit_message
-from litehive.models.common import utcnow
-from litehive.models.report_models import FollowUpTaskSpec
-from litehive.models.runtime_models import TaskRuntime
-from litehive.models.task_models import (
+from litehive.domain.common import utcnow
+from litehive.domain.reports import FollowUpTaskSpec
+from litehive.domain.runtime import TaskRuntime
+from litehive.domain.task import (
     TaskCreationSource,
     TaskRecord,
     TaskStateRecord,

@@ -10,7 +10,7 @@ from .common import (
     TaskStatus,
     utcnow,
 )
-from .runtime_models import SubagentRef, TaskRuntime
+from .runtime import SubagentRef, TaskRuntime
 
 
 class TaskRetryPolicy(BaseModel):

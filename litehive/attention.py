@@ -10,8 +10,8 @@ from pydantic import BaseModel, Field
 
 from litehive.config.workspace import ensure_workspace
 from litehive.db.schema import connect_workspace_db
-from litehive.models.common import utcnow
-from litehive.models.task_models import TaskRecord
+from litehive.domain.common import utcnow
+from litehive.domain.task import TaskRecord
 from litehive.state.records import list_tasks
 from litehive.tasks.paths import tasks_root
 from litehive.tasks.persistence import load_state, set_pool_stop_reason

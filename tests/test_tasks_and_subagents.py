@@ -186,7 +186,7 @@ def _create_follow_up_tasks_preserves_runner_queue_changes_after_state_snapshot(
 import json
 from pathlib import Path
 from litehive.config.workspace import ensure_workspace
-from litehive.models.report_models import FollowUpTaskSpec
+from litehive.domain.reports import FollowUpTaskSpec
 from litehive.state.records import create_task
 from litehive.tasks.persistence import load_state
 from litehive.state.records import create_follow_up_tasks

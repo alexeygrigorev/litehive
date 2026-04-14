@@ -7,8 +7,8 @@ from pathlib import Path
 
 import yaml
 
-from litehive.models.common import utcnow
-from litehive.models.task_models import TaskRecord
+from litehive.domain.common import utcnow
+from litehive.domain.task import TaskRecord
 
 from litehive.state.records import load_task_record_file, list_tasks, require_task
 from litehive.state.locking import workspace_lock

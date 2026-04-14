@@ -12,9 +12,9 @@ from typing import TextIO
 import yaml
 
 from litehive.config.paths import workspace_dir
-from litehive.models.common import utcnow
-from litehive.models.runtime_models import RunnerStatusState
-from litehive.models.task_models import TaskRecord, WorkspaceState
+from litehive.domain.common import utcnow
+from litehive.domain.runtime import RunnerStatusState
+from litehive.domain.task import TaskRecord, WorkspaceState
 
 from litehive.tasks.constants import (
     HEARTBEAT_LATE_THRESHOLD_SECONDS,
@@ -22,7 +22,7 @@ from litehive.tasks.constants import (
     RUNNER_LOCKS,
     RUNNER_LOCKS_MUTEX,
 )
-from litehive.tasks.models import WorkspaceConflictError, RunnerLockState
+from litehive.domain.task_ops import WorkspaceConflictError, RunnerLockState
 from litehive.tasks.paths import runner_lock_path, task_dir, task_file
 
 logger = logging.getLogger(__name__)

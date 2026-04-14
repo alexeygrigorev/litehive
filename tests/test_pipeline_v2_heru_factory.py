@@ -1,9 +1,9 @@
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-from litehive.agents.models import SubagentResult
+from litehive.domain.agent import SubagentResult
 from heru.types import SubagentRef
-from litehive.models.report_models import TaskThreadComment
+from litehive.domain.reports import TaskThreadComment
 from litehive.lifecycle.heru_factory import HeruEngineAdapter, _latest_verdict_after
 from litehive.lifecycle.nodes.agent import AgentVerdict
 from litehive.lifecycle.persistence import TaskState

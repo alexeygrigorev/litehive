@@ -4,7 +4,7 @@ import yaml
 from typer.testing import CliRunner
 
 from litehive.cli.app import app
-from litehive.models.report_models import TaskThreadComment
+from litehive.domain.reports import TaskThreadComment
 from litehive.state.records import create_task
 from litehive.tasks.paths import legacy_task_thread_file, task_comments_file
 from litehive.tasks.reports import append_thread_comment, load_task_thread

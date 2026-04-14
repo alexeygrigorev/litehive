@@ -9,8 +9,8 @@ from pathlib import Path
 
 from litehive.config.loading import load_config
 from litehive.git.ops import current_head
-from litehive.models.common import utcnow
-from litehive.models.task_models import TaskRecord, WorkspaceState
+from litehive.domain.common import utcnow
+from litehive.domain.task import TaskRecord, WorkspaceState
 
 from litehive.tasks.constants import (
     CLOSED_TASK_STATUSES,
@@ -22,7 +22,7 @@ from litehive.tasks.constants import (
     RUNNER_LOCKS_MUTEX,
 )
 from litehive.state.locking import workspace_lock
-from litehive.tasks.models import StopTaskSummary, SwitchTaskSummary, WorkspaceConflictError
+from litehive.domain.task_ops import StopTaskSummary, SwitchTaskSummary, WorkspaceConflictError
 from litehive.tasks.normalization import (
     missing_acceptance_criteria_reason,
     normalize_acceptance_criteria,
@@ -241,7 +241,7 @@ def switch_task_engine(root: Path, task_id: str, *, engine: str, reason: str) ->
         )
 
     prior_work_paths = _switch_prior_work_paths(root, task)
-    from litehive.models.report_models import TaskThreadComment
+    from litehive.domain.reports import TaskThreadComment
 
     append_thread_comment(
         root,

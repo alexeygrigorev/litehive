@@ -7,15 +7,15 @@ from pathlib import Path
 import yaml
 
 from litehive.config.loading import load_config
-from litehive.models.common import utcnow
-from litehive.models.report_models import RecoveryAction
-from litehive.models.runtime_models import (
+from litehive.domain.common import utcnow
+from litehive.domain.reports import RecoveryAction
+from litehive.domain.runtime import (
     RuntimeContinuationHandoff,
     RuntimeInterruptionState,
     RuntimeSubagentState,
 )
-from litehive.models.task_models import TaskRecord
-from litehive.tasks.models import WorkspaceRepairSummary
+from litehive.domain.task import TaskRecord
+from litehive.domain.task_ops import WorkspaceRepairSummary
 from litehive.tasks.paths import (
     read_text_artifact,
     resolve_artifact_path,

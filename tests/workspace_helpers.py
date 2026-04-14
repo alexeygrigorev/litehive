@@ -43,14 +43,14 @@ from heru.base import (
 from litehive.agents.sandbox import SandboxLauncher
 from litehive.git.ops import GitError, checkpoint_message, commit_task
 from heru.types import SubagentRef
-from litehive.models.engine_models import (
+from litehive.domain.engine import (
     EngineUsageObservation,
     EngineUsageWindow,
     LiveEvent,
     LiveTimeline,
 )
-from litehive.models.report_models import FollowUpTaskSpec, StageReport
-from litehive.models.runtime_models import (
+from litehive.domain.reports import FollowUpTaskSpec, StageReport
+from litehive.domain.runtime import (
     ResourceLimitEvent,
     RuntimeContinuationHandoff,
     RuntimeEngineContinuation,
@@ -59,10 +59,10 @@ from litehive.models.runtime_models import (
     RuntimeSubagentState,
     RunnerStatusState,
 )
-from litehive.models.task_models import TaskRecord
+from litehive.domain.task import TaskRecord
 from litehive.observability.engine_monitoring import load_engine_monitoring, record_engine_execution
 from litehive.observability.status import render_task_summary
-from litehive.config.pool_types import TaskPoolStopConditions
+from litehive.domain.pool import TaskPoolStopConditions
 from litehive.recovery.execution_recovery import recover_completed_task
 from litehive.config.engine_models import (
     resolve_engine_name,
@@ -72,7 +72,7 @@ from litehive.config.engine_models import (
 from litehive.lifecycle.orchestration import run_task, ExecutionResult
 from litehive.tasks.queue import dequeue_next_task
 from litehive.agents.manager import SubagentManager
-from litehive.agents.models import EngineFailure, SubagentResult
+from litehive.domain.agent import EngineFailure, SubagentResult
 from litehive.agents.parsing import stage_report_from_subagent
 from litehive.agents.prompts import stage_prompt
 from litehive.tasks.archive import (
@@ -92,7 +92,7 @@ from litehive.state.records import (
     save_task,
     save_task_runtime,
 )
-from litehive.tasks.models import WorkspaceConflictError
+from litehive.domain.task_ops import WorkspaceConflictError
 from litehive.tasks.normalization import (
     implementation_entry_stage,
     needs_normalization,
@@ -540,7 +540,7 @@ def _write_cli_verdict(
 ) -> None:
     """Simulate a litehive report CLI invocation by writing a thread comment.
     """
-    from litehive.models.report_models import TaskThreadComment
+    from litehive.domain.reports import TaskThreadComment
 
     # Write to the main workspace root, not the worktree.
     ws_root = _resolve_workspace_root(root)

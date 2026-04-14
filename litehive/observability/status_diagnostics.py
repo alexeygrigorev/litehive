@@ -21,9 +21,9 @@ from litehive.config.paths import (
 )
 from litehive.daemon.logs import latest_run_all_log_dir
 from litehive.daemon.registry import pid_is_alive
-from litehive.models.engine_models import WorkspaceEngineMonitoring
-from litehive.models.runtime_models import RunnerStatusState
-from litehive.models.task_models import WorkspaceState
+from litehive.domain.engine import WorkspaceEngineMonitoring
+from litehive.domain.runtime import RunnerStatusState
+from litehive.domain.task import WorkspaceState
 from litehive.state.store import runtime_store
 from litehive.state.locking import runner_pid_is_alive
 

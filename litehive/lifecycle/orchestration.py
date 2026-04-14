@@ -28,8 +28,8 @@ import subprocess
 from litehive.config.loading import load_config
 from litehive.config.engine_models import resolve_task_retry_policy
 from litehive.git.ops import GitError, remove_worktree
-from litehive.models.task_models import TaskRecord
-from litehive.models.runtime_models import RuntimeHookRejectFingerprint
+from litehive.domain.task import TaskRecord
+from litehive.domain.runtime import RuntimeHookRejectFingerprint
 from litehive.state.records import (
     clear_task_worktree_path,
     get_task,

@@ -8,7 +8,7 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
-from litehive.models.task_models import TaskRecord
+from litehive.domain.task import TaskRecord
 
 logger = logging.getLogger(__name__)
 

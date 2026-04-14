@@ -9,7 +9,7 @@ from pathlib import Path
 import yaml
 
 from litehive.config.paths import daemon_registry_path
-from litehive.models.common import utcnow
+from litehive.domain.common import utcnow
 
 logger = logging.getLogger(__name__)
 

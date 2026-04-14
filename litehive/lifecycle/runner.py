@@ -1,6 +1,6 @@
 from typing import Callable
 
-from .deltas import StateDelta
+from litehive.domain.lifecycle_deltas import StateDelta
 from .events import Event, HookOk, Pass, RecoverySucceeded
 from .journal import NullJournal, PipelineJournal
 from .nodes.base import NodeRegistry

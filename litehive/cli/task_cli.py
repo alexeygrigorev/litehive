@@ -26,7 +26,7 @@ from litehive.config.loading import load_config
 from litehive.config.workspace import ensure_workspace
 from litehive.tasks.archive import archive_root
 from litehive.state.records import create_task, list_tasks as load_tasks, require_task
-from litehive.tasks.models import WorkspaceConflictError
+from litehive.domain.task_ops import WorkspaceConflictError
 from litehive.tasks.normalization import missing_acceptance_criteria_cli_warning
 from litehive.tasks.constants import VALID_TASK_PRIORITIES
 from litehive.tasks.status import abandon_task, close_task, update_task_metadata

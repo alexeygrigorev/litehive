@@ -23,7 +23,7 @@ from heru.engine_detection import (
     filter_supported_kwargs,
     has_callable_override,
 )
-from litehive.models.runtime_models import ResourceLimitEvent
+from litehive.domain.runtime import ResourceLimitEvent
 
 
 @dataclass(frozen=True, slots=True)

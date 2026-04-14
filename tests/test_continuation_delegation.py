@@ -4,7 +4,7 @@ from types import SimpleNamespace
 from litehive.agents._continuation import extract_execution_continuation
 from heru.base import CLIExecutionResult
 from litehive.config.engine_models import _set_continuation_handoff
-from litehive.models.runtime_models import RuntimeEngineContinuation
+from litehive.domain.runtime import RuntimeEngineContinuation
 from litehive.state.records import create_task
 
 
