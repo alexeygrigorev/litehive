@@ -1,8 +1,9 @@
 """Config loading and merge helpers."""
 
-from dataclasses import asdict
+from dataclasses import asdict, fields
 from pathlib import Path
 from typing import Any, Mapping
+import warnings
 
 import yaml
 
@@ -46,6 +47,11 @@ def load_config(root: Path) -> LitehiveConfig:
         data["process_profile"] = "generic"
     if data.get("pool_selection_policy") not in VALID_POOL_SELECTION_POLICIES:
         data["pool_selection_policy"] = "dependency_aware"
+    valid_keys = {f.name for f in fields(LitehiveConfig)}
+    for key in list(data):
+        if key not in valid_keys:
+            warnings.warn(f"unknown config key {key!r} \u2014 ignoring", stacklevel=2)
+            data.pop(key)
     return LitehiveConfig(**data)
 
 

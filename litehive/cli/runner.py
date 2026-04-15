@@ -135,7 +135,11 @@ def _run_single_v2(workspace: Path) -> int:
         print(f"failed_reason: {result.failed_reason}")
     if result.failed_message:
         print(f"failed_message: {result.failed_message}")
-    return 0 if result.final_stage == "done" else 1
+    # The run command completed without an internal error. The task may still
+    # need more iterations (in_progress, recovering, failed→flagged, etc.) — those
+    # are normal pipeline outcomes, not a failure of this command. Reserve
+    # non-zero exit for actual exceptions raised above.
+    return 0
 
 
 def run_command(

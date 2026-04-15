@@ -109,6 +109,16 @@ def _write_pool_stop_reason(workspace: Path, reason: str) -> None:
     set_pool_stop_reason(workspace, reason)
 
 
+def _sleep_with_stop(seconds: float, *, stop_requested_fn) -> None:
+    """Sleep up to ``seconds``, returning early if a stop is requested."""
+    deadline = time.monotonic() + seconds
+    while True:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0 or stop_requested_fn():
+            return
+        time.sleep(min(remaining, 1.0))
+
+
 def _append_attention_log(workspace: Path, message: str) -> None:
     """Append a timestamped entry to the runtime attention log (gitignored)."""
     timestamp = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -215,6 +225,16 @@ def run_daemon_loop(
     log_root.mkdir(parents=True, exist_ok=True)
     prune_run_all_log_dirs(log_base)
     register_daemon(workspace, pid=os.getpid(), log_dir=log_root)
+    # Clear the soft "daemon_iteration_failures" marker left behind by a
+    # previous worker. This is a self-recoverable state (a fresh daemon worker
+    # is starting now); the explicit pool-stop reasons listed in
+    # _EXPLICIT_POOL_STOP_REASONS are what an operator must clear by hand.
+    try:
+        existing_state = load_state(workspace)
+        if existing_state.pool_stop_reason == "daemon_iteration_failures":
+            set_pool_stop_reason(workspace, None)
+    except Exception:
+        logger.exception("failed to clear stale daemon_iteration_failures marker")
 
     stop_requested = False
     current_child: dict[str, subprocess.Popen[str] | None] = {"process": None}
@@ -335,11 +355,14 @@ def run_daemon_loop(
                 if consecutive_iteration_failures >= MAX_CONSECUTIVE_FAILURES:
                     _emit(
                         f"Too many consecutive iteration failures "
-                        f"({consecutive_iteration_failures}). Halting pool.",
+                        f"({consecutive_iteration_failures}). Backing off 5min and retrying.",
                         stream=output_stream,
                     )
                     _write_pool_stop_reason(workspace, "daemon_iteration_failures")
-                    return 0
+                    _sleep_with_stop(300, stop_requested_fn=lambda: stop_requested)
+                    set_pool_stop_reason(workspace, None)
+                    consecutive_iteration_failures = 0
+                    continue
                 # Short backoff before the next attempt
                 time.sleep(min(5 * consecutive_iteration_failures, 30))
                 continue
@@ -407,11 +430,14 @@ def run_daemon_loop(
                 if consecutive_iteration_failures >= MAX_CONSECUTIVE_FAILURES:
                     _emit(
                         f"Too many consecutive iteration failures "
-                        f"({consecutive_iteration_failures}). Halting pool.",
+                        f"({consecutive_iteration_failures}). Backing off 5min and retrying.",
                         stream=output_stream,
                     )
                     _write_pool_stop_reason(workspace, "daemon_iteration_failures")
-                    return 0
+                    _sleep_with_stop(300, stop_requested_fn=lambda: stop_requested)
+                    set_pool_stop_reason(workspace, None)
+                    consecutive_iteration_failures = 0
+                    continue
                 time.sleep(min(5 * consecutive_iteration_failures, 30))
                 continue
 
