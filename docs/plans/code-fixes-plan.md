@@ -335,6 +335,31 @@ current target vocabulary unless explicitly revised again.
 - Use `LifecycleJournal` for machine-generated transition history and keep it
   distinct from task activity.
 
+## Vocabulary Structure Decisions
+
+The vocabulary doc is now organized by domain instead of by scattered concept
+type so related classes and enums can be reviewed together.
+
+- `Workspace Domain`
+- `Task Domain`
+- `Pipeline Domain`
+- `Recovery Domain`
+- `Execution Domain`
+- `Activity and Reports Domain`
+- `Artifacts Domain`
+- `Configuration Domain`
+
+Follow-up actions:
+
+- Keep future vocabulary additions grouped into one of those domains rather than
+  reintroducing cross-cutting scattered sections.
+- Revisit the following still-open simplification questions in-place within
+  their domains:
+  - whether `PipelineStateView` should exist separately from `PipelineState`
+  - whether `TaskStatus` should collapse further
+  - whether `StagePhase` should exist at all
+  - whether `RecoveryResult` is the final name
+
 ## engine_models.py feedback
 
 Question:

@@ -1,62 +1,188 @@
 # Vocabulary
 
-This document defines the canonical product and codebase vocabulary for
+This document defines the desired domain model and canonical vocabulary for
 Litehive.
 
 It is normative:
 
 - use one canonical term per concept
-- avoid historical labels when a clearer current term exists
 - do not use `v2` in user-facing language
-- prefer explicit owner prefixes such as `task status` or `runner status`
-  instead of bare overloaded words
-
-Some current file names and APIs still use older names. This document describes
-the target vocabulary we want the codebase to converge on.
-
-Where useful, entries show both:
-
-- `Target Python type`: the intended long-term name
-- `Current code shape`: the closest current class, field, or type alias in the
-  existing codebase
+- do not use bare overloaded words like `status`, `state`, `reason`, or
+  `outcome` when more than one kind is in scope
+- group related concepts by domain so review is local, not scattered
 
 ## Naming Rules
 
-- Use `pipeline` for the task execution flow and its persisted machine states.
-- Use `lifecycle` for the internal mechanics that implement that flow:
-  nodes, events, guards, and transitions.
-- Use `task stage` for user-facing major work steps.
-- Use `pipeline state` for the full internal machine state.
+- Use `task` for the core work item.
+- Use `pipeline` for the task execution flow.
+- Use `lifecycle` for the implementation mechanics of that flow.
 - Use `message` for human-readable text.
-- Use `reason code` for normalized machine-readable classification.
+- Use `reason_code` for normalized machine-readable classification.
 - Use `rationale` for operator or agent explanation of a choice.
-- Do not use bare `status`, `state`, `reason`, or `outcome` when more than one
-  kind is in scope.
 
-## Core Objects
+## Workspace Domain
 
 ### Workspace
 
 The repository root managed by Litehive.
 
 - Preferred: `workspace`
-- Avoid: `repo` when the meaning is specifically the Litehive-managed working
-  area rather than git in general
-
-Target Python type:
-
-- `Workspace`
-
-Current code shape:
+- Python type: `Path`
 
 ```python
-# There is no dedicated Workspace class today.
-# The repo root is usually passed around as Path, and runtime
-# workspace state lives in WorkspaceState.
-class WorkspaceState(BaseModel):
+workspace: Path
+```
+
+### Workspace Queue
+
+The ordered list of tasks waiting to run in one workspace.
+
+- Preferred: `task queue`
+- Python type: `TaskQueue`
+
+```python
+class TaskQueue(BaseModel):
     active_task_id: str | None = None
-    queue: list[str] = Field(default_factory=list)
-    pool_stop_reason: str | None = None
+    queued_task_ids: list[str] = Field(default_factory=list)
+```
+
+### Workspace Runtime Store
+
+The durable persistence API for workspace runtime data.
+
+- Preferred: `workspace runtime store`
+- Python type: `WorkspaceRuntimeStore`
+
+```python
+class WorkspaceRuntimeStore(Protocol):
+    def load_task(self, task_id: str) -> Task | None: ...
+    def save_task(self, task: Task) -> None: ...
+    def load_queue(self) -> TaskQueue: ...
+    def save_queue(self, queue: TaskQueue) -> None: ...
+```
+
+## Task Domain
+
+### Task Status
+
+The high-level execution or terminal category for a task.
+
+- Preferred: `task status`
+- Python type: `TaskStatus`
+
+```python
+class TaskStatus(str, Enum):
+    QUEUED = "queued"
+    IN_PROGRESS = "in_progress"
+    INTERRUPTED = "interrupted"
+    PARKED = "parked"
+    DONE = "done"
+    FLAGGED = "flagged"
+    CANCELLED = "cancelled"
+    CLOSED = "closed"
+```
+
+Values:
+
+- `queued`: waiting in the queue
+- `in_progress`: currently executing
+- `interrupted`: execution stopped and can potentially resume
+- `parked`: intentionally paused
+- `done`: completed successfully
+- `flagged`: requires explicit operator attention
+- `cancelled`: explicitly cancelled
+- `closed`: intentionally closed without completion
+
+### Task Close Reason
+
+The explicit operator-chosen reason when closing a task.
+
+- Preferred: `task close reason`
+- Preferred field name: `close_reason`
+- Python type: `TaskCloseReason`
+
+```python
+class TaskCloseReason(str, Enum):
+    WONT_DO = "wont_do"
+    DEFERRED = "deferred"
+    DUPLICATE = "duplicate"
+```
+
+### Task Flag Reason
+
+The normalized reason a task was flagged.
+
+- Preferred: `task flag reason`
+- Preferred field name: `flag_reason`
+- Python type: `TaskFlagReason`
+
+```python
+class TaskFlagReason(str, Enum):
+    MERGE_FAILED = "merge_failed"
+    RECOVERY_FAILED = "recovery_failed"
+    RECOVERY_BUDGET_EXCEEDED = "recovery_budget_exceeded"
+    OPERATOR_ATTENTION_REQUIRED = "operator_attention_required"
+```
+
+### Task Priority
+
+The scheduling priority of a task.
+
+- Preferred: `task priority`
+- Python type: `TaskPriority`
+
+```python
+class TaskPriority(str, Enum):
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+```
+
+### Task Type
+
+The optional classification of a task for planning or routing.
+
+- Preferred: `task type`
+- Python type: `TaskType`
+
+```python
+class TaskType(str, Enum):
+    FEATURE = "feature"
+    BUG = "bug"
+    CHORE = "chore"
+    REFACTOR = "refactor"
+```
+
+### Task Retry Policy
+
+The configured retry limits for a task.
+
+- Preferred: `task retry policy`
+- Python type: `TaskRetryPolicy`
+
+```python
+class TaskRetryPolicy(BaseModel):
+    max_retries: int | None = None
+    stage_retry_limit: int | None = None
+```
+
+### Task Git State
+
+The git-related state attached to a task.
+
+- Preferred: `task git state`
+- Python type: `TaskGitState`
+
+```python
+class TaskGitState(BaseModel):
+    auto_commit: bool = True
+    commit_message: str | None = None
+    commit_sha: str | None = None
+    checkpoint_base_sha: str | None = None
+    checkpoint_attempts: int = 0
+    rolled_back_checkpoint_attempt: int | None = None
+    merge_attempts: int = 0
+    worktree_path: Path | None = None
 ```
 
 ### Task
@@ -64,123 +190,52 @@ class WorkspaceState(BaseModel):
 A unit of work tracked by Litehive.
 
 - Preferred: `task`
-
-Target Python type:
-
-- `Task`
-
-Current code shape:
+- Python type: `Task`
 
 ```python
-class TaskRecord(BaseModel):
+class Task(BaseModel):
     id: str
     slug: str
     title: str
-    status: TaskStatus
-    pipeline_status: PipelineStatus
-    runtime: TaskRuntime
+    task_type: TaskType | None = None
+    model: str | None = None
+    priority: TaskPriority = TaskPriority.MEDIUM
+    status: TaskStatus = TaskStatus.QUEUED
+    flag_reason: TaskFlagReason | None = None
+    created_at: datetime
+    updated_at: datetime
+    goal: str = ""
+    acceptance_criteria: list[str] = Field(default_factory=list)
+    constraints: list[str] = Field(default_factory=list)
+    plan: list[str] = Field(default_factory=list)
+    depends_on: list[str] = Field(default_factory=list)
+    git: TaskGitState = Field(default_factory=TaskGitState)
+    retry_policy: TaskRetryPolicy = Field(default_factory=TaskRetryPolicy)
+    runtime_state: TaskRuntimeState = Field(default_factory=lambda: TaskRuntimeState())
 ```
 
-### Task Runtime State
+Field meanings:
 
-The mutable execution state attached to a task while Litehive runs.
+- `goal`: the main intended result
+- `acceptance_criteria`: concrete completion conditions
+- `constraints`: limitations or rules that must be respected
+- `plan`: current execution plan
+- `depends_on`: upstream task ids
 
-- Preferred: `task runtime state`
-- Short form when the context is obvious: `task runtime`
-- This is not the same thing as `pipeline state`
+## Pipeline Domain
 
-Target Python type:
+### Pipeline Mode
 
-- `TaskRuntimeState`
+The top-level execution mode for a task.
 
-Current code shape:
+- Preferred: `pipeline mode`
+- Python type: `PipelineMode`
 
 ```python
-class TaskRuntime(BaseModel):
-    current_stage: RuntimeStageState = Field(default_factory=RuntimeStageState)
-    active_subagent: RuntimeSubagentState | None = None
-    interruption: RuntimeInterruptionState | None = None
-    continuation_handoff: RuntimeContinuationHandoff | None = None
-    last_outcome: TaskOutcomeState = Field(default_factory=TaskOutcomeState)
+class PipelineMode(str, Enum):
+    FULL = "full"
+    SINGLE = "single"
 ```
-
-Typical contents include:
-
-- current stage execution state
-- retries and recovery bookkeeping
-- active subagent
-- interruption state
-- continuation handoff
-
-### Queue
-
-The ordered list of tasks waiting to run.
-
-- Preferred: `queue`
-- Use `active task` for the currently running task
-- Use `queued task` for a task waiting in the queue
-
-Target Python type:
-
-- `TaskQueue`
-
-Current code shape:
-
-```python
-# The queue is not a dedicated class today.
-# It is stored as a list of task ids on WorkspaceState.
-class WorkspaceState(BaseModel):
-    queue: list[str] = Field(default_factory=list)
-```
-
-### Engine
-
-An external agent backend or integration that Litehive can use.
-
-- Preferred: `engine`
-- Examples:
-  - `codex`
-  - `claude`
-  - `gemini`
-- An engine is a capability provider, not one concrete run
-
-Target Python type:
-
-- `EngineName(str, Enum)` if engine names are modeled as a typed enum
-
-Current code shape:
-
-```python
-# Engine names are still plain strings in most of the codebase.
-engine_name: str
-```
-
-### Subagent
-
-One task-scoped external agent execution launched by Litehive.
-
-- Preferred: `subagent`
-- Use `subagent run` when emphasizing one concrete execution attempt
-- A subagent uses an engine
-- One engine can power many subagent runs
-
-Target Python type:
-
-- `SubagentExecutionState`
-
-Current code shape:
-
-```python
-class RuntimeSubagentState(BaseModel):
-    id: str
-    role: str
-    engine: str
-    status: SubagentStatus
-    path: str
-    continuation: RuntimeEngineContinuation | None = None
-```
-
-## Pipeline Model
 
 ### Task Stage
 
@@ -188,104 +243,125 @@ A user-facing major step in task execution.
 
 - Preferred: `task stage`
 - Short form when the context is obvious: `stage`
-
-Target Python type:
-
-- `TaskStage(str, Enum)`
-
-Current code shape:
+- Python type: `TaskStage`
 
 ```python
-# Task stages are still stored as string literals today.
-StageReport.step: Literal[
-    "grooming",
-    "implementing",
-    "testing",
-    "accepting",
-    "commit_to_git",
-]
+class TaskStage(str, Enum):
+    GROOMING = "grooming"
+    IMPLEMENTING = "implementing"
+    TESTING = "testing"
+    ACCEPTING = "accepting"
+    COMMIT_TO_GIT = "commit_to_git"
+    RECOVERING = "recovering"
 ```
-
-Canonical values:
-
-- `grooming`: clarify scope, plan, and constraints
-- `implementing`: make the code or content changes
-- `testing`: verify the implementation with tests or checks
-- `accepting`: review the work against the task goal and acceptance criteria
-- `commit_to_git`: checkpoint accepted work into git
-- `recovering`: run bounded diagnosis and repair after execution got stuck
-
-### Stage Phase
-
-The position of a pipeline state relative to a task stage.
-
-- Preferred: `stage phase`
-- Avoid using `phase` as a synonym for `pipeline state`
-
-Target Python type:
-
-- `StagePhase(str, Enum)`
-
-Current code shape:
-
-```python
-# Stage phases are derived by naming convention today.
-before("implementing") == "before_implementing"
-after("implementing") == "after_implementing"
-```
-
-Canonical values:
-
-- `before`: pre-stage setup and hooks
-- `active`: the stage itself is executing
-- `after`: post-stage hooks or finalization
 
 ### Pipeline State
 
 The full internal machine state for task execution.
 
 - Preferred: `pipeline state`
-- This is the canonical name for the state-machine state
 - Avoid calling this just `stage`
-
-Target Python type:
-
-- `PipelineState(str, Enum)`
-
-Current code shape:
+- Python type: `PipelineState`
 
 ```python
-# Pipeline states are still plain strings today.
-NodeName = str
-READY: NodeName = "ready"
-RECOVERING: NodeName = "recovering"
-TERMINAL_NODES = frozenset({"done", "failed"})
+class PipelineState(str, Enum):
+    READY = "ready"
+    WORKTREE_SYNC = "worktree_sync"
+    BEFORE_GROOMING = "before_grooming"
+    GROOMING = "grooming"
+    AFTER_GROOMING = "after_grooming"
+    BEFORE_IMPLEMENTING = "before_implementing"
+    IMPLEMENTING = "implementing"
+    AFTER_IMPLEMENTING = "after_implementing"
+    BEFORE_TESTING = "before_testing"
+    TESTING = "testing"
+    AFTER_TESTING = "after_testing"
+    BEFORE_ACCEPTING = "before_accepting"
+    ACCEPTING = "accepting"
+    AFTER_ACCEPTING = "after_accepting"
+    BEFORE_COMMIT = "before_commit"
+    COMMIT = "commit"
+    AFTER_COMMIT = "after_commit"
+    MERGE_RESOLVING = "merge_resolving"
+    RECOVERING_PRE_EXEC = "recovering_pre_exec"
+    RECOVERING = "recovering"
+    DONE = "done"
+    FAILED = "failed"
 ```
 
-Canonical values:
+### Pipeline State View
 
-- `ready`: task can be admitted into the pipeline
-- `worktree_sync`: prepare or reconcile the task worktree
-- `before_grooming`: pre-stage hook state for `grooming`
-- `grooming`: active `grooming` stage
-- `after_grooming`: post-stage hook state for `grooming`
-- `before_implementing`: pre-stage hook state for `implementing`
-- `implementing`: active `implementing` stage
-- `after_implementing`: post-stage hook state for `implementing`
-- `before_testing`: pre-stage hook state for `testing`
-- `testing`: active `testing` stage
-- `after_testing`: post-stage hook state for `testing`
-- `before_accepting`: pre-stage hook state for `accepting`
-- `accepting`: active `accepting` stage
-- `after_accepting`: post-stage hook state for `accepting`
-- `before_commit`: pre-stage hook state for `commit_to_git`
-- `commit`: active commit stage
-- `after_commit`: post-stage hook state for commit finalization
-- `merge_resolving`: explicit merge-conflict resolution stage
-- `recovering_pre_exec`: repair before entering the main pipeline
-- `recovering`: bounded recovery after a pipeline failure or block
-- `done`: terminal success state
-- `failed`: terminal failure state
+The projected task-facing view of pipeline progress.
+
+- Preferred: `pipeline state view`
+- This intentionally replaces the confusing separate term `pipeline status`
+- Python type: `PipelineStateView`
+
+```python
+class PipelineStateView(str, Enum):
+    BACKLOG = "backlog"
+    GROOMING = "grooming"
+    IMPLEMENTING = "implementing"
+    TESTING = "testing"
+    ACCEPTING = "accepting"
+    COMMIT_TO_GIT = "commit_to_git"
+    DONE = "done"
+    FLAGGED = "flagged"
+```
+
+### Stage Run Status
+
+The runtime status of one task stage attempt.
+
+- Preferred: `stage run status`
+- Python type: `StageRunStatus`
+
+```python
+class StageRunStatus(str, Enum):
+    IDLE = "idle"
+    RUNNING = "running"
+    INTERRUPTED = "interrupted"
+    COMPLETED = "completed"
+```
+
+### Stage Verdict
+
+The decision submitted for a task stage.
+
+- Preferred: `stage verdict`
+- Short form when the context is obvious: `verdict`
+- Python type: `StageVerdict`
+
+```python
+class StageVerdict(str, Enum):
+    ACCEPT = "accept"
+    REJECT = "reject"
+    BLOCKED = "blocked"
+```
+
+Why `blocked` is separate from `reject`:
+
+- `reject` means Litehive can continue autonomously
+- `blocked` means progress requires external input or operator decision
+
+### Stage Execution State
+
+The runtime state of one stage attempt.
+
+- Preferred: `stage execution state`
+- Python type: `StageExecutionState`
+
+```python
+class StageExecutionState(BaseModel):
+    task_stage: TaskStage | None = None
+    status: StageRunStatus = StageRunStatus.IDLE
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    updated_at: datetime | None = None
+    duration_seconds: int = 0
+    verdict: StageVerdict | None = None
+    summary: str = ""
+```
 
 ### Lifecycle Node
 
@@ -293,18 +369,27 @@ The executable object that owns behavior for a pipeline state.
 
 - Preferred: `lifecycle node`
 - Short form when the context is obvious: `node`
-- Avoid using `node` as a synonym for `task stage`
-
-Target Python type:
-
-- `LifecycleNode`
-
-Current code shape:
+- Python type: `LifecycleNode`
 
 ```python
-# Nodes are concrete classes under litehive/lifecycle/nodes/.
-class AgentNode:
-    def run(self, state: TaskState, task: TaskRecord) -> Event: ...
+class LifecycleNode(ABC):
+    @abstractmethod
+    def run(self, task: Task, pipeline_state: PipelineState) -> LifecycleEvent: ...
+```
+
+### Lifecycle Event Source
+
+The origin of a lifecycle event when that distinction matters.
+
+- Preferred: `lifecycle event source`
+- Python type: `LifecycleEventSource`
+
+```python
+class LifecycleEventSource(str, Enum):
+    AGENT = "agent"
+    HOOK = "hook"
+    GUARD = "guard"
+    SYSTEM = "system"
 ```
 
 ### Lifecycle Event
@@ -315,389 +400,444 @@ transition rules.
 - Preferred: `lifecycle event`
 - Short form when the context is obvious: `event`
 - Avoid `runtime event`
-
-Target Python type:
-
-- base class: `LifecycleEvent`
-
-Current code shape:
+- Python type: `LifecycleEvent`
 
 ```python
 @dataclass(frozen=True)
-class Event:
+class LifecycleEvent:
     pass
 
 
 @dataclass(frozen=True)
-class Reject(Event):
-    source: Literal["agent", "hook", "guard", "system"]
-    reason: str
+class AcceptEvent(LifecycleEvent):
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class RejectEvent(LifecycleEvent):
+    source: LifecycleEventSource
+    message: str
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class BlockedEvent(LifecycleEvent):
+    message: str
+
+
+@dataclass(frozen=True)
+class CrashEvent(LifecycleEvent):
+    exc_type: str
+    message: str
+
+
+@dataclass(frozen=True)
+class TimeoutEvent(LifecycleEvent):
+    message: str = ""
 ```
 
-Typical subclasses:
+## Recovery Domain
 
-- `PassEvent`
-- `RejectEvent`
-- `BlockedEvent`
-- `CrashEvent`
-- `TimeoutEvent`
-- `RecoverySucceededEvent`
-- `RecoveryFailedEvent`
+### Trigger Event Kind
+
+The normalized label for the event that triggered recovery.
+
+- Preferred field name: `trigger_event_kind`
+- Python type: `TriggerEventKind`
+
+```python
+class TriggerEventKind(str, Enum):
+    CRASH = "crash"
+    TIMEOUT = "timeout"
+    BLOCKED = "blocked"
+    REJECT = "reject"
+    RETRY_LIMIT = "retry_limit"
+    STAGE_RETRY_LIMIT = "stage_retry_limit"
+    PRE_EXEC_RECOVERY_FAILED = "pre_exec_recovery_failed"
+    MERGE_CONFLICT = "merge_conflict"
+```
+
+### Recovery Diagnostics
+
+Structured diagnostics captured for recovery or recovery-trigger analysis.
+
+- Preferred: `recovery diagnostics`
+- Python type: `RecoveryDiagnostics`
+
+```python
+class RecoveryDiagnostics(BaseModel):
+    values: dict[str, str | int | bool | None | list[str]] = Field(default_factory=dict)
+```
 
 ### Recovery Trigger
 
 The structured input that explains why Litehive entered recovery.
 
 - Preferred: `recovery trigger`
-
-Target Python type:
-
-- `RecoveryTrigger`
-
-Current code shape:
+- Python type: `RecoveryTrigger`
 
 ```python
-# Recovery trigger data is currently split across lifecycle state fields.
-origin_stage: str | None
-failure_context: dict[str, Any]
+class RecoveryTrigger(BaseModel):
+    origin_stage: TaskStage
+    trigger_event_kind: TriggerEventKind
+    message: str = ""
+    diagnostics: RecoveryDiagnostics = Field(default_factory=RecoveryDiagnostics)
 ```
 
-Typical fields:
+### Recovery Result
 
-- `origin_stage: TaskStage`
-- `trigger_event_kind: TriggerEventKind`
-- `message`
-- optional diagnostics such as conflict files or fingerprints
+The result category of one recovery attempt.
 
-### Trigger Event Kind
-
-The normalized persisted label for the event that triggered recovery.
-
-- Preferred field name: `trigger_event_kind`
-- Avoid bare `trigger`
-
-Target Python type:
-
-- `TriggerEventKind(str, Enum)`
-
-Current code shape:
+- Preferred: `recovery result`
+- This replaces the more awkward term `recovery disposition`
+- Python type: `RecoveryResult`
 
 ```python
-# Trigger kinds are still inferred from event classes or stored as strings.
-type(event).__name__  # "Crash", "Blocked", "Reject", ...
+class RecoveryResult(str, Enum):
+    RESUMED = "resumed"
+    ADVANCED = "advanced"
+    DONE = "done"
+    FAILED = "failed"
+    BUDGET_EXCEEDED = "budget_exceeded"
 ```
 
-Canonical values:
+### Recovery Evidence
 
-- `crash`: execution raised an unrecoverable error
-- `timeout`: execution exceeded its time budget
-- `blocked`: an agent cannot continue without external input
-- `reject`: a stage result was not accepted
-- `retry_limit`: a retry budget was exhausted
-- `stage_retry_limit`: a per-stage retry budget was exhausted
-- `pre_exec_recovery_failed`: pre-execution repair could not recover the task
-- `merge_conflict`: commit or merge reconciliation needs intervention
+One evidence item collected during recovery.
 
-## Statuses and Outcomes
-
-### Task Status
-
-The high-level execution or terminal category for a task.
-
-- Preferred: `task status`
-
-Target Python type:
-
-- `TaskStatus(str, Enum)`
-
-Current code shape:
+- Preferred: `recovery evidence`
+- Python type: `RecoveryEvidence`
 
 ```python
-TaskStatus = Literal[
-    "queued",
-    "in_progress",
-    "interrupted",
-    "parked",
-    "done",
-    "flagged",
-    "merge_failed",
-    "cancelled",
-    "wont_do",
-    "deferred",
-    "duplicate",
-]
+class RecoveryEvidence(BaseModel):
+    kind: str
+    label: str
+    path: Path | None = None
+    exists: bool = False
+    summary: str = ""
+    metadata: dict[str, str | int | bool | None | list[str]] = Field(default_factory=dict)
 ```
 
-Canonical values:
+### Recovery Action
 
-- `queued`: waiting in the queue
-- `in_progress`: currently being executed
-- `interrupted`: execution stopped and can potentially resume
-- `parked`: intentionally paused outside normal execution
-- `done`: completed successfully
-- `flagged`: requires explicit operator attention
-- `merge_failed`: git integration ended in unresolved merge failure
-- `cancelled`: explicitly cancelled
-- `wont_do`: explicitly closed as not worth doing
-- `deferred`: explicitly postponed
-- `duplicate`: explicitly closed as duplicate work
+One action applied during recovery.
 
-### Pipeline Status
-
-The task-facing projection of pipeline progress stored on the task record.
-
-- Preferred: `pipeline status`
-- This is a projection for task display and filtering
-- It is not the same thing as the full `pipeline state`
-
-Target Python type:
-
-- `PipelineStatus(str, Enum)`
-
-Current code shape:
+- Preferred: `recovery action`
+- Python type: `RecoveryAction`
 
 ```python
-PipelineStatus = Literal[
-    "backlog",
-    "grooming",
-    "implementing",
-    "testing",
-    "accepting",
-    "commit_to_git",
-    "done",
-    "merge_failed",
-    "flagged",
-]
+class RecoveryAction(BaseModel):
+    kind: str
+    applied: bool = True
+    summary: str = ""
+    metadata: dict[str, str | int | bool | None | list[str]] = Field(default_factory=dict)
 ```
 
-Canonical values:
+### Recovery Outcome
 
-- `backlog`: not yet admitted into execution
-- `grooming`: in or around the grooming stage
-- `implementing`: in or around the implementing stage
-- `testing`: in or around the testing stage
-- `accepting`: in or around the accepting stage
-- `commit_to_git`: in or around the commit stage
-- `done`: pipeline completed successfully
-- `merge_failed`: pipeline stopped on merge failure
-- `flagged`: pipeline stopped for operator attention
+The persisted result of one recovery attempt.
+
+- Preferred: `recovery outcome`
+- Python type: `RecoveryOutcome`
+
+```python
+class RecoveryOutcome(BaseModel):
+    task_id: str
+    trigger: RecoveryTrigger
+    result: RecoveryResult
+    summary: str
+    message: str = ""
+    blocker: str | None = None
+    evidence: list[RecoveryEvidence] = Field(default_factory=list)
+    actions: list[RecoveryAction] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    created_at: datetime
+```
+
+### Recovery Context
+
+The recovery-entry payload carried into runtime state and prompts.
+
+- Preferred: `recovery context`
+- Python type: `RecoveryContext`
+
+```python
+class RecoveryContext(BaseModel):
+    trigger: RecoveryTrigger
+    last_rejection: VerdictEntry | None = None
+    diagnostics: RecoveryDiagnostics = Field(default_factory=RecoveryDiagnostics)
+```
+
+## Execution Domain
 
 ### Runner Status
 
 The execution status of the top-level Litehive runner process.
 
 - Preferred: `runner status`
-
-Target Python type:
-
-- `RunnerStatus(str, Enum)`
-
-Current code shape:
+- Python type: `RunnerStatus`
 
 ```python
-RunnerExecutionStatus = Literal["idle", "running", "late", "stale"]
+class RunnerStatus(str, Enum):
+    IDLE = "idle"
+    RUNNING = "running"
+    LATE = "late"
+    STALE = "stale"
 ```
 
-Canonical values:
+### Runtime Git State
 
-- `idle`: no active run
-- `running`: actively executing work
-- `late`: heartbeat is delayed
-- `stale`: runner appears abandoned or dead
+The runtime git state attached to task execution.
 
-### Stage Run Status
-
-The runtime status of one task stage attempt.
-
-- Preferred: `stage run status`
-
-Target Python type:
-
-- `StageRunStatus(str, Enum)`
-
-Current code shape:
+- Preferred: `runtime git state`
+- Python type: `RuntimeGitState`
 
 ```python
-class RuntimeStageState(BaseModel):
-    step: str | None = None
-    status: str = "idle"
-    verdict: str | None = None
+class RuntimeGitState(BaseModel):
+    commit_sha: str | None = None
+    worktree_path: Path | None = None
 ```
 
-Canonical values:
+### Continuation Handle
 
-- `idle`: not currently running
-- `running`: active now
-- `interrupted`: stopped before a clean finish
-- `completed`: ended cleanly
+The engine-specific resume handle that allows a later run to continue an
+existing session.
+
+- Preferred: `continuation handle`
+- Python type: `ContinuationHandle`
+
+```python
+class ContinuationHandle(BaseModel):
+    value: str
+```
 
 ### Subagent Status
 
 The runtime status of one subagent execution.
 
 - Preferred: `subagent status`
-
-Target Python type:
-
-- `SubagentStatus(str, Enum)`
-
-Current code shape:
+- Python type: `SubagentStatus`
 
 ```python
-SubagentStatus = Literal[
-    "queued", "running", "completed", "failed", "interrupted", "cancelled"
-]
+class SubagentStatus(str, Enum):
+    QUEUED = "queued"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    INTERRUPTED = "interrupted"
+    CANCELLED = "cancelled"
 ```
 
-Canonical values:
+### Execution Role
 
-- `queued`: allocated but not started
-- `running`: active now
-- `completed`: finished successfully
-- `failed`: finished unsuccessfully
-- `interrupted`: stopped before a clean finish
-- `cancelled`: explicitly cancelled
+The role a subagent is performing.
 
-### Task Close Outcome
-
-The explicit operator-chosen terminal disposition when closing a task.
-
-- Preferred: `task close outcome`
-- Preferred field name: `close_outcome`
-
-Target Python type:
-
-- `TaskCloseOutcome(str, Enum)`
-
-Current code shape:
+- Preferred: `execution role`
+- Python type: `ExecutionRole`
 
 ```python
-# Task close outcomes are currently passed as strings.
-close_task(..., outcome="deferred")
+class ExecutionRole(str, Enum):
+    PLANNER = "planner"
+    SWE = "swe"
+    QA = "qa"
+    REVIEWER = "reviewer"
+    RECOVERY = "recovery"
+    MERGE_RESOLVER = "merge-resolver"
 ```
 
-Canonical values:
+### Subagent Execution State
 
-- `wont_do`: intentionally abandoned
-- `deferred`: postponed for later
-- `duplicate`: superseded by another task
+The runtime state of one subagent run.
 
-### Recovery Disposition
-
-The result category of one recovery attempt.
-
-- Preferred: `recovery disposition`
-
-Target Python type:
-
-- `RecoveryDisposition(str, Enum)`
-
-Current code shape:
+- Preferred: `subagent execution state`
+- Python type: `SubagentExecutionState`
 
 ```python
-# Recovery results are currently represented by event classes.
-RecoverySucceeded(resume="implementing")
-RecoveryFailed(reason="...")
-RecoveryBudgetHit()
+class SubagentExecutionState(BaseModel):
+    id: str
+    role: ExecutionRole
+    engine: EngineName
+    status: SubagentStatus
+    path: Path
+    pid: int | None = None
+    started_at: datetime
+    updated_at: datetime
+    completed_at: datetime | None = None
+    exit_code: int | None = None
+    sandboxed: bool = False
+    sandbox_summary: str = ""
+    execution_trace_snippet: str = ""
+    interruption_reason: str = ""
+    continuation: ContinuationHandle | None = None
 ```
 
-Canonical values:
+### Interruption State
 
-- `resumed`: return to the same task stage
-- `advanced`: continue at a later task stage or pipeline state
-- `done`: recovery concluded the task is complete
-- `failed`: recovery could not restore a runnable path
-- `budget_exceeded`: recovery was not allowed another attempt
+The runtime state describing an interruption.
 
-### Stage Verdict
-
-The decision submitted for a task stage.
-
-- Preferred: `stage verdict`
-- Short form when the context is obvious: `verdict`
-
-Target Python type:
-
-- `StageVerdict(str, Enum)`
-
-Current code shape:
+- Preferred: `interruption state`
+- Python type: `InterruptionState`
 
 ```python
-TaskThreadComment.verdict: Literal["pass", "reject", "blocked", "comment"]
-StageReport.verdict: Literal["pass", "accept", "fail", "reject", "blocked"]
+class InterruptionState(BaseModel):
+    source: Literal["runner", "subagent"] = "runner"
+    task_stage: TaskStage | None = None
+    message: str = ""
+    interrupted_at: datetime | None = None
+    subagent: SubagentExecutionState | None = None
 ```
 
-Canonical values:
+### Engine Switch
 
-- `accept`: the stage goal is satisfied
-- `reject`: the work is not acceptable, but Litehive can continue autonomously
-- `blocked`: progress requires external input or operator decision
+The record of switching execution from one engine to another.
 
-Why `blocked` is separate from `reject`:
-
-- `reject` means the stage should loop or route normally because the problem is
-  still within Litehive's execution scope
-- `blocked` means the task cannot proceed without something outside that scope
-
-`comment` is not a verdict in the target vocabulary. It is an activity entry
-type or a free-form message, not a stage outcome.
-
-### Message
-
-Human-readable explanatory text.
-
-- Preferred field name: `message`
-
-Target Python type:
-
-- `str`
-
-Python sketch:
+- Preferred: `engine switch`
+- Python type: `EngineSwitch`
 
 ```python
-message: str
+class EngineSwitch(BaseModel):
+    task_stage: TaskStage
+    from_engine: EngineName
+    to_engine: EngineName
+    rationale: str
+    happened_at: datetime
 ```
 
-### Reason Code
+### Continuation Handoff
 
-Normalized machine-readable classification.
+The durable record passed to a later run so it can resume execution.
 
-- Preferred: `reason code`
-- Preferred field name: `reason_code`
-
-Target Python types:
-
-- `OutcomeReasonCode(str, Enum)`
-- `FailureReasonCode(str, Enum)` when a dedicated failure-code namespace helps
-
-Current code shape:
+- Preferred: `continuation handoff`
+- Python type: `ContinuationHandoff`
 
 ```python
-OutcomeReasonCode = Literal["verdict_reject", "execution_interrupted", ...]
-FailedReason = Literal[
-    "recovery_exhausted",
-    "recovery_budget_hit",
-    "recovery_crashed",
-    "pre_exec_recovery_failed",
-    "operator_abandoned",
-    "unrecoverable_error",
-]
+class ContinuationHandoff(BaseModel):
+    task_stage: TaskStage
+    kind: Literal["retry", "engine_switch", "restart"]
+    from_engine: EngineName | None = None
+    to_engine: EngineName | None = None
+    continuation: ContinuationHandle | None = None
+    summary: str = ""
+    updated_at: datetime
 ```
 
-### Rationale
+### Task Outcome
 
-Human explanation of why an operator or agent chose an action.
+The latest recorded execution outcome for a task.
 
-- Preferred field name: `rationale`
-
-Target Python type:
-
-- `str`
-
-Python sketch:
+- Preferred: `task outcome`
+- Python type: `TaskOutcome`
 
 ```python
-rationale: str
+class TaskOutcome(BaseModel):
+    task_stage: TaskStage | None = None
+    reason_code: str | None = None
+    message: str = ""
+    retry_count: int = 0
+    retry_limit: int = 0
+    recorded_at: datetime | None = None
+```
+
+### Task Runtime State
+
+The mutable execution state attached to a task while Litehive runs.
+
+- Preferred: `task runtime state`
+- Python type: `TaskRuntimeState`
+
+```python
+class TaskRuntimeState(BaseModel):
+    git: RuntimeGitState = Field(default_factory=RuntimeGitState)
+    execution_status: StageRunStatus = StageRunStatus.IDLE
+    run_started_at: datetime | None = None
+    updated_at: datetime | None = None
+    retry_count: int = 0
+    retry_limit: int = 0
+    stage_retry_counts: dict[TaskStage, int] = Field(default_factory=dict)
+    current_stage: StageExecutionState = Field(default_factory=StageExecutionState)
+    last_stage: StageExecutionState = Field(default_factory=StageExecutionState)
+    active_subagent: SubagentExecutionState | None = None
+    last_subagent: SubagentExecutionState | None = None
+    interruption: InterruptionState | None = None
+    continuation_handoff: ContinuationHandoff | None = None
+    last_engine_switch: EngineSwitch | None = None
+    recovery_context: RecoveryContext | None = None
+    last_outcome: TaskOutcome = Field(default_factory=TaskOutcome)
+```
+
+## Activity and Reports Domain
+
+### Activity Entry
+
+One append-only entry attached to a task.
+
+- Preferred: `activity entry`
+- Acceptable legacy term when discussing old storage only: `comment`
+- Python type: `ActivityEntry`
+
+```python
+class ActivityEntry(BaseModel):
+    role: str
+    task_stage: TaskStage | None = None
+    message: str
+    created_at: datetime
+```
+
+### Verdict Entry
+
+An activity entry that carries a stage verdict.
+
+- Preferred: `verdict entry`
+- Python type: `VerdictEntry`
+
+```python
+class VerdictEntry(ActivityEntry):
+    task_stage: TaskStage
+    verdict: StageVerdict
+    files_changed: list[str] = Field(default_factory=list)
+```
+
+### Task Activity
+
+The append-only history attached to a task.
+
+- Preferred: `task activity`
+- Python type: `TaskActivity`
+
+```python
+class TaskActivity(BaseModel):
+    task_id: str
+    entries: list[ActivityEntry] = Field(default_factory=list)
+```
+
+### Outcome Reason Code
+
+A normalized reason code for stage outcomes.
+
+- Preferred: `outcome reason code`
+- Python type: `OutcomeReasonCode`
+
+```python
+class OutcomeReasonCode(str, Enum):
+    VERDICT_REJECT = "verdict_reject"
+    VERDICT_BLOCKED = "verdict_blocked"
+    EXECUTION_INTERRUPTED = "execution_interrupted"
+    MERGE_CONFLICT = "merge_conflict"
+```
+
+### Failure Reason Code
+
+A normalized reason code for terminal failures.
+
+- Preferred: `failure reason code`
+- Python type: `FailureReasonCode`
+
+```python
+class FailureReasonCode(str, Enum):
+    RECOVERY_EXHAUSTED = "recovery_exhausted"
+    RECOVERY_BUDGET_EXCEEDED = "recovery_budget_exceeded"
+    RECOVERY_CRASHED = "recovery_crashed"
+    PRE_EXEC_RECOVERY_FAILED = "pre_exec_recovery_failed"
 ```
 
 ### Failure Fingerprint
@@ -706,90 +846,12 @@ A stable normalized identifier used to decide whether two failures are
 materially the same.
 
 - Preferred: `failure fingerprint`
-
-Target Python type:
-
-- `FailureFingerprint`
-
-Current code shape:
+- Python type: `FailureFingerprint`
 
 ```python
-class RuntimeHookRejectFingerprint(BaseModel):
-    point: str
-    command: str
-    description: str = ""
+class FailureFingerprint(BaseModel):
+    kind: str
     fingerprint: str
-```
-
-Use it for:
-
-- retry deduplication
-- recovery-budget decisions
-- grouping repeated failures in status or diagnostics
-
-## Task-Attached History and Reports
-
-### Task Activity
-
-The append-only history attached to a task.
-
-- Preferred: `task activity`
-- This replaces vaguer terms like `discussion thread`
-
-Target Python type:
-
-- `TaskActivity`
-
-Current code shape:
-
-```python
-# Task-attached history is currently stored as a list of TaskThreadComment.
-comments: list[TaskThreadComment]
-```
-
-Typical contents include:
-
-- agent notes
-- operator notes
-- verdict submissions
-- system bookkeeping entries
-
-### Activity Entry
-
-One item in task activity.
-
-- Preferred: `activity entry`
-- Acceptable legacy term when discussing current storage only: `comment`
-
-Target Python type:
-
-- `ActivityEntry`
-
-Current code shape:
-
-```python
-class TaskThreadComment(BaseModel):
-    role: str
-    step: str
-    verdict: Literal["pass", "reject", "blocked", "comment"] = "comment"
-    message: str
-```
-
-### Verdict Entry
-
-An activity entry that carries a stage verdict.
-
-- Preferred: `verdict entry`
-
-Target Python type:
-
-- `VerdictEntry`
-
-Current code shape:
-
-```python
-# Any TaskThreadComment with verdict != "comment" acts as a verdict entry today.
-comment.verdict in {"pass", "reject", "blocked"}
 ```
 
 ### Stage Report
@@ -797,99 +859,42 @@ comment.verdict in {"pass", "reject", "blocked"}
 A structured summary of what happened in one task stage run.
 
 - Preferred: `stage report`
-
-Target Python type:
-
-- `StageReport`
-
-Current code shape:
+- Python type: `StageReport`
 
 ```python
 class StageReport(BaseModel):
     task_id: str
-    step: Literal["grooming", "implementing", "testing", "accepting", "commit_to_git"]
-    verdict: Literal["pass", "accept", "fail", "reject", "blocked"]
+    task_stage: TaskStage
+    stage_verdict: StageVerdict
+    source: Literal["agent", "hook"] = "agent"
     summary: str
-    feedback: str = ""
-```
-
-Typical contents include:
-
-- `task_stage`
-- `stage_verdict`
-- `summary`
-- `message`
-- changed files, tests, warnings, and diagnostics
-
-### Recovery Outcome
-
-The persisted result of one recovery attempt.
-
-- Preferred: `recovery outcome`
-
-Target Python type:
-
-- `RecoveryOutcome`
-
-Current code shape:
-
-```python
-class RecoveryReport(BaseModel):
-    task_id: str
-    stage: str | None = None
-    trigger: str
-    summary: str
+    message: str = ""
+    files_changed: list[str] = Field(default_factory=list)
+    tests_added: int = 0
+    tests_passing: int = 0
     warnings: list[str] = Field(default_factory=list)
+    reason_code: OutcomeReasonCode | None = None
+    failure_diagnostics: dict[str, str | int | bool | None | list[str]] = Field(default_factory=dict)
+    created_at: datetime
 ```
 
-Typical contents include:
-
-- `trigger: RecoveryTrigger`
-- `disposition: RecoveryDisposition`
-- `summary`
-- `message`
-- actions taken
-- evidence gathered
-- optional failure fingerprint and diagnostics
-
-### Recovery Context
-
-The structured recovery-entry payload carried forward into prompts and runtime
-state.
-
-- Preferred: `recovery context`
-- Avoid the vague name `failure context`
-
-Target Python type:
-
-- `RecoveryContext`
-
-Current code shape:
-
-```python
-failure_context: dict[str, Any]
-origin_stage: str | None
-```
-
-## Execution Artifacts
+## Artifacts Domain
 
 ### Session
 
-The persisted metadata for one subagent run or one resumable engine
-conversation.
+The persisted metadata for one subagent run or resumable engine conversation.
 
 - Preferred: `session`
-
-Target Python type:
-
-- `Session`
-
-Current code shape:
+- Python type: `Session`
 
 ```python
-# Lifecycle session data lives in litehive/lifecycle/sessions.py and
-# runtime subagent/session references are stored on RuntimeSubagentState.
-session_id: str | None
+class Session(BaseModel):
+    id: str
+    task_id: str
+    subagent_id: str
+    engine: EngineName
+    started_at: datetime
+    completed_at: datetime | None = None
 ```
 
 ### Execution Trace
@@ -897,16 +902,11 @@ session_id: str | None
 A human-readable render of what a subagent did or said during one run.
 
 - Preferred: `execution trace`
-- Avoid `transcript` in new naming unless we intentionally keep the older word
-
-Target Python type:
-
-- `ExecutionTrace`
-
-Current code shape:
+- Python type: `ExecutionTrace`
 
 ```python
-transcript_snippet: str
+class ExecutionTrace(BaseModel):
+    text: str
 ```
 
 ### Event Stream
@@ -914,55 +914,27 @@ transcript_snippet: str
 The structured sequence of per-run events emitted by an engine or adapter.
 
 - Preferred: `event stream`
-- Avoid vague terms like `timeline` unless the UI is literally presenting a
-  timeline view
-
-Target Python type:
-
-- `EventStream`
-
-Current code shape:
+- Python type: `EventStream`
 
 ```python
-# Unified execution events currently live in engine-specific or Heru-owned
-# event streams rather than one Litehive EventStream class.
-events: list[dict[str, object]]
+class EventStream(BaseModel):
+    events: list[dict[str, object]] = Field(default_factory=list)
 ```
 
-### Continuation
+### Journal Entry
 
-The engine-specific resume handle that allows a later run to continue an
-existing session.
+One machine-generated pipeline journal row.
 
-- Preferred: `continuation`
-
-Target Python type:
-
-- `ContinuationHandle`
-
-Current code shape:
+- Preferred: `journal entry`
+- Python type: `JournalEntry`
 
 ```python
-RuntimeEngineContinuation
-```
-
-### Continuation Handoff
-
-The durable record passed to a later run so it can resume execution.
-
-- Preferred: `continuation handoff`
-
-Target Python type:
-
-- `ContinuationHandoff`
-
-Current code shape:
-
-```python
-class RuntimeContinuationHandoff(BaseModel):
-    step: str
-    kind: Literal["retry", "engine_switch", "restart"]
-    continuation: RuntimeEngineContinuation | None = None
+class JournalEntry(BaseModel):
+    seq: int
+    created_at: datetime
+    pipeline_state: PipelineState
+    event_type: str
+    payload: dict[str, object] = Field(default_factory=dict)
 ```
 
 ### Lifecycle Journal
@@ -971,21 +943,11 @@ The append-only machine-generated history of pipeline states and lifecycle
 events.
 
 - Preferred: `lifecycle journal`
-- Use `journal entry` for one row in that history
-- Do not use `journal` as a synonym for task activity
-
-Target Python types:
-
-- `LifecycleJournal`
-- `JournalEntry`
-
-Current code shape:
+- Python type: `LifecycleJournal`
 
 ```python
-# Lifecycle journal rows are loaded from SQLite today.
-row["created_at"]
-row["kind"]
-row["payload"]
+class LifecycleJournal(BaseModel):
+    entries: list[JournalEntry] = Field(default_factory=list)
 ```
 
 ### Log Artifact
@@ -993,119 +955,24 @@ row["payload"]
 Raw operational output intended mainly for debugging or operator inspection.
 
 - Preferred: `log artifact`
-- Use more specific names whenever possible:
-  - `daemon log`
-  - `stdout log`
-  - `stderr log`
-
-Do not use `log` as a synonym for:
-
-- task activity
-- lifecycle journal
-- stage report
-- execution trace
-
-Target Python type:
-
-- `LogArtifact`
-
-Current code shape:
+- Python type: `LogArtifact`
 
 ```python
-stdout_path: Path
-stderr_path: Path
+class LogArtifact(BaseModel):
+    kind: str
+    path: Path
 ```
 
-## Storage Terms
+## Configuration Domain
 
-### Configuration
+### Litehive Config
 
-Operator-controlled settings that define how Litehive should behave.
+Operator-controlled configuration for the workspace.
 
-- Preferred: `configuration` or `config`
-- Do not use `config` for mutable runtime state
-
-Target Python type:
-
-- `LitehiveConfig`
-
-Current code shape:
+- Preferred: `litehive config`
+- Python type: `LitehiveConfig`
 
 ```python
 class LitehiveConfig(BaseModel):
-    recovery_engine: str | None
-```
-
-### Runtime State
-
-Mutable state produced while Litehive runs.
-
-- Preferred: `runtime state`
-
-Target Python type:
-
-- `RuntimeState`
-
-Current code shape:
-
-```python
-# Runtime state is currently split across TaskRuntime, TaskStateRecord,
-# WorkspaceState, and lifecycle TaskState.
-TaskRuntime
-TaskStateRecord
-WorkspaceState
-```
-
-### Durable Store
-
-Structured persisted runtime storage.
-
-- Preferred: `durable store` when speaking generally
-- Use `SQLite` when the implementation detail matters
-
-Target Python type:
-
-- `WorkspaceRuntimeStore`
-
-Current code shape:
-
-```python
-class RuntimeStore:
-    def load_workspace_state(self) -> WorkspaceState | None: ...
-    def load_task_state(self, task_id: str) -> TaskStateRecord | None: ...
-    def save_task_state(self, task_id: str, state: TaskStateRecord) -> None: ...
-```
-
-### Repo-Local State
-
-State stored under `.litehive/` inside the repository.
-
-- Preferred: `repo-local state`
-
-Target Python type:
-
-- `RepoLocalState`
-
-Current code shape:
-
-```python
-# Repo-local runtime data lives under .litehive/, not one RepoLocalState class.
-Path(".litehive")
-```
-
-### Global Runtime Root
-
-User-local runtime state stored under `${LITEHIVE_HOME}`.
-
-- Preferred: `global runtime root`
-
-Target Python type:
-
-- `GlobalRuntimeRoot`
-
-Current code shape:
-
-```python
-# Global runtime root is a filesystem location, not a dedicated class today.
-Path("${LITEHIVE_HOME}")
+    recovery_engine: EngineName | None = None
 ```
