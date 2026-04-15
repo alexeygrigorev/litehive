@@ -1,0 +1,20 @@
+id: T-0378
+slug: rename-task-thread-and-comments-vocabulary-to
+title: Rename task thread and comments vocabulary to activity vocabulary
+created_at: '2026-04-15T15:43:31+00:00'
+task_type: null
+pipeline_mode: full
+priority: high
+depends_on: []
+goal: Replace old thread/comment names with the selected activity names across the
+  domain, helpers, prompts, CLI, and tests.
+acceptance_criteria:
+- No active code references TaskThreadComment.
+- No active code uses thread/comment helper names.
+- Prompt and CLI output use activity terminology.
+constraints: []
+plan: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0378 rename-task-thread-and-comments-vocabulary-to'
+created_from: null

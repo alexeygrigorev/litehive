@@ -1,0 +1,20 @@
+id: T-0380
+slug: align-stagereport-with-the-canonical-pipeline
+title: Align StageReport with the canonical pipeline-state report model
+created_at: '2026-04-15T15:43:38+00:00'
+task_type: null
+pipeline_mode: full
+priority: high
+depends_on: []
+goal: Make StageReport match docs/domain.md by using canonical report naming and narrower
+  verdict semantics.
+acceptance_criteria:
+- StageReport uses pipeline_state instead of stage.
+- Comments are not encoded as stage verdicts.
+- files_changed is removed from the canonical report structure.
+constraints: []
+plan: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0380 align-stagereport-with-the-canonical-pipeline'
+created_from: null

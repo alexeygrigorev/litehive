@@ -1,0 +1,22 @@
+id: T-0386
+slug: reconcile-recovery-naming-with-the-chosen-domain
+title: Reconcile recovery naming with the chosen domain model
+created_at: '2026-04-15T15:43:58+00:00'
+task_type: null
+pipeline_mode: full
+priority: high
+depends_on: []
+goal: Align recovery terms and models across code and docs, including diagnostics,
+  trigger/history, and recovery context naming.
+acceptance_criteria:
+- One recovery vocabulary is used across models, persistence, prompts, and routing.
+- The final relationship between FailureDiagnostics and FailureFingerprint is explicit
+  in code and docs.
+- The final relationship between RecoveryRecord RecoveryContext and current trigger/history
+  structures is explicit in code and docs.
+constraints: []
+plan: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0386 reconcile-recovery-naming-with-the-chosen-domain'
+created_from: null

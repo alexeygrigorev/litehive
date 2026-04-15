@@ -1,0 +1,20 @@
+id: T-0384
+slug: introduce-canonical-pipelinestate-and-remove
+title: Introduce canonical PipelineState and remove alias drift
+created_at: '2026-04-15T15:43:51+00:00'
+task_type: null
+pipeline_mode: full
+priority: high
+depends_on: []
+goal: Define the real internal PipelineState and stop aliasing it to the coarse pipeline-status
+  enum.
+acceptance_criteria:
+- Prompts, persistence, and transition logic agree on one PipelineState.
+- No alias PipelineState = PipelineStatus remains.
+- User-facing stage/status projections remain separate from machine state.
+constraints: []
+plan: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0384 introduce-canonical-pipelinestate-and-remove'
+created_from: null

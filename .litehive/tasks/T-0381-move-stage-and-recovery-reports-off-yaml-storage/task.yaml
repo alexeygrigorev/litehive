@@ -1,0 +1,20 @@
+id: T-0381
+slug: move-stage-and-recovery-reports-off-yaml-storage
+title: Move stage and recovery reports off YAML storage
+created_at: '2026-04-15T15:43:41+00:00'
+task_type: null
+pipeline_mode: full
+priority: high
+depends_on: []
+goal: Remove structured stage and recovery report YAML from the active system by moving
+  those records to SQLite-backed storage.
+acceptance_criteria:
+- No active code writes structured stage or recovery YAML reports.
+- Debug and recovery commands still show the latest report context.
+- Plain-text logs remain only where intentionally unstructured.
+constraints: []
+plan: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0381 move-stage-and-recovery-reports-off-yaml-storage'
+created_from: null

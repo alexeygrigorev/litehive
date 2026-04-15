@@ -758,6 +758,154 @@ Concrete actions:
 
 ## CLI package cleanup and command surface reduction
 
+## Deletion follow-up after the first recovery/domain pass
+
+Question:
+
+- The first implementation pass introduced the new recovery/domain types, but
+  it intentionally kept several legacy fields and compatibility accessors so
+  the codebase would keep running during the migration.
+- What is still left to delete, and which behavior should disappear with those
+  deletions instead of being preserved forever?
+
+Answer:
+
+- The remaining cleanup is no longer mostly about naming. It is about removing
+  transition scaffolding and breaking apart a few remaining junk-drawer models.
+- The main leftovers fall into four buckets:
+  - lifecycle recovery state still keeps old transitional fields that duplicate
+    the new structured recovery objects
+  - runtime/report models still expose legacy `step` / `stage` / `trigger`
+    compatibility shims instead of one canonical shape
+  - generic context payloads are still doing too many jobs at once
+  - some old persistence/reporting paths are still present, so the surrounding
+    helper code cannot be deleted yet
+
+What is still left to delete:
+
+- Delete transitional recovery counters/markers that are now redundant with the
+  structured model:
+  - `TaskState.recovery_attempt`
+  - `StateDelta.inc_recovery_attempt`
+  - CLI/prompt/report code that prints or depends on the per-stage
+    `recovery_attempt` dict instead of deriving history from
+    `RecoveryOutcome`
+- Delete `TaskState.origin_stage` once resume logic reads the origin from the
+  active structured trigger or the persisted recovery outcome:
+  - `StateDelta.set_origin_stage`
+  - `StateDelta.clear_origin_stage`
+  - prompt/CLI plumbing that separately renders `origin_stage`
+- Delete `TaskState.pre_exec_recovery_attempt` and the related "counter"
+  behavior if pre-exec recovery is truly one-shot:
+  - replace it with a dedicated boolean/enum or a structured pre-exec recovery
+    record
+  - then remove the counter increment/check logic from:
+    `guards.py`, `nodes/system.py`, persistence payloads, and related tests
+- Delete generic `failure_context` after splitting it into domain-specific
+  payloads:
+  - `recovery_context` or direct use of `RecoveryTrigger` /
+    `RecoveryOutcome`
+  - merge-conflict-specific context
+  - commit-result-specific context
+  - remove code that treats one free-form dict as the carrier for all of those
+    unrelated concerns
+- Delete `thread` piggybacking inside lifecycle recovery context:
+  - `RoleAgent.build_prompt()` currently reads `state.failure_context["thread"]`
+  - thread/discussion state should come from the discussion store, not from a
+    generic recovery payload
+
+Compatibility fields/accessors left to delete:
+
+- Delete `step` compatibility properties/aliases after call sites migrate to
+  `stage`:
+  - `RuntimeStageState.step`
+  - `RuntimeContinuationHandoff.step`
+  - `RuntimeEngineSwitch.step`
+  - `StageReport.step`
+  - `TaskThreadComment.step`
+- Delete `RecoveryReport.stage` and `RecoveryReport.trigger` compatibility
+  aliases after all callers use:
+  - `origin_stage`
+  - `trigger_event_kind`
+- Delete CLI/reporting surfaces that still speak in `step` terms:
+  - `litehive agent report --step`
+  - CLI output lines such as `step: ...`
+  - prompt-serializer thread rendering that still emits `step`
+- Delete verdict alias normalization that only exists for backward
+  compatibility:
+  - `accept -> pass`
+  - `fail -> reject`
+  - agents/CLI/tests should submit canonical verdicts only
+- Delete type-alias bridges once the canonical enum names are chosen:
+  - `PipelineState = PipelineStatus`
+  - `RunnerExecutionStatus = RunnerStatus`
+
+Oversized models that still need to be broken down before more deletion:
+
+- `TaskRuntime` is still carrying multiple concerns:
+  - run activity state
+  - current/last stage runtime state
+  - interruption state
+  - continuation handoff state
+  - engine switch state
+  - hook-reject loop bookkeeping
+  - last outcome state
+- `TaskState.failure_context` is still a junk drawer for:
+  - recovery trigger data
+  - merge conflict files / merge attempt count
+  - commit result data
+  - ad hoc prompt context
+- `tasks/runtime.py` still contains broad helper functions whose signatures and
+  internal branching are shaped around those large models; once the models are
+  split, some of those helpers should disappear rather than be mechanically
+  updated
+
+Concrete actions:
+
+- Migrate recovery resume/terminal logic to use only:
+  - `active_recovery_trigger`
+  - `recovery_history`
+  - `recovery_failure_explanation`
+  - then delete `recovery_attempt`, `origin_stage`, and their delta fields
+- Introduce a dedicated structured pre-exec recovery state and then delete
+  `pre_exec_recovery_attempt`
+- Split `failure_context` into explicit domain objects/fields and then delete
+  the generic dict:
+  - recovery-owned context
+  - merge-owned context
+  - commit-result field or record
+- Remove all `step` compatibility properties and alias-accepting validation
+  only after migrating:
+  - runtime helpers
+  - CLI flags/output
+  - prompt serializer
+  - tests and fixtures
+- Tighten `RecoveryReport` so `trigger_event_kind` uses the actual enum type
+  and delete the legacy `trigger`/`stage` property shims
+- Remove verdict alias normalization and update every caller/test/prompt to the
+  canonical verdict vocabulary
+- Choose one canonical enum name for pipeline/runner state and delete the alias
+  re-exports from `domain/common.py`
+- Migrate task discussion/verdict persistence off `comments.yaml`, then delete:
+  - YAML comment helpers
+  - YAML-thread compatibility logic in prompt assembly/report resolution
+  - field/functionality that only exists because comment storage is file-backed
+
+Validation steps:
+
+- Add tests that fail if old payload keys are still written for new rows:
+  - `recovery_attempt`
+  - `origin_stage`
+  - `failure_context`
+  - `step`
+  - `trigger`
+- Add CLI tests that assert canonical output/flags only:
+  - `stage`, not `step`
+  - `trigger_event_kind`, not `trigger`
+  - canonical verdicts only
+- Add persistence round-trip tests that prove the smaller replacement records
+  are sufficient before removing the old fields.
+
 Question:
 
 - rename `*_cli.py` files to plain names inside `litehive/cli/`
@@ -1673,6 +1821,461 @@ Remove:
 - verdict normalization aliases such as `fail -> reject`
 - inline imports that are only compensating for package coupling instead of
   real optional/cycle boundaries
+
+## Current implementation status
+
+This section tracks what from the refactor has already landed and what still
+remains to align the code with the storage target stated above.
+
+### Done
+
+- Recovery/state vocabulary cleanup:
+  - compatibility `step` naming was removed from active code paths in favor of
+    canonical `stage`
+  - old recovery bookkeeping fields and related fallback behavior were removed
+  - runtime/recovery state now uses the smaller structured recovery model
+- Migration reset:
+  - old multi-step schema history was collapsed into one baseline migration
+  - legacy workspace databases are rebuilt from the new baseline
+  - SQLite bootstrap repopulates current task rows from on-disk task files
+- No-compat refactor pass:
+  - old recovery/report compatibility aliases and fallback paths were removed
+  - active CLI/prompt/report surfaces now use the new canonical field names
+- Structured subagent artifact cleanup:
+  - active subagent `session` / `report` / `timeline` storage no longer uses
+    `session.yaml` / `report.yaml` / `timeline.yaml`
+  - active execution, recovery, debug, and logs paths now read those
+    structured artifacts from SQLite-backed subagent-session storage
+- Text transcript/log artifacts are still allowed by plan and remain on disk:
+  - plain-text transcript/log files are not part of the YAML removal target
+
+### Still to do
+
+- Remove filesystem-backed activity/report YAML:
+  - delete `comments.yaml`
+  - delete stage/recovery `*.yaml` report files
+  - delete any report-resolution path that infers verdicts from YAML files
+- Remove workspace-level structured YAML outside config:
+  - delete `engine-monitoring.yaml`
+  - delete pool-run summary YAML files
+- Finish moving task durability off filesystem records:
+  - stop using `task.yaml` as active Litehive-owned structured state
+  - remove code paths that load incomplete tasks from filesystem task records
+- Delete the remaining YAML-oriented helper and compatibility code once the new
+  persistence paths land:
+  - CLI/debug/log fallbacks that parse `session.yaml` / `report.yaml`
+  - recovery helpers that read/write subagent YAML artifacts
+  - artifact inventory/reporting code that still advertises YAML paths
+
+### Remaining hotspots in code
+
+- Subagent artifact writing:
+  - `litehive/agents/session.py`
+  - follow-up cleanup of old artifact inventory and pruning assumptions in
+    `litehive/tasks/reports.py` and `litehive/agents/artifacts.py`
+- YAML-backed activity/reporting:
+  - `litehive/tasks/reports.py`
+  - `litehive/lifecycle/prompt_serializer.py`
+- YAML-backed monitoring/status:
+  - `litehive/observability/engine_monitoring.py`
+  - `litehive/observability/status.py`
+  - `litehive/observability/status_diagnostics.py`
+- Filesystem task persistence still in the active path:
+  - `litehive/state/records.py`
+  - `litehive/state/store.py`
+  - `litehive/tasks/archive.py`
+  - `litehive/attention.py`
+
+### Validation target for completion
+
+- `.litehive/config.yaml` is the only remaining YAML file owned by Litehive
+- no `comments.yaml`
+- no `session.yaml`
+- no `report.yaml`
+- no `timeline.yaml`
+- no `engine-monitoring.yaml`
+- no stage/recovery/pool summary YAML
+- no runtime decision depends on parsing structured YAML artifacts
+
+### Inventory snapshot of current code
+
+This is the current-state inventory from the codebase, not the target state.
+It is intentionally specific so refactoring tasks can be scoped against the
+real implementation rather than against assumptions.
+
+#### Already landed
+
+- Recovery/state cleanup already landed:
+  - active code uses `stage` instead of the old `step` compatibility naming
+  - old recovery bookkeeping fields/fallbacks were removed
+- Baseline schema reset already landed:
+  - one baseline migration is in place
+  - old workspace databases are rebuilt from that baseline
+- Structured subagent YAML removal is partially complete and active:
+  - active subagent session/report/timeline data no longer uses
+    `session.yaml` / `report.yaml` / `timeline.yaml`
+  - subagent structured artifacts now flow through SQLite-backed session
+    storage
+  - plain-text logs/transcripts still remain on disk by design
+
+#### Still active in code today
+
+- `task.yaml` is still active runtime storage, not just import/bootstrap input:
+  - `litehive/state/records.py`
+  - `litehive/state/store.py`
+  - `litehive/attention.py`
+  - `litehive/tasks/archive.py`
+  - corresponding tests and docs still assert that incomplete-task state lives
+    in `task.yaml`
+
+- Activity storage is only partially migrated:
+  - `task_activity` exists in the schema
+  - `litehive/tasks/reports.py` has started moving thread persistence to SQLite
+  - but the code still exposes old thread/comment naming:
+    - `TaskThreadComment`
+    - `append_thread_comment`
+    - `load_task_thread`
+    - `save_task_thread`
+  - many call sites, tests, and prompt/CLI strings still use “discussion
+    thread” terminology
+
+- Structured YAML report storage is still active:
+  - `litehive/tasks/reports.py` still writes recovery reports as
+    `recovery-*.yaml`
+  - recovery prompts still point operators/agents at `reports/*.yaml`
+  - the current activity/report code still synthesizes report context from the
+    filesystem-era layout
+
+- Workspace-level monitoring YAML is still active:
+  - `litehive/observability/engine_monitoring.py`
+  - `litehive/observability/status_diagnostics.py`
+  - workspace bootstrap/gitignore still mention `engine-monitoring.yaml`
+
+- Task status semantics still diverge from the target domain:
+  - `litehive/domain/common.py` still defines:
+    - `merge_failed`
+    - `cancelled`
+    - `wont_do`
+    - `deferred`
+    - `duplicate`
+  - `litehive/tasks/status.py` and `litehive/lifecycle/orchestration.py` still
+    persist those values directly
+
+- Pipeline vocabulary is still split:
+  - `PipelineState = PipelineStatus` alias still exists in
+    `litehive/domain/common.py`
+  - actual machine phase is still represented elsewhere:
+    - `LifecyclePhase`
+    - `TaskState.stage`
+    - `TaskRuntime.current_stage.stage`
+  - prompts and runtime surfaces still consume raw stage strings
+
+- Runtime structure is still flat:
+  - `litehive/domain/runtime.py` still has one `TaskRuntime` carrying:
+    - pipeline progression
+    - execution/subagent state
+    - git state
+    - hook-reject recovery state
+    - outcome state
+  - code does not yet use the target `TaskRuntime.pipeline` /
+    `TaskRuntime.execution` split from `docs/domain.md`
+
+- Recovery naming still reflects the current implementation model, not the
+  target document model:
+  - `FailureFingerprint`
+  - `RecoveryTrigger`
+  - `RecoveryOutcome`
+  - `RecoveryDisposition`
+  - these are active in persistence, prompts, and transition logic today
+
+## Gradual factoring task list
+
+This is the recommended implementation queue for Litehive-managed work. The
+goal is to factor the refactor into independently shippable tasks with clear
+validation boundaries, rather than mixing naming, storage, and behavior
+changes in one pass.
+
+The task-by-task queue mirror lives in `docs/refactoring-tasks.md`.
+
+### Track A. Activity and report cleanup
+
+1. Introduce an activity boundary without changing behavior.
+   Scope:
+   - add an activity-oriented service/store boundary
+   - move existing thread/comment read-write calls behind that boundary
+   - keep current payload shapes temporarily
+   Why first:
+   - this gives later renames and storage changes one seam to migrate through
+   Validation:
+   - prompt serialization, agent report submission, and task debug output are
+     unchanged
+
+2. Rename thread/comment vocabulary to activity vocabulary.
+   Scope:
+   - replace `TaskThreadComment` with `ActivityEntry`
+   - replace `load_task_thread` / `save_task_thread` / `append_thread_comment`
+     with activity-oriented names
+   - replace user-facing "discussion thread" naming where it really means
+     task activity
+   Validation:
+   - no active code references `TaskThreadComment`
+   - CLI and prompts still show recent human-readable history
+
+3. Move task activity persistence to SQLite and delete `comments.yaml`.
+   Scope:
+   - back activity entries with the SQLite `task_activity` table
+   - remove filesystem `comments.yaml` support and corrupt-YAML fallbacks
+   - update prompt/recovery/debug/report paths to read task activity rows
+   Validation:
+   - no active code reads or writes `comments.yaml`
+   - recent verdict/note context still appears in prompts and CLI views
+
+4. Align `StageReport` with the target activity/report model.
+   Scope:
+   - change `StageReport` from `stage` to canonical `pipeline_state`
+   - narrow verdict usage so comments are not encoded as stage verdicts
+   - remove `files_changed` from the canonical report shape
+   Validation:
+   - stage routing still works
+   - report rendering still shows verdict summaries and warnings
+
+5. Move recovery/stage report persistence off YAML.
+   Scope:
+   - store recovery reports and stage reports in SQLite-backed tables
+   - remove `reports/*.yaml` and `recovery-*.yaml` as structured storage
+   - keep plain-text logs only if they remain unstructured
+   Validation:
+   - recovery evidence and debug commands still surface the latest report data
+   - no active code writes structured YAML reports
+
+### Track B. Task storage and task status alignment
+
+6. Stop using `task.yaml` as active task storage.
+   Scope:
+   - move incomplete-task durable state fully into SQLite
+   - keep filesystem task directories only for artifacts/logs if still needed
+   - remove filesystem reads from active task-loading code paths
+   Validation:
+   - queue/bootstrap/load paths work without reading `task.yaml`
+   - `.litehive/config.yaml` is the only remaining Litehive-owned YAML file
+
+7. Collapse terminal task statuses to the canonical domain model.
+   Scope:
+   - keep terminal task statuses as `done`, `flagged`, and `closed`
+   - add `close_reason`
+   - use `flag_reason` for merge/conflict/operator-attention cases
+   - remove ad hoc terminal statuses such as `cancelled`, `wont_do`,
+     `deferred`, `duplicate`, and `merge_failed`
+   Validation:
+   - status transitions, CLI output, and reporting use `close_reason` /
+     `flag_reason`
+   - merge failures no longer persist as `merge_failed`
+
+### Track C. Pipeline and runtime model alignment
+
+8. Define one canonical `PipelineState` and remove aliasing drift.
+   Scope:
+   - introduce the real internal machine-state enum in the domain layer
+   - stop aliasing `PipelineState` to the coarse business-stage enum
+   - map current lifecycle state holders onto the canonical pipeline-state type
+   Validation:
+   - prompts, transition rules, and persisted state all agree on one
+     `PipelineState`
+
+9. Split `TaskRuntime` into pipeline and execution slices.
+   Scope:
+   - introduce `PipelineRuntime` and `ExecutionRuntime`
+   - move current flat runtime fields into the owning slice
+   - keep `TaskRuntime` only as the container
+   Validation:
+   - subagent execution, retries, interruption, and outcome tracking still work
+   - no flat runtime bucket remains for mixed concerns
+
+10. Reconcile recovery naming with the chosen domain model.
+    Scope:
+    - decide and implement the final relationship between:
+      - `FailureDiagnostics` and `FailureFingerprint`
+      - `RecoveryRecord` / `RecoveryContext` and the current trigger/history
+        structures
+    - make the runtime/recovery surfaces use the chosen names consistently
+    Validation:
+    - recovery prompts, persistence, and routing all use one vocabulary
+
+### Track D. Workspace-level YAML cleanup
+
+11. Remove workspace-level monitoring YAML.
+    Scope:
+    - move `engine-monitoring.yaml` and pool summary YAML to SQLite or remove
+      them if redundant
+    - update status/diagnostic commands to read the new persistence path
+    Validation:
+    - no active code writes `engine-monitoring.yaml`
+    - pool/status commands still render the same information
+
+### Track E. Final terminology cleanup
+
+12. Rename remaining artifact vocabulary to the selected target names.
+    Scope:
+    - `transcript` -> `execution trace` where the data is structured
+    - `timeline` -> `event stream`
+    - `journal` remains distinct from task activity
+    Note:
+    - plain-text artifact filenames can be handled last because they are lower
+      risk than domain/storage changes
+    Validation:
+    - code, prompts, and docs use the same artifact terms
+
+### Recommended execution order
+
+- Start with Track A tasks 1-5.
+- Then do Track B task 6 before broadening any more domain renames.
+- After storage is stable, do Track B task 7 and Track C tasks 8-10.
+- Finish with Track D task 11 and Track E task 12.
+
+### Good Litehive task granularity
+
+Each Litehive task should:
+
+- change one conceptual boundary
+- touch one main persistence surface at a time
+- include a focused test slice in the task body
+- avoid mixing naming cleanup with unrelated behavior changes
+
+## Domain.md drift to reconcile
+
+These are confirmed mismatches between `docs/domain.md` and the current code,
+and they should be treated as real refactor work rather than documentation
+nits.
+
+### 1. Task status semantics still diverge from the domain model
+
+Document target:
+
+- `docs/domain.md` defines one terminal `closed` task status plus a distinct
+  `close_reason`
+- merge problems should route through `flagged` plus `flag_reason`, not become
+  ad hoc task statuses
+
+Current code:
+
+- `litehive/domain/common.py` still includes task-status values like:
+  - `merge_failed`
+  - `cancelled`
+  - `wont_do`
+  - `deferred`
+  - `duplicate`
+- `litehive/domain/task.py` persists those values directly on `TaskRecord`
+- `litehive/tasks/status.py` writes close outcomes into `task.status`
+- `litehive/lifecycle/orchestration.py` still maps commit failure to
+  `merge_failed`
+
+Concrete actions:
+
+- collapse terminal non-success task states into:
+  - `closed`
+  - `flagged`
+- add canonical `close_reason` to the task model and storage
+- stop encoding close outcomes as task statuses
+- route merge failure through `flagged` with an explicit flag reason unless the
+  domain model is revised
+- update CLI/status/report output to read `close_reason` / `flag_reason`
+  instead of inferring meaning from terminal task statuses
+
+### 2. Pipeline vocabulary is still split across overlapping models
+
+Document target:
+
+- `docs/domain.md` defines one canonical `PipelineState` for the full internal
+  machine state
+
+Current code:
+
+- `litehive/domain/common.py` uses `PipelineState` as an alias for the coarse
+  business-stage `PipelineStatus`
+- actual machine state lives elsewhere:
+  - `LifecyclePhase`
+  - `TaskState.stage`
+  - runtime strings in `litehive/domain/runtime.py`
+- event vocabulary in `litehive/lifecycle/events.py` still uses the current
+  implementation names (`Pass`, `HookOk`, `CleanState`, etc.) rather than the
+  document’s target surface
+
+Concrete actions:
+
+- define one canonical domain `PipelineState` that matches the real machine
+  states
+- separate it clearly from the coarse task-facing stage/status projection
+- replace aliasing in `litehive/domain/common.py` with the real pipeline-state
+  type
+- reduce free-form runtime strings where they actually carry pipeline-state
+  semantics
+- either align the document’s event names with the implementation hierarchy or
+  rename the implementation hierarchy to the canonical document vocabulary
+
+### 3. Activity/report persistence still diverges from the document
+
+Document target:
+
+- `docs/domain.md` centers history on `ActivityEntry` / `TaskActivity` plus
+  `StageReport` keyed by pipeline state
+
+Current code:
+
+- task discussion is still `TaskThreadComment`
+- verdict history still lives in `comments.yaml`
+- there is a separate Markdown `journal.md`
+- `StageReport` is keyed by `TaskStage`, not by pipeline state
+- `Verdict` still includes extra values beyond the tighter activity model
+
+Concrete actions:
+
+- move discussion/verdict persistence to an activity store
+- delete `comments.yaml`
+- decide whether `journal.md` survives as plain text or becomes activity/journal
+  rows only
+- align `StageReport` with the canonical activity model:
+  - keyed by pipeline state if the document remains authoritative
+  - or update `docs/domain.md` if task stage is the intended key
+- narrow or split `Verdict` if the current enum is overloaded across activity,
+  recovery, and lifecycle control signals
+
+### 4. Recovery/runtime structure still diverges from the document
+
+Document target:
+
+- `docs/domain.md` expects:
+  - `FailureDiagnostics`
+  - `RecoveryRecord`
+  - `RecoveryContext`
+  - `TaskRuntime.pipeline`
+  - `TaskRuntime.execution`
+
+Current code:
+
+- `litehive/domain/recovery.py` uses:
+  - `FailureFingerprint`
+  - `RecoveryTrigger`
+  - `RecoveryOutcome`
+  - `RecoveryDisposition`
+- `litehive/domain/runtime.py` still uses one flat `TaskRuntime` carrying:
+  - pipeline state
+  - execution state
+  - git state
+  - hook-reject state
+  - task outcome state
+
+Concrete actions:
+
+- decide whether `docs/domain.md` should adopt the implemented recovery model
+  or whether code should be renamed/split to match the document
+- split `TaskRuntime` into explicit pipeline and execution slices if
+  `docs/domain.md` remains the target architecture
+- move git/hook-reject/outcome concerns to explicit owned submodels rather than
+  one flat runtime bucket
+- reconcile recovery naming:
+  - `FailureDiagnostics` vs `FailureFingerprint`
+  - `RecoveryRecord` / `RecoveryContext` vs `RecoveryTrigger` /
+    `RecoveryOutcome`
 
 ## Safe implementation order
 
