@@ -114,6 +114,10 @@ def _sync_terminal_status(task_record: TaskRecord, state: TaskState) -> str | No
     if state.stage == "done":
         task_record.status = "done"
         task_record.pipeline_status = "done"
+        # Task reached terminal success — the crash-budget marker is no
+        # longer relevant. Clear it so a future re-open of the same task
+        # gets a fresh budget.
+        task_record.runtime.last_crashed_stage = None
         if isinstance(commit_result, dict):
             head_sha = commit_result.get("head_sha")
             if isinstance(head_sha, str) and head_sha:
@@ -155,11 +159,6 @@ def _sync_terminal_status(task_record: TaskRecord, state: TaskState) -> str | No
     else:
         task_record.status = "in_progress"
         task_record.pipeline_status = _STAGE_TO_PIPELINE_STATUS.get(state.stage, task_record.pipeline_status)
-        # Non-terminal outcome — the task advanced past (or at least out of)
-        # its prior crash. Clear the crash-budget marker so a later crash in
-        # a different stage gets its own fresh recovery attempt.
-        if task_record.runtime.last_crashed_stage is not None:
-            task_record.runtime.last_crashed_stage = None
     return journal_message
 
 
