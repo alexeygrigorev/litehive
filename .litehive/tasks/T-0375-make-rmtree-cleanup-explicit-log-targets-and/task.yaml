@@ -1,0 +1,23 @@
+id: T-0375
+slug: make-rmtree-cleanup-explicit-log-targets-and
+title: 'Make rmtree cleanup explicit: log targets and raise on unexpected failures'
+created_at: '2026-04-15T09:12:23+00:00'
+task_type: null
+pipeline_mode: full
+priority: medium
+depends_on: []
+goal: Remove silent cleanup behavior around directory deletion. rmtree call sites
+  should make the deletion target explicit, avoid ignore_errors-style masking, and
+  raise on unexpected failures so cleanup bugs are diagnosable.
+acceptance_criteria:
+- rmtree call sites in task/workspace cleanup paths log what they are deleting before
+  removal.
+- Unexpected deletion failures raise or are surfaced explicitly rather than being
+  silently swallowed.
+- Changes stay scoped to cleanup and deletion paths only.
+constraints: []
+plan: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0375 make-rmtree-cleanup-explicit-log-targets-and'
+created_from: null

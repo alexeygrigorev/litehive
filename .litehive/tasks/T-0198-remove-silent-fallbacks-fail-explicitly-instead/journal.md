@@ -5,3 +5,36 @@ Task created.
 
 ## 2026-04-06T20:35:01+00:00
 Task closed: duplicate. Split into T-0197 (verdict), T-0200 (structured submission), T-0201 (engine parsing), T-0202 (rmtree), T-0203 (legacy compat)
+
+## 2026-04-15T08:16:18+00:00
+Task metadata updated via CLI.
+
+## 2026-04-15T08:16:32+00:00
+Task closed: duplicate. Umbrella task already split into focused child tasks: T-0197 for verdict fallback removal, T-0200 for structured stage-result parsing, and T-0203 for legacy config compat. Do not reopen as one broad cleanup task; recreate or relink the missing engine-parsing and rmtree follow-up records separately if still needed.
+
+## 2026-04-15T08:57:48+00:00
+Task closed: duplicate. probe duplicate
+
+## 2026-04-15T08:57:49+00:00
+Task metadata updated via CLI.
+
+## 2026-04-15T08:58:31+00:00
+Task metadata updated via CLI.
+
+## 2026-04-15T08:58:31+00:00
+Task closed: duplicate. Umbrella task already split into focused child tasks: T-0197 for verdict fallback removal, T-0200 for structured stage-result parsing, and T-0203 for legacy config compat. Do not reopen as one broad cleanup task; recreate or relink the missing engine-parsing and rmtree follow-up records separately if still needed.
+
+## 2026-04-15T09:11:42+00:00
+Task metadata updated via CLI.
+
+## 2026-04-15T09:12:39+00:00
+Task metadata updated via CLI.
+
+## 2026-04-15T09:12:40+00:00
+Task closed: duplicate. Umbrella task split into focused child tasks: T-0197 verdict fallback removal, T-0200 structured stage-result parsing, T-0203 legacy config compat, T-0374 engine-output parse warnings, and T-0375 explicit rmtree cleanup. Do not reopen as one broad cleanup task.
+
+## 2026-04-15T09:23:35+00:00
+Task metadata updated via CLI.
+
+## 2026-04-15T09:23:36+00:00
+Task closed: duplicate. Umbrella task split into focused child tasks: T-0197 verdict fallback removal, T-0200 structured stage-result parsing, T-0203 legacy config compat, T-0374 engine-output parse warnings, and T-0375 explicit rmtree cleanup. Do not reopen as one broad cleanup task.
