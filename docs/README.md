@@ -32,6 +32,8 @@ linked pages as reference once your workspace is running.
   merge-conflict handling.
 - [workspace-layout.md](workspace-layout.md): what lives under `.litehive/` and
   what is tracked versus ignored.
+- [vocabulary.md](vocabulary.md): canonical terms for stages, statuses,
+  reports, discussion entries, recovery, and runtime artifacts.
 - [state-machine.md](state-machine.md): the exhaustive transition reference used
   by the codebase.
 - [contributing-back.md](contributing-back.md): filing upstream Litehive work
