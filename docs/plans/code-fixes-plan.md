@@ -964,3 +964,766 @@ Concrete actions:
   - observability/status
   - repair/doctor
   - engine control
+
+## Codebase simplification plan from actual code read
+
+This section supersedes the older historical package-structure notes. It is
+based on reading the current codebase on 2026-04-15, not on an older
+pre-rename layout.
+
+### Analysis snapshot
+
+What the current codebase actually looks like:
+
+- Litehive still persists a large amount of structured state as YAML:
+  - `.litehive/config.yaml`
+  - task `task.yaml`
+  - `comments.yaml`
+  - stage/recovery `*.yaml` reports
+  - subagent `session.yaml` / `report.yaml` / `timeline.yaml`
+  - `engine-monitoring.yaml`
+  - pool-run summary YAMLs
+  - runner/daemon lock metadata YAML
+- `tasks/` and `state/` are the tightest knot in the tree.
+  Import scan:
+  - `tasks/` imports `state/` 67 times
+  - `state/` imports `tasks/` 8 times
+  - that is a strong signal that the current package boundary is wrong
+- pipeline state is split across four SQLite-facing abstractions:
+  - `litehive/state/store.py` -> workspace/task runtime rows
+  - `litehive/lifecycle/persistence.py` -> pipeline state row
+  - `litehive/lifecycle/journal.py` -> pipeline journal + transitions
+  - `litehive/lifecycle/sessions.py` -> pipeline session rows
+- queue state is already partly in SQLite, but task identity/content is still
+  split against file-backed task records
+- task activity and verdict submission are still filesystem-era:
+  - `litehive/tasks/reports.py` persists `comments.yaml`
+  - `litehive/agents/parsing.py` reads that YAML back to synthesize a
+    `StageReport`
+  - runtime decisions still depend on that file path
+- package names no longer match responsibilities:
+  - `lifecycle/` is the pipeline runtime
+  - `agents/` is mostly execution/runtime orchestration, not domain agents
+  - `observability/` mixes rendering, diagnostics, JSONL event writing, and
+    engine monitoring
+  - `state/` mixes locks, repositories, write orchestration, and backups
+  - `tasks/` mixes queue logic, task mutations, activity storage, worktrees,
+    normalization, and archive handling
+- the CLI surface grew by accretion:
+  - several commands overlap (`promote` / `requeue` / `resume` /
+    `prioritize`)
+  - some command modules are wrappers over other command modules
+  - some support files are presentation-only but live as top-level helpers
+  - some debug/report/dry-run paths are likely maintenance leftovers rather
+    than part of the intended operator surface
+
+### Target package direction
+
+Recommended target package layout:
+
+```text
+litehive/
+  domain/        # pure target models, enums, value objects
+  pipeline/      # state machine, nodes, transitions, pipeline runtime store
+  execution/     # subagent execution, engine runtime orchestration
+  task/          # task repository, queue, mutation services, archive
+  activity/      # task activity entries, stage verdict submission, rendering
+  workspace/     # locks, daemon loop, worktrees, repair, health probes
+  storage/       # sqlite connection + migrations + backup utilities
+  config/        # operator-facing config only
+  roles/         # role-specific prompt/verdict behavior
+  sandbox/       # sandbox infrastructure
+  cli/           # thin command presentation only
+  git/           # git operations
+```
+
+Notes:
+
+- keep `domain/` as the pure model layer
+- use `pipeline/` consistently instead of `lifecycle/`
+- remove `observability/` as an umbrella package; split it by actual domain
+- remove `state/` as an umbrella package; split it by actual ownership
+- keep `config/` limited to config concerns; move runtime policy out of it
+- storage target: SQLite only for Litehive-owned structured data
+  - the only YAML file that remains is `.litehive/config.yaml`
+  - no task YAML
+  - no comments/report/session/timeline YAML
+  - no engine-monitoring YAML
+  - no pool summary YAML
+  - queue stays in SQLite
+  - incomplete tasks move fully to SQLite
+  - text logs/transcripts may remain plain text if unstructured
+  - every other Litehive-owned structured file format should be removed
+
+## Merge plan
+
+### 1. Merge `TaskRecord`, `TaskIntentRecord`, and `TaskStateRecord` into one domain task model plus storage adapters
+
+Current code:
+
+- `litehive/domain/task.py` defines:
+  - `TaskIntentRecord`
+  - `TaskStateRecord`
+  - `TaskRecord`
+- it also defines three git settings types:
+  - `GitSettings`
+  - `TaskIntentGitSettings`
+  - `TaskStateGitSettings`
+
+Why this should be merged:
+
+- the domain has one task, not three task-shaped domain objects
+- the split is storage-driven, not domain-driven
+- the split is also still YAML-era: task intent is persisted in `task.yaml`
+- queue order already lives in SQLite, so task content being file-backed creates
+  a split-brain persistence model for incomplete work
+- code has to keep converting back and forth:
+  - `TaskRecord.to_intent_record()`
+  - `TaskRecord.to_state_record()`
+  - `TaskRecord.to_storage_state_record()`
+  - `TaskRecord.from_intent_and_state(...)`
+- the same duplication exists for git fields
+
+Target:
+
+- keep one domain model:
+  - `Task`
+- move storage shaping to SQLite row adapters/repository code
+- keep one task-owned git model:
+  - `TaskGit`
+
+Concrete implementation steps:
+
+- define the desired `Task` shape first in code, matching `docs/domain.md`
+- move intent/state split logic out of `domain/task.py`
+- add a SQLite-backed task repository for both task intent and runtime/state
+- migrate all incomplete tasks to SQLite-backed task rows:
+  - queued
+  - in_progress
+  - interrupted
+  - parked
+  - flagged
+  - merge_failed
+  - cancelled
+  - wont_do
+  - deferred
+  - duplicate
+- stop writing `task.yaml`
+- remove `TaskIntentRecord`, `TaskStateRecord`,
+  `TaskIntentGitSettings`, and `TaskStateGitSettings` after all storage call
+  sites are migrated
+
+Validation:
+
+- task create/load/save round-trips still preserve current task data
+- no caller outside the repository layer needs to know how task state is split
+  in SQLite
+- queue selection works entirely from SQLite-backed task + queue state without
+  consulting task files
+
+### 2. Merge `state/records.py`, `state/persist.py`, `state/store.py`, and task runtime write helpers into repository/services by domain
+
+Current code:
+
+- `litehive/state/records.py` owns task YAML I/O and SQLite task-state I/O
+- `litehive/state/locking.py` persists runner metadata as YAML
+- `litehive/state/persist.py` owns atomic write orchestration and mixed
+  file+SQLite transactions
+- `litehive/state/store.py` owns low-level SQLite runtime store methods
+- `litehive/tasks/runtime.py` owns task runtime mutation helpers that persist
+  through the above layers
+
+Why this should be merged:
+
+- the current split is implementation-detail-driven, not domain-driven
+- callers have to know too much about which helper lives in which file
+- task mutation code crosses packages constantly:
+  - mutate a task model in `tasks/runtime.py`
+  - write runtime rows through `state/store.py`
+  - load/save task files through `state/records.py`
+- the code is still paying complexity for a mixed YAML+SQLite world we do not
+  want to keep
+- incomplete-task lifecycle operations are forced through both queue rows and
+  task files today
+
+Target:
+
+- `task/repository.py`
+  - load/save tasks
+  - persist task intent/state split internally
+- `task/runtime_repository.py` or repository methods on `TaskRepository`
+  - save runtime slices
+- `task/service.py`
+  - task mutations such as close/requeue/resume/update
+- `storage/sqlite.py`
+  - raw SQLite connection helpers only
+
+Concrete implementation steps:
+
+- move `records.py` responsibilities into a task repository
+- move `persist.py` write orchestration into SQLite transaction/repository code
+- shrink `RuntimeStore` so it is either:
+  - absorbed by task/pipeline/activity repositories
+  - or kept as a thin internal storage adapter, not exposed widely
+- move `tasks/runtime.py` write helpers behind repository/service methods so
+  callers stop mutating and persisting through separate helper layers
+- replace YAML lock metadata with either:
+  - SQLite-backed runner/daemon status rows
+  - or plain lockfiles with no YAML payload if only process exclusion is needed
+- make queue mutation + incomplete-task mutation one SQLite transaction where
+  they currently have to coordinate file and DB writes
+
+Validation:
+
+- task mutations become SQLite-only and stay atomic within one store
+- callers no longer import from both `state.*` and `tasks.*` just to update one
+  task
+- requeue/resume/stop/close/switch do not touch `task.yaml`
+
+### 3. Merge pipeline SQLite abstractions behind one pipeline storage boundary
+
+Current code:
+
+- `litehive/lifecycle/persistence.py`
+  - `SqlitePersistence`
+- `litehive/lifecycle/journal.py`
+  - `SqliteJournal`
+- `litehive/lifecycle/sessions.py`
+  - `SqliteSessionStore`
+
+Why this should be merged:
+
+- these are all one concern from the pipeline package's point of view:
+  pipeline runtime storage
+- CLI and orchestration code currently need to assemble several storage objects
+  for one conceptual subsystem
+- `pipeline reset` bypasses them with raw SQL, which is a direct symptom of the
+  abstraction split being wrong
+
+Target:
+
+- `pipeline/store.py` or `storage/pipeline_store.py` with sub-APIs for:
+  - state
+  - journal
+  - sessions
+- keep separate internal tables, but expose one pipeline-owned storage facade
+
+Concrete implementation steps:
+
+- define a single pipeline storage owner used by:
+  - orchestration
+  - pipeline CLI
+  - tests
+- move `reset()` / `load_journal()` / `load_transitions()` / session methods
+  under that facade
+- delete direct CLI SQL deletion in `pipeline reset`
+
+Validation:
+
+- existing pipeline CLI behavior remains possible without raw SQL in CLI code
+- orchestration depends on one injected pipeline store instead of three sqlite
+  wrappers
+
+### 4. Merge task activity, stage verdict submission, and recovery notes into one activity model/store
+
+Current code:
+
+- `litehive/domain/reports.py`
+  - `TaskThreadComment`
+  - `StageReport`
+  - `RecoveryReport`
+- `litehive/tasks/reports.py`
+  - appends and reads `comments.yaml`
+  - writes recovery reports as YAML
+  - renders task thread
+- `litehive/agents/parsing.py`
+  - reads YAML comments to synthesize a `StageReport`
+- `litehive/cli/agent_cli.py` and `litehive/cli/runner.py`
+  - both submit report/thread-style entries
+
+Why this should be merged:
+
+- verdicts, comments, and operator/recovery notes are one append-only activity
+  stream conceptually
+- right now the activity model is split between:
+  - YAML `comments.yaml`
+  - `StageReport`
+  - free-form recovery note insertion
+- subagent/session/report YAML artifacts are also feeding recovery/debug flows
+- `StageReport` still carries filesystem-era fields like `files_changed`
+
+Target:
+
+- `activity/`
+  - `models.py`
+  - `store.py`
+  - `rendering.py`
+- one append-only activity entry model with optional structured fields for:
+  - verdict
+  - pipeline state
+  - author
+  - message
+- separate stage/run reports only if they add real data beyond the entry itself
+
+Concrete implementation steps:
+
+- first move YAML-thread semantics behind an activity store interface
+- then add SQLite-backed activity persistence
+- add SQLite-backed stage-run, recovery-record, and subagent-session tables
+- then update:
+  - `agent_cli`
+  - prompt serializer
+  - recovery reporting
+  - stage report resolution
+  to read/write through the activity store
+- then delete filesystem `comments.yaml` support
+- then delete YAML `report/session/timeline/recovery` artifacts that only store
+  structured data
+- remove `files_changed` from target report/activity structures
+
+Validation:
+
+- prompt serialization still sees recent verdict context
+- recovery notes and agent verdicts still show up in task history
+- no runtime decision depends on parsing YAML artifacts after the migration
+
+### 5. Merge queue selection and task status transitions under one task application layer
+
+Current code:
+
+- `litehive/tasks/queue.py`
+  - queue mutations
+  - task selection
+  - auto-recovery staging
+- `litehive/tasks/status.py`
+  - stop
+  - switch
+  - requeue
+  - resume
+  - close
+  - park
+  - update
+- CLI command overlap mirrors this split
+
+Why this should be merged carefully:
+
+- queue selection and task mutation are different behaviors, so they do not
+  belong in one file
+- but they do belong under one task-owned application layer with shared
+  repository/service dependencies
+- today they are heavily coupled through inline imports and circular calls
+
+Target:
+
+- `task/queue_service.py`
+  - ordering and selection
+- `task/service.py`
+  - state transitions and operator actions
+- shared repository dependencies injected explicitly
+
+Concrete implementation steps:
+
+- keep selection logic separate from status transitions
+- remove inline cross-imports between queue and status
+- introduce one task application layer used by CLI and daemon code
+- collapse overlapping command behaviors so one command implementation can call
+  another service method instead of duplicating logic
+- make queue operations and incomplete-task state transitions operate on one
+  SQLite-backed task store instead of queue rows plus file-backed task data
+
+Validation:
+
+- queue ordering rules remain unchanged
+- task mutation commands still preserve current state transitions until the
+  domain vocabulary cleanup lands
+
+### 6. Merge worktree management logic into one workspace-owned area
+
+Current code:
+
+- `litehive/tasks/worktrees.py`
+- `litehive/cli/worktree_support.py`
+- worktree-related repair logic also appears in:
+  - `litehive/recovery/workspace_repair.py`
+  - `litehive/lifecycle/orchestration.py`
+
+Why this should be merged:
+
+- worktrees are a workspace/runtime concern, not a CLI concern
+- current logic is split across task, recovery, pipeline, and CLI support files
+- the CLI support file contains substantial business logic and should not
+  remain under `cli/`
+
+Target:
+
+- `workspace/worktrees.py`
+  - inspection and ownership rules
+- `workspace/worktree_rescue.py`
+  - rescue/finalization logic
+- CLI becomes a thin wrapper over those services
+
+Concrete implementation steps:
+
+- move `cli/worktree_support.py` out of `cli/`
+- consolidate worktree rescue and inspection logic in one workspace package
+- keep pipeline orchestration on a small interface such as:
+  - resolve task worktree
+  - clear stale worktree
+  - finalize worktree after terminal states
+
+Validation:
+
+- worktree rescue, clean, and lifecycle cleanup behavior stay intact
+- no domain logic remains inside CLI support files
+
+### 7. Merge execution-session helpers into explicit execution collaborators
+
+Current code:
+
+- `litehive/agents/manager.py`
+- `litehive/agents/session.py`
+- `litehive/agents/artifacts.py`
+- `litehive/agents/parsing.py`
+
+Why this should be merged:
+
+- `SubagentManager` currently owns too many responsibilities
+- `SessionMixin` is single-consumer indirection
+- artifact/session/report handling is spread across several small modules that
+  only make sense together
+
+Target:
+
+- `execution/manager.py`
+- `execution/session_writer.py`
+- `execution/result_classifier.py`
+- optional `execution/artifact_store.py`
+
+Concrete implementation steps:
+
+- merge `SessionMixin` into either:
+  - the manager
+  - or a concrete session writer collaborator
+- keep artifact writing separate only if it becomes a reusable concrete store
+- split result classification out of `SubagentManager.run()`
+- move stage report resolution to activity/report code, not execution code
+
+Validation:
+
+- manager becomes shorter and easier to reason about without changing behavior
+- execution start/progress/finish artifacts stay stable across the refactor
+
+## Rename and package-structure plan
+
+### 1. Rename `lifecycle/` to `pipeline/`
+
+Current package:
+
+- `litehive/lifecycle/`
+
+Why:
+
+- the user-facing and target domain terminology now prefers `pipeline`
+- current docs/domain vocabulary already use `pipeline` consistently
+- the package owns:
+  - pipeline states
+  - pipeline events
+  - pipeline runner
+  - pipeline journal
+
+Mapping:
+
+- `litehive/lifecycle/events.py` -> `litehive/pipeline/events.py`
+- `litehive/lifecycle/runner.py` -> `litehive/pipeline/runner.py`
+- `litehive/lifecycle/persistence.py` -> `litehive/pipeline/store.py` or
+  `litehive/pipeline/state_store.py`
+- `litehive/lifecycle/journal.py` -> `litehive/pipeline/store.py` or
+  `litehive/pipeline/journal_store.py`
+- `litehive/lifecycle/sessions.py` -> `litehive/pipeline/store.py` or
+  `litehive/pipeline/session_store.py`
+- `litehive/lifecycle/orchestration.py` -> `litehive/pipeline/run.py`
+- `litehive/lifecycle/prompt_serializer.py` -> `litehive/pipeline/prompts.py`
+- `litehive/lifecycle/nodes/` -> `litehive/pipeline/nodes/`
+
+Notes:
+
+- do this after the storage facade exists so the rename does not preserve bad
+  abstractions under a better package name
+
+### 2. Rename `agents/` to `execution/` and move generic Heru glue out of Litehive
+
+Current package:
+
+- `litehive/agents/`
+
+Why:
+
+- the package mostly runs external engines and manages subagent execution
+- it is not the home of domain agents; role-specific behavior is already in
+  `roles/`
+- some of its code is actually Heru-owned generic runtime parsing
+
+Mapping:
+
+- `agents/manager.py` -> `execution/manager.py`
+- `agents/session.py` -> `execution/session_writer.py`
+- `agents/artifacts.py` -> `execution/artifact_store.py` if retained
+- `agents/parsing.py` -> `activity/stage_reports.py` or
+  `activity/report_resolution.py`
+- `agents/sandbox.py`
+  - split and move infra pieces to `sandbox/`
+  - keep only execution-specific orchestration in `execution/`
+- remove from Litehive entirely:
+  - `agents/unified_events.py`
+  - `agents/_continuation.py`
+
+### 3. Split `tasks/` into `task/`, `activity/`, and `workspace/`
+
+Current package:
+
+- `litehive/tasks/`
+
+Why:
+
+- `tasks/` currently contains at least four different domains:
+  - task repository and mutations
+  - queue selection
+  - activity/report storage
+  - worktree handling
+
+Mapping:
+
+- keep under `task/`:
+  - `tasks/queue.py` -> `task/queue_service.py`
+  - `tasks/status.py` -> `task/service.py`
+  - `tasks/normalization.py` -> `task/normalization.py`
+  - `tasks/archive.py` -> `task/archive.py`
+  - `tasks/constants.py` -> `task/constants.py`
+- move to `activity/`:
+  - `tasks/reports.py` -> split into `activity/store.py` and
+    `recovery/reports.py`
+  - `tasks/journal.py` -> decide whether it is task activity or remove it if
+    superseded by activity entries
+- move to `workspace/`:
+  - `tasks/worktrees.py` -> `workspace/worktrees.py`
+- reduce or remove:
+  - `tasks/paths.py`
+  - split path helpers by owner instead of one catch-all path module
+- move runtime update helpers:
+  - `tasks/runtime.py` -> `task/runtime_updates.py` or absorb into task service
+
+### 4. Split `state/` into `storage/`, `workspace/`, and task-owned repositories
+
+Current package:
+
+- `litehive/state/`
+
+Why:
+
+- `state/` is not one domain
+- it currently holds:
+  - locks
+  - backups
+  - repositories
+  - write orchestration
+  - runtime-store glue
+
+Mapping:
+
+- `state/locking.py` -> `workspace/locks.py`
+- `state/backup.py` -> `storage/backups.py`
+- `state/store.py` -> absorb into:
+  - `task/repository.py`
+  - `pipeline/store.py`
+  - `activity/store.py`
+- `state/persist.py` -> repository transaction/orchestration code
+- `state/records.py` -> `task/repository.py`
+
+### 5. Remove `observability/` as an umbrella and rename by actual purpose
+
+Current package:
+
+- `litehive/observability/`
+
+Why:
+
+- it mixes three unrelated concerns:
+  - rendering status text
+  - diagnostics/doctor probes
+  - event/log file writing
+  - engine usage monitoring
+
+Mapping:
+
+- `observability/status.py` -> `cli/status_view.py`
+- `observability/status_diagnostics.py` -> `workspace/diagnostics.py`
+- `observability/engine_monitoring.py` -> `execution/engine_monitoring.py`
+- `observability/events.py` -> split between:
+  - `activity/events.py`
+  - `execution/session_logs.py`
+  depending on which records survive
+
+### 6. Rename CLI modules to plain names inside `cli/`
+
+Mapping:
+
+- `cli/agent_cli.py` -> `cli/agent.py`
+- `cli/archive_cli.py` -> `cli/archive.py`
+- `cli/daemon_cli.py` -> remove, not rename
+- `cli/pipeline_cli.py` -> `cli/pipeline.py`
+- `cli/queue_cli.py` -> `cli/queue.py`
+- `cli/task_cli.py` -> `cli/task.py`
+- `cli/worktree_cli.py` -> `cli/worktree.py`
+
+Additional CLI moves:
+
+- `cli/worktree_support.py` -> `workspace/worktree_rescue.py`
+- `cli/task_debug_support.py` -> `debug/tasks.py` if kept
+- `cli/task_logs_support.py` -> `execution/logs.py` or `workspace/logs.py`
+  depending on final ownership
+
+### 7. Move runtime policy out of `config/engine_models.py`
+
+Mapping:
+
+- keep config-only parsing and defaults under `config/`
+- move engine selection/runtime policy to:
+  - `execution/engine_selection.py`
+  - `execution/model_resolution.py`
+  - `execution/engine_freezes.py` or `workspace/engine_freezes.py`
+- move per-engine quota blocking to engine-owned adapters or a registry
+
+## Removal plan
+
+### 1. Remove modules that are wrapper-only, dead, or legacy-shape compatibility
+
+Remove after call sites are migrated:
+
+- `litehive/agents/_continuation.py`
+- `litehive/agents/unified_events.py`
+- `litehive/agents/prompts.py`
+- `litehive/agents/session.py`
+- `litehive/cli/daemon_cli.py`
+- `litehive/cli/dry_run.py`
+- `litehive/cli/parse.py`
+
+Conditional removal or relocation:
+
+- `litehive/cli/task_debug_support.py`
+- `litehive/cli/task_logs_support.py`
+- `litehive/observability/events.py`
+- `litehive/tasks/journal.py`
+
+### 2. Remove filesystem-era activity storage after SQLite activity store lands
+
+Remove:
+
+- `comments.yaml` reads/writes
+- `task.yaml` reads/writes
+- `engine-monitoring.yaml` reads/writes
+- `session.yaml`
+- `report.yaml`
+- `timeline.yaml`
+- stage/recovery `*.yaml` report files
+- pool-run summary YAML files
+- any code path that loads incomplete tasks from filesystem task records
+- any structured YAML file other than `.litehive/config.yaml`
+- `TaskThreadComment.files_changed`
+- `normalized_files_changed(...)`
+- pass-comment retraction logic that depends on claimed changed-file lists
+- any report resolution path that parses YAML comments to infer verdicts
+
+### 3. Remove redundant commands and hidden command registration
+
+Remove:
+
+- `litehive pipeline rules`
+- hidden root command registration via `register_hidden_root_commands(...)`
+- duplicate daemon command surfaces once one command path remains
+- root-level operator `report` command in `cli/runner.py` if `cli/agent.py`
+  becomes the single verdict submission path
+- rollback command if rollback is no longer part of the supported operator
+  workflow
+
+Collapse rather than keep separate:
+
+- `promote`, `resume`, `requeue`, and `prioritize`
+- they can remain as CLI aliases if desired, but should route through one
+  implementation and one shared state model
+
+### 4. Remove stale archive/index and redundant artifact compatibility
+
+Remove:
+
+- archive `INDEX.csv` support in `tasks/archive.py` and `cli/task*.py`
+- `prune_superseded_subagent_artifacts(...)`
+- old filename compatibility like `stdout.log` / `stderr.log`
+- YAML-based daemon/runner metadata payloads
+
+### 5. Remove policy and naming leftovers that keep the old mental model alive
+
+Remove:
+
+- all user-facing `v2` wording in:
+  - CLI help
+  - recovery prompts
+  - docs
+  - tests where wording is part of expected output
+- `__all__` declarations across Litehive
+- verdict normalization aliases such as `fail -> reject`
+- inline imports that are only compensating for package coupling instead of
+  real optional/cycle boundaries
+
+## Safe implementation order
+
+### Phase 1. Prepare boundaries without renaming packages yet
+
+- create repository/service facades for:
+  - task
+  - pipeline
+  - activity
+  - workspace
+- move callers to those facades while keeping current modules in place
+- stop adding new call sites to low-level helper modules
+
+### Phase 2. Eliminate filesystem-era activity and direct CLI SQL
+
+- add activity store abstraction
+- migrate CLI/report/prompt/recovery paths off YAML artifacts
+- migrate task/monitoring/session/report storage to SQLite
+- migrate incomplete tasks and queue-backed task selection fully into SQLite
+- unify pipeline storage access so CLI stops using raw SQL
+
+### Phase 3. Simplify execution/runtime internals
+
+- refactor `SubagentManager`
+- split result classification and session writing
+- move Heru-owned code out of Litehive
+- move sandbox infra to the sandbox package
+
+### Phase 4. Rename packages to match the domain model
+
+- `lifecycle` -> `pipeline`
+- `agents` -> `execution`
+- `tasks` split into `task` / `activity` / `workspace`
+- `state` split into `storage` / `workspace` / repository code
+- remove `observability` umbrella
+- rename CLI modules to plain names
+
+### Phase 5. Delete superseded modules and compatibility code
+
+- delete wrappers, dead prompt paths, hidden commands, dry-run/daemon
+  duplicates, archive index support, and remaining compatibility helpers
+
+## Open design choices to settle before implementation
+
+- whether `task/` should stay plural (`tasks/`) for package-style consistency
+  or go singular to match the domain naming
+- whether backups belong in `storage/` or `workspace/`
+- whether daemon code belongs under `workspace/` or `execution/`
+- whether any structured artifact should remain on disk at all beyond plain
+  text logs/transcripts
+- whether debug/log helpers are supported operator tools or just developer
+  maintenance tools that should be removed
+- whether `StageReport` survives as a distinct persisted object or is reduced
+  to a projection over activity + pipeline runtime data

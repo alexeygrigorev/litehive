@@ -1,0 +1,11 @@
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0366-v2-pipeline-ran-cancelled-duplicate-task-t-0200/recovery/recovery-001.yaml'
+  files_changed: []
+  created_at: '2026-04-15T09:56:46+00:00'

@@ -742,3 +742,229 @@
     report: .litehive/tasks/T-0264-reorganize-cli-command-structure-with-logical/recovery/recovery-005.yaml'
   files_changed: []
   created_at: '2026-04-13T15:18:21+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0264-reorganize-cli-command-structure-with-logical/recovery/recovery-006.yaml'
+  files_changed: []
+  created_at: '2026-04-15T09:34:29+00:00'
+- role: planner
+  step: backlog
+  verdict: pass
+  message: "I rewrote T-0264 via `litehive task update` so the task now matches the\
+    \ real user problem in this repo.\n\nWhat changed in the task contract:\n- Narrowed\
+    \ scope to the repo-owned public CLI surface plus README/docs/prompts/config/templates.\n\
+    - Removed web/dashboard and web API terminology alignment from this task because\
+    \ that code is not present in the current checkout.\n- Removed the implied requirement\
+    \ to invent a new public `engine` group; the task is now about terminology/discoverability,\
+    \ not adding a new command family.\n- Kept backward compatibility explicit: aliases\
+    \ may remain temporarily, but hidden and undocumented.\n- Clarified the agent-facing\
+    \ wording requirement: normal guidance should use `litehive report` and grouped\
+    \ task commands; `litehive agent report` should only appear when text is specifically\
+    \ describing the restricted internal subcommand.\n\nUpdated task record summary:\n\
+    - Goal: finish the CLI regrouping by aligning the public command surface, docs,\
+    \ prompts, and templates with the grouped terminology users actually see in this\
+    \ repo.\n- Acceptance criteria: public help shows the grouped surface; `start`\
+    \ is background and `run` is foreground; task/queue/import flows are documented\
+    \ under grouped commands; removed names are not documented as public commands;\
+    \ repo-owned docs/prompts/templates use the new vocabulary consistently; relevant\
+    \ CLI/help/doc tests pass.\n- Constraints: repo-owned surfaces only, no web/dashboard\
+    \ scope, no new public engine group, hidden aliases may remain but undocumented.\n\
+    - Plan: audit help/docs, update the public taxonomy, sweep stale command names,\
+    \ then run targeted scans/tests.\n\nConcrete implementation starting point:\n\
+    - The task is not done in this checkout. A targeted stale-reference scan still\
+    \ finds old public names in:\n  - `README.md` (`litehive recover`, `litehive switch`,\
+    \ `litehive prioritize`)\n  - `docs/cli.md` (`litehive import issue`, `litehive\
+    \ switch`)\n  - `docs/contributing-back.md` (`litehive import issue`)\n  - `docs/recovery.md`\
+    \ (`litehive import issue`)\n- These are the highest-signal files to fix first.\n\
+    \nNotes:\n- `litehive task show T-0264` currently fails in this workspace because\
+    \ the task is missing its SQLite runtime row, but `litehive task update` worked\
+    \ and the rewritten contract is persisted in `.litehive/tasks/T-0264-reorganize-cli-command-structure-with-logical/task.yaml`.\n\
+    - I created a temporary probe task to validate CLI mutation, then immediately\
+    \ closed it as `wont_do`; no follow-up work was left behind.\n"
+  files_changed: []
+  created_at: '2026-04-15T09:37:19+00:00'
+- role: planner
+  step: backlog
+  verdict: pass
+  message: "T-0264 has already been rewritten via `litehive task update` to match\
+    \ the actual scope in this repo.\n\nPlanner shaping completed:\n- Narrowed the\
+    \ task to the repo-owned public CLI surface plus README/docs/prompts/config/templates.\n\
+    - Removed web/dashboard and web API terminology alignment from this task because\
+    \ that code is not present in the current checkout.\n- Removed the implied requirement\
+    \ to invent a new public `engine` group; the current user problem is terminology\
+    \ and discoverability for the existing grouped CLI.\n- Clarified that backward-compat\
+    \ aliases may remain temporarily, but only as hidden/undocumented compatibility\
+    \ paths.\n- Clarified agent-facing wording: normal guidance should use `litehive\
+    \ report` and grouped task commands; `litehive agent report` should only appear\
+    \ when text is specifically about the restricted internal agent subcommand.\n\n\
+    Concrete execution target for the next agent:\n- This task is not done in the\
+    \ current checkout. A stale-reference scan still finds old public names in:\n\
+    \  - `README.md` (`litehive recover`, `litehive switch`, `litehive prioritize`)\n\
+    \  - `docs/cli.md` (`litehive import issue`, `litehive switch`)\n  - `docs/contributing-back.md`\
+    \ (`litehive import issue`)\n  - `docs/recovery.md` (`litehive import issue`)\n\
+    - Start implementation from those files, then sweep the rest of repo-owned docs/prompts/templates\
+    \ for stale command names and verify help/tests.\n\nOperational note:\n- `litehive\
+    \ task show T-0264` currently fails in this workspace because the task is missing\
+    \ its SQLite runtime row, but the task update succeeded and the rewritten contract\
+    \ is persisted in `.litehive/tasks/T-0264-reorganize-cli-command-structure-with-logical/task.yaml`.\n"
+  files_changed: []
+  created_at: '2026-04-15T09:37:41+00:00'
+- role: recovery
+  step: backlog
+  verdict: pass
+  message: "Root cause: the grooming/planner agent did submit `litehive agent report`,\
+    \ but Litehive recorded those comments under `step: backlog` instead of `step:\
+    \ grooming` when the task had no SQLite runtime row. The lifecycle then looked\
+    \ for a fresh verdict on `step == grooming`, found none, nudged once, and finally\
+    \ crashed with `agent did not submit a verdict after 1 nudges` even though planner\
+    \ comments were present in `comments.yaml`.\n\nEvidence:\n- `subagents/SA-0024-planner/session.yaml`\
+    \ shows the planner finished successfully with `exit_code: 0`.\n- `subagents/SA-0024-planner/prompt.txt`\
+    \ is a nudge prompt telling the agent to submit `litehive agent report`.\n- `.litehive/tasks/T-0264-reorganize-cli-command-structure-with-logical/comments.yaml`\
+    \ contains fresh planner `pass` comments at `created_at: 2026-04-15T09:37:19+00:00`\
+    \ and `09:37:41+00:00`, but both landed as `step: backlog`.\n- `litehive/lifecycle/heru_factory.py`\
+    \ only accepts verdict comments whose `step` matches the current lifecycle stage.\n\
+    - `litehive/cli/agent_cli.py` previously defaulted the report step to `pipeline_state.stage`\
+    \ or `task.pipeline_status`; with the missing runtime row on this task, that fallback\
+    \ became `backlog`.\n\nFix made:\n- `litehive/agents/manager.py`: inject `LITEHIVE_STAGE`\
+    \ into subagent `extra_env` using the runtime stage already used for report parsing.\n\
+    - `litehive/cli/agent_cli.py`: resolve the default report step in this order:\
+    \ explicit `--step`, SQLite pipeline stage, `LITEHIVE_STAGE`, runtime current\
+    \ stage, then task `pipeline_status`.\n- `litehive/lifecycle/nodes/agent.py`:\
+    \ align the nudge wording so it consistently names `litehive agent report`.\n\n\
+    Verification:\n- `.venv/bin/pytest -q tests/cli/test_agent_report.py tests/agents/test_subagent_manager.py\
+    \ tests/lifecycle/test_prompt_serializer.py`\n- Result: `20 passed in 0.72s`\n\
+    \nNew coverage:\n- `tests/cli/test_agent_report.py`: missing-runtime agent report\
+    \ now uses `LITEHIVE_STAGE` to record the correct stage.\n- `tests/agents/test_subagent_manager.py`:\
+    \ subagent env now includes `LITEHIVE_STAGE`.\n- `tests/lifecycle/test_prompt_serializer.py`:\
+    \ nudge prompt continues to include the agent-report command.\n\nRetry recommendation:\
+    \ rerun the grooming/recovery flow for T-0264. The prior planner turn was being\
+    \ misclassified as \u201Cno verdict submitted\u201D because the default report\
+    \ step resolved to `backlog`; that step-resolution bug is fixed.\n"
+  files_changed: []
+  created_at: '2026-04-15T09:41:52+00:00'
+- role: recovery
+  step: recovering
+  verdict: pass
+  message: "Root cause: the grooming/planner agent did submit `litehive agent report`,\
+    \ but Litehive recorded those comments under `step: backlog` instead of `step:\
+    \ grooming` when the task had no SQLite runtime row. The lifecycle then looked\
+    \ for a fresh verdict on `step == grooming`, found none, nudged once, and finally\
+    \ crashed with `agent did not submit a verdict after 1 nudges` even though planner\
+    \ comments were present in `comments.yaml`.\n\nEvidence:\n- `subagents/SA-0024-planner/session.yaml`\
+    \ shows the planner finished successfully with `exit_code: 0`.\n- `subagents/SA-0024-planner/prompt.txt`\
+    \ is a nudge prompt telling the agent to submit `litehive agent report`.\n- `.litehive/tasks/T-0264-reorganize-cli-command-structure-with-logical/comments.yaml`\
+    \ contains fresh planner `pass` comments at `created_at: 2026-04-15T09:37:19+00:00`\
+    \ and `09:37:41+00:00`, but both landed as `step: backlog`.\n- `litehive/lifecycle/heru_factory.py`\
+    \ only accepts verdict comments whose `step` matches the current lifecycle stage.\n\
+    - `litehive/cli/agent_cli.py` previously defaulted the report step to `pipeline_state.stage`\
+    \ or `task.pipeline_status`; with the missing runtime row on this task, that fallback\
+    \ became `backlog`.\n\nFix made:\n- `litehive/agents/manager.py`: inject `LITEHIVE_STAGE`\
+    \ into subagent `extra_env` using the runtime stage already used for report parsing.\n\
+    - `litehive/cli/agent_cli.py`: resolve the default report step in this order:\
+    \ explicit `--step`, SQLite pipeline stage, `LITEHIVE_STAGE`, runtime current\
+    \ stage, then task `pipeline_status`.\n- `litehive/lifecycle/nodes/agent.py`:\
+    \ align the nudge wording so it consistently names `litehive agent report`.\n\n\
+    Verification:\n- `.venv/bin/pytest -q tests/cli/test_agent_report.py tests/agents/test_subagent_manager.py\
+    \ tests/lifecycle/test_prompt_serializer.py`\n- Result: `20 passed in 0.72s`\n\
+    \nNew coverage:\n- `tests/cli/test_agent_report.py`: missing-runtime agent report\
+    \ now uses `LITEHIVE_STAGE` to record the correct stage.\n- `tests/agents/test_subagent_manager.py`:\
+    \ subagent env now includes `LITEHIVE_STAGE`.\n- `tests/lifecycle/test_prompt_serializer.py`:\
+    \ nudge prompt continues to include the agent-report command.\n\nRetry recommendation:\
+    \ rerun the grooming/recovery flow for T-0264. The prior planner turn was being\
+    \ misclassified as \u201Cno verdict submitted\u201D because the default report\
+    \ step resolved to `backlog`; that step-resolution bug is fixed.\n"
+  files_changed: []
+  created_at: '2026-04-15T09:42:00+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0264-reorganize-cli-command-structure-with-logical/recovery/recovery-007.yaml'
+  files_changed: []
+  created_at: '2026-04-15T09:46:13+00:00'
+- role: planner
+  step: backlog
+  verdict: pass
+  message: "T-0264 has already been rewritten via `litehive task update` to match\
+    \ the actual user problem in this repo.\n\nPlanner shaping completed:\n- Scope\
+    \ is now limited to the repo-owned public CLI surface plus README/docs/prompts/config/templates.\n\
+    - Web/dashboard and web API terminology alignment were removed from this task\
+    \ because that code is not present in the current checkout.\n- The task no longer\
+    \ implies adding a new public `engine` command group; the current problem is terminology\
+    \ and discoverability for the existing grouped CLI.\n- Backward-compat aliases\
+    \ may remain temporarily, but only as hidden and undocumented compatibility paths.\n\
+    - Agent-facing wording is clarified: normal guidance should use `litehive report`\
+    \ and grouped task commands; `litehive agent report` should appear only when text\
+    \ is specifically about the restricted internal agent subcommand.\n\nConcrete\
+    \ implementation target for the next agent:\n- This task is not done in the current\
+    \ checkout. A stale-reference scan still finds old public names in:\n  - `README.md`\
+    \ (`litehive recover`, `litehive switch`, `litehive prioritize`)\n  - `docs/cli.md`\
+    \ (`litehive import issue`, `litehive switch`)\n  - `docs/contributing-back.md`\
+    \ (`litehive import issue`)\n  - `docs/recovery.md` (`litehive import issue`)\n\
+    - Start there, then sweep the rest of the repo-owned docs/prompts/templates for\
+    \ stale command names and verify help/tests.\n\nOperational note:\n- `litehive\
+    \ task show T-0264` currently fails in this workspace because the task is missing\
+    \ its SQLite runtime row, but the task update succeeded and the rewritten contract\
+    \ is persisted in `.litehive/tasks/T-0264-reorganize-cli-command-structure-with-logical/task.yaml`.\n"
+  files_changed: []
+  created_at: '2026-04-15T09:46:32+00:00'
+- role: planner
+  step: backlog
+  verdict: pass
+  message: "T-0264 has already been rewritten via `litehive task update` to match\
+    \ the actual user problem in this repo.\n\nPlanner shaping completed:\n- Scope\
+    \ is now limited to the repo-owned public CLI surface plus README/docs/prompts/config/templates.\n\
+    - Web/dashboard and web API terminology alignment were removed from this task\
+    \ because that code is not present in the current checkout.\n- The task no longer\
+    \ implies adding a new public `engine` command group; the current problem is terminology\
+    \ and discoverability for the existing grouped CLI.\n- Backward-compat aliases\
+    \ may remain temporarily, but only as hidden and undocumented compatibility paths.\n\
+    - Agent-facing wording is clarified: normal guidance should use `litehive report`\
+    \ and grouped task commands; `litehive agent report` should appear only when text\
+    \ is specifically about the restricted internal agent subcommand.\n\nConcrete\
+    \ implementation target for the next agent:\n- This task is not done in the current\
+    \ checkout. A stale-reference scan still finds old public names in:\n  - `README.md`\
+    \ (`litehive recover`, `litehive switch`, `litehive prioritize`)\n  - `docs/cli.md`\
+    \ (`litehive import issue`, `litehive switch`)\n  - `docs/contributing-back.md`\
+    \ (`litehive import issue`)\n  - `docs/recovery.md` (`litehive import issue`)\n\
+    - Start there, then sweep the rest of the repo-owned docs/prompts/templates for\
+    \ stale command names and verify help/tests.\n\nOperational note:\n- `litehive\
+    \ task show T-0264` currently fails in this workspace because the task is missing\
+    \ its SQLite runtime row, but the task update succeeded and the rewritten contract\
+    \ is persisted in `.litehive/tasks/T-0264-reorganize-cli-command-structure-with-logical/task.yaml`.\n"
+  files_changed: []
+  created_at: '2026-04-15T09:47:05+00:00'
+- role: recovery
+  step: recovering
+  verdict: pass
+  message: "No additional Litehive infrastructure bug was found beyond the already-fixed\
+    \ missing-verdict path.\n\nWhat I rechecked:\n- `.venv/bin/litehive pipeline journal\
+    \ T-0264` still reports `no v2 state row for task T-0264`.\n- `.venv/bin/litehive\
+    \ task logs T-0264 --agent` and `--agent --all` still report `T-0264: no subagents`,\
+    \ so there is no newer failing subagent transcript than the one already diagnosed.\n\
+    - The repo still contains the recovery fix for the prior crash:\n  - `litehive/agents/manager.py`\
+    \ injects `LITEHIVE_STAGE` into subagent env.\n  - `litehive/cli/agent_cli.py`\
+    \ resolves report step from explicit `--step`, pipeline stage, `LITEHIVE_STAGE`,\
+    \ runtime stage, then task `pipeline_status`.\n  - `litehive/lifecycle/nodes/agent.py`\
+    \ nudges with the correct `litehive agent report` wording.\n- Focused verification\
+    \ still passes:\n  - `.venv/bin/pytest -q tests/cli/test_agent_report.py tests/agents/test_subagent_manager.py\
+    \ tests/lifecycle/test_prompt_serializer.py`\n  - Result: `20 passed in 0.68s`\n\
+    \nConclusion:\n- The original recovery root cause remains the same: planner/grooming\
+    \ verdicts were being written under `step: backlog` when the runtime row was missing,\
+    \ so the lifecycle failed to detect them and crashed as \"agent did not submit\
+    \ a verdict\".\n- That Litehive bug is already fixed in the repo. There is no\
+    \ second recovery-specific fix to make from the current evidence.\n- The task\
+    \ should be retried from grooming/recovery so the patched report-step resolution\
+    \ can take effect on a fresh run.\n"
+  files_changed: []
+  created_at: '2026-04-15T09:47:59+00:00'
