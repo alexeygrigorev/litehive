@@ -3,7 +3,6 @@
 from dataclasses import asdict, fields
 from pathlib import Path
 from typing import Any, Mapping
-import warnings
 
 import yaml
 
@@ -12,6 +11,13 @@ from litehive.config.model import LitehiveConfig
 from litehive.config.paths import config_path, context_path, global_config_path
 from litehive.config.profiles.loader import PROCESS_PROFILES
 from litehive.config.workspace import ensure_workspace
+
+_LEGACY_UNSUPPORTED_KEYS = {
+    "pre_acceptance_command": (
+        "pre_acceptance_command is no longer supported. "
+        "Migrate this command to runner_hooks.before_accepting."
+    ),
+}
 
 
 def read_config_mapping(path: Path) -> dict[str, Any]:
@@ -47,11 +53,15 @@ def load_config(root: Path) -> LitehiveConfig:
         data["process_profile"] = "generic"
     if data.get("pool_selection_policy") not in VALID_POOL_SELECTION_POLICIES:
         data["pool_selection_policy"] = "dependency_aware"
+    for key, message in _LEGACY_UNSUPPORTED_KEYS.items():
+        if key in data:
+            raise ValueError(message)
     valid_keys = {f.name for f in fields(LitehiveConfig)}
     for key in list(data):
         if key not in valid_keys:
-            warnings.warn(f"unknown config key {key!r} \u2014 ignoring", stacklevel=2)
-            data.pop(key)
+            raise ValueError(
+                f"unknown config key {key!r}; remove it or migrate to a supported config field"
+            )
     return LitehiveConfig(**data)
 
 

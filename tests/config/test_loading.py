@@ -183,3 +183,16 @@ def test_load_config_reads_subagent_inactivity_timeout_override(tmp_path: Path) 
 def test_litehive_config_rejects_unknown_retry_on_kind() -> None:
     with pytest.raises(ValueError, match="retry_on must contain only"):
         LitehiveConfig(retry_on=["timeout", "rate_limit"])
+
+
+def test_load_config_rejects_legacy_pre_acceptance_command(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    raw_config = yaml.safe_load((tmp_path / ".litehive" / "config.yaml").read_text(encoding="utf-8"))
+    raw_config["pre_acceptance_command"] = "echo hi"
+    (tmp_path / ".litehive" / "config.yaml").write_text(
+        yaml.safe_dump(raw_config, sort_keys=False),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="pre_acceptance_command is no longer supported"):
+        load_config(tmp_path)

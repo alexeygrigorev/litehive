@@ -14,10 +14,12 @@ def test_prune_log_dirs_logs_on_failure(tmp_path: Path, caplog: pytest.LogCaptur
         (log_base / name).mkdir()
 
     with patch("litehive.daemon.logs.shutil.rmtree", side_effect=OSError("permission denied")):
-        with caplog.at_level(logging.WARNING, logger="litehive.daemon.logs"):
-            prune_run_all_log_dirs(log_base, keep=1)
+        with caplog.at_level(logging.INFO, logger="litehive.daemon.logs"):
+            with pytest.raises(OSError, match="failed to prune log dir"):
+                prune_run_all_log_dirs(log_base, keep=1)
 
-    assert caplog.text.count("Failed to prune log dir") == 2
+    assert "Pruning log dir" in caplog.text
+    assert "Failed to prune log dir" in caplog.text
     assert "permission denied" in caplog.text
 
 
@@ -31,4 +33,3 @@ def test_prune_log_dirs_removes_old(tmp_path: Path) -> None:
 
     remaining = sorted(p.name for p in log_base.iterdir())
     assert remaining == ["2026-01-03"]
-

@@ -1,11 +1,14 @@
 """Helpers for heru's public unified JSONL event contract."""
 
 from dataclasses import dataclass
+import logging
 
 from pydantic import ValidationError
 
 from heru import iter_jsonl_payloads
 from heru.types import LiveEvent, LiveTimeline, RuntimeEngineContinuation, UnifiedEvent
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
@@ -57,7 +60,8 @@ def parse_unified_execution(stdout: str) -> UnifiedExecutionView | None:
     for payload in iter_jsonl_payloads(stdout):
         try:
             event = UnifiedEvent.model_validate(payload)
-        except ValidationError:
+        except ValidationError as exc:
+            logger.warning("Discarding invalid unified event payload %r: %s", payload, exc)
             continue
         events.append(event)
     if not events:
